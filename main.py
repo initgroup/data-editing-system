@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 import os
+from pathlib import Path
 import logging
 from fastapi.middleware.cors import CORSMiddleware
 from backend.routers import (home, M00000, M01001, M01002, M01003, M02001, M02002, M02003, M03001, M03002, M03003, M04001, M05001)
@@ -46,5 +47,7 @@ def read_root():
 
 # [수정] 2. 정적 파일 마운트는 맨 마지막에 위치시킵니다.
 script_dir = os.path.dirname(__file__)
-frontend_path = os.path.join(script_dir, "..", "frontend")
+# 수정 후 (현재 파일 위치 기준으로 frontend 폴더 지정)
+base_path = Path(__file__).resolve().parent
+frontend_path = base_path / "frontend"
 app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")

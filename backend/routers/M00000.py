@@ -21,8 +21,8 @@ from pydantic import BaseModel, ConfigDict
 from typing import Dict, Any, List, Optional
 from fastapi import Body
 import logging
-from database import get_db_connection # 주석 해제하여 사용
-from database_helper import execute_query, SqlLoader, get_debug_sql
+from backend.database import get_db_connection # 주석 해제하여 사용
+from backend.database_helper import execute_query, SqlLoader, get_debug_sql
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
