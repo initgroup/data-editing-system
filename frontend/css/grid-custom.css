@@ -1,0 +1,90 @@
+/* grid-custom.css */
+
+/* 1. 전체 컨테이너 및 테이블 레이아웃 */
+.gridjs-container {
+    padding: 0;
+    font-family: 'Pretendard', sans-serif; /* 현대적인 폰트 적용 제안 */
+}
+
+.gridjs-wrapper {
+    border-radius: 8px;
+    border: 1px solid #e5e7eb !important; /* Tailwind gray-200 */
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+}
+
+.gridjs-table {
+    width: 100% !important; /* 가로 100% 동적 조절 */
+}
+
+/* 2. 헤더 스타일 (최신 트렌드: 연한 그레이 바탕 + 짙은 텍스트) */
+.gridjs-th {
+    background-color: #f8fafc !important; /* Slate-50 */
+    color: #475569 !important; /* Slate-600 */
+    font-weight: 600 !important;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+    padding: 14px 16px !important;
+    border-bottom: 2px solid #e2e8f0 !important;
+}
+
+/* 3. 데이터 로우(행) 및 구분선 스타일 */
+.gridjs-td {
+    padding: 12px 16px !important;
+    border-bottom: 1px solid #f1f5f9 !important; /* 아주 연한 구분선 */
+    color: #1e293b; /* Slate-800 */
+    font-size: 0.875rem;
+}
+
+/* 행 오버 효과 (Hover) */
+.gridjs-tr:hover .gridjs-td {
+    background-color: #f1f5f9 !important; /* Slate-100 */
+    cursor: pointer;
+}
+
+/* 4. 하단 페이징 영역 스타일 */
+.gridjs-footer {
+    border-top: none !important;
+    padding: 12px 0 !important;
+    background-color: transparent !important;
+}
+
+.gridjs-pagination {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: #64748b;
+}
+
+/* 페이징 버튼 디자인 */
+.gridjs-pagination .gridjs-pages button {
+    border: 1px solid #e2e8f0 !important;
+    background-color: white !important;
+    border-radius: 6px !important;
+    padding: 4px 12px !important;
+    margin: 0 2px !important;
+    font-size: 0.8rem !important;
+    transition: all 0.2s ease;
+}
+
+.gridjs-pagination .gridjs-pages button:hover:not(:disabled) {
+    background-color: #f1f5f9 !important;
+    color: #4f46e5 !important; /* Indigo-600 */
+    border-color: #4f46e5 !important;
+}
+
+.gridjs-pagination .gridjs-pages button.gridjs-currentPage {
+    background-color: #4f46e5 !important; /* 포인트 컬러 */
+    color: white !important;
+    border-color: #4f46e5 !important;
+    font-weight: bold;
+}
+
+/* 정렬 아이콘 스타일 */
+.gridjs-sort {
+    float: right;
+    opacity: 0.3;
+}
+.gridjs-th:hover .gridjs-sort {
+    opacity: 1;
+}

@@ -1,0 +1,66 @@
+<div class="space-y-6 animate-fadeIn">
+    <div class="flex justify-between items-end mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800">반영 및 검증</h1>
+            <p class="text-gray-500 text-sm mt-1">에디팅 결정이 완료된 데이터를 마스터 DB에 반영하고 최종 검증을 수행합니다.</p>
+        </div>
+        <div class="flex gap-2">
+            <button onclick="M03003.executeValidation()" id="start-btn" class="bg-green-600 text-white px-5 py-2.5 rounded-lg text-sm font-bold shadow-md hover:bg-green-700 transition flex items-center gap-2">
+                <i class="fas fa-play"></i> 반영 및 검증 시작
+            </button>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+            <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">반영 대기</p>
+            <p class="text-2xl font-black text-gray-800 mt-1" id="val-pending">18</p>
+        </div>
+        <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm border-t-4 border-t-green-500">
+            <p class="text-[10px] font-bold text-green-600 uppercase tracking-wider">처리 완료</p>
+            <p class="text-2xl font-black text-gray-800 mt-1" id="val-completed">124</p>
+        </div>
+        <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm border-t-4 border-t-blue-500">
+            <p class="text-[10px] font-bold text-blue-600 uppercase tracking-wider">검증 통과</p>
+            <p class="text-2xl font-black text-gray-800 mt-1" id="val-passed">110</p>
+        </div>
+        <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm border-t-4 border-t-red-500">
+            <p class="text-[10px] font-bold text-red-500 uppercase tracking-wider">검증 실패</p>
+            <p class="text-2xl font-black text-gray-800 mt-1" id="val-failed">14</p>
+        </div>
+    </div>
+
+    <div id="progress-section" class="hidden bg-white p-8 rounded-xl border border-gray-200 shadow-sm space-y-4">
+        <div class="flex justify-between items-center mb-2">
+            <span class="text-sm font-bold text-gray-600" id="progress-status">데이터 반영 중...</span>
+            <span class="text-sm font-mono font-bold text-blue-600" id="progress-percent">0%</span>
+        </div>
+        <div class="w-full bg-gray-100 rounded-full h-4 overflow-hidden p-0.5 border">
+            <div id="progress-bar" class="bg-gradient-to-r from-blue-500 to-green-500 h-full rounded-full transition-all duration-300" style="width: 0%"></div>
+        </div>
+        <p class="text-xs text-center text-gray-400 italic">시스템이 에디팅 규칙을 적용하여 마스터 테이블을 동기화하고 있습니다.</p>
+    </div>
+
+    <div id="validation-result" class="hidden bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div class="p-5 border-b bg-gray-50 flex justify-between items-center">
+            <h2 class="font-bold text-gray-700">검증 결과 상세 보고</h2>
+            <span class="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold">SUCCESS</span>
+        </div>
+        <div class="p-6 space-y-4">
+            <div class="flex items-start gap-3 p-4 bg-blue-50 border border-blue-100 rounded-lg">
+                <i class="fas fa-check-circle text-blue-500 mt-1"></i>
+                <div>
+                    <h4 class="text-sm font-bold text-blue-800">무결성 검증 통과</h4>
+                    <p class="text-xs text-blue-600 mt-1">참조 무결성 및 도메인 제약 조건 검사 결과 이상이 없습니다.</p>
+                </div>
+            </div>
+            <div class="flex items-start gap-3 p-4 bg-orange-50 border border-orange-100 rounded-lg">
+                <i class="fas fa-exclamation-triangle text-orange-500 mt-1"></i>
+                <div>
+                    <h4 class="text-sm font-bold text-orange-800">주의 사항</h4>
+                    <p class="text-xs text-orange-600 mt-1">14건의 데이터가 비즈니스 규칙에 의해 자동 교정되었습니다. 로그를 확인하세요.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

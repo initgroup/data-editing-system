@@ -1,0 +1,67 @@
+<!-- rule_discovery.html -->
+<div class="space-y-6">
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+        <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
+            <span class="w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-sm">1</span>
+            발굴 대상 설정
+        </h3>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-500 mb-1">대상 테이블</label>
+                <select id="targetTable" class="w-full border-gray-300 rounded-lg p-2 border">
+                    <option>POPULATION</option>
+                    <option>HOUSEHOLD</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-500 mb-1">분석 컬럼</label>
+                <input type="text" id="targetColumn" value="SALARY" class="w-full border-gray-300 rounded-lg p-2 border">
+            </div>
+            <div class="flex items-end">
+                <button onclick="startDiscovery()" id="runBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-all">
+                    규칙발굴 실행
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="discoveryStatus" class="hidden bg-blue-50 border border-blue-200 p-4 rounded-lg flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+            <span class="text-blue-700 font-medium">데이터 분석 및 규칙 발굴 중...</span>
+        </div>
+        <span id="timer" class="text-blue-600 font-mono">00:00</span>
+    </div>
+
+    <div id="errorSection" class="hidden bg-red-50 border border-red-200 p-4 rounded-lg">
+        <div class="flex items-center gap-3">
+            <svg class="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+            </svg>
+            <div>
+                <h4 class="text-sm font-bold text-red-800">실행 오류 발생</h4>
+                <p id="errorMessage" class="text-xs text-red-700 mt-1"></p>
+            </div>
+        </div>
+    </div>
+
+    <div id="resultSection" class="hidden bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+        <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
+            <span class="w-6 h-6 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-sm">2</span>
+            발굴된 규칙 목록
+        </h3>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm text-left">
+                <thead class="bg-gray-50 text-gray-600 uppercase text-xs">
+                    <tr>
+                        <th class="px-4 py-3">유형</th>
+                        <th class="px-4 py-3">규칙 설명</th>
+                        <th class="px-4 py-3 text-center">신뢰도</th>
+                        <th class="px-4 py-3 text-right">관리</th>
+                    </tr>
+                </thead>
+                <tbody id="ruleResultBody" class="divide-y divide-gray-100"></tbody>
+            </table>
+        </div>
+    </div>
+</div>

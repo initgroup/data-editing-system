@@ -1,0 +1,59 @@
+<div class="space-y-6 animate-fadeIn">
+    <div class="flex justify-between items-end mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800">규칙확정</h1>
+            <p class="text-gray-500 text-sm mt-1">발굴된 규칙을 검토하고 최종 비즈니스 규칙으로 승인하거나 거부합니다.</p>
+        </div>
+        <div class="flex gap-2">
+            <button onclick="M02003.renderRulesTable()" class="bg-white border border-gray-300 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-gray-50 transition">
+                <i class="fas fa-sync-alt mr-2"></i>새로고침
+            </button>
+            <button onclick="M02003.approveSelected()" class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md hover:bg-green-700 transition">
+                <i class="fas fa-check-double mr-2"></i>일괄 승인
+            </button>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+            <p class="text-xs font-bold text-gray-400 uppercase">전체 규칙</p>
+            <p class="text-2xl font-black text-gray-800 mt-1" id="total-rules">0</p>
+        </div>
+        <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm border-l-4 border-l-yellow-400">
+            <p class="text-xs font-bold text-yellow-600 uppercase">검토 대기</p>
+            <p class="text-2xl font-black text-gray-800 mt-1" id="pending-rules">0</p>
+        </div>
+        <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm border-l-4 border-l-green-500">
+            <p class="text-xs font-bold text-green-600 uppercase">승인 완료</p>
+            <p class="text-2xl font-black text-gray-800 mt-1" id="approved-rules">0</p>
+        </div>
+        <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm border-l-4 border-l-red-500">
+            <p class="text-xs font-bold text-red-600 uppercase">반려됨</p>
+            <p class="text-2xl font-black text-gray-800 mt-1" id="rejected-rules">0</p>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div class="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+            <h2 class="font-bold text-gray-700 flex items-center gap-2">
+                <i class="fas fa-clipboard-check text-blue-500"></i> 검토 대상 목록
+            </h2>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-left">
+                <thead class="bg-gray-50 text-gray-500 text-xs uppercase font-bold">
+                    <tr>
+                        <th class="px-6 py-3 border-b text-center w-12"><input type="checkbox" class="rounded"></th>
+                        <th class="px-6 py-3 border-b">ID</th>
+                        <th class="px-6 py-3 border-b">규칙 명칭</th>
+                        <th class="px-6 py-3 border-b">대상 테이블/컬럼</th>
+                        <th class="px-6 py-3 border-b">상태</th>
+                        <th class="px-6 py-3 border-b text-right">작업</th>
+                    </tr>
+                </thead>
+                <tbody id="rules-tbody" class="text-sm divide-y divide-gray-100">
+                    </tbody>
+            </table>
+        </div>
+    </div>
+</div>

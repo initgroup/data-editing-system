@@ -1,0 +1,87 @@
+<div class="space-y-6 animate-fadeIn">
+    <div class="flex justify-between items-end mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800">통계 보고서</h1>
+            <p class="text-gray-500 text-sm mt-1">에디팅 수행 결과 및 데이터 품질 현황에 대한 종합 보고서를 생성합니다.</p>
+        </div>
+        <div class="flex gap-2">
+            <button onclick="M04001.downloadReport()" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md hover:bg-blue-700 transition">
+                <i class="fas fa-file-export mr-2"></i>보고서 내보내기 (PDF/Excel)
+            </button>
+        </div>
+    </div>
+
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+        <h2 class="text-sm font-bold text-gray-400 uppercase mb-4 tracking-wider">Report Configuration</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">보고서 종류</label>
+                <select id="report-type" class="w-full border-gray-300 rounded-lg p-2.5 border focus:ring-2 focus:ring-blue-500 outline-none">
+                    <option value="quality">데이터 품질 분석 보고서</option>
+                    <option value="editing">에디팅 작업 이력 보고서</option>
+                    <option value="violation">규칙 위반 현황 보고서</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">대상 기간</label>
+                <select id="report-period" class="w-full border-gray-300 rounded-lg p-2.5 border focus:ring-2 focus:ring-blue-500 outline-none">
+                    <option value="today">오늘</option>
+                    <option value="week">최근 1주일</option>
+                    <option value="month" selected>최근 1개월</option>
+                </select>
+            </div>
+            <div class="flex items-end">
+                <button onclick="M04001.generatePreview()" class="w-full bg-slate-800 text-white py-2.5 rounded-lg font-bold hover:bg-slate-900 transition">
+                    보고서 생성/조회
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="report-preview-area" class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden min-h-[500px]">
+        <div class="p-5 border-b bg-gray-50 flex justify-between items-center">
+            <h3 class="font-bold text-gray-700" id="preview-title">데이터 품질 분석 보고서 (미리보기)</h3>
+            <span class="text-xs text-gray-400 font-mono" id="preview-date">2024-05-20 기준</span>
+        </div>
+        
+        <div class="p-8 space-y-8" id="preview-content">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="p-6 bg-blue-50 rounded-xl border border-blue-100">
+                    <div class="text-sm font-bold text-blue-600 mb-1">전체 검사 데이터</div>
+                    <div class="text-3xl font-black text-blue-900">1,240,500 <span class="text-sm font-normal">건</span></div>
+                </div>
+                <div class="p-6 bg-red-50 rounded-xl border border-red-100">
+                    <div class="text-sm font-bold text-red-600 mb-1">최종 위반율</div>
+                    <div class="text-3xl font-black text-red-900">0.42 <span class="text-sm font-normal">%</span></div>
+                </div>
+                <div class="p-6 bg-green-50 rounded-xl border border-green-100">
+                    <div class="text-sm font-bold text-green-600 mb-1">품질 점수</div>
+                    <div class="text-3xl font-black text-green-900">94.8 <span class="text-sm font-normal">점</span></div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div class="space-y-4">
+                    <h4 class="text-sm font-bold text-gray-800 border-l-4 border-blue-500 pl-2">위반 유형별 분포</h4>
+                    <div class="h-64 bg-gray-50 rounded-lg border border-dashed border-gray-300 flex items-center justify-center">
+                        <canvas id="typeChart"></canvas>
+                    </div>
+                </div>
+                <div class="space-y-4">
+                    <h4 class="text-sm font-bold text-gray-800 border-l-4 border-green-500 pl-2">일별 품질 추이</h4>
+                    <div class="h-64 bg-gray-50 rounded-lg border border-dashed border-gray-300 flex items-center justify-center">
+                        <canvas id="trendChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-6 bg-gray-50 rounded-lg">
+                <h4 class="font-bold text-gray-800 mb-2">분석 결론</h4>
+                <p class="text-sm text-gray-600 leading-relaxed">
+                    최근 1개월간의 데이터 품질은 안정적인 상태(B+)를 유지하고 있습니다. <br>
+                    주요 위반 사항은 '주소 정보 누락'이며, 이는 자동 에디팅 규칙 보완을 통해 개선 가능할 것으로 판단됩니다.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
