@@ -3,7 +3,7 @@ from fastapi.staticfiles import StaticFiles
 import os
 import logging
 from fastapi.middleware.cors import CORSMiddleware
-from routers import (home, M00000, M01001, M01002, M01003, M02001, M02002, M02003, M03001, M03002, M03003, M04001, M05001)
+from backend.routers import (home, M00000, M01001, M01002, M01003, M02001, M02002, M02003, M03001, M03002, M03003, M04001, M05001)
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
