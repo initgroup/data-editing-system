@@ -192,49 +192,64 @@
 
         // 1. 공통 메뉴 클릭 핸들러 함수 정의
         function handleMenuClick(e) {
+            // 1. 이벤트 전파 및 기본 동작 즉시 중단
             e.preventDefault();
+            e.stopPropagation();
             
-            // 클릭된 요소가 a인지 button인지 확인하여 가장 가까운 요소 선택
+            // 2. 정확한 타겟 찾기 (클릭된 내부 요소가 아닌 data-page가 있는 부모)
             const target = e.currentTarget; 
             const page = target.dataset.page;
 
-            // [추가] 만약 클릭한 게 '버튼(폴더)'라면?
+            // 3. 폴더 버튼(BUTTON) 클릭 시 처리
             if (target.tagName === 'BUTTON') {
-                // 바로 다음에 오는 서브메뉴 그룹(.submenu) 내의 첫 번째 <a> 태그를 찾습니다.
-                const firstSubMenu = target.nextElementSibling?.querySelector('a');
-                
+                const submenu = target.nextElementSibling;
+                // 서브메뉴가 닫혀있다면 열어줌
+                if (submenu && submenu.classList.contains('hidden')) {
+                    submenu.classList.remove('hidden');
+                }
+
+                const firstSubMenu = submenu?.querySelector('a');
                 if (firstSubMenu) {
-                    // 하위 메뉴가 있다면 해당 메뉴를 클릭한 것처럼 시뮬레이션하고 함수 종료
+                    // 자식 메뉴를 직접 클릭하고 함수 종료
                     firstSubMenu.click(); 
-                    return; // 버튼 자체의 로직은 여기서 중단 (이후 a태그 로직이 다시 실행됨)
+                    return; 
                 }
             }
+
+            // 4. 제목 추출 (아이콘 등을 제외한 텍스트만)
+            // 텍스트를 span으로 감싸지 않았을 경우를 대비해 cloneNode 사용
+            const tempNode = target.cloneNode(true);
+            const icons = tempNode.querySelectorAll('i');
+            icons.forEach(i => i.remove()); // 아이콘 태그 제거
+            let title = tempNode.innerText.trim();
             
-            // 1-1. 제목 설정 (let 사용)
-            let title = target.innerText.trim();
+            // 5. 홈 예외 처리
             if (page === 'home') {
                 title = '인아이티 Data Editing 시스템';
             }
 
+            // 6. 페이지 로드 (명확하게 데이터가 있는지 확인 후 실행)
             if (page) {
-                // 1-2. 페이지 로드
+                console.log("Loading Page:", page, "with Title:", title); // 디버깅용
+
+                // 타이틀 출력을 보장하기 위해 PageManager 호출
                 PageManager.load(page, title);
 
-                // 3. 배경색(활성화) 스타일 처리
-                // 모든 메뉴에서 일단 제거
+                // 메뉴 활성화 스타일 처리
                 document.querySelectorAll('#mainNav a, #mainNav button').forEach(el => {
                     el.classList.remove('menu-active', 'bg-blue-700');
                 });
                 
-                // [수정 핵심] 클릭한 요소가 'A' 태그(하위 메뉴)일 때만 배경색 추가
-                // 폴더(Button)를 눌렀을 때는 페이지는 이동하되 배경은 변하지 않음
                 if (target.tagName === 'A') {
                     target.classList.add('menu-active', 'bg-blue-700');
                 }
 
-                // 4. 모바일에서 사이드바 닫기
+                // 7. 모바일 레이아웃 닫기 (비동기로 실행하여 UI 충돌 방지)
                 if (window.innerWidth <= 1024 && typeof LayoutManager !== 'undefined') {
-                    LayoutManager.close(); 
+                    // 타이틀이 찍힌 직후에 닫히도록 0ms 타임아웃 사용
+                    setTimeout(() => {
+                        LayoutManager.close();
+                    }, 50);
                 }
             }
         }

@@ -11,8 +11,10 @@ const PageManager = {
     async load(page, title) {
         const body = document.getElementById('contentBody');
         const titleEl = document.getElementById('contentTitle');
-        
-        titleEl.innerText = title;
+
+        if (titleEl) {
+            titleEl.innerText = title; // 이 부분이 실행되는지 확인
+        }
         body.innerHTML = `<div class='flex justify-center p-10'><i class="fas fa-spinner fa-spin text-3xl text-blue-500"></i></div>`;
         
         try {
