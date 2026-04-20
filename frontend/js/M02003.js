@@ -1,7 +1,7 @@
 /**
  * M02003: 규칙 확정 스크립트
  */
-{
+(function() {
     const M02003 = {
         // 원본 rule-confirmation.html의 샘플 데이터 구조 유지
         rules: [
@@ -100,4 +100,4 @@
     // 전역 초기화 함수 및 네임스페이스 등록
     window.initM02003Page = () => M02003.init();
     window.M02003 = M02003;
-}
+})();

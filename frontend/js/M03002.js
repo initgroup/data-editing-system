@@ -1,7 +1,7 @@
 /**
  * M03002: 에디팅 판단 스크립트
  */
-{
+(function() {
     const M03002 = {
         // 원본 데이터 컨텍스트 유지
         currentViolation: {
@@ -69,4 +69,4 @@
     // 전역 초기화 함수 및 네임스페이스 등록
     window.initM03002Page = () => M03002.init();
     window.M03002 = M03002;
-}
+})();

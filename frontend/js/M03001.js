@@ -1,7 +1,7 @@
 /**
  * M03001: 위반데이터 검토 스크립트
  */
-{
+(function() {
     const M03001 = {
         // 원본 violation-review.html의 데이터 샘플 유지
         violations: [
@@ -97,4 +97,4 @@
     // 전역 초기화 함수 설정
     window.initM03001Page = () => M03001.init();
     window.M03001 = M03001;
-}
+})();

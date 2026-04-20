@@ -1,7 +1,7 @@
 /**
  * M05001: 시스템 설정 스크립트
  */
-{
+(function() {
     const M05001 = {
         init() {
             console.log("M05001: 설정 모듈 로드");
@@ -59,4 +59,4 @@
     // 전역 초기화 함수 등록
     window.initM05001Page = () => M05001.init();
     window.M05001 = M05001;
-}
+})();

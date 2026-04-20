@@ -1,7 +1,7 @@
 /**
  * M02002: 시각화 분석 스크립트
  */
-{
+(function() {
     const M02002 = {
         chartInstance: null,
         currentType: 'bar',
@@ -75,4 +75,4 @@
     // 전역 초기화 함수 및 네임스페이스 등록
     window.initM02002Page = () => M02002.init();
     window.M02002 = M02002;
-}
+})();

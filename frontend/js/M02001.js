@@ -1,7 +1,7 @@
 /**
  * M02001: 규칙 발굴 스크립트
  */
-{
+(function() {
     const M02001 = {
         async init() {
             console.log("M02001: 규칙 발굴 모듈 로드 완료");
@@ -351,4 +351,4 @@
     // 전역 초기화 함수
     window.initM02001Page = () => M02001.init();
     window.M02001 = M02001;
-}
+})();

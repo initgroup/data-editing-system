@@ -1,7 +1,7 @@
 /**
  * M01002.js: 메타정보 관리
  */
-{
+(function() {
     const M01002 = {
         sampleMetadata: [
             { id: 1, tableName: "TB_CUST_INFO", logicalName: "고객기본정보", columnCount: 24, description: "고객의 기본 인적 사항" },
@@ -56,4 +56,4 @@
     // 전역 초기화 함수 설정
     window.initM01002Page = () => M01002.init();
     window.M01002 = M01002;
-}
+})();

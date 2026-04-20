@@ -1,7 +1,7 @@
 /**
  * M01001.js: 데이터 조회 및 관리
  */
-{
+(function() {
     const M01001 = {
         sampleData: [
             { id: 1, name: "고객 데이터 2024", type: "csv", size: "15.2 MB", rows: 125000, status: "active", registerDate: "2024-01-15", description: "2024년 고객 기본 정보" },
@@ -74,4 +74,4 @@
     // 전역 초기화 함수 설정
     window.initM01001Page = () => M01001.init();
     window.M01001 = M01001;
-}
+})();

@@ -126,6 +126,22 @@ body {
   font-weight: 500;
 }
 
+.content-header {
+  margin-bottom: 30px;
+}
+
+.content-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--c-dark);
+  margin-bottom: 8px;
+}
+
+.content-subtitle {
+  font-size: 14px;
+  color: var(--c-gray);
+}
+
 /* 카드 스타일 */
 .card {
   background: var(--c-white);
@@ -644,31 +660,6 @@ body {
   }
 }
 
-/* 헤더 영역 디자인 */
-.content-header {
-    background-color: #f8fafc !important; /* 메뉴바보다 밝지만 본문보다는 어두운 회색 */
-    border-bottom: 1px solid #e2e8f0 !important;
-}
-
-/* 타이틀 텍스트 강조 */
-#contentTitle {
-    color: #1e293b !important;
-    letter-spacing: -0.025em;
-}
-
-/* 하위 메뉴(A)는 배경색 전체 변경 */
-#mainNav a.menu-active {
-    background-color: #1d4ed8 !important; /* bg-blue-700 */
-    color: white !important;
-}
-
-/* 폴더(Button)는 글자색과 왼쪽 테두리 포인트만 변경 */
-#mainNav button.menu-active {
-    color: #facc15 !important; /* 글자색을 노란색 등으로 강조 */
-    border-left: 4px solid #facc15 !important;
-    background-color: transparent !important; /* 배경은 투명하게 유지 */
-}
-
 /* ==========================================================================
    최종 레이아웃: PC 여백 고정 + 모바일 오버랩 전용
    ========================================================================== */
@@ -707,12 +698,8 @@ body {
 /* 1. PC 모드 (1025px 이상 가로 폭) */
 @media (min-width: 1025px) {
     .sidebar {
-        opacity: 1 !important;
-        visibility: visible !important;
-        transform: translateX(0) !important;
-        right: auto !important;
-        left: 0 !important;
         position: fixed !important;
+        left: 0 !important;
         top: 0 !important;
         width: 260px !important;
         height: 100vh !important;
@@ -723,52 +710,23 @@ body {
         /* 기존 마진(약 20~40px)을 반(10px)으로 줄임 */
         /* 사이드바(260px) + 간격(10px) = 270px 지점에서 시작 */
         margin-left: 270px !important; 
-        padding: 0px !important;     /* 바깥 회색 마진 */
-        background-color: #f1f5f9;    /* 전체 배경 회색 */
-        min-height: 100vh;
+        margin-top: 10px !important;
+        margin-right: 10px !important;
+        margin-bottom: 10px !important;
         
         /* 너비 계산: 100% - (왼쪽 공간 270px + 오른쪽 여백 10px) */
-        width: calc(100% - 280px) !important;         
+        width: calc(100% - 280px) !important; 
+        
+        min-height: calc(100vh - 20px);       /* 화면 높이에 맞춰 꽉 차게 설정 */
         transition: all 0.3s ease;
 
-        display: flex;
-        flex-direction: column;
-    }    
-
-    /* 요청하신 클래스 내용 통합 (카드 전체 스타일) */
-    #contentWrapper {
-        background-color: #ffffff;
-/*         border-radius: 12px; 
-        border: 1px solid #e5e7eb;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1); */
-        min-height: calc(100vh - 20px);
-        overflow: hidden;
+        min-height: 100vh;
         display: flex;
         flex-direction: column;
     }
 
-    /* 헤더 영역: 메뉴바와 어울리는 연회색 */
-    .content-header {
-        background-color: #f8fafc !important; /* 좌측 메뉴바보다 밝은 회색 */
-        padding: 10px 10px !important;        /* 상단 여백 */
-        border-bottom: 1px solid #e5e7eb;     /* 헤더와 본문 구분선 */
-        margin-bottom: 10px;
-        position: relative; /* 그림자가 본문 위에 쌓이도록 */
-        z-index: 10;
-        box-shadow: 0 4px 6px -4px rgba(0, 0, 0, 0.1);
-    }
-
-    .content-header h1 {
-        font-size: 1.5rem;
-        font-weight: 700;
-        color: #1e293b;
-    }
-
-    /* 본문 영역 스타일 (요청하신 p-10 적용) */
     #contentBody {
-        padding: 30px !important;    /* p-10 (40px) */
         background-color: #ffffff !important; /* 본문 영역만 흰색 */
-        /* background-color: yellow !important;  */ /* 여백이 안맞을때 적용해서 확인해보자 */
         border-radius: 12px;
         box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05); /* 부드러운 그림자 */
         border: 1px solid #e5e7eb;
@@ -784,36 +742,19 @@ body {
 @media (max-width: 1024px) {
     .sidebar {
         position: fixed !important;
-        top: 0 !important;
-        left: auto !important;   /* 기존 left 제거 */
-        right: 0 !important;      /* 우측 고정 */
+        left: 0 !important;
         width: 280px !important;
         height: 100vh !important;
-        /* 오른쪽 밖으로 완전히 숨김 */
-        transform: translateX(100%) !important; 
-        /* [해결] 창 크기 조절 시 잔상 방지: opacity를 0으로 두었다가 show일 때만 1로 변경 */
-        opacity: 0;
-        visibility: hidden;
-        z-index: 200 !important;
-        background-color: #1E3A5F !important; /* 사이드바 배경색 유지 */
-        transition: transform 0.3s ease-in-out, opacity 0.2s ease !important;
+        transform: translateX(-100%) !important; /* 숨김 */
+        z-index: 200 !important; /* 본문 위로 올라옴 */
+        transition: transform 0.3s ease-in-out !important;
     }
 
-    /* 사이드바가 열렸을 때 위치 */
     .sidebar.show {
         transform: translateX(0) !important; /* 오버랩 표시 */
-        opacity: 1 !important;
-        visibility: visible !important;
     }
 
     .main-content {       
-        margin-left: 10px !important; 
-        margin-top: 0px !important;
-        margin-right: 10px !important;
-        margin-bottom: 10px !important;
-
-        padding: 10px !important;
-
         /* 너비 계산: 100% - (왼쪽 공간 270px + 오른쪽 여백 10px) */
         width: calc(100% - 10px) !important; 
         
@@ -825,42 +766,21 @@ body {
         flex-direction: column;
     }
 
-    /* 요청하신 클래스 내용 통합 (카드 전체 스타일) */
-    #contentWrapper {
-        background-color: #ffffff;
-/*         border-radius: 12px;
-        border: 1px solid #e5e7eb;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1); */
-        min-height: calc(100vh - 20px);
-        overflow: hidden;
-        display: flex;
-        flex-direction: column;
-    }
-
-    /* 헤더 영역: 메뉴바와 어울리는 연회색 */
-    .content-header {
-        background-color: #f8fafc !important; /* 좌측 메뉴바보다 밝은 회색 */
-        padding: 10px 10px !important;        /* 상단 여백 */
-        border-bottom: 1px solid #e5e7eb;     /* 헤더와 본문 구분선 */
-        margin-bottom: 10px;        
-        position: relative; /* 그림자가 본문 위에 쌓이도록 */
-        z-index: 10;
-        box-shadow: 0 4px 6px -4px rgba(0, 0, 0, 0.1);
-    }
-
-    .content-header h1 {
-        font-size: 1.5rem;
-        font-weight: 700;
-        color: #1e293b;
-    }
-
     #contentBody {
         background-color: #ffffff !important; /* 본문 영역만 흰색 */
         border-radius: 12px;
         box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05); /* 부드러운 그림자 */
         border: 1px solid #e5e7eb;
         flex-grow: 1; /* 컨텐츠가 적어도 바닥까지 흰색 유지 */
-        padding: 20px !important;
+    }
+
+    /* 본문 내부의 실제 흰색 카드 영역이 있다면 거기에도 적용 */
+    .main-content > div {
+        border-radius: 12px !important;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        background-color: #ffffff;
+        padding: 20px;
+        min-height: calc(100vh - 40px); /* 위아래 여백 제외한 높이 */
     }
 
     #mobile-menu-btn {
