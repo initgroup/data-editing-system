@@ -6,47 +6,64 @@
     font-family: 'Pretendard', sans-serif; /* 현대적인 폰트 적용 제안 */
 }
 
+/* 전체 컨테이너: 그림자 제거 및 높이 확보 */
 .gridjs-wrapper {
-    border-radius: 8px;
-    border: 1px solid #e5e7eb !important; /* Tailwind gray-200 */
-    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    min-height: 330px; /* 5줄 정도 나오도록 설정 */
 }
 
 .gridjs-table {
     width: 100% !important; /* 가로 100% 동적 조절 */
+    border-collapse: collapse;
 }
 
-/* 2. 헤더 스타일 (최신 트렌드: 연한 그레이 바탕 + 짙은 텍스트) */
+/* 헤더: 데이터 영역과 확실히 구분되는 연한 회색 배경 */
 .gridjs-th {
-    background-color: #f8fafc !important; /* Slate-50 */
-    color: #475569 !important; /* Slate-600 */
-    font-weight: 600 !important;
-    text-transform: uppercase;
-    font-size: 0.75rem;
-    letter-spacing: 0.05em;
+    background-color: #f1f5f9 !important; 
+    color: #1e293b !important;
+    font-weight: 700 !important;
     padding: 14px 16px !important;
-    border-bottom: 2px solid #e2e8f0 !important;
-}
-
-/* 3. 데이터 로우(행) 및 구분선 스타일 */
-.gridjs-td {
-    padding: 12px 16px !important;
-    border-bottom: 1px solid #f1f5f9 !important; /* 아주 연한 구분선 */
-    color: #1e293b; /* Slate-800 */
-    font-size: 0.875rem;
-}
-
-/* 행 오버 효과 (Hover) */
-.gridjs-tr:hover .gridjs-td {
-    background-color: #f1f5f9 !important; /* Slate-100 */
-    cursor: pointer;
-}
-
-/* 4. 하단 페이징 영역 스타일 */
-.gridjs-footer {
     border-top: none !important;
+    border-left: none !important;
+    border-right: none !important;
+    border-bottom: 1px solid #cbd5e1 !important;
+}
+
+/* 행(TD): 좌우 경계선 제거 및 행간 줄만 표시 */
+.gridjs-td {
+    padding: 14px 16px !important;
+    border-left: none !important;
+    border-right: none !important;
+    border-bottom: 1px solid #f1f5f9 !important;
+    color: #334155;
+    background-color: #ffffff;
+}
+
+/* 마우스 오버 효과 */
+.gridjs-tr:hover .gridjs-td {
+    background-color: #f8fafc !important; /* 미세한 하이라이트 */
+    transition: background-color 0.2s ease;
+}
+
+/* 선택된 행 스타일 (JS에서 클래스 추가 시 작동) */
+.gridjs-tr.gridjs-tr-selected .gridjs-td {
+    background-color: #e0f2fe !important; /* 연한 블루 배경 */
+    color: #0369a1 !important;
+}
+
+/* 선택된 행의 왼쪽 끝 파란색 포인트 바 */
+.gridjs-tr.gridjs-tr-selected .gridjs-td:first-child {
+    box-shadow: inset 4px 0 0 #0ea5e9;
+}
+
+/* 하단 페이징 영역 */
+.gridjs-footer {
+    border-top: 1px solid #f1f5f9 !important;
+    border-left: none !important;
+    border-right: none !important;
     padding: 12px 0 !important;
-    background-color: transparent !important;
 }
 
 .gridjs-pagination {
@@ -82,9 +99,11 @@
 
 /* 정렬 아이콘 스타일 */
 .gridjs-sort {
+    margin-left: 8px;
     float: right;
     opacity: 0.3;
 }
+
 .gridjs-th:hover .gridjs-sort {
     opacity: 1;
 }

@@ -9,6 +9,10 @@ const PageManager = {
 
     // 페이지 로드 시 실행
     async load(page, title) {
+        // [수정] 조회 시작 시 기존 메시지 영역을 먼저 숨깁니다.
+        if (typeof CommonUI !== 'undefined') CommonUI.hideMessage();
+        if (typeof CommonUI !== 'undefined') CommonUI.hideLoading();
+        
         const body = document.getElementById('contentBody');
         const titleEl = document.getElementById('contentTitle');
 
@@ -65,6 +69,10 @@ const PageManager = {
         const module = window[page]; // M01001.js 등에서 window.M01001로 할당한 객체
         if (module && typeof module.init === 'function') {
             module.init();
+            // [추가] 메뉴를 다시 클릭했을 때 기존 데이터를 비워주기 위해 호출
+            if (typeof module.resetSearch === 'function') {
+                module.resetSearch(1);
+            }
             this.currentModule = module;
             this.modules[page] = module; // 캐시에 저장
         }

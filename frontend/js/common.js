@@ -48,9 +48,12 @@ const CommonUI = {
     hideMessage() {
         const box = document.getElementById('errorBox');
         if (box) {
-            // 2. 숨길 때 여백도 함께 제거하여 본문이 위로 딱 붙게 함
-            box.classList.add('hidden');
-            box.classList.remove('mb-6');
+            // [개선] 즉시 숨기지 않고 투명도 조절로 부드럽게 처리
+            box.style.opacity = '0';
+            // 애니메이션 후 공간을 비워야 할 때만 hidden (선택 사항)
+            setTimeout(() => {
+                if(box.style.opacity === '0') box.classList.add('invisible'); 
+            }, 300);
         }
     },
 
@@ -65,19 +68,28 @@ const CommonUI = {
         
         if (!box || !text) return;
 
+        // 1. 메시지 텍스트 삽입
         text.innerText = msg;
         
-        // 1. 메시지 표시와 동시에 하단 여백 추가 (평소엔 0)
-        box.classList.remove('hidden');
-        box.classList.add('mb-6'); 
-
+        // 2. 초기 상태 설정 (숨김 해제 및 애니메이션 준비)
+        box.classList.remove('hidden', 'invisible');
+        
+        // 3. 타입에 따른 스타일 결정 (중복 제거 및 최적화)
+        // 공통 스타일: 하단 고정용 그림자(shadow-2xl)와 클릭 허용(pointer-events-auto) 포함
+        let baseClass = "pointer-events-auto relative border-l-4 p-4 rounded-md shadow-2xl transition-all duration-300 animate-slideUp ";
+        
         if (type === 'success') {
-            box.className = "relative border-l-4 p-4 rounded-md shadow-sm mb-6 bg-green-50 border-green-500 text-green-800 transition-all";
+            // 성공 스타일
+            box.className = baseClass + "bg-green-50 border-green-500 text-green-800";
             if (icon) icon.className = "fas fa-check-circle mr-3 text-lg text-green-500";
         } else {
-            box.className = "relative border-l-4 p-4 rounded-md shadow-sm mb-6 bg-red-50 border-red-500 text-red-800 transition-all";
+            // 에러 스타일
+            box.className = baseClass + "bg-red-50 border-red-500 text-red-800";
             if (icon) icon.className = "fas fa-exclamation-circle mr-3 text-lg text-red-500";
         }
+
+        // 4. 투명도 강제 적용 (CSS transition 연동)
+        box.style.opacity = '1';
     },
 
     /**
@@ -157,16 +169,84 @@ const CommonUI = {
                 tr.classList.add('bg-blue-100');
             }
         });
+    },
+
+    /**
+     * 특정 컨테이너 내의 모든 입력 요소 초기화
+     * @param {string} containerId - 초기화할 영역의 ID
+     */
+    clearInputs(containerId) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+
+        // 1. input(text, date), select 초기화
+        container.querySelectorAll('input[type="text"], input[type="date"], select').forEach(el => {
+            el.value = '';
+            if (el.tagName === 'SELECT' && el.id === 'subCombo') {
+                el.disabled = true; // 서브 콤보박스는 비활성화 상태로 복구
+                el.innerHTML = '<option value="">메인 먼저 선택</option>';
+            }
+        });
+
+        // 2. 체크박스 해제
+        container.querySelectorAll('input[type="checkbox"]').forEach(el => {
+            el.checked = false;
+        });
+
+        // 3. 메시지 숨기기
+        this.hideMessage();
+    }
+};
+
+const DataEditingSystem = {
+    /**
+     * JSON 데이터를 CSV 파일로 변환하여 다운로드
+     * @param {Array} data - 다운로드할 객체 배열
+     * @param {string} fileName - 저장될 파일명
+     */
+    downloadCSV(data, fileName) {
+        if (!data || !data.length) return;
+
+        // 1. 헤더 추출 (첫 번째 객체의 키값)
+        const headers = Object.keys(data[0]);
+        
+        // 2. CSV 내용 생성 (BOM 추가로 엑셀 한글 깨짐 방지)
+        const csvRows = [];
+        csvRows.push(headers.join(',')); // 헤더 행
+
+        for (const row of data) {
+            const values = headers.map(header => {
+                const escaped = ('' + row[header]).replace(/"/g, '\\"');
+                return `"${escaped}"`;
+            });
+            csvRows.push(values.join(','));
+        }
+
+        const csvString = '\uFEFF' + csvRows.join('\n'); // 한글 깨짐 방지 BOM 추가
+        const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        
+        // 3. 가상 링크 생성 및 클릭
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', fileName);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     }
 };
 
 // 전역 노출 설정 (이 부분이 있어야 M00000.js에서 찾을 수 있음)
 window.CommonUI = CommonUI;
+// 전역 객체로 노출 (M00000.js에서 참조 가능하도록)
+window.DataEditingSystem = DataEditingSystem;
 window.showLoading = () => CommonUI.showLoading();
 window.hideLoading = () => CommonUI.hideLoading();
 window.showError = (msg) => CommonUI.showError(msg);
 window.showSuccess = (msg) => CommonUI.showSuccess(msg);
 window.hideMessage = () => CommonUI.hideMessage();
+window.clearInputs = (id) => CommonUI.clearInputs(id);
 
 // M00000.js에서 호출하는 핵심 함수 연결
 window.createGrid = function(id, options) {

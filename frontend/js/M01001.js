@@ -1,59 +1,121 @@
 /**
- * M01001.js: 데이터 조회 및 관리
+ * @file        M01001.js
+ * @description 데이터 조회 및 관리 (M00000 표준 아키텍처 적용)
  */
 (function() {
     const M01001 = {
+        gridInstance: null,
+        currentData: [],
         sampleData: [
-            { id: 1, name: "고객 데이터 2024", type: "csv", size: "15.2 MB", rows: 125000, status: "active", registerDate: "2024-01-15", description: "2024년 고객 기본 정보" },
-            { id: 2, name: "거래 내역 데이터", type: "json", size: "28.7 MB", rows: 850000, status: "processing", registerDate: "2024-01-14", description: "전체 거래 내역 데이터" },
-            { id: 3, name: "제품 마스터 데이터", type: "excel", size: "2.1 MB", rows: 15000, status: "active", registerDate: "2024-01-13", description: "제품 기본 정보 마스터" },
-            { id: 4, name: "재무 데이터", type: "database", size: "45.3 MB", rows: 2100000, status: "error", registerDate: "2024-01-12", description: "재무 회계 데이터" },
-            { id: 5, name: "인사 데이터", type: "csv", size: "8.9 MB", rows: 68000, status: "inactive", registerDate: "2024-01-11", description: "직원 인사 정보" }
+            { id: 1, name: "고객 데이터 2024", type: "csv", size: "15.2 MB", rows: 125000, status: "active", registerDate: "2024-01-15" },
+            { id: 2, name: "거래 내역 데이터", type: "json", size: "28.7 MB", rows: 850000, status: "processing", registerDate: "2024-01-14" },
+            { id: 3, name: "제품 마스터 데이터", type: "excel", size: "2.1 MB", rows: 15000, status: "active", registerDate: "2024-01-13" },
+            { id: 4, name: "재무 데이터", type: "database", size: "45.3 MB", rows: 2100000, status: "error", registerDate: "2024-01-12" }
         ],
 
-        init() {
-            console.log("M01001: 데이터 관리 모듈 로드");
-            this.renderTable(this.sampleData);
+        async init() {
+            // [해결] DOM이 브라우저에 완전히 렌더링된 후 실행되도록 넉넉한 타이밍 부여
+            setTimeout(async () => {
+                this.initGrid();
+                this.bindEvents();
+                console.log("M01001 초기화 완료");
+            }, 100); 
         },
 
-        renderTable(data) {
-            const tbody = document.getElementById('data-tbody');
-            if (!tbody) return;
+        initGrid() {
+            const container = document.getElementById('gridContainer');
+            if (!container) {
+                console.warn("M01001: gridContainer를 아직 찾을 수 없습니다. (재시도)");
+                return;
+            }
 
-            tbody.innerHTML = data.map(item => `
-                <tr class="hover:bg-gray-50 border-b">
-                    <td class="px-4 py-3 text-center">${item.id}</td>
-                    <td class="px-4 py-3 font-bold text-gray-700">${item.name}</td>
-                    <td class="px-4 py-3 text-center"><span class="px-2 py-1 bg-gray-100 rounded text-xs uppercase">${item.type}</span></td>
-                    <td class="px-4 py-3 text-right text-gray-500">${item.size}</td>
-                    <td class="px-4 py-3 text-right font-mono">${item.rows.toLocaleString()}</td>
-                    <td class="px-4 py-3 text-center">${this.getStatusBadge(item.status)}</td>
-                    <td class="px-4 py-3 text-center text-gray-500 text-sm">${item.registerDate}</td>
-                    <td class="px-4 py-3 text-center">
-                        <button onclick="M01001.previewData(${item.id})" class="text-blue-600 hover:text-blue-800 mr-3" title="미리보기"><i class="fas fa-eye"></i></button>
-                        <button onclick="M01001.editData(${item.id})" class="text-green-600 hover:text-green-800 mr-3" title="편집"><i class="fas fa-edit"></i></button>
-                        <button onclick="M01001.deleteData(${item.id})" class="text-red-600 hover:text-red-800" title="삭제"><i class="fas fa-trash"></i></button>
-                    </td>
-                </tr>
-            `).join('');
+            // [공통] common.js의 createGrid 함수를 사용하여 스타일 일관성 유지
+            this.gridInstance = createGrid('gridContainer', {
+                columns: [
+                    { id: 'id', name: 'ID', width: '80px' },
+                    { id: 'name', name: '데이터명', width: '250px' },
+                    { id: 'type', name: '유형', width: '100px' },
+                    { id: 'size', name: '크기', width: '100px' },
+                    { 
+                        id: 'status', 
+                        name: '상태', 
+                        width: '120px',
+                        formatter: (cell) => gridjs.html(this.getStatusBadge(cell))
+                    },
+                    {
+                        name: '관리',
+                        width: '100px',
+                        formatter: (_, row) => gridjs.html(`
+                            <button onclick="M01001.previewData(${row.cells[0].data})" class="text-blue-600 hover:underline">보기</button>
+                        `)
+                    }
+                ],
+                data: [], // 초기 데이터는 빈 배열
+                sort: true,
+                pagination: { limit: 10 }
+            });
+        },
+
+        bindEvents() {
+            // 엔터키 검색 이벤트 등
+        },
+
+        async searchSync() {
+            if (typeof showLoading === 'function') showLoading();
+            if (window.CommonUI) window.CommonUI.hideMessage();
+
+            try {
+                // 실제 서비스 시 API 연동 구간
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                this.currentData = this.sampleData;
+                
+                if (this.gridInstance) {
+                    this.gridInstance.updateConfig({ data: this.currentData }).forceRender();
+                    if (typeof showSuccess === 'function') showSuccess(`${this.currentData.length}건이 조회되었습니다.`);
+                }
+            } catch (e) {
+                if (typeof showError === 'function') showError("데이터 조회 실패");
+            } finally {
+                if (typeof hideLoading === 'function') hideLoading();
+            }
+        },
+
+        resetSearch() {
+            this.currentData = [];
+            // common.js 유틸리티 사용 (입력창 초기화)
+            if (window.clearInputs) window.clearInputs('page-container');
+            if (this.gridInstance) {
+                this.gridInstance.updateConfig({ data: [] }).forceRender();
+            }
+        },
+
+        downloadExcel() {
+            if (!this.currentData || this.currentData.length === 0) {
+                if (typeof showError === 'function') showError("다운로드할 데이터가 없습니다.");
+                return;
+            }
+            if (window.DataEditingSystem?.downloadCSV) {
+                window.DataEditingSystem.downloadCSV(this.currentData, 'M01001_Data.csv');
+            }
         },
 
         getStatusBadge(status) {
             const classes = {
                 active: "bg-green-100 text-green-700",
                 processing: "bg-blue-100 text-blue-700",
-                error: "bg-red-100 text-red-700",
-                inactive: "bg-gray-100 text-gray-700"
+                error: "bg-red-100 text-red-700"
             };
-            return `<span class="${classes[status] || classes.inactive} px-2 py-1 rounded-full text-[11px] font-bold uppercase">${status}</span>`;
+            return `<span class="${classes[status] || 'bg-gray-100 text-gray-700'} px-2 py-1 rounded text-[11px] font-bold uppercase">${status}</span>`;
         },
 
         previewData(id) {
+            const item = this.sampleData.find(d => d.id === id);
             const modal = document.getElementById('preview-modal');
             const content = document.getElementById('preview-content');
-            if (!modal || !content) return;
+            if (!modal || !content || !item) return;
 
-            content.innerHTML = `<div class="p-4 bg-gray-50 rounded border font-mono text-sm">데이터 ID ${id}의 상세 미리보기 내용을 로드 중입니다...</div>`;
+            content.innerHTML = `<pre class="bg-gray-50 p-4 rounded border text-sm">${JSON.stringify(item, null, 2)}</pre>`;
             modal.classList.remove('hidden');
             modal.classList.add('flex');
         },
@@ -64,14 +126,8 @@
                 modal.classList.add('hidden');
                 modal.classList.remove('flex');
             }
-        },
-
-        editData(id) { alert(`ID ${id} 편집 화면으로 이동합니다.`); },
-        
-        deleteData(id) { if (confirm('정말로 삭제하시겠습니까?')) alert('삭제되었습니다.'); }
+        }
     };
 
-    // 전역 초기화 함수 설정
-    window.initM01001Page = () => M01001.init();
     window.M01001 = M01001;
 })();

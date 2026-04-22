@@ -300,29 +300,6 @@ body {
   color: #B91C1C;
 }
 
-/* 반응형 */
-@media (max-width: 768px) {
-  .sidebar {
-    transform: translateX(-100%);
-    transition: transform 0.3s;
-  }
-  
-  .sidebar.open {
-    transform: translateX(0);
-  }
-  
-  
-  .row {
-    flex-direction: column;
-  }
-  
-  .col,
-  [class*="col-"] {
-    flex: 0 0 100%;
-    max-width: 100%;
-  }
-}
-
 /* 로딩 스피너 */
 .loading {
   display: inline-block;
@@ -489,25 +466,9 @@ body {
   font-weight: 500;
 }
 
-.stat-change.positive {
-  color: var(--c-green);
-}
-
-.stat-change.negative {
-  color: var(--c-red);
-}
-
-.stat-change.neutral {
-  color: var(--c-gray);
-}
-
-/* 페이지네이션 스타일 */
-.pagination {
-  display: flex;
-  justify-content: center;
-  gap: 8px;
-  margin-top: 20px;
-}
+.stat-change.positive { color: var(--c-green); }
+.stat-change.negative { color: var(--c-red); }
+.stat-change.neutral { color: var(--c-gray); }
 
 /* 알림 스타일 */
 .alert {
@@ -518,29 +479,10 @@ body {
   border-left: 4px solid;
 }
 
-.alert-success {
-  background: var(--c-green-light);
-  border-left-color: var(--c-green);
-  color: #047857;
-}
-
-.alert-danger {
-  background: var(--c-red-light);
-  border-left-color: var(--c-red);
-  color: #B91C1C;
-}
-
-.alert-warning {
-  background: var(--c-yellow-light);
-  border-left-color: var(--c-yellow);
-  color: #92400E;
-}
-
-.alert-info {
-  background: var(--c-blue-light);
-  border-left-color: var(--c-blue);
-  color: #1E40AF;
-}
+.alert-success { background: var(--c-green-light); border-left-color: var(--c-green); color: #047857; }
+.alert-danger { background: var(--c-red-light); border-left-color: var(--c-red); color: #B91C1C; }
+.alert-warning { background: var(--c-yellow-light); border-left-color: var(--c-yellow); color: #92400E; }
+.alert-info { background: var(--c-blue-light); border-left-color: var(--c-blue); color: #1E40AF; }
 
 /* 로딩 오버레이 */
 .loading-overlay {
@@ -565,20 +507,9 @@ body {
 }
 
 /* 버튼 크기 변형 */
-.btn-sm {
-  padding: 4px 8px;
-  font-size: 12px;
-}
-
-.btn-lg {
-  padding: 12px 24px;
-  font-size: 16px;
-}
-
-.btn-block {
-  display: block;
-  width: 100%;
-}
+.btn-sm { padding: 4px 8px; font-size: 12px; }
+.btn-lg { padding: 12px 24px; font-size: 16px; }
+.btn-block { display: block; width: 100%; }
 
 /* 체크박스 및 라디오 버튼 */
 .form-check {
@@ -592,13 +523,8 @@ body {
   margin-right: 8px;
 }
 
-/* 추가 반응형 디자인 */
-@media (max-width: 1200px) {
-  .col-xl-6 { flex: 0 0 50%; max-width: 50%; }
-  .col-xl-4 { flex: 0 0 33.333%; max-width: 33.333%; }
-  .col-xl-3 { flex: 0 0 25%; max-width: 25%; }
-}
 
+/* [유지] 필요한 반응형 그리드 시스템은 유지하되, 하단 최종 레이아웃과 충돌하지 않도록 배치 */
 @media (max-width: 992px) {
   .col-lg-6 { flex: 0 0 50%; max-width: 50%; }
   .col-lg-4 { flex: 0 0 33.333%; max-width: 33.333%; }
@@ -609,64 +535,6 @@ body {
   .col-md-6 { flex: 0 0 50%; max-width: 50%; }
   .col-md-4 { flex: 0 0 33.333%; max-width: 33.333%; }
   .col-md-3 { flex: 0 0 25%; max-width: 25%; }
-  
-  .header-content {
-    padding: 0 15px;
-  }
-}
-
-@media (max-width: 576px) {
-  .col-sm-12 { flex: 0 0 100%; max-width: 100%; }
-  .col-sm-6 { flex: 0 0 50%; max-width: 50%; }
-  
-  .modal-content {
-    margin: 10px;
-    max-width: calc(100vw - 20px);
-  }
-  
-  .modal-body {
-    padding: 15px;
-  }
-  
-  .modal-footer {
-    padding: 15px;
-    flex-direction: column;
-  }
-  
-  .modal-footer .btn {
-    width: 100%;
-    margin-left: 0;
-    margin-bottom: 8px;
-  }
-  
-  .modal-footer .btn:last-child {
-    margin-bottom: 0;
-  }
-}
-
-/* 헤더 영역 디자인 */
-.content-header {
-    background-color: #f8fafc !important; /* 메뉴바보다 밝지만 본문보다는 어두운 회색 */
-    border-bottom: 1px solid #e2e8f0 !important;
-}
-
-/* 타이틀 텍스트 강조 */
-#contentTitle {
-    color: #1e293b !important;
-    letter-spacing: -0.025em;
-}
-
-/* 하위 메뉴(A)는 배경색 전체 변경 */
-#mainNav a.menu-active {
-    background-color: #1d4ed8 !important; /* bg-blue-700 */
-    color: white !important;
-}
-
-/* 폴더(Button)는 글자색과 왼쪽 테두리 포인트만 변경 */
-#mainNav button.menu-active {
-    color: #facc15 !important; /* 글자색을 노란색 등으로 강조 */
-    border-left: 4px solid #facc15 !important;
-    background-color: transparent !important; /* 배경은 투명하게 유지 */
 }
 
 /* ==========================================================================
@@ -682,29 +550,18 @@ body {
 
 #sidebar-overlay {
     position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.5); /* 어두운 회색 */
-    backdrop-filter: blur(2px);          /* 배경 블러 처리 */
-    z-index: 150;                        /* 사이드바(200)보다 낮고 본문보다 높게 */
-    display: none;                       /* 기본은 숨김 */
+    top: 0; left: 0; width: 100%; height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(2px);
+    z-index: 150;
+    display: none;
 }
 
-/* active 클래스가 붙었을 때만 보이게 설정 */
 #sidebar-overlay.active {
     display: block !important;
 }
 
-/* 사이드바는 오버레이보다 위에 있어야 함 */
-@media (max-width: 1024px) {
-    .sidebar {
-        z-index: 200 !important;
-    }
-}
-
-/* 1. PC 모드 (1025px 이상 가로 폭) */
+/* 1. PC 모드 (1025px 이상) */
 @media (min-width: 1025px) {
     .sidebar {
         opacity: 1 !important;
@@ -720,40 +577,31 @@ body {
     }
 
     .main-content {
-        /* 기존 마진(약 20~40px)을 반(10px)으로 줄임 */
-        /* 사이드바(260px) + 간격(10px) = 270px 지점에서 시작 */
         margin-left: 270px !important; 
-        padding: 0px !important;     /* 바깥 회색 마진 */
-        background-color: #f1f5f9;    /* 전체 배경 회색 */
+        padding: 0px !important;
+        background-color: #f1f5f9;
         min-height: 100vh;
-        
-        /* 너비 계산: 100% - (왼쪽 공간 270px + 오른쪽 여백 10px) */
         width: calc(100% - 280px) !important;         
         transition: all 0.3s ease;
-
         display: flex;
         flex-direction: column;
     }    
 
-    /* 요청하신 클래스 내용 통합 (카드 전체 스타일) */
     #contentWrapper {
         background-color: #ffffff;
-/*         border-radius: 12px; 
-        border: 1px solid #e5e7eb;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1); */
         min-height: calc(100vh - 20px);
         overflow: hidden;
         display: flex;
         flex-direction: column;
     }
 
-    /* 헤더 영역: 메뉴바와 어울리는 연회색 */
+    /* [중복 제거] 파일 중단에 있던 .content-header는 하단 이 정의로 통합됩니다. */
     .content-header {
-        background-color: #f8fafc !important; /* 좌측 메뉴바보다 밝은 회색 */
-        padding: 10px 10px !important;        /* 상단 여백 */
-        border-bottom: 1px solid #e5e7eb;     /* 헤더와 본문 구분선 */
+        background-color: #f8fafc !important;
+        padding: 10px 10px !important;
+        border-bottom: 1px solid #e5e7eb;
         margin-bottom: 10px;
-        position: relative; /* 그림자가 본문 위에 쌓이도록 */
+        position: relative;
         z-index: 10;
         box-shadow: 0 4px 6px -4px rgba(0, 0, 0, 0.1);
     }
@@ -764,86 +612,67 @@ body {
         color: #1e293b;
     }
 
-    /* 본문 영역 스타일 (요청하신 p-10 적용) */
     #contentBody {
-        padding: 30px !important;    /* p-10 (40px) */
-        background-color: #ffffff !important; /* 본문 영역만 흰색 */
-        /* background-color: yellow !important;  */ /* 여백이 안맞을때 적용해서 확인해보자 */
-        border-radius: 12px;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05); /* 부드러운 그림자 */
+        padding: 10px !important;
+        background-color: #ffffff !important;
+        border-radius: 0px;
+        /* box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05); */
+        box-shadow: none; 
         border: 1px solid #e5e7eb;
-        flex-grow: 1; /* 컨텐츠가 적어도 바닥까지 흰색 유지 */
-    }
+        flex-grow: 1;        
+        /* [선택사항] 테두리 선만 남기고 싶을 경우 아래 속성 유지, 선도 없애려면 border: none; */
+        border: none;
 
     #mobile-menu-btn, #sidebar-overlay {
         display: none !important;
     }
 }
 
-/* 2. 모바일 모드 (1024px 이하 가로 폭) */
+/* 2. 모바일 모드 (1024px 이하) */
 @media (max-width: 1024px) {
     .sidebar {
         position: fixed !important;
         top: 0 !important;
-        left: auto !important;   /* 기존 left 제거 */
-        right: 0 !important;      /* 우측 고정 */
+        right: 0 !important;
         width: 280px !important;
         height: 100vh !important;
-        /* 오른쪽 밖으로 완전히 숨김 */
         transform: translateX(100%) !important; 
-        /* [해결] 창 크기 조절 시 잔상 방지: opacity를 0으로 두었다가 show일 때만 1로 변경 */
         opacity: 0;
         visibility: hidden;
         z-index: 200 !important;
-        background-color: #1E3A5F !important; /* 사이드바 배경색 유지 */
+        background-color: #1E3A5F !important;
         transition: transform 0.3s ease-in-out, opacity 0.2s ease !important;
     }
 
-    /* 사이드바가 열렸을 때 위치 */
     .sidebar.show {
-        transform: translateX(0) !important; /* 오버랩 표시 */
+        transform: translateX(0) !important;
         opacity: 1 !important;
         visibility: visible !important;
     }
 
     .main-content {       
         margin-left: 10px !important; 
-        margin-top: 0px !important;
-        margin-right: 10px !important;
-        margin-bottom: 10px !important;
-
-        padding: 10px !important;
-
-        /* 너비 계산: 100% - (왼쪽 공간 270px + 오른쪽 여백 10px) */
-        width: calc(100% - 10px) !important; 
-        
-        min-height: calc(100vh - 20px);       /* 화면 높이에 맞춰 꽉 차게 설정 */
-        transition: margin-left 0.3s ease;
-
+        padding: 0px !important;
+        width: calc(100% - 20px) !important; 
         min-height: 100vh;
         display: flex;
         flex-direction: column;
     }
 
-    /* 요청하신 클래스 내용 통합 (카드 전체 스타일) */
     #contentWrapper {
         background-color: #ffffff;
-/*         border-radius: 12px;
-        border: 1px solid #e5e7eb;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1); */
         min-height: calc(100vh - 20px);
         overflow: hidden;
         display: flex;
         flex-direction: column;
     }
 
-    /* 헤더 영역: 메뉴바와 어울리는 연회색 */
     .content-header {
-        background-color: #f8fafc !important; /* 좌측 메뉴바보다 밝은 회색 */
-        padding: 10px 10px !important;        /* 상단 여백 */
-        border-bottom: 1px solid #e5e7eb;     /* 헤더와 본문 구분선 */
+        background-color: #f8fafc !important;
+        padding: 10px 10px !important;
+        border-bottom: 1px solid #e5e7eb;
         margin-bottom: 10px;        
-        position: relative; /* 그림자가 본문 위에 쌓이도록 */
+        position: relative;
         z-index: 10;
         box-shadow: 0 4px 6px -4px rgba(0, 0, 0, 0.1);
     }
@@ -855,11 +684,11 @@ body {
     }
 
     #contentBody {
-        background-color: #ffffff !important; /* 본문 영역만 흰색 */
+        background-color: #ffffff !important;
         border-radius: 12px;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05); /* 부드러운 그림자 */
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
         border: 1px solid #e5e7eb;
-        flex-grow: 1; /* 컨텐츠가 적어도 바닥까지 흰색 유지 */
+        flex-grow: 1;
         padding: 20px !important;
     }
 
@@ -867,4 +696,207 @@ body {
         display: flex !important;
         z-index: 210 !important;
     }
+}
+
+/* [추가 정리] 하위 메뉴 및 폴더 강조 스타일 (중복 선언 방지) */
+#mainNav a.menu-active {
+    background-color: #1d4ed8 !important;
+    color: white !important;
+}
+
+#mainNav button.menu-active {
+    color: #facc15 !important;
+    border-left: 4px solid #facc15 !important;
+    background-color: transparent !important;
+}
+
+/* ==========================================================================
+   M00000 전용 통합 스타일 (그리드 + 최신 UX + 레이아웃 동기화)
+   ========================================================================== */
+
+/* [기본/모바일] 공통 스타일 및 1열 배치 */
+.page-container {
+    display: flex;
+    flex-direction: column;
+    gap: 10px; /* 섹션 간 간격 확대 */
+    font-size: 15px;
+}
+
+/* 1. 타이틀 스타일 복구 및 강화 */
+/* 1. 페이지 헤더를 섹션 헤더 스타일과 동기화 */
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 10px 5px 10px; /* 하단 result-header와 동일한 여백 */
+    margin-bottom: 0px;
+}
+
+.page-title {
+    font-size: 1.25rem; /* h2.card-title과 유사한 크기 */
+    font-weight: 700;
+    color: #1e293b;
+    display: flex;
+    align-items: center;
+}
+
+/* 페이지 타이틀 앞에도 섹션 타이틀처럼 아이콘 추가 (선택 사항) */
+.page-title::before {
+    content: "\f05a"; /* FontAwesome circle-info 아이콘 */
+    font-family: "Font Awesome 6 Free";
+    font-weight: 900;
+    margin-right: 10px;
+    color: var(--c-blue);
+    font-size: 1.1rem;
+}
+
+/* 2. 좌우가 오픈된 섹션 디자인 */
+.search-section {
+    background: #ffffff;
+    padding: 24px 0;
+    border-top: 3px solid var(--c-blue);
+    border-left: none;
+    border-right: none;
+    margin-bottom: 0px; /* 두 섹션 사이 간격 */
+}
+
+.result-section {
+    background: #ffffff;
+    padding: 24px 0;
+    border-left: none;
+    border-right: none;
+    border-top: 1px solid #e2e8f0; /* 단순 실선 */
+    border-bottom: none;
+    
+    position: relative;
+    z-index: 1; /* 그림자가 위 섹션으로 살짝 겹치도록 설정 */
+    margin-top: -1px; /* 두 섹션 사이의 선이 겹치지 않게 미세 조정 */
+}
+
+/* 2. 결과 헤더 및 엑셀 아이콘 버튼 */
+.result-header {
+    background: linear-gradient(to right, #f8fafc, #ffffff); /* 세련된 그라데이션 */
+    border-top: 1px solid #e2e8f0;
+    border-bottom: 2px solid #334155; /* 확실한 영역 구분 */
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0; /* 그리드와 밀착 */
+}
+
+.result-header h4 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0;
+}
+
+/* 추가: 결과 헤더 내의 버튼이나 툴 영역 스타일 (필요시) */
+.result-tools {
+    display: flex;
+    gap: 8px;
+}
+
+.btn-icon-excel {
+    background: none;
+    border: none;
+    color: var(--c-green);
+    font-size: 1.4rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    padding: 4px;
+    border-radius: 6px;
+}
+
+.btn-icon-excel:hover {
+    background-color: var(--c-green-light);
+    transform: scale(1.15);
+}
+
+/* 폼 라벨 및 아이콘 블릿 */
+.form-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #4A5568;
+    margin-bottom: 8px;
+}
+
+/* 아이콘 블릿 (::before 활용) */
+.form-label::before {
+    content: "\f0da"; /* FontAwesome caret-right */
+    font-family: "Font Awesome 6 Free";
+    font-weight: 900;
+    color: var(--c-blue);
+    font-size: 12px;
+}
+
+.form-label.required::after {
+    content: " *";
+    color: var(--c-red);
+}
+
+/* 입력창 UX 개선 */
+.form-control {
+    height: 44px;
+    background-color: #F8FAFC;
+    border: 1.5px solid #E2E8F0;
+    font-size: 15px;
+}
+
+.form-control:focus {
+    background-color: #fff;
+    border-color: var(--c-blue);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* 조회조건 그리드 여백 조정 */
+.filter-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 20px;
+    padding: 0 10px; /* 내부 요소만 살짝 들여쓰기 */
+}
+
+/* 버튼 영역: 우측 정렬 및 상단 경계선 */
+.action-bar {
+    margin-top: 24px;
+    padding: 20px 10px 0 10px;
+    border-top: 1px dashed #e2e8f0; /* 조회조건과의 구분 경계선 */
+    display: flex;
+    justify-content: flex-end; /* 버튼 우측 정렬 */
+    gap: 12px;
+}
+
+/* 보라색 버튼 클래스 */
+.btn-purple {
+    background-color: var(--c-purple) !important;
+    color: white !important;
+}
+
+/* 보라색 버튼 클래스 */
+.btn-purple:hover {
+    background-color: #7c3aed !important;
+}
+
+
+/* [중간 해상도] 태블릿 등 (768px 이상) */
+@media (min-width: 768px) {
+    .filter-grid {
+        grid-template-columns: repeat(2, 1fr); /* 2열 */
+    }
+    .md-col-span-2 { grid-column: span 2; }
+}
+
+/* [최종 PC 모드] 기존 레이아웃 기준점 1025px에 맞춤 */
+@media (min-width: 1025px) {
+    .filter-grid {
+        grid-template-columns: repeat(4, 1fr); /* 4열 배치로 가로공간 극대화 */
+    }
+    .lg-col-span-2 { grid-column: span 2; }
 }
