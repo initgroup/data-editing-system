@@ -25,7 +25,7 @@ def get_db_connection():
         dsn = os.getenv("DB_DSN_CLD")  # <--- 이 부분이 핵심!
         base_dir = os.path.dirname(os.path.abspath(__file__))
         wallet_path = os.getenv("DB_WALLET_PATH", os.path.join(base_dir, "wallet"))
-        client_path = os.getenv("DB_CLIENT_PATH")
+        #client_path = os.getenv("DB_CLIENT_PATH")
     else:
         user = os.getenv("DB_USER_LOC")
         password = os.getenv("DB_PASSWORD_LOC")
@@ -41,17 +41,17 @@ def get_db_connection():
     try:
         if db_mode == "cloud":
             # 여기서 변수명을 CLD로 정확히 매칭합니다.            
-            print("☁️ [운영 환경] Oracle Cloud 26ai 데이터베이스에 접속 시도 중...")            
-            # 클라우드 환경: Wallet 경로가 제공되었다면 Thick 모드로 초기화
-            if wallet_path and client_path:
-                try:
-                    oracledb.init_oracle_client(lib_dir=client_path, config_dir=wallet_path)
-                    print("   - Thick 모드 활성화 완료 (Wallet 적용)")
-                except oracledb.ProgrammingError:
-                    pass # 이미 초기화된 경우 무시
+            print("☁️ [운영 환경] Oracle Cloud 26ai 데이터베이스에 접속 시도 중...")
             
             # 클라우드 DB 연결 (Wallet이 있으면 mTLS, 없으면 일반 TLS로 알아서 동작)
-            connection = oracledb.connect(user=user, password=password, dsn=dsn)       
+            #connection = oracledb.connect(user=user, password=password, dsn=dsn)       
+            connection = oracledb.connect(
+                user=user,
+                password=password,
+                dsn=dsn,
+                config_dir=wallet_path,
+                wallet_location=wallet_path,
+            )
 
             # --- [추가 코드 시작] AI 프로필 설정 ---
             # 커넥션 생성 직후, 해당 세션에 사용할 AI 프로필을 지정합니다.
