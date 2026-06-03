@@ -1,0 +1,92 @@
+<div class="space-y-6 animate-fadeIn">
+    <div class="flex justify-between items-end mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800">시각화 분석</h1>
+            <p class="text-gray-500 text-sm mt-1">데이터를 시각적으로 분석하여 패턴과 인사이트를 도출합니다.</p>
+        </div>
+        <div class="flex gap-2">
+            <button onclick="M02002.exportChart()" class="bg-white border border-gray-300 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-gray-50 transition">
+                <i class="fas fa-image mr-2"></i>차트 저장
+            </button>
+            <button onclick="M02002.updateChart()" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md hover:bg-indigo-700 transition">
+                <i class="fas fa-sync-alt mr-2"></i>적용 및 새로고침
+            </button>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <div class="lg:col-span-1 space-y-6">
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                <h3 class="font-bold text-gray-700 mb-4 flex items-center gap-2">
+                    <i class="fas fa-cog text-indigo-500"></i> 분석 설정
+                </h3>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">데이터셋</label>
+                        <select class="w-full border-gray-300 rounded-lg p-2 text-sm border outline-none focus:ring-2 focus:ring-indigo-500">
+                            <option>TB_CUST_INFO (고객정보)</option>
+                            <option>TB_ORD_HIST (거래내역)</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">차트 유형</label>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button onclick="M02002.setChartType('bar')" class="border rounded-lg p-2 text-xs font-bold hover:bg-indigo-50 hover:border-indigo-200 transition">막대 그래프</button>
+                            <button onclick="M02002.setChartType('line')" class="border rounded-lg p-2 text-xs font-bold hover:bg-indigo-50 hover:border-indigo-200 transition">선 그래프</button>
+                            <button onclick="M02002.setChartType('pie')" class="border rounded-lg p-2 text-xs font-bold hover:bg-indigo-50 hover:border-indigo-200 transition">파이 차트</button>
+                            <button onclick="M02002.setChartType('scatter')" class="border rounded-lg p-2 text-xs font-bold hover:bg-indigo-50 hover:border-indigo-200 transition">산점도</button>
+                        </div>
+                    </div>
+
+                    <div class="pt-4 border-t border-gray-100">
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">X축 (차원)</label>
+                        <select class="w-full border-gray-300 rounded-lg p-2 text-sm border mb-3">
+                            <option>AGE_GROUP</option>
+                            <option>REGION</option>
+                            <option>GENDER</option>
+                        </select>
+
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Y축 (측정값)</label>
+                        <select class="w-full border-gray-300 rounded-lg p-2 text-sm border">
+                            <option>COUNT(*)</option>
+                            <option>SUM(SALARY)</option>
+                            <option>AVG(PURCHASE_AMT)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="lg:col-span-3 space-y-6">
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200 min-h-[500px] flex flex-col">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 id="chartTitle" class="font-bold text-gray-800 text-lg">데이터 분석 결과 차트</h3>
+                    <div class="flex gap-2">
+                        <span class="bg-green-100 text-green-700 text-[10px] px-2 py-1 rounded font-bold uppercase">Live Data</span>
+                    </div>
+                </div>
+                
+                <div class="flex-1 w-full relative">
+                    <canvas id="mainVisualizationChart"></canvas>
+                </div>
+
+                <div class="mt-6 pt-6 border-t border-gray-100 grid grid-cols-3 gap-4">
+                    <div class="text-center">
+                        <p class="text-[10px] text-gray-400 font-bold uppercase">최대값</p>
+                        <p class="text-lg font-black text-gray-700">1,250,000</p>
+                    </div>
+                    <div class="text-center border-x border-gray-100">
+                        <p class="text-[10px] text-gray-400 font-bold uppercase">평균값</p>
+                        <p class="text-lg font-black text-gray-700">452,100</p>
+                    </div>
+                    <div class="text-center">
+                        <p class="text-[10px] text-gray-400 font-bold uppercase">표준편차</p>
+                        <p class="text-lg font-black text-gray-700">12,402</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

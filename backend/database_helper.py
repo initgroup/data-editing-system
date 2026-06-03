@@ -1,5 +1,6 @@
 import os
 import logging
+import re  # 정규표현식 추가 (바인드 변수 추출용)
 from typing import List, Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
@@ -59,63 +60,74 @@ class SqlLoader:
 SqlLoader.reload_queries()
 
 # [요구사항 11] DML 실행 모듈 (재사용 용이)
-def execute_query(conn, sql_id: str, params: Optional[Dict[str, Any]] = None, is_dml: bool = False, is_proc: bool = False) -> Dict[str, Any]:
+def execute_query(conn, sql_id: str, params: dict = None, is_dml: bool = False, is_proc: bool = False) -> Dict[str, Any]:
     """
     DB 커넥션과 SQL ID를 받아 쿼리를 실행하고 결과를 반환합니다.
     """
+    # 1. 커넥션 자체가 None인 경우 (연결 실패 상황) 처리
+    if conn is None:
+        logger.error("Database connection is None.")
+        return {
+            "status": "error_db",
+            "message": "데이터베이스 연결에 실패하였습니다. 관리자에게 문의하세요.",
+            "data": [],
+            "total": 0
+        }
+    
     cursor = None
     try:
-        cursor = conn.cursor()
-        
         # [요구사항 12] 파일에서 ID로 SQL 추출
         sql = SqlLoader.get_sql(sql_id)
-        safe_params = params or {}
+        if not sql:
+            # SQL을 못 찾으면 에러 메시지 반환
+            return {"data": [], "total": 0, "status": "error", "detail": f"SQL ID '{sql_id}'를 찾을 수 없습니다. (경로: {SqlLoader._file_path})"}
+        
+        cursor = conn.cursor()
 
-        if is_proc:
-            # 프로시저 호출 (sql 변수에는 프로시저명이 담김)
-            out_status = cursor.var(str)
-            out_msg = cursor.var(str)
-            cursor.callproc(sql, [safe_params.get('input_val', ''), out_status, out_msg])
+        filtered_params = {}
+        if params:
+            # 동적SQL문 치환
+            if 'dynamicTable' in params:
+                sql = sql.replace("/* --DYNAMIC_TABLE-- */", params['dynamicTable'])
+
+            # [DPY-4008 방지] 실제 SQL에 존재하는 바인드 변수만 필터링
+            used_bind_vars = re.findall(r":([a-zA-Z0-9_]+)", sql)
+            filtered_params = {k: v for k, v in params.items() if k in used_bind_vars}
+
+        if is_dml:
+            cursor.execute(sql, filtered_params)
             conn.commit()
-            return {"status": out_status.getvalue(), "message": out_msg.getvalue()}
-
-        elif is_dml:
-            cursor.execute(sql, safe_params)
+            return {"status": "success", "rowcount": cursor.rowcount}
+        elif is_proc:
+            cursor.execute(sql, filtered_params)
             conn.commit()
-            return {"rowcount": cursor.rowcount}
-
+            return {"status": "success", "rowcount": cursor.rowcount}
         else:
-            # [전문가 수정] SQL 주석 플레이스홀더 치환 방식
-            # VS Code에서 에러가 나지 않는 /* --DYNAMIC_WHERE-- */ 형식을 찾아 치환합니다.
-
-            # 1. 안전한 인자 추출
-            in_sql = safe_params.pop('in_clause_str', "")
-
-            # 2. SQL 치환 (format 대신 replace 사용 권장)
-            # 동적 WHERE 절 안전 치환 로직 (유지)
-            if "/* --DYNAMIC_WHERE-- */" in sql:
-                sql = sql.replace("/* --DYNAMIC_WHERE-- */", in_sql)
-            elif "{in_clause}" in sql:
-                # format()은 SQL 내에 다른 중괄호가 있을 때 에러가 나므로 replace가 안전합니다.
-                sql = sql.replace("{in_clause}", in_sql)
-
             try:
-                cursor.execute(sql, safe_params)
-                
-                # 3. 결과 데이터 처리
+                # 조회 실행
+                cursor.execute(sql, filtered_params)
+
+                # [중요] fetchall() 하기 전에 description을 먼저 확실하게 리스트로 변환합니다.
+                # 26ai/Thick 모드에서는 실행 직후에 메타데이터를 잡아두는 것이 안전합니다.
                 if cursor.description:
-                    columns = [col[0] for col in cursor.description]
-                    rows = cursor.fetchall()
-                    # 확실하게 리스트 객체로 생성
-                    data = [dict(zip(columns, row)) for row in rows]
+                    col_names = [desc[0] for desc in cursor.description]
                 else:
-                    data = [] # 결과셋이 없는 경우 명시적 빈 리스트
+                    col_names = []
+
+                # 3. 결과 데이터 처리
+                rows = cursor.fetchall()
+
+                # 3. 데이터 변환 (데이터가 없을 때도 columns는 반환됨)
+                data = []
+                if rows:
+                    data = [dict(zip(col_names, row)) for row in rows]
                     
                 # 4. 일관된 반환 구조 유지
                 return {
-                    "data": data, 
-                    "total": len(data),
-                    "status": "success"
+                    "status": "success",
+                    "data": data,
+                    "columns": col_names, # 컬럼명 리스트를 별도로 전달
+                    "total": len(data)
                 }
             except Exception as db_err:
                 logger.error(f"Execution Error: {str(db_err)}")
@@ -125,7 +137,13 @@ def execute_query(conn, sql_id: str, params: Optional[Dict[str, Any]] = None, is
         if conn and is_dml:
             conn.rollback()
         logger.error(f"[DB ERROR] ID: {sql_id} | MSG: {str(e)}")
-        raise e
+        # 에러 발생 시 공통 구조 반환
+        return {
+            "status": "error_db",
+            "message": f"데이터 조회 중 오류가 발생했습니다: {str(e)}",
+            "data": [],
+            "total": 0
+        }
     finally:
         if cursor:
             cursor.close()
@@ -134,18 +152,23 @@ def get_debug_sql(sql_id: str, params: dict) -> str:
     """바인드 변수와 플레이스홀더가 치환된 디버깅용 SQL 반환"""
     try:
         sql = SqlLoader.get_sql(sql_id)
-        
-        # 1. 동적 IN 절 주석 처리
-        in_sql = params.get('in_clause_str', '')
-        sql = sql.replace("/* --DYNAMIC_WHERE-- */", in_sql)
+        if not sql:
+            return f"SQL ID({sql_id})를 찾을 수 없습니다."
+
+        # [수정] 모든 replace 대상에 'or ''' 추가
+        sql = sql.replace("/* --DYNAMIC_WHERE-- */", params.get('in_clause_str') or '')
+        sql = sql.replace("/* --DYNAMIC_TABLE-- */", params.get('tableName') or '')
         
         # 2. 바인드 변수 처리
         for k, v in params.items():
-            if k == 'in_clause_str': continue # IN절은 이미 처리함
+            if k in ['in_clause_str', 'tableName']: continue
             target = f":{k}"
-            val = f"'{v}'" if isinstance(v, str) else str(v)
-            sql = sql.replace(target, val)
-            
+            if target in sql:
+                if v is None:
+                    val = "NULL"
+                else:
+                    val = f"'{v}'" if isinstance(v, str) else str(v)
+                sql = sql.replace(target, val)
         return sql.strip()
-    except:
-        return f"SQL ID({sql_id})를 찾을 수 없습니다."            
+    except Exception as e:
+        return f"Debug SQL 생성 중 에러: {str(e)}"

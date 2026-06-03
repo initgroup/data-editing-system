@@ -1,109 +1,91 @@
-/* grid-custom.css */
-
-/* 1. 전체 컨테이너 및 테이블 레이아웃 */
+/* 1. 전체 컨테이너 보더 제거 */
 .gridjs-container {
-    padding: 0;
-    font-family: 'Pretendard', sans-serif; /* 현대적인 폰트 적용 제안 */
-}
-
-/* 전체 컨테이너: 그림자 제거 및 높이 확보 */
-.gridjs-wrapper {
-    border: none !important;
-    border-radius: 0 !important;
-    box-shadow: none !important;
-    min-height: 330px; /* 5줄 정도 나오도록 설정 */
-}
-
-.gridjs-table {
-    width: 100% !important; /* 가로 100% 동적 조절 */
-    border-collapse: collapse;
-}
-
-/* 헤더: 데이터 영역과 확실히 구분되는 연한 회색 배경 */
-.gridjs-th {
-    background-color: #f1f5f9 !important; 
-    color: #1e293b !important;
-    font-weight: 700 !important;
-    padding: 14px 16px !important;
-    border-top: none !important;
     border-left: none !important;
     border-right: none !important;
+    height: 100% !important; /* 부모인 .table-container의 높이를 꽉 채움 */
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+/* 데이터 영역: 부모(container) 높이에서 남는 공간을 모두 차지 */
+.gridjs-wrapper {    
+    /* flex: 1 1 auto ; */ /* JS에서 정한 높이 내에서 유연하게 늘어남 */
+    flex: 1 !important;      /* 페이징 영역을 제외한 나머지 높이를 스크롤 영역으로 할당 */
+    border-left: none !important;
+    border-right: none !important;
+    /* 상하 보더만 남기고 싶다면 */
+    border-top: 1px solid #cbd5e1 !important;
     border-bottom: 1px solid #cbd5e1 !important;
+
+    overflow-y: auto !important; /* 내용이 많으면 내부 스크롤 발생 */
+    overflow-x: auto ;    
+    display: block;
+    min-height: 50px ;
+    height: 100% !important; 
+
+    background-color: #ffffff ;
+    z-index: 1;
+    margin-top: 0 ;       /* 상단 마진 제거 */
 }
 
-/* 행(TD): 좌우 경계선 제거 및 행간 줄만 표시 */
-.gridjs-td {
-    padding: 14px 16px !important;
+/* 3. 테이블 본체 보더 및 내부 셀의 외곽선 정리 */
+.gridjs-table {
     border-left: none !important;
     border-right: none !important;
-    border-bottom: 1px solid #f1f5f9 !important;
-    color: #334155;
-    background-color: #ffffff;
+    width: 100% !important;
 }
 
-/* 마우스 오버 효과 */
-.gridjs-tr:hover .gridjs-td {
-    background-color: #f8fafc !important; /* 미세한 하이라이트 */
-    transition: background-color 0.2s ease;
+/* 4. 행 높이 고정 (선택 사항) */
+/* 행 높이를 일정하게 맞추면 10개 행의 전체 높이를 예측하기 쉽습니다. */
+.gridjs-td {
+    height: 30px !important; 
+    padding: 3px 12px !important;
 }
 
-/* 선택된 행 스타일 (JS에서 클래스 추가 시 작동) */
-.gridjs-tr.gridjs-tr-selected .gridjs-td {
-    background-color: #e0f2fe !important; /* 연한 블루 배경 */
-    color: #0369a1 !important;
+/* 4. 헤더와 바디의 첫 번째/마지막 컬럼의 세로선 제거 (완전한 오픈형 UI) */
+.gridjs-th:first-child, .gridjs-td:first-child {
+    border-left: none !important;
 }
 
-/* 선택된 행의 왼쪽 끝 파란색 포인트 바 */
-.gridjs-tr.gridjs-tr-selected .gridjs-td:first-child {
-    box-shadow: inset 4px 0 0 #0ea5e9;
+.gridjs-th:last-child, .gridjs-td:last-child {
+    border-right: none !important;
 }
 
 /* 하단 페이징 영역 */
 .gridjs-footer {
-    border-top: 1px solid #f1f5f9 !important;
+    flex-shrink: 0; /* 높이가 줄어들지 않도록 고정 */
+    margin-top: 0;
+    height: 50px; /* 페이징 영역 높이 고정 */
+    padding: 10px 0;
+    border-top: 1px solid #f1f5f9;    
     border-left: none !important;
     border-right: none !important;
-    padding: 12px 0 !important;
 }
 
-.gridjs-pagination {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    color: #64748b;
+/* 2. [핵심] 짝수행 (2, 4, 6...) - td를 직접 타겟팅 */
+.gridjs-tr:nth-child(even) td {
+    background-color: #f1f5f9 ; /* 연한 회색 (Slate-100) */
+    color: #334155 ;           /* 글자는 진한 회색 유지 */
 }
 
-/* 페이징 버튼 디자인 */
-.gridjs-pagination .gridjs-pages button {
-    border: 1px solid #e2e8f0 !important;
-    background-color: white !important;
-    border-radius: 6px !important;
-    padding: 4px 12px !important;
-    margin: 0 2px !important;
-    font-size: 0.8rem !important;
-    transition: all 0.2s ease;
+/* 4. [중요] 선택된 행 스타일 (최우선순위) */
+/* 짝수행의 다크그레이보다 우선하도록 클래스 조합 사용 */
+.gridjs-tr.is-selected td {
+    background-color: #1e40af ; /* 진한 파란색 */
+    color: #fbbf24 ;           /* 노란색 글자 */
+    border-top: 1px solid #fbbf24 ;
+    border-bottom: 1px solid #fbbf24 ;
 }
 
-.gridjs-pagination .gridjs-pages button:hover:not(:disabled) {
-    background-color: #f1f5f9 !important;
-    color: #4f46e5 !important; /* Indigo-600 */
-    border-color: #4f46e5 !important;
+/* 5. 마우스 호버: 노란색 배경 + 검은색 글자 */
+.gridjs-tr:hover td {
+    background-color: #fbbf24 ;
+    color: #000000 ;
+    cursor: pointer;
 }
 
-.gridjs-pagination .gridjs-pages button.gridjs-currentPage {
-    background-color: #4f46e5 !important; /* 포인트 컬러 */
-    color: white !important;
-    border-color: #4f46e5 !important;
-    font-weight: bold;
-}
-
-/* 정렬 아이콘 스타일 */
-.gridjs-sort {
-    margin-left: 8px;
-    float: right;
-    opacity: 0.3;
-}
-
-.gridjs-th:hover .gridjs-sort {
-    opacity: 1;
+/* 선택된 행 위에서 호버해도 스타일 유지 혹은 약간의 반응 */
+.gridjs-tr.is-selected:hover td {
+    background-color: #fbbf24 ;
+    color: #000000 ;
 }

@@ -1,0 +1,101 @@
+<div class="space-y-6 animate-fadeIn">
+    <div class="flex justify-between items-end mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800">에디팅판단</h1>
+            <p class="text-gray-500 text-sm mt-1">위반 데이터에 대한 최종 처리 방안(교정, 삭제, 유지 등)을 결정합니다.</p>
+        </div>
+        <div class="flex gap-2">
+            <button onclick="M03002.init()" class="bg-white border border-gray-300 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-gray-50 transition text-gray-700">
+                <i class="fas fa-undo mr-2"></i>초기화
+            </button>
+            <button onclick="M03002.saveDecision()" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md hover:bg-blue-700 transition">
+                <i class="fas fa-save mr-2"></i>최종 결정 저장
+            </button>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="lg:col-span-2 space-y-6">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div class="p-5 border-b border-gray-100 bg-gray-50/50">
+                    <h2 class="font-bold text-gray-700 italic">Target Violation Detail</h2>
+                </div>
+                <div class="p-6">
+                    <div class="grid grid-cols-2 gap-y-4 text-sm">
+                        <div class="text-gray-500 font-medium">데이터 ID</div>
+                        <div class="font-mono text-gray-800" id="det-id">USER_882</div>
+                        <div class="text-gray-500 font-medium">위반 규칙</div>
+                        <div class="font-bold text-red-600" id="det-rule">급여 범위 위반 (SALARY < 0)</div>
+                        <div class="text-gray-500 font-medium">현재 값</div>
+                        <div class="bg-red-50 text-red-700 px-2 py-0.5 rounded font-bold w-fit" id="det-value">-500</div>
+                        <div class="text-gray-500 font-medium">발생 테이블</div>
+                        <div class="text-gray-800" id="det-table">POPULATION</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h3 class="text-sm font-bold text-gray-400 uppercase mb-4 tracking-wider">Related Context (Row Data)</h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-xs text-left border border-gray-100">
+                        <thead class="bg-gray-50 text-gray-600 font-bold">
+                            <tr>
+                                <th class="p-3 border-b">NAME</th>
+                                <th class="p-3 border-b">AGE</th>
+                                <th class="p-3 border-b">DEPT</th>
+                                <th class="p-3 border-b">HIRE_DATE</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100">
+                            <tr>
+                                <td class="p-3 italic text-gray-700">Kim Chul-soo</td>
+                                <td class="p-3 text-gray-700">34</td>
+                                <td class="p-3 text-gray-700">Sales</td>
+                                <td class="p-3 text-gray-700">2023-05-12</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="space-y-6">
+            <div class="bg-slate-900 rounded-xl shadow-xl p-6 text-white">
+                <h2 class="text-lg font-bold mb-6 flex items-center gap-2">
+                    <i class="fas fa-gavel text-yellow-400"></i> Decision Maker
+                </h2>
+                
+                <div class="space-y-4">
+                    <label class="flex items-center p-3 rounded-lg border border-slate-700 hover:bg-slate-800 cursor-pointer transition group">
+                        <input type="radio" name="edit-action" value="correct" class="w-4 h-4 text-blue-500 border-slate-600 focus:ring-blue-500 bg-slate-700" checked>
+                        <div class="ml-3">
+                            <span class="block font-bold group-hover:text-blue-400 transition">데이터 교정 (Correct)</span>
+                            <span class="text-[11px] text-slate-400">정상 범위 내의 값으로 자동/수동 교정</span>
+                        </div>
+                    </label>
+
+                    <label class="flex items-center p-3 rounded-lg border border-slate-700 hover:bg-slate-800 cursor-pointer transition group">
+                        <input type="radio" name="edit-action" value="delete" class="w-4 h-4 text-red-500 border-slate-600 focus:ring-red-500 bg-slate-700">
+                        <div class="ml-3">
+                            <span class="block font-bold group-hover:text-red-400 transition">데이터 삭제 (Delete)</span>
+                            <span class="text-[11px] text-slate-400">분석 대상에서 해당 레코드 제외</span>
+                        </div>
+                    </label>
+
+                    <label class="flex items-center p-3 rounded-lg border border-slate-700 hover:bg-slate-800 cursor-pointer transition group">
+                        <input type="radio" name="edit-action" value="keep" class="w-4 h-4 text-green-500 border-slate-600 focus:ring-green-500 bg-slate-700">
+                        <div class="ml-3">
+                            <span class="block font-bold group-hover:text-green-400 transition">현상 유지 (Keep)</span>
+                            <span class="text-[11px] text-slate-400">특이 케이스로 인정하고 그대로 보존</span>
+                        </div>
+                    </label>
+                </div>
+
+                <div class="mt-8">
+                    <label class="block text-xs font-bold text-slate-400 uppercase mb-2 ml-1">판단 근거 (Reason)</label>
+                    <textarea id="decision-reason" rows="4" class="w-full bg-slate-800 border-slate-700 rounded-lg p-3 text-sm text-slate-200 placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="조치 이유를 입력하세요..."></textarea>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

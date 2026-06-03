@@ -1,82 +1,129 @@
-<div class="space-y-6">
-    <div class="content-header mb-6">
-        <h1 class="text-2xl font-bold text-gray-800">메타정보 관리</h1>
-        <p class="text-gray-500">데이터셋의 메타데이터를 관리합니다</p>
+<div class="page-container" id="container-M01002">
+    <div class="local-message-anchor fixed bottom-5 right-5 w-full max-w-md z-[9999] pointer-events-none">
+        <div class="local-error-box hidden pointer-events-auto relative border-l-4 p-4 rounded-md shadow-2xl transition-all w-full bg-white">
+            <div class="flex items-center pr-8">
+                <i class="local-error-icon fas fa-exclamation-circle mr-3 text-lg"></i>
+                <p class="local-error-text text-sm font-bold"></p>
+            </div>
+            <button onclick="CommonUI.hidePageMessage('M01002');" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    </div>
+    <div class="page-header">
+        <h1 class="page-title">본 페이지의 주요 기능을 설명합니다.</h1>
     </div>
 
-    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-        <div class="flex justify-between items-center mb-6">
-            <h2 class="text-lg font-bold">메타데이터 요약</h2>
-            <button class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm flex items-center gap-2" onclick="refreshMetadata()">
-                <i class="fas fa-sync-alt"></i> 새로고침
-            </button>
+    <div class="dashboard-stats grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div class="stat-card border-l-4 border-blue-500">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="stat-label">전체 데이터셋</p>
+                    <h3 class="stat-value text-blue-600" id="total-datasets">0</h3>
+                </div>
+                <div class="stat-icon bg-blue-50 text-blue-500">
+                    <i class="fas fa-database"></i>
+                </div>
+            </div>
+        </div>
+        <div class="stat-card border-l-4 border-indigo-500">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="stat-label">전체 컬럼</p>
+                    <h3 class="stat-value text-indigo-600" id="total-columns">0</h3>
+                </div>
+                <div class="stat-icon bg-indigo-50 text-indigo-500">
+                    <i class="fas fa-columns"></i>
+                </div>
+            </div>
+        </div>
+        <div class="stat-card border-l-4 border-green-500">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="stat-label">메타데이터 완성도</p>
+                    <h3 class="stat-value text-green-600" id="metadata-completeness">0%</h3>
+                </div>
+                <div class="stat-icon bg-green-50 text-green-500">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+            </div>
+        </div>
+        <div class="stat-card border-l-4 border-yellow-500">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="stat-label">작성 대기</p>
+                    <h3 class="stat-value text-yellow-600" id="pending-metadata">0</h3>
+                </div>
+                <div class="stat-icon bg-yellow-50 text-yellow-500">
+                    <i class="fas fa-clock"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="search-section">
+        <div class="filter-grid">
+            <div class="form-group">
+                <label for="mainCombo" class="form-label required">메인 그룹</label>
+                <select id="mainCombo" class="form-control">
+                    <option value="">선택하세요</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="subCombo" class="form-label">서브 그룹</label>
+                <select id="subCombo" class="form-control" disabled>
+                    <option value="">메인 먼저 선택</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="textSearch" class="form-label">검색어</label>
+                <input type="text" id="textSearch" class="form-control" placeholder="검색어 입력">
+            </div>
+            
+            <div class="form-group">
+                <label for="dateSearch" class="form-label required">기준 일자</label>
+                <input type="date" id="dateSearch" class="form-control">
+            </div>
+
+            <div class="form-group lg-col-span-2">
+                <label class="form-label">상태 선택 (다중선택)</label>
+                <div class="checkbox-group" id="checkboxArea">
+                    <label class="checkbox-item">
+                        <input type="checkbox" value="C01" class="status-chk"> <span>상태 A</span>
+                    </label>
+                    <label class="checkbox-item">
+                        <input type="checkbox" value="C02" class="status-chk"> <span>상태 B</span>
+                    </label>
+                </div>
+            </div>
         </div>
         
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div class="bg-blue-50 p-4 rounded-lg border border-blue-100 text-center">
-                <div class="text-2xl font-bold text-blue-600" id="total-datasets">0</div>
-                <div class="text-xs text-blue-500 font-medium uppercase">전체 데이터셋</div>
-            </div>
-            <div class="bg-indigo-50 p-4 rounded-lg border border-indigo-100 text-center">
-                <div class="text-2xl font-bold text-indigo-600" id="total-columns">0</div>
-                <div class="text-xs text-indigo-500 font-medium uppercase">전체 컬럼</div>
-            </div>
-            <div class="bg-green-50 p-4 rounded-lg border border-green-100 text-center">
-                <div class="text-2xl font-bold text-green-600" id="metadata-completeness">0%</div>
-                <div class="text-xs text-green-500 font-medium uppercase">메타데이터 완성도</div>
-            </div>
-            <div class="bg-yellow-50 p-4 rounded-lg border border-yellow-100 text-center">
-                <div class="text-2xl font-bold text-yellow-600" id="pending-metadata">0</div>
-                <div class="text-xs text-yellow-500 font-medium uppercase">작성 대기</div>
-            </div>
-        </div>
-    </div>
-
-    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-        <div class="flex justify-between items-center mb-4">
-            <h2 class="text-lg font-bold text-gray-800">메타데이터 목록</h2>
-            <button onclick="openMetadataModal()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm">
-                <i class="fas fa-plus mr-1"></i> 신규 등록
+        <div class="action-bar">
+            <button onclick="M01002.resetSearch()" class="btn bg-gray-500 hover:bg-gray-600 text-white">
+                <i class="fas fa-undo mr-1"></i> 초기화
+            </button>            
+            <button onclick="M01002.executeProcedure()" class="btn btn-purple">
+                <i class="fas fa-bolt mr-1"></i> 프로시저 호출
+            </button>
+            <button onclick="M01002.searchSync()" class="btn btn-primary">
+                <i class="fas fa-search mr-1"></i> 데이터 조회
             </button>
         </div>
-        <div class="overflow-x-auto">
-            <table class="w-full text-sm text-left">
-                <thead class="bg-gray-50 text-gray-600 uppercase text-xs border-y">
-                    <tr>
-                        <th class="px-4 py-3">번호</th>
-                        <th class="px-4 py-3">테이블명</th>
-                        <th class="px-4 py-3">논리명</th>
-                        <th class="px-4 py-3 text-center">컬럼수</th>
-                        <th class="px-4 py-3">설명</th>
-                        <th class="px-4 py-3 text-center">작업</th>
-                    </tr>
-                </thead>
-                <tbody id="metadata-tbody" class="divide-y divide-gray-100"></tbody>
-            </table>
-        </div>
     </div>
-</div>
-
-<div id="metadata-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
-    <div class="bg-white rounded-xl shadow-xl w-full max-w-lg p-6">
-        <h3 class="text-xl font-bold mb-4">메타데이터 관리</h3>
-        <div class="space-y-4">
-            <div>
-                <label class="block text-sm font-medium text-gray-700">테이블명</label>
-                <input type="text" id="md-table-name" class="w-full border-gray-300 rounded-lg p-2 border mt-1">
-            </div>
-            <div>
-                <label class="block text-sm font-medium text-gray-700">논리명</label>
-                <input type="text" id="md-logical-name" class="w-full border-gray-300 rounded-lg p-2 border mt-1">
-            </div>
-            <div>
-                <label class="block text-sm font-medium text-gray-700">설명</label>
-                <textarea id="md-description" class="w-full border-gray-300 rounded-lg p-2 border mt-1" rows="3"></textarea>
+    <div class="result-section">
+        <div class="result-header">
+            <h4 class="card-title">
+                <i class="fas fa-table mr-2"></i>실시간 분석 데이터 결과
+            </h4>
+            <div class="result-tools">
+                <button onclick="M01002.downloadExcel()" class="btn-icon-excel" title="엑셀 다운로드">
+                    <i class="fas fa-file-excel"></i>
+                </button>
             </div>
         </div>
-        <div class="flex justify-end gap-2 mt-6">
-            <button onclick="closeMetadataModal()" class="px-4 py-2 bg-gray-200 rounded-lg font-medium">취소</button>
-            <button onclick="saveMetadata()" class="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium">저장</button>
-        </div>
+        <div id="gridContainer-M01002" class="table-container"></div>
+        <div id="paginationArea-M01002" class="flex justify-center mt-4 gap-1"></div>
     </div>
 </div>

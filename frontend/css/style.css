@@ -30,6 +30,12 @@
   box-sizing: border-box;
 }
 
+body, html {
+    height: 100%;
+    margin: 0;
+    overflow: hidden; /* 브라우저 자체의 큰 스크롤바 방지 */
+}
+
 body {
   font-family: 'Pretendard', -apple-system, 'Malgun Gothic', sans-serif;
   background: var(--c-bg);
@@ -39,6 +45,28 @@ body {
   overflow-x: hidden;
   margin: 0;
   padding: 0;
+}
+
+/* 메인 레이아웃 래퍼 */
+.app-wrapper {
+    display: flex;
+    height: 100vh; /* 화면 전체 높이 사용 */
+    overflow: hidden;
+}
+
+/* 페이지 컨테이너 홀더 */
+#pageContainerHolder {
+    flex: 1;
+    min-height: 0;    /* flex 자식의 스크롤 작동을 위한 필수 속성 */
+    overflow-y: auto !important;
+}
+
+/* MXXXXX.html 같은 개별 페이지 컨테이너 */
+.page-container {
+    height: 100% !important;
+    /* 부모인 holder에서 이미 높이를 잡았으므로 100%로 설정 */
+    min-height: auto !important;
+    box-sizing: border-box;
 }
 
 /* 헤더 스타일 */
@@ -103,7 +131,7 @@ body {
 
 /* 서브메뉴 스타일 */
 .submenu {
-  background: var(--c-gray-light);
+  /* background: var(--c-gray-light); */
   padding: 8px 0;
 }
 
@@ -143,7 +171,9 @@ body {
 }
 
 .card-title {
-  font-size: 18px;
+  font-size: 1.1rem !important;    /* 폰트 살짝 키움 */
+  line-height: 1.5;
+  margin: 0;
   font-weight: 600;
   color: var(--c-dark);
 }
@@ -362,8 +392,10 @@ body {
 }
 
 .table-container {
-  overflow-x: auto;
-  margin-bottom: 20px;
+    flex: 1;                /* 남은 공간을 모두 차지 */
+    overflow-y: auto;       /* 세로 스크롤 발생 */
+    overflow-x: auto;       /* 가로 스크롤 발생 */
+    min-height: 0;          /* 중요: 자식 요소가 스크롤을 인식하게 함 */
 }
 
 .table-striped tbody tr:nth-child(even) {
@@ -543,9 +575,29 @@ body {
 
 /* [공통] 본문 영역 기본값 */
 .main-content {
-    transition: all 0.3s ease-in-out;
+    flex: 1;
+    min-width: 0;
+    min-height: 0; /* flex 자식 요소의 최소 높이 해제 (스크롤 발생의 핵심) */
+    overflow: hidden;
+    transition: width 0.3s ease-in-out; /* 리사이징 시에는 JS에서 transition을 잠시 꺼주는 것이 좋습니다 */
     width: 100%;
-    min-height: 100vh;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+
+/* 하단 콘솔 메시지 영역 */
+.console-content {
+    width: 100%;
+    min-height: 500px; /* 적절한 높이 */
+    background: #1e1e1e; /* 콘솔 느낌의 배경색 */
+    color: #ffffff;
+    padding: 10px;
+    box-sizing: border-box;
+    /* 여백 문제 해결을 위한 핵심 */
+    clear: both; 
+    flex-shrink: 0; 
 }
 
 #sidebar-overlay {
@@ -577,31 +629,45 @@ body {
     }
 
     .main-content {
-        margin-left: 270px !important; 
+        margin-left: 260px !important;
+        margin-right: 0px !important; 
         padding: 0px !important;
         background-color: #f1f5f9;
-        min-height: 100vh;
-        width: calc(100% - 280px) !important;         
-        transition: all 0.3s ease;
+        height: 100vh;
+        width: calc(100% - 260px) !important;      
         display: flex;
         flex-direction: column;
+        flex: 1;
+        min-width: 0;
+        min-height: 0; /* flex 자식 요소의 최소 높이 해제 (스크롤 발생의 핵심) */
+        overflow: hidden;
+        transition: width 0.3s ease-in-out; /* 리사이징 시에는 JS에서 transition을 잠시 꺼주는 것이 좋습니다 */
+        position: relative;
     }    
 
     #contentWrapper {
         background-color: #ffffff;
-        min-height: calc(100vh - 20px);
-        overflow: hidden;
+        flex: 1;
+        height: 100%;
+        min-height: 0;
+        overflow: auto !important; /* 영역 밖으로 나가는 것 방지 */
         display: flex;
         flex-direction: column;
+        position: relative;
     }
 
     /* [중복 제거] 파일 중단에 있던 .content-header는 하단 이 정의로 통합됩니다. */
     .content-header {
-        background-color: #f8fafc !important;
-        padding: 10px 10px !important;
+        flex-shrink: 0; /* 공간이 부족해도 높이 20(80px)을 유지 */
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+        /* 만약 높이가 고정되어 있다면 height: 50px; 등으로 명시할 수도 있습니다 */
+        display: flex;
+        align-items: stretch; /* 자식 요소들이 높이를 꽉 채우도록 설정 */
+        min-height: 60px;
+        background-color: var(--c-gray) !important;
         border-bottom: 1px solid #e5e7eb;
-        margin-bottom: 10px;
-        position: relative;
+        position: relative; 
         z-index: 10;
         box-shadow: 0 4px 6px -4px rgba(0, 0, 0, 0.1);
     }
@@ -609,19 +675,8 @@ body {
     .content-header h1 {
         font-size: 1.5rem;
         font-weight: 700;
-        color: #1e293b;
+        color: white;
     }
-
-    #contentBody {
-        padding: 10px !important;
-        background-color: #ffffff !important;
-        border-radius: 0px;
-        /* box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05); */
-        box-shadow: none; 
-        border: 1px solid #e5e7eb;
-        flex-grow: 1;        
-        /* [선택사항] 테두리 선만 남기고 싶을 경우 아래 속성 유지, 선도 없애려면 border: none; */
-        border: none;
 
     #mobile-menu-btn, #sidebar-overlay {
         display: none !important;
@@ -651,28 +706,41 @@ body {
     }
 
     .main-content {       
-        margin-left: 10px !important; 
+        margin-left: 5px !important; 
+        margin-right: 0px !important; 
         padding: 0px !important;
-        width: calc(100% - 20px) !important; 
-        min-height: 100vh;
+        width: calc(100% - 5px) !important; 
+        height: 100vh;
         display: flex;
         flex-direction: column;
+        flex: 1;
+        min-width: 0;
+        min-height: 0; /* flex 자식 요소의 최소 높이 해제 (스크롤 발생의 핵심) */
+        overflow: hidden;
+        transition: width 0.3s ease-in-out; /* 리사이징 시에는 JS에서 transition을 잠시 꺼주는 것이 좋습니다 */
+        position: relative;
     }
 
     #contentWrapper {
         background-color: #ffffff;
-        min-height: calc(100vh - 20px);
-        overflow: hidden;
+        flex: 1;
+        height: 100%;
+        min-height: 0;
         display: flex;
         flex-direction: column;
+        position: relative;
     }
 
     .content-header {
-        background-color: #f8fafc !important;
-        padding: 10px 10px !important;
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+        /* 만약 높이가 고정되어 있다면 height: 50px; 등으로 명시할 수도 있습니다 */
+        display: flex;
+        align-items: stretch; /* 자식 요소들이 높이를 꽉 채우도록 설정 */
+        min-height: 60px;
+        background-color: var(--c-gray) !important;
         border-bottom: 1px solid #e5e7eb;
-        margin-bottom: 10px;        
-        position: relative;
+        position: relative; 
         z-index: 10;
         box-shadow: 0 4px 6px -4px rgba(0, 0, 0, 0.1);
     }
@@ -680,17 +748,17 @@ body {
     .content-header h1 {
         font-size: 1.5rem;
         font-weight: 700;
-        color: #1e293b;
+        color: white;
     }
 
-    #contentBody {
+ /*    #contentBody {
         background-color: #ffffff !important;
         border-radius: 12px;
         box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
         border: 1px solid #e5e7eb;
         flex-grow: 1;
         padding: 20px !important;
-    }
+    } */
 
     #mobile-menu-btn {
         display: flex !important;
@@ -714,6 +782,7 @@ body {
    M00000 전용 통합 스타일 (그리드 + 최신 UX + 레이아웃 동기화)
    ========================================================================== */
 
+
 /* [기본/모바일] 공통 스타일 및 1열 배치 */
 .page-container {
     display: flex;
@@ -727,17 +796,19 @@ body {
 .page-header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    padding: 0 10px 5px 10px; /* 하단 result-header와 동일한 여백 */
-    margin-bottom: 0px;
+    align-items: stretch; /* 자식 요소들의 높이를 헤더와 동일하게 맞춤 */
+    min-height: 50px;     /* 헤더의 최소 높이 설정 */
+    padding: 0 1.5rem;
+    background-color: var(--c-white);
+    border-bottom: 1px solid var(--c-border);
 }
 
 .page-title {
-    font-size: 1.25rem; /* h2.card-title과 유사한 크기 */
-    font-weight: 700;
-    color: #1e293b;
     display: flex;
-    align-items: center;
+    align-items: center; /* 타이틀 텍스트 세로 중앙 정렬 */
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--c-dark);
 }
 
 /* 페이지 타이틀 앞에도 섹션 타이틀처럼 아이콘 추가 (선택 사항) */
@@ -752,37 +823,51 @@ body {
 
 /* 2. 좌우가 오픈된 섹션 디자인 */
 .search-section {
-    background: #ffffff;
-    padding: 24px 0;
-    border-top: 3px solid var(--c-blue);
     border-left: none;
     border-right: none;
-    margin-bottom: 0px; /* 두 섹션 사이 간격 */
+    background-color: var(--c-gray-light-bg);
+    border-top: 3px solid var(--c-blue);
+    /* 상단 15px, 좌우 20px, 하단 10px로 박스 내부 여백 축소 */
+    padding: 15px 20px 10px 20px !important; 
+    /* 박스 자체의 하단 바깥 여백 축소 (결과 영역과의 간격) */
+    margin-bottom: 5px !important; /* 박스 하단 여백 대폭 축소 */
 }
 
 .result-section {
+    /* flex: 1; */
     background: #ffffff;
     padding: 24px 0;
     border-left: none;
     border-right: none;
-    border-top: 1px solid #e2e8f0; /* 단순 실선 */
+    border-top: none;
     border-bottom: none;
-    
+    padding-top: 0 !important; /* 결과 영역 상단 여백 제거 */
     position: relative;
     z-index: 1; /* 그림자가 위 섹션으로 살짝 겹치도록 설정 */
-    margin-top: -1px; /* 두 섹션 사이의 선이 겹치지 않게 미세 조정 */
+    margin-top: 0 !important; /* 결과 영역 상단 여백 제거 */
+    display: flex;    
+    overflow: hidden;        /* 섹션 자체의 스크롤은 숨기고 내부에서 처리 */
+    width:100%;
+    min-height: 0;
+    flex-direction: column;
 }
 
 /* 2. 결과 헤더 및 엑셀 아이콘 버튼 */
-.result-header {
+.result-header {    
     background: linear-gradient(to right, #f8fafc, #ffffff); /* 세련된 그라데이션 */
     border-top: 1px solid #e2e8f0;
-    border-bottom: 2px solid #334155; /* 확실한 영역 구분 */
-    padding: 16px 20px;
+    border-bottom: 1px solid #334155; /* 확실한 영역 구분 */
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 0; /* 그리드와 밀착 */
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;          /* 하단 여백 제거하여 그리드와 밀착 */
+    padding-top: 15px !important;
+    /* 제목 아래와 그리드 사이의 간격 축소 */
+    padding-bottom: 10px !important; 
+    font-size: 1.1rem !important;    /* 폰트 살짝 키움 */
+    line-height: 1.5;
+    margin: 0;
 }
 
 .result-header h4 {
@@ -818,13 +903,14 @@ body {
 
 /* 폼 라벨 및 아이콘 블릿 */
 .form-label {
+    font-size: 1rem !important; /* 기존보다 크게 설정 */
+    font-weight: 700 !important;
+    color: #1e293b !important;
+    margin-bottom: 6px !important;
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 14px;
-    font-weight: 600;
     color: #4A5568;
-    margin-bottom: 8px;
 }
 
 /* 아이콘 블릿 (::before 활용) */
@@ -858,19 +944,38 @@ body {
 /* 조회조건 그리드 여백 조정 */
 .filter-grid {
     display: grid;
-    grid-template-columns: 1fr;
-    gap: 20px;
-    padding: 0 10px; /* 내부 요소만 살짝 들여쓰기 */
+    /* 가로 간격을 20px에서 30px로 늘려 항목 간 구분을 명확히 함 */
+    column-gap: 30px !important; 
+    /* 세로 줄 간격을 8px에서 15px로 늘려 답답함을 해소 */
+    row-gap: 15px !important;
+    
+    /* 화면 크기에 따른 가로 배치 설정 (기존 유지 혹은 확인) */
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    align-items: end; /* 라벨과 컨트롤 높이 정렬 */
+}
+
+/* 컨트롤 내부의 라벨과 입력창 사이의 미세 간격 추가 */
+.form-group .form-label {
+    margin-bottom: 8px !important; /* 라벨 바로 아래 간격 */
 }
 
 /* 버튼 영역: 우측 정렬 및 상단 경계선 */
 .action-bar {
-    margin-top: 24px;
-    padding: 20px 10px 0 10px;
-    border-top: 1px dashed #e2e8f0; /* 조회조건과의 구분 경계선 */
+    border-top: none !important;
+    /* 버튼 위쪽 조회조건과의 간격 최소화 */
+    margin-top: 5px !important; 
+    padding-top: 0 !important;
+    /* 버튼 아래 박스 테두리까지의 간격 최소화 */
+    margin-bottom: 0 !important; 
     display: flex;
-    justify-content: flex-end; /* 버튼 우측 정렬 */
-    gap: 12px;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+/* 4. 값이 있을 때 컨트롤 배경색 노란색 변경 */
+.form-control.has-value {
+    background-color: #fef3c7 !important; /* 연한 노란색 */
+    border-color: #fbbf24 !important;
 }
 
 /* 보라색 버튼 클래스 */
@@ -899,4 +1004,1042 @@ body {
         grid-template-columns: repeat(4, 1fr); /* 4열 배치로 가로공간 극대화 */
     }
     .lg-col-span-2 { grid-column: span 2; }
+}
+
+/* 화면 너비가 768px 미만일 때 콤보박스를 한 줄에 하나씩 배치 */
+@media (max-width: 767px) {
+    .filter-grid {
+        display: grid !important;
+        grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
+    }
+}
+
+/* 화면 너비가 그 이상일 때만 2줄 이상 유지 */
+@media (min-width: 768px) {
+    .filter-grid {
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+}
+
+
+/* --- [개선된 네이버 스타일 스크롤바] --- */
+
+/* 1. 전체 스크롤바 영역 (폭을 16px로 키워 클릭 영역 확보) */
+::-webkit-scrollbar {
+    width: 16px; 
+    height: 16px;
+}
+
+/* 2. 본문 영역 스크롤바 막대 */
+::-webkit-scrollbar-thumb {
+    background-color: rgba(0, 0, 0, 0.2); /* 조금 더 진하게 조정 */
+    border-radius: 10px;
+    border: 2px solid #f8fafc; /* 본문 배경색 */
+    background-clip: padding-box;
+}
+
+/* 3. [핵심] 사이드바(aside) 전용 스크롤바 설정 */
+/* 사이드바 배경색인 --c-dark(#1E3A5F) 계열에 맞춰 보정 */
+aside::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.3); /* 어두운 배경에서 잘 보이도록 밝은색 */
+    border: 1cap solid #1E3A5F; /* 사이드바 배경색과 완벽히 일치시켜 막대만 띄움 */
+    background-clip: padding-box;
+}
+
+/* 4. 마우스 오버 시 가시성 극대화 */
+::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(0, 0, 0, 0.4);
+    border-width: 1px; /* 살짝 두꺼워지는 효과 */
+}
+
+aside::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(255, 255, 255, 0.5); /* 사이드바 막대 강조 */
+    border-width: 1px;
+}
+
+/* 5. 트랙(바탕)은 투명하게 유지 */
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+/* --- Message Box Style --- */
+.local-message-anchor {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    max-width: 450px; /* 메시지 박스 최대 너비 */
+    margin-left: 2rem;
+    pointer-events: none; /* 클릭 이벤트가 배경으로 통과 방지(박스 떴을때만 하위에서 활성화) */
+}
+
+.local-error-box {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    height: 44px;
+    background-color: #fff;
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-md);
+    padding: 0 1rem;
+    position: relative;
+    border-left: 4px solid transparent; /* 기본값 */
+    transition: opacity 0.3s ease;
+}
+
+/* 성공(녹색) 스타일 */
+.local-error-box.is-success {
+    border-left-color: var(--c-green);
+}
+.local-error-box.is-success .local-error-icon {
+    color: var(--c-green) !important;
+}
+
+/* 에러(빨강) 스타일 */
+.local-error-box.is-error {
+    border-left-color: var(--c-red);
+}
+.local-error-box.is-error .local-error-icon {
+    color: var(--c-red) !important;
+}
+
+.local-error-box.hidden {
+    display: none;
+}
+
+.local-error-content {
+    display: flex;
+    align-items: center;
+    padding-right: 2rem;
+    width: 100%;
+}
+
+.local-error-icon {
+    color: var(--c-red);
+    font-size: 1.1rem;
+    margin-right: 0.75rem;
+}
+
+.local-error-text {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #374151;
+    line-height: 1.2;
+    word-break: keep-all;
+}
+
+.local-error-close {
+    position: absolute;
+    right: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    
+    /* [핵심] 마우스 오버 시 손가락 모양 표시 */
+    cursor: pointer; 
+    
+    background: none;
+    border: none;
+    color: var(--c-gray);
+    padding: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s;
+    
+    /* 버튼 클릭 시 박스가 가려지는 것을 방해하지 않도록 함 */
+    pointer-events: auto;
+}
+
+.local-error-close:hover {
+    color: var(--c-dark);
+}
+
+/* 메시지 앵커가 클릭을 막고 있지 않은지 확인 */
+.local-message-anchor {
+    pointer-events: none; /* 앵커 자체는 클릭 통과 */
+}
+
+.local-error-box {
+    pointer-events: auto; /* 실제 박스 영역은 클릭 가능 */
+}
+
+/* 새로고침 버튼 스타일 */
+.btn-refresh-top {
+    padding: 8px;
+    border-radius: 9999px; /* rounded-full */
+    transition: all 0.2s ease;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* 기본 아이콘 색상: 어두운 회색 (배경이 밝으므로) */
+.btn-refresh-top i {
+    color: white !important; /* 슬레이트 그레이 */
+    transition: color 0.2s ease;
+}
+
+/* 마우스 오버 시 스타일 */
+.btn-refresh-top:hover {
+    background-color: #e2e8f0 !important; /* 약간 더 진한 회색 배경 */
+}
+
+/* 마우스 오버 시 아이콘 색상: 더 진하게 혹은 브랜드 컬러 */
+.btn-refresh-top:hover i {
+    color: #1e293b !important; /* 거의 검은색에 가까운 색으로 강조 */
+    /* 또는 파란색 포인트: color: var(--c-blue) !important; */
+}
+
+/* 한번이라도 선택된 페이지 스타일 (연한 파란색 계열) */
+.visited-menu {color: yellowgreen !important; }
+.submenu { transition: all 0.3s ease-in-out; }
+
+/* 사이드바 애니메이션 및 상태 */
+#sidebar { transition: width 0.3s ease; overflow-x: hidden; }
+.sidebar-collapsed { width: 60px !important; }
+.sidebar-collapsed .menu-text, 
+.sidebar-collapsed .menu-folder span,
+.sidebar-collapsed .fa-chevron-down,
+.sidebar-collapsed .logo-text { display: none; }
+.sidebar-collapsed .menu-item-content { justify-content: center; }
+
+/* 본문 가로 스크롤 방지 및 최소 너비 */
+main { min-width: 0; flex: 1; }
+#contentBodyWrapper { 
+    min-width: 800px; /* 본문이 깨지지 않는 최소 가로 폭 설정 */
+}
+
+/* [수정] 페이지 컨테이너 기본 스타일: 평소에는 숨김 */
+.page-section { display: none; width: 100% !important; height: 100%; box-sizing: border-box; /* 패딩이 너비에 영향을 주지 않도록 함 */}
+/* 활성화된 페이지만 표시 */
+.page-section.active { display: block; }
+
+/* 메시지 박스 슬라이드 인 효과 (하단 고정용) */
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.animate-slideUp {
+    animation: slideUp 0.3s ease-out forwards;
+}
+
+
+
+
+
+/* ==========================================================================
+   Root Variables & Base
+   ========================================================================== */
+:root {
+    --c-dark: #1E3A5F;
+    --c-blue: #3B82F6;
+    --c-blue-light: #DBEAFE;
+    --c-border: #E5E7EB;
+    --c-white: #FFFFFF;
+    --radius-sm: 8px;
+}
+
+/* ==========================================================================
+   Main Layout Structure
+   ========================================================================== */
+
+/* 실제 콘텐츠가 들어가는 영역 (M01001 등이 로드되는 곳) */
+.ontent-area {
+    flex: 1;
+    overflow-y: auto; /* 내용이 많아지면 여기서 스크롤 발생 */
+    padding: 20px;
+    background-color: var(--c-bg);
+}
+
+/* 우측 사이드바 기본 스타일 */
+#sideRBar,
+#googleGenaiRBar {
+    height: 100vh; /* 혹은 부모 높이에 맞게 설정 */
+    width: 300px; /* 기본 너비 */
+    flex-shrink: 0;
+    transition: width 0.3s ease-in-out; /* 닫힐 때도 부드럽게 적용 */
+    position: relative;
+    overflow: hidden; /* 내부 내용이 삐져나오지 않게 */
+    display: flex;
+    flex-direction: column;
+}
+
+/* 사이드바가 접혔을 때 */
+#sideRBar.collapsed,
+#googleGenaiRBar.collapsed {
+    width: 20px !important; /* 접혔을 때 너비 (아이콘이 보일 정도) */
+    min-width: 20px !important;
+    max-width: 20px !important;
+    cursor: pointer;
+    background-color: #334155 !important; /* 슬레이트 색상 등으로 강조 */
+    border-left: 1px solid #475569;
+    overflow: hidden;
+    display: flex !important;
+}
+
+#sideRBar.collapsed:hover,
+#googleGenaiRBar.collapsed:hover {
+    background-color:#64748B !important;
+}
+
+/* 접혔을 때 내부 콘텐츠 싹 숨기기 (후손 선택자 사용) */
+#sideRBar.collapsed *,
+#googleGenaiRBar.collapsed * {
+    pointer-events: none; /* 클릭 가로채기 방지 */
+}
+
+#sideRBar.collapsed,
+#googleGenaiRBar.collapsed {
+    pointer-events: auto;
+}
+
+/* 접힌 상태에서도 보일 로봇 아이콘 컨테이너 */
+.sideRBar-collapsed-icon-viewer {
+    position: absolute;
+    top: 15px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: none; /* 기본은 숨김 */
+    font-size: 1.2rem;
+    color: #3b82f6;
+    cursor: pointer;
+    display: none;
+}
+
+/* 접혔을 때만 로봇 아이콘 보이기 */
+#sideRBar.collapsed .sideRBar-collapsed-icon-viewer,
+#googleGenaiRBar.collapsed .sideRBar-collapsed-icon-viewer {
+    display: block;
+}
+
+/* 접혔을 때 기존의 복잡한 내용들은 숨기기 */
+#sideRBar.collapsed .side-content-original,
+#googleGenaiRBar.collapsed .side-content-original {
+    display: none;
+}
+
+/* 닫혀 있을 때는 컨텐츠 숨김 */
+.right-sidebar.collapsed .side-content-original {
+    display: none;
+}
+
+/* 열려 있을 때는 컨텐츠 보임 */
+.right-sidebar:not(.collapsed) .side-content-original {
+    display: flex;
+}
+
+/* 우측 사이드바 전체를 감싸는 컨테이너 */
+.side-content-original {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%; /* 화면 전체 높이를 사용하거나, 부모 높이에 맞게 100% */
+    min-height: 0;
+    overflow: hidden; /* 컨테이너 자체 스크롤 방지 */
+}
+
+/* 중앙 영역을 담당하는 래퍼 (사이드바 제외한 나머지) */
+.center-layout-wrapper {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0; /* 중요: Flex 자식이 부모를 뚫고 나가는 것 방지 */
+    height: 100vh;
+    position: relative;
+}
+
+/* 중앙 메인 레이아웃 (헤더 + 메인섹션) */
+.main-layout-wrapper {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+
+/* ==========================================================================
+   우측 챗봇 사이드바 (Full Height)
+   ========================================================================== */
+
+/* 가이드라인 스타일 (X축/Y축) */
+.resizer-ghost-x {
+    position: fixed;
+    top: 0;
+    width: 2px;
+    height: 100vh;
+    background-color: var(--c-blue); /* 파란색 라인 */
+    z-index: 9999;
+    display: none;
+    pointer-events: none;
+}
+.resizer-ghost-y {
+    position: fixed;
+    left: 0;
+    height: 2px;
+    background-color: var(--c-blue); /* 파란색 라인 */
+    z-index: 9999;
+    display: none;
+    pointer-events: none;
+}
+
+.chat-header {
+    flex-shrink: 0; /* 헤더는 줄어들지 않음 */
+    height: 60px;
+    padding: 0 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--c-border);
+    font-weight: 600;
+}
+
+.chat-bodys {
+    flex: 1;
+    overflow-y: auto !important; /* 내용이 많아지면 여기서만 스크롤 발생 */
+    padding: 10px;
+    background-color: #F8FAFC;
+    font-family: 'Consolas', monospace;
+    /* 스크롤바 디자인 (선택 사항) */
+}
+
+.chat-body {
+    flex: 1;
+    overflow-y: auto;
+    background-color: #F8FAFC;
+    padding: 10px;
+}
+
+.chat-input-area {
+    padding: 15px;
+    border-top: 1px solid var(--c-border);
+    background: white;
+}
+
+.chat-input {
+    width: 100%;
+    height: 80px;
+    padding: 10px;
+    border: 1px solid var(--c-border);
+    border-radius: var(--radius-sm);
+    resize: none;
+    outline: none;
+    font-size: 13px;
+}
+
+/* ==========================================================================
+   하단 콘솔 (VS Code Style - Black)
+   ========================================================================== */
+.bottom-console{
+    background-color: #000000 !important; /* 배경 투명도 제거 및 블랙 */
+    color: #cccccc;
+    font-family: 'Consolas', 'Monaco', monospace;
+    border-top: 1px solid #333;
+}
+
+#pageConsoleHolder {
+    height: 200px;
+    min-height: 35px;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden !important; /* 부모 전체에 스크롤이 생기는 것을 절대 방지 */
+    flex-shrink: 0; /* 본문에 밀리지 않도록 고정 */
+    z-index: 50;
+    transition: height 0.2s ease-out; /* 토글 시 부드러운 애니메이션 */
+    transition: height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 접혔을 때의 스타일 (콘솔) */
+#pageConsoleHolder.collapsed {
+    height: 35px !important; /* 최소한의 바 형태 유지 */
+    min-height: 35px !important;
+    cursor: pointer;
+    overflow: hidden !important;
+}
+
+#pageConsoleHolder.collapsed:hover {
+    background-color: gray !important;
+}
+
+#pageConsoleHolder.collapsed * {
+    pointer-events: none; /* 클릭 가로채기 방지 */
+}
+
+
+/* 접힘 상태에서 아이콘이 반대로 뒤집히거나 바뀌는 것을 보조하는 스타일 (선택사항) */
+#pageConsoleHolder.collapsed .btn-console-action i {
+    /* 필요 시 애니메이션 추가 가능 */
+    transition: transform 0.2s ease;
+}
+
+.btn-console-action:hover {
+    background-color: #3e3e42;
+    border-radius: 4px;
+}
+
+.console-header {
+    flex-shrink: 0; /* 높이가 줄어들거나 밀리지 않게 고정 */
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #333333; /* 조금 더 밝은 구분선 역할 */
+    border-top: 1px solid #333;
+    height: 35px;
+    padding: 0 10px;
+    overflow: hidden; /* 영역 이탈 방지 */
+    box-sizing: border-box;
+}
+
+/* 2. 타이틀(출력, 터미널) 텍스트가 줄어들지 않게 설정 */
+.console-header span {
+    flex-shrink: 0; /* 공간이 부족해도 높이나 너비가 줄어들지 않음 */
+    line-height: 35px;
+    margin-right: 15px;
+    font-size: 13px;
+}
+
+.console-tabs {
+    display: flex;
+    gap: 5px;
+    height: 100%;
+}
+
+.console-tab {
+    background: none;
+    border: none;
+    color: #888; /* 비활성 텍스트 */
+    padding: 5px 15px;
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    transition: all 0.2s;
+    text-transform: uppercase;
+}
+
+.console-tab.active {
+    border-bottom: 2px solid #3b82f6; /* 하단 포인트 라인 */
+    font-weight: bold;
+}
+
+.console-tab:hover {
+    color: #bbb;
+}
+
+.console-bodys {
+    flex: 1;
+    overflow-y: auto !important; /* 내용이 많아지면 여기서만 스크롤 발생 */
+    padding: 10px;
+    background-color: #1e1e1e;
+    font-family: 'Consolas', monospace;
+    /* 스크롤바 디자인 (선택 사항) */
+}
+
+/* 스크롤바 커스텀 (VS Code 느낌) */
+.console-bodys::-webkit-scrollbar {
+    width: 10px;
+}
+.console-bodys::-webkit-scrollbar-thumb {
+    background: #333;
+}
+.console-bodys::-webkit-scrollbar-track {
+    background: #1e1e1e;
+}
+
+.console-body {
+    background-color: #1e1e1e; /* VS Code 기본 배경 */
+    font-family: 'Consolas', 'Monaco', monospace;    
+    border-top: 1px solid #333;
+    color: #dcdcdc;
+    padding: 10px;
+    height: auto;
+    min-height: 100%;
+    overflow-y: auto;
+    flex: 1;
+    padding: 10px 15px;
+    overflow-y: auto;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.console-line {
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: #d4d4d4;
+}
+
+/* ==========================================================================
+   조절바 (Resizers)
+   ========================================================================== */
+.resizer-x {
+    width: 5px;
+    background-color: var(--c-border);
+    cursor: col-resize;
+    z-index: 110;
+    transition: background 0.2s;
+}
+
+.resizer-y {
+    height: 5px;
+    background-color: var(--c-border);
+    cursor: row-resize;
+    z-index: 60;
+    transition: background 0.2s;
+}
+
+.resizer-x:hover, .resizer-y:hover,
+.resizer-x.active, .resizer-y.active {
+    background-color: var(--c-blue);
+}
+
+/* 리사이저 강조 */
+.resizer-y:hover { background-color: var(--c-blue); height: 4px; }
+.resizer-x:hover { background-color: var(--c-blue); width: 4px; }
+
+/* 버튼 스타일 */
+.btn-panel-toggle {
+    padding: 8px;
+    color: #64748b;
+    cursor: pointer;
+}
+.btn-panel-toggle:hover { color: var(--c-blue); }
+
+/* 4. 접힘/열기 아이콘 전용 버튼 (패널 내부에 배치) */
+/* 패널 내 열기 버튼 */
+.panel-expand-btn {
+    display: none;
+    height: 35px; width: 100%; align-items: center; justify-content: center;
+    background: #2d3748; color: white; cursor: pointer;
+}
+.collapsed .panel-expand-btn { display: flex; }
+
+/* 로그별 색상 구분 */
+.log-info { color: #d4d4d4; }
+.log-error { color: #f44747; font-weight: bold; }
+.log-time { color: #6a9955; } /* 시간색 (Green계열) */
+.log-level { color: #569cd6; } /* 레벨색 (Blue계열) */
+.log-location { color: #ce9178; font-style: italic; } /* 위치 (Orange계열) */
+
+/* 사이드바 컨테이너 구조 */
+.chat-container {
+    display: flex;
+    flex-direction: column;
+    flex: 1;           /* 남은 공간을 모두 차지 */
+    overflow: hidden;  /* 전체 스크롤 방지 */
+    min-height: 0; /* 중요: 내부 스크롤이 작동하도록 설정 */
+}
+
+#googleGenaiBody {
+    height: calc(100vh - 60px);
+    min-height: 0;
+}
+
+.side-frame {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    border: 0;
+    background: #f8fafc;
+    display: block;
+    flex: 1;
+}
+
+/* 메시지 기록 영역 */
+.chat-messages-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 15px;
+    background: #f8fafc;
+}
+
+/* 시스템 메시지 스타일 */
+.chat-message.system {
+    font-size: 12px;
+    color: #64748b;
+    margin-bottom: 10px;
+}
+
+/* 하단 입력 영역 컨테이너 */
+.chat-input-wrapper {
+    flex-shrink: 0;    /* 입력창 크기 유지, 위로 밀리지 않음 */
+    padding: 10px;
+    border-top: 1px solid var(--c-border);
+    background: white; /* 배경색을 주어 메시지와 겹쳐 보이지 않게 함 */
+}
+
+/* 텍스트 영역(Textarea) 스타일 */
+.chat-input-field {
+    width: 100%;
+    border: 1px solid var(--c-border);
+    border-radius: 8px;
+    padding: 8px;
+    resize: none;
+    display: block;    
+    font-family: inherit;
+    box-sizing: border-box; /* 패딩이 너비에 포함되도록 설정 */
+}
+
+/* 전송 버튼 스타일 */
+.btn-send {
+    width: 100%;
+    margin-top: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* 추가: 텍스트 영역 포커스 시 효과 (앱 스타일 강조) */
+.chat-input-field:focus {
+    outline: none;
+    border-color: #3b82f6; /* 포인트 컬러 예시 */
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+
+/* 로그 토글 전체 컨테이너 */
+.log-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    user-select: none;
+    font-size: 11px;
+    font-weight: bold;
+    color: #3B82F6; /* 기본 ON 컬러 */
+}
+
+/* 스위치 트랙 (바탕) */
+.sw-track {
+    width: 28px;
+    height: 16px;
+    background: #cbd5e1;
+    border-radius: 10px;
+    position: relative;
+    transition: 0.2s;
+}
+
+/* 스위치 노브 (원) */
+.sw-knob {
+    width: 12px;
+    height: 12px;
+    background: white;
+    border-radius: 50%;
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    transition: 0.2s;
+}
+
+/* 활성화 상태 (Active) */
+.sw-track.active { background: #3B82F6; }
+.sw-track.active .sw-knob { left: 14px; }
+
+/* 비활성화 상태 색상 변경 */
+.log-toggle.off { color: #94a3b8; }
+
+
+
+/* Gemini 검색 css */
+.panelGemini {
+    background: #ffffff;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+}
+
+.headerGemini {
+    min-height: 60px;
+    padding: 12px 14px;
+    border-bottom: 1px solid #e5ebf3;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.headerGemini h1 {
+    margin: 0;
+    color: #172033;
+    font-size: 17px;
+    line-height: 1.25;
+    font-weight: 800;
+}
+
+.headerActionsGemini {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.badgeGemini {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 28px;
+    padding: 0 10px;
+    border-radius: 999px;
+    background: #eef6ff;
+    color: #1d4ed8;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.closeButtonGemini {
+    width: 32px;
+    height: 32px;
+    min-height: 32px;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: #64748b;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.closeButtonGemini:hover {
+    background: #f1f5f9;
+    color: #dc2626;
+}
+
+.bodyGemini {
+    padding: 14px;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.bodyGemini label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #334155;
+}
+
+.bodyGemini textarea {
+    width: 100%;
+    min-height: 116px;
+    resize: vertical;
+    padding: 12px 13px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    font: inherit;
+    line-height: 1.55;
+    outline: none;
+    box-sizing: border-box;
+}
+
+.bodyGemini textarea:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
+}
+
+.actionsGemini {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 14px;
+}
+
+.actionsGemini button {
+    min-height: 40px;
+    border: 0;
+    border-radius: 8px;
+    padding: 0 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: #2563eb;
+    color: #ffffff;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.actionsGemini button:disabled {
+    cursor: wait;
+    opacity: 0.65;
+}
+
+.outputGemini {
+    margin-top: 24px;
+    border-top: 1px solid #e5ebf3;
+    padding-top: 24px;
+}
+
+.answerGemini {
+    min-height: 180px;
+    padding: 16px;
+    border: 1px solid #d9e2ef;
+    border-radius: 8px;
+    background: #fbfdff;
+    line-height: 1.7;
+}
+
+.answerGemini.isLoadingGemini,
+.answerGemini.isEmptyGemini {
+    color: #64748b;
+}
+
+.answerGemini h3 {
+    margin: 22px 0 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #e2e8f0;
+    color: #0f172a;
+    font-size: 18px;
+    line-height: 1.35;
+}
+
+.answerGemini h3:first-child {
+    margin-top: 0;
+}
+
+.answerGemini p {
+    margin: 0 0 12px;
+    color: #263244;
+}
+
+.answerGemini strong {
+    color: #0f172a;
+}
+
+.answerGemini ul,
+.answerGemini ol {
+    margin: 10px 0 16px;
+    padding: 0;
+    display: grid;
+    gap: 8px;
+}
+
+.answerGemini li {
+    list-style: none;
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr);
+    align-items: start;
+    gap: 8px;
+    color: #263244;
+}
+
+.answerGemini .gemini-bullet-icon,
+.answerGemini .gemini-number-icon {
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    flex: none;
+    margin-top: 1px;
+}
+
+.answerGemini .gemini-bullet-icon {
+    background: #eaf8f3;
+    color: #059669;
+    font-size: 12px;
+}
+
+.answerGemini .gemini-number-icon {
+    background: #eef6ff;
+    color: #1d4ed8;
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.answerGemini code {
+    padding: 2px 6px;
+    border-radius: 6px;
+    background: #edf2f7;
+    color: #be123c;
+    font-family: Consolas, Monaco, monospace;
+    font-size: 0.92em;
+}
+
+.sourcesGemini {
+    margin-top: 18px;
+}
+
+.sourcesGemini h2 {
+    margin: 0 0 10px;
+    font-size: 16px;
+}
+
+.sourcesGemini ul {
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 8px;
+}
+
+.sourcesGemini li {
+    margin: 0;
+    list-style: none;
+    display: grid;
+    grid-template-columns: 30px minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border: 1px solid #d9e2ef;
+    border-radius: 8px;
+    background: #ffffff;
+    line-height: 1.45;
+}
+
+.sourcesGemini li i {
+    width: 30px;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: #f1f5f9;
+    color: #475569;
+}
+
+.sourcesGemini a {
+    color: #1d4ed8;
+    word-break: break-word;
+    text-decoration: none;
+    font-weight: 700;
+}
+
+.sourcesGemini a:hover {
+    text-decoration: underline;
+}
+
+.errorGemini {
+    margin-top: 14px;
+    color: #b91c1c;
+    font-weight: 700;
+}
+
+@media (max-width: 640px) {
+    .headerGemini,
+    .bodyGemini {
+        padding: 18px;
+    }
+
+    .headerGemini {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .actionsGemini {
+        justify-content: stretch;
+    }
 }

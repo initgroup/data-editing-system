@@ -1,4 +1,13 @@
+# Node.js 의존성 폴더 제외
+node_modules/
+.node_modules/
+# (추가 팁) 파이썬 가상환경을 사용 중이라면 이것도 제외해야 합니다.
+venv/
 .venv/
 .env
+secreats/
+.secreats/
+instantclient/
+.instantclient/
 __pycache__/
 *.pyc

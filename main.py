@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 import logging
 from fastapi.middleware.cors import CORSMiddleware
-from backend.routers import (home, M00000, M01001, M01002, M01003, M02001, M02002, M02003, M03001, M03002, M03003, M04001, M05001)
+from backend.routers import (common_router, home, M00000, M01001, M01002, M01003, M02001, M02002, M02003, M03001, M03002, M03003, M04001, M05001, googleGenai)
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -17,18 +17,21 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, 
 
 # [수정] 1. API 라우터 등록을 정적 파일 마운트보다 먼저 수행합니다.
 routers = [
+    (common_router.router, "common"), 
     (home.router, "home"), 
     (M00000.router, "M00000"),(M01001.router, "M01001"),
     (M01002.router, "M01002"), (M01003.router, "M01003"),
     (M02001.router, "M02001"), (M02002.router, "M02002"),
     (M02003.router, "M02003"), (M03001.router, "M03001"),
     (M03002.router, "M03002"), (M03003.router, "M03003"),
-    (M04001.router, "M04001"), (M05001.router, "M05001")
+    (M04001.router, "M04001"), (M05001.router, "M05001"),
+    (googleGenai.router, "googleGenai")
 ]
 
 for router, tag in routers:
     # f"/api/{tag}" prefix 사용 (예: /api/M02001)
     app.include_router(router, prefix=f"/api/{tag}", tags=[tag])
+
 
 # [추가] 서버 시작 시 등록된 경로 확인 로그
 @app.on_event("startup")

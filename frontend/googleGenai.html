@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini 웹 검색 AI</title>
+    <link rel="stylesheet" href="./css/all.min.css">
+    <style>
+        :root {
+            color-scheme: light;
+            font-family: Arial, "Noto Sans KR", sans-serif;
+            background: #f4f7fb;
+            color: #172033;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background:
+                linear-gradient(135deg, rgba(37, 99, 235, 0.08), rgba(16, 185, 129, 0.08)),
+                #f4f7fb;
+        }
+
+        main {
+            width: min(960px, calc(100% - 32px));
+            margin: 0 auto;
+            padding: 40px 0;
+        }
+
+        @media (max-width: 720px) {
+            body {
+                background: #f4f7fb;
+            }
+
+            main {
+                width: 100%;
+                min-height: 100vh;
+                padding: 0;
+            }
+
+            .panel {
+                min-height: 100vh;
+                border: 0;
+                border-radius: 0;
+                box-shadow: none;
+            }
+        }
+
+        .panel {
+            background: #ffffff;
+            border: 1px solid #d9e2ef;
+            border-radius: 8px;
+            box-shadow: 0 16px 36px rgba(15, 23, 42, 0.08);
+            overflow: hidden;
+        }
+
+        .header {
+            padding: 24px 28px;
+            border-bottom: 1px solid #e5ebf3;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 24px;
+            line-height: 1.25;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            min-height: 32px;
+            padding: 0 12px;
+            border-radius: 999px;
+            background: #eef6ff;
+            color: #1d4ed8;
+            font-size: 13px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .body {
+            padding: 28px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 10px;
+            font-size: 14px;
+            font-weight: 700;
+            color: #334155;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 132px;
+            resize: vertical;
+            padding: 14px 16px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            font: inherit;
+            line-height: 1.55;
+            outline: none;
+        }
+
+        textarea:focus {
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
+        }
+
+        .actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 14px;
+        }
+
+        button {
+            min-height: 42px;
+            border: 0;
+            border-radius: 8px;
+            padding: 0 18px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            background: #2563eb;
+            color: #ffffff;
+            font: inherit;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        button:disabled {
+            cursor: wait;
+            opacity: 0.65;
+        }
+
+        .output {
+            margin-top: 24px;
+            border-top: 1px solid #e5ebf3;
+            padding-top: 24px;
+        }
+
+        .answer {
+            min-height: 180px;
+            padding: 22px;
+            border: 1px solid #d9e2ef;
+            border-radius: 8px;
+            background: #fbfdff;
+            line-height: 1.7;
+        }
+
+        .answer.loading,
+        .answer.empty {
+            color: #64748b;
+        }
+
+        .answer h3 {
+            margin: 22px 0 10px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #e2e8f0;
+            color: #0f172a;
+            font-size: 18px;
+            line-height: 1.35;
+        }
+
+        .answer h3:first-child {
+            margin-top: 0;
+        }
+
+        .answer p {
+            margin: 0 0 12px;
+            color: #263244;
+        }
+
+        .answer strong {
+            color: #0f172a;
+        }
+
+        .answer ul,
+        .answer ol {
+            margin: 10px 0 16px;
+            padding: 0;
+            display: grid;
+            gap: 8px;
+        }
+
+        .answer li {
+            list-style: none;
+            display: grid;
+            grid-template-columns: 28px minmax(0, 1fr);
+            align-items: start;
+            gap: 8px;
+            color: #263244;
+        }
+
+        .answer .bullet-icon,
+        .answer .number-icon {
+            width: 28px;
+            height: 28px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            flex: none;
+            margin-top: 1px;
+        }
+
+        .answer .bullet-icon {
+            background: #eaf8f3;
+            color: #059669;
+            font-size: 12px;
+        }
+
+        .answer .number-icon {
+            background: #eef6ff;
+            color: #1d4ed8;
+            font-size: 12px;
+            font-weight: 800;
+        }
+
+        .answer code {
+            padding: 2px 6px;
+            border-radius: 6px;
+            background: #edf2f7;
+            color: #be123c;
+            font-family: Consolas, Monaco, monospace;
+            font-size: 0.92em;
+        }
+
+        .sources {
+            margin-top: 18px;
+        }
+
+        .sources h2 {
+            margin: 0 0 10px;
+            font-size: 16px;
+        }
+
+        .sources ul {
+            margin: 0;
+            padding: 0;
+            display: grid;
+            gap: 8px;
+        }
+
+        .sources li {
+            margin: 0;
+            list-style: none;
+            display: grid;
+            grid-template-columns: 30px minmax(0, 1fr);
+            align-items: center;
+            gap: 8px;
+            padding: 10px 12px;
+            border: 1px solid #d9e2ef;
+            border-radius: 8px;
+            background: #ffffff;
+            line-height: 1.45;
+        }
+
+        .sources li i {
+            width: 30px;
+            height: 30px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            background: #f1f5f9;
+            color: #475569;
+        }
+
+        .sources a {
+            color: #1d4ed8;
+            word-break: break-word;
+            text-decoration: none;
+            font-weight: 700;
+        }
+
+        .sources a:hover {
+            text-decoration: underline;
+        }
+
+        .error {
+            margin-top: 14px;
+            color: #b91c1c;
+            font-weight: 700;
+        }
+
+        @media (max-width: 640px) {
+            main {
+                width: min(100% - 20px, 960px);
+                padding: 16px 0;
+            }
+
+            .header,
+            .body {
+                padding: 18px;
+            }
+
+            .header {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+
+            h1 {
+                font-size: 20px;
+            }
+
+            .actions {
+                justify-content: stretch;
+            }
+
+            button {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <section class="panel">
+            <div class="header">
+                <h1>Gemini 웹 검색 AI</h1>
+                <span class="badge"><i class="fas fa-magnifying-glass"></i> Google Search 사용</span>
+            </div>
+
+            <div class="body">
+                <form id="searchForm">
+                    <label for="query">질문</label>
+                    <textarea id="query" name="query" placeholder="예: 2026년 현재 인기 있는 프론트엔드 프레임워크를 근거와 함께 알려줘"></textarea>
+                    <div class="actions">
+                        <button id="submitButton" type="submit">
+                            <i class="fas fa-paper-plane"></i>
+                            검색하고 답변 받기
+                        </button>
+                    </div>
+                    <div id="error" class="error" hidden></div>
+                </form>
+
+                <div class="output">
+                    <div id="answer" class="answer">질문을 입력하면 답변이 여기에 표시됩니다.</div>
+                    <div id="sources" class="sources" hidden>
+                        <h2>참고 출처</h2>
+                        <ul id="sourceList"></ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        const form = document.getElementById("searchForm");
+        const queryEl = document.getElementById("query");
+        const button = document.getElementById("submitButton");
+        const answerEl = document.getElementById("answer");
+        const errorEl = document.getElementById("error");
+        const sourcesEl = document.getElementById("sources");
+        const sourceListEl = document.getElementById("sourceList");
+
+        function escapeHtml(value) {
+            return String(value)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        function formatInline(value) {
+            return escapeHtml(value)
+                .replace(/`([^`]+)`/g, "<code>$1</code>")
+                .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+        }
+
+        function flushList(parts, listItems, listType) {
+            if (listItems.length === 0) return;
+
+            const tagName = listType === "ol" ? "ol" : "ul";
+            const items = listItems.map((item, index) => {
+                const marker = listType === "ol"
+                    ? `<span class="number-icon">${index + 1}</span>`
+                    : `<span class="bullet-icon"><i class="fas fa-check"></i></span>`;
+
+                return `<li>${marker}<span>${formatInline(item)}</span></li>`;
+            }).join("");
+
+            parts.push(`<${tagName}>${items}</${tagName}>`);
+            listItems.length = 0;
+        }
+
+        function renderAnswer(answer) {
+            const text = (answer || "").trim();
+
+            answerEl.classList.remove("loading", "empty");
+            if (!text) {
+                answerEl.classList.add("empty");
+                answerEl.textContent = "답변이 비어 있습니다.";
+                return;
+            }
+
+            const parts = [];
+            const listItems = [];
+            let listType = null;
+
+            text.split(/\r?\n/).forEach((rawLine) => {
+                const line = rawLine.trim();
+
+                if (!line) {
+                    flushList(parts, listItems, listType);
+                    listType = null;
+                    return;
+                }
+
+                const headingMatch = line.match(/^#{1,3}\s+(.+)$/);
+                if (headingMatch) {
+                    flushList(parts, listItems, listType);
+                    listType = null;
+                    parts.push(`<h3>${formatInline(headingMatch[1])}</h3>`);
+                    return;
+                }
+
+                const bulletMatch = line.match(/^[-*]\s+(.+)$/);
+                if (bulletMatch) {
+                    if (listType && listType !== "ul") flushList(parts, listItems, listType);
+                    listType = "ul";
+                    listItems.push(bulletMatch[1]);
+                    return;
+                }
+
+                const numberedMatch = line.match(/^\d+[.)]\s+(.+)$/);
+                if (numberedMatch) {
+                    if (listType && listType !== "ol") flushList(parts, listItems, listType);
+                    listType = "ol";
+                    listItems.push(numberedMatch[1]);
+                    return;
+                }
+
+                flushList(parts, listItems, listType);
+                listType = null;
+                parts.push(`<p>${formatInline(line)}</p>`);
+            });
+
+            flushList(parts, listItems, listType);
+            answerEl.innerHTML = parts.join("");
+        }
+
+        function renderSources(sources) {
+            sourceListEl.innerHTML = "";
+
+            if (!sources || sources.length === 0) {
+                sourcesEl.hidden = true;
+                return;
+            }
+
+            sources.forEach((source) => {
+                const item = document.createElement("li");
+                const icon = document.createElement("i");
+                const link = document.createElement("a");
+
+                icon.className = "fas fa-link";
+                link.href = source.url;
+                link.target = "_blank";
+                link.rel = "noopener noreferrer";
+                link.textContent = source.title || source.url;
+
+                item.appendChild(icon);
+                item.appendChild(link);
+                sourceListEl.appendChild(item);
+            });
+
+            sourcesEl.hidden = false;
+        }
+
+        form.addEventListener("submit", async (event) => {
+            event.preventDefault();
+
+            const query = queryEl.value.trim();
+            if (!query) {
+                errorEl.textContent = "질문을 입력해 주세요.";
+                errorEl.hidden = false;
+                queryEl.focus();
+                return;
+            }
+
+            errorEl.hidden = true;
+            button.disabled = true;
+            answerEl.classList.add("loading");
+            answerEl.textContent = "검색하고 답변을 생성하는 중입니다...";
+            renderSources([]);
+
+            try {
+                const response = await fetch("/api/googleGenai/search", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ query }),
+                });
+
+                const payload = await response.json();
+                if (!response.ok) {
+                    throw new Error(payload.detail || "요청 처리 중 오류가 발생했습니다.");
+                }
+
+                renderAnswer(payload.data.answer);
+                renderSources(payload.data.sources);
+            } catch (error) {
+                answerEl.classList.remove("loading");
+                answerEl.textContent = "답변을 표시할 수 없습니다.";
+                errorEl.textContent = error.message;
+                errorEl.hidden = false;
+            } finally {
+                button.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>

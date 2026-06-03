@@ -1,0 +1,13 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 커스텀 컴포넌트 스타일은 여기에 작성합니다 */
+@layer components {
+    aside .menu-active { 
+        background-color: #1d4ed8 !important; /* bg-blue-700의 실제 값 */
+        color: #ffffff !important;
+        border-left-width: 4px !important;
+        border-color: #facc15 !important; /* border-yellow-400 */
+    }
+}

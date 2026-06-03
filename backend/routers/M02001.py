@@ -1,226 +1,99 @@
-from fastapi import APIRouter, HTTPException, BackgroundTasks, status
-from pydantic import BaseModel
-from backend.database import get_db_connection
-import time
+"""
+@file           [M02001].py 
+@description    [규칙관리_규칙발굴]
+@author         [인아이티 김진열]
+@date           2026-04-18
+@version        1.0.0
+
+[수정 이력]:
+- 2026-04-18: 최초 생성 및 기본 UI 구현
+@Copyright (c) 2026 [init]. All rights reserved.
+@vLicense: MIT License
+"""
+
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, ConfigDict
+from typing import Dict, Any, List, Optional
+from fastapi import Body
 import logging
+from backend.database import get_db_connection # 주석 해제하여 사용
+from backend.database_helper import execute_query, SqlLoader, get_debug_sql
 
-# 로깅 설정
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
 router = APIRouter()
 
-class DiscoveryRequest(BaseModel):
-    target_table: str
-    target_column: str
-    discovery_type: str
+# 조회입력파라미터선언
+class SearchRequest(BaseModel):
+    # 명시적으로 사용할 것들만 선언
+    main_combo: Optional[str] = None
+    sub_combo: Optional[str] = None
+    check_values: Optional[List[str]] = []  # IN 절에 사용될 리스트
+    radio_val: Optional[str] = None
+    text_val: Optional[str] = None
+    date_val: Optional[str] = None
+    # [핵심] 선언되지 않은 나머지 필드들을 허용함
+    model_config = ConfigDict(extra='allow')
 
-def task_logic(h_id, target_column):
-    logger.info(f" === [TASK START] HIST_ID: {h_id} 분석 시작 ===")
-    conn_task = None
-    try:
-        time.sleep(3) # 분석 시뮬레이션
-        discovered = [
-            ('RANGE', f'{target_column}의 값은 0에서 10억 사이여야 함', 99.5),
-            ('FORMAT', f'{target_column}은 숫자형식이어야 함', 100.0)
-        ]
-        conn_task = get_db_connection()
-        cur_task = conn_task.cursor()
-        for r_type, r_desc, r_conf in discovered:
-            cur_task.execute(
-                "INSERT INTO DISCOVERED_RULES (HIST_ID, RULE_TYPE, RULE_DESC, CONFIDENCE) VALUES (:1, :2, :3, :4)",
-                (h_id, r_type, r_desc, r_conf)
-            )
-        cur_task.execute("UPDATE RULE_DISCOVERY_HISTORY SET STATUS='COMPLETED', EXEC_END_DT=SYSDATE WHERE HIST_ID=:1", (h_id,))
-        conn_task.commit()
-        logger.info(f" === [TASK COMPLETED] HIST_ID: {h_id} 완료 ===")
-    except Exception as e:
-        logger.error(f" !!! [TASK ERROR] {str(e)} !!!")
-    finally:
-        if conn_task:
-            conn_task.close()
-
-@router.post("/run")
-def run_discovery(req: DiscoveryRequest, background_tasks: BackgroundTasks):
-    logger.info("--------------------------------------------------")
-    logger.info(f"▶ [POST /run] 엔드포인트 진입 성공")
-    logger.info(f" - Table: {req.target_table}, Column: {req.target_column}")
-    logger.info("--------------------------------------------------")
-    
+@router.get("/init")
+def get_init_data():
     conn = None
     try:
         conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        # [수정] Cursor.get_value 오류 해결을 위한 변수 바인딩 방식
-        hist_id_var = cursor.var(int)
-        cursor.execute(
-            """
-            INSERT INTO RULE_DISCOVERY_HISTORY (TARGET_TABLE, TARGET_COLUMN, STATUS) 
-            VALUES (:1, :2, 'RUNNING') 
-            RETURNING HIST_ID INTO :3
-            """,
-            (req.target_table, req.target_column, hist_id_var)
-        )
-        
-        # 반환된 ID 값 추출
-        hist_id = hist_id_var.values[0][0]
-        conn.commit()
-        
-        logger.info(f"▶ [DB SUCCESS] HIST_ID {hist_id} 생성 완료")
-        background_tasks.add_task(task_logic, hist_id, req.target_column)
-        
-        return {"status": "success", "message": "발굴 작업 시작", "hist_id": hist_id}
-    except Exception as e:
-        if conn: conn.rollback()
-        logger.error(f"▶ [API ERROR] {str(e)}")
-        raise HTTPException(status_code=500, detail=f"DB 작업 오류: {str(e)}")
-    finally:
-        if conn: conn.close()
+        # 임시 목업 데이터 반환 (실제로는 위 헬퍼 사용)
+        result = execute_query(conn, "INIT_COMBO")
 
-@router.get("/results/{hist_id}")
-def get_results(hist_id: int):
-    # [추가] 결과 조회 요청 로그
-    logger.info(f"[GET /results/{hist_id}] 결과 조회 요청")
+        return {"status": "success", "data": result["data"], "total": result["total"]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="초기 데이터 로드 실패")
+
+@router.get("/cascade/{parent_id}")
+def get_cascade_data(parent_id: str):
     conn = None
     try:
         conn = get_db_connection()
-        cursor = conn.cursor()
-        # 실제 DB에서 조회하는 대신 DUAL 테이블을 사용하여 샘플 데이터 반환
-        cursor.execute("""
-            SELECT 
-                CAST(ROWNUM AS NUMBER) as RULE_ID,
-                CASE MOD(ROWNUM, 4)
-                    WHEN 0 THEN 'RANGE'
-                    WHEN 1 THEN 'FORMAT' 
-                    WHEN 2 THEN 'REFERENTIAL'
-                    ELSE 'PATTERN'
-                END as RULE_TYPE,
-                CASE MOD(ROWNUM, 4)
-                    WHEN 0 THEN '값은 0에서 10억 사이여야 함'
-                    WHEN 1 THEN '숫자형식이어야 함'
-                    WHEN 2 THEN '참조 테이블의 ID를 참조해야 함'
-                    ELSE '특정 패턴을 따라야 함'
-                END as RULE_DESC,
-                CASE MOD(ROWNUM, 4)
-                    WHEN 0 THEN 99.5
-                    WHEN 1 THEN 100.0
-                    WHEN 2 THEN 95.2
-                    ELSE 89.5
-                END as CONFIDENCE
-            FROM DUAL 
-            CONNECT BY ROWNUM <= 4
-        """)
-        # cursor.execute("SELECT RULE_ID, RULE_TYPE, RULE_DESC, CONFIDENCE FROM DISCOVERED_RULES WHERE HIST_ID = :1", (hist_id,))
-        rows = cursor.fetchall()
-
-        if not rows:
-             return {"status": "empty", "message": "결과 생성 중", "data": []}
-             
-        columns = [col[0] for col in cursor.description]
-        data = [dict(zip(columns, row)) for row in rows]
-        return {"status": "success", "data": data}
+        result = execute_query(conn, "SUB_COMBO", {"parent_id": parent_id})        
+        
+        return {"status": "success", "data": result["data"], "total": result["total"]}
     except Exception as e:
-        logger.error(f"[API ERROR] {str(e)}")
+        # 이 부분이 없거나 잘못되면 브라우저는 에러인 줄 모릅니다!
         raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        if conn: conn.close()
 
-@router.post("/select")
-def select_discovery(req: DiscoveryRequest):
-    logger.info(f"▶ [SELECT] Table: {req.target_table}, Col: {req.target_column} 즉시 조회")
+# 웹페이지 파라미터를 지정해서 사용할 경우
+@router.post("/search")
+def search_data(req: SearchRequest):
     conn = None
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
+        in_sql = ""
+        params = {}
+        if req.check_values:
+            bind_names = [f":chk{i}" for i in range(len(req.check_values))]
+            in_sql = f" AND COL1 IN ({','.join(bind_names)})"
+            for i, val in enumerate(req.check_values):
+                params[f"chk{i}"] = val
         
-        # [방법 1] 실제 DB에 데이터가 있다면 해당 테이블 조회
-        # [방법 2] 여기서는 요청하신 대로 가상의 SQL(DUAL 방식)로 즉시 결과 생성
-        sql = """
-            SELECT 
-                CAST(ROWNUM AS NUMBER) as RULE_ID,
-                CASE MOD(ROWNUM, 4)
-                    WHEN 0 THEN 'RANGE'
-                    WHEN 1 THEN 'FORMAT' 
-                    WHEN 2 THEN 'REFERENTIAL'
-                    ELSE 'PATTERN'
-                END as RULE_TYPE,
-                :target_col || CASE MOD(ROWNUM, 4)
-                    WHEN 0 THEN ' 값은 0에서 10억 사이여야 함'
-                    WHEN 1 THEN '은 숫자형식이어야 함'
-                    WHEN 2 THEN '은 참조 테이블의 ID를 참조해야 함'
-                    ELSE '은 특정 패턴을 따라야 함'
-                END as RULE_DESC,
-                CASE MOD(ROWNUM, 4)
-                    WHEN 0 THEN 99.5
-                    WHEN 1 THEN 100.0
-                    WHEN 2 THEN 95.2
-                    ELSE 89.5
-                END as CONFIDENCE
-            FROM DUAL 
-            CONNECT BY ROWNUM <= 8
-        """
+        params['in_clause_str'] = in_sql
+        params['text_val'] = req.main_combo
         
-        cursor.execute(sql, {"target_col": req.target_column})
-        rows = cursor.fetchall()
-        
-        # 컬럼명 추출 및 dict 변환
-        columns = [col[0] for col in cursor.description]
-        data = [dict(zip(columns, row)) for row in rows]
-        
-        # JS에서 data.status와 data.data 로 접근하므로 형식을 맞춤
-        return {
-            "status": "success",
-            "data": data
-        }
+        # 실행전 SQL 로그 출력
+        logger.info(f"실행될 쿼리:\n{get_debug_sql('SEARCH_DATA2', params)}")
 
+        # [실제 호출 예시]
+        conn = get_db_connection()
+        # database_helper의 execute_query 내부에서 SqlLoader.get_sql("SEARCH_DATA")를 호출하게 됩니다.
+        result = execute_query(conn, "SEARCH_DATA2", params)
+        
+        return {"status": "success", "data": result["data"], "total": result["total"]}
     except Exception as e:
-        logger.error(f"▶ [SELECT ERROR] {str(e)}")
+        # 이 부분이 없거나 잘못되면 브라우저는 에러인 줄 모릅니다!
         raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        if conn: conn.close()        
 
-@router.get("/tables")
-def get_table_list():
-    """페이지 로딩 시 첫 번째 콤보박스(테이블 목록) 채우기"""
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        # 실제로는 USER_TABLES를 조회하거나, 여기서는 예시로 DUAL을 포함한 리스트 반환
-        sql = """
-            SELECT TABLE_NAME AS TABLE_ID, TABLE_NAME AS TABLE_NM FROM USER_TABLES ORDER BY TABLE_NAME
-        """
-        cursor.execute(sql)
-        rows = cursor.fetchall()
-
-        # [중요] 컬럼명을 추출하여 딕셔너리 리스트로 변환
-        columns = [col[0] for col in cursor.description]
-        data = [dict(zip(columns, row)) for row in rows]
-        
-        return {"status": "success", "data": data}
-    finally:
-        if conn: conn.close()
-
-@router.get("/columns/{table_name}")
-def get_column_list(table_name: str):
-    """테이블 선택 시 두 번째 콤보박스(컬럼 목록) 채우기"""
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        # 테이블명에 따른 동적 컬럼 조회 시뮬레이션
-        if table_name == 'DUAL':
-            sql = "SELECT 'DUMMY' as COL FROM DUAL"
-        else:
-            sql = """
-                SELECT COLUMN_NAME FROM USER_TAB_COLUMNS WHERE TABLE_NAME = :table_id
-            """            
-            cursor.execute(sql, {"table_id": table_name})
-            
-        cursor.execute(sql)
-        rows = cursor.fetchall()
-        return {"status": "success", "data": [row[0] for row in rows]}
-    finally:
-        if conn: conn.close()       
+@router.post("/procedure")
+def call_proc(req: dict):
+    """[요구사항 6] 오라클 프로시저 호출 예시"""
+    # 실제 구현: result = execute_query(conn, "SP_MY_PROCEDURE", {"input_val": req.get("val")}, is_proc=True)
+    return {
+        "status": "success", 
+        "proc_result": "SUCCESS", # 또는 FAIL
+        "message": "프로시저가 정상적으로 실행되었습니다.",
+        "affected_rows": 5
+    }
