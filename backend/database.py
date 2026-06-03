@@ -1,77 +1,105 @@
-import oracledb
 import os
+from pathlib import Path
+from typing import Optional
+
+import oracledb
 from dotenv import load_dotenv
 
-# .env 파일의 내용을 환경 변수로 로드합니다.
+
 load_dotenv()
+
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _resolve_project_path(path_value: Optional[str]) -> Optional[str]:
+    if not path_value:
+        return None
+
+    path = Path(path_value)
+    if path.is_absolute():
+        return str(path)
+
+    return str((PROJECT_ROOT / path).resolve())
+
+
+def _connect_cloud_db(user: str, password: str, dsn: str):
+    wallet_path = _resolve_project_path(
+        os.getenv("DB_WALLET_PATH", "secreats/Wallet_INITGROUPEDITING")
+    )
+    oracle_mode = os.getenv("DB_ORACLE_MODE", "thin").lower()
+
+    if oracle_mode == "thick":
+        client_path = _resolve_project_path(os.getenv("DB_CLIENT_PATH"))
+        if not client_path:
+            raise ValueError("DB_ORACLE_MODE=thick 인 경우 DB_CLIENT_PATH 환경변수가 필요합니다.")
+
+        try:
+            oracledb.init_oracle_client(lib_dir=client_path, config_dir=wallet_path)
+        except oracledb.ProgrammingError:
+            pass
+
+        return oracledb.connect(user=user, password=password, dsn=dsn)
+
+    connect_args = {
+        "user": user,
+        "password": password,
+        "dsn": dsn,
+        "tcp_connect_timeout": int(os.getenv("DB_CONNECT_TIMEOUT", "10")),
+        "retry_count": int(os.getenv("DB_RETRY_COUNT", "1")),
+        "retry_delay": int(os.getenv("DB_RETRY_DELAY", "1")),
+    }
+
+    if wallet_path and Path(wallet_path).exists():
+        connect_args["config_dir"] = wallet_path
+        connect_args["wallet_location"] = wallet_path
+        wallet_password = os.getenv("DB_WALLET_PASSWORD")
+        if wallet_password:
+            connect_args["wallet_password"] = wallet_password
+
+    return oracledb.connect(**connect_args)
+
 
 def get_db_connection():
     """
-    DB_MODE 환경 변수에 따라 로컬(19c) 또는 클라우드(26ai) DB에 연결합니다.
+    DB_MODE=local 이면 로컬 Oracle DB에, DB_MODE=cloud 이면 Oracle Cloud DB에 연결합니다.
+    Cloud 연결은 기본적으로 python-oracledb Thin Mode를 사용해 Render에서도
+    Oracle Instant Client 없이 동작하도록 합니다.
     """
-    # 기본값은 'local'로 설정하여 안전하게 동작하도록 합니다.
     db_mode = os.getenv("DB_MODE", "local").lower()
 
-    # 변수 초기화 (에러 방지용)
-    user = None
-    password = None
-    dsn = None
-
-    # .env 로드 확인 (디버깅용)    
     if db_mode == "cloud":
-        # 여기서 변수명을 CLD로 정확히 매칭합니다.
         user = os.getenv("DB_USER_CLD")
         password = os.getenv("DB_PASSWORD_CLD")
-        dsn = os.getenv("DB_DSN_CLD")  # <--- 이 부분이 핵심!
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        wallet_path = os.getenv("DB_WALLET_PATH", os.path.join(base_dir, "wallet"))
-        #client_path = os.getenv("DB_CLIENT_PATH")
+        dsn = os.getenv("DB_DSN_CLD")
     else:
         user = os.getenv("DB_USER_LOC")
         password = os.getenv("DB_PASSWORD_LOC")
-        # 로컬 주소 조합
         host = os.getenv("DB_HOST", "127.0.0.1")
         port = os.getenv("DB_PORT", "1521")
         service = os.getenv("DB_SERVICE", "ORCLCDB")
-        dsn = f"{host}:{port}/{service}"        
-    
+        dsn = f"{host}:{port}/{service}"
+
     if not all([user, password, dsn]):
-        raise ValueError("DB 설정 정보가 .env 파일에 누락되었습니다.")
+        raise ValueError("DB 접속 환경변수가 누락되었습니다.")
 
     try:
         if db_mode == "cloud":
-            # 여기서 변수명을 CLD로 정확히 매칭합니다.            
-            print("☁️ [운영 환경] Oracle Cloud 26ai 데이터베이스에 접속 시도 중...")
-            
-            # 클라우드 DB 연결 (Wallet이 있으면 mTLS, 없으면 일반 TLS로 알아서 동작)
-            #connection = oracledb.connect(user=user, password=password, dsn=dsn)       
-            connection = oracledb.connect(
-                user=user,
-                password=password,
-                dsn=dsn,
-                config_dir=wallet_path,
-                wallet_location=wallet_path,
-            )
+            print("[운영 환경] Oracle Cloud DB 접속 시도 중...")
+            connection = _connect_cloud_db(user=user, password=password, dsn=dsn)
 
-            # --- [추가 코드 시작] AI 프로필 설정 ---
-            # 커넥션 생성 직후, 해당 세션에 사용할 AI 프로필을 지정합니다.
             with connection.cursor() as cursor:
                 try:
-                    # EXEC 대신 PL/SQL 문을 사용하여 실행합니다.
                     cursor.execute("BEGIN DBMS_CLOUD_AI.set_profile('INITAI_PROFILE'); END;")
-                    print("   - ✨ Select AI 프로필('INITAI_PROFILE') 활성화 완료")
+                    print("   - Select AI 프로필 'INITAI_PROFILE' 설정 완료")
                 except oracledb.Error as ai_err:
-                    print(f"   - ⚠️ AI 프로필 설정 중 오류 발생: {ai_err}")
-                    # 필요에 따라 raise를 할 수도 있지만, 일반 DB 접속은 성공했으므로 로그만 남깁니다.
-            # --- [추가 코드 끝] ---     
+                    print(f"   - AI 프로필 설정 중 오류 발생: {ai_err}")
         else:
-            print("💻 [개발 환경] 로컬 Oracle 19c 데이터베이스에 접속 시도 중...")
+            print("[개발 환경] 로컬 Oracle DB 접속 시도 중...")
             connection = oracledb.connect(user=user, password=password, dsn=dsn)
-            
-        print("✅ 데이터베이스 연결 성공!")
+
+        print("데이터베이스 연결 성공!")
         return connection
     except oracledb.Error as e:
-        # 로그를 남기고 에러를 다시 던집니다.
-        # 1521 포트 접속 실패 시 네트워크/방화벽 문제일 가능성이 높음
-        print(f"Oracle TLS 연결 실패 (Port 1521): {e}")
-        raise e
+        print(f"Oracle 데이터베이스 연결 실패: {e}")
+        raise
