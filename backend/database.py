@@ -56,6 +56,11 @@ def _connect_cloud_db(user: str, password: str, dsn: str):
         wallet_password = os.getenv("DB_WALLET_PASSWORD")
         if wallet_password:
             connect_args["wallet_password"] = wallet_password
+    elif dsn and "/" not in dsn and ":" not in dsn:
+        raise ValueError(
+            f"DB_WALLET_PATH directory not found or inaccessible: {wallet_path}. "
+            "A TNS alias such as DB_DSN_CLD requires tnsnames.ora in this directory."
+        )
 
     return oracledb.connect(**connect_args)
 
