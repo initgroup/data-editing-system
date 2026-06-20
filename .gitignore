@@ -7,6 +7,7 @@ venv/
 .env
 secreats/
 .secreats/
+etc/secrets/
 instantclient/
 .instantclient/
 __pycache__/

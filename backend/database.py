@@ -19,11 +19,18 @@ def _resolve_project_path(path_value: Optional[str]) -> Optional[str]:
     if not path_value:
         return None
 
+    normalized_value = str(path_value).strip()
+    if not normalized_value:
+        return None
+
+    project_path = (PROJECT_ROOT / normalized_value.lstrip("/\\")).resolve()
     path = Path(path_value)
     if path.is_absolute():
-        return str(path)
+        if path.exists() or not project_path.exists():
+            return str(path)
+        return str(project_path)
 
-    return str((PROJECT_ROOT / path).resolve())
+    return str(project_path)
 
 
 def _get_cloud_connect_args(user: str, password: str, dsn: str) -> dict:

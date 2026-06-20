@@ -19,7 +19,7 @@ import time
 
 import oracledb
 
-from backend.database import get_db_connection
+from backend.database import get_db_connection, get_db_pool
 from backend.database_helper import execute_query, SqlLoader
 from backend.auth_context import get_request_user_id
 
@@ -328,10 +328,16 @@ def get_admin_contact():
 def _resolve_project_path(path_value: Optional[str]) -> Optional[str]:
     if not path_value:
         return None
+    normalized_value = str(path_value).strip()
+    if not normalized_value:
+        return None
+    project_path = (PROJECT_ROOT / normalized_value.lstrip("/\\")).resolve()
     path = Path(path_value)
     if path.is_absolute():
-        return str(path)
-    return str((PROJECT_ROOT / path).resolve())
+        if path.exists() or not project_path.exists():
+            return str(path)
+        return str(project_path)
+    return str(project_path)
 
 
 def _parse_connect_options(value: Optional[Any]) -> dict:
@@ -1333,18 +1339,49 @@ def save_connection(req: ConnectionRequest, request: Request):
 @router.post("/connection/delete")
 def delete_connection(req: ConnectionIdRequest, request: Request):
     user_id = get_request_user_id(request)
-    result = None
     conn = None
+    cursor = None
+    drop_conn = False
     try:
         conn = get_db_connection()
-        result = execute_query(conn, "M91001_CONNECTION_DELETE", {
+        params = {
             "connectionId": req.connectionId,
             "userId": user_id,
-        }, is_dml=True)
-        return {"status": "success", "message": "Connection profile deleted.", "deletedCount": result.get("rowcount", 0)}
-    finally:
+        }
+        cursor = conn.cursor()
+        cursor.execute("ALTER SESSION DISABLE PARALLEL DML")
+        drop_conn = True
+        cursor.execute(SqlLoader.get_sql("M91001_CONNECTION_SETTINGS_DELETE"), params)
+        settings_deleted = cursor.rowcount
+        cursor.execute(SqlLoader.get_sql("M91001_CONNECTION_DELETE"), params)
+        deleted_count = cursor.rowcount
+        if deleted_count < 1:
+            conn.rollback()
+            raise HTTPException(status_code=404, detail="Connection profile was not found or already deleted.")
+        conn.commit()
+        return {
+            "status": "success",
+            "message": "Connection profile deleted.",
+            "deletedCount": deleted_count,
+            "settingsDeletedCount": settings_deleted,
+        }
+    except HTTPException:
         if conn:
-            conn.close()
+            conn.rollback()
+        raise
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"M91001 connection delete failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            if drop_conn:
+                get_db_pool().drop(conn)
+            else:
+                conn.close()
 
 
 @router.post("/connection/test")
