@@ -1,267 +1,220 @@
 """
-@file           [M01001].py 
-@description    [데이터준비_데이터탐색]
-@author         [인아이티 김진열]
-@date           2026-04-18
-@version        1.0.0
-
-[수정 이력]:
-- 2026-04-18: 최초 생성 및 기본 기능 구현
-@Copyright (c) 2026 [init]. All rights reserved.
-@vLicense: MIT License
+@file           M01001.py
+@description    Project settings API
 """
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict
-from typing import Dict, Any, List, Optional
-from fastapi import Body
+from typing import Any, Optional
 import logging
-from backend.database import get_db_connection # 주석 해제하여 사용
-from backend.database_helper import execute_query, SqlLoader, get_debug_sql
-import uuid
-from datetime import datetime
+
+from backend.database_helper import execute_query, SqlLoader
+from backend.target_database import get_target_db_connection
+from backend.auth_context import get_request_user_email, get_request_user_id
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# 조회입력파라미터선언
-class SearchRequest(BaseModel):
-    # 명시적으로 사용할 것들만 선언
-    mainCombo: Optional[str] = None
-    subCombo: Optional[str] = None
-    checkValues: Optional[List[str]] = []  # IN 절에 사용될 리스트
-    radioVal: Optional[str] = None
-    textVal: Optional[str] = None
-    dateVal: Optional[str] = None
-    userName: Optional[str] = None
-    tableName: Optional[str] = None
-    # [핵심] 선언되지 않은 나머지 필드들을 허용함
+
+class ProjectSaveRequest(BaseModel):
+    projectId: Optional[Any] = None
+    projectCode: Optional[str] = None
+    projectName: Optional[str] = None
+    projectType: Optional[str] = "EDITING"
+    projectDesc: Optional[str] = None
+    useYn: Optional[str] = "Y"
+    sortOrder: Optional[Any] = 0
     model_config = ConfigDict(extra='allow')
 
-@router.get("/init")
-def get_init_data():
+
+class ProjectDeleteRequest(BaseModel):
+    projectId: int
+    model_config = ConfigDict(extra='allow')
+
+
+def _to_optional_int(value):
+    if value is None:
+        return None
+    if isinstance(value, str) and value.strip() == "":
+        return None
+    return int(value)
+
+
+def _to_int(value, default=0):
+    if value is None:
+        return default
+    if isinstance(value, str) and value.strip() == "":
+        return default
+    return int(value)
+
+
+@router.get("/projects")
+def get_projects(request: Request, keyword: str = Query("")):
+    user_id = get_request_user_id(request)
     conn = None
     try:
-        conn = get_db_connection()
-        # 첫번째 데이터셋
-        result1 = execute_query(conn, "INIT_COMBO")
-        # 두번째 데이터셋
-        result2 = execute_query(conn, "INIT_COMBO")
-
+        conn = get_target_db_connection(request)
+        result = execute_query(conn, "M01001_PROJECT_LIST", {
+            "keyword": keyword or "",
+            "userId": user_id,
+        })
+        if result.get("status") != "success":
+            raise HTTPException(status_code=500, detail=result.get("message") or result.get("detail") or "Project list query failed.")
         return {
-            "status": "success", 
-            "data": {
-                "data1" : result1["data"],
-                "data2" : result2["data"]
-            },
-            "total": {
-                "total1" : result1["total"],
-                "total2" : result2["total"]
-            }
+            "status": "success",
+            "data": result.get("data", []),
+            "columns": result.get("columns", []),
+            "total": result.get("total", 0)
         }
+    except HTTPException:
+        raise
     except Exception as e:
-        # DB 접속 실패나 쿼리 에러 발생 시 사용자에게 500 에러 반환
-        raise HTTPException(
-            status_code=500,
-            detail=f"데이터베이스 연결 중 오류가 발생했습니다: {str(e)}"
-        )
+        logger.error(f"M01001 project list failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
-        # 에러가 나든 안 나든 연결이 있다면 닫아줍니다.
-        if conn:
-            conn.close()
-    
-# 웹페이지 파라미터를 지정해서 사용할 경우
-@router.post("/searchCombo")
-def search_combo(req: SearchRequest):
-    conn = None
-    try:        
-        params = {}
-
-        params['parentId'] = req.mainCombo or 'XXX'
-
-        # 실행전 SQL 로그 출력
-        logger.info(f"실행될 쿼리:\n{get_debug_sql('SUB_COMBO', params)}")
-
-        # [실제 호출 예시]
-        conn = get_db_connection()
-        result = execute_query(conn, "SUB_COMBO", params)
-
-        return {
-            "status": "success", 
-            "data": result["data"], 
-            "columns": result.get("columns", []), # [추가]
-            "total": result["total"]
-        }    
-    except Exception as e:
-        # 이 부분이 없거나 잘못되면 브라우저는 에러인 줄 모릅니다!
-        raise HTTPException(status_code=500, detail=str(e))
-        
-
-
-# 웹페이지 파라미터를 지정해서 사용할 경우
-@router.post("/search2Combo")
-def search2_combo(req: SearchRequest):
-    conn = None
-    try:        
-        params = {}
-
-        params['parentId'] = req.mainCombo or 'XXX'
-        params['secondId'] = req.subCombo or 'XXXX'
-
-        # 실행전 SQL 로그 출력
-        logger.info(f"실행될 쿼리:\n{get_debug_sql('SUB2_COMBO', params)}")
-
-        # [실제 호출 예시]
-        conn = get_db_connection()
-        result = execute_query(conn, "SUB2_COMBO", params)
-
-        return {
-            "status": "success", 
-            "data": result["data"], 
-            "columns": result.get("columns", []), # [추가]
-            "total": result["total"]
-        }
-    except Exception as e:
-        # 이 부분이 없거나 잘못되면 브라우저는 에러인 줄 모릅니다!
-        raise HTTPException(status_code=500, detail=str(e))
-
-# 웹페이지 파라미터를 지정해서 사용할 경우
-@router.post("/search")
-def search_data(req: SearchRequest):
-    conn = None
-    try:
-        params = {}        
-        params['dynamicTable'] = req.subCombo or 'DUAL'
-        
-        # 실행전 SQL 로그 출력
-        logger.info(f"실행될 쿼리:\n{get_debug_sql('SEARCH_DATA', params)}")
-
-        # [실제 호출 예시]
-        conn = get_db_connection()
-        # database_helper의 execute_query 내부에서 SqlLoader.get_sql("SEARCH_DATA")를 호출하게 됩니다.
-        result = execute_query(conn, "SEARCH_DATA", params)
-
-        # [수정] result에 담긴 columns 정보를 함께 리턴합니다.
-        return {
-            "status": "success", 
-            "data": result["data"], 
-            "columns": result.get("columns", []), # [추가]
-            "total": result["total"]
-        }
-    except Exception as e:
-        # 이 부분이 없거나 잘못되면 브라우저는 에러인 줄 모릅니다!
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.post("/procedure")
-def call_proc(req: SearchRequest, background_tasks: BackgroundTasks):
-    """
-    [개선안] 오라클 피처 분석 프로시저 비동기 호출
-    - NoneType 에러 방지 (Safe Upper)
-    - BackgroundTasks를 이용한 비동기 실행
-    """
-    # 1. 고유한 작업 ID 생성 (이것이 jobId가 됩니다)
-    job_id = str(uuid.uuid4())
-
-    conn = None
-
-    # 1. 입력값 유효성 검사 및 안전한 변환 (NoneType 에러 방지)
-    user_name = (req.userName or "").upper()
-    table_name = (req.tableName or "").upper()
-
-    if not user_name or not table_name:
-        raise HTTPException(
-            status_code=400, 
-            detail="userName과 tableName은 필수 입력 항목입니다."
-        )
-    try:
-        
-        # 2. 비동기 처리를 위한 함수 정의 (Background로 실행될 로직)
-        def run_analysis(u_name, t_name, job_id):
-            try:
-                conn = get_db_connection()
-
-                # [수정 포인트] 리스트가 아닌 딕셔너리 형태로 전달
-                # execute_query 내부에서 params.items()를 호출해도 에러가 나지 않습니다.
-                analysis_params = {
-                    "userName": u_name,
-                    "tableName": t_name,
-                    "jobId": job_id
-                }
-                execute_query(conn, "SP_ANALYZE_FEATURE_TYPES", analysis_params, is_proc=True)
-                logger.info(f"[분석완료] {u_name}.{t_name}")
-            except Exception as ex:
-                logger.error(f"[분석실패] {u_name}.{t_name} : {str(ex)}")
-            finally:
-                if conn:
-                    conn.close()
-
-        # 3. 백그라운드 작업 등록 (오래 걸리는 작업을 뒤로 보냄)
-        background_tasks.add_task(run_analysis, user_name, table_name, job_id)
-
-        # 4. 클라이언트에게 즉시 응답 (비동기 호출의 핵심)
-        return {
-            "status": "PROCESSING",
-            "jobId": job_id,
-            "message": "AI 분석 프로시저가 백그라운드에서 시작되었습니다. 결과는 잠시 후 탭에서 확인하세요.",
-            "proc_result": "SUCCESS",
-            "data": {
-                "targetUser": user_name,
-                "targetTable": table_name
-            }
-        }
-    except Exception as e:
-        logger.error(f"프로시저 호출 중 오류 발생: {str(e)}")
-        # 브라우저가 에러를 인지할 수 있도록 500 에러와 상세 내용을 전달합니다.
-        raise HTTPException(status_code=500, detail=f"AI 분석 프로시저 실행 실패: {str(e)}")
-    
-    finally:
-        # DB 연결 해제는 필수! (get_db_connection에서 context manager를 사용하지 않을 경우)
         if conn:
             conn.close()
 
-@router.get("/status/{job_id}")
-async def get_job_status(job_id: str):
-    """
-    [요구사항] AI 분석 프로시저 작업 상태 조회
-    - DB에서 해당 jobId의 현재 상태(STATUS)를 조회하여 반환
-    """
+
+@router.get("/project")
+def get_project(request: Request, projectId: int = Query(...)):
+    user_id = get_request_user_id(request)
     conn = None
     try:
-        conn = get_db_connection()
+        conn = get_target_db_connection(request)
+        result = execute_query(conn, "M01001_PROJECT_DETAIL", {
+            "projectId": projectId,
+            "userId": user_id,
+        })
+        if result.get("status") != "success":
+            raise HTTPException(status_code=500, detail=result.get("message") or result.get("detail") or "Project detail query failed.")
+        if not result.get("data"):
+            raise HTTPException(status_code=404, detail="Project not found.")
+        return {
+            "status": "success",
+            "data": result["data"][0],
+            "columns": result.get("columns", [])
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"M01001 project detail failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+
+@router.post("/project/save")
+def save_project(req: ProjectSaveRequest, request: Request):
+    user_id = get_request_user_id(request)
+    user_email = get_request_user_email(request)
+    project_name = (req.projectName or "").strip()
+    project_code = (req.projectCode or "").strip()
+    if not project_name:
+        raise HTTPException(status_code=400, detail="Project name is required.")
+    if not project_code:
+        raise HTTPException(status_code=400, detail="Project code is required.")
+
+    params = {
+        "projectId": _to_optional_int(req.projectId),
+        "projectCode": project_code,
+        "projectName": project_name,
+        "projectType": (req.projectType or "EDITING").strip(),
+        "projectDesc": req.projectDesc or "",
+        "useYn": "N" if str(req.useYn or "Y").upper() == "N" else "Y",
+        "sortOrder": _to_int(req.sortOrder),
+        "userId": user_id,
+        "userEmail": user_email,
+    }
+
+    conn = None
+    cursor = None
+    try:
+        conn = get_target_db_connection(request)
         cursor = conn.cursor()
 
-        # 1. 작업 상태 조회를 위한 SQL (준비된 테이블 조회)
-        sql = """
-            SELECT STATUS, MESSAGE 
-            FROM TB_ANALYSIS_JOB_STATUS 
-            WHERE JOB_ID = :jobId
-        """
-        cursor.execute(sql, {"jobId": job_id})
-        row = cursor.fetchone()
+        if params["projectId"]:
+            cursor.execute(SqlLoader.get_sql("M01001_PROJECT_UPDATE"), params)
+            project_id = params["projectId"]
+        else:
+            insert_params = {key: value for key, value in params.items() if key != "projectId"}
+            cursor.execute(SqlLoader.get_sql("M01001_PROJECT_INSERT"), insert_params)
+            cursor.execute(SqlLoader.get_sql("M01001_PROJECT_ID_BY_CODE"), {
+                "projectCode": project_code,
+                "userId": user_id,
+            })
+            project_id_row = cursor.fetchone()
+            if not project_id_row:
+                raise HTTPException(status_code=500, detail="Saved project ID could not be found.")
+            project_id = project_id_row[0]
 
-        if not row:
-            # 작업 ID를 찾을 수 없는 경우
-            return {
-                "status": "NOT_FOUND",
-                "message": "해당 작업 정보를 찾을 수 없습니다.",
-                "jobId": job_id
-            }
+        conn.commit()
 
-        status, message = row
-        
-        # 2. 상태별 응답 구성
-        # 클라이언트(JS)의 checkStatus 함수에서 이 status를 보고 분기 처리를 합니다.
+        result = execute_query(conn, "M01001_PROJECT_DETAIL", {
+            "projectId": project_id,
+            "userId": user_id,
+        })
+        data = result.get("data", [{}])[0] if result.get("data") else {}
         return {
-            "status": status,      # 'JOB_STR', 'JOB_END', 'JOB_ERR'
-            "message": message or "작업이 진행 중입니다.",
-            "jobId": job_id,
-            "pageCode": "M01001"
+            "status": "success",
+            "message": "Project saved.",
+            "data": data
         }
-
     except Exception as e:
-        logger.error(f"상태 조회 중 오류 발생 (JobId: {job_id}): {str(e)}")
-        raise HTTPException(status_code=500, detail="상태 조회 실패")
-        
+        if conn:
+            conn.rollback()
+        logger.error(f"M01001 project save failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+@router.post("/project/delete")
+def delete_project(req: ProjectDeleteRequest, request: Request):
+    user_id = get_request_user_id(request)
+    conn = None
+    try:
+        conn = get_target_db_connection(request)
+        child_result = execute_query(conn, "M01001_PROJECT_CHILD_COUNT", {
+            "projectId": req.projectId,
+            "userId": user_id,
+        })
+        if child_result.get("status") != "success":
+            raise HTTPException(status_code=500, detail=child_result.get("message") or "Project dependency check failed.")
+
+        child = child_result.get("data", [{}])[0] if child_result.get("data") else {}
+        scenario_count = int(child.get("SCENARIO_COUNT") or 0)
+        scenario_table_count = int(child.get("SCENARIO_TABLE_COUNT") or 0)
+        if scenario_count > 0 or scenario_table_count > 0:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "프로젝트를 삭제할 수 없습니다. "
+                    f"먼저 연결된 시나리오와 시나리오 테이블 데이터를 삭제하세요. "
+                    f"(시나리오 {scenario_count}건, 시나리오 테이블 {scenario_table_count}건)"
+                )
+            )
+
+        result = execute_query(conn, "M01001_PROJECT_DELETE", {
+            "projectId": req.projectId,
+            "userId": user_id,
+        }, is_dml=True)
+        if result.get("status") != "success":
+            raise HTTPException(status_code=500, detail=result.get("message") or "Project delete failed.")
+        return {
+            "status": "success",
+            "message": "Project deleted.",
+            "deletedCount": result.get("rowcount", 0)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"M01001 project delete failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         if conn:
-            conn.close()            
+            conn.close()

@@ -1,104 +1,318 @@
 """
-@file           [M01002].py 
-@description    [데이터준비_메타정보]
-@author         [인아이티 김진열]
-@date           2026-04-18
-@version        1.0.0
-
-[수정 이력]:
-- 2026-04-18: 최초 생성 및 기본 기능 구현
-@Copyright (c) 2026 [init]. All rights reserved.
-@vLicense: MIT License
+@file           M01002.py
+@description    Scenario definition API
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict
-from typing import Dict, Any, List, Optional
-from fastapi import Body
+from typing import Any, Optional
 import logging
-from backend.database import get_db_connection # 주석 해제하여 사용
-from backend.database_helper import execute_query, SqlLoader, get_debug_sql
+
+from backend.database_helper import execute_query, SqlLoader
+from backend.target_database import get_target_db_connection
+from backend.auth_context import get_request_user_id
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# 조회입력파라미터선언
-class SearchRequest(BaseModel):
-    # 명시적으로 사용할 것들만 선언
-    main_combo: Optional[str] = None
-    sub_combo: Optional[str] = None
-    check_values: Optional[List[str]] = []  # IN 절에 사용될 리스트
-    radio_val: Optional[str] = None
-    text_val: Optional[str] = None
-    date_val: Optional[str] = None
-    # [핵심] 선언되지 않은 나머지 필드들을 허용함
+
+class ScenarioSaveRequest(BaseModel):
+    scenarioId: Optional[Any] = None
+    projectId: Optional[Any] = None
+    scenarioCode: Optional[str] = None
+    scenarioName: Optional[str] = None
+    scenarioType: Optional[str] = "RULE"
+    scenarioDesc: Optional[str] = None
+    useYn: Optional[str] = "Y"
+    sortOrder: Optional[Any] = None
     model_config = ConfigDict(extra='allow')
 
-@router.get("/init")
-def get_init_data():
+
+class ScenarioDeleteRequest(BaseModel):
+    scenarioId: int
+    model_config = ConfigDict(extra='allow')
+
+
+class ScenarioDeleteAllRequest(BaseModel):
+    projectId: int
+    model_config = ConfigDict(extra='allow')
+
+
+def _to_optional_int(value):
+    if value is None:
+        return None
+    if isinstance(value, str) and value.strip() == "":
+        return None
+    return int(value)
+
+
+def _to_required_int(value, field_name):
+    converted = _to_optional_int(value)
+    if converted is None:
+        raise HTTPException(status_code=400, detail=f"{field_name} is required.")
+    return converted
+
+
+def _ensure_project_owner(conn, project_id: int, user_id: int):
+    result = execute_query(conn, "M01002_PROJECT_OWNER_CHECK", {
+        "projectId": project_id,
+        "userId": user_id,
+    })
+    if result.get("status") != "success":
+        raise HTTPException(status_code=500, detail=result.get("message") or "Project owner check failed.")
+    row = result.get("data", [{}])[0] if result.get("data") else {}
+    if int(row.get("CNT") or 0) <= 0:
+        raise HTTPException(status_code=404, detail="Project not found.")
+
+
+@router.get("/projects")
+def get_projects(request: Request, keyword: str = Query("")):
+    user_id = get_request_user_id(request)
     conn = None
     try:
-        conn = get_db_connection()
-        # 임시 목업 데이터 반환 (실제로는 위 헬퍼 사용)
-        result = execute_query(conn, "INIT_COMBO")
-
-        return {"status": "success", "data": result["data"], "total": result["total"]}
+        conn = get_target_db_connection(request)
+        result = execute_query(conn, "M01002_PROJECT_LIST", {
+            "keyword": keyword or "",
+            "userId": user_id,
+        })
+        if result.get("status") != "success":
+            raise HTTPException(status_code=500, detail=result.get("message") or result.get("detail") or "Project list query failed.")
+        return {
+            "status": "success",
+            "data": result.get("data", []),
+            "columns": result.get("columns", []),
+            "total": result.get("total", 0)
+        }
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail="초기 데이터 로드 실패")
-    
-# 웹페이지 파라미터를 지정해서 사용할 경우
-@router.post("/searchCombo")
-def search_combo(req: SearchRequest):
-    conn = None
-    try:        
-        # 실행전 SQL 로그 출력
-        logger.info(f"실행될 쿼리:\n{get_debug_sql('SUB_COMBO', {"parentId": req.main_combo})}")
-
-        # [실제 호출 예시]
-        conn = get_db_connection()
-        result = execute_query(conn, "SUB_COMBO", {"parentId": req.main_combo})
-        
-        return {"status": "success", "data": result["data"], "total": result["total"]}
-    except Exception as e:
-        # 이 부분이 없거나 잘못되면 브라우저는 에러인 줄 모릅니다!
+        logger.error(f"M01002 project list failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
 
-# 웹페이지 파라미터를 지정해서 사용할 경우
-@router.post("/search")
-def search_data(req: SearchRequest):
+
+@router.get("/scenarios")
+def get_scenarios(request: Request, projectId: int = Query(...), keyword: str = Query("")):
+    user_id = get_request_user_id(request)
     conn = None
     try:
-        in_sql = ""
-        params = {}
-        if req.check_values:
-            bind_names = [f":chk{i}" for i in range(len(req.check_values))]
-            in_sql = f" AND COL1 IN ({','.join(bind_names)})"
-            for i, val in enumerate(req.check_values):
-                params[f"chk{i}"] = val
-        
-        params['in_clause_str'] = in_sql
-        params['text_val'] = req.main_combo
-        
-        # 실행전 SQL 로그 출력
-        logger.info(f"실행될 쿼리:\n{get_debug_sql('SEARCH_DATA', params)}")
-
-        # [실제 호출 예시]
-        conn = get_db_connection()
-        # database_helper의 execute_query 내부에서 SqlLoader.get_sql("SEARCH_DATA")를 호출하게 됩니다.
-        result = execute_query(conn, "SEARCH_DATA", params)
-        
-        return {"status": "success", "data": result["data"], "total": result["total"]}
+        conn = get_target_db_connection(request)
+        result = execute_query(conn, "M01002_SCENARIO_LIST", {
+            "projectId": projectId,
+            "keyword": keyword or "",
+            "userId": user_id,
+        })
+        if result.get("status") != "success":
+            raise HTTPException(status_code=500, detail=result.get("message") or result.get("detail") or "Scenario list query failed.")
+        return {
+            "status": "success",
+            "data": result.get("data", []),
+            "columns": result.get("columns", []),
+            "total": result.get("total", 0)
+        }
+    except HTTPException:
+        raise
     except Exception as e:
-        # 이 부분이 없거나 잘못되면 브라우저는 에러인 줄 모릅니다!
+        logger.error(f"M01002 scenario list failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
 
-@router.post("/procedure")
-def call_proc(req: dict):
-    """[요구사항 6] 오라클 프로시저 호출 예시"""
-    # 실제 구현: result = execute_query(conn, "SP_MY_PROCEDURE", {"input_val": req.get("val")}, is_proc=True)
-    return {
-        "status": "success", 
-        "proc_result": "SUCCESS", # 또는 FAIL
-        "message": "프로시저가 정상적으로 실행되었습니다.",
-        "affected_rows": 5
+
+@router.get("/scenario")
+def get_scenario(request: Request, scenarioId: int = Query(...)):
+    user_id = get_request_user_id(request)
+    conn = None
+    try:
+        conn = get_target_db_connection(request)
+        result = execute_query(conn, "M01002_SCENARIO_DETAIL", {
+            "scenarioId": scenarioId,
+            "userId": user_id,
+        })
+        if result.get("status") != "success":
+            raise HTTPException(status_code=500, detail=result.get("message") or result.get("detail") or "Scenario detail query failed.")
+        if not result.get("data"):
+            raise HTTPException(status_code=404, detail="Scenario not found.")
+        return {
+            "status": "success",
+            "data": result["data"][0],
+            "columns": result.get("columns", [])
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"M01002 scenario detail failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+
+@router.post("/scenario/save")
+def save_scenario(req: ScenarioSaveRequest, request: Request):
+    user_id = get_request_user_id(request)
+    project_id = _to_required_int(req.projectId, "Project")
+    scenario_name = (req.scenarioName or "").strip()
+    scenario_code = (req.scenarioCode or "").strip()
+    if not scenario_name:
+        raise HTTPException(status_code=400, detail="Scenario name is required.")
+    if not scenario_code:
+        raise HTTPException(status_code=400, detail="Scenario code is required.")
+
+    scenario_id = _to_optional_int(req.scenarioId)
+    params = {
+        "scenarioId": scenario_id,
+        "projectId": project_id,
+        "scenarioCode": scenario_code,
+        "scenarioName": scenario_name,
+        "scenarioType": (req.scenarioType or "RULE").strip(),
+        "scenarioDesc": req.scenarioDesc or "",
+        "useYn": "N" if str(req.useYn or "Y").upper() == "N" else "Y",
+        "sortOrder": _to_optional_int(req.sortOrder),
+        "userId": user_id,
     }
+
+    conn = None
+    cursor = None
+    try:
+        conn = get_target_db_connection(request)
+        cursor = conn.cursor()
+        _ensure_project_owner(conn, project_id, user_id)
+
+        if scenario_id:
+            cursor.execute(SqlLoader.get_sql("M01002_SCENARIO_UPDATE"), params)
+            saved_id = scenario_id
+        else:
+            insert_params = {key: value for key, value in params.items() if key not in {"scenarioId", "userId"}}
+            cursor.execute(SqlLoader.get_sql("M01002_SCENARIO_INSERT"), insert_params)
+            cursor.execute(SqlLoader.get_sql("M01002_SCENARIO_ID_BY_CODE"), {
+                "projectId": project_id,
+                "scenarioCode": scenario_code,
+                "userId": user_id,
+            })
+            row = cursor.fetchone()
+            if not row:
+                raise HTTPException(status_code=500, detail="Saved scenario ID could not be found.")
+            saved_id = row[0]
+
+        conn.commit()
+
+        result = execute_query(conn, "M01002_SCENARIO_DETAIL", {
+            "scenarioId": saved_id,
+            "userId": user_id,
+        })
+        data = result.get("data", [{}])[0] if result.get("data") else {}
+        return {
+            "status": "success",
+            "message": "Scenario saved.",
+            "data": data
+        }
+    except HTTPException:
+        if conn:
+            conn.rollback()
+        raise
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"M01002 scenario save failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+@router.post("/scenario/delete")
+def delete_scenario(req: ScenarioDeleteRequest, request: Request):
+    user_id = get_request_user_id(request)
+    conn = None
+    try:
+        conn = get_target_db_connection(request)
+        child_result = execute_query(conn, "M01002_SCENARIO_CHILD_COUNT", {
+            "scenarioId": req.scenarioId,
+            "userId": user_id,
+        })
+        if child_result.get("status") != "success":
+            raise HTTPException(status_code=500, detail=child_result.get("message") or "Scenario dependency check failed.")
+
+        child = child_result.get("data", [{}])[0] if child_result.get("data") else {}
+        scenario_table_count = int(child.get("SCENARIO_TABLE_COUNT") or 0)
+        if scenario_table_count > 0:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "시나리오를 삭제할 수 없습니다. "
+                    f"먼저 M02002 화면에서 해당 시나리오에 등록된 테이블 데이터를 삭제하세요. "
+                    f"(시나리오 테이블 {scenario_table_count}건)"
+                )
+            )
+
+        result = execute_query(conn, "M01002_SCENARIO_DELETE", {
+            "scenarioId": req.scenarioId,
+            "userId": user_id,
+        }, is_dml=True)
+        if result.get("status") != "success":
+            raise HTTPException(status_code=500, detail=result.get("message") or "Scenario delete failed.")
+        return {
+            "status": "success",
+            "message": "Scenario deleted.",
+            "deletedCount": result.get("rowcount", 0)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"M01002 scenario delete failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+
+@router.post("/scenario/delete-all")
+def delete_all_scenarios(req: ScenarioDeleteAllRequest, request: Request):
+    user_id = get_request_user_id(request)
+    conn = None
+    try:
+        conn = get_target_db_connection(request)
+        child_result = execute_query(conn, "M01002_SCENARIO_CHILD_COUNT_BY_PROJECT", {
+            "projectId": req.projectId,
+            "userId": user_id,
+        })
+        if child_result.get("status") != "success":
+            raise HTTPException(status_code=500, detail=child_result.get("message") or "Scenario dependency check failed.")
+
+        child = child_result.get("data", [{}])[0] if child_result.get("data") else {}
+        scenario_table_count = int(child.get("SCENARIO_TABLE_COUNT") or 0)
+        if scenario_table_count > 0:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "전체 시나리오를 삭제할 수 없습니다. "
+                    f"먼저 M02002 화면에서 이 프로젝트의 시나리오에 등록된 테이블 데이터를 삭제하세요. "
+                    f"(시나리오 테이블 {scenario_table_count}건)"
+                )
+            )
+
+        result = execute_query(conn, "M01002_SCENARIO_DELETE_BY_PROJECT", {
+            "projectId": req.projectId,
+            "userId": user_id,
+        }, is_dml=True)
+        if result.get("status") != "success":
+            raise HTTPException(status_code=500, detail=result.get("message") or "Scenario delete failed.")
+        return {
+            "status": "success",
+            "message": "All scenarios were deleted.",
+            "deletedCount": result.get("rowcount", 0)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"M01002 all scenario delete failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()

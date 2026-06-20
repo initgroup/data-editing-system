@@ -1,354 +1,527 @@
-/**
- * @file        M01002.js
- * @description 데이터준비 > 메타정보
- * @author      [인아이티 김진열]
- * @date        2026-04-18
- * @version     1.0.0
- * @dependency  gridjs.umd.js, chart.js, common.js
- */
 (function() {
-    // [추가] 페이지 코드 변수 선언 (하단 모든 로직에서 공통 사용)
-    const PAGE_CODE = 'M01002';
+    const PAGE_CODE = "M01002";
+    const { getContainerEl } = PageManager.createHelper(PAGE_CODE);
+    const COMMON = MCOMMON.createPageHelper(PAGE_CODE);
 
-    // 페이지 전역 변수 또는 네임스페이스 정의
+    const emptyScenario = () => ({
+        scenarioId: null,
+        projectId: null,
+        scenarioCode: "",
+        scenarioName: "",
+        scenarioType: "RULE",
+        scenarioDesc: "",
+        useYn: "Y",
+        sortOrder: ""
+    });
+
     const M01002 = {
-        gridInstance: null,
-        currentData: [],
-        itemsPerPage: 10, // 페이징 예시용 추가
-        currentPage: 1,
+        
+        ...COMMON,
+        isInit: false,
+        projects: [],
+        scenarios: [],
+        selectedProject: null,
+        selectedScenario: emptyScenario(),
+        originalScenario: emptyScenario(),
+        projectSearchTimer: null,
+        scenarioSearchTimer: null,
 
-        // 내부 헬퍼: 페이지 내의 요소만 찾기
-        getEl(id) {
-            return document.getElementById(`${id}-${PAGE_CODE}`);
-        },
-
-        // 내부 헬퍼: 컨테이너 하위의 일반 ID 요소 찾기
-        getContainerEl(selector) {
-            const container = document.getElementById(`container-${PAGE_CODE}`);
-            return container ? container.querySelector(selector) : null;
-        },
-
-        /**
-         * 화면 초기화 진입점
-         */
         async init() {
-            console.log("${PAGE_CODE} 초기화 완료");
-            this.initGrid();
-            this.bindEvents();
-            this.resetSearch();
-            this.currentData = [];
-            await this.loadInitialData();
-            this.onShow(); // 첫 로드 때도 데이터를 가져와야 하므로 호출
+            if (this.isInit) return;
+            this.newScenario(false);
+            await this.loadProjects();
+            this.renderProjectSummary();
+            this.renderScenarioDetail();
+            this.isInit = true;
         },
 
-        onShow() {
-            // 메뉴를 클릭해서 이 페이지가 '보일 때마다' 실행
-            // (최신 데이터 조회 등)
-            //this.searchSync(); 
-        },  
+        destroy() {
+            this.unbindHelpEvents();
+            this.projects = [];
+            this.scenarios = [];
+            this.selectedProject = null;
+            this.selectedScenario = emptyScenario();
+            this.originalScenario = emptyScenario();
+            if (this.projectSearchTimer) clearTimeout(this.projectSearchTimer);
+            if (this.scenarioSearchTimer) clearTimeout(this.scenarioSearchTimer);
+            this.projectSearchTimer = null;
+            this.scenarioSearchTimer = null;
+            this.isInit = false;
+        },
 
-        /**
-         * [디자인 수정] Grid.js 기반 메인 데이터 그리드 초기화
-         */
-        initGrid() {
-            const targetId = `gridContainer-${PAGE_CODE}`;
-            
-            // 요소가 존재하는지 먼저 확인 (디버깅용)
-            if (!document.getElementById(targetId)) {
-                console.error(`[${PAGE_CODE}] 컨테이너 요소를 찾을 수 없습니다: ${targetId}`);
+        async loadProjects() {
+            const list = getContainerEl("#projectList-M01002");
+            if (!list) return;
+
+            const keyword = (getContainerEl("#projectSearch-M01002")?.value || "").trim();
+            list.innerHTML = `<div class="env-tree-loading project-empty">Loading projects...</div>`;
+
+            try {
+                const params = new URLSearchParams({ keyword });
+                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/projects?${params.toString()}`, { method: "GET", showLoading: false });
+                this.projects = Array.isArray(json.data) ? json.data : [];
+                this.renderProjectList();
+            } catch (error) {
+                console.error("[M01002] project list load failed", error);
+                list.innerHTML = `<div class="env-tree-error">${this.escapeHtml(error.message || "Project list load failed.")}</div>`;
+            }
+        },
+
+        renderProjectList() {
+            const list = getContainerEl("#projectList-M01002");
+            if (!list) return;
+
+            if (this.projects.length === 0) {
+                list.innerHTML = `
+                    <div class="project-empty">No projects found.</div>
+                    ${this.renderListFooter(0)}
+                `;
                 return;
             }
-            // createGrid는 common.js의 래퍼 함수이므로 설정을 최신 스타일로 주입합니다.
-            this.gridInstance = createGrid(targetId, {
-                columns: [
-                    { id: 'RNUM', name: '순번', width: '80px', sort: true },
-                    { id: 'COL1', name: '컬럼1', sort: true },
-                    { id: 'COL2', name: '컬럼2', sort: true },
-                    { id: 'DATE', name: '일자', width: '150px' }
-                ],
-                // [최신 스타일 적용]
-                fixedHeader: true,
-                height: '345px', // 약 5행 정도 노출되는 최적 높이
-                style: {
-                    table: { 'width': '100%' },
-                    td: { 'cursor': 'pointer' }
-                },
-                className: {
-                    table: 'custom-grid-table'
-                },
-                data: []
-            });
 
-            // 기존 행 클릭 바인딩 유지
-            CommonUI.bindGridRowClick(targetId);
-
-            // [추가] 행 선택 시 시각적 효과(Selected Row)를 위한 이벤트 리스너
-            const container = this.getEl('gridContainer');
-            container.addEventListener('click', (e) => {
-                const tr = e.target.closest('.gridjs-tr');
-                if (tr) {
-                    container.querySelectorAll('.gridjs-tr').forEach(el => 
-                        el.classList.remove('gridjs-tr-selected')
-                    );
-                    tr.classList.add('gridjs-tr-selected');
-                }
-            });
+            list.innerHTML = `
+                <div class="project-list-head">
+                    <div>Project</div>
+                    <div>Type / Use</div>
+                </div>
+                <div class="project-list-body">
+                    ${this.projects.map((project) => this.createProjectRow(project)).join("")}
+                </div>
+                ${this.renderListFooter(this.projects.length)}
+            `;
         },
-        
-        /**
-         * DOM 이벤트 바인딩 (기존 로직 유지)
-         */
-        bindEvents() {
-            // 1. 컨테이너를 먼저 찾습니다.
-            const container = this.getEl('container');
-            const mainCombo = this.getContainerEl('#mainCombo');
 
-            // 2. 컨테이너 하위의 mainCombo를 찾아 이벤트를 연결합니다.
-            mainCombo?.addEventListener('change', async (e) => {
-                const parentId = e.target.value;
-                const subCombo = this.getContainerEl('#subCombo');
-                
-                if (!parentId) {
-                    subCombo.innerHTML = '<option value="">메인을 먼저 선택하세요</option>';
-                    subCombo.disabled = true;
-                    subCombo.classList.add('bg-gray-50', 'cursor-not-allowed');
-                    return;
-                }
+        createProjectRow(project) {
+            const projectId = project.PROJECT_ID ?? "";
+            const selectedClass = String(projectId) === String(this.selectedProject?.projectId) ? "is-selected" : "";
+            const name = project.PROJECT_NAME || "";
+            const code = project.PROJECT_CODE || "";
+            const type = project.PROJECT_TYPE || "";
+            const useYn = project.USE_YN || "Y";
+            const scenarioCount = Number(project.SCENARIO_COUNT || 0);
+            const scenarioIcon = scenarioCount > 0
+                ? `<i class="fas fa-circle-check env-registered-icon" title="Registered scenarios: ${scenarioCount}"></i>`
+                : "";
 
-                try {
-                    const res = await fetch(`${API_BASE_URL}/${PAGE_CODE}/cascade/${parentId}`);
-                    const json = await res.json();
-                    
-                    subCombo.innerHTML = '<option value="">선택하세요</option>';
-                    json.data?.forEach(item => {
-                        subCombo.innerHTML += `<option value="${item.CODE}">${item.NAME}</option>`;
-                    });
-                    subCombo.disabled = false;
-                    subCombo.classList.remove('bg-gray-50', 'cursor-not-allowed');
-                } catch (e) {
-                    CommonUI.showPageError(PAGE_CODE,"하위 콤보박스 로딩 실패");
-                }
+            return `
+                <button type="button" class="project-row ${selectedClass}" data-project-id="${this.escapeAttr(projectId)}" onclick="M01002.selectProject('${this.escapeAttr(projectId)}')">
+                    <span class="project-row-main">
+                        <span class="project-row-title" title="${this.escapeHtml(name)}">
+                            <span class="project-row-title-text">${this.escapeHtml(name || "(Untitled project)")}</span>
+                            <span class="project-scenario-status">${scenarioIcon}</span>
+                        </span>
+                        <span class="project-row-sub" title="${this.escapeHtml(code)}">${this.escapeHtml(code || "No code")}</span>
+                    </span>
+                    <span class="project-row-meta">
+                        <span title="${this.escapeHtml(type)}">${this.escapeHtml(type || "-")}</span>
+                        <span title="Use ${this.escapeHtml(useYn)}">Use ${this.escapeHtml(useYn)}</span>
+                    </span>
+                </button>
+            `;
+        },
+
+        async selectProject(projectId) {
+            const row = this.projects.find((project) => String(project.PROJECT_ID) === String(projectId));
+            if (!row) return;
+
+            this.selectedProject = this.normalizeProject(row);
+            this.newScenario(false);
+            this.renderProjectSummary();
+            this.updateProjectSelection();
+            this.renderScenarioDetail();
+            this.updateDescription(`Selected project: ${this.selectedProject.projectName || ""}`);
+            await this.loadScenarios();
+        },
+
+        updateProjectSelection() {
+            const selectedId = String(this.selectedProject?.projectId ?? "");
+            getContainerEl("#projectList-M01002")?.querySelectorAll(".project-row").forEach((row) => {
+                row.classList.toggle("is-selected", row.dataset.projectId === selectedId);
             });
         },
 
-        /**
-         * 초기 데이터 로딩 (기존 로직 유지)
-         */
-        async loadInitialData() {
-            try {
-                const res = await fetch(`${API_BASE_URL}/${PAGE_CODE}/init`);
-                const json = await res.json();
-                const mainCombo = this.getContainerEl('#mainCombo');
-                const rawData = json.data?.data ?? json.data ?? [];
-                const curData = Array.isArray(rawData) ? rawData : [];
-                curData.forEach(item => {
-                    mainCombo.innerHTML += `<option value="${item.CODE}">${item.NAME}</option>`;
-                });
-            } catch (error) {
-                CommonUI.showPageError(PAGE_CODE,"초기 데이터 셋업 중 오류가 발생했습니다.");
-            }
-        },
-
-        getSearchParams() {
-            // 1. 현재 페이지의 고유 컨테이너를 먼저 지정합니다.
-            const container = this.getEl('page-section');
-            if (!container) return {};
-
-            // 2. document 대신 container.querySelector를 사용하여 범위를 제한합니다.
-            const checks = Array.from(container.querySelectorAll('.status-chk:checked')).map(cb => cb.value);
-            
+        normalizeProject(row) {
             return {
-                main_combo: container.querySelector('#mainCombo')?.value || null,
-                sub_combo: container.querySelector('#subCombo')?.value || null,
-                text_val: container.querySelector('#textSearch')?.value || null,
-                date_val: container.querySelector('#dateSearch')?.value || null,
-                check_values: checks
+                projectId: row.PROJECT_ID ?? row.projectId ?? null,
+                projectCode: row.PROJECT_CODE ?? row.projectCode ?? "",
+                projectName: row.PROJECT_NAME ?? row.projectName ?? "",
+                projectType: row.PROJECT_TYPE ?? row.projectType ?? "",
+                projectDesc: row.PROJECT_DESC ?? row.projectDesc ?? "",
+                useYn: row.USE_YN ?? row.useYn ?? "Y",
+                sortOrder: row.SORT_ORDER ?? row.sortOrder ?? ""
             };
         },
 
-        resetSearch(flag) {
-            // 1. 현재 페이지의 컨테이너를 찾습니다.
-            const container = this.getEl('page-section');
-
-            if (!container) {
-                const backupContainer = this.getEl('container');
-                if(!backupContainer) return;
-                this._executeReset(backupContainer, flag);
-            } else {
-                this._executeReset(container, flag);
-            }
+        renderProjectSummary() {
+            const project = this.selectedProject || {};
+            this.setValue("#selectedProjectId-M01002", project.projectId || "");
+            this.setValue("#selectedProjectCode-M01002", project.projectCode || "");
+            this.setValue("#selectedProjectName-M01002", project.projectName || "");
         },
 
-        // 실제 로직 분리 (가독성 및 유지보수용)
-        _executeReset(targetEl, flag) {
-            // 2. 입력값 초기화 (ID 문자열을 넘겨야 함)
-            if (window.clearInputs) {
-                // app.js가 만든 ID를 그대로 전달
-                window.clearInputs(targetEl.id); 
-            } else {
-                targetEl.querySelectorAll('input, select, textarea').forEach(el => {
-                    if (el.type === 'checkbox' || el.type === 'radio') el.checked = false;
-                    else el.value = '';
-                });
+        async loadScenarios() {
+            const list = getContainerEl("#scenarioList-M01002");
+            if (!list) return;
+
+            if (!this.selectedProject?.projectId) {
+                this.scenarios = [];
+                list.innerHTML = `
+                    <div class="project-empty">Select a project first.</div>
+                    ${this.renderListFooter(0)}
+                `;
+                return;
             }
 
-            // 3. 그리드 및 메시지 초기화
-            if (flag === 1) {
-                this.currentData = [];
-                if (this.gridInstance) {
-                    this.gridInstance.updateConfig({ data: [] }).forceRender();
-                }
-                
-                // common.js의 hidePageMessage 호출
-                if (window.CommonUI && window.CommonUI.hidePageMessage) {
-                    window.CommonUI.hidePageMessage(PAGE_CODE);
-                }
-            }
-        },
-
-        async searchSync() {
-            if (typeof CommonUI !== 'undefined') CommonUI.hidePageMessage(PAGE_CODE);
-            if (typeof CommonUI !== 'undefined') CommonUI.showLoading();
+            const keyword = (getContainerEl("#scenarioSearch-M01002")?.value || "").trim();
+            list.innerHTML = `<div class="project-empty">Loading scenarios...</div>`;
 
             try {
-                const params = this.getSearchParams();
-                const res = await fetch(`${API_BASE_URL}/${PAGE_CODE}/search`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(params)
+                const params = new URLSearchParams({
+                    projectId: this.selectedProject.projectId,
+                    keyword
                 });
-
-                let json;
-                try {
-                    json = await res.json();
-                } catch (e) {
-                    throw new Error("서버 응답이 올바른 형식이 아닙니다.");
-                }
-
-                if (!res.ok) {
-                    throw new Error(json.detail || "서버 통신 중 오류가 발생했습니다.");
-                }
-
-                const rawData = json.data?.data ?? json.data ?? [];
-                this.currentData = Array.isArray(rawData) ? rawData : [];
-
-                if (this.gridInstance) {
-                    this.gridInstance.updateConfig({ 
-                        data: this.currentData 
-                    }).forceRender();
-                }
-
-                if (this.currentData.length > 0) {
-                    if (typeof showPageSuccess === 'function') CommonUI.showPageSuccess(PAGE_CODE,`총 ${this.currentData.length}건이 조회되었습니다.`);
-                } else {
-                    if (typeof showPageError === 'function') CommonUI.showPageError(PAGE_CODE,"조회된 데이터가 없습니다.");
-                }
-            } catch (e) {
-                if (typeof showPageError === 'function') CommonUI.showPageError(PAGE_CODE,e.message);
-            } finally {
-                if (typeof hideLoading === 'function') {
-                    setTimeout(() => hideLoading(), 300);
-                }
+                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/scenarios?${params.toString()}`, { method: "GET", showLoading: false });
+                this.scenarios = Array.isArray(json.data) ? json.data : [];
+                this.updateSelectedProjectScenarioStatus(this.scenarios.length);
+                this.renderScenarioList();
+            } catch (error) {
+                console.error("[M01002] scenario list load failed", error);
+                list.innerHTML = `<div class="env-tree-error">${this.escapeHtml(error.message || "Scenario list load failed.")}</div>`;
             }
         },
 
-        async executeProcedure() {
-            if(!confirm("프로시저를 실행하시겠습니까?")) return;
+        renderScenarioList() {
+            const list = getContainerEl("#scenarioList-M01002");
+            if (!list) return;
+
+            if (this.scenarios.length === 0) {
+                list.innerHTML = `
+                    <div class="project-empty">No scenarios found.</div>
+                    ${this.renderListFooter(0)}
+                `;
+                return;
+            }
+
+            list.innerHTML = `
+                <div class="scenario-list-head">
+                    <div>Scenario</div>
+                    <div>Type / Use</div>
+                </div>
+                <div class="scenario-list-body">
+                    ${this.scenarios.map((scenario) => this.createScenarioRow(scenario)).join("")}
+                </div>
+                ${this.renderListFooter(this.scenarios.length)}
+            `;
+        },
+
+        updateSelectedProjectScenarioStatus(scenarioCount) {
+            const projectId = this.selectedProject?.projectId;
+            if (!projectId) return;
+
+            const normalizedCount = Number(scenarioCount || 0);
+            const project = this.projects.find((row) => String(row.PROJECT_ID) === String(projectId));
+            if (project) {
+                project.SCENARIO_COUNT = normalizedCount;
+                project.HAS_SCENARIO_YN = normalizedCount > 0 ? "Y" : "N";
+            }
+
+            const row = Array.from(getContainerEl("#projectList-M01002")?.querySelectorAll(".project-row") || [])
+                .find((item) => item.dataset.projectId === String(projectId));
+            const status = row?.querySelector(".project-scenario-status");
+            if (!status) return;
+
+            status.innerHTML = normalizedCount > 0
+                ? `<i class="fas fa-circle-check env-registered-icon" title="Registered scenarios: ${normalizedCount}"></i>`
+                : "";
+        },
+
+        createScenarioRow(scenario) {
+            const scenarioId = scenario.SCENARIO_ID ?? "";
+            const selectedClass = String(scenarioId) === String(this.selectedScenario.scenarioId) ? "is-selected" : "";
+            const name = scenario.SCENARIO_NAME || "";
+            const code = scenario.SCENARIO_CODE || "";
+            const type = scenario.SCENARIO_TYPE || "";
+            const useYn = scenario.USE_YN || "Y";
+
+            return `
+                <button type="button" class="scenario-row ${selectedClass}" onclick="M01002.selectScenario('${this.escapeAttr(scenarioId)}')">
+                    <span class="project-row-main">
+                        <span class="project-row-title" title="${this.escapeHtml(name)}">${this.escapeHtml(name || "(Untitled scenario)")}</span>
+                        <span class="project-row-sub" title="${this.escapeHtml(code)}">${this.escapeHtml(code || "No code")}</span>
+                    </span>
+                    <span class="project-row-meta">
+                        <span title="${this.escapeHtml(type)}">${this.escapeHtml(type || "-")}</span>
+                        <span title="Use ${this.escapeHtml(useYn)}">Use ${this.escapeHtml(useYn)}</span>
+                    </span>
+                </button>
+            `;
+        },
+
+        async selectScenario(scenarioId) {
+            if (!scenarioId) return;
+
             try {
-                const res = await fetch(`${API_BASE_URL}/${PAGE_CODE}/procedure`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ val: 'TEST' })
-                });
-                const result = await res.json();
-                if(result.proc_result === 'SUCCESS') {
-                    const successHtml = `<span class="text-green-600">성공! ${result.message} (처리건수: ${result.affected_rows}건)</span>`;
-                    CommonUI.showPageSuccess(PAGE_CODE, successHtml);
-                }
-            } catch(e) {
-                CommonUI.showPageError(PAGE_CODE,"프로시저 실행 실패"+e.message);
+                const params = new URLSearchParams({ scenarioId });
+                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/scenario?${params.toString()}`, { method: "GET" });
+                this.selectedScenario = this.normalizeScenario(json.data || {});
+                this.originalScenario = { ...this.selectedScenario };
+                this.renderScenarioDetail();
+                this.renderScenarioList();
+                this.updateDescription(`Selected scenario: ${this.selectedScenario.scenarioName || ""}`);
+            } catch (error) {
+                console.error("[M01002] scenario detail load failed", error);
+                alert(error.message || "Scenario detail load failed.");
             }
         },
 
-        renderGridNoPaging() {
-            const tbody = this.getEl('gridNoPaging');
-            if (!tbody) return;
-            if (!Array.isArray(this.currentData)) {
-                tbody.innerHTML = '<tr><td colspan="4" class="p-8 text-center text-red-400">데이터 형식 오류</td></tr>';
-                return;
-            }
-            if (this.currentData.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4" class="p-8 text-center text-gray-400">데이터가 없습니다.</td></tr>';
-                return;
-            }
-            tbody.innerHTML = this.currentData.map(row => `
-                <tr class="hover:bg-blue-50 transition-colors">
-                    <td class="p-3 border-b">${row.RNUM ?? '-'}</td>
-                    <td class="p-3 border-b">${row.COL1 ?? ''}</td>
-                    <td class="p-3 border-b">${row.COL2 ?? ''}</td>
-                    <td class="p-3 border-b">${row.DATE ?? ''}</td>
-                </tr>
-            `).join('');
+        normalizeScenario(row) {
+            return {
+                scenarioId: row.SCENARIO_ID ?? row.scenarioId ?? null,
+                projectId: row.PROJECT_ID ?? row.projectId ?? this.selectedProject?.projectId ?? null,
+                scenarioCode: row.SCENARIO_CODE ?? row.scenarioCode ?? "",
+                scenarioName: row.SCENARIO_NAME ?? row.scenarioName ?? "",
+                scenarioType: row.SCENARIO_TYPE ?? row.scenarioType ?? "RULE",
+                scenarioDesc: row.SCENARIO_DESC ?? row.scenarioDesc ?? "",
+                useYn: row.USE_YN ?? row.useYn ?? "Y",
+                sortOrder: row.SORT_ORDER ?? row.sortOrder ?? ""
+            };
         },
 
-        renderGridPaging(page) {
-            const tbody = this.getEl('gridPaging');
-            const pageArea = this.getEl('paginationArea');
-            if (!tbody) return;
-            if (!Array.isArray(this.currentData) || this.currentData.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="3" class="p-8 text-center text-gray-400">데이터가 없습니다.</td></tr>';
-                if (pageArea) pageArea.innerHTML = '';
-                return;
+        newScenario(render = true) {
+            this.selectedScenario = {
+                ...emptyScenario(),
+                projectId: this.selectedProject?.projectId || null
+            };
+            this.originalScenario = { ...this.selectedScenario };
+            if (render) {
+                this.renderScenarioDetail();
+                this.renderScenarioList();
+                this.updateDescription(this.selectedProject ? "Create a new scenario." : "Select a project first.");
+                getContainerEl("#scenarioName-M01002")?.focus();
             }
-            this.currentPage = page;
-            const start = (page - 1) * this.itemsPerPage;
-            const end = start + this.itemsPerPage;
-            const pagedData = this.currentData.slice(start, end);
-            
-            tbody.innerHTML = pagedData.map(row => `
-                <tr class="hover:bg-blue-50 transition-colors">
-                    <td class="p-3 border-b">${row.RNUM ?? '-'}</td>
-                    <td class="p-3 border-b">${row.COL1 ?? ''}</td>
-                    <td class="p-3 border-b">${row.COL2 ?? ''}</td>
-                </tr>
-            `).join('');
-            this.renderPagination();
         },
 
-        renderPagination() {
-            const pageArea = this.getEl('paginationArea');
-            if (!pageArea) return;
-
-            const totalPages = Math.ceil(this.currentData.length / this.itemsPerPage);
-
-            let html = '';
-            for(let i=1; i<=totalPages; i++) {
-                const activeCls = i === this.currentPage ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-100';
-                html += `<button onclick="${PAGE_CODE}.renderGridPaging(${i})" class="px-3 py-1 border rounded ${activeCls}">${i}</button>`;
-            }
-            pageArea.innerHTML = html;
+        resetScenario() {
+            this.selectedScenario = { ...this.originalScenario };
+            this.renderScenarioDetail();
         },
 
-        downloadExcel() {
-            if (!Array.isArray(this.currentData) || this.currentData.length === 0) {
-                if (typeof showPageError === 'function') CommonUI.showPageError(PAGE_CODE,"다운로드할 데이터가 없습니다.");
-                return;
-            }
-            if (window.DataEditingSystem?.downloadCSV) {
-                window.DataEditingSystem.downloadCSV(this.currentData, '분석결과_' + new Date().getTime() + '.csv');
+        renderScenarioDetail() {
+            const scenario = this.selectedScenario;
+            this.ensureScenarioTypeOption(scenario.scenarioType);
+            this.setValue("#scenarioId-M01002", scenario.scenarioId);
+            this.setValue("#scenarioCode-M01002", scenario.scenarioCode);
+            this.setValue("#scenarioName-M01002", scenario.scenarioName);
+            this.setValue("#scenarioType-M01002", scenario.scenarioType || "RULE");
+            this.setValue("#scenarioDesc-M01002", scenario.scenarioDesc);
+            this.setValue("#scenarioUseYn-M01002", scenario.useYn || "Y");
+            this.setValue("#scenarioSortOrder-M01002", scenario.sortOrder ?? "");
+            this.hideScenarioCodeHelp();
+        },
+
+        ensureScenarioTypeOption(value) {
+            const select = getContainerEl("#scenarioType-M01002");
+            const typeValue = String(value || "RULE").trim();
+            if (!select || !typeValue) return;
+
+            const exists = Array.from(select.options).some((option) => option.value === typeValue);
+            if (exists) return;
+
+            const option = document.createElement("option");
+            option.value = typeValue;
+            option.textContent = typeValue;
+            select.appendChild(option);
+        },
+
+        updateField(field, value) {
+            this.selectedScenario[field] = value;
+        },
+
+        toggleScenarioCodeHelp(event) {
+            event?.stopPropagation();
+            const layer = getContainerEl("#scenarioCodeHelp-M01002");
+            const button = event?.currentTarget;
+            if (!layer) return;
+
+            const willOpen = layer.hidden;
+            layer.hidden = !willOpen;
+            button?.setAttribute("aria-expanded", String(willOpen));
+
+            if (willOpen) {
+                setTimeout(() => {
+                    document.addEventListener("click", this.handleHelpOutsideClick);
+                    document.addEventListener("keydown", this.handleHelpKeydown);
+                }, 0);
             } else {
-                CommonUI.showPageError(PAGE_CODE,"다운로드 모듈을 찾을 수 없습니다.");
+                this.unbindHelpEvents();
             }
         },
 
-        downloadFile() {            
-            if(this.currentData.length === 0) {
-                CommonUI.showPageError(PAGE_CODE,"다운로드할 데이터가 없습니다.");
+        handleHelpOutsideClick: (event) => {
+            const container = getContainerEl("#scenarioCodeHelp-M01002")?.parentElement;
+            if (container?.contains(event.target)) return;
+            M01002.hideScenarioCodeHelp();
+        },
+
+        handleHelpKeydown: (event) => {
+            if (event.key === "Escape") {
+                M01002.hideScenarioCodeHelp();
+            }
+        },
+
+        hideScenarioCodeHelp() {
+            const layer = getContainerEl("#scenarioCodeHelp-M01002");
+            if (layer) layer.hidden = true;
+            const button = getContainerEl(".scenario-detail .project-help-btn");
+            button?.setAttribute("aria-expanded", "false");
+            this.unbindHelpEvents();
+        },
+
+        unbindHelpEvents() {
+            document.removeEventListener("click", this.handleHelpOutsideClick);
+            document.removeEventListener("keydown", this.handleHelpKeydown);
+        },
+
+        updateDescription(text) {
+            const desc = getContainerEl("#scenarioDescription-M01002");
+            if (desc) desc.textContent = text;
+        },
+
+        validateScenario() {
+            if (!this.selectedProject?.projectId) {
+                alert("Select a project first.");
+                return false;
+            }
+
+            const scenario = this.selectedScenario;
+            if (!String(scenario.scenarioName || "").trim()) {
+                alert("Scenario name is required.");
+                getContainerEl("#scenarioName-M01002")?.focus();
+                return false;
+            }
+            if (!String(scenario.scenarioCode || "").trim()) {
+                alert("Scenario code is required.");
+                getContainerEl("#scenarioCode-M01002")?.focus();
+                return false;
+            }
+            return true;
+        },
+
+        async saveScenario() {
+            if (!this.validateScenario()) return;
+
+            const payload = {
+                ...this.selectedScenario,
+                scenarioId: this.selectedScenario.scenarioId ? Number(this.selectedScenario.scenarioId) : null,
+                projectId: Number(this.selectedProject.projectId),
+                scenarioCode: String(this.selectedScenario.scenarioCode || "").trim(),
+                scenarioName: String(this.selectedScenario.scenarioName || "").trim(),
+                scenarioType: String(this.selectedScenario.scenarioType || "RULE").trim(),
+                scenarioDesc: this.selectedScenario.scenarioDesc || "",
+                useYn: String(this.selectedScenario.useYn || "Y").toUpperCase() === "N" ? "N" : "Y",
+                sortOrder: String(this.selectedScenario.sortOrder ?? "").trim() === "" ? null : Number(this.selectedScenario.sortOrder)
+            };
+
+            try {
+                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/scenario/save`, {
+                    method: "POST",
+                    body: payload
+                });
+
+                this.selectedScenario = this.normalizeScenario(json.data);
+                this.originalScenario = { ...this.selectedScenario };
+                this.renderScenarioDetail();
+                await this.loadScenarios();
+                this.updateDescription("Scenario was saved.");
+                alert("Scenario saved.");
+            } catch (error) {
+                console.error("[M01002] scenario save failed", error);
+                alert(error.message || "Scenario save failed.");
+            }
+        },
+
+        async deleteScenario() {
+            const scenarioId = this.selectedScenario.scenarioId;
+            if (!scenarioId) {
+                alert("Select a saved scenario before deleting.");
                 return;
             }
-            if(window.DataEditingSystem) {
-                window.DataEditingSystem.downloadCSV(this.currentData, '검색결과.csv');
+
+            if (!confirm(`Delete scenario "${this.selectedScenario.scenarioName}"?`)) {
+                return;
             }
+
+            try {
+                await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/scenario/delete`, {
+                    method: "POST",
+                    body: { scenarioId }
+                });
+                this.newScenario(false);
+                this.renderScenarioDetail();
+                await this.loadScenarios();
+                this.updateDescription("Scenario was deleted.");
+                alert("Scenario deleted.");
+            } catch (error) {
+                console.error("[M01002] scenario delete failed", error);
+                alert(error.message || "Scenario delete failed.");
+            }
+        },
+
+        async deleteAllScenarios() {
+            const projectId = this.selectedProject?.projectId;
+            if (!projectId) {
+                alert("Select a project first.");
+                return;
+            }
+
+            if (!this.scenarios.length) {
+                alert("There are no scenarios to delete.");
+                return;
+            }
+
+            const projectName = this.selectedProject.projectName || "selected project";
+            if (!confirm(`Delete all scenarios for "${projectName}"?`)) {
+                return;
+            }
+
+            try {
+                const result = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/scenario/delete-all`, {
+                    method: "POST",
+                    body: { projectId }
+                });
+                this.scenarios = [];
+                this.newScenario(false);
+                this.renderScenarioDetail();
+                this.renderScenarioList();
+                this.updateSelectedProjectScenarioStatus(0);
+                this.updateDescription("All scenarios were deleted.");
+                alert(`${result.deletedCount ?? 0} scenarios deleted.`);
+            } catch (error) {
+                console.error("[M01002] all scenario delete failed", error);
+                alert(error.message || "Scenario delete failed.");
+            }
+        },
+
+        handleProjectSearchInput() {
+            if (this.projectSearchTimer) clearTimeout(this.projectSearchTimer);
+            this.projectSearchTimer = setTimeout(() => this.loadProjects(), 250);
+        },
+
+        handleProjectSearchKey(event) {
+            if (event.key !== "Enter") return;
+            event.preventDefault();
+            this.loadProjects();
+        },
+
+        handleScenarioSearchInput() {
+            if (this.scenarioSearchTimer) clearTimeout(this.scenarioSearchTimer);
+            this.scenarioSearchTimer = setTimeout(() => this.loadScenarios(), 250);
+        },
+
+        handleScenarioSearchKey(event) {
+            if (event.key !== "Enter") return;
+            event.preventDefault();
+            this.loadScenarios();
         }
     };
 

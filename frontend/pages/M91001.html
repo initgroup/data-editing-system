@@ -1,0 +1,214 @@
+<div class="page-container env-page project-page" id="container-M91001">
+    <section class="env-workspace" aria-labelledby="connection-title-M91001">
+        <aside class="env-object-panel" data-operational-only>
+            <header class="env-object-header">
+                <div>
+                    <h2 class="env-section-title">DB Connections</h2>
+                    <p class="env-section-desc">Register target databases that this system can use.</p>
+                </div>
+                <div class="env-object-actions">
+                    <button type="button" class="env-icon-btn" title="New connection" onclick="M91001.newConnection()">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                    <button type="button" class="env-icon-btn" title="Refresh connections" onclick="M91001.loadConnections()">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+            </header>
+            <div class="env-object-search">
+                <i class="fas fa-search"></i>
+                <input id="connectionSearch-M91001" type="search" placeholder="Search connection" onkeydown="M91001.handleSearchKey(event)">
+                <div class="env-search-actions">
+                    <button type="button" class="env-icon-btn" title="Search" onclick="M91001.loadConnections()">
+                        <i class="fas fa-arrow-right"></i>
+                    </button>
+                </div>
+            </div>
+            <div id="connectionList-M91001" class="env-tree-grid project-list"></div>
+        </aside>
+
+        <section class="env-panel" aria-labelledby="connection-title-M91001">
+            <header class="env-header">
+                <div>
+                    <h1 class="env-title" id="connection-title-M91001">DB Connection Setup</h1>
+                    <p class="env-desc" id="connectionDescription-M91001">Create a target database profile, test it, and initialize required tables.</p>
+                </div>
+                <button type="button" class="env-btn" data-login-exit-only hidden onclick="M91001.backToLogin()">
+                    <i class="fas fa-right-to-bracket"></i>
+                    <span>Back to Login</span>
+                </button>
+            </header>
+
+            <div class="m91001-tabs" role="tablist" aria-label="DB setup tabs">
+                <button type="button" class="m91001-tab is-active" data-tab="connection" onclick="M91001.switchTab('connection')">Connection</button>
+                <button type="button" class="m91001-tab" data-tab="deploy" data-operational-only onclick="M91001.switchTab('deploy')">Target Install</button>
+                <button type="button" class="m91001-tab" data-tab="ml" data-operational-only onclick="M91001.switchTab('ml')">Machine Learning</button>
+            </div>
+
+            <section class="m91001-tab-panel is-active" data-panel="connection">
+                <section class="env-object-meta" aria-label="Connection detail">
+                    <div class="env-meta-grid project-meta-grid">
+                        <label>
+                            <span>Connection ID</span>
+                            <input id="connectionId-M91001" class="env-field env-meta-field" type="text" readonly>
+                        </label>
+                        <label>
+                            <span>DB Type</span>
+                            <select id="dbType-M91001" class="env-field env-meta-field">
+                                <option value="ORACLE">Oracle</option>
+                            </select>
+                        </label>
+                        <label>
+                            <span>Use</span>
+                            <select id="useYn-M91001" class="env-field env-meta-field">
+                                <option value="Y">Y</option>
+                                <option value="N">N</option>
+                            </select>
+                        </label>
+                        <div class="m91001-inline-fields">
+                            <label>
+                                <span>Default</span>
+                                <select id="defaultYn-M91001" class="env-field env-meta-field">
+                                    <option value="N">N</option>
+                                    <option value="Y">Y</option>
+                                </select>
+                            </label>
+                            <label>
+                                <span>Sort</span>
+                                <input id="sortOrder-M91001" class="env-field env-meta-field" type="number" value="0">
+                            </label>
+                        </div>
+                        <label>
+                            <span>Connection Method</span>
+                            <select id="connectionMethod-M91001" class="env-field env-meta-field" onchange="M91001.applyConnectionMethod()">
+                                <option value="basic">Basic</option>
+                                <option value="tnsAlias">TNS Alias</option>
+                                <option value="cloudWallet">Cloud Wallet</option>
+                                <option value="customJdbc">Custom JDBC</option>
+                            </select>
+                        </label>
+                        <label class="env-meta-wide">
+                            <span class="required-title">Connection Name</span>
+                            <input id="connectionName-M91001" class="env-field env-meta-field" type="text" placeholder="LOCAL_ORCL">
+                        </label>
+                        <label>
+                            <span class="required-title">Host</span>
+                            <input id="host-M91001" class="env-field env-meta-field" type="text" placeholder="127.0.0.1">
+                        </label>
+                        <label>
+                            <span>Port</span>
+                            <input id="port-M91001" class="env-field env-meta-field" type="number" value="1521">
+                        </label>
+                        <label>
+                            <span>Service Name</span>
+                            <input id="serviceName-M91001" class="env-field env-meta-field" type="text" placeholder="ORCLPDB1">
+                        </label>
+                        <label>
+                            <span>SID</span>
+                            <input id="sid-M91001" class="env-field env-meta-field" type="text" placeholder="ORCL">
+                        </label>
+                        <label>
+                            <span class="required-title">Username</span>
+                            <input id="username-M91001" class="env-field env-meta-field" type="text">
+                        </label>
+                        <label>
+                            <span>Password</span>
+                            <input id="password-M91001" class="env-field env-meta-field" type="password" autocomplete="new-password" placeholder="Leave blank to keep saved password">
+                        </label>
+                        <label class="env-meta-wide">
+                            <span>TNS Alias / JDBC URL</span>
+                            <input id="dsnAlias-M91001" class="env-field env-meta-field" type="text" placeholder="initgroupediting_high">
+                        </label>
+                        <label class="env-meta-wide">
+                            <span>Wallet Path</span>
+                            <input id="walletPath-M91001" class="env-field env-meta-field" type="text" placeholder="Optional Oracle wallet path">
+                        </label>
+                        <label>
+                            <span>Wallet Password</span>
+                            <input id="walletPassword-M91001" class="env-field env-meta-field" type="password" autocomplete="new-password" placeholder="Leave blank to keep saved wallet password">
+                        </label>
+                        <label class="env-meta-wide">
+                            <span>Connect Options</span>
+                            <textarea id="connectOptions-M91001" class="env-field env-meta-textarea" rows="3" placeholder="{ }"></textarea>
+                        </label>
+                    </div>
+                </section>
+
+                <footer class="env-footer">
+                    <div class="env-footer-group">
+                        <span class="env-detail-hint">Target DB profiles are stored in INIT$_TB_DB_CONNECTION.</span>
+                    </div>
+                    <div class="env-footer-group">
+                        <button type="button" class="env-btn" onclick="M91001.testConnection()">Test</button>
+                        <button id="bootstrapInitSystemBtn-M91001" type="button" class="env-btn env-save" data-bootstrap-only hidden onclick="M91001.bootstrapInitSystem()">Install System DDL</button>
+                        <button type="button" class="env-btn env-save" data-operational-only onclick="M91001.saveConnection()">Save</button>
+                        <button type="button" class="env-btn env-danger" data-operational-only onclick="M91001.deleteConnection()">Delete</button>
+                    </div>
+                </footer>
+
+                <section class="env-object-meta m91001-message-panel" aria-label="Connection message">
+                    <div class="data-panel-toolbar">
+                        <strong>Execution Message</strong>
+                    </div>
+                    <pre id="setupLog-M91001" class="sql-editor data-script-editor" aria-live="polite"></pre>
+                </section>
+            </section>
+
+            <section class="m91001-tab-panel" data-panel="deploy">
+                <section class="env-object-meta m91001-action-panel" aria-label="Target install actions">
+                    <div class="data-panel-toolbar">
+                        <strong>Target Install Message</strong>
+                    </div>
+                    <pre id="deployLog-M91001" class="sql-editor data-script-editor" aria-live="polite"></pre>
+                </section>
+
+                <section class="env-object-meta m91001-schema-log-panel" aria-label="Schema status">
+                    <div class="data-panel-toolbar">
+                        <strong>Application Table Status</strong>
+                        <button type="button" class="env-icon-btn" title="Refresh table status" onclick="M91001.refreshTableStatus()">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                        <span id="schemaStatusSummary-M91001" class="env-detail-hint m91001-status-summary"></span>
+                        <button type="button" class="env-btn env-save m91001-status-action" data-requires-connection disabled onclick="M91001.initSchema()">Install App Tables</button>
+                        <button type="button" class="env-btn env-danger m91001-status-action" data-requires-connection disabled onclick="M91001.truncateTargetData()">Reset App Data</button>
+                    </div>
+                    <div id="schemaStatus-M91001" class="table-result-grid"></div>
+                </section>
+
+                <section class="env-object-meta m91001-model-status-panel" aria-label="Model object deploy status">
+                    <div class="data-panel-toolbar">
+                        <strong>Model Object Deploy Status</strong>
+                        <button type="button" class="env-icon-btn" title="Refresh deploy status" onclick="M91001.loadModelDeployStatus()">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                        <span id="modelDeployStatusSummary-M91001" class="env-detail-hint m91001-status-summary"></span>
+                        <button type="button" class="env-btn env-save m91001-status-action" data-requires-connection disabled onclick="M91001.deployModelObjects()">Deploy PL/SQL Objects</button>
+                    </div>
+                    <div id="modelDeployStatus-M91001" class="table-result-grid"></div>
+                </section>
+            </section>
+
+            <section class="m91001-tab-panel" data-panel="ml">
+                <section class="env-object-meta m91001-action-panel" aria-label="Machine learning actions">
+                    <div class="data-panel-toolbar">
+                        <strong>Machine Learning Message</strong>
+                    </div>
+                    <pre id="mlLog-M91001" class="sql-editor data-script-editor" aria-live="polite"></pre>
+                </section>
+
+                <section class="env-object-meta m91001-model-status-panel" aria-label="Machine learning deploy status">
+                    <div class="data-panel-toolbar">
+                        <strong>ML Deploy Status</strong>
+                        <button type="button" class="env-icon-btn" title="Refresh ML deploy status" onclick="M91001.refreshMlDeployStatus()">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                        <span id="mlDeployStatusSummary-M91001" class="env-detail-hint m91001-status-summary"></span>
+                        <button type="button" class="env-btn env-save m91001-status-action" data-requires-connection disabled onclick="M91001.prepareMlSeed()">Prepare ML Seed Data</button>
+                        <button type="button" class="env-btn env-save m91001-status-action" data-requires-connection disabled onclick="M91001.trainMlModels()">Train ML Models</button>
+                    </div>
+                    <div id="mlDeployStatus-M91001" class="table-result-grid"></div>
+                </section>
+            </section>
+        </section>
+    </section>
+</div>

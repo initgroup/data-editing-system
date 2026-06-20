@@ -1,0 +1,77 @@
+SET SERVEROUTPUT ON;
+
+DECLARE
+    FUNCTION object_exists(p_object_name IN VARCHAR2, p_object_type IN VARCHAR2) RETURN BOOLEAN IS
+        v_count NUMBER;
+    BEGIN
+        SELECT COUNT(*)
+          INTO v_count
+          FROM USER_OBJECTS
+         WHERE OBJECT_NAME = UPPER(p_object_name)
+           AND OBJECT_TYPE = UPPER(p_object_type);
+
+        RETURN v_count > 0;
+    END;
+
+    PROCEDURE run_ddl(p_name IN VARCHAR2, p_sql IN VARCHAR2) IS
+    BEGIN
+        EXECUTE IMMEDIATE p_sql;
+        DBMS_OUTPUT.PUT_LINE('[OK] ' || p_name);
+    EXCEPTION
+        WHEN OTHERS THEN
+            DBMS_OUTPUT.PUT_LINE('[ERROR] ' || p_name || ' - ' || SQLERRM);
+    END;
+
+    PROCEDURE drop_table_if_exists(p_table_name IN VARCHAR2) IS
+    BEGIN
+        IF object_exists(p_table_name, 'TABLE') THEN
+            run_ddl(
+                'DROP TABLE ' || p_table_name,
+                'DROP TABLE "' || UPPER(p_table_name) || '" CASCADE CONSTRAINTS PURGE'
+            );
+        ELSE
+            DBMS_OUTPUT.PUT_LINE('[SKIP] TABLE ' || p_table_name || ' does not exist.');
+        END IF;
+    END;
+
+    PROCEDURE drop_index_if_exists(p_index_name IN VARCHAR2) IS
+    BEGIN
+        IF object_exists(p_index_name, 'INDEX') THEN
+            run_ddl(
+                'DROP INDEX ' || p_index_name,
+                'DROP INDEX "' || UPPER(p_index_name) || '"'
+            );
+        ELSE
+            DBMS_OUTPUT.PUT_LINE('[SKIP] INDEX ' || p_index_name || ' does not exist.');
+        END IF;
+    END;
+BEGIN
+    DBMS_OUTPUT.PUT_LINE('=== INIT_TARGET DROP START ===');
+
+    DBMS_OUTPUT.PUT_LINE('[INIT_TARGET] Drop tables');
+    drop_table_if_exists('INIT$_TB_OBJECT_DEPLOY');
+    drop_table_if_exists('INIT$_TB_FLOW_WORK_RUN');
+    drop_table_if_exists('INIT$_TB_FLOW_WORK_EDGE');
+    drop_table_if_exists('INIT$_TB_FLOW_WORK_NODE');
+    drop_table_if_exists('INIT$_TB_FLOW_WORK');
+    drop_table_if_exists('INIT$_TB_CAT_CORR_SUMMARY');
+    drop_table_if_exists('INIT$_TB_CAT_CORR_PAIR');
+    drop_table_if_exists('INIT$_TB_PREDICTED_TYPE');
+    drop_table_if_exists('INIT$_TB_DATA_WORK_RUN');
+    drop_table_if_exists('INIT$_TB_DATA_WORK_JOB');
+    drop_table_if_exists('INIT$_TB_OBJECT_DETAIL');
+    drop_table_if_exists('INIT$_TB_TABLES');
+    drop_table_if_exists('INIT$_TB_SCENARIO');
+    drop_table_if_exists('INIT$_TB_OBJECT');
+    drop_table_if_exists('INIT$_TB_PROJECT');
+
+    DBMS_OUTPUT.PUT_LINE('[INIT_TARGET] Drop remaining indexes, if any');
+    drop_index_if_exists('IX_INIT$_TB_CAT_CORR_SUMMARY_01');
+    drop_index_if_exists('IX_INIT$_TB_CAT_CORR_PAIR_01');
+    drop_index_if_exists('IX_INIT$_TB_PREDICTED_TYPE_01');
+    drop_index_if_exists('IX_INIT$_TB_OBJECT_DETAIL_01');
+    drop_index_if_exists('IX_INIT$_TB_OBJECT_01');
+
+    DBMS_OUTPUT.PUT_LINE('=== INIT_TARGET DROP END ===');
+END;
+/

@@ -1,82 +1,226 @@
-<div class="page-container" id="container-M02001">
-    <div class="local-message-anchor fixed bottom-5 right-5 w-full max-w-md z-[9999] pointer-events-none">
-        <div class="local-error-box hidden pointer-events-auto relative border-l-4 p-4 rounded-md shadow-2xl transition-all w-full bg-white">
-            <div class="flex items-center pr-8">
-                <i class="local-error-icon fas fa-exclamation-circle mr-3 text-lg"></i>
-                <p class="local-error-text text-sm font-bold"></p>
+<div class="page-container table-page upload-page" id="container-M02001">
+    <section class="work-context-card" aria-label="Project context">
+        <header class="work-context-header">
+            <div class="work-context-title-row">
+                <span><strong>Project</strong> Select the required project for this upload.</span>
+                <span><strong>Upload File</strong> Preview and load a file into a temporary table.</span>
             </div>
-            <button onclick="CommonUI.hidePageMessage('M02001');" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
-                <i class="fas fa-times"></i>
+            <button type="button" class="table-icon-btn" title="Refresh project" onclick="M02001.refreshWorkContext()">
+                <i class="fas fa-sync-alt"></i>
             </button>
+        </header>
+        <div class="work-context-bar">
+            <label>
+                <span class="required-title">Project</span>
+                <select id="contextProject-M02001" class="work-context-select" onchange="M02001.handleContextProjectChange(this.value)">
+                    <option value="">Select project</option>
+                </select>
+            </label>
+            <label>
+                <span>Project Code</span>
+                <input id="projectCode-M02001" class="work-context-select" type="text" readonly>
+            </label>
+            <label>
+                <span>Project Type</span>
+                <input id="projectType-M02001" class="work-context-select" type="text" readonly>
+            </label>
         </div>
-    </div>
-    <div class="page-header">
-        <h1 class="page-title">본 페이지의 주요 기능을 설명합니다.</h1>
-    </div>
+    </section>
 
-    <div class="search-section">
-        <div class="filter-grid">
-            <div class="form-group">
-                <label for="mainCombo" class="form-label required">메인 그룹</label>
-                <select id="mainCombo" class="form-control">
-                    <option value="">선택하세요</option>
-                </select>
+    <section class="table-panel upload-workbench-panel" aria-labelledby="upload-workbench-title-M02001">
+        <header class="table-header">
+            <div>
+                <h1 class="table-title" id="upload-workbench-title-M02001">File Upload Workbench</h1>
+                <p class="table-desc" id="uploadDescription-M02001">Preview a file or analyze the uploaded temporary table.</p>
             </div>
-            
-            <div class="form-group">
-                <label for="subCombo" class="form-label">서브 그룹</label>
-                <select id="subCombo" class="form-control" disabled>
-                    <option value="">메인 먼저 선택</option>
-                </select>
-            </div>
-            
-            <div class="form-group">
-                <label for="textSearch" class="form-label">검색어</label>
-                <input type="text" id="textSearch" class="form-control" placeholder="검색어 입력">
-            </div>
-            
-            <div class="form-group">
-                <label for="dateSearch" class="form-label required">기준 일자</label>
-                <input type="date" id="dateSearch" class="form-control">
-            </div>
+        </header>
 
-            <div class="form-group lg-col-span-2">
-                <label class="form-label">상태 선택 (다중선택)</label>
-                <div class="checkbox-group" id="checkboxArea">
-                    <label class="checkbox-item">
-                        <input type="checkbox" value="C01" class="status-chk"> <span>상태 A</span>
-                    </label>
-                    <label class="checkbox-item">
-                        <input type="checkbox" value="C02" class="status-chk"> <span>상태 B</span>
-                    </label>
+        <nav class="table-tabs upload-view-tabs" aria-label="File upload workbench tabs">
+            <button type="button" class="table-tab is-active" data-upload-view="file" onclick="M02001.switchUploadView('file')">
+                <i class="fas fa-file-upload"></i>
+                <span>File</span>
+            </button>
+            <button type="button" class="table-tab" data-upload-view="table" onclick="M02001.switchUploadView('table')">
+                <i class="fas fa-table"></i>
+                <span>Table</span>
+            </button>
+        </nav>
+
+        <section class="upload-view-panel is-active" data-upload-panel="file">
+            <div class="upload-controls">
+                <label class="upload-file-control">
+                    <span class="required-title">File</span>
+                    <input id="uploadFile-M02001" type="file" accept=".csv,.tsv,.txt,.xlsx,.xlsm" onchange="M02001.handleFileChange()">
+                </label>
+                <label>
+                    <span>Type</span>
+                    <select id="fileType-M02001" class="work-context-select" onchange="M02001.handleFileTypeChange()">
+                        <option value="csv">CSV</option>
+                        <option value="tsv">TSV</option>
+                        <option value="delimited">Delimited</option>
+                        <option value="fixed">Fixed length</option>
+                        <option value="excel">Excel</option>
+                    </select>
+                </label>
+                <label>
+                    <span>Delimiter</span>
+                    <input id="delimiter-M02001" class="upload-input" type="text" value="," maxlength="5">
+                </label>
+                <label>
+                    <span>Fixed widths</span>
+                    <input id="fixedWidths-M02001" class="upload-input" type="text" placeholder="10,20,8">
+                </label>
+                <label>
+                    <span>Header</span>
+                    <select id="hasHeader-M02001" class="work-context-select">
+                        <option value="Y">Y</option>
+                        <option value="N">N</option>
+                    </select>
+                </label>
+                <label>
+                    <span>Encoding</span>
+                    <input id="encoding-M02001" class="upload-input" type="text" value="utf-8-sig">
+                </label>
+                <label>
+                    <span>Table Comment</span>
+                    <input id="tableComment-M02001" class="upload-input" type="text" placeholder="Uploaded table comment">
+                </label>
+                <label>
+                    <span>Table ID Rule</span>
+                    <input id="tableIdRule-M02001" class="upload-input" type="text" readonly value="INITUP$_{LOGIN_ID}_{PROJECT_CODE}_{TIME}">
+                </label>
+                <div class="upload-actions">
+                    <button type="button" class="table-btn" onclick="M02001.previewFile()">
+                        <i class="fas fa-eye"></i>
+                        <span>Preview</span>
+                    </button>
+                    <button type="button" class="table-btn" onclick="M02001.uploadFile()">
+                        <i class="fas fa-upload"></i>
+                        <span>Upload</span>
+                    </button>
+                </div>
+                <div id="uploadProgress-M02001" class="upload-progress" hidden>
+                    <div class="upload-progress-meta">
+                        <span id="uploadProgressLabel-M02001">Ready</span>
+                        <span id="uploadProgressPercent-M02001">0%</span>
+                    </div>
+                    <div class="upload-progress-track">
+                        <div id="uploadProgressBar-M02001" class="upload-progress-bar"></div>
+                    </div>
                 </div>
             </div>
-        </div>
-        
-        <div class="action-bar">
-            <button onclick="M02001.resetSearch()" class="btn bg-gray-500 hover:bg-gray-600 text-white">
-                <i class="fas fa-undo mr-1"></i> 초기화
-            </button>            
-            <button onclick="M02001.executeProcedure()" class="btn btn-purple">
-                <i class="fas fa-bolt mr-1"></i> 프로시저 호출
-            </button>
-            <button onclick="M02001.searchSync()" class="btn btn-primary">
-                <i class="fas fa-search mr-1"></i> 데이터 조회
-            </button>
-        </div>
-    </div>
-    <div class="result-section">
-        <div class="result-header">
-            <h4 class="card-title">
-                <i class="fas fa-table mr-2"></i>실시간 분석 데이터 결과
-            </h4>
-            <div class="result-tools">
-                <button onclick="M02001.downloadExcel()" class="btn-icon-excel" title="엑셀 다운로드">
-                    <i class="fas fa-file-excel"></i>
-                </button>
+            <div id="previewGrid-M02001" class="upload-preview-grid"></div>
+        </section>
+
+        <section class="upload-view-panel" data-upload-panel="table">
+            <div class="upload-table-bar">
+                <div class="upload-table-title">
+                    <strong>Uploaded Table Analysis</strong>
+                    <span>Review columns, data, and SQL for the temporary table.</span>
+                </div>
+                <div class="upload-table-id">
+                    <span>Table ID</span>
+                    <input id="uploadedTableId-M02001" class="upload-input" type="text" readonly placeholder="INITUP$_..." onkeydown="M02001.handleTableIdKey(event)">
+                    <button type="button" class="table-icon-btn" title="Refresh table analysis" onclick="M02001.reloadUploadedTable()">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                    <button type="button" class="table-icon-btn table-danger-btn" title="Drop upload table" onclick="M02001.dropUploadedTable()">
+                        <i class="far fa-trash-alt"></i>
+                    </button>
+                </div>
             </div>
-        </div>
-        <div id="gridContainer-M02001" class="table-container"></div>
-        <div id="paginationArea-M02001" class="flex justify-center mt-4 gap-1"></div>
-    </div>
+
+            <div class="upload-table-workspace">
+                <aside class="table-object-panel upload-table-tree-panel" aria-label="Uploaded table explorer">
+                    <header class="table-object-header">
+                        <div>
+                            <h2 class="table-section-title">Table Explorer</h2>
+                            <p class="table-section-desc">Uploaded tables for the selected project.</p>
+                        </div>
+                        <div class="table-object-actions">
+                            <button type="button" class="table-icon-btn" title="Refresh tables" onclick="M02001.loadUploadTableTree()">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
+                    </header>
+                    <div class="table-object-search">
+                        <i class="fas fa-search"></i>
+                        <input
+                            id="uploadTableSearch-M02001"
+                            type="search"
+                            placeholder="INITUP$_LOGIN_PROJECT_"
+                            aria-label="Search uploaded table"
+                            oninput="M02001.handleUploadTableSearchInput()"
+                            onkeydown="M02001.handleUploadTableSearchKey(event)"
+                        >
+                        <div class="table-search-actions">
+                            <label class="table-filter-toggle" title="Filter search results">
+                                <input id="uploadTableSearchFilter-M02001" type="checkbox" onchange="M02001.handleUploadTableSearchFilterChange()">
+                                <i class="fas fa-filter"></i>
+                            </label>
+                            <button type="button" class="table-icon-btn" title="Find previous table" onclick="M02001.searchUploadTable('up')">
+                                <i class="fas fa-arrow-up"></i>
+                            </button>
+                            <button type="button" class="table-icon-btn" title="Find next table" onclick="M02001.searchUploadTable('down')">
+                                <i class="fas fa-arrow-down"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="uploadTableTree-M02001" class="table-tree-grid"></div>
+                </aside>
+
+                <section class="upload-table-analysis-area" aria-label="Uploaded table analysis">
+                    <nav class="table-tabs upload-table-tabs" aria-label="Uploaded table analysis tabs">
+                        <button type="button" class="table-tab is-active" data-tab="columns" onclick="M02001.switchTab('columns')">
+                            <i class="fas fa-list"></i>
+                            <span>Columns</span>
+                        </button>
+                        <button type="button" class="table-tab" data-tab="data" onclick="M02001.switchTab('data')">
+                            <i class="fas fa-table"></i>
+                            <span>Data</span>
+                        </button>
+                        <button type="button" class="table-tab" data-tab="sql" onclick="M02001.switchTab('sql')">
+                            <i class="fas fa-terminal"></i>
+                            <span>SQL</span>
+                        </button>
+                    </nav>
+
+                    <section class="table-tab-panel is-active" data-panel="columns">
+                        <div id="columnsGrid-M02001" class="table-result-grid"></div>
+                    </section>
+
+                    <section class="table-tab-panel" data-panel="data">
+                        <div class="table-toolbar">
+                            <button type="button" class="table-btn" onclick="M02001.loadTableData()">
+                                <i class="fas fa-play"></i>
+                                <span>Query Data</span>
+                            </button>
+                            <label class="table-limit-control">
+                                <span>Rows</span>
+                                <input id="dataLimit-M02001" type="number" min="1" max="1000" value="100">
+                            </label>
+                        </div>
+                        <div id="dataGrid-M02001" class="table-result-grid"></div>
+                    </section>
+
+                    <section class="table-tab-panel" data-panel="sql">
+                        <div class="sql-workbench">
+                            <div class="sql-toolbar">
+                                <button type="button" class="table-btn" onclick="M02001.executeSql()">
+                                    <i class="fas fa-play"></i>
+                                    <span>Run SQL(Ctrl+Enter)</span>
+                                </button>
+                                <label class="table-limit-control">
+                                    <span>Rows</span>
+                                    <input id="sqlLimit-M02001" type="number" min="1" max="1000" value="100">
+                                </label>
+                            </div>
+                            <textarea id="sqlEditor-M02001" class="sql-editor" spellcheck="false" aria-label="SQL worksheet"></textarea>
+                            <div id="sqlGrid-M02001" class="table-result-grid"></div>
+                        </div>
+                    </section>
+                </section>
+            </div>
+        </section>
+    </section>
 </div>

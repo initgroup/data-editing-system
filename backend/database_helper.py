@@ -9,33 +9,48 @@ class SqlLoader:
     """[요구사항 12] SQL 파일을 읽어 ID별로 관리하는 클래스"""
     _query_map: Dict[str, str] = {}
 
-    # 상위 폴더의 database 디렉토리 내 queries.sql 지정
+    # 상위 폴더의 database 디렉토리 내 SQL 파일 지정
     _current_file_dir = os.path.dirname(os.path.abspath(__file__))
-    _file_path = os.path.normpath(os.path.join(_current_file_dir, "..", "database", "queries.sql"))
+    _sql_dir = os.path.normpath(os.path.join(_current_file_dir, "..", "database"))
+    _file_path = os.path.normpath(os.path.join(_sql_dir, "queries.sql"))
+
+    @classmethod
+    def normalize_loaded_sql(cls, query: str) -> str:
+        text = (query or "").strip()
+        if re.match(r"(?is)^\s*(declare|begin)\b", text):
+            return re.sub(r"(?m)^\s*/\s*$", "", text).strip()
+        return text.rstrip(';')
 
     @classmethod
     def reload_queries(cls):
-        """queries.sql 파일을 읽어 '-- [ID]' 기준으로 파싱하여 메모리에 로드합니다."""
-        if not os.path.exists(cls._file_path):
-            logger.error(f"SQL 파일을 찾을 수 없습니다: {cls._file_path}")
+        """database 디렉토리의 SQL 파일을 읽어 '-- [ID]' 기준으로 파싱하여 메모리에 로드합니다."""
+        if not os.path.isdir(cls._sql_dir):
+            logger.error(f"SQL 디렉토리를 찾을 수 없습니다: {cls._sql_dir}")
             return
 
         try:
-            with open(cls._file_path, 'r', encoding='utf-8') as f:
-                content = f.read()
-                
             new_map = {}
-            # -- [ID] 패턴으로 쿼리 분리
-            sections = content.split('-- [')
-            for section in sections:
-                if ']' in section:
-                    sql_id, query = section.split(']', 1)
-                    # [수정] strip() 후 맨 마지막에 세미콜론이 있다면 제거
-                    clean_query = query.strip().rstrip(';')                    
-                    new_map[sql_id.strip()] = clean_query
+            sql_files = sorted(
+                os.path.join(cls._sql_dir, file_name)
+                for file_name in os.listdir(cls._sql_dir)
+                if file_name.lower().endswith(".sql")
+            )
+
+            for file_path in sql_files:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+
+                # -- [ID] 패턴으로 쿼리 분리
+                sections = content.split('-- [')
+                for section in sections:
+                    if ']' in section:
+                        sql_id, query = section.split(']', 1)
+                        # [수정] strip() 후 맨 마지막에 세미콜론이 있다면 제거
+                        clean_query = cls.normalize_loaded_sql(query)
+                        new_map[sql_id.strip()] = clean_query
             
             cls._query_map = new_map
-            logger.info(f"SQL 로드 완료: {len(cls._query_map)} 개의 쿼리")
+            logger.info(f"SQL 로드 완료: {len(cls._query_map)} 개의 쿼리, {len(sql_files)} 개의 파일")
         except Exception as e:
             logger.error(f"SQL 로딩 중 오류 발생: {str(e)}")
 
@@ -80,7 +95,7 @@ def execute_query(conn, sql_id: str, params: dict = None, is_dml: bool = False, 
         sql = SqlLoader.get_sql(sql_id)
         if not sql:
             # SQL을 못 찾으면 에러 메시지 반환
-            return {"data": [], "total": 0, "status": "error", "detail": f"SQL ID '{sql_id}'를 찾을 수 없습니다. (경로: {SqlLoader._file_path})"}
+            return {"data": [], "total": 0, "status": "error", "detail": f"SQL ID '{sql_id}'를 찾을 수 없습니다. (경로: {SqlLoader._sql_dir})"}
         
         cursor = conn.cursor()
 
@@ -89,6 +104,8 @@ def execute_query(conn, sql_id: str, params: dict = None, is_dml: bool = False, 
             # 동적SQL문 치환
             if 'dynamicTable' in params:
                 sql = sql.replace("/* --DYNAMIC_TABLE-- */", params['dynamicTable'])
+            if 'dynamicSql' in params:
+                sql = sql.replace("/* --DYNAMIC_SQL-- */", params['dynamicSql'])
 
             # [DPY-4008 방지] 실제 SQL에 존재하는 바인드 변수만 필터링
             used_bind_vars = re.findall(r":([a-zA-Z0-9_]+)", sql)

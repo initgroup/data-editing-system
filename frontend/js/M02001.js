@@ -1,354 +1,751 @@
-/**
- * @file        M02001.js
- * @description 규칙관리 > 규칙발굴
- * @author      [인아이티 김진열]
- * @date        2026-04-18
- * @version     1.0.0
- * @dependency  gridjs.umd.js, chart.js, common.js
- */
 (function() {
-    // [추가] 페이지 코드 변수 선언 (하단 모든 로직에서 공통 사용)
-    const PAGE_CODE = 'M02001';
+    const PAGE_CODE = "M02001";
+    const CONTEXT_STORAGE_KEY = "DATA_EDITING_WORK_CONTEXT";
+    const { getContainerEl } = PageManager.createHelper(PAGE_CODE);
+    const COMMON = MCOMMON.createPageHelper(PAGE_CODE);
 
-    // 페이지 전역 변수 또는 네임스페이스 정의
     const M02001 = {
-        gridInstance: null,
-        currentData: [],
-        itemsPerPage: 10, // 페이징 예시용 추가
-        currentPage: 1,
-
-        // 내부 헬퍼: 페이지 내의 요소만 찾기
-        getEl(id) {
-            return document.getElementById(`${id}-${PAGE_CODE}`);
-        },
-
-        // 내부 헬퍼: 컨테이너 하위의 일반 ID 요소 찾기
-        getContainerEl(selector) {
-            const container = document.getElementById(`container-${PAGE_CODE}`);
-            return container ? container.querySelector(selector) : null;
-        },
-
-        /**
-         * 화면 초기화 진입점
-         */
-        async init() {
-            console.log("${PAGE_CODE} 초기화 완료");
-            this.initGrid();
-            this.bindEvents();
-            this.resetSearch();
-            this.currentData = [];
-            await this.loadInitialData();
-            this.onShow(); // 첫 로드 때도 데이터를 가져와야 하므로 호출
-        },
-
-        onShow() {
-            // 메뉴를 클릭해서 이 페이지가 '보일 때마다' 실행
-            // (최신 데이터 조회 등)
-            //this.searchSync(); 
-        },  
-
-        /**
-         * [디자인 수정] Grid.js 기반 메인 데이터 그리드 초기화
-         */
-        initGrid() {
-            const targetId = `gridContainer-${PAGE_CODE}`;
-            
-            // 요소가 존재하는지 먼저 확인 (디버깅용)
-            if (!document.getElementById(targetId)) {
-                console.error(`[${PAGE_CODE}] 컨테이너 요소를 찾을 수 없습니다: ${targetId}`);
-                return;
-            }
-            // createGrid는 common.js의 래퍼 함수이므로 설정을 최신 스타일로 주입합니다.
-            this.gridInstance = createGrid(targetId, {
-                columns: [
-                    { id: 'RNUM', name: '순번', width: '80px', sort: true },
-                    { id: 'COL1', name: '컬럼1', sort: true },
-                    { id: 'COL2', name: '컬럼2', sort: true },
-                    { id: 'DATE', name: '일자', width: '150px' }
-                ],
-                // [최신 스타일 적용]
-                fixedHeader: true,
-                height: '345px', // 약 5행 정도 노출되는 최적 높이
-                style: {
-                    table: { 'width': '100%' },
-                    td: { 'cursor': 'pointer' }
-                },
-                className: {
-                    table: 'custom-grid-table'
-                },
-                data: []
-            });
-
-            // 기존 행 클릭 바인딩 유지
-            CommonUI.bindGridRowClick(targetId);
-
-            // [추가] 행 선택 시 시각적 효과(Selected Row)를 위한 이벤트 리스너
-            const container = this.getEl('gridContainer');
-            container.addEventListener('click', (e) => {
-                const tr = e.target.closest('.gridjs-tr');
-                if (tr) {
-                    container.querySelectorAll('.gridjs-tr').forEach(el => 
-                        el.classList.remove('gridjs-tr-selected')
-                    );
-                    tr.classList.add('gridjs-tr-selected');
-                }
-            });
-        },
         
-        /**
-         * DOM 이벤트 바인딩 (기존 로직 유지)
-         */
-        bindEvents() {
-            // 1. 컨테이너를 먼저 찾습니다.
-            const container = this.getEl('container');
-            const mainCombo = this.getContainerEl('#mainCombo');
+        ...COMMON,
+        isInit: false,
+        contextProjects: [],
+        selectedProjectId: "",
+        uploadTables: [],
+        displayedUploadTables: [],
+        focusedUploadTableKey: "",
+        uploadedTableName: "",
+        activeUploadView: "file",
+        activeTab: "columns",
+        gridData: { preview: [], columns: [], data: [], sql: [] },
+        sqlKeydownBound: null,
+        contextLoadFailed: false,
+        isUploading: false,
 
-            // 2. 컨테이너 하위의 mainCombo를 찾아 이벤트를 연결합니다.
-            mainCombo?.addEventListener('change', async (e) => {
-                const parentId = e.target.value;
-                const subCombo = this.getContainerEl('#subCombo');
-                
-                if (!parentId) {
-                    subCombo.innerHTML = '<option value="">메인을 먼저 선택하세요</option>';
-                    subCombo.disabled = true;
-                    subCombo.classList.add('bg-gray-50', 'cursor-not-allowed');
+        async init() {
+            if (this.isInit) return;
+            this.sqlKeydownBound = this.handleSqlEditorKeydown.bind(this);
+            getContainerEl("#sqlEditor-M02001")?.addEventListener("keydown", this.sqlKeydownBound);
+            this.handleFileTypeChange();
+            await this.loadWorkContext();
+            if (!this.contextLoadFailed) {
+                this.renderGrid("#previewGrid-M02001", [], "preview");
+            }
+            this.switchTab("columns");
+            this.isInit = true;
+        },
+
+        destroy() {
+            if (this.sqlKeydownBound) {
+                getContainerEl("#sqlEditor-M02001")?.removeEventListener("keydown", this.sqlKeydownBound);
+            }
+            this.contextProjects = [];
+            this.selectedProjectId = "";
+            this.uploadTables = [];
+            this.displayedUploadTables = [];
+            this.focusedUploadTableKey = "";
+            this.uploadedTableName = "";
+            this.activeUploadView = "file";
+            this.activeTab = "columns";
+            this.gridData = { preview: [], columns: [], data: [], sql: [] };
+            this.sqlKeydownBound = null;
+            this.contextLoadFailed = false;
+            this.isUploading = false;
+            this.isInit = false;
+        },
+
+        getStoredContext() {
+            try {
+                return JSON.parse(localStorage.getItem(CONTEXT_STORAGE_KEY) || "{}");
+            } catch (error) {
+                return {};
+            }
+        },
+
+        saveStoredContext() {
+            const stored = this.getStoredContext();
+            localStorage.setItem(CONTEXT_STORAGE_KEY, JSON.stringify({
+                ...stored,
+                projectId: this.selectedProjectId || ""
+            }));
+        },
+
+        async loadWorkContext() {
+            const stored = this.getStoredContext();
+            await this.loadContextProjects(stored.projectId || "");
+        },
+
+        async refreshWorkContext() {
+            const projectId = this.selectedProjectId;
+            await this.loadContextProjects(projectId);
+        },
+
+        async loadContextProjects(preferredProjectId = "") {
+            const select = getContainerEl("#contextProject-M02001");
+            if (!select) return;
+            select.innerHTML = `<option value="">Loading projects...</option>`;
+            try {
+                this.contextLoadFailed = false;
+                const json = await CommonUtils.request(`${API_BASE_URL}/M01002/projects?keyword=`, { method: "GET", showLoading: false });
+                this.contextProjects = Array.isArray(json.data)
+                    ? json.data.filter((project) => project.USE_YN === "Y")
+                    : [];
+                this.renderContextProjects(preferredProjectId);
+            } catch (error) {
+                const message = error.message || "Project load failed.";
+                this.contextLoadFailed = true;
+                this.contextProjects = [];
+                this.selectedProjectId = "";
+                select.innerHTML = `<option value="">Project load failed</option>`;
+                this.setText("#uploadDescription-M02001", message);
+                this.renderError("#previewGrid-M02001", message);
+            }
+        },
+
+        renderContextProjects(preferredProjectId = "") {
+            const select = getContainerEl("#contextProject-M02001");
+            if (!select) return;
+            select.innerHTML = `
+                <option value="">Select project</option>
+                ${this.contextProjects.map((project) => `
+                    <option value="${this.escapeHtml(project.PROJECT_ID ?? "")}">
+                        ${this.escapeHtml(project.PROJECT_NAME || project.PROJECT_CODE || "(Untitled project)")}
+                    </option>
+                `).join("")}
+            `;
+            const exists = this.contextProjects.some((project) => String(project.PROJECT_ID) === String(preferredProjectId));
+            this.selectedProjectId = exists ? String(preferredProjectId) : "";
+            select.value = this.selectedProjectId;
+            this.updateProjectMeta();
+        },
+
+        async handleContextProjectChange(projectId) {
+            this.selectedProjectId = projectId || "";
+            this.saveStoredContext();
+            this.updateProjectMeta();
+            this.uploadTables = [];
+            this.displayedUploadTables = [];
+            this.focusedUploadTableKey = "";
+            if (this.activeUploadView === "table") {
+                await this.loadUploadTableTree();
+            }
+        },
+
+        ensureWorkContextSelected() {
+            if (!this.selectedProjectId) {
+                alert("Project is required.");
+                getContainerEl("#contextProject-M02001")?.focus();
+                return false;
+            }
+            return true;
+        },
+
+        getSelectedProject() {
+            return this.contextProjects.find((project) => String(project.PROJECT_ID) === String(this.selectedProjectId)) || null;
+        },
+
+        getSelectedProjectCode() {
+            return this.getSelectedProject()?.PROJECT_CODE || "";
+        },
+
+        updateProjectMeta() {
+            const project = this.getSelectedProject();
+            this.setValue("#projectCode-M02001", project?.PROJECT_CODE || "");
+            this.setValue("#projectType-M02001", project?.PROJECT_TYPE || "");
+            this.setUploadTableSearchPrefix();
+        },
+
+        getUploadTableSearchPrefix() {
+            const code = this.getSelectedProjectCode() || "PROJECT";
+            const loginUser = this.getLoginUser();
+            const loginToken = this.normalizeIdentifierToken(loginUser.loginId || loginUser.userId || "LOGIN");
+            return `INITUP$_${loginToken}_${this.normalizeIdentifierToken(code)}_`;
+        },
+
+        getLoginUser() {
+            try {
+                return JSON.parse(sessionStorage.getItem("initLoginUser") || "{}");
+            } catch (error) {
+                return {};
+            }
+        },
+
+        setUploadTableSearchPrefix(force = true) {
+            const input = getContainerEl("#uploadTableSearch-M02001");
+            if (!input) return;
+            const prefix = this.getUploadTableSearchPrefix();
+            if (force || !input.value.trim()) input.value = prefix;
+            input.placeholder = prefix;
+        },
+
+        normalizeIdentifierToken(value) {
+            return String(value || "").toUpperCase().replace(/[^A-Z0-9_$#]/g, "_").replace(/_+/g, "_").replace(/^_+|_+$/g, "");
+        },
+
+        handleFileChange() {
+            const file = getContainerEl("#uploadFile-M02001")?.files?.[0];
+            const commentInput = getContainerEl("#tableComment-M02001");
+            if (file && commentInput) {
+                commentInput.value = this.getFileBaseName(file.name);
+            }
+            if (file) {
+                this.applyFileTypeFromName(file.name);
+            }
+            this.renderGrid("#previewGrid-M02001", [], "preview");
+        },
+
+        getFileBaseName(fileName) {
+            const name = String(fileName || "").split(/[\\/]/).pop();
+            const dotIndex = name.lastIndexOf(".");
+            return dotIndex > 0 ? name.slice(0, dotIndex) : name;
+        },
+
+        applyFileTypeFromName(fileName) {
+            const extension = String(fileName || "").split(/[\\/]/).pop().split(".").pop().toLowerCase();
+            const typeMap = {
+                csv: "csv",
+                tsv: "tsv",
+                txt: "delimited",
+                xlsx: "excel",
+                xlsm: "excel",
+                xls: "excel"
+            };
+            const nextType = typeMap[extension];
+            const typeSelect = getContainerEl("#fileType-M02001");
+            if (!nextType || !typeSelect) return;
+            typeSelect.value = nextType;
+            this.handleFileTypeChange();
+        },
+
+        handleFileTypeChange() {
+            const type = getContainerEl("#fileType-M02001")?.value || "csv";
+            const delimiter = getContainerEl("#delimiter-M02001");
+            const widths = getContainerEl("#fixedWidths-M02001");
+            if (delimiter) delimiter.disabled = !["csv", "delimited"].includes(type);
+            if (widths) widths.disabled = type !== "fixed";
+            if (type === "tsv" && delimiter) delimiter.value = "\\t";
+            if (type === "csv" && delimiter) delimiter.value = ",";
+        },
+
+        buildUploadFormData() {
+            const file = getContainerEl("#uploadFile-M02001")?.files?.[0];
+            if (!file) {
+                alert("Select a file first.");
+                return null;
+            }
+            const formData = new FormData();
+            formData.append("file", file);
+            formData.append("fileType", getContainerEl("#fileType-M02001")?.value || "csv");
+            const delimiter = getContainerEl("#delimiter-M02001")?.value || ",";
+            formData.append("delimiter", delimiter === "\\t" ? "\t" : delimiter);
+            formData.append("fixedWidths", getContainerEl("#fixedWidths-M02001")?.value || "");
+            formData.append("hasHeader", getContainerEl("#hasHeader-M02001")?.value || "Y");
+            formData.append("encoding", getContainerEl("#encoding-M02001")?.value || "utf-8-sig");
+            formData.append("projectCode", this.getSelectedProject()?.PROJECT_CODE || "");
+            formData.append("tableComment", getContainerEl("#tableComment-M02001")?.value || "");
+            formData.append("tableNameRule", getContainerEl("#tableIdRule-M02001")?.value || "INITUP$_{LOGIN_ID}_{PROJECT_CODE}_{TIME}");
+            return formData;
+        },
+
+        async requestForm(url, formData) {
+            const headers = {};
+            const targetConnectionId = sessionStorage.getItem("targetConnectionId") || "";
+            if (targetConnectionId) {
+                headers["X-Target-Connection-Id"] = targetConnectionId;
+            }
+            try {
+                const loginUser = JSON.parse(sessionStorage.getItem("initLoginUser") || "{}");
+                if (loginUser.userId) {
+                    headers["X-Login-User-Id"] = String(loginUser.userId);
+                }
+                if (loginUser.loginId) {
+                    headers["X-Login-Id"] = String(loginUser.loginId);
+                }
+                if (loginUser.email) {
+                    headers["X-Login-Email"] = String(loginUser.email);
+                }
+                if (loginUser.roleCode) {
+                    headers["X-Login-Role-Code"] = String(loginUser.roleCode);
+                }
+            } catch (error) {
+                // The backend will return a clear 401 if the login context is missing.
+            }
+            const response = await fetch(url, { method: "POST", headers, body: formData });
+            if (!response.ok) {
+                const errorJson = await response.json().catch(() => ({}));
+                throw new Error(CommonUtils.formatErrorMessage(errorJson));
+            }
+            window.PageManager?.extendSession?.();
+            return response.json();
+        },
+
+        async previewFile() {
+            if (!this.ensureWorkContextSelected()) return;
+            const grid = getContainerEl("#previewGrid-M02001");
+            if (grid) grid.innerHTML = `<div class="table-empty">Loading preview...</div>`;
+            try {
+                const formData = this.buildUploadFormData();
+                if (!formData) return;
+                const json = await this.requestForm(`${API_BASE_URL}/${PAGE_CODE}/preview`, formData);
+                this.renderGrid("#previewGrid-M02001", json.data || [], "preview", json.columns || []);
+            } catch (error) {
+                this.renderError("#previewGrid-M02001", error.message);
+            }
+        },
+
+        async uploadFile() {
+            if (!this.ensureWorkContextSelected()) return;
+            this.setUploading(true);
+            this.showUploadProgress("Preparing upload...", 0);
+            try {
+                const formData = this.buildUploadFormData();
+                if (!formData) {
+                    this.setUploading(false);
                     return;
                 }
+                const json = await this.requestFormWithProgress(`${API_BASE_URL}/${PAGE_CODE}/upload`, formData);
+                this.uploadedTableName = json.tableName || "";
+                this.setValue("#uploadedTableId-M02001", this.uploadedTableName);
+                const statsText = json.statsGathered ? " Statistics gathered." : (json.statsMessage ? ` ${json.statsMessage}` : "");
+                this.setText("#uploadDescription-M02001", `${this.uploadedTableName} loaded. Rows: ${json.rowCount ?? 0}.${statsText}`);
+                this.showUploadProgress(`Upload completed. Rows: ${json.rowCount ?? 0}.${statsText}`, 100);
+                this.setDefaultSql();
+                this.switchUploadView("table");
+                await this.loadUploadTableTree(this.uploadedTableName);
+                await this.selectUploadTable(this.uploadedTableName);
+                alert("File uploaded.");
+            } catch (error) {
+                this.showUploadProgress(error.message || "Upload failed.", 100);
+                alert(error.message || "Upload failed.");
+            } finally {
+                this.setUploading(false);
+            }
+        },
 
-                try {
-                    const res = await fetch(`${API_BASE_URL}/${PAGE_CODE}/cascade/${parentId}`);
-                    const json = await res.json();
-                    
-                    subCombo.innerHTML = '<option value="">선택하세요</option>';
-                    json.data?.forEach(item => {
-                        subCombo.innerHTML += `<option value="${item.CODE}">${item.NAME}</option>`;
-                    });
-                    subCombo.disabled = false;
-                    subCombo.classList.remove('bg-gray-50', 'cursor-not-allowed');
-                } catch (e) {
-                    CommonUI.showPageError(PAGE_CODE,"하위 콤보박스 로딩 실패");
-                }
+        requestFormWithProgress(url, formData) {
+            const headers = this.buildUploadHeaders();
+            return new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                xhr.open("POST", url, true);
+                Object.entries(headers).forEach(([key, value]) => xhr.setRequestHeader(key, value));
+                xhr.upload.onprogress = (event) => {
+                    if (!event.lengthComputable) {
+                        this.showUploadProgress("Uploading file...", 5);
+                        return;
+                    }
+                    const percent = Math.max(1, Math.min(95, Math.round((event.loaded / event.total) * 95)));
+                    this.showUploadProgress("Uploading file...", percent);
+                };
+                xhr.upload.onload = () => {
+                    this.showUploadProgress("File transfer completed. Server is inserting rows in batches...", 96);
+                };
+                xhr.onload = () => {
+                    const json = this.parseXhrJson(xhr);
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        window.PageManager?.extendSession?.();
+                        resolve(json);
+                        return;
+                    }
+                    reject(new Error(CommonUtils.formatErrorMessage(json)));
+                };
+                xhr.onerror = () => reject(new Error("Upload request failed."));
+                xhr.onabort = () => reject(new Error("Upload request was aborted."));
+                this.showUploadProgress("Uploading file...", 1);
+                xhr.send(formData);
             });
         },
 
-        /**
-         * 초기 데이터 로딩 (기존 로직 유지)
-         */
-        async loadInitialData() {
+        buildUploadHeaders() {
+            const headers = {};
+            const targetConnectionId = sessionStorage.getItem("targetConnectionId") || "";
+            if (targetConnectionId) {
+                headers["X-Target-Connection-Id"] = targetConnectionId;
+            }
             try {
-                const res = await fetch(`${API_BASE_URL}/${PAGE_CODE}/init`);
-                const json = await res.json();
-                const mainCombo = this.getContainerEl('#mainCombo');
-                const rawData = json.data?.data ?? json.data ?? [];
-                const curData = Array.isArray(rawData) ? rawData : [];
-                curData.forEach(item => {
-                    mainCombo.innerHTML += `<option value="${item.CODE}">${item.NAME}</option>`;
-                });
+                const loginUser = JSON.parse(sessionStorage.getItem("initLoginUser") || "{}");
+                if (loginUser.userId) headers["X-Login-User-Id"] = String(loginUser.userId);
+                if (loginUser.loginId) headers["X-Login-Id"] = String(loginUser.loginId);
+                if (loginUser.email) headers["X-Login-Email"] = String(loginUser.email);
+                if (loginUser.roleCode) headers["X-Login-Role-Code"] = String(loginUser.roleCode);
             } catch (error) {
-                CommonUI.showPageError(PAGE_CODE,"초기 데이터 셋업 중 오류가 발생했습니다.");
+                // Backend validates login context.
             }
+            return headers;
         },
 
-        getSearchParams() {
-            // 1. 현재 페이지의 고유 컨테이너를 먼저 지정합니다.
-            const container = this.getEl('page-section');
-            if (!container) return {};
-
-            // 2. document 대신 container.querySelector를 사용하여 범위를 제한합니다.
-            const checks = Array.from(container.querySelectorAll('.status-chk:checked')).map(cb => cb.value);
-            
-            return {
-                main_combo: container.querySelector('#mainCombo')?.value || null,
-                sub_combo: container.querySelector('#subCombo')?.value || null,
-                text_val: container.querySelector('#textSearch')?.value || null,
-                date_val: container.querySelector('#dateSearch')?.value || null,
-                check_values: checks
-            };
-        },
-
-        resetSearch(flag) {
-            // 1. 현재 페이지의 컨테이너를 찾습니다.
-            const container = this.getEl('page-section');
-
-            if (!container) {
-                const backupContainer = this.getEl('container');
-                if(!backupContainer) return;
-                this._executeReset(backupContainer, flag);
-            } else {
-                this._executeReset(container, flag);
-            }
-        },
-
-        // 실제 로직 분리 (가독성 및 유지보수용)
-        _executeReset(targetEl, flag) {
-            // 2. 입력값 초기화 (ID 문자열을 넘겨야 함)
-            if (window.clearInputs) {
-                // app.js가 만든 ID를 그대로 전달
-                window.clearInputs(targetEl.id); 
-            } else {
-                targetEl.querySelectorAll('input, select, textarea').forEach(el => {
-                    if (el.type === 'checkbox' || el.type === 'radio') el.checked = false;
-                    else el.value = '';
-                });
-            }
-
-            // 3. 그리드 및 메시지 초기화
-            if (flag === 1) {
-                this.currentData = [];
-                if (this.gridInstance) {
-                    this.gridInstance.updateConfig({ data: [] }).forceRender();
-                }
-                
-                // common.js의 hidePageMessage 호출
-                if (window.CommonUI && window.CommonUI.hidePageMessage) {
-                    window.CommonUI.hidePageMessage(PAGE_CODE);
-                }
-            }
-        },
-
-        async searchSync() {
-            if (typeof CommonUI !== 'undefined') CommonUI.hidePageMessage(PAGE_CODE);
-            if (typeof CommonUI !== 'undefined') CommonUI.showLoading();
-
+        parseXhrJson(xhr) {
             try {
-                const params = this.getSearchParams();
-                const res = await fetch(`${API_BASE_URL}/${PAGE_CODE}/search`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(params)
-                });
-
-                let json;
-                try {
-                    json = await res.json();
-                } catch (e) {
-                    throw new Error("서버 응답이 올바른 형식이 아닙니다.");
-                }
-
-                if (!res.ok) {
-                    throw new Error(json.detail || "서버 통신 중 오류가 발생했습니다.");
-                }
-
-                const rawData = json.data?.data ?? json.data ?? [];
-                this.currentData = Array.isArray(rawData) ? rawData : [];
-
-                if (this.gridInstance) {
-                    this.gridInstance.updateConfig({ 
-                        data: this.currentData 
-                    }).forceRender();
-                }
-
-                if (this.currentData.length > 0) {
-                    if (typeof showPageSuccess === 'function') CommonUI.showPageSuccess(PAGE_CODE,`총 ${this.currentData.length}건이 조회되었습니다.`);
-                } else {
-                    if (typeof showPageError === 'function') CommonUI.showPageError(PAGE_CODE,"조회된 데이터가 없습니다.");
-                }
-            } catch (e) {
-                if (typeof showPageError === 'function') CommonUI.showPageError(PAGE_CODE,e.message);
-            } finally {
-                if (typeof hideLoading === 'function') {
-                    setTimeout(() => hideLoading(), 300);
-                }
+                return JSON.parse(xhr.responseText || "{}");
+            } catch (error) {
+                return {};
             }
         },
 
-        async executeProcedure() {
-            if(!confirm("프로시저를 실행하시겠습니까?")) return;
+        showUploadProgress(label, percent) {
+            const box = getContainerEl("#uploadProgress-M02001");
+            const labelEl = getContainerEl("#uploadProgressLabel-M02001");
+            const percentEl = getContainerEl("#uploadProgressPercent-M02001");
+            const bar = getContainerEl("#uploadProgressBar-M02001");
+            const value = Math.max(0, Math.min(100, Number(percent) || 0));
+            if (box) box.hidden = false;
+            if (labelEl) labelEl.textContent = label || "";
+            if (percentEl) percentEl.textContent = `${value}%`;
+            if (bar) bar.style.width = `${value}%`;
+        },
+
+        handleTableIdKey(event) {
+            if (event.key !== "Enter") return;
+            event.preventDefault();
+            this.reloadUploadedTable();
+        },
+
+        async reloadUploadedTable() {
+            this.uploadedTableName = (getContainerEl("#uploadedTableId-M02001")?.value || "").trim().toUpperCase();
+            this.setValue("#uploadedTableId-M02001", this.uploadedTableName);
+            this.setDefaultSql();
+            if (this.activeTab === "data") {
+                await this.loadTableData();
+                return;
+            }
+            if (this.activeTab === "sql") return;
+            await this.loadColumns();
+        },
+
+        async dropUploadedTable() {
+            const tableName = (getContainerEl("#uploadedTableId-M02001")?.value || "").trim().toUpperCase();
+            if (!tableName) {
+                alert("Enter a table ID first.");
+                return;
+            }
+            if (!tableName.startsWith("INITUP$_")) {
+                alert("Only upload tables starting with INITUP$_ can be deleted.");
+                return;
+            }
+            if (!confirm(`${tableName} table will be dropped. Continue?`)) return;
             try {
-                const res = await fetch(`${API_BASE_URL}/${PAGE_CODE}/procedure`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ val: 'TEST' })
+                await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/drop-table`, {
+                    method: "POST",
+                    body: { tableName }
                 });
-                const result = await res.json();
-                if(result.proc_result === 'SUCCESS') {
-                    const successHtml = `<span class="text-green-600">성공! ${result.message} (처리건수: ${result.affected_rows}건)</span>`;
-                    CommonUI.showPageSuccess(PAGE_CODE, successHtml);
+                this.uploadedTableName = "";
+                this.setValue("#uploadedTableId-M02001", "");
+                this.setText("#uploadDescription-M02001", "Upload a file to create a temporary table.");
+                this.setValue("#sqlEditor-M02001", "");
+                this.renderGrid("#columnsGrid-M02001", [], "columns");
+                this.renderGrid("#dataGrid-M02001", [], "data");
+                this.renderGrid("#sqlGrid-M02001", [], "sql");
+                await this.loadUploadTableTree();
+                alert("Upload table deleted.");
+            } catch (error) {
+                alert(error.message || "Delete failed.");
+            }
+        },
+
+        switchUploadView(viewName) {
+            if (this.isUploading && viewName === "table") {
+                this.setText("#uploadDescription-M02001", "Upload is still running. The Table tab will open automatically after completion.");
+                return;
+            }
+            this.activeUploadView = viewName || "file";
+            getContainerEl(".upload-view-tabs")?.querySelectorAll(".table-tab").forEach((tab) => {
+                tab.classList.toggle("is-active", tab.dataset.uploadView === this.activeUploadView);
+            });
+            getContainerEl(".upload-workbench-panel")?.querySelectorAll(".upload-view-panel").forEach((panel) => {
+                panel.classList.toggle("is-active", panel.dataset.uploadPanel === this.activeUploadView);
+            });
+            if (this.activeUploadView === "table") {
+                this.loadUploadTableTree(this.uploadedTableName);
+            }
+            if (this.activeUploadView === "table" && this.uploadedTableName && this.activeTab === "data") {
+                this.loadTableData();
+            }
+        },
+
+        setUploading(isUploading) {
+            this.isUploading = Boolean(isUploading);
+            const tableTab = getContainerEl('.upload-view-tabs [data-upload-view="table"]');
+            if (tableTab) {
+                tableTab.disabled = this.isUploading;
+                tableTab.classList.toggle("is-disabled", this.isUploading);
+                tableTab.title = this.isUploading ? "Upload is running. This tab opens after completion." : "";
+            }
+        },
+
+        async loadUploadTableTree(preferredTableName = "") {
+            const container = getContainerEl("#uploadTableTree-M02001");
+            if (!container) return;
+            if (!this.selectedProjectId) {
+                this.uploadTables = [];
+                this.displayedUploadTables = [];
+                container.innerHTML = `
+                    <div class="table-empty">Select project first.</div>
+                    ${this.renderListFooter(0)}
+                `;
+                return;
+            }
+
+            container.innerHTML = `<div class="table-empty">Loading uploaded tables...</div>`;
+            try {
+                this.setUploadTableSearchPrefix(false);
+                const params = new URLSearchParams({
+                    projectCode: this.getSelectedProjectCode(),
+                    tablePrefix: getContainerEl("#uploadTableSearch-M02001")?.value || this.getUploadTableSearchPrefix()
+                });
+                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/upload-table-tree?${params.toString()}`, { method: "GET", showLoading: false });
+                if (json.status && json.status !== "success") {
+                    throw new Error(json.message || json.detail || "Upload table list load failed.");
                 }
-            } catch(e) {
-                CommonUI.showPageError(PAGE_CODE,"프로시저 실행 실패"+e.message);
+                this.uploadTables = Array.isArray(json.data) ? json.data : [];
+                this.displayedUploadTables = this.uploadTables;
+                if (preferredTableName) this.focusedUploadTableKey = String(preferredTableName).toUpperCase();
+                this.renderUploadTableTree();
+                if (this.focusedUploadTableKey) this.scrollToUploadTableRow(this.focusedUploadTableKey);
+            } catch (error) {
+                container.innerHTML = `<div class="table-error">${this.escapeHtml(error.message || "Upload table list load failed.")}</div>`;
             }
         },
 
-        renderGridNoPaging() {
-            const tbody = this.getEl('gridNoPaging');
-            if (!tbody) return;
-            if (!Array.isArray(this.currentData)) {
-                tbody.innerHTML = '<tr><td colspan="4" class="p-8 text-center text-red-400">데이터 형식 오류</td></tr>';
+        renderUploadTableTree() {
+            const container = getContainerEl("#uploadTableTree-M02001");
+            if (!container) return;
+
+            const keyword = (getContainerEl("#uploadTableSearch-M02001")?.value || "").trim().toLowerCase();
+            const rows = this.isUploadTableSearchFilterEnabled() && keyword
+                ? this.uploadTables.filter((row) => this.isUploadTableSearchMatch(row, keyword))
+                : this.uploadTables;
+            this.displayedUploadTables = rows;
+
+            if (!rows.length) {
+                container.innerHTML = `
+                    <div class="table-empty">No uploaded tables found.</div>
+                    ${this.renderListFooter(0)}
+                `;
                 return;
             }
-            if (this.currentData.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4" class="p-8 text-center text-gray-400">데이터가 없습니다.</td></tr>';
-                return;
-            }
-            tbody.innerHTML = this.currentData.map(row => `
-                <tr class="hover:bg-blue-50 transition-colors">
-                    <td class="p-3 border-b">${row.RNUM ?? '-'}</td>
-                    <td class="p-3 border-b">${row.COL1 ?? ''}</td>
-                    <td class="p-3 border-b">${row.COL2 ?? ''}</td>
-                    <td class="p-3 border-b">${row.DATE ?? ''}</td>
-                </tr>
-            `).join('');
+
+            container.innerHTML = `
+                <div class="table-tree-head">
+                    <div>Table</div>
+                    <div>Owner</div>
+                </div>
+                ${rows.map((row) => this.createUploadTableRow(row)).join("")}
+                ${this.renderListFooter(rows.length)}
+            `;
         },
 
-        renderGridPaging(page) {
-            const tbody = this.getEl('gridPaging');
-            const pageArea = this.getEl('paginationArea');
-            if (!tbody) return;
-            if (!Array.isArray(this.currentData) || this.currentData.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="3" class="p-8 text-center text-gray-400">데이터가 없습니다.</td></tr>';
-                if (pageArea) pageArea.innerHTML = '';
-                return;
-            }
-            this.currentPage = page;
-            const start = (page - 1) * this.itemsPerPage;
-            const end = start + this.itemsPerPage;
-            const pagedData = this.currentData.slice(start, end);
-            
-            tbody.innerHTML = pagedData.map(row => `
-                <tr class="hover:bg-blue-50 transition-colors">
-                    <td class="p-3 border-b">${row.RNUM ?? '-'}</td>
-                    <td class="p-3 border-b">${row.COL1 ?? ''}</td>
-                    <td class="p-3 border-b">${row.COL2 ?? ''}</td>
-                </tr>
-            `).join('');
-            this.renderPagination();
+        createUploadTableRow(row) {
+            const tableName = row.TABLE_NAME || "";
+            const owner = row.OWNER || "";
+            const key = tableName;
+            const selectedClass = key === (this.focusedUploadTableKey || this.uploadedTableName) ? "is-selected" : "";
+            const comment = row.COMMENTS || "";
+            return `
+                <button type="button" class="table-tree-row ${selectedClass}" data-table-key="${this.escapeHtml(key)}" onclick="M02001.selectUploadTable('${this.escapeJs(tableName)}')">
+                    <span class="table-tree-name" title="${this.escapeHtml(comment || tableName)}">
+                        <span class="table-tree-physical">
+                            <i class="fas fa-table"></i>
+                            <span>${this.escapeHtml(tableName)}</span>
+                        </span>
+                        <span class="table-tree-comment">${this.escapeHtml(comment || "-")}</span>
+                    </span>
+                    <span class="table-tree-muted">${this.escapeHtml(owner || "-")}</span>
+                </button>
+            `;
         },
 
-        renderPagination() {
-            const pageArea = this.getEl('paginationArea');
-            if (!pageArea) return;
-
-            const totalPages = Math.ceil(this.currentData.length / this.itemsPerPage);
-
-            let html = '';
-            for(let i=1; i<=totalPages; i++) {
-                const activeCls = i === this.currentPage ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-100';
-                html += `<button onclick="${PAGE_CODE}.renderGridPaging(${i})" class="px-3 py-1 border rounded ${activeCls}">${i}</button>`;
-            }
-            pageArea.innerHTML = html;
-        },
-
-        downloadExcel() {
-            if (!Array.isArray(this.currentData) || this.currentData.length === 0) {
-                if (typeof showPageError === 'function') CommonUI.showPageError(PAGE_CODE,"다운로드할 데이터가 없습니다.");
-                return;
-            }
-            if (window.DataEditingSystem?.downloadCSV) {
-                window.DataEditingSystem.downloadCSV(this.currentData, '분석결과_' + new Date().getTime() + '.csv');
-            } else {
-                CommonUI.showPageError(PAGE_CODE,"다운로드 모듈을 찾을 수 없습니다.");
+        async selectUploadTable(tableName) {
+            const name = String(tableName || "").trim().toUpperCase();
+            if (!name) return;
+            this.uploadedTableName = name;
+            this.focusedUploadTableKey = name;
+            this.setValue("#uploadedTableId-M02001", name);
+            const row = this.uploadTables.find((item) => item.TABLE_NAME === name);
+            const desc = row
+                ? `${row.OWNER || ""}.${row.TABLE_NAME} selected.`
+                : `${name} selected.`;
+            this.setText("#uploadDescription-M02001", desc);
+            this.setDefaultSql();
+            this.renderUploadTableTree();
+            this.scrollToUploadTableRow(name);
+            await this.loadColumns();
+            if (this.activeTab === "data") {
+                await this.loadTableData();
             }
         },
 
-        downloadFile() {            
-            if(this.currentData.length === 0) {
-                CommonUI.showPageError(PAGE_CODE,"다운로드할 데이터가 없습니다.");
+        handleUploadTableSearchKey(event) {
+            if (event.key !== "Enter") return;
+            event.preventDefault();
+            this.loadUploadTableTree();
+        },
+
+        searchUploadTable(direction = "down") {
+            const keyword = (getContainerEl("#uploadTableSearch-M02001")?.value || "").trim().toLowerCase();
+            if (!keyword) {
+                this.renderUploadTableTree();
                 return;
             }
-            if(window.DataEditingSystem) {
-                window.DataEditingSystem.downloadCSV(this.currentData, '검색결과.csv');
+            const matches = this.displayedUploadTables.length
+                ? this.displayedUploadTables
+                : this.uploadTables.filter((row) => this.isUploadTableSearchMatch(row, keyword));
+            if (!matches.length) return;
+            const currentKey = this.focusedUploadTableKey || this.uploadedTableName || "";
+            const currentIndex = matches.findIndex((row) => row.TABLE_NAME === currentKey);
+            const nextIndex = direction === "up"
+                ? (currentIndex <= 0 ? matches.length - 1 : currentIndex - 1)
+                : (currentIndex < 0 || currentIndex >= matches.length - 1 ? 0 : currentIndex + 1);
+            const next = matches[nextIndex];
+            if (!next) return;
+            this.focusedUploadTableKey = next.TABLE_NAME;
+            this.renderUploadTableTree();
+            this.scrollToUploadTableRow(next.TABLE_NAME);
+        },
+
+        isUploadTableSearchMatch(row, keyword) {
+            return String(row.TABLE_NAME || "").toLowerCase().includes(keyword)
+                || String(row.COMMENTS || "").toLowerCase().includes(keyword);
+        },
+
+        isUploadTableSearchFilterEnabled() {
+            return Boolean(getContainerEl("#uploadTableSearchFilter-M02001")?.checked);
+        },
+
+        handleUploadTableSearchInput() {
+            if (this.isUploadTableSearchFilterEnabled()) {
+                this.focusedUploadTableKey = "";
+                this.renderUploadTableTree();
             }
+        },
+
+        handleUploadTableSearchFilterChange() {
+            this.focusedUploadTableKey = "";
+            this.renderUploadTableTree();
+        },
+
+        scrollToUploadTableRow(tableKey) {
+            const container = getContainerEl("#uploadTableTree-M02001");
+            const target = Array.from(container?.querySelectorAll(".table-tree-row[data-table-key]") || [])
+                .find((row) => row.dataset.tableKey === tableKey);
+            if (!target) return;
+            target.scrollIntoView({ block: "center" });
+            target.focus();
+        },
+
+        switchTab(tabName) {
+            this.activeTab = tabName;
+            getContainerEl(".upload-table-tabs")?.querySelectorAll(".table-tab").forEach((tab) => {
+                tab.classList.toggle("is-active", tab.dataset.tab === tabName);
+            });
+            getContainerEl('[data-upload-panel="table"]')?.querySelectorAll(".table-tab-panel").forEach((panel) => {
+                panel.classList.toggle("is-active", panel.dataset.panel === tabName);
+            });
+            if (!this.uploadedTableName) return;
+            if (tabName === "data") this.loadTableData();
+            if (tabName === "sql" && !getContainerEl("#sqlEditor-M02001")?.value.trim()) this.setDefaultSql();
+        },
+
+        async loadColumns() {
+            if (!this.ensureUploadedTable()) return;
+            const grid = getContainerEl("#columnsGrid-M02001");
+            if (grid) grid.innerHTML = `<div class="table-empty">Loading columns...</div>`;
+            try {
+                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/columns`, {
+                    method: "POST",
+                    showLoading: false,
+                    body: { tableName: this.uploadedTableName }
+                });
+                this.renderGrid("#columnsGrid-M02001", json.data || [], "columns", json.columns || []);
+            } catch (error) {
+                this.renderError("#columnsGrid-M02001", error.message);
+            }
+        },
+
+        async loadTableData() {
+            if (!this.ensureUploadedTable()) return;
+            const limit = this.getLimit("#dataLimit-M02001");
+            const grid = getContainerEl("#dataGrid-M02001");
+            if (grid) grid.innerHTML = `<div class="table-empty">Loading data...</div>`;
+            try {
+                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/data`, {
+                    method: "POST",
+                    showLoading: false,
+                    body: { tableName: this.uploadedTableName, limit }
+                });
+                this.renderGrid("#dataGrid-M02001", json.data || [], "data", json.columns || []);
+            } catch (error) {
+                this.renderError("#dataGrid-M02001", error.message);
+            }
+        },
+
+        async executeSql() {
+            const sql = (getContainerEl("#sqlEditor-M02001")?.value || "").trim();
+            if (!sql) {
+                this.renderError("#sqlGrid-M02001", "No SQL statement found.");
+                return;
+            }
+            const limit = this.getLimit("#sqlLimit-M02001");
+            try {
+                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/sql`, {
+                    method: "POST",
+                    showLoading: false,
+                    body: { sql, limit }
+                });
+                this.renderGrid("#sqlGrid-M02001", json.data || [], "sql", json.columns || []);
+            } catch (error) {
+                this.renderError("#sqlGrid-M02001", error.message);
+            }
+        },
+
+        handleSqlEditorKeydown(event) {
+            if (!(event.ctrlKey && event.key === "Enter")) return;
+            event.preventDefault();
+            this.executeSql();
+        },
+
+        setDefaultSql() {
+            if (!this.uploadedTableName) return;
+            const editor = getContainerEl("#sqlEditor-M02001");
+            if (editor) editor.value = `SELECT *\n  FROM "${this.uploadedTableName}"`;
+        },
+
+        ensureUploadedTable() {
+            const inputValue = (getContainerEl("#uploadedTableId-M02001")?.value || "").trim().toUpperCase();
+            this.uploadedTableName = inputValue || this.uploadedTableName;
+            if (this.uploadedTableName) return true;
+            this.renderError(`#${this.activeTab}Grid-M02001`, "Upload a file or enter a table ID first.");
+            return false;
+        },
+
+        renderGrid(selector, rows, gridKey, explicitColumns = null) {
+            const container = getContainerEl(selector);
+            if (!container) return;
+            this.gridData[gridKey] = Array.isArray(rows) ? rows : [];
+            const columns = explicitColumns || Object.keys(rows?.[0] || {});
+            if (!columns.length) {
+                container.innerHTML = `
+                    <div class="table-empty">No data.</div>
+                    ${this.renderListFooter(0)}
+                `;
+                return;
+            }
+            container.innerHTML = `
+                <table class="table-grid">
+                    <thead>
+                        <tr>
+                            <th class="grid-row-no" title="No">No</th>
+                            ${columns.map((column) => `<th title="${this.escapeHtml(column)}">${this.escapeHtml(column)}</th>`).join("")}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${(rows || []).map((row, rowIndex) => `
+                            <tr>
+                                <td class="grid-row-no">${rowIndex + 1}</td>
+                                ${columns.map((column, index) => `<td title="${this.escapeHtml(Array.isArray(row) ? row[index] : row[column] ?? "")}">${this.escapeHtml(Array.isArray(row) ? row[index] : row[column] ?? "")}</td>`).join("")}
+                            </tr>
+                        `).join("")}
+                    </tbody>
+                </table>
+                ${this.renderListFooter((rows || []).length)}
+            `;
         }
     };
 

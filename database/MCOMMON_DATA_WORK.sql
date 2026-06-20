@@ -1,0 +1,275 @@
+-- [DATA_WORK_JOB_LIST]
+SELECT
+    WORK_JOB_ID AS PROFILE_JOB_ID,
+    WORK_JOB_ID,
+    MENU_CODE,
+    PROJECT_ID,
+    SCENARIO_ID,
+    SCENARIO_TABLE_ID,
+    JOB_GROUP,
+    JOB_NAME,
+    JOB_DESC,
+    OWNER_NAME,
+    TABLE_NAME,
+    EXEC_OBJECT_ID,
+    EXEC_OWNER,
+    EXEC_OBJECT_TYPE,
+    EXEC_OBJECT_NAME,
+    EXEC_OBJECT_LABEL,
+    USE_YN,
+    SORT_ORDER,
+    RESULT_CREATE_YN,
+    RESULT_OWNER,
+    RESULT_TABLE_NAME,
+    STATUS,
+    STARTED_AT,
+    FINISHED_AT,
+    CREATED_AT,
+    UPDATED_AT
+  FROM INIT$_TB_DATA_WORK_JOB
+ WHERE MENU_CODE = :menuCode
+   AND PROJECT_ID = :projectId
+   AND SCENARIO_ID = :scenarioId
+ ORDER BY JOB_GROUP, SORT_ORDER NULLS LAST, WORK_JOB_ID
+;
+
+-- [DATA_WORK_JOB_DETAIL]
+SELECT
+    WORK_JOB_ID AS PROFILE_JOB_ID,
+    WORK_JOB_ID,
+    MENU_CODE,
+    PROJECT_ID,
+    SCENARIO_ID,
+    SCENARIO_TABLE_ID,
+    JOB_GROUP,
+    JOB_NAME,
+    JOB_DESC,
+    OWNER_NAME,
+    TABLE_NAME,
+    EXEC_OBJECT_ID,
+    EXEC_OWNER,
+    EXEC_OBJECT_TYPE,
+    EXEC_OBJECT_NAME,
+    EXEC_OBJECT_LABEL,
+    USE_YN,
+    SORT_ORDER,
+    PARAM_JSON,
+    EXEC_PLSQL,
+    RESULT_CREATE_YN,
+    RESULT_OWNER,
+    RESULT_TABLE_NAME,
+    STATUS,
+    STARTED_AT,
+    FINISHED_AT,
+    CREATED_AT,
+    UPDATED_AT
+  FROM INIT$_TB_DATA_WORK_JOB
+ WHERE MENU_CODE = :menuCode
+   AND WORK_JOB_ID = :profileJobId
+;
+
+-- [DATA_WORK_JOB_INSERT]
+INSERT INTO INIT$_TB_DATA_WORK_JOB (
+    MENU_CODE,
+    PROJECT_ID,
+    SCENARIO_ID,
+    SCENARIO_TABLE_ID,
+    JOB_GROUP,
+    JOB_NAME,
+    JOB_DESC,
+    OWNER_NAME,
+    TABLE_NAME,
+    EXEC_OBJECT_ID,
+    EXEC_OWNER,
+    EXEC_OBJECT_TYPE,
+    EXEC_OBJECT_NAME,
+    EXEC_OBJECT_LABEL,
+    USE_YN,
+    SORT_ORDER,
+    PARAM_JSON,
+    EXEC_PLSQL,
+    RESULT_CREATE_YN,
+    RESULT_OWNER,
+    RESULT_TABLE_NAME,
+    STATUS,
+    CREATED_AT
+) VALUES (
+    :menuCode,
+    :projectId,
+    :scenarioId,
+    :scenarioTableId,
+    :jobGroup,
+    :jobName,
+    :jobDesc,
+    :ownerName,
+    :tableName,
+    :execObjectId,
+    :execOwner,
+    :execObjectType,
+    :execObjectName,
+    :execObjectLabel,
+    :useYn,
+    :sortOrder,
+    :paramJson,
+    :execPlsql,
+    :resultCreateYn,
+    :resultOwner,
+    :resultTableName,
+    :status,
+    SYSTIMESTAMP
+)
+;
+
+-- [DATA_WORK_JOB_UPDATE]
+UPDATE INIT$_TB_DATA_WORK_JOB
+   SET SCENARIO_TABLE_ID = :scenarioTableId,
+       JOB_GROUP = :jobGroup,
+       JOB_NAME = :jobName,
+       JOB_DESC = :jobDesc,
+       OWNER_NAME = :ownerName,
+       TABLE_NAME = :tableName,
+       EXEC_OBJECT_ID = :execObjectId,
+       EXEC_OWNER = :execOwner,
+       EXEC_OBJECT_TYPE = :execObjectType,
+       EXEC_OBJECT_NAME = :execObjectName,
+       EXEC_OBJECT_LABEL = :execObjectLabel,
+       USE_YN = :useYn,
+       SORT_ORDER = :sortOrder,
+       PARAM_JSON = :paramJson,
+       EXEC_PLSQL = :execPlsql,
+       RESULT_CREATE_YN = :resultCreateYn,
+       RESULT_OWNER = :resultOwner,
+       RESULT_TABLE_NAME = :resultTableName,
+       STATUS = :status,
+       UPDATED_AT = SYSTIMESTAMP
+ WHERE MENU_CODE = :menuCode
+   AND WORK_JOB_ID = :profileJobId
+   AND PROJECT_ID = :projectId
+   AND SCENARIO_ID = :scenarioId
+;
+
+-- [DATA_WORK_JOB_ID_LATEST]
+SELECT MAX(WORK_JOB_ID) AS PROFILE_JOB_ID
+  FROM INIT$_TB_DATA_WORK_JOB
+ WHERE MENU_CODE = :menuCode
+   AND PROJECT_ID = :projectId
+   AND SCENARIO_ID = :scenarioId
+   AND JOB_GROUP = :jobGroup
+   AND JOB_NAME = :jobName
+   AND OWNER_NAME = :ownerName
+   AND TABLE_NAME = :tableName
+;
+
+-- [DATA_WORK_JOB_RUN_LIST]
+SELECT
+    WORK_JOB_ID AS PROFILE_JOB_ID,
+    WORK_JOB_ID,
+    MENU_CODE,
+    PROJECT_ID,
+    SCENARIO_ID,
+    SCENARIO_TABLE_ID,
+    JOB_GROUP,
+    JOB_NAME,
+    JOB_DESC,
+    OWNER_NAME,
+    TABLE_NAME,
+    EXEC_OBJECT_ID,
+    EXEC_OWNER,
+    EXEC_OBJECT_TYPE,
+    EXEC_OBJECT_NAME,
+    EXEC_OBJECT_LABEL,
+    USE_YN,
+    SORT_ORDER,
+    RESULT_CREATE_YN,
+    RESULT_OWNER,
+    RESULT_TABLE_NAME,
+    STATUS,
+    STARTED_AT,
+    FINISHED_AT,
+    CREATED_AT,
+    UPDATED_AT
+  FROM INIT$_TB_DATA_WORK_JOB
+ WHERE MENU_CODE = :menuCode
+   AND PROJECT_ID = :projectId
+   AND SCENARIO_ID = :scenarioId
+   AND USE_YN = 'Y'
+ ORDER BY JOB_GROUP, SORT_ORDER NULLS LAST, WORK_JOB_ID
+;
+
+-- [DATA_WORK_JOB_STATUS_UPDATE]
+UPDATE INIT$_TB_DATA_WORK_JOB
+   SET STATUS = :status,
+       RESULT_CREATE_YN = CASE WHEN :resultTableName IS NOT NULL THEN 'Y' ELSE RESULT_CREATE_YN END,
+       RESULT_OWNER = :resultOwner,
+       RESULT_TABLE_NAME = :resultTableName,
+       STARTED_AT = CASE WHEN :startedYn = 'Y' THEN SYSTIMESTAMP ELSE STARTED_AT END,
+       FINISHED_AT = CASE WHEN :finishedYn = 'Y' THEN SYSTIMESTAMP ELSE FINISHED_AT END,
+       UPDATED_AT = SYSTIMESTAMP
+ WHERE MENU_CODE = :menuCode
+   AND WORK_JOB_ID = :profileJobId
+;
+
+-- [DATA_WORK_RUN_INSERT]
+INSERT INTO INIT$_TB_DATA_WORK_RUN (
+    WORK_JOB_ID,
+    RUN_TYPE,
+    STATUS,
+    MESSAGE,
+    RESULT_OWNER,
+    RESULT_TABLE_NAME,
+    STARTED_AT,
+    CREATED_AT
+) VALUES (
+    :profileJobId,
+    :runType,
+    :status,
+    :message,
+    :resultOwner,
+    :resultTableName,
+    SYSTIMESTAMP,
+    SYSTIMESTAMP
+)
+;
+
+-- [DATA_WORK_RUN_ID_LATEST]
+SELECT MAX(WORK_RUN_ID) AS PROFILE_RUN_ID
+  FROM INIT$_TB_DATA_WORK_RUN
+ WHERE WORK_JOB_ID = :profileJobId
+;
+
+-- [DATA_WORK_RUN_UPDATE]
+UPDATE INIT$_TB_DATA_WORK_RUN
+   SET STATUS = :status,
+       MESSAGE = :message,
+       RESULT_OWNER = :resultOwner,
+       RESULT_TABLE_NAME = :resultTableName,
+       FINISHED_AT = SYSTIMESTAMP
+ WHERE WORK_RUN_ID = :profileRunId
+;
+
+-- [DATA_WORK_RUN_LIST]
+SELECT
+    R.WORK_RUN_ID AS PROFILE_RUN_ID,
+    R.WORK_JOB_ID AS PROFILE_JOB_ID,
+    R.WORK_RUN_ID,
+    R.WORK_JOB_ID,
+    J.MENU_CODE,
+    J.JOB_GROUP,
+    J.JOB_NAME,
+    J.SORT_ORDER,
+    R.RUN_TYPE,
+    R.STATUS,
+    R.MESSAGE,
+    R.RESULT_OWNER,
+    R.RESULT_TABLE_NAME,
+    R.STARTED_AT,
+    R.FINISHED_AT,
+    R.CREATED_AT
+  FROM INIT$_TB_DATA_WORK_RUN R
+  JOIN INIT$_TB_DATA_WORK_JOB J
+    ON J.WORK_JOB_ID = R.WORK_JOB_ID
+ WHERE J.MENU_CODE = :menuCode
+   AND J.PROJECT_ID = :projectId
+   AND J.SCENARIO_ID = :scenarioId
+ ORDER BY R.CREATED_AT DESC, R.WORK_RUN_ID DESC
+;

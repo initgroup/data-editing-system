@@ -354,6 +354,19 @@ const CommonUI = {
 };
 
 const CommonUtils = {
+    activeRequestCount: 0,
+
+    getActiveRequestCount() {
+        return this.activeRequestCount;
+    },
+
+    async waitForIdle(timeoutMs = 15000) {
+        const startedAt = Date.now();
+        while (this.activeRequestCount > 0 && Date.now() - startedAt < timeoutMs) {
+            await new Promise((resolve) => setTimeout(resolve, 150));
+        }
+        return this.activeRequestCount === 0;
+    },
     // 그리드 데이터 구조 표준화
     createGridModel: (itemsPerPage = 10) => ({
         gridInstance: null,
@@ -380,31 +393,72 @@ const CommonUtils = {
         return Array.isArray(fallback) ? fallback : [];
     },
 
-    async request(url, options = {}) {
-        ConsoleLogger.info("(서버요청)", url, 'CommonnUtils.request');
+    formatErrorMessage(errorJson) {
+        const detail = errorJson?.detail || errorJson?.message;
+        if (Array.isArray(detail)) {
+            return detail.map((item) => {
+                if (typeof item === "string") return item;
+                const location = Array.isArray(item.loc) ? item.loc.join(".") : "";
+                const message = item.msg || JSON.stringify(item);
+                return location ? `${location}: ${message}` : message;
+            }).join("\n");
+        }
+        if (detail && typeof detail === "object") {
+            return detail.msg || JSON.stringify(detail);
+        }
+        return detail || "Request failed.";
+    },
 
+    async request(url, options = {}) {
+        ConsoleLogger.info("(request)", url, 'CommonUtils.request');
+        this.activeRequestCount += 1;
         try {
+            const headers = { 'Content-Type': 'application/json', ...options.headers };
+            const targetConnectionId = sessionStorage.getItem("targetConnectionId") || "";
+            if (targetConnectionId && !headers["X-Target-Connection-Id"]) {
+                headers["X-Target-Connection-Id"] = targetConnectionId;
+            }
+            const loginUser = JSON.parse(sessionStorage.getItem("initLoginUser") || "{}");
+            if (loginUser.userId && !headers["X-Login-User-Id"]) {
+                headers["X-Login-User-Id"] = String(loginUser.userId);
+            }
+            if (loginUser.loginId && !headers["X-Login-Id"]) {
+                headers["X-Login-Id"] = String(loginUser.loginId);
+            }
+            if (loginUser.email && !headers["X-Login-Email"]) {
+                headers["X-Login-Email"] = String(loginUser.email);
+            }
+            if (loginUser.roleCode && !headers["X-Login-Role-Code"]) {
+                headers["X-Login-Role-Code"] = String(loginUser.roleCode);
+            }
+            const bootstrapToken = sessionStorage.getItem("initBootstrapToken") || "";
+            if (bootstrapToken && !headers["X-Bootstrap-Token"]) {
+                headers["X-Bootstrap-Token"] = bootstrapToken;
+            }
             const response = await fetch(url, {
                 method: options.method || 'GET',
-                headers: { 'Content-Type': 'application/json', ...options.headers },
+                headers,
                 body: options.body ? JSON.stringify(options.body) : null
             });
             
             if (!response.ok) {
                 const errorJson = await response.json().catch(() => ({}));
-                const errorMsg = errorJson.detail || "통신 중 오류가 발생했습니다.";            
-                ConsoleLogger.error("(응답오류)", url, errorMsg);
+                const errorMsg = this.formatErrorMessage(errorJson);
+                ConsoleLogger.error("(response-error)", url, errorMsg);
                 throw new Error(errorMsg); // 여기서 던진 에러는 호출한 곳의 catch로 갑니다.
             }
-            ConsoleLogger.info("(응답완료)", url, 'CommonnUtils.request');
+            ConsoleLogger.info("(request)", url, 'CommonUtils.request');
+            window.PageManager?.extendSession?.();
             return await response.json();
 
         } catch (err) {
             // 네트워크 타임아웃이나 fetch 자체 실패 시 처리
             if (!(err instanceof Error)) {
-                ConsoleLogger.error("(네트워크오류)", url, err);
+                ConsoleLogger.error("(network-error)", url, err);
             }
             throw err; // 상위 호출자에게 에러를 최종 전달
+        } finally {
+            this.activeRequestCount = Math.max(0, this.activeRequestCount - 1);
         }
     },
 
@@ -605,6 +659,115 @@ const DataEditingSystem = {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+    }
+};
+
+CommonUI.getActivePageContainer = function() {
+    const activeSection = document.querySelector('.page-section.active');
+    if (!activeSection) return null;
+    return activeSection.querySelector('.page-container') || activeSection;
+};
+
+CommonUI.resolveLoadingTarget = function(target) {
+    if (target instanceof HTMLElement) return target;
+    if (typeof target === 'string') return document.querySelector(target);
+
+    const activePage = this.getActivePageContainer();
+    const activeElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const areaSelector = [
+        '[data-loading-scope]',
+        '.table-tab-panel.is-active',
+        '.m91001-tab-panel.is-active',
+        '.m91002-main-panel.is-active',
+        '[data-account-panel]:not([hidden])',
+        '[data-setting-panel]:not([hidden])',
+        '.env-object-panel',
+        '.table-object-panel',
+        '.data-job-panel',
+        '.data-main-panel',
+        '.work-context-card',
+        '.scenario-list-panel',
+        '.env-panel',
+        '.table-panel'
+    ].join(', ');
+
+    if (activePage && activeElement && activePage.contains(activeElement)) {
+        const scopedArea = activeElement.closest(areaSelector);
+        if (scopedArea && activePage.contains(scopedArea)) return scopedArea;
+    }
+
+    return activePage;
+};
+
+CommonUI.showScopedLoading = function(target, message = 'Loading...') {
+    const host = this.resolveLoadingTarget(target);
+    if (!host) return { type: 'global' };
+
+    const count = Number(host.dataset.loadingCount || '0') + 1;
+    host.dataset.loadingCount = String(count);
+    host.classList.add('local-loading-host');
+
+    let overlay = host.querySelector(':scope > .local-loading-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.className = 'local-loading-overlay';
+        overlay.innerHTML = `
+            <div class="local-loading-box" role="status" aria-live="polite">
+                <span class="local-loading-spinner" aria-hidden="true"></span>
+                <span class="local-loading-text"></span>
+            </div>
+        `;
+        host.appendChild(overlay);
+    }
+
+    const text = overlay.querySelector('.local-loading-text');
+    if (text) text.textContent = message;
+    overlay.hidden = false;
+    return { type: 'scoped', host };
+};
+
+CommonUI.hideScopedLoading = function(token) {
+    if (!token) return;
+    if (token.type === 'global') {
+        this.hideLoading();
+        return;
+    }
+
+    const host = token.host;
+    if (!host) return;
+
+    const count = Math.max(0, Number(host.dataset.loadingCount || '1') - 1);
+    if (count > 0) {
+        host.dataset.loadingCount = String(count);
+        return;
+    }
+
+    delete host.dataset.loadingCount;
+    const overlay = host.querySelector(':scope > .local-loading-overlay');
+    if (overlay) overlay.hidden = true;
+};
+
+const originalCommonRequest = CommonUtils.request.bind(CommonUtils);
+CommonUtils.request = async function(url, options = {}) {
+    const useLoading = options.showLoading !== false;
+    let loadingTimer = null;
+    let loadingToken = null;
+
+    if (useLoading) {
+        loadingTimer = setTimeout(() => {
+            loadingToken = CommonUI.showScopedLoading?.(options.loadingTarget, options.loadingMessage) || { type: 'global' };
+            if (loadingToken.type === 'global') CommonUI.showLoading();
+        }, typeof LOADING_DELAY_MS === "number" ? LOADING_DELAY_MS : 300);
+    }
+
+    try {
+        return await originalCommonRequest(url, options);
+    } finally {
+        if (loadingTimer) clearTimeout(loadingTimer);
+        if (loadingToken) {
+            if (CommonUI.hideScopedLoading) CommonUI.hideScopedLoading(loadingToken);
+            else CommonUI.hideLoading();
+        }
     }
 };
 

@@ -1,73 +1,123 @@
-<div class="page-container" id="container-M01001">
-    <div class="page-header">
-        <h1 class="page-title">본 페이지의 주요 기능을 설명합니다.</h1>
-        <div class="local-message-anchor" id="msg-anchor">
-            <div class="local-error-box hidden">
-                <div class="local-error-content">
-                    <i class="local-error-icon fas fa-exclamation-circle"></i>
-                    <p class="local-error-text"></p>
+<div class="page-container env-page project-page" id="container-M01001">
+    <section class="env-workspace" aria-labelledby="project-title-M01001">
+        <aside class="env-object-panel">
+            <header class="env-object-header">
+                <div>
+                    <h2 class="env-section-title">Project List</h2>
+                    <p class="env-section-desc">Search by project name, code, type, or description.</p>
                 </div>
-                <button onclick="CommonUI.hidePageMessage('M01001');" class="local-error-close">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-        </div>
-    </div>
+                <div class="env-object-actions">
+                    <button type="button" class="env-icon-btn env-refresh" title="New project" onclick="M01001.newProject()">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                    <button type="button" class="env-icon-btn env-refresh" title="Refresh projects" onclick="M01001.loadProjects()">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+            </header>
 
-    <div class="search-section">
-        <div class="filter-grid">
-            <div class="form-group">
-                <label for="mainCombo" class="form-label required">사용자계정</label>
-                <select id="mainCombo" class="form-control">
-                    <option value="">선택하세요</option>
-                </select>
-            </div>
-            
-            <div class="form-group">
-                <label for="subCombo" class="form-label">테이블명</label>
-                <select id="subCombo" class="form-control" disabled>
-                    <option value="">사용자 계정 선택</option>
-                </select>
+            <div class="env-object-search">
+                <i class="fas fa-search"></i>
+                <input
+                    id="projectSearch-M01001"
+                    type="search"
+                    placeholder="Search project"
+                    aria-label="Search project"
+                    oninput="M01001.handleSearchInput()"
+                    onkeydown="M01001.handleSearchKey(event)"
+                >
+                <div class="env-search-actions">
+                    <button type="button" class="env-icon-btn" title="Search" onclick="M01001.loadProjects()">
+                        <i class="fas fa-arrow-right"></i>
+                    </button>
+                </div>
             </div>
 
-            <div class="form-group">
-                <label for="sub2Combo" class="form-label">컬럼명</label>
-                <select id="sub2Combo" class="form-control" disabled>
-                    <option value="">테이블명 선택</option>
-                </select>
-            </div>            
-            
-            <div class="form-group">
-                <label for="textSearch" class="form-label">검색어</label>
-                <input type="text" id="textSearch" class="form-control" placeholder="검색어 입력">
-            </div>
-        </div>
-        
-        <div class="action-bar">
-            <button onclick="M01001.resetSearch()" class="btn bg-gray-500 hover:bg-gray-600 text-white">
-                <i class="fas fa-undo mr-1"></i> 초기화
-            </button>            
-            <button onclick="M01001.executeProcedure()" class="btn btn-purple">
-                <i class="fas fa-bolt mr-1"></i> 변수판별하기
-            </button>
-            <button onclick="M01001.searchSync()" class="btn btn-primary">
-                <i class="fas fa-search mr-1"></i> 조회하기
-            </button>
-        </div>
-    </div>
+            <div id="projectList-M01001" class="env-tree-grid project-list" aria-label="Registered projects"></div>
+        </aside>
 
-    <!--한개의 그리드 영역으로 width, height는 필요시 추가-->
-    <div class="result-section flex flex-col">
-        <div class="result-header">
-            <h4 class="card-title">
-                <i class="fas fa-table mr-2"></i>실시간 분석 데이터 결과
-            </h4>
-            <div class="result-tools">
-                <button onclick="M01001.downloadExcel()" class="btn-icon-excel" title="엑셀 다운로드">
-                    <i class="fas fa-file-excel"></i>
-                </button>
-            </div>
-        </div>
-        <div id="gridContainer" class="table-container"></div>
-    </div>
+        <section class="env-panel" aria-labelledby="project-title-M01001">
+            <header class="env-header">
+                <h1 class="env-title" id="project-title-M01001">Project Settings</h1>
+                <p class="env-desc" id="projectDescription-M01001">
+                    Select a project from the list or create a new project.
+                </p>
+            </header>
+
+            <section class="env-object-meta project-detail" aria-label="Project detail">
+                <div class="env-meta-grid project-meta-grid">
+                    <label>
+                        <span>Project ID</span>
+                        <input id="projectId-M01001" class="env-field env-meta-field" type="text" readonly>
+                    </label>
+                    <label>
+                        <span>Use</span>
+                        <select id="useYn-M01001" class="env-field env-meta-field" onchange="M01001.updateField('useYn', this.value)">
+                            <option value="Y">Y</option>
+                            <option value="N">N</option>
+                        </select>
+                    </label>
+                    <label>
+                        <span>Sort</span>
+                        <input id="sortOrder-M01001" class="env-field env-meta-field" type="number" value="0" oninput="M01001.updateField('sortOrder', this.value)">
+                    </label>
+
+                    <label class="env-meta-wide">
+                        <span class="required-title">Project Name</span>
+                        <input id="projectName-M01001" class="env-field env-meta-field" type="text" oninput="M01001.updateField('projectName', this.value)">
+                    </label>
+                    <label>
+                        <span class="project-label-line">
+                            <span class="required-title">Project Code</span>
+                            <button
+                                type="button"
+                                class="project-help-btn"
+                                title="Project code help"
+                                aria-label="Project code help"
+                                aria-expanded="false"
+                                onclick="M01001.toggleProjectCodeHelp(event)"
+                            >
+                                <i class="far fa-circle-question"></i>
+                            </button>
+                        </span>
+                        <span id="projectCodeHelp-M01001" class="project-help-layer" role="tooltip" hidden>
+                            <strong>Project Code</strong>
+                            <span>프로젝트를 구분하는 고유 키입니다. 저장 후에도 바뀌지 않는 짧은 영문 코드로 관리하세요.</span>
+                            <em>예: EDITING_DEFAULT, CUSTOMER_QUALITY</em>
+                        </span>
+                        <input id="projectCode-M01001" class="env-field env-meta-field" type="text" oninput="M01001.updateField('projectCode', this.value)">
+                    </label>
+                    <label>
+                        <span>Project Type</span>
+                        <select id="projectType-M01001" class="env-field env-meta-field" onchange="M01001.updateField('projectType', this.value)">
+                            <option value="EDITING">Data Editing</option>
+                            <option value="QUALITY">Data Quality</option>
+                            <option value="ANALYSIS">Analysis</option>
+                            <option value="OPERATION">Operation</option>
+                        </select>
+                    </label>
+                    <label class="env-meta-wide">
+                        <span>Description</span>
+                        <textarea id="projectDesc-M01001" class="env-field env-meta-textarea" rows="4" oninput="M01001.updateField('projectDesc', this.value)"></textarea>
+                    </label>
+                </div>
+            </section>
+
+            <footer class="env-footer">
+                <div class="env-footer-group">
+                    <span class="env-detail-hint">Required fields are marked. Project code is used as a unique key.</span>
+                </div>
+                <div class="env-footer-group">
+                    <button type="button" class="env-btn env-save" onclick="M01001.saveProject()">
+                        <span>Save project</span>
+                    </button>
+                    <button type="button" class="env-btn env-cancel" onclick="M01001.resetProject()">Cancel</button>
+                    <button type="button" class="env-btn env-danger" onclick="M01001.deleteProject()">
+                        <i class="far fa-trash-alt"></i>
+                        <span>Delete project</span>
+                    </button>
+                </div>
+            </footer>
+        </section>
+    </section>
 </div>

@@ -1,0 +1,165 @@
+<div class="page-container env-page project-page" id="container-M91002">
+    <section class="env-workspace" aria-labelledby="settings-title-M91002">
+        <aside class="env-object-panel">
+            <header class="env-object-header">
+                <div>
+                    <h2 class="env-section-title">Settings Categories</h2>
+                    <p class="env-section-desc">Select account or setting group.</p>
+                </div>
+                <div class="env-object-actions">
+                    <button id="createDefaultSettingsBtn-M91002" type="button" class="env-icon-btn" title="Create default settings" onclick="M91002.createDefaultSettings()">
+                        <i class="fas fa-wand-magic-sparkles"></i>
+                    </button>
+                    <button type="button" class="env-icon-btn" title="Refresh" onclick="M91002.refreshSelectedCategory()">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+            </header>
+            <div id="settingCategoryList-M91002" class="env-tree-grid project-list"></div>
+        </aside>
+
+        <section class="env-panel" aria-labelledby="settings-title-M91002">
+            <header class="env-header">
+                <h1 class="env-title" id="settings-title-M91002">System Settings</h1>
+                <p class="env-desc" id="settingsDescription-M91002">Manage category key/value settings.</p>
+            </header>
+
+            <section class="scenario-list-panel" aria-label="Settings list" data-setting-panel>
+                <div class="scenario-list-toolbar">
+                    <strong id="selectedSettingCategoryName-M91002">Settings</strong>
+                    <button type="button" class="env-btn env-cancel scenario-new-btn" onclick="M91002.newSetting()">
+                        <i class="fas fa-plus"></i>
+                        <span>New setting</span>
+                    </button>
+                </div>
+                <div id="settingsGrid-M91002" class="scenario-list" aria-label="Settings"></div>
+            </section>
+
+            <section class="env-object-meta scenario-detail" aria-label="Setting detail" data-setting-panel>
+                <div class="env-meta-grid scenario-meta-grid">
+                    <label>
+                        <span>Category</span>
+                        <input id="settingCategory-M91002" class="env-field env-meta-field" type="text" readonly>
+                    </label>
+                    <label>
+                        <span>Use</span>
+                        <select id="settingUseYn-M91002" class="env-field env-meta-field">
+                            <option value="Y">Y</option>
+                            <option value="N">N</option>
+                        </select>
+                    </label>
+                    <label>
+                        <span>Sort</span>
+                        <input id="settingSortOrder-M91002" class="env-field env-meta-field" type="number">
+                    </label>
+                    <label class="env-meta-wide">
+                        <span class="required-title">Key</span>
+                        <input id="settingKey-M91002" class="env-field env-meta-field" type="text" placeholder="SYSTEM_DISPLAY_NAME">
+                    </label>
+                    <label class="env-meta-wide">
+                        <span>Value</span>
+                        <textarea id="settingValue-M91002" class="env-field env-meta-textarea" rows="5"></textarea>
+                    </label>
+                    <label class="env-meta-wide">
+                        <span>Description</span>
+                        <textarea id="settingDesc-M91002" class="env-field env-meta-textarea" rows="3"></textarea>
+                    </label>
+                </div>
+            </section>
+
+            <section class="env-object-meta scenario-detail m91002-password-panel m91002-account-panel" aria-label="My account" data-account-panel hidden>
+                <div class="scenario-list-toolbar">
+                    <strong>My Account</strong>
+                </div>
+                <div class="env-meta-grid scenario-meta-grid">
+                    <label>
+                        <span>Login ID</span>
+                        <input id="accountLoginId-M91002" class="env-field env-meta-field" type="text" readonly>
+                    </label>
+                    <label>
+                        <span>User Name</span>
+                        <input id="accountUserName-M91002" class="env-field env-meta-field" type="text" onkeydown="M91002.handleUserNameKey(event)">
+                    </label>
+                    <label>
+                        <span>Role</span>
+                        <input id="accountRoleCode-M91002" class="env-field env-meta-field" type="text" readonly>
+                    </label>
+                    <label class="env-meta-wide">
+                        <span>Email</span>
+                        <input id="accountEmail-M91002" class="env-field env-meta-field" type="text" readonly>
+                    </label>
+                </div>
+                <div class="env-footer-group" style="justify-content: flex-end; margin-top: 12px;">
+                    <button type="button" class="env-btn env-save" onclick="M91002.changeUserName()">
+                        <i class="fas fa-user-pen"></i>
+                        <span>Save name</span>
+                    </button>
+                </div>
+
+                <div class="scenario-list-toolbar">
+                    <strong>Email</strong>
+                </div>
+                <div class="env-meta-grid scenario-meta-grid">
+                    <label>
+                        <span class="required-title">New Email</span>
+                        <input id="newEmail-M91002" class="env-field env-meta-field" type="email" autocomplete="email">
+                    </label>
+                    <label>
+                        <span class="required-title">Current Password</span>
+                        <input id="emailCurrentPassword-M91002" class="env-field env-meta-field" type="password" autocomplete="current-password" onkeydown="M91002.handleEmailKey(event)">
+                    </label>
+                    <label>
+                        <span>Action</span>
+                        <button type="button" class="env-btn env-save" onclick="M91002.changeEmail()">
+                            <i class="fas fa-envelope"></i>
+                            <span>Change email</span>
+                        </button>
+                    </label>
+                </div>
+
+                <div class="scenario-list-toolbar">
+                    <strong>Password</strong>
+                </div>
+                <div class="env-meta-grid scenario-meta-grid">
+                    <label>
+                        <span class="required-title">Current Password</span>
+                        <input id="currentPassword-M91002" class="env-field env-meta-field" type="password" autocomplete="current-password">
+                    </label>
+                    <label>
+                        <span class="required-title">New Password</span>
+                        <input id="newPassword-M91002" class="env-field env-meta-field" type="password" autocomplete="new-password">
+                    </label>
+                    <label>
+                        <span class="required-title">Confirm New Password</span>
+                        <input id="newPasswordConfirm-M91002" class="env-field env-meta-field" type="password" autocomplete="new-password" onkeydown="M91002.handlePasswordKey(event)">
+                    </label>
+                    <label class="env-meta-wide">
+                        <span>Rule</span>
+                        <input class="env-field env-meta-field" type="text" readonly value="Use at least 8 characters. Temporary passwords can be changed here after login.">
+                    </label>
+                </div>
+                <div class="env-footer-group" style="justify-content: flex-end; margin-top: 12px;">
+                    <button type="button" class="env-btn env-save" onclick="M91002.changePassword()">
+                        <i class="fas fa-key"></i>
+                        <span>Change password</span>
+                    </button>
+                    <button type="button" class="env-btn env-cancel" onclick="M91002.clearPasswordForm()">Clear</button>
+                </div>
+            </section>
+
+            <footer class="env-footer">
+                <div class="env-footer-group">
+                    <span id="systemMessage-M91002" class="env-detail-hint" aria-live="polite">Settings are stored per login user and selected Target DB in INIT$_TB_SYSTEM_SETTING.</span>
+                </div>
+                <div class="env-footer-group" data-setting-actions>
+                    <button type="button" class="env-btn env-save" onclick="M91002.saveSetting()">Save setting</button>
+                    <button type="button" class="env-btn env-cancel" onclick="M91002.newSetting()">Cancel</button>
+                    <button type="button" class="env-btn env-danger" onclick="M91002.deleteSetting()">
+                        <i class="far fa-trash-alt"></i>
+                        <span>Delete</span>
+                    </button>
+                </div>
+            </footer>
+        </section>
+    </section>
+</div>

@@ -4,7 +4,8 @@ import os
 from pathlib import Path
 import logging
 from fastapi.middleware.cors import CORSMiddleware
-from backend.routers import (common_router, home, M00000, M01001, M01002, M01003, M02001, M02002, M02003, M03001, M03002, M03003, M04001, M05001, googleGenai)
+from backend.database import close_db_pool
+from backend.routers import common_router, googleGenai, home, M01001, M01002, M02001, M02002, M02003, M02004, M03001, M04001, M90001, M91001, M91002, M91003, M99098, metadata, population_api
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -15,17 +16,37 @@ app = FastAPI(title="Data Editing System API")
 # CORS 설정
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
+
+@app.middleware("http")
+async def add_cache_headers(request, call_next):
+    response = await call_next(request)
+    path = request.url.path
+    if path in ("/", "/index.html"):
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
+
 # [수정] 1. API 라우터 등록을 정적 파일 마운트보다 먼저 수행합니다.
 routers = [
     (common_router.router, "common"), 
-    (home.router, "home"), 
-    (M00000.router, "M00000"),(M01001.router, "M01001"),
-    (M01002.router, "M01002"), (M01003.router, "M01003"),
-    (M02001.router, "M02001"), (M02002.router, "M02002"),
-    (M02003.router, "M02003"), (M03001.router, "M03001"),
-    (M03002.router, "M03002"), (M03003.router, "M03003"),
-    (M04001.router, "M04001"), (M05001.router, "M05001"),
-    (googleGenai.router, "googleGenai")
+    (home.router, "home"),
+    (M01001.router, "M01001"),
+    (M01002.router, "M01002"),
+    (M02001.router, "M02001"),
+    (M02002.router, "M02002"),
+    (M02003.router, "M02003"),
+    (M02004.router, "M02004"),
+    (M03001.router, "M03001"),
+    (M04001.router, "M04001"),
+    (M90001.router, "M90001"),
+    (M91001.router, "M91001"),
+    (M91002.router, "M91002"),
+    (M91003.router, "M91003"),
+    (M99098.router, "M99098"),
+    (metadata.router, "metadata"),
+    (population_api.router, "populationApi"),
+    (googleGenai.router, "googleGenai"),
 ]
 
 for router, tag in routers:
@@ -37,11 +58,16 @@ for router, tag in routers:
 @app.on_event("startup")
 async def startup_event():
     logger.info("==================================================")
+
     logger.info("등록된 API 경로 목록:")
     for route in app.routes:
         if hasattr(route, "methods"):
             logger.info(f"URL: {route.path} | Methods: {route.methods}")
     logger.info("==================================================")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    close_db_pool()
 
 @app.get("/api/health") # 헬스체크용
 def read_root():

@@ -1,0 +1,141 @@
+<div class="page-container env-page" id="container-M90001">
+    <section class="env-workspace" aria-labelledby="env-title-M90001">
+        <aside class="env-object-panel">
+            <header class="env-object-header">
+                <div>
+                    <h2 class="env-section-title">DB Object Schema</h2>
+                    <p class="env-section-desc">Procedures, packages, and models by owner.</p>
+                </div>
+                <div class="env-object-actions">
+                    <label class="env-registered-filter" title="Load registered objects only">
+                        <input id="registeredOnly-M90001" type="checkbox" onchange="M90001.loadObjectTree()">
+                        <span>Registered</span>
+                    </label>
+                    <button type="button" class="env-icon-btn env-refresh" title="Expand all groups" onclick="M90001.expandAllGroups()">
+                        <i class="fas fa-folder-open"></i>
+                    </button>
+                    <button type="button" class="env-icon-btn env-refresh" title="Collapse all groups" onclick="M90001.collapseAllGroups()">
+                        <i class="fas fa-folder"></i>
+                    </button>
+                    <button type="button" class="env-icon-btn env-refresh" title="Refresh objects" onclick="M90001.loadObjectTree()">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+            </header>
+            <div class="env-category-filter" aria-label="Object category filter">
+                <label>
+                    <input type="checkbox" id="objectCategoryAll-M90001" checked onchange="M90001.handleCategoryAllChange(this)">
+                    <span>All</span>
+                </label>
+                <label>
+                    <input type="checkbox" class="object-category-M90001" value="PLSQL" onchange="M90001.handleCategoryChange()">
+                    <span>Procedures</span>
+                </label>
+                <label>
+                    <input type="checkbox" class="object-category-M90001" value="PACKAGE,ML_PACKAGE" onchange="M90001.handleCategoryChange()">
+                    <span>Packages</span>
+                </label>
+                <label>
+                    <input type="checkbox" class="object-category-M90001" value="MODEL" onchange="M90001.handleCategoryChange()">
+                    <span>Models</span>
+                </label>
+            </div>
+            <div class="env-object-search">
+                <i class="fas fa-search"></i>
+                <input
+                    id="objectSearch-M90001"
+                    type="search"
+                    placeholder="Search object"
+                    aria-label="Search DB object"
+                    oninput="M90001.handleObjectSearchInput()"
+                    onkeydown="M90001.handleObjectSearchKey(event)"
+                >
+            </div>
+            <div id="gridContainer" class="env-tree-grid"></div>
+        </aside>
+
+        <section class="env-panel" aria-labelledby="env-title-M90001">
+            <header class="env-header">
+                <h1 class="env-title" id="env-title-M90001">Environment Variables</h1>
+                <p class="env-desc" id="envDescription-M90001">
+                    Select a table or procedure from the schema tree. Columns or parameters will appear here.
+                </p>
+            </header>
+
+            <section class="env-object-meta" aria-label="Object master information">
+                <div class="env-meta-grid">
+                    <label>
+                        <span>Object ID</span>
+                        <input id="objectId-M90001" class="env-field env-meta-field" type="text" readonly>
+                    </label>
+                    <label>
+                        <span>Object Type</span>
+                        <input id="objectType-M90001" class="env-field env-meta-field" type="text" readonly>
+                    </label>
+                    <label>
+                        <span>Object Name</span>
+                        <input id="objectName-M90001" class="env-field env-meta-field" type="text" readonly>
+                    </label>
+                    <div class="env-meta-wide env-meta-inline">
+                        <label class="env-meta-label">
+                            <span>Label</span>
+                            <input id="objectLabel-M90001" class="env-field env-meta-field" type="text" oninput="M90001.updateObjectMeta('objectLabel', this.value)">
+                        </label>
+                        <label>
+                            <span>Use</span>
+                            <select id="objectUseYn-M90001" class="env-field env-meta-field" onchange="M90001.updateObjectMeta('useYn', this.value)">
+                                <option value="Y">Y</option>
+                                <option value="N">N</option>
+                            </select>
+                        </label>
+                        <label>
+                            <span>Sort</span>
+                            <input id="objectSortOrder-M90001" class="env-field env-meta-field" type="number" value="0" oninput="M90001.updateObjectMeta('sortOrder', this.value)">
+                        </label>
+                    </div>
+                    <label class="env-meta-wide">
+                        <span>Description</span>
+                        <textarea id="objectDescription-M90001" class="env-field env-meta-textarea" rows="2" oninput="M90001.updateObjectMeta('description', this.value)"></textarea>
+                    </label>
+                </div>
+            </section>
+
+            <div class="env-detail-source-bar">
+                <label>
+                    <span>Detail Object ID</span>
+                    <input id="detailObjectId-M90001" class="env-field env-detail-source-field" type="text" readonly>
+                </label>
+                <label>
+                    <span>Detail Source</span>
+                    <input id="detailSource-M90001" class="env-field env-detail-source-field" type="text" readonly>
+                </label>
+            </div>
+
+            <div class="env-detail-toolbar">
+                <span class="env-detail-hint">Key and value are read-only DB object metadata. Edit comment and default value only.</span>
+            </div>
+
+            <div id="envRows-M90001" class="env-detail-grid" role="grid" aria-label="Object detail items"></div>
+
+            <footer class="env-footer">
+                <div class="env-footer-group">
+                    <span class="env-detail-hint">Rows are based on the selected DB object.</span>
+                </div>
+
+                <div class="env-footer-group">
+                    <button type="button" class="env-btn env-save" onclick="M90001.saveVariables()">
+                        <span>Save changes</span>
+                    </button>
+                    <button type="button" class="env-split" aria-label="More save options">
+                        <i class="fas fa-chevron-down"></i>
+                    </button>
+                    <button type="button" class="env-btn env-cancel" onclick="M90001.resetVariables()">Cancel</button>
+                    <button type="button" class="env-btn env-danger" onclick="M90001.deleteObjectRegistration()">
+                        <i class="far fa-trash-alt"></i>
+                        <span>Delete object</span>
+                    </button>
+                </div>
+            </footer>
+        </section>
+    </section>
+</div>

@@ -1,0 +1,293 @@
+<div class="page-container table-page data-work-page" id="container-__PAGE_CODE__">
+    <section class="work-context-card" aria-label="Project and scenario context">
+        <header class="work-context-header">
+            <div class="work-context-title-row">
+                <span><strong data-label-key="contextHeader">Project Scenario</strong> <span data-label-key="contextHeaderDesc">Select the required project and scenario for this menu.</span></span>
+                <span><strong data-label-key="tableHeader">Scenario Tables</strong> <span data-label-key="tableHeaderDesc">Tables registered to the selected scenario.</span></span>
+                <span id="workContextSummary-__PAGE_CODE__" class="work-context-summary" data-label-key="contextSummaryEmpty">No context selected.</span>
+            </div>
+            <div class="scenario-table-actions">
+                <button type="button" id="workContextToggle-__PAGE_CODE__" class="table-btn work-context-toggle" onclick="__PAGE_CODE__.toggleWorkContext()" aria-expanded="true">
+                    <i class="fas fa-chevron-up"></i>
+                    <span data-label-key="changeContext">Change</span>
+                </button>
+                <button type="button" class="table-icon-btn" title="Refresh project and scenario" data-title-key="refreshContextTitle" onclick="__PAGE_CODE__.refreshWorkContext()">
+                    <i class="fas fa-sync-alt"></i>
+                </button>
+            </div>
+        </header>
+        <div class="work-context-bar">
+            <label>
+                <span class="required-title" data-label-key="project">Project</span>
+                <select id="contextProject-__PAGE_CODE__" class="work-context-select" onchange="__PAGE_CODE__.handleContextProjectChange(this.value)">
+                    <option value="">Select project</option>
+                </select>
+            </label>
+            <label>
+                <span class="required-title" data-label-key="scenario">Scenario</span>
+                <select id="contextScenario-__PAGE_CODE__" class="work-context-select" onchange="__PAGE_CODE__.handleContextScenarioChange(this.value)">
+                    <option value="">Select scenario</option>
+                </select>
+            </label>
+        </div>
+        <div id="scenarioTablesGrid-__PAGE_CODE__" class="scenario-table-grid"></div>
+    </section>
+
+    <nav class="table-tabs data-work-tabs" aria-label="Data work workspace tabs">
+        <button type="button" class="table-tab is-active" data-tab="work" onclick="__PAGE_CODE__.switchTab('work')">
+            <i class="fas fa-diagram-project"></i>
+            <span data-label-key="workTab">Data Work</span>
+        </button>
+        <button type="button" class="table-tab" data-tab="sql" onclick="__PAGE_CODE__.switchTab('sql')">
+            <i class="fas fa-terminal"></i>
+            <span data-label-key="sqlTab">User SQL</span>
+        </button>
+        <button type="button" class="table-tab" data-tab="history" onclick="__PAGE_CODE__.switchTab('history')">
+            <i class="fas fa-clock-rotate-left"></i>
+            <span data-label-key="historyTab">Run History</span>
+        </button>
+    </nav>
+
+    <section class="table-tab-panel is-active data-work-panel" data-panel="work">
+        <section class="data-workspace" aria-labelledby="work-title-__PAGE_CODE__">
+            <aside class="data-job-panel">
+                <header class="table-object-header">
+                    <div class="data-job-title-block">
+                        <h2 class="table-section-title" data-label-key="jobsTitle">Jobs</h2>
+                    </div>
+                    <div class="data-job-subtitle-block">
+                        <p class="table-section-desc" data-label-key="jobsDescription">Saved work for the selected scenario.</p>
+                    </div>
+                    <div class="table-object-actions data-job-actions">
+                        <button type="button" class="table-icon-btn" title="New work" data-title-key="newWorkTitle" onclick="__PAGE_CODE__.newJob()">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                        <button type="button" class="table-icon-btn" title="All Execute" data-title-key="runAllTitle" onclick="__PAGE_CODE__.runAllJobs()">
+                            <i class="fas fa-forward"></i>
+                        </button>
+                        <button type="button" class="table-icon-btn" title="All Queue batch" data-title-key="runAllQueueTitle" onclick="__PAGE_CODE__.runAllQueueJobs()">
+                            <i class="fas fa-clock"></i>
+                        </button>
+                        <button type="button" class="table-icon-btn" title="Refresh jobs" data-title-key="refreshJobsTitle" onclick="__PAGE_CODE__.loadJobs()">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                    </div>
+                </header>
+                <div id="workJobGrid-__PAGE_CODE__" class="data-job-grid"></div>
+            </aside>
+
+            <section class="data-main-panel">
+                <header class="table-header">
+                    <div>
+                        <h1 class="table-title" id="work-title-__PAGE_CODE__" data-label-key="workTitle">Column Correlation Analysis</h1>
+                        <p class="table-desc" id="workDescription-__PAGE_CODE__" data-label-key="workDescriptionEmpty">Select a scenario table and registered correlation analysis object.</p>
+                    </div>
+                    <div class="table-export-actions">
+                        <button type="button" class="table-btn" onclick="__PAGE_CODE__.saveJob()">
+                            <i class="fas fa-save"></i>
+                            <span data-label-key="saveWork">Save work</span>
+                        </button>
+                        <button type="button" id="runNow-__PAGE_CODE__" class="table-btn" onclick="__PAGE_CODE__.runJob(false)" disabled>
+                            <i class="fas fa-play"></i>
+                            <span data-label-key="runNow">Run now</span>
+                        </button>
+                        <button type="button" id="queueBatch-__PAGE_CODE__" class="table-btn" onclick="__PAGE_CODE__.runJob(true)" disabled>
+                            <i class="fas fa-clock"></i>
+                            <span data-label-key="queueBatch">Queue batch</span>
+                        </button>
+                    </div>
+                </header>
+
+                <section class="data-work-form-card" aria-label="Data work setup">
+                    <div class="data-work-form-grid">
+                        <label class="data-job-id-field">
+                            <span data-label-key="jobId">Job ID</span>
+                            <input id="workJobId-__PAGE_CODE__" class="env-field" type="text" value="NEW" disabled>
+                        </label>
+                        <label class="data-job-group-field">
+                            <span class="required-title" data-label-key="jobGroup">Job Group</span>
+                            <input id="workJobGroup-__PAGE_CODE__" class="env-field" type="text" value="__PAGE_CODE__" disabled>
+                        </label>
+                        <label class="data-job-name-field">
+                            <span class="required-title" data-label-key="jobName">Job Name</span>
+                            <input id="workJobName-__PAGE_CODE__" class="env-field" type="text" oninput="__PAGE_CODE__.updateCurrentJobField('jobName', this.value)">
+                        </label>
+                        <label class="data-job-desc-field">
+                            <span data-label-key="jobDesc">Job Desc</span>
+                            <input id="workJobDesc-__PAGE_CODE__" class="env-field" type="text" oninput="__PAGE_CODE__.updateCurrentJobField('jobDesc', this.value)">
+                        </label>
+                        <label class="data-target-owner-field">
+                            <span data-label-key="targetOwner">Target Owner</span>
+                            <input id="targetOwner-__PAGE_CODE__" class="env-field" type="text" readonly>
+                        </label>
+                        <label class="data-target-table-field">
+                            <span data-label-key="targetTable">Target Table</span>
+                            <input id="targetTable-__PAGE_CODE__" class="env-field" type="text" readonly>
+                        </label>
+                        <label class="data-use-field">
+                            <span data-label-key="use">Use</span>
+                            <select id="jobUseYn-__PAGE_CODE__" class="env-field" onchange="__PAGE_CODE__.updateCurrentJobField('useYn', this.value)">
+                                <option value="Y">Y</option>
+                                <option value="N">N</option>
+                            </select>
+                        </label>
+                        <label class="data-sort-field">
+                            <span data-label-key="sort">Sort</span>
+                            <input id="jobSortOrder-__PAGE_CODE__" class="env-field" type="number" oninput="__PAGE_CODE__.updateCurrentJobField('sortOrder', this.value)">
+                        </label>
+                    </div>
+                </section>
+
+                <section class="data-param-card" aria-label="Registered object parameters">
+                    <div class="data-exec-grid">
+                        <label>
+                            <span class="required-title" data-label-key="executableObject">Correlation Procedure / Model</span>
+                            <select id="execObject-__PAGE_CODE__" class="env-field" onchange="__PAGE_CODE__.handleExecutableObjectChange(this.value)">
+                                <option value="">Select registered object</option>
+                            </select>
+                        </label>
+                        <label>
+                            <span data-label-key="resultTableCreate">Result Table Create</span>
+                            <select id="resultCreateYn-__PAGE_CODE__" class="env-field" onchange="__PAGE_CODE__.handleResultCreateChange(this.value)">
+                                <option value="N">N</option>
+                                <option value="Y">Y</option>
+                            </select>
+                        </label>
+                        <label>
+                            <span data-label-key="resultOwner">Result Owner</span>
+                            <input id="resultOwner-__PAGE_CODE__" class="env-field" type="text" placeholder="OWNER" oninput="__PAGE_CODE__.updateCurrentJobField('resultOwner', this.value)">
+                        </label>
+                        <label>
+                            <span data-label-key="resultTable">Result Table</span>
+                            <input id="resultTable-__PAGE_CODE__" class="env-field" type="text" placeholder="RESULT_TABLE" data-placeholder-key="resultTablePlaceholder" oninput="__PAGE_CODE__.updateCurrentJobField('resultTableName', this.value)">
+                        </label>
+                    </div>
+                    <div class="data-panel-toolbar">
+                        <strong data-label-key="parameters">Parameters</strong>
+                        <span>&nbsp;</span>
+                        <span id="selectedExecObjectLabel-__PAGE_CODE__" class="data-selected-object" data-label-key="noExecutableObject">No correlation object selected.</span>
+                        <span class="env-detail-hint" data-label-key="executableObjectHint">Correlation procedure defaults come from M90001 object details.</span>
+                    </div>
+                    <div class="data-param-script-layout">
+                        <section class="data-param-panel" aria-label="Parameter list">
+                            <header class="data-param-panel-header">
+                                <strong data-label-key="parameterList">Parameter List</strong>
+                            </header>
+                            <div id="parameterGrid-__PAGE_CODE__" class="data-param-grid"></div>
+                        </section>
+                        <section class="data-param-panel" aria-label="Generated executable PL/SQL">
+                            <header class="data-param-panel-header data-script-header">
+                                <span class="data-script-title-group">
+                                    <strong data-label-key="generatedScript">Generated PL/SQL</strong>
+                                    <button type="button" class="table-icon-btn data-help-btn" title="Bind variable rules" onclick="__PAGE_CODE__.openPlsqlHelp()">
+                                        <i class="fas fa-question"></i>
+                                    </button>
+                                </span>
+                                <button type="button" class="table-btn" onclick="__PAGE_CODE__.generateExecutablePlsql(true)">
+                                    <i class="fas fa-arrow-right"></i>
+                                    <span data-label-key="generateScript">Generate PL/SQL</span>
+                                </button>
+                            </header>
+                            <textarea id="execPlsqlEditor-__PAGE_CODE__" class="sql-editor data-script-editor" spellcheck="false" aria-label="Generated executable PL/SQL script"></textarea>
+                        </section>
+                    </div>
+                </section>
+            </section>
+        </section>
+    </section>
+
+    <div id="plsqlHelpLayer-__PAGE_CODE__" class="data-help-layer" hidden>
+        <section class="data-help-dialog" role="dialog" aria-modal="true" aria-labelledby="plsqlHelpTitle-__PAGE_CODE__">
+            <header>
+                <h2 id="plsqlHelpTitle-__PAGE_CODE__">PL/SQL 바인드 변수 규칙</h2>
+                <button type="button" class="table-icon-btn" title="Close" onclick="__PAGE_CODE__.closePlsqlHelp()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </header>
+            <div class="data-help-content">
+                <p>왼쪽 Parameter List의 Parameter 명칭은 PL/SQL 스크립트에서 바인드 변수 또는 문자열 치환 키로 사용할 수 있습니다.</p>
+                <ul>
+                    <li><strong>바인드 변수</strong>: Parameter 명칭이 <code>ABC_DEF</code>이면 스크립트에서는 <code>:abcDef</code>로 작성합니다. 언더바는 제거되고, 언더바 다음 첫 글자만 대문자로 변환됩니다.</li>
+                    <li><strong>동적 문자열 치환</strong>: <code>/* --DYNAMIC_MODEL_NAME-- */</code>처럼 작성하면 <code>/* --</code>와 <code>-- */</code> 사이의 이름이 Parameter 명칭과 완전히 같을 때 해당 값이 문자열 그대로 치환됩니다.</li>
+                    <li><strong>Generate PL/SQL</strong>: 기본값이 있으면 기본값을 스크립트에 직접 채우고, 기본값이 없으면 <code>:abcDef</code> 형식의 바인드 변수로 생성합니다.</li>
+                    <li><strong>Run now / Queue Batch</strong>: 실행 시 저장된 Parameter List 값으로 바인드 변수와 동적 문자열 치환을 처리한 뒤 실행합니다.</li>
+                </ul>
+            </div>
+            <footer>
+                <button type="button" class="env-btn" onclick="__PAGE_CODE__.closePlsqlHelp()">Close</button>
+            </footer>
+        </section>
+    </div>
+
+    <div id="runtimeBindLayer-__PAGE_CODE__" class="data-help-layer" hidden>
+        <section class="data-help-dialog data-bind-dialog" role="dialog" aria-modal="true" aria-labelledby="runtimeBindTitle-__PAGE_CODE__">
+            <header>
+                <h2 id="runtimeBindTitle-__PAGE_CODE__">Runtime Bind Variables</h2>
+                <button type="button" class="table-icon-btn" title="Close" onclick="__PAGE_CODE__.cancelRuntimeBindDialog()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </header>
+            <div class="data-help-content">
+                <p>Parameter List에 없는 바인드 변수가 스크립트에서 발견되었습니다. 실행에 사용할 값을 입력하세요.</p>
+                <div id="runtimeBindGrid-__PAGE_CODE__" class="data-bind-grid"></div>
+            </div>
+            <footer>
+                <button type="button" class="env-btn" onclick="__PAGE_CODE__.cancelRuntimeBindDialog()">Cancel</button>
+                <button type="button" class="env-btn env-save" onclick="__PAGE_CODE__.confirmRuntimeBindDialog()">Run</button>
+            </footer>
+        </section>
+    </div>
+
+    <section class="table-tab-panel data-tool-panel" data-panel="sql">
+        <div class="sql-workbench data-sql-workbench">
+            <div class="sql-toolbar">
+                <button type="button" class="table-btn" onclick="__PAGE_CODE__.executeSql('#sqlEditor-__PAGE_CODE__', '#sqlGrid-__PAGE_CODE__', 'sql')">
+                    <i class="fas fa-play"></i>
+                    <span data-label-key="runSql">Run SQL(Ctrl+Enter)</span>
+                </button>
+                <button type="button" class="table-btn" onclick="__PAGE_CODE__.executeFullSql('#sqlEditor-__PAGE_CODE__', '#sqlGrid-__PAGE_CODE__', 'sql')">
+                    <i class="fas fa-forward"></i>
+                    <span data-label-key="runAllSql">Run All SQL(F5)</span>
+                </button>
+                <button type="button" id="sqlTxCommit-__PAGE_CODE__" class="table-btn" onclick="__PAGE_CODE__.commitSqlTransaction()" disabled>
+                    <i class="fas fa-check"></i>
+                    <span data-label-key="commitTransaction">Commit</span>
+                </button>
+                <button type="button" id="sqlTxRollback-__PAGE_CODE__" class="table-btn" onclick="__PAGE_CODE__.rollbackSqlTransaction()" disabled>
+                    <i class="fas fa-rotate-left"></i>
+                    <span data-label-key="rollbackTransaction">Rollback</span>
+                </button>
+                <span id="sqlTxStatus-__PAGE_CODE__" class="table-empty" data-label-key="transactionOff">Auto commit</span>
+                <label class="table-limit-control">
+                    <span data-label-key="rows">Rows</span>
+                    <input id="sqlLimit-__PAGE_CODE__" type="number" min="1" max="1000" value="100">
+                </label>
+            </div>
+            <textarea id="sqlEditor-__PAGE_CODE__" class="sql-editor data-sql-editor" spellcheck="false" aria-label="User SQL worksheet"></textarea>
+            <div id="sqlMessage-__PAGE_CODE__" class="table-empty" aria-live="polite" hidden></div>
+            <div id="sqlGrid-__PAGE_CODE__" class="table-result-grid"></div>
+            <div class="table-export-actions data-sql-export-actions" aria-label="Export User SQL result">
+                <button type="button" class="table-icon-btn export-excel" title="Export Excel" onclick="__PAGE_CODE__.exportSqlGrid('excel')">
+                    <i class="fas fa-file-excel"></i>
+                </button>
+                <button type="button" class="table-icon-btn" title="Export CSV" onclick="__PAGE_CODE__.exportSqlGrid('csv')">
+                    <i class="fas fa-file-csv"></i>
+                </button>
+                <button type="button" class="table-icon-btn" title="Export TSV" onclick="__PAGE_CODE__.exportSqlGrid('tsv')">
+                    <i class="fas fa-file-lines"></i>
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <section class="table-tab-panel data-tool-panel" data-panel="history">
+        <div class="data-panel-toolbar">
+            <button type="button" class="table-btn" onclick="__PAGE_CODE__.loadRunHistory()">
+                <i class="fas fa-sync-alt"></i>
+                <span data-label-key="refreshHistory">Refresh history</span>
+            </button>
+        </div>
+        <div id="runHistoryGrid-__PAGE_CODE__" class="table-result-grid data-history-grid"></div>
+    </section>
+</div>
+

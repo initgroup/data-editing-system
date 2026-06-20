@@ -1,0 +1,245 @@
+-- [M91001_CONNECTION_LIST]
+SELECT
+    CONNECTION_ID,
+    USER_ID,
+    CONNECTION_NAME,
+    DB_TYPE,
+    HOST,
+    PORT,
+    SERVICE_NAME,
+    SID,
+    USERNAME,
+    WALLET_PATH,
+    DEFAULT_YN,
+    USE_YN,
+    SORT_ORDER,
+    LAST_TEST_STATUS,
+    LAST_TEST_MESSAGE,
+    LAST_TEST_AT,
+    CREATED_AT,
+    UPDATED_AT
+  FROM "INIT$_TB_DB_CONNECTION"
+ WHERE USER_ID = :userId
+   AND (
+          :keyword IS NULL
+       OR TRIM(:keyword) IS NULL
+       OR UPPER(CONNECTION_NAME) LIKE '%' || UPPER(TRIM(:keyword)) || '%'
+       OR UPPER(NVL(HOST, '')) LIKE '%' || UPPER(TRIM(:keyword)) || '%'
+       OR UPPER(NVL(USERNAME, '')) LIKE '%' || UPPER(TRIM(:keyword)) || '%'
+       )
+ ORDER BY DEFAULT_YN DESC, SORT_ORDER NULLS LAST, CONNECTION_NAME, CONNECTION_ID
+;
+
+-- [M91001_CONNECTION_DETAIL]
+SELECT
+    CONNECTION_ID,
+    USER_ID,
+    CONNECTION_NAME,
+    DB_TYPE,
+    HOST,
+    PORT,
+    SERVICE_NAME,
+    SID,
+    USERNAME,
+    PASSWORD_ENC,
+    WALLET_PATH,
+    WALLET_PASSWORD_ENC,
+    CONNECT_OPTIONS,
+    DEFAULT_YN,
+    USE_YN,
+    SORT_ORDER,
+    LAST_TEST_STATUS,
+    LAST_TEST_MESSAGE,
+    LAST_TEST_AT,
+    CREATED_AT,
+    UPDATED_AT
+  FROM "INIT$_TB_DB_CONNECTION"
+ WHERE CONNECTION_ID = :connectionId
+   AND USER_ID = :userId
+;
+
+-- [M91001_CONNECTION_INSERT]
+INSERT INTO "INIT$_TB_DB_CONNECTION" (
+    USER_ID,
+    CONNECTION_NAME,
+    DB_TYPE,
+    HOST,
+    PORT,
+    SERVICE_NAME,
+    SID,
+    USERNAME,
+    PASSWORD_ENC,
+    WALLET_PATH,
+    WALLET_PASSWORD_ENC,
+    CONNECT_OPTIONS,
+    DEFAULT_YN,
+    USE_YN,
+    SORT_ORDER,
+    CREATED_AT
+) VALUES (
+    :userId,
+    :connectionName,
+    :dbType,
+    :host,
+    :port,
+    :serviceName,
+    :sid,
+    :username,
+    :passwordEnc,
+    :walletPath,
+    :walletPasswordEnc,
+    :connectOptions,
+    :defaultYn,
+    :useYn,
+    :sortOrder,
+    SYSTIMESTAMP
+)
+;
+
+-- [M91001_CONNECTION_UPDATE]
+UPDATE "INIT$_TB_DB_CONNECTION"
+   SET CONNECTION_NAME = :connectionName,
+       DB_TYPE = :dbType,
+       HOST = :host,
+       PORT = :port,
+       SERVICE_NAME = :serviceName,
+       SID = :sid,
+       USERNAME = :username,
+       PASSWORD_ENC = :passwordEnc,
+       WALLET_PATH = :walletPath,
+       WALLET_PASSWORD_ENC = :walletPasswordEnc,
+       CONNECT_OPTIONS = :connectOptions,
+       DEFAULT_YN = :defaultYn,
+       USE_YN = :useYn,
+       SORT_ORDER = :sortOrder,
+       UPDATED_AT = SYSTIMESTAMP
+ WHERE CONNECTION_ID = :connectionId
+   AND USER_ID = :userId
+;
+
+-- [M91001_CONNECTION_ID_BY_NAME]
+SELECT CONNECTION_ID
+  FROM "INIT$_TB_DB_CONNECTION"
+ WHERE USER_ID = :userId
+   AND CONNECTION_NAME = :connectionName
+;
+
+-- [M91001_CONNECTION_DELETE]
+DELETE FROM "INIT$_TB_DB_CONNECTION"
+ WHERE CONNECTION_ID = :connectionId
+   AND USER_ID = :userId
+;
+
+-- [M91001_CONNECTION_CLEAR_DEFAULT]
+UPDATE "INIT$_TB_DB_CONNECTION"
+   SET DEFAULT_YN = 'N',
+       UPDATED_AT = SYSTIMESTAMP
+ WHERE DEFAULT_YN = 'Y'
+   AND USER_ID = :userId
+;
+
+-- [M91001_CONNECTION_CLEAR_DEFAULT_EXCEPT]
+UPDATE "INIT$_TB_DB_CONNECTION"
+   SET DEFAULT_YN = 'N',
+       UPDATED_AT = SYSTIMESTAMP
+ WHERE DEFAULT_YN = 'Y'
+   AND USER_ID = :userId
+   AND (:connectionId IS NULL OR CONNECTION_ID <> :connectionId)
+;
+
+-- [M91001_CONNECTION_TEST_UPDATE]
+UPDATE "INIT$_TB_DB_CONNECTION"
+   SET LAST_TEST_STATUS = :status,
+       LAST_TEST_MESSAGE = :message,
+       LAST_TEST_AT = SYSTIMESTAMP,
+       UPDATED_AT = SYSTIMESTAMP
+ WHERE CONNECTION_ID = :connectionId
+   AND USER_ID = :userId
+;
+
+-- [M91002_SETTING_LIST]
+SELECT
+    CONNECTION_ID,
+    CATEGORY_CODE,
+    SETTING_KEY,
+    SETTING_VALUE,
+    SETTING_DESC,
+    SORT_ORDER,
+    USE_YN,
+    UPDATED_AT
+  FROM "INIT$_TB_SYSTEM_SETTING"
+ WHERE USER_ID = :userId
+   AND CONNECTION_ID = :connectionId
+   AND (:categoryCode IS NULL OR CATEGORY_CODE = :categoryCode)
+ ORDER BY CATEGORY_CODE, SORT_ORDER NULLS LAST, SETTING_KEY
+;
+
+-- [M91002_SETTING_MERGE]
+MERGE INTO "INIT$_TB_SYSTEM_SETTING" T
+USING (
+    SELECT
+        :userId AS USER_ID,
+        :connectionId AS CONNECTION_ID,
+        :categoryCode AS CATEGORY_CODE,
+        :settingKey AS SETTING_KEY,
+        :settingValue AS SETTING_VALUE,
+        :settingDesc AS SETTING_DESC,
+        :sortOrder AS SORT_ORDER,
+        :useYn AS USE_YN
+      FROM DUAL
+) S
+ON (T.USER_ID = S.USER_ID AND T.CONNECTION_ID = S.CONNECTION_ID AND T.CATEGORY_CODE = S.CATEGORY_CODE AND T.SETTING_KEY = S.SETTING_KEY)
+WHEN MATCHED THEN
+    UPDATE SET
+        T.SETTING_VALUE = S.SETTING_VALUE,
+        T.SETTING_DESC = S.SETTING_DESC,
+        T.SORT_ORDER = S.SORT_ORDER,
+        T.USE_YN = S.USE_YN,
+        T.UPDATED_AT = SYSTIMESTAMP
+WHEN NOT MATCHED THEN
+    INSERT (
+        USER_ID,
+        CONNECTION_ID,
+        CATEGORY_CODE,
+        SETTING_KEY,
+        SETTING_VALUE,
+        SETTING_DESC,
+        SORT_ORDER,
+        USE_YN,
+        UPDATED_AT
+    ) VALUES (
+        S.USER_ID,
+        S.CONNECTION_ID,
+        S.CATEGORY_CODE,
+        S.SETTING_KEY,
+        S.SETTING_VALUE,
+        S.SETTING_DESC,
+        S.SORT_ORDER,
+        S.USE_YN,
+        SYSTIMESTAMP
+    )
+;
+
+-- [M91002_SETTING_DELETE]
+DELETE FROM "INIT$_TB_SYSTEM_SETTING"
+ WHERE USER_ID = :userId
+   AND CONNECTION_ID = :connectionId
+   AND CATEGORY_CODE = :categoryCode
+   AND SETTING_KEY = :settingKey
+;
+
+-- [INIT_SETUP_LOG_INSERT]
+INSERT INTO "INIT$_TB_SETUP_LOG" (
+    CONNECTION_ID,
+    ACTION_CODE,
+    STATUS,
+    MESSAGE,
+    CREATED_AT
+) VALUES (
+    :connectionId,
+    :actionCode,
+    :status,
+    :message,
+    SYSTIMESTAMP
+)
+;

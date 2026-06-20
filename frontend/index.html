@@ -3,122 +3,102 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>데이터 에디팅 시스템</title>
-    <!-- <script src="https://cdn.tailwindcss.com"></script> -->
-    <link rel="stylesheet" href="./css/styletail.css" >    
-    <!-- <link rel="stylesheet" href="./css/output.css" > -->
-    <link rel="stylesheet" href="./css/style.css">
-    <link rel="stylesheet" href="./css/mermaid.min.css">
-    <!-- <link rel="stylesheet" href="https://unpkg.com/gridjs/dist/theme/mermaid.min.css">  -->
-    <link rel="stylesheet" href="./css/grid-custom.css">
-    <!-- <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"> -->
+    <title>INIT Data Editing System</title>
+    <script>
+        window.APP_CACHE_VERSION = "1.0.215";
+        window.APP_ASSET_VERSION_OVERRIDES = {
+            // 전체 캐시 갱신: APP_CACHE_VERSION만 올립니다.
+            // 부분 캐시 갱신: "js/M90001.js": "1.0.1" 처럼 파일별 버전을 지정합니다.
+            // "pages/M02001.html": "1.0.3",
+            // "js/M02001.js": "1.0.8",
+            // "pages/M02002.html": "1.0.1",
+            // "js/M02002.js": "1.0.2",
+            // "pages/login.html": "1.0.1",
+            // "js/login.js": "1.0.1",
+            // "pages/M91001.html": "1.0.9",
+            // "js/M91001.js": "1.0.13",
+            // "pages/M91002.html": "1.0.1",
+            // "pages/M91003.html": "1.0.2",
+            // "js/M91003.js": "1.0.2",
+            // "js/common.js": "1.0.1",
+            "pages/MCOMMON_DATA_WORK.html": "1.0.2",
+            "js/MCOMMON_DATA_WORK.js": "1.0.5",
+            "pages/MCOMMON_FLOW_WORK.html": "1.0.12",
+            "js/MCOMMON_FLOW_WORK.js": "1.0.23",
+            "js/M04001.js": "1.0.1",
+        };
+        window.APP_ASSET_URL = function(path) {
+            const normalized = String(path || "").replace(/^\.\//, "");
+            const version = window.APP_ASSET_VERSION_OVERRIDES[normalized] || window.APP_CACHE_VERSION;
+            const separator = String(path).includes("?") ? "&" : "?";
+            return `${path}${separator}v=${encodeURIComponent(version)}`;
+        };
+        window.APP_WRITE_CSS = function(path) {
+            document.write(`<link rel="stylesheet" href="${window.APP_ASSET_URL(path)}">`);
+        };
+        window.APP_WRITE_SCRIPT = function(path) {
+            document.write(`<script src="${window.APP_ASSET_URL(path)}"><\/script>`);
+        };
+    </script>
+    <script>
+        [
+            "./css/styletail.css",
+            "./css/style.css",
+            "./css/styleMenu.css",
+            "./css/mermaid.min.css",
+            "./css/grid-custom.css",
+            "./css/all.min.css"
+        ].forEach(window.APP_WRITE_CSS);
+    </script>
     <link rel="icon" href="data:;base64,iVBORw0KGgo="> <link rel="shortcut icon" href="./favicon.ico" type="image/x-icon">    
-    <link rel="stylesheet" href="./css/all.min.css">
 </head>
 <body class="flex h-screen overflow-hidden">
-    <!-- 메뉴바 -->
     <aside id="sidebar" class="sidebar w-64 bg-slate-900 text-white flex-shrink-0 flex flex-col z-20">
-        <div class="p-4 text-xl font-bold border-b border-slate-700">Data Editing</div>
+        <div class="p-4 border-b border-slate-700 flex items-center justify-between gap-3">
+            <div class="text-xl font-bold">Data Editing</div>
+            <div class="flex items-center gap-1">
+                <button id="btnExpandAllMenus" type="button" class="w-8 h-8 rounded hover:bg-slate-700 text-slate-300 hover:text-white" title="메뉴 모두 펼치기">
+                    <i class="fas fa-folder-open"></i>
+                </button>
+                <button id="btnCollapseAllMenus" type="button" class="w-8 h-8 rounded hover:bg-slate-700 text-slate-300 hover:text-white" title="메뉴 모두 접기">
+                    <i class="fas fa-folder"></i>
+                </button>
+            </div>
+        </div>
         
-        <nav class="flex-1 overflow-y-auto py-4 space-y-1" id="mainNav">
-            <a href="#" data-page="home" class="block p-3 hover:bg-slate-700 menu-active flex items-center gap-2">
-                <span>🏠</span> 메인홈
-            </a>            
-
-<!--             <div class="menu-folder">
-                <button class="w-full flex items-center justify-between p-3 hover:bg-slate-800 transition-colors group">
-                    <div class="flex items-center gap-3">
-                        <i class="fas fa-user-gear text-yellow-500"></i> <span>샘플 페이지</span>
-                    </div>
-                    <i class="fas fa-chevron-down text-xs transition-transform duration-300"></i>
-                </button>
-                <div class="submenu bg-slate-800 hidden">
-                    <a href="#" data-page="M00000" class="block p-3 pl-10 hover:bg-slate-700 text-sm text-slate-300">⚙️ DB연동테스트</a>
-                </div>
-            </div> -->
-
-            <div class="menu-folder">
-                <button class="w-full flex items-center justify-between p-3 hover:bg-slate-800 transition-colors group">
-                    <div class="flex items-center gap-3">
-                        <i class="fas fa-database text-yellow-500"></i> <span>데이터 준비</span>
-                    </div>
-                    <i class="fas fa-chevron-down text-xs transition-transform duration-300"></i>
-                </button>
-                <div class="submenu bg-slate-800 hidden">
-                    <a href="#" data-page="M01001" class="block p-3 pl-10 hover:bg-slate-700 text-sm text-slate-300">🔍 데이터 탐색</a>
-<!--                     <a href="#" data-page="M01002" class="block p-3 pl-10 hover:bg-slate-700 text-sm text-slate-300">📋 메타정보</a>
-                    <a href="#" data-page="M01003" class="block p-3 pl-10 hover:bg-slate-700 text-sm text-slate-300">📊 프로파일링</a> -->
-                </div>
-            </div>
-
-            <!-- <div class="menu-folder">
-                <button class="w-full flex items-center justify-between p-3 hover:bg-slate-800 transition-colors group">
-                    <div class="flex items-center gap-3">
-                        <i class="fas fa-filter-circle-dollar text-yellow-500"></i></i> <span>규칙 관리</span>
-                    </div>
-                    <i class="fas fa-chevron-down text-xs transition-transform duration-300"></i>
-                </button>
-                <div class="submenu bg-slate-800 hidden">
-                    <a href="#" data-page="M02001" class="block p-3 pl-10 hover:bg-slate-700 text-sm text-slate-300">💡 규칙발굴(DB연동)</a>
-                    <a href="#" data-page="M02002" class="block p-3 pl-10 hover:bg-slate-700 text-sm text-slate-300">📉 시각화분석</a>
-                    <a href="#" data-page="M02003" class="block p-3 pl-10 hover:bg-slate-700 text-sm text-slate-300">✅ 규칙확정</a>
-                </div>
-            </div>
-
-            <div class="menu-folder">
-                <button class="w-full flex items-center justify-between p-3 hover:bg-slate-800 transition-colors group">
-                    <div class="flex items-center gap-3">
-                        <i class="fas fa-microchip text-yellow-500"></i> <span>에디팅</span>
-                    </div>
-                    <i class="fas fa-chevron-down text-xs transition-transform duration-300"></i>
-                </button>
-                <div class="submenu bg-slate-800 hidden">
-                    <a href="#" data-page="M03001" class="block p-3 pl-10 hover:bg-slate-700 text-sm text-slate-300">⚠️ 위반데이터 검토</a>
-                    <a href="#" data-page="M03002" class="block p-3 pl-10 hover:bg-slate-700 text-sm text-slate-300">⚖️ 에디팅판단</a>
-                    <a href="#" data-page="M03003" class="block p-3 pl-10 hover:bg-slate-700 text-sm text-slate-300">🔄 반영 및 검증</a>
-                </div>
-            </div>
-
-            <div class="menu-folder">
-                <button class="w-full flex items-center justify-between p-3 hover:bg-slate-800 transition-colors group">
-                    <div class="flex items-center gap-3">
-                        <i class="fas fa-file-lines text-yellow-500"></i> <span>보고서</span>
-                    </div>
-                    <i class="fas fa-chevron-down text-xs transition-transform duration-300"></i>
-                </button>
-                <div class="submenu bg-slate-800 hidden">
-                    <a href="#" data-page="M04001" class="block p-3 pl-10 hover:bg-slate-700 text-sm text-slate-300">📝 보고서 목록</a>
-                </div>
-            </div>
-
-            <div class="menu-folder">
-                <button class="w-full flex items-center justify-between p-3 hover:bg-slate-800 transition-colors group">
-                    <div class="flex items-center gap-3">
-                        <i class="fas fa-user-gear text-yellow-500"></i> <span>설정</span>
-                    </div>
-                    <i class="fas fa-chevron-down text-xs transition-transform duration-300"></i>
-                </button>
-                <div class="submenu bg-slate-800 hidden">
-                    <a href="#" data-page="M05001" class="block p-3 pl-10 hover:bg-slate-700 text-sm text-slate-300">⚙️ 환경 설정</a>
-                </div>
-            </div>       -->
-        </nav>
+        <nav class="flex-1 overflow-y-auto py-4 space-y-1" id="mainNav"></nav>
     </aside>
 
-    <!-- 본문 영역 -->
     <main class="main-content">
         <div>         
             <header class="content-header flex justify-between items-center px-6 py-6 border-b h-20">
                 <h1 id="contentTitle" class="text-2xl font-bold leading-none flex items-center"></h1>
-                <div class="flex items-center">
-                    <button onclick="handlePageRefresh()" class="btn-refresh-top" title="페이지 새로고침">
+                <div class="header-actions flex items-center">
+                    <div id="sessionStatusBox" class="header-session-box" hidden>
+                        <span id="sessionUserName" class="header-session-user">-</span>
+                        <span class="header-session-separator"></span>
+                        <span class="header-session-label">Session</span>
+                        <span id="sessionRemainTime" class="header-session-time">--:--</span>
+                        <button type="button" class="header-session-extend" onclick="handleExtendSession()">Extend</button>
+                    </div>
+                    <div id="currentTargetDbBox" class="header-target-db-box" hidden>
+                        <span class="header-target-db-label">Target DB</span>
+                        <span id="currentTargetDbText" class="header-target-db-text">Target DB not selected</span>
+                        <button type="button" id="targetDbChangeButton" class="header-target-db-change" onclick="openTargetDbChangeDialog()" title="Change target database">
+                            <i class="fas fa-ellipsis-h"></i>
+                        </button>
+                    </div>
+                    <button onclick="handlePageRefresh()" class="btn-refresh-top" title="Refresh current page">
                         <i id="refreshIcon" class="fas fa-sync-alt"></i>
                     </button>
-                    <button onclick="handlePageClose()" class="btn-refresh-top ml-2 text-red-500 hover:text-red-700" title="페이지 닫기">
+                    <button onclick="handlePageClose()" class="btn-refresh-top ml-2 text-red-500 hover:text-red-700" title="Close current page">
                         <i class="fas fa-times"></i>
                     </button>
-                    <button onclick="handleAllPageClose()" class="btn-refresh-top mr-2 text-orange-500 hover:text-orange-700" title="모든 페이지 닫기">
+                    <button onclick="handleAllPageClose()" class="btn-refresh-top mr-2 text-orange-500 hover:text-orange-700" title="Close all pages">
                         <i class="fas fa-layer-group"></i><i class="fas fa-times text-xs ml-[-4px]"></i>
+                    </button>
+                    <button onclick="handleLogout()" class="btn-refresh-top ml-2 text-slate-600 hover:text-slate-900" title="Logout">
+                        <i class="fas fa-sign-out-alt"></i>
                     </button>
                 </div>
             </header>
@@ -130,7 +110,7 @@
                         <div class="absolute inset-0 border-4 border-blue-200 rounded-full"></div>
                         <div class="absolute inset-0 border-4 border-blue-600 rounded-full border-t-transparent animate-spin"></div>
                     </div>
-                    <p class="text-lg font-bold text-gray-700 mt-4">데이터 처리 중...</p>
+                    <p class="text-lg font-bold text-gray-700 mt-4">Processing data...</p>
                 </div>
             </div>
             <section id="main-container" class="flex-1 flex flex-col min-h-0 relative">
@@ -138,16 +118,34 @@
                 </div>
             </section>
         </div>
+        <div id="targetDbChangeLayer" class="target-db-change-layer" hidden>
+            <div class="target-db-change-dialog" role="dialog" aria-modal="true" aria-labelledby="targetDbChangeTitle">
+                <header class="target-db-change-header">
+                    <h2 id="targetDbChangeTitle">Change Target DB</h2>
+                    <button type="button" class="target-db-change-close" onclick="closeTargetDbChangeDialog()" title="Close">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </header>
+                <div class="target-db-change-warning">
+                    Changing Target DB closes all open pages, clears in-memory state, runs target cleanup, and can discard unsaved work.
+                </div>
+                <div id="targetDbChangeList" class="target-db-change-list"></div>
+                <footer class="target-db-change-footer">
+                    <button type="button" class="env-btn env-cancel" onclick="closeTargetDbChangeDialog()">Cancel</button>
+                    <button type="button" class="env-btn env-save" onclick="applyTargetDbChange()">Change Target DB</button>
+                </footer>
+            </div>
+        </div>
         <div class="resizer-y" id="resizer-bottom"></div>
         
-        <div id="pageConsoleHolder" class="bottom-console collapsed" title="로그창입니다. 클릭하세요.">
+        <div id="pageConsoleHolder" class="bottom-console collapsed" title="Log console">
             <div class="console-header">
                 <div class="console-tabs">
-                    <button class="console-tab active">실행로그</button>
-                    <button class="console-tab">에러로그</button>
+                    <button class="console-tab active">Run Log</button>
+                    <button class="console-tab">Error Log</button>
                 </div>
                 <div class="console-actions" style="display: flex; gap: 10px; align-items: center;">
-                    <div class="log-toggle off" onclick="ConsoleLogger.toggle()" title="로그 기록 ON/OFF">
+                    <div class="log-toggle off" onclick="ConsoleLogger.toggle()" title="Log recording ON/OFF">
                         <span id="logStatusText">OFF</span>
                         <div id="logSwitch" class="sw-track">
                             <div class="sw-knob"></div>
@@ -162,7 +160,7 @@
                     <button id="btnMaxConsole" onclick="toggleMaximizeConsole()" class="btn-console-action" title="최대화">
                         <i class="fas fa-window-maximize"></i>
                     </button>
-                    <button id="btnCloseConsolebar" class="btn-console-action" title="열기">
+                    <button id="btnCloseConsolebar" class="btn-console-action" title="닫기">
                         <i class="fas fa-chevron-up"></i>
                     </button>
                 </div>
@@ -185,34 +183,11 @@
             <i class="fas fa-robot"></i>
         </div>
         <div class="side-content-original">
-<!-- oracle 26ai 사용하기
-            <div class="chat-header">
-                <span><i class="fas fa-robot mr-2"></i>Oracle 26ai Assistant</span>
-                <button id="btnCloseRightSidebar" class="btn-panel-toggle">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            <div id="chatBody" class="chat-container">
-                <div id="chatMsg" class="chat-messages-area">
-                    <div class="chat-message system">
-                        안녕하세요! 무엇을 도와드릴까요?<br>데이터에 대해 궁금한 점을 자연어로 물어보세요.<br>(예: '매출 상위 5명 조회해줘')
-                    </div>
-                </div>                
-                <div id="chatInput" class="chat-input-wrapper">
-                    <textarea id="chatInputText" placeholder="질문 입력 (Ctrl+Enter 전송)" class="chat-input-field"></textarea>
-                    <button id="btnSendChat1"
-                    class="flex-1 bg-gray-600 text-white py-2 rounded text-xs hover:bg-gray-700">SQL만 보기</button>
-                    <button id="btnSendChat2"
-                    class="flex-1 bg-blue-600 text-white py-2 rounded text-xs hover:bg-blue-700 font-bold">결과 조회</button>
-                </div>
-            </div>
-             -->
-            <!-- GOOGLE GEMINI 웹 검색 -->
             <section class="panelGemini">
                 <div class="headerGemini">
                     <h1>Gemini</h1>
                     <div class="headerActionsGemini">
-                        <span class="badgeGemini"><i class="fas fa-magnifying-glass"></i> Google Search 사용</span>
+                        <span class="badgeGemini"><i class="fas fa-magnifying-glass"></i> Google Search 적용</span>
                         <button id="btnCloseGeminiSidebar" type="button" class="closeButtonGemini" title="닫기">
                             <i class="fas fa-times"></i>
                         </button>
@@ -244,20 +219,24 @@
         </div>
     </aside>
 
-    <script src="./js/app.js?v=1.0.2"></script>
-    <script src="./js/gridjs.umd.js"></script>
-    <!-- <script src="https://unpkg.com/gridjs/dist/gridjs.umd.js"></script> -->
-    <script src="./js/common.js?v=1.0.2"></script>
-    <!--     <script src="./js/main.js"></script>    -->
-    <script src="./js/chart.js"></script>
-    <!-- <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> -->   
     <script>
+        [
+            "./js/app.js",
+            "./js/gridjs.umd.js",
+            "./js/common.js",
+            "./js/MCOMMON_DATA_WORK.js",
+            "./js/MCOMMON_FLOW_WORK.js",
+            "./js/chart.js",
+            "./config/menu.config.js",
+            "./js/menu-renderer.js"
+        ].forEach(window.APP_WRITE_SCRIPT);
+    </script>
+    <script>
+
+        MenuRenderer.render('mainNav', handleMenuClick);
 
         // 메뉴 클릭 시 PageManager 호출
         // 하위 메뉴(a) 뿐만 아니라 폴더(button)에도 이벤트를 걸어줍니다.
-        document.querySelectorAll('#mainNav a, #mainNav button[data-page]').forEach(link => {
-            link.addEventListener('click', handleMenuClick);
-        });
 
         // 1. 공통 메뉴 클릭 핸들러 함수 정의
         function handleMenuClick(e) {
@@ -265,33 +244,34 @@
             e.preventDefault();
             e.stopPropagation();
 
-            // 2. 정확한 타겟 찾기 (클릭된 내부 요소가 아닌 data-page가 있는 부모)
+            // 2. 정확한 타겟 찾기 (클릭된 요소가 아닌 data-page가 있는 부모)
             const target = e.currentTarget; 
             const page = target.dataset.page;
 
-            // 4. 제목 추출 (아이콘 등을 제외한 텍스트만)
-            // 텍스트를 span으로 감싸지 않았을 경우를 대비해 cloneNode 사용
-            const tempNode = target.cloneNode(true);
-            const icons = tempNode.querySelectorAll('i');
-            icons.forEach(i => i.remove()); // 아이콘 태그 제거
-            let title = tempNode.innerText.trim();
+            if (page !== 'login' && !PageManager.isAuthenticated()) {
+                PageManager.load('login', 'Data Editing System Login');
+                return;
+            }
+
+            // 4. 제목 추출
+            let title = target.dataset.title || target.innerText.trim();
             
             // 5. 홈 예외 처리
             if (page === 'home') {
-                title = '인아이티 Data Editing 시스템';
+                title = 'INIT Data Editing 시스템';
             }
 
-            // 6. 페이지 로드 (명확하게 데이터가 있는지 확인 후 실행)
+            // 6. 페이지 로드 (명확하게 페이지가 있는지 확인 후 실행)
             if (page) {
                 console.log("Loading Page:", page, "with Title:", title); // 디버깅용
 
-                // 타이틀 출력을 보장하기 위해 PageManager 호출
+                // 새 페이지 출력 보장하기 위해 PageManager 호출
                 PageManager.load(page, title);
 
                 // 메뉴 활성화 스타일 처리
                 document.querySelectorAll('#mainNav a, #mainNav button').forEach(el => {
                     el.classList.remove('menu-active', 'bg-blue-700');
-                    /* el.classList.remove('visited-menu'); */ // 방문한 메뉴의 배경색을 남기고 싶으면 주석 해제할것.
+                    /* el.classList.remove('visited-menu'); */ // 방문한 메뉴의 배경색을 남기고 싶으면 주석 해제할 것.
                 });
                 
                 if (target.tagName === 'A') {
@@ -301,7 +281,7 @@
 
                 // 7. 모바일 레이아웃 닫기 (비동기로 실행하여 UI 충돌 방지)
                 if (window.innerWidth <= 1024 && typeof LayoutManager !== 'undefined') {
-                    // 타이틀이 찍힌 직후에 닫히도록 0ms 타임아웃 사용
+                    // 새 페이지 찍힌 직후에 닫히도록 50ms 타임아웃 적용
                     setTimeout(() => {
                         LayoutManager.close();
                     }, 50);
@@ -309,45 +289,47 @@
             }
         }
 
-        // 현재 페이지 새로고침
+        // Refresh the active page.
         async function handlePageRefresh() {
             const icon = document.getElementById('refreshIcon');
             const activeSection = document.querySelector('.page-section.active');
             
             if (!activeSection) return;
 
-            // 1. 현재 활성화된 페이지 코드 추출 (id="page-section-M02001" 에서 M02001 추출)
             const pageCode = activeSection.id.replace('page-section-', '');
             const title = document.getElementById('contentTitle').innerText;
 
-            // 2. 아이콘 회전 애니메이션 시작
             icon.classList.add('fa-spin');
 
             try {
-                // 3. PageManager의 강제 로드 호출 (세 번째 인자로 true 전달)
                 await PageManager.load(pageCode, title, true);
             } finally {
-                // 4. 애니메이션 종료 (약간의 지연을 주어 시각적 효과 부여)
                 setTimeout(() => icon.classList.remove('fa-spin'), 500);
             }
         }
 
-        // 현재 페이지 닫기
-        function handlePageClose() {
+        async function handlePageClose() {
             const activeSection = document.querySelector('.page-section.active');
             if (!activeSection) return;
-
             const pageCode = activeSection.id.replace('page-section-', '');
-            if (confirm('현재 페이지를 닫으시겠습니까?')) {
+            if (await PageManager.confirmAndCleanupBeforeClose?.([pageCode], "close current page")) {
                 PageManager.close(pageCode, true);
             }
         }
 
-        // 모든 페이지 닫기
-        function handleAllPageClose() {           
-            if (confirm('열려 있는 모든 페이지를 닫으시겠습니까?')) {
+        async function handleAllPageClose() {
+            const pageCodes = Object.keys(PageManager.containers || {});
+            if (await PageManager.confirmAndCleanupBeforeClose?.(pageCodes, "close all pages")) {
                 PageManager.closeAll();
             }
+        }
+
+        async function handleLogout() {
+            const pageCodes = Object.keys(PageManager.containers || {});
+            if (!(await PageManager.confirmAndCleanupBeforeClose?.(pageCodes, "logout"))) return;
+            PageManager.clearLoginSession?.();
+            PageManager.resetWorkspaceForLogout?.();
+            await PageManager.load('login', 'Data Editing System Login');
         }
 
         // 전역 변수로 이전 크기 저장 (초기값 300px)
@@ -360,11 +342,11 @@
             const errBody = document.getElementById("consoleErr");
             tabs.forEach((tab, index) => {
                 tab.addEventListener("click", function () {
-                    // 1. 모든 탭에서 active 클래스 제거 및 클릭한 탭에 추가
+                    // 1. 모든 탭에서 active 클래스 제거 후 클릭한 탭에 추가
                     tabs.forEach(t => t.classList.remove("active"));
                     this.classList.add("active");
 
-                    // 2. 인덱스에 따라 컨텐츠 전환 (0: 출력, 1: 터미널)
+                    // 2. 인덱스에 따라 콘텐츠 전환 (0: 출력, 1: 에러)
                     if (index === 0) {
                         msgBody.style.display = "block";
                         errBody.style.display = "none";
@@ -386,7 +368,7 @@
             const consoleBar = document.getElementById("pageConsoleHolder");
             const btnConsoleClose = document.getElementById("btnCloseConsolebar");
             
-            // 1. 우측 사이드바: 접혀있을 때 클릭하면 열리는 기능 추가
+            // 1. 우측 사이드바: 영역을 빈 곳 클릭하면 열리는 기능 추가
             sideRBar.addEventListener("click", function() {
                 if (this.classList.contains("collapsed")) {
                     toggleRightSidebar();
@@ -409,7 +391,7 @@
                 });
             }
 
-            // 3. 하단 콘솔바: 접혀있을 때 클릭하면 열리는 기능 추가
+            // 3. 하단 콘솔창 영역을 빈 곳 클릭하면 열리는 기능 추가
             consoleBar.addEventListener("click", function() {
                 if (this.classList.contains("collapsed")) {
                     toggleConsole();
@@ -424,10 +406,10 @@
                 });
             }
 
-            // 5. 하단 콘솔바 조절 (가이드라인 방식)
+            // 5. 하단 콘솔창 조절 (가이드라인 방식)
             const resizerBottom = document.getElementById("resizer-bottom");
             const ghostY = document.getElementById("ghost-y") || document.createElement('div');    
-            // 만약 ghost-x가 없었다면 생성 및 설정
+            // 만약 ghost-y가 없었다면 생성 후 설정
             if (!document.getElementById("ghost-y")) {
                 ghostY.id = 'ghost-y';
                 ghostY.className = 'resizer-ghost-y';        
@@ -440,10 +422,8 @@
                     backgroundColor: '#3b82f6', // 선명한 파란색
                     zIndex: '9999',
                     display: 'none',
-                    pointerEvents: 'none' // 가이드라인이 마우스 이벤트를 방해하지 않도록 함
+                    pointerEvents: 'none' // 가이드라인이 마우스 이벤트를 방해하지 않도록
                 });
-                //ghostY.style.left = resizerBottom.style.left;
-                //ghostY.style.width = resizerBottom.style.width;
                 document.body.appendChild(ghostY);
             }
 
@@ -454,7 +434,7 @@
                 document.body.style.cursor = "row-resize";
                 document.body.style.userSelect = "none";
                 ghostY.style.top = e.clientY + 'px';
-                // 콘솔바 원래바의 위치와 크기 통일
+                // 콘솔창 아래바의 위치를 알기 위함
                 ghostY.style.display = 'block';
 
                 function moveGhostY(e) {
@@ -467,7 +447,7 @@
                         ghostY.style.top = e.clientY + 'px';
                     }
 
-                    // 마우스 위치에 따라 가이드라인 이동 (제한 범위 내에서만)
+                    // 마우스 위치에 따라 가이드라인 이동 (제한 범위 안에서만)
                     if (currentH >= minH && currentH <= maxH) {
                         ghostY.style.top = e.clientY + 'px';
                     } else if (currentH < minH) {
@@ -482,11 +462,11 @@
                     const minH = 35;
                     const maxH = window.innerHeight * 0.7;
 
-                    // 최종 범위 검증
+                    // 최종 범위 검사
                     if (finalHeight < minH) finalHeight = minH;
                     if (finalHeight > maxH) finalHeight = maxH;
 
-                    // 실제 콘솔바 높이 적용 및 lastConsoleHeight 갱신
+                    // 실제 콘솔창 높이 적용 및 lastConsoleHeight 갱신
                     consoleBar.style.height = finalHeight + "px";
                     lastConsoleHeight = finalHeight + "px";
                     
@@ -503,7 +483,7 @@
 
             // 6. 우측 사이드바 조절 (가이드라인 방식)
             const ghostX = document.getElementById("ghost-x") || document.createElement('div');    
-            // 만약 ghost-x가 없었다면 생성 및 설정
+            // 만약 ghost-x가 없었다면 생성 후 설정
             if (!document.getElementById("ghost-x")) {
                 ghostX.id = 'ghost-x';
                 ghostX.className = 'resizer-ghost-x';
@@ -525,7 +505,7 @@
                     const maxW = window.innerWidth * 0.7;
                     let currentW = window.innerWidth - e.clientX;
 
-                    // 마우스 위치에 따라 가이드라인 이동 (제한 범위 내에서만)
+                    // 마우스 위치에 따라 가이드라인 이동 (제한 범위 안에서만)
                     if (currentW >= minW && currentW <= maxW) {
                         ghostX.style.left = e.clientX + 'px';
                     } else if (currentW < minW) {
@@ -540,7 +520,7 @@
                     const minW = 35;
                     const maxW = window.innerWidth * 0.7;
 
-                    // 최종 범위 검증
+                    // 최종 범위 검사
                     if (finalWidth < minW) finalWidth = minW;
                     if (finalWidth > maxW) finalWidth = maxW;
 
@@ -560,7 +540,7 @@
             });
         });
 
-        // 패널 토글 기능 (아이콘 유지 포함)
+        // 패널 토글 기능 (아이콘 변경 포함)
         function toggleRightSidebar() {
             const sidebar = document.getElementById("sideRBar");
             const isCollapsed = sidebar.classList.toggle("collapsed");
@@ -589,21 +569,21 @@
             const icon = btn.querySelector("i");
             const consolBody = document.getElementById("consoleBody");
 
-            btn.removeAttribute('title'); // 기존 타이틀 제거
-            // 브라우저가 렌더링을 다시 하도록 아주 미세한 시간차를 둠
+            btn.removeAttribute('title'); // 기존 툴팁 제거
+            // 브라우저가 렌더링을 다시 하도록 아주 미세한 시간차를 줌
             setTimeout(() => {
                 btn.setAttribute('title', newTitle);
             }, 50);
 
             if (isCollapsed) {
-                // 현재 높이가 너무 낮지 않다면 나중을 위해 높이 저장
+                // 현재 높이가 너무 클 수 있으므로 나중을 위해 높이 저장
                 if (consolePanel.style.height && parseInt(consolePanel.style.height) > 40) {
                     lastConsoleHeight = consolePanel.style.height;
                 }
                 consolePanel.style.height = "35px";
-                // 두 영역을 완전히 숨김 (공간 차지 X)
+                // 내용영역은 완전히 숨김 (공간 차지 X)
                 consolBody.style.display = "none";
-                // 아이콘을 '위'로 향하게 변경 (클릭하면 열린다는 의미)
+                // 아이콘을 '위로' 향하게 변경 (클릭하면 열린다는 의미)
                 icon.className = "fas fa-chevron-up";                
             } else {
                 // [열기/펼치기 실행]
@@ -611,7 +591,7 @@
                 
                 // 아이콘을 다시 '아래'로 향하게 변경 (클릭하면 닫힌다는 의미)
                 icon.className = "fas fa-chevron-down";
-                // 두 영역을 완전히 숨김 (공간 차지 X)
+                // 내용영역은 완전히 보임 (공간 차지 O)
                 consolBody.style.display = "block";
             }
         }
@@ -619,7 +599,7 @@
         let isMaximized = false;
         let preMaxHeight = "200px";
 
-        // 현재 활성화된 탭의 로그만 지우기
+        // 현재 활성화된 탭의 로그 지우기
         function clearActiveConsole() {
             const activeTabContent = document.querySelector(".console-body[style*='display: block']");
             if (activeTabContent) {
@@ -637,12 +617,12 @@
                 lastConsoleHeight = consolePanel.style.height || "200px";
                 consolePanel.style.height = "90vh";
                 icon.className = "fas fa-window-restore";
-                btn.title = "최소화"; // 타이틀 변경
+                btn.title = "최소화"; // 툴팁 변경
                 isMaximized = true;
             } else {
                 consolePanel.style.height = lastConsoleHeight;
                 icon.className = "fas fa-window-maximize";
-                btn.title = "최대화"; // 타이틀 변경
+                btn.title = "최대화"; // 툴팁 변경
                 isMaximized = false;
             }
         }
@@ -661,7 +641,6 @@
 
     </script>
 
-    <!-- 제미나이 스크립트 -->
     <script>
         const geminiForm = document.getElementById("geminiSearchForm");
         const geminiQueryEl = document.getElementById("geminiQuery");
@@ -843,3 +822,4 @@
 
 </body>
 </html>
+

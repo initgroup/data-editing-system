@@ -1,107 +1,162 @@
-<div class="page-container" id="container-M02002">
-    <div class="local-message-anchor fixed bottom-5 right-5 w-full max-w-md z-[9999] pointer-events-none">
-        <div class="local-error-box hidden pointer-events-auto relative border-l-4 p-4 rounded-md shadow-2xl transition-all w-full bg-white">
-            <div class="flex items-center pr-8">
-                <i class="local-error-icon fas fa-exclamation-circle mr-3 text-lg"></i>
-                <p class="local-error-text text-sm font-bold"></p>
+<div class="page-container table-page" id="container-M02002">
+    <section class="work-context-card" aria-label="Project and scenario context">
+        <header class="work-context-header">
+            <div class="work-context-title-row">
+                <span><strong>Project Scenario</strong> Select the required project and scenario for this menu.</span>
+                <span><strong>Scenario Tables</strong> Tables registered to the selected scenario.</span>
             </div>
-            <button onclick="CommonUI.hidePageMessage('M02002');" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
-                <i class="fas fa-times"></i>
-            </button>
+            <div class="scenario-table-actions">
+                <button type="button" class="table-icon-btn" title="Refresh project and scenario" onclick="M02002.refreshWorkContext()">
+                    <i class="fas fa-sync-alt"></i>
+                </button>
+                <button type="button" class="table-btn" onclick="M02002.saveScenarioTable()">
+                    <i class="fas fa-save"></i>
+                    <span>Save</span>
+                </button>
+                <button type="button" class="table-btn table-danger-btn" onclick="M02002.deleteScenarioTable()">
+                    <i class="far fa-trash-alt"></i>
+                    <span>Delete</span>
+                </button>
+                <button type="button" class="table-btn table-danger-btn" onclick="M02002.deleteAllScenarioTables()">
+                    <i class="fas fa-trash-can"></i>
+                    <span>Delete all</span>
+                </button>
+            </div>
+        </header>
+        <div class="work-context-bar">
+            <label>
+                <span class="required-title">Project</span>
+                <select id="contextProject-M02002" class="work-context-select" onchange="M02002.handleContextProjectChange(this.value)">
+                    <option value="">Select project</option>
+                </select>
+            </label>
+            <label>
+                <span class="required-title">Scenario</span>
+                <select id="contextScenario-M02002" class="work-context-select" onchange="M02002.handleContextScenarioChange(this.value)">
+                    <option value="">Select scenario</option>
+                </select>
+            </label>
         </div>
-    </div>
-    <div class="page-header">
-        <h1 class="page-title">본 페이지의 주요 기능을 설명합니다.</h1>
-    </div>
+        <div id="scenarioTablesGrid-M02002" class="scenario-table-grid"></div>
+    </section>
 
-    <div class="search-section">        
-        <div class="action-bar">
-            <button onclick="M02002.resetSearch()" class="btn bg-gray-500 hover:bg-gray-600 text-white">
-                <i class="fas fa-undo mr-1"></i> 초기화
-            </button>         
-            <button onclick="M02002.exportChart()" class="bg-white border border-gray-300 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-gray-50 transition">
-                <i class="fas fa-image mr-2"></i>차트 저장
-            </button>
-            <button onclick="M02002.updateChart()" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md hover:bg-indigo-700 transition">
-                <i class="fas fa-sync-alt mr-2"></i>적용 및 새로고침
-            </button>
-        </div>
-    </div>
-    <div class="result-section">
-        <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            <div class="lg:col-span-1 space-y-6">
-                <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                    <h3 class="font-bold text-gray-700 mb-4 flex items-center gap-2">
-                        <i class="fas fa-cog text-indigo-500"></i> 분석 설정
-                    </h3>
-                    
-                    <div class="space-y-4">
-                        <div>
-                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">데이터셋</label>
-                            <select class="w-full border-gray-300 rounded-lg p-2 text-sm border outline-none focus:ring-2 focus:ring-indigo-500">
-                                <option>TB_CUST_INFO (고객정보)</option>
-                                <option>TB_ORD_HIST (거래내역)</option>
-                            </select>
-                        </div>
+    <section class="table-workspace" aria-labelledby="table-title-M02002">
+        <aside class="table-object-panel">
+            <header class="table-object-header">
+                <div>
+                    <h2 class="table-section-title">Table Explorer</h2>
+                    <p class="table-section-desc">User tables for data analysis.</p>
+                </div>
+                <div class="table-object-actions">
+                    <button type="button" class="table-icon-btn" title="Refresh tables" onclick="M02002.loadTableTree()">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+            </header>
+            <div class="table-object-search">
+                <i class="fas fa-search"></i>
+                <input
+                    id="tableSearch-M02002"
+                    type="search"
+                    placeholder="Search table"
+                    aria-label="Search table"
+                    oninput="M02002.handleTableSearchInput()"
+                    onkeydown="M02002.handleTableSearchKey(event)"
+                >
+            </div>
+            <div id="tableTree-M02002" class="table-tree-grid"></div>
+        </aside>
 
-                        <div>
-                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">차트 유형</label>
-                            <div class="grid grid-cols-2 gap-2">
-                                <button onclick="M02002.setChartType('bar')" class="border rounded-lg p-2 text-xs font-bold hover:bg-indigo-50 hover:border-indigo-200 transition">막대 그래프</button>
-                                <button onclick="M02002.setChartType('line')" class="border rounded-lg p-2 text-xs font-bold hover:bg-indigo-50 hover:border-indigo-200 transition">선 그래프</button>
-                                <button onclick="M02002.setChartType('pie')" class="border rounded-lg p-2 text-xs font-bold hover:bg-indigo-50 hover:border-indigo-200 transition">파이 차트</button>
-                                <button onclick="M02002.setChartType('scatter')" class="border rounded-lg p-2 text-xs font-bold hover:bg-indigo-50 hover:border-indigo-200 transition">산점도</button>
-                            </div>
-                        </div>
+        <section class="table-panel" aria-labelledby="table-title-M02002">
+            <header class="table-header">
+                <div>
+                    <h1 class="table-title" id="table-title-M02002">Table Analysis</h1>
+                    <p class="table-desc" id="tableDescription-M02002">Select a table from the explorer.</p>
+                </div>
+                <div class="table-export-actions" aria-label="Export current grid">
+                    <button type="button" class="table-btn" onclick="M02002.moveSelectedTableToScenario()">
+                        <i class="fas fa-arrow-up-from-bracket"></i>
+                        <span>Add selected</span>
+                    </button>
+                    <button type="button" class="table-icon-btn export-excel" title="Export Excel" onclick="M02002.exportActiveGrid('excel')">
+                        <i class="fas fa-file-excel"></i>
+                    </button>
+                    <button type="button" class="table-icon-btn" title="Export CSV" onclick="M02002.exportActiveGrid('csv')">
+                        <i class="fas fa-file-csv"></i>
+                    </button>
+                    <button type="button" class="table-icon-btn" title="Export TSV" onclick="M02002.exportActiveGrid('tsv')">
+                        <i class="fas fa-file-lines"></i>
+                    </button>
+                </div>
+            </header>
 
-                        <div class="pt-4 border-t border-gray-100">
-                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">X축 (차원)</label>
-                            <select class="w-full border-gray-300 rounded-lg p-2 text-sm border mb-3">
-                                <option>AGE_GROUP</option>
-                                <option>REGION</option>
-                                <option>GENDER</option>
-                            </select>
+            <nav class="table-tabs" aria-label="Table analysis tabs">
+                <button type="button" class="table-tab is-active" data-tab="columns" onclick="M02002.switchTab('columns')">
+                    <i class="fas fa-list"></i>
+                    <span>Columns</span>
+                </button>
+                <button type="button" class="table-tab" data-tab="data" onclick="M02002.switchTab('data')">
+                    <i class="fas fa-table"></i>
+                    <span>Data</span>
+                </button>
+                <button type="button" class="table-tab" data-tab="sql" onclick="M02002.switchTab('sql')">
+                    <i class="fas fa-terminal"></i>
+                    <span>SQL</span>
+                </button>
+            </nav>
 
-                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Y축 (측정값)</label>
-                            <select class="w-full border-gray-300 rounded-lg p-2 text-sm border">
-                                <option>COUNT(*)</option>
-                                <option>SUM(SALARY)</option>
-                                <option>AVG(PURCHASE_AMT)</option>
-                            </select>
-                        </div>
+            <section class="table-tab-panel is-active" data-panel="columns">
+                <div class="table-meta-strip">
+                    <div>
+                        <span>Owner</span>
+                        <strong id="selectedOwner-M02002">-</strong>
+                    </div>
+                    <div>
+                        <span>Table ID</span>
+                        <strong id="selectedTable-M02002">-</strong>
+                    </div>
+                    <div>
+                        <span>Created At</span>
+                        <strong id="selectedCreatedAt-M02002">-</strong>
+                    </div>
+                    <div>
+                        <span>Comment</span>
+                        <strong id="selectedComment-M02002">-</strong>
                     </div>
                 </div>
-            </div>
+                <div id="columnsGrid-M02002" class="table-result-grid"></div>
+            </section>
 
-            <div class="lg:col-span-3 space-y-6">
-                <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200 min-h-[500px] flex flex-col">
-                    <div class="flex justify-between items-center mb-6">
-                        <h3 id="chartTitle" class="font-bold text-gray-800 text-lg">데이터 분석 결과 차트</h3>
-                        <div class="flex gap-2">
-                            <span class="bg-green-100 text-green-700 text-[10px] px-2 py-1 rounded font-bold uppercase">Live Data</span>
-                        </div>
-                    </div>
-                    
-                    <div class="flex-1 w-full relative">
-                        <canvas id="mainVisualizationChart"></canvas>
-                    </div>
-
-                    <div class="mt-6 pt-6 border-t border-gray-100 grid grid-cols-3 gap-4">
-                        <div class="text-center">
-                            <p class="text-[10px] text-gray-400 font-bold uppercase">최대값</p>
-                            <p class="text-lg font-black text-gray-700">1,250,000</p>
-                        </div>
-                        <div class="text-center border-x border-gray-100">
-                            <p class="text-[10px] text-gray-400 font-bold uppercase">평균값</p>
-                            <p class="text-lg font-black text-gray-700">452,100</p>
-                        </div>
-                        <div class="text-center">
-                            <p class="text-[10px] text-gray-400 font-bold uppercase">표준편차</p>
-                            <p class="text-lg font-black text-gray-700">12,402</p>
-                        </div>
-                    </div>
+            <section class="table-tab-panel" data-panel="data">
+                <div class="table-toolbar">
+                    <button type="button" class="table-btn" onclick="M02002.loadTableData()">
+                        <i class="fas fa-play"></i>
+                        <span>Query Data</span>
+                    </button>
+                    <label class="table-limit-control">
+                        <span>Rows</span>
+                        <input id="dataLimit-M02002" type="number" min="1" max="1000" value="100">
+                    </label>
                 </div>
-            </div>
-        </div>
-    </div>
+                <div id="dataGrid-M02002" class="table-result-grid"></div>
+            </section>
+
+            <section class="table-tab-panel" data-panel="sql">
+                <div class="sql-workbench">
+                    <div class="sql-toolbar">
+                        <button type="button" class="table-btn" onclick="M02002.executeSql()">
+                            <i class="fas fa-play"></i>
+                            <span>Run SQL(Ctrl+Enter)</span>
+                        </button>
+                        <label class="table-limit-control">
+                            <span>Rows</span>
+                            <input id="sqlLimit-M02002" type="number" min="1" max="1000" value="100">
+                        </label>
+                    </div>
+                    <textarea id="sqlEditor-M02002" class="sql-editor table-sql-editor" spellcheck="false" aria-label="SQL worksheet"></textarea>
+                    <div id="sqlGrid-M02002" class="table-result-grid"></div>
+                </div>
+            </section>
+        </section>
+    </section>
 </div>

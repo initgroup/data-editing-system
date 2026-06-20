@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from threading import Lock
 from typing import Optional
 
 import oracledb
@@ -10,6 +11,8 @@ load_dotenv()
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+_pool = None
+_pool_lock = Lock()
 
 
 def _resolve_project_path(path_value: Optional[str]) -> Optional[str]:
@@ -23,7 +26,7 @@ def _resolve_project_path(path_value: Optional[str]) -> Optional[str]:
     return str((PROJECT_ROOT / path).resolve())
 
 
-def _connect_cloud_db(user: str, password: str, dsn: str):
+def _get_cloud_connect_args(user: str, password: str, dsn: str) -> dict:
     wallet_path = _resolve_project_path(
         os.getenv("DB_WALLET_PATH", "secreats/Wallet_INITGROUPEDITING")
     )
@@ -32,14 +35,14 @@ def _connect_cloud_db(user: str, password: str, dsn: str):
     if oracle_mode == "thick":
         client_path = _resolve_project_path(os.getenv("DB_CLIENT_PATH"))
         if not client_path:
-            raise ValueError("DB_ORACLE_MODE=thick 인 경우 DB_CLIENT_PATH 환경변수가 필요합니다.")
+            raise ValueError("DB_ORACLE_MODE=thick requires DB_CLIENT_PATH.")
 
         try:
             oracledb.init_oracle_client(lib_dir=client_path, config_dir=wallet_path)
         except oracledb.ProgrammingError:
             pass
 
-        return oracledb.connect(user=user, password=password, dsn=dsn)
+        return {"user": user, "password": password, "dsn": dsn}
 
     connect_args = {
         "user": user,
@@ -62,15 +65,10 @@ def _connect_cloud_db(user: str, password: str, dsn: str):
             "A TNS alias such as DB_DSN_CLD requires tnsnames.ora in this directory."
         )
 
-    return oracledb.connect(**connect_args)
+    return connect_args
 
 
-def get_db_connection():
-    """
-    DB_MODE=local 이면 로컬 Oracle DB에, DB_MODE=cloud 이면 Oracle Cloud DB에 연결합니다.
-    Cloud 연결은 기본적으로 python-oracledb Thin Mode를 사용해 Render에서도
-    Oracle Instant Client 없이 동작하도록 합니다.
-    """
+def _get_connect_args() -> tuple[str, dict]:
     db_mode = os.getenv("DB_MODE", "local").lower()
 
     if db_mode == "cloud":
@@ -86,25 +84,69 @@ def get_db_connection():
         dsn = f"{host}:{port}/{service}"
 
     if not all([user, password, dsn]):
-        raise ValueError("DB 접속 환경변수가 누락되었습니다.")
+        raise ValueError("Database connection environment variables are missing.")
 
+    if db_mode == "cloud":
+        return db_mode, _get_cloud_connect_args(user, password, dsn)
+
+    return db_mode, {"user": user, "password": password, "dsn": dsn}
+
+
+def get_db_pool():
+    global _pool
+
+    if _pool is not None:
+        return _pool
+
+    with _pool_lock:
+        if _pool is not None:
+            return _pool
+
+        db_mode, connect_args = _get_connect_args()
+        pool_args = {
+            **connect_args,
+            "min": int(os.getenv("DB_POOL_MIN", "1")),
+            "max": int(os.getenv("DB_POOL_MAX", "5")),
+            "increment": int(os.getenv("DB_POOL_INCREMENT", "1")),
+        }
+
+        print(
+            "[DB] Oracle connection pool initializing. "
+            f"mode={db_mode}, min={pool_args['min']}, max={pool_args['max']}"
+        )
+        _pool = oracledb.create_pool(**pool_args)
+        print("[DB] Oracle connection pool ready.")
+        return _pool
+
+
+def close_db_pool():
+    global _pool
+
+    with _pool_lock:
+        if _pool is not None:
+            _pool.close()
+            _pool = None
+
+
+def get_db_connection():
+    """
+    Acquire a connection from the Oracle pool.
+
+    Existing callers can keep using conn.close(); python-oracledb returns pooled
+    connections to the pool on close.
+    """
     try:
-        if db_mode == "cloud":
-            print("[운영 환경] Oracle Cloud DB 접속 시도 중...")
-            connection = _connect_cloud_db(user=user, password=password, dsn=dsn)
+        db_mode = os.getenv("DB_MODE", "local").lower()
+        connection = get_db_pool().acquire()
 
+        if db_mode == "cloud":
             with connection.cursor() as cursor:
                 try:
                     cursor.execute("BEGIN DBMS_CLOUD_AI.set_profile('INITAI_PROFILE'); END;")
-                    print("   - Select AI 프로필 'INITAI_PROFILE' 설정 완료")
                 except oracledb.Error as ai_err:
-                    print(f"   - AI 프로필 설정 중 오류 발생: {ai_err}")
-        else:
-            print("[개발 환경] 로컬 Oracle DB 접속 시도 중...")
-            connection = oracledb.connect(user=user, password=password, dsn=dsn)
+                    print(f"[DB] Select AI profile setup failed: {ai_err}")
 
-        print("데이터베이스 연결 성공!")
         return connection
     except oracledb.Error as e:
-        print(f"Oracle 데이터베이스 연결 실패: {e}")
+        print(f"Oracle database connection failed: {e}")
         raise
