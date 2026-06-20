@@ -6,7 +6,7 @@
     const TREE_PAGE_SIZE = 200;
 
     const M02002 = {
-        
+
         ...COMMON,
         isInit: false,
         contextProjects: [],
@@ -1091,7 +1091,7 @@
             link.remove();
             URL.revokeObjectURL(url);
         },
-
+
         ensureSelectedTable() {
             if (this.selectedTable) return true;
             this.renderError(`#${this.activeTab}Grid-M02002`, "Select a table first.");
