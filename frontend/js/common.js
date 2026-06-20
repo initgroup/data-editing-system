@@ -1,4 +1,4 @@
-/**
+﻿/**
  * common.js: 시스템 전역 공통 유틸리티
  */
 const CommonUI = {
@@ -26,7 +26,7 @@ const CommonUI = {
         }
     },
 
-    // --- [메시지 알림 영역] ---    
+    // --- [메시지 알림 영역] ---
     showPageError(pageCode, msg) {
         const container = document.getElementById(`container-${pageCode}`);
         const anchor = container ? container.querySelector('#msg-anchor') : null;                
@@ -170,10 +170,10 @@ const CommonUI = {
             // 한국어 메시지 설정
             language: {
                 'pagination': {
-                    'first':'맨처음',
+                    'first': '맨처음',
                     'previous': '이전',
                     'next': '다음',
-                    'last':'맨끝',
+                    'last': '맨끝',
                     'showing': '검색 결과',
                     'results': () => '건',
                     'of': '/',
@@ -410,8 +410,9 @@ const CommonUtils = {
     },
 
     async request(url, options = {}) {
-        ConsoleLogger.info("(request)", url, 'CommonUtils.request');
+        const requestLog = window.ConsoleLogger?.requestStart?.(url, options);
         this.activeRequestCount += 1;
+        let responseLogged = false;
         try {
             const headers = { 'Content-Type': 'application/json', ...options.headers };
             const targetConnectionId = sessionStorage.getItem("targetConnectionId") || "";
@@ -444,19 +445,21 @@ const CommonUtils = {
             if (!response.ok) {
                 const errorJson = await response.json().catch(() => ({}));
                 const errorMsg = this.formatErrorMessage(errorJson);
-                ConsoleLogger.error("(response-error)", url, errorMsg);
-                throw new Error(errorMsg); // 여기서 던진 에러는 호출한 곳의 catch로 갑니다.
+                window.ConsoleLogger?.requestEnd?.(requestLog, response, { message: errorMsg });
+                responseLogged = true;
+                throw new Error(errorMsg);
             }
-            ConsoleLogger.info("(request)", url, 'CommonUtils.request');
+            const json = await response.json();
+            window.ConsoleLogger?.requestEnd?.(requestLog, response);
+            responseLogged = true;
             window.PageManager?.extendSession?.();
-            return await response.json();
+            return json;
 
         } catch (err) {
-            // 네트워크 타임아웃이나 fetch 자체 실패 시 처리
-            if (!(err instanceof Error)) {
-                ConsoleLogger.error("(network-error)", url, err);
+            if (!responseLogged) {
+                window.ConsoleLogger?.requestError?.(requestLog, err);
             }
-            throw err; // 상위 호출자에게 에러를 최종 전달
+            throw err;
         } finally {
             this.activeRequestCount = Math.max(0, this.activeRequestCount - 1);
         }
@@ -467,7 +470,7 @@ const CommonUtils = {
      * @param {string} pageCode - 메시지를 출력할 페이지 코드
      * @param {HTMLElement} targetEl - 데이터를 채울 select 박스 요소
      * @param {string} apiUrl - 호출할 API 경로
-     * @param {string} dataKey - 기본은 data 
+     * @param {string} dataKey - 기본은 data
      * @param {Object} options - request 시 사용할 옵션 (method, body 등)
      * @param {string} defaultValue - 기본 선택값
      */
@@ -771,9 +774,202 @@ CommonUtils.request = async function(url, options = {}) {
     }
 };
 
-// 전역 노출 설정 (이 부분이 있어야 M00000.js에서 찾을 수 있음)
+// 전역 메시지 레이어 설정
+const CommonMessage = {
+    zIndex: 12000,
+    activeDrag: null,
+    icons: {
+        info: "fas fa-circle-info",
+        success: "fas fa-circle-check",
+        warning: "fas fa-triangle-exclamation",
+        error: "fas fa-circle-xmark",
+        confirm: "fas fa-circle-question"
+    },
+    ensureHost() {
+        let host = document.getElementById("commonMessageHost");
+        if (!host) {
+            host = document.createElement("div");
+            host.id = "commonMessageHost";
+            host.className = "common-message-host";
+            document.body.appendChild(host);
+        }
+        return host;
+    },
+    normalizeOptions(message, options = {}) {
+        if (typeof options === "string") options = { type: options };
+        const type = options.type || "info";
+        return {
+            type,
+            title: options.title || this.defaultTitle(type),
+            modal: Boolean(options.modal),
+            copyable: options.copyable !== false,
+            okText: options.okText || "OK",
+            cancelText: options.cancelText || "Cancel",
+            message: String(message ?? "")
+        };
+    },
+    defaultTitle(type) {
+        return {
+            info: "Information",
+            success: "Success",
+            warning: "Warning",
+            error: "Error",
+            confirm: "Confirm"
+        }[type] || "Message";
+    },
+    alert(message, options = {}) {
+        return this.open(this.normalizeOptions(message, options));
+    },
+    info(message, options = {}) {
+        return this.alert(message, { ...options, type: "info" });
+    },
+    success(message, options = {}) {
+        return this.alert(message, { ...options, type: "success" });
+    },
+    warn(message, options = {}) {
+        return this.alert(message, { ...options, type: "warning" });
+    },
+    error(message, options = {}) {
+        return this.alert(message, { ...options, type: "error", modal: options.modal ?? true });
+    },
+    inferType(message) {
+        const text = String(message || "").toLowerCase();
+        if (/(error|failed|fail|cannot|unable|invalid|required|denied|expired|삭제가 취소|취소)/.test(text)) return "error";
+        if (/(success|saved|deleted|uploaded|completed|created|done|완료|성공)/.test(text)) return "success";
+        if (/(warning|cannot be undone|continue|drop|reset|truncate|delete)/.test(text)) return "warning";
+        return "info";
+    },
+    confirm(message, options = {}) {
+        return this.open(this.normalizeOptions(message, { ...options, type: "confirm", modal: true }));
+    },
+    open(options) {
+        const host = this.ensureHost();
+        const overlay = options.modal ? document.createElement("div") : null;
+        const popup = document.createElement("section");
+        const bodyId = `common-message-body-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+        if (overlay) {
+            overlay.className = "common-message-overlay";
+            overlay.style.zIndex = String(++this.zIndex);
+            host.appendChild(overlay);
+        }
+        popup.className = `common-message-popup is-${options.type}${options.modal ? " is-modal" : " is-modeless"}`;
+        popup.style.zIndex = String(++this.zIndex);
+        popup.setAttribute("role", options.type === "confirm" || options.modal ? "dialog" : "status");
+        popup.setAttribute("aria-modal", String(Boolean(options.modal)));
+        popup.setAttribute("aria-describedby", bodyId);
+        popup.innerHTML = `
+            <header class="common-message-header">
+                <span class="common-message-icon"><i class="${this.icons[options.type] || this.icons.info}"></i></span>
+                <strong>${this.escapeHtml(options.title)}</strong>
+                <button type="button" class="common-message-tool" data-common-message-action="close" title="Close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </header>
+            <div id="${bodyId}" class="common-message-body" tabindex="0">${this.formatMessage(options.message)}</div>
+            <footer class="common-message-footer">
+                ${options.copyable ? `<button type="button" class="common-message-secondary" data-common-message-action="copy"><i class="fas fa-copy"></i><span>Copy</span></button>` : ""}
+                ${options.type === "confirm" ? `<button type="button" class="common-message-secondary" data-common-message-action="cancel">${this.escapeHtml(options.cancelText)}</button>` : ""}
+                <button type="button" class="common-message-primary" data-common-message-action="ok">${this.escapeHtml(options.okText)}</button>
+            </footer>
+        `;
+        host.appendChild(popup);
+        this.positionPopup(popup, options.modal);
+        this.bindDrag(popup);
+        return new Promise((resolve) => {
+            const cleanup = (result) => {
+                popup.remove();
+                overlay?.remove();
+                resolve(result);
+            };
+            popup.querySelector('[data-common-message-action="ok"]')?.addEventListener("click", () => cleanup(true));
+            popup.querySelector('[data-common-message-action="cancel"]')?.addEventListener("click", () => cleanup(false));
+            popup.querySelector('[data-common-message-action="close"]')?.addEventListener("click", () => cleanup(options.type !== "confirm"));
+            popup.querySelector('[data-common-message-action="copy"]')?.addEventListener("click", async (event) => {
+                await this.copyText(options.message);
+                const button = event.currentTarget;
+                const original = button.innerHTML;
+                button.innerHTML = '<i class="fas fa-check"></i><span>Copied</span>';
+                setTimeout(() => {
+                    if (button.isConnected) button.innerHTML = original;
+                }, 1200);
+            });
+            popup.addEventListener("keydown", (event) => {
+                if (event.key === "Escape") cleanup(options.type !== "confirm");
+                if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) cleanup(true);
+            });
+            setTimeout(() => popup.querySelector(".common-message-primary")?.focus(), 0);
+        });
+    },
+    positionPopup(popup, isModal) {
+        popup.style.left = "";
+        popup.style.top = "";
+        popup.style.right = "";
+        popup.style.transform = "";
+        if (isModal) {
+            popup.classList.add("is-centered");
+            return;
+        }
+        popup.style.right = "22px";
+        popup.style.top = `${22 + document.querySelectorAll(".common-message-popup.is-modeless").length * 14}px`;
+    },
+    bindDrag(popup) {
+        const header = popup.querySelector(".common-message-header");
+        if (!header) return;
+        header.addEventListener("pointerdown", (event) => {
+            if (event.target.closest("button")) return;
+            const rect = popup.getBoundingClientRect();
+            popup.classList.remove("is-centered");
+            popup.style.transform = "none";
+            popup.style.right = "auto";
+            popup.style.left = `${rect.left}px`;
+            popup.style.top = `${rect.top}px`;
+            this.activeDrag = { popup, startX: event.clientX, startY: event.clientY, left: rect.left, top: rect.top };
+            header.setPointerCapture?.(event.pointerId);
+        });
+        header.addEventListener("pointermove", (event) => {
+            if (!this.activeDrag || this.activeDrag.popup !== popup) return;
+            const nextLeft = this.activeDrag.left + event.clientX - this.activeDrag.startX;
+            const nextTop = this.activeDrag.top + event.clientY - this.activeDrag.startY;
+            popup.style.left = `${Math.max(8, Math.min(window.innerWidth - popup.offsetWidth - 8, nextLeft))}px`;
+            popup.style.top = `${Math.max(8, Math.min(window.innerHeight - popup.offsetHeight - 8, nextTop))}px`;
+        });
+        header.addEventListener("pointerup", () => {
+            this.activeDrag = null;
+        });
+    },
+    async copyText(text) {
+        if (navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(String(text ?? ""));
+            return;
+        }
+        const textarea = document.createElement("textarea");
+        textarea.value = String(text ?? "");
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        textarea.remove();
+    },
+    escapeHtml(value) {
+        return String(value ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    },
+    formatMessage(message) {
+        return this.escapeHtml(message).replace(/\r?\n/g, "<br>");
+    }
+};
+
 window.CommonUI = CommonUI;
 window.CommonUtils = CommonUtils;
+window.CommonMessage = CommonMessage;
+window.alert = (message) => {
+    CommonMessage.alert(message, { type: CommonMessage.inferType(message) });
+};
 // 전역 객체로 노출 (M00000.js에서 참조 가능하도록)
 window.DataEditingSystem = DataEditingSystem;
 window.showLoading = () => CommonUI.showLoading();
@@ -787,3 +983,4 @@ window.clearInputs = (id) => CommonUI.clearInputs(id);
 window.createGrid = function(el, options) {
     return CommonUI.createGrid(el, options);
 };
+

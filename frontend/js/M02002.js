@@ -1,4 +1,4 @@
-(function() {
+﻿(function() {
     const PAGE_CODE = "M02002";
     const CONTEXT_STORAGE_KEY = "DATA_EDITING_WORK_CONTEXT";
     const { getContainerEl } = PageManager.createHelper(PAGE_CODE);
@@ -435,7 +435,7 @@
                 return;
             }
 
-            if (!confirm(`Delete table "${row.OWNER_NAME}.${row.TABLE_NAME}" from this scenario?`)) {
+            if (!(await CommonMessage.confirm(`Delete table "${row.OWNER_NAME}.${row.TABLE_NAME}" from this scenario?`))) {
                 return;
             }
 
@@ -465,7 +465,7 @@
                 return;
             }
 
-            if (!confirm("Delete all tables registered to this scenario?")) {
+            if (!(await CommonMessage.confirm("Delete all tables registered to this scenario?"))) {
                 return;
             }
 
@@ -1108,3 +1108,4 @@
 
     window[PAGE_CODE] = M02002;
 })();
+

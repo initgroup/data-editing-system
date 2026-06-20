@@ -1,4 +1,4 @@
-(function() {
+﻿(function() {
     const PAGE_CODE = "M01001";
     const { getContainerEl } = PageManager.createHelper(PAGE_CODE);
     const COMMON = MCOMMON.createPageHelper(PAGE_CODE);
@@ -304,7 +304,7 @@
                 return;
             }
 
-            if (!confirm(`Delete project "${this.selectedProject.projectName}"?`)) {
+            if (!(await CommonMessage.confirm(`Delete project "${this.selectedProject.projectName}"?`))) {
                 return;
             }
 
@@ -327,3 +327,4 @@
 
     window[PAGE_CODE] = M01001;
 })();
+

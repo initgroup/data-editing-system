@@ -1,4 +1,4 @@
-(function() {
+﻿(function() {
     const PAGE_CODE = "M02001";
     const CONTEXT_STORAGE_KEY = "DATA_EDITING_WORK_CONTEXT";
     const { getContainerEl } = PageManager.createHelper(PAGE_CODE);
@@ -420,7 +420,7 @@
                 alert("Only upload tables starting with INITUP$_ can be deleted.");
                 return;
             }
-            if (!confirm(`${tableName} table will be dropped. Continue?`)) return;
+            if (!(await CommonMessage.confirm(`${tableName} table will be dropped. Continue?`))) return;
             try {
                 await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/drop-table`, {
                     method: "POST",
@@ -751,3 +751,4 @@
 
     window[PAGE_CODE] = M02001;
 })();
+

@@ -1,4 +1,4 @@
-(function() {
+﻿(function() {
     const PAGE_CODE = "M01002";
     const { getContainerEl } = PageManager.createHelper(PAGE_CODE);
     const COMMON = MCOMMON.createPageHelper(PAGE_CODE);
@@ -447,7 +447,7 @@
                 return;
             }
 
-            if (!confirm(`Delete scenario "${this.selectedScenario.scenarioName}"?`)) {
+            if (!(await CommonMessage.confirm(`Delete scenario "${this.selectedScenario.scenarioName}"?`))) {
                 return;
             }
 
@@ -480,7 +480,7 @@
             }
 
             const projectName = this.selectedProject.projectName || "selected project";
-            if (!confirm(`Delete all scenarios for "${projectName}"?`)) {
+            if (!(await CommonMessage.confirm(`Delete all scenarios for "${projectName}"?`))) {
                 return;
             }
 
@@ -527,3 +527,4 @@
 
     window[PAGE_CODE] = M01002;
 })();
+

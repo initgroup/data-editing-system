@@ -16,7 +16,7 @@ const PageManager = {
     modules: {}, // Loaded page modules cache.
     containers: {}, // Open page containers.
     lastLoadedVersion: null, // Last loaded asset version.
-    dataWorkTemplatePages: ['M02003', 'M02004', 'M03001'],
+    dataWorkTemplatePages: ['M03001', 'M03002', 'M03003'],
     flowWorkTemplatePages: ['M04001'],
     sessionTimerId: null,
     isSessionExpiredHandling: false,
@@ -213,14 +213,14 @@ const PageManager = {
     },
 
     async confirmAndCleanupBeforeClose(pageCodes = [], actionText = "continue") {
-        if (!confirm(this.buildTransitionWarning(actionText))) return false;
+        if (!(await CommonMessage.confirm(this.buildTransitionWarning(actionText)))) return false;
 
         const canClose = await this.runPageBeforeCloseHooks(pageCodes);
         if (!canClose) return false;
 
         if (CommonUtils.waitForIdle) {
             const isIdle = await CommonUtils.waitForIdle(15000);
-            if (!isIdle && !confirm("Some requests are still running. Continue cleanup anyway?")) {
+            if (!isIdle && !(await CommonMessage.confirm("Some requests are still running. Continue cleanup anyway?"))) {
                 return false;
             }
         }
@@ -230,9 +230,11 @@ const PageManager = {
     },
 
     formatPageTitle(pageCode, title) {
-        if (title) return title;
         const menu = window.MENU_PAGE_MAP?.[pageCode];
-        return menu?.title || menu?.label || pageCode;
+        const baseTitle = title || menu?.title || menu?.label || pageCode;
+        if (!pageCode || pageCode === DEFAULT_PAGE_CODE || pageCode === "home") return baseTitle;
+        if (String(baseTitle).includes(`[${pageCode}]`)) return baseTitle;
+        return `${baseTitle} [${pageCode}]`;
     },
 
     show(pageCode) {
@@ -367,7 +369,7 @@ const PageManager = {
      */
     async injectHtml(pageCode) {
         const container = this.containers[pageCode];
-        if (!container) throw new Error(`컨테이너가 생성되지 않았습니다. ${pageCode}`);
+        if (!container) throw new Error(`Page container was not created: ${pageCode}`);
 
         if (!this.hasRegisteredPageFile(pageCode, 'html')) {
             container.innerHTML = this.createMissingPageHtml(pageCode);
@@ -543,6 +545,8 @@ const LayoutManager = {
     sidebar: null,
     overlay: null,
     btn: null,
+    collapseBtn: null,
+    collapseStorageKey: 'INIT_SIDEBAR_USER_COLLAPSED',
 
     init() {
         this.sidebar = document.querySelector('.sidebar');
@@ -564,9 +568,12 @@ const LayoutManager = {
             document.body.appendChild(btn);
         }
         this.btn = document.getElementById('mobile-menu-btn');
+        this.collapseBtn = document.getElementById('btnSidebarCollapse');
 
         if (this.btn) this.btn.onclick = () => this.toggle();
+        if (this.collapseBtn) this.collapseBtn.onclick = () => this.toggleSidebarCollapsed();
         this.overlay.onclick = () => this.toggle();
+        this.restoreSidebarCollapsed();
 
         document.querySelectorAll('#mainNav [data-page]').forEach(link => {
             link.addEventListener('click', () => {
@@ -583,6 +590,9 @@ const LayoutManager = {
                 this.sidebar.classList.remove('show');
                 this.overlay.classList.remove('active');
                 if (this.btn) this.btn.innerHTML = '<i class="fas fa-bars"></i>';
+                this.applySidebarCollapsed(this.isSidebarCollapsed());
+            } else {
+                this.applySidebarCollapsed(false, { persist: false });
             }
         });
     },
@@ -627,6 +637,42 @@ const LayoutManager = {
         });
     },
 
+    isSidebarCollapsed() {
+        return localStorage.getItem(this.collapseStorageKey) === 'Y';
+    },
+
+    restoreSidebarCollapsed() {
+        this.applySidebarCollapsed(window.innerWidth > 1024 && this.isSidebarCollapsed(), { persist: false });
+    },
+
+    toggleSidebarCollapsed() {
+        const nextCollapsed = !document.body.classList.contains('sidebar-user-collapsed');
+        this.applySidebarCollapsed(nextCollapsed);
+    },
+
+    applySidebarCollapsed(collapsed, options = {}) {
+        const persist = options.persist !== false;
+        const enabled = Boolean(collapsed) && window.innerWidth > 1024;
+        if (!enabled) {
+            window.MenuRenderer?.closeCollapsedFlyouts?.();
+        }
+        document.body.classList.toggle('sidebar-user-collapsed', enabled);
+        this.sidebar.classList.toggle('sidebar-collapsed', enabled);
+
+        if (persist) {
+            localStorage.setItem(this.collapseStorageKey, enabled ? 'Y' : 'N');
+        }
+
+        if (this.collapseBtn) {
+            this.collapseBtn.title = enabled ? 'Expand sidebar' : 'Collapse sidebar';
+            this.collapseBtn.setAttribute('aria-label', this.collapseBtn.title);
+            this.collapseBtn.setAttribute('aria-expanded', String(!enabled));
+            this.collapseBtn.innerHTML = enabled
+                ? '<i class="fas fa-angles-right"></i>'
+                : '<i class="fas fa-angles-left"></i>';
+        }
+    },
+
     toggle() {
         if (!this.sidebar) return;
         const isShow = this.sidebar.classList.toggle('show');
@@ -649,10 +695,16 @@ const LayoutManager = {
 };
 
 const ConsoleLogger = {
-    isEnabled: false, // 로그 출력 여부
-    maxLines: 500, // 최대 보관 로그 라인 수
+    isEnabled: false,
+    maxLines: 500,
+    minLines: 50,
+    maxAllowedLines: 5000,
+    requestSeq: 0,
+    settingsScopeKey: "",
+    sensitiveKeyPattern: /(password|passwd|pwd|token|secret|key|authorization|credential|wallet|admin|private)/i,
 
     init() {
+        this.setMaxEntries(localStorage.getItem("initConsoleLogMaxEntries") || this.maxLines, { persist: false });
         const toggle = document.getElementById('chkLogToggle');
         const statusText = document.getElementById('logStatusTextText');
 
@@ -665,6 +717,9 @@ const ConsoleLogger = {
                 }
             });
         }
+        this.clearPlaceholderLines();
+        this.updateStats();
+        this.loadSettings();
     },
 
     toggle() {
@@ -702,47 +757,181 @@ const ConsoleLogger = {
         this._write('warn', msg, source, location);
     },
 
-    /**
-     * 콘솔 로그 영역에 로그를 출력합니다.
-     * @param {string} level - info, error, warn
-     * @param {string} msg - 메시지 내용
-     * @param {string} source - 소스 위치
-     * @param {string} location - 명령 위치
-     */
+    requestStart(url, options = {}) {
+        const method = String(options.method || "GET").toUpperCase();
+        const context = {
+            id: ++this.requestSeq,
+            method,
+            url: this.sanitizeUrl(url),
+            startedAt: performance.now()
+        };
+        this.info(`#${context.id} ${method} ${context.url}`, "Network", "request");
+        return context;
+    },
+
+    requestEnd(context, response, detail = {}) {
+        if (!context) return;
+        const elapsed = Math.max(0, Math.round(performance.now() - context.startedAt));
+        const status = response?.status || 0;
+        const statusText = response?.statusText ? ` ${response.statusText}` : "";
+        const suffix = detail.message ? ` - ${this.safeText(detail.message, 400)}` : "";
+        const level = response?.ok ? "success" : "error";
+        this._write(level, `#${context.id} ${context.method} ${context.url} -> ${status}${statusText} (${elapsed} ms)${suffix}`, "Network", "response");
+    },
+
+    requestError(context, error, detail = {}) {
+        if (!context) return;
+        const elapsed = Math.max(0, Math.round(performance.now() - context.startedAt));
+        const phase = detail.phase ? `${detail.phase} ` : "";
+        const message = this.safeText(error?.message || error || "Request failed.", 600);
+        this.error(`#${context.id} ${context.method} ${context.url} -> ${phase}failed (${elapsed} ms) - ${message}`, "Network", "error");
+    },
+
+    setMaxEntries(value, options = {}) {
+        const parsed = Number.parseInt(value, 10);
+        const nextValue = Number.isFinite(parsed) ? parsed : this.maxLines;
+        this.maxLines = Math.min(this.maxAllowedLines, Math.max(this.minLines, nextValue));
+        if (options.persist !== false) {
+            localStorage.setItem("initConsoleLogMaxEntries", String(this.maxLines));
+        }
+        this.trimAll();
+        this.updateStats();
+    },
+
+    async loadSettings() {
+        try {
+            const loginUser = JSON.parse(sessionStorage.getItem("initLoginUser") || "{}");
+            const connectionId = sessionStorage.getItem("targetConnectionId") || "";
+            if (!loginUser.userId || !connectionId || typeof API_BASE_URL === "undefined") return;
+
+            const scopeKey = `${loginUser.userId}:${connectionId}`;
+            if (this.settingsScopeKey === scopeKey) return;
+
+            const headers = { "Content-Type": "application/json" };
+            headers["X-Login-User-Id"] = String(loginUser.userId);
+            if (loginUser.loginId) headers["X-Login-Id"] = String(loginUser.loginId);
+            if (loginUser.email) headers["X-Login-Email"] = String(loginUser.email);
+            if (loginUser.roleCode) headers["X-Login-Role-Code"] = String(loginUser.roleCode);
+            headers["X-Target-Connection-Id"] = String(connectionId);
+
+            const response = await fetch(`${API_BASE_URL}/M91002/settings?categoryCode=OTHER`, { method: "GET", headers });
+            if (!response.ok) return;
+            this.settingsScopeKey = scopeKey;
+            const json = await response.json();
+            const rows = Array.isArray(json?.data) ? json.data : [];
+            const setting = rows.find((row) => String(row.SETTING_KEY || "").toUpperCase() === "CONSOLE_LOG_MAX_ENTRIES");
+            if (setting?.SETTING_VALUE) this.setMaxEntries(setting.SETTING_VALUE, { persist: true });
+        } catch (_) {
+            // Settings are optional. The console keeps the local/default value when loading fails.
+        }
+    },
+
+    sanitizeUrl(url) {
+        const raw = String(url || "");
+        try {
+            const parsed = new URL(raw, window.location.origin);
+            parsed.searchParams.forEach((value, key) => {
+                if (this.sensitiveKeyPattern.test(key)) parsed.searchParams.set(key, "[masked]");
+            });
+            const safePath = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+            return parsed.origin === window.location.origin ? safePath : `${parsed.origin}${safePath}`;
+        } catch (_) {
+            return this.maskSensitive(raw);
+        }
+    },
+
+    safeText(value, maxLength = 1600) {
+        let text = typeof value === "string" ? value : JSON.stringify(value ?? "");
+        text = this.maskSensitive(text);
+        return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
+    },
+
+    maskSensitive(text) {
+        return String(text ?? "")
+            .replace(/([?&][^=]*?(password|passwd|pwd|token|secret|key|authorization|credential|wallet|admin)[^=]*=)[^&\s]*/gi, "$1[masked]")
+            .replace(/("(?:password|passwd|pwd|token|secret|key|authorization|credential|wallet|admin)[^"]*"\s*:\s*)"[^"]*"/gi, '$1"[masked]"')
+            .replace(/((?:password|passwd|pwd|token|secret|key|authorization|credential|wallet|admin)[\w-]*\s*[:=]\s*)[^\s,;]+/gi, "$1[masked]");
+    },
+
+    escapeHtml(value) {
+        return String(value ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+    },
+
     _write(level, msg, source, location) {
+        if (!this.isEnabled) return;
         const targetMsg = document.getElementById("consoleMsg");
         const targetErr = document.getElementById("consoleErr");
         const scrollParent = document.getElementById("consoleBody");
         if (!targetMsg || !targetErr || !scrollParent) return;
+        this.clearPlaceholderLines();
 
         const now = new Date();
         const timeStr = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')} ` +
             `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}.${now.getMilliseconds().toString().padStart(3, '0')}`;
 
+        const safeMsg = this.escapeHtml(this.safeText(msg));
+        const safeSource = this.escapeHtml(source || "System");
+        const safeLocation = this.escapeHtml(location || "");
+        const locationText = safeLocation ? `${safeSource} > ${safeLocation}` : safeSource;
+        const shouldStick = scrollParent.scrollTop + scrollParent.clientHeight >= scrollParent.scrollHeight - 24;
         const logLine = document.createElement("pre");
         logLine.className = `console-line log-${level}`;
-        logLine.innerHTML = `<span class="log-time">${timeStr}</span> <span class="log-level">[${level.toUpperCase()}]</span> <span class="log-location">${source} > ${location}</span> : ${msg}`;
+        logLine.innerHTML = `<span class="log-time">${timeStr}</span> <span class="log-level">[${level.toUpperCase()}]</span> <span class="log-location">${locationText}</span> <span class="log-separator">:</span> <span class="log-message">${safeMsg}</span>`;
 
         targetMsg.appendChild(logLine);
-
-        while (targetMsg.children.length > this.maxLines) {
-            targetMsg.removeChild(targetMsg.firstChild);
-        }
+        this.trimContainer(targetMsg);
 
         if (level === 'error') {
             const logLineErr = document.createElement("pre");
             logLineErr.className = `console-line log-${level}`;
-            logLineErr.innerHTML = `<span class="log-time">${timeStr}</span> <span class="log-level">[${level.toUpperCase()}]</span> <span class="log-location">${source} > ${location}</span> : ${msg}`;
+            logLineErr.innerHTML = logLine.innerHTML;
 
             targetErr.appendChild(logLineErr);
-            while (targetErr.children.length > this.maxLines) {
-                targetErr.removeChild(targetErr.firstChild);
-            }
+            this.trimContainer(targetErr);
         }
 
+        this.updateStats();
         setTimeout(() => {
-            scrollParent.scrollTop = scrollParent.scrollHeight;
+            if (shouldStick) scrollParent.scrollTop = scrollParent.scrollHeight;
         }, 0);
+    },
+
+    clearPlaceholderLines() {
+        document.querySelectorAll("#consoleMsg > .console-line:empty, #consoleErr > .console-line:empty").forEach((line) => line.remove());
+    },
+
+    trimContainer(container) {
+        while (container.children.length > this.maxLines) {
+            container.removeChild(container.firstElementChild);
+        }
+    },
+
+    trimAll() {
+        const targetMsg = document.getElementById("consoleMsg");
+        const targetErr = document.getElementById("consoleErr");
+        if (targetMsg) this.trimContainer(targetMsg);
+        if (targetErr) this.trimContainer(targetErr);
+    },
+
+    clear(container) {
+        if (!container) return;
+        container.innerHTML = "";
+        this.updateStats();
+    },
+
+    updateStats() {
+        const stats = document.getElementById("consoleLogStats");
+        const targetMsg = document.getElementById("consoleMsg");
+        const targetErr = document.getElementById("consoleErr");
+        if (!stats || !targetMsg || !targetErr) return;
+        const total = targetMsg.children.length;
+        const errors = targetErr.children.length;
+        stats.textContent = `${total}/${this.maxLines} lines | ${errors} errors`;
     }
 };
 
@@ -878,6 +1067,7 @@ function updateCurrentTargetDbSelect() {
     const label = connectionName || (connectionId ? `Connection #${connectionId}` : 'Target DB not selected');
     text.textContent = label;
     box.title = `Current Target DB: ${label}`;
+    window.ConsoleLogger?.loadSettings?.();
 }
 
 window.updateCurrentTargetDbSelect = updateCurrentTargetDbSelect;
@@ -910,7 +1100,7 @@ async function openTargetDbChangeDialog() {
             const checked = id === currentId ? " checked" : "";
             const name = row.CONNECTION_NAME || "(Unnamed connection)";
             const endpoint = [row.HOST, row.PORT, row.SERVICE_NAME || row.SID].filter(Boolean).join(" / ");
-            const meta = [row.DB_TYPE || "ORACLE", row.DEFAULT_YN === "Y" ? "Default" : "", endpoint].filter(Boolean).join(" · ");
+            const meta = [row.DB_TYPE || "ORACLE", row.DEFAULT_YN === "Y" ? "Default" : "", endpoint].filter(Boolean).join(" / ");
             return `
                 <label class="target-db-change-option">
                     <input type="radio" name="targetDbChangeConnectionId" value="${escapeHtml(id)}"${checked}>

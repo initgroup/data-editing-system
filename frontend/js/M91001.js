@@ -454,15 +454,15 @@
                 return;
             }
             const isCurrentTarget = String(connectionId) === String(sessionStorage.getItem("targetConnectionId") || "");
-            if (!confirm("Delete selected DB connection profile?")) return;
-            if (isCurrentTarget && !confirm("현재 작업중인 데이터베이스를 정말 삭제하시겠습니까?")) return;
+            if (!(await CommonMessage.confirm("Delete selected DB connection profile?"))) return;
+            if (isCurrentTarget && !(await CommonMessage.confirm("Delete the database connection currently in use?"))) return;
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/connection/delete`, {
                     method: "POST",
                     body: { connectionId }
                 });
                 if (isCurrentTarget) {
-                    alert("다시 로그인 하십시요");
+                    alert("Please log in again.");
                     PageManager.clearLoginSession?.();
                     PageManager.resetWorkspaceForLogout?.();
                     await PageManager.load("login", "Data Editing System Login");
@@ -496,7 +496,7 @@
                 this.renderLog("Bootstrap authorization was not found. Sign up as the first administrator again.", "error");
                 return;
             }
-            if (!confirm("Install INIT system tables and create the first administrator account?")) return;
+            if (!(await CommonMessage.confirm("Install INIT system tables and create the first administrator account?"))) return;
             this.renderLog("Installing INIT_SYSTEM_DDL and creating bootstrap administrator...", "info");
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/bootstrap/init-system`, {
@@ -605,7 +605,7 @@
 
         async initSchema() {
             if (!this.requireSelectedConnection(this.renderDeployLog)) return;
-            if (!confirm("Install application tables on the selected target database?")) return;
+            if (!(await CommonMessage.confirm("Install application tables on the selected target database?"))) return;
             this.renderDeployLog("Installing application tables...", "info");
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/schema/init`, {
@@ -623,8 +623,8 @@
 
         async truncateTargetData() {
             if (!this.requireSelectedConnection(this.renderDeployLog)) return;
-            if (!confirm("Reset all application data in the selected target database? Tables remain, but data will be truncated.")) return;
-            if (!confirm("This cannot be undone. Continue target data reset?")) return;
+            if (!(await CommonMessage.confirm("Reset all application data in the selected target database? Tables remain, but data will be truncated."))) return;
+            if (!(await CommonMessage.confirm("This cannot be undone. Continue target data reset?"))) return;
             this.renderDeployLog("Resetting target application data...", "info");
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/schema/truncate-target`, {
@@ -642,7 +642,7 @@
 
         async deployModelObjects() {
             if (!this.requireSelectedConnection(this.renderDeployLog)) return;
-            if (!confirm("Deploy PL/SQL model objects on the selected target database?")) return;
+            if (!(await CommonMessage.confirm("Deploy PL/SQL model objects on the selected target database?"))) return;
             this.renderDeployLog("Deploying PL/SQL model objects...", "info");
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/schema/model-objects`, {
@@ -655,7 +655,7 @@
                 await this.loadModelDeployStatus(false);
                 const schema = await this.checkSchema(false);
                 this.markInstallTabAttention(false);
-                if (confirm("\uAE30\uBCF8 \uC124\uCE58\uAC00 \uBAA8\uB450 \uC644\uB8CC\uB418\uC5C8\uC2B5\uB2C8\uB2E4. \uB85C\uADF8\uC778 \uCC3D\uC73C\uB85C \uC774\uB3D9\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?")) {
+                if (await CommonMessage.confirm("Basic installation is complete. Move to the login screen?")) {
                     sessionStorage.setItem(
                         "loginNotice",
                         "Target DB setup completed. Login again and select the target DB."
@@ -667,7 +667,7 @@
                 }
                 return;
                 if (!sessionStorage.getItem("targetConnectionId")) {
-                    if (confirm("기본 설치가 모두 완료되었습니다. 로그인 창으로 이동하시겠습니까?")) {
+                    if (await CommonMessage.confirm("Basic installation is complete. Move to the login screen?")) {
                         sessionStorage.setItem(
                             "loginNotice",
                             "Target DB setup completed. Login again and select the target DB."
@@ -680,7 +680,7 @@
                     return;
                 }
                 if (!sessionStorage.getItem("targetConnectionId") && this.isSchemaReady(schema)) {
-                    if (confirm("기본 설치가 모두 완료되었습니다. 로그인 창으로 이동하시겠습니까?")) {
+                    if (await CommonMessage.confirm("Basic installation is complete. Move to the login screen?")) {
                         sessionStorage.setItem(
                             "loginNotice",
                             "Target DB setup completed. Login again and select the target DB."
@@ -700,7 +700,7 @@
 
         async prepareMlSeed() {
             if (!this.requireSelectedConnection(this.renderMlLog)) return;
-            if (!confirm("Prepare machine learning seed data on the selected target database?")) return;
+            if (!(await CommonMessage.confirm("Prepare machine learning seed data on the selected target database?"))) return;
             this.renderMlLog("Preparing ML seed data...", "info");
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/schema/ml-seed`, {
@@ -718,7 +718,7 @@
 
         async trainMlModels() {
             if (!this.requireSelectedConnection(this.renderMlLog)) return;
-            if (!confirm("Train or install machine learning models on the selected target database?")) return;
+            if (!(await CommonMessage.confirm("Train or install machine learning models on the selected target database?"))) return;
             this.renderMlLog("Training ML models...", "info");
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/schema/ml-train`, {
@@ -937,3 +937,4 @@
 
     window[PAGE_CODE] = M91001;
 })();
+

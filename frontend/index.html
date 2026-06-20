@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>INIT Data Editing System</title>
     <script>
-        window.APP_CACHE_VERSION = "1.0.215";
+        window.APP_CACHE_VERSION = "1.0.227";
         window.APP_ASSET_VERSION_OVERRIDES = {
             // 전체 캐시 갱신: APP_CACHE_VERSION만 올립니다.
             // 부분 캐시 갱신: "js/M90001.js": "1.0.1" 처럼 파일별 버전을 지정합니다.
@@ -20,11 +20,13 @@
             // "pages/M91002.html": "1.0.1",
             // "pages/M91003.html": "1.0.2",
             // "js/M91003.js": "1.0.2",
-            // "js/common.js": "1.0.1",
+            "js/common.js": "1.0.2",
             "pages/MCOMMON_DATA_WORK.html": "1.0.2",
             "js/MCOMMON_DATA_WORK.js": "1.0.5",
-            "pages/MCOMMON_FLOW_WORK.html": "1.0.12",
-            "js/MCOMMON_FLOW_WORK.js": "1.0.23",
+            "pages/MCOMMON_FLOW_WORK.html": "1.0.13",
+            "js/MCOMMON_FLOW_WORK.js": "1.0.24",
+            "js/app.js": "1.0.4",
+            "js/menu-renderer.js": "1.0.3",
             "js/M04001.js": "1.0.1",
         };
         window.APP_ASSET_URL = function(path) {
@@ -62,6 +64,9 @@
                 </button>
                 <button id="btnCollapseAllMenus" type="button" class="w-8 h-8 rounded hover:bg-slate-700 text-slate-300 hover:text-white" title="메뉴 모두 접기">
                     <i class="fas fa-folder"></i>
+                </button>
+                <button id="btnSidebarCollapse" type="button" class="w-8 h-8 rounded hover:bg-slate-700 text-slate-300 hover:text-white" title="Collapse sidebar">
+                    <i class="fas fa-angles-left"></i>
                 </button>
             </div>
         </div>
@@ -141,37 +146,34 @@
         <div id="pageConsoleHolder" class="bottom-console collapsed" title="Log console">
             <div class="console-header">
                 <div class="console-tabs">
-                    <button class="console-tab active">Run Log</button>
+                    <button class="console-tab active">Network / Run Log</button>
                     <button class="console-tab">Error Log</button>
                 </div>
                 <div class="console-actions" style="display: flex; gap: 10px; align-items: center;">
+                    <span id="consoleLogStats" class="console-log-stats">0/500 lines | 0 errors</span>
                     <div class="log-toggle off" onclick="ConsoleLogger.toggle()" title="Log recording ON/OFF">
                         <span id="logStatusText">OFF</span>
                         <div id="logSwitch" class="sw-track">
                             <div class="sw-knob"></div>
                         </div>
                     </div>
-                    <button onclick="clearActiveConsole()" class="btn-console-action" title="로그 초기화">
+                    <button onclick="clearActiveConsole()" class="btn-console-action" title="Clear current log">
                         <i class="fas fa-trash-alt"></i>
                     </button>
-                    <button onclick="copyConsoleLog()" class="btn-console-action" title="복사하기">
+                    <button onclick="copyConsoleLog()" class="btn-console-action" title="Copy current log">
                         <i class="fas fa-copy"></i>
                     </button>
-                    <button id="btnMaxConsole" onclick="toggleMaximizeConsole()" class="btn-console-action" title="최대화">
+                    <button id="btnMaxConsole" onclick="toggleMaximizeConsole()" class="btn-console-action" title="Maximize">
                         <i class="fas fa-window-maximize"></i>
                     </button>
-                    <button id="btnCloseConsolebar" class="btn-console-action" title="닫기">
+                    <button id="btnCloseConsolebar" class="btn-console-action" title="Close">
                         <i class="fas fa-chevron-up"></i>
                     </button>
                 </div>
             </div>
             <div id="consoleBody" class="console-bodys">
-                <div id="consoleMsg" class="console-body">
-                    <pre class="console-line"></pre>
-                </div>
-                <div id="consoleErr" class="console-body">
-                    <pre class="console-line"></pre>
-                </div>
+                <div id="consoleMsg" class="console-body"></div>
+                <div id="consoleErr" class="console-body"></div>
             </div>
         </div>
     </main>
@@ -187,33 +189,37 @@
                 <div class="headerGemini">
                     <h1>Gemini</h1>
                     <div class="headerActionsGemini">
-                        <span class="badgeGemini"><i class="fas fa-magnifying-glass"></i> Google Search 적용</span>
-                        <button id="btnCloseGeminiSidebar" type="button" class="closeButtonGemini" title="닫기">
+                        <span class="badgeGemini"><i class="fas fa-magnifying-glass"></i> Google Search</span>
+                        <button id="btnCloseGeminiSidebar" type="button" class="closeButtonGemini" title="Close">
                             <i class="fas fa-times"></i>
                         </button>
                     </div>
                 </div>
 
                 <div class="bodyGemini">
+                    <div id="geminiChatMessages" class="geminiChatMessages" aria-live="polite">
+                        <div class="geminiMessageGemini assistant">
+                            <div class="geminiMessageAvatar"><i class="fas fa-robot"></i></div>
+                            <div class="geminiMessageContent">
+                                <div class="geminiMessageMeta">
+                                    <strong>Gemini</strong>
+                                    <span>Ready</span>
+                                </div>
+                                <div class="answerGemini isEmptyGemini">Ask a question. Answers will stay in this conversation history.</div>
+                            </div>
+                        </div>
+                    </div>
                     <form id="geminiSearchForm">
-                        <label for="geminiQuery">질문</label>
-                        <textarea id="geminiQuery" name="query" placeholder="예: 2026년 현재 인기 있는 프론트엔드 프레임워크를 근거와 함께 알려줘"></textarea>
+                        <label for="geminiQuery">Question</label>
+                        <textarea id="geminiQuery" name="query" placeholder="Type a question or search request. Press Ctrl+Enter to send."></textarea>
                         <div class="actionsGemini">
-                            <button id="geminiSubmitButton" type="button" title="(Ctrl+Enter 전송)">
+                            <button id="geminiSubmitButton" type="button" title="Send (Ctrl+Enter)">
                                 <i class="fas fa-paper-plane"></i>
-                                검색하고 답변 받기
+                                Send
                             </button>
                         </div>
                         <div id="geminiError" class="errorGemini" hidden></div>
                     </form>
-
-                    <div class="outputGemini">
-                        <div id="geminiAnswer" class="answerGemini">질문을 입력하면 답변이 여기에 표시됩니다.</div>
-                        <div id="geminiSources" class="sourcesGemini" hidden>
-                            <h2>참고 출처</h2>
-                            <ul id="geminiSourceList"></ul>
-                        </div>
-                    </div>
                 </div>
             </section>
         </div>
@@ -603,8 +609,8 @@
         function clearActiveConsole() {
             const activeTabContent = document.querySelector(".console-body[style*='display: block']");
             if (activeTabContent) {
-                activeTabContent.innerHTML = "";
-                ConsoleLogger.info("로그가 초기화되었습니다.", "System", "clear");
+                ConsoleLogger.clear(activeTabContent);
+                ConsoleLogger.info("Active log cleared.", "System", "clear");
             }
         }
 
@@ -617,12 +623,12 @@
                 lastConsoleHeight = consolePanel.style.height || "200px";
                 consolePanel.style.height = "90vh";
                 icon.className = "fas fa-window-restore";
-                btn.title = "최소화"; // 툴팁 변경
+                btn.title = "Restore";
                 isMaximized = true;
             } else {
                 consolePanel.style.height = lastConsoleHeight;
                 icon.className = "fas fa-window-maximize";
-                btn.title = "최대화"; // 툴팁 변경
+                btn.title = "Maximize";
                 isMaximized = false;
             }
         }
@@ -635,7 +641,7 @@
             try {
                 await navigator.clipboard.writeText(activeBody.innerText);
             } catch (err) {
-                ConsoleLogger.error(`(복사 실패)${err}`, "System", "copyConsoleLog");
+                ConsoleLogger.error(`Copy failed: ${err}`, "System", "copyConsoleLog");
             }
         }
 
@@ -645,10 +651,8 @@
         const geminiForm = document.getElementById("geminiSearchForm");
         const geminiQueryEl = document.getElementById("geminiQuery");
         const geminiButton = document.getElementById("geminiSubmitButton");
-        const geminiAnswerEl = document.getElementById("geminiAnswer");
         const geminiErrorEl = document.getElementById("geminiError");
-        const geminiSourcesEl = document.getElementById("geminiSources");
-        const geminiSourceListEl = document.getElementById("geminiSourceList");
+        const geminiChatMessagesEl = document.getElementById("geminiChatMessages");
 
         function escapeHtml(value) {
             return String(value)
@@ -681,14 +685,11 @@
             listItems.length = 0;
         }
 
-        function renderAnswer(answer) {
+        function renderAnswerHtml(answer) {
             const text = (answer || "").trim();
 
-            geminiAnswerEl.classList.remove("isLoadingGemini", "isEmptyGemini");
             if (!text) {
-                geminiAnswerEl.classList.add("isEmptyGemini");
-                geminiAnswerEl.textContent = "답변이 비어 있습니다.";
-                return;
+                return `<div class="answerGemini isEmptyGemini">The answer is empty.</div>`;
             }
 
             const parts = [];
@@ -734,41 +735,137 @@
             });
 
             flushList(parts, listItems, listType);
-            geminiAnswerEl.innerHTML = parts.join("");
+            return `<div class="answerGemini">${parts.join("")}</div>`;
         }
 
-        function renderSources(sources) {
-            geminiSourceListEl.innerHTML = "";
-
+        function renderSourcesHtml(sources) {
             if (!sources || sources.length === 0) {
-                geminiSourcesEl.hidden = true;
-                return;
+                return "";
             }
 
-            sources.forEach((source) => {
-                const item = document.createElement("li");
-                const icon = document.createElement("i");
-                const link = document.createElement("a");
+            const items = sources.map((source) => `
+                <li>
+                    <i class="fas fa-link"></i>
+                    <a href="${escapeHtml(source.url || "#")}" target="_blank" rel="noopener noreferrer">
+                        ${escapeHtml(source.title || source.url || "Source")}
+                    </a>
+                </li>
+            `).join("");
 
-                icon.className = "fas fa-link";
-                link.href = source.url;
-                link.target = "_blank";
-                link.rel = "noopener noreferrer";
-                link.textContent = source.title || source.url;
+            return `
+                <div class="sourcesGemini">
+                    <h2>Sources</h2>
+                    <ul>${items}</ul>
+                </div>
+            `;
+        }
 
-                item.appendChild(icon);
-                item.appendChild(link);
-                geminiSourceListEl.appendChild(item);
-            });
+        function scrollGeminiToBottom() {
+            if (!geminiChatMessagesEl) return;
+            geminiChatMessagesEl.scrollTop = geminiChatMessagesEl.scrollHeight;
+        }
 
-            geminiSourcesEl.hidden = false;
+        function focusGeminiMessage(messageEl) {
+            if (!geminiChatMessagesEl || !messageEl) return;
+            const containerTop = geminiChatMessagesEl.getBoundingClientRect().top;
+            const messageTop = messageEl.getBoundingClientRect().top;
+            geminiChatMessagesEl.scrollTop += messageTop - containerTop - 8;
+        }
+
+        function appendGeminiMessage(role, options = {}) {
+            const message = document.createElement("div");
+            const isUser = role === "user";
+            message.className = `geminiMessageGemini ${isUser ? "user" : "assistant"}`;
+
+            const avatar = document.createElement("div");
+            avatar.className = "geminiMessageAvatar";
+            avatar.innerHTML = isUser ? '<i class="fas fa-user"></i>' : '<i class="fas fa-robot"></i>';
+
+            const content = document.createElement("div");
+            content.className = "geminiMessageContent";
+
+            const meta = document.createElement("div");
+            meta.className = "geminiMessageMeta";
+            meta.innerHTML = `<strong>${isUser ? "You" : "Gemini"}</strong><span>${new Date().toLocaleTimeString()}</span>`;
+
+            const body = document.createElement("div");
+            body.className = "geminiMessageBody";
+            if (options.html) {
+                body.innerHTML = options.html;
+            } else {
+                body.textContent = options.text || "";
+            }
+
+            content.appendChild(meta);
+            content.appendChild(body);
+
+            if (!isUser && options.copyText) {
+                const actions = document.createElement("div");
+                actions.className = "geminiMessageActions";
+                const copyButton = document.createElement("button");
+                copyButton.type = "button";
+                copyButton.className = "geminiCopyButton";
+                copyButton.innerHTML = '<i class="fas fa-copy"></i><span>Copy</span>';
+                copyButton.addEventListener("click", () => copyGeminiAnswer(copyButton, options.copyText));
+                actions.appendChild(copyButton);
+                content.appendChild(actions);
+            }
+
+            message.appendChild(avatar);
+            message.appendChild(content);
+            geminiChatMessagesEl.appendChild(message);
+            scrollGeminiToBottom();
+            return message;
+        }
+
+        function setGeminiAssistantMessage(messageEl, options = {}) {
+            const body = messageEl.querySelector(".geminiMessageBody");
+            if (body) {
+                body.innerHTML = options.html || "";
+            }
+
+            const existingActions = messageEl.querySelector(".geminiMessageActions");
+            if (existingActions) existingActions.remove();
+
+            if (options.copyText) {
+                const content = messageEl.querySelector(".geminiMessageContent");
+                const actions = document.createElement("div");
+                actions.className = "geminiMessageActions";
+                const copyButton = document.createElement("button");
+                copyButton.type = "button";
+                copyButton.className = "geminiCopyButton";
+                copyButton.innerHTML = '<i class="fas fa-copy"></i><span>Copy</span>';
+                copyButton.addEventListener("click", () => copyGeminiAnswer(copyButton, options.copyText));
+                actions.appendChild(copyButton);
+                content?.appendChild(actions);
+            }
+
+            if (options.focusElement) {
+                focusGeminiMessage(options.focusElement);
+            } else {
+                scrollGeminiToBottom();
+            }
+        }
+
+        async function copyGeminiAnswer(button, text) {
+            try {
+                await navigator.clipboard.writeText(text || "");
+                const original = button.innerHTML;
+                button.innerHTML = '<i class="fas fa-check"></i><span>Copied</span>';
+                setTimeout(() => {
+                    button.innerHTML = original;
+                }, 1400);
+            } catch (error) {
+                geminiErrorEl.textContent = "Unable to copy the answer.";
+                geminiErrorEl.hidden = false;
+            }
         }
 
         async function requestGeminiAnswer() {
             const query = geminiQueryEl.value.trim();
 
             if (!query) {
-                geminiErrorEl.textContent = "질문을 입력해 주세요.";
+                geminiErrorEl.textContent = "Enter a question.";
                 geminiErrorEl.hidden = false;
                 geminiQueryEl.focus();
                 return;
@@ -776,9 +873,12 @@
 
             geminiErrorEl.hidden = true;
             geminiButton.disabled = true;
-            geminiAnswerEl.classList.add("isLoadingGemini");
-            geminiAnswerEl.textContent = "검색하고 답변을 생성하는 중입니다...";
-            renderSources([]);
+            const questionMessage = appendGeminiMessage("user", { text: query });
+            geminiQueryEl.value = "";
+            const loadingMessage = appendGeminiMessage("assistant", {
+                html: `<div class="answerGemini isLoadingGemini"><i class="fas fa-spinner fa-spin"></i> Searching and generating an answer...</div>`
+            });
+            focusGeminiMessage(questionMessage);
 
             try {
                 const response = await fetch("/api/googleGenai/search", {
@@ -791,14 +891,21 @@
 
                 const payload = await response.json();
                 if (!response.ok) {
-                    throw new Error(payload.detail || "요청 처리 중 오류가 발생했습니다.");
+                    throw new Error(payload.detail || "The request could not be processed.");
                 }
 
-                renderAnswer(payload.data.answer);
-                renderSources(payload.data.sources);
+                const answer = payload.data.answer || "";
+                const sources = payload.data.sources || [];
+                setGeminiAssistantMessage(loadingMessage, {
+                    html: `${renderAnswerHtml(answer)}${renderSourcesHtml(sources)}`,
+                    copyText: answer,
+                    focusElement: questionMessage
+                });
             } catch (error) {
-                geminiAnswerEl.classList.remove("isLoadingGemini");
-                geminiAnswerEl.textContent = "답변을 표시할 수 없습니다.";
+                setGeminiAssistantMessage(loadingMessage, {
+                    html: `<div class="answerGemini isEmptyGemini">Unable to display the answer.</div>`,
+                    focusElement: questionMessage
+                });
                 geminiErrorEl.textContent = error.message;
                 geminiErrorEl.hidden = false;
             } finally {

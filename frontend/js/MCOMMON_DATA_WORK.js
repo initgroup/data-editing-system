@@ -1,4 +1,4 @@
-(function() {
+﻿(function() {
     const MCOMMON = {
         createPageHelper(pageCode) {
             const { getContainerEl } = PageManager.createHelper(pageCode);
@@ -897,7 +897,7 @@
         },
 
         async saveJob(showAlert = true) {
-            if (showAlert && !confirm("Save this work?")) return null;
+            if (showAlert && !(await CommonMessage.confirm("Save this work?"))) return null;
             const saved = await this.saveJobInternal(showAlert);
             return saved;
         },
@@ -928,7 +928,7 @@
             const message = batch
                 ? "Queue this work for batch execution?"
                 : "Run this work now?";
-            if (!confirm(message)) return;
+            if (!(await CommonMessage.confirm(message))) return;
             const runtimeBindValues = await this.collectRuntimeBindValues();
             if (runtimeBindValues === null) return;
             const payload = {
@@ -967,7 +967,7 @@
             const message = batch
                 ? "Queue all enabled jobs for batch execution?"
                 : "Execute all enabled jobs now in sort order?";
-            if (!confirm(message)) return;
+            if (!(await CommonMessage.confirm(message))) return;
 
             const summaries = [];
             let failedCount = 0;
@@ -1090,7 +1090,7 @@
             const minutes = Math.floor(totalSeconds / 60);
             const seconds = totalSeconds % 60;
 
-            return `${hours}시간 ${minutes}분 ${seconds}초`;
+            return `${hours}h ${minutes}m ${seconds}s`;
         },
 
         parseDateTime(value) {
@@ -1862,3 +1862,4 @@ END;`;
 
     window.MCOMMON = MCOMMON;
 })();
+

@@ -101,7 +101,14 @@ SETTING_CATEGORIES = [
         "CATEGORY_NAME": "Other Settings",
         "CATEGORY_DESC": "Additional system settings.",
         "SORT_ORDER": 90,
-        "DEFAULTS": [],
+        "DEFAULTS": [
+            {
+                "SETTING_KEY": "CONSOLE_LOG_MAX_ENTRIES",
+                "SETTING_VALUE": "500",
+                "SETTING_DESC": "Maximum browser log lines retained in the bottom Network / Run Log panel.",
+                "SORT_ORDER": 10,
+            }
+        ],
     },
 ]
 

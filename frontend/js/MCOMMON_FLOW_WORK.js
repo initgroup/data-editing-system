@@ -1,4 +1,4 @@
-(function() {
+﻿(function() {
     if (!window.MCOMMON) {
         window.MCOMMON = {};
     }
@@ -22,6 +22,7 @@
             scenarioTables: [],
             flowList: [],
             flowRegisteredJobs: [],
+            flowJobGroupCollapsed: new Set(),
             flowVariables: [],
             selectedProjectId: "",
             selectedScenarioId: "",
@@ -83,6 +84,7 @@
                 this.scenarioTables = [];
                 this.flowList = [];
                 this.flowRegisteredJobs = [];
+                this.flowJobGroupCollapsed = new Set();
                 this.flowVariables = [];
                 this.selectedProjectId = "";
                 this.selectedScenarioId = "";
@@ -386,39 +388,110 @@
                     return;
                 }
 
+                const groups = this.groupRegisteredJobs();
                 container.innerHTML = `
-                    <div class="data-job-list">
-                        ${this.flowRegisteredJobs.map((job, index) => {
-                            const nodeType = this.getNodeTypeForMenu(job.MENU_CODE);
-                            const jobId = job.WORK_JOB_ID || job.PROFILE_JOB_ID || "";
-                            const subtitle = `${job.MENU_CODE || "-"} / ${job.OWNER_NAME || "-"}.${job.TABLE_NAME || "-"}`;
-                            return `
-                                <button type="button" class="data-job-row flow-palette-job" draggable="true"
-                                    data-node-type="${this.escapeHtml(nodeType)}"
-                                    data-job-id="${this.escapeHtml(jobId)}"
-                                    data-ref-menu-code="${this.escapeHtml(job.MENU_CODE || "")}"
-                                    data-owner-name="${this.escapeHtml(job.OWNER_NAME || "")}"
-                                    data-table-name="${this.escapeHtml(job.TABLE_NAME || "")}"
-                                    data-ref-object-id="${this.escapeHtml(job.EXEC_OBJECT_ID || "")}">
-                                    <span class="data-job-order">${String(index + 1).padStart(2, "0")}</span>
-                                    <span>
-                                        <strong>${this.escapeHtml(job.JOB_NAME || "(Untitled job)")}</strong>
-                                        <small>${this.escapeHtml(subtitle)}</small>
-                                    </span>
-                                    <em><span>JOB</span><span>${this.escapeHtml(job.MENU_CODE || "")}</span></em>
-                                </button>
-                            `;
-                        }).join("")}
+                    <div class="flow-job-group-list">
+                        ${groups.map((group) => this.renderRegisteredJobGroup(group)).join("")}
                     </div>
                     ${this.renderListFooter(this.flowRegisteredJobs.length)}
                 `;
+                this.bindRegisteredJobGroupControls();
+                this.bindFlowPalette();
+            },
+
+            groupRegisteredJobs() {
+                const groupMap = new Map();
+                this.flowRegisteredJobs.forEach((job) => {
+                    const groupKey = String(job.JOB_GROUP || job.MENU_CODE || "UNGROUPED");
+                    if (!groupMap.has(groupKey)) {
+                        groupMap.set(groupKey, {
+                            key: groupKey,
+                            label: groupKey,
+                            jobs: []
+                        });
+                    }
+                    groupMap.get(groupKey).jobs.push(job);
+                });
+                return Array.from(groupMap.values());
+            },
+
+            renderRegisteredJobGroup(group) {
+                const collapsed = this.flowJobGroupCollapsed.has(group.key);
+                return `
+                    <section class="flow-job-group${collapsed ? " is-collapsed" : ""}" data-job-group="${this.escapeHtml(group.key)}">
+                        <button type="button" class="flow-job-group-header" data-flow-job-group-toggle="Y" aria-expanded="${String(!collapsed)}">
+                            <span class="flow-job-group-title">
+                                <i class="fas ${collapsed ? "fa-chevron-right" : "fa-chevron-down"}"></i>
+                                <strong>${this.escapeHtml(group.label)}</strong>
+                            </span>
+                            <span class="flow-job-group-count">${group.jobs.length.toLocaleString()} jobs</span>
+                        </button>
+                        <div class="data-job-list flow-job-group-body">
+                            ${group.jobs.map((job, index) => this.renderRegisteredJobRow(job, index)).join("")}
+                        </div>
+                    </section>
+                `;
+            },
+
+            renderRegisteredJobRow(job, index) {
+                const nodeType = this.getNodeTypeForMenu(job.MENU_CODE);
+                const jobId = job.WORK_JOB_ID || job.PROFILE_JOB_ID || "";
+                const tableLabel = `${job.OWNER_NAME || "-"}.${job.TABLE_NAME || "-"}`;
+                const desc = job.JOB_DESC ? ` - ${job.JOB_DESC}` : "";
+                const subtitle = `${job.MENU_CODE || "-"} / ${tableLabel}${desc}`;
+                return `
+                    <button type="button" class="data-job-row flow-palette-job" draggable="true"
+                        data-node-type="${this.escapeHtml(nodeType)}"
+                        data-job-id="${this.escapeHtml(jobId)}"
+                        data-ref-menu-code="${this.escapeHtml(job.MENU_CODE || "")}"
+                        data-owner-name="${this.escapeHtml(job.OWNER_NAME || "")}"
+                        data-table-name="${this.escapeHtml(job.TABLE_NAME || "")}"
+                        data-ref-object-id="${this.escapeHtml(job.EXEC_OBJECT_ID || "")}">
+                        <span class="data-job-order">${String(index + 1).padStart(2, "0")}</span>
+                        <span>
+                            <strong>${this.escapeHtml(job.JOB_NAME || "(Untitled job)")}</strong>
+                            <small>${this.escapeHtml(subtitle)}</small>
+                        </span>
+                        <em><span>JOB</span><span>${this.escapeHtml(job.MENU_CODE || "")}</span></em>
+                    </button>
+                `;
+            },
+
+            bindRegisteredJobGroupControls() {
+                const container = getContainerEl(`#flowRegisteredJobGrid-${PAGE_CODE}`);
+                if (!container) return;
+                container.querySelectorAll("[data-flow-job-group-toggle]").forEach((button) => {
+                    if (button.dataset.flowJobGroupBound === "Y") return;
+                    button.dataset.flowJobGroupBound = "Y";
+                    button.addEventListener("click", () => {
+                        const groupEl = button.closest(".flow-job-group");
+                        const groupKey = groupEl?.dataset.jobGroup || "";
+                        this.toggleJobGroup(groupKey);
+                    });
+                });
+            },
+
+            toggleJobGroup(groupKey) {
+                if (!groupKey) return;
+                if (this.flowJobGroupCollapsed.has(groupKey)) {
+                    this.flowJobGroupCollapsed.delete(groupKey);
+                } else {
+                    this.flowJobGroupCollapsed.add(groupKey);
+                }
+                this.renderRegisteredJobs();
+            },
+
+            setAllJobGroupsExpanded(expanded) {
+                const groups = this.groupRegisteredJobs();
+                this.flowJobGroupCollapsed = new Set(expanded ? [] : groups.map((group) => group.key));
+                this.renderRegisteredJobs();
             },
 
             getNodeTypeForMenu(menuCode) {
                 const code = String(menuCode || "").toUpperCase();
-                if (code === "M02003") return "PROFILING";
-                if (code === "M02004") return "CORRELATION";
-                if (code === "M03001") return "RULE_MINING";
+                if (code === "M03001") return "PROFILING";
+                if (code === "M03002") return "CORRELATION";
+                if (code === "M03003") return "RULE_MINING";
                 if (code === "M06001") return "VIOLATION_SEARCH";
                 return "JOB";
             },
@@ -771,7 +844,7 @@
             bindFlowPalette() {
                 const container = document.getElementById(`container-${PAGE_CODE}`);
                 if (!container) return;
-                container.querySelectorAll(".flow-palette-node, .flow-palette-job, .flow-palette-io").forEach((item) => {
+                container.querySelectorAll(".flow-palette-job").forEach((item) => {
                     if (item.dataset.flowPaletteBound === "Y") return;
                     item.dataset.flowPaletteBound = "Y";
                     item.addEventListener("dragstart", (event) => {
@@ -2038,7 +2111,7 @@
                     return;
                 }
                 const flowName = this.getValue(`#flowName-${PAGE_CODE}`) || `Flow #${flowId}`;
-                if (!confirm(`Delete ${flowName}?\nNodes, edges, and run history for this flow will also be deleted.`)) return;
+                if (!(await CommonMessage.confirm(`Delete ${flowName}?\nNodes, edges, and run history for this flow will also be deleted.`))) return;
 
                 try {
                     const params = new URLSearchParams({
@@ -2105,3 +2178,4 @@
         return page;
     };
 })();
+

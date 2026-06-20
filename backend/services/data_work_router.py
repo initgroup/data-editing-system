@@ -1,6 +1,6 @@
 """
-@file           M02003.py
-@description    Data profiling workbench API
+@file           data_work_router.py
+@description    Shared data workbench API router factory
 """
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request

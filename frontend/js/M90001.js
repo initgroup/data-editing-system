@@ -1,4 +1,4 @@
-(function() {
+﻿(function() {
     const PAGE_CODE = "M90001";
     const { getContainerEl } = PageManager.createHelper(PAGE_CODE);
     const COMMON = MCOMMON.createPageHelper(PAGE_CODE);
@@ -1018,11 +1018,11 @@
                 ? this.rows.filter((row) => (row.key || row.value)).length
                 : 0;
             const confirmMessage = detailCount > 0
-                ? `"${objectLabel}" object master를 삭제하려면 하위 detail 데이터 ${detailCount}건도 함께 삭제해야 합니다.\n\n하위 데이터까지 모두 삭제하시겠습니까?`
-                : `"${objectLabel}" object master 등록 정보를 삭제하시겠습니까?`;
+                ? `Delete "${objectLabel}" object master and ${detailCount} related detail row(s)?`
+                : `Delete "${objectLabel}" object master registration?`;
 
-            if (!confirm(confirmMessage)) {
-                alert("삭제가 취소되었습니다.");
+            if (!(await CommonMessage.confirm(confirmMessage))) {
+                alert("Delete canceled.");
                 return;
             }
 
@@ -1132,3 +1132,4 @@
 
     window[PAGE_CODE] = M90001;
 })();
+

@@ -1,4 +1,4 @@
-(function() {
+﻿(function() {
     const PAGE_CODE = "M91002";
     const { getContainerEl } = PageManager.createHelper(PAGE_CODE);
     const COMMON = MCOMMON.createPageHelper(PAGE_CODE);
@@ -229,7 +229,7 @@
         async deleteSetting() {
             const settingKey = getContainerEl("#settingKey-M91002")?.value.trim() || "";
             if (!settingKey) return;
-            if (!confirm(`Delete setting "${settingKey}"?`)) return;
+            if (!(await CommonMessage.confirm(`Delete setting "${settingKey}"?`))) return;
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/setting/delete`, {
                     method: "POST",
@@ -383,7 +383,7 @@
                 getContainerEl("#emailCurrentPassword-M91002")?.focus();
                 return;
             }
-            if (!confirm("Change your email?")) return;
+            if (!(await CommonMessage.confirm("Change your email?"))) return;
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/account/email/change`, {
                     method: "POST",
@@ -428,7 +428,7 @@
                 getContainerEl("#newPasswordConfirm-M91002")?.focus();
                 return;
             }
-            if (!confirm("Change your login password?")) return;
+            if (!(await CommonMessage.confirm("Change your login password?"))) return;
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/account/password/change`, {
                     method: "POST",
@@ -459,3 +459,4 @@
 
     window[PAGE_CODE] = M91002;
 })();
+

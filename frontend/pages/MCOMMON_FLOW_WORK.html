@@ -68,120 +68,23 @@
                     </div>
                 </header>
 
-                <section class="data-param-card flow-palette-card" aria-label="Step node palette">
-                    <div class="data-panel-toolbar">
-                        <strong data-label-key="stepPalette">Step Palette</strong>
-                        <span class="env-detail-hint" data-label-key="stepPaletteHint">Business phases that can be connected as nodes.</span>
-                    </div>
-                    <div class="data-job-list flow-palette-list">
-                        <button type="button" class="data-job-row flow-palette-node" draggable="true" data-node-type="PROFILING">
-                            <span class="data-job-order"><i class="fas fa-chart-column"></i></span>
-                            <span>
-                                <strong data-label-key="profilingStep">Profiling</strong>
-                                <small data-label-key="profilingStepDesc">Table and column profile jobs</small>
-                            </span>
-                            <em><span>STEP</span><span>M02003</span></em>
-                        </button>
-                        <button type="button" class="data-job-row flow-palette-node" draggable="true" data-node-type="CORRELATION">
-                            <span class="data-job-order"><i class="fas fa-link"></i></span>
-                            <span>
-                                <strong data-label-key="correlationStep">Correlation Analysis</strong>
-                                <small data-label-key="correlationStepDesc">Column relationship jobs</small>
-                            </span>
-                            <em><span>STEP</span><span>M02004</span></em>
-                        </button>
-                        <button type="button" class="data-job-row flow-palette-node" draggable="true" data-node-type="RULE_MINING">
-                            <span class="data-job-order"><i class="fas fa-wand-magic-sparkles"></i></span>
-                            <span>
-                                <strong data-label-key="ruleMiningStep">Rule Discovery</strong>
-                                <small data-label-key="ruleMiningStepDesc">Model or procedure based rule mining</small>
-                            </span>
-                            <em><span>STEP</span><span>M03001</span></em>
-                        </button>
-                        <button type="button" class="data-job-row flow-palette-node" draggable="true" data-node-type="VIOLATION_SEARCH">
-                            <span class="data-job-order"><i class="fas fa-triangle-exclamation"></i></span>
-                            <span>
-                                <strong data-label-key="violationSearchStep">Violation Search</strong>
-                                <small data-label-key="violationSearchStepDesc">Find rows that violate selected rules</small>
-                            </span>
-                            <em><span>STEP</span><span>M06001</span></em>
-                        </button>
-                    </div>
-                </section>
-
-                <section class="data-param-card flow-palette-card" aria-label="Input and output palette">
-                    <div class="data-panel-toolbar">
-                        <strong data-label-key="ioPalette">Input / Output</strong>
-                        <span class="env-detail-hint" data-label-key="ioPaletteHint">Reusable table, value, array, and output nodes.</span>
-                    </div>
-                    <div class="data-job-list flow-palette-list">
-                        <button type="button" class="data-job-row flow-palette-io" draggable="true" data-node-type="TABLE_INPUT">
-                            <span class="data-job-order"><i class="fas fa-table"></i></span>
-                            <span>
-                                <strong data-label-key="tableInputNode">Table Input</strong>
-                                <small data-label-key="tableInputNodeDesc">Owner/table or temporary result table</small>
-                            </span>
-                            <em><span>IN</span><span>TABLE</span></em>
-                        </button>
-                        <button type="button" class="data-job-row flow-palette-io" draggable="true" data-node-type="VALUE_INPUT">
-                            <span class="data-job-order"><i class="fas fa-sliders"></i></span>
-                            <span>
-                                <strong data-label-key="valueInputNode">Value Input</strong>
-                                <small data-label-key="valueInputNodeDesc">Scalar threshold, date, owner, or option</small>
-                            </span>
-                            <em><span>IN</span><span>VALUE</span></em>
-                        </button>
-                        <button type="button" class="data-job-row flow-palette-io" draggable="true" data-node-type="ARRAY_INPUT">
-                            <span class="data-job-order"><i class="fas fa-list-ul"></i></span>
-                            <span>
-                                <strong data-label-key="arrayInputNode">Array Input</strong>
-                                <small data-label-key="arrayInputNodeDesc">Column list, rule list, or option array</small>
-                            </span>
-                            <em><span>IN</span><span>ARRAY</span></em>
-                        </button>
-                        <button type="button" class="data-job-row flow-palette-io" draggable="true" data-node-type="TABLE_OUTPUT">
-                            <span class="data-job-order"><i class="fas fa-file-export"></i></span>
-                            <span>
-                                <strong data-label-key="tableOutputNode">Table Output</strong>
-                                <small data-label-key="tableOutputNodeDesc">Persisted result table or downstream target</small>
-                            </span>
-                            <em><span>OUT</span><span>TABLE</span></em>
-                        </button>
-                    </div>
-                </section>
-
                 <section class="data-param-card flow-palette-card" aria-label="Registered job palette">
                     <div class="data-panel-toolbar">
-                        <strong data-label-key="registeredJobs">Registered Jobs</strong>
-                        <span id="flowJobFilterLabel-__PAGE_CODE__" class="env-detail-hint" data-label-key="registeredJobsHint">Jobs saved in each business step.</span>
+                        <span>
+                            <strong data-label-key="registeredJobs">Registered Jobs</strong>
+                            <span id="flowJobFilterLabel-__PAGE_CODE__" class="env-detail-hint" data-label-key="registeredJobsHint">Jobs saved in each business step.</span>
+                        </span>
+                        <span class="flow-job-group-actions">
+                            <button type="button" class="table-icon-btn" title="Expand all job groups" onclick="__PAGE_CODE__.setAllJobGroupsExpanded(true)">
+                                <i class="fas fa-angles-down"></i>
+                            </button>
+                            <button type="button" class="table-icon-btn" title="Collapse all job groups" onclick="__PAGE_CODE__.setAllJobGroupsExpanded(false)">
+                                <i class="fas fa-angles-up"></i>
+                            </button>
+                        </span>
                     </div>
                     <div id="flowRegisteredJobGrid-__PAGE_CODE__" class="data-job-grid">
-                        <div class="data-job-list">
-                            <button type="button" class="data-job-row flow-palette-job" draggable="true" data-job-id="PF_001">
-                                <span class="data-job-order">01</span>
-                                <span>
-                                    <strong>Customer profile</strong>
-                                    <small>Profiling job / CUSTOMER_BASE</small>
-                                </span>
-                                <em><span>JOB</span><span>PF_001</span></em>
-                            </button>
-                            <button type="button" class="data-job-row flow-palette-job" draggable="true" data-job-id="CR_002">
-                                <span class="data-job-order">02</span>
-                                <span>
-                                    <strong>Email-phone correlation</strong>
-                                    <small>Correlation job / M90001 object</small>
-                                </span>
-                                <em><span>JOB</span><span>CR_002</span></em>
-                            </button>
-                            <button type="button" class="data-job-row flow-palette-job" draggable="true" data-job-id="RM_010">
-                                <span class="data-job-order">03</span>
-                                <span>
-                                    <strong>Customer edit rule mining</strong>
-                                    <small>Rule discovery job / model</small>
-                                </span>
-                                <em><span>JOB</span><span>RM_010</span></em>
-                            </button>
-                        </div>
+                        <div class="table-empty">Select project and scenario first.</div>
                     </div>
                 </section>
             </aside>
@@ -324,7 +227,7 @@
                                     </header>
                                     <div class="flow-node-body">
                                         <strong>Customer profile</strong>
-                                        <small>M02003 / PF_001</small>
+                                        <small>M03001 / PF_001</small>
                                     </div>
                                     <footer class="flow-node-ports">
                                         <span class="flow-port flow-port-in">inputTable</span>
@@ -339,7 +242,7 @@
                                     </header>
                                     <div class="flow-node-body">
                                         <strong>Email-phone correlation</strong>
-                                        <small>M02004 / CR_002</small>
+                                        <small>M03002 / CR_002</small>
                                     </div>
                                     <footer class="flow-node-ports">
                                         <span class="flow-port flow-port-in">profileTable</span>
@@ -354,7 +257,7 @@
                                     </header>
                                     <div class="flow-node-body">
                                         <strong>Customer edit rules</strong>
-                                        <small>M03001 / RM_010</small>
+                                        <small>M03003 / RM_010</small>
                                     </div>
                                     <footer class="flow-node-ports">
                                         <span class="flow-port flow-port-in">profileTable</span>

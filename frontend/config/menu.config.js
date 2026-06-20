@@ -51,20 +51,6 @@ window.MENU_CONFIG = [
                 label: '대상 데이터',
                 iconClass: 'fas fa-table text-emerald-300',
                 enabled: true
-            },
-            {
-                page: 'M02003',
-                title: '데이터 프로파일링',
-                label: '데이터 프로파일링',
-                iconClass: 'fas fa-chart-column text-emerald-300',
-                enabled: true
-            },
-            {
-                page: 'M02004',
-                title: '컬럼간 상관 분석',
-                label: '컬럼간 상관 분석',
-                iconClass: 'fas fa-link text-emerald-300',
-                enabled: true
             }
         ]
     },
@@ -77,44 +63,23 @@ window.MENU_CONFIG = [
         children: [
             {
                 page: 'M03001',
-                title: '자동 규칙 발굴',
-                label: '자동 규칙 발굴',
-                iconClass: 'fas fa-wand-magic-sparkles text-amber-300',
+                title: '데이터 프로파일링',
+                label: '데이터 프로파일링',
+                iconClass: 'fas fa-chart-column text-amber-300',
                 enabled: true
             },
             {
                 page: 'M03002',
-                title: '회귀 기반 규칙 (연속형 수치 예측/검증)',
-                label: '회귀 기반 규칙',
-                iconClass: 'fas fa-chart-line text-amber-300',
+                title: '컬럼간 상관 분석',
+                label: '컬럼간 상관 분석',
+                iconClass: 'fas fa-link text-amber-300',
                 enabled: true
             },
             {
                 page: 'M03003',
-                title: '분류 기반 규칙 (범주형 속성 판별)',
-                label: '분류 기반 규칙',
-                iconClass: 'fas fa-tags text-amber-300',
-                enabled: true
-            },
-            {
-                page: 'M03004',
-                title: '군집 기반 규칙 (이상치/아웃라이어 탐지)',
-                label: '군집 기반 규칙',
-                iconClass: 'fas fa-object-group text-amber-300',
-                enabled: true
-            },
-            {
-                page: 'M03005',
-                title: '연관 규칙 발굴 (조건부 동시 발생 규칙)',
-                label: '연관 규칙 발굴',
-                iconClass: 'fas fa-share-nodes text-amber-300',
-                enabled: true
-            },
-            {
-                page: 'M03006',
-                title: '시계열 패턴 분석 (시간 흐름에 따른 추세 분석)',
-                label: '시계열 패턴 분석',
-                iconClass: 'fas fa-wave-square text-amber-300',
+                title: '자동 규칙 발굴',
+                label: '자동 규칙 발굴',
+                iconClass: 'fas fa-wand-magic-sparkles text-amber-300',
                 enabled: true
             }
         ]
@@ -275,6 +240,6 @@ window.MENU_CONFIG = [
 ];
 
 window.PAGE_FILE_CONFIG = {
-    htmlPages: ['home', 'login', 'M01001', 'M01002', 'M02001', 'M02002', 'M02003', 'M02004', 'M03001', 'M04001', 'M90001', 'M91001', 'M91002', 'M91003', 'M99098'],
-    scriptPages: ['home', 'login', 'M01001', 'M01002', 'M02001', 'M02002', 'M02003', 'M02004', 'M03001', 'M04001', 'M90001', 'M91001', 'M91002', 'M91003', 'M99098']
+    htmlPages: ['home', 'login', 'M01001', 'M01002', 'M02001', 'M02002', 'M03001', 'M03002', 'M03003', 'M04001', 'M90001', 'M91001', 'M91002', 'M91003', 'M99098'],
+    scriptPages: ['home', 'login', 'M01001', 'M01002', 'M02001', 'M02002', 'M03001', 'M03002', 'M03003', 'M04001', 'M90001', 'M91001', 'M91002', 'M91003', 'M99098']
 };

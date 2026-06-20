@@ -1,7 +1,7 @@
 """
 Shared data-work job/run service.
 
-Menus such as M02003, M02004, and later data editing workbenches can reuse
+Menus such as M03001, M03002, M03003, and later data editing workbenches can reuse
 these functions by passing their menu code.
 """
 

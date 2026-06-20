@@ -10,6 +10,29 @@
 - SQL과 DB DDL은 영향 범위가 크므로, 사용자가 명시하지 않은 스키마 변경이나 데이터 삭제를 실행하지 않습니다.
 - 파일 검색은 `rg` 또는 `rg --files`를 우선 사용합니다.
 
+## Windows UTF-8 / Codex 셸 주의
+
+- Windows PowerShell 5.1에서는 파일이 정상 UTF-8이어도 `$OutputEncoding` 또는 콘솔 코드페이지 때문에 Codex 출력에서 한글이 깨져 보일 수 있습니다.
+- 한글이 포함된 파일을 읽거나 검색할 때는 먼저 현재 명령 세그먼트에서 UTF-8 셸 가드를 적용합니다.
+- 이 PC처럼 PowerShell 실행 정책이 `.ps1` 로드를 막을 수 있으므로, 스크립트를 쓸 때는 프로세스 범위에서만 우회합니다.
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
+. .\scripts\codex-utf8.ps1
+Get-Content -Encoding UTF8 frontend/js/app.js
+```
+
+- 스크립트 로드가 번거롭거나 실패하면 아래 inline 가드를 같은 명령 앞에 붙입니다.
+
+```powershell
+$utf8NoBom=[System.Text.UTF8Encoding]::new($false); [Console]::InputEncoding=$utf8NoBom; [Console]::OutputEncoding=$utf8NoBom; $OutputEncoding=$utf8NoBom; chcp.com 65001 | Out-Null
+Get-Content -Encoding UTF8 frontend/js/app.js
+```
+
+- `Get-Content`, `Select-String`, `rg`, `git diff` 출력에서 한글이 깨져 보이면 파일이 깨졌다고 단정하지 않습니다. UTF-8 셸 가드를 적용한 뒤 다시 확인합니다.
+- VS Code에서 정상으로 보이는 한글 주석/라벨은 사용자가 요청하지 않는 한 수정하지 않습니다.
+- 깨진 출력 내용을 그대로 `apply_patch`에 포함하지 않습니다. 화면에 노출되는 문자열을 고칠 때만 정확한 새 UTF-8 문자열로 좁게 교체합니다.
+
 ## 프로젝트 이해
 
 - 앱 진입점은 `main.py`입니다.
@@ -108,3 +131,8 @@ router = APIRouter()
 - SQL 문자열에 사용자 입력을 직접 이어 붙이는 구현 금지
 - 등록되지 않은 화면 파일만 만들고 `main.py` 또는 `menu.config.js` 등록을 빠뜨리는 작업 금지
 - 단순 오류 수정이나 작은 UI 정리는 필요하면 바로 처리할 수 있지만, 업무 흐름, 화면 단계, 버튼/메뉴 노출, 권한/인증 흐름처럼 사용자의 작업 방식이 달라지는 개선은 구현 전에 사용자에게 먼저 설명하고 확인을 받습니다.
+- VS Code에서 정상으로 보이는 한글은 함부로 수정하지 않기
+- Codex 출력에서 깨져 보인다고 바로 “파일이 깨졌다”고 판단하지 않기
+- 한글 문자열을 수정해야 하면, 해당 줄만 명확히 새 UTF-8 문자열로 교체
+- 가능하면 주석은 건드리지 않고, 사용자 화면에 보이는 문자열만 수정
+- menu.config.js 같은 한글 라벨 파일은 특히 전체 rewrite를 피하고, 필요 시 아주 좁게 수정

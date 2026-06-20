@@ -107,7 +107,7 @@
                 .map((row) => row.TABLE_NAME)
                 .join(", ");
             this.renderInitLog(`Missing INIT system tables: ${missingTables}`);
-            if (!confirm("Create missing INIT$_ system tables on the current system database?")) return;
+            if (!(await CommonMessage.confirm("Create missing INIT$_ system tables on the current system database?"))) return;
             this.setSystemMessage("Running INIT_SYSTEM_DDL...");
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/init-system/run`, { method: "POST" });
@@ -122,8 +122,8 @@
         },
 
         async truncateSystemData() {
-            if (!confirm("Reset all INIT system data? Users, target DB connections, settings, and setup logs will be truncated.")) return;
-            if (!confirm("This cannot be undone and may require system setup again. Continue system data reset?")) return;
+            if (!(await CommonMessage.confirm("Reset all INIT system data? Users, target DB connections, settings, and setup logs will be truncated."))) return;
+            if (!(await CommonMessage.confirm("This cannot be undone and may require system setup again. Continue system data reset?"))) return;
             this.renderInitLog("Resetting INIT system data...");
             this.setSystemMessage("Running INIT_SYSTEM_TRUNC...");
             try {
@@ -260,7 +260,7 @@
             const message = approveAll
                 ? "Approve all pending users in the current result?"
                 : "Approve selected user(s)?";
-            if (!confirm(message)) return;
+            if (!(await CommonMessage.confirm(message))) return;
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/system-table/user/approve`, {
                     method: "POST",
@@ -284,7 +284,7 @@
                 this.setSystemMessage("Select at least one user to reset password.", "error");
                 return;
             }
-            if (!confirm("Reset password for selected user(s)? Temporary passwords will be shown only once.")) return;
+            if (!(await CommonMessage.confirm("Reset password for selected user(s)? Temporary passwords will be shown only once."))) return;
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/system-table/user/reset-password`, {
                     method: "POST",
@@ -318,7 +318,7 @@
                 this.setSystemMessage("Select at least one user to deactivate.", "error");
                 return;
             }
-            if (!confirm("선택한 사용자를 회원탈퇴 처리하시겠습니까? USE_YN이 N으로 변경됩니다.")) return;
+            if (!(await CommonMessage.confirm("Deactivate the selected user(s)? USE_YN will be changed to N."))) return;
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/system-table/user/deactivate`, {
                     method: "POST",
@@ -435,3 +435,4 @@
 
     window[PAGE_CODE] = M99098;
 })();
+
