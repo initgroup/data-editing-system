@@ -421,7 +421,7 @@ def _build_dsn(data: dict) -> str:
     raise HTTPException(status_code=400, detail="Service name or SID is required.")
 
 
-def _connect_target(data: dict):
+def _build_target_connect_args(data: dict) -> dict:
     db_type = (data.get("dbType") or data.get("DB_TYPE") or "ORACLE").upper()
     if db_type != "ORACLE":
         raise HTTPException(status_code=400, detail="Only ORACLE target connections are supported now.")
@@ -455,6 +455,11 @@ def _connect_target(data: dict):
         if wallet_password:
             connect_args["wallet_password"] = wallet_password
 
+    return connect_args
+
+
+def _connect_target(data: dict):
+    connect_args = _build_target_connect_args(data)
     return oracledb.connect(**connect_args)
 
 
@@ -1319,6 +1324,10 @@ def save_connection(req: ConnectionRequest, request: Request):
             row = cursor.fetchone()
             connection_id = row[0] if row else None
         conn.commit()
+        if connection_id:
+            from backend.target_database import close_target_db_pool
+
+            close_target_db_pool(connection_id, user_id)
         return {"status": "success", "message": "Connection profile saved.", "connectionId": connection_id}
     except HTTPException:
         if conn:
@@ -1359,6 +1368,9 @@ def delete_connection(req: ConnectionIdRequest, request: Request):
             conn.rollback()
             raise HTTPException(status_code=404, detail="Connection profile was not found or already deleted.")
         conn.commit()
+        from backend.target_database import close_target_db_pool
+
+        close_target_db_pool(req.connectionId, user_id)
         return {
             "status": "success",
             "message": "Connection profile deleted.",
