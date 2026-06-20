@@ -43,6 +43,8 @@
             flowPaletteDragData: null,
             nodeSequence: 100,
             flowContextMenuState: null,
+            flowSidebarCollapsed: false,
+            flowSidebarCollapsedBeforeMaximize: null,
             flowInspectorCollapsed: false,
             flowDesignerBound: false,
             flowLayoutRestoredFromDb: false,
@@ -74,6 +76,7 @@
                 await this.loadWorkContext();
                 this.switchTab("designer");
                 this.setupFlowDesigner();
+                this.setFlowInspectorCollapsed(true);
                 this.isInit = true;
             },
 
@@ -99,7 +102,9 @@
                 this.edgeDragState = null;
                 this.dashedConnectionMode = false;
                 this.flowPaletteDragData = null;
-                this.flowInspectorCollapsed = false;
+                this.flowSidebarCollapsed = false;
+                this.flowSidebarCollapsedBeforeMaximize = null;
+                this.flowInspectorCollapsed = true;
                 this.flowLayoutRestoredFromDb = false;
                 this.nodeSequence = 100;
                 this.isInit = false;
@@ -351,7 +356,8 @@
             async loadFlowAssets() {
                 await Promise.all([
                     this.loadRegisteredJobs(),
-                    this.loadDefaultVariables()
+                    this.loadDefaultVariables(),
+                    this.loadFlowVersions(false)
                 ]);
                 this.bindFlowPalette();
             },
@@ -496,6 +502,15 @@
                 return "JOB";
             },
 
+            getNodeTypeLabel(nodeType) {
+                const type = String(nodeType || "").toUpperCase();
+                return {
+                    PROFILING: "M03001 - 데이터 프로파일링",
+                    CORRELATION: "M03002 - 컬럼간 상관 분석",
+                    RULE_MINING: "M03003 - 자동 규칙 발굴"
+                }[type] || type || "JOB";
+            },
+
             async loadDefaultVariables() {
                 const container = getContainerEl(`#flowVariableGrid-${PAGE_CODE}`);
                 if (!container) return;
@@ -543,16 +558,20 @@
 
             async loadFlowVersions(loadLatest = false) {
                 const select = getContainerEl(`#flowVersion-${PAGE_CODE}`);
-                if (!select) return;
+                const grid = getContainerEl(`#flowVersionGrid-${PAGE_CODE}`);
+                if (!select && !grid) return;
+                const currentFlowId = this.getValue(`#flowId-${PAGE_CODE}`);
                 if (!this.selectedProjectId || !this.selectedScenarioId) {
                     this.flowList = [];
-                    select.innerHTML = `<option value="">Draft</option>`;
+                    if (select) select.innerHTML = `<option value="">Draft</option>`;
+                    if (grid) grid.innerHTML = `<div class="table-empty">Select project and scenario first.</div>${this.renderListFooter(0)}`;
                     this.updateFlowVersionCount();
                     this.newFlow(false);
                     return;
                 }
 
                 try {
+                    this.setFlowVersionLoading(true);
                     const params = new URLSearchParams({
                         projectId: this.selectedProjectId,
                         scenarioId: this.selectedScenarioId
@@ -562,37 +581,143 @@
                     this.renderFlowVersions();
                     if (loadLatest && this.flowList.length) {
                         await this.loadFlowVersion(this.flowList[0].FLOW_ID);
+                    } else if (/^\d+$/.test(currentFlowId)) {
+                        const exists = this.flowList.some((flow) => String(flow.FLOW_ID) === String(currentFlowId));
+                        if (exists) {
+                            if (select) select.value = currentFlowId;
+                            this.renderFlowVersions();
+                        } else {
+                            this.newFlow(false);
+                            this.renderFlowVersions();
+                        }
                     }
                 } catch (error) {
                     this.flowList = [];
-                    select.innerHTML = `<option value="">Flow list load failed</option>`;
+                    if (select) select.innerHTML = `<option value="">Flow list load failed</option>`;
+                    if (grid) grid.innerHTML = `<div class="table-error">${this.escapeHtml(error.message || "Flow list load failed.")}</div>${this.renderListFooter(0)}`;
                     this.updateFlowVersionCount();
+                } finally {
+                    this.setFlowVersionLoading(false);
+                }
+            },
+
+            setFlowVersionLoading(isLoading) {
+                const refreshButton = getContainerEl(`#flowVersionRefresh-${PAGE_CODE}`);
+                const refreshIcon = refreshButton?.querySelector("i");
+                const countLabel = getContainerEl(`#flowVersionCount-${PAGE_CODE}`);
+                const grid = getContainerEl(`#flowVersionGrid-${PAGE_CODE}`);
+                if (refreshButton) {
+                    refreshButton.disabled = Boolean(isLoading);
+                    refreshButton.classList.toggle("is-loading", Boolean(isLoading));
+                }
+                if (refreshIcon) {
+                    refreshIcon.classList.toggle("fa-spin", Boolean(isLoading));
+                }
+                if (countLabel) {
+                    countLabel.textContent = isLoading ? "loading..." : `${this.flowList.length.toLocaleString()} items`;
+                }
+                if (isLoading && grid) {
+                    grid.innerHTML = `
+                        <div class="table-empty flow-list-loading">
+                            <i class="fas fa-sync-alt fa-spin"></i>
+                            <span>Loading saved flows...</span>
+                        </div>
+                        ${this.renderListFooter(0)}
+                    `;
                 }
             },
 
             renderFlowVersions() {
                 const select = getContainerEl(`#flowVersion-${PAGE_CODE}`);
-                if (!select) return;
+                const grid = getContainerEl(`#flowVersionGrid-${PAGE_CODE}`);
+                if (!select && !grid) return;
                 const currentFlowId = this.getValue(`#flowId-${PAGE_CODE}`);
                 const countText = `${this.flowList.length.toLocaleString()} saved`;
-                select.innerHTML = `
-                    <option value="">Draft (${countText})</option>
-                    ${this.flowList.map((flow) => `
-                        <option value="${this.escapeHtml(flow.FLOW_ID ?? "")}">
-                            ${this.escapeHtml(`#${flow.FLOW_ID} ${flow.FLOW_NAME || "Untitled Flow"}`)}
-                        </option>
-                    `).join("")}
-                `;
+                if (select) {
+                    select.innerHTML = `
+                        <option value="">NEW - Draft (${countText})</option>
+                        ${this.flowList.map((flow) => `
+                            <option value="${this.escapeHtml(flow.FLOW_ID ?? "")}">
+                                ${this.escapeHtml(`#${flow.FLOW_ID} ${flow.FLOW_GROUP || ""} ${flow.FLOW_NAME || "Untitled Flow"}`)}
+                            </option>
+                        `).join("")}
+                    `;
+                }
+                if (grid) {
+                    grid.innerHTML = `
+                        <button type="button" class="data-job-row flow-version-row ${/^\d+$/.test(currentFlowId) ? "" : "is-selected"}" onclick="${PAGE_CODE}.newFlow()">
+                            <span class="data-job-order">NEW</span>
+                            <span>
+                                <strong>Draft</strong>
+                                <small>${this.escapeHtml(config.defaultFlowGroup || PAGE_CODE)} / unsaved flow</small>
+                            </span>
+                            <em><span>NEW</span><span>DRAFT</span></em>
+                        </button>
+                        ${this.flowList.map((flow, index) => this.renderFlowVersionRow(flow, index, currentFlowId)).join("")}
+                        ${this.renderListFooter(this.flowList.length)}
+                    `;
+                }
                 this.updateFlowVersionCount();
-                if (this.flowList.some((flow) => String(flow.FLOW_ID) === String(currentFlowId))) {
+                if (select && this.flowList.some((flow) => String(flow.FLOW_ID) === String(currentFlowId))) {
                     select.value = currentFlowId;
                 }
+            },
+
+            renderFlowVersionRow(flow, index, currentFlowId) {
+                const flowId = flow.FLOW_ID ?? "";
+                const selectedClass = String(flowId) === String(currentFlowId) ? "is-selected" : "";
+                const flowCode = flow.FLOW_GROUP || config.defaultFlowGroup || PAGE_CODE;
+                const flowName = flow.FLOW_NAME || "Untitled Flow";
+                const flowDesc = flow.FLOW_DESC || flow.FLOW_TYPE || "";
+                return `
+                    <button type="button" class="data-job-row flow-version-row ${selectedClass}" onclick="${PAGE_CODE}.loadFlowVersion('${this.escapeJs(flowId)}')">
+                        <span class="data-job-order">${this.escapeHtml(index + 1)}</span>
+                        <span>
+                            <strong>${this.escapeHtml(flowName)}</strong>
+                            <small>#${this.escapeHtml(flowId)} / ${this.escapeHtml(flowCode)}${flowDesc ? ` / ${this.escapeHtml(flowDesc)}` : ""}</small>
+                        </span>
+                        <em><span>${this.escapeHtml(flow.USE_YN || "Y")}</span><span>DAG</span></em>
+                    </button>
+                `;
             },
 
             updateFlowVersionCount() {
                 const countLabel = getContainerEl(`#flowVersionCount-${PAGE_CODE}`);
                 if (countLabel) {
                     countLabel.textContent = `${this.flowList.length.toLocaleString()} items`;
+                }
+            },
+
+            async refreshSavedFlows() {
+                await this.loadFlowVersions(false);
+            },
+
+            async refreshRegisteredJobs() {
+                await this.loadRegisteredJobs();
+                this.bindFlowPalette();
+            },
+
+            toggleFlowSidebar() {
+                const container = document.getElementById(`container-${PAGE_CODE}`);
+                if (!container) return;
+                this.flowSidebarCollapsed = !this.flowSidebarCollapsed;
+                container.classList.toggle("is-flow-sidebar-collapsed", this.flowSidebarCollapsed);
+                this.renderFlowSidebarToggle();
+                setTimeout(() => {
+                    this.resizeFlowViewportToNodes();
+                    this.updateFlowEdges();
+                    this.updateSelectedEdgeDeleteButton();
+                }, 0);
+            },
+
+            renderFlowSidebarToggle() {
+                const button = getContainerEl(`#flowSidebarToggle-${PAGE_CODE}`);
+                const icon = button?.querySelector("i");
+                if (!icon) return;
+                icon.classList.toggle("fa-chevron-left", !this.flowSidebarCollapsed);
+                icon.classList.toggle("fa-chevron-right", this.flowSidebarCollapsed);
+                if (button) {
+                    button.title = this.flowSidebarCollapsed ? "Expand Flow Assets" : "Collapse Flow Assets";
                 }
             },
 
@@ -605,6 +730,7 @@
                     const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/flow/${encodeURIComponent(flowId)}`, { method: "GET" });
                     if (json.data) {
                         this.applyFlowData(json.data);
+                        this.renderFlowVersions();
                     }
                 } catch (error) {
                     alert(error.message || "Flow load failed.");
@@ -1131,11 +1257,15 @@
                     this.finishEdgeDrag();
                     return;
                 }
-                if ((event.key === "Delete" || event.key === "Backspace") && this.selectedEdgeId) {
+                if ((event.key === "Delete" || event.key === "Backspace") && (this.selectedEdgeId || this.selectedNodeId)) {
                     const activeTag = document.activeElement?.tagName?.toLowerCase();
                     if (["input", "textarea", "select"].includes(activeTag)) return;
                     event.preventDefault();
-                    this.removeSelectedEdge();
+                    if (this.selectedEdgeId) {
+                        this.removeSelectedEdge();
+                    } else {
+                        this.removeSelectedNode(this.selectedNodeId);
+                    }
                 }
             },
 
@@ -1296,13 +1426,15 @@
                 article.dataset.ownerName = data.ownerName || "";
                 article.dataset.tableName = data.tableName || "";
                 article.dataset.refObjectId = data.refObjectId || "";
+                article.dataset.execPlsql = data.execPlsql || "";
+                article.dataset.nodeParams = this.stringifyNodeJson(data.params || []);
                 article.style.position = "absolute";
                 article.style.left = `${Math.max(0, Math.round(left))}px`;
                 article.style.top = `${Math.max(0, Math.round(top))}px`;
                 article.style.width = "170px";
                 article.innerHTML = `
                     <header class="data-param-panel-header">
-                        <strong>${this.escapeHtml(nodeType)}</strong>
+                        <strong>${this.escapeHtml(this.getNodeTypeLabel(nodeType))}</strong>
                         <span class="data-job-order">NEW</span>
                     </header>
                     <div class="flow-node-body">
@@ -1336,13 +1468,15 @@
                 article.dataset.ownerName = data.ownerName || "";
                 article.dataset.tableName = data.tableName || "";
                 article.dataset.refObjectId = data.refObjectId || "";
+                article.dataset.execPlsql = data.execPlsql || "";
+                article.dataset.nodeParams = this.stringifyNodeJson(data.params || []);
                 article.style.position = "absolute";
                 article.style.left = `${Math.max(0, Math.round(Number(data.positionLeft) || 0))}px`;
                 article.style.top = `${Math.max(0, Math.round(Number(data.positionTop) || 0))}px`;
                 article.style.width = `${Math.max(150, Math.round(Number(data.nodeWidth) || 170))}px`;
                 article.innerHTML = `
                     <header class="data-param-panel-header">
-                        <strong>${this.escapeHtml(nodeType)}</strong>
+                        <strong>${this.escapeHtml(this.getNodeTypeLabel(nodeType))}</strong>
                         <span class="data-job-order">${this.escapeHtml(data.refMenuCode || data.sortOrder || "NODE")}</span>
                     </header>
                     <div class="flow-node-body">
@@ -1396,6 +1530,7 @@
             },
 
             selectFlowNode(nodeId) {
+                this.storeSelectedNodeInspectorState();
                 this.selectedNodeId = nodeId || "";
                 this.selectedEdgeId = "";
                 this.hideSelectedEdgeDelete();
@@ -1411,6 +1546,8 @@
                 this.setValue(`#nodeOwnerName-${PAGE_CODE}`, node.dataset.ownerName || "");
                 this.setValue(`#nodeTableName-${PAGE_CODE}`, node.dataset.tableName || "");
                 this.setValue(`#nodeDependsOn-${PAGE_CODE}`, this.getUpstreamNodeIds(this.selectedNodeId).join(", "));
+                this.setValue(`#nodeExecPlsqlEditor-${PAGE_CODE}`, node.dataset.execPlsql || "");
+                this.renderNodeBindVariables(node);
             },
 
             getUpstreamNodeIds(nodeId) {
@@ -1428,6 +1565,8 @@
                 }
                 if (fieldName === "nodeType") {
                     node.dataset.nodeType = value || "";
+                    const headerTitle = node.querySelector(".data-param-panel-header strong");
+                    if (headerTitle) headerTitle.textContent = this.getNodeTypeLabel(value);
                 }
                 if (fieldName === "ownerName") {
                     node.dataset.ownerName = value || "";
@@ -1441,8 +1580,128 @@
                 return getContainerEl(selector)?.value || "";
             },
 
+            setValue(selector, value) {
+                const element = getContainerEl(selector);
+                if (element) element.value = value ?? "";
+            },
+
             updateFlowField() {},
             handleNodeJobChange() {},
+
+            stringifyNodeJson(value) {
+                try {
+                    return JSON.stringify(value ?? []);
+                } catch {
+                    return "[]";
+                }
+            },
+
+            parseNodeJson(value, fallback = []) {
+                try {
+                    if (!value) return fallback;
+                    const parsed = JSON.parse(value);
+                    return parsed ?? fallback;
+                } catch {
+                    return fallback;
+                }
+            },
+
+            maskSqlForBindScan(sqlText) {
+                return String(sqlText || "")
+                    .replace(/'(?:''|[^'])*'/gs, (match) => " ".repeat(match.length))
+                    .replace(/"(?:""|[^"])*"/gs, (match) => " ".repeat(match.length))
+                    .replace(/\/\*.*?\*\//gs, (match) => " ".repeat(match.length))
+                    .replace(/--[^\r\n]*/gm, (match) => " ".repeat(match.length));
+            },
+
+            extractBindVariables(sqlText) {
+                const masked = this.maskSqlForBindScan(sqlText);
+                const names = [];
+                const seen = new Set();
+                const regex = /(?<!:):([A-Za-z][A-Za-z0-9_]*)/g;
+                let match;
+                while ((match = regex.exec(masked)) !== null) {
+                    const name = match[1];
+                    const key = name.toLowerCase();
+                    if (!seen.has(key)) {
+                        seen.add(key);
+                        names.push(name);
+                    }
+                }
+                return names;
+            },
+
+            getNodePortBindNames(node) {
+                return new Set(Array.from(node.querySelectorAll(".flow-port"))
+                    .map((port) => port.textContent.trim().toLowerCase())
+                    .filter(Boolean));
+            },
+
+            getRuntimeBindNamesForNode(node) {
+                const portNames = this.getNodePortBindNames(node);
+                return this.extractBindVariables(node.dataset.execPlsql || "")
+                    .filter((name) => !portNames.has(name.toLowerCase()));
+            },
+
+            getNodeParams(node) {
+                const params = this.parseNodeJson(node?.dataset?.nodeParams, []);
+                return Array.isArray(params) ? params : [];
+            },
+
+            storeSelectedNodeInspectorState() {
+                const node = this.getFlowNode(this.selectedNodeId);
+                if (!node) return;
+                const editor = getContainerEl(`#nodeExecPlsqlEditor-${PAGE_CODE}`);
+                if (editor) node.dataset.execPlsql = editor.value || "";
+                const params = [];
+                getContainerEl(`#nodeBindGrid-${PAGE_CODE}`)?.querySelectorAll(".flow-node-bind-input").forEach((input) => {
+                    params.push({
+                        name: input.dataset.bindName || "",
+                        label: `:${input.dataset.bindName || ""}`,
+                        value: input.value || "",
+                        source: "RUNTIME"
+                    });
+                });
+                node.dataset.nodeParams = this.stringifyNodeJson(params.filter((item) => item.name));
+            },
+
+            updateNodeBindValue(name, value) {
+                const node = this.getFlowNode(this.selectedNodeId);
+                if (!node || !name) return;
+                const params = this.getNodeParams(node);
+                const existing = params.find((item) => String(item.name || "").toLowerCase() === String(name).toLowerCase());
+                if (existing) {
+                    existing.value = value || "";
+                } else {
+                    params.push({ name, label: `:${name}`, value: value || "", source: "RUNTIME" });
+                }
+                node.dataset.nodeParams = this.stringifyNodeJson(params);
+            },
+
+            renderNodeBindVariables(node) {
+                const container = getContainerEl(`#nodeBindGrid-${PAGE_CODE}`);
+                if (!container) return;
+                if (!node) {
+                    container.innerHTML = `<div class="table-empty">No runtime bind variables.</div>`;
+                    return;
+                }
+                const names = this.getRuntimeBindNamesForNode(node);
+                const params = this.getNodeParams(node);
+                const valueMap = new Map(params.map((item) => [String(item.name || "").toLowerCase(), item]));
+                if (!names.length) {
+                    container.innerHTML = `<div class="table-empty">No runtime bind variables.</div>`;
+                    return;
+                }
+                container.innerHTML = names.map((name) => {
+                    const saved = valueMap.get(name.toLowerCase());
+                    return `
+                        <label class="data-bind-row">
+                            <span>:${this.escapeHtml(name)}</span>
+                            <input class="env-field flow-node-bind-input" data-bind-name="${this.escapeHtml(name)}" type="text" value="${this.escapeHtml(saved?.value ?? "")}" oninput="${PAGE_CODE}.updateNodeBindValue(this.dataset.bindName, this.value)">
+                        </label>
+                    `;
+                }).join("");
+            },
 
             collectNodePorts(node, direction) {
                 const selector = direction === "in" ? ".flow-port-in" : ".flow-port-out";
@@ -1482,6 +1741,7 @@
             },
 
             buildFlowPayload() {
+                this.storeSelectedNodeInspectorState();
                 const flowIdValue = this.getValue(`#flowId-${PAGE_CODE}`);
                 const flowName = this.getFlowNameForSave();
                 if (!this.getValue(`#flowName-${PAGE_CODE}`)) {
@@ -1505,8 +1765,8 @@
                         nodeHeight: position.height,
                         inputs: this.collectNodePorts(node, "in"),
                         outputs: this.collectNodePorts(node, "out"),
-                        params: [],
-                        execPlsql: this.selectedNodeId === node.dataset.nodeId ? this.getValue(`#nodeExecPlsqlEditor-${PAGE_CODE}`) : "",
+                        params: this.getNodeParams(node),
+                        execPlsql: node.dataset.execPlsql || "",
                         sortOrder: index + 1
                     };
                 });
@@ -1519,7 +1779,7 @@
                     flowName,
                     flowDesc: this.getValue(`#flowDesc-${PAGE_CODE}`),
                     flowType: this.flowType,
-                    executionMode: this.getValue(`#flowExecutionMode-${PAGE_CODE}`) || "DAG",
+                    executionMode: "DAG",
                     useYn: this.getValue(`#flowUseYn-${PAGE_CODE}`) || "Y",
                     status: "DRAFT",
                     nodes,
@@ -1551,7 +1811,6 @@
                 this.setValue(`#flowGroup-${PAGE_CODE}`, flow.FLOW_GROUP || config.defaultFlowGroup || PAGE_CODE);
                 this.setValue(`#flowName-${PAGE_CODE}`, flow.FLOW_NAME || "");
                 this.setValue(`#flowDesc-${PAGE_CODE}`, flow.FLOW_DESC || "");
-                this.setValue(`#flowExecutionMode-${PAGE_CODE}`, flow.EXECUTION_MODE || "DAG");
                 this.setValue(`#flowUseYn-${PAGE_CODE}`, flow.USE_YN || "Y");
                 const selector = getContainerEl(`#flowVersion-${PAGE_CODE}`);
                 if (selector) selector.value = flow.FLOW_ID || "";
@@ -1586,6 +1845,8 @@
                     this.setValue(`#nodeOwnerName-${PAGE_CODE}`, "");
                     this.setValue(`#nodeTableName-${PAGE_CODE}`, "");
                     this.setValue(`#nodeDependsOn-${PAGE_CODE}`, "");
+                    this.setValue(`#nodeExecPlsqlEditor-${PAGE_CODE}`, "");
+                    this.renderNodeBindVariables(null);
                 }
                 this.resizeFlowViewportToNodes();
                 this.updateFlowEdges();
@@ -1643,10 +1904,18 @@
                 if (!container) return;
                 const nextMaximized = !container.classList.contains("is-flow-canvas-maximized");
                 container.classList.toggle("is-flow-canvas-maximized", nextMaximized);
-                if (!nextMaximized) {
-                    this.flowInspectorCollapsed = false;
-                    container.classList.remove("is-flow-inspector-collapsed");
+                if (nextMaximized) {
+                    this.flowSidebarCollapsedBeforeMaximize = this.flowSidebarCollapsed;
+                    if (!this.flowSidebarCollapsed) {
+                        this.flowSidebarCollapsed = true;
+                        container.classList.add("is-flow-sidebar-collapsed");
+                    }
+                } else if (this.flowSidebarCollapsedBeforeMaximize !== null) {
+                    this.flowSidebarCollapsed = this.flowSidebarCollapsedBeforeMaximize;
+                    container.classList.toggle("is-flow-sidebar-collapsed", this.flowSidebarCollapsed);
+                    this.flowSidebarCollapsedBeforeMaximize = null;
                 }
+                this.renderFlowSidebarToggle();
                 const icon = getContainerEl(`#flowCanvasMaximize-${PAGE_CODE}`)?.querySelector("i");
                 if (icon) {
                     icon.classList.toggle("fa-expand", !nextMaximized);
@@ -1660,9 +1929,13 @@
             },
 
             toggleFlowInspectorOverlay() {
+                this.setFlowInspectorCollapsed(!this.flowInspectorCollapsed);
+            },
+
+            setFlowInspectorCollapsed(collapsed) {
                 const container = document.getElementById(`container-${PAGE_CODE}`);
-                if (!container?.classList.contains("is-flow-canvas-maximized")) return;
-                this.flowInspectorCollapsed = !this.flowInspectorCollapsed;
+                if (!container) return;
+                this.flowInspectorCollapsed = Boolean(collapsed);
                 container.classList.toggle("is-flow-inspector-collapsed", this.flowInspectorCollapsed);
                 this.renderFlowInspectorToggle();
                 setTimeout(() => {
@@ -1920,19 +2193,23 @@
                 `;
             },
             addFlowVariable() {},
-            async buildExecutionPlan() {
+            async buildExecutionPlan(options = {}) {
+                const switchToPlan = options.switchToPlan !== false;
                 const payload = this.buildFlowPayload();
                 try {
                     const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/flow/validate`, {
                         method: "POST",
                         body: payload
                     });
-                    this.renderExecutionPlan(json.data?.plan || []);
-                    this.switchTab("plan");
-                    return json.data?.plan || [];
+                    const plan = json.data?.plan || [];
+                    this.renderExecutionPlan(plan);
+                    this.renderFlowPlanMessage(`Validation succeeded. ${plan.length.toLocaleString()} execution step(s) found.`, "success");
+                    if (switchToPlan) this.switchTab("plan");
+                    return plan;
                 } catch (error) {
                     this.renderError(`#flowPlanGrid-${PAGE_CODE}`, error.message || "Flow validation failed.");
-                    this.switchTab("plan");
+                    this.renderFlowPlanMessage(error.message || "Flow validation failed.", "error");
+                    if (switchToPlan) this.switchTab("plan");
                     throw error;
                 }
             },
@@ -1989,6 +2266,19 @@
                     ${this.renderListFooter(plan.length)}
                 `;
             },
+            renderFlowPlanMessage(message, type = "info") {
+                const container = getContainerEl(`#flowPlanMessage-${PAGE_CODE}`);
+                if (!container) return;
+                if (!message) {
+                    container.hidden = true;
+                    container.textContent = "";
+                    container.className = "flow-plan-message";
+                    return;
+                }
+                container.hidden = false;
+                container.className = `flow-plan-message is-${type}`;
+                container.textContent = message;
+            },
             renderFlowRunHistory(rows) {
                 const container = getContainerEl(`#flowRunHistoryGrid-${PAGE_CODE}`);
                 if (!container) return;
@@ -2027,8 +2317,8 @@
                 `;
             },
             generateNodePlsql() {},
-            removeSelectedNode() {
-                const nodeId = this.flowContextMenuState?.nodeId || this.selectedNodeId;
+            removeSelectedNode(targetNodeId = "") {
+                const nodeId = targetNodeId || this.flowContextMenuState?.nodeId || this.selectedNodeId;
                 const node = this.getFlowNode(nodeId);
                 if (!node) return;
                 this.flowEdges = this.flowEdges.filter((edge) => edge.from !== nodeId && edge.to !== nodeId);
@@ -2046,6 +2336,8 @@
                     this.setValue(`#nodeOwnerName-${PAGE_CODE}`, "");
                     this.setValue(`#nodeTableName-${PAGE_CODE}`, "");
                     this.setValue(`#nodeDependsOn-${PAGE_CODE}`, "");
+                    this.setValue(`#nodeExecPlsqlEditor-${PAGE_CODE}`, "");
+                    this.renderNodeBindVariables(null);
                 }
                 this.resizeFlowViewportToNodes();
                 this.updateFlowEdges();
@@ -2067,7 +2359,6 @@
                 this.setValue(`#flowGroup-${PAGE_CODE}`, config.defaultFlowGroup || PAGE_CODE);
                 this.setValue(`#flowName-${PAGE_CODE}`, "");
                 this.setValue(`#flowDesc-${PAGE_CODE}`, "");
-                this.setValue(`#flowExecutionMode-${PAGE_CODE}`, "DAG");
                 this.setValue(`#flowUseYn-${PAGE_CODE}`, "Y");
                 const selector = getContainerEl(`#flowVersion-${PAGE_CODE}`);
                 if (selector) selector.value = "";
@@ -2137,10 +2428,10 @@
 
             async validateFlow() {
                 try {
-                    await this.buildExecutionPlan();
-                    alert("Flow validation succeeded.");
+                    const plan = await this.buildExecutionPlan({ switchToPlan: false });
+                    CommonMessage.success(`Flow validation succeeded. ${plan.length.toLocaleString()} execution step(s) found.`);
                 } catch (error) {
-                    alert(error.message || "Flow validation failed.");
+                    CommonMessage.error(error.message || "Flow validation failed.");
                 }
             },
 
@@ -2178,4 +2469,3 @@
         return page;
     };
 })();
-

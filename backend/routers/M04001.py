@@ -14,7 +14,7 @@ router = create_flow_work_router(
     messages={
         "flow_saved": "Integrated editing flow saved.",
         "flow_valid": "Integrated editing flow validation succeeded.",
-        "run_done": "Integrated editing flow execution plan created.",
-        "run_queued": "Integrated editing flow queued."
+        "run_done": "Integrated editing flow queued for DAG execution.",
+        "run_queued": "Integrated editing flow queued for DAG execution."
     }
 )

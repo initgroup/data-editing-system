@@ -141,7 +141,7 @@
                 </footer>
             </div>
         </div>
-        <div class="resizer-y" id="resizer-bottom"></div>
+        <div class="resizer-y" id="resizer-bottom" role="separator" aria-orientation="horizontal" aria-label="Resize log console"></div>
         
         <div id="pageConsoleHolder" class="bottom-console collapsed" title="Log console">
             <div class="console-header">
@@ -178,7 +178,7 @@
         </div>
     </main>
 
-    <div class="resizer-x" id="resizer-right"></div>
+    <div class="resizer-x" id="resizer-right" role="separator" aria-orientation="vertical" aria-label="Resize Gemini sidebar"></div>
 
     <aside id="sideRBar" class="right-sidebar collapsed">
         <div class="sideRBar-collapsed-icon-viewer">
@@ -339,8 +339,62 @@
         }
 
         // 전역 변수로 이전 크기 저장 (초기값 300px)
-        let lastRightWidth = "300px";        
+        const PANEL_SIZE_STORAGE_KEYS = {
+            rightSidebar: "initRightSidebarWidth",
+            bottomConsole: "initBottomConsoleHeight"
+        };
+        let lastRightWidth = "300px";
         let lastConsoleHeight = "200px";
+
+        function clampPanelSize(value, min, max) {
+            return Math.min(Math.max(value, min), max);
+        }
+
+        function getStoredPanelSize(key, fallback) {
+            const value = Number(localStorage.getItem(key));
+            return Number.isFinite(value) && value > 0 ? `${value}px` : fallback;
+        }
+
+        function savePanelSize(key, value) {
+            const numericValue = parseInt(value, 10);
+            if (Number.isFinite(numericValue) && numericValue > 0) {
+                localStorage.setItem(key, String(numericValue));
+            }
+        }
+
+        function getRightSidebarBounds() {
+            return {
+                min: Math.min(280, Math.max(220, window.innerWidth * 0.18)),
+                max: Math.max(360, window.innerWidth * 0.7)
+            };
+        }
+
+        function getConsoleBounds() {
+            return {
+                min: 120,
+                max: Math.max(240, window.innerHeight * 0.72)
+            };
+        }
+
+        function applyRightSidebarWidth(width, options = {}) {
+            const sidebar = document.getElementById("sideRBar");
+            if (!sidebar) return;
+            const bounds = getRightSidebarBounds();
+            const nextWidth = clampPanelSize(parseInt(width, 10) || parseInt(lastRightWidth, 10), bounds.min, bounds.max);
+            lastRightWidth = `${nextWidth}px`;
+            sidebar.style.width = lastRightWidth;
+            if (options.persist) savePanelSize(PANEL_SIZE_STORAGE_KEYS.rightSidebar, lastRightWidth);
+        }
+
+        function applyConsoleHeight(height, options = {}) {
+            const consolePanel = document.getElementById("pageConsoleHolder");
+            if (!consolePanel) return;
+            const bounds = getConsoleBounds();
+            const nextHeight = clampPanelSize(parseInt(height, 10) || parseInt(lastConsoleHeight, 10), bounds.min, bounds.max);
+            lastConsoleHeight = `${nextHeight}px`;
+            consolePanel.style.height = lastConsoleHeight;
+            if (options.persist) savePanelSize(PANEL_SIZE_STORAGE_KEYS.bottomConsole, lastConsoleHeight);
+        }
 
         document.addEventListener("DOMContentLoaded", function () {
             const tabs = document.querySelectorAll(".console-tab");
@@ -412,137 +466,83 @@
                 });
             }
 
-            // 5. 하단 콘솔창 조절 (가이드라인 방식)
+            lastRightWidth = getStoredPanelSize(PANEL_SIZE_STORAGE_KEYS.rightSidebar, lastRightWidth);
+            lastConsoleHeight = getStoredPanelSize(PANEL_SIZE_STORAGE_KEYS.bottomConsole, lastConsoleHeight);
+            if (!sideRBar.classList.contains("collapsed")) applyRightSidebarWidth(lastRightWidth);
+            if (!consoleBar.classList.contains("collapsed")) applyConsoleHeight(lastConsoleHeight);
+
+            // 5. 하단 콘솔창 조절
             const resizerBottom = document.getElementById("resizer-bottom");
-            const ghostY = document.getElementById("ghost-y") || document.createElement('div');    
-            // 만약 ghost-y가 없었다면 생성 후 설정
-            if (!document.getElementById("ghost-y")) {
-                ghostY.id = 'ghost-y';
-                ghostY.className = 'resizer-ghost-y';        
-                // 필수 스타일 강제 적용 (CSS 파일에 정의되어 있더라도 JS에서 보정)
-                Object.assign(ghostY.style, {
-                    position: 'fixed',
-                    left: '0',
-                    width: '100%',
-                    height: '2px',
-                    backgroundColor: '#3b82f6', // 선명한 파란색
-                    zIndex: '9999',
-                    display: 'none',
-                    pointerEvents: 'none' // 가이드라인이 마우스 이벤트를 방해하지 않도록
-                });
-                document.body.appendChild(ghostY);
-            }
-
-            resizerBottom.addEventListener("mousedown", function (e) {
-                // 콘솔바가 접혀있는 상태라면 리사이즈 무시
+            resizerBottom.addEventListener("pointerdown", function (event) {
                 if (consoleBar.classList.contains("collapsed")) return;
-
-                document.body.style.cursor = "row-resize";
-                document.body.style.userSelect = "none";
-                ghostY.style.top = e.clientY + 'px';
-                // 콘솔창 아래바의 위치를 알기 위함
-                ghostY.style.display = 'block';
-
-                function moveGhostY(e) {
-                    // 최소 35px ~ 최대 화면의 70%
-                    const minH = 35;
-                    const maxH = window.innerHeight * 0.7;
-                    let currentH = window.innerHeight - e.clientY;
-
-                    if (currentH >= minH && currentH <= maxH) {
-                        ghostY.style.top = e.clientY + 'px';
-                    }
-
-                    // 마우스 위치에 따라 가이드라인 이동 (제한 범위 안에서만)
-                    if (currentH >= minH && currentH <= maxH) {
-                        ghostY.style.top = e.clientY + 'px';
-                    } else if (currentH < minH) {
-                        ghostY.style.top = (window.innerHeight - minH) + 'px';
-                    } else if (currentH > maxH) {
-                        ghostY.style.top = (window.innerHeight - maxH) + 'px';
-                    }
-                }
-
-                function applyResizeY(e) {
-                    let finalHeight = window.innerHeight - e.clientY;
-                    const minH = 35;
-                    const maxH = window.innerHeight * 0.7;
-
-                    // 최종 범위 검사
-                    if (finalHeight < minH) finalHeight = minH;
-                    if (finalHeight > maxH) finalHeight = maxH;
-
-                    // 실제 콘솔창 높이 적용 및 lastConsoleHeight 갱신
-                    consoleBar.style.height = finalHeight + "px";
-                    lastConsoleHeight = finalHeight + "px";
-                    
-                    ghostY.style.display = 'none';
-                    document.body.style.cursor = "default";
-                    document.body.style.userSelect = "auto";
-                    document.removeEventListener("mousemove", moveGhostY);
-                    document.removeEventListener("mouseup", applyResizeY);
-                }
-
-                document.addEventListener("mousemove", moveGhostY);
-                document.addEventListener("mouseup", applyResizeY);
+                event.preventDefault();
+                let animationFrame = 0;
+                const updateHeight = (clientY, persist = false) => {
+                    const bounds = getConsoleBounds();
+                    const height = clampPanelSize(window.innerHeight - clientY, bounds.min, bounds.max);
+                    applyConsoleHeight(height, { persist });
+                };
+                const move = (moveEvent) => {
+                    if (animationFrame) cancelAnimationFrame(animationFrame);
+                    animationFrame = requestAnimationFrame(() => updateHeight(moveEvent.clientY));
+                };
+                const stop = (upEvent) => {
+                    if (animationFrame) cancelAnimationFrame(animationFrame);
+                    updateHeight(upEvent.clientY, true);
+                    resizerBottom.releasePointerCapture?.(event.pointerId);
+                    resizerBottom.classList.remove("active");
+                    document.body.classList.remove("panel-resizing-y");
+                    resizerBottom.removeEventListener("pointermove", move);
+                    resizerBottom.removeEventListener("pointerup", stop);
+                    resizerBottom.removeEventListener("pointercancel", stop);
+                };
+                resizerBottom.setPointerCapture?.(event.pointerId);
+                resizerBottom.classList.add("active");
+                document.body.classList.add("panel-resizing-y");
+                resizerBottom.addEventListener("pointermove", move);
+                resizerBottom.addEventListener("pointerup", stop);
+                resizerBottom.addEventListener("pointercancel", stop);
             });
 
-            // 6. 우측 사이드바 조절 (가이드라인 방식)
-            const ghostX = document.getElementById("ghost-x") || document.createElement('div');    
-            // 만약 ghost-x가 없었다면 생성 후 설정
-            if (!document.getElementById("ghost-x")) {
-                ghostX.id = 'ghost-x';
-                ghostX.className = 'resizer-ghost-x';
-                document.body.appendChild(ghostX);
-            }
-            const resizerRight = document.getElementById("resizer-right");            
-            resizerRight.addEventListener("mousedown", function (e) {
-                // 사이드바가 접혀있는 상태라면 리사이즈 무시
+            resizerBottom.addEventListener("dblclick", function () {
+                applyConsoleHeight(200, { persist: true });
+            });
+
+            // 6. 우측 사이드바 조절
+            const resizerRight = document.getElementById("resizer-right");
+            resizerRight.addEventListener("pointerdown", function (event) {
                 if (sideRBar.classList.contains("collapsed")) return;
+                event.preventDefault();
+                let animationFrame = 0;
+                const updateWidth = (clientX, persist = false) => {
+                    const bounds = getRightSidebarBounds();
+                    const width = clampPanelSize(window.innerWidth - clientX, bounds.min, bounds.max);
+                    applyRightSidebarWidth(width, { persist });
+                };
+                const move = (moveEvent) => {
+                    if (animationFrame) cancelAnimationFrame(animationFrame);
+                    animationFrame = requestAnimationFrame(() => updateWidth(moveEvent.clientX));
+                };
+                const stop = (upEvent) => {
+                    if (animationFrame) cancelAnimationFrame(animationFrame);
+                    updateWidth(upEvent.clientX, true);
+                    resizerRight.releasePointerCapture?.(event.pointerId);
+                    resizerRight.classList.remove("active");
+                    document.body.classList.remove("panel-resizing-x");
+                    resizerRight.removeEventListener("pointermove", move);
+                    resizerRight.removeEventListener("pointerup", stop);
+                    resizerRight.removeEventListener("pointercancel", stop);
+                };
+                resizerRight.setPointerCapture?.(event.pointerId);
+                resizerRight.classList.add("active");
+                document.body.classList.add("panel-resizing-x");
+                resizerRight.addEventListener("pointermove", move);
+                resizerRight.addEventListener("pointerup", stop);
+                resizerRight.addEventListener("pointercancel", stop);
+            });
 
-                document.body.style.cursor = "col-resize";
-                document.body.style.userSelect = "none";
-                ghostX.style.left = e.clientX + 'px';
-                ghostX.style.display = 'block';
-
-                function moveGhostX(e) {
-                    // 최소 35px ~ 최대 화면의 70%
-                    const minW = 35;
-                    const maxW = window.innerWidth * 0.7;
-                    let currentW = window.innerWidth - e.clientX;
-
-                    // 마우스 위치에 따라 가이드라인 이동 (제한 범위 안에서만)
-                    if (currentW >= minW && currentW <= maxW) {
-                        ghostX.style.left = e.clientX + 'px';
-                    } else if (currentW < minW) {
-                        ghostX.style.left = (window.innerWidth - minW) + 'px';
-                    } else if (currentW > maxW) {
-                        ghostX.style.left = (window.innerWidth - maxW) + 'px';
-                    }
-                }
-
-                function applyResizeX(e) {
-                    let finalWidth = window.innerWidth - e.clientX;
-                    const minW = 35;
-                    const maxW = window.innerWidth * 0.7;
-
-                    // 최종 범위 검사
-                    if (finalWidth < minW) finalWidth = minW;
-                    if (finalWidth > maxW) finalWidth = maxW;
-
-                    // 실제 사이드바 너비 적용 및 lastRightWidth 갱신
-                    sideRBar.style.width = finalWidth + "px";
-                    lastRightWidth = finalWidth + "px";
-                    
-                    ghostX.style.display = 'none';
-                    document.body.style.cursor = "default";
-                    document.body.style.userSelect = "auto";
-                    document.removeEventListener("mousemove", moveGhostX);
-                    document.removeEventListener("mouseup", applyResizeX);
-                }
-
-                document.addEventListener("mousemove", moveGhostX);
-                document.addEventListener("mouseup", applyResizeX);
+            resizerRight.addEventListener("dblclick", function () {
+                applyRightSidebarWidth(360, { persist: true });
             });
         });
 
@@ -556,13 +556,14 @@
                 // 현재 가로크기 저장
                 if (sidebar.style.width && parseInt(sidebar.style.width) > 25) {
                     lastRightWidth = sidebar.style.width;
+                    savePanelSize(PANEL_SIZE_STORAGE_KEYS.rightSidebar, lastRightWidth);
                 }
 
                 sidebar.style.width = "20px";                
                 if (panelBody) panelBody.style.display = "none";
             } else {
                 // 펼칠 때
-                sidebar.style.width = lastRightWidth;                
+                applyRightSidebarWidth(lastRightWidth);
                 if (panelBody) panelBody.style.display = "";
             }
         }
@@ -585,6 +586,7 @@
                 // 현재 높이가 너무 클 수 있으므로 나중을 위해 높이 저장
                 if (consolePanel.style.height && parseInt(consolePanel.style.height) > 40) {
                     lastConsoleHeight = consolePanel.style.height;
+                    savePanelSize(PANEL_SIZE_STORAGE_KEYS.bottomConsole, lastConsoleHeight);
                 }
                 consolePanel.style.height = "35px";
                 // 내용영역은 완전히 숨김 (공간 차지 X)
@@ -593,7 +595,7 @@
                 icon.className = "fas fa-chevron-up";                
             } else {
                 // [열기/펼치기 실행]
-                consolePanel.style.height = lastConsoleHeight;
+                applyConsoleHeight(lastConsoleHeight);
                 
                 // 아이콘을 다시 '아래'로 향하게 변경 (클릭하면 닫힌다는 의미)
                 icon.className = "fas fa-chevron-down";
@@ -621,12 +623,13 @@
 
             if (!isMaximized) {
                 lastConsoleHeight = consolePanel.style.height || "200px";
+                savePanelSize(PANEL_SIZE_STORAGE_KEYS.bottomConsole, lastConsoleHeight);
                 consolePanel.style.height = "90vh";
                 icon.className = "fas fa-window-restore";
                 btn.title = "Restore";
                 isMaximized = true;
             } else {
-                consolePanel.style.height = lastConsoleHeight;
+                applyConsoleHeight(lastConsoleHeight);
                 icon.className = "fas fa-window-maximize";
                 btn.title = "Maximize";
                 isMaximized = false;
@@ -929,4 +932,3 @@
 
 </body>
 </html>
-

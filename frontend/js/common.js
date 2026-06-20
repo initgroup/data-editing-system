@@ -785,6 +785,108 @@ const CommonMessage = {
         error: "fas fa-circle-xmark",
         confirm: "fas fa-circle-question"
     },
+    translations: {
+        "Some requests are still running. Continue cleanup anyway?": "아직 실행 중인 요청이 있습니다. 그래도 정리를 계속하시겠습니까?",
+        "Session expired. Please log in again.": "세션이 만료되었습니다. 다시 로그인하세요.",
+        "Please log in first.": "먼저 로그인하세요.",
+        "There are no open pages.": "열려 있는 페이지가 없습니다.",
+        "Select a target DB.": "대상 DB를 선택하세요.",
+        "Target DB change failed.": "대상 DB 변경에 실패했습니다.",
+        "Project is required.": "프로젝트를 선택하세요.",
+        "Scenario is required.": "시나리오를 선택하세요.",
+        "Project detail load failed.": "프로젝트 상세 정보를 불러오지 못했습니다.",
+        "Project name is required.": "프로젝트 이름을 입력하세요.",
+        "Project code is required.": "프로젝트 코드를 입력하세요.",
+        "Project saved.": "프로젝트가 저장되었습니다.",
+        "Project save failed.": "프로젝트 저장에 실패했습니다.",
+        "Select a saved project before deleting.": "삭제할 저장된 프로젝트를 먼저 선택하세요.",
+        "Project deleted.": "프로젝트가 삭제되었습니다.",
+        "Project delete failed.": "프로젝트 삭제에 실패했습니다.",
+        "Select a project first.": "프로젝트를 먼저 선택하세요.",
+        "Scenario detail load failed.": "시나리오 상세 정보를 불러오지 못했습니다.",
+        "Scenario name is required.": "시나리오 이름을 입력하세요.",
+        "Scenario code is required.": "시나리오 코드를 입력하세요.",
+        "Scenario saved.": "시나리오가 저장되었습니다.",
+        "Scenario save failed.": "시나리오 저장에 실패했습니다.",
+        "Select a saved scenario before deleting.": "삭제할 저장된 시나리오를 먼저 선택하세요.",
+        "Scenario deleted.": "시나리오가 삭제되었습니다.",
+        "Scenario delete failed.": "시나리오 삭제에 실패했습니다.",
+        "There are no scenarios to delete.": "삭제할 시나리오가 없습니다.",
+        "Select a file first.": "파일을 먼저 선택하세요.",
+        "File uploaded.": "파일이 업로드되었습니다.",
+        "Upload failed.": "업로드에 실패했습니다.",
+        "Enter a table ID first.": "테이블 ID를 먼저 입력하세요.",
+        "Only upload tables starting with INITUP$_ can be deleted.": "INITUP$_로 시작하는 업로드 테이블만 삭제할 수 있습니다.",
+        "Upload table deleted.": "업로드 테이블이 삭제되었습니다.",
+        "Delete failed.": "삭제에 실패했습니다.",
+        "Delete canceled.": "삭제가 취소되었습니다.",
+        "Select a table from Table Explorer first.": "먼저 Table Explorer에서 테이블을 선택하세요.",
+        "Click Add selected first, then select a scenario table to save.": "먼저 Add selected를 클릭한 뒤 저장할 시나리오 테이블을 선택하세요.",
+        "Scenario table saved.": "시나리오 테이블이 저장되었습니다.",
+        "Scenario table save failed.": "시나리오 테이블 저장에 실패했습니다.",
+        "Select a scenario table to delete.": "삭제할 시나리오 테이블을 선택하세요.",
+        "Scenario table deleted.": "시나리오 테이블이 삭제되었습니다.",
+        "Scenario table delete failed.": "시나리오 테이블 삭제에 실패했습니다.",
+        "There are no scenario tables to delete.": "삭제할 시나리오 테이블이 없습니다.",
+        "No grid data to export.": "내보낼 그리드 데이터가 없습니다.",
+        "Rows are based on the selected DB object and cannot be added manually.": "행은 선택한 DB 객체 기준으로 생성되므로 수동으로 추가할 수 없습니다.",
+        "Rows are based on the selected DB object and cannot be deleted manually.": "행은 선택한 DB 객체 기준으로 생성되므로 수동으로 삭제할 수 없습니다.",
+        "Select a table or procedure before saving.": "저장하기 전에 테이블 또는 프로시저를 선택하세요.",
+        "Save failed. Check the console for details.": "저장에 실패했습니다. 자세한 내용은 콘솔을 확인하세요.",
+        "Select a registered object before deleting.": "삭제할 등록 객체를 먼저 선택하세요.",
+        "This object is not registered.": "등록되지 않은 객체입니다.",
+        "Delete selected DB connection profile?": "선택한 DB 접속 프로필을 삭제하시겠습니까?",
+        "Delete the database connection currently in use?": "현재 사용 중인 데이터베이스 접속을 삭제하시겠습니까?",
+        "Please log in again.": "다시 로그인하세요.",
+        "Install INIT system tables and create the first administrator account?": "INIT 시스템 테이블을 설치하고 최초 관리자 계정을 생성하시겠습니까?",
+        "Install application tables on the selected target database?": "선택한 대상 데이터베이스에 애플리케이션 테이블을 설치하시겠습니까?",
+        "Reset all application data in the selected target database? Tables remain, but data will be truncated.": "선택한 대상 데이터베이스의 모든 애플리케이션 데이터를 초기화하시겠습니까? 테이블은 유지되고 데이터만 삭제됩니다.",
+        "This cannot be undone. Continue target data reset?": "이 작업은 되돌릴 수 없습니다. 대상 데이터 초기화를 계속하시겠습니까?",
+        "Deploy PL/SQL model objects on the selected target database?": "선택한 대상 데이터베이스에 PL/SQL 모델 객체를 배포하시겠습니까?",
+        "Basic installation is complete. Move to the login screen?": "기본 설치가 완료되었습니다. 로그인 화면으로 이동하시겠습니까?",
+        "Prepare machine learning seed data on the selected target database?": "선택한 대상 데이터베이스에 머신러닝 seed 데이터를 준비하시겠습니까?",
+        "Train or install machine learning models on the selected target database?": "선택한 대상 데이터베이스에서 머신러닝 모델을 학습 또는 설치하시겠습니까?",
+        "Change your email?": "이메일을 변경하시겠습니까?",
+        "Change your login password?": "로그인 비밀번호를 변경하시겠습니까?",
+        "Create missing INIT$_ system tables on the current system database?": "현재 시스템 데이터베이스에 누락된 INIT$_ 시스템 테이블을 생성하시겠습니까?",
+        "Reset all INIT system data? Users, target DB connections, settings, and setup logs will be truncated.": "모든 INIT 시스템 데이터를 초기화하시겠습니까? 사용자, 대상 DB 접속, 설정, 설정 로그가 삭제됩니다.",
+        "This cannot be undone and may require system setup again. Continue system data reset?": "이 작업은 되돌릴 수 없으며 시스템 설정을 다시 해야 할 수 있습니다. 시스템 데이터 초기화를 계속하시겠습니까?",
+        "Approve all pending users in the current result?": "현재 결과의 모든 승인 대기 사용자를 승인하시겠습니까?",
+        "Approve selected user(s)?": "선택한 사용자를 승인하시겠습니까?",
+        "Select at least one user to reset password.": "비밀번호를 초기화할 사용자를 하나 이상 선택하세요.",
+        "Reset password for selected user(s)? Temporary passwords will be shown only once.": "선택한 사용자의 비밀번호를 초기화하시겠습니까? 임시 비밀번호는 한 번만 표시됩니다.",
+        "Password reset completed.": "비밀번호 초기화가 완료되었습니다.",
+        "Deactivate the selected user(s)? USE_YN will be changed to N.": "선택한 사용자를 비활성화하시겠습니까? USE_YN이 N으로 변경됩니다.",
+        "Save this work?": "이 작업을 저장하시겠습니까?",
+        "Work saved.": "작업이 저장되었습니다.",
+        "Work save failed.": "작업 저장에 실패했습니다.",
+        "Save work first, then run the saved work.": "먼저 작업을 저장한 뒤 저장된 작업을 실행하세요.",
+        "Job submitted.": "작업이 제출되었습니다.",
+        "Job run failed.": "작업 실행에 실패했습니다.",
+        "No enabled saved jobs to execute.": "실행 가능한 저장 작업이 없습니다.",
+        "Select a scenario table first.": "시나리오 테이블을 먼저 선택하세요.",
+        "Job Name is required.": "작업명을 입력하세요.",
+        "Job Group is required.": "작업 그룹을 입력하세요.",
+        "Registered Model / Procedure is required.": "등록 모델/프로시저를 선택하세요.",
+        "Executable PL/SQL script is required. Generate or enter the script first.": "실행 가능한 PL/SQL 스크립트가 필요합니다. 먼저 생성하거나 입력하세요.",
+        "Result Owner is required when Result Table Create is Y.": "결과 테이블 생성이 Y이면 결과 Owner를 입력해야 합니다.",
+        "Result Table is required when Result Table Create is Y.": "결과 테이블 생성이 Y이면 결과 테이블명을 입력해야 합니다.",
+        "Result Table is required.": "결과 테이블명을 입력하세요.",
+        "SQL result table was created.": "SQL 결과 테이블이 생성되었습니다.",
+        "SQL result table save failed.": "SQL 결과 테이블 저장에 실패했습니다.",
+        "Flow load failed.": "플로우를 불러오지 못했습니다.",
+        "Drag from an output port to an input port to connect nodes.": "출력 포트에서 입력 포트로 드래그해 노드를 연결하세요.",
+        "Select project and scenario first.": "프로젝트와 시나리오를 먼저 선택하세요.",
+        "Flow saved.": "플로우가 저장되었습니다.",
+        "Flow save failed.": "플로우 저장에 실패했습니다.",
+        "Select a saved flow first.": "저장된 플로우를 먼저 선택하세요.",
+        "Flow deleted.": "플로우가 삭제되었습니다.",
+        "Flow delete failed.": "플로우 삭제에 실패했습니다.",
+        "Flow validation succeeded.": "플로우 검증에 성공했습니다.",
+        "Flow validation failed.": "플로우 검증에 실패했습니다.",
+        "Flow run recorded.": "플로우 실행 이력이 기록되었습니다.",
+        "Flow run failed.": "플로우 실행에 실패했습니다."
+    },
     ensureHost() {
         let host = document.getElementById("commonMessageHost");
         if (!host) {
@@ -798,10 +900,17 @@ const CommonMessage = {
     normalizeOptions(message, options = {}) {
         if (typeof options === "string") options = { type: options };
         const type = options.type || "info";
+        const modal = Boolean(options.modal);
+        const autoCloseMs = Number.isFinite(Number(options.autoCloseMs))
+            ? Math.max(0, Number(options.autoCloseMs))
+            : (type === "success" && !modal ? 2800 : 0);
+        const toast = Boolean(options.toast ?? (autoCloseMs > 0 && !modal && type !== "confirm"));
         return {
             type,
             title: options.title || this.defaultTitle(type),
-            modal: Boolean(options.modal),
+            modal,
+            toast,
+            autoCloseMs,
             copyable: options.copyable !== false,
             okText: options.okText || "OK",
             cancelText: options.cancelText || "Cancel",
@@ -852,11 +961,18 @@ const CommonMessage = {
             overlay.style.zIndex = String(++this.zIndex);
             host.appendChild(overlay);
         }
-        popup.className = `common-message-popup is-${options.type}${options.modal ? " is-modal" : " is-modeless"}`;
+        popup.className = `common-message-popup is-${options.type}${options.modal ? " is-modal" : " is-modeless"}${options.toast ? " is-toast" : ""}`;
         popup.style.zIndex = String(++this.zIndex);
         popup.setAttribute("role", options.type === "confirm" || options.modal ? "dialog" : "status");
         popup.setAttribute("aria-modal", String(Boolean(options.modal)));
         popup.setAttribute("aria-describedby", bodyId);
+        const footerHtml = options.toast ? "" : `
+            <footer class="common-message-footer">
+                ${options.copyable ? `<button type="button" class="common-message-secondary" data-common-message-action="copy"><i class="fas fa-copy"></i><span>Copy</span></button>` : ""}
+                ${options.type === "confirm" ? `<button type="button" class="common-message-secondary" data-common-message-action="cancel">${this.escapeHtml(options.cancelText)}</button>` : ""}
+                <button type="button" class="common-message-primary" data-common-message-action="ok">${this.escapeHtml(options.okText)}</button>
+            </footer>
+        `;
         popup.innerHTML = `
             <header class="common-message-header">
                 <span class="common-message-icon"><i class="${this.icons[options.type] || this.icons.info}"></i></span>
@@ -866,17 +982,18 @@ const CommonMessage = {
                 </button>
             </header>
             <div id="${bodyId}" class="common-message-body" tabindex="0">${this.formatMessage(options.message)}</div>
-            <footer class="common-message-footer">
-                ${options.copyable ? `<button type="button" class="common-message-secondary" data-common-message-action="copy"><i class="fas fa-copy"></i><span>Copy</span></button>` : ""}
-                ${options.type === "confirm" ? `<button type="button" class="common-message-secondary" data-common-message-action="cancel">${this.escapeHtml(options.cancelText)}</button>` : ""}
-                <button type="button" class="common-message-primary" data-common-message-action="ok">${this.escapeHtml(options.okText)}</button>
-            </footer>
+            ${footerHtml}
         `;
         host.appendChild(popup);
         this.positionPopup(popup, options.modal);
         this.bindDrag(popup);
         return new Promise((resolve) => {
+            let closed = false;
+            let autoCloseTimer = null;
             const cleanup = (result) => {
+                if (closed) return;
+                closed = true;
+                if (autoCloseTimer) window.clearTimeout(autoCloseTimer);
                 popup.remove();
                 overlay?.remove();
                 resolve(result);
@@ -885,7 +1002,7 @@ const CommonMessage = {
             popup.querySelector('[data-common-message-action="cancel"]')?.addEventListener("click", () => cleanup(false));
             popup.querySelector('[data-common-message-action="close"]')?.addEventListener("click", () => cleanup(options.type !== "confirm"));
             popup.querySelector('[data-common-message-action="copy"]')?.addEventListener("click", async (event) => {
-                await this.copyText(options.message);
+                await this.copyText(this.buildDisplayText(options.message));
                 const button = event.currentTarget;
                 const original = button.innerHTML;
                 button.innerHTML = '<i class="fas fa-check"></i><span>Copied</span>';
@@ -897,7 +1014,20 @@ const CommonMessage = {
                 if (event.key === "Escape") cleanup(options.type !== "confirm");
                 if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) cleanup(true);
             });
-            setTimeout(() => popup.querySelector(".common-message-primary")?.focus(), 0);
+            if (options.toast && options.autoCloseMs > 0) {
+                const startAutoClose = () => {
+                    if (autoCloseTimer) window.clearTimeout(autoCloseTimer);
+                    autoCloseTimer = window.setTimeout(() => cleanup(true), options.autoCloseMs);
+                };
+                popup.addEventListener("pointerenter", () => {
+                    if (autoCloseTimer) window.clearTimeout(autoCloseTimer);
+                    autoCloseTimer = null;
+                });
+                popup.addEventListener("pointerleave", startAutoClose);
+                startAutoClose();
+            } else {
+                setTimeout(() => popup.querySelector(".common-message-primary")?.focus(), 0);
+            }
         });
     },
     positionPopup(popup, isModal) {
@@ -959,8 +1089,82 @@ const CommonMessage = {
             .replace(/"/g, "&quot;")
             .replace(/'/g, "&#039;");
     },
+    hasKorean(value) {
+        return /[가-힣]/.test(String(value ?? ""));
+    },
+    normalizeMessageKey(message) {
+        return String(message ?? "").replace(/\s+/g, " ").trim();
+    },
+    translateMessage(message) {
+        const original = String(message ?? "");
+        const key = this.normalizeMessageKey(original);
+        if (!key || this.hasKorean(key)) return "";
+        if (this.translations[key]) return this.translations[key];
+        const patterns = [
+            [
+                /^You are about to (.+)\.\n{2,}All open pages will be closed and unsaved work may be lost\.\nAny open target DB session will be rolled back and closed before continuing\.(?:\n{2,}There are (\d+) request\(s\) still running\. The app will wait briefly before cleanup\.)?\n{2,}Continue\?$/,
+                (m) => {
+                    const actionMap = {
+                        logout: "로그아웃",
+                        "change Target DB": "대상 DB 변경",
+                        "change target DB": "대상 DB 변경",
+                        "close this page": "현재 페이지 닫기",
+                        "close all pages": "모든 페이지 닫기",
+                        continue: "계속 진행"
+                    };
+                    const action = actionMap[m[1]] || m[1];
+                    const requestWarning = m[2]
+                        ? `아직 실행 중인 요청이 ${m[2]}건 있습니다. 정리 전에 잠시 대기합니다.`
+                        : "";
+                    return [
+                        `${action} 작업을 진행하려고 합니다.`,
+                        "",
+                        "열려 있는 모든 페이지가 닫히고 저장하지 않은 작업이 사라질 수 있습니다.",
+                        "계속하기 전에 열려 있는 대상 DB 세션은 롤백 후 종료됩니다.",
+                        ...(requestWarning ? ["", requestWarning] : []),
+                        "",
+                        "계속하시겠습니까?"
+                    ].join("\n");
+                }
+            ],
+            [/^Delete project "(.+)"\?$/, (m) => `"${m[1]}" 프로젝트를 삭제하시겠습니까?`],
+            [/^Delete scenario "(.+)"\?$/, (m) => `"${m[1]}" 시나리오를 삭제하시겠습니까?`],
+            [/^Delete all scenarios for "(.+)"\?$/, (m) => `"${m[1]}"의 모든 시나리오를 삭제하시겠습니까?`],
+            [/^(.+) table will be dropped\. Continue\?$/, (m) => `${m[1]} 테이블이 DROP됩니다. 계속하시겠습니까?`],
+            [/^Delete table "(.+)" from this scenario\?$/, (m) => `이 시나리오에서 "${m[1]}" 테이블을 삭제하시겠습니까?`],
+            [/^(.+) scenario tables deleted\.$/, (m) => `시나리오 테이블 ${m[1]}건이 삭제되었습니다.`],
+            [/^(.+) scenarios deleted\.$/, (m) => `시나리오 ${m[1]}건이 삭제되었습니다.`],
+            [/^(.+) items saved\.$/, (m) => `${m[1]}건이 저장되었습니다.`],
+            [/^(.+) object and (.+) detail rows deleted\.(.*)$/, (m) => `객체 ${m[1]}건과 상세 행 ${m[2]}건이 삭제되었습니다.${m[3] ? ` ${m[3]}` : ""}`],
+            [/^Delete setting "(.+)"\?$/, (m) => `"${m[1]}" 설정을 삭제하시겠습니까?`],
+            [/^(.+) jobs (.+)\. (.+) failed\.$/, (m) => `작업 ${m[1]}건이 ${m[2]} 처리되었고, ${m[3]}건이 실패했습니다.`],
+            [/^Delete (.+)\?\nNodes, edges, and run history for this flow will also be deleted\.$/, (m) => `${m[1]} 플로우를 삭제하시겠습니까?\n이 플로우의 노드, 엣지, 실행 이력도 함께 삭제됩니다.`],
+            [/^(.+)\nFlow ID: (.+)$/, (m) => `${this.translateMessage(m[1]) || m[1]}\n플로우 ID: ${m[2]}`]
+        ];
+        for (const [regex, translator] of patterns) {
+            const match = original.match(regex);
+            if (match) return translator(match);
+        }
+        return "";
+    },
+    buildMessageParts(message) {
+        const original = String(message ?? "");
+        const translated = this.translateMessage(original);
+        return { original, translated };
+    },
+    buildDisplayText(message) {
+        const { original, translated } = this.buildMessageParts(message);
+        return translated && translated !== original ? `${original}\n${translated}` : original;
+    },
     formatMessage(message) {
-        return this.escapeHtml(message).replace(/\r?\n/g, "<br>");
+        const { original, translated } = this.buildMessageParts(message);
+        const originalHtml = this.escapeHtml(original).replace(/\r?\n/g, "<br>");
+        if (!translated || translated === original) return `<div class="common-message-original">${originalHtml}</div>`;
+        const translatedHtml = this.escapeHtml(translated).replace(/\r?\n/g, "<br>");
+        return `
+            <div class="common-message-original">${originalHtml}</div>
+            <div class="common-message-translation">${translatedHtml}</div>
+        `;
     }
 };
 
@@ -983,4 +1187,3 @@ window.clearInputs = (id) => CommonUI.clearInputs(id);
 window.createGrid = function(el, options) {
     return CommonUI.createGrid(el, options);
 };
-

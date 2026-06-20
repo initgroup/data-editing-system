@@ -50,6 +50,7 @@ BEGIN
 
     DBMS_OUTPUT.PUT_LINE('[INIT_TARGET] Drop tables');
     drop_table_if_exists('INIT$_TB_OBJECT_DEPLOY');
+    drop_table_if_exists('INIT$_TB_FLOW_WORK_NODE_RUN');
     drop_table_if_exists('INIT$_TB_FLOW_WORK_RUN');
     drop_table_if_exists('INIT$_TB_FLOW_WORK_EDGE');
     drop_table_if_exists('INIT$_TB_FLOW_WORK_NODE');

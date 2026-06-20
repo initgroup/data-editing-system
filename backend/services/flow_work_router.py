@@ -35,8 +35,8 @@ def create_flow_work_router(
     ROUTER_MESSAGES = {
         "flow_saved": "Flow saved.",
         "flow_valid": "Flow validation succeeded.",
-        "run_done": "Flow execution plan created.",
-        "run_queued": "Flow queued.",
+        "run_done": "Flow queued for DAG execution.",
+        "run_queued": "Flow queued for DAG execution.",
         **(messages or {})
     }
 
@@ -223,10 +223,10 @@ def create_flow_work_router(
                 raise HTTPException(status_code=400, detail=validation["message"])
 
             run_type = "BATCH" if req.batch else "MANUAL"
-            run_status = "QUEUED" if req.batch else "SUCCESS"
-            message = ROUTER_MESSAGES["run_queued"] if req.batch else ROUTER_MESSAGES["run_done"]
-            run_id = flow_work.create_run(conn, flow_id, run_type, "STARTED", "Flow run requested.", validation)
-            flow_work.update_run(conn, run_id, run_status, message, validation)
+            run_status = "QUEUED"
+            message = ROUTER_MESSAGES["run_queued"]
+            run_id = flow_work.create_run(conn, flow_id, run_type, run_status, message, validation)
+            flow_work.create_node_run_records(conn, run_id, flow_id, validation.get("plan", []))
             conn.commit()
             return {
                 "status": "success",
@@ -263,6 +263,16 @@ def create_flow_work_router(
         try:
             conn = get_target_db_connection(request)
             return flow_work.list_runs(conn, MENU_CODE, projectId, scenarioId, flowId)
+        finally:
+            if conn:
+                conn.close()
+
+    @router.get("/run/{flow_run_id}/nodes")
+    def get_run_nodes(flow_run_id: int, request: Request):
+        conn = None
+        try:
+            conn = get_target_db_connection(request)
+            return flow_work.list_node_runs(conn, flow_run_id)
         finally:
             if conn:
                 conn.close()

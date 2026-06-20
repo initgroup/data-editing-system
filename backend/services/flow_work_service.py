@@ -141,7 +141,7 @@ def save_flow(
         "flowName": flow_name,
         "flowDesc": normalize_text(req.flowDesc, "", 1000),
         "flowType": normalize_text(req.flowType, default_flow_type, 100),
-        "executionMode": normalize_mode(req.executionMode, "DAG"),
+        "executionMode": "DAG",
         "useYn": "N" if str(req.useYn or "Y").upper() == "N" else "Y",
         "status": normalize_status(req.status, "DRAFT"),
         "graphJson": graph_json
@@ -245,6 +245,15 @@ def list_runs(conn, menu_code: str, project_id: int, scenario_id: int, flow_id: 
     return response
 
 
+def list_node_runs(conn, flow_run_id: int) -> Dict[str, Any]:
+    result = execute_query(conn, "FLOW_WORK_NODE_RUN_LIST", {"flowRunId": flow_run_id})
+    response = data_work.require_success(result, "Flow node run query failed.")
+    for row in response.get("data", []):
+        row["RUNTIME_PARAM_JSON"] = data_work.read_lob(row.get("RUNTIME_PARAM_JSON"))
+        row["NODE_PAYLOAD_JSON"] = data_work.read_lob(row.get("NODE_PAYLOAD_JSON"))
+    return response
+
+
 def create_run(conn, flow_id: int, run_type: str, status: str, message: str, plan: Dict[str, Any]) -> int:
     cursor = conn.cursor()
     try:
@@ -258,6 +267,27 @@ def create_run(conn, flow_id: int, run_type: str, status: str, message: str, pla
         cursor.execute(SqlLoader.get_sql("FLOW_WORK_RUN_ID_LATEST"), {"flowId": flow_id})
         row = cursor.fetchone()
         return int(row[0]) if row and row[0] else 0
+    finally:
+        cursor.close()
+
+
+def create_node_run_records(conn, flow_run_id: int, flow_id: int, plan: List[Dict[str, Any]]):
+    cursor = conn.cursor()
+    try:
+        for index, step in enumerate(plan or [], start=1):
+            cursor.execute(SqlLoader.get_sql("FLOW_WORK_NODE_RUN_INSERT"), {
+                "flowRunId": flow_run_id,
+                "flowId": flow_id,
+                "nodeKey": step.get("nodeKey"),
+                "nodeName": step.get("nodeName") or step.get("nodeKey"),
+                "nodeType": step.get("nodeType") or "JOB",
+                "runLevel": step.get("level", 0),
+                "sortOrder": index,
+                "status": "PENDING",
+                "message": "Waiting for upstream dependencies.",
+                "runtimeParamJson": json.dumps(step.get("params") or {}, ensure_ascii=False),
+                "nodePayloadJson": json.dumps(step.get("nodePayload") or {}, ensure_ascii=False)
+            })
     finally:
         cursor.close()
 
@@ -300,6 +330,11 @@ def build_execution_plan(nodes: List[Dict[str, Any]], edges: List[Dict[str, Any]
             "nodeKey": node_key,
             "nodeName": node.get("nodeName"),
             "nodeType": node.get("nodeType"),
+            "refMenuCode": node.get("refMenuCode"),
+            "refWorkJobId": node.get("refWorkJobId"),
+            "refObjectId": node.get("refObjectId"),
+            "params": node.get("params") or [],
+            "nodePayload": node,
             "level": level.get(node_key, 0),
             "upstream": sorted([edge["fromNodeKey"] for edge in edges if edge["toNodeKey"] == node_key]),
             "downstream": sorted(outgoing.get(node_key, []))

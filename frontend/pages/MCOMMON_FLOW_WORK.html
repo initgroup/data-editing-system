@@ -62,11 +62,29 @@
                         <button type="button" class="table-icon-btn" title="New flow" data-title-key="newFlowTitle" onclick="__PAGE_CODE__.newFlow()">
                             <i class="fas fa-plus"></i>
                         </button>
-                        <button type="button" class="table-icon-btn" title="Refresh assets" data-title-key="refreshAssetsTitle" onclick="__PAGE_CODE__.loadFlowAssets()">
-                            <i class="fas fa-sync-alt"></i>
+                        <button type="button" id="flowSidebarToggle-__PAGE_CODE__" class="table-icon-btn flow-sidebar-toggle" title="Collapse Flow Assets" data-title-key="collapseFlowAssetsTitle" onclick="__PAGE_CODE__.toggleFlowSidebar()">
+                            <i class="fas fa-chevron-left"></i>
                         </button>
                     </div>
                 </header>
+
+                <section class="data-param-card flow-saved-card" aria-label="Saved flow list">
+                    <div class="data-panel-toolbar">
+                        <span>
+                            <strong data-label-key="flowVersion">Saved Flows</strong>
+                            <em id="flowVersionCount-__PAGE_CODE__" class="flow-version-count">0 items</em>
+                        </span>
+                        <button type="button" id="flowVersionRefresh-__PAGE_CODE__" class="table-icon-btn" title="Refresh saved flows" data-title-key="refreshSavedFlowsTitle" onclick="__PAGE_CODE__.refreshSavedFlows()">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                    </div>
+                    <select id="flowVersion-__PAGE_CODE__" class="flow-version-hidden-select" onchange="__PAGE_CODE__.loadFlowVersion(this.value)" aria-hidden="true" tabindex="-1">
+                        <option value="">Draft</option>
+                    </select>
+                    <div id="flowVersionGrid-__PAGE_CODE__" class="data-job-grid flow-version-grid">
+                        <div class="table-empty">Select project and scenario first.</div>
+                    </div>
+                </section>
 
                 <section class="data-param-card flow-palette-card" aria-label="Registered job palette">
                     <div class="data-panel-toolbar">
@@ -75,6 +93,9 @@
                             <span id="flowJobFilterLabel-__PAGE_CODE__" class="env-detail-hint" data-label-key="registeredJobsHint">Jobs saved in each business step.</span>
                         </span>
                         <span class="flow-job-group-actions">
+                            <button type="button" class="table-icon-btn" title="Refresh jobs" data-title-key="refreshJobsTitle" onclick="__PAGE_CODE__.refreshRegisteredJobs()">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
                             <button type="button" class="table-icon-btn" title="Expand all job groups" onclick="__PAGE_CODE__.setAllJobGroupsExpanded(true)">
                                 <i class="fas fa-angles-down"></i>
                             </button>
@@ -125,15 +146,6 @@
                             <span data-label-key="flowId">Flow ID</span>
                             <input id="flowId-__PAGE_CODE__" class="env-field" type="text" value="NEW" disabled>
                         </label>
-                        <label class="flow-version-field">
-                            <span class="flow-version-label">
-                                <span data-label-key="flowVersion">Saved Flow</span>
-                                <em id="flowVersionCount-__PAGE_CODE__" class="flow-version-count">0 items</em>
-                            </span>
-                            <select id="flowVersion-__PAGE_CODE__" class="env-field" onchange="__PAGE_CODE__.loadFlowVersion(this.value)">
-                                <option value="">Draft</option>
-                            </select>
-                        </label>
                         <label class="flow-group-field">
                             <span class="required-title" data-label-key="flowGroup">Flow Group</span>
                             <input id="flowGroup-__PAGE_CODE__" class="env-field" type="text" value="__PAGE_CODE__">
@@ -146,14 +158,6 @@
                             <span data-label-key="flowDesc">Flow Desc</span>
                             <input id="flowDesc-__PAGE_CODE__" class="env-field" type="text" placeholder="Profiling, correlation, rule discovery, and violation search" oninput="__PAGE_CODE__.updateFlowField('flowDesc', this.value)">
                         </label>
-                        <label class="data-use-field">
-                            <span data-label-key="executionMode">Execution Mode</span>
-                            <select id="flowExecutionMode-__PAGE_CODE__" class="env-field" onchange="__PAGE_CODE__.updateFlowField('executionMode', this.value)">
-                                <option value="DAG">DAG dependency order</option>
-                                <option value="SERIAL">Serial only</option>
-                                <option value="PARALLEL">Allow parallel branches</option>
-                            </select>
-                        </label>
                         <label class="data-sort-field">
                             <span data-label-key="use">Use</span>
                             <select id="flowUseYn-__PAGE_CODE__" class="env-field" onchange="__PAGE_CODE__.updateFlowField('useYn', this.value)">
@@ -165,28 +169,33 @@
                 </section>
 
                 <section class="data-param-card flow-designer-card" aria-label="Flow canvas and selected node detail">
-                    <div class="data-panel-toolbar">
+                    <div class="data-panel-toolbar flow-canvas-toolbar">
                         <strong data-label-key="flowCanvas">Flow Canvas</strong>
                         <span>&nbsp;</span>
                         <span id="selectedFlowLabel-__PAGE_CODE__" class="data-selected-object" data-label-key="sampleFlowLabel">Sample: table input branches into correlation and rule mining, then joins at violation search.</span>
-                        <button type="button" class="table-icon-btn" title="Zoom in" data-title-key="zoomInTitle" onclick="__PAGE_CODE__.zoomFlow(1)">
-                            <i class="fas fa-magnifying-glass-plus"></i>
-                        </button>
-                        <button type="button" class="table-icon-btn" title="Zoom out" data-title-key="zoomOutTitle" onclick="__PAGE_CODE__.zoomFlow(-1)">
-                            <i class="fas fa-magnifying-glass-minus"></i>
-                        </button>
-                        <button type="button" class="table-icon-btn" title="Reset zoom" data-title-key="resetZoomTitle" onclick="__PAGE_CODE__.resetFlowZoom()">
-                            <i class="fas fa-compress"></i>
-                        </button>
-                        <button type="button" class="table-icon-btn" title="Fit canvas" data-title-key="fitCanvasTitle" onclick="__PAGE_CODE__.fitFlowCanvas()">
-                            <i class="fas fa-up-right-and-down-left-from-center"></i>
-                        </button>
-                        <button type="button" class="table-icon-btn" title="Tree layout" data-title-key="autoLayoutTitle" onclick="__PAGE_CODE__.autoLayoutFlow()">
-                            <i class="fas fa-table-cells-large"></i>
-                        </button>
-                        <button type="button" id="flowCanvasMaximize-__PAGE_CODE__" class="table-icon-btn" title="Maximize canvas" data-title-key="maximizeCanvasTitle" onclick="__PAGE_CODE__.toggleCanvasMaximize()">
-                            <i class="fas fa-expand"></i>
-                        </button>
+                        <span class="flow-canvas-actions">
+                            <button type="button" class="table-icon-btn" title="Remove selected node" data-title-key="removeNode" onclick="__PAGE_CODE__.removeSelectedNode()">
+                                <i class="far fa-trash-alt"></i>
+                            </button>
+                            <button type="button" class="table-icon-btn" title="Zoom in" data-title-key="zoomInTitle" onclick="__PAGE_CODE__.zoomFlow(1)">
+                                <i class="fas fa-magnifying-glass-plus"></i>
+                            </button>
+                            <button type="button" class="table-icon-btn" title="Zoom out" data-title-key="zoomOutTitle" onclick="__PAGE_CODE__.zoomFlow(-1)">
+                                <i class="fas fa-magnifying-glass-minus"></i>
+                            </button>
+                            <button type="button" class="table-icon-btn" title="Reset zoom" data-title-key="resetZoomTitle" onclick="__PAGE_CODE__.resetFlowZoom()">
+                                <i class="fas fa-compress"></i>
+                            </button>
+                            <button type="button" class="table-icon-btn" title="Fit canvas" data-title-key="fitCanvasTitle" onclick="__PAGE_CODE__.fitFlowCanvas()">
+                                <i class="fas fa-up-right-and-down-left-from-center"></i>
+                            </button>
+                            <button type="button" class="table-icon-btn" title="Tree layout" data-title-key="autoLayoutTitle" onclick="__PAGE_CODE__.autoLayoutFlow()">
+                                <i class="fas fa-table-cells-large"></i>
+                            </button>
+                            <button type="button" id="flowCanvasMaximize-__PAGE_CODE__" class="table-icon-btn" title="Maximize canvas" data-title-key="maximizeCanvasTitle" onclick="__PAGE_CODE__.toggleCanvasMaximize()">
+                                <i class="fas fa-expand"></i>
+                            </button>
+                        </span>
                     </div>
 
                     <div class="data-param-script-layout flow-editor-layout">
@@ -323,10 +332,6 @@
                                         <i class="fas fa-question"></i>
                                     </button>
                                 </span>
-                                <button type="button" class="table-btn" onclick="__PAGE_CODE__.removeSelectedNode()">
-                                    <i class="far fa-trash-alt"></i>
-                                    <span data-label-key="removeNode">Remove</span>
-                                </button>
                                 <button type="button" id="flowInspectorToggle-__PAGE_CODE__" class="table-icon-btn flow-inspector-toggle" title="Collapse inspector" data-title-key="collapseInspectorTitle" onclick="__PAGE_CODE__.toggleFlowInspectorOverlay()">
                                     <i class="fas fa-chevron-right"></i>
                                 </button>
@@ -340,28 +345,23 @@
                                     </label>
                                     <label>
                                         <span data-label-key="nodeType">Node Type</span>
-                                        <select id="nodeType-__PAGE_CODE__" class="env-field" onchange="__PAGE_CODE__.updateSelectedNodeField('nodeType', this.value)">
-                                            <option value="PROFILING" selected>Profiling</option>
-                                            <option value="CORRELATION">Correlation Analysis</option>
-                                            <option value="RULE_MINING">Rule Discovery</option>
-                                            <option value="VIOLATION_SEARCH">Violation Search</option>
-                                            <option value="TABLE_INPUT">Table Input</option>
-                                            <option value="TABLE_OUTPUT">Table Output</option>
-                                            <option value="VALUE_INPUT">Value Input</option>
-                                            <option value="ARRAY_INPUT">Array Input</option>
+                                        <select id="nodeType-__PAGE_CODE__" class="env-field" disabled>
+                                            <option value="PROFILING" selected>M03001 - 데이터 프로파일링</option>
+                                            <option value="CORRELATION">M03002 - 컬럼간 상관 분석</option>
+                                            <option value="RULE_MINING">M03003 - 자동 규칙 발굴</option>
                                         </select>
                                     </label>
                                     <label>
                                         <span class="required-title" data-label-key="nodeName">Node Name</span>
-                                        <input id="nodeName-__PAGE_CODE__" class="env-field" type="text" value="Customer profile" oninput="__PAGE_CODE__.updateSelectedNodeField('nodeName', this.value)">
+                                        <input id="nodeName-__PAGE_CODE__" class="env-field" type="text" value="Customer profile" readonly>
                                     </label>
                                     <label>
                                         <span data-label-key="ownerName">Owner</span>
-                                        <input id="nodeOwnerName-__PAGE_CODE__" class="env-field" type="text" placeholder="OWNER" oninput="__PAGE_CODE__.updateSelectedNodeField('ownerName', this.value)">
+                                        <input id="nodeOwnerName-__PAGE_CODE__" class="env-field" type="text" placeholder="OWNER" readonly>
                                     </label>
                                     <label>
                                         <span data-label-key="tableName">Table</span>
-                                        <input id="nodeTableName-__PAGE_CODE__" class="env-field" type="text" placeholder="TABLE_NAME" oninput="__PAGE_CODE__.updateSelectedNodeField('tableName', this.value)">
+                                        <input id="nodeTableName-__PAGE_CODE__" class="env-field" type="text" placeholder="TABLE_NAME" readonly>
                                     </label>
                                     <label>
                                         <span data-label-key="dependsOn">Depends On</span>
@@ -370,219 +370,40 @@
                                 </div>
                             </div>
 
-                            <div class="data-panel-toolbar">
-                                <strong data-label-key="nodeExecutable">Executable Object</strong>
-                                <span class="env-detail-hint" data-label-key="nodeExecutableHint">Procedure or model registered in M90001.</span>
-                            </div>
-                            <div class="data-exec-grid">
-                                <label>
-                                    <span data-label-key="registeredJob">Registered Job</span>
-                                    <select id="nodeJobId-__PAGE_CODE__" class="env-field" onchange="__PAGE_CODE__.handleNodeJobChange(this.value)">
-                                        <option value="">Manual configuration</option>
-                                        <option value="PF_001" selected>PF_001 - Customer profile</option>
-                                        <option value="CR_002">CR_002 - Email-phone correlation</option>
-                                        <option value="RM_010">RM_010 - Customer edit rule mining</option>
-                                    </select>
-                                </label>
-                                <label>
-                                    <span data-label-key="executableObject">Procedure / Model</span>
-                                    <select id="nodeExecObject-__PAGE_CODE__" class="env-field" onchange="__PAGE_CODE__.handleNodeObjectChange(this.value)">
-                                        <option value="">Select registered object</option>
-                                        <option value="OBJ_PROFILE_CUSTOMER" selected>OBJ_PROFILE_CUSTOMER</option>
-                                        <option value="OBJ_CORRELATION_EMAIL_PHONE">OBJ_CORRELATION_EMAIL_PHONE</option>
-                                        <option value="MODEL_RULE_MINING_CUSTOMER">MODEL_RULE_MINING_CUSTOMER</option>
-                                    </select>
-                                </label>
-                            </div>
-
-                            <div class="data-param-script-layout flow-port-layout">
-                                <section class="data-param-panel" aria-label="Selected node inputs">
-                                    <header class="data-param-panel-header">
-                                        <strong data-label-key="inputPorts">Inputs</strong>
-                                        <button type="button" class="table-icon-btn" title="Add input" data-title-key="addInputTitle" onclick="__PAGE_CODE__.addNodePort('input')">
-                                            <i class="fas fa-plus"></i>
-                                        </button>
-                                    </header>
-                                    <div id="nodeInputGrid-__PAGE_CODE__" class="table-result-grid flow-port-grid">
-                                        <table class="table-grid">
-                                            <thead>
-                                                <tr>
-                                                    <th>Port</th>
-                                                    <th>Type</th>
-                                                    <th>Source</th>
-                                                    <th>Required</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                <tr>
-                                                    <td>inputTable</td>
-                                                    <td>TABLE</td>
-                                                    <td>source-customer.tableRows</td>
-                                                    <td>Y</td>
-                                                </tr>
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </section>
-
-                                <section class="data-param-panel" aria-label="Selected node outputs">
-                                    <header class="data-param-panel-header">
-                                        <strong data-label-key="outputPorts">Outputs</strong>
-                                        <button type="button" class="table-icon-btn" title="Add output" data-title-key="addOutputTitle" onclick="__PAGE_CODE__.addNodePort('output')">
-                                            <i class="fas fa-plus"></i>
-                                        </button>
-                                    </header>
-                                    <div id="nodeOutputGrid-__PAGE_CODE__" class="table-result-grid flow-port-grid">
-                                        <table class="table-grid">
-                                            <thead>
-                                                <tr>
-                                                    <th>Port</th>
-                                                    <th>Type</th>
-                                                    <th>Target</th>
-                                                    <th>Persist</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                <tr>
-                                                    <td>profileTable</td>
-                                                    <td>TABLE</td>
-                                                    <td>correlation-01, rule-mining-01</td>
-                                                    <td>Y</td>
-                                                </tr>
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </section>
-                            </div>
-
                             <section class="data-param-panel" aria-label="Selected node generated PL/SQL">
                                 <header class="data-param-panel-header data-script-header">
                                     <strong data-label-key="generatedScript">Generated PL/SQL</strong>
-                                    <button type="button" class="table-btn" onclick="__PAGE_CODE__.generateNodePlsql(true)">
-                                        <i class="fas fa-arrow-right"></i>
-                                        <span data-label-key="generateScript">Generate PL/SQL</span>
-                                    </button>
                                 </header>
-                                <textarea id="nodeExecPlsqlEditor-__PAGE_CODE__" class="sql-editor data-script-editor" spellcheck="false" aria-label="Selected node executable PL/SQL">BEGIN
+                                <textarea id="nodeExecPlsqlEditor-__PAGE_CODE__" class="sql-editor data-script-editor" spellcheck="false" aria-label="Selected node executable PL/SQL" readonly>BEGIN
     OBJ_PROFILE_CUSTOMER(
         p_input_table =&gt; :inputTable,
         p_profile_table =&gt; :profileTable
     );
 END;</textarea>
                             </section>
+
+                            <section class="data-param-panel flow-bind-card" aria-label="Runtime bind variables">
+                                <header class="data-param-panel-header">
+                                    <strong data-label-key="runtimeBindVariables">Runtime Bind Variables</strong>
+                                </header>
+                                <div id="nodeBindGrid-__PAGE_CODE__" class="data-bind-grid flow-node-bind-grid">
+                                    <div class="table-empty">No runtime bind variables.</div>
+                                </div>
+                            </section>
                         </section>
                     </div>
                 </section>
 
-                <section class="data-param-card flow-edges-card" aria-label="Flow edges">
-                    <div class="data-param-script-layout flow-port-layout">
-                        <section class="data-param-panel" aria-label="Flow dependency edges">
-                            <header class="data-param-panel-header">
-                                <strong data-label-key="edgeList">Edge List</strong>
-                                <button type="button" class="table-icon-btn" title="Add edge" data-title-key="addEdgeTitle" onclick="__PAGE_CODE__.addFlowEdge()">
-                                    <i class="fas fa-plus"></i>
-                                </button>
-                            </header>
-                            <div id="flowEdgeGrid-__PAGE_CODE__" class="table-result-grid">
-                                <table class="table-grid">
-                                    <thead>
-                                        <tr>
-                                            <th>From Node</th>
-                                            <th>Output</th>
-                                            <th>To Node</th>
-                                            <th>Input</th>
-                                            <th>Mode</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr>
-                                            <td>source-customer</td>
-                                            <td>tableRows</td>
-                                            <td>profiling-01</td>
-                                            <td>inputTable</td>
-                                            <td>SERIAL</td>
-                                        </tr>
-                                        <tr>
-                                            <td>profiling-01</td>
-                                            <td>profileTable</td>
-                                            <td>correlation-01</td>
-                                            <td>profileTable</td>
-                                            <td>PARALLEL_BRANCH</td>
-                                        </tr>
-                                        <tr>
-                                            <td>profiling-01</td>
-                                            <td>profileTable</td>
-                                            <td>rule-mining-01</td>
-                                            <td>profileTable</td>
-                                            <td>PARALLEL_BRANCH</td>
-                                        </tr>
-                                        <tr>
-                                            <td>correlation-01</td>
-                                            <td>corrRules[]</td>
-                                            <td>violation-search-01</td>
-                                            <td>corrRules[]</td>
-                                            <td>JOIN</td>
-                                        </tr>
-                                        <tr>
-                                            <td>rule-mining-01</td>
-                                            <td>rules[]</td>
-                                            <td>violation-search-01</td>
-                                            <td>rules[]</td>
-                                            <td>JOIN</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </section>
-
-                        <section class="data-param-panel" aria-label="Flow variables">
-                            <header class="data-param-panel-header">
-                                <strong data-label-key="flowVariables">Flow Variables</strong>
-                                <button type="button" class="table-icon-btn" title="Add variable" data-title-key="addVariableTitle" onclick="__PAGE_CODE__.addFlowVariable()">
-                                    <i class="fas fa-plus"></i>
-                                </button>
-                            </header>
-                            <div id="flowVariableGrid-__PAGE_CODE__" class="table-result-grid">
-                                <table class="table-grid">
-                                    <thead>
-                                        <tr>
-                                            <th>Name</th>
-                                            <th>Type</th>
-                                            <th>Default</th>
-                                            <th>Scope</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr>
-                                            <td>min_confidence</td>
-                                            <td>VALUE</td>
-                                            <td>0.95</td>
-                                            <td>rule-mining-01</td>
-                                        </tr>
-                                        <tr>
-                                            <td>target_columns</td>
-                                            <td>ARRAY</td>
-                                            <td>EMAIL, PHONE_NO, ZIP_CODE</td>
-                                            <td>flow</td>
-                                        </tr>
-                                        <tr>
-                                            <td>result_owner</td>
-                                            <td>VALUE</td>
-                                            <td>EDT_RESULT</td>
-                                            <td>flow</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </section>
-                    </div>
-                </section>
             </section>
         </section>
     </section>
 
     <section class="table-tab-panel data-tool-panel flow-plan-panel" data-panel="plan">
         <div class="data-panel-toolbar">
+            <button type="button" class="table-btn" onclick="__PAGE_CODE__.switchTab('designer')">
+                <i class="fas fa-arrow-left"></i>
+                <span data-label-key="backToDesigner">Back to designer</span>
+            </button>
             <button type="button" class="table-btn" onclick="__PAGE_CODE__.buildExecutionPlan()">
                 <i class="fas fa-list-check"></i>
                 <span data-label-key="buildPlan">Build execution plan</span>
@@ -592,6 +413,7 @@ END;</textarea>
                 <span data-label-key="validateFlow">Validate</span>
             </button>
         </div>
+        <div id="flowPlanMessage-__PAGE_CODE__" class="flow-plan-message" hidden></div>
         <div id="flowPlanGrid-__PAGE_CODE__" class="table-result-grid">
             <table class="table-grid">
                 <thead>

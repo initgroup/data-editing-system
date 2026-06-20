@@ -504,6 +504,12 @@ body {
   transform: translate(-50%, -50%);
 }
 
+.common-message-popup.is-toast {
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.18);
+  max-width: min(92vw, 420px);
+  min-width: min(340px, calc(100vw - 28px));
+}
+
 .common-message-header {
   align-items: center;
   border-bottom: 1px solid #e2e8f0;
@@ -558,6 +564,23 @@ body {
   padding: 16px;
   user-select: text;
   white-space: normal;
+}
+
+.common-message-popup.is-toast .common-message-body {
+  max-height: min(32vh, 260px);
+  padding: 14px 16px 16px;
+}
+
+.common-message-original,
+.common-message-translation {
+  overflow-wrap: anywhere;
+}
+
+.common-message-translation {
+  border-top: 1px dashed #cbd5e1;
+  color: #475569;
+  margin-top: 10px;
+  padding-top: 10px;
 }
 
 .common-message-footer {
@@ -1516,6 +1539,7 @@ main { min-width: 0; flex: 1; }
 #googleGenaiRBar {
     height: 100vh; /* 혹은 부모 높이에 맞게 설정 */
     width: 300px; /* 기본 너비 */
+    min-width: 280px;
     flex-shrink: 0;
     transition: width 0.3s ease-in-out; /* 닫힐 때도 부드럽게 적용 */
     position: relative;
@@ -1698,7 +1722,7 @@ main { min-width: 0; flex: 1; }
 
 #pageConsoleHolder {
     height: 200px;
-    min-height: 35px;
+    min-height: 120px;
     display: flex;
     flex-direction: column;
     position: relative;
@@ -1833,29 +1857,77 @@ main { min-width: 0; flex: 1; }
    조절바 (Resizers)
    ========================================================================== */
 .resizer-x {
-    width: 5px;
-    background-color: var(--c-border);
+    background-color: transparent;
     cursor: col-resize;
+    position: relative;
+    touch-action: none;
+    width: 6px;
     z-index: 110;
-    transition: background 0.2s;
+    transition: background 0.16s ease;
 }
 
 .resizer-y {
-    height: 5px;
-    background-color: var(--c-border);
+    background-color: transparent;
     cursor: row-resize;
+    height: 6px;
+    position: relative;
+    touch-action: none;
     z-index: 60;
-    transition: background 0.2s;
+    transition: background 0.16s ease;
+}
+
+.resizer-x::before,
+.resizer-y::before {
+    background: var(--c-border);
+    content: "";
+    position: absolute;
+    transition: background 0.16s ease, opacity 0.16s ease;
+}
+
+.resizer-x::before {
+    bottom: 0;
+    left: 2px;
+    top: 0;
+    width: 1px;
+}
+
+.resizer-y::before {
+    height: 1px;
+    left: 0;
+    right: 0;
+    top: 2px;
 }
 
 .resizer-x:hover, .resizer-y:hover,
 .resizer-x.active, .resizer-y.active {
-    background-color: var(--c-blue);
+    background-color: rgba(59, 130, 246, 0.08);
 }
 
-/* 리사이저 강조 */
-.resizer-y:hover { background-color: var(--c-blue); height: 4px; }
-.resizer-x:hover { background-color: var(--c-blue); width: 4px; }
+.resizer-x:hover::before,
+.resizer-y:hover::before,
+.resizer-x.active::before,
+.resizer-y.active::before {
+    background-color: var(--c-blue);
+    opacity: 1;
+}
+
+body.panel-resizing-x,
+body.panel-resizing-x * {
+    cursor: col-resize !important;
+    user-select: none !important;
+}
+
+body.panel-resizing-y,
+body.panel-resizing-y * {
+    cursor: row-resize !important;
+    user-select: none !important;
+}
+
+body.panel-resizing-x #sideRBar,
+body.panel-resizing-y #pageConsoleHolder {
+    transition: none !important;
+    will-change: width, height;
+}
 
 /* 버튼 스타일 */
 .btn-panel-toggle {
