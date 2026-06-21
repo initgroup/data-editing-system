@@ -2330,6 +2330,7 @@ body.panel-resizing-y #pageConsoleHolder {
 #mainNav .submenu a {
     color: #aebbd0 !important;
     font-size: 13px;
+    margin-left: 10px;
     padding-left: 16px !important;
 }
 
@@ -2378,6 +2379,14 @@ body.panel-resizing-y #pageConsoleHolder {
 #mainNav a.menu-active i,
 #mainNav a.bg-blue-700 i {
     color: #ffffff !important;
+}
+
+#mainNav .submenu a.menu-active,
+#mainNav .submenu a.bg-blue-700 {
+    background: #1e4fc9 !important;
+    border-color: #3b82f6 !important;
+    border-left-color: #facc15 !important;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.10), 0 6px 14px rgba(15, 23, 42, 0.18);
 }
 
 #mainNav button.menu-active {

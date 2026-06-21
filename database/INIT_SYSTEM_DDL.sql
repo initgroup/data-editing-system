@@ -11,6 +11,27 @@ DECLARE
         RETURN v_count > 0;
     END;
 
+    FUNCTION column_exists(p_table_name IN VARCHAR2, p_column_name IN VARCHAR2) RETURN BOOLEAN IS
+        v_count NUMBER;
+    BEGIN
+        SELECT COUNT(*)
+          INTO v_count
+          FROM USER_TAB_COLUMNS
+         WHERE TABLE_NAME = UPPER(p_table_name)
+           AND COLUMN_NAME = UPPER(p_column_name);
+        RETURN v_count > 0;
+    END;
+
+    FUNCTION constraint_exists(p_constraint_name IN VARCHAR2) RETURN BOOLEAN IS
+        v_count NUMBER;
+    BEGIN
+        SELECT COUNT(*)
+          INTO v_count
+          FROM USER_CONSTRAINTS
+         WHERE CONSTRAINT_NAME = UPPER(p_constraint_name);
+        RETURN v_count > 0;
+    END;
+
     PROCEDURE run_ddl(p_ddl IN CLOB, p_label IN VARCHAR2) IS
     BEGIN
         EXECUTE IMMEDIATE p_ddl;
@@ -35,6 +56,24 @@ DECLARE
             DBMS_OUTPUT.PUT_LINE('[SKIP] INDEX ' || p_index_name || ' already exists');
         ELSE
             run_ddl(p_ddl, 'CREATE INDEX ' || p_index_name);
+        END IF;
+    END;
+
+    PROCEDURE add_column_if_missing(p_table_name IN VARCHAR2, p_column_name IN VARCHAR2, p_ddl IN CLOB) IS
+    BEGIN
+        IF column_exists(p_table_name, p_column_name) THEN
+            DBMS_OUTPUT.PUT_LINE('[SKIP] COLUMN ' || p_table_name || '.' || p_column_name || ' already exists');
+        ELSE
+            run_ddl(p_ddl, 'ALTER TABLE ' || p_table_name || ' ADD ' || p_column_name);
+        END IF;
+    END;
+
+    PROCEDURE add_constraint_if_missing(p_constraint_name IN VARCHAR2, p_ddl IN CLOB) IS
+    BEGIN
+        IF constraint_exists(p_constraint_name) THEN
+            DBMS_OUTPUT.PUT_LINE('[SKIP] CONSTRAINT ' || p_constraint_name || ' already exists');
+        ELSE
+            run_ddl(p_ddl, 'ALTER TABLE ADD CONSTRAINT ' || p_constraint_name);
         END IF;
     END;
 
@@ -73,6 +112,7 @@ CREATE TABLE "INIT$_TB_DB_CONNECTION" (
     "WALLET_PASSWORD_ENC" VARCHAR2(4000 BYTE),
     "CONNECT_OPTIONS" CLOB,
     "DEFAULT_YN" CHAR(1 BYTE) DEFAULT 'N' NOT NULL ENABLE,
+    "SHARED_YN" CHAR(1 BYTE) DEFAULT 'Y' NOT NULL ENABLE,
     "USE_YN" CHAR(1 BYTE) DEFAULT 'Y' NOT NULL ENABLE,
     "SORT_ORDER" NUMBER DEFAULT 0,
     "LAST_TEST_STATUS" VARCHAR2(30 BYTE),
@@ -85,9 +125,20 @@ CREATE TABLE "INIT$_TB_DB_CONNECTION" (
     CONSTRAINT "INIT$_FK_DB_CONN_USER" FOREIGN KEY ("USER_ID")
         REFERENCES "INIT$_TB_USER" ("USER_ID") ENABLE,
     CONSTRAINT "INIT$_CK_DB_CONN_DEFAULT" CHECK ("DEFAULT_YN" IN ('Y', 'N')) ENABLE,
+    CONSTRAINT "INIT$_CK_DB_CONN_SHARED" CHECK ("SHARED_YN" IN ('Y', 'N')) ENABLE,
     CONSTRAINT "INIT$_CK_DB_CONN_USE" CHECK ("USE_YN" IN ('Y', 'N')) ENABLE
 )
 ]');
+
+    add_column_if_missing(
+        'INIT$_TB_DB_CONNECTION',
+        'SHARED_YN',
+        q'[ALTER TABLE "INIT$_TB_DB_CONNECTION" ADD "SHARED_YN" CHAR(1 BYTE) DEFAULT 'Y' NOT NULL ENABLE]'
+    );
+    add_constraint_if_missing(
+        'INIT$_CK_DB_CONN_SHARED',
+        q'[ALTER TABLE "INIT$_TB_DB_CONNECTION" ADD CONSTRAINT "INIT$_CK_DB_CONN_SHARED" CHECK ("SHARED_YN" IN ('Y', 'N')) ENABLE]'
+    );
 
     create_table_if_missing('INIT$_TB_SYSTEM_SETTING', q'[
 CREATE TABLE "INIT$_TB_SYSTEM_SETTING" (

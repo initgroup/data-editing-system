@@ -59,6 +59,7 @@ class ConnectionRequest(BaseModel):
     walletPasswordEnc: Optional[str] = None
     connectOptions: Optional[str] = None
     defaultYn: Optional[str] = "N"
+    sharedYn: Optional[str] = "Y"
     useYn: Optional[str] = "Y"
     sortOrder: Optional[Any] = 0
     model_config = ConfigDict(extra="allow")
@@ -471,6 +472,7 @@ def _normalize_connection(req: ConnectionRequest, existing: Optional[dict] = Non
         "walletPasswordEnc": wallet_password_enc,
         "connectOptions": req.connectOptions if req.connectOptions is not None else (existing.get("CONNECT_OPTIONS") or ""),
         "defaultYn": _normalize_yn(req.defaultYn if req.defaultYn is not None else existing.get("DEFAULT_YN"), "N"),
+        "sharedYn": _normalize_yn(req.sharedYn if req.sharedYn is not None else existing.get("SHARED_YN"), "Y"),
         "useYn": _normalize_yn(req.useYn if req.useYn is not None else existing.get("USE_YN"), "Y"),
         "sortOrder": _to_optional_int(req.sortOrder if req.sortOrder is not None else existing.get("SORT_ORDER")) or 0,
     }
@@ -500,6 +502,7 @@ def _get_connection_detail(conn, connection_id: int, user_id: Optional[int] = No
                     C.WALLET_PASSWORD_ENC,
                     C.CONNECT_OPTIONS,
                     C.DEFAULT_YN,
+                    C.SHARED_YN,
                     C.USE_YN,
                     C.SORT_ORDER,
                     C.LAST_TEST_STATUS,
@@ -534,6 +537,7 @@ def _get_connection_detail(conn, connection_id: int, user_id: Optional[int] = No
                     C.WALLET_PASSWORD_ENC,
                     C.CONNECT_OPTIONS,
                     C.DEFAULT_YN,
+                    C.SHARED_YN,
                     C.USE_YN,
                     C.SORT_ORDER,
                     C.LAST_TEST_STATUS,
@@ -547,7 +551,7 @@ def _get_connection_detail(conn, connection_id: int, user_id: Optional[int] = No
                  WHERE C.CONNECTION_ID = :connectionId
                    AND (
                           C.USER_ID = :userId
-                       OR (:includeShared = 'Y' AND U.ROLE_CODE = 'ADMIN')
+                       OR (:includeShared = 'Y' AND U.ROLE_CODE = 'ADMIN' AND C.SHARED_YN = 'Y')
                        )
                 """,
                 {
@@ -574,22 +578,20 @@ def _get_default_connection_detail(conn, user_id: int) -> dict:
     try:
         cursor.execute(
             """
-            SELECT CONNECTION_ID
-              FROM "INIT$_TB_DB_CONNECTION"
-             WHERE USE_YN = 'Y'
+            SELECT C.CONNECTION_ID
+              FROM "INIT$_TB_DB_CONNECTION" C
+              JOIN "INIT$_TB_USER" U
+                ON U.USER_ID = C.USER_ID
+             WHERE C.USE_YN = 'Y'
                AND (
-                      USER_ID = :userId
-                   OR USER_ID IN (
-                        SELECT USER_ID
-                          FROM "INIT$_TB_USER"
-                         WHERE ROLE_CODE = 'ADMIN'
+                      C.USER_ID = :userId
+                   OR (U.ROLE_CODE = 'ADMIN' AND C.SHARED_YN = 'Y')
                    )
-                   )
-             ORDER BY DEFAULT_YN DESC,
-                      CASE WHEN USER_ID = :userId THEN 0 ELSE 1 END,
-                      SORT_ORDER NULLS LAST,
-                      CONNECTION_NAME,
-                      CONNECTION_ID
+             ORDER BY C.DEFAULT_YN DESC,
+                      CASE WHEN C.USER_ID = :userId THEN 0 ELSE 1 END,
+                      C.SORT_ORDER NULLS LAST,
+                      C.CONNECTION_NAME,
+                      C.CONNECTION_ID
              FETCH FIRST 1 ROW ONLY
             """,
             {"userId": user_id},
@@ -612,13 +614,14 @@ def _list_enabled_connections(conn, user_id: int) -> list:
                 C.CONNECTION_NAME,
                 C.DB_TYPE,
                 C.DEFAULT_YN,
+                C.SHARED_YN,
                 C.SORT_ORDER,
                 CASE WHEN C.USER_ID = :userId THEN 'PRIVATE' ELSE 'SHARED' END AS CONNECTION_SCOPE
               FROM "INIT$_TB_DB_CONNECTION" C
               JOIN "INIT$_TB_USER" U
                 ON U.USER_ID = C.USER_ID
              WHERE C.USE_YN = 'Y'
-               AND (C.USER_ID = :userId OR U.ROLE_CODE = 'ADMIN')
+               AND (C.USER_ID = :userId OR (U.ROLE_CODE = 'ADMIN' AND C.SHARED_YN = 'Y'))
              ORDER BY C.DEFAULT_YN DESC,
                       CASE WHEN C.USER_ID = :userId THEN 0 ELSE 1 END,
                       C.SORT_ORDER NULLS LAST,
@@ -633,8 +636,9 @@ def _list_enabled_connections(conn, user_id: int) -> list:
                 "connectionName": row[1],
                 "dbType": row[2],
                 "defaultYn": row[3],
-                "sortOrder": row[4],
-                "connectionScope": row[5],
+                "sharedYn": row[4],
+                "sortOrder": row[5],
+                "connectionScope": row[6],
             }
             for row in cursor.fetchall()
         ]
@@ -660,6 +664,7 @@ def _connection_row_to_params(row: dict) -> dict:
         "walletPasswordEnc": row.get("WALLET_PASSWORD_ENC"),
         "connectOptions": row.get("CONNECT_OPTIONS") or "",
         "defaultYn": row.get("DEFAULT_YN"),
+        "sharedYn": row.get("SHARED_YN"),
         "useYn": row.get("USE_YN"),
         "sortOrder": row.get("SORT_ORDER") or 0,
     }
@@ -684,6 +689,7 @@ def _safe_connection_payload(row: dict) -> dict:
         "walletPath": row.get("WALLET_PATH"),
         "connectOptions": connect_options or "",
         "defaultYn": row.get("DEFAULT_YN"),
+        "sharedYn": row.get("SHARED_YN"),
         "useYn": row.get("USE_YN"),
         "sortOrder": row.get("SORT_ORDER") or 0,
         "lastTestStatus": row.get("LAST_TEST_STATUS"),
@@ -1319,7 +1325,7 @@ def _record_created_object_deploy_statuses(conn, created_objects: list[dict], ob
 
 
 @router.get("/connections")
-def list_connections(request: Request, keyword: str = Query("")):
+def list_connections(request: Request, keyword: str = Query(""), includeShared: str = Query("N")):
     user_id_header = request.headers.get("X-Login-User-Id")
     if not user_id_header:
         return {"status": "success", "data": [], "total": 0}
@@ -1327,7 +1333,8 @@ def list_connections(request: Request, keyword: str = Query("")):
     conn = None
     try:
         conn = get_db_connection()
-        result = execute_query(conn, "M91001_CONNECTION_LIST", {"keyword": keyword or "", "userId": user_id})
+        sql_id = "M91001_AVAILABLE_CONNECTION_LIST" if _normalize_yn(includeShared, "N") == "Y" else "M91001_CONNECTION_LIST"
+        result = execute_query(conn, sql_id, {"keyword": keyword or "", "userId": user_id})
         if result.get("status") != "success":
             raise HTTPException(status_code=500, detail=result.get("message") or result.get("detail") or "Connection list query failed.")
         return {"status": "success", "data": result.get("data", []), "total": result.get("total", 0)}

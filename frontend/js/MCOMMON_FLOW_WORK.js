@@ -9,6 +9,14 @@
             ...(config.labels || {}),
             ...(window[`${PAGE_CODE}_FLOW_UI_LABELS`] || {})
         };
+        const SAMPLE_FLOW_EDGES = [
+            { from: "source-customer", to: "profiling-01" },
+            { from: "profiling-01", to: "correlation-01" },
+            { from: "profiling-01", to: "rule-mining-01" },
+            { from: "correlation-01", to: "violation-search-01" },
+            { from: "rule-mining-01", to: "violation-search-01" },
+            { from: "threshold-01", to: "rule-mining-01", dashed: true }
+        ];
         const CONTEXT_STORAGE_KEY = config.contextStorageKey || "DATA_EDITING_WORK_CONTEXT";
         const SCENARIO_TABLE_API = config.scenarioTableApi || "M02002";
         const { getContainerEl } = PageManager.createHelper(PAGE_CODE);
@@ -21,6 +29,7 @@
             contextScenarios: [],
             scenarioTables: [],
             flowList: [],
+            flowNodeTypes: [],
             flowRegisteredJobs: [],
             flowJobGroupCollapsed: new Set(),
             flowVariables: [],
@@ -48,6 +57,8 @@
             flowInspectorCollapsed: false,
             flowDesignerBound: false,
             flowLayoutRestoredFromDb: false,
+            isSampleFlowVisible: true,
+            isFlowSaving: false,
             flowNodePointerMoveBound: null,
             flowNodePointerUpBound: null,
             flowCanvasPointerMoveBound: null,
@@ -61,14 +72,7 @@
             flowDocumentClickBound: null,
             flowDocumentKeydownBound: null,
             flowEdgeLayerClickBound: null,
-            flowEdges: [
-                { from: "source-customer", to: "profiling-01" },
-                { from: "profiling-01", to: "correlation-01" },
-                { from: "profiling-01", to: "rule-mining-01" },
-                { from: "correlation-01", to: "violation-search-01" },
-                { from: "rule-mining-01", to: "violation-search-01" },
-                { from: "threshold-01", to: "rule-mining-01", dashed: true }
-            ],
+            flowEdges: SAMPLE_FLOW_EDGES.map((edge) => ({ ...edge })),
 
             async init() {
                 if (this.isInit) return;
@@ -86,6 +90,7 @@
                 this.contextScenarios = [];
                 this.scenarioTables = [];
                 this.flowList = [];
+                this.flowNodeTypes = [];
                 this.flowRegisteredJobs = [];
                 this.flowJobGroupCollapsed = new Set();
                 this.flowVariables = [];
@@ -106,6 +111,9 @@
                 this.flowSidebarCollapsedBeforeMaximize = null;
                 this.flowInspectorCollapsed = true;
                 this.flowLayoutRestoredFromDb = false;
+                this.isSampleFlowVisible = true;
+                this.isFlowSaving = false;
+                this.flowEdges = SAMPLE_FLOW_EDGES.map((edge) => ({ ...edge }));
                 this.nodeSequence = 100;
                 this.isInit = false;
             },
@@ -354,6 +362,7 @@
             },
 
             async loadFlowAssets() {
+                await this.loadFlowNodeTypes();
                 await Promise.all([
                     this.loadRegisteredJobs(),
                     this.loadDefaultVariables(),
@@ -386,6 +395,35 @@
                 }
             },
 
+            async loadFlowNodeTypes() {
+                try {
+                    const params = new URLSearchParams();
+                    if (this.selectedProjectId) params.set("projectId", this.selectedProjectId);
+                    if (this.selectedScenarioId) params.set("scenarioId", this.selectedScenarioId);
+                    const suffix = params.toString() ? `?${params.toString()}` : "";
+                    const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/node-types${suffix}`, { method: "GET", showLoading: false });
+                    this.flowNodeTypes = Array.isArray(json.data) ? json.data : [];
+                } catch (error) {
+                    this.flowNodeTypes = [];
+                }
+                this.renderNodeTypeOptions();
+            },
+
+            renderNodeTypeOptions() {
+                const select = getContainerEl(`#nodeType-${PAGE_CODE}`);
+                if (!select || !this.flowNodeTypes.length) return;
+                const currentValue = select.value || "";
+                select.innerHTML = this.flowNodeTypes.map((item) => `
+                    <option value="${this.escapeHtml(item.NODE_TYPE || "")}">${this.escapeHtml(item.NODE_TYPE_NAME || item.NODE_TYPE || "")}</option>
+                `).join("");
+                if (currentValue && this.flowNodeTypes.some((item) => String(item.NODE_TYPE) === String(currentValue))) {
+                    select.value = currentValue;
+                } else if (currentValue) {
+                    select.insertAdjacentHTML("afterbegin", `<option value="${this.escapeHtml(currentValue)}">${this.escapeHtml(this.getNodeTypeLabel(currentValue, currentValue))}</option>`);
+                    select.value = currentValue;
+                }
+            },
+
             renderRegisteredJobs() {
                 const container = getContainerEl(`#flowRegisteredJobGrid-${PAGE_CODE}`);
                 if (!container) return;
@@ -410,9 +448,12 @@
                 this.flowRegisteredJobs.forEach((job) => {
                     const groupKey = String(job.JOB_GROUP || job.MENU_CODE || "UNGROUPED");
                     if (!groupMap.has(groupKey)) {
+                        const nodeType = this.getNodeTypeForJob(job);
+                        const nodeTypeLabel = this.getNodeTypeLabel(nodeType, groupKey);
                         groupMap.set(groupKey, {
                             key: groupKey,
-                            label: groupKey,
+                            label: this.getNodeDisplayLabel(nodeTypeLabel),
+                            code: groupKey,
                             jobs: []
                         });
                     }
@@ -429,6 +470,7 @@
                             <span class="flow-job-group-title">
                                 <i class="fas ${collapsed ? "fa-chevron-right" : "fa-chevron-down"}"></i>
                                 <strong>${this.escapeHtml(group.label)}</strong>
+                                <small>${this.escapeHtml(group.code || group.key)}</small>
                             </span>
                             <span class="flow-job-group-count">${group.jobs.length.toLocaleString()} jobs</span>
                         </button>
@@ -440,25 +482,30 @@
             },
 
             renderRegisteredJobRow(job, index) {
-                const nodeType = this.getNodeTypeForMenu(job.MENU_CODE);
+                const nodeType = this.getNodeTypeForJob(job);
+                const nodeTypeLabel = this.getNodeTypeLabel(nodeType, job.JOB_GROUP || job.MENU_CODE || "JOB");
                 const jobId = job.WORK_JOB_ID || job.PROFILE_JOB_ID || "";
                 const tableLabel = `${job.OWNER_NAME || "-"}.${job.TABLE_NAME || "-"}`;
                 const desc = job.JOB_DESC ? ` - ${job.JOB_DESC}` : "";
-                const subtitle = `${job.MENU_CODE || "-"} / ${tableLabel}${desc}`;
+                const subtitle = `${tableLabel}${desc}`;
+                const metaLabel = [job.MENU_CODE, this.getNodeDisplayLabel(nodeTypeLabel)].filter(Boolean).join(" - ");
                 return `
                     <button type="button" class="data-job-row flow-palette-job" draggable="true"
                         data-node-type="${this.escapeHtml(nodeType)}"
+                        data-node-type-label="${this.escapeHtml(nodeTypeLabel)}"
                         data-job-id="${this.escapeHtml(jobId)}"
                         data-ref-menu-code="${this.escapeHtml(job.MENU_CODE || "")}"
                         data-owner-name="${this.escapeHtml(job.OWNER_NAME || "")}"
                         data-table-name="${this.escapeHtml(job.TABLE_NAME || "")}"
                         data-ref-object-id="${this.escapeHtml(job.EXEC_OBJECT_ID || "")}">
                         <span class="data-job-order">${String(index + 1).padStart(2, "0")}</span>
-                        <span>
-                            <strong>${this.escapeHtml(job.JOB_NAME || "(Untitled job)")}</strong>
-                            <small>${this.escapeHtml(subtitle)}</small>
+                        <span class="flow-palette-job-main">
+                            <strong title="${this.escapeHtml(job.JOB_NAME || "(Untitled job)")}" class="flow-palette-job-name">${this.escapeHtml(job.JOB_NAME || "(Untitled job)")}</strong>
+                            <small class="flow-palette-job-meta">
+                                <span>${this.escapeHtml(metaLabel)}</span>
+                                <span>${this.escapeHtml(subtitle)}</span>
+                            </small>
                         </span>
-                        <em><span>JOB</span><span>${this.escapeHtml(job.MENU_CODE || "")}</span></em>
                     </button>
                 `;
             },
@@ -493,22 +540,60 @@
                 this.renderRegisteredJobs();
             },
 
-            getNodeTypeForMenu(menuCode) {
-                const code = String(menuCode || "").toUpperCase();
-                if (code === "M03001") return "PROFILING";
-                if (code === "M03002") return "CORRELATION";
-                if (code === "M03003") return "RULE_MINING";
-                if (code === "M06001") return "VIOLATION_SEARCH";
-                return "JOB";
+            getNodeTypeForJob(job) {
+                return String(job?.JOB_GROUP || job?.MENU_CODE || "JOB").trim() || "JOB";
             },
 
-            getNodeTypeLabel(nodeType) {
+            getNodeTypeLabel(nodeType, fallbackLabel = "") {
                 const type = String(nodeType || "").toUpperCase();
+                const match = this.flowNodeTypes.find((item) => String(item.NODE_TYPE || "").toUpperCase() === type);
+                const knownLabels = {
+                    M03001: "데이터 프로파일링",
+                    M03002: "컬럼간 상관 분석",
+                    M03003: "자동 규칙 발굴",
+                    M03004: "규칙 위반 탐지"
+                };
+                return match?.NODE_TYPE_NAME || knownLabels[type] || fallbackLabel || type || "JOB";
+            },
+
+            getNodeTypeConfig(nodeType) {
+                const type = String(nodeType || "").toUpperCase();
+                return this.flowNodeTypes.find((item) => String(item.NODE_TYPE || "").toUpperCase() === type) || null;
+            },
+
+            getNodeDisplayLabel(label) {
+                return String(label || "").replace(/^M\d{5}\s*[-/]\s*/, "").trim() || String(label || "");
+            },
+
+            getRegisteredJobAsset(jobId) {
+                const key = String(jobId || "");
+                if (!key) return null;
+                return this.flowRegisteredJobs.find((job) => String(job.WORK_JOB_ID || job.PROFILE_JOB_ID || "") === key) || null;
+            },
+
+            buildFlowNodeDataFromJob(job, fallback = {}) {
+                const source = job || {};
+                const nodeType = source.JOB_GROUP || fallback.nodeType || source.MENU_CODE || fallback.refMenuCode || "JOB";
+                const nodeTypeLabel = this.getNodeTypeLabel(nodeType, source.JOB_GROUP || source.MENU_CODE || fallback.nodeTypeLabel || "JOB");
+                const jobId = source.WORK_JOB_ID || source.PROFILE_JOB_ID || fallback.jobId || "";
+                const tableLabel = `${source.OWNER_NAME || fallback.ownerName || "-"}.${source.TABLE_NAME || fallback.tableName || "-"}`;
+                const desc = source.JOB_DESC ? ` - ${source.JOB_DESC}` : "";
                 return {
-                    PROFILING: "M03001 - 데이터 프로파일링",
-                    CORRELATION: "M03002 - 컬럼간 상관 분석",
-                    RULE_MINING: "M03003 - 자동 규칙 발굴"
-                }[type] || type || "JOB";
+                    nodeType,
+                    nodeTypeLabel,
+                    jobId,
+                    refMenuCode: source.MENU_CODE || fallback.refMenuCode || "",
+                    ownerName: source.OWNER_NAME || fallback.ownerName || "",
+                    tableName: source.TABLE_NAME || fallback.tableName || "",
+                    refObjectId: source.EXEC_OBJECT_ID || fallback.refObjectId || "",
+                    resultCreateYn: source.RESULT_CREATE_YN || fallback.resultCreateYn || "N",
+                    resultOwner: source.RESULT_OWNER || fallback.resultOwner || "",
+                    resultTableName: source.RESULT_TABLE_NAME || fallback.resultTableName || "",
+                    execPlsql: source.EXEC_PLSQL || "",
+                    params: this.parseNodeJson(source.PARAM_JSON, []),
+                    title: source.JOB_NAME || fallback.title || "New node",
+                    subtitle: source.MENU_CODE ? `${source.MENU_CODE} / ${tableLabel}${desc}` : (fallback.subtitle || jobId || "Manual node")
+                };
             },
 
             async loadDefaultVariables() {
@@ -603,12 +688,16 @@
 
             setFlowVersionLoading(isLoading) {
                 const refreshButton = getContainerEl(`#flowVersionRefresh-${PAGE_CODE}`);
+                const copyButton = getContainerEl(`#flowVersionCopy-${PAGE_CODE}`);
                 const refreshIcon = refreshButton?.querySelector("i");
                 const countLabel = getContainerEl(`#flowVersionCount-${PAGE_CODE}`);
                 const grid = getContainerEl(`#flowVersionGrid-${PAGE_CODE}`);
                 if (refreshButton) {
                     refreshButton.disabled = Boolean(isLoading);
                     refreshButton.classList.toggle("is-loading", Boolean(isLoading));
+                }
+                if (copyButton) {
+                    copyButton.disabled = Boolean(isLoading) || !/^\d+$/.test(this.getValue(`#flowId-${PAGE_CODE}`));
                 }
                 if (refreshIcon) {
                     refreshIcon.classList.toggle("fa-spin", Boolean(isLoading));
@@ -658,8 +747,16 @@
                     `;
                 }
                 this.updateFlowVersionCount();
+                this.updateFlowCopyButton();
                 if (select && this.flowList.some((flow) => String(flow.FLOW_ID) === String(currentFlowId))) {
                     select.value = currentFlowId;
+                }
+            },
+
+            updateFlowCopyButton() {
+                const copyButton = getContainerEl(`#flowVersionCopy-${PAGE_CODE}`);
+                if (copyButton) {
+                    copyButton.disabled = !/^\d+$/.test(this.getValue(`#flowId-${PAGE_CODE}`));
                 }
             },
 
@@ -690,6 +787,37 @@
 
             async refreshSavedFlows() {
                 await this.loadFlowVersions(false);
+            },
+
+            copySelectedSavedFlow() {
+                const flowId = this.getValue(`#flowId-${PAGE_CODE}`);
+                if (!/^\d+$/.test(flowId)) {
+                    alert("Select a saved flow first.");
+                    return;
+                }
+                this.copyFlowAsDraft();
+            },
+
+            async copySavedFlowFromList(flowId, event) {
+                event?.preventDefault?.();
+                event?.stopPropagation?.();
+                if (!/^\d+$/.test(String(flowId || ""))) return;
+                await this.loadFlowVersion(flowId);
+                this.copyFlowAsDraft();
+            },
+
+            copyFlowAsDraft() {
+                const originalName = this.getValue(`#flowName-${PAGE_CODE}`).trim() || "Untitled Flow";
+                this.setValue(`#flowId-${PAGE_CODE}`, "NEW");
+                this.setValue(`#flowName-${PAGE_CODE}`, `Copy of ${originalName}`);
+                const selector = getContainerEl(`#flowVersion-${PAGE_CODE}`);
+                if (selector) selector.value = "";
+                this.isSampleFlowVisible = false;
+                this.setSampleFlowState(false);
+                this.renderFlowVersions();
+                this.updateFlowCopyButton();
+                const label = getContainerEl(`#selectedFlowLabel-${PAGE_CODE}`);
+                if (label) label.textContent = "Copied as a new draft. Save it to create a new FLOW.";
             },
 
             async refreshRegisteredJobs() {
@@ -850,6 +978,8 @@
 
                 viewport.querySelectorAll(".flow-node").forEach((node) => this.bindFlowNode(node));
                 this.bindFlowPalette();
+                const hasSampleNodes = Boolean(viewport.querySelector(".flow-node[data-sample-node='Y']"));
+                this.setSampleFlowState(this.isSampleFlowVisible || hasSampleNodes);
 
                 const selected = viewport.querySelector(".flow-node.is-selected") || viewport.querySelector(".flow-node");
                 if (selected) {
@@ -864,6 +994,55 @@
                 }
                 this.renderFlowEdgeGrid();
                 this.flowDesignerBound = true;
+            },
+
+            setSampleFlowState(isSample) {
+                this.isSampleFlowVisible = Boolean(isSample);
+                const container = document.getElementById(`container-${PAGE_CODE}`);
+                const label = getContainerEl(`#selectedFlowLabel-${PAGE_CODE}`);
+                container?.classList.toggle("is-sample-flow-visible", this.isSampleFlowVisible);
+                this.getFlowNodes().forEach((node) => {
+                    node.classList.toggle("is-sample-node", this.isSampleFlowVisible && node.dataset.sampleNode === "Y");
+                });
+                if (label && this.isSampleFlowVisible) {
+                    label.textContent = "SAMPLE FLOW - not saved. Use the eraser icon to clear the canvas.";
+                }
+            },
+
+            clearFlowCanvas() {
+                if (!this.getFlowNodes().length && !this.flowEdges.length) {
+                    return;
+                }
+                this.getFlowNodes().forEach((node) => node.remove());
+                this.flowEdges = [];
+                this.selectedNodeId = "";
+                this.selectedEdgeId = "";
+                this.hideSelectedEdgeDelete();
+                this.clearNodeInspector();
+                this.setSampleFlowState(false);
+                const label = getContainerEl(`#selectedFlowLabel-${PAGE_CODE}`);
+                if (label) label.textContent = "Canvas cleared. Drag assets or use the canvas menu to build a flow.";
+                this.resizeFlowViewportToNodes();
+                this.updateFlowEdges();
+                this.renderFlowEdgeGrid();
+            },
+
+            clearNodeInspector() {
+                this.setValue(`#nodeId-${PAGE_CODE}`, "");
+                this.setValue(`#nodeType-${PAGE_CODE}`, "");
+                this.setValue(`#nodeName-${PAGE_CODE}`, "");
+                this.setValue(`#nodeOwnerName-${PAGE_CODE}`, "");
+                this.setValue(`#nodeTableName-${PAGE_CODE}`, "");
+                this.setResultTableFields("", "", "");
+                this.setValue(`#nodeDependsOn-${PAGE_CODE}`, "");
+                this.setValue(`#nodeExecPlsqlEditor-${PAGE_CODE}`, "");
+                this.renderNodeBindVariables(null);
+            },
+
+            markFlowEdited() {
+                if (this.isSampleFlowVisible) {
+                    this.setSampleFlowState(false);
+                }
             },
 
             teardownFlowDesigner() {
@@ -974,22 +1153,37 @@
                     if (item.dataset.flowPaletteBound === "Y") return;
                     item.dataset.flowPaletteBound = "Y";
                     item.addEventListener("dragstart", (event) => {
-                        const title = item.querySelector("strong")?.textContent?.trim() || "New node";
-                        const subtitle = item.querySelector("small")?.textContent?.trim() || "";
-                        this.flowPaletteDragData = {
-                            nodeType: item.dataset.nodeType || "JOB",
-                            jobId: item.dataset.jobId || "",
-                            refMenuCode: item.dataset.refMenuCode || "",
-                            ownerName: item.dataset.ownerName || "",
-                            tableName: item.dataset.tableName || "",
-                            refObjectId: item.dataset.refObjectId || "",
-                            title,
-                            subtitle
-                        };
+                        this.flowPaletteDragData = this.getFlowPaletteItemData(item);
                         event.dataTransfer?.setData("text/plain", JSON.stringify(this.flowPaletteDragData));
                         if (event.dataTransfer) event.dataTransfer.effectAllowed = "copy";
                     });
+                    item.addEventListener("dblclick", (event) => {
+                        event.preventDefault();
+                        this.createPaletteNodeAtCanvasCenter(item);
+                    });
                 });
+            },
+
+            getFlowPaletteItemData(item) {
+                const title = item.querySelector("strong")?.textContent?.trim() || "New node";
+                const subtitle = item.querySelector(".flow-palette-job-meta span:last-child")?.textContent?.trim()
+                    || item.querySelector("small")?.textContent?.trim()
+                    || "";
+                const fallbackData = {
+                    nodeType: item.dataset.nodeType || "JOB",
+                    nodeTypeLabel: item.dataset.nodeTypeLabel || "",
+                    jobId: item.dataset.jobId || "",
+                    refMenuCode: item.dataset.refMenuCode || "",
+                    ownerName: item.dataset.ownerName || "",
+                    tableName: item.dataset.tableName || "",
+                    refObjectId: item.dataset.refObjectId || "",
+                    title,
+                    subtitle
+                };
+                return this.buildFlowNodeDataFromJob(
+                    this.getRegisteredJobAsset(item.dataset.jobId || ""),
+                    fallbackData
+                );
             },
 
             getFlowStage() {
@@ -1290,15 +1484,37 @@
                 const rect = stage.getBoundingClientRect();
                 const left = (event.clientX - rect.left + stage.scrollLeft) / this.flowZoom;
                 const top = (event.clientY - rect.top + stage.scrollTop) / this.flowZoom;
+                this.appendFlowNode(data, left, top);
+                this.flowPaletteDragData = null;
+            },
+
+            createPaletteNodeAtCanvasCenter(item) {
+                const point = this.getCanvasVisibleCenterPoint();
+                const data = this.getFlowPaletteItemData(item);
+                this.appendFlowNode(data, point.left, point.top);
+            },
+
+            getCanvasVisibleCenterPoint() {
+                const stage = this.getFlowStage();
+                if (!stage) return { left: 80, top: 80 };
+                const nodeWidth = 170;
+                const nodeHeight = 112;
+                return {
+                    left: Math.max(0, ((stage.scrollLeft + stage.clientWidth / 2) / this.flowZoom) - nodeWidth / 2),
+                    top: Math.max(0, ((stage.scrollTop + stage.clientHeight / 2) / this.flowZoom) - nodeHeight / 2)
+                };
+            },
+
+            appendFlowNode(data, left, top) {
                 const node = this.createFlowNode(data, left, top);
                 if (node) {
+                    this.markFlowEdited();
                     this.getFlowViewport()?.appendChild(node);
                     this.bindFlowNode(node);
                     this.selectFlowNode(node.dataset.nodeId || "");
                     this.resizeFlowViewportToNodes();
                     this.updateFlowEdges();
                 }
-                this.flowPaletteDragData = null;
             },
 
             getCanvasPointFromEvent(event) {
@@ -1402,6 +1618,7 @@
                 const point = this.flowContextMenuState || { left: 80, top: 80 };
                 const node = this.createFlowNode({ nodeType, title, subtitle }, point.left, point.top);
                 if (!node) return;
+                this.markFlowEdited();
                 this.getFlowViewport()?.appendChild(node);
                 this.bindFlowNode(node);
                 this.selectFlowNode(node.dataset.nodeId || "");
@@ -1411,6 +1628,7 @@
 
             createFlowNode(data, left, top) {
                 const nodeType = data.nodeType || "JOB";
+                const nodeTypeLabel = data.nodeTypeLabel || this.getNodeTypeLabel(nodeType);
                 const nodeId = `${String(nodeType).toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${this.nodeSequence++}`;
                 const outputLabel = this.getDefaultOutputPort(nodeType);
                 const inputHtml = this.getDefaultInputPort(nodeType)
@@ -1421,11 +1639,15 @@
                 article.className = "data-param-card flow-node flow-node-step";
                 article.dataset.nodeId = nodeId;
                 article.dataset.nodeType = nodeType;
+                article.dataset.nodeTypeLabel = nodeTypeLabel;
                 article.dataset.refWorkJobId = data.jobId || data.refWorkJobId || "";
                 article.dataset.refMenuCode = data.refMenuCode || "";
                 article.dataset.ownerName = data.ownerName || "";
                 article.dataset.tableName = data.tableName || "";
                 article.dataset.refObjectId = data.refObjectId || "";
+                article.dataset.resultCreateYn = data.resultCreateYn || "N";
+                article.dataset.resultOwner = data.resultOwner || "";
+                article.dataset.resultTableName = data.resultTableName || "";
                 article.dataset.execPlsql = data.execPlsql || "";
                 article.dataset.nodeParams = this.stringifyNodeJson(data.params || []);
                 article.style.position = "absolute";
@@ -1434,7 +1656,7 @@
                 article.style.width = "170px";
                 article.innerHTML = `
                     <header class="data-param-panel-header">
-                        <strong>${this.escapeHtml(this.getNodeTypeLabel(nodeType))}</strong>
+                        <strong title="${this.escapeHtml(nodeTypeLabel)}">${this.escapeHtml(nodeTypeLabel)}</strong>
                         <span class="data-job-order">NEW</span>
                     </header>
                     <div class="flow-node-body">
@@ -1451,6 +1673,8 @@
 
             createSavedFlowNode(data) {
                 const nodeType = data.nodeType || "JOB";
+                const nodeTypeLabel = data.nodeTypeLabel || this.getNodeTypeLabel(nodeType);
+                const refJob = this.getRegisteredJobAsset(data.refWorkJobId || "");
                 const nodeId = data.nodeKey || `${String(nodeType).toLowerCase()}-${this.nodeSequence++}`;
                 const inputs = Array.isArray(data.inputs) ? data.inputs : [];
                 const outputs = Array.isArray(data.outputs) ? data.outputs : [];
@@ -1463,11 +1687,15 @@
                 article.className = "data-param-card flow-node flow-node-step";
                 article.dataset.nodeId = nodeId;
                 article.dataset.nodeType = nodeType;
+                article.dataset.nodeTypeLabel = nodeTypeLabel;
                 article.dataset.refWorkJobId = data.refWorkJobId || "";
                 article.dataset.refMenuCode = data.refMenuCode || "";
                 article.dataset.ownerName = data.ownerName || "";
                 article.dataset.tableName = data.tableName || "";
                 article.dataset.refObjectId = data.refObjectId || "";
+                article.dataset.resultCreateYn = data.resultCreateYn || refJob?.RESULT_CREATE_YN || "N";
+                article.dataset.resultOwner = data.resultOwner || refJob?.RESULT_OWNER || "";
+                article.dataset.resultTableName = data.resultTableName || refJob?.RESULT_TABLE_NAME || "";
                 article.dataset.execPlsql = data.execPlsql || "";
                 article.dataset.nodeParams = this.stringifyNodeJson(data.params || []);
                 article.style.position = "absolute";
@@ -1476,7 +1704,7 @@
                 article.style.width = `${Math.max(150, Math.round(Number(data.nodeWidth) || 170))}px`;
                 article.innerHTML = `
                     <header class="data-param-panel-header">
-                        <strong>${this.escapeHtml(this.getNodeTypeLabel(nodeType))}</strong>
+                        <strong title="${this.escapeHtml(nodeTypeLabel)}">${this.escapeHtml(nodeTypeLabel)}</strong>
                         <span class="data-job-order">${this.escapeHtml(data.refMenuCode || data.sortOrder || "NODE")}</span>
                     </header>
                     <div class="flow-node-body">
@@ -1502,6 +1730,10 @@
                 if (nodeType === "ARRAY_INPUT") return "items[]";
                 if (nodeType === "TABLE_INPUT") return "tableRows";
                 if (nodeType === "TABLE_OUTPUT") return "targetTable";
+                const outputType = String(this.getNodeTypeConfig(nodeType)?.DEFAULT_OUTPUT_TYPE || "").toUpperCase();
+                if (outputType === "ARRAY") return "items[]";
+                if (outputType === "TABLE") return "tableRows";
+                if (outputType === "VALUE") return "value";
                 return "output";
             },
 
@@ -1512,6 +1744,7 @@
                 const clone = source.cloneNode(true);
                 const sourceNodeId = source.dataset.nodeId || "node";
                 const cloneNodeId = `${sourceNodeId}-copy-${this.nodeSequence++}`;
+                this.markFlowEdited();
                 clone.id = `flowNode-${PAGE_CODE}-${cloneNodeId}`;
                 clone.dataset.nodeId = cloneNodeId;
                 clone.dataset.flowBound = "";
@@ -1545,9 +1778,20 @@
                 this.setValue(`#nodeName-${PAGE_CODE}`, node.querySelector(".flow-node-body strong")?.textContent?.trim() || "");
                 this.setValue(`#nodeOwnerName-${PAGE_CODE}`, node.dataset.ownerName || "");
                 this.setValue(`#nodeTableName-${PAGE_CODE}`, node.dataset.tableName || "");
+                this.setResultTableFields(node.dataset.resultCreateYn, node.dataset.resultOwner, node.dataset.resultTableName);
                 this.setValue(`#nodeDependsOn-${PAGE_CODE}`, this.getUpstreamNodeIds(this.selectedNodeId).join(", "));
                 this.setValue(`#nodeExecPlsqlEditor-${PAGE_CODE}`, node.dataset.execPlsql || "");
                 this.renderNodeBindVariables(node);
+            },
+
+            setResultTableFields(resultCreateYn, resultOwner, resultTableName) {
+                const visible = String(resultCreateYn || "").toUpperCase() === "Y";
+                const ownerWrap = getContainerEl(`#nodeResultOwnerWrap-${PAGE_CODE}`);
+                const tableWrap = getContainerEl(`#nodeResultTableWrap-${PAGE_CODE}`);
+                if (ownerWrap) ownerWrap.style.display = visible ? "" : "none";
+                if (tableWrap) tableWrap.style.display = visible ? "" : "none";
+                this.setValue(`#nodeResultOwner-${PAGE_CODE}`, visible ? resultOwner || "" : "");
+                this.setValue(`#nodeResultTableName-${PAGE_CODE}`, visible ? resultTableName || "" : "");
             },
 
             getUpstreamNodeIds(nodeId) {
@@ -1565,8 +1809,13 @@
                 }
                 if (fieldName === "nodeType") {
                     node.dataset.nodeType = value || "";
+                    node.dataset.nodeTypeLabel = this.getNodeTypeLabel(value);
                     const headerTitle = node.querySelector(".data-param-panel-header strong");
-                    if (headerTitle) headerTitle.textContent = this.getNodeTypeLabel(value);
+                    if (headerTitle) {
+                        const label = this.getNodeTypeLabel(value);
+                        headerTitle.textContent = label;
+                        headerTitle.title = label;
+                    }
                 }
                 if (fieldName === "ownerName") {
                     node.dataset.ownerName = value || "";
@@ -1648,18 +1897,54 @@
                 return Array.isArray(params) ? params : [];
             },
 
+            normalizeBindParamKey(value) {
+                return String(value || "")
+                    .replace(/^:/, "")
+                    .replace(/[^A-Za-z0-9]/g, "")
+                    .toLowerCase();
+            },
+
+            getNodeParamMatchKeys(item) {
+                return [
+                    item?.name,
+                    item?.NAME,
+                    item?.label,
+                    item?.LABEL,
+                    item?.itemName,
+                    item?.ITEM_NAME
+                ].map((value) => this.normalizeBindParamKey(value)).filter(Boolean);
+            },
+
+            buildNodeParamMap(params) {
+                const map = new Map();
+                (Array.isArray(params) ? params : []).forEach((item) => {
+                    this.getNodeParamMatchKeys(item).forEach((key) => {
+                        if (!map.has(key)) map.set(key, item);
+                    });
+                });
+                return map;
+            },
+
+            getNodeParamComment(item) {
+                return String(item?.itemDesc || item?.ITEM_DESC || item?.comment || item?.COMMENT || "");
+            },
+
             storeSelectedNodeInspectorState() {
                 const node = this.getFlowNode(this.selectedNodeId);
                 if (!node) return;
                 const editor = getContainerEl(`#nodeExecPlsqlEditor-${PAGE_CODE}`);
                 if (editor) node.dataset.execPlsql = editor.value || "";
+                const existingParamMap = this.buildNodeParamMap(this.getNodeParams(node));
                 const params = [];
                 getContainerEl(`#nodeBindGrid-${PAGE_CODE}`)?.querySelectorAll(".flow-node-bind-input").forEach((input) => {
+                    const bindName = input.dataset.bindName || "";
+                    const existing = existingParamMap.get(this.normalizeBindParamKey(bindName)) || {};
                     params.push({
-                        name: input.dataset.bindName || "",
-                        label: `:${input.dataset.bindName || ""}`,
+                        ...existing,
+                        name: bindName,
+                        label: `:${bindName}`,
                         value: input.value || "",
-                        source: "RUNTIME"
+                        source: existing.source || existing.SOURCE || "RUNTIME"
                     });
                 });
                 node.dataset.nodeParams = this.stringifyNodeJson(params.filter((item) => item.name));
@@ -1669,8 +1954,11 @@
                 const node = this.getFlowNode(this.selectedNodeId);
                 if (!node || !name) return;
                 const params = this.getNodeParams(node);
-                const existing = params.find((item) => String(item.name || "").toLowerCase() === String(name).toLowerCase());
+                const matchKey = this.normalizeBindParamKey(name);
+                const existing = params.find((item) => this.getNodeParamMatchKeys(item).includes(matchKey));
                 if (existing) {
+                    existing.name = existing.name || name;
+                    existing.label = existing.label || `:${name}`;
                     existing.value = value || "";
                 } else {
                     params.push({ name, label: `:${name}`, value: value || "", source: "RUNTIME" });
@@ -1687,16 +1975,20 @@
                 }
                 const names = this.getRuntimeBindNamesForNode(node);
                 const params = this.getNodeParams(node);
-                const valueMap = new Map(params.map((item) => [String(item.name || "").toLowerCase(), item]));
+                const paramMap = this.buildNodeParamMap(params);
                 if (!names.length) {
                     container.innerHTML = `<div class="table-empty">No runtime bind variables.</div>`;
                     return;
                 }
                 container.innerHTML = names.map((name) => {
-                    const saved = valueMap.get(name.toLowerCase());
+                    const saved = paramMap.get(this.normalizeBindParamKey(name));
+                    const comment = this.getNodeParamComment(saved);
                     return `
                         <label class="data-bind-row">
-                            <span>:${this.escapeHtml(name)}</span>
+                            <span class="data-bind-meta">
+                                <span class="flow-bind-name">:${this.escapeHtml(name)}</span>
+                                ${comment ? `<small class="flow-bind-comment">${this.escapeHtml(comment)}</small>` : ""}
+                            </span>
                             <input class="env-field flow-node-bind-input" data-bind-name="${this.escapeHtml(name)}" type="text" value="${this.escapeHtml(saved?.value ?? "")}" oninput="${PAGE_CODE}.updateNodeBindValue(this.dataset.bindName, this.value)">
                         </label>
                     `;
@@ -1752,6 +2044,7 @@
                     return {
                         nodeKey: node.dataset.nodeId || `node-${index + 1}`,
                         nodeType: node.dataset.nodeType || "JOB",
+                        nodeTypeLabel: node.dataset.nodeTypeLabel || this.getNodeTypeLabel(node.dataset.nodeType || "JOB"),
                         nodeName: node.querySelector(".flow-node-body strong")?.textContent?.trim() || node.dataset.nodeId || `Node ${index + 1}`,
                         nodeDesc: node.querySelector(".flow-node-body small")?.textContent?.trim() || "",
                         refMenuCode: node.dataset.refMenuCode || "",
@@ -1759,6 +2052,9 @@
                         refObjectId: node.dataset.refObjectId || null,
                         ownerName: node.dataset.ownerName || "",
                         tableName: node.dataset.tableName || "",
+                        resultCreateYn: node.dataset.resultCreateYn || "N",
+                        resultOwner: node.dataset.resultOwner || "",
+                        resultTableName: node.dataset.resultTableName || "",
                         positionLeft: position.left,
                         positionTop: position.top,
                         nodeWidth: position.width,
@@ -1803,7 +2099,28 @@
                 const project = this.contextProjects.find((row) => String(row.PROJECT_ID) === String(this.selectedProjectId));
                 const scenarioName = scenario?.SCENARIO_NAME || scenario?.SCENARIO_CODE || "";
                 const projectName = project?.PROJECT_NAME || project?.PROJECT_CODE || "";
-                return scenarioName ? `${scenarioName} Flow` : `${projectName || PAGE_CODE} Flow`;
+                const baseName = scenarioName ? `${scenarioName} Flow` : `${projectName || PAGE_CODE} Flow`;
+                return this.getUniqueFlowName(baseName, this.getValue(`#flowId-${PAGE_CODE}`));
+            },
+
+            getUniqueFlowName(baseName, currentFlowId = "") {
+                const normalizedBase = String(baseName || "Flow").trim() || "Flow";
+                const currentId = String(currentFlowId || "");
+                const usedNames = new Set(
+                    (this.flowList || [])
+                        .filter((flow) => String(flow.FLOW_ID || "") !== currentId)
+                        .map((flow) => String(flow.FLOW_NAME || "").trim().toLowerCase())
+                        .filter(Boolean)
+                );
+                if (!usedNames.has(normalizedBase.toLowerCase())) return normalizedBase;
+
+                let index = 1;
+                let nextName = `${normalizedBase} (${index})`;
+                while (usedNames.has(nextName.toLowerCase())) {
+                    index += 1;
+                    nextName = `${normalizedBase} (${index})`;
+                }
+                return nextName;
             },
 
             applyFlowData(flow) {
@@ -1816,12 +2133,14 @@
                 if (selector) selector.value = flow.FLOW_ID || "";
                 this.flowLayoutRestoredFromDb = true;
                 this.renderFlowCanvasFromData(flow.NODES || [], flow.EDGES || []);
+                this.updateFlowCopyButton();
             },
 
             renderFlowCanvasFromData(nodes, edges) {
                 const viewport = this.getFlowViewport();
                 if (!viewport) return;
                 viewport.querySelectorAll(".flow-node").forEach((node) => node.remove());
+                this.setSampleFlowState(false);
                 this.flowEdges = (edges || []).map((edge) => ({
                     from: edge.fromNodeKey,
                     fromPort: edge.fromPort || "output",
@@ -1839,14 +2158,7 @@
                 this.selectedNodeId = "";
                 if (firstNode) this.selectFlowNode(firstNode.dataset.nodeId || "");
                 if (!firstNode) {
-                    this.setValue(`#nodeId-${PAGE_CODE}`, "");
-                    this.setValue(`#nodeType-${PAGE_CODE}`, "");
-                    this.setValue(`#nodeName-${PAGE_CODE}`, "");
-                    this.setValue(`#nodeOwnerName-${PAGE_CODE}`, "");
-                    this.setValue(`#nodeTableName-${PAGE_CODE}`, "");
-                    this.setValue(`#nodeDependsOn-${PAGE_CODE}`, "");
-                    this.setValue(`#nodeExecPlsqlEditor-${PAGE_CODE}`, "");
-                    this.renderNodeBindVariables(null);
+                    this.clearNodeInspector();
                 }
                 this.resizeFlowViewportToNodes();
                 this.updateFlowEdges();
@@ -1873,6 +2185,10 @@
                 this.updateSelectedEdgeDeleteButton();
                 const label = getContainerEl(`#selectedFlowLabel-${PAGE_CODE}`);
                 if (label) {
+                    if (this.isSampleFlowVisible) {
+                        this.setSampleFlowState(true);
+                        return;
+                    }
                     const dashedHint = this.dashedConnectionMode ? " Dashed connection mode is ON." : " Hold Shift while connecting for one dashed edge.";
                     label.textContent = `Canvas zoom: ${Math.round(this.flowZoom * 100)}% / Click a right connector, move the mouse, then click a left connector to connect.${dashedHint}`;
                 }
@@ -2126,6 +2442,7 @@
             removeSelectedEdge() {
                 if (!this.selectedEdgeId) return;
                 this.flowEdges = this.flowEdges.filter((edge, index) => this.getEdgeId(edge, index) !== this.selectedEdgeId);
+                this.markFlowEdited();
                 this.selectedEdgeId = "";
                 this.hideSelectedEdgeDelete();
                 this.updateFlowEdges();
@@ -2154,6 +2471,7 @@
                     && (item.toPort || "") === nextEdge.toPort
                 );
                 if (exists) return;
+                this.markFlowEdited();
                 this.flowEdges.push(nextEdge);
                 this.updateFlowEdges();
                 this.renderFlowEdgeGrid();
@@ -2322,6 +2640,7 @@
                 const node = this.getFlowNode(nodeId);
                 if (!node) return;
                 this.flowEdges = this.flowEdges.filter((edge) => edge.from !== nodeId && edge.to !== nodeId);
+                this.markFlowEdited();
                 this.selectedEdgeId = "";
                 this.hideSelectedEdgeDelete();
                 node.remove();
@@ -2330,14 +2649,7 @@
                 if (nextNode) {
                     this.selectFlowNode(nextNode.dataset.nodeId || "");
                 } else {
-                    this.setValue(`#nodeId-${PAGE_CODE}`, "");
-                    this.setValue(`#nodeType-${PAGE_CODE}`, "");
-                    this.setValue(`#nodeName-${PAGE_CODE}`, "");
-                    this.setValue(`#nodeOwnerName-${PAGE_CODE}`, "");
-                    this.setValue(`#nodeTableName-${PAGE_CODE}`, "");
-                    this.setValue(`#nodeDependsOn-${PAGE_CODE}`, "");
-                    this.setValue(`#nodeExecPlsqlEditor-${PAGE_CODE}`, "");
-                    this.renderNodeBindVariables(null);
+                    this.clearNodeInspector();
                 }
                 this.resizeFlowViewportToNodes();
                 this.updateFlowEdges();
@@ -2364,16 +2676,22 @@
                 if (selector) selector.value = "";
                 if (clearCanvas) {
                     this.renderFlowCanvasFromData([], []);
+                } else {
+                    this.setSampleFlowState(false);
                 }
                 this.flowLayoutRestoredFromDb = false;
+                this.renderFlowVersions();
+                this.updateFlowCopyButton();
             },
 
             async saveFlow() {
+                if (this.isFlowSaving) return;
                 if (!this.selectedProjectId || !this.selectedScenarioId) {
                     alert("Select project and scenario first.");
                     return;
                 }
                 const payload = this.buildFlowPayload();
+                this.setFlowSaving(true);
                 try {
                     const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/flow/save`, {
                         method: "POST",
@@ -2388,7 +2706,19 @@
                     alert(`${json.message || "Flow saved."}${savedFlowId ? `\nFlow ID: ${savedFlowId}` : ""}`);
                 } catch (error) {
                     alert(error.message || "Flow save failed.");
+                } finally {
+                    this.setFlowSaving(false);
                 }
+            },
+
+            setFlowSaving(isSaving) {
+                this.isFlowSaving = Boolean(isSaving);
+                const button = getContainerEl(`#saveFlowButton-${PAGE_CODE}`);
+                if (!button) return;
+                button.disabled = this.isFlowSaving;
+                button.classList.toggle("is-loading", this.isFlowSaving);
+                const label = button.querySelector("span");
+                if (label) label.textContent = this.isFlowSaving ? "Saving..." : (FLOW_UI_LABELS.saveFlow || "Save flow");
             },
 
             async deleteFlow() {

@@ -16,6 +16,13 @@ from backend.database_helper import execute_query, SqlLoader
 from backend.services import data_work_service as data_work
 
 
+class FlowWorkDmlError(Exception):
+    def __init__(self, step: str, original: Exception):
+        self.step = step
+        self.original = original
+        super().__init__(f"{step}: {original}")
+
+
 class FlowNodeRequest(BaseModel):
     nodeKey: str
     nodeType: str
@@ -150,14 +157,14 @@ def save_flow(
     cursor = conn.cursor()
     try:
         if req.flowId:
-            cursor.execute(SqlLoader.get_sql("FLOW_WORK_UPDATE"), params)
+            execute_flow_dml(cursor, "FLOW_WORK_UPDATE", "FLOW_WORK_UPDATE", params)
             if cursor.rowcount == 0:
                 raise HTTPException(status_code=404, detail="Flow was not found or does not belong to this context.")
             flow_id = int(req.flowId)
         else:
             insert_params = {key: value for key, value in params.items() if key != "flowId"}
-            cursor.execute(SqlLoader.get_sql("FLOW_WORK_INSERT"), insert_params)
-            cursor.execute(SqlLoader.get_sql("FLOW_WORK_ID_LATEST"), {
+            execute_flow_dml(cursor, "FLOW_WORK_INSERT", "FLOW_WORK_INSERT", insert_params)
+            execute_flow_dml(cursor, "FLOW_WORK_ID_LATEST", "FLOW_WORK_ID_LATEST", {
                 "menuCode": menu_code,
                 "projectId": project_id,
                 "scenarioId": scenario_id,
@@ -192,11 +199,16 @@ def delete_flow(conn, menu_code: str, flow_id: int, project_id: int, scenario_id
 
 
 def replace_flow_graph(cursor, flow_id: int, nodes: List[Dict[str, Any]], edges: List[Dict[str, Any]]):
-    cursor.execute(SqlLoader.get_sql("FLOW_WORK_EDGE_DELETE_BY_FLOW"), {"flowId": flow_id})
-    cursor.execute(SqlLoader.get_sql("FLOW_WORK_NODE_DELETE_BY_FLOW"), {"flowId": flow_id})
+    execute_flow_dml(cursor, "FLOW_WORK_EDGE_DELETE_BY_FLOW", "FLOW_WORK_EDGE_DELETE_BY_FLOW", {"flowId": flow_id})
+
+    execute_flow_dml(cursor, "FLOW_WORK_NODE_KEY_LIST", "FLOW_WORK_NODE_KEY_LIST", {"flowId": flow_id})
+    existing_node_keys = {str(row[0]) for row in cursor.fetchall()}
+    next_node_keys = {str(node["nodeKey"]) for node in nodes}
 
     for index, node in enumerate(nodes, start=1):
-        cursor.execute(SqlLoader.get_sql("FLOW_WORK_NODE_INSERT"), {
+        sql_id = "FLOW_WORK_NODE_UPDATE_BY_KEY" if str(node["nodeKey"]) in existing_node_keys else "FLOW_WORK_NODE_INSERT"
+        step = f"{sql_id}[{index}]"
+        execute_flow_dml(cursor, step, sql_id, {
             "flowId": flow_id,
             "nodeKey": node["nodeKey"],
             "nodeType": node["nodeType"],
@@ -218,8 +230,14 @@ def replace_flow_graph(cursor, flow_id: int, nodes: List[Dict[str, Any]], edges:
             "sortOrder": node.get("sortOrder") or index
         })
 
+    for node_key in sorted(existing_node_keys - next_node_keys):
+        execute_flow_dml(cursor, f"FLOW_WORK_NODE_DELETE_BY_KEY[{node_key}]", "FLOW_WORK_NODE_DELETE_BY_KEY", {
+            "flowId": flow_id,
+            "nodeKey": node_key
+        })
+
     for index, edge in enumerate(edges, start=1):
-        cursor.execute(SqlLoader.get_sql("FLOW_WORK_EDGE_INSERT"), {
+        execute_flow_dml(cursor, f"FLOW_WORK_EDGE_INSERT[{index}]", "FLOW_WORK_EDGE_INSERT", {
             "flowId": flow_id,
             "fromNodeKey": edge["fromNodeKey"],
             "fromPort": edge.get("fromPort") or "output",
@@ -230,6 +248,13 @@ def replace_flow_graph(cursor, flow_id: int, nodes: List[Dict[str, Any]], edges:
             "sortOrder": edge.get("sortOrder") or index,
             "paramJson": json.dumps(edge.get("params") or {}, ensure_ascii=False)
         })
+
+
+def execute_flow_dml(cursor, step: str, sql_id: str, params: Dict[str, Any]):
+    try:
+        cursor.execute(SqlLoader.get_sql(sql_id), params)
+    except Exception as e:
+        raise FlowWorkDmlError(step, e) from e
 
 
 def list_runs(conn, menu_code: str, project_id: int, scenario_id: int, flow_id: Optional[int] = None) -> Dict[str, Any]:
@@ -382,7 +407,7 @@ def normalize_graph(nodes: List[FlowNodeRequest], edges: List[FlowEdgeRequest]):
 
 def normalize_node(node: FlowNodeRequest, sort_order: int) -> Dict[str, Any]:
     node_key = normalize_key(node.nodeKey)
-    node_type = normalize_token(node.nodeType, "JOB", 50)
+    node_type = normalize_token(node.nodeType, "JOB", 100)
     node_name = normalize_text(node.nodeName, node_key, 200) or node_key
     return {
         "nodeKey": node_key,

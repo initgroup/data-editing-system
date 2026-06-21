@@ -16,7 +16,7 @@ const PageManager = {
     modules: {}, // Loaded page modules cache.
     containers: {}, // Open page containers.
     lastLoadedVersion: null, // Last loaded asset version.
-    dataWorkTemplatePages: ['M03001', 'M03002', 'M03003'],
+    dataWorkTemplatePages: ['M03001', 'M03002', 'M03003', 'M03004'],
     flowWorkTemplatePages: ['M04001'],
     sessionTimerId: null,
     isSessionExpiredHandling: false,
@@ -1102,7 +1102,7 @@ async function openTargetDbChangeDialog() {
     layer.hidden = false;
     list.innerHTML = '<div class="target-db-change-empty">Loading target DB connections...</div>';
     try {
-        const json = await CommonUtils.request(`${API_BASE_URL}/M99001/connections`, { method: "GET", showLoading: false });
+        const json = await CommonUtils.request(`${API_BASE_URL}/M99001/connections?includeShared=Y`, { method: "GET", showLoading: false });
         const rows = (Array.isArray(json.data) ? json.data : []).filter((row) => String(row.USE_YN || "Y").toUpperCase() === "Y");
         const currentId = sessionStorage.getItem("targetConnectionId") || "";
         if (!rows.length) {
@@ -1114,7 +1114,8 @@ async function openTargetDbChangeDialog() {
             const checked = id === currentId ? " checked" : "";
             const name = row.CONNECTION_NAME || "(Unnamed connection)";
             const endpoint = [row.HOST, row.PORT, row.SERVICE_NAME || row.SID].filter(Boolean).join(" / ");
-            const meta = [row.DB_TYPE || "ORACLE", row.DEFAULT_YN === "Y" ? "Default" : "", endpoint].filter(Boolean).join(" / ");
+            const scope = row.CONNECTION_SCOPE === "SHARED" ? "Shared" : "Private";
+            const meta = [row.DB_TYPE || "ORACLE", scope, row.DEFAULT_YN === "Y" ? "Default" : "", endpoint].filter(Boolean).join(" / ");
             return `
                 <label class="target-db-change-option">
                     <input type="radio" name="targetDbChangeConnectionId" value="${escapeHtml(id)}"${checked}>

@@ -33,6 +33,8 @@ SELECT
     EXEC_OBJECT_TYPE,
     EXEC_OBJECT_NAME,
     EXEC_OBJECT_LABEL,
+    EXEC_PLSQL,
+    PARAM_JSON,
     USE_YN,
     SORT_ORDER,
     RESULT_CREATE_YN,
@@ -233,6 +235,12 @@ DELETE FROM INIT$_TB_FLOW_WORK_NODE
  WHERE FLOW_ID = :flowId
 ;
 
+-- [FLOW_WORK_NODE_KEY_LIST]
+SELECT NODE_KEY
+  FROM INIT$_TB_FLOW_WORK_NODE
+ WHERE FLOW_ID = :flowId
+;
+
 -- [FLOW_WORK_NODE_INSERT]
 INSERT INTO INIT$_TB_FLOW_WORK_NODE (
     FLOW_ID,
@@ -277,6 +285,36 @@ INSERT INTO INIT$_TB_FLOW_WORK_NODE (
     :sortOrder,
     SYSTIMESTAMP
 )
+;
+
+-- [FLOW_WORK_NODE_UPDATE_BY_KEY]
+UPDATE INIT$_TB_FLOW_WORK_NODE
+   SET NODE_TYPE = :nodeType,
+       NODE_NAME = :nodeName,
+       NODE_DESC = :nodeDesc,
+       REF_MENU_CODE = :refMenuCode,
+       REF_WORK_JOB_ID = :refWorkJobId,
+       REF_OBJECT_ID = :refObjectId,
+       OWNER_NAME = :ownerName,
+       TABLE_NAME = :tableName,
+       POSITION_LEFT = :positionLeft,
+       POSITION_TOP = :positionTop,
+       NODE_WIDTH = :nodeWidth,
+       NODE_HEIGHT = :nodeHeight,
+       INPUT_JSON = :inputJson,
+       OUTPUT_JSON = :outputJson,
+       PARAM_JSON = :paramJson,
+       EXEC_PLSQL = :execPlsql,
+       SORT_ORDER = :sortOrder,
+       UPDATED_AT = SYSTIMESTAMP
+ WHERE FLOW_ID = :flowId
+   AND NODE_KEY = :nodeKey
+;
+
+-- [FLOW_WORK_NODE_DELETE_BY_KEY]
+DELETE FROM INIT$_TB_FLOW_WORK_NODE
+ WHERE FLOW_ID = :flowId
+   AND NODE_KEY = :nodeKey
 ;
 
 -- [FLOW_WORK_EDGE_LIST]

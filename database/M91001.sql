@@ -11,6 +11,7 @@ SELECT
     USERNAME,
     WALLET_PATH,
     DEFAULT_YN,
+    SHARED_YN,
     USE_YN,
     SORT_ORDER,
     LAST_TEST_STATUS,
@@ -30,6 +31,50 @@ SELECT
  ORDER BY DEFAULT_YN DESC, SORT_ORDER NULLS LAST, CONNECTION_NAME, CONNECTION_ID
 ;
 
+-- [M91001_AVAILABLE_CONNECTION_LIST]
+SELECT
+    C.CONNECTION_ID,
+    C.USER_ID,
+    C.CONNECTION_NAME,
+    C.DB_TYPE,
+    C.HOST,
+    C.PORT,
+    C.SERVICE_NAME,
+    C.SID,
+    C.USERNAME,
+    C.WALLET_PATH,
+    C.DEFAULT_YN,
+    C.SHARED_YN,
+    C.USE_YN,
+    C.SORT_ORDER,
+    C.LAST_TEST_STATUS,
+    C.LAST_TEST_MESSAGE,
+    C.LAST_TEST_AT,
+    C.CREATED_AT,
+    C.UPDATED_AT,
+    CASE WHEN C.USER_ID = :userId THEN 'PRIVATE' ELSE 'SHARED' END AS CONNECTION_SCOPE
+  FROM "INIT$_TB_DB_CONNECTION" C
+  JOIN "INIT$_TB_USER" U
+    ON U.USER_ID = C.USER_ID
+ WHERE C.USE_YN = 'Y'
+   AND (
+          C.USER_ID = :userId
+       OR (U.ROLE_CODE = 'ADMIN' AND C.SHARED_YN = 'Y')
+       )
+   AND (
+          :keyword IS NULL
+       OR TRIM(:keyword) IS NULL
+       OR UPPER(C.CONNECTION_NAME) LIKE '%' || UPPER(TRIM(:keyword)) || '%'
+       OR UPPER(NVL(C.HOST, '')) LIKE '%' || UPPER(TRIM(:keyword)) || '%'
+       OR UPPER(NVL(C.USERNAME, '')) LIKE '%' || UPPER(TRIM(:keyword)) || '%'
+       )
+ ORDER BY C.DEFAULT_YN DESC,
+          CASE WHEN C.USER_ID = :userId THEN 0 ELSE 1 END,
+          C.SORT_ORDER NULLS LAST,
+          C.CONNECTION_NAME,
+          C.CONNECTION_ID
+;
+
 -- [M91001_CONNECTION_DETAIL]
 SELECT
     CONNECTION_ID,
@@ -46,6 +91,7 @@ SELECT
     WALLET_PASSWORD_ENC,
     CONNECT_OPTIONS,
     DEFAULT_YN,
+    SHARED_YN,
     USE_YN,
     SORT_ORDER,
     LAST_TEST_STATUS,
@@ -73,6 +119,7 @@ INSERT INTO "INIT$_TB_DB_CONNECTION" (
     WALLET_PASSWORD_ENC,
     CONNECT_OPTIONS,
     DEFAULT_YN,
+    SHARED_YN,
     USE_YN,
     SORT_ORDER,
     CREATED_AT
@@ -90,6 +137,7 @@ INSERT INTO "INIT$_TB_DB_CONNECTION" (
     :walletPasswordEnc,
     :connectOptions,
     :defaultYn,
+    :sharedYn,
     :useYn,
     :sortOrder,
     SYSTIMESTAMP
@@ -110,6 +158,7 @@ UPDATE "INIT$_TB_DB_CONNECTION"
        WALLET_PASSWORD_ENC = :walletPasswordEnc,
        CONNECT_OPTIONS = :connectOptions,
        DEFAULT_YN = :defaultYn,
+       SHARED_YN = :sharedYn,
        USE_YN = :useYn,
        SORT_ORDER = :sortOrder,
        UPDATED_AT = SYSTIMESTAMP

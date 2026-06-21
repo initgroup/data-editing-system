@@ -19,6 +19,7 @@
         dsnAlias: "",
         connectOptions: "",
         defaultYn: "N",
+        sharedYn: "Y",
         useYn: "Y",
         sortOrder: 0
     });
@@ -208,6 +209,7 @@
             const name = row.CONNECTION_NAME || "";
             const endpoint = `${row.HOST || ""}:${row.PORT || ""}/${row.SERVICE_NAME || row.SID || ""}`;
             const status = row.LAST_TEST_STATUS || (row.DEFAULT_YN === "Y" ? "DEFAULT" : row.USE_YN || "Y");
+            const shareStatus = row.SHARED_YN === "Y" ? "SHARED" : "PRIVATE";
             return `
                 <button type="button" class="project-row ${selectedClass}" onclick="M99001.selectConnection('${this.escapeAttr(id)}')">
                     <span class="project-row-main">
@@ -216,7 +218,7 @@
                     </span>
                     <span class="project-row-meta">
                         <span>${this.escapeHtml(row.DB_TYPE || "ORACLE")}</span>
-                        <span>${this.escapeHtml(status)}</span>
+                        <span>${this.escapeHtml(`${status} / ${shareStatus}`)}</span>
                     </span>
                 </button>
             `;
@@ -243,6 +245,7 @@
                     ...this.parseConnectOptions(data.connectOptions || "", data.serviceName || "", data.walletPath || ""),
                     connectOptions: data.connectOptions || "",
                     defaultYn: data.defaultYn || "N",
+                    sharedYn: data.sharedYn || "Y",
                     useYn: data.useYn || "Y",
                     sortOrder: data.sortOrder ?? 0
                 };
@@ -284,6 +287,7 @@
                 walletPassword: getContainerEl("#walletPassword-M99001")?.value || "",
                 connectOptions: this.buildConnectOptions(),
                 defaultYn: getContainerEl("#defaultYn-M99001")?.value || "N",
+                sharedYn: getContainerEl("#sharedYn-M99001")?.value || "Y",
                 useYn: getContainerEl("#useYn-M99001")?.value || "Y",
                 sortOrder: getContainerEl("#sortOrder-M99001")?.value || 0
             };
@@ -310,6 +314,7 @@
             this.setValue("#dsnAlias-M99001", item.dsnAlias || "");
             this.setValue("#connectOptions-M99001", item.connectOptions || "");
             this.setValue("#defaultYn-M99001", item.defaultYn || "N");
+            this.setValue("#sharedYn-M99001", item.sharedYn || "Y");
             this.setValue("#useYn-M99001", item.useYn || "Y");
             this.setValue("#sortOrder-M99001", item.sortOrder ?? 0);
             this.applyConnectionMethod();
@@ -937,4 +942,3 @@
 
     window[PAGE_CODE] = M99001;
 })();
-

@@ -77,6 +77,9 @@
                         <button type="button" id="flowVersionRefresh-__PAGE_CODE__" class="table-icon-btn" title="Refresh saved flows" data-title-key="refreshSavedFlowsTitle" onclick="__PAGE_CODE__.refreshSavedFlows()">
                             <i class="fas fa-sync-alt"></i>
                         </button>
+                        <button type="button" id="flowVersionCopy-__PAGE_CODE__" class="table-icon-btn" title="Copy selected saved flow" data-title-key="copySavedFlowTitle" onclick="__PAGE_CODE__.copySelectedSavedFlow()">
+                            <i class="far fa-copy"></i>
+                        </button>
                     </div>
                     <select id="flowVersion-__PAGE_CODE__" class="flow-version-hidden-select" onchange="__PAGE_CODE__.loadFlowVersion(this.value)" aria-hidden="true" tabindex="-1">
                         <option value="">Draft</option>
@@ -117,7 +120,7 @@
                         <p class="table-desc" id="flowDescription-__PAGE_CODE__" data-label-key="flowDescription">Design a reusable graph that connects data editing jobs, tables, values, and arrays.</p>
                     </div>
                     <div class="table-export-actions">
-                        <button type="button" class="table-btn" onclick="__PAGE_CODE__.saveFlow()">
+                        <button type="button" id="saveFlowButton-__PAGE_CODE__" class="table-btn" onclick="__PAGE_CODE__.saveFlow()">
                             <i class="fas fa-save"></i>
                             <span data-label-key="saveFlow">Save flow</span>
                         </button>
@@ -177,6 +180,9 @@
                             <button type="button" class="table-icon-btn" title="Remove selected node" data-title-key="removeNode" onclick="__PAGE_CODE__.removeSelectedNode()">
                                 <i class="far fa-trash-alt"></i>
                             </button>
+                            <button type="button" class="table-icon-btn" title="Clear flow canvas" data-title-key="clearFlowCanvasTitle" onclick="__PAGE_CODE__.clearFlowCanvas()">
+                                <i class="fas fa-eraser"></i>
+                            </button>
                             <button type="button" class="table-icon-btn" title="Zoom in" data-title-key="zoomInTitle" onclick="__PAGE_CODE__.zoomFlow(1)">
                                 <i class="fas fa-magnifying-glass-plus"></i>
                             </button>
@@ -215,7 +221,7 @@
                                         </defs>
                                     </svg>
 
-                                <article id="flowNodeSource-__PAGE_CODE__" class="data-param-card flow-node flow-node-source" data-node-id="source-customer" data-node-type="TABLE_INPUT" style="position: absolute; left: 24px; top: 56px; width: 170px;">
+                                <article id="flowNodeSource-__PAGE_CODE__" class="data-param-card flow-node flow-node-source" data-node-id="source-customer" data-node-type="TABLE_INPUT" data-sample-node="Y" style="position: absolute; left: 24px; top: 56px; width: 170px;">
                                     <header class="data-param-panel-header">
                                         <strong>Source Table</strong>
                                         <span class="data-job-order"><i class="fas fa-table"></i></span>
@@ -229,7 +235,7 @@
                                     </footer>
                                 </article>
 
-                                <article id="flowNodeProfile-__PAGE_CODE__" class="data-param-card flow-node flow-node-step is-selected" data-node-id="profiling-01" data-node-type="PROFILING" style="position: absolute; left: 300px; top: 58px; width: 170px;">
+                                <article id="flowNodeProfile-__PAGE_CODE__" class="data-param-card flow-node flow-node-step is-selected" data-node-id="profiling-01" data-node-type="M03001" data-sample-node="Y" style="position: absolute; left: 300px; top: 58px; width: 170px;">
                                     <header class="data-param-panel-header">
                                         <strong>Profiling</strong>
                                         <span class="data-job-order">01</span>
@@ -244,7 +250,7 @@
                                     </footer>
                                 </article>
 
-                                <article id="flowNodeCorrelation-__PAGE_CODE__" class="data-param-card flow-node flow-node-step" data-node-id="correlation-01" data-node-type="CORRELATION" style="position: absolute; left: 550px; top: 128px; width: 170px;">
+                                <article id="flowNodeCorrelation-__PAGE_CODE__" class="data-param-card flow-node flow-node-step" data-node-id="correlation-01" data-node-type="M03002" data-sample-node="Y" style="position: absolute; left: 550px; top: 128px; width: 170px;">
                                     <header class="data-param-panel-header">
                                         <strong>Correlation</strong>
                                         <span class="data-job-order">02A</span>
@@ -259,7 +265,7 @@
                                     </footer>
                                 </article>
 
-                                <article id="flowNodeRules-__PAGE_CODE__" class="data-param-card flow-node flow-node-step" data-node-id="rule-mining-01" data-node-type="RULE_MINING" style="position: absolute; left: 550px; top: 258px; width: 170px;">
+                                <article id="flowNodeRules-__PAGE_CODE__" class="data-param-card flow-node flow-node-step" data-node-id="rule-mining-01" data-node-type="M03003" data-sample-node="Y" style="position: absolute; left: 550px; top: 258px; width: 170px;">
                                     <header class="data-param-panel-header">
                                         <strong>Rule Mining</strong>
                                         <span class="data-job-order">02B</span>
@@ -275,7 +281,7 @@
                                     </footer>
                                 </article>
 
-                                <article id="flowNodeThreshold-__PAGE_CODE__" class="data-param-card flow-node flow-node-value" data-node-id="threshold-01" data-node-type="VALUE_INPUT" style="position: absolute; left: 300px; top: 378px; width: 170px;">
+                                <article id="flowNodeThreshold-__PAGE_CODE__" class="data-param-card flow-node flow-node-value" data-node-id="threshold-01" data-node-type="VALUE_INPUT" data-sample-node="Y" style="position: absolute; left: 300px; top: 378px; width: 170px;">
                                     <header class="data-param-panel-header">
                                         <strong>Value Input</strong>
                                         <span class="data-job-order"><i class="fas fa-sliders"></i></span>
@@ -289,7 +295,7 @@
                                     </footer>
                                 </article>
 
-                                <article id="flowNodeViolation-__PAGE_CODE__" class="data-param-card flow-node flow-node-step" data-node-id="violation-search-01" data-node-type="VIOLATION_SEARCH" style="position: absolute; left: 790px; top: 214px; width: 170px;">
+                                <article id="flowNodeViolation-__PAGE_CODE__" class="data-param-card flow-node flow-node-step" data-node-id="violation-search-01" data-node-type="VIOLATION_SEARCH" data-sample-node="Y" style="position: absolute; left: 790px; top: 214px; width: 170px;">
                                     <header class="data-param-panel-header">
                                         <strong>Violation Search</strong>
                                         <span class="data-job-order">03</span>
@@ -346,9 +352,10 @@
                                     <label>
                                         <span data-label-key="nodeType">Node Type</span>
                                         <select id="nodeType-__PAGE_CODE__" class="env-field" disabled>
-                                            <option value="PROFILING" selected>M03001 - 데이터 프로파일링</option>
-                                            <option value="CORRELATION">M03002 - 컬럼간 상관 분석</option>
-                                            <option value="RULE_MINING">M03003 - 자동 규칙 발굴</option>
+                                            <option value="M03001" selected>데이터 프로파일링</option>
+                                            <option value="M03002">컬럼간 상관 분석</option>
+                                            <option value="M03003">자동 규칙 발굴</option>
+                                            <option value="M03004">규칙 위반 탐지</option>
                                         </select>
                                     </label>
                                     <label>
@@ -363,12 +370,29 @@
                                         <span data-label-key="tableName">Table</span>
                                         <input id="nodeTableName-__PAGE_CODE__" class="env-field" type="text" placeholder="TABLE_NAME" readonly>
                                     </label>
+                                    <label id="nodeResultOwnerWrap-__PAGE_CODE__" style="display: none;">
+                                        <span>Result Owner</span>
+                                        <input id="nodeResultOwner-__PAGE_CODE__" class="env-field" type="text" placeholder="RESULT_OWNER" readonly>
+                                    </label>
+                                    <label id="nodeResultTableWrap-__PAGE_CODE__" style="display: none;">
+                                        <span>Result Table</span>
+                                        <input id="nodeResultTableName-__PAGE_CODE__" class="env-field" type="text" placeholder="RESULT_TABLE_NAME" readonly>
+                                    </label>
                                     <label>
                                         <span data-label-key="dependsOn">Depends On</span>
                                         <input id="nodeDependsOn-__PAGE_CODE__" class="env-field" type="text" value="source-customer" readonly>
                                     </label>
                                 </div>
                             </div>
+
+                            <section class="data-param-panel flow-bind-card" aria-label="Runtime bind variables">
+                                <header class="data-param-panel-header">
+                                    <strong data-label-key="runtimeBindVariables">Runtime Bind Variables</strong>
+                                </header>
+                                <div id="nodeBindGrid-__PAGE_CODE__" class="data-bind-grid flow-node-bind-grid">
+                                    <div class="table-empty">No runtime bind variables.</div>
+                                </div>
+                            </section>
 
                             <section class="data-param-panel" aria-label="Selected node generated PL/SQL">
                                 <header class="data-param-panel-header data-script-header">
@@ -380,15 +404,6 @@
         p_profile_table =&gt; :profileTable
     );
 END;</textarea>
-                            </section>
-
-                            <section class="data-param-panel flow-bind-card" aria-label="Runtime bind variables">
-                                <header class="data-param-panel-header">
-                                    <strong data-label-key="runtimeBindVariables">Runtime Bind Variables</strong>
-                                </header>
-                                <div id="nodeBindGrid-__PAGE_CODE__" class="data-bind-grid flow-node-bind-grid">
-                                    <div class="table-empty">No runtime bind variables.</div>
-                                </div>
                             </section>
                         </section>
                     </div>

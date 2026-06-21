@@ -81,6 +81,13 @@ window.MENU_CONFIG = [
                 label: '자동 규칙 발굴',
                 iconClass: 'fas fa-wand-magic-sparkles text-amber-300',
                 enabled: true
+            },
+            {
+                page: 'M03004',
+                title: '규칙 위반 탐지',
+                label: '규칙 위반 탐지',
+                iconClass: 'fas fa-triangle-exclamation text-amber-300',
+                enabled: true
             }
         ]
     },
@@ -259,6 +266,6 @@ window.MENU_CONFIG = [
 ];
 
 window.PAGE_FILE_CONFIG = {
-    htmlPages: ['home', 'login', 'M01001', 'M01002', 'M02001', 'M02002', 'M03001', 'M03002', 'M03003', 'M04001', 'M90001', 'M91001', 'M91002', 'M99001', 'M99002', 'M99003'],
-    scriptPages: ['home', 'login', 'M01001', 'M01002', 'M02001', 'M02002', 'M03001', 'M03002', 'M03003', 'M04001', 'M90001', 'M91001', 'M91002', 'M99001', 'M99002', 'M99003']
+    htmlPages: ['home', 'login', 'M01001', 'M01002', 'M02001', 'M02002', 'M03001', 'M03002', 'M03003', 'M03004', 'M04001', 'M90001', 'M91001', 'M91002', 'M99001', 'M99002', 'M99003'],
+    scriptPages: ['home', 'login', 'M01001', 'M01002', 'M02001', 'M02002', 'M03001', 'M03002', 'M03003', 'M03004', 'M04001', 'M90001', 'M91001', 'M91002', 'M99001', 'M99002', 'M99003']
 };

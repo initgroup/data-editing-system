@@ -5,6 +5,8 @@ Factory for reusable flow-work routers.
 from fastapi import APIRouter, HTTPException, Request
 from typing import Dict, Optional
 import logging
+import threading
+import time
 
 from backend.database_helper import execute_query
 from backend.target_database import get_target_db_connection
@@ -18,6 +20,14 @@ logger = logging.getLogger(__name__)
 def is_missing_flow_table_error(error: Exception) -> bool:
     text = str(error)
     return "ORA-00942" in text or "INIT$_TB_FLOW_WORK" in text and "does not exist" in text.lower()
+
+
+def is_flow_lock_error(error: Exception) -> bool:
+    return "ORA-12860" in str(error)
+
+
+def get_flow_error_step(error: Exception) -> str:
+    return getattr(error, "step", "") or "UNKNOWN_STEP"
 
 
 def create_flow_work_router(
@@ -39,6 +49,33 @@ def create_flow_work_router(
         "run_queued": "Flow queued for DAG execution.",
         **(messages or {})
     }
+    save_locks: Dict[str, threading.Lock] = {}
+    save_locks_guard = threading.Lock()
+    save_lock_wait_seconds = 10
+
+    def get_save_lock(req: FlowWorkRequest) -> threading.Lock:
+        flow_key = f"FLOW:{req.flowId}" if req.flowId else "NEW"
+        key = "|".join([
+            MENU_CODE,
+            str(req.projectId or ""),
+            str(req.scenarioId or ""),
+            flow_key
+        ])
+        with save_locks_guard:
+            if key not in save_locks:
+                save_locks[key] = threading.Lock()
+            return save_locks[key]
+
+    def save_flow_with_retry(conn, req: FlowWorkRequest) -> int:
+        for attempt in range(2):
+            try:
+                return flow_work.save_flow(conn, MENU_CODE, req, DEFAULT_FLOW_GROUP, DEFAULT_FLOW_TYPE)
+            except Exception as e:
+                if attempt == 0 and is_flow_lock_error(e):
+                    conn.rollback()
+                    time.sleep(0.5)
+                    continue
+                raise
 
     @router.get("/scenario-tables")
     def get_scenario_tables(request: Request, projectId: int, scenarioId: int):
@@ -64,17 +101,23 @@ def create_flow_work_router(
                 "scenarioId": scenarioId,
                 "menuCode": menuCode
             })
+            for row in result.get("data") or []:
+                row["PARAM_JSON"] = data_work.read_lob(row.get("PARAM_JSON"))
+                row["EXEC_PLSQL"] = data_work.read_lob(row.get("EXEC_PLSQL"))
             return data_work.require_success(result, "Flow job asset query failed.")
         finally:
             if conn:
                 conn.close()
 
     @router.get("/node-types")
-    def get_node_types(request: Request):
+    def get_node_types(request: Request, projectId: Optional[int] = None, scenarioId: Optional[int] = None):
         conn = None
         try:
             conn = get_target_db_connection(request)
-            result = execute_query(conn, f"{SQL_PREFIX}_FLOW_NODE_TYPE_LIST")
+            result = execute_query(conn, f"{SQL_PREFIX}_FLOW_NODE_TYPE_LIST", {
+                "projectId": projectId,
+                "scenarioId": scenarioId
+            })
             return data_work.require_success(result, "Flow node type query failed.")
         finally:
             if conn:
@@ -136,10 +179,18 @@ def create_flow_work_router(
     @router.post("/flow/save")
     def save_flow(req: FlowWorkRequest, request: Request):
         conn = None
+        save_lock = get_save_lock(req)
+        if not save_lock.acquire(timeout=save_lock_wait_seconds):
+            raise HTTPException(
+                status_code=409,
+                detail="This flow is still being saved. Please wait a moment and try again.\n이 Flow 저장이 아직 진행 중입니다. 잠시 후 다시 저장해 주세요."
+            )
         try:
             conn = get_target_db_connection(request)
-            flow_id = flow_work.save_flow(conn, MENU_CODE, req, DEFAULT_FLOW_GROUP, DEFAULT_FLOW_TYPE)
+            flow_id = save_flow_with_retry(conn, req)
             conn.commit()
+            save_lock.release()
+            save_lock = None
             flow = flow_work.load_flow(conn, MENU_CODE, flow_id)
             flows = flow_work.list_flows(conn, MENU_CODE, flow["PROJECT_ID"], flow["SCENARIO_ID"]).get("data", [])
             return {
@@ -160,11 +211,23 @@ def create_flow_work_router(
                     status_code=500,
                     detail="Flow storage tables are not installed in the target DB. Run database/INIT_TARGET_DDL.sql first."
                 )
+            if is_flow_lock_error(e):
+                step = get_flow_error_step(e)
+                logger.warning(f"{MENU_CODE} flow save lock conflict at {step}: {str(e)}")
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        f"Flow save hit a database row lock at {step}. This is a DB transaction/lock conflict, not invalid flow data. Please wait a moment and save again.\n"
+                        f"{step} 단계에서 DB row lock 충돌이 발생했습니다. Flow 데이터 값 오류가 아니라 DB 트랜잭션/락 충돌입니다. 잠시 후 다시 저장해 주세요."
+                    )
+                )
             logger.error(f"{MENU_CODE} flow save failed: {str(e)}")
             raise HTTPException(status_code=500, detail=str(e))
         finally:
             if conn:
                 conn.close()
+            if save_lock:
+                save_lock.release()
 
     @router.delete("/flow/{flow_id}")
     def delete_flow(flow_id: int, request: Request, projectId: int, scenarioId: int):
@@ -213,9 +276,15 @@ def create_flow_work_router(
     @router.post("/flow/run")
     def run_flow(req: FlowRunRequest, request: Request):
         conn = None
+        save_lock = get_save_lock(req)
+        if not save_lock.acquire(timeout=save_lock_wait_seconds):
+            raise HTTPException(
+                status_code=409,
+                detail="This flow is still being saved or queued. Please wait a moment and try again.\n이 Flow 저장 또는 실행 대기열 등록이 아직 진행 중입니다. 잠시 후 다시 시도해 주세요."
+            )
         try:
             conn = get_target_db_connection(request)
-            flow_id = flow_work.save_flow(conn, MENU_CODE, req, DEFAULT_FLOW_GROUP, DEFAULT_FLOW_TYPE)
+            flow_id = save_flow_with_retry(conn, req)
 
             nodes, edges = flow_work.normalize_graph(req.nodes, req.edges)
             validation = flow_work.validate_graph(nodes, edges)
@@ -228,6 +297,8 @@ def create_flow_work_router(
             run_id = flow_work.create_run(conn, flow_id, run_type, run_status, message, validation)
             flow_work.create_node_run_records(conn, run_id, flow_id, validation.get("plan", []))
             conn.commit()
+            save_lock.release()
+            save_lock = None
             return {
                 "status": "success",
                 "message": message,
@@ -251,11 +322,23 @@ def create_flow_work_router(
                     status_code=500,
                     detail="Flow storage tables are not installed in the target DB. Run database/INIT_TARGET_DDL.sql first."
                 )
+            if is_flow_lock_error(e):
+                step = get_flow_error_step(e)
+                logger.warning(f"{MENU_CODE} flow run lock conflict at {step}: {str(e)}")
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        f"Flow run hit a database row lock at {step}. This is a DB transaction/lock conflict, not invalid flow data. Please wait a moment and run again.\n"
+                        f"{step} 단계에서 DB row lock 충돌이 발생했습니다. Flow 데이터 값 오류가 아니라 DB 트랜잭션/락 충돌입니다. 잠시 후 다시 실행해 주세요."
+                    )
+                )
             logger.error(f"{MENU_CODE} flow run failed: {str(e)}")
             raise HTTPException(status_code=500, detail=str(e))
         finally:
             if conn:
                 conn.close()
+            if save_lock:
+                save_lock.release()
 
     @router.get("/runs")
     def get_runs(request: Request, projectId: int, scenarioId: int, flowId: Optional[int] = None):

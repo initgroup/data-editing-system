@@ -745,7 +745,7 @@ def ensure_connection_owner(conn, user_id: int, connection_id: int) -> None:
                 ON U.USER_ID = C.USER_ID
              WHERE C.CONNECTION_ID = :connectionId
                AND C.USE_YN = 'Y'
-               AND (C.USER_ID = :userId OR U.ROLE_CODE = 'ADMIN')
+               AND (C.USER_ID = :userId OR (U.ROLE_CODE = 'ADMIN' AND C.SHARED_YN = 'Y'))
             """,
             {"userId": user_id, "connectionId": connection_id},
         )
