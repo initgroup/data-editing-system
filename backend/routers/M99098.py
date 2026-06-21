@@ -189,7 +189,7 @@ def truncate_init_system():
         rows = _check_init_tables(conn)
         return {
             "status": "success",
-            "message": "INIT system data reset completed.",
+            "message": "INIT system table data cleared.",
             "logs": logs,
             "data": rows,
             "installedCount": sum(1 for row in rows if row["EXISTS_YN"] == "Y"),

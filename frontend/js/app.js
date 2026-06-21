@@ -510,9 +510,10 @@ const PageManager = {
         const holder = document.getElementById('pageContainerHolder');
         const container = document.createElement('div');
         container.id = containerId;
-        container.className = 'page-section active';
+        container.className = 'page-section';
         holder.appendChild(container);
         this.containers[pageCode] = container;
+        this.show(pageCode);
 
         CommonUI.showLoading();
 
@@ -1183,12 +1184,12 @@ function getInitialPageConfig() {
     return { pageCode: DEFAULT_PAGE_CODE, title: DEFAULT_PAGE_TITLE };
 }
 
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
     LayoutManager.init();
     AIChatManager.init();
     ConsoleLogger.init();
     updateCurrentTargetDbSelect();
     PageManager.startSessionTimer();
     const initialPage = getInitialPageConfig();
-    PageManager.load(initialPage.pageCode, initialPage.title);
+    await PageManager.load(initialPage.pageCode, initialPage.title);
 });

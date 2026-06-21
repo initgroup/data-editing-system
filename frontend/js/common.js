@@ -851,6 +851,8 @@ const CommonMessage = {
         "Create missing INIT$_ system tables on the current system database?": "현재 시스템 데이터베이스에 누락된 INIT$_ 시스템 테이블을 생성하시겠습니까?",
         "Reset all INIT system data? Users, target DB connections, settings, and setup logs will be truncated.": "모든 INIT 시스템 데이터를 초기화하시겠습니까? 사용자, 대상 DB 접속, 설정, 설정 로그가 삭제됩니다.",
         "This cannot be undone and may require system setup again. Continue system data reset?": "이 작업은 되돌릴 수 없으며 시스템 설정을 다시 해야 할 수 있습니다. 시스템 데이터 초기화를 계속하시겠습니까?",
+        "Clear all rows from INIT system tables? Users, target DB connections, settings, and setup logs will be truncated. Tables will not be dropped.": "INIT 시스템 테이블의 모든 데이터를 비우시겠습니까? 사용자, 대상 DB 접속 정보, 설정, 설정 로그가 삭제됩니다. 테이블은 DROP되지 않습니다.",
+        "This cannot be undone and may require system setup again. Continue clearing INIT system table data?": "이 작업은 되돌릴 수 없으며 시스템 설정을 다시 해야 할 수 있습니다. INIT 시스템 테이블 데이터 비우기를 계속하시겠습니까?",
         "Approve all pending users in the current result?": "현재 결과의 모든 승인 대기 사용자를 승인하시겠습니까?",
         "Approve selected user(s)?": "선택한 사용자를 승인하시겠습니까?",
         "Select at least one user to reset password.": "비밀번호를 초기화할 사용자를 하나 이상 선택하세요.",

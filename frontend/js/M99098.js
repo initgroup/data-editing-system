@@ -122,23 +122,23 @@
         },
 
         async truncateSystemData() {
-            if (!(await CommonMessage.confirm("Reset all INIT system data? Users, target DB connections, settings, and setup logs will be truncated."))) return;
-            if (!(await CommonMessage.confirm("This cannot be undone and may require system setup again. Continue system data reset?"))) return;
-            this.renderInitLog("Resetting INIT system data...");
+            if (!(await CommonMessage.confirm("Clear all rows from INIT system tables? Users, target DB connections, settings, and setup logs will be truncated. Tables will not be dropped."))) return;
+            if (!(await CommonMessage.confirm("This cannot be undone and may require system setup again. Continue clearing INIT system table data?"))) return;
+            this.renderInitLog("Clearing INIT system table data...");
             this.setSystemMessage("Running INIT_SYSTEM_TRUNC...");
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/init-system/truncate`, { method: "POST" });
                 this.initStatus = Array.isArray(json.data) ? json.data : [];
                 this.currentUserRows = [];
                 this.renderStatus();
-                this.renderInitLog((json.logs || [json.message || "INIT system data reset completed."]).join("\n"));
+                this.renderInitLog((json.logs || [json.message || "INIT system table data cleared."]).join("\n"));
                 this.setSystemMessage(`${json.installedCount || 0}/${json.total || 0} INIT system tables exist.`);
                 if (this.selectedSystemTable?.EXISTS_YN === "Y") {
                     await this.refreshActiveSystemTableView();
                 }
             } catch (error) {
-                this.renderInitLog(error.message || "INIT system data reset failed.", "error");
-                this.setSystemMessage(error.message || "INIT system data reset failed.", "error");
+                this.renderInitLog(error.message || "INIT system table data clear failed.", "error");
+                this.setSystemMessage(error.message || "INIT system table data clear failed.", "error");
             }
         },
 
@@ -435,4 +435,3 @@
 
     window[PAGE_CODE] = M99098;
 })();
-
