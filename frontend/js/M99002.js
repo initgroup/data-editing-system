@@ -1,5 +1,5 @@
 (function() {
-    const PAGE_CODE = "M91003";
+    const PAGE_CODE = "M99002";
     const { getContainerEl } = PageManager.createHelper(PAGE_CODE);
     const COMMON = MCOMMON.createPageHelper(PAGE_CODE);
 
@@ -12,7 +12,7 @@
     };
     const TREE_PAGE_SIZE = 200;
 
-    const M91003 = {
+    const M99002 = {
         ...COMMON,
         isInit: false,
         objectRows: [],
@@ -40,7 +40,7 @@
             this.sqlKeydownBound = this.handleSqlEditorKeydown.bind(this);
             document.addEventListener("mousemove", this.handleResizeMoveBound);
             document.addEventListener("mouseup", this.stopColumnResizeBound);
-            getContainerEl("#sqlEditor-M91003")?.addEventListener("keydown", this.sqlKeydownBound);
+            getContainerEl("#sqlEditor-M99002")?.addEventListener("keydown", this.sqlKeydownBound);
             await this.loadObjectTree();
             this.switchTab("columns");
             this.isInit = true;
@@ -49,7 +49,7 @@
         destroy() {
             if (this.handleResizeMoveBound) document.removeEventListener("mousemove", this.handleResizeMoveBound);
             if (this.stopColumnResizeBound) document.removeEventListener("mouseup", this.stopColumnResizeBound);
-            if (this.sqlKeydownBound) getContainerEl("#sqlEditor-M91003")?.removeEventListener("keydown", this.sqlKeydownBound);
+            if (this.sqlKeydownBound) getContainerEl("#sqlEditor-M99002")?.removeEventListener("keydown", this.sqlKeydownBound);
             this.objectRows = [];
             this.baseObjectRows = [];
             this.visibleObjectRows = [];
@@ -71,7 +71,7 @@
         },
 
         async loadObjectTree() {
-            const container = getContainerEl("#objectTree-M91003");
+            const container = getContainerEl("#objectTree-M99002");
             if (!container) return;
             container.innerHTML = `<div class="table-empty">Loading database objects...</div>`;
             this.objectRows = [];
@@ -96,7 +96,7 @@
         },
 
         renderObjectTree() {
-            const container = getContainerEl("#objectTree-M91003");
+            const container = getContainerEl("#objectTree-M99002");
             if (!container) return;
             this.visibleObjectRows = this.getVisibleObjectRows();
             if (!this.visibleObjectRows.length) {
@@ -123,7 +123,7 @@
             const childCount = Number(row.CHILD_COUNT);
             const count = Number.isFinite(childCount) && childCount > 0 ? `<span class="env-tree-count">${childCount}</span>` : "";
             return `
-                <button type="button" class="env-tree-row ${selectedClass}" data-node-id="${this.escapeHtml(nodeId)}" onclick="M91003.handleTreeRowClick(${index})">
+                <button type="button" class="env-tree-row ${selectedClass}" data-node-id="${this.escapeHtml(nodeId)}" onclick="M99002.handleTreeRowClick(${index})">
                     <span class="env-tree-node level-${Number(row.LEVEL_NO || 1)} ${this.isExpandable(row) ? "is-expandable" : ""}">
                         ${this.getExpandIcon(row)}
                         <i class="${this.getTreeIcon(row.OBJECT_TYPE)}"></i>
@@ -370,7 +370,7 @@
             this.setTabVisible("columns", true);
             this.setTabVisible("data", true);
             this.setTabVisible("script", false);
-            const viewer = getContainerEl("#scriptViewer-M91003");
+            const viewer = getContainerEl("#scriptViewer-M99002");
             if (viewer) viewer.value = "";
             this.switchTab(["columns", "data", "sql"].includes(this.activeTab) ? this.activeTab : "columns");
         },
@@ -388,11 +388,11 @@
         },
 
         updateSelectedMeta() {
-            this.setText("#selectedOwner-M91003", this.selectedObject?.OWNER || "-");
-            this.setText("#selectedObject-M91003", this.selectedObject?.OBJECT_NAME || "-");
-            this.setText("#selectedObjectComment-M91003", this.selectedObject?.OBJECT_COMMENT || "-");
-            this.setText("#selectedType-M91003", this.selectedObject?.OBJECT_TYPE || "-");
-            this.setText("#selectedCreatedAt-M91003", this.selectedObject?.CREATED_AT || "-");
+            this.setText("#selectedOwner-M99002", this.selectedObject?.OWNER || "-");
+            this.setText("#selectedObject-M99002", this.selectedObject?.OBJECT_NAME || "-");
+            this.setText("#selectedObjectComment-M99002", this.selectedObject?.OBJECT_COMMENT || "-");
+            this.setText("#selectedType-M99002", this.selectedObject?.OBJECT_TYPE || "-");
+            this.setText("#selectedCreatedAt-M99002", this.selectedObject?.CREATED_AT || "-");
             const desc = this.selectedObject
                 ? `${this.selectedObject.OWNER}.${this.selectedObject.OBJECT_NAME}`
                 : "Select an object from the schema tree.";
@@ -412,7 +412,7 @@
 
         async loadColumns() {
             if (!this.ensureTableSelected()) return;
-            const grid = getContainerEl("#columnsGrid-M91003");
+            const grid = getContainerEl("#columnsGrid-M99002");
             if (grid) grid.innerHTML = `<div class="table-empty">Loading columns...</div>`;
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/table/columns`, {
@@ -420,30 +420,30 @@
                     showLoading: false,
                     body: this.getTablePayload()
                 });
-                this.renderGrid("#columnsGrid-M91003", json.data || [], "columns", json.columns || []);
+                this.renderGrid("#columnsGrid-M99002", json.data || [], "columns", json.columns || []);
             } catch (error) {
-                this.renderError("#columnsGrid-M91003", error.message);
+                this.renderError("#columnsGrid-M99002", error.message);
             }
         },
 
         async loadTableData() {
             if (!this.ensureTableSelected()) return;
-            const grid = getContainerEl("#dataGrid-M91003");
+            const grid = getContainerEl("#dataGrid-M99002");
             if (grid) grid.innerHTML = `<div class="table-empty">Loading data...</div>`;
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/table/data`, {
                     method: "POST",
                     showLoading: false,
-                    body: { ...this.getTablePayload(), limit: this.getLimit("#dataLimit-M91003") }
+                    body: { ...this.getTablePayload(), limit: this.getLimit("#dataLimit-M99002") }
                 });
-                this.renderGrid("#dataGrid-M91003", json.data || [], "data", json.columns || []);
+                this.renderGrid("#dataGrid-M99002", json.data || [], "data", json.columns || []);
             } catch (error) {
-                this.renderError("#dataGrid-M91003", error.message);
+                this.renderError("#dataGrid-M99002", error.message);
             }
         },
 
         async loadSource() {
-            const viewer = getContainerEl("#scriptViewer-M91003");
+            const viewer = getContainerEl("#scriptViewer-M99002");
             if (!viewer || !this.selectedObject) return;
             viewer.value = "Loading script...";
             try {
@@ -465,26 +465,26 @@
         async executeSql() {
             const executable = this.getExecutableSqlFromEditor();
             if (!executable.sql) {
-                this.renderError("#sqlGrid-M91003", "No SQL statement found at the cursor.");
+                this.renderError("#sqlGrid-M99002", "No SQL statement found at the cursor.");
                 return;
             }
             if (!this.validateSelectSql(executable.sql)) {
-                this.renderError("#sqlGrid-M91003", "Only a single SELECT statement is allowed.");
+                this.renderError("#sqlGrid-M99002", "Only a single SELECT statement is allowed.");
                 this.restoreSqlSelection(executable);
                 return;
             }
             this.restoreSqlSelection(executable);
-            const grid = getContainerEl("#sqlGrid-M91003");
+            const grid = getContainerEl("#sqlGrid-M99002");
             if (grid) grid.innerHTML = `<div class="table-empty">Running SQL...</div>`;
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/sql`, {
                     method: "POST",
                     showLoading: false,
-                    body: { sql: executable.sql, limit: this.getLimit("#sqlLimit-M91003") }
+                    body: { sql: executable.sql, limit: this.getLimit("#sqlLimit-M99002") }
                 });
-                this.renderGrid("#sqlGrid-M91003", json.data || [], "sql", json.columns || []);
+                this.renderGrid("#sqlGrid-M99002", json.data || [], "sql", json.columns || []);
             } catch (error) {
-                this.renderError("#sqlGrid-M91003", error.message);
+                this.renderError("#sqlGrid-M99002", error.message);
             } finally {
                 this.restoreSqlSelection(executable);
             }
@@ -497,7 +497,7 @@
         },
 
         handleObjectSearchInput() {
-            const keyword = (getContainerEl("#objectSearch-M91003")?.value || "").trim();
+            const keyword = (getContainerEl("#objectSearch-M99002")?.value || "").trim();
             if (!keyword && this.searchMode) {
                 this.searchMode = false;
                 this.objectRows = this.baseObjectRows.slice();
@@ -514,14 +514,14 @@
         },
 
         async filterObjectSearch() {
-            const input = getContainerEl("#objectSearch-M91003");
+            const input = getContainerEl("#objectSearch-M99002");
             const keyword = (input?.value || "").trim();
             if (!keyword || this.treeSearchRunning) {
                 if (!keyword) this.handleObjectSearchInput();
                 return;
             }
 
-            const container = getContainerEl("#objectTree-M91003");
+            const container = getContainerEl("#objectTree-M99002");
             this.treeSearchRunning = true;
             if (container) container.innerHTML = `<div class="table-empty">Searching database objects...</div>`;
             try {
@@ -547,7 +547,7 @@
         },
 
         async loadMoreSearchResults(row) {
-            const keyword = (getContainerEl("#objectSearch-M91003")?.value || "").trim();
+            const keyword = (getContainerEl("#objectSearch-M99002")?.value || "").trim();
             if (!keyword) return;
             const scrollTop = this.getTreeScrollTop();
             this.replaceLoadMoreRow(row, { ...row, OBJECT_LABEL: "Loading more..." });
@@ -576,12 +576,12 @@
         },
 
         getTreeScrollTop() {
-            return getContainerEl("#objectTree-M91003")?.querySelector(".env-tree-viewport")?.scrollTop || 0;
+            return getContainerEl("#objectTree-M99002")?.querySelector(".env-tree-viewport")?.scrollTop || 0;
         },
 
         restoreTreeScroll(scrollTop) {
             window.requestAnimationFrame(() => {
-                const viewport = getContainerEl("#objectTree-M91003")?.querySelector(".env-tree-viewport");
+                const viewport = getContainerEl("#objectTree-M99002")?.querySelector(".env-tree-viewport");
                 if (viewport) viewport.scrollTop = scrollTop;
             });
         },
@@ -614,7 +614,7 @@
         },
 
         setDefaultSql() {
-            const editor = getContainerEl("#sqlEditor-M91003");
+            const editor = getContainerEl("#sqlEditor-M99002");
             if (!editor || !this.selectedObject) return;
             const owner = this.quoteName(this.selectedObject.OWNER);
             const objectName = this.quoteName(this.getObjectType(this.selectedObject).startsWith("PACKAGE_")
@@ -658,7 +658,7 @@
                             ${columns.map((column, index) => `
                                 <th class="is-resizable" title="${this.escapeHtml(column)}">
                                     <span class="table-th-content">${this.escapeHtml(column)}</span>
-                                    <span class="column-resizer" onmousedown="M91003.startColumnResize(event, '${gridKey}', ${index})"></span>
+                                    <span class="column-resizer" onmousedown="M99002.startColumnResize(event, '${gridKey}', ${index})"></span>
                                 </th>
                             `).join("")}
                         </tr>
@@ -668,7 +668,7 @@
                             <tr>
                                 <td class="grid-row-no">${rowIndex + 1}</td>
                                 ${columns.map((column, columnIndex) => `
-                                    <td title="${this.escapeHtml(row[column] ?? "")}" onclick="M91003.selectGridCell('${gridKey}', ${rowIndex}, ${columnIndex + 1})">${this.escapeHtml(row[column] ?? "")}</td>
+                                    <td title="${this.escapeHtml(row[column] ?? "")}" onclick="M99002.selectGridCell('${gridKey}', ${rowIndex}, ${columnIndex + 1})">${this.escapeHtml(row[column] ?? "")}</td>
                                 `).join("")}
                             </tr>
                         `).join("")}
@@ -744,7 +744,7 @@
         createExportFileName(gridKey) {
             const objectName = this.selectedObject?.OBJECT_NAME || "SQL_RESULT";
             const stamp = new Date().toISOString().slice(0, 19).replace(/[-:T]/g, "");
-            return `M91003_${objectName}_${gridKey}_${stamp}`;
+            return `M99002_${objectName}_${gridKey}_${stamp}`;
         },
 
         createExcelContent(rows) {
@@ -781,7 +781,7 @@
         },
 
         getExecutableSqlFromEditor() {
-            const editor = getContainerEl("#sqlEditor-M91003");
+            const editor = getContainerEl("#sqlEditor-M99002");
             if (!editor) return { sql: "", selectionStart: 0, selectionEnd: 0 };
             const value = editor.value || "";
             const selectionStart = editor.selectionStart || 0;
@@ -806,7 +806,7 @@
         },
 
         restoreSqlSelection(selection) {
-            const editor = getContainerEl("#sqlEditor-M91003");
+            const editor = getContainerEl("#sqlEditor-M99002");
             if (!editor || !selection) return;
             editor.focus();
             editor.setSelectionRange(selection.selectionStart, selection.selectionEnd);
@@ -824,7 +824,7 @@
 
         ensureTableSelected() {
             if (this.getObjectType(this.selectedObject) === "TABLE") return true;
-            this.renderError("#columnsGrid-M91003", "Select a table first.");
+            this.renderError("#columnsGrid-M99002", "Select a table first.");
             return false;
         },
 
@@ -852,11 +852,11 @@
         },
 
         handleCategoryAllChange(checkbox) {
-            getContainerEl(".env-category-filter")?.querySelectorAll(".object-category-M91003").forEach((item) => {
+            getContainerEl(".env-category-filter")?.querySelectorAll(".object-category-M99002").forEach((item) => {
                 item.checked = false;
             });
             checkbox.checked = true;
-            if (this.searchMode && (getContainerEl("#objectSearch-M91003")?.value || "").trim()) {
+            if (this.searchMode && (getContainerEl("#objectSearch-M99002")?.value || "").trim()) {
                 this.filterObjectSearch();
                 return;
             }
@@ -864,10 +864,10 @@
         },
 
         handleCategoryChange() {
-            const selected = getContainerEl(".env-category-filter")?.querySelectorAll(".object-category-M91003:checked") || [];
-            const all = getContainerEl("#objectCategoryAll-M91003");
+            const selected = getContainerEl(".env-category-filter")?.querySelectorAll(".object-category-M99002:checked") || [];
+            const all = getContainerEl("#objectCategoryAll-M99002");
             if (all) all.checked = selected.length === 0;
-            if (this.searchMode && (getContainerEl("#objectSearch-M91003")?.value || "").trim()) {
+            if (this.searchMode && (getContainerEl("#objectSearch-M99002")?.value || "").trim()) {
                 this.filterObjectSearch();
                 return;
             }
@@ -875,9 +875,9 @@
         },
 
         getSelectedCategories() {
-            const all = getContainerEl("#objectCategoryAll-M91003");
+            const all = getContainerEl("#objectCategoryAll-M99002");
             if (all?.checked) return [];
-            return Array.from(getContainerEl(".env-category-filter")?.querySelectorAll(".object-category-M91003:checked") || [])
+            return Array.from(getContainerEl(".env-category-filter")?.querySelectorAll(".object-category-M99002:checked") || [])
                 .map((item) => item.value);
         },
 
@@ -928,7 +928,7 @@
         },
 
         updateDescription(text) {
-            this.setText("#objectDescription-M91003", text || "");
+            this.setText("#objectDescription-M99002", text || "");
         },
 
         renderError(selector, message) {
@@ -937,5 +937,5 @@
         }
     };
 
-    window[PAGE_CODE] = M91003;
+    window[PAGE_CODE] = M99002;
 })();

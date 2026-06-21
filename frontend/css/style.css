@@ -3006,27 +3006,41 @@ body.panel-resizing-y #pageConsoleHolder {
 
 #sideRBar .sourcesGemini {
     border-top: 1px solid #253149;
-    margin-top: 12px;
-    padding-top: 10px;
+    margin-top: 10px;
+    padding-top: 8px;
 }
 
 #sideRBar .sourcesGemini h2 {
     color: #f8fafc;
     font-size: 13px;
+    margin: 0 0 6px;
+}
+
+#sideRBar .sourcesGemini ul {
+    gap: 6px;
 }
 
 #sideRBar .sourcesGemini li {
+    align-items: center;
     background: #172033;
     border-color: #253149;
     border-radius: 0;
+    gap: 6px;
+    grid-template-columns: 22px minmax(0, 1fr);
+    min-height: 34px;
+    padding: 6px 8px;
 }
 
 #sideRBar .sourcesGemini li i {
     background: #202b42;
     border-radius: 0;
     color: #93a4bd;
+    height: 22px;
+    width: 22px;
 }
 
 #sideRBar .sourcesGemini a {
     color: #93c5fd;
+    font-size: 12px;
+    line-height: 1.35;
 }

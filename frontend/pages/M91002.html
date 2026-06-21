@@ -3,8 +3,8 @@
         <aside class="env-object-panel">
             <header class="env-object-header">
                 <div>
-                    <h2 class="env-section-title">Settings Categories</h2>
-                    <p class="env-section-desc">Select account or setting group.</p>
+                    <h2 class="env-section-title">설정 카테고리</h2>
+                    <p class="env-section-desc">내 시스템 설정 그룹을 선택합니다.</p>
                 </div>
                 <div class="env-object-actions">
                     <button id="createDefaultSettingsBtn-M91002" type="button" class="env-icon-btn" title="Create default settings" onclick="M91002.createDefaultSettings()">
@@ -20,8 +20,8 @@
 
         <section class="env-panel" aria-labelledby="settings-title-M91002">
             <header class="env-header">
-                <h1 class="env-title" id="settings-title-M91002">System Settings</h1>
-                <p class="env-desc" id="settingsDescription-M91002">Manage category key/value settings.</p>
+                <h1 class="env-title" id="settings-title-M91002">내 시스템 설정</h1>
+                <p class="env-desc" id="settingsDescription-M91002">내 개인 시스템 설정을 관리합니다.</p>
             </header>
 
             <section class="scenario-list-panel" aria-label="Settings list" data-setting-panel>
@@ -144,6 +144,34 @@
                         <span>Change password</span>
                     </button>
                     <button type="button" class="env-btn env-cancel" onclick="M91002.clearPasswordForm()">Clear</button>
+                </div>
+
+                <div class="scenario-list-toolbar">
+                    <strong>Gemini API Personal Key</strong>
+                </div>
+                <div class="env-meta-grid scenario-meta-grid">
+                    <label class="env-meta-wide">
+                        <span>Status</span>
+                        <input id="geminiApiKeyStatus-M91002" class="env-field env-meta-field" type="text" readonly value="Not registered">
+                    </label>
+                    <label class="env-meta-wide">
+                        <span>Gemini API Key</span>
+                        <input id="geminiApiKey-M91002" class="env-field env-meta-field" type="password" autocomplete="off" placeholder="Enter a new Gemini API key">
+                    </label>
+                    <label class="env-meta-wide">
+                        <span>Guide</span>
+                        <input class="env-field env-meta-field" type="text" readonly value="This key is used only for your right sidebar Gemini assistant. Saved keys are not displayed again.">
+                    </label>
+                </div>
+                <div class="env-footer-group" style="justify-content: flex-end; margin-top: 12px;">
+                    <button type="button" class="env-btn env-save" onclick="M91002.saveGeminiApiKey()">
+                        <i class="fas fa-robot"></i>
+                        <span>Save Gemini key</span>
+                    </button>
+                    <button type="button" class="env-btn env-danger" onclick="M91002.deleteGeminiApiKey()">
+                        <i class="far fa-trash-alt"></i>
+                        <span>Delete Gemini key</span>
+                    </button>
                 </div>
             </section>
 

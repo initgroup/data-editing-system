@@ -6,18 +6,24 @@
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict
 from typing import Optional
+import base64
 import logging
 import oracledb
+from threading import Lock
 
 from backend.database import get_db_connection
 from backend.database_helper import SqlLoader
 from backend.auth_context import get_request_user_id
 from backend.target_database import get_target_connection_id, get_target_db_connection
-from backend.routers.M91001 import _hash_password, _verify_password
+from backend.routers.M99001 import _hash_password, _verify_password
 
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+GEMINI_SETTING_CATEGORY = "MY_ACCOUNT"
+GEMINI_SETTING_KEY = "GEMINI_API_KEY"
+_gemini_api_key_cache = {}
+_gemini_api_key_cache_lock = Lock()
 
 
 class SettingSaveRequest(BaseModel):
@@ -51,6 +57,11 @@ class EmailChangeRequest(BaseModel):
 
 class UserNameChangeRequest(BaseModel):
     userName: str
+    model_config = ConfigDict(extra="allow")
+
+
+class GeminiApiKeySaveRequest(BaseModel):
+    apiKey: str
     model_config = ConfigDict(extra="allow")
 
 
@@ -349,6 +360,177 @@ def get_my_account(request: Request):
             conn.close()
 
 
+def _encode_secret(value: Optional[str]) -> str:
+    if not value:
+        return ""
+    return "b64:" + base64.b64encode(value.encode("utf-8")).decode("ascii")
+
+
+def _decode_secret(value: Optional[str]) -> str:
+    text = value or ""
+    if text.startswith("b64:"):
+        try:
+            return base64.b64decode(text[4:].encode("ascii")).decode("utf-8")
+        except Exception:
+            return ""
+    return text
+
+
+def get_saved_gemini_api_key(conn, user_id: int, connection_id: int) -> str:
+    cursor = None
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT SETTING_VALUE
+              FROM "INIT$_TB_SYSTEM_SETTING"
+             WHERE USER_ID = :userId
+               AND CONNECTION_ID = :connectionId
+               AND CATEGORY_CODE = :categoryCode
+               AND SETTING_KEY = :settingKey
+               AND USE_YN = 'Y'
+            """,
+            {
+                "userId": user_id,
+                "connectionId": connection_id,
+                "categoryCode": GEMINI_SETTING_CATEGORY,
+                "settingKey": GEMINI_SETTING_KEY,
+            },
+        )
+        row = cursor.fetchone()
+        if not row:
+            return ""
+        value = row[0].read() if hasattr(row[0], "read") else row[0]
+        return _decode_secret(value)
+    finally:
+        if cursor:
+            cursor.close()
+
+
+def get_cached_gemini_api_key(conn, user_id: int, connection_id: int) -> str:
+    key = (int(user_id), int(connection_id))
+    with _gemini_api_key_cache_lock:
+        cached = _gemini_api_key_cache.get(key)
+    if cached is not None:
+        return cached
+
+    api_key = get_saved_gemini_api_key(conn, user_id, connection_id)
+    with _gemini_api_key_cache_lock:
+        _gemini_api_key_cache[key] = api_key
+    return api_key
+
+
+def clear_gemini_api_key_cache(user_id: int, connection_id: Optional[int] = None) -> None:
+    with _gemini_api_key_cache_lock:
+        if connection_id is not None:
+            _gemini_api_key_cache.pop((int(user_id), int(connection_id)), None)
+            return
+        target_user_id = int(user_id)
+        for key in list(_gemini_api_key_cache):
+            if key[0] == target_user_id:
+                _gemini_api_key_cache.pop(key, None)
+
+
+@router.get("/account/gemini-key")
+def get_gemini_api_key_status(request: Request):
+    user_id = get_request_user_id(request)
+    connection_id = get_target_connection_id(request)
+    conn = None
+    try:
+        conn = get_db_connection()
+        ensure_connection_owner(conn, user_id, connection_id)
+        api_key = get_cached_gemini_api_key(conn, user_id, connection_id)
+        return {
+            "status": "success",
+            "data": {
+                "registered": bool(api_key),
+                "maskedKey": mask_secret(api_key),
+            },
+        }
+    finally:
+        if conn:
+            conn.close()
+
+
+@router.post("/account/gemini-key/save")
+def save_gemini_api_key(req: GeminiApiKeySaveRequest, request: Request):
+    user_id = get_request_user_id(request)
+    connection_id = get_target_connection_id(request)
+    api_key = (req.apiKey or "").strip()
+    if not api_key:
+        raise HTTPException(status_code=400, detail="Gemini API key is required.")
+    if len(api_key) > 4000:
+        raise HTTPException(status_code=400, detail="Gemini API key is too long.")
+
+    conn = None
+    cursor = None
+    try:
+        conn = get_db_connection()
+        ensure_connection_owner(conn, user_id, connection_id)
+        cursor = conn.cursor()
+        cursor.execute(SqlLoader.get_sql("M91002_SETTING_MERGE"), {
+            "userId": user_id,
+            "connectionId": connection_id,
+            "categoryCode": GEMINI_SETTING_CATEGORY,
+            "settingKey": GEMINI_SETTING_KEY,
+            "settingValue": _encode_secret(api_key),
+            "settingDesc": "Personal Gemini API key for the right sidebar assistant.",
+            "sortOrder": 900,
+            "useYn": "Y",
+        })
+        conn.commit()
+        clear_gemini_api_key_cache(user_id, connection_id)
+        return {
+            "status": "success",
+            "message": "Gemini API key saved.",
+            "data": {
+                "registered": True,
+                "maskedKey": mask_secret(api_key),
+            },
+        }
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"M91002 Gemini API key save failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+@router.post("/account/gemini-key/delete")
+def delete_gemini_api_key(request: Request):
+    user_id = get_request_user_id(request)
+    connection_id = get_target_connection_id(request)
+    conn = None
+    cursor = None
+    try:
+        conn = get_db_connection()
+        ensure_connection_owner(conn, user_id, connection_id)
+        cursor = conn.cursor()
+        cursor.execute(SqlLoader.get_sql("M91002_SETTING_DELETE"), {
+            "userId": user_id,
+            "connectionId": connection_id,
+            "categoryCode": GEMINI_SETTING_CATEGORY,
+            "settingKey": GEMINI_SETTING_KEY,
+        })
+        conn.commit()
+        clear_gemini_api_key_cache(user_id, connection_id)
+        return {"status": "success", "message": "Gemini API key deleted.", "deletedCount": cursor.rowcount}
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"M91002 Gemini API key delete failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
 @router.post("/account/name/change")
 def change_user_name(req: UserNameChangeRequest, request: Request):
     user_id = get_request_user_id(request)
@@ -558,10 +740,12 @@ def ensure_connection_owner(conn, user_id: int, connection_id: int) -> None:
         cursor.execute(
             """
             SELECT COUNT(*)
-              FROM "INIT$_TB_DB_CONNECTION"
-             WHERE USER_ID = :userId
-               AND CONNECTION_ID = :connectionId
-               AND USE_YN = 'Y'
+              FROM "INIT$_TB_DB_CONNECTION" C
+              JOIN "INIT$_TB_USER" U
+                ON U.USER_ID = C.USER_ID
+             WHERE C.CONNECTION_ID = :connectionId
+               AND C.USE_YN = 'Y'
+               AND (C.USER_ID = :userId OR U.ROLE_CODE = 'ADMIN')
             """,
             {"userId": user_id, "connectionId": connection_id},
         )
@@ -597,6 +781,15 @@ def normalize_db_value(value):
         except UnicodeDecodeError:
             return value.hex()
     return value
+
+
+def mask_secret(value: Optional[str]) -> str:
+    text = str(value or "")
+    if not text:
+        return ""
+    if len(text) <= 8:
+        return "*" * len(text)
+    return f"{text[:4]}...{text[-4:]}"
 
 
 def normalize_category_code(value: Optional[str]) -> str:

@@ -680,7 +680,7 @@ CommonUI.resolveLoadingTarget = function(target) {
     const areaSelector = [
         '[data-loading-scope]',
         '.table-tab-panel.is-active',
-        '.m91001-tab-panel.is-active',
+        '.m99001-tab-panel.is-active',
         '.m91002-main-panel.is-active',
         '[data-account-panel]:not([hidden])',
         '[data-setting-panel]:not([hidden])',
@@ -859,6 +859,7 @@ const CommonMessage = {
         "Reset password for selected user(s)? Temporary passwords will be shown only once.": "선택한 사용자의 비밀번호를 초기화하시겠습니까? 임시 비밀번호는 한 번만 표시됩니다.",
         "Password reset completed.": "비밀번호 초기화가 완료되었습니다.",
         "Deactivate the selected user(s)? USE_YN will be changed to N.": "선택한 사용자를 비활성화하시겠습니까? USE_YN이 N으로 변경됩니다.",
+        "Delete your saved Gemini API key?": "저장된 Gemini API 개인 인증키를 삭제하시겠습니까?",
         "Save this work?": "이 작업을 저장하시겠습니까?",
         "Work saved.": "작업이 저장되었습니다.",
         "Work save failed.": "작업 저장에 실패했습니다.",

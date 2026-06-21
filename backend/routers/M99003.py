@@ -1,5 +1,5 @@
 """
-@file           M99098.py
+@file           M99003.py
 @description    Administrator system management API
 """
 
@@ -14,7 +14,7 @@ import string
 from backend.database import get_db_connection
 from backend.database_helper import SqlLoader
 from backend.auth_context import require_admin_role
-from backend.routers.M91001 import _hash_password
+from backend.routers.M99001 import _hash_password
 
 
 logger = logging.getLogger(__name__)
@@ -130,7 +130,7 @@ def get_system_status():
             "total": len(rows),
         }
     except Exception as e:
-        logger.error(f"M99098 status failed: {str(e)}")
+        logger.error(f"M99003 status failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if conn:
@@ -165,7 +165,7 @@ def run_init_system():
     except Exception as e:
         if conn:
             conn.rollback()
-        logger.error(f"M99098 init system run failed: {str(e)}")
+        logger.error(f"M99003 init system run failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if cursor:
@@ -200,7 +200,7 @@ def truncate_init_system():
     except Exception as e:
         if conn:
             conn.rollback()
-        logger.error(f"M99098 init system truncate failed: {str(e)}")
+        logger.error(f"M99003 init system truncate failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if cursor:
@@ -322,7 +322,7 @@ def approve_users(req: UserApproveRequest):
     except Exception as e:
         if conn:
             conn.rollback()
-        logger.error(f"M99098 user approval failed: {str(e)}")
+        logger.error(f"M99003 user approval failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if cursor:
@@ -393,7 +393,7 @@ def reset_user_passwords(req: UserPasswordResetRequest):
     except Exception as e:
         if conn:
             conn.rollback()
-        logger.error(f"M99098 password reset failed: {str(e)}")
+        logger.error(f"M99003 password reset failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if cursor:
@@ -429,7 +429,7 @@ def deactivate_users(req: UserDeactivateRequest):
     except Exception as e:
         if conn:
             conn.rollback()
-        logger.error(f"M99098 user deactivation failed: {str(e)}")
+        logger.error(f"M99003 user deactivation failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if cursor:

@@ -34,7 +34,7 @@ const MenuRenderer = {
         });
     },
 
-    createPageLink(menu, onPageClick, isRoot = false) {
+    createPageLink(menu, onPageClick, isRoot = false, depth = 0) {
         if (!menu.page || menu.enabled === false) return null;
 
         const link = document.createElement('a');
@@ -44,7 +44,7 @@ const MenuRenderer = {
         link.title = menu.title || menu.label || menu.page;
         link.className = isRoot
             ? 'block p-3 hover:bg-slate-700 flex items-center gap-2'
-            : 'block p-3 pl-10 hover:bg-slate-700 text-sm text-slate-300';
+            : `block p-3 hover:bg-slate-700 text-sm text-slate-300 ${depth > 0 ? 'pl-14' : 'pl-10'}`;
 
         if (menu.active) {
             link.classList.add('menu-active');
@@ -64,7 +64,7 @@ const MenuRenderer = {
         return link;
     },
 
-    createFolder(menu, onPageClick) {
+    createFolder(menu, onPageClick, isNested = false) {
         const children = this.filterByRole(menu.children || []).filter(child => child.enabled !== false);
         if (children.length === 0) return null;
 
@@ -73,7 +73,9 @@ const MenuRenderer = {
 
         const button = document.createElement('button');
         button.type = 'button';
-        button.className = 'w-full flex items-center justify-between p-3 hover:bg-slate-800 transition-colors group';
+        button.className = isNested
+            ? 'w-full flex items-center justify-between p-3 pl-10 hover:bg-slate-800 transition-colors group text-sm text-slate-300'
+            : 'w-full flex items-center justify-between p-3 hover:bg-slate-800 transition-colors group';
         button.title = menu.label || menu.key || '';
 
         const labelWrapper = document.createElement('div');
@@ -110,10 +112,14 @@ const MenuRenderer = {
         });
 
         children.forEach(child => {
-            const link = this.createPageLink(child, onPageClick);
-            if (link) {
-                link.addEventListener('click', () => this.closeCollapsedFlyouts());
-                submenu.appendChild(link);
+            const element = child.type === 'folder'
+                ? this.createFolder(child, onPageClick, true)
+                : this.createPageLink(child, onPageClick, false, isNested ? 1 : 0);
+            if (element) {
+                if (child.type !== 'folder') {
+                    element.addEventListener('click', () => this.closeCollapsedFlyouts());
+                }
+                submenu.appendChild(element);
             }
         });
 
@@ -189,10 +195,14 @@ const MenuRenderer = {
         flyout.style.left = `${Math.max(64, rect.right)}px`;
 
         children.forEach(child => {
-            const link = this.createPageLink(child, onPageClick);
-            if (!link) return;
-            link.addEventListener('click', () => this.closeCollapsedFlyouts());
-            flyout.appendChild(link);
+            const element = child.type === 'folder'
+                ? this.createFolder(child, onPageClick, true)
+                : this.createPageLink(child, onPageClick);
+            if (!element) return;
+            if (child.type !== 'folder') {
+                element.addEventListener('click', () => this.closeCollapsedFlyouts());
+            }
+            flyout.appendChild(element);
         });
 
         folder.classList.add('is-flyout-open');

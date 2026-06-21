@@ -165,7 +165,8 @@
                 const id = String(row.connectionId ?? "");
                 const checked = String(defaultRow?.connectionId ?? "") === id ? " checked" : "";
                 const name = row.connectionName || "(Unnamed connection)";
-                const meta = [row.dbType, row.defaultYn === "Y" ? "Default" : ""].filter(Boolean).join(" / ");
+                const scope = row.connectionScope === "SHARED" ? "공통" : "개인";
+                const meta = [scope, row.dbType, row.defaultYn === "Y" ? "Default" : ""].filter(Boolean).join(" / ");
                 return `
                     <label class="login-target-db-option">
                         <input type="radio" name="loginConnectionId" value="${this.escapeHtml(id)}"${checked}>
@@ -232,7 +233,7 @@
                 }
                 window.updateCurrentTargetDbSelect?.();
                 if (json.setupRequired || !sessionStorage.getItem("targetConnectionId")) {
-                    PageManager.load("M91001", "DB Connection Setup");
+                    PageManager.load("M99001", "DB Connection Setup");
                     return;
                 }
                 PageManager.load("home", "Data Editing System");
@@ -354,7 +355,7 @@
                     this.setValue("#signupPasswordConfirm", "");
                     this.setValue("#signupAdminKey", "");
                     this.closeSignup();
-                    await PageManager.load("M91001", "Initial System Setup", true);
+                    await PageManager.load("M99001", "Initial System Setup", true);
                     return;
                 }
                 const message = json.message || "회원가입 신청이 접수되었습니다. 관리자 승인 후 로그인할 수 있습니다.";

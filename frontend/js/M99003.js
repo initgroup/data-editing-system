@@ -1,9 +1,9 @@
 (function() {
-    const PAGE_CODE = "M99098";
+    const PAGE_CODE = "M99003";
     const { getContainerEl } = PageManager.createHelper(PAGE_CODE);
     const COMMON = MCOMMON.createPageHelper(PAGE_CODE);
 
-    const M99098 = {
+    const M99003 = {
         ...COMMON,
         isInit: false,
         initStatus: [],
@@ -15,7 +15,7 @@
         async init() {
             if (this.isInit) return;
             this.sqlKeydownBound = this.handleSqlEditorKeydown.bind(this);
-            getContainerEl("#systemSqlEditor-M99098")?.addEventListener("keydown", this.sqlKeydownBound);
+            getContainerEl("#systemSqlEditor-M99003")?.addEventListener("keydown", this.sqlKeydownBound);
             await this.loadStatus();
             this.switchBrowserTab("columns");
             this.syncUserApprovalControls();
@@ -24,7 +24,7 @@
 
         destroy() {
             if (this.sqlKeydownBound) {
-                getContainerEl("#systemSqlEditor-M99098")?.removeEventListener("keydown", this.sqlKeydownBound);
+                getContainerEl("#systemSqlEditor-M99003")?.removeEventListener("keydown", this.sqlKeydownBound);
             }
             this.initStatus = [];
             this.selectedSystemTable = null;
@@ -36,7 +36,7 @@
         },
 
         async loadStatus() {
-            const grid = getContainerEl("#initStatusGrid-M99098");
+            const grid = getContainerEl("#initStatusGrid-M99003");
             if (!grid) return;
             grid.innerHTML = `<div class="env-tree-loading project-empty">Checking INIT tables...</div>`;
             try {
@@ -55,10 +55,10 @@
         },
 
         renderStatus() {
-            const grid = getContainerEl("#initStatusGrid-M99098");
+            const grid = getContainerEl("#initStatusGrid-M99003");
             if (!grid) return;
             const missingCount = this.initStatus.filter((row) => row.EXISTS_YN !== "Y").length;
-            const createBtn = getContainerEl("#createInitTablesBtn-M99098");
+            const createBtn = getContainerEl("#createInitTablesBtn-M99003");
             if (createBtn) createBtn.title = missingCount === 0 ? "All INIT system tables already exist" : "Create missing INIT tables";
 
             if (!this.initStatus.length) {
@@ -82,7 +82,7 @@
             const tableName = row.TABLE_NAME || "";
             const selectedClass = this.selectedSystemTable?.TABLE_NAME === tableName ? "is-selected" : "";
             return `
-                <button type="button" class="project-row ${selectedClass}" onclick="M99098.selectSystemTable('${this.escapeAttr(tableName)}')">
+                <button type="button" class="project-row ${selectedClass}" onclick="M99003.selectSystemTable('${this.escapeAttr(tableName)}')">
                     <span class="project-row-main">
                         <span class="project-row-title">${this.escapeHtml(tableName)}</span>
                         <span class="project-row-sub">${row.EXISTS_YN === "Y" ? "Installed" : "Missing"}</span>
@@ -147,15 +147,15 @@
             if (!row) return;
             this.selectedSystemTable = row;
             this.renderStatus();
-            this.setText("#selectedSystemTable-M99098", tableName);
-            this.setText("#selectedSystemTableStatus-M99098", row.EXISTS_YN === "Y" ? "Installed" : "Missing");
+            this.setText("#selectedSystemTable-M99003", tableName);
+            this.setText("#selectedSystemTableStatus-M99003", row.EXISTS_YN === "Y" ? "Installed" : "Missing");
             this.syncUserApprovalControls();
-            const editor = getContainerEl("#systemSqlEditor-M99098");
+            const editor = getContainerEl("#systemSqlEditor-M99003");
             if (editor) editor.value = `SELECT *\n  FROM "${tableName}";`;
             if (row.EXISTS_YN !== "Y") {
-                this.renderError("#systemColumnsGrid-M99098", "Table does not exist.");
-                this.renderError("#systemDataGrid-M99098", "Table does not exist.");
-                this.renderError("#systemSqlGrid-M99098", "Table does not exist.");
+                this.renderError("#systemColumnsGrid-M99003", "Table does not exist.");
+                this.renderError("#systemDataGrid-M99003", "Table does not exist.");
+                this.renderError("#systemSqlGrid-M99003", "Table does not exist.");
                 return;
             }
             await this.refreshActiveSystemTableView();
@@ -163,7 +163,7 @@
 
         switchBrowserTab(tabName) {
             this.activeBrowserTab = tabName;
-            const panel = getContainerEl("#systemBrowserPanel-M99098");
+            const panel = getContainerEl("#systemBrowserPanel-M99003");
             panel?.querySelectorAll(".table-tabs .table-tab").forEach((tab) => {
                 tab.classList.toggle("is-active", tab.dataset.tab === tabName);
             });
@@ -187,7 +187,7 @@
 
         async loadSystemTableColumns() {
             if (!this.ensureSystemTable()) return;
-            const grid = getContainerEl("#systemColumnsGrid-M99098");
+            const grid = getContainerEl("#systemColumnsGrid-M99003");
             if (grid) grid.innerHTML = `<div class="table-empty">Loading columns...</div>`;
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/system-table/columns`, {
@@ -195,15 +195,15 @@
                     showLoading: false,
                     body: { tableName: this.selectedSystemTable.TABLE_NAME }
                 });
-                this.renderGrid("#systemColumnsGrid-M99098", json.data || [], json.columns || []);
+                this.renderGrid("#systemColumnsGrid-M99003", json.data || [], json.columns || []);
             } catch (error) {
-                this.renderError("#systemColumnsGrid-M99098", error.message);
+                this.renderError("#systemColumnsGrid-M99003", error.message);
             }
         },
 
         async loadSystemTableData() {
             if (!this.ensureSystemTable()) return;
-            const grid = getContainerEl("#systemDataGrid-M99098");
+            const grid = getContainerEl("#systemDataGrid-M99003");
             if (grid) grid.innerHTML = `<div class="table-empty">Loading data...</div>`;
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/system-table/data`, {
@@ -211,23 +211,23 @@
                     showLoading: false,
                     body: {
                         tableName: this.selectedSystemTable.TABLE_NAME,
-                        limit: this.getLimit("#systemDataLimit-M99098"),
+                        limit: this.getLimit("#systemDataLimit-M99003"),
                         userStatus: this.getUserStatusFilter()
                     }
                 });
-                this.renderGrid("#systemDataGrid-M99098", json.data || [], json.columns || []);
+                this.renderGrid("#systemDataGrid-M99003", json.data || [], json.columns || []);
             } catch (error) {
-                this.renderError("#systemDataGrid-M99098", error.message);
+                this.renderError("#systemDataGrid-M99003", error.message);
             }
         },
 
         async executeSystemSql() {
-            const sql = (getContainerEl("#systemSqlEditor-M99098")?.value || "").trim();
+            const sql = (getContainerEl("#systemSqlEditor-M99003")?.value || "").trim();
             if (!sql) {
-                this.renderError("#systemSqlGrid-M99098", "SQL is required.");
+                this.renderError("#systemSqlGrid-M99003", "SQL is required.");
                 return;
             }
-            const grid = getContainerEl("#systemSqlGrid-M99098");
+            const grid = getContainerEl("#systemSqlGrid-M99003");
             if (grid) grid.innerHTML = `<div class="table-empty">Running SQL...</div>`;
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/system-table/sql`, {
@@ -235,12 +235,12 @@
                     showLoading: false,
                     body: {
                         sql,
-                        limit: this.getLimit("#systemSqlLimit-M99098")
+                        limit: this.getLimit("#systemSqlLimit-M99003")
                     }
                 });
-                this.renderGrid("#systemSqlGrid-M99098", json.data || [], json.columns || []);
+                this.renderGrid("#systemSqlGrid-M99003", json.data || [], json.columns || []);
             } catch (error) {
-                this.renderError("#systemSqlGrid-M99098", error.message);
+                this.renderError("#systemSqlGrid-M99003", error.message);
             }
         },
 
@@ -335,7 +335,7 @@
             const container = getContainerEl(selector);
             if (!container) return;
             const columns = Array.isArray(columnNames) && columnNames.length ? columnNames : Object.keys(rows?.[0] || {});
-            const isUserDataGrid = selector === "#systemDataGrid-M99098" && this.isUserTableSelected();
+            const isUserDataGrid = selector === "#systemDataGrid-M99003" && this.isUserTableSelected();
             if (isUserDataGrid) this.currentUserRows = Array.isArray(rows) ? rows : [];
             if (!Array.isArray(rows) || rows.length === 0) {
                 if (!columns.length) {
@@ -357,7 +357,7 @@
                             <tr>
                                 ${isUserDataGrid ? `
                                     <td class="grid-row-no">
-                                        <input type="checkbox" class="user-approve-check-M99098" value="${this.escapeAttr(row.USER_ID ?? "")}">
+                                        <input type="checkbox" class="user-approve-check-M99003" value="${this.escapeAttr(row.USER_ID ?? "")}">
                                     </td>
                                 ` : ""}
                                 <td class="grid-row-no">${index + 1}</td>
@@ -375,11 +375,11 @@
         },
 
         getUserStatusFilter() {
-            return getContainerEl("#userStatusFilter-M99098")?.value || "ALL";
+            return getContainerEl("#userStatusFilter-M99003")?.value || "ALL";
         },
 
         getSelectedUserIds() {
-            return Array.from(document.querySelectorAll(".user-approve-check-M99098:checked"))
+            return Array.from(document.querySelectorAll(".user-approve-check-M99003:checked"))
                 .map((checkbox) => Number(checkbox.value))
                 .filter((value) => Number.isFinite(value) && value > 0);
         },
@@ -393,7 +393,7 @@
 
         syncUserApprovalControls() {
             const visible = this.isUserTableSelected();
-            const container = getContainerEl("#systemBrowserPanel-M99098");
+            const container = getContainerEl("#systemBrowserPanel-M99003");
             container?.querySelectorAll("[data-user-approval-control]").forEach((el) => {
                 el.hidden = !visible;
                 el.style.display = visible ? "" : "none";
@@ -402,7 +402,7 @@
 
         ensureSystemTable() {
             if (this.selectedSystemTable?.TABLE_NAME && this.selectedSystemTable.EXISTS_YN === "Y") return true;
-            this.renderError("#systemColumnsGrid-M99098", "Select an installed system table first.");
+            this.renderError("#systemColumnsGrid-M99003", "Select an installed system table first.");
             return false;
         },
 
@@ -412,16 +412,16 @@
         },
 
         renderInitLog(message, type = "info") {
-            const el = getContainerEl("#initRunLog-M99098");
+            const el = getContainerEl("#initRunLog-M99003");
             if (!el) return;
             el.textContent = message || "";
             el.className = type === "error"
-                ? "table-error m91002-init-log"
-                : "sql-editor data-script-editor m91002-init-log";
+                ? "table-error m99003-init-log"
+                : "sql-editor data-script-editor m99003-init-log";
         },
 
         setSystemMessage(message, type = "info") {
-            const el = getContainerEl("#systemMessage-M99098");
+            const el = getContainerEl("#systemMessage-M99003");
             if (!el) return;
             el.textContent = message || "";
             el.className = type === "error" ? "table-error" : "env-detail-hint";
@@ -433,5 +433,5 @@
         }
     };
 
-    window[PAGE_CODE] = M99098;
+    window[PAGE_CODE] = M99003;
 })();

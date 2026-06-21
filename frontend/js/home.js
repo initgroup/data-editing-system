@@ -122,7 +122,7 @@
                 { page: "M02001", title: "Load Files", desc: `${counts.projects ?? 0} projects available`, icon: "fa-file-arrow-up" },
                 { page: "M03001", title: "Profile Data", desc: `${counts.predictedColumns ?? 0} predicted columns`, icon: "fa-chart-column" },
                 { page: "M04001", title: "Design Flow", desc: `${counts.flows ?? 0} saved flows`, icon: "fa-diagram-project" },
-                { page: "M91001", title: "DB Connections", desc: `${this.dashboardData?.system?.connectionCount ?? 0} registered connections`, icon: "fa-plug" }
+                { page: "M99001", title: "DB Connections", desc: `${this.dashboardData?.system?.connectionCount ?? 0} registered connections`, icon: "fa-plug" }
             ];
 
             const container = document.getElementById("homeQuickActions");

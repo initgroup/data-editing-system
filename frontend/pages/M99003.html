@@ -1,5 +1,5 @@
-<div class="page-container env-page project-page" id="container-M99098">
-    <section class="env-workspace" aria-labelledby="system-title-M99098">
+<div class="page-container env-page project-page" id="container-M99003">
+    <section class="env-workspace" aria-labelledby="system-title-M99003">
         <aside class="env-object-panel">
             <header class="env-object-header">
                 <div>
@@ -7,37 +7,37 @@
                     <p class="env-section-desc">Required system tables on the system DB.</p>
                 </div>
                 <div class="env-object-actions">
-                    <button id="truncateInitTablesBtn-M99098" type="button" class="env-icon-btn env-danger" title="Clear INIT system table data" onclick="M99098.truncateSystemData()">
+                    <button id="truncateInitTablesBtn-M99003" type="button" class="env-icon-btn env-danger" title="Clear INIT system table data" onclick="M99003.truncateSystemData()">
                         <i class="fas fa-eraser"></i>
                     </button>
-                    <button type="button" class="env-icon-btn" title="Refresh status" onclick="M99098.loadStatus()">
+                    <button type="button" class="env-icon-btn" title="Refresh status" onclick="M99003.loadStatus()">
                         <i class="fas fa-sync-alt"></i>
                     </button>
                 </div>
             </header>
-            <div id="initStatusGrid-M99098" class="env-tree-grid project-list"></div>
-            <pre id="initRunLog-M99098" class="sql-editor data-script-editor m91002-init-log" aria-live="polite"></pre>
-            <div id="systemMessage-M99098" class="env-detail-hint" aria-live="polite"></div>
+            <div id="initStatusGrid-M99003" class="env-tree-grid project-list"></div>
+            <pre id="initRunLog-M99003" class="sql-editor data-script-editor m99003-init-log" aria-live="polite"></pre>
+            <div id="systemMessage-M99003" class="env-detail-hint" aria-live="polite"></div>
         </aside>
 
-        <section id="systemBrowserPanel-M99098" class="table-panel" aria-labelledby="system-title-M99098">
+        <section id="systemBrowserPanel-M99003" class="table-panel" aria-labelledby="system-title-M99003">
             <header class="table-header">
                 <div>
-                    <h1 class="table-title" id="system-title-M99098">System Management</h1>
-                    <p class="table-desc" id="systemDescription-M99098">Manage INIT system tables and approve users.</p>
+                    <h1 class="table-title" id="system-title-M99003">System Management</h1>
+                    <p class="table-desc" id="systemDescription-M99003">Manage INIT system tables and approve users.</p>
                 </div>
             </header>
 
             <nav class="table-tabs" aria-label="System table browser tabs">
-                <button type="button" class="table-tab is-active" data-tab="columns" onclick="M99098.switchBrowserTab('columns')">
+                <button type="button" class="table-tab is-active" data-tab="columns" onclick="M99003.switchBrowserTab('columns')">
                     <i class="fas fa-list"></i>
                     <span>Columns</span>
                 </button>
-                <button type="button" class="table-tab" data-tab="data" onclick="M99098.switchBrowserTab('data')">
+                <button type="button" class="table-tab" data-tab="data" onclick="M99003.switchBrowserTab('data')">
                     <i class="fas fa-table"></i>
                     <span>Data</span>
                 </button>
-                <button type="button" class="table-tab" data-tab="sql" onclick="M99098.switchBrowserTab('sql')">
+                <button type="button" class="table-tab" data-tab="sql" onclick="M99003.switchBrowserTab('sql')">
                     <i class="fas fa-terminal"></i>
                     <span>SQL</span>
                 </button>
@@ -47,72 +47,72 @@
                 <div class="table-meta-strip">
                     <div>
                         <span>Table</span>
-                        <strong id="selectedSystemTable-M99098">-</strong>
+                        <strong id="selectedSystemTable-M99003">-</strong>
                     </div>
                     <div>
                         <span>Status</span>
-                        <strong id="selectedSystemTableStatus-M99098">-</strong>
+                        <strong id="selectedSystemTableStatus-M99003">-</strong>
                     </div>
                     <div>
                         <span>System DB</span>
                         <strong>.env connection</strong>
                     </div>
                 </div>
-                <div id="systemColumnsGrid-M99098" class="table-result-grid"></div>
+                <div id="systemColumnsGrid-M99003" class="table-result-grid"></div>
             </section>
 
             <section class="table-tab-panel" data-panel="data">
                 <div class="table-toolbar">
-                    <button type="button" class="table-btn" onclick="M99098.loadSystemTableData()">
+                    <button type="button" class="table-btn" onclick="M99003.loadSystemTableData()">
                         <i class="fas fa-play"></i>
                         <span>Query Data</span>
                     </button>
-                    <label id="userStatusFilterWrap-M99098" class="table-limit-control" data-user-approval-control hidden style="display: none;">
+                    <label id="userStatusFilterWrap-M99003" class="table-limit-control" data-user-approval-control hidden style="display: none;">
                         <span>User Status</span>
-                        <select id="userStatusFilter-M99098" onchange="M99098.loadSystemTableData()">
+                        <select id="userStatusFilter-M99003" onchange="M99003.loadSystemTableData()">
                             <option value="ALL">전체</option>
                             <option value="PENDING">신청중</option>
                             <option value="APPROVED">신청완료</option>
                         </select>
                     </label>
-                    <button id="approveSelectedUsersBtn-M99098" type="button" class="table-btn" data-user-approval-control onclick="M99098.approveUsers(false)" hidden style="display: none;">
+                    <button id="approveSelectedUsersBtn-M99003" type="button" class="table-btn" data-user-approval-control onclick="M99003.approveUsers(false)" hidden style="display: none;">
                         <i class="fas fa-user-check"></i>
                         <span>선택 승인</span>
                     </button>
-                    <button id="approveAllUsersBtn-M99098" type="button" class="table-btn" data-user-approval-control onclick="M99098.approveUsers(true)" hidden style="display: none;">
+                    <button id="approveAllUsersBtn-M99003" type="button" class="table-btn" data-user-approval-control onclick="M99003.approveUsers(true)" hidden style="display: none;">
                         <i class="fas fa-users"></i>
                         <span>조회 전체 승인</span>
                     </button>
-                    <button id="resetSelectedPasswordsBtn-M99098" type="button" class="table-btn" data-user-approval-control onclick="M99098.resetSelectedPasswords()" hidden style="display: none;">
+                    <button id="resetSelectedPasswordsBtn-M99003" type="button" class="table-btn" data-user-approval-control onclick="M99003.resetSelectedPasswords()" hidden style="display: none;">
                         <i class="fas fa-key"></i>
                         <span>비밀번호 초기화</span>
                     </button>
-                    <button id="deactivateSelectedUsersBtn-M99098" type="button" class="table-btn" data-user-approval-control onclick="M99098.deactivateSelectedUsers()" hidden style="display: none;">
+                    <button id="deactivateSelectedUsersBtn-M99003" type="button" class="table-btn" data-user-approval-control onclick="M99003.deactivateSelectedUsers()" hidden style="display: none;">
                         <i class="fas fa-user-slash"></i>
                         <span>회원탈퇴</span>
                     </button>
                     <label class="table-limit-control">
                         <span>Rows</span>
-                        <input id="systemDataLimit-M99098" type="number" min="1" max="1000" value="100">
+                        <input id="systemDataLimit-M99003" type="number" min="1" max="1000" value="100">
                     </label>
                 </div>
-                <div id="systemDataGrid-M99098" class="table-result-grid"></div>
+                <div id="systemDataGrid-M99003" class="table-result-grid"></div>
             </section>
 
             <section class="table-tab-panel" data-panel="sql">
                 <div class="sql-workbench">
                     <div class="sql-toolbar">
-                        <button type="button" class="table-btn" onclick="M99098.executeSystemSql()">
+                        <button type="button" class="table-btn" onclick="M99003.executeSystemSql()">
                             <i class="fas fa-play"></i>
                             <span>Run SQL(Ctrl+Enter)</span>
                         </button>
                         <label class="table-limit-control">
                             <span>Rows</span>
-                            <input id="systemSqlLimit-M99098" type="number" min="1" max="1000" value="100">
+                            <input id="systemSqlLimit-M99003" type="number" min="1" max="1000" value="100">
                         </label>
                     </div>
-                    <textarea id="systemSqlEditor-M99098" class="sql-editor table-sql-editor" spellcheck="false" aria-label="System SQL worksheet"></textarea>
-                    <div id="systemSqlGrid-M99098" class="table-result-grid"></div>
+                    <textarea id="systemSqlEditor-M99003" class="sql-editor table-sql-editor" spellcheck="false" aria-label="System SQL worksheet"></textarea>
+                    <div id="systemSqlGrid-M99003" class="table-result-grid"></div>
                 </div>
             </section>
         </section>

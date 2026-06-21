@@ -202,33 +202,52 @@ window.MENU_CONFIG = [
     {
         type: 'folder',
         key: 'system-setting',
-        label: '시스템 설정',
-        iconClass: 'fas fa-gears text-slate-300',
+        label: '내환경 설정',
+        iconClass: 'fas fa-sliders text-slate-300',
         enabled: true,
         children: [
             {
                 page: 'M91001',
-                title: 'DB 접속 정보 설정',
-                label: 'DB 접속 정보 설정',
-                iconClass: 'fas fa-plug text-slate-300',
+                title: '나의 회원정보',
+                label: '나의 회원정보',
+                iconClass: 'fas fa-user text-slate-300',
                 enabled: true
             },
             {
                 page: 'M91002',
-                title: '내 환경 설정',
-                label: '내 환경 설정',
+                title: '내 시스템 설정',
+                label: '내 시스템 설정',
                 iconClass: 'fas fa-sliders text-slate-300',
+                enabled: true
+            }
+        ]
+    },
+    {
+        type: 'folder',
+        key: 'admin-setting',
+        label: '관리자설정',
+        iconClass: 'fas fa-user-shield text-red-300',
+        roles: ['ADMIN'],
+        enabled: true,
+        children: [
+            {
+                page: 'M99001',
+                title: 'DB 접속 정보 설정',
+                label: 'DB 접속 정보 설정',
+                iconClass: 'fas fa-plug text-slate-300',
+                roles: ['ADMIN'],
                 enabled: true
             },
             {
-                page: 'M91003',
+                page: 'M99002',
                 title: '데이터베이스관리',
                 label: '데이터베이스관리',
                 iconClass: 'fas fa-server text-slate-300',
+                roles: ['ADMIN'],
                 enabled: true
             },
             {
-                page: 'M99098',
+                page: 'M99003',
                 title: 'System Management',
                 label: 'System Management',
                 iconClass: 'fas fa-user-shield text-red-300',
@@ -240,6 +259,6 @@ window.MENU_CONFIG = [
 ];
 
 window.PAGE_FILE_CONFIG = {
-    htmlPages: ['home', 'login', 'M01001', 'M01002', 'M02001', 'M02002', 'M03001', 'M03002', 'M03003', 'M04001', 'M90001', 'M91001', 'M91002', 'M91003', 'M99098'],
-    scriptPages: ['home', 'login', 'M01001', 'M01002', 'M02001', 'M02002', 'M03001', 'M03002', 'M03003', 'M04001', 'M90001', 'M91001', 'M91002', 'M91003', 'M99098']
+    htmlPages: ['home', 'login', 'M01001', 'M01002', 'M02001', 'M02002', 'M03001', 'M03002', 'M03003', 'M04001', 'M90001', 'M91001', 'M91002', 'M99001', 'M99002', 'M99003'],
+    scriptPages: ['home', 'login', 'M01001', 'M01002', 'M02001', 'M02002', 'M03001', 'M03002', 'M03003', 'M04001', 'M90001', 'M91001', 'M91002', 'M99001', 'M99002', 'M99003']
 };

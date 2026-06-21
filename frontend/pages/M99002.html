@@ -1,5 +1,5 @@
-<div class="page-container table-page" id="container-M91003">
-    <section class="table-workspace" aria-labelledby="db-browser-title-M91003">
+<div class="page-container table-page" id="container-M99002">
+    <section class="table-workspace" aria-labelledby="db-browser-title-M99002">
         <aside class="table-object-panel">
             <header class="table-object-header">
                 <div>
@@ -7,90 +7,90 @@
                     <p class="table-section-desc">Tables, views, packages, procedures, and functions.</p>
                 </div>
                 <div class="table-object-actions">
-                    <button type="button" class="table-icon-btn" title="Expand all" onclick="M91003.expandAllGroups()">
+                    <button type="button" class="table-icon-btn" title="Expand all" onclick="M99002.expandAllGroups()">
                         <i class="fas fa-folder-open"></i>
                     </button>
-                    <button type="button" class="table-icon-btn" title="Collapse all" onclick="M91003.collapseAllGroups()">
+                    <button type="button" class="table-icon-btn" title="Collapse all" onclick="M99002.collapseAllGroups()">
                         <i class="fas fa-folder"></i>
                     </button>
-                    <button type="button" class="table-icon-btn" title="Refresh objects" onclick="M91003.loadObjectTree()">
+                    <button type="button" class="table-icon-btn" title="Refresh objects" onclick="M99002.loadObjectTree()">
                         <i class="fas fa-sync-alt"></i>
                     </button>
                 </div>
             </header>
             <div class="env-category-filter" aria-label="Object category filter">
                 <label>
-                    <input type="checkbox" id="objectCategoryAll-M91003" checked onchange="M91003.handleCategoryAllChange(this)">
+                    <input type="checkbox" id="objectCategoryAll-M99002" checked onchange="M99002.handleCategoryAllChange(this)">
                     <span>All</span>
                 </label>
                 <label>
-                    <input type="checkbox" class="object-category-M91003" value="TABLE" onchange="M91003.handleCategoryChange()">
+                    <input type="checkbox" class="object-category-M99002" value="TABLE" onchange="M99002.handleCategoryChange()">
                     <span>Tables</span>
                 </label>
                 <label>
-                    <input type="checkbox" class="object-category-M91003" value="VIEW" onchange="M91003.handleCategoryChange()">
+                    <input type="checkbox" class="object-category-M99002" value="VIEW" onchange="M99002.handleCategoryChange()">
                     <span>Views</span>
                 </label>
                 <label>
-                    <input type="checkbox" class="object-category-M91003" value="PACKAGE" onchange="M91003.handleCategoryChange()">
+                    <input type="checkbox" class="object-category-M99002" value="PACKAGE" onchange="M99002.handleCategoryChange()">
                     <span>Packages</span>
                 </label>
                 <label>
-                    <input type="checkbox" class="object-category-M91003" value="PROCEDURE" onchange="M91003.handleCategoryChange()">
+                    <input type="checkbox" class="object-category-M99002" value="PROCEDURE" onchange="M99002.handleCategoryChange()">
                     <span>Procedures</span>
                 </label>
                 <label>
-                    <input type="checkbox" class="object-category-M91003" value="FUNCTION" onchange="M91003.handleCategoryChange()">
+                    <input type="checkbox" class="object-category-M99002" value="FUNCTION" onchange="M99002.handleCategoryChange()">
                     <span>Functions</span>
                 </label>
             </div>
             <div class="table-object-search">
                 <i class="fas fa-search"></i>
                 <input
-                    id="objectSearch-M91003"
+                    id="objectSearch-M99002"
                     type="search"
                     placeholder="Search object"
                     aria-label="Search object"
-                    oninput="M91003.handleObjectSearchInput()"
-                    onkeydown="M91003.handleObjectSearchKey(event)"
+                    oninput="M99002.handleObjectSearchInput()"
+                    onkeydown="M99002.handleObjectSearchKey(event)"
                 >
             </div>
-            <div id="objectTree-M91003" class="env-tree-grid"></div>
+            <div id="objectTree-M99002" class="env-tree-grid"></div>
         </aside>
 
-        <section class="table-panel" aria-labelledby="db-browser-title-M91003">
+        <section class="table-panel" aria-labelledby="db-browser-title-M99002">
             <header class="table-header">
                 <div>
-                    <h1 class="table-title" id="db-browser-title-M91003">Database Browser</h1>
-                    <p class="table-desc" id="objectDescription-M91003">Select an object from the schema tree.</p>
+                    <h1 class="table-title" id="db-browser-title-M99002">Database Browser</h1>
+                    <p class="table-desc" id="objectDescription-M99002">Select an object from the schema tree.</p>
                 </div>
                 <div class="table-export-actions" aria-label="Export current grid">
-                    <button type="button" class="table-icon-btn export-excel" title="Export Excel" onclick="M91003.exportActiveGrid('excel')">
+                    <button type="button" class="table-icon-btn export-excel" title="Export Excel" onclick="M99002.exportActiveGrid('excel')">
                         <i class="fas fa-file-excel"></i>
                     </button>
-                    <button type="button" class="table-icon-btn" title="Export CSV" onclick="M91003.exportActiveGrid('csv')">
+                    <button type="button" class="table-icon-btn" title="Export CSV" onclick="M99002.exportActiveGrid('csv')">
                         <i class="fas fa-file-csv"></i>
                     </button>
-                    <button type="button" class="table-icon-btn" title="Export TSV" onclick="M91003.exportActiveGrid('tsv')">
+                    <button type="button" class="table-icon-btn" title="Export TSV" onclick="M99002.exportActiveGrid('tsv')">
                         <i class="fas fa-file-lines"></i>
                     </button>
                 </div>
             </header>
 
             <nav class="table-tabs" aria-label="Database browser tabs">
-                <button type="button" class="table-tab is-active" data-tab="columns" onclick="M91003.switchTab('columns')">
+                <button type="button" class="table-tab is-active" data-tab="columns" onclick="M99002.switchTab('columns')">
                     <i class="fas fa-list"></i>
                     <span>Columns</span>
                 </button>
-                <button type="button" class="table-tab" data-tab="data" onclick="M91003.switchTab('data')">
+                <button type="button" class="table-tab" data-tab="data" onclick="M99002.switchTab('data')">
                     <i class="fas fa-table"></i>
                     <span>Data</span>
                 </button>
-                <button type="button" class="table-tab" data-tab="script" onclick="M91003.switchTab('script')">
+                <button type="button" class="table-tab" data-tab="script" onclick="M99002.switchTab('script')">
                     <i class="fas fa-file-code"></i>
                     <span>Script</span>
                 </button>
-                <button type="button" class="table-tab" data-tab="sql" onclick="M91003.switchTab('sql')">
+                <button type="button" class="table-tab" data-tab="sql" onclick="M99002.switchTab('sql')">
                     <i class="fas fa-terminal"></i>
                     <span>SQL</span>
                 </button>
@@ -100,57 +100,57 @@
                 <div class="table-meta-strip">
                     <div>
                         <span>Owner</span>
-                        <strong id="selectedOwner-M91003">-</strong>
+                        <strong id="selectedOwner-M99002">-</strong>
                     </div>
                     <div>
                         <span>Object</span>
-                        <strong id="selectedObject-M91003">-</strong>
-                        <small id="selectedObjectComment-M91003" class="table-meta-comment">-</small>
+                        <strong id="selectedObject-M99002">-</strong>
+                        <small id="selectedObjectComment-M99002" class="table-meta-comment">-</small>
                     </div>
                     <div>
                         <span>Type</span>
-                        <strong id="selectedType-M91003">-</strong>
+                        <strong id="selectedType-M99002">-</strong>
                     </div>
                     <div>
                         <span>Created At</span>
-                        <strong id="selectedCreatedAt-M91003">-</strong>
+                        <strong id="selectedCreatedAt-M99002">-</strong>
                     </div>
                 </div>
-                <div id="columnsGrid-M91003" class="table-result-grid"></div>
+                <div id="columnsGrid-M99002" class="table-result-grid"></div>
             </section>
 
             <section class="table-tab-panel" data-panel="data">
                 <div class="table-toolbar">
-                    <button type="button" class="table-btn" onclick="M91003.loadTableData()">
+                    <button type="button" class="table-btn" onclick="M99002.loadTableData()">
                         <i class="fas fa-play"></i>
                         <span>Query Data</span>
                     </button>
                     <label class="table-limit-control">
                         <span>Rows</span>
-                        <input id="dataLimit-M91003" type="number" min="1" max="1000" value="100">
+                        <input id="dataLimit-M99002" type="number" min="1" max="1000" value="100">
                     </label>
                 </div>
-                <div id="dataGrid-M91003" class="table-result-grid"></div>
+                <div id="dataGrid-M99002" class="table-result-grid"></div>
             </section>
 
             <section class="table-tab-panel" data-panel="script">
-                <textarea id="scriptViewer-M91003" class="sql-editor table-sql-editor db-browser-script-viewer" spellcheck="false" readonly aria-label="Object script"></textarea>
+                <textarea id="scriptViewer-M99002" class="sql-editor table-sql-editor db-browser-script-viewer" spellcheck="false" readonly aria-label="Object script"></textarea>
             </section>
 
             <section class="table-tab-panel" data-panel="sql">
                 <div class="sql-workbench">
                     <div class="sql-toolbar">
-                        <button type="button" class="table-btn" onclick="M91003.executeSql()">
+                        <button type="button" class="table-btn" onclick="M99002.executeSql()">
                             <i class="fas fa-play"></i>
                             <span>Run SQL(Ctrl+Enter)</span>
                         </button>
                         <label class="table-limit-control">
                             <span>Rows</span>
-                            <input id="sqlLimit-M91003" type="number" min="1" max="1000" value="100">
+                            <input id="sqlLimit-M99002" type="number" min="1" max="1000" value="100">
                         </label>
                     </div>
-                    <textarea id="sqlEditor-M91003" class="sql-editor table-sql-editor" spellcheck="false" aria-label="SQL worksheet"></textarea>
-                    <div id="sqlGrid-M91003" class="table-result-grid"></div>
+                    <textarea id="sqlEditor-M99002" class="sql-editor table-sql-editor" spellcheck="false" aria-label="SQL worksheet"></textarea>
+                    <div id="sqlGrid-M99002" class="table-result-grid"></div>
                 </div>
             </section>
         </section>

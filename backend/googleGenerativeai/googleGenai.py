@@ -1,12 +1,8 @@
-import os
 import time
 from typing import Any
 
-from dotenv import load_dotenv
 from google import genai
 from google.genai import types
-
-load_dotenv()
 
 # 가장 성능이 좋은 2.5-flash를 1순위로 두고, 혹시 모를 에러나 한도 초과 시 2.0으로 우회하도록 배치
 GEMINI_MODELS = (
@@ -19,10 +15,13 @@ MAX_RETRIES_PER_MODEL = 3
 RETRY_DELAY_SECONDS = 2
 
 
-def _get_client() -> genai.Client:
-    api_key = os.getenv("GEMINI_API_KEY")
+def _get_client(api_key: str) -> genai.Client:
+    api_key = (api_key or "").strip()
     if not api_key:
-        raise ValueError("GEMINI_API_KEY 환경변수가 설정되어 있지 않습니다.")
+        raise ValueError("M91002 나의 회원정보에서 Gemini API 개인 인증키를 등록해 주세요.")
+
+    # 이전 방식: 서버 .env의 공용 GEMINI_API_KEY 사용
+    # api_key = os.getenv("GEMINI_API_KEY")
 
     return genai.Client(api_key=api_key)
 
@@ -64,7 +63,7 @@ def _extract_sources(response: Any) -> list[dict[str, str]]:
     return sources
 
 
-def web_search_ai_assistant(user_query: str) -> dict[str, Any]:
+def web_search_ai_assistant(user_query: str, api_key: str) -> dict[str, Any]:
     if not user_query or not user_query.strip():
         raise ValueError("질문을 입력해 주세요.")
 
@@ -79,7 +78,7 @@ def web_search_ai_assistant(user_query: str) -> dict[str, Any]:
     grounding_tool = types.Tool(google_search=types.GoogleSearch())
     config = types.GenerateContentConfig(tools=[grounding_tool])
 
-    client = _get_client()
+    client = _get_client(api_key)
     last_error: Exception | None = None
 
     for model in GEMINI_MODELS:
@@ -107,14 +106,9 @@ def web_search_ai_assistant(user_query: str) -> dict[str, Any]:
     raise RuntimeError(f"Gemini 모델 호출에 실패했습니다. 잠시 후 다시 시도해 주세요. 마지막 오류: {last_error}")
 
 
-if __name__ == "__main__":
-    user_input = "오늘 주요 AI 뉴스 알려줘"
-    result = web_search_ai_assistant(user_input)
-
-    print("=== 웹사이트 화면에 표시될 AI 답변 ===")
-    print(result["answer"])
-
-    if result["sources"]:
-        print("\n=== 참고 출처 ===")
-        for source in result["sources"]:
-            print(f"- {source['title']}: {source['url']}")
+# 직접 실행 테스트가 필요하면 개인 API 키를 명시적으로 전달해서 호출하세요.
+# 예전 방식처럼 서버 공용 GEMINI_API_KEY를 자동으로 읽지 않습니다.
+# if __name__ == "__main__":
+#     user_input = "오늘 주요 AI 뉴스 알려줘"
+#     result = web_search_ai_assistant(user_input, "YOUR_PERSONAL_GEMINI_API_KEY")
+#     print(result["answer"])

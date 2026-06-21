@@ -1,5 +1,8 @@
-﻿(function() {
+(function() {
     const PAGE_CODE = "M91002";
+    const API_CODE = "M91002";
+    const IS_ACCOUNT_PAGE = PAGE_CODE === "M91001";
+    const DEFAULT_CATEGORY_CODE = IS_ACCOUNT_PAGE ? "MY_ACCOUNT" : "";
     const { getContainerEl } = PageManager.createHelper(PAGE_CODE);
     const COMMON = MCOMMON.createPageHelper(PAGE_CODE);
 
@@ -16,10 +19,11 @@
         ...COMMON,
         isInit: false,
         categories: [],
-        selectedCategoryCode: "MY_ACCOUNT",
+        selectedCategoryCode: DEFAULT_CATEGORY_CODE,
         settings: [],
         selectedSetting: emptySetting(),
         accountInfo: null,
+        geminiKeyStatus: null,
 
         async init() {
             if (this.isInit) return;
@@ -30,10 +34,11 @@
 
         destroy() {
             this.categories = [];
-            this.selectedCategoryCode = "MY_ACCOUNT";
+            this.selectedCategoryCode = DEFAULT_CATEGORY_CODE;
             this.settings = [];
             this.selectedSetting = emptySetting();
             this.accountInfo = null;
+            this.geminiKeyStatus = null;
             this.clearPasswordForm();
             this.isInit = false;
         },
@@ -42,10 +47,14 @@
             const list = getContainerEl("#settingCategoryList-M91002");
             if (list) list.innerHTML = `<div class="project-empty">Loading categories...</div>`;
             try {
-                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/setting-categories`, { method: "GET", showLoading: false });
-                this.categories = Array.isArray(json.data) ? json.data : [];
+                const json = await CommonUtils.request(`${API_BASE_URL}/${API_CODE}/setting-categories`, { method: "GET", showLoading: false });
+                const categories = Array.isArray(json.data) ? json.data : [];
+                this.categories = categories.filter((item) => IS_ACCOUNT_PAGE
+                    ? item.CATEGORY_CODE === "MY_ACCOUNT"
+                    : item.CATEGORY_CODE !== "MY_ACCOUNT"
+                );
                 if (!this.categories.some((item) => item.CATEGORY_CODE === this.selectedCategoryCode)) {
-                    this.selectedCategoryCode = this.categories[0]?.CATEGORY_CODE || "MY_ACCOUNT";
+                    this.selectedCategoryCode = this.categories[0]?.CATEGORY_CODE || DEFAULT_CATEGORY_CODE;
                 }
                 this.renderCategories();
             } catch (error) {
@@ -89,7 +98,7 @@
         },
 
         async selectCategory(categoryCode) {
-            this.selectedCategoryCode = categoryCode || "MY_ACCOUNT";
+            this.selectedCategoryCode = categoryCode || DEFAULT_CATEGORY_CODE;
             this.selectedSetting = emptySetting();
             this.renderCategories();
             await this.refreshSelectedCategory();
@@ -104,6 +113,7 @@
                 this.renderSettings();
                 this.renderSettingDetail();
                 await this.loadMyAccount();
+                await this.loadGeminiApiKeyStatus();
                 return;
             }
             await this.loadSettings();
@@ -117,7 +127,7 @@
             grid.innerHTML = `<div class="project-empty">Loading settings...</div>`;
             try {
                 const params = new URLSearchParams({ categoryCode: this.selectedCategoryCode });
-                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/settings?${params.toString()}`, { method: "GET", showLoading: false });
+                const json = await CommonUtils.request(`${API_BASE_URL}/${API_CODE}/settings?${params.toString()}`, { method: "GET", showLoading: false });
                 this.settings = Array.isArray(json.data) ? json.data : [];
                 this.renderSettings();
                 this.updateCategoryTitle();
@@ -214,7 +224,7 @@
                 return;
             }
             try {
-                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/setting/save`, {
+                const json = await CommonUtils.request(`${API_BASE_URL}/${API_CODE}/setting/save`, {
                     method: "POST",
                     body: payload
                 });
@@ -231,7 +241,7 @@
             if (!settingKey) return;
             if (!(await CommonMessage.confirm(`Delete setting "${settingKey}"?`))) return;
             try {
-                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/setting/delete`, {
+                const json = await CommonUtils.request(`${API_BASE_URL}/${API_CODE}/setting/delete`, {
                     method: "POST",
                     body: {
                         categoryCode: this.selectedCategoryCode,
@@ -255,7 +265,7 @@
             }
             this.setSystemMessage("Creating missing default settings...");
             try {
-                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/setting/defaults`, { method: "POST" });
+                const json = await CommonUtils.request(`${API_BASE_URL}/${API_CODE}/setting/defaults`, { method: "POST" });
                 const created = Number(json.createdCount || 0);
                 const skipped = Number(json.skippedCount || 0);
                 const message = json.message || `Default settings checked. ${created} created, ${skipped} skipped.`;
@@ -316,7 +326,7 @@
         async loadMyAccount() {
             this.setSystemMessage("Loading my account...");
             try {
-                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/account/me`, { method: "GET", showLoading: false });
+                const json = await CommonUtils.request(`${API_BASE_URL}/${API_CODE}/account/me`, { method: "GET", showLoading: false });
                 this.accountInfo = json.data || {};
                 this.renderMyAccount();
                 this.setSystemMessage("My account loaded.");
@@ -335,10 +345,64 @@
             this.setValue("#emailCurrentPassword-M91002", "");
         },
 
+        async loadGeminiApiKeyStatus() {
+            try {
+                const json = await CommonUtils.request(`${API_BASE_URL}/${API_CODE}/account/gemini-key`, { method: "GET", showLoading: false });
+                this.geminiKeyStatus = json.data || {};
+                this.renderGeminiApiKeyStatus();
+            } catch (error) {
+                this.setValue("#geminiApiKeyStatus-M91002", error.message || "Gemini key status load failed.");
+            }
+        },
+
+        renderGeminiApiKeyStatus() {
+            const status = this.geminiKeyStatus || {};
+            const text = status.registered
+                ? `Registered (${status.maskedKey || "masked"})`
+                : "Not registered";
+            this.setValue("#geminiApiKeyStatus-M91002", text);
+            this.setValue("#geminiApiKey-M91002", "");
+        },
+
+        async saveGeminiApiKey() {
+            const apiKey = getContainerEl("#geminiApiKey-M91002")?.value.trim() || "";
+            if (!apiKey) {
+                this.setSystemMessage("Gemini API key is required.", "error");
+                getContainerEl("#geminiApiKey-M91002")?.focus();
+                return;
+            }
+            try {
+                const json = await CommonUtils.request(`${API_BASE_URL}/${API_CODE}/account/gemini-key/save`, {
+                    method: "POST",
+                    body: { apiKey }
+                });
+                this.geminiKeyStatus = json.data || {};
+                this.renderGeminiApiKeyStatus();
+                this.setSystemMessage(json.message || "Gemini API key saved.");
+            } catch (error) {
+                this.setSystemMessage(error.message || "Gemini API key save failed.", "error");
+            }
+        },
+
+        async deleteGeminiApiKey() {
+            if (!(await CommonMessage.confirm("Delete your saved Gemini API key?"))) return;
+            try {
+                const json = await CommonUtils.request(`${API_BASE_URL}/${API_CODE}/account/gemini-key/delete`, {
+                    method: "POST"
+                });
+                this.geminiKeyStatus = { registered: false, maskedKey: "" };
+                this.renderGeminiApiKeyStatus();
+                this.setSystemMessage(json.message || "Gemini API key deleted.");
+            } catch (error) {
+                this.setSystemMessage(error.message || "Gemini API key delete failed.", "error");
+            }
+        },
+
         clearPasswordForm() {
             this.setValue("#currentPassword-M91002", "");
             this.setValue("#newPassword-M91002", "");
             this.setValue("#newPasswordConfirm-M91002", "");
+            this.setValue("#geminiApiKey-M91002", "");
         },
 
         async changeUserName() {
@@ -351,7 +415,7 @@
                 return;
             }
             try {
-                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/account/name/change`, {
+                const json = await CommonUtils.request(`${API_BASE_URL}/${API_CODE}/account/name/change`, {
                     method: "POST",
                     body: payload
                 });
@@ -385,7 +449,7 @@
             }
             if (!(await CommonMessage.confirm("Change your email?"))) return;
             try {
-                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/account/email/change`, {
+                const json = await CommonUtils.request(`${API_BASE_URL}/${API_CODE}/account/email/change`, {
                     method: "POST",
                     body: payload
                 });
@@ -430,7 +494,7 @@
             }
             if (!(await CommonMessage.confirm("Change your login password?"))) return;
             try {
-                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/account/password/change`, {
+                const json = await CommonUtils.request(`${API_BASE_URL}/${API_CODE}/account/password/change`, {
                     method: "POST",
                     body: payload
                 });
@@ -459,4 +523,3 @@
 
     window[PAGE_CODE] = M91002;
 })();
-

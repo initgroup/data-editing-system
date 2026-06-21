@@ -49,7 +49,7 @@ const PageManager = {
 
     requiresAuth(pageCode) {
         if (PUBLIC_PAGES.includes(pageCode)) return false;
-        if (pageCode === "M91001" && this.isBootstrapAuthenticated()) return false;
+        if (pageCode === "M99001" && this.isBootstrapAuthenticated()) return false;
         return true;
     },
 
@@ -68,7 +68,7 @@ const PageManager = {
 
     isPageAllowed(pageCode) {
         if (!pageCode || pageCode === DEFAULT_PAGE_CODE || pageCode === "home") return true;
-        if (pageCode === "M91001" && this.isBootstrapAuthenticated()) return true;
+        if (pageCode === "M99001" && this.isBootstrapAuthenticated()) return true;
         const menu = window.MENU_PAGE_MAP?.[pageCode];
         if (!menu) return true;
         if (menu.enabled === false) return false;
@@ -105,18 +105,31 @@ const PageManager = {
     updateSessionStatus() {
         const boxEl = document.getElementById("sessionStatusBox");
         const userEl = document.getElementById("sessionUserName");
+        const roleEl = document.getElementById("sessionUserRole");
         const statusEl = document.getElementById("sessionRemainTime") || document.getElementById("sessionStatusText");
         if (!statusEl) return;
         if (!this.isAuthenticated()) {
             statusEl.textContent = "";
+            if (roleEl) {
+                roleEl.textContent = "";
+                roleEl.className = "header-session-role";
+                roleEl.removeAttribute("title");
+            }
             if (boxEl) boxEl.hidden = true;
             return;
         }
 
         if (boxEl) boxEl.hidden = false;
+        const user = this.getLoginUser();
         if (userEl) {
-            const user = this.getLoginUser();
             userEl.textContent = user.userName || user.USER_NAME || user.loginId || user.LOGIN_ID || "-";
+        }
+        if (roleEl) {
+            const roleCode = String(user.roleCode || user.ROLE_CODE || user.role || "USER").toUpperCase();
+            const isAdmin = roleCode === "ADMIN";
+            roleEl.textContent = isAdmin ? "관리자" : "일반회원";
+            roleEl.className = `header-session-role ${isAdmin ? "is-admin" : "is-user"}`;
+            roleEl.title = `Role: ${roleCode}`;
         }
 
         const expiresAt = Number(sessionStorage.getItem(SESSION_EXPIRES_AT_KEY) || "0");
@@ -238,7 +251,7 @@ const PageManager = {
     },
 
     show(pageCode) {
-        const setupWithoutTarget = pageCode === "M91001"
+        const setupWithoutTarget = pageCode === "M99001"
             && ((this.isAuthenticated() && !sessionStorage.getItem("targetConnectionId")) || this.isBootstrapAuthenticated());
         document.body.classList.toggle("intro-mode", SHELL_HIDDEN_PAGES.includes(pageCode) || setupWithoutTarget);
 
@@ -1089,7 +1102,7 @@ async function openTargetDbChangeDialog() {
     layer.hidden = false;
     list.innerHTML = '<div class="target-db-change-empty">Loading target DB connections...</div>';
     try {
-        const json = await CommonUtils.request(`${API_BASE_URL}/M91001/connections`, { method: "GET", showLoading: false });
+        const json = await CommonUtils.request(`${API_BASE_URL}/M99001/connections`, { method: "GET", showLoading: false });
         const rows = (Array.isArray(json.data) ? json.data : []).filter((row) => String(row.USE_YN || "Y").toUpperCase() === "Y");
         const currentId = sessionStorage.getItem("targetConnectionId") || "";
         if (!rows.length) {

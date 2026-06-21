@@ -1,5 +1,5 @@
 """
-@file           M91003.py
+@file           M99002.py
 @description    Read-only target DB browser API
 """
 
@@ -513,7 +513,7 @@ def get_object_source(req: ObjectRequest, request: Request):
             "object": {"owner": owner, "objectType": object_type, "objectName": object_name},
         }
     except Exception as e:
-        logger.error(f"M91003 source load failed: {str(e)}")
+        logger.error(f"M99002 source load failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if conn:
