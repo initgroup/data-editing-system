@@ -38,6 +38,8 @@ BEGIN
     truncate_table_if_exists('INIT$_TB_PREDICTED_TYPE');
     truncate_table_if_exists('INIT$_TB_DATA_WORK_RUN');
     truncate_table_if_exists('INIT$_TB_DATA_WORK_JOB');
+    truncate_table_if_exists('INIT$_TB_OML_RESOURCE_PARAM');
+    truncate_table_if_exists('INIT$_TB_OML_RESOURCE');
     truncate_table_if_exists('INIT$_TB_OBJECT_DETAIL');
     truncate_table_if_exists('INIT$_TB_TABLES');
     truncate_table_if_exists('INIT$_TB_SCENARIO');

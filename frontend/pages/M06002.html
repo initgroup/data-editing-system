@@ -1,0 +1,110 @@
+<div class="page-container env-page project-page" id="container-M06002">
+    <section class="env-workspace" aria-labelledby="data-clean-title-M06002">
+        <aside class="env-object-panel">
+            <header class="env-object-header">
+                <div>
+                    <h2 class="env-section-title">Violation Queue</h2>
+                    <p class="env-section-desc">정제 대상 오류 데이터</p>
+                </div>
+                <div class="env-object-actions">
+                    <button type="button" class="env-icon-btn" title="Refresh">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+            </header>
+
+            <div class="env-object-search">
+                <i class="fas fa-search"></i>
+                <input type="search" placeholder="Search row or rule">
+            </div>
+
+            <div class="project-list">
+                <div class="project-list-head">
+                    <div>Row</div>
+                    <div>Status</div>
+                </div>
+                <div class="project-empty">No error rows.</div>
+                <div class="list-count-footer">0 items</div>
+            </div>
+        </aside>
+
+        <section class="env-panel" aria-labelledby="data-clean-title-M06002">
+            <header class="env-header">
+                <div>
+                    <h1 class="env-title" id="data-clean-title-M06002">오류 데이터 정제/수정</h1>
+                    <p class="env-desc">위반 데이터를 검토하고 정제 값과 처리 상태를 관리합니다.</p>
+                </div>
+                <div class="env-header-actions">
+                    <button type="button" class="env-btn">Exclude</button>
+                    <button type="button" class="env-btn env-save">
+                        <i class="fas fa-save"></i>
+                        <span>Save</span>
+                    </button>
+                </div>
+            </header>
+
+            <div class="table-meta-strip">
+                <div><span>Row ID</span><strong>-</strong></div>
+                <div><span>Rule</span><strong>-</strong></div>
+                <div><span>Status</span><strong>-</strong></div>
+                <div><span>Assignee</span><strong>-</strong></div>
+            </div>
+
+            <div class="table-tabs">
+                <button type="button" class="table-tab is-active">Correction</button>
+                <button type="button" class="table-tab">Audit</button>
+                <button type="button" class="table-tab">SQL Preview</button>
+            </div>
+
+            <section class="env-object-meta">
+                <div class="env-meta-grid">
+                    <label>
+                        <span>Row ID</span>
+                        <input class="env-field env-meta-field" type="text" readonly>
+                    </label>
+                    <label>
+                        <span>Status</span>
+                        <select class="env-field env-meta-field">
+                            <option value="">-- Select status --</option>
+                            <option value="OPEN">OPEN</option>
+                            <option value="FIXED">FIXED</option>
+                            <option value="EXCLUDED">EXCLUDED</option>
+                        </select>
+                    </label>
+                    <label>
+                        <span>Assignee</span>
+                        <input class="env-field env-meta-field" type="text">
+                    </label>
+                    <label>
+                        <span>Apply Batch</span>
+                        <input class="env-field env-meta-field" type="text" readonly>
+                    </label>
+                </div>
+            </section>
+
+            <section class="data-param-script-layout">
+                <div class="data-param-card">
+                    <header>
+                        <h3>Before Value</h3>
+                    </header>
+                    <textarea class="env-field env-meta-textarea" rows="12" readonly></textarea>
+                </div>
+                <div class="data-param-card">
+                    <header>
+                        <h3>After Value</h3>
+                    </header>
+                    <textarea class="env-field env-meta-textarea" rows="12"></textarea>
+                </div>
+            </section>
+
+            <section class="env-object-meta">
+                <div class="env-meta-grid">
+                    <label class="env-meta-wide">
+                        <span>Comment</span>
+                        <textarea class="env-field env-meta-textarea" rows="4"></textarea>
+                    </label>
+                </div>
+            </section>
+        </section>
+    </section>
+</div>

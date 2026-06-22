@@ -74,6 +74,8 @@ router = APIRouter()
 
 - 조회: `conn = get_target_db_connection(request)` 후 `execute_query(conn, "SQL_ID", params)`
 - DML: 커서를 직접 쓰거나 `execute_query(..., is_dml=True)` 사용
+- 라우터/서비스 Python 파일에 정적 SQL 문장을 직접 작성하지 않습니다. 정적 `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `MERGE`, PL/SQL block은 `database/*.sql`에 `-- [SQL_ID]` 섹션으로 분리하고 `SqlLoader.get_sql(...)` 또는 `execute_query(...)`로 실행합니다.
+- 검증된 식별자, 동적 `IN` 바인드 목록, 사용자 SQL 워크시트의 읽기 전용 wrapper, 설치/DDL 스크립트 실행처럼 런타임 조립이 필요한 경우만 예외로 허용합니다. 이 경우에도 SQL 본문은 가능한 한 `.sql` 템플릿에 두고, Python에서는 화이트리스트/정규식 검증을 통과한 작은 조각만 치환합니다.
 - 성공 응답: `{ "status": "success", "data": ..., "columns": ..., "total": ... }` 형태 유지
 - 오류: `HTTPException`은 그대로 raise하고, 일반 예외는 로깅 후 `HTTPException(status_code=500, detail=str(e))`
 - 커넥션/커서는 `finally`에서 닫습니다.
@@ -130,6 +132,7 @@ router = APIRouter()
 - 비밀 정보 출력 금지
 - 기존 깨진 인코딩 파일 전체를 자동 변환 금지
 - SQL 문자열에 사용자 입력을 직접 이어 붙이는 구현 금지
+- 정적 SQL을 `backend/routers/*.py` 또는 `backend/services/*.py` 안에 삼중 문자열/일반 문자열로 새로 작성하는 작업 금지
 - 등록되지 않은 화면 파일만 만들고 `main.py` 또는 `menu.config.js` 등록을 빠뜨리는 작업 금지
 - 단순 오류 수정이나 작은 UI 정리는 필요하면 바로 처리할 수 있지만, 업무 흐름, 화면 단계, 버튼/메뉴 노출, 권한/인증 흐름처럼 사용자의 작업 방식이 달라지는 개선은 구현 전에 사용자에게 먼저 설명하고 확인을 받습니다.
 - VS Code에서 정상으로 보이는 한글은 함부로 수정하지 않기

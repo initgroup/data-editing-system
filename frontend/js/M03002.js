@@ -26,6 +26,7 @@
             workTitle: "[Column Correlation Analysis] work",
             workDescriptionEmpty: "Select a scenario table and registered correlation analysis object.",
             saveWork: "Save work",
+            deleteWork: "Delete work",
             runNow: "Run now",
             queueBatch: "Queue batch",
             jobId: "Job ID",

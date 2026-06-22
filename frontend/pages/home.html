@@ -33,66 +33,77 @@
         </div>
     </section>
 
-    <section class="home-kpi-grid" id="homeKpiGrid"></section>
-
     <section class="home-dashboard-grid">
         <div class="home-panel home-panel-wide">
             <div class="home-panel-header">
                 <div>
                     <h3>Workflow Readiness</h3>
-                    <p>Current operating stages for this workspace</p>
+                    <p>최근 7일 자동규칙발굴, 규칙위반탐지, 통합시나리오 실행 추이</p>
                 </div>
-                <button type="button" id="homeOpenFlowButton" class="home-icon-button" title="Open integrated flow">
-                    <i class="fas fa-diagram-project"></i>
-                </button>
+                <span class="home-panel-actions">
+                    <button type="button" id="homeRefreshWorkflowButton" class="home-icon-button" title="Refresh workflow readiness">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                    <button type="button" id="homeOpenFlowButton" class="home-icon-button" title="Open integrated flow">
+                        <i class="fas fa-diagram-project"></i>
+                    </button>
+                </span>
             </div>
-            <div class="home-stage-track" id="homeStageTrack"></div>
+            <div class="home-chart-box home-rule-chart-box">
+                <canvas id="homeRuleTrendChart"></canvas>
+            </div>
         </div>
 
         <div class="home-panel">
             <div class="home-panel-header">
                 <div>
                     <h3>Quality Signal</h3>
-                    <p>Prepared, reviewed, and pending workload</p>
+                    <p>최근 알림 메시지</p>
                 </div>
+                <span class="home-panel-actions">
+                    <button type="button" id="homeOpenNoticeListButton" class="home-icon-button" title="Open all notices">
+                        <i class="fas fa-list"></i>
+                    </button>
+                    <button type="button" id="homeRefreshQualityButton" class="home-icon-button" title="Refresh quality signal">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </span>
             </div>
-            <div class="home-chart-box">
-                <canvas id="homeQualityChart"></canvas>
-            </div>
+            <div class="home-alert-list" id="homeAlertList"></div>
         </div>
     </section>
 
-    <section class="home-dashboard-grid">
-        <div class="home-panel">
-            <div class="home-panel-header">
-                <div>
-                    <h3>Quick Actions</h3>
-                    <p>Frequent paths for the signed-in user</p>
-                </div>
+    <div id="homeNoticeLayer" class="data-help-layer home-notice-layer" hidden>
+        <section class="data-help-dialog home-notice-dialog" role="dialog" aria-modal="true" aria-labelledby="homeNoticeTitle">
+            <header>
+                <h2 id="homeNoticeTitle">Notices</h2>
+                <button type="button" class="table-icon-btn" title="Close" onclick="home.closeNoticeLayer()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </header>
+            <div class="home-notice-browser">
+                <aside class="home-notice-browser-list" id="homeNoticeBrowserList"></aside>
+                <article class="home-notice-browser-detail">
+                    <h3 id="homeNoticeDetailTitle">Notice</h3>
+                    <div id="homeNoticeMeta" class="flow-run-plan-summary"></div>
+                    <div id="homeNoticeBody" class="home-notice-body"></div>
+                </article>
             </div>
-            <div class="home-action-list" id="homeQuickActions"></div>
-        </div>
+            <footer>
+                <button type="button" class="env-btn" onclick="home.closeNoticeLayer()">Close</button>
+            </footer>
+        </section>
+    </div>
 
-        <div class="home-panel home-panel-wide">
-            <div class="home-panel-header">
-                <div>
-                    <h3>Workspace Timeline</h3>
-                    <p>Recent activity signal across data editing phases</p>
-                </div>
-            </div>
-            <div class="home-chart-box home-chart-box-line">
-                <canvas id="homeTrendChart"></canvas>
-            </div>
-        </div>
-    </section>
+    <section class="home-link-banner" id="homeLinkBanner" aria-label="Main shortcuts"></section>
 
-    <section class="home-panel home-status-panel">
-        <div class="home-panel-header">
-            <div>
-                <h3>Operational Notices</h3>
-                <p>Session, target database, and setup status</p>
-            </div>
-        </div>
-        <div class="home-notice-list" id="homeNoticeList"></div>
-    </section>
+    <a class="home-company-banner" href="https://initgroup.kr/" target="_blank" rel="noopener noreferrer" aria-label="Open iNiT homepage">
+        <img src="/assets/init-logo.png" alt="iNiT">
+        <span>인아이티 홈페이지</span>
+        <i class="fas fa-arrow-up-right-from-square"></i>
+    </a>
+
+    <footer class="home-footer">
+        <span>Copyright &copy; 2026 iNiT. All rights reserved.</span>
+    </footer>
 </div>

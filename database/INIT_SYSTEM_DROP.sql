@@ -50,12 +50,15 @@ BEGIN
 
     DBMS_OUTPUT.PUT_LINE('[INIT_SYSTEM] Drop tables');
     drop_table_if_exists('INIT$_TB_SETUP_LOG');
+    drop_table_if_exists('INIT$_TB_NOTICE');
     drop_table_if_exists('INIT$_TB_SYSTEM_SETTING');
     drop_table_if_exists('INIT$_TB_DB_CONNECTION');
     drop_table_if_exists('INIT$_TB_USER');
 
     DBMS_OUTPUT.PUT_LINE('[INIT_SYSTEM] Drop remaining indexes, if any');
     drop_index_if_exists('INIT$_IX_SETUP_LOG_CONN');
+    drop_index_if_exists('INIT$_IX_NOTICE_POPUP');
+    drop_index_if_exists('INIT$_IX_NOTICE_ACTIVE');
     drop_index_if_exists('INIT$_IX_SYSTEM_SETTING_CONN');
     drop_index_if_exists('INIT$_IX_DB_CONN_DEFAULT');
     drop_index_if_exists('INIT$_IX_USER_USE');

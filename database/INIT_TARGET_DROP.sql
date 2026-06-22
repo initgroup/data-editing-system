@@ -45,8 +45,23 @@ DECLARE
             DBMS_OUTPUT.PUT_LINE('[SKIP] INDEX ' || p_index_name || ' does not exist.');
         END IF;
     END;
+
+    PROCEDURE drop_package_if_exists(p_package_name IN VARCHAR2) IS
+    BEGIN
+        IF object_exists(p_package_name, 'PACKAGE') THEN
+            run_ddl(
+                'DROP PACKAGE ' || p_package_name,
+                'DROP PACKAGE "' || UPPER(p_package_name) || '"'
+            );
+        ELSE
+            DBMS_OUTPUT.PUT_LINE('[SKIP] PACKAGE ' || p_package_name || ' does not exist.');
+        END IF;
+    END;
 BEGIN
     DBMS_OUTPUT.PUT_LINE('=== INIT_TARGET DROP START ===');
+
+    DBMS_OUTPUT.PUT_LINE('[INIT_TARGET] Drop packages');
+    drop_package_if_exists('INIT$_PKG_OML_SCRIPT');
 
     DBMS_OUTPUT.PUT_LINE('[INIT_TARGET] Drop tables');
     drop_table_if_exists('INIT$_TB_OBJECT_DEPLOY');
@@ -60,6 +75,8 @@ BEGIN
     drop_table_if_exists('INIT$_TB_PREDICTED_TYPE');
     drop_table_if_exists('INIT$_TB_DATA_WORK_RUN');
     drop_table_if_exists('INIT$_TB_DATA_WORK_JOB');
+    drop_table_if_exists('INIT$_TB_OML_RESOURCE_PARAM');
+    drop_table_if_exists('INIT$_TB_OML_RESOURCE');
     drop_table_if_exists('INIT$_TB_OBJECT_DETAIL');
     drop_table_if_exists('INIT$_TB_TABLES');
     drop_table_if_exists('INIT$_TB_SCENARIO');
@@ -70,6 +87,7 @@ BEGIN
     drop_index_if_exists('IX_INIT$_TB_CAT_CORR_SUMMARY_01');
     drop_index_if_exists('IX_INIT$_TB_CAT_CORR_PAIR_01');
     drop_index_if_exists('IX_INIT$_TB_PREDICTED_TYPE_01');
+    drop_index_if_exists('IX_INIT$_TB_OML_RESOURCE_01');
     drop_index_if_exists('IX_INIT$_TB_OBJECT_DETAIL_01');
     drop_index_if_exists('IX_INIT$_TB_OBJECT_01');
 

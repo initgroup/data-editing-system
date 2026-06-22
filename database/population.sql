@@ -1,0 +1,23 @@
+-- [POPULATION_LIST]
+SELECT POP_ID,
+       REGION_CD,
+       POP_CNT,
+       GENDER_CD,
+       SALARY
+  FROM POPULATION
+ FETCH FIRST 100 ROWS ONLY;
+
+-- [POPULATION_INSERT]
+INSERT INTO POPULATION (
+    REGION_CD,
+    POP_CNT,
+    SURVEY_DT,
+    GENDER_CD,
+    SALARY
+) VALUES (
+    :1,
+    :2,
+    TO_DATE(:3, 'YYYY-MM-DD'),
+    :4,
+    :5
+);

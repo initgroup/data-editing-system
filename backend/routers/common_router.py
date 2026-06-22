@@ -3,7 +3,7 @@ from typing import Dict, Any, Optional
 import logging
 import oracledb
 from backend.database import get_db_connection
-from backend.database_helper import execute_query
+from backend.database_helper import SqlLoader
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -25,32 +25,7 @@ async def ask_ai(payload: Dict[str, Any] = Body(...)):
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # 1. 자연어를 SQL로 변환 (DBMS_CLOUD_AI.GENERATE 호출)
-        ai_query = """
-            SELECT "C##CLOUD$SERVICE".DBMS_CLOUD_AI.GENERATE(
-                prompt => :prompt,
-                profile_name => 'INITAI_PROFILE',
-                action       => 'showsql'
-            ) FROM DUAL
-        """
-
-        ai_query2 = """
-            SELECT "C##CLOUD$SERVICE".DBMS_CLOUD_AI.GENERATE(
-                prompt => :prompt,
-                profile_name => 'INITAI_PROFILE',
-                action       => 'runsql'
-            ) FROM DUAL
-        """
-
-        ai_query3 = """
-            SELECT "C##CLOUD$SERVICE".DBMS_CLOUD_AI.GENERATE(
-                prompt => :prompt,
-                profile_name => 'INITAI_PROFILE',
-                action       => 'explainsql'
-            ) FROM DUAL
-        """
-        
-        cursor.execute(ai_query, {"prompt": prompt})
+        cursor.execute(SqlLoader.get_sql("COMMON_AI_SHOWSQL"), {"prompt": prompt})
         row = cursor.fetchone()
         
         # GENERATE 결과는 CLOB이므로 read() 처리

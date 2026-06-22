@@ -1,0 +1,116 @@
+<div class="page-container table-page" id="container-M07002">
+    <section class="table-panel" aria-labelledby="final-apply-title-M07002">
+        <header class="table-header">
+            <div>
+                <h1 class="table-title" id="final-apply-title-M07002">DB 최종 반영</h1>
+                <p class="table-desc">검증 완료된 정제 결과를 대상 데이터베이스에 최종 반영합니다.</p>
+            </div>
+            <div class="table-actions">
+                <button type="button" class="table-btn">
+                    <i class="fas fa-list-check"></i>
+                    <span>Validate</span>
+                </button>
+                <button type="button" class="table-btn">
+                    <i class="fas fa-database"></i>
+                    <span>Commit</span>
+                </button>
+            </div>
+        </header>
+
+        <div class="table-toolbar query-filter-toolbar">
+            <label class="table-limit-control query-filter-field">
+                <span>Apply Batch</span>
+                <select>
+                    <option value="">-- Select batch --</option>
+                </select>
+            </label>
+            <label class="table-limit-control query-filter-field">
+                <span>Target Owner</span>
+                <select>
+                    <option value="">-- Select owner --</option>
+                </select>
+            </label>
+            <label class="table-limit-control query-filter-field query-filter-compact">
+                <span>Apply Mode</span>
+                <select>
+                    <option value="">-- Select mode --</option>
+                    <option value="MERGE">MERGE</option>
+                    <option value="UPDATE">UPDATE</option>
+                </select>
+            </label>
+            <label class="table-limit-control query-filter-field query-page-size">
+                <span>Rows</span>
+                <select>
+                    <option value="100">100 rows</option>
+                    <option value="500">500 rows</option>
+                    <option value="1000">1000 rows</option>
+                </select>
+            </label>
+        </div>
+
+        <div class="table-meta-strip">
+            <div><span>Ready</span><strong>0</strong></div>
+            <div><span>Blocked</span><strong>0</strong></div>
+            <div><span>Committed</span><strong>0</strong></div>
+            <div><span>Last Apply</span><strong>-</strong></div>
+        </div>
+
+        <div class="query-result-bar">
+            <div class="query-result-summary">
+                <strong>0 apply rows fetched</strong>
+                <span>Range 0 - 0 / Total 0</span>
+            </div>
+            <div class="query-result-actions">
+                <button type="button" class="table-btn" disabled>
+                    <i class="fas fa-chevron-left"></i>
+                    <span>Prev</span>
+                </button>
+                <button type="button" class="table-btn" disabled>
+                    <span>Next</span>
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+                <button type="button" class="table-btn query-load-btn" disabled>
+                    <i class="fas fa-plus"></i>
+                    <span>Load more</span>
+                </button>
+            </div>
+        </div>
+
+        <section class="data-param-script-layout">
+            <div class="data-param-card">
+                <header>
+                    <h3>Apply Queue</h3>
+                </header>
+                <div class="table-result-grid">
+                    <table class="table-grid">
+                        <thead>
+                            <tr>
+                                <th>No</th>
+                                <th>Table</th>
+                                <th>Rows</th>
+                                <th>Status</th>
+                                <th>Message</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="5" class="table-empty">No apply preview.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="data-param-card">
+                <header>
+                    <h3>Generated SQL</h3>
+                </header>
+                <textarea class="sql-editor data-script-editor" rows="17" spellcheck="false" aria-label="Final apply preview SQL"></textarea>
+            </div>
+        </section>
+
+        <div class="query-result-footer">
+            <span>Apply queue preview is loaded by page before final commit.</span>
+            <span>Commit should use the validated batch, not the visible row count.</span>
+        </div>
+    </section>
+</div>

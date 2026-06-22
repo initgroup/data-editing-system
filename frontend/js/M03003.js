@@ -26,6 +26,7 @@
             workTitle: "[Automatic Rule Discovery] work",
             workDescriptionEmpty: "Select a scenario table and registered rule discovery object.",
             saveWork: "Save work",
+            deleteWork: "Delete work",
             runNow: "Run now",
             queueBatch: "Queue batch",
             jobId: "Job ID",

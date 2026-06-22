@@ -33,6 +33,7 @@
             flowRegisteredJobs: [],
             flowJobGroupCollapsed: new Set(),
             flowVariables: [],
+            flowRunHistoryRows: [],
             selectedProjectId: "",
             selectedScenarioId: "",
             selectedScenarioTableKey: "",
@@ -54,10 +55,11 @@
             flowContextMenuState: null,
             flowSidebarCollapsed: false,
             flowSidebarCollapsedBeforeMaximize: null,
+            appSidebarCollapsedBeforeMaximize: null,
             flowInspectorCollapsed: false,
             flowDesignerBound: false,
             flowLayoutRestoredFromDb: false,
-            isSampleFlowVisible: true,
+            isSampleFlowVisible: false,
             isFlowSaving: false,
             flowNodePointerMoveBound: null,
             flowNodePointerUpBound: null,
@@ -72,7 +74,7 @@
             flowDocumentClickBound: null,
             flowDocumentKeydownBound: null,
             flowEdgeLayerClickBound: null,
-            flowEdges: SAMPLE_FLOW_EDGES.map((edge) => ({ ...edge })),
+            flowEdges: [],
 
             async init() {
                 if (this.isInit) return;
@@ -85,6 +87,7 @@
             },
 
             destroy() {
+                this.restoreAppSidebarAfterCanvasMaximize();
                 this.teardownFlowDesigner();
                 this.contextProjects = [];
                 this.contextScenarios = [];
@@ -94,6 +97,7 @@
                 this.flowRegisteredJobs = [];
                 this.flowJobGroupCollapsed = new Set();
                 this.flowVariables = [];
+                this.flowRunHistoryRows = [];
                 this.selectedProjectId = "";
                 this.selectedScenarioId = "";
                 this.selectedScenarioTableKey = "";
@@ -109,11 +113,12 @@
                 this.flowPaletteDragData = null;
                 this.flowSidebarCollapsed = false;
                 this.flowSidebarCollapsedBeforeMaximize = null;
+                this.appSidebarCollapsedBeforeMaximize = null;
                 this.flowInspectorCollapsed = true;
                 this.flowLayoutRestoredFromDb = false;
-                this.isSampleFlowVisible = true;
+                this.isSampleFlowVisible = false;
                 this.isFlowSaving = false;
-                this.flowEdges = SAMPLE_FLOW_EDGES.map((edge) => ({ ...edge }));
+                this.flowEdges = [];
                 this.nodeSequence = 100;
                 this.isInit = false;
             },
@@ -162,7 +167,7 @@
                 if (this.contextLoadFailed) return;
                 await this.loadScenarioTables();
                 await this.loadFlowAssets();
-                await this.loadFlowVersions(true);
+                await this.loadFlowVersions(false, { forceDraft: true });
                 await this.loadFlowRunHistory();
                 this.setWorkContextCollapsed(Boolean(this.selectedProjectId && this.selectedScenarioId));
             },
@@ -212,7 +217,7 @@
                 if (!select) return;
 
                 select.innerHTML = `
-                    <option value="">Select project</option>
+                    <option value="">-- Select project --</option>
                     ${this.contextProjects.map((project) => `
                         <option value="${this.escapeHtml(project.PROJECT_ID ?? "")}">
                             ${this.escapeHtml(project.PROJECT_NAME || project.PROJECT_CODE || "(Untitled project)")}
@@ -233,7 +238,7 @@
                 await this.loadContextScenarios("");
                 await this.loadScenarioTables();
                 await this.loadFlowAssets();
-                await this.loadFlowVersions(true);
+                await this.loadFlowVersions(false, { forceDraft: true });
                 await this.loadFlowRunHistory();
                 this.setWorkContextCollapsed(Boolean(this.selectedProjectId && this.selectedScenarioId));
             },
@@ -268,7 +273,7 @@
                 if (!select) return;
 
                 select.innerHTML = `
-                    <option value="">Select scenario</option>
+                    <option value="">-- Select scenario --</option>
                     ${this.contextScenarios.map((scenario) => `
                         <option value="${this.escapeHtml(scenario.SCENARIO_ID ?? "")}">
                             ${this.escapeHtml(scenario.SCENARIO_NAME || scenario.SCENARIO_CODE || "(Untitled scenario)")}
@@ -289,7 +294,7 @@
                 this.saveStoredContext();
                 await this.loadScenarioTables();
                 await this.loadFlowAssets();
-                await this.loadFlowVersions(true);
+                await this.loadFlowVersions(false, { forceDraft: true });
                 await this.loadFlowRunHistory();
                 this.setWorkContextCollapsed(Boolean(this.selectedProjectId && this.selectedScenarioId));
             },
@@ -583,6 +588,10 @@
                     nodeTypeLabel,
                     jobId,
                     refMenuCode: source.MENU_CODE || fallback.refMenuCode || "",
+                    execSourceType: source.EXEC_SOURCE_TYPE || fallback.execSourceType || "DB_OBJECT",
+                    execResourceId: source.EXEC_RESOURCE_ID || fallback.execResourceId || "",
+                    execMethod: source.EXEC_METHOD || fallback.execMethod || "",
+                    execSpecJson: source.EXEC_SPEC_JSON || fallback.execSpecJson || "",
                     ownerName: source.OWNER_NAME || fallback.ownerName || "",
                     tableName: source.TABLE_NAME || fallback.tableName || "",
                     refObjectId: source.EXEC_OBJECT_ID || fallback.refObjectId || "",
@@ -641,11 +650,12 @@
                 `;
             },
 
-            async loadFlowVersions(loadLatest = false) {
+            async loadFlowVersions(loadLatest = false, options = {}) {
                 const select = getContainerEl(`#flowVersion-${PAGE_CODE}`);
                 const grid = getContainerEl(`#flowVersionGrid-${PAGE_CODE}`);
                 if (!select && !grid) return;
-                const currentFlowId = this.getValue(`#flowId-${PAGE_CODE}`);
+                const forceDraft = Boolean(options.forceDraft);
+                const currentFlowId = forceDraft ? "" : this.getValue(`#flowId-${PAGE_CODE}`);
                 if (!this.selectedProjectId || !this.selectedScenarioId) {
                     this.flowList = [];
                     if (select) select.innerHTML = `<option value="">Draft</option>`;
@@ -663,6 +673,10 @@
                     });
                     const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/flows?${params.toString()}`, { method: "GET" });
                     this.flowList = Array.isArray(json.data) ? json.data : [];
+                    if (forceDraft) {
+                        this.newFlow(true);
+                        return;
+                    }
                     this.renderFlowVersions();
                     if (loadLatest && this.flowList.length) {
                         await this.loadFlowVersion(this.flowList[0].FLOW_ID);
@@ -976,6 +990,9 @@
                 getContainerEl(`#flowCanvasMenu-${PAGE_CODE}`)?.addEventListener("click", this.flowMenuClickBound);
                 viewport.querySelector(".flow-edge-layer")?.addEventListener("click", this.flowEdgeLayerClickBound);
 
+                if (!viewport.querySelector(".flow-node") && this.isSampleFlowVisible) {
+                    this.renderSampleFlowCanvas();
+                }
                 viewport.querySelectorAll(".flow-node").forEach((node) => this.bindFlowNode(node));
                 this.bindFlowPalette();
                 const hasSampleNodes = Boolean(viewport.querySelector(".flow-node[data-sample-node='Y']"));
@@ -989,6 +1006,10 @@
                 if (this.flowLayoutRestoredFromDb) {
                     this.resizeFlowViewportToNodes();
                     this.updateFlowEdges();
+                } else if (hasSampleNodes) {
+                    this.resizeFlowViewportToNodes();
+                    this.updateFlowEdges();
+                    this.scheduleFitFlowCanvas();
                 } else {
                     this.autoLayoutFlow();
                 }
@@ -1005,8 +1026,115 @@
                     node.classList.toggle("is-sample-node", this.isSampleFlowVisible && node.dataset.sampleNode === "Y");
                 });
                 if (label && this.isSampleFlowVisible) {
-                    label.textContent = "SAMPLE FLOW - not saved. Use the eraser icon to clear the canvas.";
+                    label.textContent = "JOB TEMPLATE - review and save when ready.";
                 }
+            },
+
+            showSampleFlowCanvas() {
+                const viewport = this.getFlowViewport();
+                if (!viewport) return;
+                const selectedSampleNodeId = this.renderSampleFlowCanvas();
+                viewport.querySelectorAll(".flow-node").forEach((node) => this.bindFlowNode(node));
+                this.setSampleFlowState(true);
+                this.flowLayoutRestoredFromDb = false;
+
+                const selected = selectedSampleNodeId ? this.getFlowNode(selectedSampleNodeId) : viewport.querySelector(".flow-node.is-selected") || viewport.querySelector(".flow-node");
+                if (selected) {
+                    this.selectFlowNode(selected.dataset.nodeId || "");
+                } else {
+                    this.clearNodeInspector();
+                }
+                this.resizeFlowViewportToNodes();
+                this.updateFlowEdges();
+                this.renderFlowEdgeGrid();
+                this.scheduleFitFlowCanvas();
+            },
+
+            renderSampleFlowCanvas(options = {}) {
+                const showEmptyAlert = options.showEmptyAlert !== false;
+                const viewport = this.getFlowViewport();
+                if (!viewport) return "";
+                const sampleJobs = this.getFirstRegisteredJobsByGroup();
+                if (!sampleJobs.length) {
+                    if (showEmptyAlert) alert("No registered jobs are available for this scenario.");
+                    return "";
+                }
+
+                const start = this.getJobTemplateInsertPoint();
+                const createdNodes = [];
+                sampleJobs.forEach((job, index) => {
+                    const node = this.createFlowNode(
+                        this.buildFlowNodeDataFromJob(job),
+                        start.left + index * 250,
+                        start.top
+                    );
+                    if (!node) return;
+                    node.dataset.sampleNode = "Y";
+                    viewport.appendChild(node);
+                    this.bindFlowNode(node);
+                    createdNodes.push(node);
+                });
+
+                for (let index = 0; index < createdNodes.length - 1; index += 1) {
+                    const edge = this.buildSequentialJobEdge(createdNodes[index], createdNodes[index + 1]);
+                    if (edge) this.addFlowEdge(edge);
+                }
+                this.markFlowEdited();
+                return createdNodes[0]?.dataset.nodeId || "";
+            },
+
+            applyDefaultDraftTemplate() {
+                if (!this.getFirstRegisteredJobsByGroup().length) {
+                    this.setSampleFlowState(false);
+                    return;
+                }
+                const selectedSampleNodeId = this.renderSampleFlowCanvas({ showEmptyAlert: false });
+                this.setSampleFlowState(Boolean(selectedSampleNodeId));
+                if (selectedSampleNodeId) {
+                    this.selectFlowNode(selectedSampleNodeId);
+                } else {
+                    this.clearNodeInspector();
+                }
+                this.resizeFlowViewportToNodes();
+                this.updateFlowEdges();
+                this.renderFlowEdgeGrid();
+                this.scheduleFitFlowCanvas();
+            },
+
+            getFirstRegisteredJobsByGroup() {
+                return this.groupRegisteredJobs()
+                    .map((group) => group.jobs[0])
+                    .filter(Boolean);
+            },
+
+            getJobTemplateInsertPoint() {
+                const existingBounds = this.getFlowNodeBounds();
+                if (existingBounds) {
+                    return {
+                        left: Math.max(0, existingBounds.right + 80),
+                        top: Math.max(0, existingBounds.top)
+                    };
+                }
+                return {
+                    left: 72,
+                    top: 86
+                };
+            },
+
+            buildSequentialJobEdge(fromNode, toNode) {
+                if (!fromNode || !toNode) return null;
+                const fromPort = fromNode.querySelector(".flow-port-out")?.textContent?.trim() || this.getDefaultOutputPort(fromNode.dataset.nodeType || "");
+                const toPort = toNode.querySelector(".flow-port-in")?.textContent?.trim() || this.getDefaultInputPort(toNode.dataset.nodeType || "");
+                if (!fromPort || !toPort) return null;
+                return {
+                    from: fromNode.dataset.nodeId || "",
+                    fromPort: this.normalizeFlowPortName(fromPort, "output"),
+                    to: toNode.dataset.nodeId || "",
+                    toPort: this.normalizeFlowPortName(toPort, "input"),
+                    dashed: false,
+                    mode: "SERIAL",
+                    params: this.buildDefaultEdgeParams(fromNode, toNode, toPort, false)
+                };
             },
 
             clearFlowCanvas() {
@@ -1112,6 +1240,8 @@
                     output.setAttribute("aria-label", "Output connector");
                     node.appendChild(output);
                 }
+                node.querySelector(".flow-connector-in")?.classList.remove("is-hidden");
+                node.querySelector(".flow-connector-out")?.classList.remove("is-hidden");
                 node.querySelectorAll(".flow-connector").forEach((connector) => {
                     if (connector.dataset.flowConnectorBound === "Y") return;
                     connector.dataset.flowConnectorBound = "Y";
@@ -1299,7 +1429,8 @@
                             to: nodeId,
                             toPort: this.getDefaultInputPort(node.dataset.nodeType || "") || "input",
                             dashed: this.edgeDragState.dashed,
-                            mode: this.edgeDragState.dashed ? "REFERENCE" : "SERIAL"
+                            mode: this.edgeDragState.dashed ? "REFERENCE" : "SERIAL",
+                            params: this.buildDefaultEdgeParams(this.getFlowNode(this.edgeDragState.fromNodeId), node, this.getDefaultInputPort(node.dataset.nodeType || "") || "input", this.edgeDragState.dashed)
                         });
                         this.selectFlowNode(nodeId);
                     }
@@ -1347,7 +1478,8 @@
                         to: toNodeId,
                         toPort: port.textContent.trim(),
                         dashed: this.edgeDragState.dashed,
-                        mode: this.edgeDragState.dashed ? "REFERENCE" : "SERIAL"
+                        mode: this.edgeDragState.dashed ? "REFERENCE" : "SERIAL",
+                        params: this.buildDefaultEdgeParams(this.getFlowNode(this.edgeDragState.fromNodeId), targetNode, port.textContent.trim(), this.edgeDragState.dashed)
                     });
                     this.selectFlowNode(toNodeId);
                 }
@@ -1557,7 +1689,7 @@
                 const menu = getContainerEl(`#flowCanvasMenu-${PAGE_CODE}`);
                 if (!menu) return;
                 const hasNode = Boolean(this.flowContextMenuState?.nodeId || this.selectedNodeId);
-                menu.querySelectorAll('[data-flow-menu-action="duplicateNode"], [data-flow-menu-action="deleteNode"]').forEach((button) => {
+                menu.querySelectorAll('[data-flow-menu-action="runSelectedNode"], [data-flow-menu-action="duplicateNode"], [data-flow-menu-action="deleteNode"]').forEach((button) => {
                     button.classList.toggle("is-disabled", !hasNode);
                     button.disabled = !hasNode;
                 });
@@ -1569,24 +1701,21 @@
                 if (menu) menu.hidden = true;
             },
 
-            handleContextMenuClick(event) {
+            async handleContextMenuClick(event) {
                 const button = event.target.closest?.("[data-flow-menu-action]");
                 if (!button || button.disabled) return;
                 event.preventDefault();
                 event.stopPropagation();
                 const action = button.dataset.flowMenuAction;
-                this.runContextMenuAction(action);
+                await this.runContextMenuAction(action);
                 if (action !== "toggleDashedConnection") {
                     this.hideCanvasContextMenu();
                 }
             },
 
-            runContextMenuAction(action) {
+            async runContextMenuAction(action) {
                 const actions = {
-                    addTableInput: () => this.createContextNode("TABLE_INPUT", "Table Input", "Owner/table or temporary result table"),
-                    addValueInput: () => this.createContextNode("VALUE_INPUT", "Value Input", "Scalar threshold, date, owner, or option"),
-                    addArrayInput: () => this.createContextNode("ARRAY_INPUT", "Array Input", "Column list, rule list, or option array"),
-                    addOutput: () => this.createContextNode("TABLE_OUTPUT", "Table Output", "Persisted result table or downstream target"),
+                    runSelectedNode: () => this.runSelectedNode(),
                     duplicateNode: () => this.duplicateSelectedNode(),
                     deleteNode: () => this.removeSelectedNode(),
                     toggleDashedConnection: () => this.toggleDashedConnectionMode(),
@@ -1595,7 +1724,7 @@
                     fitCanvas: () => this.fitFlowCanvas(),
                     resetZoom: () => this.resetFlowZoom()
                 };
-                actions[action]?.();
+                await actions[action]?.();
             },
 
             toggleDashedConnectionMode() {
@@ -1630,10 +1759,8 @@
                 const nodeType = data.nodeType || "JOB";
                 const nodeTypeLabel = data.nodeTypeLabel || this.getNodeTypeLabel(nodeType);
                 const nodeId = `${String(nodeType).toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${this.nodeSequence++}`;
-                const outputLabel = this.getDefaultOutputPort(nodeType);
-                const inputHtml = this.getDefaultInputPort(nodeType)
-                    ? `<span class="flow-port flow-port-in">${this.escapeHtml(this.getDefaultInputPort(nodeType))}</span>`
-                    : "";
+                const inputHtml = this.renderNodePortSpans(this.getRenderInputPorts(nodeType, data), "in");
+                const outputHtml = this.renderNodePortSpans(this.getRenderOutputPorts(nodeType, data), "out");
                 const article = document.createElement("article");
                 article.id = `flowNode-${PAGE_CODE}-${nodeId}`;
                 article.className = "data-param-card flow-node flow-node-step";
@@ -1648,6 +1775,10 @@
                 article.dataset.resultCreateYn = data.resultCreateYn || "N";
                 article.dataset.resultOwner = data.resultOwner || "";
                 article.dataset.resultTableName = data.resultTableName || "";
+                article.dataset.execSourceType = data.execSourceType || "DB_OBJECT";
+                article.dataset.execResourceId = data.execResourceId || "";
+                article.dataset.execMethod = data.execMethod || "";
+                article.dataset.execSpecJson = data.execSpecJson || "";
                 article.dataset.execPlsql = data.execPlsql || "";
                 article.dataset.nodeParams = this.stringifyNodeJson(data.params || []);
                 article.style.position = "absolute";
@@ -1665,7 +1796,7 @@
                     </div>
                     <footer class="flow-node-ports">
                         ${inputHtml}
-                        <span class="flow-port flow-port-out">${this.escapeHtml(outputLabel)}</span>
+                        ${outputHtml}
                     </footer>
                 `;
                 return article;
@@ -1676,12 +1807,8 @@
                 const nodeTypeLabel = data.nodeTypeLabel || this.getNodeTypeLabel(nodeType);
                 const refJob = this.getRegisteredJobAsset(data.refWorkJobId || "");
                 const nodeId = data.nodeKey || `${String(nodeType).toLowerCase()}-${this.nodeSequence++}`;
-                const inputs = Array.isArray(data.inputs) ? data.inputs : [];
-                const outputs = Array.isArray(data.outputs) ? data.outputs : [];
-                const inputHtml = inputs.map((port) => `<span class="flow-port flow-port-in">${this.escapeHtml(port.port || port.name || "input")}</span>`).join("");
-                const outputHtml = outputs.length
-                    ? outputs.map((port) => `<span class="flow-port flow-port-out">${this.escapeHtml(port.port || port.name || "output")}</span>`).join("")
-                    : `<span class="flow-port flow-port-out">${this.escapeHtml(this.getDefaultOutputPort(nodeType))}</span>`;
+                const inputHtml = this.renderNodePortSpans(this.getRenderInputPorts(nodeType, data), "in");
+                const outputHtml = this.renderNodePortSpans(this.getRenderOutputPorts(nodeType, data, refJob), "out");
                 const article = document.createElement("article");
                 article.id = `flowNode-${PAGE_CODE}-${nodeId}`;
                 article.className = "data-param-card flow-node flow-node-step";
@@ -1690,6 +1817,10 @@
                 article.dataset.nodeTypeLabel = nodeTypeLabel;
                 article.dataset.refWorkJobId = data.refWorkJobId || "";
                 article.dataset.refMenuCode = data.refMenuCode || "";
+                article.dataset.execSourceType = data.execSourceType || refJob?.EXEC_SOURCE_TYPE || "DB_OBJECT";
+                article.dataset.execResourceId = data.execResourceId || refJob?.EXEC_RESOURCE_ID || "";
+                article.dataset.execMethod = data.execMethod || refJob?.EXEC_METHOD || "";
+                article.dataset.execSpecJson = data.execSpecJson || refJob?.EXEC_SPEC_JSON || "";
                 article.dataset.ownerName = data.ownerName || "";
                 article.dataset.tableName = data.tableName || "";
                 article.dataset.refObjectId = data.refObjectId || "";
@@ -1719,22 +1850,87 @@
                 return article;
             },
 
+            renderNodePortSpans(ports, direction) {
+                const className = direction === "in" ? "flow-port-in" : "flow-port-out";
+                return (ports || [])
+                    .filter((port) => String(port || "").trim())
+                    .map((port) => `<span class="flow-port ${className}">${this.escapeHtml(port)}</span>`)
+                    .join("");
+            },
+
+            getRenderInputPorts(nodeType, data = {}) {
+                const explicitPorts = this.normalizePortNames(data.inputs, "input");
+                if (explicitPorts.length) return explicitPorts;
+                const defaultPort = this.getDefaultInputPort(nodeType);
+                return defaultPort ? [defaultPort] : [];
+            },
+
+            getRenderOutputPorts(nodeType, data = {}, refJob = null) {
+                const explicitPorts = this.normalizePortNames(data.outputs, "output");
+                const resultCreateYn = String(data.resultCreateYn || refJob?.RESULT_CREATE_YN || "N").toUpperCase();
+                if (resultCreateYn !== "Y") {
+                    return [];
+                }
+                return explicitPorts.length ? explicitPorts : [this.getDefaultOutputPort(nodeType)];
+            },
+
+            normalizePortNames(ports, fallback = "") {
+                if (!Array.isArray(ports)) return [];
+                const names = ports
+                    .map((port) => this.normalizeFlowPortName(port?.port || port?.name || port || "", fallback))
+                    .filter(Boolean);
+                return Array.from(new Set(names));
+            },
+
+            normalizeFlowPortName(portName, fallback = "input") {
+                const value = String(portName || "").trim();
+                const normalized = value.toLowerCase();
+                if (normalized === "input" || normalized.endsWith("input")) return "input";
+                if (normalized === "output" || normalized.endsWith("output")) return "output";
+                if (!value) return fallback;
+                return fallback === "input" ? "input" : "output";
+            },
+
+            isFlowSourceNodeType(nodeType) {
+                return false;
+            },
+
             getDefaultInputPort(nodeType) {
-                if (nodeType === "TABLE_INPUT" || nodeType === "VALUE_INPUT" || nodeType === "ARRAY_INPUT") return "";
-                if (nodeType === "TABLE_OUTPUT") return "inputTable";
                 return "input";
             },
 
             getDefaultOutputPort(nodeType) {
-                if (nodeType === "VALUE_INPUT") return "value";
-                if (nodeType === "ARRAY_INPUT") return "items[]";
-                if (nodeType === "TABLE_INPUT") return "tableRows";
-                if (nodeType === "TABLE_OUTPUT") return "targetTable";
-                const outputType = String(this.getNodeTypeConfig(nodeType)?.DEFAULT_OUTPUT_TYPE || "").toUpperCase();
-                if (outputType === "ARRAY") return "items[]";
-                if (outputType === "TABLE") return "tableRows";
-                if (outputType === "VALUE") return "value";
                 return "output";
+            },
+
+            buildDefaultEdgeParams(fromNode, toNode, toPort = "input", dashed = false) {
+                if (!fromNode || !toNode || dashed) return {};
+                const hasResultTable = String(fromNode.dataset.resultCreateYn || "").toUpperCase() === "Y"
+                    || Boolean(fromNode.dataset.resultOwner && fromNode.dataset.resultTableName);
+                if (!hasResultTable) return {};
+                return {
+                    inputSource: "UPSTREAM_RESULT",
+                    fromNodeKey: fromNode.dataset.nodeId || "",
+                    toNodeKey: toNode.dataset.nodeId || "",
+                    toPort: toPort || "input",
+                    bindTo: {
+                        targetOwner: "$from.resultOwner",
+                        targetTable: "$from.resultTableName",
+                        inputOwner: "$from.resultOwner",
+                        inputTable: "$from.qualifiedTable",
+                        INPUT_TABLE: "$from.quotedTable"
+                    }
+                };
+            },
+
+            getEdgeParams(edge) {
+                if (edge?.params && Object.keys(edge.params).length) return edge.params;
+                return this.buildDefaultEdgeParams(
+                    this.getFlowNode(edge?.from || ""),
+                    this.getFlowNode(edge?.to || ""),
+                    edge?.toPort || "input",
+                    Boolean(edge?.dashed)
+                );
             },
 
             duplicateSelectedNode() {
@@ -1867,7 +2063,7 @@
                 const masked = this.maskSqlForBindScan(sqlText);
                 const names = [];
                 const seen = new Set();
-                const regex = /(?<!:):([A-Za-z][A-Za-z0-9_]*)/g;
+                const regex = /(?<!:):([A-Za-z_][A-Za-z0-9_]*)/g;
                 let match;
                 while ((match = regex.exec(masked)) !== null) {
                     const name = match[1];
@@ -1890,6 +2086,55 @@
                 const portNames = this.getNodePortBindNames(node);
                 return this.extractBindVariables(node.dataset.execPlsql || "")
                     .filter((name) => !portNames.has(name.toLowerCase()));
+            },
+
+            isSystemBindName(name) {
+                return [
+                    "_TargetOwner",
+                    "_TargetTable",
+                    "_ResultOwner",
+                    "_ResultTable",
+                    "_preTargetOwner",
+                    "_preTargetTable",
+                    "_preResultOwner",
+                    "_preResultTable"
+                ].includes(String(name || ""));
+            },
+
+            getPreviousNodeForSystemBind(node) {
+                const nodeId = node?.dataset?.nodeId || "";
+                const incoming = this.flowEdges.find((edge) =>
+                    edge.to === nodeId
+                    && !edge.dashed
+                    && String(edge.mode || "SERIAL").toUpperCase() !== "REFERENCE"
+                ) || this.flowEdges.find((edge) => edge.to === nodeId);
+                return incoming ? this.getFlowNode(incoming.from) : null;
+            },
+
+            getSystemBindValue(name, node) {
+                const previousNode = this.getPreviousNodeForSystemBind(node);
+                const sourceNode = String(name || "").startsWith("_pre") ? previousNode : node;
+                if (!sourceNode) return "";
+                const resultOwner = sourceNode.dataset.resultOwner || "";
+                const resultTable = sourceNode.dataset.resultTableName || "";
+                const values = {
+                    _TargetOwner: sourceNode.dataset.ownerName || "",
+                    _TargetTable: sourceNode.dataset.tableName || "",
+                    _ResultOwner: resultOwner,
+                    _ResultTable: resultTable,
+                    _preTargetOwner: sourceNode.dataset.ownerName || "",
+                    _preTargetTable: sourceNode.dataset.tableName || "",
+                    _preResultOwner: resultOwner,
+                    _preResultTable: resultTable
+                };
+                return values[name] || "";
+            },
+
+            getSystemBindComment(name, node) {
+                if (String(name || "").startsWith("_pre") && !this.getPreviousNodeForSystemBind(node)) {
+                    return "No upstream node is connected.";
+                }
+                return "System bind value. It is supplied automatically at run time.";
             },
 
             getNodeParams(node) {
@@ -1981,6 +2226,18 @@
                     return;
                 }
                 container.innerHTML = names.map((name) => {
+                    if (this.isSystemBindName(name)) {
+                        const value = this.getSystemBindValue(name, node);
+                        return `
+                            <label class="data-bind-row flow-system-bind-row">
+                                <span class="data-bind-meta">
+                                    <span class="flow-bind-name">:${this.escapeHtml(name)}</span>
+                                    <small class="flow-bind-comment">${this.escapeHtml(this.getSystemBindComment(name, node))}</small>
+                                </span>
+                                <input class="env-field" type="text" value="${this.escapeHtml(value || "(auto)")}" readonly>
+                            </label>
+                        `;
+                    }
                     const saved = paramMap.get(this.normalizeBindParamKey(name));
                     const comment = this.getNodeParamComment(saved);
                     return `
@@ -2026,10 +2283,8 @@
 
             inferPortType(portName, nodeType) {
                 const value = String(portName || "").toLowerCase();
-                if (value.includes("[]") || value.includes("array") || nodeType === "ARRAY_INPUT") return "ARRAY";
-                if (value.includes("table") || value.includes("rows") || nodeType === "TABLE_INPUT" || nodeType === "TABLE_OUTPUT") return "TABLE";
-                if (nodeType === "VALUE_INPUT") return "VALUE";
-                return "ANY";
+                if (value === "input" || value === "output") return "TABLE";
+                return "TABLE";
             },
 
             buildFlowPayload() {
@@ -2039,7 +2294,8 @@
                 if (!this.getValue(`#flowName-${PAGE_CODE}`)) {
                     this.setValue(`#flowName-${PAGE_CODE}`, flowName);
                 }
-                const nodes = this.getFlowNodes().map((node, index) => {
+                const flowNodes = this.getFlowNodes();
+                const nodes = flowNodes.map((node, index) => {
                     const position = this.getNodePosition(node);
                     return {
                         nodeKey: node.dataset.nodeId || `node-${index + 1}`,
@@ -2050,6 +2306,10 @@
                         refMenuCode: node.dataset.refMenuCode || "",
                         refWorkJobId: node.dataset.refWorkJobId || null,
                         refObjectId: node.dataset.refObjectId || null,
+                        execSourceType: node.dataset.execSourceType || "DB_OBJECT",
+                        execResourceId: node.dataset.execResourceId || "",
+                        execMethod: node.dataset.execMethod || "",
+                        execSpecJson: node.dataset.execSpecJson || "",
                         ownerName: node.dataset.ownerName || "",
                         tableName: node.dataset.tableName || "",
                         resultCreateYn: node.dataset.resultCreateYn || "N",
@@ -2081,12 +2341,13 @@
                     nodes,
                     edges: this.flowEdges.map((edge, index) => ({
                         fromNodeKey: edge.from,
-                        fromPort: edge.fromPort || "output",
+                        fromPort: this.normalizeFlowPortName(edge.fromPort, "output"),
                         toNodeKey: edge.to,
-                        toPort: edge.toPort || "input",
+                        toPort: this.normalizeFlowPortName(edge.toPort, "input"),
                         edgeMode: edge.mode || (edge.dashed ? "REFERENCE" : "SERIAL"),
                         dashedYn: edge.dashed ? "Y" : "N",
                         dashed: Boolean(edge.dashed),
+                        params: this.getEdgeParams(edge),
                         sortOrder: index + 1
                     }))
                 };
@@ -2133,6 +2394,7 @@
                 if (selector) selector.value = flow.FLOW_ID || "";
                 this.flowLayoutRestoredFromDb = true;
                 this.renderFlowCanvasFromData(flow.NODES || [], flow.EDGES || []);
+                this.scheduleFitFlowCanvas();
                 this.updateFlowCopyButton();
             },
 
@@ -2143,11 +2405,12 @@
                 this.setSampleFlowState(false);
                 this.flowEdges = (edges || []).map((edge) => ({
                     from: edge.fromNodeKey,
-                    fromPort: edge.fromPort || "output",
+                    fromPort: this.normalizeFlowPortName(edge.fromPort, "output"),
                     to: edge.toNodeKey,
-                    toPort: edge.toPort || "input",
+                    toPort: this.normalizeFlowPortName(edge.toPort, "input"),
                     dashed: Boolean(edge.dashed || edge.dashedYn === "Y"),
-                    mode: edge.edgeMode || (edge.dashed || edge.dashedYn === "Y" ? "REFERENCE" : "SERIAL")
+                    mode: edge.edgeMode || (edge.dashed || edge.dashedYn === "Y" ? "REFERENCE" : "SERIAL"),
+                    params: edge.params || {}
                 }));
                 (nodes || []).forEach((node) => {
                     const element = this.createSavedFlowNode(node);
@@ -2183,6 +2446,7 @@
                 viewport.style.transform = `scale(${this.flowZoom})`;
                 this.resizeFlowViewportToNodes();
                 this.updateSelectedEdgeDeleteButton();
+                this.updateFlowZoomLabel();
                 const label = getContainerEl(`#selectedFlowLabel-${PAGE_CODE}`);
                 if (label) {
                     if (this.isSampleFlowVisible) {
@@ -2194,11 +2458,27 @@
                 }
             },
 
+            updateFlowZoomLabel() {
+                const label = getContainerEl(`#flowZoomLabel-${PAGE_CODE}`);
+                if (label) label.textContent = `${Math.round(this.flowZoom * 100)}%`;
+            },
+
             resetFlowZoom() {
                 this.setFlowZoom(1);
             },
 
-            fitFlowCanvas() {
+            scheduleFitFlowCanvas(options = {}) {
+                const run = () => this.fitFlowCanvas(options);
+                if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+                    window.requestAnimationFrame(() => {
+                        window.requestAnimationFrame(run);
+                    });
+                    return;
+                }
+                setTimeout(run, 0);
+            },
+
+            fitFlowCanvas(options = {}) {
                 const stage = this.getFlowStage();
                 const viewport = this.getFlowViewport();
                 if (!stage || !viewport) return;
@@ -2206,13 +2486,20 @@
                 if (!bounds) return;
                 const availableWidth = Math.max(stage.clientWidth - 80, 320);
                 const availableHeight = Math.max(stage.clientHeight - 80, 240);
+                const maxZoom = Number.isFinite(Number(options.maxZoom))
+                    ? Math.min(this.maxFlowZoom, Math.max(this.minFlowZoom, Number(options.maxZoom)))
+                    : this.maxFlowZoom;
                 const zoom = Math.min(
-                    this.maxFlowZoom,
+                    maxZoom,
                     Math.max(this.minFlowZoom, Math.min(availableWidth / bounds.width, availableHeight / bounds.height))
                 );
                 this.setFlowZoom(zoom);
-                stage.scrollLeft = Math.max(0, (bounds.left - 40) * this.flowZoom);
-                stage.scrollTop = Math.max(0, (bounds.top - 40) * this.flowZoom);
+                const scaledWidth = bounds.width * this.flowZoom;
+                const scaledHeight = bounds.height * this.flowZoom;
+                const centeredLeft = (bounds.left * this.flowZoom) - Math.max(40, (stage.clientWidth - scaledWidth) / 2);
+                const centeredTop = (bounds.top * this.flowZoom) - Math.max(40, (stage.clientHeight - scaledHeight) / 2);
+                stage.scrollLeft = Math.max(0, centeredLeft);
+                stage.scrollTop = Math.max(0, centeredTop);
             },
 
             toggleCanvasMaximize() {
@@ -2220,6 +2507,7 @@
                 if (!container) return;
                 const nextMaximized = !container.classList.contains("is-flow-canvas-maximized");
                 container.classList.toggle("is-flow-canvas-maximized", nextMaximized);
+                this.syncAppSidebarForCanvasMaximize(nextMaximized);
                 if (nextMaximized) {
                     this.flowSidebarCollapsedBeforeMaximize = this.flowSidebarCollapsed;
                     if (!this.flowSidebarCollapsed) {
@@ -2242,6 +2530,24 @@
                     this.resizeFlowViewportToNodes();
                     this.updateFlowEdges();
                 }, 0);
+            },
+
+            syncAppSidebarForCanvasMaximize(maximized) {
+                if (!window.LayoutManager?.applySidebarCollapsed) return;
+                if (maximized) {
+                    this.appSidebarCollapsedBeforeMaximize = document.body.classList.contains("sidebar-user-collapsed");
+                    window.LayoutManager.applySidebarCollapsed(true, { persist: false });
+                    return;
+                }
+                this.restoreAppSidebarAfterCanvasMaximize();
+            },
+
+            restoreAppSidebarAfterCanvasMaximize() {
+                if (this.appSidebarCollapsedBeforeMaximize === null) return;
+                if (window.LayoutManager?.applySidebarCollapsed) {
+                    window.LayoutManager.applySidebarCollapsed(this.appSidebarCollapsedBeforeMaximize, { persist: false });
+                }
+                this.appSidebarCollapsedBeforeMaximize = null;
             },
 
             toggleFlowInspectorOverlay() {
@@ -2441,12 +2747,18 @@
 
             removeSelectedEdge() {
                 if (!this.selectedEdgeId) return;
+                const removedEdge = this.flowEdges.find((edge, index) => this.getEdgeId(edge, index) === this.selectedEdgeId);
                 this.flowEdges = this.flowEdges.filter((edge, index) => this.getEdgeId(edge, index) !== this.selectedEdgeId);
                 this.markFlowEdited();
                 this.selectedEdgeId = "";
                 this.hideSelectedEdgeDelete();
                 this.updateFlowEdges();
                 this.renderFlowEdgeGrid();
+                if (!this.selectedNodeId && removedEdge?.to) {
+                    this.selectFlowNode(removedEdge.to);
+                    return;
+                }
+                this.refreshNodeBindVariablesForEdgeChange(removedEdge);
             },
 
             addNodePort() {},
@@ -2457,11 +2769,12 @@
                 }
                 const nextEdge = {
                     from: edge.from,
-                    fromPort: edge.fromPort || "output",
+                    fromPort: this.normalizeFlowPortName(edge.fromPort, "output"),
                     to: edge.to,
-                    toPort: edge.toPort || "input",
+                    toPort: this.normalizeFlowPortName(edge.toPort, "input"),
                     dashed: Boolean(edge.dashed),
-                    mode: edge.mode || (edge.dashed ? "REFERENCE" : "SERIAL")
+                    mode: edge.mode || (edge.dashed ? "REFERENCE" : "SERIAL"),
+                    params: edge.params || {}
                 };
                 if (!nextEdge.from || !nextEdge.to || nextEdge.from === nextEdge.to) return;
                 const exists = this.flowEdges.some((item) =>
@@ -2475,6 +2788,17 @@
                 this.flowEdges.push(nextEdge);
                 this.updateFlowEdges();
                 this.renderFlowEdgeGrid();
+                this.refreshNodeBindVariablesForEdgeChange(nextEdge);
+            },
+
+            refreshNodeBindVariablesForEdgeChange(edge) {
+                if (!edge || !this.selectedNodeId) return;
+                if (edge.to !== this.selectedNodeId && edge.from !== this.selectedNodeId) return;
+                const selectedNode = this.getFlowNode(this.selectedNodeId);
+                if (selectedNode) {
+                    this.renderNodeBindVariables(selectedNode);
+                    this.setValue(`#nodeDependsOn-${PAGE_CODE}`, this.getUpstreamNodeIds(this.selectedNodeId).join(", "));
+                }
             },
 
             renderFlowEdgeGrid() {
@@ -2492,6 +2816,7 @@
                                 <th>Output</th>
                                 <th>To Node</th>
                                 <th>Input</th>
+                                <th>Source</th>
                                 <th>Mode</th>
                             </tr>
                         </thead>
@@ -2502,6 +2827,7 @@
                                     <td>${this.escapeHtml(edge.fromPort || "output")}</td>
                                     <td>${this.escapeHtml(edge.to || "")}</td>
                                     <td>${this.escapeHtml(edge.toPort || "input")}</td>
+                                    <td>${this.escapeHtml(this.getEdgeParams(edge)?.inputSource === "UPSTREAM_RESULT" ? "Upstream result table" : "-")}</td>
                                     <td>${this.escapeHtml(edge.mode || (edge.dashed ? "REFERENCE" : "SERIAL"))}</td>
                                 </tr>
                             `).join("")}
@@ -2512,33 +2838,46 @@
             },
             addFlowVariable() {},
             async buildExecutionPlan(options = {}) {
-                const switchToPlan = options.switchToPlan !== false;
                 const payload = this.buildFlowPayload();
                 try {
                     const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/flow/validate`, {
                         method: "POST",
                         body: payload
                     });
-                    const plan = json.data?.plan || [];
-                    this.renderExecutionPlan(plan);
-                    this.renderFlowPlanMessage(`Validation succeeded. ${plan.length.toLocaleString()} execution step(s) found.`, "success");
-                    if (switchToPlan) this.switchTab("plan");
-                    return plan;
+                    return json.data?.plan || [];
                 } catch (error) {
-                    this.renderError(`#flowPlanGrid-${PAGE_CODE}`, error.message || "Flow validation failed.");
-                    this.renderFlowPlanMessage(error.message || "Flow validation failed.", "error");
-                    if (switchToPlan) this.switchTab("plan");
                     throw error;
                 }
             },
-            async loadFlowRunHistory() {
+            async refreshFlowRunHistory() {
+                await this.loadFlowRunHistory({ showFeedback: true });
+            },
+            setFlowRunHistoryLoading(isLoading, message = "") {
+                const button = getContainerEl(`#flowRunHistoryRefresh-${PAGE_CODE}`);
+                const icon = button?.querySelector("i");
+                const status = getContainerEl(`#flowRunHistoryRefreshStatus-${PAGE_CODE}`);
+                if (button) {
+                    button.disabled = Boolean(isLoading);
+                    button.classList.toggle("is-loading", Boolean(isLoading));
+                }
+                if (icon) {
+                    icon.classList.toggle("fa-spin", Boolean(isLoading));
+                }
+                if (status) {
+                    status.textContent = message;
+                }
+            },
+            async loadFlowRunHistory(options = {}) {
                 const container = getContainerEl(`#flowRunHistoryGrid-${PAGE_CODE}`);
                 if (!container) return;
+                const showFeedback = Boolean(options.showFeedback);
                 if (!this.selectedProjectId || !this.selectedScenarioId) {
                     container.innerHTML = `<div class="table-empty">Select project and scenario first.</div>${this.renderListFooter(0)}`;
+                    if (showFeedback) this.setFlowRunHistoryLoading(false, "Project and scenario are required.");
                     return;
                 }
                 try {
+                    if (showFeedback) this.setFlowRunHistoryLoading(true, "Refreshing history...");
                     const params = new URLSearchParams({
                         projectId: this.selectedProjectId,
                         scenarioId: this.selectedScenarioId
@@ -2547,12 +2886,16 @@
                     if (/^\d+$/.test(flowId)) params.set("flowId", flowId);
                     const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/runs?${params.toString()}`, { method: "GET", showLoading: false });
                     this.renderFlowRunHistory(Array.isArray(json.data) ? json.data : []);
+                    if (showFeedback) {
+                        const refreshedAt = new Date().toLocaleTimeString("ko-KR", { hour12: false });
+                        this.setFlowRunHistoryLoading(false, `Refreshed ${refreshedAt}`);
+                    }
                 } catch (error) {
                     this.renderError(`#flowRunHistoryGrid-${PAGE_CODE}`, error.message || "Run history load failed.");
+                    if (showFeedback) this.setFlowRunHistoryLoading(false, "Refresh failed.");
                 }
             },
-            renderExecutionPlan(plan) {
-                const container = getContainerEl(`#flowPlanGrid-${PAGE_CODE}`);
+            renderExecutionPlanTable(container, plan = []) {
                 if (!container) return;
                 if (!plan.length) {
                     container.innerHTML = `<div class="table-empty">No execution steps.</div>${this.renderListFooter(0)}`;
@@ -2584,22 +2927,10 @@
                     ${this.renderListFooter(plan.length)}
                 `;
             },
-            renderFlowPlanMessage(message, type = "info") {
-                const container = getContainerEl(`#flowPlanMessage-${PAGE_CODE}`);
-                if (!container) return;
-                if (!message) {
-                    container.hidden = true;
-                    container.textContent = "";
-                    container.className = "flow-plan-message";
-                    return;
-                }
-                container.hidden = false;
-                container.className = `flow-plan-message is-${type}`;
-                container.textContent = message;
-            },
             renderFlowRunHistory(rows) {
                 const container = getContainerEl(`#flowRunHistoryGrid-${PAGE_CODE}`);
                 if (!container) return;
+                this.flowRunHistoryRows = Array.isArray(rows) ? rows : [];
                 if (!rows.length) {
                     container.innerHTML = `<div class="table-empty">No run history.</div>${this.renderListFooter(0)}`;
                     return;
@@ -2615,6 +2946,7 @@
                                 <th>Message</th>
                                 <th>Started</th>
                                 <th>Finished</th>
+                                <th></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -2627,12 +2959,111 @@
                                     <td>${this.escapeHtml(row.MESSAGE || "")}</td>
                                     <td>${this.escapeHtml(row.STARTED_AT || "")}</td>
                                     <td>${this.escapeHtml(row.FINISHED_AT || "")}</td>
+                                    <td>
+                                        <button type="button" class="table-icon-btn" title="View execution plan" onclick="${PAGE_CODE}.openRunPlanLayer('${this.escapeHtml(row.FLOW_RUN_ID || "")}')">
+                                            <i class="fas fa-ellipsis"></i>
+                                        </button>
+                                    </td>
                                 </tr>
                             `).join("")}
                         </tbody>
                     </table>
                     ${this.renderListFooter(rows.length)}
                 `;
+            },
+            async openRunPlanLayer(flowRunId) {
+                const row = this.flowRunHistoryRows.find((item) => String(item.FLOW_RUN_ID || "") === String(flowRunId || ""));
+                if (!row) return;
+                const layer = getContainerEl(`#flowRunPlanLayer-${PAGE_CODE}`);
+                const title = getContainerEl(`#flowRunPlanTitle-${PAGE_CODE}`);
+                const summary = getContainerEl(`#flowRunPlanSummary-${PAGE_CODE}`);
+                const grid = getContainerEl(`#flowRunPlanGrid-${PAGE_CODE}`);
+                if (!layer || !grid) return;
+
+                if (title) title.textContent = `Execution Plan - Run #${row.FLOW_RUN_ID || ""}`;
+                if (summary) {
+                    summary.innerHTML = `
+                        <span><strong>Flow</strong> ${this.escapeHtml(row.FLOW_NAME || "")}</span>
+                        <span><strong>Type</strong> ${this.escapeHtml(row.RUN_TYPE || "")}</span>
+                        <span><strong>Status</strong> ${this.escapeHtml(row.STATUS || "")}</span>
+                        <span><strong>Started</strong> ${this.escapeHtml(row.STARTED_AT || "")}</span>
+                        <span><strong>Message</strong> ${this.escapeHtml(row.MESSAGE || "")}</span>
+                    `;
+                }
+                grid.innerHTML = `<div class="table-empty">Loading node execution results...</div>${this.renderListFooter(0)}`;
+                layer.hidden = false;
+                try {
+                    const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/run/${encodeURIComponent(flowRunId)}/nodes`, {
+                        method: "GET",
+                        showLoading: false
+                    });
+                    const nodeRuns = Array.isArray(json.data) ? json.data : [];
+                    if (nodeRuns.length) {
+                        this.renderNodeRunResultTable(grid, nodeRuns);
+                    } else {
+                        this.renderExecutionPlanTable(grid, this.extractRunPlan(row));
+                    }
+                } catch (error) {
+                    grid.innerHTML = `<div class="table-error">${this.escapeHtml(error.message || "Node run result load failed.")}</div>${this.renderListFooter(0)}`;
+                }
+            },
+            closeRunPlanLayer() {
+                const layer = getContainerEl(`#flowRunPlanLayer-${PAGE_CODE}`);
+                if (layer) layer.hidden = true;
+            },
+            extractRunPlan(row) {
+                const raw = row?.PLAN_JSON || "";
+                if (!raw) return [];
+                try {
+                    const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+                    return Array.isArray(parsed?.plan) ? parsed.plan : (Array.isArray(parsed) ? parsed : []);
+                } catch (error) {
+                    return [];
+                }
+            },
+            renderNodeRunResultTable(container, rows = []) {
+                if (!container) return;
+                if (!rows.length) {
+                    container.innerHTML = `<div class="table-empty">No node execution results.</div>${this.renderListFooter(0)}`;
+                    return;
+                }
+                container.innerHTML = `
+                    <table class="table-grid flow-node-run-result-table">
+                        <thead>
+                            <tr>
+                                <th>Level</th>
+                                <th>Node</th>
+                                <th>Type</th>
+                                <th>Status</th>
+                                <th>Started</th>
+                                <th>Finished</th>
+                                <th>Message / Error</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${rows.map((row) => `
+                                <tr class="${this.getRunStatusClass(row.STATUS)}">
+                                    <td>${this.escapeHtml(row.RUN_LEVEL ?? "")}</td>
+                                    <td>${this.escapeHtml(row.NODE_NAME || row.NODE_KEY || "")}</td>
+                                    <td>${this.escapeHtml(row.NODE_TYPE || "")}</td>
+                                    <td><span class="flow-run-status-pill">${this.escapeHtml(row.STATUS || "")}</span></td>
+                                    <td>${this.escapeHtml(row.STARTED_AT || "")}</td>
+                                    <td>${this.escapeHtml(row.FINISHED_AT || "")}</td>
+                                    <td class="flow-run-message-cell">${this.escapeHtml(row.MESSAGE || "")}</td>
+                                </tr>
+                            `).join("")}
+                        </tbody>
+                    </table>
+                    ${this.renderListFooter(rows.length)}
+                `;
+            },
+            getRunStatusClass(status) {
+                const value = String(status || "").toUpperCase();
+                if (value === "SUCCESS") return "is-success";
+                if (value === "FAILED") return "is-failed";
+                if (value === "RUNNING" || value === "STARTED") return "is-running";
+                if (value === "SKIPPED") return "is-skipped";
+                return "";
             },
             generateNodePlsql() {},
             removeSelectedNode(targetNodeId = "") {
@@ -2676,6 +3107,7 @@
                 if (selector) selector.value = "";
                 if (clearCanvas) {
                     this.renderFlowCanvasFromData([], []);
+                    this.applyDefaultDraftTemplate();
                 } else {
                     this.setSampleFlowState(false);
                 }
@@ -2770,6 +3202,10 @@
                     alert("Select project and scenario first.");
                     return;
                 }
+                const flowName = this.getValue(`#flowName-${PAGE_CODE}`).trim() || this.getFlowNameForSave();
+                const actionName = batch ? "Queue batch / 배치 대기열 등록" : "Run now / 지금 실행";
+                const confirmMessage = `${actionName} for "${flowName}"?\n"${flowName}" 플로우를 ${batch ? "배치 대기열에 등록" : "지금 실행"}할까요?\n\nThis will save the current flow, validate the DAG, and create a run history record.\n현재 플로우를 저장하고 DAG를 검증한 뒤 실행 이력 기록을 생성합니다.`;
+                if (!(await CommonMessage.confirm(confirmMessage))) return;
                 const payload = {
                     ...this.buildFlowPayload(),
                     batch: Boolean(batch)
@@ -2785,12 +3221,48 @@
                         const selector = getContainerEl(`#flowVersion-${PAGE_CODE}`);
                         if (selector) selector.value = json.data.flowId;
                     }
-                    this.renderExecutionPlan(json.data?.plan || []);
                     await this.loadFlowRunHistory();
                     this.switchTab("history");
                     alert(json.message || "Flow run recorded.");
                 } catch (error) {
                     alert(error.message || "Flow run failed.");
+                }
+            },
+
+            async runSelectedNode() {
+                const nodeId = this.flowContextMenuState?.nodeId || this.selectedNodeId;
+                const node = this.getFlowNode(nodeId);
+                if (!node) {
+                    alert("Select a node first.\n먼저 실행할 노드를 선택해 주세요.");
+                    return;
+                }
+                if (!this.selectedProjectId || !this.selectedScenarioId) {
+                    alert("Select project and scenario first.\n먼저 프로젝트와 시나리오를 선택해 주세요.");
+                    return;
+                }
+                const nodeName = node.querySelector(".flow-node-body strong")?.textContent?.trim() || nodeId;
+                const confirmMessage = `Run selected node / 선택 노드 실행: "${nodeName}"?\n"${nodeName}" 노드만 지금 실행할까요?\n\nThis will save the current flow, validate the DAG, and create a node run history record.\n현재 플로우를 저장하고 DAG를 검증한 뒤 선택 노드 실행 이력 기록을 생성합니다.`;
+                if (!(await CommonMessage.confirm(confirmMessage))) return;
+                const payload = {
+                    ...this.buildFlowPayload(),
+                    nodeKey: nodeId
+                };
+                try {
+                    const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/flow/run-node`, {
+                        method: "POST",
+                        body: payload
+                    });
+                    if (json.data?.flowId) {
+                        this.setValue(`#flowId-${PAGE_CODE}`, json.data.flowId);
+                        await this.loadFlowVersions(false);
+                        const selector = getContainerEl(`#flowVersion-${PAGE_CODE}`);
+                        if (selector) selector.value = json.data.flowId;
+                    }
+                    await this.loadFlowRunHistory();
+                    this.switchTab("history");
+                    alert(json.message || "Selected node run recorded.");
+                } catch (error) {
+                    alert(error.message || "Selected node run failed.");
                 }
             }
         };

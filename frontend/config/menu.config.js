@@ -199,7 +199,7 @@ window.MENU_CONFIG = [
             },
             {
                 page: 'M90002',
-                title: '외부 모델 등록 (Python/R 스크립트)',
+                title: '외부 모델 등록',
                 label: '외부 모델 등록',
                 iconClass: 'fas fa-code text-pink-300',
                 enabled: true
@@ -260,12 +260,20 @@ window.MENU_CONFIG = [
                 iconClass: 'fas fa-user-shield text-red-300',
                 roles: ['ADMIN'],
                 enabled: true
+            },
+            {
+                page: 'M99004',
+                title: '공지사항 관리',
+                label: '공지사항 관리',
+                iconClass: 'fas fa-bullhorn text-slate-300',
+                roles: ['ADMIN'],
+                enabled: true
             }
         ]
     }
 ];
 
 window.PAGE_FILE_CONFIG = {
-    htmlPages: ['home', 'login', 'M01001', 'M01002', 'M02001', 'M02002', 'M03001', 'M03002', 'M03003', 'M03004', 'M04001', 'M90001', 'M91001', 'M91002', 'M99001', 'M99002', 'M99003'],
-    scriptPages: ['home', 'login', 'M01001', 'M01002', 'M02001', 'M02002', 'M03001', 'M03002', 'M03003', 'M03004', 'M04001', 'M90001', 'M91001', 'M91002', 'M99001', 'M99002', 'M99003']
+    htmlPages: ['home', 'login', 'M01001', 'M01002', 'M02001', 'M02002', 'M03001', 'M03002', 'M03003', 'M03004', 'M04001', 'M05001', 'M05002', 'M06001', 'M06002', 'M07001', 'M07002', 'M07003', 'M90001', 'M90002', 'M91001', 'M91002', 'M99001', 'M99002', 'M99003', 'M99004'],
+    scriptPages: ['home', 'login', 'M01001', 'M01002', 'M02001', 'M02002', 'M03001', 'M03002', 'M03003', 'M03004', 'M04001', 'M90001', 'M90002', 'M91001', 'M91002', 'M99001', 'M99002', 'M99003', 'M99004']
 };

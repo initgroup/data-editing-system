@@ -262,22 +262,12 @@ def create_default_settings(request: Request):
             if category["CATEGORY_CODE"] == "MY_ACCOUNT":
                 continue
             for item in category.get("DEFAULTS", []):
-                cursor.execute(
-                    """
-                    SELECT COUNT(*)
-                     FROM "INIT$_TB_SYSTEM_SETTING"
-                     WHERE USER_ID = :userId
-                       AND CONNECTION_ID = :connectionId
-                       AND CATEGORY_CODE = :categoryCode
-                       AND SETTING_KEY = :settingKey
-                    """,
-                    {
-                        "userId": user_id,
-                        "connectionId": connection_id,
-                        "categoryCode": category["CATEGORY_CODE"],
-                        "settingKey": item["SETTING_KEY"],
-                    },
-                )
+                cursor.execute(SqlLoader.get_sql("M91002_SETTING_EXISTS"), {
+                    "userId": user_id,
+                    "connectionId": connection_id,
+                    "categoryCode": category["CATEGORY_CODE"],
+                    "settingKey": item["SETTING_KEY"],
+                })
                 if cursor.fetchone()[0] > 0:
                     skipped += 1
                     continue
@@ -322,21 +312,7 @@ def get_my_account(request: Request):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute(
-            """
-            SELECT USER_ID,
-                   LOGIN_ID,
-                   USER_NAME,
-                   EMAIL,
-                   ROLE_CODE,
-                   USE_YN,
-                   CREATED_AT,
-                   UPDATED_AT
-              FROM "INIT$_TB_USER"
-             WHERE USER_ID = :userId
-            """,
-            {"userId": user_id},
-        )
+        cursor.execute(SqlLoader.get_sql("M91002_ACCOUNT_ME"), {"userId": user_id})
         row = cursor.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Login user was not found.")
@@ -380,23 +356,12 @@ def get_saved_gemini_api_key(conn, user_id: int, connection_id: int) -> str:
     cursor = None
     try:
         cursor = conn.cursor()
-        cursor.execute(
-            """
-            SELECT SETTING_VALUE
-              FROM "INIT$_TB_SYSTEM_SETTING"
-             WHERE USER_ID = :userId
-               AND CONNECTION_ID = :connectionId
-               AND CATEGORY_CODE = :categoryCode
-               AND SETTING_KEY = :settingKey
-               AND USE_YN = 'Y'
-            """,
-            {
-                "userId": user_id,
-                "connectionId": connection_id,
-                "categoryCode": GEMINI_SETTING_CATEGORY,
-                "settingKey": GEMINI_SETTING_KEY,
-            },
-        )
+        cursor.execute(SqlLoader.get_sql("M91002_ACTIVE_SETTING_VALUE"), {
+            "userId": user_id,
+            "connectionId": connection_id,
+            "categoryCode": GEMINI_SETTING_CATEGORY,
+            "settingKey": GEMINI_SETTING_KEY,
+        })
         row = cursor.fetchone()
         if not row:
             return ""
@@ -545,16 +510,7 @@ def change_user_name(req: UserNameChangeRequest, request: Request):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute(
-            """
-            UPDATE "INIT$_TB_USER"
-               SET USER_NAME = :userName,
-                   UPDATED_AT = SYSTIMESTAMP
-             WHERE USER_ID = :userId
-               AND USE_YN = 'Y'
-            """,
-            {"userName": user_name, "userId": user_id},
-        )
+        cursor.execute(SqlLoader.get_sql("M91002_USER_NAME_UPDATE"), {"userName": user_name, "userId": user_id})
         if cursor.rowcount <= 0:
             raise HTTPException(status_code=404, detail="Active login user was not found.")
         conn.commit()
@@ -592,42 +548,18 @@ def change_email(req: EmailChangeRequest, request: Request):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute(
-            """
-            SELECT PASSWORD_HASH
-              FROM "INIT$_TB_USER"
-             WHERE USER_ID = :userId
-               AND USE_YN = 'Y'
-            """,
-            {"userId": user_id},
-        )
+        cursor.execute(SqlLoader.get_sql("M91002_ACTIVE_USER_PASSWORD"), {"userId": user_id})
         row = cursor.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Active login user was not found.")
         if not _verify_password(current_password, row[0] or ""):
             raise HTTPException(status_code=400, detail="Current password is not correct.")
 
-        cursor.execute(
-            """
-            SELECT COUNT(*)
-              FROM "INIT$_TB_USER"
-             WHERE EMAIL = :email
-               AND USER_ID <> :userId
-            """,
-            {"email": new_email, "userId": user_id},
-        )
+        cursor.execute(SqlLoader.get_sql("M91002_EMAIL_DUPLICATE_COUNT"), {"email": new_email, "userId": user_id})
         if int(cursor.fetchone()[0] or 0) > 0:
             raise HTTPException(status_code=400, detail="Email is already used by another user.")
 
-        cursor.execute(
-            """
-            UPDATE "INIT$_TB_USER"
-               SET EMAIL = :email,
-                   UPDATED_AT = SYSTIMESTAMP
-             WHERE USER_ID = :userId
-            """,
-            {"email": new_email, "userId": user_id},
-        )
+        cursor.execute(SqlLoader.get_sql("M91002_EMAIL_UPDATE"), {"email": new_email, "userId": user_id})
         conn.commit()
         return {"status": "success", "message": "Email changed.", "email": new_email}
     except HTTPException:
@@ -669,33 +601,17 @@ def change_password(req: PasswordChangeRequest, request: Request):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute(
-            """
-            SELECT PASSWORD_HASH
-              FROM "INIT$_TB_USER"
-             WHERE USER_ID = :userId
-               AND USE_YN = 'Y'
-            """,
-            {"userId": user_id},
-        )
+        cursor.execute(SqlLoader.get_sql("M91002_ACTIVE_USER_PASSWORD"), {"userId": user_id})
         row = cursor.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Active login user was not found.")
         if not _verify_password(current_password, row[0] or ""):
             raise HTTPException(status_code=400, detail="Current password is not correct.")
 
-        cursor.execute(
-            """
-            UPDATE "INIT$_TB_USER"
-               SET PASSWORD_HASH = :passwordHash,
-                   UPDATED_AT = SYSTIMESTAMP
-             WHERE USER_ID = :userId
-            """,
-            {
-                "passwordHash": _hash_password(new_password),
-                "userId": user_id,
-            },
-        )
+        cursor.execute(SqlLoader.get_sql("M91002_PASSWORD_UPDATE"), {
+            "passwordHash": _hash_password(new_password),
+            "userId": user_id,
+        })
         conn.commit()
         return {"status": "success", "message": "Password changed. Please use the new password from next login."}
     except HTTPException:
@@ -720,7 +636,7 @@ def get_current_target_owner(request: Request) -> str:
     try:
         conn = get_target_db_connection(request)
         cursor = conn.cursor()
-        cursor.execute("SELECT SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA') FROM DUAL")
+        cursor.execute(SqlLoader.get_sql("M91002_CURRENT_SCHEMA"))
         row = cursor.fetchone()
         return str(row[0] if row and row[0] else "").strip().upper()
     except Exception as e:
@@ -737,18 +653,7 @@ def ensure_connection_owner(conn, user_id: int, connection_id: int) -> None:
     cursor = None
     try:
         cursor = conn.cursor()
-        cursor.execute(
-            """
-            SELECT COUNT(*)
-              FROM "INIT$_TB_DB_CONNECTION" C
-              JOIN "INIT$_TB_USER" U
-                ON U.USER_ID = C.USER_ID
-             WHERE C.CONNECTION_ID = :connectionId
-               AND C.USE_YN = 'Y'
-               AND (C.USER_ID = :userId OR (U.ROLE_CODE = 'ADMIN' AND C.SHARED_YN = 'Y'))
-            """,
-            {"userId": user_id, "connectionId": connection_id},
-        )
+        cursor.execute(SqlLoader.get_sql("M91002_CONNECTION_OWNER_COUNT"), {"userId": user_id, "connectionId": connection_id})
         row = cursor.fetchone()
         if not row or int(row[0] or 0) <= 0:
             raise HTTPException(status_code=403, detail="Selected target DB connection is not available for this user.")

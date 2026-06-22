@@ -46,6 +46,7 @@
             validateFlow: "Validate",
             runNow: "Run now",
             queueBatch: "Queue batch",
+            showSampleNodesTitle: "Show sample nodes",
             zoomInTitle: "Zoom in",
             zoomOutTitle: "Zoom out",
             resetZoomTitle: "Reset zoom",

@@ -122,7 +122,7 @@
         },
 
         async truncateSystemData() {
-            if (!(await CommonMessage.confirm("Clear all rows from INIT system tables? Users, target DB connections, settings, and setup logs will be truncated. Tables will not be dropped."))) return;
+            if (!(await CommonMessage.confirm("Clear all rows from INIT system tables? Notices, users, target DB connections, settings, and setup logs will be truncated. Tables will not be dropped."))) return;
             if (!(await CommonMessage.confirm("This cannot be undone and may require system setup again. Continue clearing INIT system table data?"))) return;
             this.renderInitLog("Clearing INIT system table data...");
             this.setSystemMessage("Running INIT_SYSTEM_TRUNC...");

@@ -171,29 +171,30 @@ def get_object_tree(
     limit: int = Query(200, ge=1, le=500),
     keyword: str = Query(""),
     registeredOnly: str = Query("N"),
-    categoryFilter: str = Query("ALL"),
-    includePackageMembers: str = Query("N")
+    categoryFilter: str = Query("ALL")
 ):
     conn = None
     try:
         conn = get_target_db_connection(request)
-        allowed_categories = {"TABLE", "PLSQL", "PACKAGE", "ML_PACKAGE", "MODEL"}
+        allowed_categories = {"PLSQL", "PACKAGE", "ML_PACKAGE", "MODEL"}
         selected_categories = [
             item.strip().upper()
             for item in str(categoryFilter or "ALL").split(",")
             if item.strip().upper() in allowed_categories
         ]
+        keyword_text = str(keyword or "").strip()
+        sql_id = "M90001_OBJECT_SEARCH" if keyword_text else "M90001_OBJECT_TREE"
         params = {
             "offset": offset,
             "endRow": offset + limit + 1,
-            "keyword": f"%{str(keyword or '').strip().upper()}%" if str(keyword or "").strip() else None,
             "registeredOnly": "Y" if str(registeredOnly).upper() == "Y" else "N",
-            "categoryFilter": ",".join(selected_categories) if selected_categories else "ALL",
-            "includePackageMembers": "Y" if str(includePackageMembers).upper() == "Y" else "N"
+            "categoryFilter": ",".join(selected_categories) if selected_categories else "ALL"
         }
-        result = execute_query(conn, "M90001_OBJECT_TREE", params)
+        if keyword_text:
+            params["keyword"] = f"%{keyword_text.upper()}%"
+        result = execute_query(conn, sql_id, params)
         if result.get("status") != "success":
-            logger.error(f"M90001_OBJECT_TREE failed: {result}")
+            logger.error(f"{sql_id} failed: {result}")
             raise HTTPException(status_code=500, detail=result.get("message") or "M90001 object tree query failed.")
 
         raw_data = result["data"]
@@ -213,6 +214,54 @@ def get_object_tree(
         raise
     except Exception as e:
         logger.error(f"M90001_OBJECT_TREE exception: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+@router.get("/object-children")
+def get_object_children(
+    request: Request,
+    owner: str = Query(...),
+    groupType: str = Query(...),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(200, ge=1, le=500),
+    registeredOnly: str = Query("N")
+):
+    conn = None
+    try:
+        normalized_group = str(groupType or "").strip().upper()
+        if normalized_group not in {"PROCEDURES", "PACKAGES", "ML_PACKAGES", "MODELS"}:
+            raise HTTPException(status_code=400, detail="Invalid groupType.")
+
+        conn = get_target_db_connection(request)
+        params = {
+            "owner": owner,
+            "groupType": normalized_group,
+            "offset": offset,
+            "endRow": offset + limit + 1,
+            "registeredOnly": "Y" if str(registeredOnly).upper() == "Y" else "N"
+        }
+        result = execute_query(conn, "M90001_OBJECT_CHILDREN", params)
+        if result.get("status") != "success":
+            logger.error(f"M90001_OBJECT_CHILDREN failed: {result}")
+            raise HTTPException(status_code=500, detail=result.get("message") or "M90001 object children query failed.")
+
+        raw_data = result["data"]
+        has_more = len(raw_data) > limit
+        data = raw_data[:limit]
+        return {
+            "status": "success",
+            "data": data,
+            "columns": result.get("columns", []),
+            "total": offset + len(data) + (1 if has_more else 0),
+            "nextOffset": offset + len(data),
+            "hasMore": has_more
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"M90001_OBJECT_CHILDREN exception: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if conn:
@@ -725,4 +774,3 @@ def call_proc(req: dict, request: Request):
         "message": "프로시저가 정상적으로 실행되었습니다.",
         "affected_rows": 5
     }
-

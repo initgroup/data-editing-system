@@ -105,7 +105,7 @@
             const select = getContainerEl("#contextProject-M02001");
             if (!select) return;
             select.innerHTML = `
-                <option value="">Select project</option>
+                <option value="">-- Select project --</option>
                 ${this.contextProjects.map((project) => `
                     <option value="${this.escapeHtml(project.PROJECT_ID ?? "")}">
                         ${this.escapeHtml(project.PROJECT_NAME || project.PROJECT_CODE || "(Untitled project)")}
@@ -336,7 +336,7 @@
                     this.showUploadProgress("Uploading file...", percent);
                 };
                 xhr.upload.onload = () => {
-                    this.showUploadProgress("File transfer completed. Server is inserting rows in batches...", 96);
+                    this.showUploadProgress("File transfer completed. Server is inserting rows in batches...", 96, { processing: true });
                 };
                 xhr.onload = () => {
                     const json = this.parseXhrJson(xhr);
@@ -380,13 +380,16 @@
             }
         },
 
-        showUploadProgress(label, percent) {
+        showUploadProgress(label, percent, options = {}) {
             const box = getContainerEl("#uploadProgress-M02001");
             const labelEl = getContainerEl("#uploadProgressLabel-M02001");
             const percentEl = getContainerEl("#uploadProgressPercent-M02001");
             const bar = getContainerEl("#uploadProgressBar-M02001");
             const value = Math.max(0, Math.min(100, Number(percent) || 0));
-            if (box) box.hidden = false;
+            if (box) {
+                box.hidden = false;
+                box.classList.toggle("is-processing", Boolean(options.processing));
+            }
             if (labelEl) labelEl.textContent = label || "";
             if (percentEl) percentEl.textContent = `${value}%`;
             if (bar) bar.style.width = `${value}%`;
@@ -751,4 +754,3 @@
 
     window[PAGE_CODE] = M02001;
 })();
-

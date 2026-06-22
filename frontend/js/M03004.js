@@ -26,6 +26,7 @@
             workTitle: "[Rule Violation Detection] work",
             workDescriptionEmpty: "Select a scenario table and registered rule violation detection object.",
             saveWork: "Save work",
+            deleteWork: "Delete work",
             runNow: "Run now",
             queueBatch: "Queue batch",
             jobId: "Job ID",

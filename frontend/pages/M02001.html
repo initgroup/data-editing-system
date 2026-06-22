@@ -13,7 +13,7 @@
             <label>
                 <span class="required-title">Project</span>
                 <select id="contextProject-M02001" class="work-context-select" onchange="M02001.handleContextProjectChange(this.value)">
-                    <option value="">Select project</option>
+                    <option value="">-- Select project --</option>
                 </select>
             </label>
             <label>
@@ -101,7 +101,10 @@
                 </div>
                 <div id="uploadProgress-M02001" class="upload-progress" hidden>
                     <div class="upload-progress-meta">
-                        <span id="uploadProgressLabel-M02001">Ready</span>
+                        <span class="upload-progress-status">
+                            <i class="fas fa-spinner upload-progress-spinner" aria-hidden="true"></i>
+                            <span id="uploadProgressLabel-M02001">Ready</span>
+                        </span>
                         <span id="uploadProgressPercent-M02001">0%</span>
                     </div>
                     <div class="upload-progress-track">

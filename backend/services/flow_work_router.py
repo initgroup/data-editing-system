@@ -12,7 +12,7 @@ from backend.database_helper import execute_query
 from backend.target_database import get_target_db_connection
 from backend.services import data_work_service as data_work
 from backend.services import flow_work_service as flow_work
-from backend.services.flow_work_service import FlowRunRequest, FlowWorkRequest
+from backend.services.flow_work_service import FlowNodeRunRequest, FlowRunRequest, FlowWorkRequest
 
 logger = logging.getLogger(__name__)
 
@@ -104,6 +104,7 @@ def create_flow_work_router(
             for row in result.get("data") or []:
                 row["PARAM_JSON"] = data_work.read_lob(row.get("PARAM_JSON"))
                 row["EXEC_PLSQL"] = data_work.read_lob(row.get("EXEC_PLSQL"))
+                row["EXEC_SPEC_JSON"] = data_work.read_lob(row.get("EXEC_SPEC_JSON"))
             return data_work.require_success(result, "Flow job asset query failed.")
         finally:
             if conn:
@@ -292,11 +293,15 @@ def create_flow_work_router(
                 raise HTTPException(status_code=400, detail=validation["message"])
 
             run_type = "BATCH" if req.batch else "MANUAL"
-            run_status = "QUEUED"
-            message = ROUTER_MESSAGES["run_queued"]
+            run_status = "QUEUED" if req.batch else "STARTED"
+            message = ROUTER_MESSAGES["run_queued"] if req.batch else "Flow execution started."
             run_id = flow_work.create_run(conn, flow_id, run_type, run_status, message, validation)
             flow_work.create_node_run_records(conn, run_id, flow_id, validation.get("plan", []))
             conn.commit()
+            if not req.batch:
+                run_result = flow_work.execute_flow_plan(conn, run_id, validation.get("plan", []))
+                run_status = run_result.get("status") or run_status
+                message = run_result.get("message") or message
             save_lock.release()
             save_lock = None
             return {
@@ -333,6 +338,83 @@ def create_flow_work_router(
                     )
                 )
             logger.error(f"{MENU_CODE} flow run failed: {str(e)}")
+            raise HTTPException(status_code=500, detail=str(e))
+        finally:
+            if conn:
+                conn.close()
+            if save_lock:
+                save_lock.release()
+
+    @router.post("/flow/run-node")
+    def run_flow_node(req: FlowNodeRunRequest, request: Request):
+        conn = None
+        save_lock = get_save_lock(req)
+        if not save_lock.acquire(timeout=save_lock_wait_seconds):
+            raise HTTPException(
+                status_code=409,
+                detail="This flow is still being saved or queued. Please wait a moment and try again.\n이 Flow 저장 또는 실행 대기열 등록이 아직 진행 중입니다. 잠시 후 다시 시도해 주세요."
+            )
+        try:
+            conn = get_target_db_connection(request)
+            flow_id = save_flow_with_retry(conn, req)
+
+            nodes, edges = flow_work.normalize_graph(req.nodes, req.edges)
+            validation = flow_work.validate_graph(nodes, edges)
+            if validation["status"] != "success":
+                raise HTTPException(status_code=400, detail=validation["message"])
+
+            selected_node_key = str(req.nodeKey or "")
+            selected_step = next(
+                (step for step in validation.get("plan", []) if str(step.get("nodeKey") or "") == selected_node_key),
+                None
+            )
+            if not selected_step:
+                raise HTTPException(status_code=400, detail="Selected node was not found in the current flow.")
+
+            run_type = "MANUAL_NODE"
+            message = f"Node execution started: {selected_step.get('nodeName') or selected_node_key}"
+            run_plan = {**validation, "selectedNodeKey": selected_node_key, "plan": [selected_step]}
+            run_id = flow_work.create_run(conn, flow_id, run_type, "STARTED", message, run_plan)
+            flow_work.create_node_run_records(conn, run_id, flow_id, [selected_step])
+            conn.commit()
+
+            run_result = flow_work.execute_flow_plan(conn, run_id, [selected_step])
+            run_status = run_result.get("status") or "STARTED"
+            message = run_result.get("message") or message
+            return {
+                "status": "success",
+                "message": message,
+                "data": {
+                    "flowId": flow_id,
+                    "flowRunId": run_id,
+                    "runType": run_type,
+                    "runStatus": run_status,
+                    "plan": [selected_step]
+                }
+            }
+        except HTTPException:
+            if conn:
+                conn.rollback()
+            raise
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            if is_missing_flow_table_error(e):
+                raise HTTPException(
+                    status_code=500,
+                    detail="Flow storage tables are not installed in the target DB. Run database/INIT_TARGET_DDL.sql first."
+                )
+            if is_flow_lock_error(e):
+                step = get_flow_error_step(e)
+                logger.warning(f"{MENU_CODE} flow node run lock conflict at {step}: {str(e)}")
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        f"Flow node run hit a database row lock at {step}. Please wait a moment and run again.\n"
+                        f"{step} 단계에서 DB row lock 충돌이 발생했습니다. 잠시 후 다시 실행해 주세요."
+                    )
+                )
+            logger.error(f"{MENU_CODE} flow node run failed: {str(e)}")
             raise HTTPException(status_code=500, detail=str(e))
         finally:
             if conn:

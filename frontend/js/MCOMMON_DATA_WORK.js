@@ -93,6 +93,7 @@
         contextScenarios: [],
         scenarioTables: [],
         executableObjects: [],
+        omlResources: [],
         jobs: [],
         runHistory: [],
         parameters: [],
@@ -125,7 +126,10 @@
             getContainerEl(`#sqlEditor-${PAGE_CODE}`)?.addEventListener("keydown", this.sqlKeydownBound);
             getContainerEl(`#sqlEditor-${PAGE_CODE}`)?.addEventListener("input", this.userSqlInputBound);
             getContainerEl(`#resultSqlEditor-${PAGE_CODE}`)?.addEventListener("keydown", this.resultSqlKeydownBound);
-            await this.loadExecutableObjects();
+            await Promise.all([
+                this.loadExecutableObjects(),
+                this.loadOmlResources()
+            ]);
             await this.loadWorkContext();
             this.switchTab("work");
             this.renderCurrentJob();
@@ -140,6 +144,7 @@
             this.contextScenarios = [];
             this.scenarioTables = [];
             this.executableObjects = [];
+            this.omlResources = [];
             this.jobs = [];
             this.runHistory = [];
             this.parameters = [];
@@ -173,6 +178,10 @@
                 jobDesc: "",
                 ownerName: "",
                 tableName: "",
+                execSourceType: "DB_OBJECT",
+                execResourceId: "",
+                execMethod: "",
+                execSpecJson: "",
                 execObjectId: "",
                 execOwner: "",
                 execObjectType: "",
@@ -288,7 +297,7 @@
             if (!select) return;
 
             select.innerHTML = `
-                <option value="">Select project</option>
+                <option value="">-- Select project --</option>
                 ${this.contextProjects.map((project) => `
                     <option value="${this.escapeHtml(project.PROJECT_ID ?? "")}">
                         ${this.escapeHtml(project.PROJECT_NAME || project.PROJECT_CODE || "(Untitled project)")}
@@ -350,7 +359,7 @@
             if (!select) return;
 
             select.innerHTML = `
-                <option value="">Select scenario</option>
+                <option value="">-- Select scenario --</option>
                 ${this.contextScenarios.map((scenario) => `
                     <option value="${this.escapeHtml(scenario.SCENARIO_ID ?? "")}">
                         ${this.escapeHtml(scenario.SCENARIO_NAME || scenario.SCENARIO_CODE || "(Untitled scenario)")}
@@ -528,7 +537,7 @@
             if (!select) return;
 
             select.innerHTML = `
-                <option value="">Select registered object</option>
+                <option value="">-- Select registered object --</option>
                 ${this.executableObjects.map((object) => `
                     <option value="${this.escapeHtml(object.OBJECT_ID ?? "")}">
                         ${this.escapeHtml(object.OBJECT_LABEL || object.OBJECT_NAME || "(Unnamed object)")}
@@ -536,6 +545,61 @@
                 `).join("")}
             `;
             select.value = this.currentJob?.execObjectId || "";
+        },
+
+        async loadOmlResources() {
+            const select = getContainerEl(`#omlResource-${PAGE_CODE}`);
+            if (select) select.innerHTML = `<option value="">Loading OML4Py resources...</option>`;
+
+            try {
+                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/oml-resources`, { method: "GET", showLoading: false });
+                this.omlResources = Array.isArray(json.data) ? json.data : [];
+                this.renderOmlResources();
+            } catch (error) {
+                const message = error.message || "OML4Py resource load failed.";
+                console.error("[${PAGE_CODE}] OML resource load failed", error);
+                if (select) select.innerHTML = `<option value="">OML resource load failed</option>`;
+                this.renderSqlMessage("sql", message, "error");
+            }
+        },
+
+        renderOmlResources() {
+            const select = getContainerEl(`#omlResource-${PAGE_CODE}`);
+            if (!select) return;
+            select.innerHTML = `
+                <option value="">-- Select OML4Py resource --</option>
+                ${this.omlResources.map((resource) => `
+                    <option value="${this.escapeHtml(resource.OML_RESOURCE_ID ?? "")}">
+                        ${this.escapeHtml(resource.RESOURCE_LABEL || resource.RESOURCE_NAME || "(Unnamed OML resource)")}
+                    </option>
+                `).join("")}
+            `;
+            select.value = this.currentJob?.execResourceId || "";
+        },
+
+        handleExecutionSourceChange(value) {
+            const nextSource = String(value || "DB_OBJECT").toUpperCase() === "OML_PYTHON" ? "OML_PYTHON" : "DB_OBJECT";
+            this.currentJob = {
+                ...this.currentJob,
+                execSourceType: nextSource
+            };
+            if (nextSource === "DB_OBJECT") {
+                this.currentJob.execResourceId = "";
+                this.currentJob.execMethod = "";
+                this.currentJob.execSpecJson = "";
+                this.setFieldValue(`#omlResource-${PAGE_CODE}`, "");
+            } else {
+                this.currentJob.execObjectId = "";
+                this.currentJob.execOwner = "";
+                this.currentJob.execObjectType = "OML_PYTHON";
+                this.currentJob.execObjectName = "";
+                this.currentJob.execObjectLabel = "";
+                this.setFieldValue(`#execObject-${PAGE_CODE}`, "");
+            }
+            this.parameters = [];
+            this.renderParameters();
+            this.renderCurrentJob();
+            this.generateExecutablePlsql(true);
         },
 
         async handleExecutableObjectChange(objectId) {
@@ -569,6 +633,44 @@
             this.renderCurrentJob();
         },
 
+        async handleOmlResourceChange(resourceId) {
+            const resource = this.omlResources.find((row) => String(row.OML_RESOURCE_ID) === String(resourceId));
+            if (!resource) {
+                this.currentJob = {
+                    ...this.currentJob,
+                    execSourceType: "OML_PYTHON",
+                    execResourceId: "",
+                    execMethod: "",
+                    execSpecJson: "",
+                    execObjectType: "OML_PYTHON",
+                    execObjectName: "",
+                    execObjectLabel: ""
+                };
+                this.parameters = [];
+                this.renderCurrentJob();
+                this.renderParameters();
+                return;
+            }
+
+            this.currentJob = {
+                ...this.currentJob,
+                execSourceType: "OML_PYTHON",
+                execResourceId: resource.OML_RESOURCE_ID,
+                execMethod: resource.EXEC_METHOD || "",
+                execSpecJson: resource.SPEC_JSON || "",
+                execObjectId: "",
+                execOwner: resource.SCRIPT_OWNER || "",
+                execObjectType: "OML_PYTHON",
+                execObjectName: resource.RESOURCE_NAME || resource.SCRIPT_NAME || "",
+                execObjectLabel: resource.RESOURCE_LABEL || resource.RESOURCE_NAME || resource.SCRIPT_NAME || ""
+            };
+            this.parameters = [];
+            this.renderParameters();
+            await this.loadOmlParameters(resource.OML_RESOURCE_ID);
+            this.renderCurrentJob();
+            this.generateExecutablePlsql(true);
+        },
+
         async loadParameters(objectId) {
             const container = getContainerEl(`#parameterGrid-${PAGE_CODE}`);
             if (container) container.innerHTML = `<div class="table-empty">Loading parameters...</div>`;
@@ -589,12 +691,49 @@
             }
         },
 
+        async loadOmlParameters(resourceId) {
+            const container = getContainerEl(`#parameterGrid-${PAGE_CODE}`);
+            if (container) container.innerHTML = `<div class="table-empty">Loading OML4Py parameters...</div>`;
+
+            try {
+                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/oml-resource/${resourceId}/parameters`, { method: "GET", showLoading: false });
+                const resource = json.resource || {};
+                if (resource.OML_RESOURCE_ID) {
+                    const cachedResource = this.omlResources.find((row) => String(row.OML_RESOURCE_ID) === String(resource.OML_RESOURCE_ID));
+                    if (cachedResource) Object.assign(cachedResource, resource);
+                    this.currentJob = {
+                        ...this.currentJob,
+                        execResourceId: resource.OML_RESOURCE_ID,
+                        execMethod: resource.EXEC_METHOD || this.currentJob?.execMethod || "",
+                        execSpecJson: resource.SPEC_JSON || "",
+                        execObjectName: resource.RESOURCE_NAME || resource.SCRIPT_NAME || this.currentJob?.execObjectName || "",
+                        execObjectLabel: resource.RESOURCE_LABEL || resource.RESOURCE_NAME || resource.SCRIPT_NAME || this.currentJob?.execObjectLabel || ""
+                    };
+                }
+                this.parameters = (Array.isArray(json.data) ? json.data : []).map((row) => ({
+                    itemName: row.itemName || "",
+                    itemValue: row.itemValue || "",
+                    itemDesc: row.itemDesc || "",
+                    itemDefault: row.itemDefault || "",
+                    itemOrder: row.itemOrder ?? "",
+                    bindName: row.bindName || ""
+                }));
+                this.renderParameters();
+            } catch (error) {
+                this.parameters = [];
+                if (container) container.innerHTML = `<div class="table-error">${this.escapeHtml(error.message || "OML4Py parameter load failed.")}</div>`;
+            }
+        },
+
         renderParameters() {
             const container = getContainerEl(`#parameterGrid-${PAGE_CODE}`);
             if (!container) return;
 
             if (!this.parameters.length) {
-                container.innerHTML = `<div class="table-empty">No registered parameters. Check M90001 object detail registration.</div>${this.renderListFooter(0)}`;
+                const emptyMessage = String(this.currentJob?.execSourceType || "DB_OBJECT").toUpperCase() === "OML_PYTHON"
+                    ? "No registered parameters. Check M90002 OML4Py resource registration."
+                    : "No registered parameters. Check M90001 object detail registration.";
+                container.innerHTML = `<div class="table-empty">${this.escapeHtml(emptyMessage)}</div>${this.renderListFooter(0)}`;
                 return;
             }
 
@@ -726,6 +865,10 @@
                 jobDesc: job.JOB_DESC || "",
                 ownerName: job.OWNER_NAME || "",
                 tableName: job.TABLE_NAME || "",
+                execSourceType: job.EXEC_SOURCE_TYPE || "DB_OBJECT",
+                execResourceId: job.EXEC_RESOURCE_ID || "",
+                execMethod: job.EXEC_METHOD || "",
+                execSpecJson: job.EXEC_SPEC_JSON || "",
                 execObjectId: job.EXEC_OBJECT_ID || "",
                 execOwner: job.EXEC_OWNER || "",
                 execObjectType: job.EXEC_OBJECT_TYPE || "",
@@ -744,7 +887,8 @@
                 itemValue: row.itemValue || row.ITEM_VALUE || "",
                 itemDesc: row.itemDesc || row.ITEM_DESC || "",
                 itemDefault: row.itemDefault || row.ITEM_DEFAULT || "",
-                itemOrder: row.itemOrder || row.ITEM_ORDER || ""
+                itemOrder: row.itemOrder || row.ITEM_ORDER || "",
+                bindName: row.bindName || row.BIND_NAME || ""
             })) : [];
             this.selectedScenarioTableKey = job.SCENARIO_TABLE_ID ? `ID:${job.SCENARIO_TABLE_ID}` : "";
             this.renderScenarioTables();
@@ -792,8 +936,25 @@
         },
 
         handleResultCreateChange(value) {
-            this.updateCurrentJobField("resultCreateYn", value === "Y" ? "Y" : "N");
+            const createYn = value === "Y" ? "Y" : "N";
+            this.updateCurrentJobField("resultCreateYn", createYn);
+            if (createYn === "Y") {
+                this.applyDefaultResultOwner();
+            }
             this.syncResultFields();
+            if (createYn === "Y") {
+                getContainerEl(`#resultTable-${PAGE_CODE}`)?.focus();
+            }
+        },
+
+        applyDefaultResultOwner() {
+            const resultOwnerField = getContainerEl(`#resultOwner-${PAGE_CODE}`);
+            const currentValue = resultOwnerField?.value.trim() || this.currentJob?.resultOwner || "";
+            if (currentValue) return;
+            const targetOwner = getContainerEl(`#targetOwner-${PAGE_CODE}`)?.value.trim() || this.currentJob?.ownerName || "";
+            if (!targetOwner) return;
+            this.updateCurrentJobField("resultOwner", targetOwner);
+            this.setFieldValue(`#resultOwner-${PAGE_CODE}`, targetOwner);
         },
 
         syncResultFields() {
@@ -820,12 +981,18 @@
             this.setFieldValue(`#targetTable-${PAGE_CODE}`, job.tableName || "");
             this.setFieldValue(`#jobUseYn-${PAGE_CODE}`, job.useYn || "Y");
             this.setFieldValue(`#jobSortOrder-${PAGE_CODE}`, job.sortOrder ?? "");
+            this.setFieldValue(`#execSourceType-${PAGE_CODE}`, job.execSourceType || "DB_OBJECT");
             this.setFieldValue(`#execObject-${PAGE_CODE}`, job.execObjectId || "");
+            this.setFieldValue(`#omlResource-${PAGE_CODE}`, job.execResourceId || "");
             this.setFieldValue(`#resultCreateYn-${PAGE_CODE}`, job.resultCreateYn || "N");
             this.setFieldValue(`#resultOwner-${PAGE_CODE}`, job.resultOwner || "");
             this.setFieldValue(`#resultTable-${PAGE_CODE}`, job.resultTableName || "");
             this.setFieldValue(`#resultQueryTable-${PAGE_CODE}`, job.resultTableName || "");
+            if ((job.resultCreateYn || "N") === "Y") {
+                this.applyDefaultResultOwner();
+            }
             this.setText(`#selectedExecObjectLabel-${PAGE_CODE}`, job.execObjectLabel || job.execObjectName || this.getLabel("noExecutableObject"));
+            this.syncExecutionSourceFields();
             this.syncResultFields();
             const desc = job.ownerName && job.tableName
                 ? `${job.ownerName}.${job.tableName}`
@@ -835,10 +1002,61 @@
 
         syncRunButtons() {
             const enabled = Boolean(this.currentJob?.profileJobId);
-            [`#runNow-${PAGE_CODE}`, `#queueBatch-${PAGE_CODE}`].forEach((selector) => {
+            [`#runNow-${PAGE_CODE}`, `#queueBatch-${PAGE_CODE}`, `#deleteJob-${PAGE_CODE}`].forEach((selector) => {
                 const button = getContainerEl(selector);
                 if (button) button.disabled = !enabled;
             });
+        },
+
+        syncExecutionSourceFields() {
+            const sourceType = getContainerEl(`#execSourceType-${PAGE_CODE}`)?.value || this.currentJob?.execSourceType || "DB_OBJECT";
+            const isOml = String(sourceType).toUpperCase() === "OML_PYTHON";
+            const execObject = getContainerEl(`#execObject-${PAGE_CODE}`);
+            const omlWrap = getContainerEl(`#omlResourceWrap-${PAGE_CODE}`);
+            const omlResource = getContainerEl(`#omlResource-${PAGE_CODE}`);
+            if (execObject) execObject.closest("label").hidden = isOml;
+            if (omlWrap) omlWrap.hidden = !isOml;
+            if (omlResource) omlResource.disabled = !isOml;
+            this.syncExecutableScriptUi(isOml);
+        },
+
+        syncExecutableScriptUi(isOml = false) {
+            const title = getContainerEl(`#generatedScriptTitle-${PAGE_CODE}`);
+            const generateLabel = getContainerEl(`#generateScriptLabel-${PAGE_CODE}`);
+            const helpButton = getContainerEl(`#scriptHelpButton-${PAGE_CODE}`);
+            const helpTitle = getContainerEl(`#plsqlHelpTitle-${PAGE_CODE}`);
+            const helpContent = getContainerEl(`#scriptHelpContent-${PAGE_CODE}`);
+
+            if (title) title.textContent = isOml ? "Generated OML SQL" : (this.getLabel("generatedScript") || "Generated PL/SQL");
+            if (generateLabel) generateLabel.textContent = isOml ? "Generate OML SQL" : (this.getLabel("generateScript") || "Generate PL/SQL");
+            if (helpButton) helpButton.setAttribute("title", isOml ? "OML4Py SQL API rules" : "PL/SQL bind variable rules");
+            if (helpTitle) helpTitle.textContent = isOml ? "OML4Py SQL API 실행 규칙" : "PL/SQL 바인드 변수 규칙";
+            if (!helpContent) return;
+
+            helpContent.innerHTML = isOml
+                ? `
+                    <p>OML Python 선택 시 생성되는 스크립트는 PL/SQL 블록이 아니라 Autonomous Database Embedded Python Execution SQL API 호출 SQL입니다.</p>
+                    <ul>
+                        <li><strong>실행 함수</strong>: 등록된 OML4Py Resource의 Exec Method에 따라 <code>pyqEval</code>, <code>pyqTableEval</code>, <code>pyqRowEval</code> 같은 SQL API를 사용합니다.</li>
+                        <li><strong>입력 데이터</strong>: 테이블 입력 방식은 현재 Owner/Table을 <code>CURSOR(SELECT * FROM OWNER.TABLE)</code> 형태로 전달합니다.</li>
+                        <li><strong>Parameter List</strong>: 파라미터는 <code>par_lst =&gt; JSON_OBJECT(... RETURNING CLOB)</code>로 생성됩니다. 기본값이 있으면 값이 직접 들어가고, 기본값이 없으면 <code>:abcDef</code> 형식의 런타임 바인드 변수로 생성됩니다.</li>
+                        <li><strong>Result Table Create</strong>: Y이면 생성 SQL이 <code>CREATE TABLE OWNER.TABLE AS SELECT ...</code> 형태로 바뀝니다.</li>
+                        <li><strong>Run now / Queue Batch</strong>: 실행 시 저장된 Parameter List와 런타임 바인드 값을 사용해 OML SQL을 실행합니다.</li>
+                    </ul>
+                `
+                : `
+                    <p>Parameter List의 Parameter 명칭과 시스템 예약 변수를 PL/SQL 스크립트에서 바인드 변수 또는 문자열 치환 키로 사용할 수 있습니다.</p>
+                    <ul>
+                        <li><strong>바인드 변수명 규칙</strong>: Parameter 명칭을 camelCase로 변환해 사용합니다. 예: <code>ABC_DEF</code> -> <code>:abcDef</code>, <code>P_MODEL_NAME</code> -> <code>:pModelName</code>.</li>
+                        <li><strong>작성 방법</strong>: PL/SQL에서는 바인드 변수 앞에 콜론을 붙입니다. 예: <code>P_MODEL_NAME =&gt; :pModelName</code>.</li>
+                        <li><strong>동적 문자열 치환</strong>: <code>/* --DYNAMIC_MODEL_NAME-- */</code>처럼 작성하면 <code>/* --</code>와 <code>-- */</code> 사이의 이름이 Parameter 명칭과 완전히 같을 때 해당 값이 문자열 그대로 치환됩니다.</li>
+                        <li><strong>현재 Job 예약 변수</strong>: <code>:_TargetOwner</code>, <code>:_TargetTable</code>, <code>:_ResultOwner</code>, <code>:_ResultTable</code>은 실행 시 현재 Job/Node의 Target/Result owner/table 값으로 자동 전달됩니다.</li>
+                        <li><strong>Flow 선행 Node 예약 변수</strong>: M04001 Flow 실행에서는 <code>:_preTargetOwner</code>, <code>:_preTargetTable</code>, <code>:_preResultOwner</code>, <code>:_preResultTable</code>을 사용할 수 있습니다.</li>
+                        <li><strong>Generate PL/SQL</strong>: Parameter 기본값이 있으면 기본값을 스크립트에 직접 채우고, 기본값이 없으면 위 규칙의 바인드 변수로 생성합니다. 예약 변수는 필요한 위치에 직접 입력해 사용합니다.</li>
+                        <li><strong>Run now / Queue Batch</strong>: 실행 시 Parameter List 값과 Runtime Bind 값을 처리하고, 시스템 예약 변수는 실제 Job/Node 정보로 자동 덮어쓴 뒤 실행합니다.</li>
+                        <li><strong>예시</strong>: <code>P_OWNER =&gt; :_preResultOwner</code>, <code>P_TABLE =&gt; :_preResultTable</code>, <code>P_RESULT_OWNER =&gt; :_ResultOwner</code>, <code>P_RESULT_TABLE =&gt; :_ResultTable</code></li>
+                    </ul>
+                `;
         },
 
         applyUiLabels() {
@@ -917,6 +1135,42 @@
             } catch (error) {
                 alert(error.message || "Work save failed.");
                 return null;
+            }
+        },
+
+        async deleteJob() {
+            const jobId = this.currentJob?.profileJobId || this.selectedJobId;
+            if (!jobId) {
+                alert("Select a saved job first.\n저장된 작업을 먼저 선택하세요.");
+                return;
+            }
+            if (!this.selectedProjectId || !this.selectedScenarioId) {
+                alert("Select project and scenario first.\n프로젝트와 시나리오를 먼저 선택하세요.");
+                return;
+            }
+            const jobName = this.currentJob?.jobName || `Job #${jobId}`;
+            if (!(await CommonMessage.confirm(`Delete ${jobName}?\nRun history for this job will also be deleted.\n${jobName} 작업을 삭제할까요?\n이 작업의 실행 이력도 함께 삭제됩니다.`))) return;
+
+            try {
+                const params = new URLSearchParams({
+                    projectId: this.selectedProjectId,
+                    scenarioId: this.selectedScenarioId
+                });
+                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/job/${encodeURIComponent(jobId)}?${params.toString()}`, {
+                    method: "DELETE"
+                });
+                this.jobs = Array.isArray(json.list) ? json.list : [];
+                const nextJob = this.jobs[0];
+                if (nextJob?.PROFILE_JOB_ID) {
+                    this.renderJobs();
+                    await this.selectJob(nextJob.PROFILE_JOB_ID, false);
+                } else {
+                    this.newJob();
+                }
+                await this.loadRunHistory(false);
+                alert(json.message || "Job deleted.");
+            } catch (error) {
+                alert(error.message || "Job delete failed.");
             }
         },
 
@@ -1131,19 +1385,27 @@
                 getContainerEl(`#workJobGroup-${PAGE_CODE}`)?.focus();
                 return false;
             }
-            const hasExecutableObject = Boolean(
-                getContainerEl(`#execObject-${PAGE_CODE}`)?.value
-                || this.currentJob?.execObjectId
-                || this.currentJob?.execObjectName
-                || this.currentJob?.execObjectLabel
-            );
+            const execSourceType = getContainerEl(`#execSourceType-${PAGE_CODE}`)?.value || this.currentJob?.execSourceType || "DB_OBJECT";
+            const isOml = String(execSourceType).toUpperCase() === "OML_PYTHON";
+            const hasExecutableObject = isOml
+                ? Boolean(getContainerEl(`#omlResource-${PAGE_CODE}`)?.value || this.currentJob?.execResourceId)
+                : Boolean(
+                    getContainerEl(`#execObject-${PAGE_CODE}`)?.value
+                    || this.currentJob?.execObjectId
+                    || this.currentJob?.execObjectName
+                    || this.currentJob?.execObjectLabel
+                );
             if (requireObject && !hasExecutableObject) {
-                alert("Registered Model / Procedure is required.");
-                getContainerEl(`#execObject-${PAGE_CODE}`)?.focus();
+                alert(isOml
+                    ? "OML4Py Resource is required.\nOML4Py 리소스는 필수입니다."
+                    : "Registered Model / Procedure is required.\n등록된 모델/프로시저는 필수입니다.");
+                getContainerEl(isOml ? `#omlResource-${PAGE_CODE}` : `#execObject-${PAGE_CODE}`)?.focus();
                 return false;
             }
             if (requireObject && !getContainerEl(`#execPlsqlEditor-${PAGE_CODE}`)?.value.trim()) {
-                alert("Executable PL/SQL script is required. Generate or enter the script first.");
+                alert(isOml
+                    ? "Executable OML SQL is required. Generate or enter the SQL first.\n실행할 OML SQL이 필요합니다. SQL을 생성하거나 직접 입력해 주세요."
+                    : "Executable PL/SQL script is required. Generate or enter the script first.\n실행할 PL/SQL 스크립트가 필요합니다. 스크립트를 생성하거나 직접 입력해 주세요.");
                 getContainerEl(`#execPlsqlEditor-${PAGE_CODE}`)?.focus();
                 return false;
             }
@@ -1164,7 +1426,10 @@
         },
 
         getJobPayload(status, message) {
+            const execSourceType = getContainerEl(`#execSourceType-${PAGE_CODE}`)?.value || this.currentJob?.execSourceType || "DB_OBJECT";
+            const isOml = String(execSourceType).toUpperCase() === "OML_PYTHON";
             const execObject = this.executableObjects.find((row) => String(row.OBJECT_ID) === String(getContainerEl(`#execObject-${PAGE_CODE}`)?.value || ""));
+            const omlResource = this.omlResources.find((row) => String(row.OML_RESOURCE_ID) === String(getContainerEl(`#omlResource-${PAGE_CODE}`)?.value || ""));
             return {
                 profileJobId: this.currentJob?.profileJobId || null,
                 projectId: Number(this.selectedProjectId),
@@ -1175,11 +1440,15 @@
                 jobDesc: getContainerEl(`#workJobDesc-${PAGE_CODE}`)?.value.trim() || "",
                 ownerName: this.currentJob?.ownerName || "",
                 tableName: this.currentJob?.tableName || "",
-                execObjectId: execObject?.OBJECT_ID || null,
-                execOwner: execObject?.OWNER || "",
-                execObjectType: execObject?.OBJECT_TYPE || "",
-                execObjectName: execObject?.OBJECT_NAME || "",
-                execObjectLabel: execObject?.OBJECT_LABEL || execObject?.OBJECT_NAME || "",
+                execSourceType: isOml ? "OML_PYTHON" : "DB_OBJECT",
+                execResourceId: isOml ? (omlResource?.OML_RESOURCE_ID || null) : null,
+                execMethod: isOml ? (omlResource?.EXEC_METHOD || this.currentJob?.execMethod || "") : "",
+                execSpecJson: isOml ? (omlResource?.SPEC_JSON || this.currentJob?.execSpecJson || "") : "",
+                execObjectId: isOml ? null : (execObject?.OBJECT_ID || null),
+                execOwner: isOml ? (omlResource?.SCRIPT_OWNER || "") : (execObject?.OWNER || ""),
+                execObjectType: isOml ? "OML_PYTHON" : (execObject?.OBJECT_TYPE || ""),
+                execObjectName: isOml ? (omlResource?.RESOURCE_NAME || omlResource?.SCRIPT_NAME || "") : (execObject?.OBJECT_NAME || ""),
+                execObjectLabel: isOml ? (omlResource?.RESOURCE_LABEL || omlResource?.RESOURCE_NAME || omlResource?.SCRIPT_NAME || "") : (execObject?.OBJECT_LABEL || execObject?.OBJECT_NAME || ""),
                 useYn: getContainerEl(`#jobUseYn-${PAGE_CODE}`)?.value || "Y",
                 sortOrder: this.parseOptionalNumber(getContainerEl(`#jobSortOrder-${PAGE_CODE}`)?.value),
                 params: this.parameters,
@@ -1196,6 +1465,17 @@
             if (!editor) return;
             if (!force && editor.value.trim()) return;
 
+            if (String(this.currentJob?.execSourceType || "DB_OBJECT").toUpperCase() === "OML_PYTHON") {
+                const resource = this.omlResources.find((row) => String(row.OML_RESOURCE_ID) === String(this.currentJob?.execResourceId || getContainerEl(`#omlResource-${PAGE_CODE}`)?.value || ""));
+                if (!resource) {
+                    editor.value = "";
+                    return;
+                }
+                editor.value = this.createOmlSqlTemplate(resource);
+                this.currentJob.execPlsql = editor.value;
+                return;
+            }
+
             const objectName = this.currentJob?.execObjectName || "";
             if (!objectName) {
                 editor.value = "";
@@ -1206,14 +1486,99 @@
             this.currentJob.execPlsql = editor.value;
         },
 
+        createOmlSqlTemplate(resource) {
+            const method = String(resource?.EXEC_METHOD || this.currentJob?.execMethod || "PYQ_TABLE_EVAL").toUpperCase();
+            const scriptName = resource?.SCRIPT_NAME || this.currentJob?.execObjectName || "";
+            const scriptOwner = resource?.SCRIPT_OWNER || "";
+            const targetOwner = this.currentJob?.ownerName || "";
+            const targetTable = this.currentJob?.tableName || "";
+            const resultCreateYn = getContainerEl(`#resultCreateYn-${PAGE_CODE}`)?.value || this.currentJob?.resultCreateYn || "N";
+            const resultOwner = getContainerEl(`#resultOwner-${PAGE_CODE}`)?.value || this.currentJob?.resultOwner || "";
+            const resultTable = getContainerEl(`#resultTable-${PAGE_CODE}`)?.value || this.currentJob?.resultTableName || "";
+            const parList = this.createOmlParListExpression();
+            const outFmt = String(resource?.OUTPUT_FORMAT || "").trim() || "NULL";
+            const scriptOwnerArg = scriptOwner ? `,\n        scr_owner => '${this.escapeSqlLiteral(scriptOwner)}'` : "";
+            const tableCursor = targetOwner && targetTable
+                ? `CURSOR(SELECT * FROM ${this.quoteName(targetOwner)}.${this.quoteName(targetTable)})`
+                : "CURSOR(SELECT * FROM /* --INPUT_TABLE-- */)";
+            const functionName = {
+                PYQ_EVAL: "pyqEval",
+                PYQ_TABLE_EVAL: "pyqTableEval",
+                PYQ_ROW_EVAL: "pyqRowEval",
+                PYQ_GROUP_EVAL: "pyqGroupEval",
+                PYQ_INDEX_EVAL: "pyqIndexEval"
+            }[method] || "pyqTableEval";
+            const inputArg = method === "PYQ_EVAL"
+                ? ""
+                : `\n        inp_cur => ${tableCursor},`;
+            const selectSql = `SELECT *\n  FROM TABLE(${functionName}(${inputArg}\n        par_lst => ${parList},\n        out_fmt => ${outFmt},\n        scr_name => '${this.escapeSqlLiteral(scriptName)}'${scriptOwnerArg}\n  ))`;
+            if (resultCreateYn === "Y" && resultOwner && resultTable) {
+                return `CREATE TABLE ${this.quoteName(resultOwner)}.${this.quoteName(resultTable)} AS\n${selectSql}`;
+            }
+            return selectSql;
+        },
+
+        createOmlParListExpression() {
+            const pairs = (this.parameters || [])
+                .filter((row) => row.itemName)
+                .map((row) => {
+                    const key = row.bindName || row.itemName;
+                    const value = String(row.itemDefault ?? "").trim();
+                    const expression = value ? this.createPlsqlLiteral(value) : `:${this.toBindVariableName(row.itemName)}`;
+                    return `'${this.escapeSqlLiteral(key)}' VALUE ${expression}`;
+                });
+            return pairs.length ? `JSON_OBJECT(${pairs.join(", ")} RETURNING CLOB)` : "NULL";
+        },
+
         openPlsqlHelp() {
+            const sourceType = getContainerEl(`#execSourceType-${PAGE_CODE}`)?.value || this.currentJob?.execSourceType || "DB_OBJECT";
+            this.syncExecutableScriptUi(String(sourceType).toUpperCase() === "OML_PYTHON");
             const layer = getContainerEl(`#plsqlHelpLayer-${PAGE_CODE}`);
-            if (layer) layer.hidden = false;
+            if (layer) {
+                layer.hidden = false;
+                this.enableHelpLayerDrag(layer);
+            }
         },
 
         closePlsqlHelp() {
             const layer = getContainerEl(`#plsqlHelpLayer-${PAGE_CODE}`);
             if (layer) layer.hidden = true;
+        },
+
+        enableHelpLayerDrag(layer) {
+            const dialog = layer?.querySelector(".data-help-dialog");
+            const header = dialog?.querySelector("header");
+            if (!dialog || !header || dialog.dataset.dragBound === "Y") return;
+            dialog.dataset.dragBound = "Y";
+            header.classList.add("is-draggable");
+            header.addEventListener("pointerdown", (event) => {
+                if (event.target.closest("button")) return;
+                event.preventDefault();
+                const rect = dialog.getBoundingClientRect();
+                const startX = event.clientX;
+                const startY = event.clientY;
+                const startLeft = rect.left;
+                const startTop = rect.top;
+                dialog.style.position = "fixed";
+                dialog.style.margin = "0";
+                dialog.style.left = `${startLeft}px`;
+                dialog.style.top = `${startTop}px`;
+                header.setPointerCapture?.(event.pointerId);
+                const move = (moveEvent) => {
+                    const nextLeft = Math.max(8, Math.min(window.innerWidth - rect.width - 8, startLeft + moveEvent.clientX - startX));
+                    const nextTop = Math.max(8, Math.min(window.innerHeight - rect.height - 8, startTop + moveEvent.clientY - startY));
+                    dialog.style.left = `${nextLeft}px`;
+                    dialog.style.top = `${nextTop}px`;
+                };
+                const up = () => {
+                    header.removeEventListener("pointermove", move);
+                    header.removeEventListener("pointerup", up);
+                    header.removeEventListener("pointercancel", up);
+                };
+                header.addEventListener("pointermove", move);
+                header.addEventListener("pointerup", up);
+                header.addEventListener("pointercancel", up);
+            });
         },
 
         async collectRuntimeBindValues(scriptText = null, options = {}) {
@@ -1232,6 +1597,7 @@
             const seen = new Set();
 
             bindNames.forEach((name) => {
+                if (this.isSystemBindName(name)) return;
                 const row = parameterBindMap.get(name);
                 if (!row || !String(row.itemDefault ?? "").trim()) {
                     this.addRuntimeBindPrompt(prompts, seen, name, `:${name}`);
@@ -1253,7 +1619,7 @@
             const masked = this.maskSqlForBindScan(sqlText);
             const names = [];
             const seen = new Set();
-            const regex = /(?<!:):([A-Za-z][A-Za-z0-9_]*)/g;
+            const regex = /(?<!:):([A-Za-z_][A-Za-z0-9_]*)/g;
             let match;
             while ((match = regex.exec(masked)) !== null) {
                 const name = match[1];
@@ -1263,6 +1629,19 @@
                 }
             }
             return names;
+        },
+
+        isSystemBindName(name) {
+            return [
+                "_TargetOwner",
+                "_TargetTable",
+                "_ResultOwner",
+                "_ResultTable",
+                "_preTargetOwner",
+                "_preTargetTable",
+                "_preResultOwner",
+                "_preResultTable"
+            ].includes(String(name || ""));
         },
 
         extractDynamicTokens(sqlText) {
@@ -1862,4 +2241,3 @@ END;`;
 
     window.MCOMMON = MCOMMON;
 })();
-

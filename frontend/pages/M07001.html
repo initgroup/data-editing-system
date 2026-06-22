@@ -1,0 +1,132 @@
+<div class="page-container table-page" id="container-M07001">
+    <section class="table-panel" aria-labelledby="effect-title-M07001">
+        <header class="table-header">
+            <div>
+                <h1 class="table-title" id="effect-title-M07001">에디팅 효과 검증</h1>
+                <p class="table-desc">정제 전/후 데이터 품질 지표를 비교합니다.</p>
+            </div>
+            <div class="table-actions">
+                <button type="button" class="table-btn">
+                    <i class="fas fa-sync-alt"></i>
+                    <span>Refresh</span>
+                </button>
+            </div>
+        </header>
+
+        <div class="table-toolbar query-filter-toolbar">
+            <label class="table-limit-control query-filter-field">
+                <span>Scenario</span>
+                <select>
+                    <option value="">-- Select scenario --</option>
+                </select>
+            </label>
+            <label class="table-limit-control query-filter-field">
+                <span>Run</span>
+                <select>
+                    <option value="">-- Select run --</option>
+                </select>
+            </label>
+            <label class="table-limit-control query-filter-field query-filter-compact">
+                <span>Metric</span>
+                <select>
+                    <option value="">-- Select metric --</option>
+                    <option value="VIOLATION">Violation</option>
+                    <option value="COMPLETENESS">Completeness</option>
+                    <option value="VALIDITY">Validity</option>
+                </select>
+            </label>
+            <label class="table-limit-control query-filter-field query-page-size">
+                <span>Rows</span>
+                <select>
+                    <option value="100">100 rows</option>
+                    <option value="500">500 rows</option>
+                    <option value="1000">1000 rows</option>
+                </select>
+            </label>
+            <button type="button" class="table-btn">
+                <i class="fas fa-chart-line"></i>
+                <span>Compare</span>
+            </button>
+        </div>
+
+        <div class="table-meta-strip">
+            <div><span>Before Violations</span><strong>0</strong></div>
+            <div><span>After Violations</span><strong>0</strong></div>
+            <div><span>Improvement</span><strong>0%</strong></div>
+            <div><span>Validation Run</span><strong>-</strong></div>
+        </div>
+
+        <div class="query-result-bar">
+            <div class="query-result-summary">
+                <strong>0 metric rows fetched</strong>
+                <span>Range 0 - 0 / Total 0</span>
+            </div>
+            <div class="query-result-actions">
+                <button type="button" class="table-btn" disabled>
+                    <i class="fas fa-chevron-left"></i>
+                    <span>Prev</span>
+                </button>
+                <button type="button" class="table-btn" disabled>
+                    <span>Next</span>
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+                <button type="button" class="table-btn query-load-btn" disabled>
+                    <i class="fas fa-plus"></i>
+                    <span>Load more</span>
+                </button>
+            </div>
+        </div>
+
+        <section class="data-param-script-layout">
+            <div class="data-param-card">
+                <header>
+                    <h3>Quality Metrics</h3>
+                </header>
+                <div class="table-result-grid">
+                    <table class="table-grid">
+                        <thead>
+                            <tr>
+                                <th>Metric</th>
+                                <th>Before</th>
+                                <th>After</th>
+                                <th>Delta</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="4" class="table-empty">No quality comparison result.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="data-param-card">
+                <header>
+                    <h3>Validation Scope</h3>
+                </header>
+                <div class="table-result-grid">
+                    <table class="table-grid">
+                        <thead>
+                            <tr>
+                                <th>Owner</th>
+                                <th>Table</th>
+                                <th>Rows</th>
+                                <th>Checked</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="4" class="table-empty">No validation scope.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <div class="query-result-footer">
+            <span>Comparison results are fetched in blocks for large validation runs.</span>
+            <span>Additional detail rows can be appended without clearing the current grid.</span>
+        </div>
+    </section>
+</div>

@@ -1,0 +1,122 @@
+<div class="page-container table-page" id="container-M06001">
+    <section class="table-panel" aria-labelledby="violation-query-title-M06001">
+        <header class="table-header">
+            <div>
+                <h1 class="table-title" id="violation-query-title-M06001">규칙 위반 데이터 조회</h1>
+                <p class="table-desc">선택한 규칙과 대상 테이블 기준으로 위반 데이터를 조회합니다.</p>
+            </div>
+            <div class="table-actions">
+                <button type="button" class="table-btn">
+                    <i class="fas fa-sync-alt"></i>
+                    <span>Refresh</span>
+                </button>
+                <button type="button" class="table-btn">
+                    <i class="fas fa-download"></i>
+                    <span>Export</span>
+                </button>
+            </div>
+        </header>
+
+        <div class="table-toolbar query-filter-toolbar">
+            <label class="table-limit-control query-filter-field">
+                <span>Project</span>
+                <select>
+                    <option value="">-- Select project --</option>
+                </select>
+            </label>
+            <label class="table-limit-control query-filter-field">
+                <span>Scenario</span>
+                <select>
+                    <option value="">-- Select scenario --</option>
+                </select>
+            </label>
+            <label class="table-limit-control query-filter-field">
+                <span>Rule</span>
+                <select>
+                    <option value="">-- Select rule --</option>
+                </select>
+            </label>
+            <label class="table-limit-control query-filter-field query-filter-compact">
+                <span>Status</span>
+                <select>
+                    <option value="">-- Select status --</option>
+                    <option value="OPEN">OPEN</option>
+                    <option value="FIXED">FIXED</option>
+                    <option value="EXCLUDED">EXCLUDED</option>
+                </select>
+            </label>
+            <label class="table-limit-control query-filter-field query-page-size">
+                <span>Rows</span>
+                <select>
+                    <option value="100">100 rows</option>
+                    <option value="500">500 rows</option>
+                    <option value="1000">1000 rows</option>
+                </select>
+            </label>
+            <button type="button" class="table-btn">
+                <i class="fas fa-search"></i>
+                <span>Search</span>
+            </button>
+        </div>
+
+        <div class="table-meta-strip">
+            <div><span>Total Violations</span><strong>0</strong></div>
+            <div><span>Open</span><strong>0</strong></div>
+            <div><span>Fixed</span><strong>0</strong></div>
+            <div><span>Target Table</span><strong>-</strong></div>
+        </div>
+
+        <div class="table-tabs">
+            <button type="button" class="table-tab is-active">Violation Rows</button>
+            <button type="button" class="table-tab">Rule Summary</button>
+            <button type="button" class="table-tab">Data Preview</button>
+        </div>
+
+        <div class="query-result-bar">
+            <div class="query-result-summary">
+                <strong>0 rows fetched</strong>
+                <span>Range 0 - 0 / Total 0</span>
+            </div>
+            <div class="query-result-actions">
+                <button type="button" class="table-btn" disabled>
+                    <i class="fas fa-chevron-left"></i>
+                    <span>Prev</span>
+                </button>
+                <button type="button" class="table-btn" disabled>
+                    <span>Next</span>
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+                <button type="button" class="table-btn query-load-btn" disabled>
+                    <i class="fas fa-plus"></i>
+                    <span>Load more</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="table-result-grid">
+            <table class="table-grid">
+                <thead>
+                    <tr>
+                        <th>No</th>
+                        <th>Rule</th>
+                        <th>Owner</th>
+                        <th>Table</th>
+                        <th>Key Value</th>
+                        <th>Status</th>
+                        <th>Detected At</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td colspan="7" class="table-empty">No violation data.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="query-result-footer">
+            <span>Server-side paging is applied for large result sets.</span>
+            <span>Use Load more to append the next result block.</span>
+        </div>
+    </section>
+</div>

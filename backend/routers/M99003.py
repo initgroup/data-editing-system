@@ -24,8 +24,16 @@ INIT_SYSTEM_TABLES = [
     "INIT$_TB_USER",
     "INIT$_TB_DB_CONNECTION",
     "INIT$_TB_SYSTEM_SETTING",
+    "INIT$_TB_NOTICE",
     "INIT$_TB_SETUP_LOG",
 ]
+
+
+def get_router_sql(sql_id: str, replacements: Optional[dict[str, str]] = None) -> str:
+    sql = SqlLoader.get_sql(sql_id)
+    for key, value in (replacements or {}).items():
+        sql = sql.replace(f"/* --{key}-- */", value)
+    return sql
 
 
 class SystemTableRequest(BaseModel):
@@ -63,14 +71,7 @@ def _check_init_tables(conn):
     try:
         placeholders = ",".join(f":t{i}" for i, _ in enumerate(INIT_SYSTEM_TABLES))
         params = {f"t{i}": table for i, table in enumerate(INIT_SYSTEM_TABLES)}
-        cursor.execute(
-            f"""
-            SELECT TABLE_NAME
-              FROM USER_TABLES
-             WHERE TABLE_NAME IN ({placeholders})
-            """,
-            params,
-        )
+        cursor.execute(get_router_sql("M99003_CHECK_INIT_TABLES", {"INIT_TABLE_BINDS": placeholders}), params)
         existing = {row[0] for row in cursor.fetchall()}
         return [
             {
@@ -227,23 +228,7 @@ def get_system_table_columns(req: SystemTableRequest):
     conn = None
     try:
         conn = get_db_connection()
-        rows, columns = fetch_result(conn, """
-            SELECT
-                C.COLUMN_ID,
-                C.COLUMN_NAME,
-                C.DATA_TYPE,
-                C.DATA_LENGTH,
-                C.DATA_PRECISION,
-                C.DATA_SCALE,
-                C.NULLABLE,
-                CC.COMMENTS
-              FROM USER_TAB_COLUMNS C
-              LEFT JOIN USER_COL_COMMENTS CC
-                ON CC.TABLE_NAME = C.TABLE_NAME
-               AND CC.COLUMN_NAME = C.COLUMN_NAME
-             WHERE C.TABLE_NAME = :tableName
-             ORDER BY C.COLUMN_ID
-        """, {"tableName": table_name})
+        rows, columns = fetch_result(conn, SqlLoader.get_sql("M99003_SYSTEM_TABLE_COLUMNS"), {"tableName": table_name})
         return with_columns(rows, columns)
     finally:
         if conn:
@@ -269,20 +254,18 @@ def get_system_table_data(req: SystemTableRequest):
                 params["useYn"] = "Y"
             rows, columns = fetch_result(
                 conn,
-                f"""
-                SELECT *
-                  FROM (
-                    SELECT *
-                      FROM "{table_name}"
-                      {status_clause}
-                     ORDER BY USER_ID
-                  )
-                 WHERE ROWNUM <= :limit
-                """,
+                get_router_sql("M99003_SYSTEM_USER_DATA", {
+                    "SYSTEM_TABLE": f'"{table_name}"',
+                    "STATUS_CLAUSE": status_clause,
+                }),
                 params,
             )
         else:
-            rows, columns = fetch_result(conn, f'SELECT * FROM "{table_name}" WHERE ROWNUM <= :limit', {"limit": limit})
+            rows, columns = fetch_result(
+                conn,
+                get_router_sql("M99003_SYSTEM_TABLE_DATA", {"SYSTEM_TABLE": f'"{table_name}"'}),
+                {"limit": limit},
+            )
         return with_columns(rows, columns)
     finally:
         if conn:
@@ -303,13 +286,7 @@ def approve_users(req: UserApproveRequest):
             raise HTTPException(status_code=400, detail=detail)
         bind_names = ", ".join(f":u{i}" for i, _ in enumerate(user_ids))
         cursor.execute(
-            f"""
-            UPDATE "INIT$_TB_USER"
-               SET USE_YN = 'Y',
-                   UPDATED_AT = SYSTIMESTAMP
-             WHERE USE_YN = 'N'
-               AND USER_ID IN ({bind_names})
-            """,
+            get_router_sql("M99003_USER_APPROVE", {"USER_ID_BINDS": bind_names}),
             {f"u{i}": user_id for i, user_id in enumerate(user_ids)},
         )
         affected = cursor.rowcount
@@ -344,12 +321,7 @@ def reset_user_passwords(req: UserPasswordResetRequest):
         cursor = conn.cursor()
         bind_names = ", ".join(f":u{i}" for i, _ in enumerate(user_ids))
         cursor.execute(
-            f"""
-            SELECT USER_ID, LOGIN_ID, USER_NAME, EMAIL
-              FROM "INIT$_TB_USER"
-             WHERE USER_ID IN ({bind_names})
-             ORDER BY USER_ID
-            """,
+            get_router_sql("M99003_USER_LIST_BY_IDS", {"USER_ID_BINDS": bind_names}),
             {f"u{i}": user_id for i, user_id in enumerate(user_ids)},
         )
         users = cursor.fetchall()
@@ -359,18 +331,10 @@ def reset_user_passwords(req: UserPasswordResetRequest):
         results = []
         for row in users:
             temp_password = generate_temporary_password()
-            cursor.execute(
-                """
-                UPDATE "INIT$_TB_USER"
-                   SET PASSWORD_HASH = :passwordHash,
-                       UPDATED_AT = SYSTIMESTAMP
-                 WHERE USER_ID = :userId
-                """,
-                {
-                    "passwordHash": _hash_password(temp_password),
-                    "userId": int(row[0]),
-                },
-            )
+            cursor.execute(SqlLoader.get_sql("M99003_USER_RESET_PASSWORD"), {
+                "passwordHash": _hash_password(temp_password),
+                "userId": int(row[0]),
+            })
             results.append({
                 "userId": row[0],
                 "loginId": row[1],
@@ -415,12 +379,7 @@ def deactivate_users(req: UserDeactivateRequest):
         cursor = conn.cursor()
         bind_names = ", ".join(f":u{i}" for i, _ in enumerate(user_ids))
         cursor.execute(
-            f"""
-            UPDATE "INIT$_TB_USER"
-               SET USE_YN = 'N',
-                   UPDATED_AT = SYSTIMESTAMP
-             WHERE USER_ID IN ({bind_names})
-            """,
+            get_router_sql("M99003_USER_DEACTIVATE", {"USER_ID_BINDS": bind_names}),
             {f"u{i}": user_id for i, user_id in enumerate(user_ids)},
         )
         affected = cursor.rowcount
@@ -445,7 +404,11 @@ def execute_system_sql(req: SqlRequest):
     conn = None
     try:
         conn = get_db_connection()
-        rows, columns = fetch_result(conn, f"SELECT * FROM ({sql}) WHERE ROWNUM <= :limit", {"limit": limit})
+        rows, columns = fetch_result(
+            conn,
+            get_router_sql("M99003_LIMITED_SELECT_WRAPPER", {"READONLY_SQL": sql}),
+            {"limit": limit},
+        )
         return with_columns(rows, columns)
     finally:
         if conn:

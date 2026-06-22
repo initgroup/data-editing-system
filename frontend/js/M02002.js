@@ -160,7 +160,7 @@
             if (!select) return;
 
             select.innerHTML = `
-                <option value="">Select project</option>
+                <option value="">-- Select project --</option>
                 ${this.contextProjects.map((project) => `
                     <option value="${this.escapeHtml(project.PROJECT_ID ?? "")}">
                         ${this.escapeHtml(project.PROJECT_NAME || project.PROJECT_CODE || "(Untitled project)")}
@@ -216,7 +216,7 @@
             if (!select) return;
 
             select.innerHTML = `
-                <option value="">Select scenario</option>
+                <option value="">-- Select scenario --</option>
                 ${this.contextScenarios.map((scenario) => `
                     <option value="${this.escapeHtml(scenario.SCENARIO_ID ?? "")}">
                         ${this.escapeHtml(scenario.SCENARIO_NAME || scenario.SCENARIO_CODE || "(Untitled scenario)")}
@@ -554,15 +554,14 @@
             const key = `${row.OWNER}.${row.TABLE_NAME}`;
             const selectedKey = this.selectedTable ? `${this.selectedTable.OWNER}.${this.selectedTable.TABLE_NAME}` : "";
             const selectedClass = key === (this.focusedTableKey || selectedKey) ? "is-selected" : "";
-            const comment = row.COMMENTS || "";
             return `
                 <button type="button" class="table-tree-row ${selectedClass}" data-table-key="${this.escapeHtml(key)}" onclick="M02002.selectTable('${this.escapeJs(row.OWNER)}', '${this.escapeJs(row.TABLE_NAME)}')">
-                    <span class="table-tree-name" title="${this.escapeHtml(comment || row.TABLE_NAME)}">
+                    <span class="table-tree-name" title="${this.escapeHtml(row.TABLE_NAME)}">
                         <span class="table-tree-physical">
                             <i class="fas fa-table"></i>
                             <span>${this.escapeHtml(row.TABLE_NAME)}</span>
                         </span>
-                        <span class="table-tree-comment">${this.escapeHtml(comment || "-")}</span>
+                        <span class="table-tree-comment">Click to analyze table</span>
                     </span>
                     <span class="table-tree-muted">${this.escapeHtml(row.OWNER)}</span>
                 </button>
@@ -640,8 +639,8 @@
 
         isTableSearchMatch(row, keyword) {
             const tableName = String(row.TABLE_NAME || "").toLowerCase();
-            const tableComment = String(row.COMMENTS || "").toLowerCase();
-            return tableName.includes(keyword) || tableComment.includes(keyword);
+            const owner = String(row.OWNER || "").toLowerCase();
+            return tableName.includes(keyword) || owner.includes(keyword);
         },
 
         isTableSearchFilterEnabled() {
@@ -689,7 +688,10 @@
             this.renderTableTree();
             this.updateSelectedMeta();
             this.setDefaultSql();
-            await this.loadColumns();
+            await Promise.all([
+                this.loadTableInfo(),
+                this.loadColumns()
+            ]);
             if (this.activeTab === "data") {
                 await this.loadTableData();
             }
@@ -721,6 +723,26 @@
             }
             if (tabName === "sql" && !getContainerEl("#sqlEditor-M02002")?.value.trim()) {
                 this.setDefaultSql();
+            }
+        },
+
+        async loadTableInfo() {
+            if (!this.ensureSelectedTable()) return;
+            try {
+                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/table-info`, {
+                    method: "POST",
+                    showLoading: false,
+                    body: this.getSelectedPayload()
+                });
+                if (json.data && Object.keys(json.data).length) {
+                    this.selectedTable = {
+                        ...this.selectedTable,
+                        ...json.data
+                    };
+                    this.updateSelectedMeta();
+                }
+            } catch (error) {
+                console.warn("[M02002] table info load failed", error);
             }
         },
 
@@ -1108,4 +1130,3 @@
 
     window[PAGE_CODE] = M02002;
 })();
-

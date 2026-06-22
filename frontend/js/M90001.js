@@ -16,6 +16,8 @@
         objectRows: [],
         visibleObjectRows: [],
         collapsedNodes: new Set(),
+        loadedGroupNodes: new Set(),
+        loadingGroupNodes: new Set(),
         loadedPackageNodes: new Set(),
         loadingPackageNodes: new Set(),
         treeRowHeight: 36,
@@ -58,6 +60,8 @@
             this.objectRows = [];
             this.visibleObjectRows = [];
             this.collapsedNodes = new Set();
+            this.loadedGroupNodes = new Set();
+            this.loadingGroupNodes = new Set();
             this.loadedPackageNodes = new Set();
             this.loadingPackageNodes = new Set();
             this.treeLoading = false;
@@ -90,6 +94,8 @@
                     this.objectRows = [];
                     this.visibleObjectRows = [];
                     this.collapsedNodes = new Set();
+                    this.loadedGroupNodes = new Set();
+                    this.loadingGroupNodes = new Set();
                     this.loadedPackageNodes = new Set();
                     this.loadingPackageNodes = new Set();
                     this.selectedTreeNodeId = null;
@@ -111,8 +117,7 @@
                     limit: String(this.treeFetchLimit),
                     keyword: this.treeSearchMode ? (getContainerEl("#objectSearch-M90001")?.value || "").trim() : "",
                     registeredOnly: this.isRegisteredOnlyTree() ? "Y" : "N",
-                    categoryFilter: this.getObjectCategoryFilter(),
-                    includePackageMembers: "N"
+                    categoryFilter: this.getObjectCategoryFilter()
                 });
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/object-tree?${params.toString()}`, { method: "GET", showLoading: false });
                 if (json.status && json.status !== "success") {
@@ -306,12 +311,21 @@
             this.selectedTreeNodeId = this.getNodeId(selected);
 
             if (this.getObjectType(selected) === "LOAD_MORE") {
-                await this.loadMoreObjects();
+                if (selected.GROUP_LOAD_MORE === "Y") {
+                    await this.loadMoreGroupChildren(selected);
+                } else {
+                    await this.loadMoreObjects();
+                }
                 return;
             }
 
             if (this.getObjectType(selected) === "PACKAGE") {
                 await this.handlePackageNodeClick(selected);
+                return;
+            }
+
+            if (this.getObjectType(selected) === "GROUP") {
+                await this.handleGroupNodeClick(selected);
                 return;
             }
 
@@ -325,6 +339,185 @@
             if (selected.IS_SELECTABLE === "Y") {
                 this.selectObject(selected);
             }
+        },
+
+        async handleGroupNodeClick(row) {
+            const nodeId = this.getNodeId(row);
+            if (!nodeId) return;
+
+            if (!this.loadedGroupNodes.has(nodeId)) {
+                this.collapsedNodes.delete(nodeId);
+                await this.loadGroupChildren(row);
+                return;
+            }
+
+            this.toggleNode(nodeId);
+        },
+
+        async loadGroupChildren(row) {
+            const nodeId = this.getNodeId(row);
+            if (!nodeId || this.loadingGroupNodes.has(nodeId)) return;
+
+            this.loadingGroupNodes.add(nodeId);
+            this.insertGroupLoadingRow(row);
+            this.refreshTreeRows();
+
+            try {
+                const params = new URLSearchParams({
+                    owner: row.OWNER || "",
+                    groupType: this.getGroupType(row),
+                    offset: "0",
+                    limit: String(this.treeFetchLimit),
+                    registeredOnly: this.isRegisteredOnlyTree() ? "Y" : "N"
+                });
+                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/object-children?${params.toString()}`, { method: "GET", showLoading: false });
+                if (json.status && json.status !== "success") {
+                    throw new Error(json.message || json.detail || "Object children response failed.");
+                }
+
+                const children = Array.isArray(json.data) ? json.data : [];
+                this.replaceGroupChildren(row, this.withGroupLoadMoreRow(row, children, json));
+                this.loadedGroupNodes.add(nodeId);
+            } catch (error) {
+                console.error("[M90001] object children load failed", error);
+                this.removeGroupChildren(nodeId);
+                this.updateDescription(error.message || "Object children load failed.");
+            } finally {
+                this.loadingGroupNodes.delete(nodeId);
+                this.refreshTreeRows();
+            }
+        },
+
+        async loadMoreGroupChildren(row) {
+            const parentNodeId = this.getParentId(row);
+            const parent = this.objectRows.find((item) => this.getNodeId(item) === parentNodeId);
+            if (!parent) return;
+
+            const scrollTop = this.getTreeScrollTop();
+            this.replaceTreeRow(row, { ...row, OBJECT_LABEL: "Loading more...", OBJECT_NAME: "Loading more..." });
+            this.refreshTreeRows();
+            this.restoreTreeScroll(scrollTop);
+
+            try {
+                const params = new URLSearchParams({
+                    owner: parent.OWNER || "",
+                    groupType: row.GROUP_TYPE || this.getGroupType(parent),
+                    offset: String(row.NEXT_OFFSET || 0),
+                    limit: String(this.treeFetchLimit),
+                    registeredOnly: this.isRegisteredOnlyTree() ? "Y" : "N"
+                });
+                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/object-children?${params.toString()}`, { method: "GET", showLoading: false });
+                if (json.status && json.status !== "success") {
+                    throw new Error(json.message || json.detail || "Object children response failed.");
+                }
+                const children = Array.isArray(json.data) ? json.data : [];
+                this.removeTreeRow(this.getNodeId(row));
+                this.appendGroupChildren(parent, this.withGroupLoadMoreRow(parent, children, json));
+            } catch (error) {
+                console.error("[M90001] object children load more failed", error);
+                this.removeTreeRow(this.getNodeId(row));
+                this.appendGroupChildren(parent, [this.createGroupLoadMoreRow(parent, Number(row.NEXT_OFFSET || 0), error.message || "Load more failed.")]);
+                this.updateDescription(error.message || "Object children load failed.");
+            }
+            this.refreshTreeRows();
+            this.restoreTreeScroll(scrollTop);
+        },
+
+        insertGroupLoadingRow(row) {
+            const nodeId = this.getNodeId(row);
+            if (!nodeId) return;
+            this.removeGroupChildren(nodeId);
+            const index = this.objectRows.findIndex((item) => this.getNodeId(item) === nodeId);
+            if (index < 0) return;
+            this.objectRows.splice(index + 1, 0, {
+                OWNER: row.OWNER,
+                OBJECT_TYPE: "LOADING",
+                OBJECT_NAME: "Loading objects...",
+                OBJECT_LABEL: "Loading objects...",
+                NODE_ID: `LOADING:${nodeId}`,
+                PARENT_ID: nodeId,
+                LEVEL_NO: Number(row.LEVEL_NO || 2) + 1,
+                IS_SELECTABLE: "N",
+                IS_REGISTERED: "N",
+                CHILD_COUNT: null
+            });
+        },
+
+        replaceGroupChildren(row, children) {
+            const nodeId = this.getNodeId(row);
+            if (!nodeId) return;
+            this.removeGroupChildren(nodeId);
+            const index = this.objectRows.findIndex((item) => this.getNodeId(item) === nodeId);
+            if (index < 0) return;
+
+            const normalizedChildren = children.map((child) => ({
+                ...child,
+                PARENT_ID: nodeId,
+                LEVEL_NO: Number(row.LEVEL_NO || 2) + 1
+            }));
+            this.objectRows.splice(index + 1, 0, ...normalizedChildren);
+            row.CHILD_COUNT = normalizedChildren.filter((child) => this.getObjectType(child) !== "LOAD_MORE").length;
+        },
+
+        removeGroupChildren(parentNodeId) {
+            this.objectRows = this.objectRows.filter((item) => this.getParentId(item) !== parentNodeId);
+        },
+
+        appendGroupChildren(parent, children) {
+            const parentNodeId = this.getNodeId(parent);
+            if (!parentNodeId) return;
+            const sameParentRows = this.objectRows
+                .map((row, index) => ({ row, index }))
+                .filter((item) => this.getParentId(item.row) === parentNodeId);
+            const insertIndex = sameParentRows.length
+                ? sameParentRows[sameParentRows.length - 1].index + 1
+                : this.objectRows.findIndex((row) => this.getNodeId(row) === parentNodeId) + 1;
+            if (insertIndex < 0) return;
+            const normalizedChildren = children.map((child) => ({
+                ...child,
+                PARENT_ID: parentNodeId,
+                LEVEL_NO: Number(parent.LEVEL_NO || 2) + 1
+            }));
+            this.objectRows.splice(insertIndex, 0, ...normalizedChildren);
+            parent.CHILD_COUNT = this.objectRows.filter((child) =>
+                this.getParentId(child) === parentNodeId && this.getObjectType(child) !== "LOAD_MORE"
+            ).length;
+        },
+
+        withGroupLoadMoreRow(parent, rows, response) {
+            const nextRows = rows.slice();
+            if (response?.hasMore) {
+                nextRows.push(this.createGroupLoadMoreRow(parent, Number(response.nextOffset || nextRows.length)));
+            }
+            return nextRows;
+        },
+
+        createGroupLoadMoreRow(parent, nextOffset, label = "Load more...") {
+            const parentNodeId = this.getNodeId(parent);
+            return {
+                OWNER: parent.OWNER || "",
+                OBJECT_TYPE: "LOAD_MORE",
+                OBJECT_NAME: label,
+                OBJECT_LABEL: label,
+                NODE_ID: `LOAD_MORE:${parentNodeId}:${nextOffset}`,
+                PARENT_ID: parentNodeId,
+                LEVEL_NO: Number(parent.LEVEL_NO || 2) + 1,
+                IS_SELECTABLE: "N",
+                IS_REGISTERED: "N",
+                CHILD_COUNT: null,
+                GROUP_LOAD_MORE: "Y",
+                GROUP_TYPE: this.getGroupType(parent),
+                NEXT_OFFSET: nextOffset
+            };
+        },
+
+        replaceTreeRow(oldRow, nextRow) {
+            const index = this.objectRows.findIndex((row) => this.getNodeId(row) === this.getNodeId(oldRow));
+            if (index >= 0) this.objectRows.splice(index, 1, nextRow);
+        },
+
+        removeTreeRow(nodeId) {
+            this.objectRows = this.objectRows.filter((row) => this.getNodeId(row) !== nodeId);
         },
 
         async handlePackageNodeClick(row) {
@@ -476,7 +669,13 @@
             if (!row || (objectType !== "GROUP" && objectType !== "PACKAGE")) return false;
             const nodeId = this.getNodeId(row);
             if (objectType === "PACKAGE") return Boolean(nodeId);
-            return Boolean(nodeId) && this.objectRows.some((child) => this.getParentId(child) === nodeId);
+            return Boolean(nodeId);
+        },
+
+        getGroupType(row) {
+            const nodeId = this.getNodeId(row);
+            const parts = nodeId.split(":");
+            return String(parts[2] || row.OBJECT_NAME || "").trim().toUpperCase();
         },
 
         toggleNode(nodeId) {
@@ -1112,8 +1311,13 @@
             }
 
             const nodeId = this.getNodeId(row);
-            const unloadedPackage = this.getObjectType(row) === "PACKAGE" && !this.loadedPackageNodes.has(nodeId);
-            const icon = this.collapsedNodes.has(nodeId) || unloadedPackage ? "fa-chevron-right" : "fa-chevron-down";
+            const type = this.getObjectType(row);
+            const isLoading = (type === "GROUP" && this.loadingGroupNodes.has(nodeId))
+                || (type === "PACKAGE" && this.loadingPackageNodes.has(nodeId));
+            const isUnloaded = (type === "GROUP" && !this.loadedGroupNodes.has(nodeId))
+                || (type === "PACKAGE" && !this.loadedPackageNodes.has(nodeId));
+            const isClosed = this.collapsedNodes.has(nodeId) || (isUnloaded && !isLoading);
+            const icon = isClosed ? "fa-chevron-right" : "fa-chevron-down";
             return `<i class="fas ${icon} env-tree-toggle"></i>`;
         },
 
@@ -1132,4 +1336,3 @@
 
     window[PAGE_CODE] = M90001;
 })();
-

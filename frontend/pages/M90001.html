@@ -56,10 +56,26 @@
 
         <section class="env-panel" aria-labelledby="env-title-M90001">
             <header class="env-header">
-                <h1 class="env-title" id="env-title-M90001">Environment Variables</h1>
-                <p class="env-desc" id="envDescription-M90001">
-                    Select a table or procedure from the schema tree. Columns or parameters will appear here.
-                </p>
+                <div class="env-header-main">
+                    <h1 class="env-title" id="env-title-M90001">Environment Variables</h1>
+                    <p class="env-desc" id="envDescription-M90001">
+                        Select a table or procedure from the schema tree. Columns or parameters will appear here.
+                    </p>
+                </div>
+                <div class="env-header-actions">
+                    <button type="button" class="env-btn env-save" onclick="M90001.saveVariables()">
+                        <i class="fas fa-save"></i>
+                        <span>Save</span>
+                    </button>
+                    <button type="button" class="env-btn env-cancel" onclick="M90001.resetVariables()">
+                        <i class="fas fa-undo"></i>
+                        <span>Reset</span>
+                    </button>
+                    <button type="button" class="env-btn env-danger" onclick="M90001.deleteObjectRegistration()">
+                        <i class="far fa-trash-alt"></i>
+                        <span>Delete</span>
+                    </button>
+                </div>
             </header>
 
             <section class="env-object-meta" aria-label="Object master information">
@@ -120,20 +136,6 @@
             <footer class="env-footer">
                 <div class="env-footer-group">
                     <span class="env-detail-hint">Rows are based on the selected DB object.</span>
-                </div>
-
-                <div class="env-footer-group">
-                    <button type="button" class="env-btn env-save" onclick="M90001.saveVariables()">
-                        <span>Save changes</span>
-                    </button>
-                    <button type="button" class="env-split" aria-label="More save options">
-                        <i class="fas fa-chevron-down"></i>
-                    </button>
-                    <button type="button" class="env-btn env-cancel" onclick="M90001.resetVariables()">Cancel</button>
-                    <button type="button" class="env-btn env-danger" onclick="M90001.deleteObjectRegistration()">
-                        <i class="far fa-trash-alt"></i>
-                        <span>Delete object</span>
-                    </button>
                 </div>
             </footer>
         </section>

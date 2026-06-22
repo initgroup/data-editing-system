@@ -20,13 +20,13 @@
             <label>
                 <span class="required-title" data-label-key="project">Project</span>
                 <select id="contextProject-__PAGE_CODE__" class="work-context-select" onchange="__PAGE_CODE__.handleContextProjectChange(this.value)">
-                    <option value="">Select project</option>
+                    <option value="">-- Select project --</option>
                 </select>
             </label>
             <label>
                 <span class="required-title" data-label-key="scenario">Scenario</span>
                 <select id="contextScenario-__PAGE_CODE__" class="work-context-select" onchange="__PAGE_CODE__.handleContextScenarioChange(this.value)">
-                    <option value="">Select scenario</option>
+                    <option value="">-- Select scenario --</option>
                 </select>
             </label>
         </div>
@@ -87,6 +87,10 @@
                             <i class="fas fa-save"></i>
                             <span data-label-key="saveWork">Save work</span>
                         </button>
+                        <button type="button" id="deleteJob-__PAGE_CODE__" class="table-btn" onclick="__PAGE_CODE__.deleteJob()" disabled>
+                            <i class="fas fa-trash-alt"></i>
+                            <span data-label-key="deleteWork">Delete work</span>
+                        </button>
                         <button type="button" id="runNow-__PAGE_CODE__" class="table-btn" onclick="__PAGE_CODE__.runJob(false)" disabled>
                             <i class="fas fa-play"></i>
                             <span data-label-key="runNow">Run now</span>
@@ -140,24 +144,37 @@
 
                 <section class="data-param-card" aria-label="Registered object parameters">
                     <div class="data-exec-grid">
-                        <label>
-                            <span class="required-title" data-label-key="executableObject">Correlation Procedure / Model</span>
-                            <select id="execObject-__PAGE_CODE__" class="env-field" onchange="__PAGE_CODE__.handleExecutableObjectChange(this.value)">
-                                <option value="">Select registered object</option>
+                        <label class="data-exec-source-field">
+                            <span data-label-key="executionSource">Execution Source</span>
+                            <select id="execSourceType-__PAGE_CODE__" class="env-field" onchange="__PAGE_CODE__.handleExecutionSourceChange(this.value)">
+                                <option value="DB_OBJECT">DB Object</option>
+                                <option value="OML_PYTHON">OML Python</option>
                             </select>
                         </label>
-                        <label>
+                        <label class="data-exec-object-field">
+                            <span class="required-title" data-label-key="executableObject">Correlation Procedure / Model</span>
+                            <select id="execObject-__PAGE_CODE__" class="env-field" onchange="__PAGE_CODE__.handleExecutableObjectChange(this.value)">
+                                <option value="">-- Select registered object --</option>
+                            </select>
+                        </label>
+                        <label id="omlResourceWrap-__PAGE_CODE__" class="data-oml-resource-field" hidden>
+                            <span class="required-title" data-label-key="omlResource">OML4Py Resource</span>
+                            <select id="omlResource-__PAGE_CODE__" class="env-field" onchange="__PAGE_CODE__.handleOmlResourceChange(this.value)">
+                                <option value="">-- Select OML4Py resource --</option>
+                            </select>
+                        </label>
+                        <label class="data-result-create-field">
                             <span data-label-key="resultTableCreate">Result Table Create</span>
                             <select id="resultCreateYn-__PAGE_CODE__" class="env-field" onchange="__PAGE_CODE__.handleResultCreateChange(this.value)">
                                 <option value="N">N</option>
                                 <option value="Y">Y</option>
                             </select>
                         </label>
-                        <label>
+                        <label class="data-result-owner-field">
                             <span data-label-key="resultOwner">Result Owner</span>
                             <input id="resultOwner-__PAGE_CODE__" class="env-field" type="text" placeholder="OWNER" oninput="__PAGE_CODE__.updateCurrentJobField('resultOwner', this.value)">
                         </label>
-                        <label>
+                        <label class="data-result-table-field">
                             <span data-label-key="resultTable">Result Table</span>
                             <input id="resultTable-__PAGE_CODE__" class="env-field" type="text" placeholder="RESULT_TABLE" data-placeholder-key="resultTablePlaceholder" oninput="__PAGE_CODE__.updateCurrentJobField('resultTableName', this.value)">
                         </label>
@@ -175,20 +192,20 @@
                             </header>
                             <div id="parameterGrid-__PAGE_CODE__" class="data-param-grid"></div>
                         </section>
-                        <section class="data-param-panel" aria-label="Generated executable PL/SQL">
+                        <section class="data-param-panel" aria-label="Generated executable script">
                             <header class="data-param-panel-header data-script-header">
                                 <span class="data-script-title-group">
-                                    <strong data-label-key="generatedScript">Generated PL/SQL</strong>
-                                    <button type="button" class="table-icon-btn data-help-btn" title="Bind variable rules" onclick="__PAGE_CODE__.openPlsqlHelp()">
+                                    <strong id="generatedScriptTitle-__PAGE_CODE__" data-label-key="generatedScript">Generated PL/SQL</strong>
+                                    <button id="scriptHelpButton-__PAGE_CODE__" type="button" class="table-icon-btn data-help-btn" title="Bind variable rules" onclick="__PAGE_CODE__.openPlsqlHelp()">
                                         <i class="fas fa-question"></i>
                                     </button>
                                 </span>
                                 <button type="button" class="table-btn" onclick="__PAGE_CODE__.generateExecutablePlsql(true)">
                                     <i class="fas fa-arrow-right"></i>
-                                    <span data-label-key="generateScript">Generate PL/SQL</span>
+                                    <span id="generateScriptLabel-__PAGE_CODE__" data-label-key="generateScript">Generate PL/SQL</span>
                                 </button>
                             </header>
-                            <textarea id="execPlsqlEditor-__PAGE_CODE__" class="sql-editor data-script-editor" spellcheck="false" aria-label="Generated executable PL/SQL script"></textarea>
+                            <textarea id="execPlsqlEditor-__PAGE_CODE__" class="sql-editor data-script-editor" spellcheck="false" aria-label="Generated executable script"></textarea>
                         </section>
                     </div>
                 </section>
@@ -204,13 +221,17 @@
                     <i class="fas fa-times"></i>
                 </button>
             </header>
-            <div class="data-help-content">
-                <p>왼쪽 Parameter List의 Parameter 명칭은 PL/SQL 스크립트에서 바인드 변수 또는 문자열 치환 키로 사용할 수 있습니다.</p>
+            <div id="scriptHelpContent-__PAGE_CODE__" class="data-help-content">
+                <p>Parameter List의 Parameter 명칭과 시스템 예약 변수를 PL/SQL 스크립트에서 바인드 변수 또는 문자열 치환 키로 사용할 수 있습니다.</p>
                 <ul>
-                    <li><strong>바인드 변수</strong>: Parameter 명칭이 <code>ABC_DEF</code>이면 스크립트에서는 <code>:abcDef</code>로 작성합니다. 언더바는 제거되고, 언더바 다음 첫 글자만 대문자로 변환됩니다.</li>
+                    <li><strong>바인드 변수명 규칙</strong>: Parameter 명칭을 camelCase로 변환해 사용합니다. 예: <code>ABC_DEF</code> -> <code>:abcDef</code>, <code>P_MODEL_NAME</code> -> <code>:pModelName</code>.</li>
+                    <li><strong>작성 방법</strong>: PL/SQL에서는 바인드 변수 앞에 콜론을 붙입니다. 예: <code>P_MODEL_NAME =&gt; :pModelName</code>.</li>
                     <li><strong>동적 문자열 치환</strong>: <code>/* --DYNAMIC_MODEL_NAME-- */</code>처럼 작성하면 <code>/* --</code>와 <code>-- */</code> 사이의 이름이 Parameter 명칭과 완전히 같을 때 해당 값이 문자열 그대로 치환됩니다.</li>
-                    <li><strong>Generate PL/SQL</strong>: 기본값이 있으면 기본값을 스크립트에 직접 채우고, 기본값이 없으면 <code>:abcDef</code> 형식의 바인드 변수로 생성합니다.</li>
-                    <li><strong>Run now / Queue Batch</strong>: 실행 시 저장된 Parameter List 값으로 바인드 변수와 동적 문자열 치환을 처리한 뒤 실행합니다.</li>
+                    <li><strong>현재 Job 예약 변수</strong>: <code>:_TargetOwner</code>, <code>:_TargetTable</code>, <code>:_ResultOwner</code>, <code>:_ResultTable</code>은 실행 시 현재 Job/Node의 Target/Result owner/table 값으로 자동 전달됩니다.</li>
+                    <li><strong>Flow 선행 Node 예약 변수</strong>: M04001 Flow 실행에서는 <code>:_preTargetOwner</code>, <code>:_preTargetTable</code>, <code>:_preResultOwner</code>, <code>:_preResultTable</code>을 사용할 수 있습니다. 연결된 선행 Node의 Target/Result owner/table 값이 자동 전달됩니다.</li>
+                    <li><strong>Generate PL/SQL</strong>: Parameter 기본값이 있으면 기본값을 스크립트에 직접 채우고, 기본값이 없으면 위 규칙의 바인드 변수로 생성합니다. 예약 변수는 필요한 위치에 직접 입력해 사용합니다.</li>
+                    <li><strong>Run now / Queue Batch</strong>: 실행 시 Parameter List 값과 Runtime Bind 값을 처리하고, 시스템 예약 변수는 실제 Job/Node 정보로 자동 덮어쓴 뒤 실행합니다.</li>
+                    <li><strong>예시</strong>: <code>P_OWNER =&gt; :_preResultOwner</code>, <code>P_TABLE =&gt; :_preResultTable</code>, <code>P_RESULT_OWNER =&gt; :_ResultOwner</code>, <code>P_RESULT_TABLE =&gt; :_ResultTable</code></li>
                 </ul>
             </div>
             <footer>
@@ -290,4 +311,3 @@
         <div id="runHistoryGrid-__PAGE_CODE__" class="table-result-grid data-history-grid"></div>
     </section>
 </div>
-

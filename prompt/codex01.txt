@@ -105,6 +105,177 @@ init01 / init2026!
 
 ----------------------------------------------------------------------
 
+Oracle Machine Learning for Python (OML4Py)
+
+만약 Oracle Cloud의
+Oracle Autonomous Database
+를 사용한다면
+Jupyter Notebook 기반 Python 환경이 이미 제공되는 경우가 있습니다.
+이 경우는 별도 설치가 거의 필요 없습니다.
+
+
+SELECT comp_name, version, status
+FROM dba_registry
+ORDER BY comp_name;
+----------------------------------------------------------------------
+OML4Py는 별도의 script repository에 Python 함수를 저장합니다.
+예를 들면 Python API에서는 이렇게 저장합니다.
+
+oml.script.create("build_lm1", func=build_lm1, overwrite=True)
+
+그리고 실행할 때는 함수명을 문자열로 넘깁니다.
+oml.table_apply(oml_iris, func="build_lm1", oml_input_type="pandas.DataFrame")
+----------------------------------------------------------------------
+1. OML Notebook 또는 SQL API에서 Python 함수 등록
+2. M90002에서 script repository 목록 조회/동기화
+3. 등록된 script를 M90002 리소스로 선택
+4. MCOMMON_DATA_WORK job에서 pyqEval/pyqTableEval 호출
+5. Flow에서 job을 노드로 사용
+이 흐름이 Oracle 방식에 가장 가깝습니다.
+----------------------------------------------------------------------
+
+관리자 계정에서 예를 들어 현재 사용자가 INIT$EDIT01이면:
+아래 쿼리로 권한 부여해...
+GRANT OML_DEVELOPER TO "INIT$EDIT01";
+
+GRANT PYQADMIN TO "INIT$EDIT01";
+
+BEGIN
+    DBMS_NETWORK_ACL_ADMIN.APPEND_HOST_ACE(
+        host => '*',
+        ace  => XS$ACE_TYPE(
+            privilege_list => XS$NAME_LIST('connect', 'resolve'),
+            principal_name => 'INIT$EDIT01',
+            principal_type => XS_ACL.PTYPE_DB
+        )
+    );
+END;
+/
+
+COMMIT;
+
+
+BEGIN
+    DBMS_NETWORK_ACL_ADMIN.APPEND_HOST_ACE(
+        host => 'POD',
+        ace  => XS$ACE_TYPE(
+            privilege_list => XS$NAME_LIST('connect', 'resolve'),
+            principal_name => 'INIT$EDIT01',
+            principal_type => XS_ACL.PTYPE_DB
+        )
+    );
+END;
+/
+
+COMMIT;
+
+
+
+BEGIN
+  DBMS_NETWORK_ACL_ADMIN.APPEND_HOST_ACE(
+    host => '*',
+    ace  => XS$ACE_TYPE(
+      privilege_list => XS$NAME_LIST('connect', 'resolve'),
+      principal_name => 'INIT$EDIT01',
+      principal_type => XS_ACL.PTYPE_DB
+    )
+  );
+
+  DBMS_NETWORK_ACL_ADMIN.APPEND_HOST_ACE(
+    host => 'POD',
+    ace  => XS$ACE_TYPE(
+      privilege_list => XS$NAME_LIST('connect', 'resolve'),
+      principal_name => 'INIT$EDIT01',
+      principal_type => XS_ACL.PTYPE_DB
+    )
+  );
+END;
+/
+
+commit;
+
+SELECT HOST, PRINCIPAL, PRIVILEGE, GRANT_TYPE
+  FROM DBA_HOST_ACES
+ WHERE PRINCIPAL = 'INIT$EDIT01'
+ ORDER BY HOST, PRIVILEGE;
+-->  HOST = POD에 CONNECT, RESOLVE가 보여야 합니다.
+
+
+SELECT * FROM sys.pyq_config;
+--여기에서 OML4Py 관련 설정을 먼저 보세요. 
+특히 PYTHONHOME, PYTHONPATH, VERSION, PLATFORM 등이 나와야 
+OML4Py 서버 설정이 되어 있는 상태입니다.
+
+
+
+무료 Oracle Cloud DB가 Autonomous Database라면 
+v$instance.host_name이나 pod 같은 값이 중요한 게 아닙니다.
+
+ACL에는 보통 아래 형태의 Autonomous DB OML REST 도메인을 넣습니다.
+
+
+--> ADMIN 에서 실행
+EXEC pyqAppendHostAce('INIT$EDIT01', 'adb.ap-seoul-1.oraclecloudapps.com');
+
+
+
+BEGIN
+  sys.pyqScriptCreate(
+    'OML_HELLO_PYTHON',
+    'def hello(pMessage):
+       import json
+       return {"message": pMessage, "status": "OK"}',
+    FALSE,
+    TRUE
+  );
+END;
+/
+
+
+SET LONG 5000;
+
+SELECT *
+  FROM TABLE(pyqEval(
+        par_lst => '{"pMessage":"Hello OML4Py"}',
+        out_fmt => 'JSON',
+        scr_name => 'OML_HELLO_PYTHON'
+  ));
+
+----------------------------------------------------------------------
+SELECT HOST,
+       LOWER_PORT,
+       UPPER_PORT,
+       ACE_ORDER,
+       PRINCIPAL,
+       PRIVILEGE,
+       GRANT_TYPE
+  FROM DBA_HOST_ACES
+ WHERE PRINCIPAL = 'INIT$EDIT01'
+ ORDER BY HOST, ACE_ORDER, PRIVILEGE;
+; 
+
+SELECT SYS_CONTEXT('USERENV', 'CURRENT_USER') AS CURRENT_USER
+  FROM DUAL;
+
+
+SELECT HOST,
+       PRINCIPAL,
+       PRIVILEGE,
+       GRANT_TYPE
+  FROM DBA_HOST_ACES
+ WHERE PRINCIPAL = 'INIT$EDIT01'
+ ORDER BY HOST, PRIVILEGE;
+
+SELECT
+    SYS_CONTEXT('USERENV', 'SESSION_USER')  AS SESSION_USER,
+    SYS_CONTEXT('USERENV', 'CURRENT_USER')  AS CURRENT_USER,
+    SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA') AS CURRENT_SCHEMA
+FROM DUAL; 
+
+
+SELECT * FROM USER_SYS_PRIVS ORDER BY PRIVILEGE;
+
+----------------------------------------------------------------------
 SELECT
     s.sid,
     s.serial#,

@@ -550,6 +550,18 @@ body {
   padding: 0 12px;
 }
 
+.common-message-tool:focus,
+.common-message-primary:focus,
+.common-message-secondary:focus {
+  outline: none;
+}
+
+.common-message-tool:focus-visible,
+.common-message-secondary:focus-visible {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.22);
+}
+
 .common-message-tool {
   background: transparent;
   border-color: transparent;
@@ -597,6 +609,16 @@ body {
   border-color: #2563eb;
   color: #ffffff;
   font-weight: 700;
+  min-width: 82px;
+}
+
+.common-message-primary:focus,
+.common-message-primary:focus-visible {
+  box-shadow:
+    0 0 0 2px #ffffff,
+    0 0 0 5px rgba(37, 99, 235, 0.65);
+  outline: 2px solid transparent;
+  outline-offset: 2px;
 }
 
 .common-message-secondary {

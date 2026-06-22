@@ -181,6 +181,51 @@ def create_data_work_router(
         finally:
             if conn:
                 conn.close()
+
+
+    @router.get("/oml-resources")
+    def get_oml_resources(request: Request):
+        conn = None
+        try:
+            conn = get_target_db_connection(request)
+            result = execute_query(conn, "DATA_WORK_OML_RESOURCE_LIST")
+            return data_work.require_success(result, "OML resource query failed.")
+        finally:
+            if conn:
+                conn.close()
+
+
+    @router.get("/oml-resource/{resource_id}/parameters")
+    def get_oml_resource_parameters(resource_id: int, request: Request):
+        conn = None
+        try:
+            conn = get_target_db_connection(request)
+            result = execute_query(conn, "DATA_WORK_OML_RESOURCE_DETAIL", {"resourceId": resource_id})
+            normalized = data_work.require_success(result, "OML resource parameter query failed.")
+            rows = [normalize_lob_row(row) for row in normalized.get("data", [])]
+            resource = rows[0] if rows else {}
+            params = [
+                {
+                    "itemName": row.get("PARAM_NAME") or "",
+                    "itemValue": row.get("DATA_TYPE") or "",
+                    "itemDesc": row.get("PARAM_DESC") or "",
+                    "itemDefault": row.get("DEFAULT_VALUE") or "",
+                    "itemOrder": row.get("ITEM_ORDER") or index + 1,
+                    "bindName": row.get("BIND_NAME") or ""
+                }
+                for index, row in enumerate(rows)
+                if row.get("PARAM_NAME")
+            ]
+            return {
+                "status": "success",
+                "data": params,
+                "resource": resource,
+                "columns": normalized.get("columns", []),
+                "total": len(params)
+            }
+        finally:
+            if conn:
+                conn.close()
     
     
     @router.get("/jobs")
@@ -240,6 +285,34 @@ def create_data_work_router(
             if conn:
                 conn.rollback()
             logger.error(f"{MENU_CODE} profile job save failed: {str(e)}")
+            raise HTTPException(status_code=500, detail=str(e))
+        finally:
+            if conn:
+                conn.close()
+
+
+    @router.delete("/job/{profile_job_id}")
+    def delete_profile_job(profile_job_id: int, request: Request, projectId: int, scenarioId: int):
+        conn = None
+        try:
+            conn = get_target_db_connection(request)
+            data_work.delete_job(conn, MENU_CODE, profile_job_id, projectId, scenarioId)
+            conn.commit()
+            jobs = data_work.list_jobs(conn, MENU_CODE, projectId, scenarioId).get("data", [])
+            return {
+                "status": "success",
+                "message": "Job deleted.",
+                "data": {"profileJobId": profile_job_id},
+                "list": jobs
+            }
+        except HTTPException:
+            if conn:
+                conn.rollback()
+            raise
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            logger.error(f"{MENU_CODE} profile job delete failed: {str(e)}")
             raise HTTPException(status_code=500, detail=str(e))
         finally:
             if conn:
@@ -547,12 +620,13 @@ def create_data_work_router(
     
     def execute_profile_job(conn, profile_job_id: int, runtime_bind_values: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         job = data_work.load_job(conn, MENU_CODE, profile_job_id)
+        run_type = "OML_PYTHON" if str(job.get("EXEC_SOURCE_TYPE") or "").upper() == "OML_PYTHON" else "PLSQL"
         result_owner = job.get("RESULT_OWNER") or ""
         result_table_name = job.get("RESULT_TABLE_NAME") or ""
         run_id = data_work.create_run(
             conn,
             profile_job_id,
-            "PLSQL",
+            run_type,
             "STARTED",
             ROUTER_MESSAGES["job_started"],
             result_table_name,
@@ -646,7 +720,10 @@ def create_data_work_router(
             if param.get("itemName") or param.get("ITEM_NAME")
         }
 
-        runtime_values = runtime_bind_values or {}
+        runtime_values = {
+            **(runtime_bind_values or {}),
+            **build_system_bind_values(job)
+        }
 
         def replace_dynamic_token(match):
             key = match.group(1).strip()
@@ -672,12 +749,25 @@ def create_data_work_router(
             if "_" in str(runtime_name):
                 bind_values_by_name[to_bind_variable_name(runtime_name)] = runtime_value
         bind_scan_text = mask_sql_for_bind_scan(prepared_text)
-        used_bind_names = set(re.findall(r"(?<!:):([A-Za-z][A-Za-z0-9_]*)", bind_scan_text))
+        used_bind_names = set(re.findall(r"(?<!:):([A-Za-z_][A-Za-z0-9_]*)", bind_scan_text))
         bind_values = {
             bind_name: normalize_bind_value(bind_values_by_name.get(bind_name))
             for bind_name in used_bind_names
         }
         return prepared_text, bind_values
+
+
+    def build_system_bind_values(job: Dict[str, Any]) -> Dict[str, Any]:
+        target_owner = job.get("OWNER_NAME") or job.get("ownerName") or ""
+        target_table = job.get("TABLE_NAME") or job.get("tableName") or ""
+        result_owner = job.get("RESULT_OWNER") or job.get("resultOwner") or ""
+        result_table = job.get("RESULT_TABLE_NAME") or job.get("resultTableName") or ""
+        return {
+            "_TargetOwner": target_owner,
+            "_TargetTable": target_table,
+            "_ResultOwner": result_owner,
+            "_ResultTable": result_table
+        }
 
 
     def mask_sql_for_bind_scan(sql_text: str) -> str:
@@ -768,7 +858,7 @@ def create_data_work_router(
                 bind_values_by_name[to_bind_variable_name(str(runtime_name))] = runtime_value
 
         bind_scan_text = mask_sql_for_bind_scan(prepared_text)
-        used_bind_names = set(re.findall(r"(?<!:):([A-Za-z][A-Za-z0-9_]*)", bind_scan_text))
+        used_bind_names = set(re.findall(r"(?<!:):([A-Za-z_][A-Za-z0-9_]*)", bind_scan_text))
         bind_values = {
             bind_name: normalize_bind_value(bind_values_by_name.get(bind_name))
             for bind_name in used_bind_names
@@ -842,7 +932,13 @@ def create_data_work_router(
         if re.match(r"(?is)^(insert|update|delete|merge)\b", sql):
             return {"type": "DML", "text": sql}
         raise HTTPException(status_code=400, detail="Executable script must be PL/SQL, SELECT, CREATE TABLE, or DML.")
+
+
+    def normalize_lob_row(row: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            key: value.read() if hasattr(value, "read") else value
+            for key, value in row.items()
+        }
     
 
     return router
-

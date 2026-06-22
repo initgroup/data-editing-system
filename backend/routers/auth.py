@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from backend.auth_context import get_request_user_id
 from backend.database import get_db_connection
+from backend.database_helper import SqlLoader
 from backend.routers.M99001 import (
     LoginRequest,
     SessionCleanupRequest,
@@ -82,48 +83,20 @@ def save_signup(req: SignupRequest):
             }
 
         cursor = system_conn.cursor()
-        cursor.execute(
-            """
-            SELECT USE_YN
-              FROM "INIT$_TB_USER"
-             WHERE LOGIN_ID = :loginId
-            """,
-            {"loginId": login_id},
-        )
+        cursor.execute(SqlLoader.get_sql("AUTH_SIGNUP_EXISTING_USER"), {"loginId": login_id})
         existing_user = cursor.fetchone()
         if existing_user:
             if existing_user[0] == "Y":
                 raise HTTPException(status_code=400, detail="이미 등록된 로그인 ID입니다.")
             raise HTTPException(status_code=400, detail="이미 승인 대기 중인 로그인 ID입니다.")
-        cursor.execute(
-            """
-            INSERT INTO "INIT$_TB_USER" (
-                LOGIN_ID,
-                USER_NAME,
-                EMAIL,
-                PASSWORD_HASH,
-                ROLE_CODE,
-                USE_YN,
-                CREATED_AT
-            ) VALUES (
-                :loginId,
-                :userName,
-                :email,
-                :passwordHash,
-                :roleCode,
-                :useYn,
-                SYSTIMESTAMP
-            )
-            """,
-            {
-                "loginId": login_id,
-                "userName": user_name,
-                "email": email,
-                "passwordHash": _hash_password(req.loginPassword),
-                "roleCode": role_code,
-                "useYn": use_yn,
-            },
-        )
+        cursor.execute(SqlLoader.get_sql("AUTH_SIGNUP_INSERT_USER"), {
+            "loginId": login_id,
+            "userName": user_name,
+            "email": email,
+            "passwordHash": _hash_password(req.loginPassword),
+            "roleCode": role_code,
+            "useYn": use_yn,
+        })
         system_conn.commit()
         message = (
             "관리자 회원가입이 완료되었습니다. 바로 로그인할 수 있습니다."
@@ -165,14 +138,7 @@ def login(req: LoginRequest):
         if not _system_user_table_exists(system_conn):
             raise HTTPException(status_code=409, detail="System tables are not installed. Sign up as the first administrator to start initial setup.")
         cursor = system_conn.cursor()
-        cursor.execute(
-            """
-            SELECT USER_ID, LOGIN_ID, USER_NAME, EMAIL, PASSWORD_HASH, USE_YN, ROLE_CODE
-              FROM "INIT$_TB_USER"
-             WHERE LOGIN_ID = :loginId
-            """,
-            {"loginId": login_id},
-        )
+        cursor.execute(SqlLoader.get_sql("AUTH_LOGIN_USER"), {"loginId": login_id})
         row = cursor.fetchone()
         if not row or not _verify_password(req.loginPassword, row[4] or ""):
             raise HTTPException(status_code=401, detail="Invalid login ID or password.")

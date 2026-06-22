@@ -297,6 +297,8 @@ const PageManager = {
         openPages.forEach((pageCode, index) => {
             this.close(pageCode, index === openPages.length - 1);
         });
+        MenuRenderer?.collapseAll?.();
+        LayoutManager?.collapseAllMenus?.();
     },
 
     resetWorkspaceForLogout(keepLoginSession = false) {

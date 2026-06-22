@@ -13,7 +13,7 @@
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict
-from typing import Any, Dict, Optional
+from typing import Optional
 import logging
 import re
 
@@ -79,34 +79,23 @@ def get_table_tree(
         safe_offset = max(0, int(offset or 0))
         safe_limit = max(1, min(int(limit or 200), 500))
         keyword_text = str(keyword or "").strip().upper()
-        data = []
-        source_offset = safe_offset
-        has_more = False
-        while len(data) < safe_limit + 1:
-            result = execute_query(conn, "M02002_TABLE_TREE", {
-                "keyword": f"%{keyword_text}%" if keyword_text else None,
-                "offset": source_offset,
-                "endRow": source_offset + safe_limit + 1,
-            })
-            if result.get("status") != "success":
-                raise HTTPException(status_code=500, detail=result.get("detail") or result.get("message") or "Table tree query failed.")
-            raw_data = result.get("data", [])
-            source_has_more = len(raw_data) > safe_limit
-            page_rows = raw_data[:safe_limit]
-            data.extend([
-                row for row in page_rows
-                if is_included_owner(row, include_owner_patterns)
-                and not is_excluded_table(row, exclude_patterns)
-            ])
-            source_offset += len(page_rows)
-            if not source_has_more:
-                has_more = False
-                break
-            has_more = True
-            if len(data) >= safe_limit + 1:
-                break
-        has_more = has_more or len(data) > safe_limit
-        data = data[:safe_limit]
+        padded_excludes = (exclude_patterns + [None] * 5)[:5]
+        result = execute_query(conn, "M02002_TABLE_TREE", {
+            "keyword": f"%{keyword_text}%" if keyword_text else None,
+            "ownerPattern": include_owner_patterns[0] if include_owner_patterns else None,
+            "excludePattern1": padded_excludes[0],
+            "excludePattern2": padded_excludes[1],
+            "excludePattern3": padded_excludes[2],
+            "excludePattern4": padded_excludes[3],
+            "excludePattern5": padded_excludes[4],
+            "offset": safe_offset,
+            "endRow": safe_offset + safe_limit + 1,
+        })
+        if result.get("status") != "success":
+            raise HTTPException(status_code=500, detail=result.get("detail") or result.get("message") or "Table tree query failed.")
+        raw_data = result.get("data", [])
+        has_more = len(raw_data) > safe_limit
+        data = raw_data[:safe_limit]
         return {
             "status": "success",
             "data": data,
@@ -114,8 +103,29 @@ def get_table_tree(
             "total": len(data),
             "offset": safe_offset,
             "limit": safe_limit,
-            "nextOffset": source_offset,
+            "nextOffset": safe_offset + len(data),
             "hasMore": has_more
+        }
+    finally:
+        if conn:
+            conn.close()
+
+
+@router.post("/table-info")
+def get_table_info(req: TableRequest, request: Request):
+    owner, table_name = require_table(req)
+    conn = None
+    try:
+        conn = get_target_db_connection(request)
+        result = execute_query(conn, "M02002_TABLE_INFO", {"owner": owner, "tableName": table_name})
+        if result.get("status") != "success":
+            raise HTTPException(status_code=500, detail=result.get("detail") or result.get("message") or "Table info query failed.")
+        data = result.get("data", [])
+        return {
+            "status": "success",
+            "data": data[0] if data else {},
+            "columns": result.get("columns", []),
+            "total": len(data)
         }
     finally:
         if conn:
@@ -382,18 +392,7 @@ def get_table_exclude_patterns(request: Request) -> list[str]:
         connection_id = get_target_connection_id(request)
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute(
-            """
-            SELECT SETTING_VALUE
-              FROM "INIT$_TB_SYSTEM_SETTING"
-             WHERE USER_ID = :userId
-               AND CONNECTION_ID = :connectionId
-               AND CATEGORY_CODE = 'M02002_TABLE_FILTER'
-               AND SETTING_KEY = 'EXCLUDE_TABLE_LIKE'
-               AND USE_YN = 'Y'
-            """,
-            {"userId": user_id, "connectionId": connection_id},
-        )
+        cursor.execute(SqlLoader.get_sql("M02002_EXCLUDE_TABLE_FILTER_SETTING"), {"userId": user_id, "connectionId": connection_id})
         row = cursor.fetchone()
         if row and row[0]:
             raw_value = row[0].read() if hasattr(row[0], "read") else row[0]
@@ -419,18 +418,7 @@ def get_table_include_owner_patterns(request: Request, target_conn) -> list[str]
         connection_id = get_target_connection_id(request)
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute(
-            """
-            SELECT SETTING_VALUE
-              FROM "INIT$_TB_SYSTEM_SETTING"
-             WHERE USER_ID = :userId
-               AND CONNECTION_ID = :connectionId
-               AND CATEGORY_CODE = 'M02002_TABLE_FILTER'
-               AND SETTING_KEY = 'INCLUDE_OWNER'
-               AND USE_YN = 'Y'
-            """,
-            {"userId": user_id, "connectionId": connection_id},
-        )
+        cursor.execute(SqlLoader.get_sql("M02002_INCLUDE_OWNER_FILTER_SETTING"), {"userId": user_id, "connectionId": connection_id})
         row = cursor.fetchone()
         if row and row[0]:
             raw_value = row[0].read() if hasattr(row[0], "read") else row[0]
@@ -451,7 +439,7 @@ def get_current_target_owner(conn) -> str:
     cursor = None
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA') FROM DUAL")
+        cursor.execute(SqlLoader.get_sql("M02002_CURRENT_SCHEMA"))
         row = cursor.fetchone()
         return str(row[0] if row and row[0] else "").strip().upper()
     finally:
@@ -465,23 +453,6 @@ def parse_setting_lines(value) -> list[str]:
         for line in str(value or "").replace(",", "\n").splitlines()
         if line.strip()
     ]
-
-
-def is_included_owner(row: Dict[str, Any], patterns: list[str]) -> bool:
-    if not patterns:
-        return True
-    owner = str(row.get("OWNER") or "").upper()
-    return any(sql_like_match(owner, pattern) for pattern in patterns)
-
-
-def is_excluded_table(row: Dict[str, Any], patterns: list[str]) -> bool:
-    table_name = str(row.get("TABLE_NAME") or "").upper()
-    return any(sql_like_match(table_name, pattern) for pattern in patterns)
-
-
-def sql_like_match(value: str, pattern: str) -> bool:
-    regex = "^" + re.escape(pattern.upper()).replace("%", ".*").replace("_", ".") + "$"
-    return bool(re.match(regex, value.upper()))
 
 
 def is_identifier(value: str) -> bool:
@@ -503,4 +474,3 @@ def normalize_select_sql(sql: str) -> str:
     if re.search(blocked, text, re.IGNORECASE):
         raise HTTPException(status_code=400, detail="Only read-only SELECT statements are allowed.")
     return text
-

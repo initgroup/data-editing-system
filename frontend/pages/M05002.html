@@ -1,0 +1,135 @@
+<div class="page-container env-page project-page" id="container-M05002">
+    <section class="env-workspace" aria-labelledby="user-rule-title-M05002">
+        <aside class="env-object-panel">
+            <header class="env-object-header">
+                <div>
+                    <h2 class="env-section-title">User Rules</h2>
+                    <p class="env-section-desc">사용자 등록 규칙</p>
+                </div>
+                <div class="env-object-actions">
+                    <button type="button" class="env-icon-btn" title="New">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                    <button type="button" class="env-icon-btn" title="Refresh">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+            </header>
+
+            <div class="env-object-search">
+                <i class="fas fa-search"></i>
+                <input type="search" placeholder="Search user rule">
+            </div>
+
+            <div class="project-list">
+                <div class="project-list-head">
+                    <div>Rule</div>
+                    <div>Use</div>
+                </div>
+                <div class="project-empty">No user rules.</div>
+                <div class="list-count-footer">0 items</div>
+            </div>
+        </aside>
+
+        <section class="env-panel" aria-labelledby="user-rule-title-M05002">
+            <header class="env-header">
+                <div>
+                    <h1 class="env-title" id="user-rule-title-M05002">사용자 규칙 등록</h1>
+                    <p class="env-desc">업무 담당자가 직접 검증 규칙과 수정 SQL을 등록합니다.</p>
+                </div>
+                <div class="env-header-actions">
+                    <button type="button" class="env-btn">Validate</button>
+                    <button type="button" class="env-btn env-save">
+                        <i class="fas fa-save"></i>
+                        <span>Save</span>
+                    </button>
+                    <button type="button" class="env-btn env-danger">
+                        <i class="fas fa-trash-alt"></i>
+                        <span>Delete</span>
+                    </button>
+                </div>
+            </header>
+
+            <div class="table-meta-strip">
+                <div><span>Rule ID</span><strong>NEW</strong></div>
+                <div><span>Validation</span><strong>-</strong></div>
+                <div><span>Last Saved</span><strong>-</strong></div>
+            </div>
+
+            <div class="table-tabs">
+                <button type="button" class="table-tab is-active">Rule Definition</button>
+                <button type="button" class="table-tab">Parameter</button>
+                <button type="button" class="table-tab">Validation Result</button>
+            </div>
+
+            <section class="env-object-meta">
+                <div class="env-meta-grid">
+                    <label>
+                        <span>Rule ID</span>
+                        <input class="env-field env-meta-field" type="text" value="NEW" readonly>
+                    </label>
+                    <label>
+                        <span>Use</span>
+                        <select class="env-field env-meta-field">
+                            <option value="Y">Y</option>
+                            <option value="N">N</option>
+                        </select>
+                    </label>
+                    <label>
+                        <span>Severity</span>
+                        <select class="env-field env-meta-field">
+                            <option value="">-- Select severity --</option>
+                            <option value="INFO">INFO</option>
+                            <option value="WARNING">WARNING</option>
+                            <option value="ERROR">ERROR</option>
+                        </select>
+                    </label>
+                    <label>
+                        <span>Rule Group</span>
+                        <select class="env-field env-meta-field">
+                            <option value="">-- Select group --</option>
+                        </select>
+                    </label>
+                    <label class="env-meta-wide">
+                        <span>Rule Name</span>
+                        <input class="env-field env-meta-field" type="text">
+                    </label>
+                </div>
+            </section>
+
+            <section class="data-param-script-layout">
+                <div class="data-param-card">
+                    <header>
+                        <h3>Rule Parameters</h3>
+                        <button type="button" class="env-icon-btn" title="Add parameter">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </header>
+                    <div class="table-result-grid">
+                        <table class="table-grid">
+                            <thead>
+                                <tr>
+                                    <th>Order</th>
+                                    <th>Parameter</th>
+                                    <th>Default</th>
+                                    <th>Comment</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td colspan="4" class="table-empty">No parameters.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="data-param-card">
+                    <header>
+                        <h3>Manual SQL</h3>
+                    </header>
+                    <textarea class="sql-editor data-script-editor" rows="16" spellcheck="false"></textarea>
+                </div>
+            </section>
+        </section>
+    </section>
+</div>

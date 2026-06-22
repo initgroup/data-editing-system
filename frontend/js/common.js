@@ -339,7 +339,7 @@ const CommonUI = {
             // 만약 Select 박스라면 첫 번째 옵션("선택하세요")으로 복구
             if (el.tagName === 'SELECT') {
                 el.disabled = true;
-                el.innerHTML = '<option value="">선택하세요</option>';
+                el.innerHTML = '<option value="">-- 선택하세요 --</option>';
             }
         });
 
@@ -497,7 +497,7 @@ const CommonUtils = {
 
             if (json.status === 'success') {
                 // 3. 데이터 바인딩
-                let htmlOptions = '<option value="">선택하세요</option>';
+                let htmlOptions = '<option value="">-- 선택하세요 --</option>';
                 const dataList = this.extractArray(json, dataKey); // 방어적 추출
 
                 if (Array.isArray(dataList) && dataList.length > 0) {
@@ -852,6 +852,7 @@ const CommonMessage = {
         "Reset all INIT system data? Users, target DB connections, settings, and setup logs will be truncated.": "모든 INIT 시스템 데이터를 초기화하시겠습니까? 사용자, 대상 DB 접속, 설정, 설정 로그가 삭제됩니다.",
         "This cannot be undone and may require system setup again. Continue system data reset?": "이 작업은 되돌릴 수 없으며 시스템 설정을 다시 해야 할 수 있습니다. 시스템 데이터 초기화를 계속하시겠습니까?",
         "Clear all rows from INIT system tables? Users, target DB connections, settings, and setup logs will be truncated. Tables will not be dropped.": "INIT 시스템 테이블의 모든 데이터를 비우시겠습니까? 사용자, 대상 DB 접속 정보, 설정, 설정 로그가 삭제됩니다. 테이블은 DROP되지 않습니다.",
+        "Clear all rows from INIT system tables? Notices, users, target DB connections, settings, and setup logs will be truncated. Tables will not be dropped.": "INIT 시스템 테이블의 모든 데이터를 비우시겠습니까? 공지사항, 사용자, 대상 DB 접속 정보, 설정, 설정 로그가 삭제됩니다. 테이블은 DROP되지 않습니다.",
         "This cannot be undone and may require system setup again. Continue clearing INIT system table data?": "이 작업은 되돌릴 수 없으며 시스템 설정을 다시 해야 할 수 있습니다. INIT 시스템 테이블 데이터 비우기를 계속하시겠습니까?",
         "Approve all pending users in the current result?": "현재 결과의 모든 승인 대기 사용자를 승인하시겠습니까?",
         "Approve selected user(s)?": "선택한 사용자를 승인하시겠습니까?",
@@ -888,7 +889,18 @@ const CommonMessage = {
         "Flow validation succeeded.": "플로우 검증에 성공했습니다.",
         "Flow validation failed.": "플로우 검증에 실패했습니다.",
         "Flow run recorded.": "플로우 실행 이력이 기록되었습니다.",
-        "Flow run failed.": "플로우 실행에 실패했습니다."
+        "Flow run failed.": "플로우 실행에 실패했습니다.",
+        "Notice title is required.": "공지사항 제목을 입력하세요.",
+        "Notice saved.": "공지사항이 저장되었습니다.",
+        "Notice save failed.": "공지사항 저장에 실패했습니다.",
+        "Notice deleted.": "공지사항이 삭제되었습니다.",
+        "Notice delete failed.": "공지사항 삭제에 실패했습니다.",
+        "Select a saved notice before deleting.": "삭제할 저장된 공지사항을 먼저 선택하세요.",
+        "Notice was not found.": "공지사항을 찾을 수 없습니다.",
+        "Notice type is invalid.": "공지사항 유형이 올바르지 않습니다.",
+        "Y/N value is invalid.": "Y/N 값이 올바르지 않습니다.",
+        "Post start date must be before post end date.": "게시 시작일은 게시 종료일보다 이전이어야 합니다.",
+        "Popup start date must be before popup end date.": "팝업 시작일은 팝업 종료일보다 이전이어야 합니다."
     },
     ensureHost() {
         let host = document.getElementById("commonMessageHost");
@@ -1140,6 +1152,7 @@ const CommonMessage = {
             [/^(.+) items saved\.$/, (m) => `${m[1]}건이 저장되었습니다.`],
             [/^(.+) object and (.+) detail rows deleted\.(.*)$/, (m) => `객체 ${m[1]}건과 상세 행 ${m[2]}건이 삭제되었습니다.${m[3] ? ` ${m[3]}` : ""}`],
             [/^Delete setting "(.+)"\?$/, (m) => `"${m[1]}" 설정을 삭제하시겠습니까?`],
+            [/^Delete notice "(.+)"\?$/, (m) => `"${m[1]}" 공지사항을 삭제하시겠습니까?`],
             [/^(.+) jobs (.+)\. (.+) failed\.$/, (m) => `작업 ${m[1]}건이 ${m[2]} 처리되었고, ${m[3]}건이 실패했습니다.`],
             [/^Delete (.+)\?\nNodes, edges, and run history for this flow will also be deleted\.$/, (m) => `${m[1]} 플로우를 삭제하시겠습니까?\n이 플로우의 노드, 엣지, 실행 이력도 함께 삭제됩니다.`],
             [/^(.+)\nFlow ID: (.+)$/, (m) => `${this.translateMessage(m[1]) || m[1]}\n플로우 ID: ${m[2]}`]

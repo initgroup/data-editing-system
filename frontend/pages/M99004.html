@@ -1,0 +1,181 @@
+<div class="page-container env-page project-page notice-page" id="container-M99004">
+    <section class="env-workspace" aria-labelledby="notice-title-M99004">
+        <aside class="env-object-panel">
+            <header class="env-object-header">
+                <div>
+                    <h2 class="env-section-title">Notices</h2>
+                    <p class="env-section-desc">Manage dashboard and popup notices.</p>
+                </div>
+                <div class="env-object-actions">
+                    <button type="button" class="env-icon-btn" title="New notice" onclick="M99004.newNotice()">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                    <button type="button" class="env-icon-btn" title="Refresh notices" onclick="M99004.loadNotices()">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+            </header>
+
+            <div class="env-object-search">
+                <i class="fas fa-search"></i>
+                <input id="noticeSearch-M99004" type="search" placeholder="Search title or content" onkeydown="M99004.handleSearchKey(event)">
+                <div class="env-search-actions">
+                    <select id="noticeUseFilter-M99004" title="Use filter" onchange="M99004.loadNotices()">
+                        <option value="ALL">ALL</option>
+                        <option value="Y">Y</option>
+                        <option value="N">N</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="noticeList-M99004" class="env-tree-grid project-list"></div>
+        </aside>
+
+        <section class="env-panel" aria-labelledby="notice-title-M99004">
+            <header class="env-header">
+                <div>
+                    <h1 class="env-title" id="notice-title-M99004">공지사항 관리</h1>
+                    <p class="env-desc" id="noticeDesc-M99004">관리자 공지사항을 등록하고 게시 기간과 팝업 표시 여부를 설정합니다.</p>
+                </div>
+            </header>
+
+            <section class="env-object-meta" aria-label="Notice detail">
+                <div class="env-meta-grid notice-meta-grid">
+                    <label>
+                        <span>Notice ID</span>
+                        <input id="noticeId-M99004" class="env-field env-meta-field" type="text" readonly>
+                    </label>
+                    <label>
+                        <span>Type</span>
+                        <select id="noticeType-M99004" class="env-field env-meta-field">
+                            <option value="INFO">INFO</option>
+                            <option value="IMPORTANT">IMPORTANT</option>
+                            <option value="MAINTENANCE">MAINTENANCE</option>
+                            <option value="WARNING">WARNING</option>
+                        </select>
+                    </label>
+                    <label>
+                        <span>Use</span>
+                        <select id="noticeUseYn-M99004" class="env-field env-meta-field">
+                            <option value="Y">Y</option>
+                            <option value="N">N</option>
+                        </select>
+                    </label>
+                    <label>
+                        <span>Pin</span>
+                        <select id="noticePinYn-M99004" class="env-field env-meta-field">
+                            <option value="N">N</option>
+                            <option value="Y">Y</option>
+                        </select>
+                    </label>
+                    <label>
+                        <span>Popup</span>
+                        <select id="noticePopupYn-M99004" class="env-field env-meta-field" onchange="M99004.syncPopupFields()">
+                            <option value="N">N</option>
+                            <option value="Y">Y</option>
+                        </select>
+                    </label>
+                    <label>
+                        <span>Sort</span>
+                        <input id="noticeSortOrder-M99004" class="env-field env-meta-field" type="number" value="0">
+                    </label>
+                    <label class="env-meta-wide">
+                        <span class="required-title">Title</span>
+                        <input id="noticeTitle-M99004" class="env-field env-meta-field" type="text" placeholder="공지사항 제목">
+                    </label>
+                    <label>
+                        <span>Post Start</span>
+                        <input id="noticePostStartAt-M99004" class="env-field env-meta-field" type="datetime-local">
+                    </label>
+                    <label>
+                        <span>Post End</span>
+                        <input id="noticePostEndAt-M99004" class="env-field env-meta-field" type="datetime-local">
+                    </label>
+                    <label data-popup-field>
+                        <span>Popup Start</span>
+                        <input id="noticePopupStartAt-M99004" class="env-field env-meta-field" type="datetime-local">
+                    </label>
+                    <label data-popup-field>
+                        <span>Popup End</span>
+                        <input id="noticePopupEndAt-M99004" class="env-field env-meta-field" type="datetime-local">
+                    </label>
+                    <label class="env-meta-wide notice-content-field">
+                        <span>Content</span>
+                        <div class="notice-editor-shell">
+                            <div class="notice-editor-toolbar" aria-label="Notice editor toolbar">
+                                <button type="button" class="env-icon-btn" title="Bold" onclick="M99004.execEditorCommand('bold')">
+                                    <i class="fas fa-bold"></i>
+                                </button>
+                                <button type="button" class="env-icon-btn" title="Italic" onclick="M99004.execEditorCommand('italic')">
+                                    <i class="fas fa-italic"></i>
+                                </button>
+                                <button type="button" class="env-icon-btn" title="Underline" onclick="M99004.execEditorCommand('underline')">
+                                    <i class="fas fa-underline"></i>
+                                </button>
+                                <span class="notice-editor-divider"></span>
+                                <select class="notice-editor-select" title="Font size" onmousedown="M99004.saveEditorSelection()" onchange="M99004.applyEditorInlineStyle('font-size', this.value); this.value = '';">
+                                    <option value="">Size</option>
+                                    <option value="12px">12</option>
+                                    <option value="14px">14</option>
+                                    <option value="16px">16</option>
+                                    <option value="18px">18</option>
+                                    <option value="24px">24</option>
+                                </select>
+                                <label class="notice-editor-color" title="Font color">
+                                    <i class="fas fa-palette"></i>
+                                    <input type="color" value="#1f2937" onmousedown="M99004.saveEditorSelection()" onchange="M99004.applyEditorInlineStyle('color', this.value)">
+                                </label>
+                                <span class="notice-color-swatches" aria-label="Preset font colors">
+                                    <button type="button" title="Black" style="--notice-swatch:#111827" onmousedown="event.preventDefault(); M99004.applyEditorInlineStyle('color', '#111827')"></button>
+                                    <button type="button" title="Gray" style="--notice-swatch:#64748b" onmousedown="event.preventDefault(); M99004.applyEditorInlineStyle('color', '#64748b')"></button>
+                                    <button type="button" title="Blue" style="--notice-swatch:#2563eb" onmousedown="event.preventDefault(); M99004.applyEditorInlineStyle('color', '#2563eb')"></button>
+                                    <button type="button" title="Green" style="--notice-swatch:#16a34a" onmousedown="event.preventDefault(); M99004.applyEditorInlineStyle('color', '#16a34a')"></button>
+                                    <button type="button" title="Red" style="--notice-swatch:#dc2626" onmousedown="event.preventDefault(); M99004.applyEditorInlineStyle('color', '#dc2626')"></button>
+                                    <button type="button" title="Orange" style="--notice-swatch:#f97316" onmousedown="event.preventDefault(); M99004.applyEditorInlineStyle('color', '#f97316')"></button>
+                                    <button type="button" title="Purple" style="--notice-swatch:#7c3aed" onmousedown="event.preventDefault(); M99004.applyEditorInlineStyle('color', '#7c3aed')"></button>
+                                    <button type="button" title="Pink" style="--notice-swatch:#db2777" onmousedown="event.preventDefault(); M99004.applyEditorInlineStyle('color', '#db2777')"></button>
+                                </span>
+                                <span class="notice-editor-divider"></span>
+                                <button type="button" class="env-icon-btn" title="Paragraph" onclick="M99004.execEditorCommand('formatBlock', 'p')">
+                                    <i class="fas fa-paragraph"></i>
+                                </button>
+                                <button type="button" class="env-icon-btn" title="Heading" onclick="M99004.execEditorCommand('formatBlock', 'h3')">
+                                    <i class="fas fa-heading"></i>
+                                </button>
+                                <span class="notice-editor-divider"></span>
+                                <button type="button" class="env-icon-btn" title="Bulleted list" onclick="M99004.execEditorCommand('insertUnorderedList')">
+                                    <i class="fas fa-list-ul"></i>
+                                </button>
+                                <button type="button" class="env-icon-btn" title="Numbered list" onclick="M99004.execEditorCommand('insertOrderedList')">
+                                    <i class="fas fa-list-ol"></i>
+                                </button>
+                                <button type="button" class="env-icon-btn" title="Link" onclick="M99004.createEditorLink()">
+                                    <i class="fas fa-link"></i>
+                                </button>
+                                <button type="button" class="env-icon-btn" title="Remove format" onclick="M99004.execEditorCommand('removeFormat')">
+                                    <i class="fas fa-eraser"></i>
+                                </button>
+                                <button type="button" id="noticeSourceToggle-M99004" class="env-icon-btn" title="Edit HTML source" onclick="M99004.toggleEditorSourceMode()">
+                                    <i class="fas fa-code"></i>
+                                </button>
+                            </div>
+                            <div id="noticeContentEditor-M99004" class="notice-html-editor" contenteditable="true" data-placeholder="공지 내용을 입력하세요."></div>
+                            <textarea id="noticeContent-M99004" class="notice-editor-source" spellcheck="false" hidden></textarea>
+                        </div>
+                    </label>
+                </div>
+            </section>
+
+            <footer class="env-footer">
+                <div class="env-footer-group">
+                    <span id="noticeMessage-M99004" class="env-detail-hint" aria-live="polite">공지사항은 INIT$_TB_NOTICE에 저장됩니다.</span>
+                </div>
+                <div class="env-footer-group">
+                    <button type="button" class="env-btn" onclick="M99004.newNotice()">New</button>
+                    <button type="button" class="env-btn env-save" onclick="M99004.saveNotice()">Save</button>
+                    <button type="button" class="env-btn env-danger" onclick="M99004.deleteNotice()">Delete</button>
+                </div>
+            </footer>
+        </section>
+    </section>
+</div>

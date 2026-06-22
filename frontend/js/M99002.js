@@ -109,7 +109,7 @@
                     <div>Type</div>
                 </div>
                 <div class="env-tree-viewport">
-                    <div class="env-tree-window">
+                    <div class="env-tree-window m99002-tree-window">
                         ${this.visibleObjectRows.map((row, index) => this.createTreeRowTemplate(row, index)).join("")}
                     </div>
                 </div>
@@ -139,41 +139,47 @@
             const row = this.visibleObjectRows[index];
             if (!row) return;
             const type = this.getObjectType(row);
+            const scrollState = this.captureTreeScroll(row);
             if (type === "LOAD_MORE") {
                 await this.loadMoreObjects(row);
                 return;
             }
             if (type === "OWNER") {
-                this.toggleNode(this.getNodeId(row));
+                this.toggleNode(this.getNodeId(row), true, scrollState);
                 return;
             }
             if (type === "GROUP") {
                 const nodeId = this.getNodeId(row);
-                await this.ensureGroupChildren(row);
-                this.toggleNode(nodeId);
+                if (this.loadedGroups.has(nodeId)) {
+                    this.toggleNode(nodeId, true, scrollState);
+                } else {
+                    this.collapsedNodes.delete(nodeId);
+                    await this.ensureGroupChildren(row, scrollState);
+                }
                 return;
             }
             if (type === "PACKAGE") {
-                await this.selectObject(row);
-                if (!this.loadedPackages.has(this.getNodeId(row))) {
-                    await this.ensurePackageMembers(row);
-                    this.collapsedNodes.delete(this.getNodeId(row));
-                    this.renderObjectTree();
+                await this.selectObject(row, scrollState);
+                const nodeId = this.getNodeId(row);
+                if (!this.loadedPackages.has(nodeId)) {
+                    this.collapsedNodes.delete(nodeId);
+                    await this.ensurePackageMembers(row, scrollState);
                 } else {
-                    this.toggleNode(this.getNodeId(row));
+                    this.toggleNode(nodeId, true, scrollState);
                 }
                 return;
             }
             if (row.IS_SELECTABLE === "Y") {
-                await this.selectObject(row);
+                await this.selectObject(row, scrollState);
             }
         },
 
-        async ensureGroupChildren(row) {
+        async ensureGroupChildren(row, scrollState = this.captureTreeScroll(row)) {
             const nodeId = this.getNodeId(row);
             if (this.loadedGroups.has(nodeId)) return;
             this.insertLoadingRow(row);
             this.renderObjectTree();
+            this.restoreTreeScroll(scrollState);
             try {
                 const params = new URLSearchParams({
                     owner: row.OWNER || "",
@@ -189,6 +195,8 @@
                 this.replaceChildren(nodeId, []);
                 this.updateDescription(error.message || "Object children load failed.");
             }
+            this.renderObjectTree();
+            this.restoreTreeScroll(scrollState);
         },
 
         async loadMoreObjects(row) {
@@ -227,11 +235,12 @@
             this.restoreTreeScroll(scrollTop);
         },
 
-        async ensurePackageMembers(row) {
+        async ensurePackageMembers(row, scrollState = this.captureTreeScroll(row)) {
             const nodeId = this.getNodeId(row);
             if (this.loadedPackages.has(nodeId)) return;
             this.insertLoadingRow(row);
             this.renderObjectTree();
+            this.restoreTreeScroll(scrollState);
             try {
                 const params = new URLSearchParams({ owner: row.OWNER || "", packageName: row.OBJECT_NAME || "" });
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/package-members?${params.toString()}`, { method: "GET", showLoading: false });
@@ -241,6 +250,8 @@
                 this.replaceChildren(nodeId, []);
                 this.updateDescription(error.message || "Package members load failed.");
             }
+            this.renderObjectTree();
+            this.restoreTreeScroll(scrollState);
         },
 
         insertLoadingRow(parent) {
@@ -352,17 +363,44 @@
             return categories.includes(String(category || "").toUpperCase());
         },
 
-        async selectObject(row) {
-            this.selectedObject = row;
+        async selectObject(row, scrollState = this.captureTreeScroll(row)) {
+            this.selectedObject = { ...row, OBJECT_COMMENT: "", CREATED_AT: "" };
             this.renderObjectTree();
+            this.restoreTreeScroll(scrollState);
             this.updateSelectedMeta();
             this.setDefaultSql();
             if (this.getObjectType(row) === "TABLE") {
                 this.showTableTabs();
-                await this.loadColumns();
+                await Promise.all([this.loadObjectDetail(row), this.loadColumns()]);
             } else {
                 this.showObjectTabs();
-                await this.loadSource();
+                await Promise.all([this.loadObjectDetail(row), this.loadSource()]);
+            }
+        },
+
+        async loadObjectDetail(row) {
+            if (!row) return;
+            const selectedNodeId = this.getNodeId(row);
+            try {
+                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/object/detail`, {
+                    method: "POST",
+                    showLoading: false,
+                    body: {
+                        owner: row.OWNER,
+                        objectType: row.OBJECT_TYPE,
+                        objectName: row.OBJECT_NAME
+                    }
+                });
+                if (!this.selectedObject || this.getNodeId(this.selectedObject) !== selectedNodeId) return;
+                const scrollState = this.captureTreeScroll(this.selectedObject);
+                this.selectedObject = { ...this.selectedObject, ...(json.object || {}) };
+                this.updateSelectedMeta();
+                this.renderObjectTree();
+                this.restoreTreeScroll(scrollState);
+            } catch (error) {
+                if (this.selectedObject && this.getNodeId(this.selectedObject) === selectedNodeId) {
+                    this.setText("#selectedObjectComment-M99002", error.message || "Detail load failed.");
+                }
             }
         },
 
@@ -576,14 +614,59 @@
         },
 
         getTreeScrollTop() {
-            return getContainerEl("#objectTree-M99002")?.querySelector(".env-tree-viewport")?.scrollTop || 0;
+            return this.getTreeScrollElement()?.scrollTop || 0;
         },
 
-        restoreTreeScroll(scrollTop) {
+        getTreeScrollElement() {
+            const container = getContainerEl("#objectTree-M99002");
+            const candidates = [
+                container?.querySelector(".env-tree-viewport"),
+                container,
+                container?.closest(".table-object-panel"),
+                container?.closest(".table-workspace")
+            ].filter(Boolean);
+            return candidates.find((el) => el.scrollHeight > el.clientHeight) || candidates[0] || null;
+        },
+
+        captureTreeScroll(row = null) {
+            const scrollEl = this.getTreeScrollElement();
+            const nodeId = row ? this.getNodeId(row) : "";
+            const anchor = nodeId ? this.findTreeRowElement(nodeId) : null;
+            const scrollRect = scrollEl?.getBoundingClientRect();
+            const anchorRect = anchor?.getBoundingClientRect();
+            return {
+                scrollTop: scrollEl?.scrollTop || 0,
+                nodeId,
+                anchorOffset: scrollRect && anchorRect ? anchorRect.top - scrollRect.top : null
+            };
+        },
+
+        restoreTreeScroll(scrollState) {
+            const state = typeof scrollState === "number" ? { scrollTop: scrollState } : (scrollState || { scrollTop: 0 });
+            const apply = () => {
+                const scrollEl = this.getTreeScrollElement();
+                if (!scrollEl) return;
+                scrollEl.scrollTop = Number(state.scrollTop || 0);
+                if (!state.nodeId || !Number.isFinite(state.anchorOffset)) return;
+                const anchor = this.findTreeRowElement(state.nodeId);
+                if (!anchor) return;
+                const scrollRect = scrollEl.getBoundingClientRect();
+                const anchorRect = anchor.getBoundingClientRect();
+                const delta = (anchorRect.top - scrollRect.top) - state.anchorOffset;
+                if (Math.abs(delta) > 1) {
+                    scrollEl.scrollTop += delta;
+                }
+            };
             window.requestAnimationFrame(() => {
-                const viewport = getContainerEl("#objectTree-M99002")?.querySelector(".env-tree-viewport");
-                if (viewport) viewport.scrollTop = scrollTop;
+                apply();
+                window.requestAnimationFrame(apply);
+                window.setTimeout(apply, 50);
             });
+        },
+
+        findTreeRowElement(nodeId) {
+            const rows = getContainerEl("#objectTree-M99002")?.querySelectorAll(".env-tree-row[data-node-id]") || [];
+            return Array.from(rows).find((row) => row.dataset.nodeId === nodeId) || null;
         },
 
         withSearchLoadMoreRow(rows, response, keyword) {
@@ -835,10 +918,13 @@
             };
         },
 
-        toggleNode(nodeId, render = true) {
+        toggleNode(nodeId, render = true, scrollTop = this.getTreeScrollTop()) {
             if (this.collapsedNodes.has(nodeId)) this.collapsedNodes.delete(nodeId);
             else this.collapsedNodes.add(nodeId);
-            if (render) this.renderObjectTree();
+            if (render) {
+                this.renderObjectTree();
+                this.restoreTreeScroll(scrollTop);
+            }
         },
 
         expandAllGroups() {
@@ -888,7 +974,7 @@
 
         isExpandable(row) {
             const type = this.getObjectType(row);
-            return type === "OWNER" || type === "GROUP" || (type === "PACKAGE" && Number(row.CHILD_COUNT || 0) > 0);
+            return type === "OWNER" || type === "GROUP" || type === "PACKAGE";
         },
 
         getExpandIcon(row) {

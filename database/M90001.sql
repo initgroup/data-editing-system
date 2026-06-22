@@ -1,328 +1,226 @@
 -- [M90001_OBJECT_TREE]
--- M90001 DB object tree from Oracle dictionary views.
+-- Lightweight M90001 DB object tree. Object rows are loaded lazily per group.
 WITH
 USER_OWNERS AS (
-    SELECT USERNAME AS OWNER
-      FROM ALL_USERS
-     WHERE ORACLE_MAINTAINED = 'N'
-       AND USERNAME NOT IN ('SYS', 'SYSTEM', 'XDB', 'CTXSYS', 'MDSYS', 'ORDSYS', 'OUTLN')
+    SELECT SYS_CONTEXT('USERENV', 'SESSION_USER') AS OWNER
+      FROM DUAL
+    UNION
+    SELECT SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA') AS OWNER
+      FROM DUAL
+    UNION
+    SELECT DISTINCT OWNER
+      FROM INIT$_TB_OBJECT
+     WHERE OWNER IS NOT NULL
+    UNION
+    SELECT 'SYS' AS OWNER
+      FROM DUAL
+     WHERE :categoryFilter = 'ALL'
+        OR INSTR(',' || :categoryFilter || ',', ',ML_PACKAGE,') > 0
 ),
+OWNER_ROWS AS (
+    SELECT
+        U.OWNER,
+        'OWNER' AS OBJECT_TYPE,
+        U.OWNER AS OBJECT_NAME,
+        U.OWNER AS OBJECT_LABEL,
+        'OWNER:' || U.OWNER AS NODE_ID,
+        CAST(NULL AS VARCHAR2(4000)) AS PARENT_ID,
+        1 AS LEVEL_NO,
+        'N' AS IS_SELECTABLE,
+        'N' AS IS_REGISTERED,
+        CAST(NULL AS NUMBER) AS CHILD_COUNT,
+        U.OWNER AS SORT_OWNER,
+        10 AS SORT_GROUP,
+        U.OWNER AS SORT_NAME
+      FROM USER_OWNERS U
+),
+GROUP_DEFS AS (
+    SELECT 'PLSQL' AS CATEGORY_CODE, 'Procedures / Functions' AS GROUP_NAME, 'PROCEDURES' AS GROUP_KEY, 30 AS SORT_GROUP FROM DUAL
+    UNION ALL SELECT 'PACKAGE', 'Packages', 'PACKAGES', 40 FROM DUAL
+    UNION ALL SELECT 'ML_PACKAGE', 'Machine Learning Packages', 'ML_PACKAGES', 50 FROM DUAL
+    UNION ALL SELECT 'MODEL', 'Models', 'MODELS', 60 FROM DUAL
+),
+GROUP_ROWS AS (
+    SELECT
+        U.OWNER,
+        'GROUP' AS OBJECT_TYPE,
+        G.GROUP_NAME AS OBJECT_NAME,
+        G.GROUP_NAME AS OBJECT_LABEL,
+        'GROUP:' || U.OWNER || ':' || G.GROUP_KEY AS NODE_ID,
+        'OWNER:' || U.OWNER AS PARENT_ID,
+        2 AS LEVEL_NO,
+        'N' AS IS_SELECTABLE,
+        CASE
+            WHEN EXISTS (
+                SELECT 1
+                  FROM INIT$_TB_OBJECT M
+                 WHERE M.OWNER = U.OWNER
+                   AND (
+                          (G.CATEGORY_CODE = 'PLSQL' AND M.OBJECT_TYPE IN ('PROCEDURE', 'FUNCTION'))
+                       OR (G.CATEGORY_CODE = 'PACKAGE' AND M.OBJECT_TYPE = 'PACKAGE')
+                       OR (G.CATEGORY_CODE = 'ML_PACKAGE' AND M.OBJECT_TYPE IN ('PACKAGE', 'PACKAGE_PROCEDURE', 'PACKAGE_FUNCTION'))
+                       OR (G.CATEGORY_CODE = 'MODEL' AND M.OBJECT_TYPE = 'MINING_MODEL')
+                   )
+            ) THEN 'Y'
+            ELSE 'N'
+        END AS IS_REGISTERED,
+        CAST(NULL AS NUMBER) AS CHILD_COUNT,
+        U.OWNER AS SORT_OWNER,
+        G.SORT_GROUP,
+        G.GROUP_NAME AS SORT_NAME,
+        G.CATEGORY_CODE
+     FROM USER_OWNERS U
+      CROSS JOIN GROUP_DEFS G
+     WHERE (:categoryFilter = 'ALL' OR INSTR(',' || :categoryFilter || ',', ',' || G.CATEGORY_CODE || ',') > 0)
+       AND (U.OWNER <> 'SYS' OR G.CATEGORY_CODE = 'ML_PACKAGE')
+       AND (:registeredOnly = 'N' OR EXISTS (
+            SELECT 1
+              FROM INIT$_TB_OBJECT M
+             WHERE M.OWNER = U.OWNER
+               AND (
+                      (G.CATEGORY_CODE = 'PLSQL' AND M.OBJECT_TYPE IN ('PROCEDURE', 'FUNCTION'))
+                   OR (G.CATEGORY_CODE = 'PACKAGE' AND M.OBJECT_TYPE = 'PACKAGE')
+                   OR (G.CATEGORY_CODE = 'ML_PACKAGE' AND M.OBJECT_TYPE IN ('PACKAGE', 'PACKAGE_PROCEDURE', 'PACKAGE_FUNCTION'))
+                   OR (G.CATEGORY_CODE = 'MODEL' AND M.OBJECT_TYPE = 'MINING_MODEL')
+               )
+        ))
+),
+TREE_ROWS AS (
+    SELECT OWNER, OBJECT_TYPE, OBJECT_NAME, OBJECT_LABEL, NODE_ID, PARENT_ID, LEVEL_NO,
+           IS_SELECTABLE, IS_REGISTERED, CHILD_COUNT, SORT_OWNER, SORT_GROUP, SORT_NAME
+      FROM OWNER_ROWS
+     WHERE :registeredOnly = 'N' OR EXISTS (
+        SELECT 1 FROM GROUP_ROWS G WHERE G.OWNER = OWNER_ROWS.OWNER
+     )
+    UNION ALL
+    SELECT OWNER, OBJECT_TYPE, OBJECT_NAME, OBJECT_LABEL, NODE_ID, PARENT_ID, LEVEL_NO,
+           IS_SELECTABLE, IS_REGISTERED, CHILD_COUNT, SORT_OWNER, SORT_GROUP, SORT_NAME
+      FROM GROUP_ROWS
+),
+ORDERED_ROWS AS (
+    SELECT
+        R.*,
+        ROW_NUMBER() OVER (ORDER BY SORT_OWNER, SORT_GROUP, SORT_NAME) AS RN
+      FROM TREE_ROWS R
+)
+SELECT OWNER, OBJECT_TYPE, OBJECT_NAME, OBJECT_LABEL, NODE_ID, PARENT_ID, LEVEL_NO, IS_SELECTABLE, IS_REGISTERED, CHILD_COUNT
+  FROM ORDERED_ROWS
+ WHERE RN > :offset
+   AND RN <= :endRow
+ ORDER BY RN
+;
+
+-- [M90001_OBJECT_CHILDREN]
+-- Lazy-loaded object rows under a selected M90001 owner/group node.
+WITH
 ML_PACKAGE_ALLOWLIST AS (
     SELECT 'DBMS_DATA_MINING' AS OBJECT_NAME FROM DUAL
     UNION ALL SELECT 'DBMS_DATA_MINING_TRANSFORM' FROM DUAL
     UNION ALL SELECT 'DBMS_PREDICTIVE_ANALYTICS' FROM DUAL
 ),
-PLSQL_OBJECTS AS (
+BASE_ROWS AS (
     SELECT
         O.OWNER,
         O.OBJECT_TYPE,
         O.OBJECT_NAME,
-        CASE
-            WHEN ML.OBJECT_NAME IS NOT NULL
-              OR UPPER(O.OBJECT_NAME) LIKE '%ML%'
-              OR UPPER(O.OBJECT_NAME) LIKE '%MINING%'
-              OR UPPER(O.OBJECT_NAME) LIKE '%MACHINE_LEARNING%' THEN 'Y'
-            ELSE 'N'
-        END AS IS_ML_PACKAGE
-      FROM ALL_OBJECTS O
-      LEFT JOIN USER_OWNERS U
-        ON U.OWNER = O.OWNER
-      LEFT JOIN ML_PACKAGE_ALLOWLIST ML
-        ON ML.OBJECT_NAME = O.OBJECT_NAME
-     WHERE O.OBJECT_TYPE IN ('PROCEDURE', 'FUNCTION', 'PACKAGE')
-       AND O.GENERATED = 'N'
-       AND O.OBJECT_NAME NOT LIKE 'BIN$%'
-       AND (
-              U.OWNER IS NOT NULL
-           OR (O.OWNER = 'SYS' AND ML.OBJECT_NAME IS NOT NULL)
-       )
-),
-MINING_MODELS AS (
-    SELECT
-        M.OWNER,
-        M.MODEL_NAME,
-        M.MINING_FUNCTION,
-        M.ALGORITHM
-      FROM ALL_MINING_MODELS M
-      JOIN USER_OWNERS U
-        ON U.OWNER = M.OWNER
-),
-OWNER_LIST AS (
-    SELECT OWNER
-      FROM ALL_TABLES
-     WHERE OWNER IN (SELECT OWNER FROM USER_OWNERS)
-       AND TABLE_NAME NOT LIKE 'BIN$%'
-       AND NESTED = 'NO'
-       AND SECONDARY = 'N'
-    UNION
-    SELECT OWNER
-      FROM PLSQL_OBJECTS
-    UNION
-    SELECT OWNER
-      FROM MINING_MODELS
-),
-TREE_ROWS AS (
-    SELECT
-        OWNER,
-        'OWNER' AS OBJECT_TYPE,
-        OWNER AS OBJECT_NAME,
-        OWNER AS OBJECT_LABEL,
-        'OWNER:' || OWNER AS NODE_ID,
-        CAST(NULL AS VARCHAR2(4000)) AS PARENT_ID,
-        1 AS LEVEL_NO,
-        'N' AS IS_SELECTABLE,
-        'ALL' AS CATEGORY_CODE,
-        OWNER AS SORT_OWNER,
-        10 AS SORT_GROUP,
-        OWNER AS SORT_NAME
-      FROM OWNER_LIST
-    UNION ALL
-    SELECT
-        OWNER,
-        'GROUP' AS OBJECT_TYPE,
-        'Procedures / Functions' AS OBJECT_NAME,
-        'Procedures / Functions' AS OBJECT_LABEL,
-        'GROUP:' || OWNER || ':PROCEDURES' AS NODE_ID,
-        'OWNER:' || OWNER AS PARENT_ID,
-        2 AS LEVEL_NO,
-        'N' AS IS_SELECTABLE,
-        'PLSQL' AS CATEGORY_CODE,
-        OWNER AS SORT_OWNER,
-        30 AS SORT_GROUP,
-        'Procedures / Functions' AS SORT_NAME
-      FROM OWNER_LIST
-     WHERE EXISTS (
-        SELECT 1
-          FROM PLSQL_OBJECTS O
-         WHERE O.OWNER = OWNER_LIST.OWNER
-           AND O.OBJECT_TYPE IN ('PROCEDURE', 'FUNCTION')
-           AND O.IS_ML_PACKAGE = 'N'
-     )
-    UNION ALL
-    SELECT
-        O.OWNER,
-        O.OBJECT_TYPE AS OBJECT_TYPE,
-        O.OBJECT_NAME AS OBJECT_NAME,
         O.OBJECT_NAME AS OBJECT_LABEL,
         O.OBJECT_TYPE || ':' || O.OWNER || ':' || O.OBJECT_NAME AS NODE_ID,
         'GROUP:' || O.OWNER || ':PROCEDURES' AS PARENT_ID,
         3 AS LEVEL_NO,
         'Y' AS IS_SELECTABLE,
-        'PLSQL' AS CATEGORY_CODE,
-        O.OWNER AS SORT_OWNER,
-        31 AS SORT_GROUP,
+        CASE WHEN M.OBJECT_ID IS NOT NULL THEN 'Y' ELSE 'N' END AS IS_REGISTERED,
+        CAST(NULL AS NUMBER) AS CHILD_COUNT,
         O.OBJECT_NAME AS SORT_NAME
-      FROM PLSQL_OBJECTS O
-     WHERE O.OBJECT_TYPE IN ('PROCEDURE', 'FUNCTION')
-       AND O.IS_ML_PACKAGE = 'N'
-    UNION ALL
-    SELECT
-        OWNER,
-        'GROUP' AS OBJECT_TYPE,
-        'Packages' AS OBJECT_NAME,
-        'Packages' AS OBJECT_LABEL,
-        'GROUP:' || OWNER || ':PACKAGES' AS NODE_ID,
-        'OWNER:' || OWNER AS PARENT_ID,
-        2 AS LEVEL_NO,
-        'N' AS IS_SELECTABLE,
-        'PACKAGE' AS CATEGORY_CODE,
-        OWNER AS SORT_OWNER,
-        40 AS SORT_GROUP,
-        'Packages' AS SORT_NAME
-      FROM OWNER_LIST
-     WHERE EXISTS (
-        SELECT 1
-         FROM PLSQL_OBJECTS O
-         WHERE O.OWNER = OWNER_LIST.OWNER
-           AND O.OBJECT_TYPE = 'PACKAGE'
-           AND O.IS_ML_PACKAGE = 'N'
-           AND EXISTS (
-                SELECT 1
-                  FROM ALL_PROCEDURES P
-                 WHERE P.OWNER = O.OWNER
-                   AND P.OBJECT_NAME = O.OBJECT_NAME
-                   AND P.PROCEDURE_NAME IS NOT NULL
-           )
-     )
+      FROM ALL_OBJECTS O
+      LEFT JOIN INIT$_TB_OBJECT M
+        ON M.OWNER = O.OWNER
+       AND M.OBJECT_TYPE = O.OBJECT_TYPE
+       AND M.OBJECT_NAME = O.OBJECT_NAME
+     WHERE :groupType = 'PROCEDURES'
+       AND O.OWNER = :owner
+       AND O.OBJECT_TYPE IN ('PROCEDURE', 'FUNCTION')
+       AND O.GENERATED = 'N'
+       AND O.OBJECT_NAME NOT LIKE 'BIN$%'
     UNION ALL
     SELECT
         O.OWNER,
         'PACKAGE' AS OBJECT_TYPE,
-        O.OBJECT_NAME AS OBJECT_NAME,
+        O.OBJECT_NAME,
         O.OBJECT_NAME AS OBJECT_LABEL,
         'PACKAGE:' || O.OWNER || ':' || O.OBJECT_NAME AS NODE_ID,
         'GROUP:' || O.OWNER || ':PACKAGES' AS PARENT_ID,
         3 AS LEVEL_NO,
         'N' AS IS_SELECTABLE,
-        'PACKAGE' AS CATEGORY_CODE,
-        O.OWNER AS SORT_OWNER,
-        41 AS SORT_GROUP,
-        O.OBJECT_NAME AS SORT_NAME
-      FROM PLSQL_OBJECTS O
-     WHERE O.OBJECT_TYPE = 'PACKAGE'
-       AND O.IS_ML_PACKAGE = 'N'
-       AND EXISTS (
-            SELECT 1
-              FROM ALL_PROCEDURES P
-             WHERE P.OWNER = O.OWNER
-               AND P.OBJECT_NAME = O.OBJECT_NAME
-               AND P.PROCEDURE_NAME IS NOT NULL
-       )
-    UNION ALL
-    SELECT
-        P.OWNER,
         CASE
+            WHEN M.OBJECT_ID IS NOT NULL THEN 'Y'
             WHEN EXISTS (
                 SELECT 1
-                  FROM ALL_ARGUMENTS A
-                 WHERE A.OWNER = P.OWNER
-                   AND A.PACKAGE_NAME = P.OBJECT_NAME
-                   AND A.OBJECT_NAME = P.PROCEDURE_NAME
-                   AND A.POSITION = 0
-            ) THEN 'PACKAGE_FUNCTION'
-            ELSE 'PACKAGE_PROCEDURE'
-        END AS OBJECT_TYPE,
-        P.OBJECT_NAME || '.' || P.PROCEDURE_NAME AS OBJECT_NAME,
-        P.OBJECT_NAME || '.' || P.PROCEDURE_NAME AS OBJECT_LABEL,
-        'PACKAGE_MEMBER:' || P.OWNER || ':' || P.OBJECT_NAME || ':' || P.PROCEDURE_NAME AS NODE_ID,
-        'PACKAGE:' || P.OWNER || ':' || P.OBJECT_NAME AS PARENT_ID,
-        4 AS LEVEL_NO,
-        'Y' AS IS_SELECTABLE,
-        'PACKAGE' AS CATEGORY_CODE,
-        P.OWNER AS SORT_OWNER,
-        41 AS SORT_GROUP,
-        P.OBJECT_NAME || '.' || P.PROCEDURE_NAME AS SORT_NAME
-      FROM ALL_PROCEDURES P
-      JOIN PLSQL_OBJECTS O
-        ON O.OWNER = P.OWNER
-       AND O.OBJECT_NAME = P.OBJECT_NAME
+                  FROM INIT$_TB_OBJECT PM
+                 WHERE PM.OWNER = O.OWNER
+                   AND PM.OBJECT_NAME LIKE O.OBJECT_NAME || '.%'
+                   AND PM.OBJECT_TYPE IN ('PACKAGE_PROCEDURE', 'PACKAGE_FUNCTION')
+            ) THEN 'Y'
+            ELSE 'N'
+        END AS IS_REGISTERED,
+        CAST(NULL AS NUMBER) AS CHILD_COUNT,
+        O.OBJECT_NAME AS SORT_NAME
+      FROM ALL_OBJECTS O
+      LEFT JOIN INIT$_TB_OBJECT M
+        ON M.OWNER = O.OWNER
+       AND M.OBJECT_TYPE = 'PACKAGE'
+       AND M.OBJECT_NAME = O.OBJECT_NAME
+      LEFT JOIN ML_PACKAGE_ALLOWLIST ML
+        ON ML.OBJECT_NAME = O.OBJECT_NAME
+     WHERE :groupType = 'PACKAGES'
+       AND O.OWNER = :owner
        AND O.OBJECT_TYPE = 'PACKAGE'
-       AND O.IS_ML_PACKAGE = 'N'
-     WHERE P.PROCEDURE_NAME IS NOT NULL
-       AND (
-              :includePackageMembers = 'Y'
-           OR EXISTS (
-                SELECT 1
-                  FROM INIT$_TB_OBJECT M
-                 WHERE M.OWNER = P.OWNER
-                   AND M.OBJECT_NAME = P.OBJECT_NAME || '.' || P.PROCEDURE_NAME
-                   AND M.OBJECT_TYPE IN ('PACKAGE_PROCEDURE', 'PACKAGE_FUNCTION')
-           )
-       )
-    UNION ALL
-    SELECT
-        OWNER,
-        'GROUP' AS OBJECT_TYPE,
-        'Machine Learning Packages' AS OBJECT_NAME,
-        'Machine Learning Packages' AS OBJECT_LABEL,
-        'GROUP:' || OWNER || ':ML_PACKAGES' AS NODE_ID,
-        'OWNER:' || OWNER AS PARENT_ID,
-        2 AS LEVEL_NO,
-        'N' AS IS_SELECTABLE,
-        'ML_PACKAGE' AS CATEGORY_CODE,
-        OWNER AS SORT_OWNER,
-        50 AS SORT_GROUP,
-        'Machine Learning Packages' AS SORT_NAME
-      FROM OWNER_LIST
-     WHERE EXISTS (
-        SELECT 1
-         FROM PLSQL_OBJECTS O
-         WHERE O.OWNER = OWNER_LIST.OWNER
-           AND O.OBJECT_TYPE = 'PACKAGE'
-           AND O.IS_ML_PACKAGE = 'Y'
-           AND EXISTS (
-                SELECT 1
-                  FROM ALL_PROCEDURES P
-                 WHERE P.OWNER = O.OWNER
-                   AND P.OBJECT_NAME = O.OBJECT_NAME
-                   AND P.PROCEDURE_NAME IS NOT NULL
-           )
-     )
+       AND O.GENERATED = 'N'
+       AND O.OBJECT_NAME NOT LIKE 'BIN$%'
+       AND ML.OBJECT_NAME IS NULL
+       AND UPPER(O.OBJECT_NAME) NOT LIKE '%ML%'
+       AND UPPER(O.OBJECT_NAME) NOT LIKE '%MINING%'
+       AND UPPER(O.OBJECT_NAME) NOT LIKE '%MACHINE_LEARNING%'
     UNION ALL
     SELECT
         O.OWNER,
         'PACKAGE' AS OBJECT_TYPE,
-        O.OBJECT_NAME AS OBJECT_NAME,
+        O.OBJECT_NAME,
         O.OBJECT_NAME AS OBJECT_LABEL,
         'PACKAGE:' || O.OWNER || ':' || O.OBJECT_NAME AS NODE_ID,
         'GROUP:' || O.OWNER || ':ML_PACKAGES' AS PARENT_ID,
         3 AS LEVEL_NO,
         'N' AS IS_SELECTABLE,
-        'ML_PACKAGE' AS CATEGORY_CODE,
-        O.OWNER AS SORT_OWNER,
-        51 AS SORT_GROUP,
-        O.OBJECT_NAME AS SORT_NAME
-      FROM PLSQL_OBJECTS O
-     WHERE O.OBJECT_TYPE = 'PACKAGE'
-       AND O.IS_ML_PACKAGE = 'Y'
-       AND EXISTS (
-            SELECT 1
-              FROM ALL_PROCEDURES P
-             WHERE P.OWNER = O.OWNER
-               AND P.OBJECT_NAME = O.OBJECT_NAME
-               AND P.PROCEDURE_NAME IS NOT NULL
-       )
-    UNION ALL
-    SELECT
-        P.OWNER,
         CASE
+            WHEN M.OBJECT_ID IS NOT NULL THEN 'Y'
             WHEN EXISTS (
                 SELECT 1
-                  FROM ALL_ARGUMENTS A
-                 WHERE A.OWNER = P.OWNER
-                   AND A.PACKAGE_NAME = P.OBJECT_NAME
-                   AND A.OBJECT_NAME = P.PROCEDURE_NAME
-                   AND A.POSITION = 0
-            ) THEN 'PACKAGE_FUNCTION'
-            ELSE 'PACKAGE_PROCEDURE'
-        END AS OBJECT_TYPE,
-        P.OBJECT_NAME || '.' || P.PROCEDURE_NAME AS OBJECT_NAME,
-        P.OBJECT_NAME || '.' || P.PROCEDURE_NAME AS OBJECT_LABEL,
-        'PACKAGE_MEMBER:' || P.OWNER || ':' || P.OBJECT_NAME || ':' || P.PROCEDURE_NAME AS NODE_ID,
-        'PACKAGE:' || P.OWNER || ':' || P.OBJECT_NAME AS PARENT_ID,
-        4 AS LEVEL_NO,
-        'Y' AS IS_SELECTABLE,
-        'ML_PACKAGE' AS CATEGORY_CODE,
-        P.OWNER AS SORT_OWNER,
-        51 AS SORT_GROUP,
-        P.OBJECT_NAME || '.' || P.PROCEDURE_NAME AS SORT_NAME
-      FROM ALL_PROCEDURES P
-      JOIN PLSQL_OBJECTS O
-        ON O.OWNER = P.OWNER
-       AND O.OBJECT_NAME = P.OBJECT_NAME
+                  FROM INIT$_TB_OBJECT PM
+                 WHERE PM.OWNER = O.OWNER
+                   AND PM.OBJECT_NAME LIKE O.OBJECT_NAME || '.%'
+                   AND PM.OBJECT_TYPE IN ('PACKAGE_PROCEDURE', 'PACKAGE_FUNCTION')
+            ) THEN 'Y'
+            ELSE 'N'
+        END AS IS_REGISTERED,
+        CAST(NULL AS NUMBER) AS CHILD_COUNT,
+        O.OBJECT_NAME AS SORT_NAME
+      FROM ALL_OBJECTS O
+      LEFT JOIN INIT$_TB_OBJECT M
+        ON M.OWNER = O.OWNER
+       AND M.OBJECT_TYPE = 'PACKAGE'
+       AND M.OBJECT_NAME = O.OBJECT_NAME
+      LEFT JOIN ML_PACKAGE_ALLOWLIST ML
+        ON ML.OBJECT_NAME = O.OBJECT_NAME
+     WHERE :groupType = 'ML_PACKAGES'
+       AND O.OWNER = :owner
        AND O.OBJECT_TYPE = 'PACKAGE'
-       AND O.IS_ML_PACKAGE = 'Y'
-     WHERE P.PROCEDURE_NAME IS NOT NULL
+       AND O.GENERATED = 'N'
+       AND O.OBJECT_NAME NOT LIKE 'BIN$%'
        AND (
-              :includePackageMembers = 'Y'
-           OR EXISTS (
-                SELECT 1
-                  FROM INIT$_TB_OBJECT M
-                 WHERE M.OWNER = P.OWNER
-                   AND M.OBJECT_NAME = P.OBJECT_NAME || '.' || P.PROCEDURE_NAME
-                   AND M.OBJECT_TYPE IN ('PACKAGE_PROCEDURE', 'PACKAGE_FUNCTION')
-           )
+              ML.OBJECT_NAME IS NOT NULL
+           OR UPPER(O.OBJECT_NAME) LIKE '%ML%'
+           OR UPPER(O.OBJECT_NAME) LIKE '%MINING%'
+           OR UPPER(O.OBJECT_NAME) LIKE '%MACHINE_LEARNING%'
        )
-    UNION ALL
-    SELECT
-        OWNER,
-        'GROUP' AS OBJECT_TYPE,
-        'Models' AS OBJECT_NAME,
-        'Models' AS OBJECT_LABEL,
-        'GROUP:' || OWNER || ':MODELS' AS NODE_ID,
-        'OWNER:' || OWNER AS PARENT_ID,
-        2 AS LEVEL_NO,
-        'N' AS IS_SELECTABLE,
-        'MODEL' AS CATEGORY_CODE,
-        OWNER AS SORT_OWNER,
-        60 AS SORT_GROUP,
-        'Models' AS SORT_NAME
-      FROM OWNER_LIST
-     WHERE EXISTS (
-        SELECT 1
-          FROM MINING_MODELS M
-         WHERE M.OWNER = OWNER_LIST.OWNER
-     )
     UNION ALL
     SELECT
         M.OWNER,
@@ -333,142 +231,109 @@ TREE_ROWS AS (
         'GROUP:' || M.OWNER || ':MODELS' AS PARENT_ID,
         3 AS LEVEL_NO,
         'Y' AS IS_SELECTABLE,
-        'MODEL' AS CATEGORY_CODE,
-        M.OWNER AS SORT_OWNER,
-        61 AS SORT_GROUP,
+        CASE WHEN R.OBJECT_ID IS NOT NULL THEN 'Y' ELSE 'N' END AS IS_REGISTERED,
+        CAST(NULL AS NUMBER) AS CHILD_COUNT,
         M.MODEL_NAME AS SORT_NAME
-      FROM MINING_MODELS M
-),
-JOINED_ROWS AS (
-    SELECT
-        R.OWNER,
-        R.OBJECT_TYPE,
-        R.OBJECT_NAME,
-        R.OBJECT_LABEL,
-        R.NODE_ID,
-        R.PARENT_ID,
-        R.LEVEL_NO,
-        R.IS_SELECTABLE,
-        R.CATEGORY_CODE,
-        CASE
-            WHEN M.OBJECT_ID IS NOT NULL THEN 'Y'
-            ELSE 'N'
-        END AS IS_REGISTERED,
-        R.SORT_OWNER,
-        R.SORT_GROUP,
-        R.SORT_NAME
-      FROM TREE_ROWS R
-      LEFT JOIN INIT$_TB_OBJECT M
-        ON M.OWNER = R.OWNER
-       AND M.OBJECT_TYPE = R.OBJECT_TYPE
-       AND M.OBJECT_NAME = R.OBJECT_NAME
-),
-CHILD_COUNTS AS (
-    SELECT
-        PARENT_ID,
-        COUNT(*) AS CHILD_COUNT
-      FROM JOINED_ROWS
-     WHERE PARENT_ID IS NOT NULL
-       AND (
-              :registeredOnly = 'N'
-           OR IS_REGISTERED = 'Y'
-       )
-     GROUP BY PARENT_ID
-),
-FILTERED_ROWS AS (
-    SELECT
-        J.*,
-        CASE
-            WHEN J.OBJECT_TYPE = 'GROUP' THEN NVL(CC.CHILD_COUNT, 0)
-            ELSE NULL
-        END AS CHILD_COUNT
-      FROM JOINED_ROWS J
-      LEFT JOIN CHILD_COUNTS CC
-        ON CC.PARENT_ID = J.NODE_ID
-     WHERE (
-              :registeredOnly = 'N'
-           OR J.IS_REGISTERED = 'Y'
-           OR (
-                J.OBJECT_TYPE = 'OWNER'
-                AND EXISTS (
-                    SELECT 1
-                      FROM JOINED_ROWS C
-                     WHERE C.OWNER = J.OWNER
-                       AND C.IS_REGISTERED = 'Y'
-                       AND (
-                              :categoryFilter = 'ALL'
-                           OR INSTR(',' || :categoryFilter || ',', ',' || C.CATEGORY_CODE || ',') > 0
-                       )
-                )
-            )
-           OR (
-                J.OBJECT_TYPE = 'GROUP'
-                AND EXISTS (
-                    SELECT 1
-                      FROM JOINED_ROWS C
-                     WHERE C.PARENT_ID = J.NODE_ID
-                       AND C.IS_REGISTERED = 'Y'
-                       AND (
-                              :categoryFilter = 'ALL'
-                           OR INSTR(',' || :categoryFilter || ',', ',' || C.CATEGORY_CODE || ',') > 0
-                       )
-                )
-            )
-           OR (
-                J.OBJECT_TYPE = 'PACKAGE'
-                AND J.IS_SELECTABLE = 'N'
-                AND EXISTS (
-                    SELECT 1
-                      FROM JOINED_ROWS C
-                     WHERE C.PARENT_ID = J.NODE_ID
-                       AND C.IS_REGISTERED = 'Y'
-                       AND (
-                              :categoryFilter = 'ALL'
-                           OR INSTR(',' || :categoryFilter || ',', ',' || C.CATEGORY_CODE || ',') > 0
-                       )
-                )
-            )
-          )
-       AND (
-              :categoryFilter = 'ALL'
-           OR INSTR(',' || :categoryFilter || ',', ',' || J.CATEGORY_CODE || ',') > 0
-           OR (
-                J.OBJECT_TYPE = 'OWNER'
-                AND EXISTS (
-                    SELECT 1
-                      FROM JOINED_ROWS C
-                     WHERE C.OWNER = J.OWNER
-                      AND INSTR(',' || :categoryFilter || ',', ',' || C.CATEGORY_CODE || ',') > 0
-                )
-            )
-          )
-       AND (
-              :keyword IS NULL
-           OR (
-                J.IS_SELECTABLE = 'Y'
-                AND (
-                       UPPER(J.OWNER) LIKE :keyword
-                    OR UPPER(J.OBJECT_TYPE) LIKE :keyword
-                    OR UPPER(J.OBJECT_NAME) LIKE :keyword
-                    OR UPPER(J.OBJECT_LABEL) LIKE :keyword
-                )
-            )
-          )
+      FROM ALL_MINING_MODELS M
+      LEFT JOIN INIT$_TB_OBJECT R
+        ON R.OWNER = M.OWNER
+       AND R.OBJECT_TYPE = 'MINING_MODEL'
+       AND R.OBJECT_NAME = M.MODEL_NAME
+     WHERE :groupType = 'MODELS'
+       AND M.OWNER = :owner
 ),
 ORDERED_ROWS AS (
-    SELECT
-        OWNER,
-        OBJECT_TYPE,
-        OBJECT_NAME,
-        OBJECT_LABEL,
-        NODE_ID,
-        PARENT_ID,
-        LEVEL_NO,
-        IS_SELECTABLE,
-        IS_REGISTERED,
-        CHILD_COUNT,
-        ROW_NUMBER() OVER (ORDER BY SORT_OWNER, SORT_GROUP, SORT_NAME) AS RN
-      FROM FILTERED_ROWS
+    SELECT B.*, ROW_NUMBER() OVER (ORDER BY SORT_NAME) AS RN
+      FROM BASE_ROWS B
+     WHERE (:registeredOnly = 'N' OR B.IS_REGISTERED = 'Y')
+)
+SELECT OWNER, OBJECT_TYPE, OBJECT_NAME, OBJECT_LABEL, NODE_ID, PARENT_ID, LEVEL_NO, IS_SELECTABLE, IS_REGISTERED, CHILD_COUNT
+  FROM ORDERED_ROWS
+ WHERE RN > :offset
+   AND RN <= :endRow
+ ORDER BY RN
+;
+
+-- [M90001_OBJECT_SEARCH]
+-- Search selectable dictionary objects only when the user explicitly searches.
+WITH
+USER_OWNERS AS (
+    SELECT SYS_CONTEXT('USERENV', 'SESSION_USER') AS OWNER FROM DUAL
+    UNION SELECT SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA') AS OWNER FROM DUAL
+    UNION SELECT DISTINCT OWNER FROM INIT$_TB_OBJECT WHERE OWNER IS NOT NULL
+    UNION SELECT 'SYS' AS OWNER FROM DUAL WHERE :categoryFilter = 'ALL' OR INSTR(',' || :categoryFilter || ',', ',ML_PACKAGE,') > 0
+),
+ML_PACKAGE_ALLOWLIST AS (
+    SELECT 'DBMS_DATA_MINING' AS OBJECT_NAME FROM DUAL
+    UNION ALL SELECT 'DBMS_DATA_MINING_TRANSFORM' FROM DUAL
+    UNION ALL SELECT 'DBMS_PREDICTIVE_ANALYTICS' FROM DUAL
+),
+MATCHED AS (
+    SELECT O.OWNER, O.OBJECT_TYPE, O.OBJECT_NAME, O.OBJECT_NAME AS OBJECT_LABEL,
+           O.OBJECT_TYPE || ':' || O.OWNER || ':' || O.OBJECT_NAME AS NODE_ID, CAST(NULL AS VARCHAR2(4000)) AS PARENT_ID,
+           1 AS LEVEL_NO, 'Y' AS IS_SELECTABLE,
+           CASE WHEN R.OBJECT_ID IS NOT NULL THEN 'Y' ELSE 'N' END AS IS_REGISTERED,
+           CAST(NULL AS NUMBER) AS CHILD_COUNT, O.OBJECT_NAME AS SORT_NAME
+      FROM ALL_OBJECTS O
+      JOIN USER_OWNERS U ON U.OWNER = O.OWNER
+      LEFT JOIN INIT$_TB_OBJECT R ON R.OWNER = O.OWNER AND R.OBJECT_TYPE = O.OBJECT_TYPE AND R.OBJECT_NAME = O.OBJECT_NAME
+     WHERE (:categoryFilter = 'ALL' OR INSTR(',' || :categoryFilter || ',', ',PLSQL,') > 0)
+       AND O.OBJECT_TYPE IN ('PROCEDURE', 'FUNCTION')
+       AND O.GENERATED = 'N'
+       AND O.OBJECT_NAME NOT LIKE 'BIN$%'
+    UNION ALL
+    SELECT O.OWNER, 'PACKAGE' AS OBJECT_TYPE, O.OBJECT_NAME, O.OBJECT_NAME AS OBJECT_LABEL,
+           'PACKAGE:' || O.OWNER || ':' || O.OBJECT_NAME AS NODE_ID, CAST(NULL AS VARCHAR2(4000)) AS PARENT_ID,
+           1 AS LEVEL_NO, 'N' AS IS_SELECTABLE,
+           CASE WHEN R.OBJECT_ID IS NOT NULL THEN 'Y' ELSE 'N' END AS IS_REGISTERED,
+           CAST(NULL AS NUMBER) AS CHILD_COUNT, O.OBJECT_NAME AS SORT_NAME
+      FROM ALL_OBJECTS O
+      JOIN USER_OWNERS U ON U.OWNER = O.OWNER
+      LEFT JOIN INIT$_TB_OBJECT R ON R.OWNER = O.OWNER AND R.OBJECT_TYPE = 'PACKAGE' AND R.OBJECT_NAME = O.OBJECT_NAME
+      LEFT JOIN ML_PACKAGE_ALLOWLIST ML ON ML.OBJECT_NAME = O.OBJECT_NAME
+     WHERE (
+              :categoryFilter = 'ALL'
+           OR (
+                INSTR(',' || :categoryFilter || ',', ',PACKAGE,') > 0
+            AND ML.OBJECT_NAME IS NULL
+            AND UPPER(O.OBJECT_NAME) NOT LIKE '%ML%'
+            AND UPPER(O.OBJECT_NAME) NOT LIKE '%MINING%'
+            AND UPPER(O.OBJECT_NAME) NOT LIKE '%MACHINE_LEARNING%'
+           )
+           OR (
+                INSTR(',' || :categoryFilter || ',', ',ML_PACKAGE,') > 0
+            AND (
+                    ML.OBJECT_NAME IS NOT NULL
+                 OR UPPER(O.OBJECT_NAME) LIKE '%ML%'
+                 OR UPPER(O.OBJECT_NAME) LIKE '%MINING%'
+                 OR UPPER(O.OBJECT_NAME) LIKE '%MACHINE_LEARNING%'
+            )
+           )
+       )
+       AND O.OBJECT_TYPE = 'PACKAGE'
+       AND O.GENERATED = 'N'
+       AND O.OBJECT_NAME NOT LIKE 'BIN$%'
+    UNION ALL
+    SELECT M.OWNER, 'MINING_MODEL' AS OBJECT_TYPE, M.MODEL_NAME AS OBJECT_NAME,
+           M.MODEL_NAME || NVL2(M.MINING_FUNCTION, ' (' || M.MINING_FUNCTION || ')', '') AS OBJECT_LABEL,
+           'MINING_MODEL:' || M.OWNER || ':' || M.MODEL_NAME AS NODE_ID, CAST(NULL AS VARCHAR2(4000)) AS PARENT_ID,
+           1 AS LEVEL_NO, 'Y' AS IS_SELECTABLE,
+           CASE WHEN R.OBJECT_ID IS NOT NULL THEN 'Y' ELSE 'N' END AS IS_REGISTERED,
+           CAST(NULL AS NUMBER) AS CHILD_COUNT, M.MODEL_NAME AS SORT_NAME
+      FROM ALL_MINING_MODELS M
+      JOIN USER_OWNERS U ON U.OWNER = M.OWNER
+      LEFT JOIN INIT$_TB_OBJECT R ON R.OWNER = M.OWNER AND R.OBJECT_TYPE = 'MINING_MODEL' AND R.OBJECT_NAME = M.MODEL_NAME
+     WHERE (:categoryFilter = 'ALL' OR INSTR(',' || :categoryFilter || ',', ',MODEL,') > 0)
+),
+FILTERED_MATCHED AS (
+    SELECT *
+      FROM MATCHED
+     WHERE (:registeredOnly = 'N' OR IS_REGISTERED = 'Y')
+       AND (UPPER(OWNER) LIKE :keyword OR UPPER(OBJECT_TYPE) LIKE :keyword OR UPPER(OBJECT_NAME) LIKE :keyword OR UPPER(OBJECT_LABEL) LIKE :keyword)
+),
+ORDERED_ROWS AS (
+    SELECT M.*, ROW_NUMBER() OVER (ORDER BY OWNER, OBJECT_TYPE, SORT_NAME) AS RN
+      FROM FILTERED_MATCHED M
 )
 SELECT OWNER, OBJECT_TYPE, OBJECT_NAME, OBJECT_LABEL, NODE_ID, PARENT_ID, LEVEL_NO, IS_SELECTABLE, IS_REGISTERED, CHILD_COUNT
   FROM ORDERED_ROWS
