@@ -4,7 +4,7 @@
             <header class="env-object-header">
                 <div>
                     <h2 class="env-section-title">DB Object Schema</h2>
-                    <p class="env-section-desc">Procedures, packages, and models by owner.</p>
+                    <p class="env-section-desc">Current owner procedures, functions, packages, and models.</p>
                 </div>
                 <div class="env-object-actions">
                     <label class="env-registered-filter" title="Load registered objects only">
@@ -32,7 +32,7 @@
                     <span>Procedures</span>
                 </label>
                 <label>
-                    <input type="checkbox" class="object-category-M90001" value="PACKAGE,ML_PACKAGE" onchange="M90001.handleCategoryChange()">
+                    <input type="checkbox" class="object-category-M90001" value="PACKAGE" onchange="M90001.handleCategoryChange()">
                     <span>Packages</span>
                 </label>
                 <label>
@@ -138,6 +138,19 @@
                     <span class="env-detail-hint">Rows are based on the selected DB object.</span>
                 </div>
             </footer>
+
+            <section class="env-source-panel" aria-label="Selected object source script">
+                <header class="env-source-header">
+                    <span class="env-source-title">
+                        <strong>Script</strong>
+                        <span id="objectSourceStatus-M90001" class="env-detail-hint">Select an object to load source.</span>
+                    </span>
+                    <button type="button" class="table-icon-btn env-source-copy-btn" title="Copy script" onclick="M90001.copyObjectSource()">
+                        <i class="far fa-copy"></i>
+                    </button>
+                </header>
+                <textarea id="objectSourceViewer-M90001" class="sql-editor env-source-viewer" spellcheck="false" readonly aria-label="Selected object script"></textarea>
+            </section>
         </section>
     </section>
 </div>

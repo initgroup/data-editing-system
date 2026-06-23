@@ -590,8 +590,8 @@ const CommonUtils = {
             ConsoleLogger.error("다운로드할 데이터가 없습니다.", `${pageCode} > ${fileName}`, 'expoortExcel')
             return;
         }
-        if (window.DataEditingSystem?.downloadCSV) {
-            window.DataEditingSystem.downloadCSV(data, `${fileName}_${new Date().getTime()}.csv`);
+        if (window.DataEditingSystem?.downloadXLSX) {
+            window.DataEditingSystem.downloadXLSX(data, `${fileName}_${new Date().getTime()}.xlsx`);
         }
     }, 
 
@@ -662,6 +662,239 @@ const DataEditingSystem = {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+    },
+
+    downloadXLSX(data, fileName, columnNames = []) {
+        if (!Array.isArray(data) || !data.length) return;
+        const columns = Array.isArray(columnNames) && columnNames.length
+            ? columnNames
+            : Object.keys(data[0] || {});
+        const files = this.createXlsxFiles(data, columns);
+        const blob = new Blob([this.createZipArchive(files)], {
+            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        });
+        this.downloadBlob(blob, fileName);
+    },
+
+    downloadBlob(blob, fileName) {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', fileName);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    },
+
+    createXlsxFiles(rows, columns) {
+        const now = new Date().toISOString();
+        const sheetRows = [
+            columns,
+            ...rows.map((row) => columns.map((column) => row[column] ?? ""))
+        ];
+        return [
+            {
+                path: '[Content_Types].xml',
+                content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
+<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
+<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+</Types>`
+            },
+            {
+                path: '_rels/.rels',
+                content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>
+<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>
+</Relationships>`
+            },
+            {
+                path: 'docProps/app.xml',
+                content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
+<Application>INIT Data Editing System</Application>
+</Properties>`
+            },
+            {
+                path: 'docProps/core.xml',
+                content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<dc:creator>INIT Data Editing System</dc:creator>
+<cp:lastModifiedBy>INIT Data Editing System</cp:lastModifiedBy>
+<dcterms:created xsi:type="dcterms:W3CDTF">${now}</dcterms:created>
+<dcterms:modified xsi:type="dcterms:W3CDTF">${now}</dcterms:modified>
+</cp:coreProperties>`
+            },
+            {
+                path: 'xl/workbook.xml',
+                content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets>
+</workbook>`
+            },
+            {
+                path: 'xl/_rels/workbook.xml.rels',
+                content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>`
+            },
+            {
+                path: 'xl/styles.xml',
+                content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts>
+<fills count="1"><fill><patternFill patternType="none"/></fill></fills>
+<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>
+<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+<cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs>
+<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
+</styleSheet>`
+            },
+            {
+                path: 'xl/worksheets/sheet1.xml',
+                content: this.createWorksheetXml(sheetRows)
+            }
+        ];
+    },
+
+    createWorksheetXml(rows) {
+        const xmlRows = rows.map((row, rowIndex) => {
+            const rowNo = rowIndex + 1;
+            const cells = row.map((value, colIndex) => {
+                const ref = `${this.columnName(colIndex + 1)}${rowNo}`;
+                return `<c r="${ref}" t="inlineStr"><is><t>${this.escapeXml(value)}</t></is></c>`;
+            }).join("");
+            return `<row r="${rowNo}">${cells}</row>`;
+        }).join("");
+        return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<sheetData>${xmlRows}</sheetData>
+</worksheet>`;
+    },
+
+    columnName(index) {
+        let name = "";
+        let value = Number(index) || 1;
+        while (value > 0) {
+            const remainder = (value - 1) % 26;
+            name = String.fromCharCode(65 + remainder) + name;
+            value = Math.floor((value - 1) / 26);
+        }
+        return name;
+    },
+
+    escapeXml(value) {
+        return String(value ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&apos;");
+    },
+
+    createZipArchive(files) {
+        const encoder = new TextEncoder();
+        const localParts = [];
+        const centralParts = [];
+        let offset = 0;
+
+        files.forEach((file) => {
+            const nameBytes = encoder.encode(file.path);
+            const dataBytes = encoder.encode(file.content);
+            const crc = this.crc32(dataBytes);
+            const localHeader = this.createLocalZipHeader(nameBytes, dataBytes, crc);
+            localParts.push(localHeader, dataBytes);
+            centralParts.push(this.createCentralZipHeader(nameBytes, dataBytes, crc, offset));
+            offset += localHeader.length + dataBytes.length;
+        });
+
+        const centralSize = centralParts.reduce((sum, part) => sum + part.length, 0);
+        const endRecord = this.createEndZipRecord(files.length, centralSize, offset);
+        return new Blob([...localParts, ...centralParts, endRecord]);
+    },
+
+    createLocalZipHeader(nameBytes, dataBytes, crc) {
+        const header = new Uint8Array(30 + nameBytes.length);
+        const view = new DataView(header.buffer);
+        view.setUint32(0, 0x04034b50, true);
+        view.setUint16(4, 20, true);
+        view.setUint16(6, 0, true);
+        view.setUint16(8, 0, true);
+        view.setUint16(10, 0, true);
+        view.setUint16(12, 0, true);
+        view.setUint32(14, crc, true);
+        view.setUint32(18, dataBytes.length, true);
+        view.setUint32(22, dataBytes.length, true);
+        view.setUint16(26, nameBytes.length, true);
+        view.setUint16(28, 0, true);
+        header.set(nameBytes, 30);
+        return header;
+    },
+
+    createCentralZipHeader(nameBytes, dataBytes, crc, offset) {
+        const header = new Uint8Array(46 + nameBytes.length);
+        const view = new DataView(header.buffer);
+        view.setUint32(0, 0x02014b50, true);
+        view.setUint16(4, 20, true);
+        view.setUint16(6, 20, true);
+        view.setUint16(8, 0, true);
+        view.setUint16(10, 0, true);
+        view.setUint16(12, 0, true);
+        view.setUint16(14, 0, true);
+        view.setUint32(16, crc, true);
+        view.setUint32(20, dataBytes.length, true);
+        view.setUint32(24, dataBytes.length, true);
+        view.setUint16(28, nameBytes.length, true);
+        view.setUint16(30, 0, true);
+        view.setUint16(32, 0, true);
+        view.setUint16(34, 0, true);
+        view.setUint16(36, 0, true);
+        view.setUint32(38, 0, true);
+        view.setUint32(42, offset, true);
+        header.set(nameBytes, 46);
+        return header;
+    },
+
+    createEndZipRecord(fileCount, centralSize, centralOffset) {
+        const record = new Uint8Array(22);
+        const view = new DataView(record.buffer);
+        view.setUint32(0, 0x06054b50, true);
+        view.setUint16(4, 0, true);
+        view.setUint16(6, 0, true);
+        view.setUint16(8, fileCount, true);
+        view.setUint16(10, fileCount, true);
+        view.setUint32(12, centralSize, true);
+        view.setUint32(16, centralOffset, true);
+        view.setUint16(20, 0, true);
+        return record;
+    },
+
+    crc32(bytes) {
+        if (!this._crc32Table) {
+            this._crc32Table = Array.from({ length: 256 }, (_, index) => {
+                let value = index;
+                for (let bit = 0; bit < 8; bit += 1) {
+                    value = (value & 1) ? (0xedb88320 ^ (value >>> 1)) : (value >>> 1);
+                }
+                return value >>> 0;
+            });
+        }
+        let crc = 0xffffffff;
+        for (const byte of bytes) {
+            crc = this._crc32Table[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+        }
+        return (crc ^ 0xffffffff) >>> 0;
     }
 };
 
@@ -873,8 +1106,8 @@ const CommonMessage = {
         "Job Group is required.": "작업 그룹을 입력하세요.",
         "Registered Model / Procedure is required.": "등록 모델/프로시저를 선택하세요.",
         "Executable PL/SQL script is required. Generate or enter the script first.": "실행 가능한 PL/SQL 스크립트가 필요합니다. 먼저 생성하거나 입력하세요.",
-        "Result Owner is required when Result Table Create is Y.": "결과 테이블 생성이 Y이면 결과 Owner를 입력해야 합니다.",
-        "Result Table is required when Result Table Create is Y.": "결과 테이블 생성이 Y이면 결과 테이블명을 입력해야 합니다.",
+        "Result Owner is required when Result Table Create is T or M.": "결과 사용 방식이 T 또는 M이면 결과 Owner를 입력해야 합니다.",
+        "Result Table is required when Result Table Create is T or M.": "결과 사용 방식이 T 또는 M이면 결과 테이블/모델명을 입력해야 합니다.",
         "Result Table is required.": "결과 테이블명을 입력하세요.",
         "SQL result table was created.": "SQL 결과 테이블이 생성되었습니다.",
         "SQL result table save failed.": "SQL 결과 테이블 저장에 실패했습니다.",
@@ -1083,18 +1316,31 @@ const CommonMessage = {
         });
     },
     async copyText(text) {
+        const value = String(text ?? "");
         if (navigator.clipboard?.writeText) {
-            await navigator.clipboard.writeText(String(text ?? ""));
-            return;
+            try {
+                await navigator.clipboard.writeText(value);
+                return;
+            } catch (error) {
+                // Fall back to a selected textarea when Clipboard API is blocked.
+            }
         }
         const textarea = document.createElement("textarea");
-        textarea.value = String(text ?? "");
+        textarea.value = value;
         textarea.style.position = "fixed";
+        textarea.style.left = "-9999px";
+        textarea.style.top = "0";
         textarea.style.opacity = "0";
+        textarea.setAttribute("readonly", "readonly");
         document.body.appendChild(textarea);
+        textarea.focus();
         textarea.select();
-        document.execCommand("copy");
+        textarea.setSelectionRange(0, textarea.value.length);
+        const copied = document.execCommand("copy");
         textarea.remove();
+        if (!copied) {
+            throw new Error("Clipboard copy failed.");
+        }
     },
     escapeHtml(value) {
         return String(value ?? "")

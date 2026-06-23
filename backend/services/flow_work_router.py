@@ -3,8 +3,12 @@ Factory for reusable flow-work routers.
 """
 
 from fastapi import APIRouter, HTTPException, Request
-from typing import Dict, Optional
+from pydantic import BaseModel
+from typing import Any, Dict, Optional
+from datetime import date, datetime
+from decimal import Decimal
 import logging
+import re
 import threading
 import time
 
@@ -17,17 +21,168 @@ from backend.services.flow_work_service import FlowNodeRunRequest, FlowRunReques
 logger = logging.getLogger(__name__)
 
 
+class FlowResultSqlRequest(BaseModel):
+    sql: str
+    limit: Optional[int] = 200
+
+
+MODEL_DETAIL_VIEW_TYPES = [
+    ("VA", "Attribute/detail view"),
+    ("VG", "Global/detail view"),
+    ("VI", "Itemset/detail view"),
+    ("VN", "Node/detail view"),
+    ("VP", "Pattern/partition/detail view"),
+    ("VR", "Rule/detail view"),
+    ("VT", "Transformation/detail view")
+]
+
+
+def quote_identifier(value: str) -> str:
+    return '"' + str(value).replace('"', '""') + '"'
+
+
+def normalize_select_sql(sql: str) -> str:
+    text = (sql or "").strip()
+    text = re.sub(r";+\s*$", "", text)
+    if not re.match(r"(?is)^(select|with)\b", text):
+        raise HTTPException(status_code=400, detail="Only SELECT statements are allowed.")
+    if re.search(r";\s*\S", sql or ""):
+        raise HTTPException(status_code=400, detail="Only a single SELECT statement is allowed.")
+    blocked = r"\b(insert|update|delete|merge|drop|alter|create|truncate|grant|revoke|begin|declare|execute|exec)\b"
+    if re.search(blocked, text, re.IGNORECASE):
+        raise HTTPException(status_code=400, detail="Only read-only SELECT statements are allowed.")
+    return text
+
+
+def normalize_limit(value: Optional[int]) -> int:
+    try:
+        limit = int(value or 200)
+    except (TypeError, ValueError):
+        limit = 200
+    return max(1, min(limit, 1000))
+
+
+def build_table_result_sql(owner: str, table_name: str) -> str:
+    return f"SELECT *\n  FROM {quote_identifier(owner)}.{quote_identifier(table_name)}"
+
+
+def build_model_detail_sql(conn, owner: str, model_name: str) -> tuple[str, list[Dict[str, Any]]]:
+    view_names = [f"DM${view_type}{model_name}" for view_type, _ in MODEL_DETAIL_VIEW_TYPES]
+    result = execute_query(conn, "DATA_WORK_MODEL_DETAIL_VIEW_LIST", {
+        "owner": owner,
+        "viewNameVa": view_names[0],
+        "viewNameVg": view_names[1],
+        "viewNameVi": view_names[2],
+        "viewNameVn": view_names[3],
+        "viewNameVp": view_names[4],
+        "viewNameVr": view_names[5],
+        "viewNameVt": view_names[6]
+    })
+    rows = data_work.require_success(result, "Model detail view query failed.").get("data", [])
+    owner_prefix = quote_identifier(owner) + "."
+    views = []
+    lines = [
+        "-- Existing Oracle ML model detail views only.",
+        f"-- Model: {owner}.{model_name}",
+        ""
+    ]
+    for row in rows:
+        view_type = row.get("VIEW_TYPE") or ""
+        view_name = row.get("VIEW_NAME") or ""
+        description = row.get("DESCRIPTION") or ""
+        object_type = row.get("OBJECT_TYPE")
+        exists_yn = row.get("EXISTS_YN") or ("Y" if object_type else "N")
+        views.append({
+            "viewType": view_type,
+            "viewName": view_name,
+            "description": description,
+            "objectType": object_type,
+            "existsYn": exists_yn
+        })
+        if not object_type:
+            continue
+        lines.extend([
+            f"-- {view_type} - {description}",
+            "SELECT *",
+            f"  FROM {owner_prefix}{quote_identifier(view_name)};",
+            ""
+        ])
+    if not any(row.get("existsYn") == "Y" for row in views):
+        lines.extend([
+            "-- No DM$ detail views were found for this model yet.",
+            "-- Check USER_MINING_MODELS and INIT$_SP_DM_MODEL_VIEW_LIST."
+        ])
+    return "\n".join(lines).strip(), views
+
+
+def serialize_db_value(value: Any) -> Any:
+    if value is None:
+        return None
+    if hasattr(value, "read"):
+        return serialize_db_value(value.read())
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if isinstance(value, Decimal):
+        return int(value) if value == value.to_integral_value() else float(value)
+    if isinstance(value, bytes):
+        try:
+            return value.decode("utf-8")
+        except Exception:
+            return value.hex()
+    if isinstance(value, (list, tuple)):
+        return [serialize_db_value(item) for item in value]
+    if isinstance(value, dict):
+        return {key: serialize_db_value(item) for key, item in value.items()}
+    if hasattr(value, "aslist"):
+        try:
+            return serialize_db_value(value.aslist())
+        except Exception:
+            pass
+    if hasattr(value, "asdict"):
+        try:
+            return serialize_db_value(value.asdict())
+        except Exception:
+            pass
+    if hasattr(value, "__dict__") and not isinstance(value, (str, int, float, bool)):
+        public_items = {
+            key: item for key, item in vars(value).items()
+            if not key.startswith("_")
+        }
+        if public_items:
+            return serialize_db_value(public_items)
+        return str(value)
+    return value
+
+
+def normalize_sql_result(result: Dict[str, Any]) -> Dict[str, Any]:
+    result["data"] = [
+        {key: serialize_db_value(value) for key, value in row.items()}
+        for row in result.get("data", [])
+    ]
+    return result
+
+
 def is_missing_flow_table_error(error: Exception) -> bool:
     text = str(error)
     return "ORA-00942" in text or "INIT$_TB_FLOW_WORK" in text and "does not exist" in text.lower()
 
 
 def is_flow_lock_error(error: Exception) -> bool:
-    return "ORA-12860" in str(error)
+    text = str(error)
+    if any(code in text for code in ("ORA-00054", "ORA-00060", "ORA-12860")):
+        return True
+    original = getattr(error, "original", None)
+    return bool(original and is_flow_lock_error(original))
 
 
 def get_flow_error_step(error: Exception) -> str:
-    return getattr(error, "step", "") or "UNKNOWN_STEP"
+    current = error
+    while current:
+        step = getattr(current, "step", "")
+        if step:
+            return step
+        current = getattr(current, "__cause__", None) or getattr(current, "original", None)
+    return "UNKNOWN_STEP"
 
 
 def create_flow_work_router(
@@ -51,7 +206,7 @@ def create_flow_work_router(
     }
     save_locks: Dict[str, threading.Lock] = {}
     save_locks_guard = threading.Lock()
-    save_lock_wait_seconds = 10
+    save_lock_wait_seconds = 15
 
     def get_save_lock(req: FlowWorkRequest) -> threading.Lock:
         flow_key = f"FLOW:{req.flowId}" if req.flowId else "NEW"
@@ -67,13 +222,13 @@ def create_flow_work_router(
             return save_locks[key]
 
     def save_flow_with_retry(conn, req: FlowWorkRequest) -> int:
-        for attempt in range(2):
+        for attempt in range(3):
             try:
                 return flow_work.save_flow(conn, MENU_CODE, req, DEFAULT_FLOW_GROUP, DEFAULT_FLOW_TYPE)
             except Exception as e:
-                if attempt == 0 and is_flow_lock_error(e):
+                if attempt < 2 and is_flow_lock_error(e):
                     conn.rollback()
-                    time.sleep(0.5)
+                    time.sleep(0.5 * (attempt + 1))
                     continue
                 raise
 
@@ -438,6 +593,60 @@ def create_flow_work_router(
         try:
             conn = get_target_db_connection(request)
             return flow_work.list_node_runs(conn, flow_run_id)
+        finally:
+            if conn:
+                conn.close()
+
+    @router.get("/result-sql")
+    def get_result_sql(request: Request, resultCreateYn: str, owner: str, objectName: str):
+        conn = None
+        try:
+            mode = data_work.normalize_result_create_mode(resultCreateYn)
+            result_owner = data_work.require_identifier(owner, "owner")
+            result_object = data_work.require_identifier(objectName, "objectName")
+            if mode == "T":
+                return {
+                    "status": "success",
+                    "data": {
+                        "mode": mode,
+                        "sql": build_table_result_sql(result_owner, result_object),
+                        "views": []
+                    }
+                }
+            if mode == "M":
+                conn = get_target_db_connection(request)
+                sql_text, views = build_model_detail_sql(conn, result_owner, result_object)
+                return {
+                    "status": "success",
+                    "data": {
+                        "mode": mode,
+                        "sql": sql_text,
+                        "views": views
+                    }
+                }
+            return {
+                "status": "success",
+                "data": {
+                    "mode": "N",
+                    "sql": "-- This node does not create a result table or model.",
+                    "views": []
+                }
+            }
+        finally:
+            if conn:
+                conn.close()
+
+    @router.post("/result-sql")
+    def execute_result_sql(req: FlowResultSqlRequest, request: Request):
+        conn = None
+        try:
+            sql = normalize_select_sql(req.sql)
+            conn = get_target_db_connection(request)
+            result = execute_query(conn, "FLOW_WORK_RESULT_SQL_SELECT", {
+                "dynamicSql": sql,
+                "limit": normalize_limit(req.limit)
+            })
+            return normalize_sql_result(data_work.require_success(result, "Result SQL execution failed."))
         finally:
             if conn:
                 conn.close()

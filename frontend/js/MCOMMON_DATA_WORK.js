@@ -431,7 +431,7 @@
                 this.renderScenarioTables();
                 if (this.selectedScenarioTableKey && !this.currentJob?.profileJobId) {
                     this.applySelectedScenarioTableToCurrentJob();
-                    this.setDefaultUserSql(false);
+                    await this.setDefaultUserSql(false);
                     this.renderCurrentJob();
                 }
                 this.updateWorkContextSummary();
@@ -728,6 +728,7 @@
         renderParameters() {
             const container = getContainerEl(`#parameterGrid-${PAGE_CODE}`);
             if (!container) return;
+            this.renderUserSqlJobContext();
 
             if (!this.parameters.length) {
                 const emptyMessage = String(this.currentJob?.execSourceType || "DB_OBJECT").toUpperCase() === "OML_PYTHON"
@@ -847,13 +848,13 @@
                     method: "GET",
                     showLoading
                 });
-                this.applyJob(json.data || {});
+                await this.applyJob(json.data || {});
             } catch (error) {
                 alert(error.message || "Job load failed.");
             }
         },
 
-        applyJob(job) {
+        async applyJob(job) {
             this.selectedJobId = String(job.PROFILE_JOB_ID || "");
             this.currentJob = {
                 profileJobId: job.PROFILE_JOB_ID || "",
@@ -877,7 +878,7 @@
                 useYn: job.USE_YN || "Y",
                 sortOrder: job.SORT_ORDER ?? "",
                 execPlsql: job.EXEC_PLSQL || "",
-                resultCreateYn: job.RESULT_CREATE_YN || "N",
+                resultCreateYn: this.normalizeResultCreateMode(job.RESULT_CREATE_YN || "N"),
                 resultOwner: job.RESULT_OWNER || "",
                 resultTableName: job.RESULT_TABLE_NAME || "",
                 status: job.STATUS || "DRAFT"
@@ -897,9 +898,9 @@
             this.updateWorkContextSummary();
             this.renderParameters();
             this.setEditorValue(`#execPlsqlEditor-${PAGE_CODE}`, job.EXEC_PLSQL || "");
-            this.setEditorValue(`#resultSqlEditor-${PAGE_CODE}`, this.createResultSql(job.RESULT_TABLE_NAME || "", job.RESULT_OWNER || ""));
+            this.setEditorValue(`#resultSqlEditor-${PAGE_CODE}`, this.createResultSql(job.RESULT_TABLE_NAME || "", job.RESULT_OWNER || "", this.currentJob.resultCreateYn || "N"));
             this.setFieldValue(`#resultQueryTable-${PAGE_CODE}`, job.RESULT_TABLE_NAME || "");
-            this.setDefaultUserSql(false);
+            await this.setDefaultUserSql(false);
         },
 
         newJob() {
@@ -933,18 +934,37 @@
         updateCurrentJobField(field, value) {
             if (!this.currentJob) this.currentJob = this.createEmptyJob();
             this.currentJob[field] = value;
+            this.renderUserSqlJobContext();
         },
 
         handleResultCreateChange(value) {
-            const createYn = value === "Y" ? "Y" : "N";
-            this.updateCurrentJobField("resultCreateYn", createYn);
-            if (createYn === "Y") {
+            const createMode = this.normalizeResultCreateMode(value);
+            this.updateCurrentJobField("resultCreateYn", createMode);
+            if (createMode !== "N") {
                 this.applyDefaultResultOwner();
             }
             this.syncResultFields();
-            if (createYn === "Y") {
+            if (createMode !== "N") {
                 getContainerEl(`#resultTable-${PAGE_CODE}`)?.focus();
             }
+        },
+
+        normalizeResultCreateMode(value) {
+            const mode = String(value || "N").trim().toUpperCase();
+            if (mode === "Y") return "T";
+            return ["N", "T", "M"].includes(mode) ? mode : "N";
+        },
+
+        isResultObjectMode(value) {
+            return this.normalizeResultCreateMode(value) !== "N";
+        },
+
+        isResultTableMode(value) {
+            return this.normalizeResultCreateMode(value) === "T";
+        },
+
+        isResultModelMode(value) {
+            return this.normalizeResultCreateMode(value) === "M";
         },
 
         applyDefaultResultOwner() {
@@ -958,8 +978,8 @@
         },
 
         syncResultFields() {
-            const createYn = getContainerEl(`#resultCreateYn-${PAGE_CODE}`)?.value || this.currentJob?.resultCreateYn || "N";
-            const disabled = createYn !== "Y";
+            const createMode = this.normalizeResultCreateMode(getContainerEl(`#resultCreateYn-${PAGE_CODE}`)?.value || this.currentJob?.resultCreateYn || "N");
+            const disabled = createMode === "N";
             [`#resultOwner-${PAGE_CODE}`, `#resultTable-${PAGE_CODE}`].forEach((selector) => {
                 const field = getContainerEl(selector);
                 if (field) field.disabled = disabled;
@@ -984,11 +1004,11 @@
             this.setFieldValue(`#execSourceType-${PAGE_CODE}`, job.execSourceType || "DB_OBJECT");
             this.setFieldValue(`#execObject-${PAGE_CODE}`, job.execObjectId || "");
             this.setFieldValue(`#omlResource-${PAGE_CODE}`, job.execResourceId || "");
-            this.setFieldValue(`#resultCreateYn-${PAGE_CODE}`, job.resultCreateYn || "N");
+            this.setFieldValue(`#resultCreateYn-${PAGE_CODE}`, this.normalizeResultCreateMode(job.resultCreateYn || "N"));
             this.setFieldValue(`#resultOwner-${PAGE_CODE}`, job.resultOwner || "");
             this.setFieldValue(`#resultTable-${PAGE_CODE}`, job.resultTableName || "");
             this.setFieldValue(`#resultQueryTable-${PAGE_CODE}`, job.resultTableName || "");
-            if ((job.resultCreateYn || "N") === "Y") {
+            if (this.isResultObjectMode(job.resultCreateYn || "N")) {
                 this.applyDefaultResultOwner();
             }
             this.setText(`#selectedExecObjectLabel-${PAGE_CODE}`, job.execObjectLabel || job.execObjectName || this.getLabel("noExecutableObject"));
@@ -998,14 +1018,60 @@
                 ? `${job.ownerName}.${job.tableName}`
                 : this.getLabel("workDescriptionEmpty");
             this.setText(`#workDescription-${PAGE_CODE}`, desc);
+            this.renderUserSqlJobContext();
+        },
+
+        hasUserSqlJobContext() {
+            const job = this.currentJob || {};
+            return Boolean(
+                job.profileJobId
+                || job.ownerName
+                || job.tableName
+                || job.execObjectId
+                || job.execResourceId
+                || (this.parameters || []).length
+            );
+        },
+
+        renderUserSqlJobContext() {
+            const container = getContainerEl(`#userSqlJobContext-${PAGE_CODE}`);
+            if (!container) return;
+            const job = this.currentJob || {};
+            if (!this.hasUserSqlJobContext()) {
+                container.className = "data-user-sql-context is-empty";
+                container.innerHTML = `
+                    <strong>No Data Work job context</strong>
+                    <span>User SQL runtime binds will not use Data Work parameter defaults or system job values.</span>
+                `;
+                return;
+            }
+            const target = job.ownerName && job.tableName ? `${job.ownerName}.${job.tableName}` : "-";
+            const resultMode = this.normalizeResultCreateMode(job.resultCreateYn || "N");
+            const resultObject = this.isResultObjectMode(resultMode) && job.resultOwner && job.resultTableName
+                ? `${job.resultOwner}.${job.resultTableName}`
+                : "N/A";
+            container.className = "data-user-sql-context";
+            container.innerHTML = `
+                <strong>${this.escapeHtml(job.jobName || `Job #${job.profileJobId}`)}</strong>
+                <span>${job.profileJobId ? `Job ID: ${this.escapeHtml(job.profileJobId)}` : "Draft job context"}</span>
+                <span>Target: ${this.escapeHtml(target)}</span>
+                <span>Result: ${this.escapeHtml(resultMode)} / ${this.escapeHtml(resultObject)}</span>
+            `;
         },
 
         syncRunButtons() {
             const enabled = Boolean(this.currentJob?.profileJobId);
+            const running = this.isJobExecutionActive();
+            const saveButton = getContainerEl(`#saveJob-${PAGE_CODE}`);
+            if (saveButton) saveButton.disabled = running;
             [`#runNow-${PAGE_CODE}`, `#queueBatch-${PAGE_CODE}`, `#deleteJob-${PAGE_CODE}`].forEach((selector) => {
                 const button = getContainerEl(selector);
-                if (button) button.disabled = !enabled;
+                if (button) button.disabled = !enabled || running;
             });
+        },
+
+        isJobExecutionActive() {
+            return (this.jobs || []).some((job) => Boolean(job._RUN_PROGRESS));
         },
 
         syncExecutionSourceFields() {
@@ -1040,7 +1106,7 @@
                         <li><strong>실행 함수</strong>: 등록된 OML4Py Resource의 Exec Method에 따라 <code>pyqEval</code>, <code>pyqTableEval</code>, <code>pyqRowEval</code> 같은 SQL API를 사용합니다.</li>
                         <li><strong>입력 데이터</strong>: 테이블 입력 방식은 현재 Owner/Table을 <code>CURSOR(SELECT * FROM OWNER.TABLE)</code> 형태로 전달합니다.</li>
                         <li><strong>Parameter List</strong>: 파라미터는 <code>par_lst =&gt; JSON_OBJECT(... RETURNING CLOB)</code>로 생성됩니다. 기본값이 있으면 값이 직접 들어가고, 기본값이 없으면 <code>:abcDef</code> 형식의 런타임 바인드 변수로 생성됩니다.</li>
-                        <li><strong>Result Table Create</strong>: Y이면 생성 SQL이 <code>CREATE TABLE OWNER.TABLE AS SELECT ...</code> 형태로 바뀝니다.</li>
+                        <li><strong>Result Table Create</strong>: T이면 생성 SQL이 <code>CREATE TABLE OWNER.TABLE AS SELECT ...</code> 형태로 바뀌고, M이면 결과명을 모델명으로 사용합니다.</li>
                         <li><strong>Run now / Queue Batch</strong>: 실행 시 저장된 Parameter List와 런타임 바인드 값을 사용해 OML SQL을 실행합니다.</li>
                     </ul>
                 `
@@ -1050,11 +1116,11 @@
                         <li><strong>바인드 변수명 규칙</strong>: Parameter 명칭을 camelCase로 변환해 사용합니다. 예: <code>ABC_DEF</code> -> <code>:abcDef</code>, <code>P_MODEL_NAME</code> -> <code>:pModelName</code>.</li>
                         <li><strong>작성 방법</strong>: PL/SQL에서는 바인드 변수 앞에 콜론을 붙입니다. 예: <code>P_MODEL_NAME =&gt; :pModelName</code>.</li>
                         <li><strong>동적 문자열 치환</strong>: <code>/* --DYNAMIC_MODEL_NAME-- */</code>처럼 작성하면 <code>/* --</code>와 <code>-- */</code> 사이의 이름이 Parameter 명칭과 완전히 같을 때 해당 값이 문자열 그대로 치환됩니다.</li>
-                        <li><strong>현재 Job 예약 변수</strong>: <code>:_TargetOwner</code>, <code>:_TargetTable</code>, <code>:_ResultOwner</code>, <code>:_ResultTable</code>은 실행 시 현재 Job/Node의 Target/Result owner/table 값으로 자동 전달됩니다.</li>
-                        <li><strong>Flow 선행 Node 예약 변수</strong>: M04001 Flow 실행에서는 <code>:_preTargetOwner</code>, <code>:_preTargetTable</code>, <code>:_preResultOwner</code>, <code>:_preResultTable</code>을 사용할 수 있습니다.</li>
-                        <li><strong>Generate PL/SQL</strong>: Parameter 기본값이 있으면 기본값을 스크립트에 직접 채우고, 기본값이 없으면 위 규칙의 바인드 변수로 생성합니다. 예약 변수는 필요한 위치에 직접 입력해 사용합니다.</li>
-                        <li><strong>Run now / Queue Batch</strong>: 실행 시 Parameter List 값과 Runtime Bind 값을 처리하고, 시스템 예약 변수는 실제 Job/Node 정보로 자동 덮어쓴 뒤 실행합니다.</li>
-                        <li><strong>예시</strong>: <code>P_OWNER =&gt; :_preResultOwner</code>, <code>P_TABLE =&gt; :_preResultTable</code>, <code>P_RESULT_OWNER =&gt; :_ResultOwner</code>, <code>P_RESULT_TABLE =&gt; :_ResultTable</code></li>
+                        <li><strong>현재 Job 예약 변수</strong>: <code>:INIT$TargetOwner</code>, <code>:INIT$TargetTable</code>, <code>:INIT$ResultOwner</code>, <code>:INIT$ResultTable</code>은 실행 시 현재 Job/Node의 Target/Result owner/table 값으로 자동 전달됩니다.</li>
+                        <li><strong>Flow 선행 Node 예약 변수</strong>: M04001 Flow 실행에서는 <code>:INIT$PreTargetOwner</code>, <code>:INIT$PreTargetTable</code>, <code>:INIT$PreResultOwner</code>, <code>:INIT$PreResultTable</code>을 사용할 수 있습니다.</li>
+                        <li><strong>Generate PL/SQL</strong>: Parameter 기본값이 있어도 스크립트에는 위 규칙의 바인드 변수로 생성합니다. 기본값과 예약 변수 값은 실행 직전 Runtime Bind 값으로 확인하고 수정할 수 있습니다.</li>
+                        <li><strong>Run now / Queue Batch</strong>: 실행 시 Parameter List 기본값과 Runtime Bind 값을 처리하고, 시스템 예약 변수는 실제 Job/Node 정보로 자동 덮어쓴 뒤 실행합니다.</li>
+                        <li><strong>예시</strong>: <code>P_OWNER =&gt; :INIT$PreResultOwner</code>, <code>P_TABLE =&gt; :INIT$PreResultTable</code>, <code>P_RESULT_OWNER =&gt; :INIT$ResultOwner</code>, <code>P_RESULT_TABLE =&gt; :INIT$ResultTable</code></li>
                     </ul>
                 `;
         },
@@ -1083,8 +1149,21 @@
             return WORK_UI_LABELS[key] || "";
         },
 
-        toggleWorkContext() {
+        toggleWorkContext(event) {
+            event?.stopPropagation?.();
             this.setWorkContextCollapsed(!this.workContextCollapsed);
+        },
+
+        toggleWorkContextFromHeader(event) {
+            const target = event?.target;
+            if (target?.closest?.("button, select, input, textarea, a, label")) return;
+            this.toggleWorkContext(event);
+        },
+
+        handleWorkContextHeaderKeydown(event) {
+            if (event.key !== "Enter" && event.key !== " ") return;
+            event.preventDefault();
+            this.toggleWorkContext(event);
         },
 
         setWorkContextCollapsed(collapsed) {
@@ -1115,6 +1194,10 @@
         },
 
         async saveJob(showAlert = true) {
+            if (this.isJobExecutionActive()) {
+                alert("A job is running. Please wait until execution finishes.");
+                return null;
+            }
             if (showAlert && !(await CommonMessage.confirm("Save this work?"))) return null;
             const saved = await this.saveJobInternal(showAlert);
             return saved;
@@ -1129,7 +1212,7 @@
                     body: payload
                 });
                 this.jobs = Array.isArray(json.list) ? json.list : this.jobs;
-                this.applyJob(json.data || {});
+                await this.applyJob(json.data || {});
                 if (showAlert) alert("Work saved.");
                 return json.data || null;
             } catch (error) {
@@ -1139,6 +1222,10 @@
         },
 
         async deleteJob() {
+            if (this.isJobExecutionActive()) {
+                alert("A job is running. Please wait until execution finishes.");
+                return;
+            }
             const jobId = this.currentJob?.profileJobId || this.selectedJobId;
             if (!jobId) {
                 alert("Select a saved job first.\n저장된 작업을 먼저 선택하세요.");
@@ -1175,6 +1262,10 @@
         },
 
         async runJob(batch = false) {
+            if (this.isJobExecutionActive()) {
+                alert("A job is already running. Please wait until execution finishes.");
+                return;
+            }
             if (!this.currentJob?.profileJobId) {
                 alert("Save work first, then run the saved work.");
                 return;
@@ -1191,11 +1282,15 @@
                 runtimeBindValues
             };
 
+            const jobId = String(this.currentJob.profileJobId);
+            this.setJobRunState(jobId, batch ? "QUEUING" : "RUNNING", true);
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/job/run`, {
                     method: "POST",
-                    body: payload
+                    body: payload,
+                    showLoading: false
                 });
+                this.setJobRunState(jobId, batch ? "QUEUED" : "SUCCESS", false);
                 alert(json.message || "Job submitted.");
                 await this.loadJobs(false);
                 await this.loadRunHistory(false);
@@ -1203,6 +1298,7 @@
                     await this.selectJob(String(json.profileJobId), false);
                 }
             } catch (error) {
+                this.setJobRunState(jobId, "FAILED", false);
                 alert(error.message || "Job run failed.");
             }
         },
@@ -1280,6 +1376,7 @@
                     : job
             ));
             this.renderJobs();
+            this.syncRunButtons();
         },
 
         async loadRunHistory(showLoading = false) {
@@ -1321,14 +1418,31 @@
         createRunHistoryColumns(rows) {
             const baseColumns = Object.keys(rows?.[0] || {});
             if (!baseColumns.length) return [];
-            const columns = baseColumns.filter((column) => column !== "ELAPSED_TIME");
-            const finishedAtIndex = columns.indexOf("FINISHED_AT");
-            if (finishedAtIndex >= 0) {
-                columns.splice(finishedAtIndex + 1, 0, "ELAPSED_TIME");
-            } else {
-                columns.push("ELAPSED_TIME");
-            }
-            return columns;
+            const preferredColumns = [
+                "STATUS",
+                "MESSAGE",
+                "JOB_NAME",
+                "RUN_TYPE",
+                "STARTED_AT",
+                "FINISHED_AT",
+                "ELAPSED_TIME",
+                "RESULT_OWNER",
+                "RESULT_TABLE_NAME",
+                "CREATED_AT",
+                "PROFILE_RUN_ID",
+                "WORK_RUN_ID",
+                "PROFILE_JOB_ID",
+                "WORK_JOB_ID",
+                "SORT_ORDER",
+                "MENU_CODE",
+                "JOB_GROUP"
+            ];
+            const availableColumns = new Set([...baseColumns, "ELAPSED_TIME"]);
+            const orderedColumns = preferredColumns.filter((column) => availableColumns.has(column));
+            const remainingColumns = baseColumns
+                .filter((column) => column !== "ELAPSED_TIME")
+                .filter((column) => !orderedColumns.includes(column));
+            return [...orderedColumns, ...remainingColumns];
         },
 
         formatElapsedTime(startedAt, finishedAt) {
@@ -1409,15 +1523,15 @@
                 getContainerEl(`#execPlsqlEditor-${PAGE_CODE}`)?.focus();
                 return false;
             }
-            const resultCreateYn = getContainerEl(`#resultCreateYn-${PAGE_CODE}`)?.value || "N";
-            if (resultCreateYn === "Y") {
+            const resultCreateYn = this.normalizeResultCreateMode(getContainerEl(`#resultCreateYn-${PAGE_CODE}`)?.value || "N");
+            if (this.isResultObjectMode(resultCreateYn)) {
                 if (!getContainerEl(`#resultOwner-${PAGE_CODE}`)?.value.trim()) {
-                    alert("Result Owner is required when Result Table Create is Y.");
+                    alert("Result Owner is required when Result Table Create is T or M.");
                     getContainerEl(`#resultOwner-${PAGE_CODE}`)?.focus();
                     return false;
                 }
                 if (!getContainerEl(`#resultTable-${PAGE_CODE}`)?.value.trim()) {
-                    alert("Result Table is required when Result Table Create is Y.");
+                    alert("Result Table is required when Result Table Create is T or M.");
                     getContainerEl(`#resultTable-${PAGE_CODE}`)?.focus();
                     return false;
                 }
@@ -1453,7 +1567,7 @@
                 sortOrder: this.parseOptionalNumber(getContainerEl(`#jobSortOrder-${PAGE_CODE}`)?.value),
                 params: this.parameters,
                 execPlsql: getContainerEl(`#execPlsqlEditor-${PAGE_CODE}`)?.value || "",
-                resultCreateYn: getContainerEl(`#resultCreateYn-${PAGE_CODE}`)?.value || "N",
+                resultCreateYn: this.normalizeResultCreateMode(getContainerEl(`#resultCreateYn-${PAGE_CODE}`)?.value || "N"),
                 resultOwner: getContainerEl(`#resultOwner-${PAGE_CODE}`)?.value.trim() || "",
                 resultTableName: getContainerEl(`#resultTable-${PAGE_CODE}`)?.value.trim() || "",
                 status
@@ -1492,7 +1606,7 @@
             const scriptOwner = resource?.SCRIPT_OWNER || "";
             const targetOwner = this.currentJob?.ownerName || "";
             const targetTable = this.currentJob?.tableName || "";
-            const resultCreateYn = getContainerEl(`#resultCreateYn-${PAGE_CODE}`)?.value || this.currentJob?.resultCreateYn || "N";
+            const resultCreateYn = this.normalizeResultCreateMode(getContainerEl(`#resultCreateYn-${PAGE_CODE}`)?.value || this.currentJob?.resultCreateYn || "N");
             const resultOwner = getContainerEl(`#resultOwner-${PAGE_CODE}`)?.value || this.currentJob?.resultOwner || "";
             const resultTable = getContainerEl(`#resultTable-${PAGE_CODE}`)?.value || this.currentJob?.resultTableName || "";
             const parList = this.createOmlParListExpression();
@@ -1512,7 +1626,7 @@
                 ? ""
                 : `\n        inp_cur => ${tableCursor},`;
             const selectSql = `SELECT *\n  FROM TABLE(${functionName}(${inputArg}\n        par_lst => ${parList},\n        out_fmt => ${outFmt},\n        scr_name => '${this.escapeSqlLiteral(scriptName)}'${scriptOwnerArg}\n  ))`;
-            if (resultCreateYn === "Y" && resultOwner && resultTable) {
+            if (this.isResultTableMode(resultCreateYn) && resultOwner && resultTable) {
                 return `CREATE TABLE ${this.quoteName(resultOwner)}.${this.quoteName(resultTable)} AS\n${selectSql}`;
             }
             return selectSql;
@@ -1523,9 +1637,7 @@
                 .filter((row) => row.itemName)
                 .map((row) => {
                     const key = row.bindName || row.itemName;
-                    const value = String(row.itemDefault ?? "").trim();
-                    const expression = value ? this.createPlsqlLiteral(value) : `:${this.toBindVariableName(row.itemName)}`;
-                    return `'${this.escapeSqlLiteral(key)}' VALUE ${expression}`;
+                    return `'${this.escapeSqlLiteral(key)}' VALUE :${this.toBindVariableName(row.itemName)}`;
                 });
             return pairs.length ? `JSON_OBJECT(${pairs.join(", ")} RETURNING CLOB)` : "NULL";
         },
@@ -1586,6 +1698,10 @@
             const script = scriptText ?? (editor?.value || this.currentJob?.execPlsql || "");
             const bindNames = this.extractBindVariables(script);
             const dynamicTokenNames = this.extractDynamicTokens(script);
+            const bindOptions = {
+                useParameterDefaults: options.useParameterDefaults !== false,
+                useSystemBindContext: options.useSystemBindContext !== false
+            };
             const parameterRows = options.useParameterDefaults === false ? [] : (this.parameters || []);
             const parameterBindMap = new Map(parameterRows
                 .map((row) => [this.toBindVariableName(row.itemName || ""), row])
@@ -1597,18 +1713,27 @@
             const seen = new Set();
 
             bindNames.forEach((name) => {
-                if (this.isSystemBindName(name)) return;
                 const row = parameterBindMap.get(name);
-                if (!row || !String(row.itemDefault ?? "").trim()) {
-                    this.addRuntimeBindPrompt(prompts, seen, name, `:${name}`);
-                }
+                this.addRuntimeBindPrompt(
+                    prompts,
+                    seen,
+                    name,
+                    `:${name}`,
+                    this.getRuntimeBindDefaultValue(name, row, bindOptions),
+                    this.getRuntimeBindComment(name, row, bindOptions)
+                );
             });
 
             dynamicTokenNames.forEach((name) => {
                 const row = parameterNameMap.get(name);
-                if (!row || !String(row.itemDefault ?? "").trim()) {
-                    this.addRuntimeBindPrompt(prompts, seen, name, `/* --${name}-- */`);
-                }
+                this.addRuntimeBindPrompt(
+                    prompts,
+                    seen,
+                    name,
+                    `/* --${name}-- */`,
+                    this.getRuntimeBindDefaultValue(name, row, bindOptions),
+                    this.getRuntimeBindComment(name, row, bindOptions)
+                );
             });
 
             if (!prompts.length) return {};
@@ -1619,7 +1744,7 @@
             const masked = this.maskSqlForBindScan(sqlText);
             const names = [];
             const seen = new Set();
-            const regex = /(?<!:):([A-Za-z_][A-Za-z0-9_]*)/g;
+            const regex = /(?<!:):([A-Za-z][A-Za-z0-9_$#]*)/g;
             let match;
             while ((match = regex.exec(masked)) !== null) {
                 const name = match[1];
@@ -1632,16 +1757,72 @@
         },
 
         isSystemBindName(name) {
-            return [
-                "_TargetOwner",
-                "_TargetTable",
-                "_ResultOwner",
-                "_ResultTable",
-                "_preTargetOwner",
-                "_preTargetTable",
-                "_preResultOwner",
-                "_preResultTable"
-            ].includes(String(name || ""));
+            return Boolean(this.normalizeSystemBindName(name));
+        },
+
+        normalizeSystemBindName(name) {
+            const key = String(name || "");
+            const aliases = {
+                "INIT$TargetOwner": "INIT$TargetOwner",
+                "INIT$TargetTable": "INIT$TargetTable",
+                "INIT$ResultOwner": "INIT$ResultOwner",
+                "INIT$ResultTable": "INIT$ResultTable",
+                "INIT$PreTargetOwner": "INIT$PreTargetOwner",
+                "INIT$PreTargetTable": "INIT$PreTargetTable",
+                "INIT$PreResultOwner": "INIT$PreResultOwner",
+                "INIT$PreResultTable": "INIT$PreResultTable"
+            };
+            return aliases[key] || "";
+        },
+
+        getRuntimeBindDefaultValue(name, row = null, options = {}) {
+            if (this.isSystemBindName(name)) return this.getSystemBindValue(name, options);
+            const savedValue = this.runtimeBindValues?.[name];
+            if (savedValue !== undefined) return savedValue;
+            return row ? this.resolveRuntimeDefaultValue(row.itemDefault, options) : "";
+        },
+
+        resolveRuntimeDefaultValue(value, options = {}) {
+            const text = String(value ?? "").trim();
+            const bindMatch = text.match(/^:([A-Za-z][A-Za-z0-9_$#]*)$/);
+            if (bindMatch && this.isSystemBindName(bindMatch[1])) {
+                return this.getSystemBindValue(bindMatch[1], options);
+            }
+            const tokenMatch = text.match(/^\/\*\s*--\s*([A-Za-z][A-Za-z0-9_$#]*)\s*--\s*\*\/$/);
+            if (tokenMatch && this.isSystemBindName(tokenMatch[1])) {
+                return this.getSystemBindValue(tokenMatch[1], options);
+            }
+            return text;
+        },
+
+        getRuntimeBindComment(name, row = null, options = {}) {
+            if (this.isSystemBindName(name)) {
+                if (options.useSystemBindContext === false) {
+                    return "System bind. Select a saved Data Work job to fill this automatically.";
+                }
+                return "System bind default. You can override it for this run.";
+            }
+            if (row && String(row.itemDefault ?? "").trim()) {
+                return "Parameter default. You can override it for this run.";
+            }
+            return "";
+        },
+
+        getSystemBindValue(name, options = {}) {
+            if (options.useSystemBindContext === false) return "";
+            const job = this.currentJob || {};
+            const canonicalName = this.normalizeSystemBindName(name);
+            const values = {
+                "INIT$TargetOwner": getContainerEl(`#targetOwner-${PAGE_CODE}`)?.value || job.ownerName || "",
+                "INIT$TargetTable": getContainerEl(`#targetTable-${PAGE_CODE}`)?.value || job.tableName || "",
+                "INIT$ResultOwner": getContainerEl(`#resultOwner-${PAGE_CODE}`)?.value || job.resultOwner || "",
+                "INIT$ResultTable": getContainerEl(`#resultTable-${PAGE_CODE}`)?.value || job.resultTableName || "",
+                "INIT$PreTargetOwner": "",
+                "INIT$PreTargetTable": "",
+                "INIT$PreResultOwner": "",
+                "INIT$PreResultTable": ""
+            };
+            return values[canonicalName] ?? "";
         },
 
         extractDynamicTokens(sqlText) {
@@ -1659,10 +1840,10 @@
             return names;
         },
 
-        addRuntimeBindPrompt(prompts, seen, name, label) {
+        addRuntimeBindPrompt(prompts, seen, name, label, value = "", comment = "") {
             if (!name || seen.has(name)) return;
             seen.add(name);
-            prompts.push({ name, label });
+            prompts.push({ name, label, value, comment });
         },
 
         maskSqlForBindScan(sqlText) {
@@ -1679,11 +1860,15 @@
             if (!layer || !grid) return Promise.resolve({});
             grid.innerHTML = bindPrompts.map((item) => `
                 <label class="data-bind-row">
-                    <span>${this.escapeHtml(item.label || item.name)}</span>
-                    <input class="env-field data-runtime-bind-input" data-bind-name="${this.escapeHtml(item.name)}" type="text" value="${this.escapeAttr(this.runtimeBindValues[item.name] ?? "")}">
+                    <span class="data-bind-meta">
+                        <span class="flow-bind-name">${this.escapeHtml(item.label || item.name)}</span>
+                        ${item.comment ? `<small class="flow-bind-comment">${this.escapeHtml(item.comment)}</small>` : ""}
+                    </span>
+                    <input class="env-field data-runtime-bind-input" data-bind-name="${this.escapeHtml(item.name)}" type="text" value="${this.escapeAttr(item.value ?? "")}">
                 </label>
             `).join("");
             layer.hidden = false;
+            this.enableHelpLayerDrag(layer);
             setTimeout(() => grid.querySelector("input")?.focus(), 0);
             return new Promise((resolve) => {
                 this.runtimeBindDialog = { resolve };
@@ -1740,8 +1925,6 @@ END;`;
         },
 
         createPlsqlArgument(row) {
-            const text = String(row?.itemDefault ?? "").trim();
-            if (text) return this.createPlsqlLiteral(text);
             return `:${this.toBindVariableName(row?.itemName || "")}`;
         },
 
@@ -1851,7 +2034,7 @@ END;`;
                 return;
             }
             const sql = executable.sql;
-            const runtimeBindValues = await this.collectRuntimeBindValues(sql, { useParameterDefaults: false });
+            const runtimeBindValues = await this.collectRuntimeBindValues(sql, this.getWorksheetRuntimeBindOptions(gridKey));
             if (runtimeBindValues === null) {
                 this.renderSqlMessage(gridKey, "SQL execution canceled.", "info");
                 this.restoreSqlSelection(editorSelector, executable);
@@ -1875,7 +2058,7 @@ END;`;
                 this.renderSqlMessage(gridKey, "No SQL text to execute.", "error");
                 return;
             }
-            const runtimeBindValues = await this.collectRuntimeBindValues(sql, { useParameterDefaults: false });
+            const runtimeBindValues = await this.collectRuntimeBindValues(sql, this.getWorksheetRuntimeBindOptions(gridKey));
             if (runtimeBindValues === null) {
                 this.renderSqlMessage(gridKey, "SQL execution canceled.", "info");
                 return;
@@ -1886,6 +2069,17 @@ END;`;
             }
             await this.runWorksheetSql(sql, gridSelector, gridKey, runtimeBindValues);
             editor?.focus();
+        },
+
+        getWorksheetRuntimeBindOptions(gridKey) {
+            if (gridKey !== "sql") {
+                return { useParameterDefaults: false, useSystemBindContext: false };
+            }
+            const hasJob = this.hasUserSqlJobContext();
+            return {
+                useParameterDefaults: hasJob,
+                useSystemBindContext: hasJob
+            };
         },
 
         async runWorksheetSql(sql, gridSelector, gridKey, runtimeBindValues = null) {
@@ -1937,7 +2131,7 @@ END;`;
 
             const baseName = this.createSqlExportFileName();
             if (format === "excel") {
-                this.downloadBlob(`${baseName}.xls`, this.createExcelContent(rows, grid.columns), "application/vnd.ms-excel;charset=utf-8");
+                DataEditingSystem.downloadXLSX(rows, `${baseName}.xlsx`, grid.columns);
                 return;
             }
             if (format === "csv") {
@@ -2039,7 +2233,7 @@ END;`;
                 alert(json.message || "SQL result table was created.");
                 this.currentJob.resultOwner = json.resultOwner || resultOwner;
                 this.currentJob.resultTableName = json.tableName || targetTable;
-                this.currentJob.resultCreateYn = "Y";
+                this.currentJob.resultCreateYn = "T";
                 this.currentJob.status = "RESULT_SAVED";
                 this.renderCurrentJob();
                 this.setResultTableSql();
@@ -2049,7 +2243,7 @@ END;`;
             }
         },
 
-        setDefaultUserSql(force = false) {
+        async setDefaultUserSql(force = false) {
             const editor = getContainerEl(`#sqlEditor-${PAGE_CODE}`);
             if (!editor) return;
             const currentValue = editor.value || "";
@@ -2059,7 +2253,7 @@ END;`;
                 || (force && !this.userSqlDirty);
             if (!canReplace) return;
 
-            const sql = this.createDefaultUserSql();
+            const sql = await this.createDefaultUserSql();
             if (!sql) return;
             editor.value = sql;
             this.systemUserSqlValue = sql;
@@ -2072,27 +2266,62 @@ END;`;
             this.userSqlDirty = Boolean(value.trim()) && value !== this.systemUserSqlValue;
         },
 
-        createDefaultUserSql() {
+        async createDefaultUserSql() {
             const job = this.currentJob || {};
-            const useResultTable = String(job.resultCreateYn || "").toUpperCase() === "Y"
+            const useResultObject = this.isResultObjectMode(job.resultCreateYn)
                 && job.resultOwner
                 && job.resultTableName;
-            const ownerName = useResultTable ? job.resultOwner : job.ownerName;
-            const tableName = useResultTable ? job.resultTableName : job.tableName;
+            if (useResultObject && this.isResultModelMode(job.resultCreateYn)) {
+                return this.fetchModelDetailSql(job.resultTableName, job.resultOwner);
+            }
+            const ownerName = useResultObject ? job.resultOwner : job.ownerName;
+            const tableName = useResultObject ? job.resultTableName : job.tableName;
             return ownerName && tableName
                 ? `SELECT *\n  FROM ${this.quoteName(ownerName)}.${this.quoteName(tableName)};`
                 : "";
         },
 
+        async fetchModelDetailSql(modelName, ownerName = "") {
+            const model = String(modelName || "").trim().toUpperCase();
+            const owner = String(ownerName || "").trim().toUpperCase();
+            if (!model || !owner) return "";
+            try {
+                const params = new URLSearchParams({ owner, modelName: model });
+                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/model-detail-sql?${params.toString()}`, {
+                    method: "GET",
+                    showLoading: false
+                });
+                return json?.data?.sql || this.createModelDetailSql(model, owner);
+            } catch (error) {
+                return this.createModelDetailSql(model, owner);
+            }
+        },
+
+        createModelDetailSql(modelName, ownerName = "") {
+            const model = String(modelName || "").trim().toUpperCase();
+            if (!model) return "";
+            const owner = String(ownerName || "").trim().toUpperCase();
+            return [
+                "-- Model detail views depend on the Oracle ML mining function and generated objects.",
+                `-- Model: ${owner ? `${owner}.` : ""}${model}`,
+                "-- Existing DM$ detail view SELECT statements could not be loaded yet.",
+                "-- Open the model in M90001 or reload this job after model creation."
+            ].join("\n");
+        },
+
         setResultTableSql() {
             const tableName = getContainerEl(`#resultQueryTable-${PAGE_CODE}`)?.value.trim() || getContainerEl(`#resultTable-${PAGE_CODE}`)?.value.trim();
             const ownerName = getContainerEl(`#resultOwner-${PAGE_CODE}`)?.value.trim();
-            this.setEditorValue(`#resultSqlEditor-${PAGE_CODE}`, this.createResultSql(tableName, ownerName));
+            const createMode = this.normalizeResultCreateMode(getContainerEl(`#resultCreateYn-${PAGE_CODE}`)?.value || this.currentJob?.resultCreateYn || "N");
+            this.setEditorValue(`#resultSqlEditor-${PAGE_CODE}`, this.createResultSql(tableName, ownerName, createMode));
         },
 
-        createResultSql(tableName, ownerName = "") {
+        createResultSql(tableName, ownerName = "", resultCreateYn = "N") {
             const table = String(tableName || "").trim();
             const owner = String(ownerName || "").trim();
+            if (this.isResultModelMode(resultCreateYn)) {
+                return this.createModelDetailSql(table, owner);
+            }
             const objectName = owner ? `${this.quoteName(owner)}.${this.quoteName(table)}` : this.quoteName(table);
             return table ? `SELECT *\n  FROM ${objectName};` : "";
         },
@@ -2146,8 +2375,28 @@ END;`;
             }
 
             while (start < end && /\s/.test(value[start])) start += 1;
+            start = this.skipLeadingSqlComments(value, start, end);
             while (end > start && /\s/.test(value[end - 1])) end -= 1;
             return { selectionStart: start, selectionEnd: end };
+        },
+
+        skipLeadingSqlComments(value, start, end) {
+            let nextStart = start;
+            while (nextStart < end) {
+                while (nextStart < end && /\s/.test(value[nextStart])) nextStart += 1;
+                if (value.startsWith("--", nextStart)) {
+                    const lineEnd = value.indexOf("\n", nextStart + 2);
+                    nextStart = lineEnd < 0 || lineEnd > end ? end : lineEnd + 1;
+                    continue;
+                }
+                if (value.startsWith("/*", nextStart)) {
+                    const commentEnd = value.indexOf("*/", nextStart + 2);
+                    nextStart = commentEnd < 0 || commentEnd + 2 > end ? end : commentEnd + 2;
+                    continue;
+                }
+                break;
+            }
+            return nextStart;
         },
 
         restoreSqlSelection(selector, selection) {

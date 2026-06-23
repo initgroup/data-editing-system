@@ -242,7 +242,8 @@ def _get_target_summary(request: Request, user_id: int, connection_id: int | Non
                     "label": row[0],
                     "menuCode": row[1],
                     "menuLabel": row[2],
-                    "count": int(row[3] or 0),
+                    "statusGroup": row[3] or "SUCCESS",
+                    "count": int(row[4] or 0),
                 }
                 for row in cursor.fetchall()
             ]

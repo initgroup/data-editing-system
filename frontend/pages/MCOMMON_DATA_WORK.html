@@ -1,15 +1,15 @@
 <div class="page-container table-page data-work-page" id="container-__PAGE_CODE__">
     <section class="work-context-card" aria-label="Project and scenario context">
-        <header class="work-context-header">
+        <header class="work-context-header" onclick="__PAGE_CODE__.toggleWorkContextFromHeader(event)" role="button" tabindex="0" onkeydown="__PAGE_CODE__.handleWorkContextHeaderKeydown(event)">
             <div class="work-context-title-row">
                 <span><strong data-label-key="contextHeader">Project Scenario</strong> <span data-label-key="contextHeaderDesc">Select the required project and scenario for this menu.</span></span>
                 <span><strong data-label-key="tableHeader">Scenario Tables</strong> <span data-label-key="tableHeaderDesc">Tables registered to the selected scenario.</span></span>
                 <span id="workContextSummary-__PAGE_CODE__" class="work-context-summary" data-label-key="contextSummaryEmpty">No context selected.</span>
             </div>
             <div class="scenario-table-actions">
-                <button type="button" id="workContextToggle-__PAGE_CODE__" class="table-btn work-context-toggle" onclick="__PAGE_CODE__.toggleWorkContext()" aria-expanded="true">
+                <button type="button" id="workContextToggle-__PAGE_CODE__" class="table-btn work-context-toggle" onclick="__PAGE_CODE__.toggleWorkContext(event)" aria-expanded="true">
                     <i class="fas fa-chevron-up"></i>
-                    <span data-label-key="changeContext">Change</span>
+                    <span data-label-key="hideContext">Hide</span>
                 </button>
                 <button type="button" class="table-icon-btn" title="Refresh project and scenario" data-title-key="refreshContextTitle" onclick="__PAGE_CODE__.refreshWorkContext()">
                     <i class="fas fa-sync-alt"></i>
@@ -83,7 +83,7 @@
                         <p class="table-desc" id="workDescription-__PAGE_CODE__" data-label-key="workDescriptionEmpty">Select a scenario table and registered correlation analysis object.</p>
                     </div>
                     <div class="table-export-actions">
-                        <button type="button" class="table-btn" onclick="__PAGE_CODE__.saveJob()">
+                        <button type="button" id="saveJob-__PAGE_CODE__" class="table-btn" onclick="__PAGE_CODE__.saveJob()">
                             <i class="fas fa-save"></i>
                             <span data-label-key="saveWork">Save work</span>
                         </button>
@@ -166,8 +166,9 @@
                         <label class="data-result-create-field">
                             <span data-label-key="resultTableCreate">Result Table Create</span>
                             <select id="resultCreateYn-__PAGE_CODE__" class="env-field" onchange="__PAGE_CODE__.handleResultCreateChange(this.value)">
-                                <option value="N">N</option>
-                                <option value="Y">Y</option>
+                                <option value="N">N (사용안함)</option>
+                                <option value="T">T (테이블사용)</option>
+                                <option value="M">M (모델사용)</option>
                             </select>
                         </label>
                         <label class="data-result-owner-field">
@@ -227,11 +228,11 @@
                     <li><strong>바인드 변수명 규칙</strong>: Parameter 명칭을 camelCase로 변환해 사용합니다. 예: <code>ABC_DEF</code> -> <code>:abcDef</code>, <code>P_MODEL_NAME</code> -> <code>:pModelName</code>.</li>
                     <li><strong>작성 방법</strong>: PL/SQL에서는 바인드 변수 앞에 콜론을 붙입니다. 예: <code>P_MODEL_NAME =&gt; :pModelName</code>.</li>
                     <li><strong>동적 문자열 치환</strong>: <code>/* --DYNAMIC_MODEL_NAME-- */</code>처럼 작성하면 <code>/* --</code>와 <code>-- */</code> 사이의 이름이 Parameter 명칭과 완전히 같을 때 해당 값이 문자열 그대로 치환됩니다.</li>
-                    <li><strong>현재 Job 예약 변수</strong>: <code>:_TargetOwner</code>, <code>:_TargetTable</code>, <code>:_ResultOwner</code>, <code>:_ResultTable</code>은 실행 시 현재 Job/Node의 Target/Result owner/table 값으로 자동 전달됩니다.</li>
-                    <li><strong>Flow 선행 Node 예약 변수</strong>: M04001 Flow 실행에서는 <code>:_preTargetOwner</code>, <code>:_preTargetTable</code>, <code>:_preResultOwner</code>, <code>:_preResultTable</code>을 사용할 수 있습니다. 연결된 선행 Node의 Target/Result owner/table 값이 자동 전달됩니다.</li>
-                    <li><strong>Generate PL/SQL</strong>: Parameter 기본값이 있으면 기본값을 스크립트에 직접 채우고, 기본값이 없으면 위 규칙의 바인드 변수로 생성합니다. 예약 변수는 필요한 위치에 직접 입력해 사용합니다.</li>
-                    <li><strong>Run now / Queue Batch</strong>: 실행 시 Parameter List 값과 Runtime Bind 값을 처리하고, 시스템 예약 변수는 실제 Job/Node 정보로 자동 덮어쓴 뒤 실행합니다.</li>
-                    <li><strong>예시</strong>: <code>P_OWNER =&gt; :_preResultOwner</code>, <code>P_TABLE =&gt; :_preResultTable</code>, <code>P_RESULT_OWNER =&gt; :_ResultOwner</code>, <code>P_RESULT_TABLE =&gt; :_ResultTable</code></li>
+                    <li><strong>현재 Job 예약 변수</strong>: <code>:INIT$TargetOwner</code>, <code>:INIT$TargetTable</code>, <code>:INIT$ResultOwner</code>, <code>:INIT$ResultTable</code>은 실행 시 현재 Job/Node의 Target/Result owner/table 값으로 자동 전달됩니다.</li>
+                    <li><strong>Flow 선행 Node 예약 변수</strong>: M04001 Flow 실행에서는 <code>:INIT$PreTargetOwner</code>, <code>:INIT$PreTargetTable</code>, <code>:INIT$PreResultOwner</code>, <code>:INIT$PreResultTable</code>을 사용할 수 있습니다. 연결된 선행 Node의 Target/Result owner/table 값이 자동 전달됩니다.</li>
+                    <li><strong>Generate PL/SQL</strong>: Parameter 기본값이 있어도 스크립트에는 위 규칙의 바인드 변수로 생성합니다. 기본값과 예약 변수 값은 실행 직전 Runtime Bind 값으로 확인하고 수정할 수 있습니다.</li>
+                    <li><strong>Run now / Queue Batch</strong>: 실행 시 Parameter List 기본값과 Runtime Bind 값을 처리하고, 시스템 예약 변수는 실제 Job/Node 정보로 자동 덮어쓴 뒤 실행합니다.</li>
+                    <li><strong>예시</strong>: <code>P_OWNER =&gt; :INIT$PreResultOwner</code>, <code>P_TABLE =&gt; :INIT$PreResultTable</code>, <code>P_RESULT_OWNER =&gt; :INIT$ResultOwner</code>, <code>P_RESULT_TABLE =&gt; :INIT$ResultTable</code></li>
                 </ul>
             </div>
             <footer>
@@ -249,7 +250,7 @@
                 </button>
             </header>
             <div class="data-help-content">
-                <p>Parameter List에 없는 바인드 변수가 스크립트에서 발견되었습니다. 실행에 사용할 값을 입력하세요.</p>
+                <p>실행에 사용할 런타임 바인드 값을 확인하세요. 기본값과 예약 변수 값은 미리 채워지며 필요하면 수정할 수 있습니다.</p>
                 <div id="runtimeBindGrid-__PAGE_CODE__" class="data-bind-grid"></div>
             </div>
             <footer>
@@ -284,20 +285,23 @@
                     <input id="sqlLimit-__PAGE_CODE__" type="number" min="1" max="1000" value="100">
                 </label>
             </div>
+            <div id="userSqlJobContext-__PAGE_CODE__" class="data-user-sql-context"></div>
             <textarea id="sqlEditor-__PAGE_CODE__" class="sql-editor data-sql-editor" spellcheck="false" aria-label="User SQL worksheet"></textarea>
-            <div id="sqlMessage-__PAGE_CODE__" class="table-empty" aria-live="polite" hidden></div>
-            <div id="sqlGrid-__PAGE_CODE__" class="table-result-grid"></div>
-            <div class="table-export-actions data-sql-export-actions" aria-label="Export User SQL result">
-                <button type="button" class="table-icon-btn export-excel" title="Export Excel" onclick="__PAGE_CODE__.exportSqlGrid('excel')">
-                    <i class="fas fa-file-excel"></i>
-                </button>
-                <button type="button" class="table-icon-btn" title="Export CSV" onclick="__PAGE_CODE__.exportSqlGrid('csv')">
-                    <i class="fas fa-file-csv"></i>
-                </button>
-                <button type="button" class="table-icon-btn" title="Export TSV" onclick="__PAGE_CODE__.exportSqlGrid('tsv')">
-                    <i class="fas fa-file-lines"></i>
-                </button>
+            <div class="data-sql-result-header">
+                <div id="sqlMessage-__PAGE_CODE__" class="table-empty" aria-live="polite" hidden></div>
+                <div class="table-export-actions data-sql-export-actions" aria-label="Export User SQL result">
+                    <button type="button" class="table-icon-btn export-excel" title="Export Excel" onclick="__PAGE_CODE__.exportSqlGrid('excel')">
+                        <i class="fas fa-file-excel"></i>
+                    </button>
+                    <button type="button" class="table-icon-btn" title="Export CSV" onclick="__PAGE_CODE__.exportSqlGrid('csv')">
+                        <i class="fas fa-file-csv"></i>
+                    </button>
+                    <button type="button" class="table-icon-btn" title="Export TSV" onclick="__PAGE_CODE__.exportSqlGrid('tsv')">
+                        <i class="fas fa-file-lines"></i>
+                    </button>
+                </div>
             </div>
+            <div id="sqlGrid-__PAGE_CODE__" class="table-result-grid"></div>
         </div>
     </section>
 

@@ -2,13 +2,18 @@
 -- [M02002_TABLE_TREE]
 SELECT
     OWNER,
-    TABLE_NAME
+    TABLE_NAME,
+    COMMENTS
   FROM (
     SELECT
         T.OWNER,
         T.TABLE_NAME,
+        C.COMMENTS,
         ROW_NUMBER() OVER (ORDER BY T.OWNER, T.TABLE_NAME) AS RN
       FROM ALL_TABLES T
+      LEFT JOIN ALL_TAB_COMMENTS C
+        ON C.OWNER = T.OWNER
+       AND C.TABLE_NAME = T.TABLE_NAME
      WHERE T.NESTED = 'NO'
        AND T.SECONDARY = 'N'
        AND T.TABLE_NAME NOT LIKE 'BIN$%'
@@ -22,6 +27,7 @@ SELECT
               :keyword IS NULL
            OR UPPER(T.OWNER) LIKE :keyword
            OR UPPER(T.TABLE_NAME) LIKE :keyword
+           OR UPPER(C.COMMENTS) LIKE :keyword
        )
   )
  WHERE RN > :offset

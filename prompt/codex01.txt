@@ -37,6 +37,20 @@ git push origin main
 
 
 
+# 현재 브랜치 확인은:
+git branch
+
+# 원격과 로컬 커밋 차이 확인:
+git fetch
+git status
+
+# 원격 Git에 올라간 최신 상태로 내 작업 폴더를 강제로 되돌리려면:
+git fetch
+git reset --hard origin/main
+
+# 브랜치가 master면:
+git fetch
+git reset --hard origin/master
 =====================================================================
 # Git에 올라갈 소스만 백업됨
 ---------------------------------------------------------------------

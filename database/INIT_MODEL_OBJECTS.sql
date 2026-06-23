@@ -34,7 +34,7 @@ SET SERVEROUTPUT ON;
 --   /
 
 DECLARE
-    v_version CONSTANT VARCHAR2(50) := '1.0.6';
+    v_version CONSTANT VARCHAR2(50) := '1.0.7';
 BEGIN
     DBMS_OUTPUT.PUT_LINE('=== INIT MODEL OBJECTS DEPLOY START ===');
     DBMS_OUTPUT.PUT_LINE('[INFO] Bundle version: ' || v_version);
@@ -233,9 +233,9 @@ END "INIT$_PKG_OML_SCRIPT";
 /
 
 CREATE OR REPLACE PROCEDURE "INIT$_SP_APRIORI_ASSOC_MODEL" (
-    p_model_name          IN VARCHAR2 DEFAULT 'TB_DATA002_SURVEY_ASSOC_MODEL',
-    p_data_query          IN VARCHAR2 DEFAULT 'SELECT * FROM TB_DATA002',
-    p_case_id_column_name IN VARCHAR2 DEFAULT 'RNUM',
+    p_model_name          IN VARCHAR2,
+    p_data_query          IN VARCHAR2,
+    p_case_id_column_name IN VARCHAR2,
     p_min_support         IN NUMBER   DEFAULT 0.1,
     p_min_confidence      IN NUMBER   DEFAULT 0.6,
     p_max_rule_length     IN NUMBER   DEFAULT 4,
@@ -508,11 +508,15 @@ BEGIN
         RAISE_APPLICATION_ERROR(-20102, 'Invalid tableName parameter.');
     END IF;
 
-    DELETE FROM "INIT$_TB_CAT_CORR_SUMMARY"
+    EXECUTE IMMEDIATE 'ALTER SESSION DISABLE PARALLEL DML';
+
+    DELETE /*+ NO_PARALLEL */
+      FROM "INIT$_TB_CAT_CORR_SUMMARY"
      WHERE "OWNER" = v_owner
        AND "TABLE_NAME" = v_table_name;
 
-    DELETE FROM "INIT$_TB_CAT_CORR_PAIR"
+    DELETE /*+ NO_PARALLEL */
+      FROM "INIT$_TB_CAT_CORR_PAIR"
      WHERE "OWNER" = v_owner
        AND "TABLE_NAME" = v_table_name;
 
@@ -632,7 +636,7 @@ SELECT TOT.TOTAL_CNT,
                              ELSE 'N'
                          END;
 
-            INSERT INTO "INIT$_TB_CAT_CORR_PAIR" (
+            INSERT /*+ NO_PARALLEL */ INTO "INIT$_TB_CAT_CORR_PAIR" (
                 "OWNER",
                 "TABLE_NAME",
                 "COL_A",
@@ -660,7 +664,7 @@ SELECT TOT.TOTAL_CNT,
         END LOOP;
     END LOOP;
 
-    INSERT INTO "INIT$_TB_CAT_CORR_SUMMARY" (
+    INSERT /*+ NO_PARALLEL */ INTO "INIT$_TB_CAT_CORR_SUMMARY" (
         "OWNER",
         "TABLE_NAME",
         "COLUMN_NAME",
@@ -715,7 +719,7 @@ END;
 CREATE OR REPLACE PROCEDURE "INIT$_SP_PREDICTED_TYPE" (
     p_owner              IN VARCHAR2,
     p_tableName          IN VARCHAR2,
-    p_dynamic_model_name IN VARCHAR2
+    p_dynamic_model_name IN VARCHAR2 DEFAULT 'OML_DECISION_TREE_MODEL_01'
 ) AUTHID CURRENT_USER IS
     v_owner      VARCHAR2(128);
     v_table_name VARCHAR2(128);
@@ -734,12 +738,16 @@ BEGIN
         RAISE_APPLICATION_ERROR(-20002, 'Invalid tableName parameter.');
     END IF;
 
-    DELETE FROM "INIT$_TB_PREDICTED_TYPE"
+    EXECUTE IMMEDIATE 'ALTER SESSION DISABLE PARALLEL DML';
+
+    DELETE /*+ NO_PARALLEL */
+      FROM "INIT$_TB_PREDICTED_TYPE"
      WHERE "OWNER" = v_owner
-       AND "TABLE_NAME" = v_table_name;
+       AND "TABLE_NAME" = v_table_name
+       AND "MODEL_NAME" = v_model_name;
 
     v_sql := q'~
-INSERT INTO "INIT$_TB_PREDICTED_TYPE" (
+INSERT /*+ NO_PARALLEL */ INTO "INIT$_TB_PREDICTED_TYPE" (
     "OWNER",
     "TABLE_NAME",
     "MODEL_NAME",

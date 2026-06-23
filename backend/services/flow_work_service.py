@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from typing import Any, Dict, List, Optional
 import json
 import re
+import time
 
 from backend.database_helper import execute_query, SqlLoader
 from backend.services import data_work_service as data_work
@@ -21,6 +22,11 @@ class FlowWorkDmlError(Exception):
         self.step = step
         self.original = original
         super().__init__(f"{step}: {original}")
+
+
+def is_oracle_lock_error(error: Exception) -> bool:
+    text = str(error)
+    return any(code in text for code in ("ORA-00054", "ORA-00060", "ORA-12860"))
 
 
 class FlowNodeRequest(BaseModel):
@@ -258,10 +264,19 @@ def replace_flow_graph(cursor, flow_id: int, nodes: List[Dict[str, Any]], edges:
 
 
 def execute_flow_dml(cursor, step: str, sql_id: str, params: Dict[str, Any]):
-    try:
-        cursor.execute(SqlLoader.get_sql(sql_id), params)
-    except Exception as e:
-        raise FlowWorkDmlError(step, e) from e
+    last_error = None
+    for attempt in range(3):
+        try:
+            cursor.execute(SqlLoader.get_sql(sql_id), params)
+            return
+        except Exception as e:
+            last_error = e
+            if attempt < 2 and is_oracle_lock_error(e):
+                time.sleep(0.35 * (attempt + 1))
+                continue
+            raise FlowWorkDmlError(step, e) from e
+    if last_error:
+        raise FlowWorkDmlError(step, last_error) from last_error
 
 
 def list_runs(conn, menu_code: str, project_id: int, scenario_id: int, flow_id: Optional[int] = None) -> Dict[str, Any]:
@@ -289,14 +304,14 @@ def list_node_runs(conn, flow_run_id: int) -> Dict[str, Any]:
 def create_run(conn, flow_id: int, run_type: str, status: str, message: str, plan: Dict[str, Any]) -> int:
     cursor = conn.cursor()
     try:
-        cursor.execute(SqlLoader.get_sql("FLOW_WORK_RUN_INSERT"), {
+        execute_flow_dml(cursor, "FLOW_WORK_RUN_INSERT", "FLOW_WORK_RUN_INSERT", {
             "flowId": flow_id,
             "runType": normalize_status(run_type, "MANUAL"),
             "status": normalize_status(status, "STARTED"),
             "message": normalize_text(message, "", 4000),
             "planJson": json.dumps(plan or {}, ensure_ascii=False)
         })
-        cursor.execute(SqlLoader.get_sql("FLOW_WORK_RUN_ID_LATEST"), {"flowId": flow_id})
+        execute_flow_dml(cursor, "FLOW_WORK_RUN_ID_LATEST", "FLOW_WORK_RUN_ID_LATEST", {"flowId": flow_id})
         row = cursor.fetchone()
         return int(row[0]) if row and row[0] else 0
     finally:
@@ -307,7 +322,7 @@ def create_node_run_records(conn, flow_run_id: int, flow_id: int, plan: List[Dic
     cursor = conn.cursor()
     try:
         for index, step in enumerate(plan or [], start=1):
-            cursor.execute(SqlLoader.get_sql("FLOW_WORK_NODE_RUN_INSERT"), {
+            execute_flow_dml(cursor, f"FLOW_WORK_NODE_RUN_INSERT[{index}]", "FLOW_WORK_NODE_RUN_INSERT", {
                 "flowRunId": flow_run_id,
                 "flowId": flow_id,
                 "nodeKey": step.get("nodeKey"),
@@ -327,9 +342,22 @@ def create_node_run_records(conn, flow_run_id: int, flow_id: int, plan: List[Dic
 def update_node_run_runtime_params(conn, flow_run_id: int, node_key: str, runtime_values: Dict[str, Any]):
     cursor = conn.cursor()
     try:
-        cursor.execute(SqlLoader.get_sql("FLOW_WORK_NODE_RUN_UPDATE_RUNTIME_PARAMS"), {
+        execute_flow_dml(cursor, f"FLOW_WORK_NODE_RUN_UPDATE_RUNTIME_PARAMS[{node_key}]", "FLOW_WORK_NODE_RUN_UPDATE_RUNTIME_PARAMS", {
             "flowRunId": flow_run_id,
             "nodeKey": node_key,
+            "runtimeParamJson": json.dumps(runtime_values or {}, ensure_ascii=False)
+        })
+    finally:
+        cursor.close()
+
+
+def start_node_run_by_key(conn, flow_run_id: int, node_key: str, runtime_values: Dict[str, Any]):
+    cursor = conn.cursor()
+    try:
+        execute_flow_dml(cursor, f"FLOW_WORK_NODE_RUN_START_BY_KEY[{node_key}:RUNNING]", "FLOW_WORK_NODE_RUN_START_BY_KEY", {
+            "flowRunId": flow_run_id,
+            "nodeKey": node_key,
+            "message": "Node execution started.",
             "runtimeParamJson": json.dumps(runtime_values or {}, ensure_ascii=False)
         })
     finally:
@@ -347,7 +375,7 @@ def update_node_run_by_key(
 ):
     cursor = conn.cursor()
     try:
-        cursor.execute(SqlLoader.get_sql("FLOW_WORK_NODE_RUN_UPDATE_BY_KEY"), {
+        execute_flow_dml(cursor, f"FLOW_WORK_NODE_RUN_UPDATE_BY_KEY[{node_key}:{status}]", "FLOW_WORK_NODE_RUN_UPDATE_BY_KEY", {
             "flowRunId": flow_run_id,
             "nodeKey": node_key,
             "status": normalize_status(status, "PENDING"),
@@ -362,7 +390,7 @@ def update_node_run_by_key(
 def update_run(conn, flow_run_id: int, status: str, message: str, plan: Dict[str, Any]):
     cursor = conn.cursor()
     try:
-        cursor.execute(SqlLoader.get_sql("FLOW_WORK_RUN_UPDATE"), {
+        execute_flow_dml(cursor, f"FLOW_WORK_RUN_UPDATE[{status}]", "FLOW_WORK_RUN_UPDATE", {
             "flowRunId": flow_run_id,
             "status": normalize_status(status, "SUCCESS"),
             "message": normalize_text(message, "", 4000),
@@ -384,8 +412,7 @@ def execute_flow_plan(conn, flow_run_id: int, plan: List[Dict[str, Any]]) -> Dic
         node_name = step.get("nodeName") or node_key
         step_result = {**step}
         runtime_values = create_runtime_values(step, node_outputs)
-        update_node_run_runtime_params(conn, flow_run_id, node_key, runtime_values)
-        update_node_run_by_key(conn, flow_run_id, node_key, "RUNNING", "Node execution started.", True, False)
+        start_node_run_by_key(conn, flow_run_id, node_key, runtime_values)
         conn.commit()
         try:
             node_result = execute_flow_node(conn, step, runtime_values)
@@ -420,9 +447,15 @@ def execute_flow_plan(conn, flow_run_id: int, plan: List[Dict[str, Any]]) -> Dic
                 True
             )
         conn.commit()
+        failed_step = enriched_plan[-1] if enriched_plan else {}
+        failed_name = failed_step.get("nodeName") or failed_step.get("nodeKey") or "Unknown node"
+        failed_message = normalize_text(failed_step.get("message") or "", "", 1000)
         return {
             "status": "FAILED",
-            "message": f"Flow execution failed. {executed} node(s) succeeded, {failed} failed, {skipped} skipped.",
+            "message": (
+                f"Flow execution failed. {executed} node(s) succeeded, {failed} failed, {skipped} skipped. "
+                f"First failed node: {failed_name}. {failed_message}"
+            ).strip(),
             "plan": enriched_plan
         }
 
@@ -490,7 +523,7 @@ def create_runtime_values(step: Dict[str, Any], node_outputs: Optional[Dict[str,
         if not isinstance(item, dict):
             continue
         key = item.get("itemName") or item.get("ITEM_NAME") or item.get("name") or item.get("key")
-        value = item.get("itemValue", item.get("ITEM_VALUE", item.get("value", item.get("itemDefault", item.get("ITEM_DEFAULT")))))
+        value = get_flow_param_runtime_value(item)
         if key:
             values[str(key)] = value
     apply_upstream_result_mappings(values, step, node_outputs or {})
@@ -498,18 +531,30 @@ def create_runtime_values(step: Dict[str, Any], node_outputs: Optional[Dict[str,
     return values
 
 
+def get_flow_param_runtime_value(item: Dict[str, Any]) -> Any:
+    if "value" in item and normalize_bind_value(item.get("value")) is not None:
+        return item.get("value")
+    if "VALUE" in item and normalize_bind_value(item.get("VALUE")) is not None:
+        return item.get("VALUE")
+    if "itemDefault" in item and normalize_bind_value(item.get("itemDefault")) is not None:
+        return item.get("itemDefault")
+    if "ITEM_DEFAULT" in item and normalize_bind_value(item.get("ITEM_DEFAULT")) is not None:
+        return item.get("ITEM_DEFAULT")
+    return item.get("value", item.get("VALUE", item.get("itemDefault", item.get("ITEM_DEFAULT"))))
+
+
 def build_step_system_bind_values(step: Dict[str, Any], node_outputs: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
     current = build_node_output(step, {})
     previous = find_previous_node_output(step, node_outputs)
     return {
-        "_TargetOwner": current.get("targetOwner") or "",
-        "_TargetTable": current.get("targetTable") or "",
-        "_ResultOwner": current.get("resultOwner") or "",
-        "_ResultTable": current.get("resultTableName") or "",
-        "_preTargetOwner": previous.get("targetOwner") or "",
-        "_preTargetTable": previous.get("targetTable") or "",
-        "_preResultOwner": previous.get("resultOwner") or "",
-        "_preResultTable": previous.get("resultTableName") or ""
+        "INIT$TargetOwner": current.get("targetOwner") or "",
+        "INIT$TargetTable": current.get("targetTable") or "",
+        "INIT$ResultOwner": current.get("resultOwner") or "",
+        "INIT$ResultTable": current.get("resultTableName") or "",
+        "INIT$PreTargetOwner": previous.get("targetOwner") or "",
+        "INIT$PreTargetTable": previous.get("targetTable") or "",
+        "INIT$PreResultOwner": previous.get("resultOwner") or "",
+        "INIT$PreResultTable": previous.get("resultTableName") or ""
     }
 
 
@@ -541,6 +586,8 @@ def apply_upstream_result_mappings(values: Dict[str, Any], step: Dict[str, Any],
         source = node_outputs.get(str(source_key or ""), {})
         if not source:
             source = build_node_output({"nodePayload": edge.get("fromNodePayload") or {}}, {})
+        if data_work.normalize_result_create_mode(source.get("resultCreateYn")) != "T":
+            continue
         if not source.get("resultOwner") or not source.get("resultTableName"):
             continue
         bind_to = params.get("bindTo") if isinstance(params.get("bindTo"), dict) else {}
@@ -562,6 +609,7 @@ def build_node_output(step: Dict[str, Any], job: Dict[str, Any]) -> Dict[str, An
     payload = step.get("nodePayload") or {}
     target_owner = payload.get("ownerName") or job.get("OWNER_NAME")
     target_table = payload.get("tableName") or job.get("TABLE_NAME")
+    result_create_yn = data_work.normalize_result_create_mode(payload.get("resultCreateYn") or job.get("RESULT_CREATE_YN"))
     result_owner = payload.get("resultOwner") or job.get("RESULT_OWNER") or payload.get("ownerName") or job.get("OWNER_NAME")
     result_table = payload.get("resultTableName") or job.get("RESULT_TABLE_NAME") or payload.get("tableName") or job.get("TABLE_NAME")
     target_owner = str(target_owner or "").strip().upper()
@@ -571,6 +619,7 @@ def build_node_output(step: Dict[str, Any], job: Dict[str, Any]) -> Dict[str, An
     output = {
         "targetOwner": target_owner,
         "targetTable": target_table,
+        "resultCreateYn": result_create_yn,
         "resultOwner": result_owner,
         "resultTableName": result_table,
         "resultTable": result_table,
@@ -616,10 +665,14 @@ def prepare_saved_job_script(script_text: str, job: Dict[str, Any], runtime_bind
         for param_name, value in param_values.items()
     }
     for runtime_name, runtime_value in runtime_values.items():
-        bind_values_by_name[str(runtime_name)] = runtime_value
+        runtime_bind_names = [str(runtime_name)]
         if "_" in str(runtime_name):
-            bind_values_by_name[to_bind_variable_name(str(runtime_name))] = runtime_value
-    used_bind_names = set(re.findall(r"(?<!:):([A-Za-z_][A-Za-z0-9_]*)", mask_sql_for_bind_scan(prepared_text)))
+            runtime_bind_names.append(to_bind_variable_name(str(runtime_name)))
+        for bind_name in runtime_bind_names:
+            if normalize_bind_value(runtime_value) is None and normalize_bind_value(bind_values_by_name.get(bind_name)) is not None:
+                continue
+            bind_values_by_name[bind_name] = runtime_value
+    used_bind_names = set(re.findall(r"(?<!:):([A-Za-z][A-Za-z0-9_$#]*)", mask_sql_for_bind_scan(prepared_text)))
     bind_values = {
         bind_name: normalize_bind_value(bind_values_by_name.get(bind_name))
         for bind_name in used_bind_names
@@ -805,7 +858,7 @@ def normalize_node(node: FlowNodeRequest, sort_order: int) -> Dict[str, Any]:
         "refObjectId": int(node.refObjectId) if node.refObjectId else None,
         "ownerName": normalize_optional_identifier(node.ownerName),
         "tableName": normalize_optional_identifier(node.tableName),
-        "resultCreateYn": str(getattr(node, "resultCreateYn", "") or "").upper() or "N",
+        "resultCreateYn": data_work.normalize_result_create_mode(getattr(node, "resultCreateYn", None)),
         "resultOwner": normalize_optional_identifier(getattr(node, "resultOwner", None)),
         "resultTableName": normalize_optional_identifier(getattr(node, "resultTableName", None)),
         "positionLeft": round_number(node.positionLeft),

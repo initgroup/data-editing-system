@@ -99,13 +99,13 @@ def save_job(
         raise HTTPException(status_code=400, detail="jobName is required.")
     job_desc = normalize_text(req.jobDesc, "", 1000)
 
-    result_create_yn = "Y" if str(req.resultCreateYn or "N").upper() == "Y" else "N"
+    result_create_yn = normalize_result_create_mode(req.resultCreateYn)
     result_owner = normalize_optional_identifier(req.resultOwner)
     result_table_name = normalize_optional_identifier(req.resultTableName)
-    if result_create_yn == "Y" and (not result_owner or not result_table_name):
+    if result_create_yn != "N" and (not result_owner or not result_table_name):
         raise HTTPException(
             status_code=400,
-            detail="resultOwner and resultTableName are required when resultCreateYn is Y."
+            detail="resultOwner and resultTableName are required when resultCreateYn is T or M."
         )
 
     exec_source_type = normalize_exec_source_type(req.execSourceType)
@@ -395,6 +395,13 @@ def normalize_text(value: Any, default: str = "", max_length: int = 4000) -> str
 def normalize_status(value: Any) -> str:
     text = str(value or "DRAFT").strip().upper()
     return re.sub(r"[^A-Z0-9_]", "_", text)[:30] or "DRAFT"
+
+
+def normalize_result_create_mode(value: Any) -> str:
+    text = str(value or "N").strip().upper()
+    if text == "Y":
+        return "T"
+    return text if text in {"N", "T", "M"} else "N"
 
 
 def normalize_menu_code(value: Any) -> str:

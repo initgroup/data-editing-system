@@ -554,14 +554,15 @@
             const key = `${row.OWNER}.${row.TABLE_NAME}`;
             const selectedKey = this.selectedTable ? `${this.selectedTable.OWNER}.${this.selectedTable.TABLE_NAME}` : "";
             const selectedClass = key === (this.focusedTableKey || selectedKey) ? "is-selected" : "";
+            const comment = row.COMMENTS || "";
             return `
                 <button type="button" class="table-tree-row ${selectedClass}" data-table-key="${this.escapeHtml(key)}" onclick="M02002.selectTable('${this.escapeJs(row.OWNER)}', '${this.escapeJs(row.TABLE_NAME)}')">
-                    <span class="table-tree-name" title="${this.escapeHtml(row.TABLE_NAME)}">
+                    <span class="table-tree-name" title="${this.escapeHtml(comment || row.TABLE_NAME)}">
                         <span class="table-tree-physical">
                             <i class="fas fa-table"></i>
                             <span>${this.escapeHtml(row.TABLE_NAME)}</span>
                         </span>
-                        <span class="table-tree-comment">Click to analyze table</span>
+                        <span class="table-tree-comment">${this.escapeHtml(comment || "-")}</span>
                     </span>
                     <span class="table-tree-muted">${this.escapeHtml(row.OWNER)}</span>
                 </button>
@@ -1049,7 +1050,7 @@
             }
             const baseName = this.createExportFileName(gridKey);
             if (format === "excel") {
-                this.downloadBlob(`${baseName}.xls`, this.createExcelContent(rows), "application/vnd.ms-excel;charset=utf-8");
+                DataEditingSystem.downloadXLSX(rows, `${baseName}.xlsx`);
                 return;
             }
             if (format === "csv") {

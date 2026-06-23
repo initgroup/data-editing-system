@@ -58,27 +58,54 @@
                     labels: trend.labels,
                     datasets: [
                         {
-                            label: "자동규칙발굴",
-                            data: trend.discovery,
+                            label: "자동규칙발굴 성공",
+                            data: trend.discoverySuccess,
                             borderColor: "#2563eb",
                             backgroundColor: "rgba(37, 99, 235, 0.12)",
                             fill: true,
                             tension: 0.35
                         },
                         {
-                            label: "규칙위반탐지",
-                            data: trend.violation,
+                            label: "자동규칙발굴 실패",
+                            data: trend.discoveryFailed,
+                            borderColor: "#1d4ed8",
+                            backgroundColor: "rgba(37, 99, 235, 0.04)",
+                            borderDash: [6, 5],
+                            fill: false,
+                            tension: 0.35
+                        },
+                        {
+                            label: "규칙위반탐지 성공",
+                            data: trend.violationSuccess,
                             borderColor: "#dc2626",
                             backgroundColor: "rgba(220, 38, 38, 0.10)",
                             fill: true,
                             tension: 0.35
                         },
                         {
-                            label: "통합시나리오실행",
-                            data: trend.flow,
+                            label: "규칙위반탐지 실패",
+                            data: trend.violationFailed,
+                            borderColor: "#b91c1c",
+                            backgroundColor: "rgba(220, 38, 38, 0.04)",
+                            borderDash: [6, 5],
+                            fill: false,
+                            tension: 0.35
+                        },
+                        {
+                            label: "통합시나리오실행 성공",
+                            data: trend.flowSuccess,
                             borderColor: "#16a34a",
                             backgroundColor: "rgba(22, 163, 74, 0.10)",
                             fill: true,
+                            tension: 0.35
+                        },
+                        {
+                            label: "통합시나리오실행 실패",
+                            data: trend.flowFailed,
+                            borderColor: "#15803d",
+                            backgroundColor: "rgba(22, 163, 74, 0.04)",
+                            borderDash: [6, 5],
+                            fill: false,
                             tension: 0.35
                         }
                     ]
@@ -106,9 +133,12 @@
             if (!Array.isArray(rows) || rows.length === 0) {
                 return {
                     labels: fallbackLabels,
-                    discovery: [0, 0, 0, 0, 0, 0, 0],
-                    violation: [0, 0, 0, 0, 0, 0, 0],
-                    flow: [0, 0, 0, 0, 0, 0, 0]
+                    discoverySuccess: [0, 0, 0, 0, 0, 0, 0],
+                    discoveryFailed: [0, 0, 0, 0, 0, 0, 0],
+                    violationSuccess: [0, 0, 0, 0, 0, 0, 0],
+                    violationFailed: [0, 0, 0, 0, 0, 0, 0],
+                    flowSuccess: [0, 0, 0, 0, 0, 0, 0],
+                    flowFailed: [0, 0, 0, 0, 0, 0, 0]
                 };
             }
             const labels = [];
@@ -116,21 +146,33 @@
             rows.forEach((row) => {
                 const label = row.label || row.RUN_DATE || "";
                 const menuCode = row.menuCode || row.MENU_CODE || "";
+                const statusGroup = String(row.statusGroup || row.STATUS_GROUP || "SUCCESS").toUpperCase();
                 const count = Number(row.count ?? row.CNT ?? 0);
                 if (!label) return;
                 if (!byLabel[label]) {
                     labels.push(label);
-                    byLabel[label] = { discovery: 0, violation: 0, flow: 0 };
+                    byLabel[label] = {
+                        discoverySuccess: 0,
+                        discoveryFailed: 0,
+                        violationSuccess: 0,
+                        violationFailed: 0,
+                        flowSuccess: 0,
+                        flowFailed: 0
+                    };
                 }
-                if (menuCode === "M04001") byLabel[label].flow += count;
-                else if (menuCode === "M03004") byLabel[label].violation += count;
-                else byLabel[label].discovery += count;
+                const suffix = statusGroup === "FAILED" ? "Failed" : "Success";
+                if (menuCode === "M04001") byLabel[label][`flow${suffix}`] += count;
+                else if (menuCode === "M03004") byLabel[label][`violation${suffix}`] += count;
+                else byLabel[label][`discovery${suffix}`] += count;
             });
             return {
                 labels,
-                discovery: labels.map((label) => byLabel[label].discovery),
-                violation: labels.map((label) => byLabel[label].violation),
-                flow: labels.map((label) => byLabel[label].flow)
+                discoverySuccess: labels.map((label) => byLabel[label].discoverySuccess),
+                discoveryFailed: labels.map((label) => byLabel[label].discoveryFailed),
+                violationSuccess: labels.map((label) => byLabel[label].violationSuccess),
+                violationFailed: labels.map((label) => byLabel[label].violationFailed),
+                flowSuccess: labels.map((label) => byLabel[label].flowSuccess),
+                flowFailed: labels.map((label) => byLabel[label].flowFailed)
             };
         },
 

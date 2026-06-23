@@ -16,11 +16,21 @@ from pydantic import BaseModel, ConfigDict
 from typing import Dict, Any, List, Optional, Tuple
 from fastapi import Body
 import logging
+import re
 from backend.target_database import get_target_db_connection # 주석 해제하여 사용
 from backend.database_helper import execute_query, SqlLoader, get_debug_sql
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+def ensure_m90001_object_status_sql_loaded() -> None:
+    try:
+        sql = SqlLoader.get_sql("M90001_OBJECT_CHILDREN")
+        sql_upper = sql.upper()
+        if "OBJECT_STATUS" not in sql_upper or "ALL_MINING_MODELS" not in sql_upper:
+            SqlLoader.reload_queries()
+    except Exception:
+        SqlLoader.reload_queries()
 
 # 조회입력파라미터선언
 class SearchRequest(BaseModel):
@@ -50,6 +60,13 @@ class ObjectDetailDeleteRequest(BaseModel):
     object: Optional[Dict[str, Any]] = None
     metadata: Optional[Dict[str, Any]] = None
     includeDetails: bool = False
+    model_config = ConfigDict(extra='allow')
+
+
+class ObjectSourceRequest(BaseModel):
+    owner: Optional[str] = None
+    objectType: Optional[str] = None
+    objectName: Optional[str] = None
     model_config = ConfigDict(extra='allow')
 
 @router.get("/init")
@@ -175,8 +192,9 @@ def get_object_tree(
 ):
     conn = None
     try:
+        ensure_m90001_object_status_sql_loaded()
         conn = get_target_db_connection(request)
-        allowed_categories = {"PLSQL", "PACKAGE", "ML_PACKAGE", "MODEL"}
+        allowed_categories = {"PLSQL", "PACKAGE", "MODEL"}
         selected_categories = [
             item.strip().upper()
             for item in str(categoryFilter or "ALL").split(",")
@@ -230,8 +248,9 @@ def get_object_children(
 ):
     conn = None
     try:
+        ensure_m90001_object_status_sql_loaded()
         normalized_group = str(groupType or "").strip().upper()
-        if normalized_group not in {"PROCEDURES", "PACKAGES", "ML_PACKAGES", "MODELS"}:
+        if normalized_group not in {"PROCEDURES", "PACKAGES", "MODELS"}:
             raise HTTPException(status_code=400, detail="Invalid groupType.")
 
         conn = get_target_db_connection(request)
@@ -249,12 +268,23 @@ def get_object_children(
 
         raw_data = result["data"]
         has_more = len(raw_data) > limit
-        data = raw_data[:limit]
+        child_total = None
+        if raw_data:
+            try:
+                child_total = int(raw_data[0].get("TOTAL_COUNT") or 0)
+            except (TypeError, ValueError):
+                child_total = None
+        data = [
+            {key: value for key, value in row.items() if key != "TOTAL_COUNT"}
+            for row in raw_data[:limit]
+        ]
+        total = child_total if child_total is not None else offset + len(data) + (1 if has_more else 0)
         return {
             "status": "success",
             "data": data,
-            "columns": result.get("columns", []),
-            "total": offset + len(data) + (1 if has_more else 0),
+            "columns": [column for column in result.get("columns", []) if column != "TOTAL_COUNT"],
+            "total": total,
+            "childTotal": total,
             "nextOffset": offset + len(data),
             "hasMore": has_more
         }
@@ -276,6 +306,7 @@ def get_package_members(
 ):
     conn = None
     try:
+        ensure_m90001_object_status_sql_loaded()
         conn = get_target_db_connection(request)
         params = {
             "owner": owner,
@@ -319,6 +350,7 @@ def get_object_detail(req: ObjectDetailRequest, request: Request):
         if result.get("status") != "success":
             logger.warning(f"M90001_OBJECT_DETAIL failed, using dictionary fallback: {result}")
             detail_rows = fetch_dictionary_object_detail(conn, params)
+            enrich_argument_defaults(conn, detail_rows, params)
             return {
                 "status": "success",
                 "data": detail_rows,
@@ -328,9 +360,11 @@ def get_object_detail(req: ObjectDetailRequest, request: Request):
                 "source": "dictionary_fallback"
             }
 
+        detail_rows = result["data"]
+        enrich_argument_defaults(conn, detail_rows, params)
         return {
             "status": "success",
-            "data": result["data"],
+            "data": detail_rows,
             "metadata": metadata,
             "columns": result.get("columns", []),
             "total": result["total"]
@@ -348,6 +382,7 @@ def get_object_detail(req: ObjectDetailRequest, request: Request):
                     "objectId": fallback_metadata.get("OBJECT_ID")
                 }
                 fallback_rows = fetch_dictionary_object_detail(conn, fallback_params)
+                enrich_argument_defaults(conn, fallback_rows, fallback_params)
             except Exception as fallback_error:
                 logger.warning(f"M90001 dictionary fallback failed: {str(fallback_error)}")
         return {
@@ -358,6 +393,35 @@ def get_object_detail(req: ObjectDetailRequest, request: Request):
             "total": len(fallback_rows),
             "source": "dictionary_fallback" if fallback_rows else "dictionary_fallback_empty"
         }
+    finally:
+        if conn:
+            conn.close()
+
+
+@router.post("/object-source")
+def get_object_source(req: ObjectSourceRequest, request: Request):
+    owner = normalize_identifier(req.owner or "", "owner")
+    object_type = normalize_object_type(req.objectType or "")
+    object_name = normalize_object_name(req.objectName or "")
+
+    conn = None
+    try:
+        conn = get_target_db_connection(request)
+        source = fetch_object_source(conn, owner, object_type, object_name)
+        return {
+            "status": "success",
+            "source": source,
+            "object": {
+                "owner": owner,
+                "objectType": object_type,
+                "objectName": object_name
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"M90001 object source load failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         if conn:
             conn.close()
@@ -604,6 +668,145 @@ def get_object_metadata(conn, params: Dict[str, Any]) -> Dict[str, Any]:
         params.get("objectName")
     )
 
+
+def normalize_identifier(value: str, field_name: str) -> str:
+    text = str(value or "").strip().upper()
+    if not re.fullmatch(r"[A-Z][A-Z0-9_$#]*", text):
+        raise HTTPException(status_code=400, detail=f"Invalid {field_name}.")
+    return text
+
+
+def normalize_object_name(value: str) -> str:
+    text = str(value or "").strip().upper()
+    if not re.fullmatch(r"[A-Z][A-Z0-9_$#]*(\.[A-Z][A-Z0-9_$#]*)?", text):
+        raise HTTPException(status_code=400, detail="Invalid objectName.")
+    return text
+
+
+def normalize_object_type(value: str) -> str:
+    text = str(value or "").strip().upper()
+    allowed = {"PROCEDURE", "FUNCTION", "PACKAGE", "PACKAGE_PROCEDURE", "PACKAGE_FUNCTION", "MINING_MODEL"}
+    if text not in allowed:
+        raise HTTPException(status_code=400, detail="Invalid objectType.")
+    return text
+
+
+def fetch_object_source(conn, owner: str, object_type: str, object_name: str) -> str:
+    if object_type == "MINING_MODEL":
+        return build_mining_model_source(conn, owner, object_name)
+
+    source_parts = []
+    for source_type, source_name, title in get_source_targets(object_type, object_name):
+        text = fetch_source_text(conn, owner, source_type, source_name)
+        if text:
+            if source_parts:
+                source_parts.append("\n")
+            source_parts.append(f"-- [{title}]\n{text}")
+    return "".join(source_parts)
+
+
+MODEL_DETAIL_VIEW_TYPES = [
+    ("VA", "Attribute/detail view"),
+    ("VG", "Global/detail view"),
+    ("VI", "Itemset/detail view"),
+    ("VN", "Node/detail view"),
+    ("VP", "Pattern/partition/detail view"),
+    ("VR", "Rule/detail view"),
+    ("VT", "Transformation/detail view"),
+]
+
+
+def build_mining_model_source(conn, owner: str, model_name: str) -> str:
+    owner = normalize_identifier(owner, "owner")
+    model_name = normalize_object_name(model_name)
+    view_names = [f"DM${view_type}{model_name}" for view_type, _ in MODEL_DETAIL_VIEW_TYPES]
+    placeholders = ",".join(f":v{i}" for i, _ in enumerate(view_names))
+    existing_rows = fetch_rows(conn, f"""
+        SELECT OBJECT_NAME, OBJECT_TYPE
+          FROM ALL_OBJECTS
+         WHERE OWNER = :owner
+           AND OBJECT_NAME IN ({placeholders})
+    """, {
+        "owner": owner,
+        **{f"v{i}": view_name for i, view_name in enumerate(view_names)}
+    })
+    existing = {row.get("OBJECT_NAME"): row.get("OBJECT_TYPE") for row in existing_rows}
+    owner_prefix = f"{quote_identifier(owner)}."
+    lines = [
+        "-- [MINING MODEL DETAIL VIEWS]",
+        f"-- Model: {owner}.{model_name}",
+        "-- Use INIT$_SP_DM_MODEL_VIEW_LIST to check which DM$ detail views exist.",
+        "",
+        "VAR rc REFCURSOR;",
+        "BEGIN",
+        f"  INIT$_SP_DM_MODEL_VIEW_LIST('{escape_sql_literal(model_name)}', :rc);",
+        "END;",
+        "/",
+        "PRINT rc;",
+        ""
+    ]
+    for view_type, description in MODEL_DETAIL_VIEW_TYPES:
+        view_name = f"DM${view_type}{model_name}"
+        exists_text = existing.get(view_name) or "NOT FOUND"
+        if existing.get(view_name):
+            lines.extend([
+                f"-- [{view_type}] {description} / {exists_text}",
+                f"SELECT * FROM {owner_prefix}{quote_identifier(view_name)};",
+                ""
+            ])
+        else:
+            lines.extend([
+                f"-- [{view_type}] {description} / NOT FOUND",
+                f"-- {owner_prefix}{quote_identifier(view_name)} does not exist for this model.",
+                ""
+            ])
+    if existing.get(f"DM$VR{model_name}"):
+        lines.extend([
+            "-- Open one detail view through the helper procedure when refcursor output is preferred.",
+            "BEGIN",
+            f"  INIT$_SP_DM_MODEL_VIEW_OPEN('{escape_sql_literal(model_name)}', 'VR', :rc);",
+            "END;",
+            "/",
+            "PRINT rc;"
+        ])
+    else:
+        lines.append("-- DM$VR detail view was not found, so INIT$_SP_DM_MODEL_VIEW_OPEN('VR') is not included.")
+    return "\n".join(lines)
+
+
+def quote_identifier(value: str) -> str:
+    return '"' + str(value).replace('"', '""') + '"'
+
+
+def escape_sql_literal(value: str) -> str:
+    return str(value or "").replace("'", "''")
+
+
+def get_source_targets(object_type: str, object_name: str) -> List[Tuple[str, str, str]]:
+    if object_type == "MINING_MODEL":
+        return []
+    if object_type in {"PROCEDURE", "FUNCTION"}:
+        return [(object_type, object_name, object_type)]
+    if object_type == "PACKAGE":
+        return [
+            ("PACKAGE", object_name, "PACKAGE SPEC"),
+            ("PACKAGE BODY", object_name, "PACKAGE BODY")
+        ]
+    package_name, _ = split_package_member_name(object_name)
+    return [
+        ("PACKAGE", package_name, "PACKAGE SPEC"),
+        ("PACKAGE BODY", package_name, "PACKAGE BODY")
+    ]
+
+
+def fetch_source_text(conn, owner: str, source_type: str, source_name: str) -> str:
+    rows = fetch_rows(conn, SqlLoader.get_sql("M90001_OBJECT_SOURCE"), {
+        "owner": owner,
+        "sourceType": source_type,
+        "sourceName": source_name
+    })
+    return "".join(str(row.get("TEXT") or "") for row in rows)
+
 def build_default_object_metadata(owner: Optional[str], object_type: Optional[str], object_name: Optional[str]) -> Dict[str, Any]:
     name = object_name or ""
     return {
@@ -641,6 +844,202 @@ def fetch_rows(conn, sql: str, params: Dict[str, Any]) -> List[Dict[str, Any]]:
     finally:
         if cursor:
             cursor.close()
+
+def enrich_argument_defaults(conn, rows: List[Dict[str, Any]], params: Dict[str, Any]) -> None:
+    object_type = (params.get("objectType") or "").upper()
+    if object_type not in {"PROCEDURE", "FUNCTION", "PACKAGE_PROCEDURE", "PACKAGE_FUNCTION"}:
+        return
+    if not rows:
+        return
+
+    defaults = {}
+    if all_arguments_has_default_value(conn):
+        defaults.update(fetch_argument_defaults(conn, params))
+    if not defaults:
+        defaults.update(fetch_argument_defaults_from_source(conn, params))
+    if not defaults:
+        return
+
+    for row in rows:
+        item_name = str(row.get("ITEM_NAME") or "").upper()
+        if not item_name or row.get("ITEM_DEFAULT"):
+            continue
+        default_value = defaults.get(item_name)
+        if default_value is not None:
+            row["ITEM_DEFAULT"] = normalize_argument_default_value(default_value)
+            if row.get("DETAIL_SOURCE") == "DICTIONARY":
+                row["DETAIL_SOURCE"] = "Dictionary default"
+
+def all_arguments_has_default_value(conn) -> bool:
+    sql = """
+        SELECT COUNT(*) AS CNT
+          FROM ALL_TAB_COLUMNS
+         WHERE TABLE_NAME = 'ALL_ARGUMENTS'
+           AND COLUMN_NAME = 'DEFAULT_VALUE'
+    """
+    try:
+        rows = fetch_rows(conn, sql, {})
+        return bool(rows and int(rows[0].get("CNT") or 0) > 0)
+    except Exception as e:
+        logger.info(f"ALL_ARGUMENTS.DEFAULT_VALUE is not available: {str(e)}")
+        return False
+
+def fetch_argument_defaults(conn, params: Dict[str, Any]) -> Dict[str, str]:
+    object_type = (params.get("objectType") or "").upper()
+    owner = params.get("owner") or ""
+    object_name = params.get("objectName") or ""
+    query_params = {"owner": owner}
+
+    if object_type in {"PROCEDURE", "FUNCTION"}:
+        where_sql = """
+           AND A.PACKAGE_NAME IS NULL
+           AND A.OBJECT_NAME = :objectName
+        """
+        query_params["objectName"] = object_name
+    else:
+        package_name, procedure_name = split_package_member_name(object_name)
+        where_sql = """
+           AND A.PACKAGE_NAME = :packageName
+           AND A.OBJECT_NAME = :procedureName
+        """
+        query_params["packageName"] = package_name
+        query_params["procedureName"] = procedure_name
+
+    sql = f"""
+        SELECT A.ARGUMENT_NAME, A.DEFAULT_VALUE
+          FROM ALL_ARGUMENTS A
+         WHERE A.OWNER = :owner
+           AND A.ARGUMENT_NAME IS NOT NULL
+           AND A.DEFAULTED = 'Y'
+           {where_sql}
+         ORDER BY A.POSITION
+    """
+    try:
+        rows = fetch_rows(conn, sql, query_params)
+    except Exception as e:
+        logger.info(f"Argument default values could not be loaded: {str(e)}")
+        return {}
+
+    defaults: Dict[str, str] = {}
+    for row in rows:
+        name = str(row.get("ARGUMENT_NAME") or "").upper()
+        if not name or name in defaults:
+            continue
+        value = row.get("DEFAULT_VALUE")
+        if value is not None:
+            defaults[name] = str(value).strip()
+    return defaults
+
+def fetch_argument_defaults_from_source(conn, params: Dict[str, Any]) -> Dict[str, str]:
+    object_type = (params.get("objectType") or "").upper()
+    owner = str(params.get("owner") or "").upper()
+    object_name = str(params.get("objectName") or "").upper()
+    try:
+        source = fetch_object_source(conn, owner, object_type, object_name)
+    except Exception as e:
+        logger.info(f"Argument defaults could not be parsed from source: {str(e)}")
+        return {}
+    return parse_argument_defaults_from_source(source, object_type, object_name)
+
+def parse_argument_defaults_from_source(source: str, object_type: str, object_name: str) -> Dict[str, str]:
+    signature = extract_argument_signature(source, object_type, object_name)
+    if not signature:
+        return {}
+
+    defaults: Dict[str, str] = {}
+    for part in split_signature_arguments(signature):
+        name = extract_argument_name(part)
+        if not name:
+            continue
+        default_value = extract_argument_default(part)
+        if default_value:
+            defaults[name] = default_value
+    return defaults
+
+def extract_argument_signature(source: str, object_type: str, object_name: str) -> str:
+    text = source or ""
+    names = [object_name]
+    if "." in object_name:
+        names.append(object_name.split(".")[-1])
+    keyword = "FUNCTION" if object_type in {"FUNCTION", "PACKAGE_FUNCTION"} else "PROCEDURE"
+
+    for name in names:
+        pattern = re.compile(
+            rf"\b{keyword}\s+\"?{re.escape(name)}\"?\s*\(",
+            re.IGNORECASE
+        )
+        match = pattern.search(text)
+        if match:
+            start = text.find("(", match.start())
+            end = find_matching_parenthesis(text, start)
+            if end > start:
+                return text[start + 1:end]
+    return ""
+
+def find_matching_parenthesis(text: str, start: int) -> int:
+    depth = 0
+    in_quote = False
+    index = start
+    while index < len(text):
+        char = text[index]
+        if char == "'":
+            if in_quote and index + 1 < len(text) and text[index + 1] == "'":
+                index += 2
+                continue
+            in_quote = not in_quote
+        elif not in_quote:
+            if char == "(":
+                depth += 1
+            elif char == ")":
+                depth -= 1
+                if depth == 0:
+                    return index
+        index += 1
+    return -1
+
+def split_signature_arguments(signature: str) -> List[str]:
+    parts = []
+    start = 0
+    depth = 0
+    in_quote = False
+    index = 0
+    while index < len(signature):
+        char = signature[index]
+        if char == "'":
+            if in_quote and index + 1 < len(signature) and signature[index + 1] == "'":
+                index += 2
+                continue
+            in_quote = not in_quote
+        elif not in_quote:
+            if char == "(":
+                depth += 1
+            elif char == ")" and depth > 0:
+                depth -= 1
+            elif char == "," and depth == 0:
+                parts.append(signature[start:index].strip())
+                start = index + 1
+        index += 1
+    tail = signature[start:].strip()
+    if tail:
+        parts.append(tail)
+    return parts
+
+def extract_argument_name(argument_text: str) -> str:
+    match = re.match(r'\s*"?([A-Z][A-Z0-9_$#]*)"?\b', argument_text or "", re.IGNORECASE)
+    return match.group(1).upper() if match else ""
+
+def extract_argument_default(argument_text: str) -> str:
+    match = re.search(r"\bDEFAULT\b|:=", argument_text or "", re.IGNORECASE)
+    if not match:
+        return ""
+    default_value = argument_text[match.end():].strip()
+    return re.sub(r"\s+", " ", default_value)
+
+def normalize_argument_default_value(value: Any) -> str:
+    text = str(value).strip()
+    if len(text) >= 2 and text[0] == "'" and text[-1] == "'":
+        return text[1:-1].replace("''", "'")
+    return text
 
 def fetch_dictionary_table_columns(conn, params: Dict[str, Any]) -> List[Dict[str, Any]]:
     sql = """

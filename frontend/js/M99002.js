@@ -819,7 +819,7 @@
                 return;
             }
             const baseName = this.createExportFileName(gridKey);
-            if (format === "excel") return this.downloadBlob(`${baseName}.xls`, this.createExcelContent(rows), "application/vnd.ms-excel;charset=utf-8");
+            if (format === "excel") return DataEditingSystem.downloadXLSX(rows, `${baseName}.xlsx`);
             if (format === "csv") return this.downloadBlob(`${baseName}.csv`, this.createDelimitedContent(rows, ","), "text/csv;charset=utf-8");
             if (format === "tsv") this.downloadBlob(`${baseName}.tsv`, this.createDelimitedContent(rows, "\t"), "text/tab-separated-values;charset=utf-8");
         },

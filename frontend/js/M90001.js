@@ -10,6 +10,7 @@
         selectedObject: null,
         objectMeta: null,
         detailSource: "",
+        objectSourceRequestSeq: 0,
         rows: [],
         originalRows: [],
         selectedRowIndex: null,
@@ -43,6 +44,7 @@
             this.originalRows = [];
             this.selectedRowIndex = null;
             this.renderRows();
+            this.renderObjectSource("", "Select an object to load source.");
             await this.loadObjectTree();
             this.isInit = true;
         },
@@ -76,6 +78,8 @@
             this.selectedObject = null;
             this.objectMeta = null;
             this.detailSource = "";
+            this.objectSourceRequestSeq += 1;
+            this.renderObjectSource("", "Select an object to load source.");
             this.isInit = false;
         },
 
@@ -263,8 +267,9 @@
                         ${this.getExpandIcon(row)}
                         <i class="${this.getTreeIcon(row.OBJECT_TYPE)}"></i>
                         ${this.getRegisteredIcon(row)}
+                        ${this.getObjectStatusIcon(row)}
                         <span class="env-tree-label" title="${this.escapeHtml(row.OBJECT_LABEL)}">${this.escapeHtml(treeLabel)}</span>
-                        ${childCount !== null ? `<span class="env-tree-count">${childCount}</span>` : ""}
+                        ${childCount !== null ? `<span class="env-tree-count">${this.escapeHtml(childCount)}</span>` : ""}
                     </span>
                     <span class="env-tree-muted">
                         <span>${this.escapeHtml(row.OBJECT_TYPE)}</span>
@@ -297,9 +302,12 @@
 
         getGroupChildCount(row) {
             if (!this.isExpandable(row)) return null;
+            const objectType = this.getObjectType(row);
             const count = Number(row.CHILD_COUNT ?? row.childCount);
-            if (Number.isFinite(count) && this.getObjectType(row) === "GROUP") return count;
-            if (this.getObjectType(row) === "PACKAGE" && !this.loadedPackageNodes.has(this.getNodeId(row))) return null;
+            if (objectType === "GROUP") {
+                return Number.isFinite(count) ? count : "?";
+            }
+            if (objectType === "PACKAGE" && !this.loadedPackageNodes.has(this.getNodeId(row))) return null;
             const nodeId = this.getNodeId(row);
             return this.objectRows.filter((child) => this.getParentId(child) === nodeId).length;
         },
@@ -376,7 +384,7 @@
                 }
 
                 const children = Array.isArray(json.data) ? json.data : [];
-                this.replaceGroupChildren(row, this.withGroupLoadMoreRow(row, children, json));
+                this.replaceGroupChildren(row, this.withGroupLoadMoreRow(row, children, json), json);
                 this.loadedGroupNodes.add(nodeId);
             } catch (error) {
                 console.error("[M90001] object children load failed", error);
@@ -412,7 +420,7 @@
                 }
                 const children = Array.isArray(json.data) ? json.data : [];
                 this.removeTreeRow(this.getNodeId(row));
-                this.appendGroupChildren(parent, this.withGroupLoadMoreRow(parent, children, json));
+                this.appendGroupChildren(parent, this.withGroupLoadMoreRow(parent, children, json), json);
             } catch (error) {
                 console.error("[M90001] object children load more failed", error);
                 this.removeTreeRow(this.getNodeId(row));
@@ -443,7 +451,7 @@
             });
         },
 
-        replaceGroupChildren(row, children) {
+        replaceGroupChildren(row, children, response = null) {
             const nodeId = this.getNodeId(row);
             if (!nodeId) return;
             this.removeGroupChildren(nodeId);
@@ -456,14 +464,14 @@
                 LEVEL_NO: Number(row.LEVEL_NO || 2) + 1
             }));
             this.objectRows.splice(index + 1, 0, ...normalizedChildren);
-            row.CHILD_COUNT = normalizedChildren.filter((child) => this.getObjectType(child) !== "LOAD_MORE").length;
+            row.CHILD_COUNT = this.getResponseChildTotal(response, normalizedChildren.filter((child) => this.getObjectType(child) !== "LOAD_MORE").length);
         },
 
         removeGroupChildren(parentNodeId) {
             this.objectRows = this.objectRows.filter((item) => this.getParentId(item) !== parentNodeId);
         },
 
-        appendGroupChildren(parent, children) {
+        appendGroupChildren(parent, children, response = null) {
             const parentNodeId = this.getNodeId(parent);
             if (!parentNodeId) return;
             const sameParentRows = this.objectRows
@@ -479,9 +487,16 @@
                 LEVEL_NO: Number(parent.LEVEL_NO || 2) + 1
             }));
             this.objectRows.splice(insertIndex, 0, ...normalizedChildren);
-            parent.CHILD_COUNT = this.objectRows.filter((child) =>
+            const loadedCount = this.objectRows.filter((child) =>
                 this.getParentId(child) === parentNodeId && this.getObjectType(child) !== "LOAD_MORE"
             ).length;
+            parent.CHILD_COUNT = this.getResponseChildTotal(response, loadedCount);
+        },
+
+        getResponseChildTotal(response, fallbackCount) {
+            const total = Number(response?.childTotal ?? response?.total);
+            if (Number.isFinite(total)) return total;
+            return fallbackCount;
         },
 
         withGroupLoadMoreRow(parent, rows, response) {
@@ -920,6 +935,9 @@
         async selectObject(objectRow) {
             this.selectedObject = objectRow;
             this.updateDescription(`Loading ${objectRow.OWNER}.${objectRow.OBJECT_NAME}...`);
+            const sourceRequestSeq = this.objectSourceRequestSeq + 1;
+            this.objectSourceRequestSeq = sourceRequestSeq;
+            this.renderObjectSource("Loading script...", "Loading source...");
 
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/object-detail`, {
@@ -948,6 +966,7 @@
                 this.originalRows = this.rows.map((row) => ({ ...row }));
                 this.selectedRowIndex = this.rows.length > 0 ? 0 : null;
                 this.renderRows();
+                this.loadObjectSource(objectRow, sourceRequestSeq);
 
                 const label = objectRow.OBJECT_TYPE === "TABLE" ? "columns" : "parameters";
                 this.updateDescription(`${objectRow.OWNER}.${objectRow.OBJECT_NAME} ${label}`);
@@ -961,7 +980,52 @@
                 this.renderObjectMeta();
                 this.renderDetailSource();
                 this.renderRows();
+                this.renderObjectSource("", "Source was not loaded.");
                 this.updateDescription("Could not load object detail.");
+            }
+        },
+
+        async loadObjectSource(objectRow, requestSeq) {
+            try {
+                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/object-source`, {
+                    method: "POST",
+                    showLoading: false,
+                    body: {
+                        owner: objectRow.OWNER,
+                        objectType: objectRow.OBJECT_TYPE,
+                        objectName: objectRow.OBJECT_NAME
+                    }
+                });
+                if (requestSeq !== this.objectSourceRequestSeq) return;
+                this.renderObjectSource(json.source || "", json.source ? "Dictionary source" : "No source text found.");
+            } catch (error) {
+                if (requestSeq !== this.objectSourceRequestSeq) return;
+                this.renderObjectSource(error.message || "Script load failed.", "Source load failed.");
+            }
+        },
+
+        renderObjectSource(source, status) {
+            const viewer = getContainerEl("#objectSourceViewer-M90001");
+            const statusEl = getContainerEl("#objectSourceStatus-M90001");
+            if (viewer) viewer.value = source || "";
+            if (statusEl) statusEl.textContent = status || "";
+        },
+
+        async copyObjectSource() {
+            const viewer = getContainerEl("#objectSourceViewer-M90001");
+            const text = viewer?.value || "";
+            if (!text.trim()) {
+                alert("No script source to copy.");
+                return;
+            }
+            try {
+                await navigator.clipboard.writeText(text);
+                this.renderObjectSource(text, "Script copied.");
+            } catch (error) {
+                viewer.focus();
+                viewer.select();
+                document.execCommand("copy");
+                this.renderObjectSource(text, "Script copied.");
             }
         },
 
@@ -1272,6 +1336,12 @@
         getRegisteredIcon(row) {
             if (!row || row.IS_REGISTERED !== "Y") return "";
             return '<i class="fas fa-circle-check env-registered-icon" title="Registered object"></i>';
+        },
+
+        getObjectStatusIcon(row) {
+            const status = String(row?.OBJECT_STATUS ?? row?.objectStatus ?? row?.object_status ?? row?.STATUS ?? "").toUpperCase();
+            if (status !== "INVALID") return "";
+            return '<i class="fas fa-exclamation-triangle env-invalid-icon" title="Invalid object"></i>';
         },
 
         markSelectedObjectRegistered() {

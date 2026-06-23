@@ -258,8 +258,23 @@ def get_object_source(req: ObjectRequest, request: Request):
             "object": {"owner": owner, "objectType": object_type, "objectName": object_name},
         }
     except Exception as e:
-        logger.error(f"M99002 source load failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        message = str(e)
+        logger.error(f"M99002 source load failed: {message}")
+        if is_metadata_permission_error(message):
+            fallback_source = fetch_source_lines(conn, owner, ddl_type, ddl_name)
+            if fallback_source:
+                return {
+                    "status": "success",
+                    "source": fallback_source,
+                    "sourceType": "ALL_SOURCE",
+                    "message": "DBMS_METADATA.GET_DDL failed, so ALL_SOURCE text was shown.",
+                    "object": {"owner": owner, "objectType": object_type, "objectName": object_name},
+                }
+            raise HTTPException(
+                status_code=403,
+                detail=create_metadata_permission_message(owner, ddl_type, ddl_name)
+            )
+        raise HTTPException(status_code=500, detail=message)
     finally:
         if conn:
             conn.close()
@@ -373,6 +388,43 @@ def resolve_ddl_type_name(object_type: str, object_name: str) -> tuple[str, str]
     if object_type in {"PACKAGE_PROCEDURE", "PACKAGE_FUNCTION"}:
         return "PACKAGE", object_name.split(".", 1)[0]
     return object_type, object_name
+
+
+def is_metadata_permission_error(message: str) -> bool:
+    text = str(message or "").upper()
+    return any(code in text for code in ("ORA-31603", "ORA-31608", "ORA-31600", "ORA-01031"))
+
+
+def create_metadata_permission_message(owner: str, object_type: str, object_name: str) -> str:
+    return (
+        f'DDL metadata for "{owner}.{object_name}" ({object_type}) could not be loaded.\n'
+        "Connect with the object owner or ask a DBA to grant metadata dictionary access to the Target DB account.\n\n"
+        "DBA grant examples:\n"
+        "GRANT SELECT_CATALOG_ROLE TO <TARGET_DB_USER>;\n"
+        "-- or, if your security policy allows it:\n"
+        "GRANT SELECT ANY DICTIONARY TO <TARGET_DB_USER>;"
+    )
+
+
+def fetch_source_lines(conn, owner: str, object_type: str, object_name: str) -> str:
+    if not conn:
+        return ""
+    if object_type not in {"PACKAGE", "PROCEDURE", "FUNCTION"}:
+        return ""
+    cursor = None
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            SqlLoader.get_sql("M99002_OBJECT_SOURCE_LINES"),
+            {"owner": owner, "objectType": object_type, "objectName": object_name},
+        )
+        return "".join(str(row[0] or "") for row in cursor.fetchall())
+    except Exception as e:
+        logger.warning(f"M99002 ALL_SOURCE fallback failed: {str(e)}")
+        return ""
+    finally:
+        if cursor:
+            cursor.close()
 
 
 def require_table(req: TableRequest) -> tuple[str, str]:

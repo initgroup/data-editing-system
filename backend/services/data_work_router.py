@@ -6,6 +6,8 @@
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from pydantic import BaseModel, ConfigDict
 from typing import Any, Dict, Optional
+from datetime import date, datetime
+from decimal import Decimal
 import logging
 import re
 import threading
@@ -51,6 +53,17 @@ class SaveSqlTableRequest(BaseModel):
     resultOwner: Optional[str] = None
     profileJobId: Optional[int] = None
     model_config = ConfigDict(extra="allow")
+
+
+MODEL_DETAIL_VIEW_TYPES = [
+    ("VA", "Attribute/detail view"),
+    ("VG", "Global/detail view"),
+    ("VI", "Itemset/detail view"),
+    ("VN", "Node/detail view"),
+    ("VP", "Pattern/partition/detail view"),
+    ("VR", "Rule/detail view"),
+    ("VT", "Transformation/detail view"),
+]
 
 
 
@@ -222,6 +235,29 @@ def create_data_work_router(
                 "resource": resource,
                 "columns": normalized.get("columns", []),
                 "total": len(params)
+            }
+        finally:
+            if conn:
+                conn.close()
+
+
+    @router.get("/model-detail-sql")
+    def get_model_detail_sql(request: Request, owner: str, modelName: str):
+        conn = None
+        try:
+            model_owner = data_work.require_identifier(owner, "owner")
+            model_name = data_work.require_identifier(modelName, "modelName")
+            conn = get_target_db_connection(request)
+            sql_text, views = build_model_detail_sql(conn, model_owner, model_name)
+            return {
+                "status": "success",
+                "data": {
+                    "owner": model_owner,
+                    "modelName": model_name,
+                    "sql": sql_text,
+                    "views": views
+                },
+                "total": len([row for row in views if row.get("existsYn") == "Y"])
             }
         finally:
             if conn:
@@ -457,7 +493,7 @@ def create_data_work_router(
                 "dynamicTable": quote_identifier(owner) + "." + quote_identifier(table_name),
                 "limit": limit
             })
-            return data_work.require_success(result, "Data query failed.")
+            return normalize_sql_result(data_work.require_success(result, "Data query failed."))
         finally:
             if conn:
                 conn.close()
@@ -532,7 +568,7 @@ def create_data_work_router(
                 "limit": limit,
                 **bind_values
             })
-            response = data_work.require_success(result, "SQL execution failed.")
+            response = normalize_sql_result(data_work.require_success(result, "SQL execution failed."))
             response["message"] = f"{response.get('total', 0)} rows selected."
             response["elapsedMs"] = int((time.perf_counter() - started_at) * 1000)
             response["transactionId"] = req.transactionId
@@ -721,8 +757,8 @@ def create_data_work_router(
         }
 
         runtime_values = {
-            **(runtime_bind_values or {}),
-            **build_system_bind_values(job)
+            **build_system_bind_values(job),
+            **(runtime_bind_values or {})
         }
 
         def replace_dynamic_token(match):
@@ -749,7 +785,7 @@ def create_data_work_router(
             if "_" in str(runtime_name):
                 bind_values_by_name[to_bind_variable_name(runtime_name)] = runtime_value
         bind_scan_text = mask_sql_for_bind_scan(prepared_text)
-        used_bind_names = set(re.findall(r"(?<!:):([A-Za-z_][A-Za-z0-9_]*)", bind_scan_text))
+        used_bind_names = set(re.findall(r"(?<!:):([A-Za-z][A-Za-z0-9_$#]*)", bind_scan_text))
         bind_values = {
             bind_name: normalize_bind_value(bind_values_by_name.get(bind_name))
             for bind_name in used_bind_names
@@ -763,10 +799,10 @@ def create_data_work_router(
         result_owner = job.get("RESULT_OWNER") or job.get("resultOwner") or ""
         result_table = job.get("RESULT_TABLE_NAME") or job.get("resultTableName") or ""
         return {
-            "_TargetOwner": target_owner,
-            "_TargetTable": target_table,
-            "_ResultOwner": result_owner,
-            "_ResultTable": result_table
+            "INIT$TargetOwner": target_owner,
+            "INIT$TargetTable": target_table,
+            "INIT$ResultOwner": result_owner,
+            "INIT$ResultTable": result_table
         }
 
 
@@ -788,6 +824,57 @@ def create_data_work_router(
             lower = part.lower()
             result.append(lower if index == 0 else lower[:1].upper() + lower[1:])
         return "".join(result)
+
+
+    def build_model_detail_sql(conn, owner: str, model_name: str) -> tuple[str, list[Dict[str, Any]]]:
+        view_names = [f"DM${view_type}{model_name}" for view_type, _ in MODEL_DETAIL_VIEW_TYPES]
+        result = execute_query(conn, "DATA_WORK_MODEL_DETAIL_VIEW_LIST", {
+            "owner": owner,
+            "viewNameVa": view_names[0],
+            "viewNameVg": view_names[1],
+            "viewNameVi": view_names[2],
+            "viewNameVn": view_names[3],
+            "viewNameVp": view_names[4],
+            "viewNameVr": view_names[5],
+            "viewNameVt": view_names[6]
+        })
+        rows = data_work.require_success(result, "Model detail view query failed.").get("data", [])
+
+        owner_prefix = quote_identifier(owner) + "."
+        views = []
+        lines = [
+            "-- Existing Oracle ML model detail views only.",
+            f"-- Model: {owner}.{model_name}",
+            ""
+        ]
+        for row in rows:
+            view_type = row.get("VIEW_TYPE") or ""
+            view_name = row.get("VIEW_NAME") or ""
+            description = row.get("DESCRIPTION") or ""
+            object_type = row.get("OBJECT_TYPE")
+            exists_yn = row.get("EXISTS_YN") or ("Y" if object_type else "N")
+            views.append({
+                "viewType": view_type,
+                "viewName": view_name,
+                "description": description,
+                "objectType": object_type,
+                "existsYn": exists_yn
+            })
+            if not object_type:
+                continue
+            lines.extend([
+                f"-- {view_type} - {description}",
+                f"SELECT *",
+                f"  FROM {owner_prefix}{quote_identifier(view_name)};",
+                ""
+            ])
+
+        if not any(row.get("existsYn") == "Y" for row in views):
+            lines.extend([
+                "-- No DM$ detail views were found for this model yet.",
+                "-- Check USER_MINING_MODELS and INIT$_SP_DM_MODEL_VIEW_LIST."
+            ])
+        return "\n".join(lines).strip(), views
 
 
     def normalize_bind_value(value: Any) -> Any:
@@ -858,14 +945,14 @@ def create_data_work_router(
                 bind_values_by_name[to_bind_variable_name(str(runtime_name))] = runtime_value
 
         bind_scan_text = mask_sql_for_bind_scan(prepared_text)
-        used_bind_names = set(re.findall(r"(?<!:):([A-Za-z_][A-Za-z0-9_]*)", bind_scan_text))
+        used_bind_names = set(re.findall(r"(?<!:):([A-Za-z][A-Za-z0-9_$#]*)", bind_scan_text))
         bind_values = {
             bind_name: normalize_bind_value(bind_values_by_name.get(bind_name))
             for bind_name in used_bind_names
         }
         return prepared_text, bind_values
-    
-    
+
+
     def is_plsql_script(sql_text: str) -> bool:
         return bool(re.match(r"(?is)^\s*(declare|begin)\b", sql_text or ""))
     
@@ -939,6 +1026,57 @@ def create_data_work_router(
             key: value.read() if hasattr(value, "read") else value
             for key, value in row.items()
         }
+
+
+    def normalize_sql_result(result: Dict[str, Any]) -> Dict[str, Any]:
+        result["data"] = [
+            {key: serialize_db_value(value) for key, value in row.items()}
+            for row in result.get("data", [])
+        ]
+        return result
+
+
+    def serialize_db_value(value: Any) -> Any:
+        if value is None:
+            return None
+        if hasattr(value, "read"):
+            return serialize_db_value(value.read())
+        if isinstance(value, (datetime, date)):
+            return value.isoformat()
+        if isinstance(value, Decimal):
+            return int(value) if value == value.to_integral_value() else float(value)
+        if isinstance(value, bytes):
+            try:
+                return value.decode("utf-8")
+            except UnicodeDecodeError:
+                return value.hex()
+        if isinstance(value, (str, int, float, bool)):
+            return value
+        if isinstance(value, (list, tuple)):
+            return [serialize_db_value(item) for item in value]
+        if isinstance(value, dict):
+            return {str(key): serialize_db_value(item) for key, item in value.items()}
+        if hasattr(value, "aslist"):
+            try:
+                return [serialize_db_value(item) for item in value.aslist()]
+            except Exception:
+                pass
+        if hasattr(value, "asdict"):
+            try:
+                return {str(key): serialize_db_value(item) for key, item in value.asdict().items()}
+            except Exception:
+                pass
+        object_type = getattr(value, "type", None)
+        attributes = getattr(object_type, "attributes", None)
+        if attributes:
+            try:
+                return {
+                    str(attribute.name): serialize_db_value(getattr(value, attribute.name))
+                    for attribute in attributes
+                }
+            except Exception:
+                pass
+        return str(value)
     
 
     return router

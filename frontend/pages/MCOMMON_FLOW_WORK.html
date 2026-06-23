@@ -1,15 +1,15 @@
 <div class="page-container table-page data-work-page flow-work-page" id="container-__PAGE_CODE__">
     <section class="work-context-card" aria-label="Project and scenario context">
-        <header class="work-context-header">
+        <header class="work-context-header" onclick="__PAGE_CODE__.toggleWorkContextFromHeader(event)" role="button" tabindex="0" onkeydown="__PAGE_CODE__.handleWorkContextHeaderKeydown(event)">
             <div class="work-context-title-row">
                 <span><strong data-label-key="contextHeader">Project Scenario</strong> <span data-label-key="contextHeaderDesc">Select the project and scenario for this flow.</span></span>
                 <span><strong data-label-key="flowHeader">Data Editing Flow</strong> <span data-label-key="flowHeaderDesc">Connect jobs as serial or parallel processing nodes.</span></span>
                 <span id="workContextSummary-__PAGE_CODE__" class="work-context-summary" data-label-key="contextSummaryEmpty">No context selected.</span>
             </div>
             <div class="scenario-table-actions">
-                <button type="button" id="workContextToggle-__PAGE_CODE__" class="table-btn work-context-toggle" onclick="__PAGE_CODE__.toggleWorkContext()" aria-expanded="true">
+                <button type="button" id="workContextToggle-__PAGE_CODE__" class="table-btn work-context-toggle" onclick="__PAGE_CODE__.toggleWorkContext(event)" aria-expanded="true">
                     <i class="fas fa-chevron-up"></i>
-                    <span data-label-key="changeContext">Change</span>
+                    <span data-label-key="hideContext">Hide</span>
                 </button>
                 <button type="button" class="table-icon-btn" title="Refresh project and scenario" data-title-key="refreshContextTitle" onclick="__PAGE_CODE__.refreshWorkContext()">
                     <i class="fas fa-sync-alt"></i>
@@ -41,6 +41,10 @@
         <button type="button" class="table-tab" data-tab="history" onclick="__PAGE_CODE__.switchTab('history')">
             <i class="fas fa-clock-rotate-left"></i>
             <span data-label-key="historyTab">Run History</span>
+        </button>
+        <button type="button" class="table-tab" data-tab="resultSql" onclick="__PAGE_CODE__.switchTab('resultSql')">
+            <i class="fas fa-table"></i>
+            <span>Result SQL</span>
         </button>
     </nav>
 
@@ -120,7 +124,7 @@
                             <i class="fas fa-save"></i>
                             <span data-label-key="saveFlow">Save flow</span>
                         </button>
-                        <button type="button" class="table-btn" onclick="__PAGE_CODE__.deleteFlow()">
+                        <button type="button" id="deleteFlowButton-__PAGE_CODE__" class="table-btn" onclick="__PAGE_CODE__.deleteFlow()">
                             <i class="far fa-trash-alt"></i>
                             <span data-label-key="deleteFlow">Delete flow</span>
                         </button>
@@ -278,6 +282,10 @@
                                         <span data-label-key="tableName">Table</span>
                                         <input id="nodeTableName-__PAGE_CODE__" class="env-field" type="text" placeholder="TABLE_NAME" readonly>
                                     </label>
+                                    <label>
+                                        <span data-label-key="resultTableCreate">Result Table Create</span>
+                                        <input id="nodeResultCreateYn-__PAGE_CODE__" class="env-field" type="text" placeholder="N / T / M" readonly>
+                                    </label>
                                     <label id="nodeResultOwnerWrap-__PAGE_CODE__" style="display: none;">
                                         <span>Result Owner</span>
                                         <input id="nodeResultOwner-__PAGE_CODE__" class="env-field" type="text" placeholder="RESULT_OWNER" readonly>
@@ -332,13 +340,60 @@ END;</textarea>
         <div id="flowRunHistoryGrid-__PAGE_CODE__" class="table-result-grid"></div>
     </section>
 
+    <section class="table-tab-panel data-tool-panel flow-result-sql-panel" data-panel="resultSql">
+        <div class="data-sql-workbench flow-result-sql-workbench">
+            <div class="data-panel-toolbar flow-result-sql-toolbar">
+                <span class="flow-result-sql-heading">
+                    <strong id="flowResultSqlTitle-__PAGE_CODE__">Result SQL</strong>
+                    <small id="flowResultSqlHint-__PAGE_CODE__">Select a node result from Run History details.</small>
+                </span>
+                <button type="button" class="table-btn" onclick="__PAGE_CODE__.executeFlowResultSql()">
+                    <i class="fas fa-play"></i>
+                    <span>Run SQL(Ctrl+Enter)</span>
+                </button>
+                <button type="button" class="table-btn" onclick="__PAGE_CODE__.executeFlowResultSql()">
+                    <i class="fas fa-forward"></i>
+                    <span>Run All SQL(F5)</span>
+                </button>
+                <span class="table-empty">Read only result SQL</span>
+                <label class="table-limit-control flow-result-sql-limit">
+                        <span>Rows</span>
+                    <input id="flowResultSqlLimit-__PAGE_CODE__" type="number" min="1" max="1000" value="100">
+                </label>
+            </div>
+            <textarea id="flowResultSqlEditor-__PAGE_CODE__" class="sql-editor data-script-editor flow-result-sql-editor" spellcheck="false" aria-label="Flow result SQL" onkeydown="__PAGE_CODE__.handleFlowResultSqlKeydown(event)">-- Select a node result from Run History details.</textarea>
+            <div class="data-sql-result-header">
+                <div id="flowResultSqlMessage-__PAGE_CODE__" class="table-empty" aria-live="polite" hidden></div>
+                <div class="table-export-actions data-sql-export-actions" aria-label="Export Flow result SQL data">
+                    <button type="button" class="table-icon-btn export-excel" title="Export Excel" onclick="__PAGE_CODE__.exportFlowResultSqlGrid('excel')">
+                        <i class="fas fa-file-excel"></i>
+                    </button>
+                    <button type="button" class="table-icon-btn" title="Export CSV" onclick="__PAGE_CODE__.exportFlowResultSqlGrid('csv')">
+                        <i class="fas fa-file-csv"></i>
+                    </button>
+                    <button type="button" class="table-icon-btn" title="Export TSV" onclick="__PAGE_CODE__.exportFlowResultSqlGrid('tsv')">
+                        <i class="fas fa-file-lines"></i>
+                    </button>
+                </div>
+            </div>
+            <div id="flowResultSqlGrid-__PAGE_CODE__" class="table-result-grid">
+                <div class="table-empty">No result SQL executed.</div>
+            </div>
+        </div>
+    </section>
+
     <div id="flowRunPlanLayer-__PAGE_CODE__" class="data-help-layer flow-run-plan-layer" hidden>
         <section class="data-help-dialog flow-run-plan-dialog" role="dialog" aria-modal="true" aria-labelledby="flowRunPlanTitle-__PAGE_CODE__">
             <header>
                 <h2 id="flowRunPlanTitle-__PAGE_CODE__">Execution Plan</h2>
-                <button type="button" class="table-icon-btn" title="Close" onclick="__PAGE_CODE__.closeRunPlanLayer()">
-                    <i class="fas fa-times"></i>
-                </button>
+                <span class="flow-run-plan-tools">
+                    <button type="button" id="flowRunPlanRefresh-__PAGE_CODE__" class="table-icon-btn" title="Refresh run details" onclick="__PAGE_CODE__.refreshRunPlanLayer()">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                    <button type="button" class="table-icon-btn" title="Close" onclick="__PAGE_CODE__.closeRunPlanLayer()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </span>
             </header>
             <div id="flowRunPlanSummary-__PAGE_CODE__" class="flow-run-plan-summary"></div>
             <div id="flowRunPlanGrid-__PAGE_CODE__" class="table-result-grid"></div>
