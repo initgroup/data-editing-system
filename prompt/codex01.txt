@@ -29,7 +29,7 @@ git add requirements.txt
 # 2. 변경 파일 스테이징
 git add .
 # 3. 커밋 생성
-git commit -m "INIT Data Editing Sytem - 2026.06.21"
+git commit -m "INIT Data Editing Sytem - 2026.06.24"
 # 4. 원격 저장소 최신 상태 반영
 git pull origin main
 # 5. 원격 저장소에 푸시
