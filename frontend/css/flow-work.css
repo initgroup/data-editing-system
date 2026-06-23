@@ -1,0 +1,226 @@
+.flow-work-page {
+    display: flex;
+    flex-direction: column;
+    min-height: calc(100vh - 128px);
+    overflow: visible;
+}
+
+.flow-work-page .work-context-card,
+.flow-work-page .flow-work-tabs {
+    flex: 0 0 auto;
+}
+
+.flow-work-page .flow-designer-panel.is-active,
+.flow-work-page .flow-history-panel.is-active,
+.flow-work-page .flow-result-sql-panel.is-active {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    height: calc(100vh - 320px);
+    max-height: calc(100vh - 320px);
+    min-height: 0;
+    overflow: hidden;
+}
+
+.flow-work-page .flow-workspace {
+    display: grid;
+    flex: 1 1 0;
+    grid-template-columns: minmax(260px, 300px) minmax(0, 1fr);
+    height: 100%;
+    margin-top: 12px;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.flow-work-page.is-flow-sidebar-collapsed .flow-workspace {
+    grid-template-columns: 48px minmax(0, 1fr);
+}
+
+.flow-work-page .flow-sidebar,
+.flow-work-page .flow-main-panel {
+    height: 100%;
+    max-height: none;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.flow-work-page .flow-main-panel {
+    display: flex;
+    flex-direction: column;
+}
+
+.flow-work-page .flow-meta-card {
+    flex: 0 0 auto;
+}
+
+.flow-work-page .flow-designer-card {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.flow-work-page .flow-editor-layout {
+    display: grid;
+    flex: 1 1 0;
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
+    min-height: 0;
+    overflow: hidden;
+}
+
+.flow-work-page.is-flow-inspector-collapsed .flow-editor-layout {
+    grid-template-columns: minmax(0, 1fr) 48px;
+}
+
+.flow-work-page .flow-canvas-panel,
+.flow-work-page .flow-inspector-panel {
+    min-height: 0;
+    overflow: hidden;
+}
+
+.flow-work-page .flow-inspector-panel {
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+
+.flow-work-page .flow-inspector-panel > .data-param-panel-header {
+    align-items: center;
+    background: #fff;
+    flex: 0 0 36px;
+    flex-wrap: nowrap;
+    height: 36px;
+    justify-content: space-between;
+    min-height: 36px;
+    overflow: visible;
+    padding: 0 40px 8px 0;
+    position: relative;
+    z-index: 3;
+}
+
+.flow-work-page .flow-inspector-toggle {
+    height: 32px;
+    margin-left: 0;
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: 32px;
+    z-index: 4;
+}
+
+.flow-work-page .flow-inspector-body {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+}
+
+.flow-work-page.is-flow-inspector-collapsed .flow-inspector-panel > .data-param-panel-header {
+    flex: 0 0 auto;
+    height: 32px;
+    min-height: 0;
+    padding: 0;
+}
+
+.flow-work-page.is-flow-inspector-collapsed .flow-inspector-toggle {
+    margin-left: 0;
+}
+
+.flow-work-page.is-flow-inspector-collapsed .flow-inspector-panel,
+.flow-work-page.is-flow-canvas-maximized.is-flow-inspector-collapsed .flow-inspector-panel {
+    padding: 0;
+}
+
+.flow-work-page.is-flow-inspector-collapsed .flow-inspector-body {
+    display: none !important;
+}
+
+.flow-work-page .flow-canvas-stage {
+    flex: 1 1 0;
+    height: auto;
+    min-height: 0;
+    overflow: auto;
+}
+
+.flow-work-page .flow-node {
+    background: #fffaf0;
+    border-color: #cbd5e1;
+    border-style: solid;
+}
+
+.flow-work-page.is-sample-flow-visible .flow-node.is-sample-node {
+    background: #fffaf0;
+    border-color: #cbd5e1;
+    border-style: dashed;
+}
+
+.flow-work-page .flow-node.is-selected {
+    background: #fffaf0;
+    border-color: #2563eb;
+    border-style: solid;
+}
+
+.flow-work-page.is-sample-flow-visible .flow-node.is-selected.is-sample-node {
+    border-style: dashed;
+}
+
+.flow-work-page .flow-history-panel.is-active,
+.flow-work-page .flow-result-sql-panel.is-active {
+    padding: 20px 24px;
+}
+
+.flow-work-page .flow-history-panel > .data-panel-toolbar,
+.flow-work-page .flow-result-sql-toolbar,
+.flow-work-page .data-sql-result-header {
+    flex: 0 0 auto;
+}
+
+.flow-work-page .flow-history-panel > .table-result-grid {
+    border: 1px solid #d1d5db;
+    flex: 1 1 0;
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    overflow: auto;
+}
+
+.flow-work-page .flow-result-sql-workbench {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    gap: 8px;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.flow-work-page .flow-result-sql-editor {
+    flex: 0 0 180px;
+    min-height: 160px;
+    width: 100%;
+}
+
+.flow-work-page .flow-result-sql-workbench > .table-result-grid {
+    border: 1px solid #d1d5db;
+    flex: 1 1 0;
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    overflow: auto;
+}
+
+.flow-work-page .flow-history-panel > .table-result-grid .table-grid th,
+.flow-work-page .flow-result-sql-workbench > .table-result-grid .table-grid th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
+@media (max-width: 1100px) {
+    .flow-work-page .flow-workspace,
+    .flow-work-page .flow-editor-layout {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}

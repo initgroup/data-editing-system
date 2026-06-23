@@ -1371,11 +1371,31 @@
     padding: 12px;
 }
 
+.upload-table-analysis-area .table-tab-panel.is-active {
+    display: flex;
+    flex-direction: column;
+}
+
+.upload-preview-grid,
 .upload-table-analysis-area .table-tab-panel > .table-result-grid,
 .upload-table-analysis-area .sql-workbench > .table-result-grid {
-    flex: 1 1 auto;
+    flex: 1 1 0;
+    height: auto;
+    max-height: none;
     min-height: 0;
     overflow: auto;
+}
+
+.upload-table-analysis-area .sql-workbench {
+    flex: 1 1 0;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.upload-table-analysis-area .sql-editor {
+    flex: 0 0 180px;
+    min-height: 160px;
 }
 
 .upload-table-analysis-area .table-toolbar,
@@ -1647,6 +1667,52 @@
 
 #container-M02002 .table-meta-strip {
     grid-template-columns: minmax(110px, 150px) minmax(320px, 1.4fr) minmax(170px, 220px) minmax(0, 1fr);
+}
+
+#container-M02002 .table-workspace {
+    height: calc(100vh - 300px);
+    max-height: calc(100vh - 300px);
+    min-height: 0;
+    overflow: hidden;
+}
+
+#container-M02002 .table-object-panel,
+#container-M02002 .table-panel {
+    min-height: 0;
+    overflow: hidden;
+}
+
+#container-M02002 .table-tab-panel.is-active {
+    display: flex;
+    flex-direction: column;
+}
+
+#container-M02002 .table-tab-panel > .table-result-grid,
+#container-M02002 .sql-workbench > .table-result-grid {
+    flex: 1 1 0;
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    overflow: auto;
+}
+
+#container-M02002 .sql-workbench {
+    flex: 1 1 0;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+}
+
+#container-M02002 .table-sql-editor {
+    flex: 0 0 180px;
+    height: 180px;
+    min-height: 160px;
+}
+
+#container-M02002 .table-result-grid .table-grid th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
 }
 
 .table-grid {
@@ -3341,12 +3407,73 @@ body.is-column-resizing {
     min-height: 0;
 }
 
+#container-M90001 .env-workspace,
+#container-M90002 .oml-workspace {
+    height: calc(100vh - 176px);
+    max-height: calc(100vh - 176px);
+    min-height: 0;
+    overflow: hidden;
+}
+
+#container-M90001 .env-object-panel,
+#container-M90001 .env-panel,
+#container-M90002 .oml-resource-panel,
+#container-M90002 .oml-detail-panel {
+    max-height: 100%;
+    min-height: 0;
+}
+
+#container-M90002 .data-param-script-layout {
+    min-height: 0;
+}
+
+#container-M90001.env-page,
+#container-M90002.env-page {
+    display: flex;
+    flex-direction: column;
+    min-height: calc(100vh - 128px);
+    overflow: visible;
+}
+
+#container-M90001 .env-workspace,
+#container-M90002 .oml-workspace {
+    flex: 0 0 auto;
+}
+
+#container-M90001 .env-panel,
+#container-M90002 .oml-detail-panel {
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+#container-M90001 .env-detail-grid {
+    flex: 1 1 220px;
+    min-height: 0;
+}
+
+#container-M90001 .env-source-panel {
+    flex: 0 1 240px;
+    flex-basis: 240px;
+    min-height: 160px;
+}
+
+#container-M90002 .data-param-script-layout {
+    flex: 1 1 0;
+    min-height: 0;
+}
+
+#container-M90002 .data-param-panel .sql-editor {
+    min-height: 0;
+    resize: none;
+}
+
 /* ===== Shared data work layout ===== */
 #page-section-M01001,
 #page-section-M01002,
 #page-section-M02001,
 #page-section-M02002,
 #page-section-M90001,
+#page-section-M90002,
 #page-section-M03001 {
     height: auto !important;
     min-height: 100%;
@@ -3354,6 +3481,8 @@ body.is-column-resizing {
 }
 
 .table-page.data-work-page {
+    display: flex;
+    flex-direction: column;
     height: auto !important;
     max-height: none;
     min-height: calc(100vh - 128px);
@@ -3369,6 +3498,7 @@ body.is-column-resizing {
 }
 
 .data-work-tabs {
+    flex: 0 0 auto;
     margin-top: 12px;
 }
 
@@ -3825,10 +3955,10 @@ body.is-column-resizing {
 }
 
 #container-M90002 .data-param-script-layout {
-    flex: 1 1 auto;
+    flex: 1 1 0;
     grid-template-columns: minmax(360px, 1.05fr) minmax(420px, 1.25fr);
     margin-top: 0;
-    min-height: 320px;
+    min-height: 0;
     overflow: hidden;
 }
 
@@ -4477,6 +4607,87 @@ body.is-column-resizing {
     height: auto;
     max-height: none;
     min-height: 0;
+}
+
+.data-work-page:not(.flow-work-page) .data-work-panel.is-active,
+.data-work-page:not(.flow-work-page) .data-tool-panel.is-active {
+    flex: 0 0 auto;
+    height: calc(100vh - 320px);
+    max-height: calc(100vh - 320px);
+    min-height: 0;
+    overflow: hidden;
+}
+
+.data-work-page:not(.flow-work-page) .data-workspace {
+    flex: 1 1 auto;
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.data-work-page:not(.flow-work-page) .data-job-panel {
+    min-height: 0;
+    overflow: hidden;
+}
+
+.data-work-page:not(.flow-work-page) .data-main-panel {
+    min-height: 0;
+    overflow: hidden;
+}
+
+.data-work-page:not(.flow-work-page) .data-param-card {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.data-work-page:not(.flow-work-page) .data-param-script-layout {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.data-work-page:not(.flow-work-page) .data-param-panel {
+    min-height: 0;
+    overflow: hidden;
+}
+
+.data-work-page:not(.flow-work-page) .data-param-grid,
+.data-work-page:not(.flow-work-page) .data-script-editor {
+    flex: 1 1 0;
+    height: auto;
+    min-height: 0;
+}
+
+.data-work-page:not(.flow-work-page) .data-sql-workbench {
+    flex: 1 1 0;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.data-work-page:not(.flow-work-page) .data-sql-editor {
+    flex: 0 0 180px;
+    min-height: 160px;
+}
+
+.data-work-page:not(.flow-work-page) .data-sql-workbench .table-result-grid,
+.data-work-page:not(.flow-work-page) .data-history-grid {
+    flex: 1 1 auto;
+    height: auto;
+    max-height: none;
+    min-height: 240px;
+    overflow: auto;
+}
+
+.data-work-page:not(.flow-work-page) .data-sql-workbench .table-result-grid .table-grid th,
+.data-work-page:not(.flow-work-page) .data-history-grid .table-grid th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
 }
 
 .data-sql-result-header {
@@ -5930,6 +6141,21 @@ body.intro-mode #container-M99001 .env-workspace {
 
 .flow-work-page .flow-workspace {
     grid-template-columns: minmax(260px, 300px) minmax(0, 1fr);
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.flow-work-page .flow-designer-panel.is-active,
+.flow-work-page .flow-history-panel.is-active,
+.flow-work-page .flow-result-sql-panel.is-active {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    height: calc(100vh - 320px);
+    max-height: calc(100vh - 320px);
+    min-height: 0;
+    overflow: hidden;
 }
 
 .flow-work-page.is-flow-sidebar-collapsed .flow-workspace {
@@ -5968,7 +6194,10 @@ body.intro-mode #container-M99001 .env-workspace {
 }
 
 .flow-work-page .flow-main-panel {
-    min-height: calc(100vh - 180px);
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    overflow: hidden;
 }
 
 .flow-work-page .flow-meta-card {
@@ -6108,7 +6337,10 @@ body.intro-mode #container-M99001 .env-workspace {
 }
 
 .flow-work-page .flow-editor-layout {
+    flex: 1 1 0;
     grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
+    min-height: 0;
+    overflow: hidden;
 }
 
 .flow-work-page.is-flow-inspector-collapsed .flow-editor-layout {
@@ -6116,15 +6348,23 @@ body.intro-mode #container-M99001 .env-workspace {
 }
 
 .flow-work-page .flow-designer-card {
+    display: flex;
+    flex-direction: column;
     flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
     position: relative;
 }
 
 .flow-canvas-toolbar {
     align-items: center;
     display: flex;
+    flex: 0 0 32px;
+    flex-wrap: nowrap;
     gap: 6px;
+    min-height: 32px;
     min-width: 0;
+    overflow: hidden;
 }
 
 .flow-zoom-label {
@@ -6159,6 +6399,23 @@ body.intro-mode #container-M99001 .env-workspace {
 
 .flow-work-page .flow-canvas-panel {
     min-height: 0;
+    overflow: hidden;
+}
+
+.flow-work-page .flow-canvas-panel > .data-param-panel-header {
+    align-items: center;
+    flex: 0 0 32px;
+    flex-wrap: nowrap;
+    height: 32px;
+    min-height: 32px;
+    overflow: hidden;
+}
+
+.flow-work-page .flow-canvas-panel > .data-param-panel-header .env-detail-hint {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .flow-canvas-stage {
@@ -6170,8 +6427,8 @@ body.intro-mode #container-M99001 .env-workspace {
     border: 1px solid #d7dce3;
     cursor: grab;
     flex: 1 1 auto;
-    height: clamp(680px, calc(100vh - 340px), 980px);
-    min-height: 680px;
+    height: auto;
+    min-height: 0;
     overflow: auto;
     position: relative;
     user-select: none;
@@ -6513,17 +6770,16 @@ body.intro-mode #container-M99001 .env-workspace {
 .data-tool-panel[data-panel="resultSql"].is-active {
     display: flex;
     flex-direction: column;
-    height: calc(100vh - 280px);
-    max-height: calc(100vh - 280px);
     min-height: 0;
     overflow: hidden;
 }
 
 .flow-result-sql-workbench {
     display: flex;
-    flex: 1 1 auto;
+    flex: 1 1 0;
     flex-direction: column;
     gap: 8px;
+    height: 100%;
     min-height: 0;
     overflow: hidden;
 }
@@ -6571,8 +6827,29 @@ body.intro-mode #container-M99001 .env-workspace {
 
 .flow-result-sql-workbench .table-result-grid {
     border: 1px solid #d1d5db;
-    flex: 1 1 auto;
-    min-height: 240px;
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: auto;
+}
+
+.flow-result-sql-workbench .table-result-grid .table-grid th,
+.flow-work-page .data-tool-panel[data-panel="history"] .table-result-grid .table-grid th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
+.flow-work-page .data-tool-panel[data-panel="history"].is-active {
+    min-height: 0;
+    overflow: hidden;
+}
+
+.flow-work-page .data-tool-panel[data-panel="history"] .table-result-grid {
+    border: 1px solid #d1d5db;
+    flex: 1 1 0;
+    height: auto;
+    max-height: none;
+    min-height: 0;
     overflow: auto;
 }
 
@@ -6679,7 +6956,8 @@ body.intro-mode #container-M99001 .env-workspace {
 .flow-inspector-panel {
     max-width: 100%;
     min-width: 0;
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
 }
 
 .flow-inspector-panel .data-work-form-grid,
@@ -6710,9 +6988,18 @@ body.intro-mode #container-M99001 .env-workspace {
 
 .flow-inspector-panel .data-script-header {
     align-items: flex-start;
+    background: #fff;
     flex-wrap: wrap;
     height: auto;
     min-height: 30px;
+    padding: 4px 0 8px;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
+.flow-inspector-panel .data-script-title-group {
+    padding-top: 4px;
 }
 
 .flow-inspector-toggle {

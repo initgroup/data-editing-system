@@ -255,72 +255,74 @@
                                 </button>
                             </header>
 
-                            <div class="data-work-form-card flow-node-meta-card" aria-label="Selected node metadata">
-                                <div class="data-work-form-grid">
-                                    <label>
-                                        <span data-label-key="nodeId">Node ID</span>
-                                        <input id="nodeId-__PAGE_CODE__" class="env-field" type="text" value="profiling-01" readonly>
-                                    </label>
-                                    <label>
-                                        <span data-label-key="nodeType">Node Type</span>
-                                        <select id="nodeType-__PAGE_CODE__" class="env-field" disabled>
-                                            <option value="M03001" selected>데이터 프로파일링</option>
-                                            <option value="M03002">컬럼간 상관 분석</option>
-                                            <option value="M03003">자동 규칙 발굴</option>
-                                            <option value="M03004">규칙 위반 탐지</option>
-                                        </select>
-                                    </label>
-                                    <label>
-                                        <span class="required-title" data-label-key="nodeName">Node Name</span>
-                                        <input id="nodeName-__PAGE_CODE__" class="env-field" type="text" value="Customer profile" readonly>
-                                    </label>
-                                    <label>
-                                        <span data-label-key="ownerName">Owner</span>
-                                        <input id="nodeOwnerName-__PAGE_CODE__" class="env-field" type="text" placeholder="OWNER" readonly>
-                                    </label>
-                                    <label>
-                                        <span data-label-key="tableName">Table</span>
-                                        <input id="nodeTableName-__PAGE_CODE__" class="env-field" type="text" placeholder="TABLE_NAME" readonly>
-                                    </label>
-                                    <label>
-                                        <span data-label-key="resultTableCreate">Result Table Create</span>
-                                        <input id="nodeResultCreateYn-__PAGE_CODE__" class="env-field" type="text" placeholder="N / T / M" readonly>
-                                    </label>
-                                    <label id="nodeResultOwnerWrap-__PAGE_CODE__" style="display: none;">
-                                        <span>Result Owner</span>
-                                        <input id="nodeResultOwner-__PAGE_CODE__" class="env-field" type="text" placeholder="RESULT_OWNER" readonly>
-                                    </label>
-                                    <label id="nodeResultTableWrap-__PAGE_CODE__" style="display: none;">
-                                        <span>Result Table</span>
-                                        <input id="nodeResultTableName-__PAGE_CODE__" class="env-field" type="text" placeholder="RESULT_TABLE_NAME" readonly>
-                                    </label>
-                                    <label>
-                                        <span data-label-key="dependsOn">Depends On</span>
-                                        <input id="nodeDependsOn-__PAGE_CODE__" class="env-field" type="text" value="source-customer" readonly>
-                                    </label>
+                            <div class="flow-inspector-body">
+                                <div class="data-work-form-card flow-node-meta-card" aria-label="Selected node metadata">
+                                    <div class="data-work-form-grid">
+                                        <label>
+                                            <span data-label-key="nodeId">Node ID</span>
+                                            <input id="nodeId-__PAGE_CODE__" class="env-field" type="text" value="profiling-01" readonly>
+                                        </label>
+                                        <label>
+                                            <span data-label-key="nodeType">Node Type</span>
+                                            <select id="nodeType-__PAGE_CODE__" class="env-field" disabled>
+                                                <option value="M03001" selected>데이터 프로파일링</option>
+                                                <option value="M03002">컬럼간 상관 분석</option>
+                                                <option value="M03003">자동 규칙 발굴</option>
+                                                <option value="M03004">규칙 위반 탐지</option>
+                                            </select>
+                                        </label>
+                                        <label>
+                                            <span class="required-title" data-label-key="nodeName">Node Name</span>
+                                            <input id="nodeName-__PAGE_CODE__" class="env-field" type="text" value="Customer profile" readonly>
+                                        </label>
+                                        <label>
+                                            <span data-label-key="ownerName">Owner</span>
+                                            <input id="nodeOwnerName-__PAGE_CODE__" class="env-field" type="text" placeholder="OWNER" readonly>
+                                        </label>
+                                        <label>
+                                            <span data-label-key="tableName">Table</span>
+                                            <input id="nodeTableName-__PAGE_CODE__" class="env-field" type="text" placeholder="TABLE_NAME" readonly>
+                                        </label>
+                                        <label>
+                                            <span data-label-key="resultTableCreate">Result Table Create</span>
+                                            <input id="nodeResultCreateYn-__PAGE_CODE__" class="env-field" type="text" placeholder="N / T / M" readonly>
+                                        </label>
+                                        <label id="nodeResultOwnerWrap-__PAGE_CODE__" style="display: none;">
+                                            <span>Result Owner</span>
+                                            <input id="nodeResultOwner-__PAGE_CODE__" class="env-field" type="text" placeholder="RESULT_OWNER" readonly>
+                                        </label>
+                                        <label id="nodeResultTableWrap-__PAGE_CODE__" style="display: none;">
+                                            <span>Result Table</span>
+                                            <input id="nodeResultTableName-__PAGE_CODE__" class="env-field" type="text" placeholder="RESULT_TABLE_NAME" readonly>
+                                        </label>
+                                        <label>
+                                            <span data-label-key="dependsOn">Depends On</span>
+                                            <input id="nodeDependsOn-__PAGE_CODE__" class="env-field" type="text" value="source-customer" readonly>
+                                        </label>
+                                    </div>
                                 </div>
-                            </div>
 
-                            <section class="data-param-panel flow-bind-card" aria-label="Runtime bind variables">
-                                <header class="data-param-panel-header">
-                                    <strong data-label-key="runtimeBindVariables">Runtime Bind Variables</strong>
-                                </header>
-                                <div id="nodeBindGrid-__PAGE_CODE__" class="data-bind-grid flow-node-bind-grid">
-                                    <div class="table-empty">No runtime bind variables.</div>
-                                </div>
-                            </section>
+                                <section class="data-param-panel flow-bind-card" aria-label="Runtime bind variables">
+                                    <header class="data-param-panel-header">
+                                        <strong data-label-key="runtimeBindVariables">Runtime Bind Variables</strong>
+                                    </header>
+                                    <div id="nodeBindGrid-__PAGE_CODE__" class="data-bind-grid flow-node-bind-grid">
+                                        <div class="table-empty">No runtime bind variables.</div>
+                                    </div>
+                                </section>
 
-                            <section class="data-param-panel" aria-label="Selected node generated PL/SQL">
-                                <header class="data-param-panel-header data-script-header">
-                                    <strong data-label-key="generatedScript">Generated PL/SQL</strong>
-                                </header>
-                                <textarea id="nodeExecPlsqlEditor-__PAGE_CODE__" class="sql-editor data-script-editor" spellcheck="false" aria-label="Selected node executable PL/SQL" readonly>BEGIN
+                                <section class="data-param-panel" aria-label="Selected node generated PL/SQL">
+                                    <header class="data-param-panel-header data-script-header">
+                                        <strong data-label-key="generatedScript">Generated PL/SQL</strong>
+                                    </header>
+                                    <textarea id="nodeExecPlsqlEditor-__PAGE_CODE__" class="sql-editor data-script-editor" spellcheck="false" aria-label="Selected node executable PL/SQL" readonly>BEGIN
     OBJ_PROFILE_CUSTOMER(
         p_input_table =&gt; :input,
         p_output_table =&gt; :output
     );
 END;</textarea>
-                            </section>
+                                </section>
+                            </div>
                         </section>
                     </div>
                 </section>
