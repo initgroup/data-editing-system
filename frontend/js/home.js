@@ -3,14 +3,22 @@
 
     const home = {
         ruleTrendChart: null,
+        workflowResultChart: null,
+        workflowJobChart: null,
         dashboardData: null,
         isRefreshingWorkflow: false,
         isRefreshingQuality: false,
         selectedNoticeId: null,
+        selectedFlowRunLabel: "",
+        selectedFlowRunId: "",
+        selectedNodeRunId: "",
 
         init() {
             this.renderIdentity();
+            this.renderWorkflowKpis();
             this.renderRuleTrendChart();
+            this.renderFlowRunStrip();
+            this.renderFlowDetailPanel({ deferLoad: true });
             this.renderAlerts();
             this.renderLinks();
             this.bindEvents();
@@ -50,7 +58,7 @@
             const canvas = document.getElementById("homeRuleTrendChart");
             if (!canvas || !window.Chart) return;
             if (this.ruleTrendChart) this.ruleTrendChart.destroy();
-            const trend = this.normalizeRuleTrend(this.dashboardData?.target?.ruleTrend || this.dashboardData?.ruleTrend || []);
+            const trend = this.normalizeFlowTrend(this.dashboardData?.target?.flowTrend || []);
 
             this.ruleTrendChart = new Chart(canvas, {
                 type: "line",
@@ -58,55 +66,31 @@
                     labels: trend.labels,
                     datasets: [
                         {
-                            label: "자동규칙발굴 성공",
-                            data: trend.discoverySuccess,
+                            label: "통합시나리오 성공",
+                            data: trend.success,
                             borderColor: "#2563eb",
-                            backgroundColor: "rgba(37, 99, 235, 0.12)",
+                            backgroundColor: "rgba(37, 99, 235, 0.14)",
                             fill: true,
-                            tension: 0.35
+                            tension: 0.35,
+                            borderWidth: 2.5,
+                            pointRadius: (context) => Number(context.raw || 0) > 0 ? 5 : 0,
+                            pointHoverRadius: 8,
+                            statusLabel: "성공"
                         },
                         {
-                            label: "자동규칙발굴 실패",
-                            data: trend.discoveryFailed,
-                            borderColor: "#1d4ed8",
-                            backgroundColor: "rgba(37, 99, 235, 0.04)",
-                            borderDash: [6, 5],
-                            fill: false,
-                            tension: 0.35
-                        },
-                        {
-                            label: "규칙위반탐지 성공",
-                            data: trend.violationSuccess,
+                            label: "통합시나리오 실패",
+                            data: trend.failed,
                             borderColor: "#dc2626",
-                            backgroundColor: "rgba(220, 38, 38, 0.10)",
-                            fill: true,
-                            tension: 0.35
-                        },
-                        {
-                            label: "규칙위반탐지 실패",
-                            data: trend.violationFailed,
-                            borderColor: "#b91c1c",
-                            backgroundColor: "rgba(220, 38, 38, 0.04)",
-                            borderDash: [6, 5],
+                            backgroundColor: "#dc2626",
                             fill: false,
-                            tension: 0.35
-                        },
-                        {
-                            label: "통합시나리오실행 성공",
-                            data: trend.flowSuccess,
-                            borderColor: "#16a34a",
-                            backgroundColor: "rgba(22, 163, 74, 0.10)",
-                            fill: true,
-                            tension: 0.35
-                        },
-                        {
-                            label: "통합시나리오실행 실패",
-                            data: trend.flowFailed,
-                            borderColor: "#15803d",
-                            backgroundColor: "rgba(22, 163, 74, 0.04)",
-                            borderDash: [6, 5],
-                            fill: false,
-                            tension: 0.35
+                            showLine: false,
+                            pointStyle: "triangle",
+                            pointRadius: (context) => Number(context.raw || 0) > 0 ? 8 : 0,
+                            pointHoverRadius: (context) => Number(context.raw || 0) > 0 ? 10 : 0,
+                            pointBorderColor: "#ffffff",
+                            pointBorderWidth: 2,
+                            statusLabel: "실패",
+                            hasData: trend.failed.some((value) => Number(value || 0) > 0)
                         }
                     ]
                 },
@@ -114,67 +98,884 @@
                     responsive: true,
                     maintainAspectRatio: false,
                     interaction: { mode: "index", intersect: false },
+                    onClick: (event, elements) => {
+                        const element = elements?.[0];
+                        if (!element) return;
+                        const label = trend.labels[element.index];
+                        this.selectFlowRunLabel(label);
+                    },
                     plugins: {
                         legend: {
                             position: "bottom",
-                            labels: { boxWidth: 10, usePointStyle: true }
+                            labels: {
+                                boxWidth: 10,
+                                usePointStyle: true,
+                                filter: (item, data) => {
+                                    const dataset = data.datasets[item.datasetIndex];
+                                    return !dataset.label.includes("실패") || dataset.hasData;
+                                }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => {
+                                    const dataset = context.dataset || {};
+                                    return `${dataset.statusLabel || ""} ${this.formatNumber(context.raw)}건`;
+                                },
+                                afterBody: (items) => {
+                                    const hasFailure = items.some((item) => item.dataset?.statusLabel === "실패" && Number(item.raw || 0) > 0);
+                                    return hasFailure ? ["실패 이벤트가 있는 날짜입니다.", "클릭하면 해당 날짜의 실행 목록을 확인합니다."] : ["클릭하면 해당 날짜의 실행 목록을 확인합니다."];
+                                }
+                            }
                         }
                     },
                     scales: {
                         x: { grid: { display: false } },
-                        y: { beginAtZero: true, ticks: { precision: 0 } }
+                        y: {
+                            beginAtZero: true,
+                            ticks: { precision: 0 },
+                            grid: { color: "rgba(148, 163, 184, 0.24)" }
+                        }
                     }
                 }
             });
         },
 
-        normalizeRuleTrend(rows) {
+        renderWorkflowKpis() {
+            const container = document.getElementById("homeWorkflowKpiGrid");
+            if (!container) return;
+            const trend = this.normalizeFlowTrend(this.dashboardData?.target?.flowTrend || []);
+            const runs = this.getRecentFlowRuns();
+            const summary = this.summarizeFlowTrend(trend);
+            const latest = runs[0] || null;
+            const cards = [
+                {
+                    label: "통합 실행",
+                    value: this.formatNumber(summary.totalRuns),
+                    trend: summary.lastActivity ? `최근 실행 ${summary.lastActivity}` : "최근 7일 실행 없음",
+                    icon: "fa-diagram-project",
+                    tone: "is-primary"
+                },
+                {
+                    label: "성공률",
+                    value: summary.totalRuns ? `${summary.successRate}%` : "-",
+                    trend: `${this.formatNumber(summary.successRuns)} 성공 / ${this.formatNumber(summary.failedRuns)} 실패`,
+                    icon: "fa-chart-line",
+                    tone: summary.failedRuns ? "is-warn" : "is-good"
+                },
+                {
+                    label: "실패 건수",
+                    value: this.formatNumber(summary.failedRuns),
+                    trend: summary.failedRuns ? "실패 날짜는 빨간 마커로 표시" : "최근 실패 없음",
+                    icon: summary.failedRuns ? "fa-triangle-exclamation" : "fa-circle-check",
+                    tone: summary.failedRuns ? "is-warn" : "is-good"
+                },
+                {
+                    label: "최근 시나리오",
+                    value: latest?.FLOW_NAME || "없음",
+                    trend: latest ? `${latest.STATUS || "-"} · Run #${latest.FLOW_RUN_ID}` : "실행 이력 없음",
+                    icon: "fa-clock-rotate-left",
+                    tone: latest?.STATUS === "SUCCESS" ? "is-good" : (latest ? "is-warn" : "is-neutral"),
+                    wide: true
+                }
+            ];
+            container.innerHTML = cards.map((card) => `
+                <article class="home-kpi ${this.escapeHtml(card.tone)} ${card.wide ? "is-wide" : ""}">
+                    <span class="home-kpi-icon"><i class="fas ${this.escapeHtml(card.icon)}"></i></span>
+                    <div>
+                        <span>${this.escapeHtml(card.label)}</span>
+                        <strong title="${this.escapeHtml(card.value)}">${this.escapeHtml(card.value)}</strong>
+                        <small>${this.escapeHtml(card.trend)}</small>
+                    </div>
+                </article>
+            `).join("");
+        },
+
+        normalizeFlowTrend(rows) {
             const fallbackLabels = ["D-6", "D-5", "D-4", "D-3", "D-2", "D-1", "Today"];
             if (!Array.isArray(rows) || rows.length === 0) {
                 return {
                     labels: fallbackLabels,
-                    discoverySuccess: [0, 0, 0, 0, 0, 0, 0],
-                    discoveryFailed: [0, 0, 0, 0, 0, 0, 0],
-                    violationSuccess: [0, 0, 0, 0, 0, 0, 0],
-                    violationFailed: [0, 0, 0, 0, 0, 0, 0],
-                    flowSuccess: [0, 0, 0, 0, 0, 0, 0],
-                    flowFailed: [0, 0, 0, 0, 0, 0, 0]
+                    success: [0, 0, 0, 0, 0, 0, 0],
+                    failed: [0, 0, 0, 0, 0, 0, 0]
                 };
             }
             const labels = [];
             const byLabel = {};
             rows.forEach((row) => {
                 const label = row.label || row.RUN_DATE || "";
-                const menuCode = row.menuCode || row.MENU_CODE || "";
                 const statusGroup = String(row.statusGroup || row.STATUS_GROUP || "SUCCESS").toUpperCase();
                 const count = Number(row.count ?? row.CNT ?? 0);
                 if (!label) return;
                 if (!byLabel[label]) {
                     labels.push(label);
-                    byLabel[label] = {
-                        discoverySuccess: 0,
-                        discoveryFailed: 0,
-                        violationSuccess: 0,
-                        violationFailed: 0,
-                        flowSuccess: 0,
-                        flowFailed: 0
-                    };
+                    byLabel[label] = { success: 0, failed: 0 };
                 }
-                const suffix = statusGroup === "FAILED" ? "Failed" : "Success";
-                if (menuCode === "M04001") byLabel[label][`flow${suffix}`] += count;
-                else if (menuCode === "M03004") byLabel[label][`violation${suffix}`] += count;
-                else byLabel[label][`discovery${suffix}`] += count;
+                const statusKey = statusGroup === "FAILED" ? "failed" : "success";
+                byLabel[label][statusKey] += count;
             });
             return {
                 labels,
-                discoverySuccess: labels.map((label) => byLabel[label].discoverySuccess),
-                discoveryFailed: labels.map((label) => byLabel[label].discoveryFailed),
-                violationSuccess: labels.map((label) => byLabel[label].violationSuccess),
-                violationFailed: labels.map((label) => byLabel[label].violationFailed),
-                flowSuccess: labels.map((label) => byLabel[label].flowSuccess),
-                flowFailed: labels.map((label) => byLabel[label].flowFailed)
+                success: labels.map((label) => byLabel[label].success),
+                failed: labels.map((label) => byLabel[label].failed)
             };
         },
+
+        summarizeFlowTrend(trend) {
+            const successRuns = trend.success.reduce((sum, value) => sum + Number(value || 0), 0);
+            const failedRuns = trend.failed.reduce((sum, value) => sum + Number(value || 0), 0);
+            let lastActivity = "";
+            trend.labels.forEach((label, index) => {
+                if (Number(trend.success[index] || 0) + Number(trend.failed[index] || 0) > 0) lastActivity = label;
+            });
+            const totalRuns = successRuns + failedRuns;
+            const successRate = totalRuns ? Math.round((successRuns / totalRuns) * 100) : 0;
+            return { totalRuns, successRuns, failedRuns, successRate, lastActivity };
+        },
+
+        getRecentFlowRuns() {
+            return Array.isArray(this.dashboardData?.target?.recentFlowRuns)
+                ? this.dashboardData.target.recentFlowRuns
+                : [];
+        },
+
+        getFlowRunLabel(row) {
+            const value = row?.CREATED_AT || row?.STARTED_AT || "";
+            const match = String(value || "").match(/^\d{4}-(\d{2})-(\d{2})/);
+            if (match) return `${match[1]}-${match[2]}`;
+            const compact = String(value || "").match(/^(\d{2})-(\d{2})/);
+            return compact ? `${compact[1]}-${compact[2]}` : "";
+        },
+
+        renderFlowRunStrip() {
+            const container = document.getElementById("homeFlowRunStrip");
+            if (!container) return;
+            const runs = this.getRecentFlowRuns();
+            if (!runs.length) {
+                container.innerHTML = `
+                    <div class="home-flow-selection-empty">
+                        <i class="fas fa-inbox"></i>
+                        <span>최근 통합시나리오 실행 이력이 없습니다.</span>
+                    </div>
+                `;
+                return;
+            }
+            if (!this.selectedFlowRunLabel) this.selectedFlowRunLabel = this.getFlowRunLabel(runs[0]);
+            const dateRuns = this.getFlowRunsByLabel(this.selectedFlowRunLabel);
+            if (!dateRuns.some((run) => String(run.FLOW_RUN_ID || "") === String(this.selectedFlowRunId || ""))) {
+                this.selectedFlowRunId = String(dateRuns[0]?.FLOW_RUN_ID || runs[0].FLOW_RUN_ID || "");
+            }
+            const successCount = dateRuns.filter((run) => String(run.STATUS || "").toUpperCase() === "SUCCESS").length;
+            const failedCount = dateRuns.filter((run) => ["FAILED", "SKIPPED", "ERROR"].includes(String(run.STATUS || "").toUpperCase())).length;
+            container.innerHTML = `
+                <div class="home-flow-selection-summary">
+                    <span><i class="fas fa-chart-line"></i></span>
+                    <div>
+                        <strong>${this.escapeHtml(this.selectedFlowRunLabel || "최근 실행")}</strong>
+                        <small>그래프에서 날짜를 선택하면 해당 날짜의 통합실행 목록과 상세가 아래에 표시됩니다.</small>
+                    </div>
+                </div>
+                <div class="home-flow-selection-metrics">
+                    <span><strong>${this.formatNumber(dateRuns.length)}</strong><small>runs</small></span>
+                    <span><strong>${this.formatNumber(successCount)}</strong><small>success</small></span>
+                    <span><strong>${this.formatNumber(failedCount)}</strong><small>failed</small></span>
+                </div>
+            `;
+        },
+
+        getFlowRunsByLabel(label) {
+            return this.getRecentFlowRuns().filter((item) => this.getFlowRunLabel(item) === label);
+        },
+
+        async selectFlowRunLabel(label) {
+            if (!label) return;
+            await this.preserveHomeScroll(async () => {
+                const runs = this.getFlowRunsByLabel(label);
+                this.selectedFlowRunLabel = label;
+                this.selectedFlowRunId = String(runs[0]?.FLOW_RUN_ID || "");
+                this.selectedNodeRunId = "";
+                this.renderFlowRunStrip();
+                await this.renderFlowDetailPanel({ reload: true });
+            });
+        },
+
+        async selectFlowRun(flowRunId) {
+            if (!flowRunId) return;
+            await this.preserveHomeScroll(async () => {
+                this.selectedFlowRunId = String(flowRunId);
+                const selectedRun = this.getRecentFlowRuns().find((item) => String(item.FLOW_RUN_ID || "") === String(flowRunId));
+                if (selectedRun) this.selectedFlowRunLabel = this.getFlowRunLabel(selectedRun);
+                this.selectedNodeRunId = "";
+                this.renderFlowRunStrip();
+                await this.renderFlowDetailPanel({ reload: true });
+            });
+        },
+
+        getModuleMeta(menuCode) {
+            const map = {
+                M03001: { title: "데이터 프로파일링", icon: "fa-table-columns", tone: "is-profile", description: "컬럼 품질과 분포" },
+                M03002: { title: "컬럼간 상관 분석", icon: "fa-grip", tone: "is-correlation", description: "상관쌍과 관계 강도" },
+                M03003: { title: "자동규칙발굴", icon: "fa-wand-magic-sparkles", tone: "is-discovery", description: "Itemset과 Association Rule" },
+                M03004: { title: "규칙위반탐지", icon: "fa-shield-halved", tone: "is-violation", description: "위반 유형과 샘플" }
+            };
+            return map[menuCode] || { title: "Flow Node", icon: "fa-cube", tone: "is-neutral", description: "노드 결과" };
+        },
+
+        async renderFlowDetailPanel(options = {}) {
+            const panel = document.getElementById("homeFlowDetailPanel");
+            if (!panel) return;
+            const runs = this.getRecentFlowRuns();
+            if (!this.selectedFlowRunLabel && runs.length) this.selectedFlowRunLabel = this.getFlowRunLabel(runs[0]);
+            const dateRuns = this.getFlowRunsByLabel(this.selectedFlowRunLabel);
+            if (this.selectedFlowRunLabel && !dateRuns.length) {
+                panel.innerHTML = `
+                    <div class="home-flow-detail-empty">
+                        <i class="fas fa-calendar-xmark"></i>
+                        <strong>${this.escapeHtml(this.selectedFlowRunLabel)} 실행 이력이 없습니다</strong>
+                        <span>실행 건수가 있는 그래프 지점을 선택하면 노드별 결과가 표시됩니다.</span>
+                    </div>
+                `;
+                return;
+            }
+            const selectedRun = dateRuns.find((item) => String(item.FLOW_RUN_ID || "") === String(this.selectedFlowRunId || "")) || dateRuns[0] || runs[0];
+            if (!selectedRun) {
+                panel.innerHTML = `
+                    <div class="home-flow-detail-empty">
+                        <i class="fas fa-diagram-project"></i>
+                        <strong>통합시나리오 실행을 선택하세요</strong>
+                        <span>라인 그래프의 실행 지점을 선택하면 노드별 결과가 표시됩니다.</span>
+                    </div>
+                `;
+                return;
+            }
+            this.selectedFlowRunId = String(selectedRun.FLOW_RUN_ID || "");
+            this.selectedFlowRunLabel = this.getFlowRunLabel(selectedRun) || this.selectedFlowRunLabel;
+            if (options.deferLoad && !options.reload) {
+                panel.innerHTML = `
+                    <header class="home-flow-detail-header">
+                        <div>
+                            <span>Scenario Run Detail</span>
+                            <strong>${this.escapeHtml(selectedRun.FLOW_NAME || "Integrated Scenario")}</strong>
+                            <small>Run #${this.escapeHtml(selectedRun.FLOW_RUN_ID || "")} · ${this.escapeHtml(selectedRun.STATUS || "-")} · ${this.escapeHtml(this.formatElapsedTime(selectedRun.STARTED_AT, selectedRun.FINISHED_AT, selectedRun.STATUS))}</small>
+                        </div>
+                        <button type="button" class="home-icon-button" title="Open integrated result analysis" onclick="home.openPage('M04002')">
+                            <i class="fas fa-up-right-from-square"></i>
+                        </button>
+                    </header>
+                    ${this.renderDateRunList(dateRuns.length ? dateRuns : [selectedRun])}
+                    <div class="home-flow-detail-empty">
+                        <i class="fas fa-bolt"></i>
+                        <strong>상세 결과는 선택 시 조회합니다</strong>
+                        <span>초기 대시보드는 빠르게 표시하고, 그래프 지점이나 Run을 클릭하면 노드와 결과 상세를 불러옵니다.</span>
+                    </div>
+                `;
+                panel.querySelectorAll("[data-home-flow-run-id]").forEach((button) => {
+                    button.onclick = () => this.selectFlowRun(button.dataset.homeFlowRunId);
+                });
+                return;
+            }
+            const loadingOverlay = this.showFlowDetailLoading(panel, `Run #${this.selectedFlowRunId} 노드 결과를 불러오는 중입니다.`);
+            try {
+                const json = await CommonUtils.request(`${API_BASE_URL}/home/flow-run/${encodeURIComponent(this.selectedFlowRunId)}/nodes`, {
+                    method: "GET",
+                    showLoading: false
+                });
+                this.hideFlowDetailLoading(panel, loadingOverlay);
+                const nodes = this.normalizeHomeNodes(Array.isArray(json.data) ? json.data : []);
+                this.renderFlowDetailContent(panel, selectedRun, nodes, dateRuns.length ? dateRuns : [selectedRun]);
+            } catch (error) {
+                this.hideFlowDetailLoading(panel, loadingOverlay);
+                if (panel.children.length) {
+                    panel.insertAdjacentHTML("beforeend", `<div class="table-error">${this.escapeHtml(error.message || "통합시나리오 상세 조회에 실패했습니다.")}</div>`);
+                } else {
+                    panel.innerHTML = `<div class="table-error">${this.escapeHtml(error.message || "통합시나리오 상세 조회에 실패했습니다.")}</div>`;
+                }
+            }
+        },
+
+        showFlowDetailLoading(panel, message) {
+            if (!panel) return null;
+            panel.classList.add("is-soft-loading");
+            const overlay = document.createElement("div");
+            overlay.className = "home-flow-detail-loading-overlay";
+            overlay.innerHTML = `
+                <i class="fas fa-spinner fa-spin"></i>
+                <span>${this.escapeHtml(message)}</span>
+            `;
+            panel.appendChild(overlay);
+            return overlay;
+        },
+
+        hideFlowDetailLoading(panel, overlay) {
+            panel?.classList.remove("is-soft-loading");
+            overlay?.remove?.();
+        },
+
+        normalizeHomeNodes(rows) {
+            const knownOrder = ["M03001", "M03002", "M03003", "M03004"];
+            const nodes = rows.map((row) => {
+                const payload = row.PAYLOAD || this.parseJson(row.NODE_PAYLOAD_JSON, {});
+                const menuCode = row.REF_MENU_CODE || payload.refMenuCode || payload.menuCode || "";
+                const meta = this.getModuleMeta(menuCode);
+                return {
+                    raw: row,
+                    payload,
+                    flowNodeRunId: String(row.FLOW_NODE_RUN_ID || ""),
+                    menuCode,
+                    title: meta.title,
+                    icon: meta.icon,
+                    tone: meta.tone,
+                    description: meta.description,
+                    nodeName: row.NODE_NAME || payload.nodeName || meta.title,
+                    status: String(row.STATUS || "").toUpperCase(),
+                    message: row.MESSAGE || "",
+                    resultKind: row.RESULT_KIND || "NONE",
+                    resultMode: row.RESULT_CREATE_YN || "N",
+                    resultOwner: row.RESULT_OWNER || "",
+                    resultObjectName: row.RESULT_OBJECT_NAME || "",
+                    startedAt: row.STARTED_AT || "",
+                    finishedAt: row.FINISHED_AT || ""
+                };
+            });
+            return nodes.sort((a, b) => {
+                const ai = knownOrder.indexOf(a.menuCode);
+                const bi = knownOrder.indexOf(b.menuCode);
+                return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi);
+            });
+        },
+
+        renderFlowDetailContent(panel, run, nodes, dateRuns = []) {
+            const elapsed = this.formatElapsedTime(run.STARTED_AT, run.FINISHED_AT, run.STATUS);
+            panel.innerHTML = `
+                <header class="home-flow-detail-header">
+                    <div>
+                        <span>Scenario Run Detail</span>
+                        <strong>${this.escapeHtml(run.FLOW_NAME || "Integrated Scenario")}</strong>
+                        <small>Run #${this.escapeHtml(run.FLOW_RUN_ID || "")} · ${this.escapeHtml(run.STATUS || "-")} · ${this.escapeHtml(elapsed)}</small>
+                    </div>
+                    <button type="button" class="home-icon-button" title="Open integrated result analysis" onclick="home.openPage('M04002')">
+                        <i class="fas fa-up-right-from-square"></i>
+                    </button>
+                </header>
+                ${this.renderDateRunList(dateRuns)}
+                <div class="home-run-node-divider">
+                    <span>Selected Run Nodes</span>
+                    <strong>Run #${this.escapeHtml(run.FLOW_RUN_ID || "")}</strong>
+                </div>
+                <div class="home-node-step-grid">
+                    ${nodes.map((node) => this.renderNodeCard(node)).join("") || `<div class="table-empty">노드 실행 결과가 없습니다.</div>`}
+                </div>
+                <div class="home-node-visual-panel" id="homeNodeVisualPanel">
+                    <div class="home-flow-detail-empty">
+                        <i class="fas fa-chart-simple"></i>
+                        <strong>노드를 선택하세요</strong>
+                        <span>결과 테이블 또는 모델뷰 유형에 맞춰 시각화가 표시됩니다.</span>
+                    </div>
+                </div>
+            `;
+            panel.querySelectorAll("[data-home-flow-run-id]").forEach((button) => {
+                button.onclick = () => this.selectFlowRun(button.dataset.homeFlowRunId);
+            });
+            panel.querySelectorAll("[data-home-node-run-id]").forEach((button) => {
+                button.onclick = () => this.selectFlowNode(button.dataset.homeNodeRunId, nodes);
+            });
+        },
+
+        renderDateRunList(runs = []) {
+            if (!runs.length) return "";
+            return `
+                <div class="home-date-run-list" aria-label="Selected date integrated scenario runs">
+                    ${runs.map((run) => {
+                        const selected = String(run.FLOW_RUN_ID || "") === String(this.selectedFlowRunId || "");
+                        return `
+                            <button type="button" class="home-date-run-row ${selected ? "is-selected" : ""} ${this.getStatusClass(run.STATUS)}" data-home-flow-run-id="${this.escapeHtml(run.FLOW_RUN_ID || "")}">
+                                <span>
+                                    <strong>Run #${this.escapeHtml(run.FLOW_RUN_ID || "")}</strong>
+                                    <small>${this.escapeHtml(run.FLOW_NAME || "Integrated Scenario")} · ${this.escapeHtml(this.formatDateTime(run.STARTED_AT || run.CREATED_AT))}</small>
+                                </span>
+                                <em>${this.escapeHtml(run.STATUS || "-")}</em>
+                            </button>
+                        `;
+                    }).join("")}
+                </div>
+            `;
+        },
+
+        renderNodeCard(node) {
+            const selected = String(node.flowNodeRunId) === String(this.selectedNodeRunId || "");
+            return `
+                <button type="button" class="home-node-card ${node.tone} ${this.getStatusClass(node.status)} ${selected ? "is-selected" : ""}" data-home-node-run-id="${this.escapeHtml(node.flowNodeRunId)}">
+                    <span class="home-node-icon"><i class="fas ${this.escapeHtml(node.icon)}"></i></span>
+                    <span class="home-node-main">
+                        <strong>${this.escapeHtml(node.title)}</strong>
+                        <small>${this.escapeHtml(node.nodeName || node.description)}</small>
+                        ${node.resultObjectName ? `<em>${this.escapeHtml(node.resultKind)} · ${this.escapeHtml(node.resultOwner)}.${this.escapeHtml(node.resultObjectName)}</em>` : `<em>Result 없음</em>`}
+                    </span>
+                    <span class="home-node-status">${this.escapeHtml(node.status || "-")}</span>
+                </button>
+            `;
+        },
+
+        async selectFlowNode(flowNodeRunId, nodes = null) {
+            this.selectedNodeRunId = String(flowNodeRunId || "");
+            const panel = document.getElementById("homeFlowDetailPanel");
+            const visual = document.getElementById("homeNodeVisualPanel");
+            const nodeRows = nodes || [];
+            const node = nodeRows.find((item) => String(item.flowNodeRunId) === String(flowNodeRunId));
+            panel?.querySelectorAll("[data-home-node-run-id]").forEach((button) => {
+                button.classList.toggle("is-selected", String(button.dataset.homeNodeRunId) === String(flowNodeRunId));
+            });
+            if (!visual || !node) return;
+            visual.innerHTML = `
+                <div class="home-flow-detail-loading">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <span>${this.escapeHtml(node.title)} 결과를 불러오는 중입니다.</span>
+                </div>
+            `;
+            if (node.status !== "SUCCESS") {
+                visual.innerHTML = this.renderNodeMessageVisual(node);
+                return;
+            }
+            if (!node.resultOwner || !node.resultObjectName || node.resultKind === "NONE") {
+                visual.innerHTML = this.renderNodeMessageVisual(node);
+                return;
+            }
+            try {
+                if (node.resultKind === "MODEL") {
+                    const params = new URLSearchParams({
+                        owner: node.resultOwner,
+                        modelName: node.resultObjectName,
+                        limit: "120"
+                    });
+                    const json = await CommonUtils.request(`${API_BASE_URL}/home/model-detail?${params.toString()}`, {
+                        method: "GET",
+                        showLoading: false
+                    });
+                    visual.innerHTML = this.renderModelVisual(node, json);
+                } else {
+                    const params = new URLSearchParams({
+                        owner: node.resultOwner,
+                        objectName: node.resultObjectName,
+                        menuCode: node.menuCode || "",
+                        limit: "80"
+                    });
+                    const json = await CommonUtils.request(`${API_BASE_URL}/home/result-sample?${params.toString()}`, {
+                        method: "GET",
+                        showLoading: false
+                    });
+                    visual.innerHTML = this.renderTableVisual(node, json);
+                }
+            } catch (error) {
+                visual.innerHTML = `<div class="table-error">${this.escapeHtml(error.message || "결과 시각화 조회에 실패했습니다.")}</div>`;
+            }
+        },
+
+        renderNodeMessageVisual(node) {
+            return `
+                <section class="home-node-visual-empty">
+                    <i class="fas ${this.escapeHtml(node.icon)}"></i>
+                    <strong>${this.escapeHtml(node.title)}</strong>
+                    <span>${this.escapeHtml(node.message || "표시할 결과 객체가 없습니다.")}</span>
+                </section>
+            `;
+        },
+
+        renderModelVisual(node, json) {
+            const views = Array.isArray(json.views) ? json.views : [];
+            const vi = views.find((view) => view.viewType === "VI") || {};
+            const vr = views.find((view) => view.viewType === "VR") || {};
+            const vg = views.find((view) => view.viewType === "VG") || {};
+            const va = views.find((view) => view.viewType === "VA") || {};
+            const itemTags = this.extractItemsetTags(vi.data || []).slice(0, 28);
+            const rules = this.extractRuleRows(vr.data || []).slice(0, 8);
+            const itemDictionary = this.buildItemDictionary([...(vi.data || []), ...(va.data || [])]);
+            const readableRules = this.buildReadableRuleCards(vr.data || [], itemDictionary).slice(0, 8);
+            return `
+                <section class="home-node-visual">
+                    <header>
+                        <div>
+                            <span>${this.escapeHtml(node.title)}</span>
+                            <strong>${this.escapeHtml(json.owner || node.resultOwner)}.${this.escapeHtml(json.modelName || node.resultObjectName)}</strong>
+                        </div>
+                        <em>Oracle ML Model View</em>
+                    </header>
+                    <div class="home-model-tabs">
+                        <button type="button" class="is-active" onclick="home.switchModelVisualTab(this, 'readable')">Readable Rules</button>
+                        <button type="button" onclick="home.switchModelVisualTab(this, 'raw')">Detail Views</button>
+                    </div>
+                    <div class="home-model-tab-panel is-active" data-model-tab="readable">
+                        <div class="home-readable-rule-intro">
+                            <strong>사람이 읽는 규칙 요약</strong>
+                            <span>DM$VR의 XML itemset과 조건/결과 컬럼을 해석해 IF 컬럼 = 값 THEN 컬럼 = 값 형태로 표현합니다. 결과 값이 모델뷰에 없으면 값 정보 없음으로 표시합니다.</span>
+                        </div>
+                        <div class="home-readable-rule-grid">
+                            ${readableRules.length ? readableRules.map((rule) => this.renderReadableRuleCard(rule)).join("") : `<div class="table-empty">표시할 규칙 행이 없습니다.</div>`}
+                        </div>
+                    </div>
+                    <div class="home-model-tab-panel" data-model-tab="raw">
+                        <div class="home-model-visual-grid">
+                            <div class="home-model-view-card is-vi">
+                                ${this.renderModelViewHeader("VI", "Itemset/detail", vi)}
+                                <div class="home-model-view-note">
+                                    <strong>Extracted itemset values</strong>
+                                    <span>DM$VI 원본 행의 ITEM / ATTRIBUTE / VALUE / NAME 계열 컬럼에서 추출한 값입니다. 숫자만 보이면 해당 모델뷰가 항목 ID 중심으로 제공되는 상태입니다.</span>
+                                </div>
+                                <div class="home-tag-cloud">
+                                    ${itemTags.length ? itemTags.map((item) => `<span style="--tag-weight:${item.weight}">${this.escapeHtml(item.label)}</span>`).join("") : `<small>DM$VI itemset row가 없습니다.</small>`}
+                                </div>
+                                ${this.renderSampleTable("DM$VI sample rows", vi.columns || [], vi.data || [], 5)}
+                            </div>
+                            <div class="home-model-view-card is-vr">
+                                ${this.renderModelViewHeader("VR", "Top Rules", vr)}
+                                ${rules.length ? `
+                                    <div class="home-rule-list">
+                                        ${rules.map((rule) => `
+                                            <div class="home-rule-bar">
+                                                <span title="${this.escapeHtml(rule.label)}">${this.escapeHtml(rule.label)}</span>
+                                                <em><i style="width:${Math.max(4, rule.score)}%"></i></em>
+                                                <small>
+                                                    <b>${this.escapeHtml(rule.scoreName)}</b>
+                                                    <strong>${this.escapeHtml(rule.scoreValue)}</strong>
+                                                </small>
+                                            </div>
+                                        `).join("")}
+                                    </div>
+                                ` : `<small>DM$VR rule row가 없습니다.</small>`}
+                            </div>
+                        </div>
+                        <div class="home-model-view-card is-vg">
+                            ${this.renderModelViewHeader("VG", "Global/detail", vg)}
+                            ${this.renderSampleTable("", vg.columns || [], vg.data || [], 4)}
+                        </div>
+                        <div class="home-model-view-card is-va">
+                            ${this.renderModelViewHeader("VA", "Attribute/detail rows", va)}
+                            ${this.renderSampleTable("", va.columns || [], va.data || [], 6)}
+                        </div>
+                        <div class="home-model-view-card is-vr">
+                            ${this.renderModelViewHeader("VR", "Rule/detail rows", vr)}
+                            ${this.renderSampleTable("", vr.columns || [], vr.data || [], 6)}
+                        </div>
+                    </div>
+                </section>
+            `;
+        },
+
+        switchModelVisualTab(button, tabName) {
+            const root = button?.closest?.(".home-node-visual");
+            if (!root) return;
+            root.querySelectorAll(".home-model-tabs button").forEach((item) => {
+                item.classList.toggle("is-active", item === button);
+            });
+            root.querySelectorAll(".home-model-tab-panel").forEach((panel) => {
+                panel.classList.toggle("is-active", panel.dataset.modelTab === tabName);
+            });
+        },
+
+        renderReadableRuleCard(rule) {
+            const qualityClass = rule.mappingLevel === "mapped" ? "is-mapped" : "is-limited";
+            return `
+                <article class="home-readable-rule-card ${qualityClass}">
+                    <header>
+                        <span>${this.escapeHtml(rule.ruleId)}</span>
+                        <em>${this.escapeHtml(rule.mappingLabel)}</em>
+                    </header>
+                    <div class="home-readable-rule-sentence">
+                        <b>IF</b>
+                        <strong>${this.escapeHtml(rule.ifText)}</strong>
+                        <b>THEN</b>
+                        <strong>${this.escapeHtml(rule.thenText)}</strong>
+                    </div>
+                    <p>${this.escapeHtml(rule.note)}</p>
+                    <footer>
+                        ${rule.metrics.map((metric) => `
+                            <span>
+                                <small>${this.escapeHtml(metric.label)}</small>
+                                <strong>${this.escapeHtml(metric.value)}</strong>
+                            </span>
+                        `).join("")}
+                    </footer>
+                </article>
+            `;
+        },
+
+        renderModelViewHeader(viewType, title, view = {}) {
+            const viewName = view.viewName || `DM$${viewType}`;
+            const description = view.description || "";
+            const total = Number(view.total || 0);
+            return `
+                <div class="home-model-view-header">
+                    <span class="home-model-view-type">${this.escapeHtml(viewType)}</span>
+                    <div>
+                        <strong>${this.escapeHtml(title)}</strong>
+                        <small>${this.escapeHtml(description)}</small>
+                        <code>${this.escapeHtml(viewName)}</code>
+                    </div>
+                    <em>${this.formatNumber(total)} rows</em>
+                </div>
+            `;
+        },
+
+        renderTableVisual(node, json) {
+            const rows = Array.isArray(json.data) ? json.data : [];
+            const columns = Array.isArray(json.columns) ? json.columns : [];
+            const numericProfile = this.extractNumericProfile(rows, columns).slice(0, 8);
+            const filterHint = node.menuCode === "M03002" && node.resultObjectName === "INIT$_TB_CAT_CORR_PAIR"
+                ? "PASS_YN = 'Y' only"
+                : `${this.formatNumber(rows.length)} sample rows`;
+            return `
+                <section class="home-node-visual">
+                    <header>
+                        <div>
+                            <span>${this.escapeHtml(node.title)}</span>
+                            <strong>${this.escapeHtml(node.resultOwner)}.${this.escapeHtml(node.resultObjectName)}</strong>
+                        </div>
+                        <em>${this.escapeHtml(filterHint)}</em>
+                    </header>
+                    <div class="home-table-profile-bars">
+                        ${numericProfile.length ? numericProfile.map((item) => `
+                            <div class="home-profile-bar">
+                                <span>${this.escapeHtml(item.column)}</span>
+                                <em style="width:${item.width}%"></em>
+                                <small>${this.escapeHtml(item.label)}</small>
+                            </div>
+                        `).join("") : `<small>숫자형 요약 대상 컬럼이 없어서 샘플 테이블을 표시합니다.</small>`}
+                    </div>
+                    ${this.renderSampleTable("Result sample", columns, rows, 8)}
+                </section>
+            `;
+        },
+
+        extractItemsetTags(rows) {
+            const counts = new Map();
+            rows.forEach((row) => {
+                Object.entries(row || {}).forEach(([key, value]) => {
+                    if (!/ITEM|ATTRIBUTE|VALUE|NAME/i.test(key)) return;
+                    String(value ?? "").split(/[{},;|]+/).map((part) => part.trim()).filter(Boolean).forEach((part) => {
+                        if (part.length > 48) return;
+                        counts.set(part, (counts.get(part) || 0) + 1);
+                    });
+                });
+            });
+            const max = Math.max(1, ...counts.values());
+            return [...counts.entries()]
+                .sort((a, b) => b[1] - a[1])
+                .map(([label, count]) => ({ label, weight: (0.75 + (count / max) * 0.65).toFixed(2) }));
+        },
+
+        extractRuleRows(rows) {
+            return rows.map((row, index) => {
+                const entries = Object.entries(row || {});
+                const labelEntry = entries.find(([key]) => /RULE|ITEM|ANT|CONSE|PRED/i.test(key));
+                const scoreEntry = entries.find(([key, value]) => /LIFT|CONF|SUPPORT|PROB/i.test(key) && !Number.isNaN(Number(value)));
+                const rawScore = Number(scoreEntry?.[1] ?? 0);
+                const score = rawScore <= 1 ? rawScore * 100 : Math.min(rawScore * 10, 100);
+                return {
+                    label: String(labelEntry?.[1] || `Rule ${index + 1}`).slice(0, 90),
+                    score: Math.min(100, Math.max(0, score || 8)),
+                    scoreName: scoreEntry?.[0] || "",
+                    scoreValue: scoreEntry ? this.formatDecimal(rawScore) : ""
+                };
+            });
+        },
+
+        buildReadableRuleCards(rows, itemDictionary = new Map()) {
+            return (rows || []).map((row, index) => {
+                const ruleId = this.findRuleValue(row, [/^RULE_ID$/i, /RULE.*ID/i]) || `Rule ${index + 1}`;
+                const antecedent = this.findRuleValue(row, [/ANTECEDENT/i, /\bLHS\b/i, /PREMISE/i, /CONDITION/i, /\bIF\b/i]);
+                const consequent = this.findRuleValue(row, [/CONSEQUENT/i, /\bRHS\b/i, /PREDICT/i, /OUTCOME/i, /\bTHEN\b/i]);
+                const antecedentText = this.resolveRuleSideText(antecedent, itemDictionary);
+                const consequentText = this.resolveRuleSideText(consequent, itemDictionary);
+                const thenText = consequentText && !this.ruleTextHasExplicitValue(consequentText) && !/값 정보 없음/.test(consequentText)
+                    ? `${consequentText} (값 정보 없음)`
+                    : consequentText;
+                const support = this.findMetricValue(row, [/RULE_SUPPORT/i, /^SUPPORT$/i]);
+                const confidence = this.findMetricValue(row, [/RULE_CONFIDENCE/i, /^CONFIDENCE$/i]);
+                const lift = this.findMetricValue(row, [/RULE_LIFT/i, /^LIFT$/i]);
+                const mapped = Boolean(antecedentText && consequentText);
+                const missingConsequentValue = mapped && thenText !== consequentText;
+                return {
+                    ruleId: `Rule #${ruleId}`,
+                    mappingLevel: mapped ? "mapped" : "limited",
+                    mappingLabel: mapped ? "조건/결과 매핑됨" : "ID/지표 중심",
+                    ifText: mapped ? antecedentText : "조건 항목 조합을 뷰에서 직접 확인해야 합니다",
+                    thenText: mapped ? thenText : "결과 항목을 뷰에서 직접 확인해야 합니다",
+                    note: mapped && missingConsequentValue
+                        ? "조건은 XML itemset에서 컬럼 = 값으로 해석했습니다. 결과는 모델뷰가 컬럼명만 제공해서 값은 현재 뷰에서 확인되지 않습니다."
+                        : (mapped
+                            ? "모델 detail view의 XML itemset과 item dictionary 후보를 사용해 사람이 읽는 문장으로 구성했습니다."
+                            : "현재 DM$VR/DM$VI/DM$VA 샘플에는 컬럼명과 값으로 복원 가능한 조건/결과 매핑이 보이지 않습니다. 모델이 item id와 품질지표 중심으로 detail view를 제공하는 상태입니다."),
+                    metrics: [
+                        { label: "support", value: support === null ? "-" : this.formatPercentMetric(support) },
+                        { label: "confidence", value: confidence === null ? "-" : this.formatPercentMetric(confidence) },
+                        { label: "lift", value: lift === null ? "-" : this.formatDecimal(lift) }
+                    ]
+                };
+            });
+        },
+
+        findRuleValue(row, patterns = []) {
+            const entries = Object.entries(row || {});
+            const found = entries.find(([key, value]) => {
+                if (value === null || value === undefined || String(value).trim() === "") return false;
+                if (this.isRuleMetricColumn(key)) return false;
+                return patterns.some((pattern) => pattern.test(String(key || "")));
+            });
+            return found ? found[1] : "";
+        },
+
+        isRuleMetricColumn(key) {
+            return /(SUPPORT|CONFIDENCE|LIFT|COUNT|PROB|P_VALUE|NUMERIC|RANK|PARTITION)/i.test(String(key || ""));
+        },
+
+        buildItemDictionary(rows = []) {
+            const dictionary = new Map();
+            rows.forEach((row) => {
+                const entries = Object.entries(row || {});
+                const idEntry = entries.find(([key, value]) => /(^|_)(ITEM|ITEMSET|ATTRIBUTE|ATTR).*ID$/i.test(key) && value !== null && value !== undefined);
+                if (!idEntry) return;
+                const name = this.findDictionaryValue(row, [/ATTRIBUTE.*NAME/i, /ATTR.*NAME/i, /COLUMN.*NAME/i, /^NAME$/i, /ITEM.*NAME/i]);
+                const value = this.findDictionaryValue(row, [/ATTRIBUTE.*VALUE/i, /ATTR.*VALUE/i, /^VALUE$/i, /ITEM.*VALUE/i, /STRING.*VALUE/i]);
+                const label = [name, value].filter(Boolean).join(" = ");
+                if (label) dictionary.set(String(idEntry[1]), label);
+            });
+            return dictionary;
+        },
+
+        findDictionaryValue(row, patterns = []) {
+            const found = Object.entries(row || {}).find(([key, value]) => {
+                if (value === null || value === undefined || String(value).trim() === "") return false;
+                return patterns.some((pattern) => pattern.test(String(key || "")));
+            });
+            return found ? String(found[1]).trim() : "";
+        },
+
+        resolveRuleSideText(value, dictionary = new Map()) {
+            const text = String(value ?? "").trim();
+            if (!text) return "";
+            const itemsetItems = this.parseOracleItemsetText(text);
+            if (itemsetItems.length) {
+                return itemsetItems
+                    .map((item) => this.formatOracleItemsetItem(item, dictionary))
+                    .filter(Boolean)
+                    .join(" AND ");
+            }
+            const tokens = text.split(/[{},;|]+/).map((part) => part.trim()).filter(Boolean);
+            const resolved = tokens.map((token) => dictionary.get(token) || token);
+            const meaningful = resolved.filter((token) => !/^\d+(\.\d+)?$/.test(token));
+            if (!meaningful.length) return "";
+            return meaningful.map((token) => this.formatRuleExpression(token)).join(" AND ");
+        },
+
+        parseOracleItemsetText(value) {
+            const text = String(value ?? "").trim();
+            if (!/<item\b/i.test(text)) return [];
+            const items = [];
+            const itemPattern = /<item\b[^>]*>([\s\S]*?)<\/item>/gi;
+            let match;
+            while ((match = itemPattern.exec(text)) !== null) {
+                const itemBody = match[1] || "";
+                items.push({
+                    name: this.readXmlTagValue(itemBody, "item_name"),
+                    subname: this.readXmlTagValue(itemBody, "item_subname"),
+                    value: this.readXmlTagValue(itemBody, "item_value")
+                });
+            }
+            return items;
+        },
+
+        readXmlTagValue(text, tagName) {
+            const pattern = new RegExp(`<${tagName}\\b[^>]*>([\\s\\S]*?)<\\/${tagName}>`, "i");
+            const match = pattern.exec(String(text || ""));
+            return match ? this.decodeXmlText(match[1]).trim() : "";
+        },
+
+        decodeXmlText(value) {
+            return String(value ?? "")
+                .replace(/&lt;/g, "<")
+                .replace(/&gt;/g, ">")
+                .replace(/&amp;/g, "&")
+                .replace(/&quot;/g, "\"")
+                .replace(/&apos;/g, "'")
+                .replace(/&#39;/g, "'");
+        },
+
+        formatOracleItemsetItem(item, dictionary = new Map()) {
+            const rawName = String(item?.name || "").trim();
+            const rawSubname = String(item?.subname || "").trim();
+            const rawValue = String(item?.value || "").trim();
+            const dictionaryLabel = dictionary.get(rawName);
+            if (dictionaryLabel && !rawValue) return dictionaryLabel;
+            const name = dictionaryLabel || rawName;
+            if (!name && !rawValue) return "";
+            const field = rawSubname ? `${name}.${rawSubname}` : name;
+            if (field && rawValue) return `${field} = ${rawValue}`;
+            if (field) return `${field} (값 정보 없음)`;
+            return rawValue;
+        },
+
+        ruleTextHasExplicitValue(value) {
+            return /(?:=|>|<|>=|<=|!=|<>|\bIS\b|\bLIKE\b)/i.test(String(value || ""));
+        },
+
+        findMetricValue(row, patterns = []) {
+            const found = Object.entries(row || {}).find(([key, value]) => {
+                if (value === null || value === undefined || String(value).trim() === "") return false;
+                if (!patterns.some((pattern) => pattern.test(String(key || "")))) return false;
+                return Number.isFinite(Number(value));
+            });
+            return found ? Number(found[1]) : null;
+        },
+
+        formatRuleExpression(value) {
+            const text = String(value ?? "").trim();
+            if (!text) return "-";
+            return text
+                .replace(/[{}"]/g, "")
+                .replace(/\s*[|;]\s*/g, " AND ")
+                .replace(/\s*,\s*/g, " AND ")
+                .replace(/\s+/g, " ");
+        },
+
+        formatPercentMetric(value) {
+            const number = Number(value);
+            if (!Number.isFinite(number)) return "-";
+            const percent = number <= 1 ? number * 100 : number;
+            return `${percent.toLocaleString("ko-KR", { maximumFractionDigits: 1 })}%`;
+        },
+
+        extractNumericProfile(rows, columns) {
+            return columns.map((column) => {
+                const values = rows.map((row) => Number(row?.[column])).filter((value) => Number.isFinite(value));
+                if (!values.length) return null;
+                const max = Math.max(...values);
+                const min = Math.min(...values);
+                const avg = values.reduce((sum, value) => sum + value, 0) / values.length;
+                const width = max === min ? 100 : Math.max(6, Math.min(100, ((avg - min) / (max - min)) * 100));
+                return { column, width, label: `avg ${this.formatDecimal(avg)}` };
+            }).filter(Boolean);
+        },
+
+        renderSampleTable(title, columns, rows, limit = 6) {
+            const safeColumns = (columns || []).slice(0, 8);
+            const safeRows = (rows || []).slice(0, limit);
+            if (!safeColumns.length || !safeRows.length) return "";
+            return `
+                <div class="home-sample-table-wrap">
+                    ${title ? `<strong>${this.escapeHtml(title)}</strong>` : ""}
+                    <table class="table-grid home-sample-table">
+                        <thead>
+                            <tr>${safeColumns.map((column) => `<th>${this.escapeHtml(column)}</th>`).join("")}</tr>
+                        </thead>
+                        <tbody>
+                            ${safeRows.map((row) => `
+                                <tr>${safeColumns.map((column) => `<td title="${this.escapeHtml(row?.[column] ?? "")}">${this.escapeHtml(row?.[column] ?? "")}</td>`).join("")}</tr>
+                            `).join("")}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        },
+
 
         renderAlerts() {
             const alerts = this.getRecentAlerts();
@@ -257,7 +1058,12 @@
                 });
                 this.dashboardData = json || null;
                 if (renderIdentity) this.renderIdentity();
-                if (renderChart) this.renderRuleTrendChart();
+                if (renderChart) {
+                    this.renderWorkflowKpis();
+                    this.renderRuleTrendChart();
+                    this.renderFlowRunStrip();
+                    this.renderFlowDetailPanel({ deferLoad: true });
+                }
                 if (renderAlerts) this.renderAlerts();
                 if (renderLinks) this.renderLinks();
                 this.bindEvents();
@@ -431,6 +1237,89 @@
             if (el) el.textContent = value || "";
         },
 
+        formatNumber(value) {
+            const number = Number(value || 0);
+            return Number.isFinite(number) ? number.toLocaleString("ko-KR") : "0";
+        },
+
+        formatDecimal(value) {
+            const number = Number(value || 0);
+            if (!Number.isFinite(number)) return "0";
+            return number.toLocaleString("ko-KR", { maximumFractionDigits: 3 });
+        },
+
+        formatDateTime(value) {
+            const text = String(value || "");
+            if (!text) return "-";
+            return text.replace("T", " ").slice(0, 16);
+        },
+
+        formatElapsedTime(startedAt, finishedAt, status = "") {
+            if (!startedAt) return "-";
+            const start = new Date(startedAt);
+            const end = finishedAt ? new Date(finishedAt) : (String(status || "").toUpperCase() === "RUNNING" ? new Date() : null);
+            if (!end || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return "-";
+            const seconds = Math.max(0, Math.round((end.getTime() - start.getTime()) / 1000));
+            if (seconds < 60) return `${seconds}s`;
+            const minutes = Math.floor(seconds / 60);
+            const remain = seconds % 60;
+            if (minutes < 60) return `${minutes}m ${remain}s`;
+            const hours = Math.floor(minutes / 60);
+            return `${hours}h ${minutes % 60}m`;
+        },
+
+        getHomeScrollSnapshot() {
+            const mainScroller = document.getElementById("pageContainerHolder");
+            const scrollers = [mainScroller, document.scrollingElement]
+                .filter(Boolean)
+                .filter((item, index, array) => array.indexOf(item) === index);
+            return scrollers.map((element) => ({
+                element,
+                left: element.scrollLeft,
+                top: element.scrollTop
+            }));
+        },
+
+        restoreHomeScroll(snapshot = []) {
+            const restore = () => {
+                snapshot.forEach((item) => {
+                    if (!item.element) return;
+                    item.element.scrollLeft = item.left;
+                    item.element.scrollTop = item.top;
+                });
+            };
+            restore();
+            requestAnimationFrame(restore);
+            setTimeout(restore, 80);
+        },
+
+        async preserveHomeScroll(callback) {
+            const snapshot = this.getHomeScrollSnapshot();
+            try {
+                return await callback();
+            } finally {
+                this.restoreHomeScroll(snapshot);
+            }
+        },
+
+        getStatusClass(status) {
+            const text = String(status || "").toUpperCase();
+            if (text === "SUCCESS") return "is-success";
+            if (["FAILED", "SKIPPED", "ERROR"].includes(text)) return "is-failed";
+            if (["RUNNING", "STARTED"].includes(text)) return "is-running";
+            return "is-neutral";
+        },
+
+        parseJson(value, fallback = {}) {
+            if (!value) return fallback;
+            if (typeof value === "object") return value;
+            try {
+                return JSON.parse(String(value));
+            } catch (error) {
+                return fallback;
+            }
+        },
+
         escapeHtml(value) {
             return String(value ?? "")
                 .replace(/&/g, "&amp;")
@@ -500,6 +1389,14 @@
             if (this.ruleTrendChart) {
                 this.ruleTrendChart.destroy();
                 this.ruleTrendChart = null;
+            }
+            if (this.workflowResultChart) {
+                this.workflowResultChart.destroy();
+                this.workflowResultChart = null;
+            }
+            if (this.workflowJobChart) {
+                this.workflowJobChart.destroy();
+                this.workflowJobChart = null;
             }
         }
     };

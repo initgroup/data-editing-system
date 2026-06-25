@@ -1802,8 +1802,8 @@
                 }
                 return "System bind default. You can override it for this run.";
             }
-            if (row && String(row.itemDefault ?? "").trim()) {
-                return "Parameter default. You can override it for this run.";
+            if (row) {
+                return String(row.itemDesc ?? "").trim();
             }
             return "";
         },

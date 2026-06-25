@@ -1,13 +1,15 @@
-from datetime import datetime
+from datetime import date, datetime
+from decimal import Decimal
+import json
 import logging
 import re
 from typing import Any, Dict
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 
 from backend.auth_context import get_request_role_code, get_request_user_id
 from backend.database import get_db_connection
-from backend.database_helper import SqlLoader
+from backend.database_helper import SqlLoader, execute_query
 from backend.target_database import get_target_connection_id, get_target_db_connection
 
 
@@ -23,10 +25,20 @@ TARGET_TABLES = [
     "INIT$_TB_DATA_WORK_RUN",
     "INIT$_TB_FLOW_WORK",
     "INIT$_TB_FLOW_WORK_RUN",
+    "INIT$_TB_FLOW_WORK_NODE_RUN",
     "INIT$_TB_PREDICTED_TYPE",
     "INIT$_TB_CAT_CORR_PAIR",
     "INIT$_TB_CAT_CORR_SUMMARY",
 ]
+
+MODEL_DETAIL_VIEW_TYPES = [
+    ("VA", "Attribute/detail view"),
+    ("VG", "Global/detail view"),
+    ("VI", "Itemset/detail view"),
+    ("VR", "Rule/detail view"),
+]
+
+IDENTIFIER_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_$#]{0,127}$")
 
 
 def _scalar(cursor, sql: str, params: Dict[str, Any] | None = None, default: Any = 0) -> Any:
@@ -55,6 +67,66 @@ def _plain_notice_text(value: str) -> str:
     text = text.replace("&nbsp;", " ")
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
+
+
+def _read_lob(value: Any) -> Any:
+    if hasattr(value, "read"):
+        return value.read()
+    return value
+
+
+def _serialize_db_value(value: Any) -> Any:
+    value = _read_lob(value)
+    if value is None:
+        return None
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if isinstance(value, Decimal):
+        return int(value) if value == value.to_integral_value() else float(value)
+    if isinstance(value, bytes):
+        try:
+            return value.decode("utf-8")
+        except Exception:
+            return value.hex()
+    return value
+
+
+def _row_to_dict(columns: list[str], row: Any) -> dict[str, Any]:
+    return {
+        columns[index]: _serialize_db_value(value)
+        for index, value in enumerate(row)
+    }
+
+
+def _parse_json(value: Any, default: Any = None) -> Any:
+    text = _read_lob(value)
+    if text is None or text == "":
+        return default
+    if isinstance(text, (dict, list)):
+        return text
+    try:
+        return json.loads(str(text))
+    except Exception:
+        return default
+
+
+def _validate_identifier(value: str, label: str) -> str:
+    text = str(value or "").strip().upper()
+    if not IDENTIFIER_RE.match(text):
+        raise HTTPException(status_code=400, detail=f"Invalid {label}.")
+    return text
+
+
+def _quote_identifier(value: str) -> str:
+    return '"' + str(value).replace('"', '""') + '"'
+
+
+def _normalize_limit(value: int | None, default: int = 100, maximum: int = 500) -> int:
+    try:
+        limit = int(value or default)
+    except (TypeError, ValueError):
+        limit = default
+    return max(1, min(limit, maximum))
 
 
 def _get_system_summary(user_id: int, connection_id: int | None, include_all_users: bool = False) -> dict[str, Any]:
@@ -177,6 +249,8 @@ def _get_target_summary(request: Request, user_id: int, connection_id: int | Non
         "runStatus": [],
         "trend": [],
         "ruleTrend": [],
+        "flowTrend": [],
+        "recentFlowRuns": [],
     }
     if not connection_id:
         summary["message"] = "Target DB is not selected."
@@ -247,6 +321,31 @@ def _get_target_summary(request: Request, user_id: int, connection_id: int | Non
                 }
                 for row in cursor.fetchall()
             ]
+
+        if (
+            existing.get("INIT$_TB_FLOW_WORK_RUN")
+            and existing.get("INIT$_TB_FLOW_WORK")
+            and existing.get("INIT$_TB_PROJECT")
+        ):
+            cursor.execute(SqlLoader.get_sql("HOME_FLOW_RUN_TREND"), scope_params)
+            summary["flowTrend"] = [
+                {
+                    "label": row[0],
+                    "statusGroup": row[1] or "SUCCESS",
+                    "count": int(row[2] or 0),
+                }
+                for row in cursor.fetchall()
+            ]
+            if existing.get("INIT$_TB_FLOW_WORK_NODE_RUN"):
+                cursor.execute(SqlLoader.get_sql("HOME_RECENT_FLOW_RUNS"), {
+                    **scope_params,
+                    "limit": 40,
+                })
+                columns = [desc[0] for desc in cursor.description]
+                summary["recentFlowRuns"] = [
+                    _row_to_dict(columns, row)
+                    for row in cursor.fetchall()
+                ]
     except Exception as error:
         logger.warning("Home target dashboard summary failed: %s", error)
         summary["connected"] = False
@@ -341,3 +440,154 @@ def dashboard(request: Request):
         "notices": active_notices,
         "popupNotices": [notice for notice in active_notices if notice.get("popupYn") == "Y"],
     }
+
+
+def _normalize_node_result(row: dict[str, Any]) -> dict[str, Any]:
+    payload = _parse_json(row.get("NODE_PAYLOAD_JSON"), {}) or {}
+    runtime_params = _parse_json(row.get("RUNTIME_PARAM_JSON"), {}) or {}
+    mode = str(payload.get("resultCreateYn") or payload.get("RESULT_CREATE_YN") or "N").strip().upper()
+    mode = mode if mode in ("N", "T", "M") else "N"
+    menu_code = payload.get("refMenuCode") or payload.get("menuCode") or payload.get("REF_MENU_CODE") or ""
+    owner = payload.get("resultOwner") or payload.get("RESULT_OWNER") or payload.get("ownerName") or ""
+    object_name = payload.get("resultTableName") or payload.get("RESULT_TABLE_NAME") or payload.get("tableName") or ""
+    row["PAYLOAD"] = payload
+    row["RUNTIME_PARAMS"] = runtime_params
+    row["REF_MENU_CODE"] = menu_code
+    row["RESULT_CREATE_YN"] = mode
+    row["RESULT_OWNER"] = str(owner or "").strip().upper()
+    row["RESULT_OBJECT_NAME"] = str(object_name or "").strip().upper()
+    row["RESULT_KIND"] = "MODEL" if mode == "M" else ("TABLE" if mode == "T" else "NONE")
+    return row
+
+
+@router.get("/flow-run/{flow_run_id}/nodes")
+def get_flow_run_nodes(flow_run_id: int, request: Request):
+    user_id = get_request_user_id(request)
+    include_all_users = get_request_role_code(request) == "ADMIN"
+    conn = None
+    cursor = None
+    try:
+        conn = get_target_db_connection(request)
+        cursor = conn.cursor()
+        cursor.execute(SqlLoader.get_sql("HOME_FLOW_RUN_NODES"), {
+            "flowRunId": flow_run_id,
+            "userId": user_id,
+            "includeAllUsers": "Y" if include_all_users else "N",
+        })
+        columns = [desc[0] for desc in cursor.description]
+        rows = [_normalize_node_result(_row_to_dict(columns, row)) for row in cursor.fetchall()]
+        return {
+            "status": "success",
+            "data": rows,
+            "total": len(rows),
+        }
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+@router.get("/result-sample")
+def get_result_sample(request: Request, owner: str, objectName: str, limit: int = 80, menuCode: str | None = None):
+    owner_name = _validate_identifier(owner, "owner")
+    object_name = _validate_identifier(objectName, "object name")
+    row_limit = _normalize_limit(limit, 80, 200)
+    conn = None
+    cursor = None
+    try:
+        conn = get_target_db_connection(request)
+        cursor = conn.cursor()
+        where_sql = ""
+        order_sql = ""
+        if str(menuCode or "").upper() == "M03002" and object_name == "INIT$_TB_CAT_CORR_PAIR":
+            where_sql = " WHERE PASS_YN = 'Y'"
+            order_sql = " ORDER BY CRAMERS_V DESC, P_VALUE ASC"
+        select_sql = f"SELECT * FROM {_quote_identifier(owner_name)}.{_quote_identifier(object_name)}{where_sql}{order_sql}"
+        sql = SqlLoader.get_sql("HOME_MODEL_VIEW_SAMPLE").replace("/* --DYNAMIC_SQL-- */", select_sql)
+        cursor.execute(sql, {"limit": row_limit})
+        columns = [desc[0] for desc in cursor.description]
+        rows = [_row_to_dict(columns, row) for row in cursor.fetchall()]
+        return {
+            "status": "success",
+            "columns": columns,
+            "data": rows,
+            "total": len(rows),
+        }
+    except HTTPException:
+        raise
+    except Exception as error:
+        logger.warning("Home result sample query failed: %s", error)
+        raise HTTPException(status_code=500, detail=str(error))
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+@router.get("/model-detail")
+def get_model_detail(request: Request, owner: str, modelName: str, limit: int = 120):
+    owner_name = _validate_identifier(owner, "owner")
+    model_name = _validate_identifier(modelName, "model name")
+    row_limit = _normalize_limit(limit, 120, 300)
+    conn = None
+    cursor = None
+    try:
+        conn = get_target_db_connection(request)
+        view_names = {view_type: f"DM${view_type}{model_name}" for view_type, _ in MODEL_DETAIL_VIEW_TYPES}
+        view_lookup = {view_type: description for view_type, description in MODEL_DETAIL_VIEW_TYPES}
+        result = execute_query(conn, "DATA_WORK_MODEL_DETAIL_VIEW_LIST", {
+            "owner": owner_name,
+            "viewNameVa": f"DM$VA{model_name}",
+            "viewNameVg": view_names["VG"],
+            "viewNameVi": view_names["VI"],
+            "viewNameVn": f"DM$VN{model_name}",
+            "viewNameVp": f"DM$VP{model_name}",
+            "viewNameVr": view_names["VR"],
+            "viewNameVt": f"DM$VT{model_name}",
+        })
+        existing_views = {
+            row.get("VIEW_TYPE"): row
+            for row in result.get("data", [])
+            if row.get("VIEW_TYPE") in view_lookup
+        }
+        cursor = conn.cursor()
+        views = []
+        for view_type, description in MODEL_DETAIL_VIEW_TYPES:
+            view_name = view_names[view_type]
+            meta = existing_views.get(view_type) or {}
+            exists_yn = meta.get("EXISTS_YN") or "N"
+            columns = []
+            rows = []
+            if exists_yn == "Y":
+                select_sql = f"SELECT * FROM {_quote_identifier(owner_name)}.{_quote_identifier(view_name)}"
+                sql = SqlLoader.get_sql("HOME_MODEL_VIEW_SAMPLE").replace("/* --DYNAMIC_SQL-- */", select_sql)
+                cursor.execute(sql, {"limit": row_limit})
+                columns = [desc[0] for desc in cursor.description]
+                rows = [_row_to_dict(columns, row) for row in cursor.fetchall()]
+            views.append({
+                "viewType": view_type,
+                "viewName": view_name,
+                "description": description,
+                "existsYn": exists_yn,
+                "columns": columns,
+                "data": rows,
+                "total": len(rows),
+            })
+        return {
+            "status": "success",
+            "owner": owner_name,
+            "modelName": model_name,
+            "views": views,
+        }
+    except HTTPException:
+        raise
+    except Exception as error:
+        logger.warning("Home model detail query failed: %s", error)
+        raise HTTPException(status_code=500, detail=str(error))
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()

@@ -37,8 +37,8 @@
         <div class="home-panel home-panel-wide">
             <div class="home-panel-header">
                 <div>
-                    <h3>Workflow Readiness</h3>
-                    <p>최근 7일 자동규칙발굴, 규칙위반탐지, 통합시나리오 실행 추이</p>
+                    <h3>Integrated Scenario</h3>
+                    <p>최근 7일 통합시나리오 실행 추이와 노드별 결과</p>
                 </div>
                 <span class="home-panel-actions">
                     <button type="button" id="homeRefreshWorkflowButton" class="home-icon-button" title="Refresh workflow readiness">
@@ -49,9 +49,18 @@
                     </button>
                 </span>
             </div>
+            <div class="home-workflow-kpi-grid" id="homeWorkflowKpiGrid" aria-label="Workflow execution summary"></div>
             <div class="home-chart-box home-rule-chart-box">
                 <canvas id="homeRuleTrendChart"></canvas>
             </div>
+            <div class="home-flow-selection-bar" id="homeFlowRunStrip" aria-label="Selected integrated scenario run date"></div>
+            <section class="home-flow-detail-panel" id="homeFlowDetailPanel" aria-label="Scenario run detail">
+                <div class="home-flow-detail-empty">
+                    <i class="fas fa-diagram-project"></i>
+                    <strong>통합시나리오 실행을 선택하세요</strong>
+                    <span>라인 그래프의 실행 지점을 선택하면 해당 날짜의 실행 목록과 노드별 결과가 표시됩니다.</span>
+                </div>
+            </section>
         </div>
 
         <div class="home-panel">
