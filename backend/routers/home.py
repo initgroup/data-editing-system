@@ -289,7 +289,7 @@ def _get_target_summary(request: Request, user_id: int, connection_id: int | Non
         conn = get_target_db_connection(request)
         previous_call_timeout = getattr(conn, "call_timeout", None)
         if hasattr(conn, "call_timeout"):
-            conn.call_timeout = int(os.getenv("HOME_TARGET_QUERY_TIMEOUT_MS", "5000"))
+            conn.call_timeout = int(os.getenv("HOME_TARGET_QUERY_TIMEOUT_MS", "30000"))
         cursor = conn.cursor()
         existing = _count_existing_tables(cursor, TARGET_TABLES)
         summary["connected"] = True

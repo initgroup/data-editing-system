@@ -1108,7 +1108,7 @@
                 const json = await CommonUtils.request(`${API_BASE_URL}/home/dashboard`, {
                     method: "GET",
                     showLoading: false,
-                    timeoutMs: 6000,
+                    timeoutMs: 30000,
                     timeoutMessage: "Dashboard query timed out. Target DB may be busy with a batch job."
                 });
                 this.dashboardData = json || null;
