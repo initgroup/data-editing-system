@@ -816,7 +816,7 @@
         renderModelDeployStatus(rows) {
             const container = getContainerEl("#modelDeployStatus-M99001");
             if (!container) return;
-            this.renderDeployStatusTable(container, rows, "No model object deploy status.", "#modelDeployStatusSummary-M99001");
+            this.renderDeployStatusTable(container, this.filterInitDeployRows(rows), "No INIT$ model object deploy status.", "#modelDeployStatusSummary-M99001");
         },
 
         renderMlDeployStatus(rows) {
@@ -832,6 +832,17 @@
                     const group = String(row.OBJECT_GROUP || "").toUpperCase();
                     const type = String(row.OBJECT_TYPE || "").toUpperCase();
                     return group.includes("ML") || group.includes("MODEL_SEED") || group.includes("MODEL_TRAIN") || ["ML_MODEL", "MODEL_SEED", "MODEL_TRAINING_DATA", "MODEL_SETTING"].includes(type);
+                })
+                : [];
+        },
+
+        filterInitDeployRows(rows) {
+            const objectTypes = new Set(["PACKAGE", "PACKAGE BODY", "PROCEDURE", "FUNCTION", "MODEL", "MINING MODEL"]);
+            return Array.isArray(rows)
+                ? rows.filter((row) => {
+                    const name = String(row.OBJECT_NAME || "").toUpperCase();
+                    const type = String(row.OBJECT_TYPE || "").toUpperCase();
+                    return name.startsWith("INIT$") && objectTypes.has(type);
                 })
                 : [];
         },

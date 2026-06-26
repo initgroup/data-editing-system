@@ -13,9 +13,11 @@ import threading
 import time
 
 from backend.database_helper import execute_query
-from backend.target_database import get_target_db_connection
+from backend.auth_context import get_request_user_id
+from backend.target_database import get_target_connection_id, get_target_db_connection, get_target_db_connection_by_id
 from backend.services import data_work_service as data_work
 from backend.services import flow_work_service as flow_work
+from backend.services.background_jobs import submit_background_job
 from backend.services.flow_work_service import FlowNodeRunRequest, FlowRunRequest, FlowWorkRequest
 
 logger = logging.getLogger(__name__)
@@ -35,10 +37,15 @@ MODEL_DETAIL_VIEW_TYPES = [
     ("VR", "Rule/detail view"),
     ("VT", "Transformation/detail view")
 ]
+TARGET_FILTER_RESULT_TABLES = {"INIT$_TB_PREDICTED_TYPE", "INIT$_TB_CAT_CORR_PAIR"}
 
 
 def quote_identifier(value: str) -> str:
     return '"' + str(value).replace('"', '""') + '"'
+
+
+def quote_sql_literal(value: str) -> str:
+    return "'" + str(value).replace("'", "''") + "'"
 
 
 def normalize_select_sql(sql: str) -> str:
@@ -62,8 +69,14 @@ def normalize_limit(value: Optional[int]) -> int:
     return max(1, min(limit, 1000))
 
 
-def build_table_result_sql(owner: str, table_name: str) -> str:
-    return f"SELECT *\n  FROM {quote_identifier(owner)}.{quote_identifier(table_name)}"
+def build_table_result_sql(owner: str, table_name: str, target_owner: str = "", target_table: str = "") -> str:
+    sql = f"SELECT *\n  FROM {quote_identifier(owner)}.{quote_identifier(table_name)}"
+    if table_name.upper() in TARGET_FILTER_RESULT_TABLES and target_owner and target_table:
+        sql += (
+            f"\n WHERE OWNER = {quote_sql_literal(target_owner.upper())}"
+            f"\n   AND TABLE_NAME = {quote_sql_literal(target_table.upper())}"
+        )
+    return sql
 
 
 def build_model_detail_sql(conn, owner: str, model_name: str) -> tuple[str, list[Dict[str, Any]]]:
@@ -453,7 +466,16 @@ def create_flow_work_router(
             run_id = flow_work.create_run(conn, flow_id, run_type, run_status, message, validation)
             flow_work.create_node_run_records(conn, run_id, flow_id, validation.get("plan", []))
             conn.commit()
-            if not req.batch:
+            if req.batch:
+                submit_background_job(
+                    f"{MENU_CODE} flow_run_id={run_id}",
+                    run_flow_background,
+                    run_id,
+                    get_target_connection_id(request),
+                    get_request_user_id(request),
+                    validation.get("plan", []),
+                )
+            else:
                 run_result = flow_work.execute_flow_plan(conn, run_id, validation.get("plan", []))
                 run_status = run_result.get("status") or run_status
                 message = run_result.get("message") or message
@@ -499,6 +521,32 @@ def create_flow_work_router(
                 conn.close()
             if save_lock:
                 save_lock.release()
+
+    def run_flow_background(flow_run_id: int, connection_id: int, user_id: int, plan: list[dict]):
+        conn = None
+        try:
+            conn = get_target_db_connection_by_id(connection_id, user_id)
+            flow_work.start_run(conn, flow_run_id, "Flow batch execution started.")
+            conn.commit()
+            flow_work.execute_flow_plan(conn, flow_run_id, plan or [])
+        except Exception as e:
+            if conn:
+                conn.rollback()
+                try:
+                    flow_work.update_run(
+                        conn,
+                        flow_run_id,
+                        "FAILED",
+                        f"Batch flow execution failed: {str(e)}",
+                        {"plan": plan or []}
+                    )
+                    conn.commit()
+                except Exception:
+                    conn.rollback()
+            logger.error(f"{MENU_CODE} background flow run failed: {str(e)}")
+        finally:
+            if conn:
+                conn.close()
 
     @router.post("/flow/run-node")
     def run_flow_node(req: FlowNodeRunRequest, request: Request):
@@ -598,18 +646,27 @@ def create_flow_work_router(
                 conn.close()
 
     @router.get("/result-sql")
-    def get_result_sql(request: Request, resultCreateYn: str, owner: str, objectName: str):
+    def get_result_sql(
+        request: Request,
+        resultCreateYn: str,
+        owner: str,
+        objectName: str,
+        targetOwner: Optional[str] = None,
+        targetTable: Optional[str] = None,
+    ):
         conn = None
         try:
             mode = data_work.normalize_result_create_mode(resultCreateYn)
             result_owner = data_work.require_identifier(owner, "owner")
             result_object = data_work.require_identifier(objectName, "objectName")
+            target_owner = data_work.require_identifier(targetOwner, "targetOwner") if targetOwner else ""
+            target_table = data_work.require_identifier(targetTable, "targetTable") if targetTable else ""
             if mode == "T":
                 return {
                     "status": "success",
                     "data": {
                         "mode": mode,
-                        "sql": build_table_result_sql(result_owner, result_object),
+                        "sql": build_table_result_sql(result_owner, result_object, target_owner, target_table),
                         "views": []
                     }
                 }

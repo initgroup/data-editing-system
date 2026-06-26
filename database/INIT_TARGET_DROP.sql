@@ -61,6 +61,7 @@ BEGIN
     DBMS_OUTPUT.PUT_LINE('=== INIT_TARGET DROP START ===');
 
     DBMS_OUTPUT.PUT_LINE('[INIT_TARGET] Drop packages');
+    drop_package_if_exists('INIT$_PKG_RULE_SUMMARY');
     drop_package_if_exists('INIT$_PKG_OML_SCRIPT');
 
     DBMS_OUTPUT.PUT_LINE('[INIT_TARGET] Drop tables');
@@ -72,6 +73,8 @@ BEGIN
     drop_table_if_exists('INIT$_TB_FLOW_WORK');
     drop_table_if_exists('INIT$_TB_CAT_CORR_SUMMARY');
     drop_table_if_exists('INIT$_TB_CAT_CORR_PAIR');
+    drop_table_if_exists('INIT$_TB_RULE_VIOLATION_RESULT');
+    drop_table_if_exists('INIT$_TB_ASSOC_RULE_SUMMARY');
     drop_table_if_exists('INIT$_TB_PREDICTED_TYPE');
     drop_table_if_exists('INIT$_TB_DATA_WORK_RUN');
     drop_table_if_exists('INIT$_TB_DATA_WORK_JOB');
@@ -86,6 +89,12 @@ BEGIN
     DBMS_OUTPUT.PUT_LINE('[INIT_TARGET] Drop remaining indexes, if any');
     drop_index_if_exists('IX_INIT$_TB_CAT_CORR_SUMMARY_01');
     drop_index_if_exists('IX_INIT$_TB_CAT_CORR_PAIR_01');
+    drop_index_if_exists('IX_INIT$_TB_RULE_VIOLATION_03');
+    drop_index_if_exists('IX_INIT$_TB_RULE_VIOLATION_02');
+    drop_index_if_exists('IX_INIT$_TB_RULE_VIOLATION_01');
+    drop_index_if_exists('IX_INIT$_TB_ASSOC_RULE_SUMMARY_03');
+    drop_index_if_exists('IX_INIT$_TB_ASSOC_RULE_SUMMARY_02');
+    drop_index_if_exists('IX_INIT$_TB_ASSOC_RULE_SUMMARY_01');
     drop_index_if_exists('IX_INIT$_TB_PREDICTED_TYPE_01');
     drop_index_if_exists('IX_INIT$_TB_OML_RESOURCE_01');
     drop_index_if_exists('IX_INIT$_TB_OBJECT_DETAIL_01');

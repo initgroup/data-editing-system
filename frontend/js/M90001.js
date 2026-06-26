@@ -378,7 +378,12 @@
                     limit: String(this.treeFetchLimit),
                     registeredOnly: this.isRegisteredOnlyTree() ? "Y" : "N"
                 });
-                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/object-children?${params.toString()}`, { method: "GET", showLoading: false });
+                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/object-children?${params.toString()}`, {
+                    method: "GET",
+                    showLoading: false,
+                    timeoutMs: 15000,
+                    timeoutMessage: "Object load is taking too long. Click to retry."
+                });
                 if (json.status && json.status !== "success") {
                     throw new Error(json.message || json.detail || "Object children response failed.");
                 }
@@ -389,6 +394,7 @@
             } catch (error) {
                 console.error("[M90001] object children load failed", error);
                 this.removeGroupChildren(nodeId);
+                this.appendGroupChildren(row, [this.createGroupLoadMoreRow(row, 0, error.message || "Load failed. Click to retry.")]);
                 this.updateDescription(error.message || "Object children load failed.");
             } finally {
                 this.loadingGroupNodes.delete(nodeId);
@@ -414,7 +420,12 @@
                     limit: String(this.treeFetchLimit),
                     registeredOnly: this.isRegisteredOnlyTree() ? "Y" : "N"
                 });
-                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/object-children?${params.toString()}`, { method: "GET", showLoading: false });
+                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/object-children?${params.toString()}`, {
+                    method: "GET",
+                    showLoading: false,
+                    timeoutMs: 15000,
+                    timeoutMessage: "Object load is taking too long. Click to retry."
+                });
                 if (json.status && json.status !== "success") {
                     throw new Error(json.message || json.detail || "Object children response failed.");
                 }
@@ -564,7 +575,12 @@
                     packageName: row.OBJECT_NAME || "",
                     registeredOnly: this.isRegisteredOnlyTree() ? "Y" : "N"
                 });
-                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/package-members?${params.toString()}`, { method: "GET", showLoading: false });
+                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/package-members?${params.toString()}`, {
+                    method: "GET",
+                    showLoading: false,
+                    timeoutMs: 15000,
+                    timeoutMessage: "Package member load is taking too long. Click to retry."
+                });
                 if (json.status && json.status !== "success") {
                     throw new Error(json.message || json.detail || "Package member response failed.");
                 }

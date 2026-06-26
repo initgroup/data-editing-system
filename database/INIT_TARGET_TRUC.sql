@@ -35,6 +35,8 @@ BEGIN
     truncate_table_if_exists('INIT$_TB_FLOW_WORK');
     truncate_table_if_exists('INIT$_TB_CAT_CORR_SUMMARY');
     truncate_table_if_exists('INIT$_TB_CAT_CORR_PAIR');
+    truncate_table_if_exists('INIT$_TB_RULE_VIOLATION_RESULT');
+    truncate_table_if_exists('INIT$_TB_ASSOC_RULE_SUMMARY');
     truncate_table_if_exists('INIT$_TB_PREDICTED_TYPE');
     truncate_table_if_exists('INIT$_TB_DATA_WORK_RUN');
     truncate_table_if_exists('INIT$_TB_DATA_WORK_JOB');

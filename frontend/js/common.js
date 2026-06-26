@@ -413,6 +413,7 @@ const CommonUtils = {
         const requestLog = window.ConsoleLogger?.requestStart?.(url, options);
         this.activeRequestCount += 1;
         let responseLogged = false;
+        let timeoutId = null;
         try {
             const headers = { 'Content-Type': 'application/json', ...options.headers };
             const targetConnectionId = sessionStorage.getItem("targetConnectionId") || "";
@@ -436,10 +437,15 @@ const CommonUtils = {
             if (bootstrapToken && !headers["X-Bootstrap-Token"]) {
                 headers["X-Bootstrap-Token"] = bootstrapToken;
             }
+            const controller = options.timeoutMs ? new AbortController() : null;
+            if (controller) {
+                timeoutId = setTimeout(() => controller.abort(), Number(options.timeoutMs));
+            }
             const response = await fetch(url, {
                 method: options.method || 'GET',
                 headers,
-                body: options.body ? JSON.stringify(options.body) : null
+                body: options.body ? JSON.stringify(options.body) : null,
+                signal: options.signal || controller?.signal
             });
             
             if (!response.ok) {
@@ -456,11 +462,15 @@ const CommonUtils = {
             return json;
 
         } catch (err) {
+            if (err?.name === "AbortError") {
+                err = new Error(options.timeoutMessage || "Request timed out.");
+            }
             if (!responseLogged) {
                 window.ConsoleLogger?.requestError?.(requestLog, err);
             }
             throw err;
         } finally {
+            if (timeoutId) clearTimeout(timeoutId);
             this.activeRequestCount = Math.max(0, this.activeRequestCount - 1);
         }
     },

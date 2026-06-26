@@ -67,6 +67,7 @@
             graphHint: "Solid edges define execution order. Dashed edges are reference/value inputs that do not create a primary execution step.",
             sampleFlowLabel: "Solid line: execution dependency / dashed line: reference or value input.",
             nodeInspector: "Node Inspector",
+            nodeUseYn: "Execute",
             ownerName: "Target Owner",
             tableName: "Target Table",
             inputPorts: "Inputs",

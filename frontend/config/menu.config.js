@@ -94,21 +94,21 @@ window.MENU_CONFIG = [
     {
         type: 'folder',
         key: 'edit-flow',
-        label: '에디팅 통합 실행',
+        label: '에디팅 시나리오',
         iconClass: 'fas fa-lightbulb text-amber-400',
         enabled: true,
         children: [
             {
                 page: 'M04001',
-                title: '통합 에디팅 시나리오',
-                label: '통합 에디팅 시나리오',
+                title: '에디팅 시나리오 설계',
+                label: '에디팅 시나리오 설계',
                 iconClass: 'fas fa-wave-square text-amber-300',
                 enabled: true
             },
             {
                 page: 'M04002',
-                title: '통합 에디팅 결과분석',
-                label: '통합 에디팅 결과분석',
+                title: '에디팅 시나리오 분석',
+                label: '에디팅 시나리오 분석',
                 iconClass: 'fas fa-chart-simple text-amber-300',
                 enabled: true
             }
@@ -119,21 +119,21 @@ window.MENU_CONFIG = [
         key: 'edit-master',
         label: '에디팅 규칙 마스터',
         iconClass: 'fas fa-clipboard-check text-violet-400',
-        enabled: true,
+        enabled: false,
         children: [
             {
                 page: 'M05001',
                 title: '발굴 규칙 선정 (발굴 규칙 후보 검토/저장)',
                 label: '발굴 규칙 선정',
                 iconClass: 'fas fa-list-check text-violet-300',
-                enabled: true
+                enabled: false
             },
             {
                 page: 'M05002',
                 title: '사용자 규칙 등록 (발굴 규칙 수정/수동 SQL)',
                 label: '사용자 규칙 등록',
                 iconClass: 'fas fa-pen-to-square text-violet-300',
-                enabled: true
+                enabled: false
             }
         ]
     },
@@ -142,21 +142,21 @@ window.MENU_CONFIG = [
         key: 'edit-data',
         label: '데이터 에디팅 및 정제',
         iconClass: 'fas fa-broom text-lime-400',
-        enabled: true,
+        enabled: false,
         children: [
             {
                 page: 'M06001',
                 title: '규칙 위반 데이터 조회',
                 label: '규칙 위반 데이터 조회',
                 iconClass: 'fas fa-triangle-exclamation text-lime-300',
-                enabled: true
+                enabled: false
             },
             {
                 page: 'M06002',
                 title: '오류 데이터 정제/수정',
                 label: '오류 데이터 정제/수정',
                 iconClass: 'fas fa-eraser text-lime-300',
-                enabled: true
+                enabled: false
             }
         ]
     },
@@ -165,28 +165,28 @@ window.MENU_CONFIG = [
         key: 'edit-apply',
         label: '검증 및 반영',
         iconClass: 'fas fa-circle-check text-cyan-400',
-        enabled: true,
+        enabled: false,
         children: [
             {
                 page: 'M07001',
                 title: '에디팅 효과 검증 (정제 전/후 품질 비교)',
                 label: '에디팅 효과 검증',
                 iconClass: 'fas fa-circle-check text-cyan-300',
-                enabled: true
+                enabled: false
             },
             {
                 page: 'M07002',
                 title: 'DB 최종 반영 (Commit)',
                 label: 'DB 최종 반영',
                 iconClass: 'fas fa-database text-cyan-300',
-                enabled: true
+                enabled: false
             },
             {
                 page: 'M07003',
                 title: '에디팅 이력 조회',
                 label: '에디팅 이력 조회',
                 iconClass: 'fas fa-clock-rotate-left text-cyan-300',
-                enabled: true
+                enabled: false
             }
         ]
     },

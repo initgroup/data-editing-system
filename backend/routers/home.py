@@ -2,7 +2,9 @@ from datetime import date, datetime
 from decimal import Decimal
 import json
 import logging
+import os
 import re
+import time
 from typing import Any, Dict
 
 from fastapi import APIRouter, HTTPException, Request
@@ -47,18 +49,41 @@ def _scalar(cursor, sql: str, params: Dict[str, Any] | None = None, default: Any
     return row[0] if row and row[0] is not None else default
 
 
+def _target_execute(cursor, sql_id: str, params: Dict[str, Any] | None = None):
+    started_at = time.monotonic()
+    logger.info("[Home Target] SQL start %s", sql_id)
+    cursor.execute(SqlLoader.get_sql(sql_id), params or {})
+    elapsed = time.monotonic() - started_at
+    warn_seconds = float(os.getenv("HOME_TARGET_SQL_WARN_SECONDS", "1.5"))
+    log_method = logger.warning if elapsed >= warn_seconds else logger.info
+    log_method("[Home Target] SQL done %s elapsed=%.3fs", sql_id, elapsed)
+    return cursor
+
+
+def _target_scalar(cursor, sql_id: str, params: Dict[str, Any] | None = None, default: Any = 0) -> Any:
+    _target_execute(cursor, sql_id, params)
+    row = cursor.fetchone()
+    return row[0] if row and row[0] is not None else default
+
+
 def _count_existing_tables(cursor, table_names: list[str]) -> dict[str, bool]:
     table_binds = ",".join(f":t{i}" for i, _ in enumerate(table_names))
     sql = SqlLoader.get_sql("HOME_EXISTING_TABLES").replace("/* --TABLE_BINDS-- */", table_binds)
+    started_at = time.monotonic()
+    logger.info("[Home Target] SQL start HOME_EXISTING_TABLES")
     cursor.execute(sql, {f"t{i}": name for i, name in enumerate(table_names)})
+    elapsed = time.monotonic() - started_at
+    warn_seconds = float(os.getenv("HOME_TARGET_SQL_WARN_SECONDS", "1.5"))
+    log_method = logger.warning if elapsed >= warn_seconds else logger.info
+    log_method("[Home Target] SQL done HOME_EXISTING_TABLES elapsed=%.3fs", elapsed)
     existing = {row[0] for row in cursor.fetchall()}
     return {name: name in existing for name in table_names}
 
 
-def _count_if(cursor, existing: dict[str, bool], table_name: str, sql: str, params: Dict[str, Any] | None = None) -> int:
+def _count_if(cursor, existing: dict[str, bool], table_name: str, sql_id: str, params: Dict[str, Any] | None = None) -> int:
     if not existing.get(table_name):
         return 0
-    return int(_scalar(cursor, sql, params, 0) or 0)
+    return int(_target_scalar(cursor, sql_id, params, 0) or 0)
 
 
 def _plain_notice_text(value: str) -> str:
@@ -259,8 +284,12 @@ def _get_target_summary(request: Request, user_id: int, connection_id: int | Non
 
     conn = None
     cursor = None
+    previous_call_timeout = None
     try:
         conn = get_target_db_connection(request)
+        previous_call_timeout = getattr(conn, "call_timeout", None)
+        if hasattr(conn, "call_timeout"):
+            conn.call_timeout = int(os.getenv("HOME_TARGET_QUERY_TIMEOUT_MS", "5000"))
         cursor = conn.cursor()
         existing = _count_existing_tables(cursor, TARGET_TABLES)
         summary["connected"] = True
@@ -275,29 +304,29 @@ def _get_target_summary(request: Request, user_id: int, connection_id: int | Non
 
         counts = summary["counts"]
         counts["projects"] = _count_if(cursor, existing, "INIT$_TB_PROJECT",
-            SqlLoader.get_sql("HOME_PROJECT_COUNT"),
+            "HOME_PROJECT_COUNT",
             scope_params)
         counts["scenarios"] = _count_if(cursor, existing, "INIT$_TB_SCENARIO",
-            SqlLoader.get_sql("HOME_SCENARIO_COUNT"), scope_params) if existing.get("INIT$_TB_PROJECT") else 0
+            "HOME_SCENARIO_COUNT", scope_params) if existing.get("INIT$_TB_PROJECT") else 0
         counts["scenarioTables"] = _count_if(cursor, existing, "INIT$_TB_TABLES",
-            SqlLoader.get_sql("HOME_SCENARIO_TABLE_COUNT"), scope_params) if existing.get("INIT$_TB_PROJECT") else 0
+            "HOME_SCENARIO_TABLE_COUNT", scope_params) if existing.get("INIT$_TB_PROJECT") else 0
         counts["dataJobs"] = _count_if(cursor, existing, "INIT$_TB_DATA_WORK_JOB",
-            SqlLoader.get_sql("HOME_DATA_JOB_COUNT"), scope_params) if existing.get("INIT$_TB_PROJECT") else 0
+            "HOME_DATA_JOB_COUNT", scope_params) if existing.get("INIT$_TB_PROJECT") else 0
         counts["dataRuns"] = _count_if(cursor, existing, "INIT$_TB_DATA_WORK_RUN",
-            SqlLoader.get_sql("HOME_DATA_RUN_COUNT"), scope_params) if existing.get("INIT$_TB_DATA_WORK_JOB") and existing.get("INIT$_TB_PROJECT") else 0
+            "HOME_DATA_RUN_COUNT", scope_params) if existing.get("INIT$_TB_DATA_WORK_JOB") and existing.get("INIT$_TB_PROJECT") else 0
         counts["flows"] = _count_if(cursor, existing, "INIT$_TB_FLOW_WORK",
-            SqlLoader.get_sql("HOME_FLOW_COUNT"), scope_params) if existing.get("INIT$_TB_PROJECT") else 0
+            "HOME_FLOW_COUNT", scope_params) if existing.get("INIT$_TB_PROJECT") else 0
         counts["flowRuns"] = _count_if(cursor, existing, "INIT$_TB_FLOW_WORK_RUN",
-            SqlLoader.get_sql("HOME_FLOW_RUN_COUNT"), scope_params) if existing.get("INIT$_TB_FLOW_WORK") and existing.get("INIT$_TB_PROJECT") else 0
+            "HOME_FLOW_RUN_COUNT", scope_params) if existing.get("INIT$_TB_FLOW_WORK") and existing.get("INIT$_TB_PROJECT") else 0
         counts["predictedColumns"] = _count_if(cursor, existing, "INIT$_TB_PREDICTED_TYPE",
-            SqlLoader.get_sql("HOME_PREDICTED_COLUMN_COUNT"))
+            "HOME_PREDICTED_COLUMN_COUNT")
         counts["correlationPairs"] = _count_if(cursor, existing, "INIT$_TB_CAT_CORR_PAIR",
-            SqlLoader.get_sql("HOME_CORRELATION_PAIR_COUNT"))
+            "HOME_CORRELATION_PAIR_COUNT")
         counts["selectedCorrelations"] = _count_if(cursor, existing, "INIT$_TB_CAT_CORR_SUMMARY",
-            SqlLoader.get_sql("HOME_SELECTED_CORRELATION_COUNT"))
+            "HOME_SELECTED_CORRELATION_COUNT")
 
         if existing.get("INIT$_TB_DATA_WORK_RUN") and existing.get("INIT$_TB_DATA_WORK_JOB") and existing.get("INIT$_TB_PROJECT"):
-            cursor.execute(SqlLoader.get_sql("HOME_RUN_STATUS"), scope_params)
+            _target_execute(cursor, "HOME_RUN_STATUS", scope_params)
             summary["runStatus"] = [{"status": row[0] or "UNKNOWN", "count": int(row[1] or 0)} for row in cursor.fetchall()]
 
         if (
@@ -307,10 +336,10 @@ def _get_target_summary(request: Request, user_id: int, connection_id: int | Non
             and existing.get("INIT$_TB_FLOW_WORK")
             and existing.get("INIT$_TB_PROJECT")
         ):
-            cursor.execute(SqlLoader.get_sql("HOME_DATA_RUN_TREND"), scope_params)
+            _target_execute(cursor, "HOME_DATA_RUN_TREND", scope_params)
             summary["trend"] = [{"label": row[0], "count": int(row[1] or 0)} for row in cursor.fetchall()]
 
-            cursor.execute(SqlLoader.get_sql("HOME_RULE_RUN_TREND"), scope_params)
+            _target_execute(cursor, "HOME_RULE_RUN_TREND", scope_params)
             summary["ruleTrend"] = [
                 {
                     "label": row[0],
@@ -327,7 +356,7 @@ def _get_target_summary(request: Request, user_id: int, connection_id: int | Non
             and existing.get("INIT$_TB_FLOW_WORK")
             and existing.get("INIT$_TB_PROJECT")
         ):
-            cursor.execute(SqlLoader.get_sql("HOME_FLOW_RUN_TREND"), scope_params)
+            _target_execute(cursor, "HOME_FLOW_RUN_TREND", scope_params)
             summary["flowTrend"] = [
                 {
                     "label": row[0],
@@ -337,7 +366,7 @@ def _get_target_summary(request: Request, user_id: int, connection_id: int | Non
                 for row in cursor.fetchall()
             ]
             if existing.get("INIT$_TB_FLOW_WORK_NODE_RUN"):
-                cursor.execute(SqlLoader.get_sql("HOME_RECENT_FLOW_RUNS"), {
+                _target_execute(cursor, "HOME_RECENT_FLOW_RUNS", {
                     **scope_params,
                     "limit": 40,
                 })
@@ -353,6 +382,8 @@ def _get_target_summary(request: Request, user_id: int, connection_id: int | Non
     finally:
         if cursor:
             cursor.close()
+        if conn and previous_call_timeout is not None and hasattr(conn, "call_timeout"):
+            conn.call_timeout = previous_call_timeout
         if conn:
             conn.close()
     return summary
@@ -447,7 +478,7 @@ def _normalize_node_result(row: dict[str, Any]) -> dict[str, Any]:
     runtime_params = _parse_json(row.get("RUNTIME_PARAM_JSON"), {}) or {}
     mode = str(payload.get("resultCreateYn") or payload.get("RESULT_CREATE_YN") or "N").strip().upper()
     mode = mode if mode in ("N", "T", "M") else "N"
-    menu_code = payload.get("refMenuCode") or payload.get("menuCode") or payload.get("REF_MENU_CODE") or ""
+    menu_code = payload.get("refMenuCode") or payload.get("menuCode") or payload.get("REF_MENU_CODE") or row.get("REF_MENU_CODE") or ""
     owner = payload.get("resultOwner") or payload.get("RESULT_OWNER") or payload.get("ownerName") or ""
     object_name = payload.get("resultTableName") or payload.get("RESULT_TABLE_NAME") or payload.get("tableName") or ""
     row["PAYLOAD"] = payload

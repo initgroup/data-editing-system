@@ -1194,6 +1194,7 @@
                 this.setValue(`#nodeId-${PAGE_CODE}`, "");
                 this.setValue(`#nodeType-${PAGE_CODE}`, "");
                 this.setValue(`#nodeName-${PAGE_CODE}`, "");
+                this.setValue(`#nodeUseYn-${PAGE_CODE}`, "Y");
                 this.setValue(`#nodeOwnerName-${PAGE_CODE}`, "");
                 this.setValue(`#nodeTableName-${PAGE_CODE}`, "");
                 this.setResultTableFields("", "", "");
@@ -1816,6 +1817,7 @@
                 article.dataset.execSpecJson = data.execSpecJson || "";
                 article.dataset.execPlsql = data.execPlsql || "";
                 article.dataset.nodeParams = this.stringifyNodeJson(data.params || []);
+                article.dataset.useYn = String(data.useYn || "Y").toUpperCase() === "N" ? "N" : "Y";
                 article.style.position = "absolute";
                 article.style.left = `${Math.max(0, Math.round(left))}px`;
                 article.style.top = `${Math.max(0, Math.round(top))}px`;
@@ -1834,6 +1836,7 @@
                         ${outputHtml}
                     </footer>
                 `;
+                this.applyNodeUseState(article);
                 return article;
             },
 
@@ -1864,6 +1867,7 @@
                 article.dataset.resultTableName = data.resultTableName || refJob?.RESULT_TABLE_NAME || "";
                 article.dataset.execPlsql = data.execPlsql || "";
                 article.dataset.nodeParams = this.stringifyNodeJson(data.params || []);
+                article.dataset.useYn = String(data.useYn || "Y").toUpperCase() === "N" ? "N" : "Y";
                 article.style.position = "absolute";
                 article.style.left = `${Math.max(0, Math.round(Number(data.positionLeft) || 0))}px`;
                 article.style.top = `${Math.max(0, Math.round(Number(data.positionTop) || 0))}px`;
@@ -1882,7 +1886,15 @@
                         ${outputHtml}
                     </footer>
                 `;
+                this.applyNodeUseState(article);
                 return article;
+            },
+
+            applyNodeUseState(node) {
+                if (!node) return;
+                const disabled = String(node.dataset.useYn || "Y").toUpperCase() === "N";
+                node.classList.toggle("is-node-disabled", disabled);
+                node.setAttribute("data-node-use-yn", disabled ? "N" : "Y");
             },
 
             renderNodePortSpans(ports, direction) {
@@ -2013,6 +2025,7 @@
                 this.setValue(`#nodeId-${PAGE_CODE}`, node.dataset.nodeId || "");
                 this.setValue(`#nodeType-${PAGE_CODE}`, node.dataset.nodeType || "");
                 this.setValue(`#nodeName-${PAGE_CODE}`, node.querySelector(".flow-node-body strong")?.textContent?.trim() || "");
+                this.setValue(`#nodeUseYn-${PAGE_CODE}`, String(node.dataset.useYn || "Y").toUpperCase() === "N" ? "N" : "Y");
                 this.setValue(`#nodeOwnerName-${PAGE_CODE}`, node.dataset.ownerName || "");
                 this.setValue(`#nodeTableName-${PAGE_CODE}`, node.dataset.tableName || "");
                 this.setValue(`#nodeResultCreateYn-${PAGE_CODE}`, this.getResultCreateModeLabel(node.dataset.resultCreateYn || "N"));
@@ -2070,6 +2083,10 @@
                 }
                 if (fieldName === "tableName") {
                     node.dataset.tableName = value || "";
+                }
+                if (fieldName === "useYn") {
+                    node.dataset.useYn = String(value || "Y").toUpperCase() === "N" ? "N" : "Y";
+                    this.applyNodeUseState(node);
                 }
             },
 
@@ -2437,6 +2454,7 @@
                         nodeTypeLabel: node.dataset.nodeTypeLabel || this.getNodeTypeLabel(node.dataset.nodeType || "JOB"),
                         nodeName: node.querySelector(".flow-node-body strong")?.textContent?.trim() || node.dataset.nodeId || `Node ${index + 1}`,
                         nodeDesc: node.querySelector(".flow-node-body small")?.textContent?.trim() || "",
+                        useYn: String(node.dataset.useYn || "Y").toUpperCase() === "N" ? "N" : "Y",
                         refMenuCode: node.dataset.refMenuCode || "",
                         refWorkJobId: node.dataset.refWorkJobId || null,
                         refObjectId: node.dataset.refObjectId || null,
@@ -3153,6 +3171,7 @@
                 if (!layer || !grid) return;
 
                 layer.hidden = false;
+                this.enableRunPlanLayerDrag(layer);
                 this.setRunPlanRefreshing(Boolean(options.refreshing));
                 if (title) title.textContent = `Execution Plan - Run #${row.FLOW_RUN_ID || ""}`;
                 if (summary) {
@@ -3219,6 +3238,41 @@
                 const layer = getContainerEl(`#flowRunPlanLayer-${PAGE_CODE}`);
                 if (layer) layer.hidden = true;
                 this.activeRunPlanFlowRunId = "";
+            },
+            enableRunPlanLayerDrag(layer) {
+                const dialog = layer?.querySelector(".flow-run-plan-dialog");
+                const header = dialog?.querySelector("header");
+                if (!dialog || !header || dialog.dataset.dragBound === "Y") return;
+                dialog.dataset.dragBound = "Y";
+                header.classList.add("is-draggable");
+                header.addEventListener("pointerdown", (event) => {
+                    if (event.target.closest("button")) return;
+                    event.preventDefault();
+                    const rect = dialog.getBoundingClientRect();
+                    const startX = event.clientX;
+                    const startY = event.clientY;
+                    const startLeft = rect.left;
+                    const startTop = rect.top;
+                    dialog.style.position = "fixed";
+                    dialog.style.margin = "0";
+                    dialog.style.left = `${startLeft}px`;
+                    dialog.style.top = `${startTop}px`;
+                    header.setPointerCapture?.(event.pointerId);
+                    const move = (moveEvent) => {
+                        const nextLeft = Math.max(8, Math.min(window.innerWidth - rect.width - 8, startLeft + moveEvent.clientX - startX));
+                        const nextTop = Math.max(8, Math.min(window.innerHeight - rect.height - 8, startTop + moveEvent.clientY - startY));
+                        dialog.style.left = `${nextLeft}px`;
+                        dialog.style.top = `${nextTop}px`;
+                    };
+                    const up = () => {
+                        header.removeEventListener("pointermove", move);
+                        header.removeEventListener("pointerup", up);
+                        header.removeEventListener("pointercancel", up);
+                    };
+                    header.addEventListener("pointermove", move);
+                    header.addEventListener("pointerup", up);
+                    header.addEventListener("pointercancel", up);
+                });
             },
             extractRunPlan(row) {
                 const raw = row?.PLAN_JSON || "";
@@ -3303,9 +3357,12 @@
             },
             getNodeResultInfo(row) {
                 const payload = this.parseNodeJson(row?.NODE_PAYLOAD_JSON, {});
+                const runtimeParams = this.parseNodeJson(row?.RUNTIME_PARAM_JSON, {});
                 const mode = this.normalizeResultCreateMode(payload.resultCreateYn || payload.RESULT_CREATE_YN || "N");
                 const owner = payload.resultOwner || payload.RESULT_OWNER || "";
                 const objectName = payload.resultTableName || payload.RESULT_TABLE_NAME || "";
+                const targetOwner = runtimeParams["INIT$TargetOwner"] || runtimeParams.targetOwner || payload.targetOwner || payload.ownerName || "";
+                const targetTable = runtimeParams["INIT$TargetTable"] || runtimeParams.targetTable || payload.targetTable || payload.tableName || "";
                 return {
                     flowNodeRunId: row?.FLOW_NODE_RUN_ID || "",
                     nodeName: row?.NODE_NAME || row?.NODE_KEY || "",
@@ -3313,7 +3370,9 @@
                     mode,
                     modeLabel: mode === "M" ? "Model" : (mode === "T" ? "Table" : "None"),
                     owner,
-                    objectName
+                    objectName,
+                    targetOwner,
+                    targetTable
                 };
             },
             async openFlowNodeResultSql(flowNodeRunId) {
@@ -3328,7 +3387,9 @@
                 const params = new URLSearchParams({
                     resultCreateYn: info.mode,
                     owner: info.owner,
-                    objectName: info.objectName
+                    objectName: info.objectName,
+                    targetOwner: info.targetOwner || "",
+                    targetTable: info.targetTable || ""
                 });
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/result-sql?${params.toString()}`, {
                     method: "GET",
@@ -3337,7 +3398,8 @@
                 const sql = json.data?.sql || "";
                 this.setValue(`#flowResultSqlEditor-${PAGE_CODE}`, sql);
                 this.setText(`#flowResultSqlTitle-${PAGE_CODE}`, `${info.nodeName || "Node"} Result SQL`);
-                this.setText(`#flowResultSqlHint-${PAGE_CODE}`, `${info.modeLabel}: ${info.owner}.${info.objectName}`);
+                const targetHint = info.targetOwner && info.targetTable ? ` / Target ${info.targetOwner}.${info.targetTable}` : "";
+                this.setText(`#flowResultSqlHint-${PAGE_CODE}`, `${info.modeLabel}: ${info.owner}.${info.objectName}${targetHint}`);
                 this.flowResultSqlGridData = { rows: [], columns: [] };
                 this.renderFlowResultSqlMessage("", "info");
                 const grid = getContainerEl(`#flowResultSqlGrid-${PAGE_CODE}`);
@@ -3623,9 +3685,11 @@
                 const start = this.parseDateTime(startedAt);
                 if (!start) return "";
                 const statusText = String(status || "").toUpperCase();
-                const isRunning = !finishedAt && ["RUNNING", "STARTED", "QUEUED"].includes(statusText);
-                const finish = finishedAt ? this.parseDateTime(finishedAt) : (isRunning ? new Date() : null);
-                if (!finish || finish < start) return isRunning ? "Running" : "";
+                if (!finishedAt && statusText === "QUEUED") return "Queued";
+                const isRunning = !finishedAt && ["RUNNING", "STARTED"].includes(statusText);
+                if (isRunning) return "Running";
+                const finish = finishedAt ? this.parseDateTime(finishedAt) : null;
+                if (!finish || finish < start) return "";
 
                 let totalSeconds = Math.floor((finish.getTime() - start.getTime()) / 1000);
                 const hours = Math.floor(totalSeconds / 3600);
@@ -3633,7 +3697,7 @@
                 const minutes = Math.floor(totalSeconds / 60);
                 const seconds = totalSeconds % 60;
                 const elapsed = `${hours}h ${minutes}m ${seconds}s`;
-                return isRunning ? `Running ${elapsed}` : elapsed;
+                return elapsed;
             },
             parseDateTime(value) {
                 if (!value) return null;

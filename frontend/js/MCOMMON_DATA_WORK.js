@@ -20,6 +20,40 @@
                     return `"${String(name || "").replace(/"/g, "\"\"")}"`;
                 },
 
+                escapeSqlLiteral(value) {
+                    return String(value ?? "").replace(/'/g, "''");
+                },
+
+                shouldApplyTargetResultFilter(tableName) {
+                    return new Set(["INIT$_TB_PREDICTED_TYPE", "INIT$_TB_CAT_CORR_PAIR"])
+                        .has(String(tableName || "").trim().toUpperCase());
+                },
+
+                createTargetResultWhereClause(tableName, targetOwner = "", targetTable = "") {
+                    const table = String(tableName || "").trim();
+                    const owner = String(targetOwner || "").trim();
+                    const target = String(targetTable || "").trim();
+                    if (!this.shouldApplyTargetResultFilter(table) || !owner || !target) return "";
+                    return [
+                        `OWNER = '${this.escapeSqlLiteral(owner.toUpperCase())}'`,
+                        `AND TABLE_NAME = '${this.escapeSqlLiteral(target.toUpperCase())}'`
+                    ].join("\n");
+                },
+
+                createTargetFilteredSelectSql(ownerName, tableName, targetOwner = "", targetTable = "") {
+                    const owner = String(ownerName || "").trim();
+                    const table = String(tableName || "").trim();
+                    if (!table) return "";
+                    const objectName = owner ? `${this.quoteName(owner)}.${this.quoteName(table)}` : this.quoteName(table);
+                    const whereClause = this.createTargetResultWhereClause(table, targetOwner, targetTable);
+                    if (!whereClause) return `SELECT *\n  FROM ${objectName};`;
+                    return [
+                        "SELECT *",
+                        `  FROM ${objectName}`,
+                        ` WHERE ${whereClause.replace(/\nAND /g, "\n   AND ")};`
+                    ].join("\n");
+                },
+
                 setText(selector, value) {
                     const element = getContainerEl(selector);
                     if (element) element.textContent = value ?? "";
@@ -107,10 +141,17 @@
         sqlKeydownBound: null,
         resultSqlKeydownBound: null,
         userSqlInputBound: null,
+        dataWhereInputBound: null,
         userSqlDirty: false,
         systemUserSqlValue: "",
+        dataWhereDirty: false,
+        systemDataWhereValue: "",
         sqlTransactionId: "",
         gridData: {},
+        dataGridRows: [],
+        dataGridColumns: [],
+        dataGridDirtyCells: new Map(),
+        dataGridTargetKey: "",
         contextLoadFailed: false,
         runtimeBindDialog: null,
         runtimeBindValues: {},
@@ -119,12 +160,15 @@
             if (this.isInit) return;
             this.currentJob = this.createEmptyJob();
             this.applyUiLabels();
+            this.syncDataEditTabVisibility();
             this.renderSqlTransactionState();
             this.sqlKeydownBound = (event) => this.handleSqlEditorKeydown(event, `#sqlEditor-${PAGE_CODE}`, `#sqlGrid-${PAGE_CODE}`, "sql");
             this.resultSqlKeydownBound = (event) => this.handleSqlEditorKeydown(event, `#resultSqlEditor-${PAGE_CODE}`, `#resultGrid-${PAGE_CODE}`, "result");
             this.userSqlInputBound = () => this.handleUserSqlInput();
+            this.dataWhereInputBound = () => this.handleDataWhereInput();
             getContainerEl(`#sqlEditor-${PAGE_CODE}`)?.addEventListener("keydown", this.sqlKeydownBound);
             getContainerEl(`#sqlEditor-${PAGE_CODE}`)?.addEventListener("input", this.userSqlInputBound);
+            getContainerEl(`#dataWhere-${PAGE_CODE}`)?.addEventListener("input", this.dataWhereInputBound);
             getContainerEl(`#resultSqlEditor-${PAGE_CODE}`)?.addEventListener("keydown", this.resultSqlKeydownBound);
             await Promise.all([
                 this.loadExecutableObjects(),
@@ -139,6 +183,7 @@
         destroy() {
             getContainerEl(`#sqlEditor-${PAGE_CODE}`)?.removeEventListener("keydown", this.sqlKeydownBound);
             getContainerEl(`#sqlEditor-${PAGE_CODE}`)?.removeEventListener("input", this.userSqlInputBound);
+            getContainerEl(`#dataWhere-${PAGE_CODE}`)?.removeEventListener("input", this.dataWhereInputBound);
             getContainerEl(`#resultSqlEditor-${PAGE_CODE}`)?.removeEventListener("keydown", this.resultSqlKeydownBound);
             this.contextProjects = [];
             this.contextScenarios = [];
@@ -158,9 +203,17 @@
             this.sqlKeydownBound = null;
             this.resultSqlKeydownBound = null;
             this.userSqlInputBound = null;
+            this.dataWhereInputBound = null;
             this.userSqlDirty = false;
             this.systemUserSqlValue = "";
+            this.dataWhereDirty = false;
+            this.systemDataWhereValue = "";
             this.sqlTransactionId = "";
+            this.gridData = {};
+            this.dataGridRows = [];
+            this.dataGridColumns = [];
+            this.dataGridDirtyCells = new Map();
+            this.dataGridTargetKey = "";
             this.contextLoadFailed = false;
             this.runtimeBindDialog = null;
             this.runtimeBindValues = {};
@@ -488,6 +541,7 @@
             });
 
             this.applySelectedScenarioTableToCurrentJob();
+            this.resetEditableDataGrid();
             this.setDefaultUserSql(false);
             this.renderCurrentJob();
             this.updateWorkContextSummary();
@@ -725,6 +779,42 @@
             }
         },
 
+        async refreshParameters() {
+            const selectedSourceType = getContainerEl(`#execSourceType-${PAGE_CODE}`)?.value || "";
+            const sourceType = String(this.currentJob?.execSourceType || selectedSourceType || "DB_OBJECT").toUpperCase();
+            const button = getContainerEl(`#refreshParametersButton-${PAGE_CODE}`);
+            const icon = button?.querySelector("i");
+            button?.setAttribute("disabled", "disabled");
+            icon?.classList.add("fa-spin");
+            try {
+                if (sourceType === "OML_PYTHON") {
+                    const resourceId = this.currentJob?.execResourceId || getContainerEl(`#omlResource-${PAGE_CODE}`)?.value || "";
+                    if (!resourceId) {
+                        this.parameters = [];
+                        this.renderParameters();
+                        CommonMessage.warning?.("Select an OML4Py resource first.");
+                        return;
+                    }
+                    await this.loadOmlParameters(resourceId);
+                } else {
+                    const objectId = this.currentJob?.execObjectId || getContainerEl(`#execObject-${PAGE_CODE}`)?.value || "";
+                    if (!objectId) {
+                        this.parameters = [];
+                        this.renderParameters();
+                        CommonMessage.warning?.("Select a DB object first.");
+                        return;
+                    }
+                    await this.loadParameters(objectId);
+                }
+                CommonMessage.success?.("Parameters refreshed.", { copyable: false });
+            } catch (error) {
+                CommonMessage.error(error.message || "Parameter refresh failed.");
+            } finally {
+                button?.removeAttribute("disabled");
+                icon?.classList.remove("fa-spin");
+            }
+        },
+
         renderParameters() {
             const container = getContainerEl(`#parameterGrid-${PAGE_CODE}`);
             if (!container) return;
@@ -897,6 +987,7 @@
             this.renderCurrentJob();
             this.updateWorkContextSummary();
             this.renderParameters();
+            this.resetEditableDataGrid();
             this.setEditorValue(`#execPlsqlEditor-${PAGE_CODE}`, job.EXEC_PLSQL || "");
             this.setEditorValue(`#resultSqlEditor-${PAGE_CODE}`, this.createResultSql(job.RESULT_TABLE_NAME || "", job.RESULT_OWNER || "", this.currentJob.resultCreateYn || "N"));
             this.setFieldValue(`#resultQueryTable-${PAGE_CODE}`, job.RESULT_TABLE_NAME || "");
@@ -908,6 +999,7 @@
             const selectedTable = this.getSelectedScenarioTable();
             this.currentJob = this.createEmptyJob();
             this.parameters = [];
+            this.resetEditableDataGrid();
             if (selectedTable) {
                 const jobNo = this.getNextJobNo();
                 this.currentJob = {
@@ -934,6 +1026,9 @@
         updateCurrentJobField(field, value) {
             if (!this.currentJob) this.currentJob = this.createEmptyJob();
             this.currentJob[field] = value;
+            if (["ownerName", "tableName", "resultOwner", "resultTableName", "resultCreateYn"].includes(field)) {
+                this.resetEditableDataGrid();
+            }
             this.renderUserSqlJobContext();
         },
 
@@ -1018,6 +1113,7 @@
                 ? `${job.ownerName}.${job.tableName}`
                 : this.getLabel("workDescriptionEmpty");
             this.setText(`#workDescription-${PAGE_CODE}`, desc);
+            this.renderDataEditTarget();
             this.renderUserSqlJobContext();
         },
 
@@ -1975,6 +2071,9 @@ END;`;
         },
 
         switchTab(tabName) {
+            if (tabName === "data" && !this.isDataEditTabEnabled()) {
+                tabName = "work";
+            }
             this.activeTab = tabName;
             const container = document.getElementById(`container-${PAGE_CODE}`);
             getContainerEl(".data-work-tabs")?.querySelectorAll(".table-tab").forEach((tab) => {
@@ -1986,6 +2085,311 @@ END;`;
             if (tabName === "history") {
                 this.loadRunHistory();
             }
+        },
+
+        isDataEditTabEnabled() {
+            return config.enableDataEditTab === true || PAGE_CODE === "M03001";
+        },
+
+        syncDataEditTabVisibility() {
+            const enabled = this.isDataEditTabEnabled();
+            const container = document.getElementById(`container-${PAGE_CODE}`);
+            const tab = getContainerEl(`.data-work-tabs .table-tab[data-tab="data"]`);
+            const panel = container?.querySelector(`.data-tool-panel[data-panel="data"]`);
+            if (tab) {
+                tab.hidden = !enabled;
+                tab.style.display = enabled ? "" : "none";
+            }
+            if (panel) {
+                panel.hidden = !enabled;
+                panel.style.display = enabled ? "" : "none";
+            }
+            if (!enabled && this.activeTab === "data") {
+                this.switchTab("work");
+            }
+            if (enabled) {
+                this.renderDataEditTarget();
+            }
+        },
+
+        resetEditableDataGrid(message = "") {
+            this.dataGridRows = [];
+            this.dataGridColumns = [];
+            this.dataGridDirtyCells = new Map();
+            this.dataGridTargetKey = "";
+            this.renderDataEditTarget();
+            this.syncEditableDataSaveButton();
+            const grid = getContainerEl(`#dataEditGrid-${PAGE_CODE}`);
+            if (grid) grid.innerHTML = "";
+            if (message) {
+                this.renderDataEditMessage(message, "info");
+            } else {
+                this.renderDataEditMessage("", "info");
+            }
+        },
+
+        getDataEditTarget() {
+            const job = this.currentJob || {};
+            const useResultObject = this.isResultObjectMode(job.resultCreateYn)
+                && job.resultOwner
+                && job.resultTableName
+                && !this.isResultModelMode(job.resultCreateYn);
+            const owner = String(useResultObject ? job.resultOwner : job.ownerName || "").trim();
+            const tableName = String(useResultObject ? job.resultTableName : job.tableName || "").trim();
+            return { owner, tableName };
+        },
+
+        renderDataEditTarget(target = this.getDataEditTarget()) {
+            const owner = target?.owner || "-";
+            const tableName = target?.tableName || "-";
+            this.setText(`#dataEditOwner-${PAGE_CODE}`, owner);
+            this.setText(`#dataEditTable-${PAGE_CODE}`, tableName);
+            const container = getContainerEl(`#dataEditTarget-${PAGE_CODE}`);
+            if (container) {
+                container.title = owner !== "-" && tableName !== "-" ? `${owner}.${tableName}` : "No target table selected.";
+            }
+        },
+
+        getDataEditWhereClause() {
+            return getContainerEl(`#dataWhere-${PAGE_CODE}`)?.value.trim() || "";
+        },
+
+        getDataEditOrderByClause() {
+            return getContainerEl(`#dataOrderBy-${PAGE_CODE}`)?.value.trim() || "";
+        },
+
+        getEditableDataColumns(target = this.getDataEditTarget()) {
+            const configColumns = config.editableDataColumns || {};
+            const tableKey = String(target?.tableName || "").trim().toUpperCase();
+            const configured = Array.isArray(configColumns[tableKey]) ? configColumns[tableKey] : null;
+            if (configured?.length) {
+                return new Set(configured.map((column) => String(column).trim().toUpperCase()).filter(Boolean));
+            }
+            if (PAGE_CODE === "M03001" && tableKey === "INIT$_TB_PREDICTED_TYPE") {
+                return new Set(["MODL_PREDICTED_TYPE"]);
+            }
+            return new Set();
+        },
+
+        async loadEditableTableData() {
+            if (!this.isDataEditTabEnabled()) return;
+            const target = this.getDataEditTarget();
+            this.renderDataEditTarget(target);
+            if (!target.owner || !target.tableName) {
+                this.renderDataEditMessage("No target table selected.", "error");
+                return;
+            }
+
+            const grid = getContainerEl(`#dataEditGrid-${PAGE_CODE}`);
+            if (grid) grid.innerHTML = `<div class="table-empty">Loading data...</div>`;
+            this.dataGridDirtyCells = new Map();
+            this.syncEditableDataSaveButton();
+            this.renderDataEditMessage("Loading data...", "info");
+
+            try {
+                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/data/editable`, {
+                    method: "POST",
+                    body: {
+                        owner: target.owner,
+                        tableName: target.tableName,
+                        limit: this.getLimit(`#dataLimit-${PAGE_CODE}`),
+                        whereClause: this.getDataEditWhereClause(),
+                        orderByClause: this.getDataEditOrderByClause()
+                    }
+                });
+                const rows = json.data || [];
+                const columns = (json.columns || []).filter((column) => column !== "INIT$ROWID");
+                this.dataGridRows = rows;
+                this.dataGridColumns = columns;
+                this.dataGridTargetKey = `${target.owner}.${target.tableName}`;
+                this.renderEditableDataGrid(rows, columns, target);
+                this.renderDataEditMessage(`${rows.length.toLocaleString()} rows selected.`, "success");
+            } catch (error) {
+                this.dataGridRows = [];
+                this.dataGridColumns = [];
+                if (grid) grid.innerHTML = "";
+                this.renderDataEditMessage(error.message || "Data query failed.", "error");
+            }
+        },
+
+        renderEditableDataGrid(rows, columns, target) {
+            const container = getContainerEl(`#dataEditGrid-${PAGE_CODE}`);
+            if (!container) return;
+            const editableColumns = this.getEditableDataColumns(target);
+            const hasEditableColumns = columns.some((column) => editableColumns.has(String(column).toUpperCase()));
+            if (!Array.isArray(rows) || !rows.length) {
+                container.innerHTML = columns.length
+                    ? `<table class="table-grid data-edit-table"><thead><tr><th class="grid-row-no">No</th>${columns.map((column) => {
+                        const editable = editableColumns.has(String(column).toUpperCase());
+                        return `<th class="${editable ? "is-editable-column" : ""}" title="${this.escapeHtml(column)}">${this.escapeHtml(column)}</th>`;
+                    }).join("")}</tr></thead><tbody></tbody></table>${this.renderListFooter(0)}`
+                    : `<div class="table-empty">No data.</div>${this.renderListFooter(0)}`;
+                this.syncEditableDataSaveButton();
+                return;
+            }
+
+            container.innerHTML = `
+                <table class="table-grid data-edit-table">
+                    <thead>
+                        <tr>
+                            <th class="grid-row-no">No</th>
+                            ${columns.map((column) => {
+                                const editable = editableColumns.has(String(column).toUpperCase());
+                                return `<th class="${editable ? "is-editable-column" : ""}" title="${this.escapeHtml(column)}">${this.escapeHtml(column)}</th>`;
+                            }).join("")}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rows.map((row, rowIndex) => `
+                            <tr>
+                                <td class="grid-row-no">${rowIndex + 1}</td>
+                                ${columns.map((column) => this.renderEditableDataCell(row, rowIndex, column, editableColumns)).join("")}
+                            </tr>
+                        `).join("")}
+                    </tbody>
+                </table>
+                ${this.renderListFooter(rows.length)}
+            `;
+
+            if (!hasEditableColumns) {
+                this.renderDataEditMessage("No editable columns are configured for this table.", "info");
+            }
+            this.syncEditableDataSaveButton();
+        },
+
+        renderEditableDataCell(row, rowIndex, column, editableColumns) {
+            const columnName = String(column);
+            const value = row[columnName] ?? "";
+            const editable = editableColumns.has(columnName.toUpperCase());
+            if (!editable) {
+                return `<td title="${this.escapeHtml(value)}">${this.escapeHtml(value)}</td>`;
+            }
+            if (this.isPredictedTypeEditColumn(columnName)) {
+                return `
+                    <td
+                        class="data-edit-cell is-editable is-select-edit"
+                        data-row-index="${rowIndex}"
+                        data-column-name="${this.escapeHtml(columnName)}"
+                        title="${this.escapeHtml(value)}"
+                    >
+                        <select class="data-edit-select" onchange="${PAGE_CODE}.handleEditableDataCellInput(event)">
+                            ${this.getPredictedTypeOptions().map((option) => `
+                                <option value="${this.escapeHtml(option)}"${String(value) === option ? " selected" : ""}>${this.escapeHtml(option)}</option>
+                            `).join("")}
+                        </select>
+                    </td>
+                `;
+            }
+            return `
+                <td
+                    class="data-edit-cell is-editable"
+                    contenteditable="true"
+                    spellcheck="false"
+                    data-row-index="${rowIndex}"
+                    data-column-name="${this.escapeHtml(columnName)}"
+                    title="${this.escapeHtml(value)}"
+                    oninput="${PAGE_CODE}.handleEditableDataCellInput(event)"
+                    onkeydown="${PAGE_CODE}.handleEditableDataCellKeydown(event)"
+                >${this.escapeHtml(value)}</td>
+            `;
+        },
+
+        isPredictedTypeEditColumn(columnName) {
+            return PAGE_CODE === "M03001" && String(columnName || "").toUpperCase() === "MODL_PREDICTED_TYPE";
+        },
+
+        getPredictedTypeOptions() {
+            return [
+                "숫자형식별자",
+                "문자형식별자",
+                "숫자형범주형",
+                "순서형범주형",
+                "문자형범주형",
+                "일반적범주형",
+                "숫자형연속형",
+                "단순형텍스트",
+                "기타데이터형"
+            ];
+        },
+
+        handleEditableDataCellInput(event) {
+            const source = event.currentTarget;
+            const cell = source?.closest?.(".data-edit-cell") || source;
+            const rowIndex = Number(cell?.dataset?.rowIndex);
+            const columnName = cell?.dataset?.columnName || "";
+            const row = this.dataGridRows[rowIndex];
+            if (!row || !columnName) return;
+            const originalValue = row[columnName] ?? "";
+            const newValue = source?.tagName === "SELECT" ? source.value : (cell.textContent ?? "");
+            const key = `${row.INIT$ROWID || ""}::${columnName}`;
+            if (String(originalValue) === newValue) {
+                this.dataGridDirtyCells.delete(key);
+                cell.classList.remove("is-dirty");
+            } else {
+                this.dataGridDirtyCells.set(key, {
+                    rowId: row.INIT$ROWID,
+                    columnName,
+                    value: newValue
+                });
+                cell.classList.add("is-dirty");
+            }
+            this.syncEditableDataSaveButton();
+        },
+
+        handleEditableDataCellKeydown(event) {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                event.currentTarget.blur();
+            }
+        },
+
+        syncEditableDataSaveButton() {
+            const button = getContainerEl(`#dataSaveUpdates-${PAGE_CODE}`);
+            if (button) button.disabled = !this.dataGridDirtyCells?.size;
+        },
+
+        async saveEditableTableData() {
+            if (!this.dataGridDirtyCells?.size) {
+                this.renderDataEditMessage("No changes to save.", "info");
+                return;
+            }
+            const target = this.getDataEditTarget();
+            if (!target.owner || !target.tableName) {
+                this.renderDataEditMessage("No target table selected.", "error");
+                return;
+            }
+
+            const changes = Array.from(this.dataGridDirtyCells.values()).filter((change) => change.rowId && change.columnName);
+            if (!changes.length) {
+                this.renderDataEditMessage("No valid changes to save.", "error");
+                return;
+            }
+
+            try {
+                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/data/update`, {
+                    method: "POST",
+                    body: {
+                        owner: target.owner,
+                        tableName: target.tableName,
+                        whereClause: this.getDataEditWhereClause(),
+                        changes
+                    }
+                });
+                this.dataGridDirtyCells = new Map();
+                this.syncEditableDataSaveButton();
+                this.renderDataEditMessage(json.message || "Changes saved.", "success");
+                await this.loadEditableTableData();
+            } catch (error) {
+                this.renderDataEditMessage(error.message || "Update failed.", "error");
+            }
+        },
+
+        renderDataEditMessage(message, type = "info") {
+            const element = getContainerEl(`#dataEditMessage-${PAGE_CODE}`);
+            if (!element) return;
+            element.className = type === "error" ? "table-error" : "table-empty";
+            element.textContent = message || "";
+            element.hidden = !message;
         },
 
         renderSqlTransactionState() {
@@ -2244,6 +2648,7 @@ END;`;
         },
 
         async setDefaultUserSql(force = false) {
+            this.setDefaultDataWhere(force);
             const editor = getContainerEl(`#sqlEditor-${PAGE_CODE}`);
             if (!editor) return;
             const currentValue = editor.value || "";
@@ -2258,6 +2663,38 @@ END;`;
             editor.value = sql;
             this.systemUserSqlValue = sql;
             this.userSqlDirty = false;
+        },
+
+        setDefaultDataWhere(force = false) {
+            const field = getContainerEl(`#dataWhere-${PAGE_CODE}`);
+            if (!field) return;
+            const currentValue = field.value || "";
+            const canReplace = !currentValue.trim()
+                || currentValue === this.systemDataWhereValue
+                || !this.dataWhereDirty
+                || (force && !this.dataWhereDirty);
+            if (!canReplace) return;
+
+            const whereClause = this.createDefaultDataWhereClause();
+            field.value = whereClause;
+            this.systemDataWhereValue = whereClause;
+            this.dataWhereDirty = false;
+        },
+
+        createDefaultDataWhereClause() {
+            const job = this.currentJob || {};
+            const useResultObject = this.isResultObjectMode(job.resultCreateYn)
+                && job.resultOwner
+                && job.resultTableName
+                && !this.isResultModelMode(job.resultCreateYn);
+            if (!useResultObject) return "";
+            return this.createTargetResultWhereClause(job.resultTableName, job.ownerName, job.tableName);
+        },
+
+        handleDataWhereInput() {
+            const field = getContainerEl(`#dataWhere-${PAGE_CODE}`);
+            const value = field?.value || "";
+            this.dataWhereDirty = Boolean(value.trim()) && value !== this.systemDataWhereValue;
         },
 
         handleUserSqlInput() {
@@ -2277,7 +2714,12 @@ END;`;
             const ownerName = useResultObject ? job.resultOwner : job.ownerName;
             const tableName = useResultObject ? job.resultTableName : job.tableName;
             return ownerName && tableName
-                ? `SELECT *\n  FROM ${this.quoteName(ownerName)}.${this.quoteName(tableName)};`
+                ? this.createTargetFilteredSelectSql(
+                    ownerName,
+                    tableName,
+                    useResultObject ? job.ownerName : "",
+                    useResultObject ? job.tableName : ""
+                )
                 : "";
         },
 
@@ -2322,8 +2764,9 @@ END;`;
             if (this.isResultModelMode(resultCreateYn)) {
                 return this.createModelDetailSql(table, owner);
             }
-            const objectName = owner ? `${this.quoteName(owner)}.${this.quoteName(table)}` : this.quoteName(table);
-            return table ? `SELECT *\n  FROM ${objectName};` : "";
+            const targetOwner = getContainerEl(`#targetOwner-${PAGE_CODE}`)?.value.trim() || this.currentJob?.ownerName || "";
+            const targetTable = getContainerEl(`#targetTable-${PAGE_CODE}`)?.value.trim() || this.currentJob?.tableName || "";
+            return this.createTargetFilteredSelectSql(owner, table, targetOwner, targetTable);
         },
 
         handleSqlEditorKeydown(event, editorSelector, gridSelector, gridKey) {

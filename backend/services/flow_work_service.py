@@ -34,6 +34,7 @@ class FlowNodeRequest(BaseModel):
     nodeType: str
     nodeName: str
     nodeDesc: Optional[str] = None
+    useYn: Optional[str] = "Y"
     refMenuCode: Optional[str] = None
     refWorkJobId: Optional[int] = None
     refObjectId: Optional[int] = None
@@ -227,6 +228,7 @@ def replace_flow_graph(cursor, flow_id: int, nodes: List[Dict[str, Any]], edges:
             "nodeType": node["nodeType"],
             "nodeName": node["nodeName"],
             "nodeDesc": node.get("nodeDesc"),
+            "useYn": node.get("useYn", "Y"),
             "refMenuCode": node.get("refMenuCode"),
             "refWorkJobId": node.get("refWorkJobId"),
             "refObjectId": node.get("refObjectId"),
@@ -279,6 +281,14 @@ def execute_flow_dml(cursor, step: str, sql_id: str, params: Dict[str, Any]):
         raise FlowWorkDmlError(step, last_error) from last_error
 
 
+def prepare_flow_run_session(conn):
+    cursor = conn.cursor()
+    try:
+        cursor.execute(SqlLoader.get_sql("FLOW_WORK_DISABLE_PARALLEL_DML"))
+    finally:
+        cursor.close()
+
+
 def list_runs(conn, menu_code: str, project_id: int, scenario_id: int, flow_id: Optional[int] = None) -> Dict[str, Any]:
     result = execute_query(conn, "FLOW_WORK_RUN_LIST", {
         "menuCode": normalize_menu_code(menu_code),
@@ -288,6 +298,7 @@ def list_runs(conn, menu_code: str, project_id: int, scenario_id: int, flow_id: 
     })
     response = data_work.require_success(result, "Flow run query failed.")
     for row in response.get("data", []):
+        row["MESSAGE"] = data_work.read_lob(row.get("MESSAGE"))
         row["PLAN_JSON"] = data_work.read_lob(row.get("PLAN_JSON"))
     return response
 
@@ -296,6 +307,7 @@ def list_node_runs(conn, flow_run_id: int) -> Dict[str, Any]:
     result = execute_query(conn, "FLOW_WORK_NODE_RUN_LIST", {"flowRunId": flow_run_id})
     response = data_work.require_success(result, "Flow node run query failed.")
     for row in response.get("data", []):
+        row["MESSAGE"] = data_work.read_lob(row.get("MESSAGE"))
         row["RUNTIME_PARAM_JSON"] = data_work.read_lob(row.get("RUNTIME_PARAM_JSON"))
         row["NODE_PAYLOAD_JSON"] = data_work.read_lob(row.get("NODE_PAYLOAD_JSON"))
     return response
@@ -326,8 +338,8 @@ def create_node_run_records(conn, flow_run_id: int, flow_id: int, plan: List[Dic
                 "flowRunId": flow_run_id,
                 "flowId": flow_id,
                 "nodeKey": step.get("nodeKey"),
-                "nodeName": step.get("nodeName") or step.get("nodeKey"),
-                "nodeType": step.get("nodeType") or "JOB",
+            "nodeName": step.get("nodeName") or step.get("nodeKey"),
+            "nodeType": step.get("nodeType") or "JOB",
                 "runLevel": step.get("level", 0),
                 "sortOrder": index,
                 "status": "PENDING",
@@ -358,6 +370,19 @@ def start_node_run_by_key(conn, flow_run_id: int, node_key: str, runtime_values:
             "flowRunId": flow_run_id,
             "nodeKey": node_key,
             "message": "Node execution started.",
+            "runtimeParamJson": json.dumps(runtime_values or {}, ensure_ascii=False)
+        })
+    finally:
+        cursor.close()
+
+
+def skip_node_run_by_key(conn, flow_run_id: int, node_key: str, message: str, runtime_values: Dict[str, Any]):
+    cursor = conn.cursor()
+    try:
+        execute_flow_dml(cursor, f"FLOW_WORK_NODE_RUN_SKIP_BY_KEY[{node_key}:SKIPPED]", "FLOW_WORK_NODE_RUN_SKIP_BY_KEY", {
+            "flowRunId": flow_run_id,
+            "nodeKey": node_key,
+            "message": normalize_text(message, "", 4000),
             "runtimeParamJson": json.dumps(runtime_values or {}, ensure_ascii=False)
         })
     finally:
@@ -400,18 +425,41 @@ def update_run(conn, flow_run_id: int, status: str, message: str, plan: Dict[str
         cursor.close()
 
 
+def start_run(conn, flow_run_id: int, message: str):
+    cursor = conn.cursor()
+    try:
+        execute_flow_dml(cursor, "FLOW_WORK_RUN_START", "FLOW_WORK_RUN_START", {
+            "flowRunId": flow_run_id,
+            "message": normalize_text(message, "", 4000)
+        })
+    finally:
+        cursor.close()
+
+
 def execute_flow_plan(conn, flow_run_id: int, plan: List[Dict[str, Any]]) -> Dict[str, Any]:
+    prepare_flow_run_session(conn)
     executed = 0
     failed = 0
     skipped = 0
     enriched_plan = []
     node_outputs: Dict[str, Dict[str, Any]] = {}
 
-    for step in plan or []:
+    for step_index, step in enumerate(plan or []):
         node_key = step.get("nodeKey") or ""
         node_name = step.get("nodeName") or node_key
         step_result = {**step}
         runtime_values = create_runtime_values(step, node_outputs)
+        if str(step.get("useYn") or "Y").upper() == "N":
+            output = build_node_output(step, {})
+            node_outputs[node_key] = output
+            message = "Node execution skipped because node useYn is N."
+            skip_node_run_by_key(conn, flow_run_id, node_key, message, runtime_values)
+            conn.commit()
+            step_result.update({"status": "SKIPPED", "message": message, "output": output})
+            enriched_plan.append(step_result)
+            skipped += 1
+            continue
+
         start_node_run_by_key(conn, flow_run_id, node_key, runtime_values)
         conn.commit()
         try:
@@ -435,8 +483,9 @@ def execute_flow_plan(conn, flow_run_id: int, plan: List[Dict[str, Any]]) -> Dic
         enriched_plan.append(step_result)
 
     if failed:
-        skipped = max(0, len(plan or []) - executed - failed)
-        for step in (plan or [])[executed + failed:]:
+        remaining_steps = (plan or [])[step_index + 1:]
+        skipped += len(remaining_steps)
+        for step in remaining_steps:
             update_node_run_by_key(
                 conn,
                 flow_run_id,
@@ -459,11 +508,11 @@ def execute_flow_plan(conn, flow_run_id: int, plan: List[Dict[str, Any]]) -> Dic
             "plan": enriched_plan
         }
 
-    update_run(conn, flow_run_id, "SUCCESS", f"Flow execution completed. {executed} node(s) executed.", {"plan": enriched_plan})
+    update_run(conn, flow_run_id, "SUCCESS", f"Flow execution completed. {executed} node(s) executed, {skipped} skipped.", {"plan": enriched_plan})
     conn.commit()
     return {
         "status": "SUCCESS",
-        "message": f"Flow execution completed. {executed} node(s) executed.",
+        "message": f"Flow execution completed. {executed} node(s) executed, {skipped} skipped.",
         "plan": enriched_plan
     }
 
@@ -502,6 +551,13 @@ def execute_saved_job_script(
     cursor = conn.cursor()
     try:
         script_text, bind_values = prepare_saved_job_script(executable_script["text"], job, runtime_bind_values or {})
+        output_enabled = False
+        if executable_script["type"] == "PLSQL":
+            try:
+                cursor.callproc("DBMS_OUTPUT.ENABLE")
+                output_enabled = True
+            except Exception:
+                output_enabled = False
         cursor.execute(script_text, bind_values)
         script_type = executable_script["type"]
         label = job.get("EXEC_OBJECT_LABEL") or job.get("EXEC_OBJECT_NAME") or job.get("JOB_NAME") or script_type
@@ -512,9 +568,27 @@ def execute_saved_job_script(
         if script_type == "DML":
             rowcount = cursor.rowcount if cursor.rowcount is not None else 0
             return f"{label} DML statement executed. {rowcount} rows affected."
-        return f"{label} PL/SQL block executed."
+        output_lines = collect_dbms_output(cursor) if output_enabled else []
+        message = f"{label} PL/SQL block executed."
+        if output_lines:
+            message += "\n\nDBMS_OUTPUT:\n" + "\n".join(output_lines)
+        return message
     finally:
         cursor.close()
+
+
+def collect_dbms_output(cursor) -> List[str]:
+    lines = []
+    line_var = cursor.var(str)
+    status_var = cursor.var(int)
+    while True:
+        cursor.callproc("DBMS_OUTPUT.GET_LINE", [line_var, status_var])
+        if status_var.getvalue() != 0:
+            break
+        line = line_var.getvalue()
+        if line is not None:
+            lines.append(str(line))
+    return lines
 
 
 def create_runtime_values(step: Dict[str, Any], node_outputs: Optional[Dict[str, Dict[str, Any]]] = None) -> Dict[str, Any]:
@@ -778,6 +852,7 @@ def build_execution_plan(nodes: List[Dict[str, Any]], edges: List[Dict[str, Any]
             "nodeKey": node_key,
             "nodeName": node.get("nodeName"),
             "nodeType": node.get("nodeType"),
+            "useYn": node.get("useYn", "Y"),
             "refMenuCode": node.get("refMenuCode"),
             "refWorkJobId": node.get("refWorkJobId"),
             "refObjectId": node.get("refObjectId"),
@@ -853,6 +928,7 @@ def normalize_node(node: FlowNodeRequest, sort_order: int) -> Dict[str, Any]:
         "nodeType": node_type,
         "nodeName": node_name,
         "nodeDesc": normalize_text(node.nodeDesc, "", 1000),
+        "useYn": "N" if str(getattr(node, "useYn", "Y") or "Y").upper() == "N" else "Y",
         "refMenuCode": normalize_optional_token(node.refMenuCode, 30),
         "refWorkJobId": int(node.refWorkJobId) if node.refWorkJobId else None,
         "refObjectId": int(node.refObjectId) if node.refObjectId else None,
@@ -894,6 +970,7 @@ def format_node(row: Dict[str, Any]) -> Dict[str, Any]:
         "nodeType": row.get("NODE_TYPE"),
         "nodeName": row.get("NODE_NAME"),
         "nodeDesc": row.get("NODE_DESC"),
+        "useYn": row.get("USE_YN") or "Y",
         "refMenuCode": row.get("REF_MENU_CODE"),
         "refWorkJobId": row.get("REF_WORK_JOB_ID"),
         "refObjectId": row.get("REF_OBJECT_ID"),

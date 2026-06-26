@@ -1,4 +1,6 @@
 import os
+import time
+import logging
 from pathlib import Path
 from threading import Lock
 from typing import Optional
@@ -13,6 +15,16 @@ load_dotenv()
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _pool = None
 _pool_lock = Lock()
+logger = logging.getLogger(__name__)
+
+
+def _pool_snapshot(pool) -> str:
+    parts = []
+    for name in ("opened", "busy", "max", "min", "increment"):
+        value = getattr(pool, name, None)
+        if value is not None:
+            parts.append(f"{name}={value}")
+    return ", ".join(parts) or "pool_stats=unavailable"
 
 
 def _resolve_project_path(path_value: Optional[str]) -> Optional[str]:
@@ -144,7 +156,14 @@ def get_db_connection():
     """
     try:
         db_mode = os.getenv("DB_MODE", "local").lower()
-        connection = get_db_pool().acquire()
+        pool = get_db_pool()
+        started_at = time.monotonic()
+        logger.info("[DB] acquire start. %s", _pool_snapshot(pool))
+        connection = pool.acquire()
+        elapsed = time.monotonic() - started_at
+        warn_seconds = float(os.getenv("DB_POOL_ACQUIRE_WARN_SECONDS", "3"))
+        log_method = logger.warning if elapsed >= warn_seconds else logger.info
+        log_method("[DB] acquire done. elapsed=%.3fs, %s", elapsed, _pool_snapshot(pool))
 
         if db_mode == "cloud":
             with connection.cursor() as cursor:

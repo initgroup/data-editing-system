@@ -15,6 +15,7 @@
             project: "Project",
             scenario: "Scenario",
             workTab: "Data Work",
+            dataTab: "Data",
             sqlTab: "User SQL",
             historyTab: "Run History",
             jobsTitle: "[Data Profiling] Jobs",
@@ -50,6 +51,10 @@
             generateScript: "Generate PL/SQL",
             runSql: "Run SQL(Ctrl+Enter)",
             runAllSql: "Run All SQL(F5)",
+            queryData: "Query Data",
+            saveUpdates: "Save Updates",
+            whereCondition: "Where",
+            whereConditionPlaceholder: "OWNER = 'INIT$EDIT01'",
             rows: "Rows",
             refreshHistory: "Refresh history"
         }

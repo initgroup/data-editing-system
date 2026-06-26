@@ -38,6 +38,10 @@
             <i class="fas fa-diagram-project"></i>
             <span data-label-key="workTab">Data Work</span>
         </button>
+        <button type="button" class="table-tab" data-tab="data" onclick="__PAGE_CODE__.switchTab('data')">
+            <i class="fas fa-table"></i>
+            <span data-label-key="dataTab">Data</span>
+        </button>
         <button type="button" class="table-tab" data-tab="sql" onclick="__PAGE_CODE__.switchTab('sql')">
             <i class="fas fa-terminal"></i>
             <span data-label-key="sqlTab">User SQL</span>
@@ -189,7 +193,12 @@
                     <div class="data-param-script-layout">
                         <section class="data-param-panel" aria-label="Parameter list">
                             <header class="data-param-panel-header">
-                                <strong data-label-key="parameterList">Parameter List</strong>
+                                <span class="data-param-title-group">
+                                    <strong data-label-key="parameterList">Parameter List</strong>
+                                    <button id="refreshParametersButton-__PAGE_CODE__" type="button" class="table-icon-btn" title="Refresh parameters" onclick="__PAGE_CODE__.refreshParameters()">
+                                        <i class="fas fa-sync-alt"></i>
+                                    </button>
+                                </span>
                             </header>
                             <div id="parameterGrid-__PAGE_CODE__" class="data-param-grid"></div>
                         </section>
@@ -259,6 +268,47 @@
             </footer>
         </section>
     </div>
+
+    <section class="table-tab-panel data-tool-panel" data-panel="data">
+        <div class="data-table-workbench">
+            <div id="dataEditTarget-__PAGE_CODE__" class="data-edit-target-bar" aria-label="Editable data target">
+                <span class="data-edit-target-item">
+                    <span class="data-edit-target-label">Owner</span>
+                    <strong id="dataEditOwner-__PAGE_CODE__">-</strong>
+                </span>
+                <span class="data-edit-target-item">
+                    <span class="data-edit-target-label">Table</span>
+                    <strong id="dataEditTable-__PAGE_CODE__">-</strong>
+                </span>
+            </div>
+            <div class="table-toolbar query-filter-toolbar data-edit-toolbar">
+                <button type="button" class="table-btn" onclick="__PAGE_CODE__.loadEditableTableData()">
+                    <i class="fas fa-play"></i>
+                    <span data-label-key="queryData">Query Data</span>
+                </button>
+                <button type="button" id="dataSaveUpdates-__PAGE_CODE__" class="table-btn" onclick="__PAGE_CODE__.saveEditableTableData()" disabled>
+                    <i class="fas fa-save"></i>
+                    <span data-label-key="saveUpdates">Save Updates</span>
+                </button>
+                <div class="data-filter-stack">
+                    <label class="query-filter-field data-where-field">
+                        <span data-label-key="whereCondition">Where</span>
+                        <input id="dataWhere-__PAGE_CODE__" class="env-field" type="text" placeholder="COL001 = 'A'" data-placeholder-key="whereConditionPlaceholder">
+                    </label>
+                    <label class="query-filter-field data-order-field">
+                        <span>Order By</span>
+                        <input id="dataOrderBy-__PAGE_CODE__" class="env-field" type="text" placeholder="COLUMN_ID ASC">
+                    </label>
+                </div>
+                <label class="table-limit-control">
+                    <span data-label-key="rows">Rows</span>
+                    <input id="dataLimit-__PAGE_CODE__" type="number" min="1" max="1000" value="100">
+                </label>
+            </div>
+            <div id="dataEditMessage-__PAGE_CODE__" class="table-empty" aria-live="polite" hidden></div>
+            <div id="dataEditGrid-__PAGE_CODE__" class="table-result-grid data-edit-grid"></div>
+        </div>
+    </section>
 
     <section class="table-tab-panel data-tool-panel" data-panel="sql">
         <div class="sql-workbench data-sql-workbench">

@@ -6,6 +6,8 @@ selected at login time and stored in INIT$_TB_DB_CONNECTION on the system DB.
 """
 
 import os
+import time
+import logging
 from threading import Lock
 
 from fastapi import HTTPException, Request
@@ -22,6 +24,16 @@ from backend.routers.M99001 import (
 
 _target_pools = {}
 _target_pool_lock = Lock()
+logger = logging.getLogger(__name__)
+
+
+def _pool_snapshot(pool) -> str:
+    parts = []
+    for name in ("opened", "busy", "max", "min", "increment"):
+        value = getattr(pool, name, None)
+        if value is not None:
+            parts.append(f"{name}={value}")
+    return ", ".join(parts) or "pool_stats=unavailable"
 
 
 def get_target_connection_id(request: Request) -> int:
@@ -105,7 +117,26 @@ def get_target_db_connection_by_id(connection_id: int, user_id: int):
         if row.get("USE_YN") != "Y":
             raise HTTPException(status_code=400, detail="Selected target DB connection is disabled.")
         params = _connection_row_to_params(row)
-        return get_target_db_pool(connection_id, user_id, params).acquire()
+        pool = get_target_db_pool(connection_id, user_id, params)
+        started_at = time.monotonic()
+        logger.info(
+            "[Target DB] acquire start. connection_id=%s, user_id=%s, %s",
+            connection_id,
+            user_id,
+            _pool_snapshot(pool),
+        )
+        connection = pool.acquire()
+        elapsed = time.monotonic() - started_at
+        warn_seconds = float(os.getenv("TARGET_DB_POOL_ACQUIRE_WARN_SECONDS", "3"))
+        log_method = logger.warning if elapsed >= warn_seconds else logger.info
+        log_method(
+            "[Target DB] acquire done. connection_id=%s, user_id=%s, elapsed=%.3fs, %s",
+            connection_id,
+            user_id,
+            elapsed,
+            _pool_snapshot(pool),
+        )
+        return connection
     finally:
         if system_conn:
             system_conn.close()

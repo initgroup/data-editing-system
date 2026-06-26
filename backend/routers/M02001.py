@@ -94,6 +94,12 @@ async def upload_file_to_table(
         ])
         cursor.execute(f'CREATE TABLE "{table_name}" ({column_ddl})')
         cursor.execute(f'COMMENT ON COLUMN "{table_name}"."{UPLOAD_ROW_NO_COLUMN}" IS \'File row number\'')
+        for safe_column, original_column in zip(safe_columns, columns):
+            comment = str(original_column or "").strip()
+            if comment and comment.upper() != safe_column:
+                cursor.execute(
+                    f'COMMENT ON COLUMN "{table_name}"."{safe_column}" IS \'{escape_sql_literal(comment)[:3900]}\''
+                )
         if (tableComment or "").strip():
             cursor.execute(f'COMMENT ON TABLE "{table_name}" IS \'{escape_sql_literal(tableComment.strip())}\'')
 

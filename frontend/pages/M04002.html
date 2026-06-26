@@ -19,6 +19,18 @@
 
     <section class="m04002-toolbar">
         <label>
+            <span>Project</span>
+            <select id="projectId-M04002" onchange="M04002.handleProjectChange()">
+                <option value="">Loading projects...</option>
+            </select>
+        </label>
+        <label>
+            <span>Scenario</span>
+            <select id="scenarioId-M04002" onchange="M04002.loadRuns(1)">
+                <option value="">ALL</option>
+            </select>
+        </label>
+        <label>
             <span>Status</span>
             <select id="status-M04002" onchange="M04002.loadRuns(1)">
                 <option value="ALL">ALL</option>

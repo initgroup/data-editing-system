@@ -271,9 +271,16 @@
                                                 <option value="M03004">규칙 위반 탐지</option>
                                             </select>
                                         </label>
-                                        <label>
+                                         <label>
                                             <span class="required-title" data-label-key="nodeName">Node Name</span>
                                             <input id="nodeName-__PAGE_CODE__" class="env-field" type="text" value="Customer profile" readonly>
+                                        </label>
+                                        <label>
+                                            <span data-label-key="nodeUseYn">Execute</span>
+                                            <select id="nodeUseYn-__PAGE_CODE__" class="env-field" onchange="__PAGE_CODE__.updateSelectedNodeField('useYn', this.value)">
+                                                <option value="Y">Y</option>
+                                                <option value="N">N</option>
+                                            </select>
                                         </label>
                                         <label>
                                             <span data-label-key="ownerName">Owner</span>

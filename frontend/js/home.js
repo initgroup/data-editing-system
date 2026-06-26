@@ -9,6 +9,7 @@
         isRefreshingWorkflow: false,
         isRefreshingQuality: false,
         selectedNoticeId: null,
+        noticeLayerMode: "list",
         selectedFlowRunLabel: "",
         selectedFlowRunId: "",
         selectedNodeRunId: "",
@@ -98,12 +99,6 @@
                     responsive: true,
                     maintainAspectRatio: false,
                     interaction: { mode: "index", intersect: false },
-                    onClick: (event, elements) => {
-                        const element = elements?.[0];
-                        if (!element) return;
-                        const label = trend.labels[element.index];
-                        this.selectFlowRunLabel(label);
-                    },
                     plugins: {
                         legend: {
                             position: "bottom",
@@ -124,7 +119,7 @@
                                 },
                                 afterBody: (items) => {
                                     const hasFailure = items.some((item) => item.dataset?.statusLabel === "실패" && Number(item.raw || 0) > 0);
-                                    return hasFailure ? ["실패 이벤트가 있는 날짜입니다.", "클릭하면 해당 날짜의 실행 목록을 확인합니다."] : ["클릭하면 해당 날짜의 실행 목록을 확인합니다."];
+                                    return hasFailure ? ["실패 이벤트가 있는 날짜입니다.", "그래프 아래 날짜 버튼에서 실행 목록을 선택하세요."] : ["그래프 아래 날짜 버튼에서 실행 목록을 선택하세요."];
                                 }
                             }
                         }
@@ -261,6 +256,7 @@
                 return;
             }
             if (!this.selectedFlowRunLabel) this.selectedFlowRunLabel = this.getFlowRunLabel(runs[0]);
+            const trend = this.normalizeFlowTrend(this.dashboardData?.target?.flowTrend || []);
             const dateRuns = this.getFlowRunsByLabel(this.selectedFlowRunLabel);
             if (!dateRuns.some((run) => String(run.FLOW_RUN_ID || "") === String(this.selectedFlowRunId || ""))) {
                 this.selectedFlowRunId = String(dateRuns[0]?.FLOW_RUN_ID || runs[0].FLOW_RUN_ID || "");
@@ -272,8 +268,20 @@
                     <span><i class="fas fa-chart-line"></i></span>
                     <div>
                         <strong>${this.escapeHtml(this.selectedFlowRunLabel || "최근 실행")}</strong>
-                        <small>그래프에서 날짜를 선택하면 해당 날짜의 통합실행 목록과 상세가 아래에 표시됩니다.</small>
+                        <small>아래 날짜 버튼을 선택하면 해당 날짜의 통합실행 요약이 표시됩니다.</small>
                     </div>
+                </div>
+                <div class="home-flow-date-selector" aria-label="Integrated scenario run date selector">
+                    ${trend.labels.map((label, index) => {
+                        const total = Number(trend.success[index] || 0) + Number(trend.failed[index] || 0);
+                        const selected = String(label) === String(this.selectedFlowRunLabel || "");
+                        return `
+                            <button type="button" class="${selected ? "is-selected" : ""}" data-home-flow-label="${this.escapeHtml(label)}">
+                                <strong>${this.escapeHtml(label)}</strong>
+                                <small>${this.formatNumber(total)} runs</small>
+                            </button>
+                        `;
+                    }).join("")}
                 </div>
                 <div class="home-flow-selection-metrics">
                     <span><strong>${this.formatNumber(dateRuns.length)}</strong><small>runs</small></span>
@@ -281,6 +289,9 @@
                     <span><strong>${this.formatNumber(failedCount)}</strong><small>failed</small></span>
                 </div>
             `;
+            container.querySelectorAll("[data-home-flow-label]").forEach((button) => {
+                button.onclick = () => this.selectFlowRunLabel(button.dataset.homeFlowLabel);
+            });
         },
 
         getFlowRunsByLabel(label) {
@@ -301,14 +312,13 @@
 
         async selectFlowRun(flowRunId) {
             if (!flowRunId) return;
-            await this.preserveHomeScroll(async () => {
-                this.selectedFlowRunId = String(flowRunId);
-                const selectedRun = this.getRecentFlowRuns().find((item) => String(item.FLOW_RUN_ID || "") === String(flowRunId));
-                if (selectedRun) this.selectedFlowRunLabel = this.getFlowRunLabel(selectedRun);
-                this.selectedNodeRunId = "";
-                this.renderFlowRunStrip();
-                await this.renderFlowDetailPanel({ reload: true });
+            this.selectedFlowRunId = String(flowRunId);
+            const selectedRun = this.getRecentFlowRuns().find((item) => String(item.FLOW_RUN_ID || "") === String(flowRunId));
+            if (selectedRun) this.selectedFlowRunLabel = this.getFlowRunLabel(selectedRun) || this.selectedFlowRunLabel;
+            document.querySelectorAll("#homeFlowDetailPanel [data-home-flow-run-id]").forEach((button) => {
+                button.classList.toggle("is-selected", String(button.dataset.homeFlowRunId) === String(flowRunId));
             });
+            this.openM04002Run(flowRunId);
         },
 
         getModuleMeta(menuCode) {
@@ -354,43 +364,74 @@
                 panel.innerHTML = `
                     <header class="home-flow-detail-header">
                         <div>
-                            <span>Scenario Run Detail</span>
+                            <span>Scenario Run Summary</span>
                             <strong>${this.escapeHtml(selectedRun.FLOW_NAME || "Integrated Scenario")}</strong>
                             <small>Run #${this.escapeHtml(selectedRun.FLOW_RUN_ID || "")} · ${this.escapeHtml(selectedRun.STATUS || "-")} · ${this.escapeHtml(this.formatElapsedTime(selectedRun.STARTED_AT, selectedRun.FINISHED_AT, selectedRun.STATUS))}</small>
                         </div>
-                        <button type="button" class="home-icon-button" title="Open integrated result analysis" onclick="home.openPage('M04002')">
+                        <button type="button" class="home-icon-button" title="Open integrated result analysis" onclick="home.openM04002Run('${this.escapeHtml(selectedRun.FLOW_RUN_ID || "")}')">
                             <i class="fas fa-up-right-from-square"></i>
                         </button>
                     </header>
                     ${this.renderDateRunList(dateRuns.length ? dateRuns : [selectedRun])}
-                    <div class="home-flow-detail-empty">
-                        <i class="fas fa-bolt"></i>
-                        <strong>상세 결과는 선택 시 조회합니다</strong>
-                        <span>초기 대시보드는 빠르게 표시하고, 그래프 지점이나 Run을 클릭하면 노드와 결과 상세를 불러옵니다.</span>
-                    </div>
+                    ${this.renderHomeRunSummary(selectedRun, dateRuns.length ? dateRuns : [selectedRun])}
                 `;
                 panel.querySelectorAll("[data-home-flow-run-id]").forEach((button) => {
                     button.onclick = () => this.selectFlowRun(button.dataset.homeFlowRunId);
                 });
                 return;
             }
-            const loadingOverlay = this.showFlowDetailLoading(panel, `Run #${this.selectedFlowRunId} 노드 결과를 불러오는 중입니다.`);
-            try {
-                const json = await CommonUtils.request(`${API_BASE_URL}/home/flow-run/${encodeURIComponent(this.selectedFlowRunId)}/nodes`, {
-                    method: "GET",
-                    showLoading: false
-                });
-                this.hideFlowDetailLoading(panel, loadingOverlay);
-                const nodes = this.normalizeHomeNodes(Array.isArray(json.data) ? json.data : []);
-                this.renderFlowDetailContent(panel, selectedRun, nodes, dateRuns.length ? dateRuns : [selectedRun]);
-            } catch (error) {
-                this.hideFlowDetailLoading(panel, loadingOverlay);
-                if (panel.children.length) {
-                    panel.insertAdjacentHTML("beforeend", `<div class="table-error">${this.escapeHtml(error.message || "통합시나리오 상세 조회에 실패했습니다.")}</div>`);
-                } else {
-                    panel.innerHTML = `<div class="table-error">${this.escapeHtml(error.message || "통합시나리오 상세 조회에 실패했습니다.")}</div>`;
-                }
+            this.renderFlowSummaryContent(panel, selectedRun, dateRuns.length ? dateRuns : [selectedRun]);
+        },
+
+        renderFlowSummaryContent(panel, run, dateRuns = []) {
+            const elapsed = this.formatElapsedTime(run.STARTED_AT, run.FINISHED_AT, run.STATUS);
+            panel.innerHTML = `
+                <header class="home-flow-detail-header">
+                    <div>
+                        <span>Scenario Run Summary</span>
+                        <strong>${this.escapeHtml(run.FLOW_NAME || "Integrated Scenario")}</strong>
+                        <small>Run #${this.escapeHtml(run.FLOW_RUN_ID || "")} · ${this.escapeHtml(run.STATUS || "-")} · ${this.escapeHtml(elapsed)}</small>
+                    </div>
+                    <button type="button" class="home-icon-button" title="Open integrated result analysis" onclick="home.openM04002Run('${this.escapeHtml(run.FLOW_RUN_ID || "")}')">
+                        <i class="fas fa-up-right-from-square"></i>
+                    </button>
+                </header>
+                ${this.renderDateRunList(dateRuns)}
+                ${this.renderHomeRunSummary(run, dateRuns)}
+            `;
+            panel.querySelectorAll("[data-home-flow-run-id]").forEach((button) => {
+                button.onclick = () => this.selectFlowRun(button.dataset.homeFlowRunId);
+            });
+        },
+
+        renderHomeRunSummary(selectedRun, dateRuns = []) {
+            const successCount = dateRuns.filter((run) => String(run.STATUS || "").toUpperCase() === "SUCCESS").length;
+            const failedCount = dateRuns.filter((run) => ["FAILED", "SKIPPED", "ERROR"].includes(String(run.STATUS || "").toUpperCase())).length;
+            return `
+                <div class="home-run-summary-panel">
+                    <div>
+                        <span>선택 날짜 요약</span>
+                        <strong>${this.escapeHtml(this.selectedFlowRunLabel || this.getFlowRunLabel(selectedRun) || "-")}</strong>
+                        <small>아래 Run을 클릭하면 M04002에서 해당 Run 상세 분석 화면으로 이동합니다.</small>
+                    </div>
+                    <div class="home-flow-selection-metrics">
+                        <span><strong>${this.formatNumber(dateRuns.length)}</strong><small>runs</small></span>
+                        <span><strong>${this.formatNumber(successCount)}</strong><small>success</small></span>
+                        <span><strong>${this.formatNumber(failedCount)}</strong><small>failed</small></span>
+                    </div>
+                </div>
+            `;
+        },
+
+        openM04002Run(flowRunId = this.selectedFlowRunId) {
+            if (flowRunId) {
+                sessionStorage.setItem("M04002:selectedRunId", String(flowRunId));
+                const run = this.getRecentFlowRuns().find((item) => String(item.FLOW_RUN_ID || "") === String(flowRunId));
+                if (run?.PROJECT_ID) sessionStorage.setItem("M04002:selectedProjectId", String(run.PROJECT_ID));
+                if (run?.SCENARIO_ID) sessionStorage.setItem("M04002:selectedScenarioId", String(run.SCENARIO_ID));
             }
+            const menu = window.MENU_PAGE_MAP?.M04002;
+            PageManager.load("M04002", menu?.title || menu?.label || "통합 에디팅 결과분석", true);
         },
 
         showFlowDetailLoading(panel, message) {
@@ -453,7 +494,7 @@
                         <strong>${this.escapeHtml(run.FLOW_NAME || "Integrated Scenario")}</strong>
                         <small>Run #${this.escapeHtml(run.FLOW_RUN_ID || "")} · ${this.escapeHtml(run.STATUS || "-")} · ${this.escapeHtml(elapsed)}</small>
                     </div>
-                    <button type="button" class="home-icon-button" title="Open integrated result analysis" onclick="home.openPage('M04002')">
+                    <button type="button" class="home-icon-button" title="Open integrated result analysis" onclick="home.openM04002Run('${this.escapeHtml(run.FLOW_RUN_ID || "")}')">
                         <i class="fas fa-up-right-from-square"></i>
                     </button>
                 </header>
@@ -977,7 +1018,7 @@
         },
 
 
-        renderAlerts() {
+        renderAlerts(errorMessage = "") {
             const alerts = this.getRecentAlerts();
             const container = document.getElementById("homeAlertList");
             if (!container) return;
@@ -988,6 +1029,18 @@
                         <div>
                             <strong>공지사항 조회 중</strong>
                             <p>등록된 공지사항을 확인하고 있습니다.</p>
+                        </div>
+                    </article>
+                `;
+                return;
+            }
+            if (errorMessage) {
+                container.innerHTML = `
+                    <article class="home-alert is-warn">
+                        <span><i class="fas fa-triangle-exclamation"></i></span>
+                        <div>
+                            <strong>대시보드 조회 지연</strong>
+                            <p>${this.escapeHtml(errorMessage)}</p>
                         </div>
                     </article>
                 `;
@@ -1054,7 +1107,9 @@
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/home/dashboard`, {
                     method: "GET",
-                    showLoading: false
+                    showLoading: false,
+                    timeoutMs: 6000,
+                    timeoutMessage: "Dashboard query timed out. Target DB may be busy with a batch job."
                 });
                 this.dashboardData = json || null;
                 if (renderIdentity) this.renderIdentity();
@@ -1069,7 +1124,22 @@
                 this.bindEvents();
                 if (showPopups) await this.showPopupNotices();
             } catch (error) {
-                CommonUI.showPageError(PAGE_CODE, error.message || "Dashboard data load failed.");
+                this.dashboardData = this.dashboardData || {
+                    system: {},
+                    target: {},
+                    notices: [],
+                    popupNotices: []
+                };
+                if (renderIdentity) this.renderIdentity();
+                if (renderChart) {
+                    this.renderWorkflowKpis();
+                    this.renderRuleTrendChart();
+                    this.renderFlowRunStrip();
+                    this.renderFlowDetailPanel({ deferLoad: true });
+                }
+                if (renderAlerts) this.renderAlerts(error.message || "Dashboard data load failed.");
+                if (renderLinks) this.renderLinks();
+                this.bindEvents();
             }
         },
 
@@ -1149,20 +1219,20 @@
             }
             const noticeListButton = document.getElementById("homeOpenNoticeListButton");
             if (noticeListButton) {
-                noticeListButton.onclick = () => this.openNoticeLayer();
+                noticeListButton.onclick = () => this.openNoticeLayer(null, { mode: "list" });
             }
             document.querySelectorAll("#container-home [data-home-notice-id]").forEach((item) => {
-                item.onclick = () => this.openNoticeLayer(item.dataset.homeNoticeId);
+                item.onclick = () => this.openNoticeLayer(item.dataset.homeNoticeId, { mode: "detail" });
                 item.onkeydown = (event) => {
                     if (event.key === "Enter" || event.key === " ") {
                         event.preventDefault();
-                        this.openNoticeLayer(item.dataset.homeNoticeId);
+                        this.openNoticeLayer(item.dataset.homeNoticeId, { mode: "detail" });
                     }
                 };
             });
         },
 
-        openNoticeLayer(noticeId = null) {
+        openNoticeLayer(noticeId = null, options = {}) {
             const notices = Array.isArray(this.dashboardData?.notices) ? this.dashboardData.notices : [];
             if (!notices.length) {
                 CommonMessage.info("현재 게시 기간에 해당하는 공지사항이 없습니다.", {
@@ -1172,9 +1242,14 @@
             }
             const fallbackId = notices[0]?.noticeId || notices[0]?.title || "";
             this.selectedNoticeId = String(noticeId || this.selectedNoticeId || fallbackId || "");
+            this.noticeLayerMode = options.mode === "detail" ? "detail" : "list";
             this.renderNoticeBrowser();
             const layer = document.getElementById("homeNoticeLayer");
-            if (layer) layer.hidden = false;
+            if (layer) {
+                layer.classList.toggle("is-detail-only", this.noticeLayerMode === "detail");
+                layer.hidden = false;
+                this.enableNoticeLayerDrag(layer);
+            }
         },
 
         renderNoticeBrowser() {
@@ -1207,7 +1282,7 @@
             const notice = notices.find((item) => String(item.noticeId || item.title || "") === String(this.selectedNoticeId || "")) || notices[0];
             if (!notice) return;
             this.selectedNoticeId = String(notice.noticeId || notice.title || "");
-            this.setText("homeNoticeTitle", "Notices");
+            this.setText("homeNoticeTitle", this.noticeLayerMode === "detail" ? "Notice" : "Notices");
             this.setText("homeNoticeDetailTitle", notice.title || "Notice");
             const meta = document.getElementById("homeNoticeMeta");
             if (meta) {
@@ -1224,6 +1299,42 @@
         closeNoticeLayer() {
             const layer = document.getElementById("homeNoticeLayer");
             if (layer) layer.hidden = true;
+        },
+
+        enableNoticeLayerDrag(layer) {
+            const dialog = layer?.querySelector(".data-help-dialog");
+            const header = dialog?.querySelector("header");
+            if (!dialog || !header || dialog.dataset.dragBound === "Y") return;
+            dialog.dataset.dragBound = "Y";
+            header.classList.add("is-draggable");
+            header.addEventListener("pointerdown", (event) => {
+                if (event.target.closest("button")) return;
+                event.preventDefault();
+                const rect = dialog.getBoundingClientRect();
+                const startX = event.clientX;
+                const startY = event.clientY;
+                const startLeft = rect.left;
+                const startTop = rect.top;
+                dialog.style.position = "fixed";
+                dialog.style.margin = "0";
+                dialog.style.left = `${startLeft}px`;
+                dialog.style.top = `${startTop}px`;
+                header.setPointerCapture?.(event.pointerId);
+                const move = (moveEvent) => {
+                    const nextLeft = Math.max(8, Math.min(window.innerWidth - rect.width - 8, startLeft + moveEvent.clientX - startX));
+                    const nextTop = Math.max(8, Math.min(window.innerHeight - rect.height - 8, startTop + moveEvent.clientY - startY));
+                    dialog.style.left = `${nextLeft}px`;
+                    dialog.style.top = `${nextTop}px`;
+                };
+                const up = () => {
+                    header.removeEventListener("pointermove", move);
+                    header.removeEventListener("pointerup", up);
+                    header.removeEventListener("pointercancel", up);
+                };
+                header.addEventListener("pointermove", move);
+                header.addEventListener("pointerup", up);
+                header.addEventListener("pointercancel", up);
+            });
         },
 
         openPage(pageCode) {

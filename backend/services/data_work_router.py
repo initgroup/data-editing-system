@@ -3,9 +3,9 @@
 @description    Shared data workbench API router factory
 """
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from datetime import date, datetime
 from decimal import Decimal
 import logging
@@ -17,6 +17,7 @@ import uuid
 from backend.target_database import get_target_connection_id, get_target_db_connection, get_target_db_connection_by_id
 from backend.auth_context import get_request_user_id
 from backend.database_helper import execute_query
+from backend.services.background_jobs import submit_background_job
 from backend.services import data_work_service as data_work
 from backend.services.data_work_service import (
     DataWorkJobRequest as ProfileJobRequest,
@@ -31,6 +32,20 @@ class TableRequest(BaseModel):
     owner: Optional[str] = None
     tableName: Optional[str] = None
     limit: Optional[int] = 100
+    whereClause: Optional[str] = None
+    orderByClause: Optional[str] = None
+    model_config = ConfigDict(extra="allow")
+
+
+class DataCellChange(BaseModel):
+    rowId: str
+    columnName: str
+    value: Any = None
+    model_config = ConfigDict(extra="allow")
+
+
+class DataUpdateRequest(TableRequest):
+    changes: List[DataCellChange] = []
     model_config = ConfigDict(extra="allow")
 
 
@@ -356,7 +371,7 @@ def create_data_work_router(
     
     
     @router.post("/job/run")
-    def run_profile_job(req: RunJobRequest, background_tasks: BackgroundTasks, request: Request):
+    def run_profile_job(req: RunJobRequest, request: Request):
         conn = None
         try:
             conn = get_target_db_connection(request)
@@ -376,7 +391,8 @@ def create_data_work_router(
                     False
                 )
                 conn.commit()
-                background_tasks.add_task(
+                submit_background_job(
+                    f"{MENU_CODE} profile_job_id={profile_job_id}",
                     run_profile_job_background,
                     profile_job_id,
                     get_target_connection_id(request),
@@ -497,8 +513,91 @@ def create_data_work_router(
         finally:
             if conn:
                 conn.close()
-    
-    
+
+
+    @router.post("/data/editable")
+    def get_editable_table_data(req: TableRequest, request: Request):
+        owner, table_name = require_table(req)
+        limit = normalize_limit(req.limit)
+        where_clause = normalize_where_clause(req.whereClause)
+        conn = None
+        try:
+            conn = get_target_db_connection(request)
+            column_names = get_table_column_names(conn, owner, table_name)
+            order_by_clause = normalize_order_by_clause(req.orderByClause, column_names)
+            return fetch_editable_table_data(conn, owner, table_name, limit, where_clause, order_by_clause)
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"{MENU_CODE} editable data query failed: {str(e)}")
+            raise HTTPException(status_code=500, detail=str(e))
+        finally:
+            if conn:
+                conn.close()
+
+
+    @router.post("/data/update")
+    def update_editable_table_data(req: DataUpdateRequest, request: Request):
+        owner, table_name = require_table(req)
+        where_clause = normalize_where_clause(req.whereClause)
+        changes = req.changes or []
+        if not changes:
+            return {"status": "success", "updated": 0, "message": "No changes to update."}
+
+        conn = None
+        try:
+            conn = get_target_db_connection(request)
+            column_names = get_table_column_names(conn, owner, table_name)
+            if not column_names:
+                raise HTTPException(status_code=400, detail="Target table columns were not found.")
+            editable_columns = get_editable_data_columns(table_name)
+            if not editable_columns:
+                raise HTTPException(status_code=400, detail="No editable columns are configured for this table.")
+
+            updated_count = 0
+            target_object = quote_identifier(owner) + "." + quote_identifier(table_name)
+            where_sql = f" AND ({where_clause})" if where_clause else ""
+            cursor = conn.cursor()
+            try:
+                for change in changes:
+                    column_name = data_work.require_identifier(change.columnName, "columnName")
+                    if column_name not in column_names:
+                        raise HTTPException(status_code=400, detail=f"Column is not updatable for target table: {column_name}")
+                    if column_name not in editable_columns:
+                        raise HTTPException(status_code=400, detail=f"Column is not configured as editable: {column_name}")
+                    row_id = str(change.rowId or "").strip()
+                    if not re.match(r"^[A-Za-z0-9+/=._-]+$", row_id):
+                        raise HTTPException(status_code=400, detail="Invalid row identifier.")
+
+                    sql = (
+                        f"UPDATE {target_object} "
+                        f"SET {quote_identifier(column_name)} = :value "
+                        f"WHERE ROWID = CHARTOROWID(:row_id){where_sql}"
+                    )
+                    cursor.execute(sql, {"value": normalize_update_value(change.value), "row_id": row_id})
+                    updated_count += max(cursor.rowcount or 0, 0)
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+            finally:
+                cursor.close()
+
+            return {
+                "status": "success",
+                "updated": updated_count,
+                "message": f"{updated_count} cells updated."
+            }
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"{MENU_CODE} editable data update failed: {str(e)}")
+            raise HTTPException(status_code=500, detail=str(e))
+        finally:
+            if conn:
+                conn.close()
+     
+     
     @router.post("/sql/transaction/start")
     def start_sql_transaction(request: Request):
         cleanup_expired_transactions()
@@ -974,8 +1073,110 @@ def create_data_work_router(
         except (TypeError, ValueError):
             limit = 100
         return max(1, min(limit, 1000))
-    
-    
+
+
+    def normalize_where_clause(value: Optional[str]) -> str:
+        text = (value or "").strip()
+        if not text:
+            return ""
+        text = re.sub(r";+\s*$", "", text).strip()
+        text = re.sub(r"(?is)^\s*where\s+", "", text).strip()
+        if len(text) > 2000:
+            raise HTTPException(status_code=400, detail="WHERE condition is too long.")
+        if re.search(r";\s*\S", value or "") or re.search(r"(--|/\*|\*/)", text):
+            raise HTTPException(status_code=400, detail="Only a single WHERE condition is allowed.")
+        blocked = r"\b(insert|update|delete|merge|drop|alter|create|truncate|grant|revoke|begin|declare|execute|exec|commit|rollback)\b"
+        if re.search(blocked, text, re.IGNORECASE):
+            raise HTTPException(status_code=400, detail="WHERE condition contains a blocked keyword.")
+        return text
+
+
+    def normalize_order_by_clause(value: Optional[str], column_names: set[str]) -> str:
+        text = (value or "").strip()
+        if not text:
+            return ""
+        text = re.sub(r";+\s*$", "", text).strip()
+        text = re.sub(r"(?is)^\s*order\s+by\s+", "", text).strip()
+        if len(text) > 1000:
+            raise HTTPException(status_code=400, detail="ORDER BY condition is too long.")
+        if re.search(r";\s*\S", value or "") or re.search(r"(--|/\*|\*/)", text):
+            raise HTTPException(status_code=400, detail="Only a single ORDER BY condition is allowed.")
+        blocked = r"\b(insert|update|delete|merge|drop|alter|create|truncate|grant|revoke|begin|declare|execute|exec|commit|rollback)\b"
+        if re.search(blocked, text, re.IGNORECASE):
+            raise HTTPException(status_code=400, detail="ORDER BY condition contains a blocked keyword.")
+
+        column_lookup = {column.upper(): column for column in column_names}
+        order_items = []
+        for raw_item in [item.strip() for item in text.split(",") if item.strip()]:
+            match = re.fullmatch(
+                r'"?([A-Za-z][A-Za-z0-9_$#]*)"?(\s+(ASC|DESC))?(\s+NULLS\s+(FIRST|LAST))?',
+                raw_item,
+                re.IGNORECASE
+            )
+            if not match:
+                raise HTTPException(status_code=400, detail=f"Invalid ORDER BY expression: {raw_item}")
+            column_name = match.group(1).upper()
+            if column_name not in column_lookup:
+                raise HTTPException(status_code=400, detail=f"ORDER BY column was not found: {column_name}")
+            direction = (match.group(3) or "").upper()
+            nulls = (match.group(5) or "").upper()
+            item_sql = quote_identifier(column_lookup[column_name])
+            if direction:
+                item_sql += f" {direction}"
+            if nulls:
+                item_sql += f" NULLS {nulls}"
+            order_items.append(item_sql)
+
+        return ", ".join(order_items)
+
+
+    def get_table_column_names(conn, owner: str, table_name: str) -> set[str]:
+        result = execute_query(conn, "DATA_WORK_TABLE_COLUMN_NAMES", {"owner": owner, "tableName": table_name})
+        rows = data_work.require_success(result, "Target table column query failed.").get("data", [])
+        return {str(row.get("COLUMN_NAME") or "").upper() for row in rows}
+
+
+    def get_editable_data_columns(table_name: str) -> set[str]:
+        if MENU_CODE == "M03001" and str(table_name or "").upper() == "INIT$_TB_PREDICTED_TYPE":
+            return {"MODL_PREDICTED_TYPE"}
+        return set()
+
+
+    def fetch_editable_table_data(conn, owner: str, table_name: str, limit: int, where_clause: str, order_by_clause: str) -> Dict[str, Any]:
+        target_object = quote_identifier(owner) + "." + quote_identifier(table_name)
+        where_sql = f" WHERE {where_clause}" if where_clause else ""
+        order_sql = f" ORDER BY {order_by_clause}" if order_by_clause else ""
+        sql = (
+            f"SELECT * FROM ("
+            f"SELECT ROWIDTOCHAR(T.ROWID) AS \"INIT$ROWID\", T.* "
+            f"FROM {target_object} T{where_sql}{order_sql}"
+            f") WHERE ROWNUM <= :limit"
+        )
+        cursor = conn.cursor()
+        try:
+            cursor.execute(sql, {"limit": limit})
+            columns = [desc[0] for desc in cursor.description] if cursor.description else []
+            rows = cursor.fetchall()
+            data = [
+                {column: serialize_db_value(value) for column, value in zip(columns, row)}
+                for row in rows
+            ]
+            return {
+                "status": "success",
+                "data": data,
+                "columns": columns,
+                "total": len(data)
+            }
+        finally:
+            cursor.close()
+
+
+    def normalize_update_value(value: Any) -> Any:
+        if isinstance(value, str):
+            return value
+        return serialize_db_value(value)
+     
+     
     def normalize_select_sql(sql: str) -> str:
         text = (sql or "").strip()
         text = re.sub(r";+\s*$", "", text)

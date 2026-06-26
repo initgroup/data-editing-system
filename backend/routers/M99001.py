@@ -28,19 +28,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
-REQUIRED_APP_TABLES = [
-    "INIT$_TB_PROJECT",
-    "INIT$_TB_SCENARIO",
-    "INIT$_TB_TABLES",
-    "INIT$_TB_OBJECT",
-    "INIT$_TB_OBJECT_DETAIL",
-    "INIT$_TB_PREDICTED_TYPE",
-    "INIT$_TB_CAT_CORR_PAIR",
-    "INIT$_TB_CAT_CORR_SUMMARY",
-    "INIT$_TB_DATA_WORK_JOB",
-    "INIT$_TB_DATA_WORK_RUN",
-    "INIT$_TB_OBJECT_DEPLOY",
-]
+INIT_OBJECT_NAME_PATTERN = "INIT$%"
 
 
 class ConnectionRequest(BaseModel):
@@ -1109,35 +1097,27 @@ def _collect_dbms_output(cursor):
 def _check_required_tables(target_conn):
     cursor = target_conn.cursor()
     try:
-        placeholders = ",".join(f":t{i}" for i, _ in enumerate(REQUIRED_APP_TABLES))
-        params = {f"t{i}": table for i, table in enumerate(REQUIRED_APP_TABLES)}
         cursor.execute(
-            f"""
+            """
             SELECT
                 OBJECT_NAME,
                 TO_CHAR(CREATED, 'YYYY-MM-DD HH24:MI:SS') AS CREATED_AT,
                 TO_CHAR(LAST_DDL_TIME, 'YYYY-MM-DD HH24:MI:SS') AS LAST_DDL_TIME
               FROM USER_OBJECTS
              WHERE OBJECT_TYPE = 'TABLE'
-               AND OBJECT_NAME IN ({placeholders})
+               AND OBJECT_NAME LIKE :objectNamePattern
+             ORDER BY OBJECT_NAME
             """,
-            params,
+            {"objectNamePattern": INIT_OBJECT_NAME_PATTERN},
         )
-        existing = {
-            row[0]: {
+        return [
+            {
+                "TABLE_NAME": row[0],
+                "EXISTS_YN": "Y",
                 "CREATED_AT": row[1],
                 "LAST_DDL_TIME": row[2],
             }
             for row in cursor.fetchall()
-        }
-        return [
-            {
-                "TABLE_NAME": table,
-                "EXISTS_YN": "Y" if table in existing else "N",
-                "CREATED_AT": existing.get(table, {}).get("CREATED_AT"),
-                "LAST_DDL_TIME": existing.get(table, {}).get("LAST_DDL_TIME"),
-            }
-            for table in REQUIRED_APP_TABLES
         ]
     finally:
         cursor.close()
@@ -1191,71 +1171,64 @@ def _fetch_model_deploy_status(target_conn):
                     if hasattr(value, "read"):
                         value = value.read()
                     item[column] = value
-                existing_keys.add((
-                    str(item.get("OBJECT_GROUP") or "").upper(),
-                    str(item.get("OBJECT_NAME") or "").upper(),
-                    str(item.get("OBJECT_TYPE") or "").upper(),
-                ))
+                existing_keys.add(_deploy_object_key(item.get("OBJECT_NAME"), item.get("OBJECT_TYPE")))
                 rows.append(item)
 
-        rows.extend(_fetch_model_object_status_rows(target_conn, existing_keys))
+        rows.extend(_fetch_init_object_status_rows(target_conn, existing_keys))
         return rows
     finally:
         cursor.close()
 
 
-def _fetch_model_object_status_rows(target_conn, existing_keys=None):
-    script = _read_model_objects_script()
-    object_version = _extract_model_bundle_version(script)
-    created_objects = _extract_created_objects(script)
-    if not created_objects:
-        return []
+def _deploy_object_key(object_name, object_type):
+    return (str(object_name or "").upper(), str(object_type or "").upper())
 
+
+def _fetch_init_object_status_rows(target_conn, existing_keys=None):
     existing_keys = existing_keys or set()
     cursor = target_conn.cursor()
     try:
+        cursor.execute(
+            """
+            SELECT
+                OBJECT_NAME,
+                OBJECT_TYPE,
+                STATUS,
+                TO_CHAR(CREATED, 'YYYY-MM-DD HH24:MI:SS') AS CREATED_AT,
+                TO_CHAR(LAST_DDL_TIME, 'YYYY-MM-DD HH24:MI:SS') AS LAST_DDL_TIME
+              FROM USER_OBJECTS
+             WHERE OBJECT_NAME LIKE :objectNamePattern
+               AND OBJECT_TYPE IN (
+                    'PACKAGE',
+                    'PACKAGE BODY',
+                    'PROCEDURE',
+                    'FUNCTION',
+                    'MODEL',
+                    'MINING MODEL'
+               )
+             ORDER BY OBJECT_NAME, OBJECT_TYPE
+            """,
+            {"objectNamePattern": INIT_OBJECT_NAME_PATTERN},
+        )
         rows = []
-        for item in created_objects:
-            key = ("INIT_MODEL_OBJECTS", item["objectName"].upper(), item["objectType"].upper())
+        for object_name, object_type, status, created_at, last_ddl_time in cursor.fetchall():
+            key = _deploy_object_key(object_name, object_type)
             if key in existing_keys:
                 continue
-            cursor.execute(
-                """
-                SELECT STATUS,
-                       TO_CHAR(CREATED, 'YYYY-MM-DD HH24:MI:SS') AS CREATED_AT,
-                       TO_CHAR(LAST_DDL_TIME, 'YYYY-MM-DD HH24:MI:SS') AS LAST_DDL_TIME
-                  FROM USER_OBJECTS
-                 WHERE OBJECT_NAME = :objectName
-                   AND OBJECT_TYPE = :objectType
-                """,
-                item,
-            )
-            object_row = cursor.fetchone()
-            if not object_row:
-                rows.append({
-                    "OBJECT_GROUP": "INIT_MODEL_OBJECTS",
-                    "OBJECT_NAME": item["objectName"],
-                    "OBJECT_TYPE": item["objectType"],
-                    "OBJECT_VERSION": object_version,
-                    "CHECKSUM": "",
-                    "DEPLOY_STATUS": "MISSING",
-                    "DEPLOYED_AT": "",
-                    "ERROR_MESSAGE": "Object was not found in USER_OBJECTS.",
-                })
-                continue
-
-            status = object_row[0] or ""
             error_message = ""
             if status != "VALID":
-                error_message = "\n".join(_fetch_compile_errors(target_conn, [item]))
+                error_message = "\n".join(_fetch_compile_errors(target_conn, [{
+                    "objectName": object_name,
+                    "objectType": object_type,
+                }]))
             rows.append({
-                "OBJECT_GROUP": "INIT_MODEL_OBJECTS",
-                "OBJECT_NAME": item["objectName"],
-                "OBJECT_TYPE": item["objectType"],
-                "OBJECT_VERSION": object_version,
+                "OBJECT_GROUP": "USER_OBJECTS",
+                "OBJECT_NAME": object_name,
+                "OBJECT_TYPE": object_type,
+                "OBJECT_VERSION": "",
                 "CHECKSUM": "",
                 "DEPLOY_STATUS": "SUCCESS" if status == "VALID" else "INVALID",
-                "DEPLOYED_AT": object_row[2] or object_row[1] or "",
+                "DEPLOYED_AT": last_ddl_time or created_at or "",
                 "ERROR_MESSAGE": error_message,
             })
         return rows
