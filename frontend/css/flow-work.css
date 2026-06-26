@@ -218,6 +218,36 @@
     z-index: 2;
 }
 
+#container-M04001.flow-work-page.is-flow-canvas-maximized .flow-designer-panel.is-active {
+    height: calc(100vh - 128px);
+    max-height: none;
+    min-height: 0;
+}
+
+#container-M04001.flow-work-page.is-flow-canvas-maximized .flow-workspace {
+    height: 100%;
+    margin-top: 0;
+    min-height: 0;
+}
+
+#container-M04001.flow-work-page.is-flow-canvas-maximized .flow-main-panel,
+#container-M04001.flow-work-page.is-flow-canvas-maximized .flow-designer-card,
+#container-M04001.flow-work-page.is-flow-canvas-maximized .flow-editor-layout,
+#container-M04001.flow-work-page.is-flow-canvas-maximized .flow-canvas-panel {
+    min-height: 0;
+}
+
+#container-M04001.flow-work-page.is-flow-canvas-maximized .flow-main-panel {
+    min-height: 0;
+    padding: 12px;
+}
+
+#container-M04001.flow-work-page.is-flow-canvas-maximized .flow-canvas-stage {
+    flex: 1 1 0;
+    height: calc(100vh - 190px);
+    min-height: 0;
+}
+
 @media (max-width: 1100px) {
     .flow-work-page .flow-workspace,
     .flow-work-page .flow-editor-layout {

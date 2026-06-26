@@ -118,6 +118,8 @@ SELECT COUNT(*) AS TOTAL_RULES,
        MAX(RULE_LIFT) AS MAX_LIFT
   FROM "INIT$_TB_ASSOC_RULE_SUMMARY"
  WHERE OWNER = :owner
+   AND TARGET_OWNER = :targetOwner
+   AND TARGET_TABLE = :targetTable
    AND MODEL_NAME = :modelName;
 
 -- [M04002_ASSOC_RULE_CONDITION_DIST]
@@ -128,6 +130,8 @@ SELECT CONDITION_COUNT,
        AVG(RULE_LIFT) AS AVG_LIFT
   FROM "INIT$_TB_ASSOC_RULE_SUMMARY"
  WHERE OWNER = :owner
+   AND TARGET_OWNER = :targetOwner
+   AND TARGET_TABLE = :targetTable
    AND MODEL_NAME = :modelName
  GROUP BY CONDITION_COUNT
  ORDER BY CONDITION_COUNT;
@@ -147,6 +151,8 @@ SELECT *
                        AVG(RULE_LIFT) AS AVG_LIFT
                   FROM "INIT$_TB_ASSOC_RULE_SUMMARY"
                  WHERE OWNER = :owner
+                   AND TARGET_OWNER = :targetOwner
+                   AND TARGET_TABLE = :targetTable
                    AND MODEL_NAME = :modelName
                  GROUP BY NVL(RESULT_COLUMN, '(RESULT UNKNOWN)')
                ) Q
@@ -163,6 +169,8 @@ SELECT *
                COUNT(*) OVER () AS TOTAL_COUNT
           FROM (
                 SELECT OWNER,
+                       TARGET_OWNER,
+                       TARGET_TABLE,
                        MODEL_NAME,
                         RULE_ID,
                         MODEL_TYPE,
@@ -185,6 +193,8 @@ SELECT *
                         CREATE_DT
                   FROM "INIT$_TB_ASSOC_RULE_SUMMARY"
                  WHERE OWNER = :owner
+                   AND TARGET_OWNER = :targetOwner
+                   AND TARGET_TABLE = :targetTable
                    AND MODEL_NAME = :modelName
                    AND (:conditionCount IS NULL OR CONDITION_COUNT = :conditionCount)
                    AND (

@@ -945,20 +945,28 @@ def get_model_rule_summary(
         column_comments = _fetch_column_comment_map(cursor, target_owner, target_table) if cursor else {}
         overview = execute_query(conn, "M04002_ASSOC_RULE_OVERVIEW", {
             "owner": owner_name,
+            "targetOwner": target_owner,
+            "targetTable": target_table,
             "modelName": model_name,
         })
         condition_dist = execute_query(conn, "M04002_ASSOC_RULE_CONDITION_DIST", {
             "owner": owner_name,
+            "targetOwner": target_owner,
+            "targetTable": target_table,
             "modelName": model_name,
         })
         result_top = execute_query(conn, "M04002_ASSOC_RULE_RESULT_TOP", {
             "owner": owner_name,
+            "targetOwner": target_owner,
+            "targetTable": target_table,
             "modelName": model_name,
             "resultOffset": result_column_offset,
             "resultEndRow": result_column_end_row,
         })
         detail = execute_query(conn, "M04002_ASSOC_RULE_DETAIL_LIST", {
             "owner": owner_name,
+            "targetOwner": target_owner,
+            "targetTable": target_table,
             "modelName": model_name,
             "conditionCount": conditionCount,
             "resultColumn": normalized_result_column,

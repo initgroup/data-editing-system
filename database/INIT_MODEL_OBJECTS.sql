@@ -561,6 +561,8 @@ CREATE OR REPLACE PACKAGE BODY "INIT$_PKG_RULE_SUMMARY" AS
             v_sql := q'[
 INSERT INTO "INIT$_TB_ASSOC_RULE_SUMMARY" (
     "OWNER",
+    "TARGET_OWNER",
+    "TARGET_TABLE",
     "MODEL_NAME",
     "MODEL_TYPE",
     "RULE_SOURCE",
@@ -645,6 +647,8 @@ RANKED AS (
        AND M.RULE_LIFT >= ]' || TO_CHAR(v_min_lift, 'TM9', 'NLS_NUMERIC_CHARACTERS=.,') || q'[
 )
 SELECT SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA'),
+       ]' || sql_literal(v_target_owner) || q'[,
+       ]' || sql_literal(v_target_table) || q'[,
        ]' || sql_literal(v_model_name) || q'[,
        ]' || sql_literal(v_model_type) || q'[,
        ]' || sql_literal(v_rule_source) || q'[,
@@ -719,6 +723,12 @@ SELECT SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA'),
         v_model_type := SUBSTR(UPPER(TRIM(NVL(p_model_type, 'CONDITIONAL_RULE'))), 1, 80);
         v_rule_source := SUBSTR(UPPER(TRIM(NVL(p_rule_source, 'CONDITIONAL_FREQUENCY'))), 1, 80);
         v_base_query := clean_query(p_data_query);
+        IF v_target_owner IS NULL THEN
+            v_target_owner := NVL(infer_query_owner(v_base_query), SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA'));
+        END IF;
+        IF v_target_table IS NULL THEN
+            v_target_table := NVL(infer_query_table(v_base_query), 'UNKNOWN');
+        END IF;
         v_min_support_count := GREATEST(1, NVL(p_min_support_count, 30));
         v_min_confidence := GREATEST(0, LEAST(1, NVL(p_min_confidence, 0.7)));
         v_min_lift := GREATEST(0, NVL(p_min_lift, 1));
@@ -734,12 +744,6 @@ SELECT SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA'),
             v_candidates := split_columns(p_candidate_columns, v_case_id_col, v_max_columns);
         ELSE
             v_described_candidates := describe_query_columns(v_base_query, v_case_id_col, v_max_columns);
-            IF v_target_owner IS NULL THEN
-                v_target_owner := infer_query_owner(v_base_query);
-            END IF;
-            IF v_target_table IS NULL THEN
-                v_target_table := infer_query_table(v_base_query);
-            END IF;
             v_candidates := correlated_pair_columns(
                 v_described_candidates,
                 v_case_id_col,
@@ -789,6 +793,8 @@ SELECT SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA'),
         IF UPPER(TRIM(NVL(p_clear_existing_yn, 'Y'))) = 'Y' THEN
             DELETE FROM "INIT$_TB_ASSOC_RULE_SUMMARY"
              WHERE "OWNER" = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')
+               AND "TARGET_OWNER" = v_target_owner
+               AND "TARGET_TABLE" = v_target_table
                AND "MODEL_NAME" = v_model_name;
         END IF;
 
@@ -807,6 +813,8 @@ SELECT SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA'),
                 v_sql := q'[
 INSERT INTO "INIT$_TB_ASSOC_RULE_SUMMARY" (
     "OWNER",
+    "TARGET_OWNER",
+    "TARGET_TABLE",
     "MODEL_NAME",
     "MODEL_TYPE",
     "RULE_SOURCE",
@@ -891,6 +899,8 @@ RANKED AS (
        AND M.RULE_LIFT >= ]' || TO_CHAR(v_min_lift, 'TM9', 'NLS_NUMERIC_CHARACTERS=.,') || q'[
 )
 SELECT SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA'),
+       ]' || sql_literal(v_target_owner) || q'[,
+       ]' || sql_literal(v_target_table) || q'[,
        ]' || sql_literal(v_model_name) || q'[,
        ]' || sql_literal(v_model_type) || q'[,
        ]' || sql_literal(v_rule_source) || q'[,
@@ -937,6 +947,8 @@ SELECT SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA'),
                         v_sql := q'[
 INSERT INTO "INIT$_TB_ASSOC_RULE_SUMMARY" (
     "OWNER",
+    "TARGET_OWNER",
+    "TARGET_TABLE",
     "MODEL_NAME",
     "MODEL_TYPE",
     "RULE_SOURCE",
@@ -1028,6 +1040,8 @@ RANKED AS (
        AND M.RULE_LIFT >= ]' || TO_CHAR(v_min_lift, 'TM9', 'NLS_NUMERIC_CHARACTERS=.,') || q'[
 )
 SELECT SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA'),
+       ]' || sql_literal(v_target_owner) || q'[,
+       ]' || sql_literal(v_target_table) || q'[,
        ]' || sql_literal(v_model_name) || q'[,
        ]' || sql_literal(v_model_type) || q'[,
        ]' || sql_literal(v_rule_source) || q'[,
@@ -1470,6 +1484,8 @@ BEGIN
           INTO v_conditional_rule_count
           FROM "INIT$_TB_ASSOC_RULE_SUMMARY"
          WHERE "OWNER" = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')
+           AND "TARGET_OWNER" = v_target_owner
+           AND "TARGET_TABLE" = v_target_table
            AND "MODEL_NAME" = v_model_name
            AND "RULE_SOURCE" = 'CONDITIONAL_FREQUENCY';
 
@@ -1511,13 +1527,15 @@ BEGIN
 
             DELETE FROM "INIT$_TB_ASSOC_RULE_SUMMARY"
              WHERE "OWNER" = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')
+               AND "TARGET_OWNER" = v_target_owner
+               AND "TARGET_TABLE" = v_target_table
                AND "MODEL_NAME" = v_model_name;
 
             EXECUTE IMMEDIATE
                 'INSERT INTO "INIT$_TB_ASSOC_RULE_SUMMARY" (' ||
-                ' "OWNER", "MODEL_NAME", "MODEL_TYPE", "RULE_SOURCE", "RULE_ID", "CONDITION_COUNT", "RESULT_COLUMN", "RESULT_VALUE", ' ||
+                ' "OWNER", "TARGET_OWNER", "TARGET_TABLE", "MODEL_NAME", "MODEL_TYPE", "RULE_SOURCE", "RULE_ID", "CONDITION_COUNT", "RESULT_COLUMN", "RESULT_VALUE", ' ||
                 ' "RESULT_HAS_VALUE_YN", "RULE_SUPPORT", "RULE_CONFIDENCE", "RULE_LIFT", "CONDITION_TEXT", "RESULT_TEXT", "CREATE_DT") ' ||
-                'SELECT SYS_CONTEXT(''USERENV'', ''CURRENT_SCHEMA''), :model_name, ''APRIORI_ASSOCIATION'', ''ORACLE_DM_VR'', ' || v_rule_id_expr || ', ' ||
+                'SELECT SYS_CONTEXT(''USERENV'', ''CURRENT_SCHEMA''), :target_owner, :target_table, :model_name, ''APRIORI_ASSOCIATION'', ''ORACLE_DM_VR'', ' || v_rule_id_expr || ', ' ||
                 '       REGEXP_COUNT(NVL(' || v_antecedent_expr || ', ''''), ''<item([[:space:]>])'', 1, ''i''), ' ||
                 '       REGEXP_SUBSTR(' || v_consequent_expr || ', ''<item_name>([^<]+)</item_name>'', 1, 1, ''i'', 1), ' ||
                 '       REGEXP_SUBSTR(' || v_consequent_expr || ', ''<item_value>([^<]+)</item_value>'', 1, 1, ''i'', 1), ' ||
@@ -1525,7 +1543,7 @@ BEGIN
                 '       ' || v_support_expr || ', ' || v_confidence_expr || ', ' || v_lift_expr || ', ' ||
                 '       ' || v_antecedent_expr || ', ' || v_consequent_expr || ', SYSDATE ' ||
                 '  FROM "' || REPLACE(v_rule_view_name, '"', '""') || '"'
-            USING v_model_name;
+            USING v_target_owner, v_target_table, v_model_name;
 
             DBMS_OUTPUT.PUT_LINE('[OK] Association rule summary loaded: ' || SQL%ROWCOUNT || ' rows');
             DBMS_OUTPUT.PUT_LINE('[INFO] Rule summary columns: rule_id=' || NVL(v_rule_id_col, '(ROWNUM)') ||
@@ -1653,6 +1671,8 @@ BEGIN
       INTO v_rule_count
       FROM "INIT$_TB_ASSOC_RULE_SUMMARY"
      WHERE "OWNER" = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')
+       AND "TARGET_OWNER" = v_target_owner
+       AND "TARGET_TABLE" = v_target_table
        AND "MODEL_NAME" = v_model_name
        AND "RULE_SOURCE" = 'TARGET_CONDITIONAL_FREQUENCY';
 
@@ -1859,8 +1879,10 @@ BEGIN
                                     S.SUPPORT_COUNT DESC NULLS LAST,
                                     S.RULE_ID
                        ) AS RN__
-                  FROM "INIT$_TB_ASSOC_RULE_SUMMARY" S
+                 FROM "INIT$_TB_ASSOC_RULE_SUMMARY" S
                  WHERE S."OWNER" = v_rule_owner
+                   AND S."TARGET_OWNER" = v_target_owner
+                   AND S."TARGET_TABLE" = v_target_table
                    AND S."MODEL_NAME" = v_rule_model
                    AND S."RESULT_HAS_VALUE_YN" = 'Y'
                    AND S."RESULT_COLUMN" IS NOT NULL

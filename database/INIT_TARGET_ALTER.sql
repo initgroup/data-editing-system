@@ -112,6 +112,18 @@ DECLARE
         END IF;
     END;
 
+    PROCEDURE drop_index_if_exists(p_index_name IN VARCHAR2) IS
+    BEGIN
+        IF index_exists(p_index_name) THEN
+            run_ddl(
+                'DROP INDEX ' || p_index_name,
+                'DROP INDEX "' || UPPER(p_index_name) || '"'
+            );
+        ELSE
+            DBMS_OUTPUT.PUT_LINE('[SKIP] INDEX ' || p_index_name || ' does not exist.');
+        END IF;
+    END;
+
     PROCEDURE drop_constraint_if_exists(p_constraint_name IN VARCHAR2, p_table_name IN VARCHAR2) IS
     BEGIN
         IF table_exists(p_table_name) AND constraint_exists(p_constraint_name) THEN
@@ -147,6 +159,8 @@ DECLARE
         TYPE t_col_list IS TABLE OF VARCHAR2(128);
         v_cols t_col_list := t_col_list(
             'OWNER',
+            'TARGET_OWNER',
+            'TARGET_TABLE',
             'MODEL_NAME',
             'MODEL_TYPE',
             'RULE_SOURCE',
@@ -191,6 +205,8 @@ DECLARE
            AND HIDDEN_COLUMN = 'NO'
            AND COLUMN_NAME IN (
                'OWNER',
+               'TARGET_OWNER',
+               'TARGET_TABLE',
                'MODEL_NAME',
                'MODEL_TYPE',
                'RULE_SOURCE',
@@ -252,6 +268,8 @@ BEGIN
     drop_constraint_if_exists('FK_INIT$_TB_FLOW_NODE_RUN_FLOW', 'INIT$_TB_FLOW_WORK_NODE_RUN');
 
     add_column_if_missing('INIT$_TB_ASSOC_RULE_SUMMARY', 'MODEL_TYPE', '"MODEL_TYPE" VARCHAR2(80 BYTE)');
+    add_column_if_missing('INIT$_TB_ASSOC_RULE_SUMMARY', 'TARGET_OWNER', '"TARGET_OWNER" VARCHAR2(128 BYTE) DEFAULT ''UNKNOWN'' NOT NULL ENABLE');
+    add_column_if_missing('INIT$_TB_ASSOC_RULE_SUMMARY', 'TARGET_TABLE', '"TARGET_TABLE" VARCHAR2(128 BYTE) DEFAULT ''UNKNOWN'' NOT NULL ENABLE');
     add_column_if_missing('INIT$_TB_ASSOC_RULE_SUMMARY', 'RULE_SOURCE', '"RULE_SOURCE" VARCHAR2(80 BYTE)');
     add_column_if_missing('INIT$_TB_ASSOC_RULE_SUMMARY', 'CONDITION_COLUMN', '"CONDITION_COLUMN" VARCHAR2(128 BYTE)');
     add_column_if_missing('INIT$_TB_ASSOC_RULE_SUMMARY', 'CONDITION_VALUE', '"CONDITION_VALUE" VARCHAR2(4000 BYTE)');
@@ -294,7 +312,43 @@ CREATE INDEX "IX_INIT$_TB_FLOW_NODE_RUN_02"
     END IF;
 
     IF table_exists('INIT$_TB_ASSOC_RULE_SUMMARY') THEN
+        IF column_exists('INIT$_TB_ASSOC_RULE_SUMMARY', 'TARGET_OWNER') AND column_exists('INIT$_TB_ASSOC_RULE_SUMMARY', 'TARGET_TABLE') THEN
+            run_ddl(
+                'NORMALIZE INIT$_TB_ASSOC_RULE_SUMMARY TARGET SCOPE',
+                q'[UPDATE "INIT$_TB_ASSOC_RULE_SUMMARY"
+                      SET "TARGET_OWNER" = NVL(NULLIF(TRIM("TARGET_OWNER"), ''), 'UNKNOWN'),
+                          "TARGET_TABLE" = NVL(NULLIF(TRIM("TARGET_TABLE"), ''), 'UNKNOWN')
+                    WHERE "TARGET_OWNER" IS NULL
+                       OR "TARGET_TABLE" IS NULL
+                       OR TRIM("TARGET_OWNER") IS NULL
+                       OR TRIM("TARGET_TABLE") IS NULL]'
+            );
+
+            run_ddl(
+                'MODIFY INIT$_TB_ASSOC_RULE_SUMMARY.TARGET_OWNER',
+                q'[ALTER TABLE "INIT$_TB_ASSOC_RULE_SUMMARY" MODIFY ("TARGET_OWNER" DEFAULT 'UNKNOWN' NOT NULL ENABLE)]'
+            );
+            run_ddl(
+                'MODIFY INIT$_TB_ASSOC_RULE_SUMMARY.TARGET_TABLE',
+                q'[ALTER TABLE "INIT$_TB_ASSOC_RULE_SUMMARY" MODIFY ("TARGET_TABLE" DEFAULT 'UNKNOWN' NOT NULL ENABLE)]'
+            );
+
+            drop_constraint_if_exists('PK_INIT$_TB_ASSOC_RULE_SUMMARY', 'INIT$_TB_ASSOC_RULE_SUMMARY');
+            IF NOT constraint_exists('PK_INIT$_TB_ASSOC_RULE_SUMMARY') THEN
+                run_ddl(
+                    'ADD PK_INIT$_TB_ASSOC_RULE_SUMMARY',
+                    q'[ALTER TABLE "INIT$_TB_ASSOC_RULE_SUMMARY" ADD CONSTRAINT "PK_INIT$_TB_ASSOC_RULE_SUMMARY" PRIMARY KEY ("OWNER", "TARGET_OWNER", "TARGET_TABLE", "MODEL_NAME", "RULE_ID") ENABLE]'
+                );
+            END IF;
+
+            drop_index_if_exists('IX_INIT$_TB_ASSOC_RULE_SUMMARY_01');
+            drop_index_if_exists('IX_INIT$_TB_ASSOC_RULE_SUMMARY_02');
+            drop_index_if_exists('IX_INIT$_TB_ASSOC_RULE_SUMMARY_03');
+        END IF;
+
         run_ddl('COMMENT INIT$_TB_ASSOC_RULE_SUMMARY', q'[COMMENT ON TABLE "INIT$_TB_ASSOC_RULE_SUMMARY" IS 'Association model rule summary for fast drill-down analysis']');
+        run_ddl('COMMENT INIT$_TB_ASSOC_RULE_SUMMARY.TARGET_OWNER', q'[COMMENT ON COLUMN "INIT$_TB_ASSOC_RULE_SUMMARY"."TARGET_OWNER" IS 'Target table owner used to calculate this rule summary']');
+        run_ddl('COMMENT INIT$_TB_ASSOC_RULE_SUMMARY.TARGET_TABLE', q'[COMMENT ON COLUMN "INIT$_TB_ASSOC_RULE_SUMMARY"."TARGET_TABLE" IS 'Target table used to calculate this rule summary']');
         run_ddl('COMMENT INIT$_TB_ASSOC_RULE_SUMMARY.MODEL_TYPE', q'[COMMENT ON COLUMN "INIT$_TB_ASSOC_RULE_SUMMARY"."MODEL_TYPE" IS 'Human-readable rule model type such as Apriori or Decision Tree']');
         run_ddl('COMMENT INIT$_TB_ASSOC_RULE_SUMMARY.RULE_SOURCE', q'[COMMENT ON COLUMN "INIT$_TB_ASSOC_RULE_SUMMARY"."RULE_SOURCE" IS 'Rule summary source such as conditional frequency']');
         run_ddl('COMMENT INIT$_TB_ASSOC_RULE_SUMMARY.CONDITION_COLUMN', q'[COMMENT ON COLUMN "INIT$_TB_ASSOC_RULE_SUMMARY"."CONDITION_COLUMN" IS 'Condition column name for conditional probability rules']');
@@ -307,17 +361,17 @@ CREATE INDEX "IX_INIT$_TB_FLOW_NODE_RUN_02"
 
     create_index_if_missing('IX_INIT$_TB_ASSOC_RULE_SUMMARY_01', 'INIT$_TB_ASSOC_RULE_SUMMARY', q'[
 CREATE INDEX "IX_INIT$_TB_ASSOC_RULE_SUMMARY_01"
-    ON "INIT$_TB_ASSOC_RULE_SUMMARY" ("OWNER", "MODEL_NAME", "CONDITION_COUNT", "RULE_CONFIDENCE", "RULE_LIFT", "RULE_SUPPORT")
+    ON "INIT$_TB_ASSOC_RULE_SUMMARY" ("OWNER", "TARGET_OWNER", "TARGET_TABLE", "MODEL_NAME", "CONDITION_COUNT", "RULE_CONFIDENCE", "RULE_LIFT", "RULE_SUPPORT")
 ]');
 
     create_index_if_missing('IX_INIT$_TB_ASSOC_RULE_SUMMARY_02', 'INIT$_TB_ASSOC_RULE_SUMMARY', q'[
 CREATE INDEX "IX_INIT$_TB_ASSOC_RULE_SUMMARY_02"
-    ON "INIT$_TB_ASSOC_RULE_SUMMARY" ("OWNER", "MODEL_NAME", "RESULT_COLUMN", "RESULT_HAS_VALUE_YN")
+    ON "INIT$_TB_ASSOC_RULE_SUMMARY" ("OWNER", "TARGET_OWNER", "TARGET_TABLE", "MODEL_NAME", "RESULT_COLUMN", "RESULT_HAS_VALUE_YN")
 ]');
 
     create_index_if_missing('IX_INIT$_TB_ASSOC_RULE_SUMMARY_03', 'INIT$_TB_ASSOC_RULE_SUMMARY', q'[
 CREATE INDEX "IX_INIT$_TB_ASSOC_RULE_SUMMARY_03"
-    ON "INIT$_TB_ASSOC_RULE_SUMMARY" ("OWNER", "MODEL_NAME", "MODEL_TYPE", "RULE_SOURCE")
+    ON "INIT$_TB_ASSOC_RULE_SUMMARY" ("OWNER", "TARGET_OWNER", "TARGET_TABLE", "MODEL_NAME", "MODEL_TYPE", "RULE_SOURCE")
 ]');
 
     create_table_if_missing('INIT$_TB_RULE_VIOLATION_RESULT', q'[
