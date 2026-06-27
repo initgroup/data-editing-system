@@ -6,8 +6,9 @@ import os
 import re
 import time
 from typing import Any, Dict
+from urllib.parse import quote
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Response
 
 from backend.auth_context import get_request_role_code, get_request_user_id
 from backend.database import get_db_connection
@@ -98,6 +99,12 @@ def _read_lob(value: Any) -> Any:
     if hasattr(value, "read"):
         return value.read()
     return value
+
+
+def _safe_file_name(value: Any) -> str:
+    text = str(value or "").replace("\\", "/").split("/")[-1].strip()
+    text = text.replace("\r", "").replace("\n", "")
+    return (text or "attachment")[:500]
 
 
 def _serialize_db_value(value: Any) -> Any:
@@ -226,7 +233,8 @@ def _get_active_system_notices(limit: int = 5) -> list[dict[str, Any]]:
         for row in cursor.fetchall():
             content = row[3].read() if hasattr(row[3], "read") else (row[3] or "")
             full_text = str(content or "").strip() or "공지 내용이 없습니다."
-            text = _plain_notice_text(full_text) or "공지 내용이 없습니다."
+            popup_text = _plain_notice_text(full_text) or "공지 내용이 없습니다."
+            text = popup_text
             if len(text) > 180:
                 text = f"{text[:177]}..."
             notice_type = str(row[1] or "INFO").upper()
@@ -236,13 +244,25 @@ def _get_active_system_notices(limit: int = 5) -> list[dict[str, Any]]:
                 "tone": tone_map.get(notice_type, "is-info"),
                 "title": row[2] or "Notice",
                 "text": text,
+                "popupText": popup_text,
                 "fullText": full_text,
                 "popupYn": row[4] or "N",
                 "pinYn": row[5] or "N",
                 "postStartAt": row[6].isoformat(timespec="minutes") if isinstance(row[6], datetime) else row[6],
                 "postEndAt": row[7].isoformat(timespec="minutes") if isinstance(row[7], datetime) else row[7],
                 "createdAt": row[8].isoformat(timespec="minutes") if isinstance(row[8], datetime) else row[8],
+                "attachments": [],
             })
+        cursor.execute(SqlLoader.get_sql("HOME_NOTICE_FILE_TABLE_EXISTS"))
+        file_table_row = cursor.fetchone()
+        if file_table_row and int(file_table_row[0] or 0) > 0:
+            for notice in notices:
+                cursor.execute(SqlLoader.get_sql("HOME_NOTICE_FILES_FOR_NOTICE"), {"noticeId": notice.get("noticeId")})
+                columns = [desc[0] for desc in cursor.description]
+                notice["attachments"] = [
+                    _row_to_dict(columns, file_row)
+                    for file_row in cursor.fetchall()
+                ]
         return notices
     except Exception as error:
         logger.warning("Home active notice query failed: %s", error)
@@ -471,6 +491,42 @@ def dashboard(request: Request):
         "notices": active_notices,
         "popupNotices": [notice for notice in active_notices if notice.get("popupYn") == "Y"],
     }
+
+
+@router.get("/notice-files/{file_id}/download")
+def download_notice_file(file_id: int):
+    conn = None
+    cursor = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(SqlLoader.get_sql("HOME_NOTICE_FILE_DOWNLOAD"), {"fileId": file_id})
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Attachment was not found.")
+        file_name = _safe_file_name(row[2])
+        content_type = row[3] or "application/octet-stream"
+        file_data = _read_lob(row[5]) or b""
+        if isinstance(file_data, str):
+            file_data = file_data.encode("utf-8")
+        return Response(
+            content=file_data,
+            media_type=content_type,
+            headers={
+                "Content-Disposition": f"attachment; filename=\"attachment\"; filename*=UTF-8''{quote(file_name)}",
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
+    except HTTPException:
+        raise
+    except Exception as error:
+        logger.warning("Home notice file download failed: %s", error)
+        raise HTTPException(status_code=500, detail=str(error))
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 
 def _normalize_node_result(row: dict[str, Any]) -> dict[str, Any]:

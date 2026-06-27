@@ -512,6 +512,9 @@ const PageManager = {
                 await module.init();
             }
             this.show(pageCode);
+            if (module && typeof module.onShow === 'function') {
+                await module.onShow();
+            }
             const displayTitle = this.formatPageTitle(pageCode, title);
             if (displayTitle) document.getElementById('contentTitle').innerText = displayTitle;
             this.rememberCurrentPage(pageCode, displayTitle);
@@ -545,6 +548,9 @@ const PageManager = {
             }
 
             this.show(pageCode);
+            if (module && typeof module.onShow === 'function') {
+                await module.onShow();
+            }
         } catch (e) {
             CommonUI.showPageError(pageCode, e.message);
         } finally {

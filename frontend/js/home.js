@@ -1194,7 +1194,7 @@
 
             const id = notice.noticeId || notice.title || "";
             sessionStorage.setItem(`homeNoticePopup:${id}`, "Y");
-            await CommonMessage.info(`${notice.title || "Notice"}\n\n${notice.text || ""}`, {
+            await CommonMessage.info(`${notice.title || "Notice"}\n\n${notice.popupText || notice.text || ""}`, {
                 title: "공지사항",
                 modal: true
             });
@@ -1294,6 +1294,20 @@
             }
             const body = document.getElementById("homeNoticeBody");
             if (body) body.innerHTML = this.sanitizeNoticeHtml(notice.fullText || notice.text || "");
+            const attachments = document.getElementById("homeNoticeAttachments");
+            if (attachments) {
+                const files = Array.isArray(notice.attachments) ? notice.attachments : [];
+                attachments.innerHTML = files.length ? `
+                    <strong>Attachments</strong>
+                    ${files.map((file) => `
+                        <button type="button" class="home-notice-attachment" onclick="home.downloadNoticeFile('${this.escapeHtml(file.FILE_ID || "")}')">
+                            <i class="fas fa-paperclip"></i>
+                            <span title="${this.escapeHtml(file.FILE_NAME || "")}">${this.escapeHtml(file.FILE_NAME || "attachment")}</span>
+                            <small>${this.escapeHtml(this.formatFileSize(file.FILE_SIZE))}</small>
+                        </button>
+                    `).join("")}
+                ` : "";
+            }
         },
 
         closeNoticeLayer() {
@@ -1343,6 +1357,55 @@
             PageManager.load(pageCode, menu?.title || menu?.label || pageCode);
         },
 
+        buildRequestHeaders() {
+            const headers = {};
+            const targetConnectionId = sessionStorage.getItem("targetConnectionId") || "";
+            if (targetConnectionId) headers["X-Target-Connection-Id"] = targetConnectionId;
+            try {
+                const loginUser = JSON.parse(sessionStorage.getItem("initLoginUser") || "{}");
+                if (loginUser.userId) headers["X-Login-User-Id"] = String(loginUser.userId);
+                if (loginUser.loginId) headers["X-Login-Id"] = String(loginUser.loginId);
+                if (loginUser.email) headers["X-Login-Email"] = String(loginUser.email);
+                if (loginUser.roleCode) headers["X-Login-Role-Code"] = String(loginUser.roleCode);
+            } catch (error) {
+                // Backend auth will report missing context if needed.
+            }
+            const bootstrapToken = sessionStorage.getItem("initBootstrapToken") || "";
+            if (bootstrapToken) headers["X-Bootstrap-Token"] = bootstrapToken;
+            return headers;
+        },
+
+        async downloadNoticeFile(fileId) {
+            if (!fileId) return;
+            try {
+                const response = await fetch(`${API_BASE_URL}/home/notice-files/${encodeURIComponent(fileId)}/download`, {
+                    method: "GET",
+                    headers: this.buildRequestHeaders()
+                });
+                if (!response.ok) {
+                    const errorJson = await response.json().catch(() => ({}));
+                    throw new Error(CommonUtils.formatErrorMessage(errorJson));
+                }
+                const blob = await response.blob();
+                const fileName = this.getDownloadFileName(response.headers.get("Content-Disposition")) || "attachment";
+                if (window.DataEditingSystem?.downloadBlob) {
+                    window.DataEditingSystem.downloadBlob(blob, fileName);
+                } else {
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement("a");
+                    link.href = url;
+                    link.download = fileName;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(url);
+                }
+                window.PageManager?.extendSession?.();
+            } catch (error) {
+                await CommonMessage.error(error.message || "Attachment download failed.");
+            }
+        },
+
         setText(id, value) {
             const el = document.getElementById(id);
             if (el) el.textContent = value || "";
@@ -1351,6 +1414,35 @@
         formatNumber(value) {
             const number = Number(value || 0);
             return Number.isFinite(number) ? number.toLocaleString("ko-KR") : "0";
+        },
+
+        formatFileSize(value) {
+            const size = Number(value || 0);
+            if (!Number.isFinite(size) || size <= 0) return "0 B";
+            const units = ["B", "KB", "MB", "GB"];
+            let next = size;
+            let unitIndex = 0;
+            while (next >= 1024 && unitIndex < units.length - 1) {
+                next /= 1024;
+                unitIndex += 1;
+            }
+            const digits = unitIndex === 0 ? 0 : (next >= 10 ? 1 : 2);
+            return `${next.toFixed(digits)} ${units[unitIndex]}`;
+        },
+
+        getDownloadFileName(disposition) {
+            const header = String(disposition || "");
+            const encoded = header.match(/filename\*=UTF-8''([^;]+)/i);
+            if (encoded) {
+                try {
+                    return decodeURIComponent(encoded[1].trim());
+                } catch (error) {
+                    return encoded[1].trim();
+                }
+            }
+            const quoted = header.match(/filename="([^"]+)"/i);
+            if (quoted) return quoted[1].trim();
+            return "";
         },
 
         formatDecimal(value) {

@@ -28,6 +28,7 @@ BEGIN
     DBMS_OUTPUT.PUT_LINE('=== INIT_SYSTEM TRUNCATE START ===');
 
     truncate_table_if_exists('INIT$_TB_SETUP_LOG');
+    truncate_table_if_exists('INIT$_TB_NOTICE_FILE');
     truncate_table_if_exists('INIT$_TB_NOTICE');
     truncate_table_if_exists('INIT$_TB_SYSTEM_SETTING');
     truncate_table_if_exists('INIT$_TB_DB_CONNECTION');

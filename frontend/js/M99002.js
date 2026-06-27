@@ -42,7 +42,7 @@
             document.addEventListener("mouseup", this.stopColumnResizeBound);
             getContainerEl("#sqlEditor-M99002")?.addEventListener("keydown", this.sqlKeydownBound);
             await this.loadObjectTree();
-            this.switchTab("columns");
+            this.showObjectTabs();
             this.isInit = true;
         },
 
@@ -369,12 +369,12 @@
             this.restoreTreeScroll(scrollState);
             this.updateSelectedMeta();
             this.setDefaultSql();
-            if (this.getObjectType(row) === "TABLE") {
+            if (this.isTableOrView(row)) {
                 this.showTableTabs();
                 await Promise.all([this.loadObjectDetail(row), this.loadColumns()]);
             } else {
                 this.showObjectTabs();
-                await Promise.all([this.loadObjectDetail(row), this.loadSource()]);
+                await this.loadObjectDetail(row);
             }
         },
 
@@ -407,10 +407,10 @@
         showTableTabs() {
             this.setTabVisible("columns", true);
             this.setTabVisible("data", true);
-            this.setTabVisible("script", false);
+            this.setTabVisible("script", true);
             const viewer = getContainerEl("#scriptViewer-M99002");
             if (viewer) viewer.value = "";
-            this.switchTab(["columns", "data", "sql"].includes(this.activeTab) ? this.activeTab : "columns");
+            this.switchTab(["columns", "data", "script", "sql"].includes(this.activeTab) ? this.activeTab : "columns");
         },
 
         showObjectTabs() {
@@ -421,8 +421,13 @@
         },
 
         setTabVisible(tabName, visible) {
-            getContainerEl(`.table-tab[data-tab="${tabName}"]`)?.toggleAttribute("hidden", !visible);
-            getContainerEl(`.table-tab-panel[data-panel="${tabName}"]`)?.toggleAttribute("hidden", !visible);
+            const tab = getContainerEl(`.table-tab[data-tab="${tabName}"]`);
+            const panel = getContainerEl(`.table-tab-panel[data-panel="${tabName}"]`);
+            [tab, panel].filter(Boolean).forEach((el) => {
+                el.hidden = !visible;
+                el.style.display = visible ? "" : "none";
+                el.setAttribute("aria-hidden", String(!visible));
+            });
         },
 
         updateSelectedMeta() {
@@ -445,7 +450,8 @@
             getContainerEl(".table-panel")?.querySelectorAll(".table-tab-panel").forEach((panel) => {
                 panel.classList.toggle("is-active", panel.dataset.panel === tabName);
             });
-            if (tabName === "data" && this.getObjectType(this.selectedObject) === "TABLE") this.loadTableData();
+            if (tabName === "data" && this.isTableOrView(this.selectedObject)) this.loadTableData();
+            if (tabName === "script" && this.selectedObject) this.loadSource();
         },
 
         async loadColumns() {
@@ -494,10 +500,28 @@
                         objectName: this.selectedObject.OBJECT_NAME
                     }
                 });
-                viewer.value = json.source || "";
+                viewer.value = this.formatSourceForDisplay(json.source || "", this.selectedObject);
             } catch (error) {
                 viewer.value = error.message || "Script load failed.";
             }
+        },
+
+        formatSourceForDisplay(source, object = this.selectedObject) {
+            const text = String(source || "").trim();
+            if (!text || this.getObjectType(object) !== "VIEW") return text;
+            return text
+                .replace(/\s+/g, " ")
+                .replace(/\s+(AS\s+SELECT)\s+/i, "\n$1\n    ")
+                .replace(/\s+(SELECT)\s+/i, "\n$1\n    ")
+                .replace(/\s+(FROM)\s+/i, "\n$1\n    ")
+                .replace(/\s+(WHERE)\s+/i, "\n$1\n    ")
+                .replace(/\s+(GROUP\s+BY|ORDER\s+BY|HAVING)\s+/ig, "\n$1\n    ")
+                .replace(/\s+(AND|OR)\s+/ig, "\n    $1 ")
+                .replace(/\s+(LEFT|RIGHT|FULL|INNER|CROSS)?\s*(JOIN)\s+/ig, "\n    $1 $2 ")
+                .replace(/\s+(ON)\s+/ig, "\n        $1 ")
+                .replace(/\s*,\s*/g, ",\n    ")
+                .replace(/\n\s+\n/g, "\n")
+                .trim();
         },
 
         async executeSql() {
@@ -703,7 +727,7 @@
             const objectName = this.quoteName(this.getObjectType(this.selectedObject).startsWith("PACKAGE_")
                 ? this.selectedObject.OBJECT_NAME.split(".")[0]
                 : this.selectedObject.OBJECT_NAME);
-            if (this.getObjectType(this.selectedObject) === "TABLE") {
+            if (this.isTableOrView(this.selectedObject)) {
                 editor.value = `SELECT *\n  FROM ${owner}.${objectName};`;
             } else {
                 editor.value = `SELECT *\n  FROM ALL_OBJECTS\n WHERE OWNER = '${this.selectedObject.OWNER}'\n   AND OBJECT_NAME = '${this.selectedObject.OBJECT_NAME.split(".")[0]}';`;
@@ -906,9 +930,13 @@
         },
 
         ensureTableSelected() {
-            if (this.getObjectType(this.selectedObject) === "TABLE") return true;
-            this.renderError("#columnsGrid-M99002", "Select a table first.");
+            if (this.isTableOrView(this.selectedObject)) return true;
+            this.renderError("#columnsGrid-M99002", "Select a table or view first.");
             return false;
+        },
+
+        isTableOrView(row) {
+            return ["TABLE", "VIEW"].includes(this.getObjectType(row));
         },
 
         getTablePayload() {

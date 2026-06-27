@@ -25,6 +25,7 @@ INIT_SYSTEM_TABLES = [
     "INIT$_TB_DB_CONNECTION",
     "INIT$_TB_SYSTEM_SETTING",
     "INIT$_TB_NOTICE",
+    "INIT$_TB_NOTICE_FILE",
     "INIT$_TB_SETUP_LOG",
 ]
 
@@ -259,6 +260,12 @@ def get_system_table_data(req: SystemTableRequest):
                     "STATUS_CLAUSE": status_clause,
                 }),
                 params,
+            )
+        elif table_name == "INIT$_TB_NOTICE_FILE":
+            rows, columns = fetch_result(
+                conn,
+                SqlLoader.get_sql("M99003_NOTICE_FILE_DATA"),
+                {"limit": limit},
             )
         else:
             rows, columns = fetch_result(

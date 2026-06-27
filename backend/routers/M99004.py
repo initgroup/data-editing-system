@@ -5,9 +5,12 @@
 
 from datetime import datetime
 import logging
+import os
 from typing import Optional
+from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
+import oracledb
 from pydantic import BaseModel, ConfigDict
 
 from backend.auth_context import get_request_user_id, require_admin_role
@@ -45,6 +48,11 @@ class NoticeSaveRequest(BaseModel):
 
 class NoticeDeleteRequest(BaseModel):
     noticeId: int
+    model_config = ConfigDict(extra="allow")
+
+
+class NoticeFileDeleteRequest(BaseModel):
+    fileId: int
     model_config = ConfigDict(extra="allow")
 
 
@@ -97,6 +105,10 @@ def _row_to_notice(columns, row):
     return {column: _format_value(value) for column, value in zip(columns, row)}
 
 
+def _row_to_file(columns, row):
+    return {column: _format_value(value) for column, value in zip(columns, row)}
+
+
 def _fetch_notice(cursor, notice_id: int):
     cursor.execute(SqlLoader.get_sql("M99004_NOTICE_DETAIL"), {"noticeId": notice_id})
     row = cursor.fetchone()
@@ -104,6 +116,29 @@ def _fetch_notice(cursor, notice_id: int):
         return None
     columns = [col[0] for col in cursor.description]
     return _row_to_notice(columns, row)
+
+
+def _fetch_notice_files(cursor, notice_id: int, include_inactive: bool = False):
+    cursor.execute(SqlLoader.get_sql("M99004_NOTICE_FILE_LIST"), {
+        "noticeId": notice_id,
+        "includeInactive": "Y" if include_inactive else "N",
+    })
+    columns = [col[0] for col in cursor.description]
+    return [_row_to_file(columns, row) for row in cursor.fetchall()], columns
+
+
+def _safe_file_name(value: Optional[str]) -> str:
+    text = str(value or "").replace("\\", "/").split("/")[-1].strip()
+    text = text.replace("\r", "").replace("\n", "")
+    return (text or "attachment")[:500]
+
+
+def _max_notice_file_bytes() -> int:
+    try:
+        megabytes = int(os.getenv("NOTICE_FILE_MAX_MB", "10"))
+    except (TypeError, ValueError):
+        megabytes = 10
+    return max(1, min(megabytes, 100)) * 1024 * 1024
 
 
 @router.post("/notices")
@@ -164,6 +199,29 @@ def get_notice(notice_id: int):
             conn.close()
 
 
+@router.get("/notices/{notice_id}/files")
+def list_notice_files(notice_id: int, includeInactive: str = "N"):
+    conn = None
+    cursor = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        if not _fetch_notice(cursor, notice_id):
+            raise HTTPException(status_code=404, detail="Notice was not found.")
+        rows, columns = _fetch_notice_files(cursor, notice_id, str(includeInactive).upper() == "Y")
+        return {"status": "success", "data": rows, "columns": columns, "total": len(rows)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("M99004 notice file list failed: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
 @router.post("/notices/save")
 def save_notice(req: NoticeSaveRequest, user_id: int = Depends(get_request_user_id)):
     title = str(req.title or "").strip()
@@ -216,6 +274,138 @@ def save_notice(req: NoticeSaveRequest, user_id: int = Depends(get_request_user_
         if conn:
             conn.rollback()
         logger.error("M99004 notice save failed: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+@router.post("/notices/{notice_id}/files")
+async def upload_notice_file(
+    notice_id: int,
+    file: UploadFile = File(...),
+    sortOrder: int = Form(0),
+    user_id: int = Depends(get_request_user_id),
+):
+    file_name = _safe_file_name(file.filename)
+    content_type = str(file.content_type or "application/octet-stream")[:200]
+    content = await file.read()
+    max_bytes = _max_notice_file_bytes()
+    if len(content) > max_bytes:
+        raise HTTPException(status_code=413, detail=f"Attachment is too large. Max size is {max_bytes // 1024 // 1024} MB.")
+
+    conn = None
+    cursor = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        if not _fetch_notice(cursor, notice_id):
+            raise HTTPException(status_code=404, detail="Notice was not found.")
+
+        file_id_var = cursor.var(int)
+        cursor.setinputsizes(fileData=oracledb.DB_TYPE_BLOB)
+        cursor.execute(SqlLoader.get_sql("M99004_NOTICE_FILE_INSERT"), {
+            "noticeId": notice_id,
+            "fileName": file_name,
+            "contentType": content_type,
+            "fileSize": len(content),
+            "fileData": content,
+            "sortOrder": int(sortOrder or 0),
+            "userId": user_id,
+            "fileIdOut": file_id_var,
+        })
+        value = file_id_var.getvalue()
+        file_id = int(value[0] if isinstance(value, list) else value)
+        conn.commit()
+        rows, columns = _fetch_notice_files(cursor, notice_id)
+        return {
+            "status": "success",
+            "message": "Attachment uploaded.",
+            "fileId": file_id,
+            "data": rows,
+            "columns": columns,
+            "total": len(rows),
+        }
+    except HTTPException:
+        if conn:
+            conn.rollback()
+        raise
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error("M99004 notice file upload failed: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        await file.close()
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+@router.get("/files/{file_id}/download")
+def download_notice_file(file_id: int):
+    conn = None
+    cursor = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(SqlLoader.get_sql("M99004_NOTICE_FILE_DOWNLOAD"), {"fileId": file_id})
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Attachment was not found.")
+        file_name = _safe_file_name(row[2])
+        content_type = row[3] or "application/octet-stream"
+        file_data = _read_lob(row[5]) or b""
+        if isinstance(file_data, str):
+            file_data = file_data.encode("utf-8")
+        quoted_name = quote(file_name)
+        return Response(
+            content=file_data,
+            media_type=content_type,
+            headers={
+                "Content-Disposition": f"attachment; filename=\"attachment\"; filename*=UTF-8''{quoted_name}",
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("M99004 notice file download failed: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+@router.post("/files/delete")
+def delete_notice_file(req: NoticeFileDeleteRequest):
+    file_id = int(req.fileId or 0)
+    if file_id <= 0:
+        raise HTTPException(status_code=400, detail="Select an attachment before deleting.")
+
+    conn = None
+    cursor = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(SqlLoader.get_sql("M99004_NOTICE_FILE_DELETE"), {"fileId": file_id})
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Attachment was not found.")
+        conn.commit()
+        return {"status": "success", "message": "Attachment deleted.", "deletedCount": cursor.rowcount}
+    except HTTPException:
+        if conn:
+            conn.rollback()
+        raise
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error("M99004 notice file delete failed: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if cursor:

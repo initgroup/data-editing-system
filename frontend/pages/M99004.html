@@ -83,22 +83,25 @@
                         <span class="required-title">Title</span>
                         <input id="noticeTitle-M99004" class="env-field env-meta-field" type="text" placeholder="공지사항 제목">
                     </label>
-                    <label>
-                        <span>Post Start</span>
-                        <input id="noticePostStartAt-M99004" class="env-field env-meta-field" type="datetime-local">
-                    </label>
-                    <label>
-                        <span>Post End</span>
-                        <input id="noticePostEndAt-M99004" class="env-field env-meta-field" type="datetime-local">
-                    </label>
-                    <label data-popup-field>
-                        <span>Popup Start</span>
-                        <input id="noticePopupStartAt-M99004" class="env-field env-meta-field" type="datetime-local">
-                    </label>
-                    <label data-popup-field>
-                        <span>Popup End</span>
-                        <input id="noticePopupEndAt-M99004" class="env-field env-meta-field" type="datetime-local">
-                    </label>
+                    <div class="env-meta-wide notice-period-field">
+                        <span>Post Period</span>
+                        <div class="notice-period-range">
+                            <input id="noticePostStartAt-M99004" class="env-field env-meta-field" type="datetime-local" title="Post start">
+                            <span class="notice-period-separator">~</span>
+                            <input id="noticePostEndAt-M99004" class="env-field env-meta-field" type="datetime-local" title="Post end">
+                        </div>
+                    </div>
+                    <div class="env-meta-wide notice-period-field" data-popup-field>
+                        <span>Popup Period</span>
+                        <div class="notice-period-range" data-popup-period-range>
+                            <input id="noticePopupStartAt-M99004" class="env-field env-meta-field" type="datetime-local" title="Popup start">
+                            <span class="notice-period-separator">~</span>
+                            <input id="noticePopupEndAt-M99004" class="env-field env-meta-field" type="datetime-local" title="Popup end">
+                        </div>
+                        <div class="notice-period-disabled-message" data-popup-disabled-message hidden>
+                            Popup Y일 때 설정 가능
+                        </div>
+                    </div>
                     <label class="env-meta-wide notice-content-field">
                         <span>Content</span>
                         <div class="notice-editor-shell">
@@ -163,6 +166,17 @@
                             <textarea id="noticeContent-M99004" class="notice-editor-source" spellcheck="false" hidden></textarea>
                         </div>
                     </label>
+                    <section class="env-meta-wide notice-attachment-field" aria-label="Notice attachments">
+                        <div class="notice-attachment-head">
+                            <span>Attachments</span>
+                            <small id="noticeFileSummary-M99004">Save the notice before uploading files.</small>
+                        </div>
+                        <div class="notice-attachment-upload">
+                            <input id="noticeFileInput-M99004" class="env-field env-meta-field" type="file" multiple>
+                            <input id="noticeFileSortOrder-M99004" class="env-field env-meta-field" type="number" value="0" title="Sort order">
+                        </div>
+                        <div id="noticeFileList-M99004" class="notice-attachment-list"></div>
+                    </section>
                 </div>
             </section>
 

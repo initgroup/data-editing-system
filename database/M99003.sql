@@ -34,6 +34,21 @@ SELECT *
   FROM /* --SYSTEM_TABLE-- */
  WHERE ROWNUM <= :limit;
 
+-- [M99003_NOTICE_FILE_DATA]
+SELECT FILE_ID,
+       NOTICE_ID,
+       FILE_NAME,
+       CONTENT_TYPE,
+       FILE_SIZE,
+       SORT_ORDER,
+       USE_YN,
+       CREATED_BY,
+       CREATED_AT,
+       UPDATED_BY,
+       UPDATED_AT
+  FROM "INIT$_TB_NOTICE_FILE"
+ WHERE ROWNUM <= :limit;
+
 -- [M99003_USER_APPROVE]
 UPDATE "INIT$_TB_USER"
    SET USE_YN = 'Y',

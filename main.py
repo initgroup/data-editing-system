@@ -22,7 +22,12 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, 
 async def add_cache_headers(request, call_next):
     response = await call_next(request)
     path = request.url.path
-    if path in ("/", "/index.html"):
+    no_cache_paths = (
+        path in ("/", "/index.html")
+        or path.startswith(("/js/", "/css/", "/pages/", "/config/"))
+        or path.endswith((".html", ".js", ".css"))
+    )
+    if no_cache_paths:
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
