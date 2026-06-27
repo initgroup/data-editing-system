@@ -239,9 +239,9 @@
                     <li><strong>동적 문자열 치환</strong>: <code>/* --DYNAMIC_MODEL_NAME-- */</code>처럼 작성하면 <code>/* --</code>와 <code>-- */</code> 사이의 이름이 Parameter 명칭과 완전히 같을 때 해당 값이 문자열 그대로 치환됩니다.</li>
                     <li><strong>현재 Job 예약 변수</strong>: <code>:INIT$TargetOwner</code>, <code>:INIT$TargetTable</code>, <code>:INIT$ResultOwner</code>, <code>:INIT$ResultTable</code>은 실행 시 현재 Job/Node의 Target/Result owner/table 값으로 자동 전달됩니다.</li>
                     <li><strong>Flow 선행 Node 예약 변수</strong>: M04001 Flow 실행에서는 <code>:INIT$PreTargetOwner</code>, <code>:INIT$PreTargetTable</code>, <code>:INIT$PreResultOwner</code>, <code>:INIT$PreResultTable</code>을 사용할 수 있습니다. 연결된 선행 Node의 Target/Result owner/table 값이 자동 전달됩니다.</li>
-                    <li><strong>Generate PL/SQL</strong>: Parameter 기본값이 있어도 스크립트에는 위 규칙의 바인드 변수로 생성합니다. 기본값과 예약 변수 값은 실행 직전 Runtime Bind 값으로 확인하고 수정할 수 있습니다.</li>
+                    <li><strong>Generate PL/SQL</strong>: Parameter List의 Default 값에 <code>:</code> 문자가 포함되어 있으면 해당 Default 값을 그대로 사용합니다. 예: Default가 <code>:INIT$TargetOwner</code>이면 <code>P_RULE_OWNER_NAME =&gt; :INIT$TargetOwner</code>로 생성합니다. Default 값에 <code>:</code>가 없으면 Parameter 명칭을 camelCase 바인드 변수로 변환합니다.</li>
                     <li><strong>Run now / Queue Batch</strong>: 실행 시 Parameter List 기본값과 Runtime Bind 값을 처리하고, 시스템 예약 변수는 실제 Job/Node 정보로 자동 덮어쓴 뒤 실행합니다.</li>
-                    <li><strong>예시</strong>: <code>P_OWNER =&gt; :INIT$PreResultOwner</code>, <code>P_TABLE =&gt; :INIT$PreResultTable</code>, <code>P_RESULT_OWNER =&gt; :INIT$ResultOwner</code>, <code>P_RESULT_TABLE =&gt; :INIT$ResultTable</code></li>
+                    <li><strong>예시</strong>: <code>P_TARGET_OWNER =&gt; :INIT$TargetOwner</code>, <code>P_TARGET_TABLE =&gt; :INIT$TargetTable</code>, <code>P_RESULT_OWNER =&gt; :INIT$ResultOwner</code>, <code>P_RESULT_TABLE =&gt; :INIT$ResultTable</code></li>
                 </ul>
             </div>
             <footer>
@@ -286,10 +286,6 @@
                     <i class="fas fa-play"></i>
                     <span data-label-key="queryData">Query Data</span>
                 </button>
-                <button type="button" id="dataSaveUpdates-__PAGE_CODE__" class="table-btn" onclick="__PAGE_CODE__.saveEditableTableData()" disabled>
-                    <i class="fas fa-save"></i>
-                    <span data-label-key="saveUpdates">Save Updates</span>
-                </button>
                 <div class="data-filter-stack">
                     <label class="query-filter-field data-where-field">
                         <span data-label-key="whereCondition">Where</span>
@@ -300,12 +296,27 @@
                         <input id="dataOrderBy-__PAGE_CODE__" class="env-field" type="text" placeholder="COLUMN_ID ASC">
                     </label>
                 </div>
+                <label class="table-limit-control data-freeze-control" title="Freeze No plus this many data columns while scrolling horizontally">
+                    <span>Freeze</span>
+                    <input id="dataFreezeColumns-__PAGE_CODE__" type="number" min="0" max="50" value="0" onchange="__PAGE_CODE__.applyEditableDataFrozenColumns()" oninput="__PAGE_CODE__.applyEditableDataFrozenColumns()">
+                </label>
                 <label class="table-limit-control">
                     <span data-label-key="rows">Rows</span>
                     <input id="dataLimit-__PAGE_CODE__" type="number" min="1" max="1000" value="100">
                 </label>
             </div>
-            <div id="dataEditMessage-__PAGE_CODE__" class="table-empty" aria-live="polite" hidden></div>
+            <div class="data-grid-topbar">
+                <div id="dataEditMessage-__PAGE_CODE__" class="table-empty data-grid-message" aria-live="polite" hidden></div>
+                <div class="data-grid-actions">
+                    <button type="button" id="dataSaveUpdates-__PAGE_CODE__" class="table-btn" onclick="__PAGE_CODE__.saveEditableTableData()" disabled>
+                        <i class="fas fa-save"></i>
+                        <span data-label-key="saveUpdates">Save Updates</span>
+                    </button>
+                    <button type="button" id="dataFillColumn-__PAGE_CODE__" class="table-icon-btn data-fill-column-btn" title="Paste the focused cell value downward in the current grid order" onclick="__PAGE_CODE__.applyActiveEditableValueToAllRows()" disabled>
+                        <i class="fas fa-fill-drip"></i>
+                    </button>
+                </div>
+            </div>
             <div id="dataEditGrid-__PAGE_CODE__" class="table-result-grid data-edit-grid"></div>
         </div>
     </section>

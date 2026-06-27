@@ -110,6 +110,9 @@ def save_job(
 
     exec_source_type = normalize_exec_source_type(req.execSourceType)
     exec_resource_id = require_positive_optional_int(req.execResourceId, "execResourceId")
+    exec_plsql = normalize_required_executable_script(req.execPlsql)
+    validation_plsql = prepare_executable_script_for_validation(exec_plsql, req.params or [])
+    validate_executable_script_syntax(conn, validation_plsql)
 
     params = {
         "menuCode": menu_code,
@@ -134,7 +137,7 @@ def save_job(
         "useYn": "N" if str(req.useYn or "Y").upper() == "N" else "Y",
         "sortOrder": req.sortOrder,
         "paramJson": json.dumps(req.params or [], ensure_ascii=False),
-        "execPlsql": req.execPlsql or "",
+        "execPlsql": exec_plsql,
         "resultCreateYn": result_create_yn,
         "resultOwner": result_owner,
         "resultTableName": result_table_name,
@@ -162,6 +165,59 @@ def save_job(
         if not row or not row[0]:
             raise HTTPException(status_code=500, detail="Saved data work job ID could not be found.")
         return int(row[0])
+    finally:
+        cursor.close()
+
+
+def normalize_required_executable_script(script: Optional[str]) -> str:
+    text = (script or "").strip()
+    text = re.sub(r"(?m)^\s*/\s*$", "", text).strip()
+    if not text:
+        raise HTTPException(
+            status_code=400,
+            detail="Executable PL/SQL script is required. Generate or enter the script first."
+        )
+    if re.match(r"(?is)^(declare|begin)\b", text):
+        if not re.search(r"(?is)\bend\s*;\s*$", text):
+            raise HTTPException(status_code=400, detail="Executable PL/SQL script must end with END;.")
+        return text
+
+    sql = re.sub(r";+\s*$", "", text).strip()
+    if re.search(r";\s*\S", sql):
+        raise HTTPException(status_code=400, detail="Only a single executable statement is allowed.")
+    if re.match(r"(?is)^(select|with|create\s+table|insert|update|delete|merge)\b", sql):
+        return sql
+    raise HTTPException(status_code=400, detail="Executable script must be PL/SQL, SELECT, CREATE TABLE, or DML.")
+
+
+def prepare_executable_script_for_validation(script_text: str, params: List[Dict[str, Any]]) -> str:
+    param_values = {
+        str(param.get("itemName") or param.get("ITEM_NAME") or ""): param.get("itemDefault", param.get("ITEM_DEFAULT"))
+        for param in params
+        if param.get("itemName") or param.get("ITEM_NAME")
+    }
+
+    def replace_dynamic_token(match):
+        key = match.group(1).strip()
+        value = param_values.get(key)
+        return "" if value is None else str(value)
+
+    return re.sub(
+        r"/\*\s*--\s*([A-Za-z][A-Za-z0-9_$#]*(?:_[A-Za-z0-9_$#]+)*)\s*--\s*\*/",
+        replace_dynamic_token,
+        script_text or "",
+    )
+
+
+def validate_executable_script_syntax(conn, script_text: str) -> None:
+    cursor = conn.cursor()
+    try:
+        cursor.prepare(script_text)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Executable PL/SQL syntax validation failed. {str(exc)}"
+        ) from exc
     finally:
         cursor.close()
 

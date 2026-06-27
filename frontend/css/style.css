@@ -2956,6 +2956,237 @@ body.panel-resizing-y #pageConsoleHolder {
     padding: 10px;
 }
 
+.geminiQuestionHeader {
+    align-items: center;
+    display: flex;
+    gap: 8px;
+    justify-content: space-between;
+    margin-bottom: 6px;
+}
+
+.geminiQuestionToolbar {
+    display: inline-flex;
+    gap: 4px;
+}
+
+.geminiQuestionToolbar button {
+    align-items: center;
+    background: #172033;
+    border: 1px solid #334155;
+    color: #cbd5e1;
+    cursor: pointer;
+    display: inline-flex;
+    height: 28px;
+    justify-content: center;
+    width: 28px;
+}
+
+.geminiQuestionToolbar button:hover {
+    background: #202b42;
+    border-color: #4f6f9f;
+    color: #ffffff;
+}
+
+.geminiInputFrame {
+    border: 1px solid transparent;
+}
+
+.geminiInputFrame.isDragOver {
+    border-color: #5eead4;
+    box-shadow: 0 0 0 2px rgba(45, 212, 191, 0.24);
+}
+
+.geminiAttachmentList {
+    display: grid;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.geminiAttachmentListHeader {
+    align-items: center;
+    color: #93a4bd;
+    display: flex;
+    font-size: 11px;
+    justify-content: space-between;
+    min-height: 26px;
+}
+
+.geminiAttachmentListHeader > span {
+    font-weight: 700;
+}
+
+.geminiAttachmentListHeader button {
+    align-items: center;
+    background: #172033;
+    border: 1px solid #334155;
+    color: #cbd5e1;
+    cursor: pointer;
+    display: inline-flex;
+    font-size: 11px;
+    font-weight: 800;
+    gap: 5px;
+    min-height: 26px;
+    padding: 0 8px;
+}
+
+.geminiAttachmentListHeader button:hover {
+    background: #202b42;
+    border-color: #ef4444;
+    color: #fecaca;
+}
+
+.geminiAttachmentItem {
+    align-items: center;
+    background: #172033;
+    border: 1px solid #253149;
+    color: #dbe4f0;
+    cursor: pointer;
+    display: grid;
+    gap: 6px;
+    grid-template-columns: 22px minmax(0, 1fr) auto 24px;
+    min-height: 34px;
+    padding: 5px 6px;
+}
+
+.geminiAttachmentItem:hover,
+.geminiAttachmentItem:focus {
+    border-color: #4f6f9f;
+    outline: none;
+}
+
+.geminiAttachmentItem > i {
+    color: #93c5fd;
+    text-align: center;
+}
+
+.geminiAttachmentItem span {
+    font-size: 12px;
+    font-weight: 700;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.geminiAttachmentItem small {
+    color: #93a4bd;
+    font-size: 10px;
+    max-width: 96px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.geminiAttachmentItem button {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    color: #94a3b8;
+    cursor: pointer;
+    display: inline-flex;
+    height: 22px;
+    justify-content: center;
+    width: 22px;
+}
+
+.geminiAttachmentItem button:hover {
+    color: #fecaca;
+}
+
+.geminiPreviewLayer {
+    align-items: center;
+    background: rgba(15, 23, 42, 0.62);
+    display: flex;
+    inset: 0;
+    justify-content: center;
+    padding: 24px;
+    position: fixed;
+    z-index: 13000;
+}
+
+.geminiPreviewLayer[hidden] {
+    display: none;
+}
+
+.geminiPreviewDialog {
+    background: #111827;
+    border: 1px solid #334155;
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.45);
+    color: #dbe4f0;
+    display: flex;
+    flex-direction: column;
+    max-height: min(760px, 88vh);
+    max-width: min(980px, 92vw);
+    min-height: 320px;
+    width: 900px;
+}
+
+.geminiPreviewDialog header {
+    align-items: center;
+    border-bottom: 1px solid #253149;
+    display: flex;
+    gap: 16px;
+    justify-content: space-between;
+    padding: 14px 16px;
+}
+
+.geminiPreviewDialog h2 {
+    color: #f8fafc;
+    font-size: 16px;
+    font-weight: 800;
+    margin: 0;
+}
+
+.geminiPreviewDialog p {
+    color: #93a4bd;
+    font-size: 12px;
+    margin: 4px 0 0;
+}
+
+.geminiPreviewDialog header button {
+    align-items: center;
+    background: #172033;
+    border: 1px solid #334155;
+    color: #cbd5e1;
+    cursor: pointer;
+    display: inline-flex;
+    height: 32px;
+    justify-content: center;
+    width: 32px;
+}
+
+.geminiPreviewDialog header button:hover {
+    background: #202b42;
+    color: #ffffff;
+}
+
+.geminiPreviewBody {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    padding: 14px;
+}
+
+.geminiPreviewBody img {
+    background: #ffffff;
+    display: block;
+    height: auto;
+    max-width: 100%;
+}
+
+.geminiPreviewBody pre {
+    background: #0f172a;
+    border: 1px solid #253149;
+    color: #dbe4f0;
+    font-size: 12px;
+    line-height: 1.55;
+    margin: 0;
+    min-height: 100%;
+    overflow: auto;
+    padding: 12px;
+    white-space: pre-wrap;
+}
+
 #sideRBar .bodyGemini label {
     color: #cbd5e1;
     font-size: 12px;

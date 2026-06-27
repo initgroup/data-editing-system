@@ -1505,7 +1505,7 @@
                     </div>
                     ${detailGroups.length ? `
                         <div class="m04002-type-detail">
-                            <strong>MODL_PREDICTED_TYPE 상세 그룹</strong>
+                            <strong>FINAL / MODEL / BASE 예측 유형 상세 그룹</strong>
                             <div>
                                 ${detailGroups.map((group) => `
                                     <span title="${this.escapeHtml(group.typeName)}">

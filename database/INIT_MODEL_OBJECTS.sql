@@ -1220,10 +1220,10 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_APRIORI_ASSOC_MODEL" (
             CATEGORICAL_COLS AS (
                 SELECT "COLUMN_NAME",
                        MIN(NVL("COLUMN_ID", 999999)) AS COLUMN_ID
-                  FROM "INIT$_TB_PREDICTED_TYPE"
-                 WHERE "OWNER" = v_target_owner
-                   AND "TABLE_NAME" = v_target_table
-                   AND "MODL_PREDICTED_TYPE" LIKE '%범주형'
+                 FROM "INIT$_TB_PREDICTED_TYPE"
+                WHERE "OWNER" = v_target_owner
+                  AND "TABLE_NAME" = v_target_table
+                  AND COALESCE(TRIM("FINAL_PREDICTED_TYPE"), TRIM("MODL_PREDICTED_TYPE"), TRIM("BASE_PREDICTED_TYPE")) LIKE '%범주형'
                  GROUP BY "COLUMN_NAME"
             )
             SELECT C."COLUMN_NAME"
@@ -1243,7 +1243,135 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_APRIORI_ASSOC_MODEL" (
             END IF;
         END LOOP;
 
+        IF v_cols.COUNT = 0 THEN
+            DBMS_OUTPUT.PUT_LINE('[WARN] No PASS_YN=Y categorical correlation columns found. Falling back to categorical predicted columns only.');
+            FOR col_rec IN (
+                SELECT "COLUMN_NAME"
+                  FROM (
+                        SELECT "COLUMN_NAME",
+                               MIN(NVL("COLUMN_ID", 999999)) AS COLUMN_ID
+                          FROM "INIT$_TB_PREDICTED_TYPE"
+                         WHERE "OWNER" = v_target_owner
+                           AND "TABLE_NAME" = v_target_table
+                           AND COALESCE(TRIM("FINAL_PREDICTED_TYPE"), TRIM("MODL_PREDICTED_TYPE"), TRIM("BASE_PREDICTED_TYPE")) LIKE '%범주형'
+                         GROUP BY "COLUMN_NAME"
+                         ORDER BY COLUMN_ID, "COLUMN_NAME"
+                       )
+            ) LOOP
+                v_col := UPPER(TRIM(col_rec.COLUMN_NAME));
+                IF REGEXP_LIKE(v_col, '^[A-Z][A-Z0-9_$#]{0,127}$')
+                   AND v_col <> v_case_id_col
+                   AND contains_column(p_available_cols, v_col)
+                   AND NOT contains_column(v_cols, v_col) THEN
+                    v_cols.EXTEND;
+                    v_cols(v_cols.COUNT) := v_col;
+                END IF;
+            END LOOP;
+        END IF;
+
         RETURN v_cols;
+    END;
+
+    PROCEDURE raise_no_apriori_input_columns(
+        p_available_cols IN t_column_list
+    ) IS
+        v_predicted_categorical_cols NUMBER := 0;
+        v_corr_pair_count NUMBER := 0;
+        v_pass_pair_count NUMBER := 0;
+        v_pass_column_count NUMBER := 0;
+        v_candidate_before_query_count NUMBER := 0;
+        v_reason VARCHAR2(1000);
+    BEGIN
+        SELECT COUNT(DISTINCT "COLUMN_NAME")
+          INTO v_predicted_categorical_cols
+          FROM "INIT$_TB_PREDICTED_TYPE"
+         WHERE "OWNER" = v_target_owner
+           AND "TABLE_NAME" = v_target_table
+           AND COALESCE(TRIM("FINAL_PREDICTED_TYPE"), TRIM("MODL_PREDICTED_TYPE"), TRIM("BASE_PREDICTED_TYPE")) LIKE '%범주형';
+
+        SELECT COUNT(*)
+          INTO v_corr_pair_count
+          FROM "INIT$_TB_CAT_CORR_PAIR"
+         WHERE "OWNER" = v_target_owner
+           AND "TABLE_NAME" = v_target_table;
+
+        SELECT COUNT(*)
+          INTO v_pass_pair_count
+          FROM "INIT$_TB_CAT_CORR_PAIR"
+         WHERE "OWNER" = v_target_owner
+           AND "TABLE_NAME" = v_target_table
+           AND "PASS_YN" = 'Y';
+
+        SELECT COUNT(DISTINCT COLUMN_NAME)
+          INTO v_pass_column_count
+          FROM (
+                SELECT "COL_A" AS COLUMN_NAME
+                  FROM "INIT$_TB_CAT_CORR_PAIR"
+                 WHERE "OWNER" = v_target_owner
+                   AND "TABLE_NAME" = v_target_table
+                   AND "PASS_YN" = 'Y'
+                UNION
+                SELECT "COL_B" AS COLUMN_NAME
+                  FROM "INIT$_TB_CAT_CORR_PAIR"
+                 WHERE "OWNER" = v_target_owner
+                   AND "TABLE_NAME" = v_target_table
+                   AND "PASS_YN" = 'Y'
+               );
+
+        SELECT COUNT(*)
+          INTO v_candidate_before_query_count
+          FROM (
+                WITH CORR_COLS AS (
+                    SELECT "COL_A" AS COLUMN_NAME
+                      FROM "INIT$_TB_CAT_CORR_PAIR"
+                     WHERE "OWNER" = v_target_owner
+                       AND "TABLE_NAME" = v_target_table
+                       AND "PASS_YN" = 'Y'
+                    UNION
+                    SELECT "COL_B" AS COLUMN_NAME
+                      FROM "INIT$_TB_CAT_CORR_PAIR"
+                     WHERE "OWNER" = v_target_owner
+                       AND "TABLE_NAME" = v_target_table
+                       AND "PASS_YN" = 'Y'
+                ),
+                CATEGORICAL_COLS AS (
+                    SELECT DISTINCT "COLUMN_NAME"
+                      FROM "INIT$_TB_PREDICTED_TYPE"
+                     WHERE "OWNER" = v_target_owner
+                       AND "TABLE_NAME" = v_target_table
+                       AND COALESCE(TRIM("FINAL_PREDICTED_TYPE"), TRIM("MODL_PREDICTED_TYPE"), TRIM("BASE_PREDICTED_TYPE")) LIKE '%범주형'
+                )
+                SELECT C."COLUMN_NAME"
+                  FROM CATEGORICAL_COLS C
+                  JOIN CORR_COLS R
+                    ON R.COLUMN_NAME = C."COLUMN_NAME"
+               );
+
+        v_reason := CASE
+            WHEN v_predicted_categorical_cols = 0 THEN
+                'Run M03001 predicted type with RULE or BOTH first; no categorical predicted columns were found.'
+            WHEN v_corr_pair_count = 0 THEN
+                'Run M03002 correlation analysis first; no correlation pair rows were found.'
+            WHEN v_pass_pair_count = 0 THEN
+                'Relax M03002 thresholds or review data; no correlation pair passed PASS_YN=Y.'
+            WHEN v_candidate_before_query_count = 0 THEN
+                'Predicted categorical columns and PASS_YN=Y columns do not overlap.'
+            ELSE
+                'Candidate columns exist before query filtering, but data_query does not include usable candidate columns or only contains the case id column.'
+        END;
+
+        RAISE_APPLICATION_ERROR(
+            -20209,
+            'No Apriori input columns found for ' || v_target_owner || '.' || v_target_table
+            || '. categorical_cols=' || v_predicted_categorical_cols
+            || ', corr_pairs=' || v_corr_pair_count
+            || ', pass_pairs=' || v_pass_pair_count
+            || ', pass_cols=' || v_pass_column_count
+            || ', candidate_cols_before_query_filter=' || v_candidate_before_query_count
+            || ', data_query_cols=' || p_available_cols.COUNT
+            || ', case_id=' || v_case_id_col
+            || '. Next action: ' || v_reason
+        );
     END;
 
     PROCEDURE prepare_apriori_data_query(p_input_rows IN NUMBER) IS
@@ -1261,11 +1389,7 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_APRIORI_ASSOC_MODEL" (
 
         v_candidate_cols := apriori_candidate_columns(v_available_cols);
         IF v_candidate_cols.COUNT = 0 THEN
-            RAISE_APPLICATION_ERROR(
-                -20209,
-                'No Apriori input columns found. Required columns must be both MODL_PREDICTED_TYPE LIKE ''%범주형'' and INIT$_TB_CAT_CORR_PAIR PASS_YN = ''Y'' for '
-                || v_target_owner || '.' || v_target_table || '.'
-            );
+            raise_no_apriori_input_columns(v_available_cols);
         END IF;
 
         v_select_list := quote_name(v_case_id_col);
@@ -1592,6 +1716,18 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_DECISION_TREE_RULE_MODEL" (
     v_data_query VARCHAR2(32767);
     v_max_input_rows NUMBER;
     v_rule_count NUMBER := 0;
+    v_target_owner VARCHAR2(128);
+    v_target_table VARCHAR2(128);
+
+    FUNCTION normalize_identifier(p_value IN VARCHAR2, p_label IN VARCHAR2) RETURN VARCHAR2 IS
+        v_value VARCHAR2(128);
+    BEGIN
+        v_value := UPPER(TRIM(BOTH '"' FROM TRIM(p_value)));
+        IF v_value IS NULL OR NOT REGEXP_LIKE(v_value, '^[A-Z][A-Z0-9_$#]{0,127}$') THEN
+            RAISE_APPLICATION_ERROR(-20407, 'Invalid ' || p_label || ' parameter: ' || SUBSTR(NVL(p_value, '(null)'), 1, 200));
+        END IF;
+        RETURN v_value;
+    END;
 BEGIN
     v_model_name := UPPER(TRIM(p_model_name));
     v_case_id_col := UPPER(TRIM(p_case_id_column_name));
@@ -1617,6 +1753,15 @@ BEGIN
     IF v_case_id_col = v_target_col THEN
         RAISE_APPLICATION_ERROR(-20405, 'case_id_column_name and target_column_name must be different.');
     END IF;
+
+    v_target_owner := CASE
+        WHEN p_target_owner IS NULL OR TRIM(p_target_owner) IS NULL THEN SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')
+        ELSE normalize_identifier(p_target_owner, 'target_owner')
+    END;
+    v_target_table := CASE
+        WHEN p_target_table IS NULL OR TRIM(p_target_table) IS NULL THEN 'UNKNOWN'
+        ELSE normalize_identifier(p_target_table, 'target_table')
+    END;
 
     SELECT COUNT(*)
       INTO v_model_count
@@ -1663,8 +1808,8 @@ BEGIN
         p_max_rules_per_pair  => p_max_rule_summary_per_pair,
         p_max_input_rows      => NULL,
         p_clear_existing_yn   => 'Y',
-        p_target_owner        => p_target_owner,
-        p_target_table        => p_target_table
+        p_target_owner        => v_target_owner,
+        p_target_table        => v_target_table
     );
 
     SELECT COUNT(*)
@@ -2039,8 +2184,8 @@ END;
 /
 
 CREATE OR REPLACE PROCEDURE "INIT$_SP_CAT_CORR_ANALYZE" (
-    p_owner       IN VARCHAR2,
-    p_tableName   IN VARCHAR2,
+    p_target_owner IN VARCHAR2,
+    p_target_table IN VARCHAR2,
     p_min_pvalue  IN NUMBER DEFAULT 0.05,
     p_min_cramer  IN NUMBER DEFAULT 0.3,
     p_min_avg_v   IN NUMBER DEFAULT 0.5,
@@ -2160,8 +2305,8 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_CAT_CORR_ANALYZE" (
         RETURN gamma_q(p_df / 2, p_chi_square / 2);
     END;
 BEGIN
-    v_owner := UPPER(TRIM(p_owner));
-    v_table_name := UPPER(TRIM(p_tableName));
+    v_owner := UPPER(TRIM(p_target_owner));
+    v_table_name := UPPER(TRIM(p_target_table));
     v_sample_rows := CASE WHEN p_sample_rows IS NULL OR p_sample_rows <= 0 THEN NULL ELSE p_sample_rows END;
     v_max_distinct := CASE WHEN p_max_distinct IS NULL OR p_max_distinct <= 0 THEN 100 ELSE p_max_distinct END;
     v_max_columns := CASE WHEN p_max_columns IS NULL OR p_max_columns <= 0 THEN 80 ELSE p_max_columns END;
@@ -2193,10 +2338,10 @@ BEGIN
               FROM (
                     SELECT COLUMN_NAME,
                            MIN(NVL(COLUMN_ID, 999999)) AS COLUMN_ID
-                      FROM "INIT$_TB_PREDICTED_TYPE"
-                     WHERE "OWNER" = v_owner
-                       AND "TABLE_NAME" = v_table_name
-                       AND "MODL_PREDICTED_TYPE" LIKE '%범주형'
+                     FROM "INIT$_TB_PREDICTED_TYPE"
+                    WHERE "OWNER" = v_owner
+                      AND "TABLE_NAME" = v_table_name
+                      AND COALESCE(TRIM("FINAL_PREDICTED_TYPE"), TRIM("MODL_PREDICTED_TYPE"), TRIM("BASE_PREDICTED_TYPE")) LIKE '%범주형'
                      GROUP BY COLUMN_NAME
                      ORDER BY COLUMN_ID, COLUMN_NAME
                    )
@@ -2383,18 +2528,55 @@ END;
 /
 
 CREATE OR REPLACE PROCEDURE "INIT$_SP_PREDICTED_TYPE" (
-    p_owner              IN VARCHAR2,
-    p_tableName          IN VARCHAR2,
-    p_dynamic_model_name IN VARCHAR2 DEFAULT 'OML_DECISION_TREE_MODEL_01'
+    p_target_owner       IN VARCHAR2,
+    p_target_table       IN VARCHAR2,
+    p_dynamic_model_name IN VARCHAR2 DEFAULT 'OML_DECISION_TREE_MODEL_01',
+    p_prediction_method  IN VARCHAR2 DEFAULT 'ONLY_RULE'
 ) AUTHID CURRENT_USER IS
-    v_owner      VARCHAR2(128);
-    v_table_name VARCHAR2(128);
-    v_model_name VARCHAR2(261);
-    v_sql        CLOB;
+    v_owner                   VARCHAR2(128);
+    v_table_name              VARCHAR2(128);
+    v_model_name              VARCHAR2(261);
+    v_method                  VARCHAR2(20);
+    v_use_rule                BOOLEAN;
+    v_use_model               BOOLEAN;
+    v_sql                     CLOB;
+    v_update_rule_sql         CLOB := '';
+    v_update_model_sql        CLOB := '';
+    v_update_final_sql        CLOB := '';
+    v_model_prediction_expr   VARCHAR2(1000);
+    v_insert_base_type_expr   VARCHAR2(1000);
+    v_insert_base_reason_expr VARCHAR2(1000);
+    v_insert_model_expr       VARCHAR2(1000);
+    v_final_type_expr         CLOB := 'CAST(NULL AS VARCHAR2(4000))';
+    v_final_reason_expr       VARCHAR2(1000) := 'CAST(NULL AS VARCHAR2(1000))';
+    v_final_dt_expr           VARCHAR2(1000) := 'CAST(NULL AS DATE)';
+    v_final_user_expr         VARCHAR2(1000) := 'CAST(NULL AS VARCHAR2(128))';
+
+    FUNCTION sql_literal(p_value IN VARCHAR2) RETURN VARCHAR2 IS
+    BEGIN
+        RETURN '''' || REPLACE(NVL(p_value, ''), '''', '''''') || '''';
+    END;
+
+    FUNCTION prediction_type_rank_expr(p_sql_expr IN VARCHAR2) RETURN VARCHAR2 IS
+    BEGIN
+        RETURN 'CASE TRIM(' || p_sql_expr || ')
+                   WHEN ''숫자형식별자'' THEN 1
+                   WHEN ''문자형식별자'' THEN 2
+                   WHEN ''숫자형연속형'' THEN 3
+                   WHEN ''일반적범주형'' THEN 4
+                   WHEN ''문자형범주형'' THEN 5
+                   WHEN ''순서형범주형'' THEN 6
+                   WHEN ''숫자형범주형'' THEN 7
+                   WHEN ''단순형텍스트'' THEN 8
+                   WHEN ''기타데이터형'' THEN 9
+                   ELSE 999
+               END';
+    END;
 BEGIN
-    v_owner := UPPER(TRIM(p_owner));
-    v_table_name := UPPER(TRIM(p_tableName));
-    v_model_name := DBMS_ASSERT.QUALIFIED_SQL_NAME(UPPER(TRIM(p_dynamic_model_name)));
+    v_owner := UPPER(TRIM(p_target_owner));
+    v_table_name := UPPER(TRIM(p_target_table));
+    v_model_name := DBMS_ASSERT.QUALIFIED_SQL_NAME(UPPER(NVL(NULLIF(TRIM(p_dynamic_model_name), ''), 'OML_DECISION_TREE_MODEL_01')));
+    v_method := UPPER(TRIM(NVL(p_prediction_method, 'ONLY_RULE')));
 
     IF NOT REGEXP_LIKE(v_owner, '^[A-Z][A-Z0-9_$#]{0,127}$') THEN
         RAISE_APPLICATION_ERROR(-20001, 'Invalid owner parameter.');
@@ -2404,140 +2586,299 @@ BEGIN
         RAISE_APPLICATION_ERROR(-20002, 'Invalid tableName parameter.');
     END IF;
 
+    IF v_method IN ('FIXED', 'BASE', 'RULE') THEN
+        v_method := 'ONLY_RULE';
+    ELSIF v_method IN ('ML', 'MODEL') THEN
+        v_method := 'ONLY_MODEL';
+    ELSIF v_method IN ('ALL', 'BOTH') THEN
+        v_method := 'ONLY_BOTH';
+    END IF;
+
+    IF v_method NOT IN ('ONLY_RULE', 'ONLY_MODEL', 'ONLY_BOTH', 'FINAL_RULE', 'FINAL_MODEL', 'FINAL_BOTH') THEN
+        RAISE_APPLICATION_ERROR(-20003, 'Invalid prediction_method parameter. Use ONLY_RULE, ONLY_MODEL, ONLY_BOTH, FINAL_RULE, FINAL_MODEL, or FINAL_BOTH.');
+    END IF;
+
+    v_use_rule := v_method IN ('ONLY_RULE', 'ONLY_BOTH', 'FINAL_RULE', 'FINAL_BOTH');
+    v_use_model := v_method IN ('ONLY_MODEL', 'ONLY_BOTH', 'FINAL_MODEL', 'FINAL_BOTH');
+
+    IF v_use_rule THEN
+        v_update_rule_sql := q'[
+        T."BASE_PREDICTED_TYPE" = S."BASE_PREDICTED_TYPE",
+        T."BASE_REASON" = S."BASE_REASON",
+]';
+        v_insert_base_type_expr := 'S."BASE_PREDICTED_TYPE"';
+        v_insert_base_reason_expr := 'S."BASE_REASON"';
+    ELSE
+        v_insert_base_type_expr := 'CAST(NULL AS VARCHAR2(100))';
+        v_insert_base_reason_expr := 'CAST(NULL AS VARCHAR2(4000))';
+    END IF;
+
+    IF v_use_model THEN
+        v_update_model_sql := q'[
+        T."MODL_PREDICTED_TYPE" = S."MODL_PREDICTED_TYPE",
+]';
+        v_model_prediction_expr := 'PREDICTION(' || v_model_name || ' USING *)';
+        v_insert_model_expr := 'S."MODL_PREDICTED_TYPE"';
+    ELSE
+        v_model_prediction_expr := 'CAST(NULL AS VARCHAR2(4000))';
+        v_insert_model_expr := 'CAST(NULL AS VARCHAR2(4000))';
+    END IF;
+
+    IF v_method = 'FINAL_RULE' THEN
+        v_final_type_expr := 'S."BASE_PREDICTED_TYPE"';
+        v_final_reason_expr := sql_literal('[자동결정] FINAL_RULE: BASE_PREDICTED_TYPE 값을 FINAL_PREDICTED_TYPE에 반영');
+    ELSIF v_method = 'FINAL_MODEL' THEN
+        v_final_type_expr := 'S."MODL_PREDICTED_TYPE"';
+        v_final_reason_expr := sql_literal('[자동결정] FINAL_MODEL: MODL_PREDICTED_TYPE 값을 FINAL_PREDICTED_TYPE에 반영');
+    ELSIF v_method = 'FINAL_BOTH' THEN
+        v_final_type_expr :=
+            'CASE
+                 WHEN TRIM(S."BASE_PREDICTED_TYPE") IS NULL THEN S."MODL_PREDICTED_TYPE"
+                 WHEN TRIM(S."MODL_PREDICTED_TYPE") IS NULL THEN S."BASE_PREDICTED_TYPE"
+                 WHEN ' || prediction_type_rank_expr('S."BASE_PREDICTED_TYPE"') || ' <= ' || prediction_type_rank_expr('S."MODL_PREDICTED_TYPE"') || '
+                 THEN S."BASE_PREDICTED_TYPE"
+                 ELSE S."MODL_PREDICTED_TYPE"
+             END';
+        v_final_reason_expr := sql_literal('[자동결정] FINAL_BOTH: BASE/MODL 결과 중 유형 우선순위가 높은 값을 FINAL_PREDICTED_TYPE에 반영');
+    END IF;
+
+    IF v_method IN ('FINAL_RULE', 'FINAL_MODEL', 'FINAL_BOTH') THEN
+        v_final_dt_expr := 'SYSDATE';
+        v_final_user_expr := 'SYS_CONTEXT(''USERENV'', ''SESSION_USER'')';
+        v_update_final_sql := '
+        T."FINAL_PREDICTED_TYPE" = ' || v_final_type_expr || ',
+        T."FINAL_REASON" = ' || v_final_reason_expr || ',
+        T."FINAL_UPDATE_DT" = ' || v_final_dt_expr || ',
+        T."FINAL_UPDATE_USER" = ' || v_final_user_expr || ',
+';
+    END IF;
+
     EXECUTE IMMEDIATE 'ALTER SESSION DISABLE PARALLEL DML';
 
-    DELETE /*+ NO_PARALLEL */
-      FROM "INIT$_TB_PREDICTED_TYPE"
-     WHERE "OWNER" = v_owner
-       AND "TABLE_NAME" = v_table_name
-       AND "MODEL_NAME" = v_model_name;
-
     v_sql := q'~
-INSERT /*+ NO_PARALLEL */ INTO "INIT$_TB_PREDICTED_TYPE" (
-    "OWNER",
-    "TABLE_NAME",
-    "MODEL_NAME",
-    "COLUMN_ID",
-    "COLUMN_NAME",
-    "DATA_TYPE",
-    "TOTAL_ROWS",
-    "NUM_DISTINCT",
-    "DIST_VAL_RT",
-    "LOG_DATA_TYPE",
-    "ENTROPY",
-    "NORM_ENTROPY",
-    "BASE_PREDICTED_TYPE",
-    "MODL_PREDICTED_TYPE",
-    "CREATE_DT"
+MERGE /*+ NO_PARALLEL */ INTO "INIT$_TB_PREDICTED_TYPE" T
+USING (
+    WITH BASE_COL AS (
+        SELECT C.OWNER,
+               C.TABLE_NAME,
+               C.COLUMN_ID,
+               C.COLUMN_NAME,
+               C.DATA_TYPE,
+               C.NUM_DISTINCT,
+               TT.TOTAL_ROWS
+          FROM ALL_TAB_COLUMNS C
+               CROSS JOIN (
+                   SELECT COUNT(*) AS TOTAL_ROWS
+                     FROM "~' || REPLACE(v_owner, '"', '""') || q'~"."~' || REPLACE(v_table_name, '"', '""') || q'~"
+               ) TT
+         WHERE C.OWNER = ~' || sql_literal(v_owner) || q'~
+           AND C.TABLE_NAME = ~' || sql_literal(v_table_name) || q'~
+    ),
+    PROFILE AS (
+        SELECT B.OWNER,
+               B.TABLE_NAME,
+               ~' || sql_literal(v_model_name) || q'~ AS MODEL_NAME,
+               B.COLUMN_ID,
+               B.COLUMN_NAME,
+               B.DATA_TYPE,
+               B.TOTAL_ROWS,
+               NVL(B.NUM_DISTINCT, X.DIST_CNT) AS NUM_DISTINCT,
+               ROUND(NVL(B.NUM_DISTINCT, X.DIST_CNT) / NULLIF(B.TOTAL_ROWS, 0), 6) AS DIST_VAL_RT,
+               CASE
+                   WHEN X.SAMPLE_NOT_NULL_COUNT = 0 THEN 'ETC'
+                   WHEN X.SAMPLE_NOT_NULL_COUNT = X.NUMERIC_CONVERTIBLE_COUNT THEN 'NUM'
+                   ELSE 'CHR'
+               END AS LOG_DATA_TYPE,
+               X.ENTROPY,
+               X.NORM_ENTROPY,
+               CASE
+                   WHEN X.SAMPLE_NOT_NULL_COUNT > 0
+                    AND X.NUMERIC_CONVERTIBLE_COUNT = X.INTEGER_CONVERTIBLE_COUNT
+                   THEN 1 ELSE 0
+               END AS IS_INTEGER
+          FROM BASE_COL B
+               CROSS APPLY XMLTABLE(
+                   '/ROWSET/ROW'
+                   PASSING DBMS_XMLGEN.GETXMLTYPE(
+                       'WITH S AS (
+                            SELECT TO_CHAR("' || REPLACE(B.COLUMN_NAME, '"', '""') || '") AS COL_VALUE
+                              FROM "' || REPLACE(B.OWNER, '"', '""') || '"."' || REPLACE(B.TABLE_NAME, '"', '""') || '"
+                             WHERE "' || REPLACE(B.COLUMN_NAME, '"', '""') || '" IS NOT NULL
+                               AND ROWNUM <= 10000
+                        ),
+                        FREQ AS (
+                            SELECT COL_VALUE,
+                                   COUNT(*) AS CNT
+                              FROM S
+                             GROUP BY COL_VALUE
+                        ),
+                        TOTAL AS (
+                            SELECT SUM(CNT) AS TOTAL_CNT,
+                                   COUNT(*) AS DIST_CNT
+                              FROM FREQ
+                        ),
+                        STAT AS (
+                            SELECT COUNT(*) AS SAMPLE_NOT_NULL_COUNT,
+                                   NVL(SUM(
+                                       CASE
+                                           WHEN VALIDATE_CONVERSION(TRIM(COL_VALUE) AS NUMBER) = 1
+                                            AND NOT (
+                                                REGEXP_LIKE(TRIM(COL_VALUE), ''^0[0-9]'')
+                                                AND NOT REGEXP_LIKE(TRIM(COL_VALUE), ''^0$|^0\.'')
+                                            )
+                                           THEN 1 ELSE 0
+                                       END
+                                   ), 0) AS NUMERIC_CONVERTIBLE_COUNT,
+                                   NVL(SUM(
+                                       CASE
+                                           WHEN VALIDATE_CONVERSION(TRIM(COL_VALUE) AS NUMBER) = 1
+                                            AND NOT (
+                                                REGEXP_LIKE(TRIM(COL_VALUE), ''^0[0-9]'')
+                                                AND NOT REGEXP_LIKE(TRIM(COL_VALUE), ''^0$|^0\.'')
+                                            )
+                                            AND TRUNC(TO_NUMBER(TRIM(COL_VALUE))) = TO_NUMBER(TRIM(COL_VALUE))
+                                           THEN 1 ELSE 0
+                                       END
+                                   ), 0) AS INTEGER_CONVERTIBLE_COUNT
+                              FROM S
+                        ),
+                        ENT AS (
+                            SELECT CASE
+                                       WHEN NVL(T.TOTAL_CNT, 0) = 0 THEN 0
+                                       ELSE -NVL(SUM((F.CNT / T.TOTAL_CNT) * LN(F.CNT / T.TOTAL_CNT)), 0)
+                                   END AS ENTROPY,
+                                   CASE
+                                       WHEN NVL(T.TOTAL_CNT, 0) = 0 OR T.DIST_CNT <= 1 THEN 0
+                                       ELSE -NVL(SUM((F.CNT / T.TOTAL_CNT) * LN(F.CNT / T.TOTAL_CNT)), 0) / LN(T.DIST_CNT)
+                                   END AS NORM_ENTROPY
+                              FROM TOTAL T
+                                   LEFT JOIN FREQ F ON 1 = 1
+                             GROUP BY T.TOTAL_CNT, T.DIST_CNT
+                        )
+                        SELECT STAT.SAMPLE_NOT_NULL_COUNT,
+                               STAT.NUMERIC_CONVERTIBLE_COUNT,
+                               STAT.INTEGER_CONVERTIBLE_COUNT,
+                               TOTAL.DIST_CNT,
+                               ROUND(NVL(ENT.ENTROPY, 0), 6) AS ENTROPY,
+                               ROUND(NVL(ENT.NORM_ENTROPY, 0), 6) AS NORM_ENTROPY
+                          FROM STAT
+                               CROSS JOIN TOTAL
+                               CROSS JOIN ENT'
+                   )
+                   COLUMNS
+                       SAMPLE_NOT_NULL_COUNT      NUMBER PATH 'SAMPLE_NOT_NULL_COUNT',
+                       NUMERIC_CONVERTIBLE_COUNT  NUMBER PATH 'NUMERIC_CONVERTIBLE_COUNT',
+                       INTEGER_CONVERTIBLE_COUNT  NUMBER PATH 'INTEGER_CONVERTIBLE_COUNT',
+                       DIST_CNT                   NUMBER PATH 'DIST_CNT',
+                       ENTROPY                    NUMBER PATH 'ENTROPY',
+                       NORM_ENTROPY               NUMBER PATH 'NORM_ENTROPY'
+               ) X
+    )
+    SELECT P.OWNER AS "OWNER",
+           P.TABLE_NAME AS "TABLE_NAME",
+           P.MODEL_NAME AS "MODEL_NAME",
+           P.COLUMN_ID AS "COLUMN_ID",
+           P.COLUMN_NAME AS "COLUMN_NAME",
+           P.DATA_TYPE AS "DATA_TYPE",
+           P.TOTAL_ROWS AS "TOTAL_ROWS",
+           P.NUM_DISTINCT AS "NUM_DISTINCT",
+           P.DIST_VAL_RT AS "DIST_VAL_RT",
+           P.LOG_DATA_TYPE AS "LOG_DATA_TYPE",
+           P.ENTROPY AS "ENTROPY",
+           P.NORM_ENTROPY AS "NORM_ENTROPY",
+           CASE
+               WHEN P.COLUMN_NAME = 'FILE_ROW_NO' THEN
+                   CASE WHEN P.LOG_DATA_TYPE = 'NUM' THEN '숫자형식별자' ELSE '문자형식별자' END
+               WHEN NVL(P.DIST_VAL_RT, 0) > 0.9 THEN
+                   CASE WHEN P.LOG_DATA_TYPE = 'NUM' THEN '숫자형식별자' ELSE '문자형식별자' END
+               WHEN P.LOG_DATA_TYPE = 'NUM' AND NVL(P.NUM_DISTINCT, 0) <= 15 THEN '숫자형범주형'
+               WHEN P.LOG_DATA_TYPE = 'NUM' AND P.IS_INTEGER = 1 AND NVL(P.NORM_ENTROPY, 0) < 0.7 THEN '순서형범주형'
+               WHEN P.LOG_DATA_TYPE = 'NUM' THEN '숫자형연속형'
+               WHEN P.LOG_DATA_TYPE = 'CHR' AND NVL(P.NUM_DISTINCT, 0) <= 15 THEN '문자형범주형'
+               WHEN P.LOG_DATA_TYPE = 'CHR' AND NVL(P.DIST_VAL_RT, 0) > 0.5 AND NVL(P.NORM_ENTROPY, 0) >= 0.7 THEN '단순형텍스트'
+               WHEN P.LOG_DATA_TYPE = 'CHR' THEN '일반적범주형'
+               WHEN P.LOG_DATA_TYPE = 'ETC' THEN '기타데이터형'
+               ELSE '미상데이터형'
+           END AS "BASE_PREDICTED_TYPE",
+           CASE
+               WHEN P.COLUMN_NAME = 'FILE_ROW_NO' THEN '[고정로직] FILE_ROW_NO 컬럼은 행 식별자로 판단'
+               WHEN NVL(P.DIST_VAL_RT, 0) > 0.9 THEN '[고정로직] 고유값 비율 90% 초과로 식별자 성격'
+               WHEN P.LOG_DATA_TYPE = 'NUM' AND NVL(P.NUM_DISTINCT, 0) <= 15 THEN '[고정로직] 숫자형이나 고유값 건수 15 이하'
+               WHEN P.LOG_DATA_TYPE = 'NUM' AND P.IS_INTEGER = 1 AND NVL(P.NORM_ENTROPY, 0) < 0.7 THEN '[고정로직] 정수형이며 분포 편중이 있음'
+               WHEN P.LOG_DATA_TYPE = 'NUM' THEN '[고정로직] 숫자형이며 고유값이 다양함'
+               WHEN P.LOG_DATA_TYPE = 'CHR' AND NVL(P.NUM_DISTINCT, 0) <= 15 THEN '[고정로직] 문자형이며 고유값 건수 15 이하'
+               WHEN P.LOG_DATA_TYPE = 'CHR' AND NVL(P.DIST_VAL_RT, 0) > 0.5 AND NVL(P.NORM_ENTROPY, 0) >= 0.7 THEN '[고정로직] 고유값 비율과 엔트로피가 높음'
+               WHEN P.LOG_DATA_TYPE = 'CHR' THEN '[고정로직] 일반 문자형 그룹핑 속성'
+               WHEN P.LOG_DATA_TYPE = 'ETC' THEN '[고정로직] 날짜 또는 LOB 등 특수 데이터 타입'
+               ELSE '[고정로직] 조건 분류 실패'
+           END AS "BASE_REASON",
+           ~' || v_model_prediction_expr || q'~ AS "MODL_PREDICTED_TYPE"
+      FROM PROFILE P
+) S
+ON (
+       T."OWNER" = S."OWNER"
+   AND T."TABLE_NAME" = S."TABLE_NAME"
+   AND T."MODEL_NAME" = S."MODEL_NAME"
+   AND T."COLUMN_NAME" = S."COLUMN_NAME"
 )
-WITH BASE_COL AS (
-    SELECT C.OWNER
-         , C.TABLE_NAME
-         , C.COLUMN_ID
-         , C.COLUMN_NAME
-         , C.DATA_TYPE
-         , C.NUM_DISTINCT
-         , MAX(CASE
-                   WHEN C.COLUMN_ID = 1
-                    AND C.COLUMN_NAME = 'FILE_ROW_NO'
-                   THEN C.NUM_DISTINCT
-               END) OVER (PARTITION BY C.OWNER, C.TABLE_NAME) AS TOTAL_ROWS
-      FROM ALL_TAB_COLUMNS C
-     WHERE C.OWNER = :owner
-       AND C.TABLE_NAME = :tableName
-)
-SELECT B.OWNER
-     , B.TABLE_NAME
-     , :modelName AS MODEL_NAME
-     , B.COLUMN_ID
-     , B.COLUMN_NAME
-     , B.DATA_TYPE
-     , B.TOTAL_ROWS
-     , B.NUM_DISTINCT
-     , ROUND(B.NUM_DISTINCT / NULLIF(B.TOTAL_ROWS, 0), 6) AS DIST_VAL_RT
-     , CASE
-           WHEN X.SAMPLE_NOT_NULL_COUNT = 0 THEN 'ETC'
-           WHEN X.SAMPLE_NOT_NULL_COUNT = X.NUMERIC_CONVERTIBLE_COUNT THEN 'NUM'
-           ELSE 'CHR'
-       END AS LOG_DATA_TYPE
-     , X.ENTROPY
-     , X.NORM_ENTROPY
-     , CASE
-           WHEN B.COLUMN_NAME = 'FILE_ROW_NO' THEN '식별자'
-           WHEN X.SAMPLE_NOT_NULL_COUNT = 0 THEN '기타'
-           WHEN X.SAMPLE_NOT_NULL_COUNT = X.NUMERIC_CONVERTIBLE_COUNT
-                AND NVL(B.NUM_DISTINCT, 0) >= 20
-                AND NVL(B.NUM_DISTINCT / NULLIF(B.TOTAL_ROWS, 0), 0) >= 0.05
-                AND NVL(X.NORM_ENTROPY, 0) >= 0.70
-           THEN '연속형'
-           ELSE '범주형'
-       END AS BASE_PREDICTED_TYPE
-     , PREDICTION(~' || v_model_name || q'~ USING *) AS MODL_PREDICTED_TYPE
-     , SYSDATE AS CREATE_DT
-  FROM BASE_COL B
-       CROSS APPLY XMLTABLE(
-           '/ROWSET/ROW'
-           PASSING DBMS_XMLGEN.GETXMLTYPE(
-               'WITH S AS (
-                    SELECT "' || REPLACE(B.COLUMN_NAME, '"', '""') || '" AS COL_VALUE
-                      FROM "' || REPLACE(B.OWNER, '"', '""') || '"."' || REPLACE(B.TABLE_NAME, '"', '""') || '"
-                     WHERE "' || REPLACE(B.COLUMN_NAME, '"', '""') || '" IS NOT NULL
-                       AND ROWNUM <= 10000
-                ),
-                FREQ AS (
-                    SELECT COL_VALUE,
-                           COUNT(*) AS CNT
-                      FROM S
-                     GROUP BY COL_VALUE
-                ),
-                TOTAL AS (
-                    SELECT SUM(CNT) AS TOTAL_CNT,
-                           COUNT(*) AS DIST_CNT
-                      FROM FREQ
-                ),
-                STAT AS (
-                    SELECT COUNT(*) AS SAMPLE_NOT_NULL_COUNT,
-                           NVL(SUM(
-                               CASE
-                                   WHEN VALIDATE_CONVERSION(TRIM(COL_VALUE) AS NUMBER) = 1
-                                   THEN 1
-                                   ELSE 0
-                               END
-                           ), 0) AS NUMERIC_CONVERTIBLE_COUNT
-                      FROM S
-                ),
-                ENT AS (
-                    SELECT CASE
-                               WHEN T.TOTAL_CNT = 0 THEN 0
-                               ELSE -SUM((F.CNT / T.TOTAL_CNT) * LN(F.CNT / T.TOTAL_CNT))
-                           END AS ENTROPY,
-                           CASE
-                               WHEN T.TOTAL_CNT = 0 OR T.DIST_CNT <= 1 THEN 0
-                               ELSE -SUM((F.CNT / T.TOTAL_CNT) * LN(F.CNT / T.TOTAL_CNT)) / LN(T.DIST_CNT)
-                           END AS NORM_ENTROPY
-                      FROM FREQ F
-                           CROSS JOIN TOTAL T
-                     GROUP BY T.TOTAL_CNT, T.DIST_CNT
-                )
-                SELECT STAT.SAMPLE_NOT_NULL_COUNT,
-                       STAT.NUMERIC_CONVERTIBLE_COUNT,
-                       ROUND(NVL(ENT.ENTROPY, 0), 6) AS ENTROPY,
-                       ROUND(NVL(ENT.NORM_ENTROPY, 0), 6) AS NORM_ENTROPY
-                  FROM STAT
-                       CROSS JOIN ENT'
-           )
-           COLUMNS
-               SAMPLE_NOT_NULL_COUNT      NUMBER PATH 'SAMPLE_NOT_NULL_COUNT',
-               NUMERIC_CONVERTIBLE_COUNT  NUMBER PATH 'NUMERIC_CONVERTIBLE_COUNT',
-               ENTROPY                    NUMBER PATH 'ENTROPY',
-               NORM_ENTROPY               NUMBER PATH 'NORM_ENTROPY'
-       ) X
- ORDER BY B.COLUMN_ID~';
+WHEN MATCHED THEN UPDATE SET
+        T."COLUMN_ID" = S."COLUMN_ID",
+        T."DATA_TYPE" = S."DATA_TYPE",
+        T."TOTAL_ROWS" = S."TOTAL_ROWS",
+        T."NUM_DISTINCT" = S."NUM_DISTINCT",
+        T."DIST_VAL_RT" = S."DIST_VAL_RT",
+        T."LOG_DATA_TYPE" = S."LOG_DATA_TYPE",
+        T."ENTROPY" = S."ENTROPY",
+        T."NORM_ENTROPY" = S."NORM_ENTROPY",
+~' || v_update_rule_sql || v_update_model_sql || v_update_final_sql || q'~        T."CREATE_DT" = SYSDATE
+WHEN NOT MATCHED THEN INSERT (
+        "OWNER",
+        "TABLE_NAME",
+        "MODEL_NAME",
+        "COLUMN_ID",
+        "COLUMN_NAME",
+        "DATA_TYPE",
+        "TOTAL_ROWS",
+        "NUM_DISTINCT",
+        "DIST_VAL_RT",
+        "LOG_DATA_TYPE",
+        "ENTROPY",
+        "NORM_ENTROPY",
+        "BASE_PREDICTED_TYPE",
+        "BASE_REASON",
+        "MODL_PREDICTED_TYPE",
+        "FINAL_PREDICTED_TYPE",
+        "FINAL_REASON",
+        "FINAL_UPDATE_DT",
+        "FINAL_UPDATE_USER",
+        "CREATE_DT"
+) VALUES (
+        S."OWNER",
+        S."TABLE_NAME",
+        S."MODEL_NAME",
+        S."COLUMN_ID",
+        S."COLUMN_NAME",
+        S."DATA_TYPE",
+        S."TOTAL_ROWS",
+        S."NUM_DISTINCT",
+        S."DIST_VAL_RT",
+        S."LOG_DATA_TYPE",
+        S."ENTROPY",
+        S."NORM_ENTROPY",
+        ~' || v_insert_base_type_expr || q'~,
+        ~' || v_insert_base_reason_expr || q'~,
+        ~' || v_insert_model_expr || q'~,
+        ~' || v_final_type_expr || q'~,
+        ~' || v_final_reason_expr || q'~,
+        ~' || v_final_dt_expr || q'~,
+        ~' || v_final_user_expr || q'~,
+        SYSDATE
+)~';
 
-    EXECUTE IMMEDIATE v_sql USING v_owner, v_table_name, v_model_name;
+    EXECUTE IMMEDIATE v_sql;
 
     DBMS_OUTPUT.PUT_LINE('[OK] INIT$_SP_PREDICTED_TYPE loaded '
         || SQL%ROWCOUNT || ' column prediction rows for '
-        || v_owner || '.' || v_table_name || ' using ' || v_model_name);
+        || v_owner || '.' || v_table_name || ' using ' || v_method || ' / ' || v_model_name);
 END;
 /

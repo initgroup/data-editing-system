@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="ko" data-ai-document="menu-help" data-menu-code="home" data-context-priority="highest">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HOME 도움말 - INIT Data Editing System</title>
+    <meta name="ai-context-kind" content="menu-help">
+    <meta name="ai-menu-code" content="home">
+    <meta name="ai-context-priority" content="highest">
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "TechArticle",
+        "name": "INIT Data Editing System HOME 도움말",
+        "about": "HOME dashboard usage guide and AI context",
+        "audience": "Data editing system user",
+        "keywords": ["home", "dashboard", "workflow", "notice", "target database", "data quality"],
+        "isPartOf": "INIT Data Editing System"
+    }
+    </script>
+    <style>
+        :root {
+            color-scheme: light;
+            font-family: Arial, "Malgun Gothic", sans-serif;
+        }
+
+        body {
+            background: #f8fafc;
+            color: #0f172a;
+            margin: 0;
+        }
+
+        header {
+            background: #111827;
+            color: #f8fafc;
+            padding: 26px 34px;
+        }
+
+        main {
+            display: grid;
+            gap: 18px;
+            margin: 0 auto;
+            max-width: 980px;
+            padding: 24px 34px 40px;
+        }
+
+        h1,
+        h2,
+        h3,
+        p {
+            margin-top: 0;
+        }
+
+        h1 {
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+
+        header p {
+            color: #cbd5e1;
+            line-height: 1.6;
+            margin: 0;
+        }
+
+        section {
+            background: #ffffff;
+            border: 1px solid #dbe3ef;
+            padding: 18px;
+        }
+
+        h2 {
+            border-bottom: 1px solid #e2e8f0;
+            font-size: 18px;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+        }
+
+        h3 {
+            font-size: 14px;
+            margin-bottom: 6px;
+        }
+
+        p,
+        li,
+        dd {
+            color: #334155;
+            font-size: 14px;
+            line-height: 1.65;
+        }
+
+        ul,
+        ol {
+            margin-bottom: 0;
+            padding-left: 22px;
+        }
+
+        dl {
+            display: grid;
+            gap: 10px;
+            margin: 0;
+        }
+
+        dt {
+            color: #0f172a;
+            font-size: 14px;
+            font-weight: 800;
+        }
+
+        dd {
+            margin: 2px 0 0;
+        }
+
+        code {
+            background: #f1f5f9;
+            border: 1px solid #e2e8f0;
+            color: #1d4ed8;
+            padding: 1px 4px;
+        }
+
+        .ai-note {
+            background: #ecfdf5;
+            border-color: #99f6e4;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>HOME 도움말</h1>
+        <p>INIT Data Editing System의 HOME 화면은 로그인 후 현재 작업 상태, Target DB 연결 상태, 워크플로우 준비도, 공지사항, 주요 메뉴 바로가기를 확인하는 대시보드입니다.</p>
+    </header>
+
+    <main>
+        <section class="ai-note" data-ai-section="summary">
+            <h2>AI 우선 요약</h2>
+            <p>사용자가 HOME 화면에서 질문하면 이 문서를 먼저 기준으로 삼습니다. HOME은 작업을 직접 편집하는 화면이라기보다 현재 사용자 세션과 데이터 편집 작업 준비 상태를 확인하고, 다음 업무 화면으로 이동하는 시작점입니다.</p>
+        </section>
+
+        <section data-ai-section="purpose">
+            <h2>화면 목적</h2>
+            <ul>
+                <li>현재 로그인 사용자, 권한, Target DB 선택 상태를 확인합니다.</li>
+                <li>통합 플로우와 데이터 품질 관련 주요 지표를 요약합니다.</li>
+                <li>공지사항과 작업 바로가기를 통해 사용자가 다음 작업으로 빠르게 이동하게 합니다.</li>
+                <li>Gemini 질문 context에서 현재 메뉴가 HOME임을 알려주는 기준 문서로 사용됩니다.</li>
+            </ul>
+        </section>
+
+        <section data-ai-section="layout">
+            <h2>주요 영역</h2>
+            <dl>
+                <div>
+                    <dt>상단 요약 영역</dt>
+                    <dd>시스템 이름, 사용자 인사말, 로그인/권한/Target DB 상태를 보여줍니다.</dd>
+                </div>
+                <div>
+                    <dt>Workflow readiness</dt>
+                    <dd>통합 플로우 실행 준비도와 최근 실행 흐름을 요약합니다. 새로고침 아이콘으로 최신 상태를 다시 조회합니다.</dd>
+                </div>
+                <div>
+                    <dt>Quality signal / Notices</dt>
+                    <dd>데이터 품질 알림과 공지사항을 보여줍니다. 공지사항 목록 버튼을 누르면 상세 목록을 확인할 수 있습니다.</dd>
+                </div>
+                <div>
+                    <dt>Main shortcuts</dt>
+                    <dd>프로젝트, 시나리오, 데이터 작업, 플로우 작업 등 자주 사용하는 메뉴로 이동하는 바로가기입니다.</dd>
+                </div>
+            </dl>
+        </section>
+
+        <section data-ai-section="buttons">
+            <h2>헤더 버튼</h2>
+            <ul>
+                <li><code>Refresh current page</code>: 현재 열린 화면을 다시 로드합니다.</li>
+                <li><code>Close current page</code>: 현재 화면을 닫습니다.</li>
+                <li><code>Close all pages</code>: 열려 있는 업무 화면을 모두 닫습니다.</li>
+                <li><code>Logout</code>: 세션 정리 후 로그아웃합니다.</li>
+                <li><code>HOME Help</code>: 이 도움말 팝업을 엽니다.</li>
+            </ul>
+        </section>
+
+        <section data-ai-section="gemini-context">
+            <h2>Gemini 질문 context 기준</h2>
+            <ol>
+                <li>HOME 관련 질문이면 이 도움말을 가장 먼저 요약합니다.</li>
+                <li>현재 화면의 Elements DOM 스냅샷이 첨부되면 실제 렌더링 상태를 기준으로 답변합니다.</li>
+                <li>사용자가 캡처 이미지나 파일을 첨부하면 해당 첨부를 질문의 직접 근거로 사용합니다.</li>
+                <li>도움말과 화면 상태가 다르면 현재 렌더링된 화면 상태를 함께 언급하고, 확인이 필요한 부분을 분리해서 말합니다.</li>
+            </ol>
+        </section>
+    </main>
+</body>
+</html>

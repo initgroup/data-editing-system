@@ -758,7 +758,7 @@
                 }
                 if (grid) {
                     grid.innerHTML = `
-                        <button type="button" class="data-job-row flow-version-row ${/^\d+$/.test(currentFlowId) ? "" : "is-selected"}" onclick="${PAGE_CODE}.newFlow()">
+                        <button type="button" class="data-job-row flow-version-row ${/^\d+$/.test(currentFlowId) ? "" : "is-selected"}" data-flow-id="" onclick="${PAGE_CODE}.newFlow()">
                             <span class="data-job-order">NEW</span>
                             <span>
                                 <strong>Draft</strong>
@@ -777,6 +777,24 @@
                 }
                 this.isFlowRunning = this.isFlowRunActive();
                 this.updateFlowActionButtons();
+                this.scrollSelectedFlowVersionIntoView();
+            },
+
+            scrollSelectedFlowVersionIntoView() {
+                const grid = getContainerEl(`#flowVersionGrid-${PAGE_CODE}`);
+                const selectedRow = grid?.querySelector?.(".flow-version-row.is-selected");
+                if (!grid || !selectedRow) return;
+                const gridRect = grid.getBoundingClientRect();
+                const rowRect = selectedRow.getBoundingClientRect();
+                const rowTop = grid.scrollTop + rowRect.top - gridRect.top;
+                const rowBottom = rowTop + selectedRow.offsetHeight;
+                const viewTop = grid.scrollTop;
+                const viewBottom = viewTop + grid.clientHeight;
+                if (rowTop < viewTop) {
+                    grid.scrollTop = rowTop;
+                } else if (rowBottom > viewBottom) {
+                    grid.scrollTop = rowBottom - grid.clientHeight;
+                }
             },
 
             updateFlowCopyButton() {
@@ -795,7 +813,7 @@
                 const flowName = flow.FLOW_NAME || "Untitled Flow";
                 const flowDesc = flow.FLOW_DESC || flow.FLOW_TYPE || "";
                 return `
-                    <button type="button" class="data-job-row flow-version-row ${selectedClass}${runningClass}" onclick="${PAGE_CODE}.loadFlowVersion('${this.escapeJs(flowId)}')">
+                    <button type="button" class="data-job-row flow-version-row ${selectedClass}${runningClass}" data-flow-id="${this.escapeHtml(flowId)}" onclick="${PAGE_CODE}.loadFlowVersion('${this.escapeJs(flowId)}')">
                         <span class="data-job-order">${this.escapeHtml(index + 1)}</span>
                         <span>
                             <strong>${this.escapeHtml(flowName)}</strong>
@@ -1352,6 +1370,14 @@
                 );
             },
 
+            async resolveLatestFlowNodeData(data) {
+                const jobId = String(data?.jobId || data?.refWorkJobId || "").trim();
+                if (!jobId) return data;
+                await this.loadRegisteredJobs();
+                const latestJob = this.getRegisteredJobAsset(jobId);
+                return latestJob ? this.buildFlowNodeDataFromJob(latestJob, data) : data;
+            },
+
             getFlowStage() {
                 return getContainerEl(`#flowCanvas-${PAGE_CODE}`);
             },
@@ -1636,7 +1662,7 @@
                 if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
             },
 
-            handleCanvasDrop(event) {
+            async handleCanvasDrop(event) {
                 event.preventDefault();
                 const stage = this.getFlowStage();
                 if (!stage) return;
@@ -1652,14 +1678,19 @@
                 const rect = stage.getBoundingClientRect();
                 const left = (event.clientX - rect.left + stage.scrollLeft) / this.flowZoom;
                 const top = (event.clientY - rect.top + stage.scrollTop) / this.flowZoom;
-                this.appendFlowNode(data, left, top);
-                this.flowPaletteDragData = null;
+                try {
+                    const latestData = await this.resolveLatestFlowNodeData(data);
+                    this.appendFlowNode(latestData, left, top);
+                } finally {
+                    this.flowPaletteDragData = null;
+                }
             },
 
-            createPaletteNodeAtCanvasCenter(item) {
+            async createPaletteNodeAtCanvasCenter(item) {
                 const point = this.getCanvasVisibleCenterPoint();
                 const data = this.getFlowPaletteItemData(item);
-                this.appendFlowNode(data, point.left, point.top);
+                const latestData = await this.resolveLatestFlowNodeData(data);
+                this.appendFlowNode(latestData, point.left, point.top);
             },
 
             getCanvasVisibleCenterPoint() {
@@ -3097,6 +3128,7 @@
                     <table class="table-grid">
                         <thead>
                             <tr>
+                                <th>Detail</th>
                                 <th>Run ID</th>
                                 <th>Flow</th>
                                 <th>Type</th>
@@ -3105,12 +3137,16 @@
                                 <th>Started</th>
                                 <th>Finished</th>
                                 <th>Elapsed</th>
-                                <th></th>
                             </tr>
                         </thead>
                         <tbody>
                             ${rows.map((row) => `
-                                <tr>
+                                <tr ondblclick="${PAGE_CODE}.openRunPlanLayer('${this.escapeJs(row.FLOW_RUN_ID || "")}')">
+                                    <td>
+                                        <button type="button" class="table-icon-btn" title="View execution plan" onclick="event.stopPropagation(); ${PAGE_CODE}.openRunPlanLayer('${this.escapeJs(row.FLOW_RUN_ID || "")}')">
+                                            <i class="fas fa-ellipsis"></i>
+                                        </button>
+                                    </td>
                                     <td>${this.escapeHtml(row.FLOW_RUN_ID || "")}</td>
                                     <td>${this.escapeHtml(row.FLOW_NAME || "")}</td>
                                     <td>${this.escapeHtml(row.RUN_TYPE || "")}</td>
@@ -3119,11 +3155,6 @@
                                     <td>${this.escapeHtml(row.STARTED_AT || "")}</td>
                                     <td>${this.escapeHtml(row.FINISHED_AT || "")}</td>
                                     <td>${this.escapeHtml(this.formatElapsedTime(row.STARTED_AT, row.FINISHED_AT, row.STATUS))}</td>
-                                    <td>
-                                        <button type="button" class="table-icon-btn" title="View execution plan" onclick="${PAGE_CODE}.openRunPlanLayer('${this.escapeHtml(row.FLOW_RUN_ID || "")}')">
-                                            <i class="fas fa-ellipsis"></i>
-                                        </button>
-                                    </td>
                                 </tr>
                             `).join("")}
                         </tbody>

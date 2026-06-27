@@ -152,6 +152,8 @@
         dataGridColumns: [],
         dataGridDirtyCells: new Map(),
         dataGridTargetKey: "",
+        dataGridActiveCell: null,
+        dataGridFrozenColumns: 0,
         contextLoadFailed: false,
         runtimeBindDialog: null,
         runtimeBindValues: {},
@@ -214,6 +216,8 @@
             this.dataGridColumns = [];
             this.dataGridDirtyCells = new Map();
             this.dataGridTargetKey = "";
+            this.dataGridActiveCell = null;
+            this.dataGridFrozenColumns = 0;
             this.contextLoadFailed = false;
             this.runtimeBindDialog = null;
             this.runtimeBindValues = {};
@@ -882,9 +886,21 @@
                 });
                 this.jobs = Array.isArray(json.data) ? json.data : [];
                 this.renderJobs();
+                await this.selectFirstJobAfterLoad();
             } catch (error) {
                 container.innerHTML = `<div class="table-error">${this.escapeHtml(error.message || "Job load failed.")}</div>`;
             }
+        },
+
+        async selectFirstJobAfterLoad() {
+            if (!Array.isArray(this.jobs) || !this.jobs.length) return false;
+            const selectedExists = this.selectedJobId
+                && this.jobs.some((job) => String(job.PROFILE_JOB_ID || "") === String(this.selectedJobId));
+            if (selectedExists) return false;
+            const firstJob = this.jobs.find((job) => job.PROFILE_JOB_ID);
+            if (!firstJob) return false;
+            await this.selectJob(String(firstJob.PROFILE_JOB_ID), false);
+            return true;
         },
 
         renderJobs() {
@@ -1214,9 +1230,9 @@
                         <li><strong>동적 문자열 치환</strong>: <code>/* --DYNAMIC_MODEL_NAME-- */</code>처럼 작성하면 <code>/* --</code>와 <code>-- */</code> 사이의 이름이 Parameter 명칭과 완전히 같을 때 해당 값이 문자열 그대로 치환됩니다.</li>
                         <li><strong>현재 Job 예약 변수</strong>: <code>:INIT$TargetOwner</code>, <code>:INIT$TargetTable</code>, <code>:INIT$ResultOwner</code>, <code>:INIT$ResultTable</code>은 실행 시 현재 Job/Node의 Target/Result owner/table 값으로 자동 전달됩니다.</li>
                         <li><strong>Flow 선행 Node 예약 변수</strong>: M04001 Flow 실행에서는 <code>:INIT$PreTargetOwner</code>, <code>:INIT$PreTargetTable</code>, <code>:INIT$PreResultOwner</code>, <code>:INIT$PreResultTable</code>을 사용할 수 있습니다.</li>
-                        <li><strong>Generate PL/SQL</strong>: Parameter 기본값이 있어도 스크립트에는 위 규칙의 바인드 변수로 생성합니다. 기본값과 예약 변수 값은 실행 직전 Runtime Bind 값으로 확인하고 수정할 수 있습니다.</li>
+                        <li><strong>Generate PL/SQL</strong>: Parameter List의 Default 값에 <code>:</code> 문자가 포함되어 있으면 해당 Default 값을 그대로 사용합니다. 예: Default가 <code>:INIT$TargetOwner</code>이면 <code>P_RULE_OWNER_NAME =&gt; :INIT$TargetOwner</code>로 생성합니다. Default 값에 <code>:</code>가 없으면 Parameter 명칭을 camelCase 바인드 변수로 변환합니다.</li>
                         <li><strong>Run now / Queue Batch</strong>: 실행 시 Parameter List 기본값과 Runtime Bind 값을 처리하고, 시스템 예약 변수는 실제 Job/Node 정보로 자동 덮어쓴 뒤 실행합니다.</li>
-                        <li><strong>예시</strong>: <code>P_OWNER =&gt; :INIT$PreResultOwner</code>, <code>P_TABLE =&gt; :INIT$PreResultTable</code>, <code>P_RESULT_OWNER =&gt; :INIT$ResultOwner</code>, <code>P_RESULT_TABLE =&gt; :INIT$ResultTable</code></li>
+                        <li><strong>예시</strong>: <code>P_TARGET_OWNER =&gt; :INIT$TargetOwner</code>, <code>P_TARGET_TABLE =&gt; :INIT$TargetTable</code>, <code>P_RESULT_OWNER =&gt; :INIT$ResultOwner</code>, <code>P_RESULT_TABLE =&gt; :INIT$ResultTable</code></li>
                     </ul>
                 `;
         },
@@ -1294,6 +1310,8 @@
                 alert("A job is running. Please wait until execution finishes.");
                 return null;
             }
+            if (!this.ensureJobReady(false)) return null;
+            if (!this.ensureExecutableScriptReady()) return null;
             if (showAlert && !(await CommonMessage.confirm("Save this work?"))) return null;
             const saved = await this.saveJobInternal(showAlert);
             return saved;
@@ -1301,6 +1319,7 @@
 
         async saveJobInternal(showAlert = false) {
             if (!this.ensureJobReady(false)) return null;
+            if (!this.ensureExecutableScriptReady()) return null;
             const payload = this.getJobPayload("DRAFT", "");
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/job/save`, {
@@ -1631,6 +1650,20 @@
                     getContainerEl(`#resultTable-${PAGE_CODE}`)?.focus();
                     return false;
                 }
+            }
+            return true;
+        },
+
+        ensureExecutableScriptReady() {
+            const editor = getContainerEl(`#execPlsqlEditor-${PAGE_CODE}`);
+            const execSourceType = getContainerEl(`#execSourceType-${PAGE_CODE}`)?.value || this.currentJob?.execSourceType || "DB_OBJECT";
+            const isOml = String(execSourceType).toUpperCase() === "OML_PYTHON";
+            if (!editor?.value.trim()) {
+                alert(isOml
+                    ? "Executable OML SQL is required. Generate or enter the SQL first.\n실행할 OML SQL이 필요합니다. SQL을 생성하거나 직접 입력해 주세요."
+                    : "Executable PL/SQL script is required. Generate or enter the script first.\n실행할 PL/SQL 스크립트가 필요합니다. 스크립트를 생성하거나 직접 입력해 주세요.");
+                editor?.focus();
+                return false;
             }
             return true;
         },
@@ -2021,6 +2054,8 @@ END;`;
         },
 
         createPlsqlArgument(row) {
+            const defaultValue = String(row?.itemDefault || "").trim();
+            if (defaultValue.includes(":")) return defaultValue;
             return `:${this.toBindVariableName(row?.itemName || "")}`;
         },
 
@@ -2117,8 +2152,11 @@ END;`;
             this.dataGridColumns = [];
             this.dataGridDirtyCells = new Map();
             this.dataGridTargetKey = "";
+            this.dataGridActiveCell = null;
             this.renderDataEditTarget();
             this.syncEditableDataSaveButton();
+            this.syncEditableDataFillButton();
+            this.applyEditableDataFrozenColumns();
             const grid = getContainerEl(`#dataEditGrid-${PAGE_CODE}`);
             if (grid) grid.innerHTML = "";
             if (message) {
@@ -2166,7 +2204,7 @@ END;`;
                 return new Set(configured.map((column) => String(column).trim().toUpperCase()).filter(Boolean));
             }
             if (PAGE_CODE === "M03001" && tableKey === "INIT$_TB_PREDICTED_TYPE") {
-                return new Set(["MODL_PREDICTED_TYPE"]);
+                return new Set(["FINAL_PREDICTED_TYPE", "FINAL_REASON"]);
             }
             return new Set();
         },
@@ -2202,6 +2240,7 @@ END;`;
                 this.dataGridRows = rows;
                 this.dataGridColumns = columns;
                 this.dataGridTargetKey = `${target.owner}.${target.tableName}`;
+                this.dataGridActiveCell = null;
                 this.renderEditableDataGrid(rows, columns, target);
                 this.renderDataEditMessage(`${rows.length.toLocaleString()} rows selected.`, "success");
             } catch (error) {
@@ -2225,6 +2264,8 @@ END;`;
                     }).join("")}</tr></thead><tbody></tbody></table>${this.renderListFooter(0)}`
                     : `<div class="table-empty">No data.</div>${this.renderListFooter(0)}`;
                 this.syncEditableDataSaveButton();
+                this.syncEditableDataFillButton();
+                this.applyEditableDataFrozenColumns();
                 return;
             }
 
@@ -2255,6 +2296,52 @@ END;`;
                 this.renderDataEditMessage("No editable columns are configured for this table.", "info");
             }
             this.syncEditableDataSaveButton();
+            this.syncEditableDataFillButton();
+            this.applyEditableDataFrozenColumns();
+        },
+
+        getEditableDataFreezeCount() {
+            const input = getContainerEl(`#dataFreezeColumns-${PAGE_CODE}`);
+            const maxDataColumns = Math.max(0, (this.dataGridColumns || []).length);
+            let dataColumnCount = Number.parseInt(input?.value ?? this.dataGridFrozenColumns ?? 0, 10);
+            if (!Number.isFinite(dataColumnCount)) dataColumnCount = 0;
+            dataColumnCount = Math.max(0, Math.min(maxDataColumns, dataColumnCount));
+            this.dataGridFrozenColumns = dataColumnCount;
+            if (input && input.value !== String(dataColumnCount)) input.value = String(dataColumnCount);
+            return dataColumnCount + 1;
+        },
+
+        applyEditableDataFrozenColumns() {
+            const grid = getContainerEl(`#dataEditGrid-${PAGE_CODE}`);
+            const table = grid?.querySelector?.(".data-edit-table");
+            if (!table) return;
+
+            table.querySelectorAll(".is-frozen-col, .is-frozen-edge").forEach((cell) => {
+                cell.classList.remove("is-frozen-col", "is-frozen-edge");
+                cell.style.left = "";
+            });
+
+            const headerRow = table.tHead?.rows?.[0] || table.rows?.[0];
+            if (!headerRow) return;
+
+            const freezeCount = this.getEditableDataFreezeCount();
+            const headerCells = Array.from(headerRow.children);
+            const visibleFreezeCount = Math.min(freezeCount, headerCells.length);
+            const offsets = [];
+            let left = 0;
+            for (let index = 0; index < visibleFreezeCount; index += 1) {
+                offsets[index] = left;
+                left += headerCells[index].getBoundingClientRect().width || headerCells[index].offsetWidth || 0;
+            }
+
+            Array.from(table.rows || []).forEach((row) => {
+                Array.from(row.children || []).forEach((cell, index) => {
+                    if (index >= visibleFreezeCount) return;
+                    cell.classList.add("is-frozen-col");
+                    if (index === visibleFreezeCount - 1) cell.classList.add("is-frozen-edge");
+                    cell.style.left = `${offsets[index]}px`;
+                });
+            });
         },
 
         renderEditableDataCell(row, rowIndex, column, editableColumns) {
@@ -2271,8 +2358,19 @@ END;`;
                         data-row-index="${rowIndex}"
                         data-column-name="${this.escapeHtml(columnName)}"
                         title="${this.escapeHtml(value)}"
+                        tabindex="0"
+                        onfocus="${PAGE_CODE}.handleEditableDataCellFocus(event)"
+                        onkeydown="${PAGE_CODE}.handleEditableDataCellKeydown(event)"
+                        oncopy="${PAGE_CODE}.handleEditableDataCellCopy(event)"
+                        onpaste="${PAGE_CODE}.handleEditableDataCellPaste(event)"
                     >
-                        <select class="data-edit-select" onchange="${PAGE_CODE}.handleEditableDataCellInput(event)">
+                        <select class="data-edit-select"
+                            onfocus="${PAGE_CODE}.handleEditableDataCellFocus(event)"
+                            onchange="${PAGE_CODE}.handleEditableDataCellInput(event)"
+                            onkeydown="${PAGE_CODE}.handleEditableDataCellKeydown(event)"
+                            oncopy="${PAGE_CODE}.handleEditableDataCellCopy(event)"
+                            onpaste="${PAGE_CODE}.handleEditableDataCellPaste(event)"
+                        >
                             ${this.getPredictedTypeOptions().map((option) => `
                                 <option value="${this.escapeHtml(option)}"${String(value) === option ? " selected" : ""}>${this.escapeHtml(option)}</option>
                             `).join("")}
@@ -2285,21 +2383,26 @@ END;`;
                     class="data-edit-cell is-editable"
                     contenteditable="true"
                     spellcheck="false"
+                    tabindex="0"
                     data-row-index="${rowIndex}"
                     data-column-name="${this.escapeHtml(columnName)}"
                     title="${this.escapeHtml(value)}"
+                    onfocus="${PAGE_CODE}.handleEditableDataCellFocus(event)"
                     oninput="${PAGE_CODE}.handleEditableDataCellInput(event)"
                     onkeydown="${PAGE_CODE}.handleEditableDataCellKeydown(event)"
+                    oncopy="${PAGE_CODE}.handleEditableDataCellCopy(event)"
+                    onpaste="${PAGE_CODE}.handleEditableDataCellPaste(event)"
                 >${this.escapeHtml(value)}</td>
             `;
         },
 
         isPredictedTypeEditColumn(columnName) {
-            return PAGE_CODE === "M03001" && String(columnName || "").toUpperCase() === "MODL_PREDICTED_TYPE";
+            return PAGE_CODE === "M03001" && String(columnName || "").toUpperCase() === "FINAL_PREDICTED_TYPE";
         },
 
         getPredictedTypeOptions() {
             return [
+                "",
                 "숫자형식별자",
                 "문자형식별자",
                 "숫자형범주형",
@@ -2317,29 +2420,225 @@ END;`;
             const cell = source?.closest?.(".data-edit-cell") || source;
             const rowIndex = Number(cell?.dataset?.rowIndex);
             const columnName = cell?.dataset?.columnName || "";
+            const newValue = source?.tagName === "SELECT" ? source.value : (cell.textContent ?? "");
+            this.markEditableDataCellValue(rowIndex, columnName, newValue, cell);
+        },
+
+        handleEditableDataCellFocus(event) {
+            const cell = event.currentTarget?.closest?.(".data-edit-cell") || event.currentTarget;
+            if (!cell?.classList?.contains("data-edit-cell")) return;
+            this.setActiveEditableDataCell(Number(cell.dataset.rowIndex), cell.dataset.columnName || "", cell);
+        },
+
+        handleEditableDataCellCopy(event) {
+            const source = event.currentTarget;
+            const cell = source?.closest?.(".data-edit-cell") || source;
+            const value = this.getEditableDataCellDomValue(cell);
+            event.preventDefault();
+            event.clipboardData?.setData("text/plain", value);
+        },
+
+        handleEditableDataCellPaste(event) {
+            const source = event.currentTarget;
+            const cell = source?.closest?.(".data-edit-cell") || source;
+            const text = event.clipboardData?.getData("text/plain") ?? "";
+            if (!cell?.classList?.contains("data-edit-cell") || !text) return;
+            event.preventDefault();
+            this.pasteEditableDataMatrix(Number(cell.dataset.rowIndex), cell.dataset.columnName || "", text);
+        },
+
+        setActiveEditableDataCell(rowIndex, columnName, cell = null) {
+            if (!Number.isInteger(rowIndex) || !columnName) return;
+            getContainerEl(`#dataEditGrid-${PAGE_CODE}`)?.querySelectorAll(".data-edit-cell.is-active-cell").forEach((item) => {
+                item.classList.remove("is-active-cell");
+            });
+            const targetCell = cell || this.getEditableDataCellElement(rowIndex, columnName);
+            targetCell?.classList?.add("is-active-cell");
+            this.dataGridActiveCell = { rowIndex, columnName };
+            this.syncEditableDataFillButton();
+        },
+
+        getEditableColumnNames(target = this.getDataEditTarget()) {
+            const editableColumns = this.getEditableDataColumns(target);
+            return (this.dataGridColumns || []).filter((column) => editableColumns.has(String(column || "").toUpperCase()));
+        },
+
+        getEditableDataCellElement(rowIndex, columnName) {
+            const escapedColumn = this.escapeCssIdentifier(columnName);
+            return getContainerEl(`#dataEditGrid-${PAGE_CODE}`)?.querySelector(`.data-edit-cell[data-row-index="${rowIndex}"][data-column-name="${escapedColumn}"]`) || null;
+        },
+
+        escapeCssIdentifier(value) {
+            if (window.CSS && typeof window.CSS.escape === "function") {
+                return window.CSS.escape(String(value || ""));
+            }
+            return String(value || "").replace(/["\\]/g, "\\$&");
+        },
+
+        getEditableDataCellDomValue(cell) {
+            if (!cell) return "";
+            const select = cell.querySelector?.(".data-edit-select");
+            return select ? select.value : (cell.textContent ?? "");
+        },
+
+        focusEditableDataCell(rowIndex, columnName) {
+            const cell = this.getEditableDataCellElement(rowIndex, columnName);
+            if (!cell) return;
+            this.setActiveEditableDataCell(rowIndex, columnName, cell);
+            const select = cell.querySelector?.(".data-edit-select");
+            (select || cell).focus();
+        },
+
+        setEditableDataCellDomValue(cell, value) {
+            if (!cell) return;
+            const textValue = String(value ?? "");
+            const select = cell.querySelector?.(".data-edit-select");
+            if (select) {
+                if (![...select.options].some((option) => option.value === textValue)) {
+                    select.appendChild(new Option(textValue, textValue));
+                }
+                select.value = textValue;
+            } else {
+                cell.textContent = textValue;
+            }
+            cell.title = textValue;
+        },
+
+        markEditableDataCellValue(rowIndex, columnName, newValue, cell = null) {
             const row = this.dataGridRows[rowIndex];
             if (!row || !columnName) return;
+            const targetCell = cell || this.getEditableDataCellElement(rowIndex, columnName);
             const originalValue = row[columnName] ?? "";
-            const newValue = source?.tagName === "SELECT" ? source.value : (cell.textContent ?? "");
             const key = `${row.INIT$ROWID || ""}::${columnName}`;
-            if (String(originalValue) === newValue) {
+            const normalizedValue = String(newValue ?? "");
+            if (String(originalValue) === normalizedValue) {
                 this.dataGridDirtyCells.delete(key);
-                cell.classList.remove("is-dirty");
+                targetCell?.classList?.remove("is-dirty");
             } else {
                 this.dataGridDirtyCells.set(key, {
                     rowId: row.INIT$ROWID,
                     columnName,
-                    value: newValue
+                    value: normalizedValue
                 });
-                cell.classList.add("is-dirty");
+                targetCell?.classList?.add("is-dirty");
             }
             this.syncEditableDataSaveButton();
         },
 
         handleEditableDataCellKeydown(event) {
+            const source = event.currentTarget;
+            const cell = source?.closest?.(".data-edit-cell") || source;
+            if (!cell?.classList?.contains("data-edit-cell")) return;
+
+            if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "c") {
+                return;
+            }
+            if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "v") {
+                return;
+            }
+
+            const editableColumns = this.getEditableColumnNames();
+            const rowIndex = Number(cell.dataset.rowIndex);
+            const columnName = cell.dataset.columnName || "";
+            const colIndex = editableColumns.findIndex((column) => String(column).toUpperCase() === String(columnName).toUpperCase());
+            if (!Number.isInteger(rowIndex) || colIndex < 0) return;
+
+            let nextRow = rowIndex;
+            let nextCol = colIndex;
             if (event.key === "Enter") {
-                event.preventDefault();
-                event.currentTarget.blur();
+                nextRow += event.shiftKey ? -1 : 1;
+            } else if (event.key === "Tab") {
+                nextCol += event.shiftKey ? -1 : 1;
+                if (nextCol < 0) {
+                    nextCol = editableColumns.length - 1;
+                    nextRow -= 1;
+                } else if (nextCol >= editableColumns.length) {
+                    nextCol = 0;
+                    nextRow += 1;
+                }
+            } else if (event.key === "ArrowUp") {
+                nextRow -= 1;
+            } else if (event.key === "ArrowDown") {
+                nextRow += 1;
+            } else if (event.key === "ArrowLeft") {
+                nextCol -= 1;
+            } else if (event.key === "ArrowRight") {
+                nextCol += 1;
+            } else {
+                return;
+            }
+
+            nextRow = Math.max(0, Math.min((this.dataGridRows || []).length - 1, nextRow));
+            nextCol = Math.max(0, Math.min(editableColumns.length - 1, nextCol));
+            if (nextRow === rowIndex && nextCol === colIndex && event.key !== "Enter") {
+                return;
+            }
+            event.preventDefault();
+            this.focusEditableDataCell(nextRow, editableColumns[nextCol]);
+        },
+
+        parseEditableDataClipboardText(text) {
+            const normalized = String(text ?? "").replace(/\r/g, "");
+            const trimmed = normalized.endsWith("\n") ? normalized.slice(0, -1) : normalized;
+            return trimmed.split("\n").map((line) => line.split("\t"));
+        },
+
+        pasteEditableDataMatrix(startRowIndex, startColumnName, text) {
+            const editableColumns = this.getEditableColumnNames();
+            const startColIndex = editableColumns.findIndex((column) => String(column).toUpperCase() === String(startColumnName).toUpperCase());
+            if (startColIndex < 0 || !Number.isInteger(startRowIndex)) return;
+
+            const matrix = this.parseEditableDataClipboardText(text);
+            let changed = 0;
+            matrix.forEach((line, rowOffset) => {
+                const rowIndex = startRowIndex + rowOffset;
+                if (rowIndex >= (this.dataGridRows || []).length) return;
+                line.forEach((value, colOffset) => {
+                    const columnName = editableColumns[startColIndex + colOffset];
+                    if (!columnName) return;
+                    const cell = this.getEditableDataCellElement(rowIndex, columnName);
+                    this.setEditableDataCellDomValue(cell, value);
+                    this.markEditableDataCellValue(rowIndex, columnName, value, cell);
+                    changed += 1;
+                });
+            });
+
+            this.focusEditableDataCell(startRowIndex, startColumnName);
+            if (changed) {
+                this.renderDataEditMessage(`${changed.toLocaleString()} cell(s) pasted.`, "success");
+            }
+        },
+
+        applyActiveEditableValueToAllRows() {
+            const active = this.dataGridActiveCell;
+            if (!active) {
+                this.renderDataEditMessage("Select an editable cell first.", "error");
+                return;
+            }
+            const editableColumns = this.getEditableColumnNames();
+            if (!editableColumns.some((column) => String(column).toUpperCase() === String(active.columnName).toUpperCase())) {
+                this.renderDataEditMessage("Selected cell is not editable.", "error");
+                return;
+            }
+            const sourceCell = this.getEditableDataCellElement(active.rowIndex, active.columnName);
+            const value = this.getEditableDataCellDomValue(sourceCell);
+            let changed = 0;
+            (this.dataGridRows || []).forEach((row, rowIndex) => {
+                if (rowIndex <= active.rowIndex) return;
+                if (!row?.INIT$ROWID) return;
+                const cell = this.getEditableDataCellElement(rowIndex, active.columnName);
+                this.setEditableDataCellDomValue(cell, value);
+                this.markEditableDataCellValue(rowIndex, active.columnName, value, cell);
+                changed += 1;
+            });
+            this.focusEditableDataCell(active.rowIndex, active.columnName);
+            this.renderDataEditMessage(`${this.escapeHtml(active.columnName)} value pasted downward to ${changed.toLocaleString()} row(s).`, "success");
+        },
+
+        syncEditableDataFillButton() {
+            const button = getContainerEl(`#dataFillColumn-${PAGE_CODE}`);
+            if (button) {
+                button.disabled = !this.dataGridActiveCell || !(this.dataGridRows || []).length;
             }
         },
 

@@ -2,6 +2,7 @@
     const PAGE_CODE = "M90001";
     const { getContainerEl } = PageManager.createHelper(PAGE_CODE);
     const COMMON = MCOMMON.createPageHelper(PAGE_CODE);
+    const DETAIL_PRESET_URL = "./config/M90001.object-detail-presets.json";
 
     const M90001 = {
         
@@ -10,6 +11,7 @@
         selectedObject: null,
         objectMeta: null,
         detailSource: "",
+        detailPresets: null,
         objectSourceRequestSeq: 0,
         rows: [],
         originalRows: [],
@@ -78,7 +80,9 @@
             this.selectedObject = null;
             this.objectMeta = null;
             this.detailSource = "";
+            this.detailPresets = null;
             this.objectSourceRequestSeq += 1;
+            this.setDetailPresetButtonVisible(false);
             this.renderObjectSource("", "Select an object to load source.");
             this.isInit = false;
         },
@@ -950,6 +954,7 @@
 
         async selectObject(objectRow) {
             this.selectedObject = objectRow;
+            this.setDetailPresetButtonVisible(false);
             this.updateDescription(`Loading ${objectRow.OWNER}.${objectRow.OBJECT_NAME}...`);
             const sourceRequestSeq = this.objectSourceRequestSeq + 1;
             this.objectSourceRequestSeq = sourceRequestSeq;
@@ -982,6 +987,7 @@
                 this.originalRows = this.rows.map((row) => ({ ...row }));
                 this.selectedRowIndex = this.rows.length > 0 ? 0 : null;
                 this.renderRows();
+                this.updateDetailPresetButton();
                 this.loadObjectSource(objectRow, sourceRequestSeq);
 
                 const label = objectRow.OBJECT_TYPE === "TABLE" ? "columns" : "parameters";
@@ -996,6 +1002,7 @@
                 this.renderObjectMeta();
                 this.renderDetailSource();
                 this.renderRows();
+                this.setDetailPresetButtonVisible(false);
                 this.renderObjectSource("", "Source was not loaded.");
                 this.updateDescription("Could not load object detail.");
             }
@@ -1100,6 +1107,22 @@
             const meta = this.objectMeta || this.createDefaultObjectMeta(this.selectedObject);
             this.setFieldValue("#detailObjectId-M90001", meta.objectId || "");
             this.setFieldValue("#detailSource-M90001", this.detailSource || "");
+        },
+
+        async updateDetailPresetButton() {
+            const button = getContainerEl(".env-detail-preset-btn");
+            if (!button) return;
+            this.setDetailPresetButtonVisible(false);
+            if (!this.selectedObject || !this.rows.length) return;
+            const selectedObjectName = this.normalizePresetObjectName(this.selectedObject.OBJECT_NAME);
+            const preset = await this.findDetailPresetForSelectedObject();
+            if (selectedObjectName !== this.normalizePresetObjectName(this.selectedObject?.OBJECT_NAME)) return;
+            this.setDetailPresetButtonVisible(Boolean(preset));
+        },
+
+        setDetailPresetButtonVisible(visible) {
+            const button = getContainerEl(".env-detail-preset-btn");
+            if (button) button.hidden = !visible;
         },
 
         updateObjectMeta(field, value) {
@@ -1210,6 +1233,112 @@
         updateDefault(index, value) {
             if (!this.rows[index]) return;
             this.rows[index].defaultValue = value;
+        },
+
+        async applyDetailPresets() {
+            if (!this.selectedObject) {
+                alert("Select a procedure, function, package member, or model first.");
+                return;
+            }
+            if (!this.rows.length) {
+                alert("No parameter rows to initialize.");
+                return;
+            }
+
+            try {
+                const preset = await this.findDetailPresetForSelectedObject();
+                if (!preset) {
+                    alert("No comment/default preset is registered for this object.");
+                    return;
+                }
+
+                const itemMap = this.createPresetItemMap(preset);
+                let changedCount = 0;
+                this.rows = this.rows.map((row) => {
+                    const item = itemMap.get(this.normalizePresetKey(row.key));
+                    if (!item) return row;
+
+                    const next = { ...row };
+                    const hasComment = Object.prototype.hasOwnProperty.call(item, "comment")
+                        || Object.prototype.hasOwnProperty.call(item, "desc");
+                    const hasDefault = Object.prototype.hasOwnProperty.call(item, "defaultValue")
+                        || Object.prototype.hasOwnProperty.call(item, "default");
+                    if (hasComment) {
+                        next.desc = item.comment ?? item.desc ?? "";
+                    }
+                    if (hasDefault) {
+                        next.defaultValue = item.defaultValue ?? item.default ?? "";
+                    }
+                    if (next.desc !== row.desc || next.defaultValue !== row.defaultValue) {
+                        changedCount += 1;
+                    }
+                    return next;
+                });
+
+                this.renderRows();
+                this.detailSource = changedCount > 0 ? "Preset applied" : this.detailSource;
+                this.renderDetailSource();
+                alert(changedCount > 0
+                    ? `${changedCount} comment/default value(s) applied from preset. Review and click Save to store.`
+                    : "Preset found, but no matching parameter keys were changed.");
+            } catch (error) {
+                console.error("[M90001] detail preset apply failed", error);
+                alert(error.message || "Comment/default preset load failed.");
+            }
+        },
+
+        async findDetailPresetForSelectedObject() {
+            const presets = await this.loadDetailPresets();
+            const objects = Array.isArray(presets?.objects) ? presets.objects : [];
+            const selected = this.selectedObject || {};
+            const owner = this.normalizePresetKey(selected.OWNER);
+            const objectType = this.normalizePresetKey(selected.OBJECT_TYPE);
+            const objectName = this.normalizePresetObjectName(selected.OBJECT_NAME);
+
+            return objects.find((preset) => {
+                const presetOwner = this.normalizePresetKey(preset.owner || "*");
+                const presetType = this.normalizePresetKey(preset.objectType || "*");
+                const presetName = this.normalizePresetObjectName(preset.objectName);
+                const ownerMatches = presetOwner === "*" || presetOwner === owner;
+                const typeMatches = presetType === "*" || presetType === objectType;
+                return ownerMatches && typeMatches && presetName === objectName;
+            }) || null;
+        },
+
+        async loadDetailPresets() {
+            if (this.detailPresets) return this.detailPresets;
+            try {
+                const response = await fetch(`${DETAIL_PRESET_URL}?v=${Date.now()}`, { cache: "no-store" });
+                if (!response.ok) {
+                    console.warn(`[M90001] detail preset file was not loaded: ${response.status}`);
+                    this.detailPresets = { objects: [] };
+                    return this.detailPresets;
+                }
+                const presets = await response.json();
+                this.detailPresets = {
+                    ...presets,
+                    objects: Array.isArray(presets?.objects) ? presets.objects : []
+                };
+            } catch (error) {
+                console.warn("[M90001] detail preset file was ignored.", error);
+                this.detailPresets = { objects: [] };
+            }
+            return this.detailPresets;
+        },
+
+        createPresetItemMap(preset) {
+            const items = Array.isArray(preset?.items) ? preset.items : [];
+            return new Map(items
+                .filter((item) => item?.key)
+                .map((item) => [this.normalizePresetKey(item.key), item]));
+        },
+
+        normalizePresetKey(value) {
+            return String(value || "").trim().toUpperCase();
+        },
+
+        normalizePresetObjectName(value) {
+            return this.normalizePresetKey(value).replace(/\s+/g, "");
         },
 
         resetVariables() {

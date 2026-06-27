@@ -1,0 +1,357 @@
+{
+  "version": 1,
+  "description": "M90001 object detail comment/default presets. Match by owner/objectType/objectName, then apply item key values to COMMENT and DEFAULT only.",
+  "objects": [
+    {
+      "owner": "*",
+      "objectType": "PROCEDURE",
+      "objectName": "INIT$_SP_APRIORI_ASSOC_MODEL",
+      "label": "Automatic Rule Discovery model creation",
+      "items": [
+        {
+          "key": "P_MODEL_NAME",
+          "comment": "연관규칙학습모델명",
+          "defaultValue": "OML_ASSOCIATION_MODEL_01"
+        },
+        {
+          "key": "P_DATA_QUERY",
+          "comment": "학습대상테이블SELECT문",
+          "defaultValue": "'SELECT * FROM '||:INIT$TargetOwner||'.'||:INIT$TargetTable"
+        },
+        {
+          "key": "P_CASE_ID_COLUMN_NAME",
+          "comment": "테이블고유컬럼",
+          "defaultValue": "FILE_ROW_NO"
+        },
+        {
+          "key": "P_MIN_SUPPORT",
+          "comment": "규칙 생성을 위한 최소 지지도",
+          "defaultValue": "0.2"
+        },
+        {
+          "key": "P_MIN_CONFIDENCE",
+          "comment": "규칙 생성을 위한 최소 신뢰도",
+          "defaultValue": "0.7"
+        },
+        {
+          "key": "P_MAX_RULE_LENGTH",
+          "comment": "규칙당최대아이템수",
+          "defaultValue": "3"
+        },
+        {
+          "key": "P_DROP_EXISTING_YN",
+          "comment": "기존 동일 모델 삭제 여부",
+          "defaultValue": "Y"
+        },
+        {
+          "key": "P_MAX_INPUT_ROWS",
+          "comment": "학습 입력 최대 행 수",
+          "defaultValue": "100000"
+        },
+        {
+          "key": "P_CANDIDATE_COLUMNS",
+          "comment": "학습 후보 컬럼 목록",
+          "defaultValue": ""
+        },
+        {
+          "key": "P_MIN_RULE_SUPPORT_COUNT",
+          "comment": "규칙 요약 최소 건수",
+          "defaultValue": "30"
+        },
+        {
+          "key": "P_MIN_RULE_LIFT",
+          "comment": "규칙 요약 최소 향상도",
+          "defaultValue": "1"
+        },
+        {
+          "key": "P_MAX_RULE_SUMMARY_COLUMNS",
+          "comment": "규칙 요약 최대 컬럼 수",
+          "defaultValue": "50"
+        },
+        {
+          "key": "P_MAX_RULE_SUMMARY_PER_PAIR",
+          "comment": "컬럼 쌍별 최대 요약 개수",
+          "defaultValue": "50"
+        },
+        {
+          "key": "P_TARGET_OWNER",
+          "comment": "대상 테이블 계정",
+          "defaultValue": ":INIT$TargetOwner"
+        },
+        {
+          "key": "P_TARGET_TABLE",
+          "comment": "대상 테이블명",
+          "defaultValue": ":INIT$TargetTable"
+        }
+      ]
+    },
+    {
+      "owner": "*",
+      "objectType": "PROCEDURE",
+      "objectName": "INIT$_SP_DECISION_TREE_RULE_MODEL",
+      "label": "Decision tree rule model creation",
+      "items": [
+        {
+          "key": "P_MODEL_NAME",
+          "comment": "의사결정트리 규칙 모델명",
+          "defaultValue": "OML_DECISION_TREE_MODEL_01"
+        },
+        {
+          "key": "P_DATA_QUERY",
+          "comment": "학습 입력 데이터 SELECT 문",
+          "defaultValue": "'SELECT * FROM '||:INIT$TargetOwner||'.'||:INIT$TargetTable"
+        },
+        {
+          "key": "P_CASE_ID_COLUMN_NAME",
+          "comment": "행 식별 컬럼명",
+          "defaultValue": "FILE_ROW_NO"
+        },
+        {
+          "key": "P_TARGET_COLUMN_NAME",
+          "comment": "예측/분류 대상 컬럼명",
+          "defaultValue": "PREDICTED_TYPE"
+        },
+        {
+          "key": "P_CANDIDATE_COLUMNS",
+          "comment": "학습 후보 컬럼 목록",
+          "defaultValue": ""
+        },
+        {
+          "key": "P_MIN_SUPPORT_COUNT",
+          "comment": "규칙 생성 최소 건수",
+          "defaultValue": "30"
+        },
+        {
+          "key": "P_MIN_CONFIDENCE",
+          "comment": "규칙 생성 최소 신뢰도",
+          "defaultValue": "0.7"
+        },
+        {
+          "key": "P_MIN_LIFT",
+          "comment": "규칙 생성 최소 향상도",
+          "defaultValue": "1"
+        },
+        {
+          "key": "P_DROP_EXISTING_YN",
+          "comment": "기존 동일 모델 삭제 여부",
+          "defaultValue": "Y"
+        },
+        {
+          "key": "P_MAX_INPUT_ROWS",
+          "comment": "학습 입력 최대 행 수",
+          "defaultValue": "100000"
+        },
+        {
+          "key": "P_MAX_RULE_SUMMARY_COLUMNS",
+          "comment": "규칙 요약 최대 컬럼 수",
+          "defaultValue": "25"
+        },
+        {
+          "key": "P_MAX_RULE_SUMMARY_PER_PAIR",
+          "comment": "컬럼 쌍별 최대 요약 개수",
+          "defaultValue": "50"
+        },
+        {
+          "key": "P_TARGET_OWNER",
+          "comment": "대상 테이블 계정",
+          "defaultValue": ":INIT$TargetOwner"
+        },
+        {
+          "key": "P_TARGET_TABLE",
+          "comment": "대상 테이블명",
+          "defaultValue": ":INIT$TargetTable"
+        }
+      ]
+    },
+    {
+      "owner": "*",
+      "objectType": "PROCEDURE",
+      "objectName": "INIT$_SP_RULE_VIOLATION_DETECT",
+      "label": "Rule violation detection",
+      "items": [
+        {
+          "key": "P_RULE_OWNER_NAME",
+          "comment": "규칙 모델 계정",
+          "defaultValue": ":INIT$TargetOwner"
+        },
+        {
+          "key": "P_RULE_MODEL_NAME",
+          "comment": "위반 탐지에 사용할 규칙 모델명",
+          "defaultValue": "OML_ASSOCIATION_MODEL_01"
+        },
+        {
+          "key": "P_TARGET_OWNER",
+          "comment": "검사 대상 테이블 계정",
+          "defaultValue": ":INIT$TargetOwner"
+        },
+        {
+          "key": "P_TARGET_TABLE",
+          "comment": "검사 대상 테이블명",
+          "defaultValue": ":INIT$TargetTable"
+        },
+        {
+          "key": "P_CASE_ID_COLUMN_NAME",
+          "comment": "행 식별 컬럼명",
+          "defaultValue": "FILE_ROW_NO"
+        },
+        {
+          "key": "P_RESULT_OWNER",
+          "comment": "결과 테이블 계정",
+          "defaultValue": ":INIT$ResultOwner"
+        },
+        {
+          "key": "P_RESULT_TABLE",
+          "comment": "결과 테이블명",
+          "defaultValue": ":INIT$ResultTable"
+        },
+        {
+          "key": "P_MIN_CONFIDENCE",
+          "comment": "위반 판단 최소 신뢰도",
+          "defaultValue": "0.8"
+        },
+        {
+          "key": "P_MIN_LIFT",
+          "comment": "위반 판단 최소 향상도",
+          "defaultValue": "1"
+        },
+        {
+          "key": "P_MAX_RULES",
+          "comment": "적용할 최대 규칙 수",
+          "defaultValue": "500"
+        },
+        {
+          "key": "P_MAX_VIOLATIONS_PER_RULE",
+          "comment": "규칙별 최대 위반 건수",
+          "defaultValue": "1000"
+        },
+        {
+          "key": "P_CLEAR_EXISTING_YN",
+          "comment": "기존 결과 삭제 여부",
+          "defaultValue": "Y"
+        },
+        {
+          "key": "P_COMMIT_YN",
+          "comment": "프로시저 내부 커밋 여부",
+          "defaultValue": "Y"
+        }
+      ]
+    },
+    {
+      "owner": "*",
+      "objectType": "PROCEDURE",
+      "objectName": "INIT$_SP_CAT_CORR_ANALYZE",
+      "label": "Categorical correlation analysis",
+      "items": [
+        {
+          "key": "P_TARGET_OWNER",
+          "comment": "분석 대상 테이블 계정",
+          "defaultValue": ":INIT$TargetOwner"
+        },
+        {
+          "key": "P_TARGET_TABLE",
+          "comment": "분석 대상 테이블명",
+          "defaultValue": ":INIT$TargetTable"
+        },
+        {
+          "key": "P_MIN_PVALUE",
+          "comment": "상관 후보 최소 p-value 기준",
+          "defaultValue": "0.05"
+        },
+        {
+          "key": "P_MIN_CRAMER",
+          "comment": "통과 판정 최소 Cramer V",
+          "defaultValue": "0.3"
+        },
+        {
+          "key": "P_MIN_AVG_V",
+          "comment": "선택 후보 평균 Cramer V 기준",
+          "defaultValue": "0.5"
+        },
+        {
+          "key": "P_SAMPLE_ROWS",
+          "comment": "분석 샘플 최대 행 수",
+          "defaultValue": "100000"
+        },
+        {
+          "key": "P_MAX_DISTINCT",
+          "comment": "분석 대상 컬럼 최대 distinct 수",
+          "defaultValue": "100"
+        },
+        {
+          "key": "P_MAX_COLUMNS",
+          "comment": "분석 대상 최대 컬럼 수",
+          "defaultValue": "80"
+        }
+      ]
+    },
+    {
+      "owner": "*",
+      "objectType": "PROCEDURE",
+      "objectName": "INIT$_SP_PREDICTED_TYPE",
+      "label": "Predicted type feature summary",
+      "items": [
+        {
+          "key": "P_TARGET_OWNER",
+          "comment": "분석 대상 테이블 계정",
+          "defaultValue": ":INIT$TargetOwner"
+        },
+        {
+          "key": "P_TARGET_TABLE",
+          "comment": "분석 대상 테이블명",
+          "defaultValue": ":INIT$TargetTable"
+        },
+        {
+          "key": "P_DYNAMIC_MODEL_NAME",
+          "comment": "분류/예측 모델명",
+          "defaultValue": "OML_DECISION_TREE_MODEL_01"
+        },
+        {
+          "key": "P_PREDICTION_METHOD",
+          "comment": "예측 방식 선택(ONLY_RULE/MODEL/BOTH: 중간 결과만, FINAL_RULE/MODEL/BOTH: 중간 결과와 FINAL 자동 반영)",
+          "defaultValue": "ONLY_RULE"
+        }
+      ]
+    },
+    {
+      "owner": "*",
+      "objectType": "PROCEDURE",
+      "objectName": "INIT$_SP_DM_MODEL_VIEW_LIST",
+      "label": "Oracle ML model detail view list",
+      "items": [
+        {
+          "key": "P_MODEL_NAME",
+          "comment": "조회할 Oracle ML 모델명",
+          "defaultValue": "OML_ASSOCIATION_MODEL_01"
+        },
+        {
+          "key": "P_RESULT",
+          "comment": "모델 상세 뷰 목록 REF CURSOR",
+          "defaultValue": ""
+        }
+      ]
+    },
+    {
+      "owner": "*",
+      "objectType": "PROCEDURE",
+      "objectName": "INIT$_SP_DM_MODEL_VIEW_OPEN",
+      "label": "Oracle ML model detail view open",
+      "items": [
+        {
+          "key": "P_MODEL_NAME",
+          "comment": "조회할 Oracle ML 모델명",
+          "defaultValue": "OML_ASSOCIATION_MODEL_01"
+        },
+        {
+          "key": "P_VIEW_TYPE",
+          "comment": "열람할 모델 상세 뷰 유형",
+          "defaultValue": "VR"
+        },
+        {
+          "key": "P_RESULT",
+          "comment": "모델 상세 데이터 REF CURSOR",
+          "defaultValue": ""
+        }
+      ]
+    }
+  ]
+}

@@ -245,6 +245,91 @@ DECLARE
 
         DBMS_OUTPUT.PUT_LINE('[OK] INIT$_TB_ASSOC_RULE_SUMMARY column display order refreshed.');
     END;
+
+    PROCEDURE reorder_predicted_type_columns IS
+        TYPE t_col_list IS TABLE OF VARCHAR2(128);
+        v_cols t_col_list := t_col_list(
+            'OWNER',
+            'TABLE_NAME',
+            'MODEL_NAME',
+            'COLUMN_ID',
+            'COLUMN_NAME',
+            'DATA_TYPE',
+            'TOTAL_ROWS',
+            'NUM_DISTINCT',
+            'DIST_VAL_RT',
+            'LOG_DATA_TYPE',
+            'ENTROPY',
+            'NORM_ENTROPY',
+            'BASE_PREDICTED_TYPE',
+            'BASE_REASON',
+            'MODL_PREDICTED_TYPE',
+            'FINAL_PREDICTED_TYPE',
+            'FINAL_REASON',
+            'FINAL_UPDATE_DT',
+            'FINAL_UPDATE_USER',
+            'CREATE_DT'
+        );
+        v_current_order VARCHAR2(32767);
+        v_expected_order VARCHAR2(32767);
+    BEGIN
+        IF NOT table_exists('INIT$_TB_PREDICTED_TYPE') THEN
+            DBMS_OUTPUT.PUT_LINE('[SKIP] TABLE INIT$_TB_PREDICTED_TYPE does not exist.');
+            RETURN;
+        END IF;
+
+        FOR i IN 1 .. v_cols.COUNT LOOP
+            IF NOT column_exists('INIT$_TB_PREDICTED_TYPE', v_cols(i)) THEN
+                DBMS_OUTPUT.PUT_LINE('[SKIP] INIT$_TB_PREDICTED_TYPE column order refresh skipped. Missing column: ' || v_cols(i));
+                RETURN;
+            END IF;
+            v_expected_order := v_expected_order || CASE WHEN i > 1 THEN ',' END || v_cols(i);
+        END LOOP;
+
+        SELECT LISTAGG(COLUMN_NAME, ',') WITHIN GROUP (ORDER BY COLUMN_ID)
+          INTO v_current_order
+          FROM USER_TAB_COLS
+         WHERE TABLE_NAME = 'INIT$_TB_PREDICTED_TYPE'
+           AND HIDDEN_COLUMN = 'NO'
+           AND COLUMN_NAME IN (
+               'OWNER',
+               'TABLE_NAME',
+               'MODEL_NAME',
+               'COLUMN_ID',
+               'COLUMN_NAME',
+               'DATA_TYPE',
+               'TOTAL_ROWS',
+               'NUM_DISTINCT',
+               'DIST_VAL_RT',
+               'LOG_DATA_TYPE',
+               'ENTROPY',
+               'NORM_ENTROPY',
+               'BASE_PREDICTED_TYPE',
+               'BASE_REASON',
+               'MODL_PREDICTED_TYPE',
+               'FINAL_PREDICTED_TYPE',
+               'FINAL_REASON',
+               'FINAL_UPDATE_DT',
+               'FINAL_UPDATE_USER',
+               'CREATE_DT'
+           );
+
+        IF v_current_order = v_expected_order THEN
+            DBMS_OUTPUT.PUT_LINE('[SKIP] INIT$_TB_PREDICTED_TYPE column display order already matches.');
+            RETURN;
+        END IF;
+
+        -- Keep OWNER visible so the table never has zero visible columns.
+        FOR i IN 2 .. v_cols.COUNT LOOP
+            set_column_visibility('INIT$_TB_PREDICTED_TYPE', v_cols(i), 'INVISIBLE');
+        END LOOP;
+
+        FOR i IN 2 .. v_cols.COUNT LOOP
+            set_column_visibility('INIT$_TB_PREDICTED_TYPE', v_cols(i), 'VISIBLE');
+        END LOOP;
+
+        DBMS_OUTPUT.PUT_LINE('[OK] INIT$_TB_PREDICTED_TYPE column display order refreshed.');
+    END;
 BEGIN
     DBMS_OUTPUT.PUT_LINE('=== INIT_TARGET ALTER START ===');
 
@@ -277,7 +362,20 @@ BEGIN
     add_column_if_missing('INIT$_TB_ASSOC_RULE_SUMMARY', 'CONDITION_TOTAL_COUNT', '"CONDITION_TOTAL_COUNT" NUMBER');
     add_column_if_missing('INIT$_TB_ASSOC_RULE_SUMMARY', 'RESULT_TOTAL_COUNT', '"RESULT_TOTAL_COUNT" NUMBER');
     add_column_if_missing('INIT$_TB_ASSOC_RULE_SUMMARY', 'TOTAL_COUNT', '"TOTAL_COUNT" NUMBER');
+    add_column_if_missing('INIT$_TB_PREDICTED_TYPE', 'BASE_REASON', '"BASE_REASON" VARCHAR2(4000 BYTE)');
+    add_column_if_missing('INIT$_TB_PREDICTED_TYPE', 'FINAL_PREDICTED_TYPE', '"FINAL_PREDICTED_TYPE" VARCHAR2(4000 BYTE)');
+    add_column_if_missing('INIT$_TB_PREDICTED_TYPE', 'FINAL_REASON', '"FINAL_REASON" VARCHAR2(1000 BYTE)');
+    add_column_if_missing('INIT$_TB_PREDICTED_TYPE', 'FINAL_UPDATE_DT', '"FINAL_UPDATE_DT" DATE');
+    add_column_if_missing('INIT$_TB_PREDICTED_TYPE', 'FINAL_UPDATE_USER', '"FINAL_UPDATE_USER" VARCHAR2(128 BYTE)');
     add_column_if_missing('INIT$_TB_FLOW_WORK_NODE', 'USE_YN', '"USE_YN" CHAR(1 BYTE) DEFAULT ''Y'' NOT NULL ENABLE');
+
+    IF table_exists('INIT$_TB_PREDICTED_TYPE') THEN
+        run_ddl('COMMENT INIT$_TB_PREDICTED_TYPE.BASE_REASON', q'[COMMENT ON COLUMN "INIT$_TB_PREDICTED_TYPE"."BASE_REASON" IS 'Reason produced by rule-based profiling logic']');
+        run_ddl('COMMENT INIT$_TB_PREDICTED_TYPE.FINAL_PREDICTED_TYPE', q'[COMMENT ON COLUMN "INIT$_TB_PREDICTED_TYPE"."FINAL_PREDICTED_TYPE" IS 'User-confirmed final predicted type']');
+        run_ddl('COMMENT INIT$_TB_PREDICTED_TYPE.FINAL_REASON', q'[COMMENT ON COLUMN "INIT$_TB_PREDICTED_TYPE"."FINAL_REASON" IS 'User note for final predicted type decision']');
+        run_ddl('COMMENT INIT$_TB_PREDICTED_TYPE.FINAL_UPDATE_DT', q'[COMMENT ON COLUMN "INIT$_TB_PREDICTED_TYPE"."FINAL_UPDATE_DT" IS 'Final predicted type update date']');
+        run_ddl('COMMENT INIT$_TB_PREDICTED_TYPE.FINAL_UPDATE_USER', q'[COMMENT ON COLUMN "INIT$_TB_PREDICTED_TYPE"."FINAL_UPDATE_USER" IS 'Final predicted type update user']');
+    END IF;
 
     IF table_exists('INIT$_TB_FLOW_WORK_NODE') AND column_exists('INIT$_TB_FLOW_WORK_NODE', 'USE_YN') THEN
         run_ddl(
@@ -427,6 +525,7 @@ CREATE INDEX "IX_INIT$_TB_RULE_VIOLATION_03"
     END IF;
 
     reorder_assoc_rule_summary_columns;
+    reorder_predicted_type_columns;
 
     DBMS_OUTPUT.PUT_LINE('=== INIT_TARGET ALTER END ===');
 END;

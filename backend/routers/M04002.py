@@ -263,12 +263,13 @@ def _fetch_predicted_type_summary(cursor, owner_name: str, object_name: str, tar
     row = cursor.fetchone()
     total_columns = int(row[0] or 0) if row else 0
     result_object = f"{_quote_identifier(owner_name)}.{_quote_identifier(object_name)}"
+    effective_type_expr = "COALESCE(TRIM(FINAL_PREDICTED_TYPE), TRIM(MODL_PREDICTED_TYPE), TRIM(BASE_PREDICTED_TYPE))"
     cursor.execute(
         "SELECT TYPE_GROUP, COLUMN_NAME "
         "  FROM ("
         "        SELECT CASE "
-        "                 WHEN MODL_PREDICTED_TYPE LIKE '%범주형' THEN '범주형' "
-        "                 WHEN MODL_PREDICTED_TYPE LIKE '%연속형' THEN '연속형' "
+        f"                 WHEN {effective_type_expr} LIKE '%범주형' THEN '범주형' "
+        f"                 WHEN {effective_type_expr} LIKE '%연속형' THEN '연속형' "
         "                 ELSE '기타' "
         "               END AS TYPE_GROUP, "
         "               COLUMN_NAME, "
@@ -278,8 +279,8 @@ def _fetch_predicted_type_summary(cursor, owner_name: str, object_name: str, tar
         "           AND TABLE_NAME = :targetTable "
         "           AND COLUMN_NAME IS NOT NULL "
         "         GROUP BY CASE "
-        "                    WHEN MODL_PREDICTED_TYPE LIKE '%범주형' THEN '범주형' "
-        "                    WHEN MODL_PREDICTED_TYPE LIKE '%연속형' THEN '연속형' "
+        f"                    WHEN {effective_type_expr} LIKE '%범주형' THEN '범주형' "
+        f"                    WHEN {effective_type_expr} LIKE '%연속형' THEN '연속형' "
         "                    ELSE '기타' "
         "                  END, COLUMN_NAME "
         "       ) "
@@ -291,12 +292,12 @@ def _fetch_predicted_type_summary(cursor, owner_name: str, object_name: str, tar
         key = str(type_group or "기타")
         group_map.setdefault(key, []).append(str(column_name))
     cursor.execute(
-        "SELECT NVL(MODL_PREDICTED_TYPE, '(값 없음)') AS TYPE_NAME, "
+        f"SELECT NVL({effective_type_expr}, '(값 없음)') AS TYPE_NAME, "
         "       COUNT(DISTINCT COLUMN_NAME) AS COLUMN_COUNT "
         f"  FROM {result_object} "
         " WHERE OWNER = :targetOwner "
         "   AND TABLE_NAME = :targetTable "
-        " GROUP BY NVL(MODL_PREDICTED_TYPE, '(값 없음)') "
+        f" GROUP BY NVL({effective_type_expr}, '(값 없음)') "
         " ORDER BY COLUMN_COUNT DESC, TYPE_NAME",
         {"targetOwner": target_owner, "targetTable": target_table},
     )

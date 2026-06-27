@@ -569,12 +569,25 @@ def create_data_work_router(
                     if not re.match(r"^[A-Za-z0-9+/=._-]+$", row_id):
                         raise HTTPException(status_code=400, detail="Invalid row identifier.")
 
+                    set_items = [f"{quote_identifier(column_name)} = :value"]
+                    params = {"value": normalize_update_value(change.value), "row_id": row_id}
+                    if (
+                        MENU_CODE == "M03001"
+                        and str(table_name or "").upper() == "INIT$_TB_PREDICTED_TYPE"
+                        and column_name == "FINAL_PREDICTED_TYPE"
+                    ):
+                        if "FINAL_UPDATE_DT" in column_names:
+                            set_items.append('"FINAL_UPDATE_DT" = SYSDATE')
+                        if "FINAL_UPDATE_USER" in column_names:
+                            set_items.append('"FINAL_UPDATE_USER" = :final_update_user')
+                            params["final_update_user"] = get_request_user_id(request)
+
                     sql = (
                         f"UPDATE {target_object} "
-                        f"SET {quote_identifier(column_name)} = :value "
+                        f"SET {', '.join(set_items)} "
                         f"WHERE ROWID = CHARTOROWID(:row_id){where_sql}"
                     )
-                    cursor.execute(sql, {"value": normalize_update_value(change.value), "row_id": row_id})
+                    cursor.execute(sql, params)
                     updated_count += max(cursor.rowcount or 0, 0)
                 conn.commit()
             except Exception:
@@ -1138,7 +1151,7 @@ def create_data_work_router(
 
     def get_editable_data_columns(table_name: str) -> set[str]:
         if MENU_CODE == "M03001" and str(table_name or "").upper() == "INIT$_TB_PREDICTED_TYPE":
-            return {"MODL_PREDICTED_TYPE"}
+            return {"FINAL_PREDICTED_TYPE", "FINAL_REASON"}
         return set()
 
 

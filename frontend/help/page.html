@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="ko" data-ai-document="menu-help" data-context-priority="highest">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>메뉴 도움말 - INIT Data Editing System</title>
+    <meta name="ai-context-kind" content="menu-help">
+    <meta name="ai-context-priority" content="highest">
+    <script src="./help-utils.js"></script>
+    <style>
+        :root {
+            color-scheme: light;
+            font-family: Arial, "Malgun Gothic", sans-serif;
+        }
+
+        body {
+            background: #f8fafc;
+            color: #0f172a;
+            margin: 0;
+        }
+
+        header {
+            background: #111827;
+            color: #f8fafc;
+            padding: 26px 34px;
+        }
+
+        main {
+            display: grid;
+            gap: 18px;
+            margin: 0 auto;
+            max-width: 1080px;
+            padding: 24px 34px 40px;
+        }
+
+        h1,
+        h2,
+        h3,
+        p {
+            margin-top: 0;
+        }
+
+        h1 {
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+
+        header p {
+            color: #cbd5e1;
+            line-height: 1.6;
+            margin: 0;
+        }
+
+        .meta {
+            color: #93a4bd;
+            display: flex;
+            flex-wrap: wrap;
+            font-size: 12px;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .meta span {
+            border: 1px solid #334155;
+            padding: 4px 8px;
+        }
+
+        section {
+            background: #ffffff;
+            border: 1px solid #dbe3ef;
+            padding: 18px;
+        }
+
+        .ai-note {
+            background: #ecfdf5;
+            border-color: #99f6e4;
+        }
+
+        .warning-note {
+            background: #fff7ed;
+            border-color: #fed7aa;
+        }
+
+        h2 {
+            border-bottom: 1px solid #e2e8f0;
+            font-size: 18px;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+        }
+
+        h3 {
+            font-size: 14px;
+            margin-bottom: 6px;
+        }
+
+        p,
+        li,
+        dd {
+            color: #334155;
+            font-size: 14px;
+            line-height: 1.65;
+        }
+
+        ul,
+        ol {
+            margin-bottom: 0;
+            padding-left: 22px;
+        }
+
+        dl {
+            display: grid;
+            gap: 10px;
+            margin: 0;
+        }
+
+        dt {
+            color: #0f172a;
+            font-size: 14px;
+            font-weight: 800;
+        }
+
+        dd {
+            margin: 2px 0 0;
+        }
+
+        code {
+            background: #f1f5f9;
+            border: 1px solid #e2e8f0;
+            color: #1d4ed8;
+            padding: 1px 4px;
+        }
+
+        .grid {
+            display: grid;
+            gap: 12px;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .full {
+            grid-column: 1 / -1;
+        }
+
+        @media (max-width: 760px) {
+            header,
+            main {
+                padding-left: 18px;
+                padding-right: 18px;
+            }
+
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1 id="helpTitle">메뉴 도움말</h1>
+        <p id="helpSummary">도움말 정보를 불러오는 중입니다.</p>
+        <div class="meta" id="helpMeta"></div>
+    </header>
+
+    <main id="helpMain" data-ai-section="menu-help"></main>
+
+    <script>
+        function escapeHtml(value) {
+            return String(value ?? "")
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        function renderList(items) {
+            const list = (items || []).filter(Boolean);
+            if (!list.length) return "<p>등록된 설명이 없습니다.</p>";
+            return `<ul>${list.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
+        }
+
+        function renderDefinitionList(items) {
+            const list = (items || []).filter(Boolean);
+            if (!list.length) return "<p>등록된 구성 정보가 없습니다.</p>";
+            return `<dl>${list.map((item) => `
+                <div>
+                    <dt>${escapeHtml(item.name)}</dt>
+                    <dd>${escapeHtml(item.description)}</dd>
+                </div>
+            `).join("")}</dl>`;
+        }
+
+        function renderImplementation(implementation) {
+            const serviceFiles = implementation.serviceFiles.length ? implementation.serviceFiles : ["없음 또는 화면 전용 라우터에서 직접 처리"];
+            const rows = [
+                ["화면 HTML", implementation.frontendHtml],
+                ["화면 JS", implementation.frontendJs],
+                ["API 라우터", implementation.backendRouter || "등록된 API 라우터 없음 또는 구현 예정"],
+                ["공통 서비스", serviceFiles.join(", ")],
+                ["SQL 템플릿", implementation.sqlFiles.join(", ")]
+            ];
+
+            return `<dl>${rows.map(([name, value]) => `
+                <div>
+                    <dt>${escapeHtml(name)}</dt>
+                    <dd><code>${escapeHtml(value)}</code></dd>
+                </div>
+            `).join("")}</dl>`;
+        }
+
+        function renderOptionalSection(title, items, sectionKey, extraClass = "") {
+            if (!Array.isArray(items) || !items.length) return "";
+            return `
+                <section class="${escapeHtml(extraClass)} full" data-ai-section="${escapeHtml(sectionKey)}">
+                    <h2>${escapeHtml(title)}</h2>
+                    ${renderList(items)}
+                </section>
+            `;
+        }
+
+        function renderHelp(page) {
+            const implementation = window.HelpContentUtils.buildImplementation(page.pageCode);
+            document.documentElement.dataset.menuCode = page.pageCode;
+            document.title = `${page.title || page.label || page.pageCode} 도움말 - INIT Data Editing System`;
+            document.getElementById("helpTitle").textContent = `${page.title || page.label || page.pageCode} 도움말`;
+            document.getElementById("helpSummary").textContent = page.summary || "";
+            document.getElementById("helpMeta").innerHTML = [
+                `메뉴 코드: ${page.pageCode}`,
+                `그룹: ${page.group || "-"}`,
+                `상태: ${page.status || "enabled"}`
+            ].map((item) => `<span>${escapeHtml(item)}</span>`).join("");
+
+            const publicModels = implementation.publicModelDetails.length
+                ? renderList(implementation.publicModelDetails)
+                : "<p>이 메뉴에서 공개 ML/AI 모델 상세 설명은 별도 공개 범위가 확인될 때만 제공합니다.</p>";
+
+            document.getElementById("helpMain").innerHTML = `
+                <section class="ai-note" data-ai-section="summary">
+                    <h2>AI 우선 요약</h2>
+                    <p>${escapeHtml(page.summary || "")}</p>
+                </section>
+
+                <div class="grid">
+                    <section data-ai-section="purpose">
+                        <h2>화면 목적</h2>
+                        ${renderList(page.purpose)}
+                    </section>
+
+                    <section data-ai-section="workflow">
+                        <h2>기본 업무 흐름</h2>
+                        ${renderList(page.workflow)}
+                    </section>
+
+                    <section class="full" data-ai-section="layout">
+                        <h2>화면 구성</h2>
+                        ${renderDefinitionList(page.layout)}
+                    </section>
+
+                    <section data-ai-section="controls">
+                        <h2>주요 버튼/동작</h2>
+                        ${renderList(page.controls)}
+                    </section>
+
+                    <section data-ai-section="ai-guidance">
+                        <h2>Gemini 답변 기준</h2>
+                        ${renderList(page.aiGuidance)}
+                    </section>
+
+                    <section class="full" data-ai-section="implementation">
+                        <h2>구현 연동</h2>
+                        ${renderImplementation(implementation)}
+                    </section>
+
+                    <section data-ai-section="sql-purpose">
+                        <h2>SQL 역할</h2>
+                        ${renderList(implementation.sqlPurposes)}
+                    </section>
+
+                    <section data-ai-section="logical-data">
+                        <h2>논리 데이터 도메인</h2>
+                        ${renderList(implementation.logicalDataDomains)}
+                    </section>
+
+                    <section class="full" data-ai-section="public-models">
+                        <h2>공개 ML/AI 설명 가능 범위</h2>
+                        ${publicModels}
+                    </section>
+
+                    ${renderOptionalSection("상세 이해 가이드", page.deepDive, "deep-dive", "ai-note")}
+                    ${renderOptionalSection("결과 해석 기준", page.interpretationGuide, "interpretation-guide")}
+                    ${renderOptionalSection("자주 확인할 문제", page.troubleshooting, "troubleshooting")}
+                    ${renderOptionalSection("구현 보충 설명", page.implementationNotes, "implementation-notes")}
+
+                    <section class="warning-note full" data-ai-section="privacy">
+                        <h2>비공개 원칙</h2>
+                        <p>${escapeHtml(implementation.privacyNote)}</p>
+                    </section>
+                </div>
+            `;
+        }
+
+        async function initHelp() {
+            const params = new URLSearchParams(window.location.search);
+            const requestedPage = window.HelpContentUtils.normalizePageCode(params.get("page") || "home");
+            const response = await fetch("./help-content.json", { cache: "no-store" });
+            const content = await response.json();
+            const page = content.pages[requestedPage] || content.pages.home;
+            renderHelp(page);
+        }
+
+        initHelp().catch((error) => {
+            document.getElementById("helpSummary").textContent = `도움말을 불러오지 못했습니다: ${error.message}`;
+        });
+    </script>
+</body>
+</html>

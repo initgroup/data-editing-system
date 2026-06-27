@@ -510,6 +510,10 @@
     margin-left: 8px;
 }
 
+#container-M90001 .env-detail-preset-btn {
+    margin-left: auto;
+}
+
 .env-detail-grid {
     border: 1px solid #e0e0e0;
     border-top: 0;
@@ -4844,6 +4848,36 @@ body.is-column-resizing {
     gap: 8px;
 }
 
+.data-fill-column-btn {
+    height: 34px;
+    width: 34px;
+}
+
+.data-freeze-control input {
+    width: 64px;
+}
+
+.data-grid-topbar {
+    align-items: center;
+    display: flex;
+    gap: 12px;
+    justify-content: space-between;
+    min-height: 42px;
+}
+
+.data-grid-message {
+    flex: 1 1 auto;
+    margin: 0;
+}
+
+.data-grid-actions {
+    align-items: center;
+    display: flex;
+    flex: 0 0 auto;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
 .data-filter-stack {
     display: flex;
     flex: 1 1 520px;
@@ -4873,6 +4907,36 @@ body.is-column-resizing {
     font-weight: 850;
 }
 
+.data-edit-table .is-frozen-col {
+    position: sticky;
+    z-index: 2;
+}
+
+.data-edit-table td.is-frozen-col {
+    background: #fff;
+}
+
+.data-edit-table th.is-frozen-col {
+    z-index: 4;
+}
+
+.data-edit-table th.is-editable-column.is-frozen-col {
+    background: #fef3c7;
+}
+
+.data-edit-table .grid-row-no.is-frozen-col {
+    background: #f8fafc;
+    z-index: 3;
+}
+
+.data-edit-table th.grid-row-no.is-frozen-col {
+    z-index: 5;
+}
+
+.data-edit-table .is-frozen-edge {
+    box-shadow: 3px 0 4px rgba(15, 23, 42, 0.12);
+}
+
 .data-edit-cell.is-editable {
     background: #fff;
     cursor: text;
@@ -4880,6 +4944,10 @@ body.is-column-resizing {
 }
 
 .data-edit-cell.is-editable:focus {
+    box-shadow: inset 0 0 0 2px #2563eb;
+}
+
+.data-edit-cell.is-active-cell {
     box-shadow: inset 0 0 0 2px #2563eb;
 }
 
@@ -6512,24 +6580,34 @@ body.intro-mode #container-M99001 .env-workspace {
 .flow-work-page .flow-sidebar {
     display: flex;
     flex-direction: column;
+    gap: 10px;
     max-height: 100%;
     min-height: 0;
-    overflow-x: hidden;
-    overflow-y: auto;
+    overflow: hidden;
 }
 
-.flow-work-page .flow-sidebar .table-object-header,
-.flow-work-page .flow-saved-card {
+.flow-work-page .flow-sidebar .table-object-header {
     flex: 0 0 auto;
+}
+
+.flow-work-page .flow-saved-card {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    max-height: clamp(150px, 26vh, 240px);
+    min-height: 136px;
+    overflow: hidden;
 }
 
 .flow-work-page .flow-palette-card {
     display: flex;
-    flex: 1 1 auto;
+    flex: 1 1 320px;
     flex-direction: column;
-    min-height: 0;
+    min-height: 210px;
+    overflow: hidden;
 }
 
+.flow-work-page .flow-saved-card .data-job-grid,
 .flow-work-page .flow-palette-card .data-job-grid {
     flex: 1 1 auto;
     min-height: 0;
@@ -6653,7 +6731,10 @@ body.intro-mode #container-M99001 .env-workspace {
 
 .flow-work-page .flow-version-grid {
     border-top: 1px solid #d7dce3;
+    flex: 1 1 auto;
     margin: 8px -12px -12px;
+    min-height: 0;
+    overflow-y: auto;
 }
 
 .flow-work-page .flow-version-row {

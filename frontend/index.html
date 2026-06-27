@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>INIT Data Editing System</title>
     <script>
-        window.APP_CACHE_VERSION = "1.0.263";
+        window.APP_CACHE_VERSION = "1.0.264";
         window.APP_ASSET_VERSION_OVERRIDES = {
             // 전체 캐시 갱신: APP_CACHE_VERSION만 올립니다.
             // 부분 캐시 갱신: "js/M90001.js": "1.0.1" 처럼 파일별 버전을 지정합니다.
@@ -35,6 +35,7 @@
             "pages/M99004.html": "1.0.2",
             "js/M99004.js": "1.0.3",
             "css/styleMenu.css": "1.0.3",
+            "css/style.css": "1.0.1",
         };
         window.APP_ASSET_URL = function(path) {
             const normalized = String(path || "").replace(/^\.\//, "");
@@ -113,6 +114,9 @@
                     </button>
                     <button onclick="handleLogout()" class="btn-refresh-top ml-2 text-slate-600 hover:text-slate-900" title="Logout">
                         <i class="fas fa-sign-out-alt"></i>
+                    </button>
+                    <button onclick="openHomeHelpPopup()" class="btn-refresh-top ml-2 text-sky-600 hover:text-sky-800" title="Current menu help">
+                        <i class="fas fa-circle-question"></i>
                     </button>
                 </div>
             </header>
@@ -219,8 +223,25 @@
                         </div>
                     </div>
                     <form id="geminiSearchForm">
-                        <label for="geminiQuery">Question</label>
-                        <textarea id="geminiQuery" name="query" placeholder="Type a question or search request. Press Ctrl+Enter to send."></textarea>
+                        <div class="geminiQuestionHeader">
+                            <label for="geminiQuery">Question</label>
+                            <div class="geminiQuestionToolbar" aria-label="Gemini attachment tools">
+                                <button id="geminiAttachFileButton" type="button" title="Attach files">
+                                    <i class="fas fa-paperclip"></i>
+                                </button>
+                                <button id="geminiCapturePageButton" type="button" title="Capture current page">
+                                    <i class="fas fa-camera"></i>
+                                </button>
+                                <button id="geminiAttachSourceButton" type="button" title="Attach current page source context">
+                                    <i class="fas fa-code"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <input id="geminiFileInput" type="file" multiple hidden>
+                        <div id="geminiDropZone" class="geminiInputFrame">
+                            <textarea id="geminiQuery" name="query" placeholder="Type a question or search request. Press Ctrl+Enter to send."></textarea>
+                        </div>
+                        <div id="geminiAttachmentList" class="geminiAttachmentList" hidden></div>
                         <div class="actionsGemini">
                             <button id="geminiSubmitButton" type="button" title="Send (Ctrl+Enter)">
                                 <i class="fas fa-paper-plane"></i>
@@ -241,6 +262,7 @@
             "./js/common.js",
             "./js/MCOMMON_DATA_WORK.js",
             "./js/MCOMMON_FLOW_WORK.js",
+            "./help/help-utils.js",
             "./js/chart.js",
             "./config/menu.config.js",
             "./js/menu-renderer.js"
@@ -345,6 +367,31 @@
             PageManager.clearLoginSession?.();
             PageManager.resetWorkspaceForLogout?.();
             await PageManager.load('login', 'Data Editing System Login');
+        }
+
+        function getCurrentHelpPageCode() {
+            const activeSection = document.querySelector(".page-section.active");
+            const activeCode = activeSection?.id?.replace("page-section-", "");
+            return activeCode || sessionStorage.getItem("initCurrentPage") || "home";
+        }
+
+        function openHomeHelpPopup() {
+            const width = 980;
+            const height = 760;
+            const left = Math.max(0, Math.round((window.screen.width - width) / 2));
+            const top = Math.max(0, Math.round((window.screen.height - height) / 2));
+            const pageCode = encodeURIComponent(getCurrentHelpPageCode());
+            const features = [
+                `width=${width}`,
+                `height=${height}`,
+                `left=${left}`,
+                `top=${top}`,
+                "resizable=yes",
+                "scrollbars=yes",
+                "noopener=yes"
+            ].join(",");
+
+            window.open(`./help/page.html?page=${pageCode}`, "initMenuHelp", features);
         }
 
         // 전역 변수로 이전 크기 저장 (초기값 300px)
@@ -665,6 +712,22 @@
         const geminiButton = document.getElementById("geminiSubmitButton");
         const geminiErrorEl = document.getElementById("geminiError");
         const geminiChatMessagesEl = document.getElementById("geminiChatMessages");
+        const geminiFileInputEl = document.getElementById("geminiFileInput");
+        const geminiAttachmentListEl = document.getElementById("geminiAttachmentList");
+        const geminiDropZoneEl = document.getElementById("geminiDropZone");
+        const geminiAttachFileButton = document.getElementById("geminiAttachFileButton");
+        const geminiCapturePageButton = document.getElementById("geminiCapturePageButton");
+        const geminiAttachSourceButton = document.getElementById("geminiAttachSourceButton");
+        const GEMINI_MAX_ATTACHMENTS = 8;
+        const GEMINI_MAX_TEXT_CHARS = 80000;
+        const GEMINI_MAX_BINARY_BYTES = 4 * 1024 * 1024;
+        const GEMINI_MAX_CAPTURE_DIMENSION = 14000;
+        const GEMINI_TEXT_EXTENSIONS = new Set([
+            "txt", "md", "csv", "tsv", "json", "xml", "html", "htm", "css", "js", "ts",
+            "py", "java", "sql", "log", "yaml", "yml", "ini", "properties"
+        ]);
+        let geminiAttachments = [];
+        let geminiAttachmentSeq = 0;
 
         function escapeHtml(value) {
             return String(value)
@@ -873,20 +936,662 @@
             }
         }
 
+        function setGeminiError(message) {
+            geminiErrorEl.textContent = message || "";
+            geminiErrorEl.hidden = !message;
+        }
+
+        function formatGeminiBytes(bytes) {
+            const value = Number(bytes || 0);
+            if (value < 1024) return `${value} B`;
+            if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+            return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+        }
+
+        function capGeminiText(text, maxChars = GEMINI_MAX_TEXT_CHARS) {
+            const value = String(text || "");
+            if (value.length <= maxChars) return value;
+            return `${value.slice(0, maxChars)}\n\n[Truncated: ${value.length - maxChars} more characters]`;
+        }
+
+        function getGeminiFileExtension(fileName) {
+            const match = String(fileName || "").toLowerCase().match(/\.([^.]+)$/);
+            return match ? match[1] : "";
+        }
+
+        function isGeminiTextFile(file) {
+            const mimeType = String(file.type || "").toLowerCase();
+            const extension = getGeminiFileExtension(file.name);
+            return mimeType.startsWith("text/")
+                || mimeType.includes("json")
+                || mimeType.includes("xml")
+                || mimeType.includes("javascript")
+                || GEMINI_TEXT_EXTENSIONS.has(extension);
+        }
+
+        function createGeminiTextAttachment({ name, role, text, mimeType = "text/plain", sourceType = "generated", priority = 50, metadata = {} }) {
+            return {
+                id: `gemini-attachment-${++geminiAttachmentSeq}`,
+                name,
+                role,
+                sourceType,
+                contentKind: "text",
+                mimeType,
+                size: new Blob([text || ""]).size,
+                textContent: capGeminiText(text),
+                priority,
+                metadata
+            };
+        }
+
+        function renderGeminiAttachments() {
+            if (!geminiAttachmentListEl) return;
+            if (!geminiAttachments.length) {
+                geminiAttachmentListEl.hidden = true;
+                geminiAttachmentListEl.innerHTML = "";
+                return;
+            }
+
+            geminiAttachmentListEl.hidden = false;
+            const itemsHtml = geminiAttachments.map((item) => `
+                <div class="geminiAttachmentItem" data-attachment-id="${escapeHtml(item.id)}" role="button" tabindex="0" title="Preview attachment">
+                    <i class="fas ${item.contentKind === "image" ? "fa-image" : (item.sourceType === "page-source" ? "fa-code" : "fa-file-lines")}"></i>
+                    <span title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</span>
+                    <small>${escapeHtml(item.role || item.contentKind || "context")} · ${escapeHtml(formatGeminiBytes(item.size))}</small>
+                    <button type="button" title="Remove attachment" data-remove-attachment="${escapeHtml(item.id)}">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `).join("");
+            geminiAttachmentListEl.innerHTML = `
+                <div class="geminiAttachmentListHeader">
+                    <span>${geminiAttachments.length} attachment(s)</span>
+                    <button type="button" title="Remove all attachments" data-clear-attachments>
+                        <i class="fas fa-trash-can"></i>
+                        <span>Clear all</span>
+                    </button>
+                </div>
+                ${itemsHtml}
+            `;
+        }
+
+        function addGeminiAttachments(items) {
+            const nextItems = (Array.isArray(items) ? items : [items]).filter(Boolean);
+            if (!nextItems.length) return;
+
+            const remaining = Math.max(0, GEMINI_MAX_ATTACHMENTS - geminiAttachments.length);
+            if (remaining === 0) {
+                setGeminiError(`Attach up to ${GEMINI_MAX_ATTACHMENTS} context items.`);
+                return;
+            }
+
+            geminiAttachments.push(...nextItems.slice(0, remaining));
+            if (nextItems.length > remaining) {
+                setGeminiError(`Only ${remaining} more attachment(s) were added. Limit is ${GEMINI_MAX_ATTACHMENTS}.`);
+            } else {
+                setGeminiError("");
+            }
+            renderGeminiAttachments();
+        }
+
+        function removeGeminiAttachment(id) {
+            geminiAttachments = geminiAttachments.filter((item) => item.id !== id);
+            renderGeminiAttachments();
+        }
+        window.removeGeminiAttachment = removeGeminiAttachment;
+
+        function clearGeminiAttachments() {
+            geminiAttachments = [];
+            renderGeminiAttachments();
+        }
+
+        function getGeminiAttachmentById(id) {
+            return geminiAttachments.find((item) => item.id === id) || null;
+        }
+
+        function ensureGeminiPreviewLayer() {
+            let layer = document.getElementById("geminiAttachmentPreviewLayer");
+            if (layer) return layer;
+
+            layer = document.createElement("div");
+            layer.id = "geminiAttachmentPreviewLayer";
+            layer.className = "geminiPreviewLayer";
+            layer.hidden = true;
+            layer.innerHTML = `
+                <section class="geminiPreviewDialog" role="dialog" aria-modal="true" aria-labelledby="geminiPreviewTitle">
+                    <header>
+                        <div>
+                            <h2 id="geminiPreviewTitle">Attachment preview</h2>
+                            <p id="geminiPreviewMeta"></p>
+                        </div>
+                        <button id="geminiPreviewCloseButton" type="button" title="Close">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </header>
+                    <div id="geminiPreviewBody" class="geminiPreviewBody"></div>
+                </section>
+            `;
+            document.body.appendChild(layer);
+            layer.addEventListener("click", (event) => {
+                if (event.target === layer) closeGeminiAttachmentPreview();
+            });
+            layer.querySelector("#geminiPreviewCloseButton")?.addEventListener("click", closeGeminiAttachmentPreview);
+            return layer;
+        }
+
+        function closeGeminiAttachmentPreview() {
+            const layer = document.getElementById("geminiAttachmentPreviewLayer");
+            if (layer) layer.hidden = true;
+        }
+        window.closeGeminiAttachmentPreview = closeGeminiAttachmentPreview;
+
+        function previewGeminiAttachment(id) {
+            const item = getGeminiAttachmentById(id);
+            if (!item) return;
+
+            const layer = ensureGeminiPreviewLayer();
+            const title = layer.querySelector("#geminiPreviewTitle");
+            const meta = layer.querySelector("#geminiPreviewMeta");
+            const body = layer.querySelector("#geminiPreviewBody");
+            if (!title || !meta || !body) return;
+
+            title.textContent = item.name || "Attachment preview";
+            meta.textContent = `${item.role || item.contentKind || "context"} · ${item.mimeType || "text/plain"} · ${formatGeminiBytes(item.size)}`;
+
+            if (item.contentKind === "image" && item.base64Data) {
+                body.innerHTML = `<img src="data:${escapeHtml(item.mimeType || "image/png")};base64,${item.base64Data}" alt="${escapeHtml(item.name)}">`;
+            } else {
+                const previewText = item.textContent || JSON.stringify(item.metadata || {}, null, 2) || "No preview content.";
+                body.innerHTML = `<pre>${escapeHtml(previewText)}</pre>`;
+            }
+
+            layer.hidden = false;
+        }
+
+        function getCurrentGeminiPageInfo() {
+            const activeSection = document.querySelector(".page-section.active");
+            const pageCode = activeSection?.id?.replace("page-section-", "") || "unknown";
+            const menu = window.MENU_PAGE_MAP?.[pageCode] || {};
+            return {
+                pageCode,
+                title: document.getElementById("contentTitle")?.innerText?.trim() || menu.title || menu.label || pageCode,
+                menuLabel: menu.label || "",
+                location: window.location.href,
+                capturedAt: new Date().toISOString()
+            };
+        }
+
+        function getActiveGeminiPageElement() {
+            return CommonUI.getActivePageContainer?.()
+                || document.querySelector(".page-section.active")
+                || document.getElementById("pageContainerHolder");
+        }
+
+        function applyRuntimeValuesToSnapshot(sourceEl, cloneEl) {
+            const sourceFields = sourceEl.querySelectorAll("input, textarea, select");
+            const cloneFields = cloneEl.querySelectorAll("input, textarea, select");
+
+            sourceFields.forEach((field, index) => {
+                const clone = cloneFields[index];
+                if (!clone) return;
+
+                if (field.tagName === "TEXTAREA") {
+                    clone.textContent = field.value || "";
+                    clone.setAttribute("data-current-value", field.value || "");
+                    return;
+                }
+
+                if (field.tagName === "SELECT") {
+                    Array.from(clone.options || []).forEach((option, optionIndex) => {
+                        option.toggleAttribute("selected", Boolean(field.options?.[optionIndex]?.selected));
+                    });
+                    clone.setAttribute("data-current-value", field.value || "");
+                    return;
+                }
+
+                clone.setAttribute("value", field.value || "");
+                clone.toggleAttribute("checked", Boolean(field.checked));
+            });
+        }
+
+        function buildCurrentElementsSnapshot() {
+            const pageInfo = getCurrentGeminiPageInfo();
+            const sourceEl = getActiveGeminiPageElement();
+            if (!sourceEl) {
+                return createGeminiTextAttachment({
+                    name: "runtime-elements-snapshot.html",
+                    role: "Current rendered page DOM snapshot",
+                    sourceType: "page-source",
+                    priority: 10,
+                    text: "<!-- No active page element was found. -->",
+                    metadata: pageInfo
+                });
+            }
+
+            const clone = sourceEl.cloneNode(true);
+            applyRuntimeValuesToSnapshot(sourceEl, clone);
+            clone.querySelectorAll("script").forEach((el) => el.remove());
+            clone.querySelectorAll("[hidden]").forEach((el) => el.setAttribute("data-hidden-at-capture", "true"));
+
+            const text = [
+                `<!--`,
+                `AI_CONTEXT_KIND: runtime-elements-snapshot`,
+                `PAGE_CODE: ${pageInfo.pageCode}`,
+                `PAGE_TITLE: ${pageInfo.title}`,
+                `CAPTURED_AT: ${pageInfo.capturedAt}`,
+                `NOTE: This snapshot mirrors the browser Elements panel after dynamic rendering. Form values are copied into attributes.`,
+                `-->`,
+                clone.outerHTML
+            ].join("\n");
+
+            return createGeminiTextAttachment({
+                name: "runtime-elements-snapshot.html",
+                role: "Current rendered page DOM snapshot",
+                sourceType: "page-source",
+                priority: 10,
+                text,
+                mimeType: "text/html",
+                metadata: pageInfo
+            });
+        }
+
+        async function fetchGeminiTextAsset(path, name, role, priority, metadata = {}) {
+            const url = PageManager.getAssetUrl?.(path) || path;
+            const response = await fetch(url);
+            if (!response.ok) return null;
+            const text = await response.text();
+            return createGeminiTextAttachment({
+                name,
+                role,
+                sourceType: "page-source",
+                priority,
+                text,
+                mimeType: name.endsWith(".css") ? "text/css" : (name.endsWith(".js") ? "text/javascript" : "text/html"),
+                metadata: { ...metadata, assetPath: path }
+            });
+        }
+
+        async function buildCurrentPageSourceContext() {
+            const pageInfo = getCurrentGeminiPageInfo();
+            const pageCode = pageInfo.pageCode;
+            const attachments = [
+                createGeminiTextAttachment({
+                    name: "current-page-metadata.json",
+                    role: "Current page metadata for AI routing",
+                    sourceType: "page-source",
+                    priority: 5,
+                    mimeType: "application/json",
+                    text: JSON.stringify({
+                        aiContextKind: "current-page-source-context",
+                        priorityOrder: [
+                            "menu-help",
+                            "runtime-elements-snapshot.html",
+                            "page-html-template",
+                            "page-javascript",
+                            "shared-css"
+                        ],
+                        page: pageInfo
+                    }, null, 2),
+                    metadata: pageInfo
+                }),
+                buildCurrentElementsSnapshot()
+            ];
+
+            const isDataTemplate = PageManager.dataWorkTemplatePages?.includes(pageCode);
+            const isFlowTemplate = PageManager.flowWorkTemplatePages?.includes(pageCode);
+            const htmlFileName = isDataTemplate ? "MCOMMON_DATA_WORK" : (isFlowTemplate ? "MCOMMON_FLOW_WORK" : pageCode);
+            const scriptFileName = isDataTemplate ? "MCOMMON_DATA_WORK" : (isFlowTemplate ? "MCOMMON_FLOW_WORK" : pageCode);
+
+            const sourceAssets = [
+                [`./pages/${htmlFileName}.html`, `${htmlFileName}.html`, "Original page HTML template", 30],
+                [`./js/${scriptFileName}.js`, `${scriptFileName}.js`, "Page JavaScript behavior source", 35],
+                ["./css/style.css", "style.css", "Shared shell and Gemini CSS", 45],
+                ["./css/styleMenu.css", "styleMenu.css", "Shared page CSS", 46]
+            ];
+
+            for (const [path, name, role, priority] of sourceAssets) {
+                try {
+                    const item = await fetchGeminiTextAsset(path, name, role, priority, pageInfo);
+                    if (item) attachments.push(item);
+                } catch (error) {
+                    attachments.push(createGeminiTextAttachment({
+                        name: `${name}.load-error.txt`,
+                        role: `${role} load error`,
+                        sourceType: "page-source",
+                        priority,
+                        text: `Failed to load ${path}: ${error.message}`,
+                        metadata: pageInfo
+                    }));
+                }
+            }
+
+            return attachments;
+        }
+
+        async function buildGeminiHelpContext(pageCode) {
+            const normalized = String(pageCode || "home");
+            try {
+                const url = PageManager.getAssetUrl?.("./help/help-content.json") || "./help/help-content.json";
+                const response = await fetch(url, { cache: "no-store" });
+                if (!response.ok) return [];
+
+                const content = await response.json();
+                const page = content.pages?.[normalized] || content.pages?.[normalized.toUpperCase?.()] || content.pages?.home;
+                if (!page || !window.HelpContentUtils?.buildImplementation || !window.HelpContentUtils?.buildHelpMarkdown) return [];
+
+                const implementation = window.HelpContentUtils.buildImplementation(page.pageCode);
+                return [createGeminiTextAttachment({
+                    name: `${page.pageCode}-menu-help.md`,
+                    role: "Menu help page. Use this before other context.",
+                    sourceType: "menu-help",
+                    priority: 1,
+                    mimeType: "text/markdown",
+                    text: window.HelpContentUtils.buildHelpMarkdown(page, implementation),
+                    metadata: {
+                        pageCode: page.pageCode,
+                        contextPriority: "highest",
+                        contentVersion: content.version || ""
+                    }
+                })];
+            } catch (error) {
+                return [];
+            }
+        }
+
+        function readFileAsDataUrl(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(String(reader.result || ""));
+                reader.onerror = () => reject(reader.error || new Error("File read failed."));
+                reader.readAsDataURL(file);
+            });
+        }
+
+        async function createGeminiFileAttachment(file) {
+            const base = {
+                id: `gemini-attachment-${++geminiAttachmentSeq}`,
+                name: file.name,
+                role: "User attached local file",
+                sourceType: "user-file",
+                mimeType: file.type || "application/octet-stream",
+                size: file.size,
+                priority: 20,
+                metadata: {
+                    lastModified: file.lastModified ? new Date(file.lastModified).toISOString() : null
+                }
+            };
+
+            if (isGeminiTextFile(file)) {
+                const text = await file.text();
+                return {
+                    ...base,
+                    contentKind: "text",
+                    textContent: capGeminiText(text)
+                };
+            }
+
+            if ((file.type || "").startsWith("image/") || file.type === "application/pdf") {
+                if (file.size > GEMINI_MAX_BINARY_BYTES) {
+                    return {
+                        ...base,
+                        contentKind: "binary-summary",
+                        textContent: `Binary file was not embedded because it is larger than ${formatGeminiBytes(GEMINI_MAX_BINARY_BYTES)}.`
+                    };
+                }
+                const dataUrl = await readFileAsDataUrl(file);
+                return {
+                    ...base,
+                    contentKind: (file.type || "").startsWith("image/") ? "image" : "binary",
+                    base64Data: dataUrl.split(",")[1] || "",
+                    textContent: `${file.name} is attached as ${file.type || "binary data"}.`
+                };
+            }
+
+            return {
+                ...base,
+                contentKind: "binary-summary",
+                textContent: `Binary file metadata only. MIME type: ${file.type || "unknown"}, size: ${formatGeminiBytes(file.size)}.`
+            };
+        }
+
+        async function handleGeminiFiles(files) {
+            const fileList = Array.from(files || []);
+            if (!fileList.length) return;
+
+            try {
+                const attachments = [];
+                for (const file of fileList) {
+                    attachments.push(await createGeminiFileAttachment(file));
+                }
+                addGeminiAttachments(attachments);
+            } catch (error) {
+                setGeminiError(error.message || "Unable to attach file.");
+            } finally {
+                if (geminiFileInputEl) geminiFileInputEl.value = "";
+            }
+        }
+
+        function getGeminiPageCaptureSize(sourceEl) {
+            const rect = sourceEl.getBoundingClientRect();
+            const width = Math.max(320, Math.ceil(Math.max(rect.width, sourceEl.scrollWidth, sourceEl.offsetWidth)));
+            const height = Math.max(320, Math.ceil(Math.max(rect.height, sourceEl.scrollHeight, sourceEl.offsetHeight)));
+            const scale = Math.min(1, GEMINI_MAX_CAPTURE_DIMENSION / Math.max(width, height));
+            return {
+                width,
+                height,
+                canvasWidth: Math.max(1, Math.floor(width * scale)),
+                canvasHeight: Math.max(1, Math.floor(height * scale)),
+                scale
+            };
+        }
+
+        function collectGeminiCaptureCss() {
+            const preferredNames = ["styletail.css", "style.css", "styleMenu.css", "flow-work.css", "grid-custom.css", "mermaid.min.css"];
+            const cssTexts = [];
+
+            Array.from(document.styleSheets || []).forEach((sheet) => {
+                const href = sheet.href || "";
+                if (href && !preferredNames.some((name) => href.includes(name))) return;
+                try {
+                    const rules = Array.from(sheet.cssRules || []).map((rule) => rule.cssText).join("\n");
+                    if (rules) cssTexts.push(rules);
+                } catch (error) {
+                    // Cross-origin or protected stylesheets are skipped.
+                }
+            });
+
+            return cssTexts.join("\n");
+        }
+
+        function buildGeminiCaptureHtmlDocument(sourceEl, size, pageInfo) {
+            const clone = sourceEl.cloneNode(true);
+            applyRuntimeValuesToSnapshot(sourceEl, clone);
+            clone.querySelectorAll("script").forEach((el) => el.remove());
+            clone.style.width = `${size.width}px`;
+            clone.style.minHeight = `${size.height}px`;
+            clone.style.boxSizing = "border-box";
+            const serializedClone = new XMLSerializer().serializeToString(clone);
+            const cssText = collectGeminiCaptureCss().replace(/\]\]>/g, "]]]]><![CDATA[>");
+
+            return `
+                <html xmlns="http://www.w3.org/1999/xhtml">
+                    <head>
+                        <meta charset="UTF-8" />
+                        <style><![CDATA[
+                            html, body {
+                                background: #f8fafc;
+                                margin: 0;
+                                min-height: ${size.height}px;
+                                width: ${size.width}px;
+                            }
+                            * { box-sizing: border-box; }
+                            ${cssText}
+                        ]]></style>
+                    </head>
+                    <body data-ai-capture-page-code="${escapeHtml(pageInfo.pageCode)}" data-ai-capture-title="${escapeHtml(pageInfo.title)}">
+                        ${serializedClone}
+                    </body>
+                </html>
+            `;
+        }
+
+        function loadGeminiImage(src) {
+            return new Promise((resolve, reject) => {
+                const image = new Image();
+                image.onload = () => resolve(image);
+                image.onerror = () => reject(new Error("Rendered capture image could not be loaded."));
+                image.src = src;
+            });
+        }
+
+        async function captureCurrentGeminiPageLongImage() {
+            const sourceEl = getActiveGeminiPageElement();
+            if (!sourceEl) throw new Error("No active page is available for capture.");
+
+            const pageInfo = getCurrentGeminiPageInfo();
+            const size = getGeminiPageCaptureSize(sourceEl);
+            const html = buildGeminiCaptureHtmlDocument(sourceEl, size, pageInfo);
+            const svg = `
+                <svg xmlns="http://www.w3.org/2000/svg" width="${size.width}" height="${size.height}">
+                    <foreignObject width="100%" height="100%">${html}</foreignObject>
+                </svg>
+            `;
+            const image = await loadGeminiImage(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`);
+            const canvas = document.createElement("canvas");
+            canvas.width = size.canvasWidth;
+            canvas.height = size.canvasHeight;
+            const ctx = canvas.getContext("2d");
+            ctx.fillStyle = "#f8fafc";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(image, 0, 0, size.canvasWidth, size.canvasHeight);
+
+            const dataUrl = canvas.toDataURL("image/png");
+            return {
+                id: `gemini-attachment-${++geminiAttachmentSeq}`,
+                name: `${pageInfo.pageCode}-full-scroll-capture.png`,
+                role: "Full scroll rendered page capture",
+                sourceType: "page-capture",
+                contentKind: "image",
+                mimeType: "image/png",
+                size: Math.round((dataUrl.length * 3) / 4),
+                base64Data: dataUrl.split(",")[1] || "",
+                textContent: `Full scroll page capture is attached as image/png. Original size: ${size.width}x${size.height}, captured size: ${size.canvasWidth}x${size.canvasHeight}.`,
+                priority: 12,
+                metadata: { ...pageInfo, originalWidth: size.width, originalHeight: size.height, captureWidth: size.canvasWidth, captureHeight: size.canvasHeight }
+            };
+        }
+
+        async function captureCurrentGeminiPageImage() {
+            if (!navigator.mediaDevices?.getDisplayMedia) {
+                throw new Error("Screen capture is not supported in this browser. Drag a screenshot file instead.");
+            }
+
+            let stream = null;
+            try {
+                stream = await navigator.mediaDevices.getDisplayMedia({
+                    video: { displaySurface: "browser" },
+                    audio: false
+                });
+                const video = document.createElement("video");
+                video.srcObject = stream;
+                await video.play();
+
+                const canvas = document.createElement("canvas");
+                canvas.width = video.videoWidth || window.innerWidth;
+                canvas.height = video.videoHeight || window.innerHeight;
+                const ctx = canvas.getContext("2d");
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                const dataUrl = canvas.toDataURL("image/png");
+                const pageInfo = getCurrentGeminiPageInfo();
+                return {
+                    id: `gemini-attachment-${++geminiAttachmentSeq}`,
+                    name: `${pageInfo.pageCode}-visible-page-capture.png`,
+                    role: "Visible page screenshot selected by the user",
+                    sourceType: "page-capture",
+                    contentKind: "image",
+                    mimeType: "image/png",
+                    size: Math.round((dataUrl.length * 3) / 4),
+                    base64Data: dataUrl.split(",")[1] || "",
+                    textContent: "Visible page screenshot is attached as image/png.",
+                    priority: 15,
+                    metadata: pageInfo
+                };
+            } finally {
+                if (stream) stream.getTracks().forEach((track) => track.stop());
+            }
+        }
+
+        async function attachCurrentPageCapture() {
+            setGeminiError("");
+            const snapshot = buildCurrentElementsSnapshot();
+            try {
+                const image = await captureCurrentGeminiPageLongImage();
+                addGeminiAttachments([image, snapshot]);
+            } catch (error) {
+                try {
+                    const image = await captureCurrentGeminiPageImage();
+                    addGeminiAttachments([image, snapshot]);
+                    setGeminiError(`Full scroll capture failed, so a visible screen capture was attached. ${error.message || ""}`.trim());
+                } catch (fallbackError) {
+                    addGeminiAttachments([snapshot]);
+                    setGeminiError(`${fallbackError.message || error.message || "Screen capture failed."} Elements snapshot was attached instead.`);
+                }
+            }
+        }
+
+        async function attachCurrentPageSourceContext() {
+            setGeminiError("");
+            try {
+                addGeminiAttachments(await buildCurrentPageSourceContext());
+            } catch (error) {
+                setGeminiError(error.message || "Unable to attach current page source context.");
+            }
+        }
+
+        function renderGeminiUserQuestion(query, attachments) {
+            if (!attachments?.length) return query;
+            const lines = attachments.map((item) => `- ${item.name} (${item.role || item.contentKind}, ${formatGeminiBytes(item.size)})`);
+            return `${query}\n\nAttached context:\n${lines.join("\n")}`;
+        }
+
+        function buildGeminiAttachmentPayload(items) {
+            return items
+                .slice()
+                .sort((a, b) => (a.priority || 50) - (b.priority || 50))
+                .map((item) => ({
+                    name: item.name,
+                    role: item.role,
+                    sourceType: item.sourceType,
+                    contentKind: item.contentKind,
+                    mimeType: item.mimeType,
+                    size: item.size,
+                    textContent: item.textContent,
+                    base64Data: item.base64Data,
+                    metadata: item.metadata || {},
+                    priority: item.priority || 50
+                }));
+        }
+
         async function requestGeminiAnswer() {
             const query = geminiQueryEl.value.trim();
 
             if (!query) {
-                geminiErrorEl.textContent = "Enter a question.";
-                geminiErrorEl.hidden = false;
+                setGeminiError("Enter a question.");
                 geminiQueryEl.focus();
                 return;
             }
 
-            geminiErrorEl.hidden = true;
+            setGeminiError("");
             geminiButton.disabled = true;
-            const questionMessage = appendGeminiMessage("user", { text: query });
+            const pageInfo = getCurrentGeminiPageInfo();
+            const contextAttachments = [
+                ...(await buildGeminiHelpContext(pageInfo.pageCode)),
+                ...geminiAttachments
+            ];
+            const questionMessage = appendGeminiMessage("user", { text: renderGeminiUserQuestion(query, contextAttachments) });
             geminiQueryEl.value = "";
+            clearGeminiAttachments();
             const loadingMessage = appendGeminiMessage("assistant", {
                 html: `<div class="answerGemini isLoadingGemini"><i class="fas fa-spinner fa-spin"></i> Searching and generating an answer...</div>`
             });
@@ -896,7 +1601,10 @@
                 const payload = await CommonUtils.request("/api/googleGenai/search", {
                     method: "POST",
                     showLoading: false,
-                    body: { query },
+                    body: {
+                        query,
+                        contextAttachments: buildGeminiAttachmentPayload(contextAttachments)
+                    },
                 });
 
                 const answer = payload.data.answer || "";
@@ -911,8 +1619,7 @@
                     html: `<div class="answerGemini isEmptyGemini">Unable to display the answer.</div>`,
                     focusElement: questionMessage
                 });
-                geminiErrorEl.textContent = error.message;
-                geminiErrorEl.hidden = false;
+                setGeminiError(error.message);
             } finally {
                 geminiButton.disabled = false;
             }
@@ -923,6 +1630,60 @@
         });
 
         geminiButton.addEventListener("click", requestGeminiAnswer);
+
+        geminiAttachFileButton?.addEventListener("click", () => {
+            geminiFileInputEl?.click();
+        });
+
+        geminiFileInputEl?.addEventListener("change", (event) => {
+            handleGeminiFiles(event.target.files);
+        });
+
+        geminiCapturePageButton?.addEventListener("click", attachCurrentPageCapture);
+        geminiAttachSourceButton?.addEventListener("click", attachCurrentPageSourceContext);
+
+        geminiDropZoneEl?.addEventListener("dragover", (event) => {
+            event.preventDefault();
+            geminiDropZoneEl.classList.add("isDragOver");
+        });
+
+        geminiDropZoneEl?.addEventListener("dragleave", () => {
+            geminiDropZoneEl.classList.remove("isDragOver");
+        });
+
+        geminiDropZoneEl?.addEventListener("drop", (event) => {
+            event.preventDefault();
+            geminiDropZoneEl.classList.remove("isDragOver");
+            handleGeminiFiles(event.dataTransfer?.files);
+        });
+
+        geminiAttachmentListEl?.addEventListener("click", (event) => {
+            const targetEl = event.target instanceof Element ? event.target : event.target?.parentElement;
+            const clearButton = targetEl?.closest("[data-clear-attachments]");
+            if (clearButton) {
+                clearGeminiAttachments();
+                setGeminiError("");
+                return;
+            }
+
+            const removeButton = targetEl?.closest("[data-remove-attachment]");
+            if (removeButton) {
+                removeGeminiAttachment(removeButton.dataset.removeAttachment);
+                return;
+            }
+
+            const itemEl = targetEl?.closest("[data-attachment-id]");
+            if (itemEl) previewGeminiAttachment(itemEl.dataset.attachmentId);
+        });
+
+        geminiAttachmentListEl?.addEventListener("keydown", (event) => {
+            if (event.key !== "Enter" && event.key !== " ") return;
+            const targetEl = event.target instanceof Element ? event.target : event.target?.parentElement;
+            const itemEl = targetEl?.closest("[data-attachment-id]");
+            if (!itemEl) return;
+            event.preventDefault();
+            previewGeminiAttachment(itemEl.dataset.attachmentId);
+        });
 
         geminiQueryEl.addEventListener("keydown", function(event) {
             if (event.ctrlKey && event.key === "Enter") {
