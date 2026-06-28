@@ -16,11 +16,15 @@
         resultPageSize: 50,
         excludeEmptyConsequent: false,
         readableRuleConditionFilter: "ALL",
-        ruleSummaryFilters: { conditionCount: "ALL", resultColumn: "ALL", resultHasValueYn: "ALL", page: 1, resultColumnPage: 1 },
+        readableRuleConfidenceFilter: "ALL",
+        ruleSummaryFilters: { conditionCount: "ALL", confidenceScope: "ALL", resultColumn: "ALL", conditionColumn: "ALL", resultHasValueYn: "ALL", page: 1, pageSize: 20, resultColumnPage: 1 },
+        violationRuleFilters: { ruleId: "", conditionCount: "ALL", confidenceScope: "NON_PERFECT", resultScope: "HIT", page: 1, pageSize: 20 },
         violationSql: { sql: "", page: 1, pageSize: 50, total: 0, columns: [], rows: [], title: "" },
         currentModelDetail: null,
+        lastViolationSummary: null,
         pendingRunId: "",
         currentExport: { filename: "integrated-result.csv", columns: [], rows: [] },
+        nodeResultCache: new Map(),
 
         async init() {
             const pendingRunId = sessionStorage.getItem("M04002:selectedRunId") || "";
@@ -53,9 +57,89 @@
             this.selectedRun = null;
             this.selectedNode = null;
             this.currentModelDetail = null;
+            this.lastViolationSummary = null;
+            this.readableRuleConditionFilter = "ALL";
+            this.readableRuleConfidenceFilter = "ALL";
+            this.violationRuleFilters = { ruleId: "", conditionCount: "ALL", confidenceScope: "NON_PERFECT", resultScope: "HIT", page: 1, pageSize: 20 };
             this.closeViolationSqlPopup();
             this.pendingRunId = "";
             this.currentExport = { filename: "integrated-result.csv", columns: [], rows: [] };
+            this.nodeResultCache = new Map();
+        },
+
+        cloneCacheValue(value) {
+            if (value === undefined || value === null) return value;
+            try {
+                if (typeof structuredClone === "function") return structuredClone(value);
+                return JSON.parse(JSON.stringify(value));
+            } catch (error) {
+                return value;
+            }
+        },
+
+        getNodeCacheKey(nodeRunId = this.selectedNode?.FLOW_NODE_RUN_ID) {
+            if (nodeRunId === undefined || nodeRunId === null || nodeRunId === "") return "";
+            return String(nodeRunId);
+        },
+
+        snapshotNodeResultCache() {
+            const key = this.getNodeCacheKey();
+            const panel = getContainerEl("#resultPanel-M04002");
+            if (!key || !panel || !this.selectedNode || panel.classList.contains("is-loading")) return;
+            if (!this.nodeResultCache) this.nodeResultCache = new Map();
+            this.nodeResultCache.set(key, {
+                html: panel.innerHTML,
+                resultPage: this.resultPage,
+                resultPageSize: this.resultPageSize,
+                excludeEmptyConsequent: this.excludeEmptyConsequent,
+                readableRuleConditionFilter: this.readableRuleConditionFilter,
+                readableRuleConfidenceFilter: this.readableRuleConfidenceFilter,
+                ruleSummaryFilters: this.cloneCacheValue(this.ruleSummaryFilters),
+                violationRuleFilters: this.cloneCacheValue(this.violationRuleFilters),
+                violationSql: this.cloneCacheValue(this.violationSql),
+                currentModelDetail: this.cloneCacheValue(this.currentModelDetail),
+                lastViolationSummary: this.cloneCacheValue(this.lastViolationSummary),
+                currentExport: this.cloneCacheValue(this.currentExport)
+            });
+        },
+
+        restoreNodeResultCache(nodeRunId) {
+            const key = this.getNodeCacheKey(nodeRunId);
+            const cached = key ? this.nodeResultCache?.get(key) : null;
+            const panel = getContainerEl("#resultPanel-M04002");
+            if (!cached || !panel) return false;
+            this.resultPage = Number(cached.resultPage || 1);
+            this.resultPageSize = Number(cached.resultPageSize || this.resultPageSize || 50);
+            this.excludeEmptyConsequent = Boolean(cached.excludeEmptyConsequent);
+            this.readableRuleConditionFilter = cached.readableRuleConditionFilter || "ALL";
+            this.readableRuleConfidenceFilter = cached.readableRuleConfidenceFilter || "ALL";
+            this.ruleSummaryFilters = {
+                conditionCount: "ALL",
+                confidenceScope: "ALL",
+                resultColumn: "ALL",
+                conditionColumn: "ALL",
+                resultHasValueYn: "ALL",
+                page: 1,
+                pageSize: 20,
+                resultColumnPage: 1,
+                ...(this.cloneCacheValue(cached.ruleSummaryFilters) || {})
+            };
+            this.violationRuleFilters = {
+                ruleId: "",
+                conditionCount: "ALL",
+                confidenceScope: "NON_PERFECT",
+                resultScope: "HIT",
+                page: 1,
+                pageSize: 20,
+                ...(this.cloneCacheValue(cached.violationRuleFilters) || {})
+            };
+            this.violationSql = this.cloneCacheValue(cached.violationSql) || { sql: "", page: 1, pageSize: 50, total: 0, columns: [], rows: [], title: "" };
+            this.currentModelDetail = this.cloneCacheValue(cached.currentModelDetail);
+            this.lastViolationSummary = this.cloneCacheValue(cached.lastViolationSummary);
+            this.currentExport = this.cloneCacheValue(cached.currentExport) || { filename: "integrated-result.csv", columns: [], rows: [] };
+            panel.classList.remove("is-loading");
+            panel.innerHTML = cached.html || `<div class="table-empty">노드를 선택하면 결과 상세가 표시됩니다.</div>`;
+            return true;
         },
 
         readWorkContext() {
@@ -86,6 +170,9 @@
                 this.runTotal = 0;
                 this.selectedRun = null;
                 this.selectedNode = null;
+                this.currentModelDetail = null;
+                this.lastViolationSummary = null;
+                this.nodeResultCache = new Map();
                 this.renderRuns();
                 this.renderRunSummary();
                 const nodeList = getContainerEl("#nodeList-M04002");
@@ -248,6 +335,10 @@
         async selectRun(flowRunId) {
             this.selectedRun = this.runs.find((run) => Number(run.FLOW_RUN_ID) === Number(flowRunId)) || null;
             this.selectedNode = null;
+            this.currentModelDetail = null;
+            this.lastViolationSummary = null;
+            this.currentExport = { filename: "integrated-result.csv", columns: [], rows: [] };
+            this.nodeResultCache = new Map();
             this.renderRuns();
             this.renderRunSummary();
             const nodeList = getContainerEl("#nodeList-M04002");
@@ -304,16 +395,24 @@
             `).join("");
         },
 
-        async selectNode(nodeRunId, page = 1) {
+        async selectNode(nodeRunId, page = 1, options = {}) {
             this.selectedNode = this.nodes.find((node) => Number(node.FLOW_NODE_RUN_ID) === Number(nodeRunId)) || null;
             this.resultPage = Math.max(1, Number(page || 1));
-            this.currentModelDetail = null;
-            this.ruleSummaryFilters = { conditionCount: "ALL", resultColumn: "ALL", resultHasValueYn: "ALL", page: 1, resultColumnPage: 1 };
             this.renderNodes();
             const panel = getContainerEl("#resultPanel-M04002");
             if (!panel || !this.selectedNode) return;
+            if (!options.forceRefresh && this.restoreNodeResultCache(nodeRunId)) return;
+            this.currentModelDetail = null;
+            this.readableRuleConditionFilter = "ALL";
+            this.readableRuleConfidenceFilter = "ALL";
+            this.ruleSummaryFilters = { conditionCount: "ALL", confidenceScope: "ALL", resultColumn: "ALL", conditionColumn: "ALL", resultHasValueYn: "ALL", page: 1, pageSize: 20, resultColumnPage: 1 };
+            if (!options.preserveViolationRuleFilter) {
+                this.violationRuleFilters = { ruleId: "", conditionCount: "ALL", confidenceScope: "NON_PERFECT", resultScope: "HIT", page: 1, pageSize: 20 };
+            }
+            this.lastViolationSummary = null;
             if (this.selectedNode.RESULT_KIND === "NONE") {
                 panel.innerHTML = `<div class="table-empty">이 노드는 저장된 결과 테이블/모델이 없습니다.</div>`;
+                this.snapshotNodeResultCache();
                 return;
             }
             panel.innerHTML = `<div class="table-empty">Loading result...</div>`;
@@ -324,9 +423,30 @@
             }
         },
 
+        async openViolationForRule(ruleId) {
+            const normalizedRuleId = String(ruleId || "").trim();
+            if (!normalizedRuleId) return;
+            const violationNode = this.findViolationNode();
+            if (!violationNode) {
+                alert("현재 Flow에서 규칙 위반 탐지 노드를 찾을 수 없습니다.");
+                return;
+            }
+            this.violationRuleFilters = { ...(this.violationRuleFilters || {}), ruleId: normalizedRuleId, confidenceScope: "NON_PERFECT", resultScope: "HIT", page: 1, pageSize: 20 };
+            if (!this.selectedNode || Number(this.selectedNode.FLOW_NODE_RUN_ID) !== Number(violationNode.FLOW_NODE_RUN_ID)) {
+                await this.selectNode(violationNode.FLOW_NODE_RUN_ID, 1, { preserveViolationRuleFilter: true, forceRefresh: true });
+                return;
+            }
+            await this.loadResultTable(this.resultPage || 1);
+        },
+
+        findViolationNode() {
+            return (this.nodes || []).find((node) => this.isViolationNode(node)) || null;
+        },
+
         async loadResultTable(page = 1) {
             const node = this.selectedNode;
             if (!node) return;
+            this.resultPage = Math.max(1, Number(page || 1));
             this.showResultLoading("결과 테이블 조회 중...");
             const ruleModelName = this.getSelectedNodeRuleModelName(node);
             const params = new URLSearchParams({
@@ -335,12 +455,27 @@
                 menuCode: node.REF_MENU_CODE || "",
                 targetOwner: node.TARGET_OWNER || "",
                 targetTable: node.TARGET_TABLE || "",
-                page: String(page),
+                page: String(this.resultPage),
                 pageSize: String(this.resultPageSize)
             });
             if (ruleModelName) params.set("ruleModelName", ruleModelName);
+            if (this.isViolationNode(node)) {
+                const filters = this.violationRuleFilters || {};
+                const criteria = this.getViolationDetectionCriteria(node);
+                const ruleId = String(filters.ruleId || "").trim();
+                if (ruleId) params.set("violationRuleId", ruleId);
+                if (filters.conditionCount !== "ALL") params.set("violationConditionCount", String(filters.conditionCount));
+                params.set("violationConfidenceScope", filters.confidenceScope === "ALL" ? "ALL" : "NON_PERFECT");
+                params.set("violationResultScope", ["CANDIDATE", "MISS"].includes(filters.resultScope) ? filters.resultScope : "HIT");
+                params.set("violationMinConfidence", String(criteria.minConfidence));
+                params.set("violationMinLift", String(criteria.minLift));
+                params.set("violationMaxRules", String(criteria.maxRules));
+                params.set("violationRulePage", String(Math.max(1, Number(filters.page || 1))));
+                params.set("violationRulePageSize", String(this.normalizeRuleCardPageSize(filters.pageSize || 20)));
+            }
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/result-table?${params.toString()}`, { method: "GET", showLoading: false });
+                if (this.selectedNode !== node) return;
                 this.currentExport = { filename: `${node.RESULT_OBJECT_NAME || "result"}.csv`, columns: json.columns || [], rows: json.data || [] };
                 this.renderResultTable(json, "Result Table", "TABLE");
             } catch (error) {
@@ -361,6 +496,7 @@
             });
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/model-view?${params.toString()}`, { method: "GET", showLoading: false });
+                if (this.selectedNode !== node) return;
                 this.currentExport = { filename: `${json.viewName || node.RESULT_OBJECT_NAME || "model-view"}.csv`, columns: json.columns || [], rows: json.data || [] };
                 this.renderModelView(json);
             } catch (error) {
@@ -382,6 +518,7 @@
             });
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/model-detail-summary?${params.toString()}`, { method: "GET", showLoading: false });
+                if (this.selectedNode !== node) return;
                 this.currentModelDetail = json;
                 this.currentExport = { filename: `${node.RESULT_OBJECT_NAME || "model-detail"}.csv`, columns: [], rows: [] };
                 this.renderModelAnalysis(json, "readable");
@@ -404,13 +541,15 @@
                 targetOwner: node.TARGET_OWNER || "",
                 targetTable: node.TARGET_TABLE || "",
                 page: String(Math.max(1, Number(page || 1))),
-                pageSize: "12",
+                pageSize: String(this.normalizeRuleCardPageSize(filters.pageSize || 20)),
                 resultColumnPage: String(Math.max(1, Number(filters.resultColumnPage || 1))),
                 resultColumnPageSize: "12"
             });
             if (filters.conditionCount !== "ALL") params.set("conditionCount", String(filters.conditionCount));
             if (filters.resultColumn !== "ALL") params.set("resultColumn", String(filters.resultColumn));
+            if (filters.conditionColumn !== "ALL") params.set("conditionColumn", String(filters.conditionColumn));
             if (filters.resultHasValueYn !== "ALL") params.set("resultHasValueYn", String(filters.resultHasValueYn));
+            if (filters.confidenceScope === "NON_PERFECT") params.set("confidenceScope", "NON_PERFECT");
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/model-rule-summary?${params.toString()}`, {
                     method: "GET",
@@ -422,14 +561,17 @@
                 this.currentModelDetail.ruleSummary = json;
                 this.currentModelDetail.ruleSummaryLoading = false;
                 this.ruleSummaryFilters.page = Number(json.page || page || 1);
+                this.ruleSummaryFilters.pageSize = Number(json.pageSize || filters.pageSize || 20);
                 this.ruleSummaryFilters.resultColumnPage = Number(json.resultTopPage || filters.resultColumnPage || 1);
                 this.currentExport = this.buildRuleSummaryExport(node, json);
                 this.renderModelAnalysis(this.currentModelDetail, this.getActiveModelAnalysisTab());
+                this.snapshotNodeResultCache();
             } catch (error) {
                 if (this.selectedNode !== node || !this.currentModelDetail) return;
                 this.currentModelDetail.ruleSummaryLoading = false;
                 this.currentModelDetail.ruleSummaryError = error.message || "Rule summary load failed.";
                 this.renderModelAnalysis(this.currentModelDetail, this.getActiveModelAnalysisTab());
+                this.snapshotNodeResultCache();
             }
         },
 
@@ -466,17 +608,18 @@
                         <strong>${this.escapeHtml(json.owner)}.${this.escapeHtml(json.modelName)}</strong>
                         <small>${this.escapeHtml(json.viewName || "")} · ${this.formatNumber(json.total)} rows</small>
                         ${this.renderSelectedNodeJobDesc()}
-                        ${this.renderSelectedNodeExecutionMeta()}
                     </div>
                     <nav>
                         ${["VR", "VI", "VG", "VA"].map((type) => `<button type="button" class="${type === viewType ? "is-active" : ""}" onclick="M04002.loadModelView('${type}', 1)">${type}</button>`).join("")}
                     </nav>
+                    ${this.renderSelectedNodeExecutionMeta()}
                 </header>
                 ${viewType === "VR" ? this.renderRuleFilterBar() : ""}
                 ${readable}
                 ${this.renderGrid(json.columns || [], json.data || [])}
                 ${this.renderResultPager(json.page, json.pageSize, json.total, `M04002.loadModelView('${viewType}',`)}
             `;
+            this.snapshotNodeResultCache();
         },
 
         renderModelAnalysis(json = this.currentModelDetail, activeTab = "readable") {
@@ -491,9 +634,9 @@
                         <span>${this.escapeHtml(this.selectedNode?.NODE_NAME || "Oracle ML Model View")}</span>
                         <strong>${this.escapeHtml(json.owner || this.selectedNode?.RESULT_OWNER)}.${this.escapeHtml(json.modelName || this.selectedNode?.RESULT_OBJECT_NAME)}</strong>
                         ${this.renderSelectedNodeJobDesc()}
-                        ${this.renderSelectedNodeExecutionMeta()}
                     </div>
                     <em>${this.escapeHtml(modelHeaderLabel)}</em>
+                    ${this.renderSelectedNodeExecutionMeta()}
                 </header>
                 <div class="m04002-model-tabs">
                     <button type="button" class="${readableActive ? "is-active" : ""}" onclick="M04002.switchModelAnalysisTab('readable')">Readable Rules</button>
@@ -510,6 +653,7 @@
 
         switchModelAnalysisTab(tabName) {
             this.renderModelAnalysis(this.currentModelDetail, tabName);
+            this.snapshotNodeResultCache();
         },
 
         getActiveModelAnalysisTab() {
@@ -553,6 +697,7 @@
             });
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/model-view?${params.toString()}`, { method: "GET", showLoading: false });
+                if (this.selectedNode !== node || !this.currentModelDetail) return;
                 this.replaceModelDetailView({
                     viewType: json.viewType || viewType,
                     viewName: json.viewName || `DM$${viewType}${node.RESULT_OBJECT_NAME || ""}`,
@@ -565,8 +710,12 @@
                     pageSize: Number(json.pageSize || pageSize)
                 });
                 this.currentExport = { filename: `${json.viewName || node.RESULT_OBJECT_NAME || "model-view"}.csv`, columns: json.columns || [], rows: json.data || [] };
-                if (viewType === "VR") this.readableRuleConditionFilter = "ALL";
+                if (viewType === "VR") {
+                    this.readableRuleConditionFilter = "ALL";
+                    this.readableRuleConfidenceFilter = "ALL";
+                }
                 this.renderModelAnalysis(this.currentModelDetail, activeTab);
+                this.snapshotNodeResultCache();
             } catch (error) {
                 this.renderResultError(error.message || "Model view page load failed.");
             }
@@ -649,6 +798,21 @@
             const overview = summary.overview || {};
             const rules = this.buildSummaryRuleCards(summary.rules || []);
             const totalPages = Math.max(1, Math.ceil(Number(summary.total || 0) / Number(summary.pageSize || 12)));
+            const conditionColumnFilter = this.ruleSummaryFilters.conditionColumn === "ALL" ? "" : this.ruleSummaryFilters.conditionColumn;
+            const conditionItems = [
+                {
+                    label: "전체",
+                    value: "ALL",
+                    total: overview.TOTAL_RULES,
+                    nonPerfect: overview.NON_PERFECT_CONF_RULES
+                },
+                ...(summary.conditionDist || []).map((bucket) => ({
+                    label: Number(bucket.CONDITION_COUNT || 0) > 0 ? `조건 ${this.formatNumber(bucket.CONDITION_COUNT)}개` : "조건 미해석",
+                    value: String(Number(bucket.CONDITION_COUNT || 0)),
+                    total: bucket.RULE_COUNT,
+                    nonPerfect: bucket.NON_PERFECT_CONF_RULES
+                }))
+            ];
             return `
                 <div class="m04002-readable-rule-intro">
                     <div>
@@ -660,50 +824,61 @@
                             <i class="fas fa-file-export"></i>
                             Export
                         </button>
-                        ${this.renderSamplePageJump("ruleSummaryPage-M04002", { page: summary.page, pageSize: summary.pageSize, total: summary.total }, "M04002.goRuleSummaryPage()", "M04002.loadModelRuleSummary")}
+                        ${this.renderSamplePageJump("ruleSummaryPage-M04002", { page: summary.page, pageSize: summary.pageSize, total: summary.total }, "M04002.goRuleSummaryPage()", "M04002.loadModelRuleSummary", {
+                            pageSizeId: "ruleSummaryPageSize-M04002",
+                            pageSizes: [20, 40, 100, 500, 1000],
+                            onPageSizeChange: "M04002.changeRuleSummaryPageSize(this.value)"
+                        })}
                     </div>
                 </div>
                 <section class="m04002-readable-stats">
-                    <div class="m04002-readable-stat-metrics">
-                        <span><b>${this.formatNumber(overview.TOTAL_RULES)}</b><small>전체 규칙</small></span>
-                        <span><b>${this.formatNumber(overview.MAPPED_RULES)}</b><small>조건/결과 매핑</small></span>
-                        <span><b>${this.formatNumber(overview.MISSING_RESULT_RULES)}</b><small>결과 값 없음</small></span>
-                        <span><b>${this.formatNumber(summary.total)}</b><small>필터 결과</small></span>
+                    <div class="m04002-readable-stat-block">
+                        <strong>규칙 요약</strong>
+                        <div class="m04002-readable-stat-metrics">
+                            <span><b>${this.formatNumber(overview.TOTAL_RULES)}</b><small>전체 규칙</small></span>
+                            <span><b>${this.formatNumber(overview.MAPPED_RULES)}</b><small>조건/결과 매핑</small></span>
+                            <span><b>${this.formatNumber(overview.MISSING_RESULT_RULES)}</b><small>결과 값 없음</small></span>
+                            <span><b>${this.formatNumber(summary.total)}</b><small>필터 결과</small></span>
+                        </div>
                     </div>
                     <div class="m04002-readable-condition-dist">
                         <strong>조건 수 선택</strong>
-                        <div>
-                            <button type="button" class="${this.ruleSummaryFilters.conditionCount === "ALL" ? "is-active" : ""}" onclick="M04002.selectRuleSummaryCondition('ALL')">
-                                <small>전체</small>
-                                <b>${this.formatNumber(overview.TOTAL_RULES)}</b>
-                            </button>
-                            ${(summary.conditionDist || []).map((bucket) => `
-                                <button type="button" class="${String(this.ruleSummaryFilters.conditionCount) === String(bucket.CONDITION_COUNT) ? "is-active" : ""}" onclick="M04002.selectRuleSummaryCondition('${String(Number(bucket.CONDITION_COUNT || 0))}')">
-                                    <small>${Number(bucket.CONDITION_COUNT || 0) > 0 ? `조건 ${this.formatNumber(bucket.CONDITION_COUNT)}개` : "조건 미해석"}</small>
-                                    <b>${this.formatNumber(bucket.RULE_COUNT)}</b>
-                                </button>
-                            `).join("")}
-                        </div>
+                        ${this.renderRuleConditionMatrix(conditionItems, this.ruleSummaryFilters.conditionCount, this.ruleSummaryFilters.confidenceScope || "ALL", "M04002.selectRuleSummaryCondition")}
                     </div>
                 </section>
                 <section class="m04002-rule-facet-panel">
-                    <header>
-                        <strong>결과 컬럼 Top 12</strong>
-                        <div class="m04002-rule-facet-actions">
-                            ${this.renderResultColumnPager(summary)}
-                            <button type="button" class="${this.ruleSummaryFilters.resultColumn === "ALL" ? "is-active" : ""}" onclick="M04002.selectRuleSummaryResult('ALL')">전체</button>
+                    <div class="m04002-rule-facet-block">
+                        <header>
+                            <strong>결과 컬럼 Top 12</strong>
+                            <div class="m04002-rule-facet-actions">
+                                ${this.renderResultColumnPager(summary)}
+                                <button type="button" class="${this.ruleSummaryFilters.resultColumn === "ALL" ? "is-active" : ""}" onclick="M04002.selectRuleSummaryResult('ALL')">전체</button>
+                            </div>
+                        </header>
+                        <div class="m04002-rule-facet-list">
+                            ${(summary.resultTop || []).map((item) => {
+                                const rawColumn = item.RESULT_COLUMN === "(RESULT UNKNOWN)" ? "__NULL__" : item.RESULT_COLUMN;
+                                return `
+                                    <button type="button" class="${this.ruleSummaryFilters.resultColumn === rawColumn ? "is-active" : ""}" onclick="M04002.selectRuleSummaryResult('${this.escapeJs(rawColumn)}')">
+                                        <span>${this.renderColumnAwareCell(item.RESULT_COLUMN, summary)}</span>
+                                        <b>${this.formatNumber(item.RULE_COUNT)}</b>
+                                    </button>
+                                `;
+                            }).join("")}
                         </div>
-                    </header>
-                    <div>
-                        ${(summary.resultTop || []).map((item) => {
-                            const rawColumn = item.RESULT_COLUMN === "(RESULT UNKNOWN)" ? "__NULL__" : item.RESULT_COLUMN;
-                            return `
-                                <button type="button" class="${this.ruleSummaryFilters.resultColumn === rawColumn ? "is-active" : ""}" onclick="M04002.selectRuleSummaryResult('${this.escapeJs(rawColumn)}')">
-                                    <span>${this.renderColumnAwareCell(item.RESULT_COLUMN, summary)}</span>
-                                    <b>${this.formatNumber(item.RULE_COUNT)}</b>
-                                </button>
-                            `;
-                        }).join("")}
+                    </div>
+                    <div class="m04002-rule-facet-block is-condition">
+                        <header>
+                            <strong>조건 컬럼 ID 검색</strong>
+                            <div class="m04002-rule-facet-actions">
+                                <button type="button" onclick="M04002.searchRuleSummaryConditionColumn()">Search</button>
+                                <button type="button" class="${this.ruleSummaryFilters.conditionColumn === "ALL" ? "is-active" : ""}" onclick="M04002.resetRuleSummaryConditionColumn()">Reset</button>
+                            </div>
+                        </header>
+                        <label class="m04002-rule-condition-search">
+                            <span>Condition Column</span>
+                            <input id="ruleConditionColumnInput-M04002" type="search" value="${this.escapeHtml(conditionColumnFilter)}" placeholder="예: COL001" onkeydown="M04002.handleRuleSummaryConditionColumnKeydown(event)">
+                        </label>
                     </div>
                 </section>
                 <div class="m04002-readable-rule-grid">
@@ -722,46 +897,79 @@
 
         renderReadableRuleStats(rules = [], visibleRuleCount = 0, baseRuleCount = 0) {
             const stats = this.createReadableRuleStats(rules);
+            const conditionItems = [
+                { label: "전체", value: "ALL", total: baseRuleCount, nonPerfect: stats.nonPerfect },
+                ...stats.conditionBuckets.map((bucket) => ({
+                    label: bucket.label,
+                    value: String(Number(bucket.conditionCount || 0)),
+                    total: bucket.count,
+                    nonPerfect: bucket.nonPerfect
+                }))
+            ];
             return `
                 <section class="m04002-readable-stats">
-                    <div class="m04002-readable-stat-metrics">
-                        <span><b>${this.formatNumber(stats.total)}</b><small>현재 샘플 규칙</small></span>
-                        <span><b>${this.formatNumber(stats.mapped)}</b><small>조건/결과 매핑</small></span>
-                        <span><b>${this.formatNumber(stats.missingResult)}</b><small>결과 정보 없음</small></span>
-                        <span><b>${this.formatNumber(visibleRuleCount)}</b><small>표시 중</small></span>
+                    <div class="m04002-readable-stat-block">
+                        <strong>규칙 요약</strong>
+                        <div class="m04002-readable-stat-metrics">
+                            <span><b>${this.formatNumber(stats.total)}</b><small>현재 샘플 규칙</small></span>
+                            <span><b>${this.formatNumber(stats.mapped)}</b><small>조건/결과 매핑</small></span>
+                            <span><b>${this.formatNumber(stats.missingResult)}</b><small>결과 정보 없음</small></span>
+                            <span><b>${this.formatNumber(visibleRuleCount)}</b><small>표시 중</small></span>
+                        </div>
                     </div>
                     <div class="m04002-readable-condition-dist">
                         <strong>조건 수 선택</strong>
-                        <div>
-                            <button type="button" class="${this.readableRuleConditionFilter === "ALL" ? "is-active" : ""}" onclick="M04002.selectReadableConditionFilter('ALL')">
-                                <small>전체</small>
-                                <b>${this.formatNumber(baseRuleCount)}</b>
-                            </button>
-                            ${stats.conditionBuckets.map((bucket) => `
-                                <button type="button" class="${this.readableRuleConditionFilter === String(bucket.conditionCount) ? "is-active" : ""}" onclick="M04002.selectReadableConditionFilter('${String(Number(bucket.conditionCount || 0))}')">
-                                    <small>${this.escapeHtml(bucket.label)}</small>
-                                    <b>${this.formatNumber(bucket.count)}</b>
-                                </button>
-                            `).join("")}
-                        </div>
+                        ${this.renderRuleConditionMatrix(conditionItems, this.readableRuleConditionFilter, this.readableRuleConfidenceFilter, "M04002.selectReadableConditionFilter")}
                     </div>
                 </section>
             `;
         },
 
+        renderRuleConditionMatrix(items = [], activeValue = "ALL", activeConfidenceScope = "ALL", handlerName = "") {
+            const renderButtons = (countKey, confidenceScope) => items.map((item) => {
+                const value = String(item.value ?? "ALL");
+                const scope = String(confidenceScope || "ALL");
+                const active = String(activeValue ?? "ALL") === value && String(activeConfidenceScope || "ALL") === scope;
+                return `
+                    <button type="button" class="${active ? "is-active" : ""}" onclick="${handlerName}('${this.escapeJs(value)}', '${this.escapeJs(scope)}')">
+                        <small>${this.escapeHtml(item.label)}</small>
+                        <b>${this.formatNumber(item[countKey])}</b>
+                    </button>
+                `;
+            }).join("");
+            return `
+                <div class="m04002-condition-count-matrix">
+                    <div class="m04002-condition-count-row">
+                        <span>전체 규칙수</span>
+                        <div class="m04002-condition-count-buttons">${renderButtons("total", "ALL")}</div>
+                    </div>
+                    <div class="m04002-condition-count-row">
+                        <span>위반 후보 규칙수</span>
+                        <div class="m04002-condition-count-buttons">${renderButtons("nonPerfect", "NON_PERFECT")}</div>
+                    </div>
+                </div>
+            `;
+        },
+
         applyReadableConditionFilter(rules = []) {
-            if (this.readableRuleConditionFilter === "ALL") return rules;
-            const selected = Number(this.readableRuleConditionFilter);
-            return rules.filter((rule) => Number(rule.conditionCount || 0) === selected);
+            const conditionFiltered = this.readableRuleConditionFilter === "ALL"
+                ? rules
+                : rules.filter((rule) => Number(rule.conditionCount || 0) === Number(this.readableRuleConditionFilter));
+            return this.readableRuleConfidenceFilter === "NON_PERFECT"
+                ? conditionFiltered.filter((rule) => this.isRuleViolationCandidate(rule.confidenceValue))
+                : conditionFiltered;
         },
 
-        selectReadableConditionFilter(value) {
+        selectReadableConditionFilter(value, confidenceScope = "ALL") {
             this.readableRuleConditionFilter = value === undefined || value === null || value === "" ? "ALL" : String(value);
+            this.readableRuleConfidenceFilter = confidenceScope === "NON_PERFECT" ? "NON_PERFECT" : "ALL";
             this.renderModelAnalysis(this.currentModelDetail, "readable");
+            this.snapshotNodeResultCache();
         },
 
-        selectRuleSummaryCondition(value) {
+        selectRuleSummaryCondition(value, confidenceScope = "ALL") {
             this.ruleSummaryFilters.conditionCount = value === undefined || value === null || value === "" ? "ALL" : String(value);
+            this.ruleSummaryFilters.confidenceScope = confidenceScope === "NON_PERFECT" ? "NON_PERFECT" : "ALL";
             this.ruleSummaryFilters.page = 1;
             this.loadModelRuleSummary(1);
         },
@@ -770,6 +978,31 @@
             this.ruleSummaryFilters.resultColumn = value === undefined || value === null || value === "" ? "ALL" : String(value);
             this.ruleSummaryFilters.page = 1;
             this.loadModelRuleSummary(1);
+        },
+
+        selectRuleSummaryConditionColumn(value) {
+            this.ruleSummaryFilters.conditionColumn = value === undefined || value === null || value === "" ? "ALL" : String(value);
+            this.ruleSummaryFilters.page = 1;
+            this.loadModelRuleSummary(1);
+        },
+
+        handleRuleSummaryConditionColumnKeydown(event) {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                this.searchRuleSummaryConditionColumn();
+            }
+        },
+
+        searchRuleSummaryConditionColumn() {
+            const input = getContainerEl("#ruleConditionColumnInput-M04002");
+            const value = String(input?.value || "").trim().toUpperCase();
+            this.selectRuleSummaryConditionColumn(value || "ALL");
+        },
+
+        resetRuleSummaryConditionColumn() {
+            const input = getContainerEl("#ruleConditionColumnInput-M04002");
+            if (input) input.value = "";
+            this.selectRuleSummaryConditionColumn("ALL");
         },
 
         moveRuleSummaryResultColumns(direction) {
@@ -802,6 +1035,12 @@
             this.loadModelRuleSummary(input?.value || 1);
         },
 
+        changeRuleSummaryPageSize(value) {
+            this.ruleSummaryFilters.pageSize = this.normalizeRuleCardPageSize(value);
+            this.ruleSummaryFilters.page = 1;
+            this.loadModelRuleSummary(1);
+        },
+
         renderRuleSummaryPager(page, totalPages) {
             const current = Math.max(1, Number(page || 1));
             const total = Math.max(1, Number(totalPages || 1));
@@ -821,18 +1060,26 @@
             let mapped = 0;
             let missingResult = 0;
             let limited = 0;
+            let nonPerfect = 0;
             (rules || []).forEach((rule) => {
                 if (rule.mappingLevel === "mapped") mapped += 1;
                 else limited += 1;
                 if (this.isEmptyRuleText(rule.thenText)) missingResult += 1;
                 const count = Number(rule.conditionCount || 0);
-                buckets.set(count, (buckets.get(count) || 0) + 1);
+                const bucket = buckets.get(count) || { count: 0, nonPerfect: 0 };
+                bucket.count += 1;
+                if (this.isRuleViolationCandidate(rule.confidenceValue)) {
+                    nonPerfect += 1;
+                    bucket.nonPerfect += 1;
+                }
+                buckets.set(count, bucket);
             });
             const conditionBuckets = Array.from(buckets.entries())
-                .map(([conditionCount, count]) => ({
+                .map(([conditionCount, bucket]) => ({
                     conditionCount,
                     label: conditionCount > 0 ? `조건 ${conditionCount}개` : "조건 미해석",
-                    count
+                    count: bucket.count,
+                    nonPerfect: bucket.nonPerfect
                 }))
                 .sort((a, b) => {
                     const aNumber = a.conditionCount > 0 ? a.conditionCount : 9999;
@@ -845,6 +1092,7 @@
                 mapped,
                 missingResult,
                 limited,
+                nonPerfect,
                 conditionBuckets
             };
         },
@@ -869,6 +1117,9 @@
                 const supportText = row.RULE_SUPPORT === null || row.RULE_SUPPORT === undefined ? "-" : this.formatPercentMetric(row.RULE_SUPPORT);
                 const confidenceText = row.RULE_CONFIDENCE === null || row.RULE_CONFIDENCE === undefined ? "-" : this.formatPercentMetric(row.RULE_CONFIDENCE);
                 const liftText = row.RULE_LIFT === null || row.RULE_LIFT === undefined ? "-" : this.formatDecimal(row.RULE_LIFT);
+                const expectedViolationRate = this.formatExpectedViolationRate(row.RULE_CONFIDENCE);
+                const exceptionCount = Math.max(0, conditionTotal - supportCount);
+                const rawRuleId = String(row.RULE_ID || index + 1);
                 const note = this.describeReadableRuleSentence({
                     conditionText,
                     thenText,
@@ -880,7 +1131,10 @@
                     isConditional
                 });
                 return {
-                    ruleId: `Rule #${row.RULE_ID || index + 1}`,
+                    ruleId: `Rule #${rawRuleId}`,
+                    rawRuleId,
+                    confidenceValue: row.RULE_CONFIDENCE,
+                    canOpenViolation: this.isRuleViolationCandidate(row.RULE_CONFIDENCE),
                     mappingLevel: mapped ? "mapped" : "limited",
                     mappingLabel: mapped
                         ? (isDecisionTree ? "Decision Tree 목표 규칙" : (isConditional ? "조건부 확률 규칙" : "조건/결과 매핑됨"))
@@ -892,6 +1146,8 @@
                         { label: "count", value: frequencyLabel },
                         { label: "support", value: supportText },
                         { label: "confidence", value: confidenceText },
+                        { label: "예상 위반", value: expectedViolationRate },
+                        { label: "예외 수", value: this.formatNumber(exceptionCount) },
                         { label: "lift", value: liftText }
                     ],
                     conditionCount: Number(row.CONDITION_COUNT || 0)
@@ -933,6 +1189,8 @@
                     COUNT: metricMap.COUNT || "",
                     SUPPORT: metricMap.SUPPORT || "",
                     CONFIDENCE: metricMap.CONFIDENCE || "",
+                    EXPECTED_VIOLATION_RATE: metricMap["예상 위반"] || "",
+                    EXCEPTION_COUNT: metricMap["예외 수"] || "",
                     LIFT: metricMap.LIFT || "",
                     CONDITION_COUNT: card.conditionCount,
                     RULE_TYPE: card.mappingLabel
@@ -940,7 +1198,7 @@
             });
             return {
                 filename: `${node.RESULT_OBJECT_NAME || "rule-summary"}_readable.csv`,
-                columns: ["RULE_ID", "IF", "THEN", "DESCRIPTION", "COUNT", "SUPPORT", "CONFIDENCE", "LIFT", "CONDITION_COUNT", "RULE_TYPE"],
+                columns: ["RULE_ID", "IF", "THEN", "DESCRIPTION", "COUNT", "SUPPORT", "CONFIDENCE", "EXPECTED_VIOLATION_RATE", "EXCEPTION_COUNT", "LIFT", "CONDITION_COUNT", "RULE_TYPE"],
                 rows
             };
         },
@@ -974,11 +1232,23 @@
 
         renderReadableRuleCard(rule) {
             const qualityClass = rule.mappingLevel === "mapped" ? "is-mapped" : "is-limited";
+            const plainRuleId = rule.rawRuleId || this.getPlainRuleId(rule.ruleId);
             return `
                 <article class="m04002-readable-rule-card ${qualityClass}">
                     <header>
-                        <span>${this.escapeHtml(rule.ruleId)}</span>
-                        <em>${this.escapeHtml(rule.mappingLabel)}</em>
+                        <span class="m04002-rule-title">
+                            <small>Rule #</small>
+                            <code title="${this.escapeHtml(plainRuleId)}">${this.escapeHtml(plainRuleId)}</code>
+                            <button type="button" class="m04002-rule-copy-btn" title="RULE ID 복사" onclick="M04002.copyRuleId('${this.escapeJs(plainRuleId)}', event)">
+                                <i class="far fa-copy"></i>
+                            </button>
+                        </span>
+                        <span class="m04002-rule-card-actions">
+                            <em>${this.escapeHtml(rule.mappingLabel)}</em>
+                            ${rule.canOpenViolation
+                                ? `<button type="button" class="m04002-rule-open-link" title="이 RULE ID로 위반탐지 결과 검색" onclick="M04002.openViolationForRule('${this.escapeJs(plainRuleId)}')">위반 조회</button>`
+                                : ""}
+                        </span>
                     </header>
                     <div class="m04002-readable-rule-sentence">
                         <b>IF</b>
@@ -997,6 +1267,46 @@
                     </footer>
                 </article>
             `;
+        },
+
+        getPlainRuleId(ruleId) {
+            return String(ruleId || "").replace(/^Rule\s*#?/i, "").trim();
+        },
+
+        async copyRuleId(ruleId, event) {
+            event?.preventDefault?.();
+            event?.stopPropagation?.();
+            const text = String(ruleId || "").trim();
+            if (!text) return;
+            try {
+                if (window.CommonMessage?.copyText) {
+                    await CommonMessage.copyText(text);
+                    CommonMessage.success?.("RULE ID copied.", { copyable: false, autoCloseMs: 1200 });
+                    return;
+                }
+                await navigator.clipboard.writeText(text);
+            } catch (error) {
+                const textarea = document.createElement("textarea");
+                textarea.value = text;
+                textarea.setAttribute("readonly", "readonly");
+                textarea.style.position = "fixed";
+                textarea.style.left = "-9999px";
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand("copy");
+                document.body.removeChild(textarea);
+            }
+        },
+
+        isPerfectConfidence(value) {
+            const number = Number(value);
+            if (!Number.isFinite(number)) return false;
+            return number <= 1 ? number >= 0.999999 : number >= 99.9999;
+        },
+
+        isRuleViolationCandidate(value) {
+            const number = Number(value);
+            return Number.isFinite(number) && !this.isPerfectConfidence(number);
         },
 
         renderModelDetailViews(json) {
@@ -1109,12 +1419,20 @@
             return Math.max(1, Math.ceil(Number(view.total || 0) / pageSize));
         },
 
-        renderSamplePageJump(inputId, view = {}, goOnclick, pageCall) {
+        renderSamplePageJump(inputId, view = {}, goOnclick, pageCall, options = {}) {
             const page = Math.max(1, Number(view.page || 1));
             const totalPages = this.getViewTotalPages(view);
             const callPage = (nextPage) => pageCall.endsWith(", ")
                 ? `${pageCall}${nextPage})`
                 : `${pageCall}(${nextPage})`;
+            const selectedPageSize = this.normalizeRuleCardPageSize(view.pageSize || options.defaultPageSize || 20);
+            const pageSizeSelect = Array.isArray(options.pageSizes) && options.pageSizes.length
+                ? `
+                    <select id="${this.escapeHtml(options.pageSizeId || `${inputId}-pageSize`)}" title="Page size" onchange="${this.escapeHtml(options.onPageSizeChange || "")}">
+                        ${options.pageSizes.map((size) => `<option value="${this.escapeHtml(size)}" ${Number(size) === selectedPageSize ? "selected" : ""}>${this.formatNumber(size)}</option>`).join("")}
+                    </select>
+                `
+                : "";
             return `
                 <div class="m04002-page-jump">
                     <button type="button" ${page <= 1 ? "disabled" : ""} onclick="${callPage(page - 1)}"><i class="fas fa-chevron-left"></i></button>
@@ -1125,6 +1443,7 @@
                     </label>
                     <button type="button" onclick="${goOnclick}">Go</button>
                     <button type="button" ${page >= totalPages ? "disabled" : ""} onclick="${callPage(page + 1)}"><i class="fas fa-chevron-right"></i></button>
+                    ${pageSizeSelect}
                 </div>
             `;
         },
@@ -1142,8 +1461,8 @@
                         ${json.filteredByTarget ? `<small>Target ${this.escapeHtml(json.targetOwner)}.${this.escapeHtml(json.targetTable)}</small>` : ""}
                         ${json.ruleModelName ? `<small>Rule Model ${this.escapeHtml(json.ruleModelName)}</small>` : ""}
                         ${this.renderSelectedNodeJobDesc()}
-                        ${this.renderSelectedNodeExecutionMeta()}
                     </div>
+                    ${this.renderSelectedNodeExecutionMeta()}
                 </header>
                 ${this.renderViolationSummary(json.violationSummary)}
                 ${this.renderCorrelationSummary(json.correlationSummary)}
@@ -1152,6 +1471,7 @@
                 ${this.renderGrid(json.columns || [], json.data || [], json)}
                 ${this.renderResultPager(json.page, json.pageSize, json.total, "M04002.loadResultTable(")}
             `;
+            this.snapshotNodeResultCache();
         },
 
         renderResultError(message) {
@@ -1181,42 +1501,130 @@
             if (!summary) return "";
             this.lastViolationSummary = summary;
             const overview = summary.overview || {};
+            const candidateOverview = summary.candidateOverview || {};
+            const candidateItems = [
+                {
+                    label: "전체",
+                    value: "ALL",
+                    total: candidateOverview.TOTAL_RULES,
+                    nonPerfect: candidateOverview.NON_PERFECT_CONF_RULES
+                },
+                ...(summary.candidateConditionDist || []).map((bucket) => ({
+                    label: Number(bucket.CONDITION_COUNT || 0) > 0 ? `조건 ${this.formatNumber(bucket.CONDITION_COUNT)}개` : "조건 미해석",
+                    value: String(Number(bucket.CONDITION_COUNT || 0)),
+                    total: bucket.RULE_COUNT,
+                    nonPerfect: bucket.NON_PERFECT_CONF_RULES
+                }))
+            ];
             const topRules = Array.isArray(summary.topRules) ? summary.topRules : [];
             const topColumns = Array.isArray(summary.topColumns) ? summary.topColumns : [];
+            const ruleFilter = summary.ruleIdFilter ?? this.violationRuleFilters?.ruleId ?? "";
+            const ruleFilterDisplay = String(ruleFilter || "");
+            const candidateCount = this.getViolationCandidateCount(summary);
+            const detectionOverview = summary.detectionOverview || {};
+            const detectionCriteria = summary.detectionCriteria || this.getViolationDetectionCriteria();
+            const detectionEligibleCount = Number(detectionOverview.DETECTION_ELIGIBLE_RULE_COUNT || 0);
+            const confidenceCutoffCount = Number(detectionOverview.CONFIDENCE_CUTOFF_COUNT || 0);
+            const liftCutoffCount = Number(detectionOverview.LIFT_CUTOFF_COUNT || 0);
+            const maxRulesCutoffCount = Number(detectionOverview.MAX_RULES_CUTOFF_COUNT || 0);
+            const violatedRuleCount = Number(overview.VIOLATED_RULE_COUNT || 0);
+            const noViolationRuleCount = Math.max(0, Number(candidateCount || 0) - violatedRuleCount);
+            const noViolationAfterDetectionCount = Math.max(0, detectionEligibleCount - violatedRuleCount);
+            const activeScopeLabel = this.violationRuleFilters?.confidenceScope === "ALL" ? "전체 규칙" : "100% 아닌 규칙";
+            const resultScope = summary.resultScope || this.violationRuleFilters?.resultScope || "HIT";
+            const resultScopeMessage = resultScope === "CANDIDATE"
+                ? "선택 후보 규칙 전체를 표시합니다."
+                : resultScope === "MISS"
+                    ? "선택 후보 중 실제 위반 Row가 없는 규칙을 표시합니다."
+                    : "실제 위반 Row가 발생한 규칙을 표시합니다.";
             return `
                 <section class="m04002-violation-summary">
-                    <header>
+                    <div class="m04002-violation-intro">
                         <div>
                             <strong>규칙 위반 탐지 요약</strong>
-                            <span>Target ${this.escapeHtml(summary.targetOwner || "-")}.${this.escapeHtml(summary.targetTable || "-")}${summary.ruleModelName ? ` · Rule Model ${this.escapeHtml(summary.ruleModelName)}` : ""}</span>
+                            <span>Target ${this.escapeHtml(summary.targetOwner || "-")}.${this.escapeHtml(summary.targetTable || "-")}${summary.ruleModelName ? ` · Rule Model ${this.escapeHtml(summary.ruleModelName)}` : ""} · ${this.escapeHtml(activeScopeLabel)} 기준</span>
                         </div>
-                        <div class="m04002-corr-metrics">
-                            <span><b>${this.formatNumber(overview.VIOLATION_COUNT)}</b><small>위반 건수</small></span>
-                            <span><b>${this.formatNumber(overview.VIOLATED_ROW_COUNT)}</b><small>위반 Row</small></span>
-                            <span><b>${this.formatNumber(overview.VIOLATED_RULE_COUNT)}</b><small>위반 규칙</small></span>
-                            <span><b>${this.formatDecimal(overview.MAX_VIOLATION_SCORE)}</b><small>최고 점수</small></span>
+                        ${this.renderViolationRulePager(summary)}
+                    </div>
+                    <section class="m04002-violation-condition-panel">
+                        <strong>조건 수 선택</strong>
+                        ${this.renderRuleConditionMatrix(candidateItems, this.violationRuleFilters?.conditionCount || "ALL", this.violationRuleFilters?.confidenceScope || "NON_PERFECT", "M04002.selectViolationCondition")}
+                        <div class="m04002-violation-inline-summary">
+                            <button type="button" class="${resultScope === "CANDIDATE" ? "is-active" : ""}" onclick="M04002.selectViolationResultScope('CANDIDATE')">
+                                <small>선택 후보</small>
+                                <b>${this.formatNumber(candidateCount)}</b>
+                                <em>${this.escapeHtml(activeScopeLabel)}</em>
+                            </button>
+                            <button type="button" disabled>
+                                <small>탐지 대상</small>
+                                <b>${this.formatNumber(detectionEligibleCount)}</b>
+                                <em>min/conf/lift/max 적용</em>
+                            </button>
+                            <button type="button" class="is-hit ${resultScope === "HIT" ? "is-active" : ""}" onclick="M04002.selectViolationResultScope('HIT')">
+                                <small>위반 발생</small>
+                                <b>${this.formatNumber(violatedRuleCount)}</b>
+                                <em>아래 목록 표시</em>
+                            </button>
+                            <button type="button" class="is-muted ${resultScope === "MISS" ? "is-active" : ""}" onclick="M04002.selectViolationResultScope('MISS')">
+                                <small>위반 없음</small>
+                                <b>${this.formatNumber(noViolationRuleCount)}</b>
+                                <em>위반 없음 표시</em>
+                            </button>
+                            <button type="button" disabled>
+                                <small>위반 Row / 건수</small>
+                                <b>${this.formatNumber(overview.VIOLATED_ROW_COUNT)} / ${this.formatNumber(overview.VIOLATION_COUNT)}</b>
+                                <em>실제 탐지 결과</em>
+                            </button>
+                            ${ruleFilterDisplay ? `<b>RULE ID 검색: ${this.escapeHtml(ruleFilterDisplay)}</b>` : ""}
                         </div>
-                    </header>
-                    ${topColumns.length ? `
-                        <div class="m04002-violation-column-strip">
-                            <strong>위반 결과 컬럼 Top</strong>
-                            <div>
-                                ${topColumns.map((item) => `
+                        <div class="m04002-violation-reason-strip">
+                            <span><small>confidence 미달</small><b>${this.formatNumber(confidenceCutoffCount)}</b></span>
+                            <span><small>lift 미달</small><b>${this.formatNumber(liftCutoffCount)}</b></span>
+                            <span><small>max rules 제외</small><b>${this.formatNumber(maxRulesCutoffCount)}</b></span>
+                            <span><small>탐지 후 위반 없음</small><b>${this.formatNumber(noViolationAfterDetectionCount)}</b></span>
+                            <em>탐지 기준: confidence >= ${this.formatPercentMetric(detectionCriteria.minConfidence)}, lift >= ${this.formatDecimal(detectionCriteria.minLift)}, max rules ${this.formatNumber(detectionCriteria.maxRules)}</em>
+                        </div>
+                        <div class="m04002-violation-scope-note">${this.escapeHtml(resultScopeMessage)}</div>
+                    </section>
+                    <section class="m04002-rule-facet-panel is-violation">
+                        <div class="m04002-rule-facet-block">
+                            <header>
+                                <strong>위반 결과 컬럼 Top</strong>
+                            </header>
+                            <div class="m04002-rule-facet-list">
+                                ${topColumns.length ? topColumns.map((item) => `
                                     <button type="button" onclick="M04002.openViolationSqlPopup('column', '${this.escapeJs(item.RESULT_COLUMN)}')">
-                                        ${this.renderColumnAwareCell(item.RESULT_COLUMN, summary)}
+                                        <span>${this.renderColumnAwareCell(item.RESULT_COLUMN, summary)}</span>
                                         <b>${this.formatNumber(item.VIOLATION_COUNT)}</b>
                                     </button>
-                                `).join("")}
+                                `).join("") : `<span>표시할 위반 결과 컬럼이 없습니다.</span>`}
                             </div>
                         </div>
-                    ` : ""}
+                        <div class="m04002-rule-facet-block is-condition">
+                            <header>
+                                <strong>RULE ID 검색</strong>
+                                <div class="m04002-rule-facet-actions">
+                                    <button type="button" onclick="M04002.searchViolationRule()">Search</button>
+                                    <button type="button" onclick="M04002.resetViolationRuleSearch()">Reset</button>
+                                </div>
+                            </header>
+                            <label class="m04002-rule-condition-search">
+                                <span>RULE ID</span>
+                                <input id="violationRuleSearch-M04002" type="search" value="${this.escapeHtml(ruleFilterDisplay)}" placeholder="예: COND_..." onkeydown="M04002.handleViolationRuleSearchKeydown(event)">
+                            </label>
+                        </div>
+                    </section>
                     ${topRules.length ? `
                         <div class="m04002-violation-rule-grid">
-                            ${topRules.map((rule) => `
-                                <article>
+                            ${topRules.map((rule) => {
+                                const hasViolation = Number(rule.VIOLATION_COUNT || 0) > 0;
+                                return `
+                                <article class="${hasViolation ? "" : "is-no-violation"}">
                                     <header>
                                         <strong>${this.escapeHtml(rule.RULE_ID)}</strong>
-                                        <button type="button" onclick="M04002.openViolationSqlPopup('rule', '${this.escapeJs(rule.RULE_ID)}')">${this.formatNumber(rule.VIOLATION_COUNT)}건</button>
+                                        ${hasViolation
+                                            ? `<button type="button" onclick="M04002.openViolationSqlPopup('rule', '${this.escapeJs(rule.RULE_ID)}')">${this.formatNumber(rule.VIOLATION_COUNT)}건</button>`
+                                            : `<em>위반 없음</em>`}
                                     </header>
                                     <p>
                                         <b>IF</b>
@@ -1226,21 +1634,129 @@
                                     </p>
                                     <footer>
                                         <span><small>confidence</small><b>${this.formatPercentMetric(rule.RULE_CONFIDENCE)}</b></span>
+                                        <span><small>예상 위반</small><b>${this.formatExpectedViolationRate(rule.RULE_CONFIDENCE)}</b></span>
                                         <span><small>lift</small><b>${this.formatDecimal(rule.RULE_LIFT)}</b></span>
+                                        <span><small>support</small><b>${this.formatPercentMetric(rule.RULE_SUPPORT)}</b></span>
                                         <span><small>score</small><b>${this.formatDecimal(rule.AVG_VIOLATION_SCORE)}</b></span>
                                     </footer>
                                 </article>
-                            `).join("")}
+                            `;
+                            }).join("")}
                         </div>
-                    ` : `<div class="table-empty">탐지된 규칙 위반 결과가 없습니다.</div>`}
+                    ` : `<div class="table-empty">${ruleFilter ? "검색한 RULE ID에 해당하는 규칙이 없습니다." : "표시할 규칙이 없습니다."}</div>`}
                 </section>
             `;
+        },
+
+        getViolationCandidateCount(summary = {}) {
+            const conditionCount = String(this.violationRuleFilters?.conditionCount ?? "ALL");
+            const confidenceScope = this.violationRuleFilters?.confidenceScope === "ALL" ? "ALL" : "NON_PERFECT";
+            if (conditionCount === "ALL") {
+                const overview = summary.candidateOverview || {};
+                return confidenceScope === "NON_PERFECT"
+                    ? overview.NON_PERFECT_CONF_RULES
+                    : overview.TOTAL_RULES;
+            }
+            const row = (summary.candidateConditionDist || []).find((item) => String(Number(item.CONDITION_COUNT || 0)) === conditionCount);
+            if (!row) return 0;
+            return confidenceScope === "NON_PERFECT" ? row.NON_PERFECT_CONF_RULES : row.RULE_COUNT;
+        },
+
+        renderViolationRulePager(summary = {}) {
+            const page = Math.max(1, Number(summary.topRulePage || this.violationRuleFilters?.page || 1));
+            const pageSize = this.normalizeRuleCardPageSize(summary.topRulePageSize || this.violationRuleFilters?.pageSize || 20);
+            const total = Math.max(0, Number(summary.topRuleTotal || 0));
+            return this.renderSamplePageJump(
+                "violationRulePage-M04002",
+                { page, pageSize, total },
+                "M04002.goViolationRulePage()",
+                "M04002.loadViolationRulePage",
+                {
+                    pageSizeId: "violationRulePageSize-M04002",
+                    pageSizes: [20, 40, 100, 500, 1000],
+                    onPageSizeChange: "M04002.changeViolationRulePageSize(this.value)"
+                }
+            );
+        },
+
+        handleViolationRuleSearchKeydown(event) {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                this.searchViolationRule();
+            }
+        },
+
+        async searchViolationRule() {
+            const input = getContainerEl("#violationRuleSearch-M04002");
+            this.violationRuleFilters = {
+                ...(this.violationRuleFilters || {}),
+                ruleId: String(input?.value || "").trim(),
+                page: 1,
+                pageSize: this.normalizeRuleCardPageSize(this.violationRuleFilters?.pageSize || 20)
+            };
+            await this.loadResultTable(this.resultPage || 1);
+        },
+
+        async resetViolationRuleSearch() {
+            this.violationRuleFilters = {
+                ...(this.violationRuleFilters || {}),
+                ruleId: "",
+                page: 1,
+                pageSize: this.normalizeRuleCardPageSize(this.violationRuleFilters?.pageSize || 20)
+            };
+            await this.loadResultTable(this.resultPage || 1);
+        },
+
+        async selectViolationCondition(value, confidenceScope = "NON_PERFECT") {
+            this.violationRuleFilters = {
+                ...(this.violationRuleFilters || {}),
+                conditionCount: value === undefined || value === null || value === "" ? "ALL" : String(value),
+                confidenceScope: confidenceScope === "ALL" ? "ALL" : "NON_PERFECT",
+                page: 1,
+                pageSize: this.normalizeRuleCardPageSize(this.violationRuleFilters?.pageSize || 20)
+            };
+            await this.loadResultTable(1);
+        },
+
+        async selectViolationResultScope(resultScope = "HIT") {
+            const normalizedScope = ["CANDIDATE", "MISS"].includes(resultScope) ? resultScope : "HIT";
+            this.violationRuleFilters = {
+                ...(this.violationRuleFilters || {}),
+                resultScope: normalizedScope,
+                page: 1,
+                pageSize: this.normalizeRuleCardPageSize(this.violationRuleFilters?.pageSize || 20)
+            };
+            await this.loadResultTable(1);
+        },
+
+        async loadViolationRulePage(page = 1) {
+            this.violationRuleFilters = {
+                ...(this.violationRuleFilters || {}),
+                page: Math.max(1, Number(page || 1)),
+                pageSize: this.normalizeRuleCardPageSize(this.violationRuleFilters?.pageSize || 20)
+            };
+            await this.loadResultTable(this.resultPage || 1);
+        },
+
+        async changeViolationRulePageSize(value) {
+            this.violationRuleFilters = {
+                ...(this.violationRuleFilters || {}),
+                page: 1,
+                pageSize: this.normalizeRuleCardPageSize(value)
+            };
+            await this.loadResultTable(this.resultPage || 1);
+        },
+
+        async goViolationRulePage() {
+            const input = getContainerEl("#violationRulePage-M04002");
+            await this.loadViolationRulePage(input?.value || 1);
         },
 
         openViolationSqlPopup(kind = "all", value = "") {
             const sql = this.createViolationSql(kind, value);
             if (!sql) return;
             const ruleColumns = this.getViolationRuleColumns(kind, value);
+            const ruleDetail = this.getViolationRuleDetail(kind, value);
             const label = kind === "column"
                 ? `결과 컬럼 ${value}`
                 : (kind === "rule" ? `Rule ${value}` : "전체 위반");
@@ -1252,9 +1768,16 @@
                 columns: [],
                 rows: [],
                 ruleColumns,
+                ruleDetail,
                 title: `${label} 위반 Row 조회`
             };
             this.renderViolationSqlPopup();
+        },
+
+        getViolationRuleDetail(kind = "all", value = "") {
+            if (kind !== "rule" || !value) return null;
+            const summary = this.lastViolationSummary || {};
+            return (summary.topRules || []).find((item) => String(item.RULE_ID) === String(value)) || null;
         },
 
         getViolationRuleColumns(kind = "all", value = "") {
@@ -1301,6 +1824,13 @@
                 `V.TARGET_TABLE = ${this.sqlLiteral(targetTable)}`
             ];
             if (ruleModelName) filters.push(`V.MODEL_NAME = ${this.sqlLiteral(ruleModelName)}`);
+            const violationFilters = this.violationRuleFilters || {};
+            if (violationFilters.conditionCount !== "ALL") {
+                filters.push(`V.CONDITION_COUNT = ${this.sqlLiteral(violationFilters.conditionCount)}`);
+            }
+            if (violationFilters.confidenceScope !== "ALL") {
+                filters.push("V.RULE_CONFIDENCE IS NOT NULL AND ((V.RULE_CONFIDENCE <= 1 AND V.RULE_CONFIDENCE < 0.999999) OR (V.RULE_CONFIDENCE > 1 AND V.RULE_CONFIDENCE < 99.9999))");
+            }
             if (kind === "column" && value) filters.push(`V.RESULT_COLUMN = ${this.sqlLiteral(value)}`);
             if (kind === "rule" && value) filters.push(`V.RULE_ID = ${this.sqlLiteral(value)}`);
             return [
@@ -1343,9 +1873,11 @@
                         <button type="button" onclick="M04002.closeViolationSqlPopup()"><i class="fas fa-times"></i></button>
                     </header>
                     <div class="m04002-sql-popup-body">
+                        ${this.renderViolationSqlRuleContext(state.ruleDetail)}
                         <textarea id="m04002ViolationSqlEditor" class="m04002-sql-editor" spellcheck="false" onkeydown="M04002.handleViolationSqlKeydown(event)">${this.escapeHtml(state.sql || "")}</textarea>
                         <div class="m04002-sql-popup-toolbar">
                             <button type="button" class="table-btn primary" onclick="M04002.executeViolationSql(1)"><i class="fas fa-play"></i> Run</button>
+                            <button type="button" class="table-btn" ${state.columns?.length ? "" : "disabled"} onclick="M04002.exportViolationSqlRows()"><i class="fas fa-file-export"></i> Export</button>
                             <label>Rows
                                 <select id="m04002ViolationSqlPageSize" onchange="M04002.executeViolationSql(1)">
                                     ${[20, 50, 100, 200].map((size) => `<option value="${size}" ${Number(state.pageSize || 50) === size ? "selected" : ""}>${size}</option>`).join("")}
@@ -1364,6 +1896,24 @@
                             ${state.columns?.length ? this.renderViolationSqlGrid(state.columns, state.rows, state.ruleColumns || []) : ""}
                         </div>
                     </div>
+                </section>
+            `;
+        },
+
+        renderViolationSqlRuleContext(rule = null) {
+            if (!rule) return "";
+            return `
+                <section class="m04002-violation-rule-context">
+                    <header>
+                        <strong>${this.escapeHtml(rule.RULE_ID || "")}</strong>
+                        <span>${this.formatNumber(rule.VIOLATION_COUNT)}건 · confidence ${this.formatPercentMetric(rule.RULE_CONFIDENCE)} · lift ${this.formatDecimal(rule.RULE_LIFT)}</span>
+                    </header>
+                    <p>
+                        <b>IF</b>
+                        ${this.renderColumnAwareText(rule.CONDITION_TEXT || "", this.lastViolationSummary || {})}
+                        <b>THEN</b>
+                        ${this.renderColumnAwareCell(rule.RESULT_COLUMN, this.lastViolationSummary || {})} = ${this.escapeHtml(rule.EXPECTED_VALUE || "")}
+                    </p>
                 </section>
             `;
         },
@@ -1456,6 +2006,20 @@
         goViolationSqlPage() {
             const page = Number(document.getElementById("m04002ViolationSqlPage")?.value || 1);
             this.executeViolationSql(page);
+        },
+
+        exportViolationSqlRows() {
+            const state = this.violationSql || {};
+            const columns = (state.columns || []).filter((column) => column !== "RN__");
+            const rows = state.rows || [];
+            if (!columns.length || !rows.length) {
+                alert("Export할 위반 Row 데이터가 없습니다.");
+                return;
+            }
+            const filenameBase = String(state.title || "violation-rows")
+                .replace(/[\\/:*?"<>|]+/g, "_")
+                .replace(/\s+/g, "_");
+            this.downloadCsv(`${filenameBase}.csv`, columns, rows);
         },
 
         startViolationSqlPopupDrag(event) {
@@ -1602,6 +2166,7 @@
             this.excludeEmptyConsequent = Boolean(checked);
             if (this.currentModelDetail) {
                 this.renderModelAnalysis(this.currentModelDetail, "readable");
+                this.snapshotNodeResultCache();
                 return;
             }
             const viewButton = getContainerEl("#resultPanel-M04002 .m04002-result-header nav button.is-active");
@@ -1662,7 +2227,7 @@
                         `).join("")}
                     </div>
                     ${paramEntries.length ? `
-                        <details class="m04002-param-details" open>
+                        <details class="m04002-param-details">
                             <summary>호출 옵션 파라미터 ${this.formatNumber(paramEntries.length)}개</summary>
                             <div>
                                 ${paramEntries.map(([key, value]) => `
@@ -1696,6 +2261,43 @@
                 if (normalized) return normalized;
             }
             return "";
+        },
+
+        getViolationDetectionCriteria(node = this.selectedNode) {
+            const payload = this.normalizeObject(node?.PAYLOAD);
+            const params = this.normalizeObject(node?.RUNTIME_PARAMS);
+            const minConfidence = this.readNumericParam(
+                [params.P_MIN_CONFIDENCE, params.pMinConfidence, params.minConfidence, payload.P_MIN_CONFIDENCE, payload.pMinConfidence, payload.minConfidence],
+                0.8
+            );
+            const minLift = this.readNumericParam(
+                [params.P_MIN_LIFT, params.pMinLift, params.minLift, payload.P_MIN_LIFT, payload.pMinLift, payload.minLift],
+                1
+            );
+            const maxRules = this.readNumericParam(
+                [params.P_MAX_RULES, params.pMaxRules, params.maxRules, payload.P_MAX_RULES, payload.pMaxRules, payload.maxRules],
+                500
+            );
+            return {
+                minConfidence: Math.max(0, Math.min(1, Number(minConfidence))),
+                minLift: Math.max(0, Number(minLift)),
+                maxRules: Math.max(1, Math.min(10000, Math.trunc(Number(maxRules))))
+            };
+        },
+
+        readNumericParam(candidates = [], fallback = 0) {
+            for (const value of candidates) {
+                if (value === undefined || value === null || String(value).trim() === "") continue;
+                const number = Number(String(value).trim());
+                if (Number.isFinite(number)) return number;
+            }
+            return fallback;
+        },
+
+        normalizeRuleCardPageSize(value) {
+            const allowed = [20, 40, 100, 500, 1000];
+            const number = Number(value);
+            return allowed.includes(number) ? number : 20;
         },
 
         normalizeIdentifierParam(value) {
@@ -1842,8 +2444,12 @@
                 const mapped = Boolean(antecedentText && consequentText);
                 const missingConsequentValue = mapped && thenText !== consequentText;
                 const conditionCount = mapped ? this.countRuleConditions(antecedentText) : 0;
+                const rawRuleId = String(ruleId || `Rule ${index + 1}`);
                 return {
-                    ruleId: `Rule #${ruleId}`,
+                    ruleId: `Rule #${rawRuleId}`,
+                    rawRuleId,
+                    confidenceValue: confidence,
+                    canOpenViolation: this.isRuleViolationCandidate(confidence),
                     mappingLevel: mapped ? "mapped" : "limited",
                     mappingLabel: mapped ? "조건/결과 매핑됨" : "ID/지표 중심",
                     ifText: mapped ? antecedentText : "조건 항목 조합을 Detail Views에서 확인해야 합니다",
@@ -1856,6 +2462,7 @@
                     metrics: [
                         { label: "support", value: support === null ? "-" : this.formatPercentMetric(support) },
                         { label: "confidence", value: confidence === null ? "-" : this.formatPercentMetric(confidence) },
+                        { label: "예상 위반", value: this.formatExpectedViolationRate(confidence) },
                         { label: "lift", value: lift === null ? "-" : this.formatDecimal(lift) }
                     ],
                     conditionCount,
@@ -1986,6 +2593,18 @@
             return `${percent.toLocaleString("ko-KR", { maximumFractionDigits: 1 })}%`;
         },
 
+        normalizeProbability(value) {
+            const number = Number(value);
+            if (!Number.isFinite(number)) return null;
+            return number <= 1 ? number : number / 100;
+        },
+
+        formatExpectedViolationRate(confidence) {
+            const probability = this.normalizeProbability(confidence);
+            if (probability === null) return "-";
+            return this.formatPercentMetric(Math.max(0, 1 - probability));
+        },
+
         extractNumericProfile(rows, columns) {
             return columns.map((column) => {
                 const values = rows.map((row) => Number(row?.[column])).filter((value) => Number.isFinite(value));
@@ -2041,6 +2660,10 @@
                 alert("Export할 데이터가 없습니다.");
                 return;
             }
+            this.downloadCsv(this.currentExport.filename || "integrated-result.csv", columns, rows);
+        },
+
+        downloadCsv(filename, columns = [], rows = []) {
             const csv = [
                 columns.map((column) => this.csvCell(column)).join(","),
                 ...rows.map((row) => columns.map((column) => this.csvCell(row?.[column] ?? "")).join(","))
@@ -2048,7 +2671,7 @@
             const blob = new Blob(["\ufeff", csv], { type: "text/csv;charset=utf-8;" });
             const link = document.createElement("a");
             link.href = URL.createObjectURL(blob);
-            link.download = this.currentExport.filename || "integrated-result.csv";
+            link.download = filename || "integrated-result.csv";
             link.click();
             URL.revokeObjectURL(link.href);
         },
@@ -2133,19 +2756,57 @@
         },
 
         getNodeTone(node) {
-            const code = String(node.REF_MENU_CODE || node.NODE_TYPE || "").toUpperCase();
+            const code = String(node?.REF_MENU_CODE || node?.NODE_TYPE || node?.JOB_GROUP || "").toUpperCase();
             if (code === "M03002") return "is-correlation";
-            if (code === "M03003") return "is-discovery";
-            if (code === "M03004") return "is-violation";
+            if (this.isAssociationRuleNode(node)) return "is-discovery";
+            if (this.isViolationNode(node)) return "is-violation";
             return "is-profile";
         },
 
         getNodeIcon(node) {
-            const code = String(node.REF_MENU_CODE || node.NODE_TYPE || "").toUpperCase();
+            const code = String(node?.REF_MENU_CODE || node?.NODE_TYPE || node?.JOB_GROUP || "").toUpperCase();
             if (code === "M03002") return "fa-border-all";
-            if (code === "M03003") return "fa-wand-magic-sparkles";
-            if (code === "M03004") return "fa-shield-halved";
+            if (this.isAssociationRuleNode(node)) return "fa-wand-magic-sparkles";
+            if (this.isViolationNode(node)) return "fa-shield-halved";
             return "fa-table-columns";
+        },
+
+        isAssociationRuleNode(node) {
+            return this.matchesNodeWork(node, "M03003", "INIT$_SP_APRIORI_ASSOC_MODEL");
+        },
+
+        isViolationNode(node) {
+            return this.matchesNodeWork(node, "M03004", "INIT$_SP_RULE_VIOLATION_DETECT");
+        },
+
+        matchesNodeWork(node, menuCode, procedureName) {
+            const code = String(menuCode || "").toUpperCase();
+            const proc = String(procedureName || "").toUpperCase();
+            const payload = this.normalizeObject(node?.PAYLOAD);
+            const params = this.normalizeObject(node?.RUNTIME_PARAMS);
+            const directCodes = [
+                node?.REF_MENU_CODE,
+                node?.NODE_TYPE,
+                node?.JOB_GROUP,
+                payload.refMenuCode,
+                payload.menuCode,
+                payload.jobGroup,
+                payload.JOB_GROUP
+            ].map((value) => String(value || "").toUpperCase());
+            if (directCodes.includes(code)) return true;
+            const haystack = [
+                node?.EXEC_OBJECT_NAME,
+                node?.EXEC_OBJECT_LABEL,
+                node?.JOB_NAME,
+                node?.NODE_NAME,
+                payload.execObjectName,
+                payload.execObjectLabel,
+                payload.EXEC_OBJECT_NAME,
+                payload.EXEC_OBJECT_LABEL,
+                params.execObjectName,
+                params.EXEC_OBJECT_NAME
+            ].map((value) => String(value || "").toUpperCase()).join(" ");
+            return Boolean(proc && haystack.includes(proc));
         },
 
         escapeHtml(value) {

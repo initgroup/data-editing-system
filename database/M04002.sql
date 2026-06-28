@@ -108,6 +108,14 @@ SELECT OWNER,
 SELECT COUNT(*) AS TOTAL_RULES,
        SUM(CASE WHEN CONDITION_COUNT > 0 AND RESULT_COLUMN IS NOT NULL THEN 1 ELSE 0 END) AS MAPPED_RULES,
        SUM(CASE WHEN RESULT_HAS_VALUE_YN = 'N' THEN 1 ELSE 0 END) AS MISSING_RESULT_RULES,
+       SUM(CASE
+               WHEN RULE_CONFIDENCE IS NOT NULL
+                AND (
+                    (RULE_CONFIDENCE <= 1 AND RULE_CONFIDENCE < 0.999999)
+                    OR (RULE_CONFIDENCE > 1 AND RULE_CONFIDENCE < 99.9999)
+                )
+               THEN 1 ELSE 0
+           END) AS NON_PERFECT_CONF_RULES,
        MAX(MODEL_TYPE) AS MODEL_TYPE,
        MAX(RULE_SOURCE) AS RULE_SOURCE,
        AVG(RULE_SUPPORT) AS AVG_SUPPORT,
@@ -125,6 +133,14 @@ SELECT COUNT(*) AS TOTAL_RULES,
 -- [M04002_ASSOC_RULE_CONDITION_DIST]
 SELECT CONDITION_COUNT,
        COUNT(*) AS RULE_COUNT,
+       SUM(CASE
+               WHEN RULE_CONFIDENCE IS NOT NULL
+                AND (
+                    (RULE_CONFIDENCE <= 1 AND RULE_CONFIDENCE < 0.999999)
+                    OR (RULE_CONFIDENCE > 1 AND RULE_CONFIDENCE < 99.9999)
+                )
+               THEN 1 ELSE 0
+           END) AS NON_PERFECT_CONF_RULES,
        AVG(RULE_SUPPORT) AS AVG_SUPPORT,
        AVG(RULE_CONFIDENCE) AS AVG_CONFIDENCE,
        AVG(RULE_LIFT) AS AVG_LIFT
@@ -202,7 +218,22 @@ SELECT *
                         OR (:resultColumn = '__NULL__' AND RESULT_COLUMN IS NULL)
                         OR RESULT_COLUMN = :resultColumn
                    )
+                   AND (
+                        :conditionColumn IS NULL
+                        OR (:conditionColumn = '__NULL__' AND CONDITION_COLUMN IS NULL)
+                        OR CONDITION_COLUMN = :conditionColumn
+                   )
                    AND (:resultHasValueYn IS NULL OR RESULT_HAS_VALUE_YN = :resultHasValueYn)
+                   AND (
+                        :confidenceScope <> 'NON_PERFECT'
+                        OR (
+                            RULE_CONFIDENCE IS NOT NULL
+                            AND (
+                                (RULE_CONFIDENCE <= 1 AND RULE_CONFIDENCE < 0.999999)
+                                OR (RULE_CONFIDENCE > 1 AND RULE_CONFIDENCE < 99.9999)
+                            )
+                        )
+                   )
                ) Q
        )
  WHERE RN__ > :offset

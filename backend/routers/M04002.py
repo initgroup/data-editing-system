@@ -327,6 +327,15 @@ def _fetch_rule_violation_summary(
     target_owner: str,
     target_table: str,
     rule_model_name: str = "",
+    rule_id_filter: str = "",
+    condition_count: int | None = None,
+    confidence_scope: str = "NON_PERFECT",
+    result_scope: str = "HIT",
+    detection_min_confidence: float = 0.8,
+    detection_min_lift: float = 1.0,
+    detection_max_rules: int = 500,
+    rule_page: int = 1,
+    rule_page_size: int = 8,
 ) -> dict[str, Any] | None:
     if object_name != "INIT$_TB_RULE_VIOLATION_RESULT":
         return None
@@ -342,16 +351,54 @@ def _fetch_rule_violation_summary(
     if rule_model_name:
         where_clauses.append("MODEL_NAME = :ruleModelName")
         bind_params["ruleModelName"] = rule_model_name
+    if condition_count is not None:
+        where_clauses.append("CONDITION_COUNT = :conditionCount")
+        bind_params["conditionCount"] = condition_count
+    normalized_confidence_scope = str(confidence_scope or "").strip().upper()
+    if normalized_confidence_scope == "NON_PERFECT":
+        where_clauses.append(
+            "RULE_CONFIDENCE IS NOT NULL "
+            "AND ((RULE_CONFIDENCE <= 1 AND RULE_CONFIDENCE < 0.999999) "
+            " OR (RULE_CONFIDENCE > 1 AND RULE_CONFIDENCE < 99.9999))"
+        )
+    else:
+        normalized_confidence_scope = "ALL"
+    normalized_result_scope = str(result_scope or "").strip().upper()
+    if normalized_result_scope not in {"CANDIDATE", "HIT", "MISS"}:
+        normalized_result_scope = "HIT"
+    try:
+        detection_min_confidence = max(0.0, min(1.0, float(detection_min_confidence)))
+    except (TypeError, ValueError):
+        detection_min_confidence = 0.8
+    try:
+        detection_min_lift = max(0.0, float(detection_min_lift))
+    except (TypeError, ValueError):
+        detection_min_lift = 1.0
+    try:
+        detection_max_rules = max(1, min(10000, int(detection_max_rules)))
+    except (TypeError, ValueError):
+        detection_max_rules = 500
     where_sql = f" WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+    rule_where_clauses = list(where_clauses)
+    rule_bind_params = dict(bind_params)
+    normalized_rule_filter = str(rule_id_filter or "").strip()
+    if normalized_rule_filter:
+        rule_where_clauses.append("UPPER(RULE_ID) LIKE '%' || UPPER(:ruleIdFilter) || '%'")
+        rule_bind_params["ruleIdFilter"] = normalized_rule_filter
+    rule_where_sql = f" WHERE {' AND '.join(rule_where_clauses)}" if rule_where_clauses else ""
+    rule_page = _normalize_page(rule_page)
+    rule_page_size = _normalize_page_size(rule_page_size, 20, 1000)
+    rule_offset, rule_end_row = _page_window(rule_page, rule_page_size)
+    rule_bind_params.update({"ruleOffset": rule_offset, "ruleEndRow": rule_end_row})
 
-    def fetch_one(sql: str) -> dict[str, Any]:
-        cursor.execute(sql, bind_params)
+    def fetch_one(sql: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        cursor.execute(sql, params or bind_params)
         columns = [desc[0] for desc in cursor.description]
         row = cursor.fetchone()
         return {column: _serialize_db_value(value) for column, value in zip(columns, row)} if row else {}
 
-    def fetch_many(sql: str) -> list[dict[str, Any]]:
-        cursor.execute(sql, bind_params)
+    def fetch_many(sql: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+        cursor.execute(sql, params or bind_params)
         columns = [desc[0] for desc in cursor.description]
         return [
             {column: _serialize_db_value(value) for column, value in zip(columns, row)}
@@ -368,22 +415,149 @@ def _fetch_rule_violation_summary(
         "       MAX(RULE_CONFIDENCE) AS MAX_RULE_CONFIDENCE "
         f"  FROM {result_object}{where_sql}"
     )
+    candidate_params = {
+        "owner": owner_name,
+        "targetOwner": target_owner,
+        "targetTable": target_table,
+        "modelName": rule_model_name,
+    }
+    candidate_overview = fetch_one(
+        SqlLoader.get_sql("M04002_ASSOC_RULE_OVERVIEW"),
+        candidate_params,
+    ) if rule_model_name else {}
+    candidate_condition_dist = fetch_many(
+        SqlLoader.get_sql("M04002_ASSOC_RULE_CONDITION_DIST"),
+        candidate_params,
+    ) if rule_model_name else []
+
+    candidate_filter_clauses = [
+        '"OWNER" = :owner',
+        '"TARGET_OWNER" = :targetOwner',
+        '"TARGET_TABLE" = :targetTable',
+        '"MODEL_NAME" = :modelName',
+        '"RESULT_HAS_VALUE_YN" = \'Y\'',
+        '"RESULT_COLUMN" IS NOT NULL',
+        '"RESULT_VALUE" IS NOT NULL',
+        '"CONDITION_TEXT" IS NOT NULL',
+    ]
+    candidate_filter_params = {
+        "owner": owner_name,
+        "targetOwner": target_owner,
+        "targetTable": target_table,
+        "modelName": rule_model_name,
+        "detectMinConfidence": detection_min_confidence,
+        "detectMinLift": detection_min_lift,
+        "detectMaxRules": detection_max_rules,
+    }
+    if condition_count is not None:
+        candidate_filter_clauses.append('"CONDITION_COUNT" = :candidateConditionCount')
+        candidate_filter_params["candidateConditionCount"] = condition_count
+    if normalized_confidence_scope == "NON_PERFECT":
+        candidate_filter_clauses.append(
+            '"RULE_CONFIDENCE" IS NOT NULL '
+            'AND (("RULE_CONFIDENCE" <= 1 AND "RULE_CONFIDENCE" < 0.999999) '
+            ' OR ("RULE_CONFIDENCE" > 1 AND "RULE_CONFIDENCE" < 99.9999))'
+        )
+    if normalized_rule_filter:
+        candidate_filter_clauses.append('UPPER("RULE_ID") LIKE \'%\' || UPPER(:candidateRuleIdFilter) || \'%\'')
+        candidate_filter_params["candidateRuleIdFilter"] = normalized_rule_filter
+    candidate_filter_sql = " AND ".join(candidate_filter_clauses)
+    detection_overview = fetch_one(
+        "WITH CANDIDATES AS ("
+        "        SELECT S.* "
+        "          FROM \"INIT$_TB_ASSOC_RULE_SUMMARY\" S "
+        f"         WHERE {candidate_filter_sql}"
+        "     ), DETECTABLE AS ("
+        "        SELECT C.*, "
+        "               ROW_NUMBER() OVER (ORDER BY C.\"RULE_CONFIDENCE\" DESC NULLS LAST, C.\"RULE_LIFT\" DESC NULLS LAST, C.\"SUPPORT_COUNT\" DESC NULLS LAST, C.\"RULE_ID\") AS DETECTION_RN "
+        "          FROM CANDIDATES C "
+        "         WHERE NVL(C.\"RULE_CONFIDENCE\", 0) >= :detectMinConfidence "
+        "           AND NVL(C.\"RULE_LIFT\", 0) >= :detectMinLift"
+        "     ) "
+        "SELECT (SELECT COUNT(*) FROM CANDIDATES) AS CANDIDATE_RULE_COUNT, "
+        "       (SELECT COUNT(*) FROM CANDIDATES WHERE NVL(\"RULE_CONFIDENCE\", 0) < :detectMinConfidence) AS CONFIDENCE_CUTOFF_COUNT, "
+        "       (SELECT COUNT(*) FROM CANDIDATES WHERE NVL(\"RULE_LIFT\", 0) < :detectMinLift) AS LIFT_CUTOFF_COUNT, "
+        "       (SELECT COUNT(*) FROM DETECTABLE WHERE DETECTION_RN <= :detectMaxRules) AS DETECTION_ELIGIBLE_RULE_COUNT, "
+        "       (SELECT COUNT(*) FROM DETECTABLE WHERE DETECTION_RN > :detectMaxRules) AS MAX_RULES_CUTOFF_COUNT "
+        "  FROM DUAL",
+        candidate_filter_params,
+    ) if rule_model_name else {}
+
+    candidate_rule_clauses = [
+        'S."OWNER" = :candidateOwner',
+        'S."TARGET_OWNER" = :candidateTargetOwner',
+        'S."TARGET_TABLE" = :candidateTargetTable',
+        'S."MODEL_NAME" = :candidateModelName',
+        'S."RESULT_HAS_VALUE_YN" = \'Y\'',
+        'S."RESULT_COLUMN" IS NOT NULL',
+        'S."RESULT_VALUE" IS NOT NULL',
+        'S."CONDITION_TEXT" IS NOT NULL',
+    ]
+    candidate_rule_params: dict[str, Any] = {
+        "candidateOwner": owner_name,
+        "candidateTargetOwner": target_owner,
+        "candidateTargetTable": target_table,
+        "candidateModelName": rule_model_name,
+        "ruleOffset": rule_offset,
+        "ruleEndRow": rule_end_row,
+    }
+    if condition_count is not None:
+        candidate_rule_clauses.append('S."CONDITION_COUNT" = :candidateConditionCount')
+        candidate_rule_params["candidateConditionCount"] = condition_count
+    if normalized_confidence_scope == "NON_PERFECT":
+        candidate_rule_clauses.append(
+            'S."RULE_CONFIDENCE" IS NOT NULL '
+            'AND ((S."RULE_CONFIDENCE" <= 1 AND S."RULE_CONFIDENCE" < 0.999999) '
+            ' OR (S."RULE_CONFIDENCE" > 1 AND S."RULE_CONFIDENCE" < 99.9999))'
+        )
+    if normalized_rule_filter:
+        candidate_rule_clauses.append('UPPER(S."RULE_ID") LIKE \'%\' || UPPER(:candidateRuleIdFilter) || \'%\'')
+        candidate_rule_params["candidateRuleIdFilter"] = normalized_rule_filter
+    candidate_rule_where_sql = " AND ".join(candidate_rule_clauses)
+    result_scope_predicate = {
+        "CANDIDATE": "1 = 1",
+        "HIT": "NVL(Q.VIOLATION_COUNT, 0) > 0",
+        "MISS": "NVL(Q.VIOLATION_COUNT, 0) = 0",
+    }[normalized_result_scope]
     top_rules = fetch_many(
         "SELECT * FROM ("
-        "        SELECT RULE_ID, "
-        "               MIN(DBMS_LOB.SUBSTR(CONDITION_TEXT, 4000, 1)) AS CONDITION_TEXT, "
-        "               RESULT_COLUMN, "
-        "               EXPECTED_VALUE, "
-        "               COUNT(*) AS VIOLATION_COUNT, "
-        "               COUNT(DISTINCT NVL(CASE_ID, CASE_ROWID)) AS VIOLATED_ROW_COUNT, "
-        "               AVG(VIOLATION_SCORE) AS AVG_VIOLATION_SCORE, "
-        "               MAX(RULE_CONFIDENCE) AS RULE_CONFIDENCE, "
-        "               MAX(RULE_LIFT) AS RULE_LIFT "
-        f"          FROM {result_object}{where_sql} "
-        "         GROUP BY RULE_ID, RESULT_COLUMN, EXPECTED_VALUE "
-        "         ORDER BY VIOLATION_COUNT DESC, AVG_VIOLATION_SCORE DESC, RULE_ID"
-        "       ) WHERE ROWNUM <= 8"
+        "        SELECT Q.*, "
+        "               ROW_NUMBER() OVER (ORDER BY Q.RULE_CONFIDENCE DESC NULLS LAST, Q.RULE_LIFT DESC NULLS LAST, Q.RULE_SUPPORT DESC NULLS LAST, Q.RULE_ID) AS RN__, "
+        "               COUNT(*) OVER () AS TOTAL_COUNT "
+        "          FROM ("
+        '                SELECT S."RULE_ID" AS RULE_ID, '
+        '                       S."CONDITION_COUNT" AS CONDITION_COUNT, '
+        '                       DBMS_LOB.SUBSTR(S."CONDITION_TEXT", 4000, 1) AS CONDITION_TEXT, '
+        '                       S."RESULT_COLUMN" AS RESULT_COLUMN, '
+        '                       DBMS_LOB.SUBSTR(TO_CLOB(S."RESULT_VALUE"), 4000, 1) AS EXPECTED_VALUE, '
+        '                       NVL(V.VIOLATION_COUNT, 0) AS VIOLATION_COUNT, '
+        '                       NVL(V.VIOLATED_ROW_COUNT, 0) AS VIOLATED_ROW_COUNT, '
+        '                       V.AVG_VIOLATION_SCORE AS AVG_VIOLATION_SCORE, '
+        '                       S."RULE_SUPPORT" AS RULE_SUPPORT, '
+        '                       S."RULE_CONFIDENCE" AS RULE_CONFIDENCE, '
+        '                       S."RULE_LIFT" AS RULE_LIFT '
+        '                  FROM "INIT$_TB_ASSOC_RULE_SUMMARY" S '
+        "                  LEFT JOIN ("
+        "                        SELECT RULE_ID, "
+        "                               COUNT(*) AS VIOLATION_COUNT, "
+        "                               COUNT(DISTINCT NVL(CASE_ID, CASE_ROWID)) AS VIOLATED_ROW_COUNT, "
+        "                               AVG(VIOLATION_SCORE) AS AVG_VIOLATION_SCORE "
+        f"                          FROM {result_object}{rule_where_sql} "
+        "                         GROUP BY RULE_ID"
+        "                       ) V"
+        '                    ON V.RULE_ID = S."RULE_ID" '
+        f"                 WHERE {candidate_rule_where_sql} "
+        "               ) Q"
+        f"         WHERE {result_scope_predicate}"
+        "       ) WHERE RN__ > :ruleOffset "
+        "           AND RN__ <= :ruleEndRow "
+        " ORDER BY RN__",
+        {**rule_bind_params, **candidate_rule_params},
     )
+    top_rule_total = int(top_rules[0].get("TOTAL_COUNT") or 0) if top_rules else 0
+    for row in top_rules:
+        row.pop("RN__", None)
+        row.pop("TOTAL_COUNT", None)
     top_columns = fetch_many(
         "SELECT * FROM ("
         "        SELECT RESULT_COLUMN, "
@@ -401,6 +575,21 @@ def _fetch_rule_violation_summary(
         "ruleModelName": rule_model_name,
         "overview": overview,
         "topRules": top_rules,
+        "topRuleTotal": top_rule_total,
+        "topRulePage": rule_page,
+        "topRulePageSize": rule_page_size,
+        "ruleIdFilter": normalized_rule_filter,
+        "conditionCountFilter": condition_count,
+        "confidenceScope": normalized_confidence_scope,
+        "resultScope": normalized_result_scope,
+        "detectionOverview": detection_overview,
+        "detectionCriteria": {
+            "minConfidence": detection_min_confidence,
+            "minLift": detection_min_lift,
+            "maxRules": detection_max_rules,
+        },
+        "candidateOverview": candidate_overview,
+        "candidateConditionDist": candidate_condition_dist,
         "topColumns": top_columns,
         "columnComments": _fetch_column_comment_map(cursor, target_owner, target_table),
     }
@@ -658,6 +847,15 @@ def get_result_table(
     targetOwner: str | None = None,
     targetTable: str | None = None,
     ruleModelName: str | None = None,
+    violationRuleId: str | None = None,
+    violationConditionCount: int | None = None,
+    violationConfidenceScope: str | None = "NON_PERFECT",
+    violationResultScope: str | None = "HIT",
+    violationMinConfidence: float = 0.8,
+    violationMinLift: float = 1.0,
+    violationMaxRules: int = 500,
+    violationRulePage: int = 1,
+    violationRulePageSize: int = 20,
     page: int = 1,
     pageSize: int = 50,
 ):
@@ -666,6 +864,13 @@ def get_result_table(
     target_owner = _validate_identifier(targetOwner, "target owner") if targetOwner else ""
     target_table = _validate_identifier(targetTable, "target table") if targetTable else ""
     rule_model_name = _validate_identifier(ruleModelName, "rule model name") if ruleModelName else ""
+    normalized_violation_rule_id = str(violationRuleId or "").strip()[:160]
+    normalized_violation_confidence_scope = str(violationConfidenceScope or "").strip().upper()
+    if normalized_violation_confidence_scope != "NON_PERFECT":
+        normalized_violation_confidence_scope = "ALL"
+    normalized_violation_result_scope = str(violationResultScope or "").strip().upper()
+    if normalized_violation_result_scope not in {"CANDIDATE", "HIT", "MISS"}:
+        normalized_violation_result_scope = "HIT"
     page = _normalize_page(page)
     page_size = _normalize_page_size(pageSize, 50, 500)
     conn = None
@@ -697,12 +902,40 @@ def get_result_table(
         if object_name == "INIT$_TB_RULE_VIOLATION_RESULT" and rule_model_name and "MODEL_NAME" in columns:
             where_clauses.append("MODEL_NAME = :ruleModelName")
             bind_params["ruleModelName"] = rule_model_name
+        if object_name == "INIT$_TB_RULE_VIOLATION_RESULT" and violationConditionCount is not None and "CONDITION_COUNT" in columns:
+            where_clauses.append("CONDITION_COUNT = :violationConditionCount")
+            bind_params["violationConditionCount"] = violationConditionCount
+        if object_name == "INIT$_TB_RULE_VIOLATION_RESULT" and normalized_violation_confidence_scope == "NON_PERFECT" and "RULE_CONFIDENCE" in columns:
+            where_clauses.append(
+                "RULE_CONFIDENCE IS NOT NULL "
+                "AND ((RULE_CONFIDENCE <= 1 AND RULE_CONFIDENCE < 0.999999) "
+                " OR (RULE_CONFIDENCE > 1 AND RULE_CONFIDENCE < 99.9999))"
+            )
+        if object_name == "INIT$_TB_RULE_VIOLATION_RESULT" and normalized_violation_rule_id and "RULE_ID" in columns:
+            where_clauses.append("UPPER(RULE_ID) LIKE '%' || UPPER(:violationRuleId) || '%'")
+            bind_params["violationRuleId"] = normalized_violation_rule_id
         where_sql = f" WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
         base_sql = f"SELECT * FROM {_quote_identifier(owner_name)}.{_quote_identifier(object_name)}{where_sql}{order_sql}"
         result = _fetch_dynamic_page(cursor, base_sql, page, page_size, bind_params)
         cat_corr_summary = _fetch_cat_corr_summary(cursor, owner_name, object_name, target_owner, target_table)
         predicted_type_summary = _fetch_predicted_type_summary(cursor, owner_name, object_name, target_owner, target_table)
-        violation_summary = _fetch_rule_violation_summary(cursor, owner_name, object_name, target_owner, target_table, rule_model_name)
+        violation_summary = _fetch_rule_violation_summary(
+            cursor,
+            owner_name,
+            object_name,
+            target_owner,
+            target_table,
+            rule_model_name,
+            normalized_violation_rule_id,
+            violationConditionCount,
+            normalized_violation_confidence_scope,
+            normalized_violation_result_scope,
+            violationMinConfidence,
+            violationMinLift,
+            violationMaxRules,
+            violationRulePage,
+            violationRulePageSize,
+        )
         column_comments = _fetch_column_comment_map(cursor, target_owner, target_table)
         return {
             "status": "success",
@@ -916,9 +1149,11 @@ def get_model_rule_summary(
     targetTable: str | None = None,
     conditionCount: int | None = None,
     resultColumn: str | None = None,
+    conditionColumn: str | None = None,
     resultHasValueYn: str | None = None,
+    confidenceScope: str | None = None,
     page: int = 1,
-    pageSize: int = 12,
+    pageSize: int = 20,
     resultColumnPage: int = 1,
     resultColumnPageSize: int = 12,
 ):
@@ -927,7 +1162,7 @@ def get_model_rule_summary(
     target_owner = _validate_identifier(targetOwner, "target owner") if targetOwner else ""
     target_table = _validate_identifier(targetTable, "target table") if targetTable else ""
     page = _normalize_page(page)
-    page_size = _normalize_page_size(pageSize, 12, 100)
+    page_size = _normalize_page_size(pageSize, 20, 1000)
     offset, end_row = _page_window(page, page_size)
     result_column_page = _normalize_page(resultColumnPage)
     result_column_page_size = _normalize_page_size(resultColumnPageSize, 12, 50)
@@ -935,9 +1170,15 @@ def get_model_rule_summary(
     normalized_result_has_value = str(resultHasValueYn or "").strip().upper()
     if normalized_result_has_value not in {"Y", "N"}:
         normalized_result_has_value = None
+    normalized_confidence_scope = str(confidenceScope or "").strip().upper()
+    if normalized_confidence_scope != "NON_PERFECT":
+        normalized_confidence_scope = "ALL"
     normalized_result_column = str(resultColumn or "").strip().upper() or None
     if normalized_result_column and normalized_result_column != "__NULL__":
         normalized_result_column = _validate_identifier(normalized_result_column, "result column")
+    normalized_condition_column = str(conditionColumn or "").strip().upper() or None
+    if normalized_condition_column and normalized_condition_column != "__NULL__":
+        normalized_condition_column = _validate_identifier(normalized_condition_column, "condition column")
     conn = None
     cursor = None
     try:
@@ -971,7 +1212,9 @@ def get_model_rule_summary(
             "modelName": model_name,
             "conditionCount": conditionCount,
             "resultColumn": normalized_result_column,
+            "conditionColumn": normalized_condition_column,
             "resultHasValueYn": normalized_result_has_value,
+            "confidenceScope": normalized_confidence_scope,
             "offset": offset,
             "endRow": end_row,
         })
@@ -1018,7 +1261,9 @@ def get_model_rule_summary(
             "filters": {
                 "conditionCount": conditionCount,
                 "resultColumn": normalized_result_column,
+                "conditionColumn": normalized_condition_column,
                 "resultHasValueYn": normalized_result_has_value,
+                "confidenceScope": normalized_confidence_scope,
             },
         }
     except HTTPException:
