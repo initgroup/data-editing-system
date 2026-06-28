@@ -2527,6 +2527,242 @@ SELECT TOT.TOTAL_CNT,
 END;
 /
 
+CREATE OR REPLACE FUNCTION "INIT$_FN_TARGET_SETTING_VALUE" (
+    p_category_code IN VARCHAR2,
+    p_setting_key   IN VARCHAR2,
+    p_default_value IN VARCHAR2
+) RETURN VARCHAR2
+AUTHID CURRENT_USER
+IS
+    v_value VARCHAR2(4000);
+BEGIN
+    SELECT DBMS_LOB.SUBSTR("SETTING_VALUE", 4000, 1)
+      INTO v_value
+      FROM "INIT$_TB_TARGET_SETTING"
+     WHERE "CATEGORY_CODE" = UPPER(TRIM(p_category_code))
+       AND "SETTING_KEY" = UPPER(TRIM(p_setting_key))
+       AND "USE_YN" = 'Y'
+       AND ROWNUM = 1;
+
+    RETURN NVL(v_value, p_default_value);
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        RETURN p_default_value;
+    WHEN OTHERS THEN
+        RETURN p_default_value;
+END;
+/
+
+CREATE OR REPLACE FUNCTION "INIT$_FN_TARGET_SETTING_NUMBER" (
+    p_category_code IN VARCHAR2,
+    p_setting_key   IN VARCHAR2,
+    p_default_value IN NUMBER
+) RETURN NUMBER
+AUTHID CURRENT_USER
+IS
+    v_value VARCHAR2(4000);
+BEGIN
+    v_value := "INIT$_FN_TARGET_SETTING_VALUE"(p_category_code, p_setting_key, TO_CHAR(p_default_value));
+    RETURN TO_NUMBER(TRIM(v_value));
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN p_default_value;
+END;
+/
+
+CREATE OR REPLACE FUNCTION "INIT$_FN_TOKEN_LIST_CONTAINS" (
+    p_token_list IN VARCHAR2,
+    p_token      IN VARCHAR2
+) RETURN VARCHAR2
+AUTHID CURRENT_USER
+DETERMINISTIC
+IS
+    v_list  VARCHAR2(4000);
+    v_token VARCHAR2(4000);
+BEGIN
+    v_list := UPPER(NVL(p_token_list, ''));
+    v_list := REPLACE(v_list, CHR(13), ',');
+    v_list := REPLACE(v_list, CHR(10), ',');
+    v_list := REPLACE(v_list, ';', ',');
+    v_list := REPLACE(v_list, ' ', '');
+    v_list := ',' || v_list || ',';
+    v_token := UPPER(TRIM(p_token));
+
+    IF v_token IS NOT NULL AND INSTR(v_list, ',' || v_token || ',') > 0 THEN
+        RETURN 'Y';
+    END IF;
+
+    RETURN 'N';
+END;
+/
+
+CREATE OR REPLACE FUNCTION "INIT$_FN_PREDICT_LOG_DATA_TYPE" (
+    p_data_type                 IN VARCHAR2,
+    p_sample_not_null_count     IN NUMBER,
+    p_numeric_convertible_count IN NUMBER
+) RETURN VARCHAR2
+AUTHID CURRENT_USER
+IS
+    v_data_type VARCHAR2(128);
+    v_numeric_types VARCHAR2(4000);
+BEGIN
+    v_data_type := UPPER(TRIM(p_data_type));
+    v_numeric_types := "INIT$_FN_TARGET_SETTING_VALUE"('DATA_PROFILING', 'NUMERIC_TYPES', 'NUMBER,FLOAT');
+
+    IF "INIT$_FN_TOKEN_LIST_CONTAINS"(v_numeric_types, v_data_type) = 'Y' THEN
+        RETURN 'NUM';
+    END IF;
+
+    IF NVL(p_sample_not_null_count, 0) = 0 THEN
+        RETURN 'ETC';
+    END IF;
+
+    IF NVL(p_sample_not_null_count, 0) = NVL(p_numeric_convertible_count, 0) THEN
+        RETURN 'NUM';
+    END IF;
+
+    RETURN 'CHR';
+END;
+/
+
+CREATE OR REPLACE FUNCTION "INIT$_FN_PREDICT_BASE_TYPE" (
+    p_column_name      IN VARCHAR2,
+    p_log_data_type    IN VARCHAR2,
+    p_num_distinct     IN NUMBER,
+    p_dist_val_rt      IN NUMBER,
+    p_is_integer       IN NUMBER,
+    p_norm_entropy     IN NUMBER
+) RETURN VARCHAR2
+AUTHID CURRENT_USER
+IS
+    v_column_name   VARCHAR2(128);
+    v_log_data_type VARCHAR2(50);
+    v_force_identifier_columns VARCHAR2(4000);
+    v_identifier_dist_ratio NUMBER;
+    v_low_cardinality_count NUMBER;
+    v_text_dist_ratio NUMBER;
+    v_high_entropy NUMBER;
+BEGIN
+    v_column_name := UPPER(TRIM(p_column_name));
+    v_log_data_type := UPPER(TRIM(p_log_data_type));
+    v_force_identifier_columns := "INIT$_FN_TARGET_SETTING_VALUE"('DATA_PROFILING', 'FORCE_IDENTIFIER_COLUMNS', 'FILE_ROW_NO');
+    v_identifier_dist_ratio := "INIT$_FN_TARGET_SETTING_NUMBER"('DATA_PROFILING', 'IDENTIFIER_DIST_RATIO', 0.9);
+    v_low_cardinality_count := "INIT$_FN_TARGET_SETTING_NUMBER"('DATA_PROFILING', 'LOW_CARDINALITY_COUNT', 15);
+    v_text_dist_ratio := "INIT$_FN_TARGET_SETTING_NUMBER"('DATA_PROFILING', 'TEXT_DIST_RATIO', 0.5);
+    v_high_entropy := "INIT$_FN_TARGET_SETTING_NUMBER"('DATA_PROFILING', 'HIGH_ENTROPY', 0.7);
+
+    IF "INIT$_FN_TOKEN_LIST_CONTAINS"(v_force_identifier_columns, v_column_name) = 'Y' THEN
+        IF v_log_data_type = 'NUM' THEN
+            RETURN '숫자형식별자';
+        END IF;
+        RETURN '문자형식별자';
+    END IF;
+
+    IF NVL(p_dist_val_rt, 0) > v_identifier_dist_ratio THEN
+        IF v_log_data_type = 'NUM' THEN
+            RETURN '숫자형식별자';
+        END IF;
+        RETURN '문자형식별자';
+    END IF;
+
+    IF v_log_data_type = 'NUM' AND NVL(p_num_distinct, 0) <= v_low_cardinality_count THEN
+        RETURN '숫자형범주형';
+    END IF;
+
+    IF v_log_data_type = 'NUM' AND NVL(p_is_integer, 0) = 1 AND NVL(p_norm_entropy, 0) < v_high_entropy THEN
+        RETURN '순서형범주형';
+    END IF;
+
+    IF v_log_data_type = 'NUM' THEN
+        RETURN '숫자형연속형';
+    END IF;
+
+    IF v_log_data_type = 'CHR' AND NVL(p_num_distinct, 0) <= v_low_cardinality_count THEN
+        RETURN '문자형범주형';
+    END IF;
+
+    IF v_log_data_type = 'CHR' AND NVL(p_dist_val_rt, 0) > v_text_dist_ratio AND NVL(p_norm_entropy, 0) >= v_high_entropy THEN
+        RETURN '단순형텍스트';
+    END IF;
+
+    IF v_log_data_type = 'CHR' THEN
+        RETURN '일반적범주형';
+    END IF;
+
+    IF v_log_data_type = 'ETC' THEN
+        RETURN '기타데이터형';
+    END IF;
+
+    RETURN '미상데이터형';
+END;
+/
+
+CREATE OR REPLACE FUNCTION "INIT$_FN_PREDICT_BASE_REASON" (
+    p_column_name      IN VARCHAR2,
+    p_log_data_type    IN VARCHAR2,
+    p_num_distinct     IN NUMBER,
+    p_dist_val_rt      IN NUMBER,
+    p_is_integer       IN NUMBER,
+    p_norm_entropy     IN NUMBER
+) RETURN VARCHAR2
+AUTHID CURRENT_USER
+IS
+    v_column_name   VARCHAR2(128);
+    v_log_data_type VARCHAR2(50);
+    v_force_identifier_columns VARCHAR2(4000);
+    v_identifier_dist_ratio NUMBER;
+    v_low_cardinality_count NUMBER;
+    v_text_dist_ratio NUMBER;
+    v_high_entropy NUMBER;
+BEGIN
+    v_column_name := UPPER(TRIM(p_column_name));
+    v_log_data_type := UPPER(TRIM(p_log_data_type));
+    v_force_identifier_columns := "INIT$_FN_TARGET_SETTING_VALUE"('DATA_PROFILING', 'FORCE_IDENTIFIER_COLUMNS', 'FILE_ROW_NO');
+    v_identifier_dist_ratio := "INIT$_FN_TARGET_SETTING_NUMBER"('DATA_PROFILING', 'IDENTIFIER_DIST_RATIO', 0.9);
+    v_low_cardinality_count := "INIT$_FN_TARGET_SETTING_NUMBER"('DATA_PROFILING', 'LOW_CARDINALITY_COUNT', 15);
+    v_text_dist_ratio := "INIT$_FN_TARGET_SETTING_NUMBER"('DATA_PROFILING', 'TEXT_DIST_RATIO', 0.5);
+    v_high_entropy := "INIT$_FN_TARGET_SETTING_NUMBER"('DATA_PROFILING', 'HIGH_ENTROPY', 0.7);
+
+    IF "INIT$_FN_TOKEN_LIST_CONTAINS"(v_force_identifier_columns, v_column_name) = 'Y' THEN
+        RETURN '[설정기반 RULE] 강제 식별자 컬럼으로 판단';
+    END IF;
+
+    IF NVL(p_dist_val_rt, 0) > v_identifier_dist_ratio THEN
+        RETURN '[설정기반 RULE] 고유값 비율이 식별자 기준을 초과';
+    END IF;
+
+    IF v_log_data_type = 'NUM' AND NVL(p_num_distinct, 0) <= v_low_cardinality_count THEN
+        RETURN '[설정기반 RULE] 숫자형이나 고유값 건수가 범주 기준 이하';
+    END IF;
+
+    IF v_log_data_type = 'NUM' AND NVL(p_is_integer, 0) = 1 AND NVL(p_norm_entropy, 0) < v_high_entropy THEN
+        RETURN '[설정기반 RULE] 정수형이며 정규화 엔트로피가 기준 미만';
+    END IF;
+
+    IF v_log_data_type = 'NUM' THEN
+        RETURN '[설정기반 RULE] 숫자형이며 고유값이 다양함';
+    END IF;
+
+    IF v_log_data_type = 'CHR' AND NVL(p_num_distinct, 0) <= v_low_cardinality_count THEN
+        RETURN '[설정기반 RULE] 문자형이며 고유값 건수가 범주 기준 이하';
+    END IF;
+
+    IF v_log_data_type = 'CHR' AND NVL(p_dist_val_rt, 0) > v_text_dist_ratio AND NVL(p_norm_entropy, 0) >= v_high_entropy THEN
+        RETURN '[설정기반 RULE] 고유값 비율과 정규화 엔트로피가 텍스트 기준을 충족';
+    END IF;
+
+    IF v_log_data_type = 'CHR' THEN
+        RETURN '[설정기반 RULE] 일반 문자형 그룹핑 속성';
+    END IF;
+
+    IF v_log_data_type = 'ETC' THEN
+        RETURN '[설정기반 RULE] 날짜 또는 LOB 등 특수 데이터 타입';
+    END IF;
+
+    RETURN '[설정기반 RULE] 조건 분류 실패';
+END;
+/
+
 CREATE OR REPLACE PROCEDURE "INIT$_SP_PREDICTED_TYPE" (
     p_target_owner       IN VARCHAR2,
     p_target_table       IN VARCHAR2,
@@ -2684,11 +2920,11 @@ USING (
                B.TOTAL_ROWS,
                NVL(B.NUM_DISTINCT, X.DIST_CNT) AS NUM_DISTINCT,
                ROUND(NVL(B.NUM_DISTINCT, X.DIST_CNT) / NULLIF(B.TOTAL_ROWS, 0), 6) AS DIST_VAL_RT,
-               CASE
-                   WHEN X.SAMPLE_NOT_NULL_COUNT = 0 THEN 'ETC'
-                   WHEN X.SAMPLE_NOT_NULL_COUNT = X.NUMERIC_CONVERTIBLE_COUNT THEN 'NUM'
-                   ELSE 'CHR'
-               END AS LOG_DATA_TYPE,
+               "INIT$_FN_PREDICT_LOG_DATA_TYPE"(
+                   B.DATA_TYPE,
+                   X.SAMPLE_NOT_NULL_COUNT,
+                   X.NUMERIC_CONVERTIBLE_COUNT
+               ) AS LOG_DATA_TYPE,
                X.ENTROPY,
                X.NORM_ENTROPY,
                CASE
@@ -2786,32 +3022,22 @@ USING (
            P.LOG_DATA_TYPE AS "LOG_DATA_TYPE",
            P.ENTROPY AS "ENTROPY",
            P.NORM_ENTROPY AS "NORM_ENTROPY",
-           CASE
-               WHEN P.COLUMN_NAME = 'FILE_ROW_NO' THEN
-                   CASE WHEN P.LOG_DATA_TYPE = 'NUM' THEN '숫자형식별자' ELSE '문자형식별자' END
-               WHEN NVL(P.DIST_VAL_RT, 0) > 0.9 THEN
-                   CASE WHEN P.LOG_DATA_TYPE = 'NUM' THEN '숫자형식별자' ELSE '문자형식별자' END
-               WHEN P.LOG_DATA_TYPE = 'NUM' AND NVL(P.NUM_DISTINCT, 0) <= 15 THEN '숫자형범주형'
-               WHEN P.LOG_DATA_TYPE = 'NUM' AND P.IS_INTEGER = 1 AND NVL(P.NORM_ENTROPY, 0) < 0.7 THEN '순서형범주형'
-               WHEN P.LOG_DATA_TYPE = 'NUM' THEN '숫자형연속형'
-               WHEN P.LOG_DATA_TYPE = 'CHR' AND NVL(P.NUM_DISTINCT, 0) <= 15 THEN '문자형범주형'
-               WHEN P.LOG_DATA_TYPE = 'CHR' AND NVL(P.DIST_VAL_RT, 0) > 0.5 AND NVL(P.NORM_ENTROPY, 0) >= 0.7 THEN '단순형텍스트'
-               WHEN P.LOG_DATA_TYPE = 'CHR' THEN '일반적범주형'
-               WHEN P.LOG_DATA_TYPE = 'ETC' THEN '기타데이터형'
-               ELSE '미상데이터형'
-           END AS "BASE_PREDICTED_TYPE",
-           CASE
-               WHEN P.COLUMN_NAME = 'FILE_ROW_NO' THEN '[고정로직] FILE_ROW_NO 컬럼은 행 식별자로 판단'
-               WHEN NVL(P.DIST_VAL_RT, 0) > 0.9 THEN '[고정로직] 고유값 비율 90% 초과로 식별자 성격'
-               WHEN P.LOG_DATA_TYPE = 'NUM' AND NVL(P.NUM_DISTINCT, 0) <= 15 THEN '[고정로직] 숫자형이나 고유값 건수 15 이하'
-               WHEN P.LOG_DATA_TYPE = 'NUM' AND P.IS_INTEGER = 1 AND NVL(P.NORM_ENTROPY, 0) < 0.7 THEN '[고정로직] 정수형이며 분포 편중이 있음'
-               WHEN P.LOG_DATA_TYPE = 'NUM' THEN '[고정로직] 숫자형이며 고유값이 다양함'
-               WHEN P.LOG_DATA_TYPE = 'CHR' AND NVL(P.NUM_DISTINCT, 0) <= 15 THEN '[고정로직] 문자형이며 고유값 건수 15 이하'
-               WHEN P.LOG_DATA_TYPE = 'CHR' AND NVL(P.DIST_VAL_RT, 0) > 0.5 AND NVL(P.NORM_ENTROPY, 0) >= 0.7 THEN '[고정로직] 고유값 비율과 엔트로피가 높음'
-               WHEN P.LOG_DATA_TYPE = 'CHR' THEN '[고정로직] 일반 문자형 그룹핑 속성'
-               WHEN P.LOG_DATA_TYPE = 'ETC' THEN '[고정로직] 날짜 또는 LOB 등 특수 데이터 타입'
-               ELSE '[고정로직] 조건 분류 실패'
-           END AS "BASE_REASON",
+           "INIT$_FN_PREDICT_BASE_TYPE"(
+               P.COLUMN_NAME,
+               P.LOG_DATA_TYPE,
+               P.NUM_DISTINCT,
+               P.DIST_VAL_RT,
+               P.IS_INTEGER,
+               P.NORM_ENTROPY
+           ) AS "BASE_PREDICTED_TYPE",
+           "INIT$_FN_PREDICT_BASE_REASON"(
+               P.COLUMN_NAME,
+               P.LOG_DATA_TYPE,
+               P.NUM_DISTINCT,
+               P.DIST_VAL_RT,
+               P.IS_INTEGER,
+               P.NORM_ENTROPY
+           ) AS "BASE_REASON",
            ~' || v_model_prediction_expr || q'~ AS "MODL_PREDICTED_TYPE"
       FROM PROFILE P
 ) S

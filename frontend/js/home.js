@@ -267,8 +267,8 @@
                 <div class="home-flow-selection-summary">
                     <span><i class="fas fa-chart-line"></i></span>
                     <div>
+                        <small>선택일</small>
                         <strong>${this.escapeHtml(this.selectedFlowRunLabel || "최근 실행")}</strong>
-                        <small>아래 날짜 버튼을 선택하면 해당 날짜의 통합실행 요약이 표시됩니다.</small>
                     </div>
                 </div>
                 <div class="home-flow-date-selector" aria-label="Integrated scenario run date selector">
@@ -292,6 +292,8 @@
             container.querySelectorAll("[data-home-flow-label]").forEach((button) => {
                 button.onclick = () => this.selectFlowRunLabel(button.dataset.homeFlowLabel);
             });
+            const selectedButton = container.querySelector(".home-flow-date-selector button.is-selected");
+            selectedButton?.scrollIntoView({ block: "nearest", inline: "end" });
         },
 
         getFlowRunsByLabel(label) {
@@ -373,7 +375,6 @@
                         </button>
                     </header>
                     ${this.renderDateRunList(dateRuns.length ? dateRuns : [selectedRun])}
-                    ${this.renderHomeRunSummary(selectedRun, dateRuns.length ? dateRuns : [selectedRun])}
                 `;
                 panel.querySelectorAll("[data-home-flow-run-id]").forEach((button) => {
                     button.onclick = () => this.selectFlowRun(button.dataset.homeFlowRunId);
@@ -397,30 +398,10 @@
                     </button>
                 </header>
                 ${this.renderDateRunList(dateRuns)}
-                ${this.renderHomeRunSummary(run, dateRuns)}
             `;
             panel.querySelectorAll("[data-home-flow-run-id]").forEach((button) => {
                 button.onclick = () => this.selectFlowRun(button.dataset.homeFlowRunId);
             });
-        },
-
-        renderHomeRunSummary(selectedRun, dateRuns = []) {
-            const successCount = dateRuns.filter((run) => String(run.STATUS || "").toUpperCase() === "SUCCESS").length;
-            const failedCount = dateRuns.filter((run) => ["FAILED", "SKIPPED", "ERROR"].includes(String(run.STATUS || "").toUpperCase())).length;
-            return `
-                <div class="home-run-summary-panel">
-                    <div>
-                        <span>선택 날짜 요약</span>
-                        <strong>${this.escapeHtml(this.selectedFlowRunLabel || this.getFlowRunLabel(selectedRun) || "-")}</strong>
-                        <small>아래 Run을 클릭하면 M04002에서 해당 Run 상세 분석 화면으로 이동합니다.</small>
-                    </div>
-                    <div class="home-flow-selection-metrics">
-                        <span><strong>${this.formatNumber(dateRuns.length)}</strong><small>runs</small></span>
-                        <span><strong>${this.formatNumber(successCount)}</strong><small>success</small></span>
-                        <span><strong>${this.formatNumber(failedCount)}</strong><small>failed</small></span>
-                    </div>
-                </div>
-            `;
         },
 
         openM04002Run(flowRunId = this.selectedFlowRunId) {
@@ -525,6 +506,7 @@
         renderDateRunList(runs = []) {
             if (!runs.length) return "";
             return `
+                <p class="home-date-run-hint">아래 Run을 클릭하면 M04002에서 해당 Run 상세 분석 화면으로 이동합니다.</p>
                 <div class="home-date-run-list" aria-label="Selected date integrated scenario runs">
                     ${runs.map((run) => {
                         const selected = String(run.FLOW_RUN_ID || "") === String(this.selectedFlowRunId || "");

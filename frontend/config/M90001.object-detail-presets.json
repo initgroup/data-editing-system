@@ -307,7 +307,7 @@
         },
         {
           "key": "P_PREDICTION_METHOD",
-          "comment": "예측 방식 선택(ONLY_RULE/MODEL/BOTH: 중간 결과만, FINAL_RULE/MODEL/BOTH: 중간 결과와 FINAL 자동 반영)",
+          "comment": "예측 방식 선택(ONLY_RULE: BASE 컬럼만, ONLY_MODEL: MODL 컬럼만, ONLY_BOTH: BASE/MODL 컬럼, FINAL_RULE/MODEL/BOTH: FINAL 자동 반영)",
           "defaultValue": "ONLY_RULE"
         }
       ]

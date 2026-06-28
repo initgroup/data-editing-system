@@ -57,12 +57,32 @@ DECLARE
             DBMS_OUTPUT.PUT_LINE('[SKIP] PACKAGE ' || p_package_name || ' does not exist.');
         END IF;
     END;
+
+    PROCEDURE drop_function_if_exists(p_function_name IN VARCHAR2) IS
+    BEGIN
+        IF object_exists(p_function_name, 'FUNCTION') THEN
+            run_ddl(
+                'DROP FUNCTION ' || p_function_name,
+                'DROP FUNCTION "' || UPPER(p_function_name) || '"'
+            );
+        ELSE
+            DBMS_OUTPUT.PUT_LINE('[SKIP] FUNCTION ' || p_function_name || ' does not exist.');
+        END IF;
+    END;
 BEGIN
     DBMS_OUTPUT.PUT_LINE('=== INIT_TARGET DROP START ===');
 
     DBMS_OUTPUT.PUT_LINE('[INIT_TARGET] Drop packages');
     drop_package_if_exists('INIT$_PKG_RULE_SUMMARY');
     drop_package_if_exists('INIT$_PKG_OML_SCRIPT');
+
+    DBMS_OUTPUT.PUT_LINE('[INIT_TARGET] Drop functions');
+    drop_function_if_exists('INIT$_FN_PREDICT_BASE_REASON');
+    drop_function_if_exists('INIT$_FN_PREDICT_BASE_TYPE');
+    drop_function_if_exists('INIT$_FN_PREDICT_LOG_DATA_TYPE');
+    drop_function_if_exists('INIT$_FN_TOKEN_LIST_CONTAINS');
+    drop_function_if_exists('INIT$_FN_TARGET_SETTING_NUMBER');
+    drop_function_if_exists('INIT$_FN_TARGET_SETTING_VALUE');
 
     DBMS_OUTPUT.PUT_LINE('[INIT_TARGET] Drop tables');
     drop_table_if_exists('INIT$_TB_OBJECT_DEPLOY');
@@ -78,6 +98,7 @@ BEGIN
     drop_table_if_exists('INIT$_TB_PREDICTED_TYPE');
     drop_table_if_exists('INIT$_TB_DATA_WORK_RUN');
     drop_table_if_exists('INIT$_TB_DATA_WORK_JOB');
+    drop_table_if_exists('INIT$_TB_TARGET_SETTING');
     drop_table_if_exists('INIT$_TB_OML_RESOURCE_PARAM');
     drop_table_if_exists('INIT$_TB_OML_RESOURCE');
     drop_table_if_exists('INIT$_TB_OBJECT_DETAIL');
@@ -96,6 +117,7 @@ BEGIN
     drop_index_if_exists('IX_INIT$_TB_ASSOC_RULE_SUMMARY_02');
     drop_index_if_exists('IX_INIT$_TB_ASSOC_RULE_SUMMARY_01');
     drop_index_if_exists('IX_INIT$_TB_PREDICTED_TYPE_01');
+    drop_index_if_exists('IX_INIT$_TB_TARGET_SETTING_01');
     drop_index_if_exists('IX_INIT$_TB_OML_RESOURCE_01');
     drop_index_if_exists('IX_INIT$_TB_OBJECT_DETAIL_01');
     drop_index_if_exists('IX_INIT$_TB_OBJECT_01');

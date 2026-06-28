@@ -1,5 +1,6 @@
 (function() {
     const PAGE_CODE = "M04002";
+    const CONTEXT_STORAGE_KEY = "DATA_EDITING_WORK_CONTEXT";
     const { getContainerEl } = PageManager.createHelper(PAGE_CODE);
 
     const M04002 = {
@@ -25,14 +26,18 @@
             const pendingRunId = sessionStorage.getItem("M04002:selectedRunId") || "";
             const pendingProjectId = sessionStorage.getItem("M04002:selectedProjectId") || "";
             const pendingScenarioId = sessionStorage.getItem("M04002:selectedScenarioId") || "";
+            const storedContext = this.readWorkContext();
             if (pendingRunId) {
                 sessionStorage.removeItem("M04002:selectedRunId");
                 this.pendingRunId = pendingRunId;
             }
             sessionStorage.removeItem("M04002:selectedProjectId");
             sessionStorage.removeItem("M04002:selectedScenarioId");
-            await this.loadProjects(pendingProjectId);
-            await this.loadScenarios(pendingScenarioId);
+            const preferredProjectId = pendingProjectId || storedContext.projectId || "";
+            const preferredScenarioId = pendingScenarioId || (pendingProjectId ? "" : storedContext.scenarioId || "");
+            await this.loadProjects(preferredProjectId);
+            await this.loadScenarios(preferredScenarioId);
+            this.persistWorkContext();
             if (this.pendingRunId) {
                 await this.openPendingRunPage();
             } else {
@@ -53,9 +58,28 @@
             this.currentExport = { filename: "integrated-result.csv", columns: [], rows: [] };
         },
 
+        readWorkContext() {
+            try {
+                return JSON.parse(localStorage.getItem(CONTEXT_STORAGE_KEY) || "{}") || {};
+            } catch (error) {
+                return {};
+            }
+        },
+
+        persistWorkContext() {
+            const projectId = getContainerEl("#projectId-M04002")?.value || "";
+            const scenarioId = getContainerEl("#scenarioId-M04002")?.value || "";
+            try {
+                localStorage.setItem(CONTEXT_STORAGE_KEY, JSON.stringify({ projectId, scenarioId }));
+            } catch (error) {
+                console.warn("[M04002] work context save failed", error);
+            }
+        },
+
         async loadRuns(page = this.runPage, options = {}) {
             if (page === 1 && !options.preservePending) this.pendingRunId = "";
             const projectId = getContainerEl("#projectId-M04002")?.value || "";
+            this.persistWorkContext();
             if (!projectId) {
                 this.runs = [];
                 this.nodes = [];
@@ -181,6 +205,7 @@
 
         async handleProjectChange() {
             await this.loadScenarios("");
+            this.persistWorkContext();
             await this.loadRuns(1);
         },
 

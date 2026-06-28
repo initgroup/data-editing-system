@@ -1,0 +1,85 @@
+<div class="page-container env-page project-page" id="container-M91003">
+    <section class="env-workspace" aria-labelledby="settings-title-M91003">
+        <aside class="env-object-panel">
+            <header class="env-object-header">
+                <div>
+                    <h2 class="env-section-title">설정 카테고리</h2>
+                    <p class="env-section-desc">Target DB 설정 그룹을 선택합니다.</p>
+                </div>
+                <div class="env-object-actions">
+                    <button id="createDefaultSettingsBtn-M91003" type="button" class="env-icon-btn" title="Create default target settings" onclick="M91003.createDefaultSettings()">
+                        <i class="fas fa-wand-magic-sparkles"></i>
+                    </button>
+                    <button type="button" class="env-icon-btn" title="Refresh" onclick="M91003.refreshSelectedCategory()">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+            </header>
+            <div id="settingCategoryList-M91003" class="env-tree-grid project-list"></div>
+        </aside>
+
+        <section class="env-panel" aria-labelledby="settings-title-M91003">
+            <header class="env-header">
+                <h1 class="env-title" id="settings-title-M91003">Target DB 설정</h1>
+                <p class="env-desc" id="settingsDescription-M91003">선택된 Target DB의 설정값을 관리합니다.</p>
+            </header>
+
+            <section class="scenario-list-panel" aria-label="Target settings list">
+                <div class="scenario-list-toolbar">
+                    <strong id="selectedSettingCategoryName-M91003">Settings</strong>
+                    <button type="button" class="env-btn env-cancel scenario-new-btn" onclick="M91003.newSetting()">
+                        <i class="fas fa-plus"></i>
+                        <span>New setting</span>
+                    </button>
+                </div>
+                <div id="settingsGrid-M91003" class="scenario-list" aria-label="Target settings"></div>
+            </section>
+
+            <section class="env-object-meta scenario-detail" aria-label="Target setting detail">
+                <div class="env-meta-grid scenario-meta-grid">
+                    <label>
+                        <span>Category</span>
+                        <input id="settingCategory-M91003" class="env-field env-meta-field" type="text" readonly>
+                    </label>
+                    <label>
+                        <span>Use</span>
+                        <select id="settingUseYn-M91003" class="env-field env-meta-field">
+                            <option value="Y">Y</option>
+                            <option value="N">N</option>
+                        </select>
+                    </label>
+                    <label>
+                        <span>Sort</span>
+                        <input id="settingSortOrder-M91003" class="env-field env-meta-field" type="number">
+                    </label>
+                    <label class="env-meta-wide">
+                        <span class="required-title">Key</span>
+                        <input id="settingKey-M91003" class="env-field env-meta-field" type="text" placeholder="IDENTIFIER_DIST_RATIO">
+                    </label>
+                    <label class="env-meta-wide">
+                        <span>Value</span>
+                        <textarea id="settingValue-M91003" class="env-field env-meta-textarea" rows="5"></textarea>
+                    </label>
+                    <label class="env-meta-wide">
+                        <span>Description</span>
+                        <textarea id="settingDesc-M91003" class="env-field env-meta-textarea" rows="3"></textarea>
+                    </label>
+                </div>
+            </section>
+
+            <footer class="env-footer">
+                <div class="env-footer-group">
+                    <span id="systemMessage-M91003" class="env-detail-hint" aria-live="polite">Settings are stored in selected Target DB table INIT$_TB_TARGET_SETTING.</span>
+                </div>
+                <div class="env-footer-group">
+                    <button type="button" class="env-btn env-save" onclick="M91003.saveSetting()">Save setting</button>
+                    <button type="button" class="env-btn env-cancel" onclick="M91003.newSetting()">Cancel</button>
+                    <button type="button" class="env-btn env-danger" onclick="M91003.deleteSetting()">
+                        <i class="far fa-trash-alt"></i>
+                        <span>Delete</span>
+                    </button>
+                </div>
+            </footer>
+        </section>
+    </section>
+</div>

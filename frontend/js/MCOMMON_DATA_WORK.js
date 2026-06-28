@@ -823,6 +823,7 @@
             const container = getContainerEl(`#parameterGrid-${PAGE_CODE}`);
             if (!container) return;
             this.renderUserSqlJobContext();
+            this.renderSelectedResourceMeta();
 
             if (!this.parameters.length) {
                 const emptyMessage = String(this.currentJob?.execSourceType || "DB_OBJECT").toUpperCase() === "OML_PYTHON"
@@ -856,6 +857,44 @@
                     </tbody>
                 </table>
                 ${this.renderListFooter(this.parameters.length)}
+            `;
+        },
+
+        getSelectedResourceMeta() {
+            const job = this.currentJob || {};
+            const sourceType = String(job.execSourceType || getContainerEl(`#execSourceType-${PAGE_CODE}`)?.value || "DB_OBJECT").toUpperCase();
+            if (sourceType === "OML_PYTHON") {
+                const selectedResourceId = job.execResourceId || getContainerEl(`#omlResource-${PAGE_CODE}`)?.value || "";
+                const resource = this.omlResources.find((row) => String(row.OML_RESOURCE_ID || "") === String(selectedResourceId)) || {};
+                return {
+                    objectType: job.execObjectType || "OML_PYTHON",
+                    objectName: job.execObjectName || resource.RESOURCE_NAME || resource.SCRIPT_NAME || job.execObjectLabel || ""
+                };
+            }
+
+            const selectedObjectId = job.execObjectId || getContainerEl(`#execObject-${PAGE_CODE}`)?.value || "";
+            const object = this.executableObjects.find((row) => String(row.OBJECT_ID || "") === String(selectedObjectId)) || {};
+            return {
+                objectType: job.execObjectType || object.OBJECT_TYPE || "",
+                objectName: job.execObjectName || object.OBJECT_NAME || job.execObjectLabel || ""
+            };
+        },
+
+        renderSelectedResourceMeta() {
+            const container = getContainerEl(`#selectedResourceMeta-${PAGE_CODE}`);
+            if (!container) return;
+            const meta = this.getSelectedResourceMeta();
+            const objectType = String(meta.objectType || "").trim();
+            const objectName = String(meta.objectName || "").trim();
+            if (!objectType && !objectName) {
+                container.hidden = true;
+                container.innerHTML = "";
+                return;
+            }
+            container.hidden = false;
+            const metaText = `${objectType || "-"} · ${objectName || "-"}`;
+            container.innerHTML = `
+                <b title="${this.escapeHtml(metaText)}">${this.escapeHtml(metaText)}</b>
             `;
         },
 
@@ -1223,17 +1262,33 @@
                     </ul>
                 `
                 : `
-                    <p>Parameter List의 Parameter 명칭과 시스템 예약 변수를 PL/SQL 스크립트에서 바인드 변수 또는 문자열 치환 키로 사용할 수 있습니다.</p>
-                    <ul>
-                        <li><strong>바인드 변수명 규칙</strong>: Parameter 명칭을 camelCase로 변환해 사용합니다. 예: <code>ABC_DEF</code> -> <code>:abcDef</code>, <code>P_MODEL_NAME</code> -> <code>:pModelName</code>.</li>
-                        <li><strong>작성 방법</strong>: PL/SQL에서는 바인드 변수 앞에 콜론을 붙입니다. 예: <code>P_MODEL_NAME =&gt; :pModelName</code>.</li>
-                        <li><strong>동적 문자열 치환</strong>: <code>/* --DYNAMIC_MODEL_NAME-- */</code>처럼 작성하면 <code>/* --</code>와 <code>-- */</code> 사이의 이름이 Parameter 명칭과 완전히 같을 때 해당 값이 문자열 그대로 치환됩니다.</li>
-                        <li><strong>현재 Job 예약 변수</strong>: <code>:INIT$TargetOwner</code>, <code>:INIT$TargetTable</code>, <code>:INIT$ResultOwner</code>, <code>:INIT$ResultTable</code>은 실행 시 현재 Job/Node의 Target/Result owner/table 값으로 자동 전달됩니다.</li>
-                        <li><strong>Flow 선행 Node 예약 변수</strong>: M04001 Flow 실행에서는 <code>:INIT$PreTargetOwner</code>, <code>:INIT$PreTargetTable</code>, <code>:INIT$PreResultOwner</code>, <code>:INIT$PreResultTable</code>을 사용할 수 있습니다.</li>
-                        <li><strong>Generate PL/SQL</strong>: Parameter List의 Default 값에 <code>:</code> 문자가 포함되어 있으면 해당 Default 값을 그대로 사용합니다. 예: Default가 <code>:INIT$TargetOwner</code>이면 <code>P_RULE_OWNER_NAME =&gt; :INIT$TargetOwner</code>로 생성합니다. Default 값에 <code>:</code>가 없으면 Parameter 명칭을 camelCase 바인드 변수로 변환합니다.</li>
-                        <li><strong>Run now / Queue Batch</strong>: 실행 시 Parameter List 기본값과 Runtime Bind 값을 처리하고, 시스템 예약 변수는 실제 Job/Node 정보로 자동 덮어쓴 뒤 실행합니다.</li>
-                        <li><strong>예시</strong>: <code>P_TARGET_OWNER =&gt; :INIT$TargetOwner</code>, <code>P_TARGET_TABLE =&gt; :INIT$TargetTable</code>, <code>P_RESULT_OWNER =&gt; :INIT$ResultOwner</code>, <code>P_RESULT_TABLE =&gt; :INIT$ResultTable</code></li>
-                    </ul>
+                    <p class="data-help-summary">Generate PL/SQL은 Parameter List의 Default 값을 먼저 확인한 뒤, 필요한 바인드 변수를 자동으로 만듭니다.</p>
+                    <div class="data-help-flow">
+                        <section class="data-help-step">
+                            <strong>1. Default에 <code>:</code>가 있으면 그대로 사용</strong>
+                            <span><code>:INIT$TargetOwner</code> -> <code>P_TARGET_OWNER =&gt; :INIT$TargetOwner</code></span>
+                        </section>
+                        <section class="data-help-step">
+                            <strong>2. Default에 <code>:</code>가 없으면 Parameter명을 camelCase로 변환</strong>
+                            <span><code>P_DYNAMIC_MODEL_NAME</code> -> <code>:pDynamicModelName</code></span>
+                        </section>
+                        <section class="data-help-step">
+                            <strong>3. 실행 시 실제 값으로 바인딩</strong>
+                            <span>Run now / Queue Batch에서 저장된 Default, Runtime Bind, 현재 Job 정보를 합쳐 실행합니다.</span>
+                        </section>
+                    </div>
+                    <h3>자동 예약 변수</h3>
+                    <div class="data-help-token-grid">
+                        <span><code>:INIT$TargetOwner</code><small>현재 Target Owner</small></span>
+                        <span><code>:INIT$TargetTable</code><small>현재 Target Table</small></span>
+                        <span><code>:INIT$ResultOwner</code><small>현재 Result Owner</small></span>
+                        <span><code>:INIT$ResultTable</code><small>현재 Result Table</small></span>
+                    </div>
+                    <h3>생성 예시</h3>
+                    <pre class="data-help-code"><code>P_TARGET_OWNER       =&gt; :INIT$TargetOwner
+P_TARGET_TABLE       =&gt; :INIT$TargetTable
+P_DYNAMIC_MODEL_NAME =&gt; :pDynamicModelName
+P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                 `;
         },
 

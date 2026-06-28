@@ -5,7 +5,7 @@
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict
-from typing import Optional
+from typing import Dict, List, Optional, Tuple
 import base64
 import logging
 import oracledb
@@ -15,13 +15,16 @@ from backend.database import get_db_connection
 from backend.database_helper import SqlLoader
 from backend.auth_context import get_request_user_id
 from backend.target_database import get_target_connection_id, get_target_db_connection
+from backend.setting_defaults import (
+    get_gemini_setting_category,
+    get_gemini_setting_key,
+    get_system_setting_categories,
+)
 from backend.routers.M99001 import _hash_password, _verify_password
 
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-GEMINI_SETTING_CATEGORY = "MY_ACCOUNT"
-GEMINI_SETTING_KEY = "GEMINI_API_KEY"
 _gemini_api_key_cache = {}
 _gemini_api_key_cache_lock = Lock()
 
@@ -65,65 +68,6 @@ class GeminiApiKeySaveRequest(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
-SETTING_CATEGORIES = [
-    {
-        "CATEGORY_CODE": "MY_ACCOUNT",
-        "CATEGORY_NAME": "나의 회원정보",
-        "CATEGORY_DESC": "내 로그인 정보, 이메일, 비밀번호를 관리합니다.",
-        "SORT_ORDER": 0,
-        "DEFAULTS": [],
-    },
-    {
-        "CATEGORY_CODE": "GENERAL",
-        "CATEGORY_NAME": "System General",
-        "CATEGORY_DESC": "Basic system display settings.",
-        "SORT_ORDER": 10,
-        "DEFAULTS": [
-            {
-                "SETTING_KEY": "SYSTEM_DISPLAY_NAME",
-                "SETTING_VALUE": "Data Editing System",
-                "SETTING_DESC": "System display name.",
-                "SORT_ORDER": 10,
-            }
-        ],
-    },
-    {
-        "CATEGORY_CODE": "M02002_TABLE_FILTER",
-        "CATEGORY_NAME": "M02002 Table Filter",
-        "CATEGORY_DESC": "M02002 Table Explorer include/exclude settings.",
-        "SORT_ORDER": 20,
-        "DEFAULTS": [
-            {
-                "SETTING_KEY": "EXCLUDE_TABLE_LIKE",
-                "SETTING_VALUE": "INIT$%\nBIN$%\nDM$%",
-                "SETTING_DESC": "Exclude table LIKE patterns. Enter one pattern per line.",
-                "SORT_ORDER": 10,
-            },
-            {
-                "SETTING_KEY": "INCLUDE_OWNER",
-                "SETTING_VALUE": "__CURRENT_OWNER__",
-                "SETTING_DESC": "Included owners. Enter one owner per line.",
-                "SORT_ORDER": 20,
-            },
-        ],
-    },
-    {
-        "CATEGORY_CODE": "OTHER",
-        "CATEGORY_NAME": "Other Settings",
-        "CATEGORY_DESC": "Additional system settings.",
-        "SORT_ORDER": 90,
-        "DEFAULTS": [
-            {
-                "SETTING_KEY": "CONSOLE_LOG_MAX_ENTRIES",
-                "SETTING_VALUE": "500",
-                "SETTING_DESC": "Maximum browser log lines retained in the bottom Network / Run Log panel.",
-                "SORT_ORDER": 10,
-            }
-        ],
-    },
-]
-
-
 @router.get("/settings")
 def list_settings(request: Request, categoryCode: Optional[str] = None):
     user_id = get_request_user_id(request)
@@ -158,13 +102,14 @@ def list_settings(request: Request, categoryCode: Optional[str] = None):
 
 @router.get("/setting-categories")
 def list_setting_categories():
+    categories = get_system_setting_categories()
     return {
         "status": "success",
         "data": [
             {key: value for key, value in category.items() if key != "DEFAULTS"}
-            for category in SETTING_CATEGORIES
+            for category in categories
         ],
-        "total": len(SETTING_CATEGORIES),
+        "total": len(categories),
     }
 
 
@@ -258,7 +203,7 @@ def create_default_settings(request: Request):
         merge_sql = SqlLoader.get_sql("M91002_SETTING_MERGE")
         created = 0
         skipped = 0
-        for category in SETTING_CATEGORIES:
+        for category in get_system_setting_categories():
             if category["CATEGORY_CODE"] == "MY_ACCOUNT":
                 continue
             for item in category.get("DEFAULTS", []):
@@ -359,8 +304,8 @@ def get_saved_gemini_api_key(conn, user_id: int, connection_id: int) -> str:
         cursor.execute(SqlLoader.get_sql("M91002_ACTIVE_SETTING_VALUE"), {
             "userId": user_id,
             "connectionId": connection_id,
-            "categoryCode": GEMINI_SETTING_CATEGORY,
-            "settingKey": GEMINI_SETTING_KEY,
+            "categoryCode": get_gemini_setting_category(),
+            "settingKey": get_gemini_setting_key(),
         })
         row = cursor.fetchone()
         if not row:
@@ -436,8 +381,8 @@ def save_gemini_api_key(req: GeminiApiKeySaveRequest, request: Request):
         cursor.execute(SqlLoader.get_sql("M91002_SETTING_MERGE"), {
             "userId": user_id,
             "connectionId": connection_id,
-            "categoryCode": GEMINI_SETTING_CATEGORY,
-            "settingKey": GEMINI_SETTING_KEY,
+            "categoryCode": get_gemini_setting_category(),
+            "settingKey": get_gemini_setting_key(),
             "settingValue": _encode_secret(api_key),
             "settingDesc": "Personal Gemini API key for the right sidebar assistant.",
             "sortOrder": 900,
@@ -478,8 +423,8 @@ def delete_gemini_api_key(request: Request):
         cursor.execute(SqlLoader.get_sql("M91002_SETTING_DELETE"), {
             "userId": user_id,
             "connectionId": connection_id,
-            "categoryCode": GEMINI_SETTING_CATEGORY,
-            "settingKey": GEMINI_SETTING_KEY,
+            "categoryCode": get_gemini_setting_category(),
+            "settingKey": get_gemini_setting_key(),
         })
         conn.commit()
         clear_gemini_api_key_cache(user_id, connection_id)
@@ -662,7 +607,7 @@ def ensure_connection_owner(conn, user_id: int, connection_id: int) -> None:
             cursor.close()
 
 
-def fetch_result(conn, sql: str, params: Optional[dict] = None) -> tuple[list[dict], list[str]]:
+def fetch_result(conn, sql: str, params: Optional[Dict] = None) -> Tuple[List[Dict], List[str]]:
     cursor = None
     try:
         cursor = conn.cursor()
@@ -699,7 +644,7 @@ def mask_secret(value: Optional[str]) -> str:
 
 def normalize_category_code(value: Optional[str]) -> str:
     text = str(value or "GENERAL").strip().upper()
-    allowed = {category["CATEGORY_CODE"] for category in SETTING_CATEGORIES}
+    allowed = {category["CATEGORY_CODE"] for category in get_system_setting_categories()}
     if text not in allowed:
         raise HTTPException(status_code=400, detail="Invalid categoryCode.")
     return text
