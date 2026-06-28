@@ -1,6 +1,6 @@
-"""
-@file           M04002.py
-@description    Integrated editing result analysis API
+﻿"""
+@file           anly_work_service.py
+@description    Reusable analysis result work service
 """
 
 from datetime import date, datetime
@@ -11,7 +11,7 @@ import re
 import time
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import HTTPException, Request
 from pydantic import BaseModel
 
 from backend.auth_context import get_request_role_code, get_request_user_id
@@ -20,7 +20,6 @@ from backend.target_database import get_target_db_connection
 
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
 
 IDENTIFIER_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_$#]{0,127}$")
 MODEL_DETAIL_VIEW_TYPES = {
@@ -28,6 +27,40 @@ MODEL_DETAIL_VIEW_TYPES = {
     "VG": "Global/detail view",
     "VI": "Itemset/detail view",
     "VR": "Rule/detail view",
+}
+GENERIC_TABLE_RESULT_LAYOUT = {
+    "kind": "TABLE",
+    "key": "TABLE:GENERIC",
+    "summary": "",
+}
+TABLE_RESULT_LAYOUTS = {
+    "INIT$_TB_PREDICTED_TYPE": {
+        "kind": "TABLE",
+        "key": "TABLE:INIT$_TB_PREDICTED_TYPE",
+        "summary": "predictedTypeSummary",
+    },
+    "INIT$_TB_CAT_CORR_PAIR": {
+        "kind": "TABLE",
+        "key": "TABLE:INIT$_TB_CAT_CORR_PAIR",
+        "summary": "correlationSummary",
+    },
+    "INIT$_TB_RULE_VIOLATION_RESULT": {
+        "kind": "TABLE",
+        "key": "TABLE:INIT$_TB_RULE_VIOLATION_RESULT",
+        "summary": "violationSummary",
+    },
+}
+MODEL_RESULT_LAYOUTS = {
+    "ASSOCIATION_RULES": {
+        "kind": "MODEL",
+        "key": "MODEL:ASSOCIATION_RULES",
+        "summary": "associationRules",
+    },
+    "GENERIC_MODEL": {
+        "kind": "MODEL",
+        "key": "MODEL:GENERIC",
+        "summary": "",
+    },
 }
 READABLE_RULE_SUMMARY_CACHE: dict[tuple[str, str], tuple[float, dict[str, Any] | None]] = {}
 READABLE_RULE_SUMMARY_CACHE_TTL_SECONDS = 600
@@ -63,6 +96,28 @@ def _serialize_db_value(value: Any) -> Any:
 
 def _row_to_dict(columns: list[str], row: Any) -> dict[str, Any]:
     return {columns[index]: _serialize_db_value(value) for index, value in enumerate(row)}
+
+
+def _get_table_result_layout(object_name: str) -> dict[str, str]:
+    normalized_name = str(object_name or "").strip().upper()
+    return dict(TABLE_RESULT_LAYOUTS.get(normalized_name) or GENERIC_TABLE_RESULT_LAYOUT)
+
+
+def _get_model_result_layout(model_name: str, model_metadata: dict[str, Any] | None = None) -> dict[str, str]:
+    metadata = model_metadata or {}
+    normalized_name = str(model_name or "").strip().upper()
+    model_type = str(metadata.get("MODEL_TYPE") or "").upper()
+    algorithm = str(metadata.get("ALGORITHM") or metadata.get("MINING_FUNCTION") or "").upper()
+    if (
+        "ASSOCIATION" in normalized_name
+        or "APRIORI" in normalized_name
+        or "ASSOCIATION" in model_type
+        or "APRIORI" in model_type
+        or "ASSOCIATION" in algorithm
+        or "APRIORI" in algorithm
+    ):
+        return dict(MODEL_RESULT_LAYOUTS["ASSOCIATION_RULES"])
+    return dict(MODEL_RESULT_LAYOUTS["GENERIC_MODEL"])
 
 
 def _parse_json(value: Any, default: Any = None) -> Any:
@@ -193,14 +248,14 @@ def _normalize_node_result(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def _get_table_columns(cursor, owner_name: str, object_name: str) -> set[str]:
-    cursor.execute(SqlLoader.get_sql("M04002_RESULT_TABLE_COLUMNS"), {"owner": owner_name, "tableName": object_name})
+    cursor.execute(SqlLoader.get_sql("MCOMMON_ANLY_WORK_RESULT_TABLE_COLUMNS"), {"owner": owner_name, "tableName": object_name})
     return {str(row[0]).upper() for row in cursor.fetchall()}
 
 
 def _fetch_column_comment_map(cursor, owner_name: str, table_name: str) -> dict[str, str]:
     if not owner_name or not table_name:
         return {}
-    cursor.execute(SqlLoader.get_sql("M04002_TARGET_COLUMN_COMMENTS"), {
+    cursor.execute(SqlLoader.get_sql("MCOMMON_ANLY_WORK_TARGET_COLUMN_COMMENTS"), {
         "owner": owner_name,
         "tableName": table_name,
     })
@@ -214,7 +269,7 @@ def _fetch_column_comment_map(cursor, owner_name: str, table_name: str) -> dict[
 def _fetch_cat_corr_summary(cursor, owner_name: str, object_name: str, target_owner: str, target_table: str) -> dict[str, Any] | None:
     if object_name != "INIT$_TB_CAT_CORR_PAIR" or not target_owner or not target_table:
         return None
-    cursor.execute(SqlLoader.get_sql("M04002_TARGET_TABLE_COLUMN_COUNT"), {
+    cursor.execute(SqlLoader.get_sql("MCOMMON_ANLY_WORK_TARGET_TABLE_COLUMN_COUNT"), {
         "owner": target_owner,
         "tableName": target_table,
     })
@@ -256,7 +311,7 @@ def _fetch_cat_corr_summary(cursor, owner_name: str, object_name: str, target_ow
 def _fetch_predicted_type_summary(cursor, owner_name: str, object_name: str, target_owner: str, target_table: str) -> dict[str, Any] | None:
     if object_name != "INIT$_TB_PREDICTED_TYPE" or not target_owner or not target_table:
         return None
-    cursor.execute(SqlLoader.get_sql("M04002_TARGET_TABLE_COLUMN_COUNT"), {
+    cursor.execute(SqlLoader.get_sql("MCOMMON_ANLY_WORK_TARGET_TABLE_COLUMN_COUNT"), {
         "owner": target_owner,
         "tableName": target_table,
     })
@@ -422,11 +477,11 @@ def _fetch_rule_violation_summary(
         "modelName": rule_model_name,
     }
     candidate_overview = fetch_one(
-        SqlLoader.get_sql("M04002_ASSOC_RULE_OVERVIEW"),
+        SqlLoader.get_sql("MCOMMON_ANLY_WORK_ASSOC_RULE_OVERVIEW"),
         candidate_params,
     ) if rule_model_name else {}
     candidate_condition_dist = fetch_many(
-        SqlLoader.get_sql("M04002_ASSOC_RULE_CONDITION_DIST"),
+        SqlLoader.get_sql("MCOMMON_ANLY_WORK_ASSOC_RULE_CONDITION_DIST"),
         candidate_params,
     ) if rule_model_name else []
 
@@ -694,7 +749,6 @@ def _normalize_select_sql(sql_text: str) -> str:
     return sql
 
 
-@router.get("/runs")
 def list_flow_runs(
     request: Request,
     page: int = 1,
@@ -703,6 +757,7 @@ def list_flow_runs(
     keyword: str | None = None,
     projectId: int | None = None,
     scenarioId: int | None = None,
+    flow_menu_code: str = "M04001",
 ):
     if not projectId:
         raise HTTPException(status_code=400, detail="Project is required.")
@@ -719,9 +774,10 @@ def list_flow_runs(
     try:
         conn = get_target_db_connection(request)
         cursor = conn.cursor()
-        cursor.execute(SqlLoader.get_sql("M04002_FLOW_RUN_LIST"), {
+        cursor.execute(SqlLoader.get_sql("MCOMMON_ANLY_WORK_FLOW_RUN_LIST"), {
             "userId": user_id,
             "includeAllUsers": "Y" if include_all_users else "N",
+            "flowMenuCode": flow_menu_code,
             "projectId": projectId,
             "scenarioId": scenarioId,
             "status": normalized_status,
@@ -742,7 +798,6 @@ def list_flow_runs(
             conn.close()
 
 
-@router.get("/runs/{flow_run_id}/position")
 def get_flow_run_position(
     flow_run_id: int,
     request: Request,
@@ -751,6 +806,7 @@ def get_flow_run_position(
     keyword: str | None = None,
     projectId: int | None = None,
     scenarioId: int | None = None,
+    flow_menu_code: str = "M04001",
 ):
     if not projectId:
         raise HTTPException(status_code=400, detail="Project is required.")
@@ -765,10 +821,11 @@ def get_flow_run_position(
     try:
         conn = get_target_db_connection(request)
         cursor = conn.cursor()
-        cursor.execute(SqlLoader.get_sql("M04002_FLOW_RUN_POSITION"), {
+        cursor.execute(SqlLoader.get_sql("MCOMMON_ANLY_WORK_FLOW_RUN_POSITION"), {
             "flowRunId": flow_run_id,
             "userId": user_id,
             "includeAllUsers": "Y" if include_all_users else "N",
+            "flowMenuCode": flow_menu_code,
             "projectId": projectId,
             "scenarioId": scenarioId,
             "status": normalized_status,
@@ -787,7 +844,6 @@ def get_flow_run_position(
             conn.close()
 
 
-@router.get("/runs/{flow_run_id}/nodes")
 def list_flow_run_nodes(flow_run_id: int, request: Request):
     user_id = get_request_user_id(request)
     include_all_users = get_request_role_code(request) == "ADMIN"
@@ -811,7 +867,6 @@ def list_flow_run_nodes(flow_run_id: int, request: Request):
             conn.close()
 
 
-@router.post("/sql")
 def execute_select_sql(req: SqlRequest, request: Request):
     sql = _normalize_select_sql(req.sql)
     page = _normalize_page(req.page)
@@ -829,7 +884,7 @@ def execute_select_sql(req: SqlRequest, request: Request):
     except HTTPException:
         raise
     except Exception as error:
-        logger.warning("M04002 SQL query failed: %s", error)
+        logger.warning("MCOMMON_ANLY_WORK SQL query failed: %s", error)
         raise HTTPException(status_code=500, detail=str(error))
     finally:
         if cursor:
@@ -838,7 +893,6 @@ def execute_select_sql(req: SqlRequest, request: Request):
             conn.close()
 
 
-@router.get("/result-table")
 def get_result_table(
     request: Request,
     owner: str,
@@ -871,6 +925,7 @@ def get_result_table(
     normalized_violation_result_scope = str(violationResultScope or "").strip().upper()
     if normalized_violation_result_scope not in {"CANDIDATE", "HIT", "MISS"}:
         normalized_violation_result_scope = "HIT"
+    result_layout = _get_table_result_layout(object_name)
     page = _normalize_page(page)
     page_size = _normalize_page_size(pageSize, 50, 500)
     conn = None
@@ -885,6 +940,8 @@ def get_result_table(
         if str(menuCode or "").upper() == "M03002" and object_name == "INIT$_TB_CAT_CORR_PAIR":
             where_clauses.append("PASS_YN = 'Y'")
             order_sql = " ORDER BY CRAMERS_V DESC, P_VALUE ASC"
+        if object_name == "INIT$_TB_PREDICTED_TYPE" and "COLUMN_ID" in columns:
+            order_sql = " ORDER BY COLUMN_ID NULLS LAST, COLUMN_NAME"
         if object_name == "INIT$_TB_RULE_VIOLATION_RESULT":
             order_sql = " ORDER BY VIOLATION_SCORE DESC NULLS LAST, RULE_CONFIDENCE DESC NULLS LAST, VIOLATION_ID"
         if target_owner and "OWNER" in columns:
@@ -917,30 +974,37 @@ def get_result_table(
         where_sql = f" WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
         base_sql = f"SELECT * FROM {_quote_identifier(owner_name)}.{_quote_identifier(object_name)}{where_sql}{order_sql}"
         result = _fetch_dynamic_page(cursor, base_sql, page, page_size, bind_params)
-        cat_corr_summary = _fetch_cat_corr_summary(cursor, owner_name, object_name, target_owner, target_table)
-        predicted_type_summary = _fetch_predicted_type_summary(cursor, owner_name, object_name, target_owner, target_table)
-        violation_summary = _fetch_rule_violation_summary(
-            cursor,
-            owner_name,
-            object_name,
-            target_owner,
-            target_table,
-            rule_model_name,
-            normalized_violation_rule_id,
-            violationConditionCount,
-            normalized_violation_confidence_scope,
-            normalized_violation_result_scope,
-            violationMinConfidence,
-            violationMinLift,
-            violationMaxRules,
-            violationRulePage,
-            violationRulePageSize,
-        )
+        cat_corr_summary = None
+        predicted_type_summary = None
+        violation_summary = None
+        if result_layout.get("summary") == "correlationSummary":
+            cat_corr_summary = _fetch_cat_corr_summary(cursor, owner_name, object_name, target_owner, target_table)
+        elif result_layout.get("summary") == "predictedTypeSummary":
+            predicted_type_summary = _fetch_predicted_type_summary(cursor, owner_name, object_name, target_owner, target_table)
+        elif result_layout.get("summary") == "violationSummary":
+            violation_summary = _fetch_rule_violation_summary(
+                cursor,
+                owner_name,
+                object_name,
+                target_owner,
+                target_table,
+                rule_model_name,
+                normalized_violation_rule_id,
+                violationConditionCount,
+                normalized_violation_confidence_scope,
+                normalized_violation_result_scope,
+                violationMinConfidence,
+                violationMinLift,
+                violationMaxRules,
+                violationRulePage,
+                violationRulePageSize,
+            )
         column_comments = _fetch_column_comment_map(cursor, target_owner, target_table)
         return {
             "status": "success",
             "owner": owner_name,
             "objectName": object_name,
+            "resultLayout": result_layout,
             "targetOwner": target_owner,
             "targetTable": target_table,
             "ruleModelName": rule_model_name,
@@ -954,7 +1018,7 @@ def get_result_table(
     except HTTPException:
         raise
     except Exception as error:
-        logger.warning("M04002 result table query failed: %s", error)
+        logger.warning("MCOMMON_ANLY_WORK result table query failed: %s", error)
         raise HTTPException(status_code=500, detail=str(error))
     finally:
         if cursor:
@@ -963,7 +1027,6 @@ def get_result_table(
             conn.close()
 
 
-@router.get("/model-view")
 def get_model_view(request: Request, owner: str, modelName: str, viewType: str = "VR", page: int = 1, pageSize: int = 50):
     owner_name = _validate_identifier(owner, "owner")
     model_name = _validate_identifier(modelName, "model name")
@@ -1024,7 +1087,7 @@ def get_model_view(request: Request, owner: str, modelName: str, viewType: str =
     except HTTPException:
         raise
     except Exception as error:
-        logger.warning("M04002 model view query failed: %s", error)
+        logger.warning("MCOMMON_ANLY_WORK model view query failed: %s", error)
         raise HTTPException(status_code=500, detail=str(error))
     finally:
         if cursor:
@@ -1033,7 +1096,6 @@ def get_model_view(request: Request, owner: str, modelName: str, viewType: str =
             conn.close()
 
 
-@router.get("/model-detail-summary")
 def get_model_detail_summary(
     request: Request,
     owner: str,
@@ -1054,7 +1116,7 @@ def get_model_detail_summary(
         conn = get_target_db_connection(request)
         model_metadata: dict[str, Any] = {}
         try:
-            metadata_result = execute_query(conn, "M04002_MODEL_METADATA", {
+            metadata_result = execute_query(conn, "MCOMMON_ANLY_WORK_MODEL_METADATA", {
                 "owner": owner_name,
                 "modelName": model_name,
             })
@@ -1064,7 +1126,7 @@ def get_model_detail_summary(
                     for key, value in metadata_result["data"][0].items()
                 }
         except Exception as metadata_error:
-            logger.info("M04002 model metadata query skipped: %s", metadata_error)
+            logger.info("MCOMMON_ANLY_WORK model metadata query skipped: %s", metadata_error)
 
         view_names = {view_type: f"DM${view_type}{model_name}" for view_type in MODEL_DETAIL_VIEW_TYPES}
         result = execute_query(conn, "DATA_WORK_MODEL_DETAIL_VIEW_LIST", {
@@ -1117,10 +1179,12 @@ def get_model_detail_summary(
                 "pageSize": row_limit,
                 "sampleLoaded": bool(includeSamples and exists_yn == "Y"),
             })
+        model_layout = _get_model_result_layout(model_name, model_metadata)
         return {
             "status": "success",
             "owner": owner_name,
             "modelName": model_name,
+            "resultLayout": model_layout,
             "targetOwner": target_owner,
             "targetTable": target_table,
             "columnComments": column_comments,
@@ -1131,7 +1195,7 @@ def get_model_detail_summary(
     except HTTPException:
         raise
     except Exception as error:
-        logger.warning("M04002 model detail summary query failed: %s", error)
+        logger.warning("MCOMMON_ANLY_WORK model detail summary query failed: %s", error)
         raise HTTPException(status_code=500, detail=str(error))
     finally:
         if cursor:
@@ -1140,7 +1204,6 @@ def get_model_detail_summary(
             conn.close()
 
 
-@router.get("/model-rule-summary")
 def get_model_rule_summary(
     request: Request,
     owner: str,
@@ -1185,19 +1248,19 @@ def get_model_rule_summary(
         conn = get_target_db_connection(request)
         cursor = conn.cursor() if target_owner and target_table else None
         column_comments = _fetch_column_comment_map(cursor, target_owner, target_table) if cursor else {}
-        overview = execute_query(conn, "M04002_ASSOC_RULE_OVERVIEW", {
+        overview = execute_query(conn, "MCOMMON_ANLY_WORK_ASSOC_RULE_OVERVIEW", {
             "owner": owner_name,
             "targetOwner": target_owner,
             "targetTable": target_table,
             "modelName": model_name,
         })
-        condition_dist = execute_query(conn, "M04002_ASSOC_RULE_CONDITION_DIST", {
+        condition_dist = execute_query(conn, "MCOMMON_ANLY_WORK_ASSOC_RULE_CONDITION_DIST", {
             "owner": owner_name,
             "targetOwner": target_owner,
             "targetTable": target_table,
             "modelName": model_name,
         })
-        result_top = execute_query(conn, "M04002_ASSOC_RULE_RESULT_TOP", {
+        result_top = execute_query(conn, "MCOMMON_ANLY_WORK_ASSOC_RULE_RESULT_TOP", {
             "owner": owner_name,
             "targetOwner": target_owner,
             "targetTable": target_table,
@@ -1205,7 +1268,7 @@ def get_model_rule_summary(
             "resultOffset": result_column_offset,
             "resultEndRow": result_column_end_row,
         })
-        detail = execute_query(conn, "M04002_ASSOC_RULE_DETAIL_LIST", {
+        detail = execute_query(conn, "MCOMMON_ANLY_WORK_ASSOC_RULE_DETAIL_LIST", {
             "owner": owner_name,
             "targetOwner": target_owner,
             "targetTable": target_table,
@@ -1269,7 +1332,7 @@ def get_model_rule_summary(
     except HTTPException:
         raise
     except Exception as error:
-        logger.warning("M04002 model rule summary query failed: %s", error)
+        logger.warning("MCOMMON_ANLY_WORK model rule summary query failed: %s", error)
         raise HTTPException(status_code=500, detail=str(error))
     finally:
         if cursor:
@@ -1278,7 +1341,6 @@ def get_model_rule_summary(
             conn.close()
 
 
-@router.get("/model-readable-summary")
 def get_model_readable_summary(request: Request, owner: str, modelName: str):
     owner_name = _validate_identifier(owner, "owner")
     model_name = _validate_identifier(modelName, "model name")
@@ -1298,10 +1360,11 @@ def get_model_readable_summary(request: Request, owner: str, modelName: str):
     except HTTPException:
         raise
     except Exception as error:
-        logger.warning("M04002 model readable summary query failed: %s", error)
+        logger.warning("MCOMMON_ANLY_WORK model readable summary query failed: %s", error)
         raise HTTPException(status_code=500, detail=str(error))
     finally:
         if cursor:
             cursor.close()
         if conn:
             conn.close()
+

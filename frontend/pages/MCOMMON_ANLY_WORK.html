@@ -1,38 +1,38 @@
-<div class="page-container table-page m04002-page" id="container-M04002">
-    <section class="m04002-header">
+﻿<div class="page-container table-page M04002-page" id="container-__PAGE_CODE__">
+    <section class="M04002-header">
         <div>
             <p>Integrated Editing Result Analysis</p>
             <h2>통합 에디팅 결과분석</h2>
             <span>통합시나리오 실행 이력과 노드별 결과 테이블 / Oracle ML 모델뷰를 전체 조회합니다.</span>
         </div>
-        <div class="m04002-actions">
-            <button type="button" class="table-btn" onclick="M04002.loadRuns()">
+        <div class="M04002-actions">
+            <button type="button" class="table-btn" onclick="__PAGE_CODE__.loadRuns()">
                 <i class="fas fa-sync-alt"></i>
                 Refresh
             </button>
-            <button type="button" class="table-btn" onclick="M04002.exportCurrent()">
+            <button type="button" class="table-btn" onclick="__PAGE_CODE__.exportCurrent()">
                 <i class="fas fa-file-export"></i>
                 Export CSV
             </button>
         </div>
     </section>
 
-    <section class="m04002-toolbar">
+    <section class="M04002-toolbar">
         <label>
             <span>Project</span>
-            <select id="projectId-M04002" onchange="M04002.handleProjectChange()">
+            <select id="projectId-__PAGE_CODE__" onchange="__PAGE_CODE__.handleProjectChange()">
                 <option value="">Loading projects...</option>
             </select>
         </label>
         <label>
             <span>Scenario</span>
-            <select id="scenarioId-M04002" onchange="M04002.loadRuns(1)">
+            <select id="scenarioId-__PAGE_CODE__" onchange="__PAGE_CODE__.loadRuns(1)">
                 <option value="">ALL</option>
             </select>
         </label>
         <label>
             <span>Status</span>
-            <select id="status-M04002" onchange="M04002.loadRuns(1)">
+            <select id="status-__PAGE_CODE__" onchange="__PAGE_CODE__.loadRuns(1)">
                 <option value="ALL">ALL</option>
                 <option value="SUCCESS">SUCCESS</option>
                 <option value="FAILED">FAILED</option>
@@ -42,11 +42,11 @@
         </label>
         <label>
             <span>Keyword</span>
-            <input id="keyword-M04002" type="search" placeholder="Run ID or flow name" onkeydown="M04002.handleKeywordKeydown(event)">
+            <input id="keyword-__PAGE_CODE__" type="search" placeholder="Run ID or flow name" onkeydown="__PAGE_CODE__.handleKeywordKeydown(event)">
         </label>
         <label>
             <span>Rows</span>
-            <select id="pageSize-M04002" onchange="M04002.loadRuns(1)">
+            <select id="pageSize-__PAGE_CODE__" onchange="__PAGE_CODE__.loadRuns(1)">
                 <option value="20">20</option>
                 <option value="50">50</option>
                 <option value="100">100</option>
@@ -54,30 +54,33 @@
         </label>
     </section>
 
-    <section class="m04002-layout">
-        <aside class="m04002-run-panel">
+    <section class="M04002-layout">
+        <aside class="M04002-run-panel">
             <header>
                 <strong>Scenario Runs</strong>
-                <span id="runCount-M04002">0 rows</span>
+                <span id="runCount-__PAGE_CODE__">0 rows</span>
             </header>
-            <div id="runList-M04002" class="m04002-run-list"></div>
-            <footer class="m04002-pager">
-                <button type="button" onclick="M04002.changeRunPage(-1)"><i class="fas fa-chevron-left"></i></button>
-                <span id="runPage-M04002">1 / 1</span>
-                <button type="button" onclick="M04002.changeRunPage(1)"><i class="fas fa-chevron-right"></i></button>
+            <div id="runList-__PAGE_CODE__" class="M04002-run-list"></div>
+            <footer class="M04002-pager">
+                <button type="button" onclick="__PAGE_CODE__.changeRunPage(-1)"><i class="fas fa-chevron-left"></i></button>
+                <span id="runPage-__PAGE_CODE__">1 / 1</span>
+                <button type="button" onclick="__PAGE_CODE__.changeRunPage(1)"><i class="fas fa-chevron-right"></i></button>
             </footer>
         </aside>
 
-        <main class="m04002-detail-panel">
-            <section id="runSummary-M04002" class="m04002-summary">
+        <main class="M04002-detail-panel">
+            <section id="runSummary-__PAGE_CODE__" class="M04002-summary">
                 <div class="table-empty">실행 이력을 선택하세요.</div>
             </section>
             <section>
-                <div id="nodeList-M04002" class="m04002-node-grid"></div>
+                <div id="nodeList-__PAGE_CODE__" class="M04002-node-grid"></div>
             </section>
-            <section id="resultPanel-M04002" class="m04002-result-panel">
+            <section id="resultPanel-__PAGE_CODE__" class="M04002-result-panel">
                 <div class="table-empty">노드를 선택하면 결과 상세가 표시됩니다.</div>
             </section>
         </main>
     </section>
 </div>
+
+
+

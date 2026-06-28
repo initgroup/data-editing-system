@@ -25,11 +25,12 @@
             "js/MCOMMON_DATA_WORK.js": "1.0.15",
             "pages/MCOMMON_FLOW_WORK.html": "1.0.14",
             "js/MCOMMON_FLOW_WORK.js": "1.0.26",
+            "pages/MCOMMON_ANLY_WORK.html": "1.0.1",
+            "js/MCOMMON_ANLY_WORK.js": "1.0.1",
             "css/flow-work.css": "1.0.2",
             "js/app.js": "1.0.6",
             "js/menu-renderer.js": "1.0.3",
             "js/M04001.js": "1.0.1",
-            "js/M04002.js": "1.0.1",
             "js/M02002.js": "1.0.3",
             "js/M99002.js": "1.0.7",
             "pages/M99004.html": "1.0.2",
@@ -262,6 +263,7 @@
             "./js/common.js",
             "./js/MCOMMON_DATA_WORK.js",
             "./js/MCOMMON_FLOW_WORK.js",
+            "./js/MCOMMON_ANLY_WORK.js",
             "./help/help-utils.js",
             "./js/chart.js",
             "./config/menu.config.js",
@@ -1239,8 +1241,9 @@
 
             const isDataTemplate = PageManager.dataWorkTemplatePages?.includes(pageCode);
             const isFlowTemplate = PageManager.flowWorkTemplatePages?.includes(pageCode);
-            const htmlFileName = isDataTemplate ? "MCOMMON_DATA_WORK" : (isFlowTemplate ? "MCOMMON_FLOW_WORK" : pageCode);
-            const scriptFileName = isDataTemplate ? "MCOMMON_DATA_WORK" : (isFlowTemplate ? "MCOMMON_FLOW_WORK" : pageCode);
+            const isAnlyTemplate = PageManager.anlyWorkTemplatePages?.includes(pageCode);
+            const htmlFileName = isDataTemplate ? "MCOMMON_DATA_WORK" : (isFlowTemplate ? "MCOMMON_FLOW_WORK" : (isAnlyTemplate ? "MCOMMON_ANLY_WORK" : pageCode));
+            const scriptFileName = isDataTemplate ? "MCOMMON_DATA_WORK" : (isFlowTemplate ? "MCOMMON_FLOW_WORK" : (isAnlyTemplate ? "MCOMMON_ANLY_WORK" : pageCode));
 
             const sourceAssets = [
                 [`./pages/${htmlFileName}.html`, `${htmlFileName}.html`, "Original page HTML template", 30],

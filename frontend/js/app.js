@@ -18,6 +18,7 @@ const PageManager = {
     lastLoadedVersion: null, // Last loaded asset version.
     dataWorkTemplatePages: ['M03001', 'M03002', 'M03003', 'M03004'],
     flowWorkTemplatePages: ['M04001'],
+    anlyWorkTemplatePages: ['M04002'],
     sessionTimerId: null,
     isSessionExpiredHandling: false,
 
@@ -392,10 +393,13 @@ const PageManager = {
         }
 
         try {
-            const useCommonTemplate = this.dataWorkTemplatePages.includes(pageCode) || this.flowWorkTemplatePages.includes(pageCode);
+            const isDataTemplate = this.dataWorkTemplatePages.includes(pageCode);
+            const isFlowTemplate = this.flowWorkTemplatePages.includes(pageCode);
+            const isAnlyTemplate = this.anlyWorkTemplatePages.includes(pageCode);
+            const useCommonTemplate = isDataTemplate || isFlowTemplate || isAnlyTemplate;
             const htmlFileName = this.dataWorkTemplatePages.includes(pageCode)
                 ? 'MCOMMON_DATA_WORK'
-                : (this.flowWorkTemplatePages.includes(pageCode) ? 'MCOMMON_FLOW_WORK' : pageCode);
+                : (this.flowWorkTemplatePages.includes(pageCode) ? 'MCOMMON_FLOW_WORK' : (isAnlyTemplate ? 'MCOMMON_ANLY_WORK' : pageCode));
             const htmlUrl = this.getAssetUrl(`./pages/${htmlFileName}.html`);
             const response = await fetch(htmlUrl);
             if (!response.ok) {
@@ -444,7 +448,11 @@ const PageManager = {
      * @param {boolean} force - 기존 스크립트를 무시하고 다시 로드할지 여부
      */
     async injectScript(pageCode, force = false) {
-        if (!force && document.querySelector(`script[src*="${pageCode}.js"]`)) {
+        const isAnlyTemplate = this.anlyWorkTemplatePages.includes(pageCode);
+        const scriptFileName = isAnlyTemplate ? 'MCOMMON_ANLY_WORK' : pageCode;
+
+        if (!force && document.querySelector(`script[src*="${scriptFileName}.js"]`)) {
+            if (isAnlyTemplate) this.ensureAnlyWorkPage(pageCode);
             return true;
         }
 
@@ -452,7 +460,7 @@ const PageManager = {
             return false;
         }
 
-        const scriptSrc = this.getAssetUrl(`./js/${pageCode}.js`);
+        const scriptSrc = this.getAssetUrl(`./js/${scriptFileName}.js`);
 
         try {
             const response = await fetch(scriptSrc, { method: 'HEAD' });
@@ -469,7 +477,8 @@ const PageManager = {
             script.async = true;
 
             script.onload = () => {
-                console.log(`[Script Loaded] ${pageCode}.js`);
+                console.log(`[Script Loaded] ${scriptFileName}.js`);
+                if (isAnlyTemplate) this.ensureAnlyWorkPage(pageCode);
                 resolve(true);
             };
 
@@ -479,6 +488,14 @@ const PageManager = {
 
             document.body.appendChild(script);
         });
+    },
+
+    ensureAnlyWorkPage(pageCode) {
+        if (window[pageCode]) return window[pageCode];
+        if (window.MCOMMON && typeof window.MCOMMON.initAnlyWorkPage === 'function') {
+            return window.MCOMMON.initAnlyWorkPage(pageCode);
+        }
+        return null;
     },
 
     /**

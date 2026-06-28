@@ -447,9 +447,9 @@
         "CSV 내보내기 결과가 비어 있으면 현재 화면에 표시된 분석 데이터가 있는지 먼저 확인합니다."
       ],
       "implementationNotes": [
-        "프론트는 M04002.html과 M04002.js 전용 화면으로 구성됩니다.",
-        "백엔드는 backend/routers/M04002.py가 실행 이력, 노드 결과, 모델 상세, 연관 규칙 요약, 결과 샘플 API를 제공합니다.",
-        "SQL은 database/M04002.sql의 실행 이력/모델 메타/연관 규칙 요약/결과 샘플 조회 SQL ID를 사용합니다.",
+        "프론트는 MCOMMON_ANLY_WORK.html과 MCOMMON_ANLY_WORK.js 공통 분석 화면을 사용합니다.",
+        "백엔드는 backend/services/anly_work_router.py와 backend/services/anly_work_service.py가 실행 이력, 노드 결과, 모델 상세, 연관 규칙 요약, 결과 샘플 API를 제공합니다.",
+        "SQL은 database/MCOMMON_ANLY_WORK.sql의 실행 이력/모델 메타/연관 규칙 요약/결과 샘플 조회 SQL ID를 사용합니다.",
         "Oracle ML 모델 상세는 공개적으로 설명 가능한 모델 해석 개념을 사용하되, 내부 물리 객체명은 도움말에서 숨깁니다."
       ]
     },

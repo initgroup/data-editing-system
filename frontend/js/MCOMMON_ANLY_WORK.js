@@ -1,9 +1,74 @@
-(function() {
-    const PAGE_CODE = "M04002";
-    const CONTEXT_STORAGE_KEY = "DATA_EDITING_WORK_CONTEXT";
-    const { getContainerEl } = PageManager.createHelper(PAGE_CODE);
+﻿(function() {
+    if (!window.MCOMMON) {
+        window.MCOMMON = {};
+    }
 
-    const M04002 = {
+    const DEFAULT_ANLY_WORK_CONFIGS = Object.freeze({
+        M04002: Object.freeze({
+            pageCode: "M04002",
+            apiCode: "M04002",
+            contextStorageKey: "DATA_EDITING_WORK_CONTEXT"
+        })
+    });
+
+    window.MCOMMON.createAnlyWorkPage = function(config = {}) {
+        const PAGE_CODE = config.pageCode || "M04002";
+        const API_PAGE_CODE = config.apiCode || PAGE_CODE;
+        const PAGE_ID_PREFIX = PAGE_CODE;
+        const CONTEXT_STORAGE_KEY = config.contextStorageKey || "DATA_EDITING_WORK_CONTEXT";
+        const pageHelper = PageManager.createHelper(PAGE_CODE);
+        const resolvePageText = (value) => String(value ?? "").split("${PAGE_CODE}").join(PAGE_CODE);
+        const getContainerEl = (selector) => pageHelper.getContainerEl(resolvePageText(selector));
+    const GENERIC_TABLE_RESULT_LAYOUT = Object.freeze({
+        kind: "TABLE",
+        key: "TABLE:GENERIC",
+        title: "Result Table",
+        summaryRenderer: ""
+    });
+    const TABLE_RESULT_LAYOUTS = Object.freeze({
+        "INIT$_TB_PREDICTED_TYPE": Object.freeze({
+            kind: "TABLE",
+            key: "TABLE:INIT$_TB_PREDICTED_TYPE",
+            title: "Result Table",
+            summaryKey: "predictedTypeSummary",
+            summaryRenderer: "renderPredictedTypeSummary"
+        }),
+        "INIT$_TB_CAT_CORR_PAIR": Object.freeze({
+            kind: "TABLE",
+            key: "TABLE:INIT$_TB_CAT_CORR_PAIR",
+            title: "Result Table",
+            summaryKey: "correlationSummary",
+            summaryRenderer: "renderCorrelationSummary"
+        }),
+        "INIT$_TB_RULE_VIOLATION_RESULT": Object.freeze({
+            kind: "TABLE",
+            key: "TABLE:INIT$_TB_RULE_VIOLATION_RESULT",
+            title: "Result Table",
+            summaryKey: "violationSummary",
+            summaryRenderer: "renderViolationSummary"
+        })
+    });
+    const MODEL_RESULT_LAYOUTS = Object.freeze({
+        ASSOCIATION_RULES: Object.freeze({
+            kind: "MODEL",
+            key: "MODEL:ASSOCIATION_RULES",
+            title: "Association Rules",
+            renderer: "renderAssociationModelAnalysis"
+        }),
+        GENERIC_MODEL: Object.freeze({
+            kind: "MODEL",
+            key: "MODEL:GENERIC",
+            title: "Oracle ML Model View",
+            renderer: "renderAssociationModelAnalysis"
+        })
+    });
+    const EMPTY_RESULT_LAYOUT = Object.freeze({
+        kind: "NONE",
+        key: "NONE",
+        title: "No Result"
+    });
+
+    const page = {
         runs: [],
         nodes: [],
         projects: [],
@@ -27,16 +92,16 @@
         nodeResultCache: new Map(),
 
         async init() {
-            const pendingRunId = sessionStorage.getItem("M04002:selectedRunId") || "";
-            const pendingProjectId = sessionStorage.getItem("M04002:selectedProjectId") || "";
-            const pendingScenarioId = sessionStorage.getItem("M04002:selectedScenarioId") || "";
+            const pendingRunId = sessionStorage.getItem(`${PAGE_CODE}:selectedRunId`) || "";
+            const pendingProjectId = sessionStorage.getItem(`${PAGE_CODE}:selectedProjectId`) || "";
+            const pendingScenarioId = sessionStorage.getItem(`${PAGE_CODE}:selectedScenarioId`) || "";
             const storedContext = this.readWorkContext();
             if (pendingRunId) {
-                sessionStorage.removeItem("M04002:selectedRunId");
+                sessionStorage.removeItem(`${PAGE_CODE}:selectedRunId`);
                 this.pendingRunId = pendingRunId;
             }
-            sessionStorage.removeItem("M04002:selectedProjectId");
-            sessionStorage.removeItem("M04002:selectedScenarioId");
+            sessionStorage.removeItem(`${PAGE_CODE}:selectedProjectId`);
+            sessionStorage.removeItem(`${PAGE_CODE}:selectedScenarioId`);
             const preferredProjectId = pendingProjectId || storedContext.projectId || "";
             const preferredScenarioId = pendingScenarioId || (pendingProjectId ? "" : storedContext.scenarioId || "");
             await this.loadProjects(preferredProjectId);
@@ -84,7 +149,7 @@
 
         snapshotNodeResultCache() {
             const key = this.getNodeCacheKey();
-            const panel = getContainerEl("#resultPanel-M04002");
+            const panel = getContainerEl("#resultPanel-${PAGE_CODE}");
             if (!key || !panel || !this.selectedNode || panel.classList.contains("is-loading")) return;
             if (!this.nodeResultCache) this.nodeResultCache = new Map();
             this.nodeResultCache.set(key, {
@@ -106,7 +171,7 @@
         restoreNodeResultCache(nodeRunId) {
             const key = this.getNodeCacheKey(nodeRunId);
             const cached = key ? this.nodeResultCache?.get(key) : null;
-            const panel = getContainerEl("#resultPanel-M04002");
+            const panel = getContainerEl("#resultPanel-${PAGE_CODE}");
             if (!cached || !panel) return false;
             this.resultPage = Number(cached.resultPage || 1);
             this.resultPageSize = Number(cached.resultPageSize || this.resultPageSize || 50);
@@ -151,18 +216,18 @@
         },
 
         persistWorkContext() {
-            const projectId = getContainerEl("#projectId-M04002")?.value || "";
-            const scenarioId = getContainerEl("#scenarioId-M04002")?.value || "";
+            const projectId = getContainerEl("#projectId-${PAGE_CODE}")?.value || "";
+            const scenarioId = getContainerEl("#scenarioId-${PAGE_CODE}")?.value || "";
             try {
                 localStorage.setItem(CONTEXT_STORAGE_KEY, JSON.stringify({ projectId, scenarioId }));
             } catch (error) {
-                console.warn("[M04002] work context save failed", error);
+                console.warn(`[${PAGE_CODE}] work context save failed`, error);
             }
         },
 
         async loadRuns(page = this.runPage, options = {}) {
             if (page === 1 && !options.preservePending) this.pendingRunId = "";
-            const projectId = getContainerEl("#projectId-M04002")?.value || "";
+            const projectId = getContainerEl("#projectId-${PAGE_CODE}")?.value || "";
             this.persistWorkContext();
             if (!projectId) {
                 this.runs = [];
@@ -175,27 +240,27 @@
                 this.nodeResultCache = new Map();
                 this.renderRuns();
                 this.renderRunSummary();
-                const nodeList = getContainerEl("#nodeList-M04002");
+                const nodeList = getContainerEl("#nodeList-${PAGE_CODE}");
                 if (nodeList) nodeList.innerHTML = "";
-                const panel = getContainerEl("#resultPanel-M04002");
+                const panel = getContainerEl("#resultPanel-${PAGE_CODE}");
                 if (panel) panel.innerHTML = `<div class="table-empty">프로젝트를 선택하면 실행 이력이 표시됩니다.</div>`;
                 return;
             }
             this.runPage = Math.max(1, Number(page || 1));
-            const pageSize = Number(getContainerEl("#pageSize-M04002")?.value || 20);
+            const pageSize = Number(getContainerEl("#pageSize-${PAGE_CODE}")?.value || 20);
             const params = new URLSearchParams({
                 page: String(this.runPage),
                 pageSize: String(pageSize),
                 projectId,
-                status: getContainerEl("#status-M04002")?.value || "ALL",
-                keyword: getContainerEl("#keyword-M04002")?.value?.trim?.() || ""
+                status: getContainerEl("#status-${PAGE_CODE}")?.value || "ALL",
+                keyword: getContainerEl("#keyword-${PAGE_CODE}")?.value?.trim?.() || ""
             });
-            const scenarioId = getContainerEl("#scenarioId-M04002")?.value || "";
+            const scenarioId = getContainerEl("#scenarioId-${PAGE_CODE}")?.value || "";
             if (scenarioId) params.set("scenarioId", scenarioId);
-            const list = getContainerEl("#runList-M04002");
+            const list = getContainerEl("#runList-${PAGE_CODE}");
             if (list) list.innerHTML = `<div class="table-empty">Loading runs...</div>`;
             try {
-                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/runs?${params.toString()}`, { method: "GET", showLoading: false });
+                const json = await CommonUtils.request(`${API_BASE_URL}/${API_PAGE_CODE}/runs?${params.toString()}`, { method: "GET", showLoading: false });
                 this.runs = Array.isArray(json.data) ? json.data : [];
                 this.runTotal = Number(json.total || 0);
                 this.renderRuns();
@@ -215,31 +280,31 @@
                 await this.loadRuns(1);
                 return;
             }
-            const projectId = getContainerEl("#projectId-M04002")?.value || "";
+            const projectId = getContainerEl("#projectId-${PAGE_CODE}")?.value || "";
             if (!projectId) {
                 await this.loadRuns(1);
                 return;
             }
-            const pageSize = Number(getContainerEl("#pageSize-M04002")?.value || 20);
+            const pageSize = Number(getContainerEl("#pageSize-${PAGE_CODE}")?.value || 20);
             const params = new URLSearchParams({
                 projectId,
                 pageSize: String(pageSize),
-                status: getContainerEl("#status-M04002")?.value || "ALL",
-                keyword: getContainerEl("#keyword-M04002")?.value?.trim?.() || ""
+                status: getContainerEl("#status-${PAGE_CODE}")?.value || "ALL",
+                keyword: getContainerEl("#keyword-${PAGE_CODE}")?.value?.trim?.() || ""
             });
-            const scenarioId = getContainerEl("#scenarioId-M04002")?.value || "";
+            const scenarioId = getContainerEl("#scenarioId-${PAGE_CODE}")?.value || "";
             if (scenarioId) params.set("scenarioId", scenarioId);
             try {
-                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/runs/${encodeURIComponent(flowRunId)}/position?${params.toString()}`, { method: "GET", showLoading: false });
+                const json = await CommonUtils.request(`${API_BASE_URL}/${API_PAGE_CODE}/runs/${encodeURIComponent(flowRunId)}/position?${params.toString()}`, { method: "GET", showLoading: false });
                 await this.loadRuns(Number(json.page || 1), { preservePending: true });
             } catch (error) {
-                console.warn("[M04002] pending run position failed", error);
+                console.warn(`[${PAGE_CODE}] pending run position failed`, error);
                 await this.loadRuns(1);
             }
         },
 
         async loadProjects(preferredProjectId = "") {
-            const select = getContainerEl("#projectId-M04002");
+            const select = getContainerEl("#projectId-${PAGE_CODE}");
             if (select) select.innerHTML = `<option value="">Loading projects...</option>`;
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/M01002/projects?keyword=`, { method: "GET", showLoading: false });
@@ -263,8 +328,8 @@
         },
 
         async loadScenarios(preferredScenarioId = "") {
-            const projectId = getContainerEl("#projectId-M04002")?.value || "";
-            const select = getContainerEl("#scenarioId-M04002");
+            const projectId = getContainerEl("#projectId-${PAGE_CODE}")?.value || "";
+            const select = getContainerEl("#scenarioId-${PAGE_CODE}");
             this.scenarios = [];
             if (select) select.innerHTML = `<option value="">ALL</option>`;
             if (!projectId) return;
@@ -297,10 +362,10 @@
         },
 
         renderRuns() {
-            const list = getContainerEl("#runList-M04002");
-            const count = getContainerEl("#runCount-M04002");
-            const pageText = getContainerEl("#runPage-M04002");
-            const pageSize = Number(getContainerEl("#pageSize-M04002")?.value || 20);
+            const list = getContainerEl("#runList-${PAGE_CODE}");
+            const count = getContainerEl("#runCount-${PAGE_CODE}");
+            const pageText = getContainerEl("#runPage-${PAGE_CODE}");
+            const pageSize = Number(getContainerEl("#pageSize-${PAGE_CODE}")?.value || 20);
             const totalPages = Math.max(1, Math.ceil(this.runTotal / pageSize));
             if (count) count.textContent = `${this.formatNumber(this.runTotal)} rows`;
             if (pageText) pageText.textContent = `${this.runPage} / ${totalPages}`;
@@ -310,7 +375,7 @@
                 return;
             }
             list.innerHTML = this.runs.map((run) => `
-                <button type="button" class="m04002-run-card ${this.selectedRun?.FLOW_RUN_ID === run.FLOW_RUN_ID ? "is-selected" : ""}" onclick="M04002.selectRun(${Number(run.FLOW_RUN_ID)})">
+                <button type="button" class="M04002-run-card ${this.selectedRun?.FLOW_RUN_ID === run.FLOW_RUN_ID ? "is-selected" : ""}" onclick="${PAGE_CODE}.selectRun(${Number(run.FLOW_RUN_ID)})">
                     <span>
                         <strong>Run #${this.escapeHtml(run.FLOW_RUN_ID)}</strong>
                         <small>${this.escapeHtml(run.FLOW_NAME || "-")}</small>
@@ -322,7 +387,7 @@
         },
 
         changeRunPage(delta) {
-            const pageSize = Number(getContainerEl("#pageSize-M04002")?.value || 20);
+            const pageSize = Number(getContainerEl("#pageSize-${PAGE_CODE}")?.value || 20);
             const totalPages = Math.max(1, Math.ceil(this.runTotal / pageSize));
             const next = Math.min(totalPages, Math.max(1, this.runPage + delta));
             if (next !== this.runPage) this.loadRuns(next);
@@ -341,12 +406,12 @@
             this.nodeResultCache = new Map();
             this.renderRuns();
             this.renderRunSummary();
-            const nodeList = getContainerEl("#nodeList-M04002");
-            const resultPanel = getContainerEl("#resultPanel-M04002");
+            const nodeList = getContainerEl("#nodeList-${PAGE_CODE}");
+            const resultPanel = getContainerEl("#resultPanel-${PAGE_CODE}");
             if (nodeList) nodeList.innerHTML = `<div class="table-empty">Loading nodes...</div>`;
             if (resultPanel) resultPanel.innerHTML = `<div class="table-empty">노드를 선택하면 결과 상세가 표시됩니다.</div>`;
             try {
-                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/runs/${flowRunId}/nodes`, { method: "GET", showLoading: false });
+                const json = await CommonUtils.request(`${API_BASE_URL}/${API_PAGE_CODE}/runs/${flowRunId}/nodes`, { method: "GET", showLoading: false });
                 this.nodes = Array.isArray(json.data) ? json.data : [];
                 this.renderNodes();
                 const firstResultNode = this.nodes.find((node) => node.RESULT_KIND !== "NONE") || this.nodes[0];
@@ -357,7 +422,7 @@
         },
 
         renderRunSummary() {
-            const el = getContainerEl("#runSummary-M04002");
+            const el = getContainerEl("#runSummary-${PAGE_CODE}");
             const run = this.selectedRun;
             if (!el) return;
             if (!run) {
@@ -376,14 +441,14 @@
         },
 
         renderNodes() {
-            const el = getContainerEl("#nodeList-M04002");
+            const el = getContainerEl("#nodeList-${PAGE_CODE}");
             if (!el) return;
             if (!this.nodes.length) {
                 el.innerHTML = `<div class="table-empty">노드 실행 결과가 없습니다.</div>`;
                 return;
             }
             el.innerHTML = this.nodes.map((node) => `
-                <button type="button" class="m04002-node-card ${this.getNodeTone(node)} ${this.selectedNode?.FLOW_NODE_RUN_ID === node.FLOW_NODE_RUN_ID ? "is-selected" : ""}" onclick="M04002.selectNode(${Number(node.FLOW_NODE_RUN_ID)})">
+                <button type="button" class="M04002-node-card ${this.getNodeTone(node)} ${this.selectedNode?.FLOW_NODE_RUN_ID === node.FLOW_NODE_RUN_ID ? "is-selected" : ""}" onclick="${PAGE_CODE}.selectNode(${Number(node.FLOW_NODE_RUN_ID)})">
                     <span>
                         <i class="fas ${this.getNodeIcon(node)}"></i>
                         <strong>${this.escapeHtml(node.NODE_NAME || node.NODE_KEY || "-")}</strong>
@@ -395,11 +460,46 @@
             `).join("");
         },
 
+        getNodeResultLayout(node = this.selectedNode, json = null) {
+            const kind = String(node?.RESULT_KIND || "").toUpperCase();
+            if (kind === "TABLE") return this.getTableResultLayout(node, json);
+            if (kind === "MODEL") return this.getModelResultLayout(node, json);
+            return EMPTY_RESULT_LAYOUT;
+        },
+
+        getTableResultLayout(node = this.selectedNode, json = null) {
+            const layoutKey = String(json?.resultLayout?.key || "").trim().toUpperCase();
+            const serverLayout = Object.values(TABLE_RESULT_LAYOUTS).find((layout) => layout.key === layoutKey);
+            if (serverLayout) return serverLayout;
+            const objectName = String(json?.objectName || node?.RESULT_OBJECT_NAME || "").trim().toUpperCase();
+            return TABLE_RESULT_LAYOUTS[objectName] || GENERIC_TABLE_RESULT_LAYOUT;
+        },
+
+        getModelResultLayout(node = this.selectedNode, json = null) {
+            const layoutKey = String(json?.resultLayout?.key || "").trim().toUpperCase();
+            const serverLayout = Object.values(MODEL_RESULT_LAYOUTS).find((layout) => layout.key === layoutKey);
+            if (serverLayout) return serverLayout;
+            const modelName = String(json?.modelName || node?.RESULT_OBJECT_NAME || "").trim().toUpperCase();
+            const metadata = json?.modelMetadata || {};
+            const overview = json?.ruleSummary?.overview || {};
+            const modelType = String(metadata.MODEL_TYPE || overview.MODEL_TYPE || "").toUpperCase();
+            const algorithm = String(metadata.ALGORITHM || metadata.MINING_FUNCTION || "").toUpperCase();
+            const isAssociationModel = (
+                this.isAssociationRuleNode(node)
+                || modelName.includes("ASSOCIATION")
+                || modelType.includes("APRIORI")
+                || modelType.includes("ASSOCIATION")
+                || algorithm.includes("APRIORI")
+                || algorithm.includes("ASSOCIATION")
+            );
+            return isAssociationModel ? MODEL_RESULT_LAYOUTS.ASSOCIATION_RULES : MODEL_RESULT_LAYOUTS.GENERIC_MODEL;
+        },
+
         async selectNode(nodeRunId, page = 1, options = {}) {
             this.selectedNode = this.nodes.find((node) => Number(node.FLOW_NODE_RUN_ID) === Number(nodeRunId)) || null;
             this.resultPage = Math.max(1, Number(page || 1));
             this.renderNodes();
-            const panel = getContainerEl("#resultPanel-M04002");
+            const panel = getContainerEl("#resultPanel-${PAGE_CODE}");
             if (!panel || !this.selectedNode) return;
             if (!options.forceRefresh && this.restoreNodeResultCache(nodeRunId)) return;
             this.currentModelDetail = null;
@@ -410,13 +510,14 @@
                 this.violationRuleFilters = { ruleId: "", conditionCount: "ALL", confidenceScope: "NON_PERFECT", resultScope: "HIT", page: 1, pageSize: 20 };
             }
             this.lastViolationSummary = null;
-            if (this.selectedNode.RESULT_KIND === "NONE") {
+            const resultLayout = this.getNodeResultLayout(this.selectedNode);
+            if (resultLayout.kind === "NONE") {
                 panel.innerHTML = `<div class="table-empty">이 노드는 저장된 결과 테이블/모델이 없습니다.</div>`;
                 this.snapshotNodeResultCache();
                 return;
             }
             panel.innerHTML = `<div class="table-empty">Loading result...</div>`;
-            if (this.selectedNode.RESULT_KIND === "MODEL") {
+            if (resultLayout.kind === "MODEL") {
                 await this.loadModelDetailSummary();
             } else {
                 await this.loadResultTable(this.resultPage);
@@ -474,10 +575,11 @@
                 params.set("violationRulePageSize", String(this.normalizeRuleCardPageSize(filters.pageSize || 20)));
             }
             try {
-                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/result-table?${params.toString()}`, { method: "GET", showLoading: false });
+                const json = await CommonUtils.request(`${API_BASE_URL}/${API_PAGE_CODE}/result-table?${params.toString()}`, { method: "GET", showLoading: false });
                 if (this.selectedNode !== node) return;
                 this.currentExport = { filename: `${node.RESULT_OBJECT_NAME || "result"}.csv`, columns: json.columns || [], rows: json.data || [] };
-                this.renderResultTable(json, "Result Table", "TABLE");
+                const resultLayout = this.getTableResultLayout(node, json);
+                this.renderResultTable(json, resultLayout.title, resultLayout.kind);
             } catch (error) {
                 this.renderResultError(error.message || "Result table load failed.");
             }
@@ -495,7 +597,7 @@
                 pageSize: String(this.resultPageSize)
             });
             try {
-                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/model-view?${params.toString()}`, { method: "GET", showLoading: false });
+                const json = await CommonUtils.request(`${API_BASE_URL}/${API_PAGE_CODE}/model-view?${params.toString()}`, { method: "GET", showLoading: false });
                 if (this.selectedNode !== node) return;
                 this.currentExport = { filename: `${json.viewName || node.RESULT_OBJECT_NAME || "model-view"}.csv`, columns: json.columns || [], rows: json.data || [] };
                 this.renderModelView(json);
@@ -517,7 +619,7 @@
                 includeSamples: "false"
             });
             try {
-                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/model-detail-summary?${params.toString()}`, { method: "GET", showLoading: false });
+                const json = await CommonUtils.request(`${API_BASE_URL}/${API_PAGE_CODE}/model-detail-summary?${params.toString()}`, { method: "GET", showLoading: false });
                 if (this.selectedNode !== node) return;
                 this.currentModelDetail = json;
                 this.currentExport = { filename: `${node.RESULT_OBJECT_NAME || "model-detail"}.csv`, columns: [], rows: [] };
@@ -551,7 +653,7 @@
             if (filters.resultHasValueYn !== "ALL") params.set("resultHasValueYn", String(filters.resultHasValueYn));
             if (filters.confidenceScope === "NON_PERFECT") params.set("confidenceScope", "NON_PERFECT");
             try {
-                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/model-rule-summary?${params.toString()}`, {
+                const json = await CommonUtils.request(`${API_BASE_URL}/${API_PAGE_CODE}/model-rule-summary?${params.toString()}`, {
                     method: "GET",
                     showLoading: false,
                     timeoutMs: 12000,
@@ -576,18 +678,18 @@
         },
 
         showResultLoading(message = "Loading...", activeViewType = "") {
-            const panel = getContainerEl("#resultPanel-M04002");
+            const panel = getContainerEl("#resultPanel-${PAGE_CODE}");
             if (!panel) return;
             panel.classList.add("is-loading");
             const activeType = String(activeViewType || "").toUpperCase();
-            panel.querySelectorAll(".m04002-result-header nav button").forEach((button) => {
+            panel.querySelectorAll(".M04002-result-header nav button").forEach((button) => {
                 const type = button.textContent?.trim?.().toUpperCase() || "";
                 button.classList.toggle("is-active", Boolean(activeType) && type === activeType);
                 button.disabled = true;
             });
-            panel.querySelector(".m04002-result-loading-overlay")?.remove();
+            panel.querySelector(".M04002-result-loading-overlay")?.remove();
             const overlay = document.createElement("div");
-            overlay.className = "m04002-result-loading-overlay";
+            overlay.className = "M04002-result-loading-overlay";
             overlay.innerHTML = `
                 <span><i class="fas fa-spinner fa-spin"></i></span>
                 <strong>${this.escapeHtml(message)}</strong>
@@ -596,13 +698,13 @@
         },
 
         renderModelView(json) {
-            const panel = getContainerEl("#resultPanel-M04002");
+            const panel = getContainerEl("#resultPanel-${PAGE_CODE}");
             if (!panel) return;
             panel.classList.remove("is-loading");
             const viewType = json.viewType || "VR";
             const readable = viewType === "VR" ? this.renderReadableRules(json.data || []) : "";
             panel.innerHTML = `
-                <header class="m04002-result-header">
+                <header class="M04002-result-header">
                     <div>
                         <span>Oracle ML Model View</span>
                         <strong>${this.escapeHtml(json.owner)}.${this.escapeHtml(json.modelName)}</strong>
@@ -610,26 +712,32 @@
                         ${this.renderSelectedNodeJobDesc()}
                     </div>
                     <nav>
-                        ${["VR", "VI", "VG", "VA"].map((type) => `<button type="button" class="${type === viewType ? "is-active" : ""}" onclick="M04002.loadModelView('${type}', 1)">${type}</button>`).join("")}
+                        ${["VR", "VI", "VG", "VA"].map((type) => `<button type="button" class="${type === viewType ? "is-active" : ""}" onclick="${PAGE_CODE}.loadModelView('${type}', 1)">${type}</button>`).join("")}
                     </nav>
                     ${this.renderSelectedNodeExecutionMeta()}
                 </header>
                 ${viewType === "VR" ? this.renderRuleFilterBar() : ""}
                 ${readable}
                 ${this.renderGrid(json.columns || [], json.data || [])}
-                ${this.renderResultPager(json.page, json.pageSize, json.total, `M04002.loadModelView('${viewType}',`)}
+                ${this.renderResultPager(json.page, json.pageSize, json.total, `${PAGE_CODE}.loadModelView('${viewType}',`)}
             `;
             this.snapshotNodeResultCache();
         },
 
         renderModelAnalysis(json = this.currentModelDetail, activeTab = "readable") {
-            const panel = getContainerEl("#resultPanel-M04002");
+            const resultLayout = this.getModelResultLayout(this.selectedNode, json);
+            const renderer = typeof this[resultLayout.renderer] === "function" ? resultLayout.renderer : "renderAssociationModelAnalysis";
+            this[renderer](json, activeTab, resultLayout);
+        },
+
+        renderAssociationModelAnalysis(json = this.currentModelDetail, activeTab = "readable", resultLayout = this.getModelResultLayout(this.selectedNode, json)) {
+            const panel = getContainerEl("#resultPanel-${PAGE_CODE}");
             if (!panel || !json) return;
             panel.classList.remove("is-loading");
             const readableActive = activeTab !== "detail";
             const modelHeaderLabel = this.getModelHeaderLabel(json);
             panel.innerHTML = `
-                <header class="m04002-result-header">
+                <header class="M04002-result-header">
                     <div>
                         <span>${this.escapeHtml(this.selectedNode?.NODE_NAME || "Oracle ML Model View")}</span>
                         <strong>${this.escapeHtml(json.owner || this.selectedNode?.RESULT_OWNER)}.${this.escapeHtml(json.modelName || this.selectedNode?.RESULT_OBJECT_NAME)}</strong>
@@ -638,14 +746,14 @@
                     <em>${this.escapeHtml(modelHeaderLabel)}</em>
                     ${this.renderSelectedNodeExecutionMeta()}
                 </header>
-                <div class="m04002-model-tabs">
-                    <button type="button" class="${readableActive ? "is-active" : ""}" onclick="M04002.switchModelAnalysisTab('readable')">Readable Rules</button>
-                    <button type="button" class="${!readableActive ? "is-active" : ""}" onclick="M04002.switchModelAnalysisTab('detail')">Detail Views</button>
+                <div class="M04002-model-tabs">
+                    <button type="button" class="${readableActive ? "is-active" : ""}" onclick="${PAGE_CODE}.switchModelAnalysisTab('readable')">Readable Rules</button>
+                    <button type="button" class="${!readableActive ? "is-active" : ""}" onclick="${PAGE_CODE}.switchModelAnalysisTab('detail')">Detail Views</button>
                 </div>
-                <div class="m04002-model-tab-panel ${readableActive ? "is-active" : ""}" data-model-tab="readable">
+                <div class="M04002-model-tab-panel ${readableActive ? "is-active" : ""}" data-model-tab="readable">
                     ${this.renderReadableRuleSummary(json)}
                 </div>
-                <div class="m04002-model-tab-panel ${!readableActive ? "is-active" : ""}" data-model-tab="detail">
+                <div class="M04002-model-tab-panel ${!readableActive ? "is-active" : ""}" data-model-tab="detail">
                     ${this.renderModelDetailViews(json)}
                 </div>
             `;
@@ -657,7 +765,7 @@
         },
 
         getActiveModelAnalysisTab() {
-            const active = getContainerEl("#resultPanel-M04002 .m04002-model-tabs button.is-active");
+            const active = getContainerEl("#resultPanel-${PAGE_CODE} .M04002-model-tabs button.is-active");
             return /Detail/i.test(active?.textContent || "") ? "detail" : "readable";
         },
 
@@ -696,7 +804,7 @@
                 pageSize: String(pageSize)
             });
             try {
-                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/model-view?${params.toString()}`, { method: "GET", showLoading: false });
+                const json = await CommonUtils.request(`${API_BASE_URL}/${API_PAGE_CODE}/model-view?${params.toString()}`, { method: "GET", showLoading: false });
                 if (this.selectedNode !== node || !this.currentModelDetail) return;
                 this.replaceModelDetailView({
                     viewType: json.viewType || viewType,
@@ -722,12 +830,12 @@
         },
 
         goReadableRulesPage() {
-            const input = getContainerEl("#readableRulePage-M04002");
+            const input = getContainerEl("#readableRulePage-${PAGE_CODE}");
             this.loadReadableRulesPage(input?.value || 1);
         },
 
         goDetailViewPage(viewType) {
-            const input = getContainerEl(`#detailViewPage-${viewType}-M04002`);
+            const input = getContainerEl(`#detailViewPage-${viewType}-${PAGE_CODE}`);
             this.loadDetailViewPage(viewType, input?.value || 1);
         },
 
@@ -747,21 +855,21 @@
             const visibleRuleCount = filtered.length;
             const baseRuleCount = readableRules.length;
             return `
-                <div class="m04002-readable-rule-intro">
+                <div class="M04002-readable-rule-intro">
                     <div>
                         <strong>사람이 읽는 규칙 요약</strong>
                         <span>DM$VR 전체 ${this.formatNumber(vr.total || 0)}건 중 현재 ${this.getViewSampleRange(vr)} 샘플을 해석해 표시합니다. 조건 개수 칩을 선택하면 아래 규칙 목록이 바뀝니다.</span>
                     </div>
-                    <div class="m04002-sample-controls">
+                    <div class="M04002-sample-controls">
                         <label>
-                            <input type="checkbox" ${this.excludeEmptyConsequent ? "checked" : ""} onchange="M04002.toggleExcludeEmptyConsequent(this.checked)">
+                            <input type="checkbox" ${this.excludeEmptyConsequent ? "checked" : ""} onchange="${PAGE_CODE}.toggleExcludeEmptyConsequent(this.checked)">
                             <span>결과 정보 없음 제외</span>
                         </label>
-                        ${this.renderSamplePageJump("readableRulePage-M04002", vr, "M04002.goReadableRulesPage()", "M04002.loadReadableRulesPage")}
+                        ${this.renderSamplePageJump("readableRulePage-${PAGE_CODE}", vr, "${PAGE_CODE}.goReadableRulesPage()", "${PAGE_CODE}.loadReadableRulesPage")}
                     </div>
                 </div>
                 ${this.renderReadableRuleStats(readableRules, visibleRuleCount, baseRuleCount)}
-                <div class="m04002-readable-rule-grid">
+                <div class="M04002-readable-rule-grid">
                     ${filtered.length ? filtered.map((rule) => this.renderReadableRuleCard(rule)).join("") : `<div class="table-empty">표시할 규칙 행이 없습니다. Detail Views에서 원본 모델뷰를 확인하세요.</div>`}
                 </div>
             `;
@@ -773,20 +881,20 @@
             const error = json?.ruleSummaryError || "";
             if (loading && !summary) {
                 return `
-                    <div class="m04002-readable-rule-intro">
+                    <div class="M04002-readable-rule-intro">
                         <div>
                             <strong>사람이 읽는 규칙 요약</strong>
                             <span>Job 실행 시 저장된 규칙 요약 테이블을 조회하고 있습니다.</span>
                         </div>
                     </div>
-                    <section class="m04002-readable-stats"><div class="table-empty">규칙 요약을 불러오는 중입니다...</div></section>
+                    <section class="M04002-readable-stats"><div class="table-empty">규칙 요약을 불러오는 중입니다...</div></section>
                     ${this.renderFallbackReadableRuleGrid(fallbackRules)}
                 `;
             }
             if (!summary || Number(summary.overview?.TOTAL_RULES || 0) <= 0) {
                 const message = error || "저장된 규칙 요약이 없습니다. 이 모델 Job을 다시 실행하면 요약 테이블이 생성됩니다.";
                 return `
-                    <div class="m04002-readable-rule-intro">
+                    <div class="M04002-readable-rule-intro">
                         <div>
                             <strong>사람이 읽는 규칙 요약</strong>
                             <span>${this.escapeHtml(message)}</span>
@@ -814,52 +922,52 @@
                 }))
             ];
             return `
-                <div class="m04002-readable-rule-intro">
+                <div class="M04002-readable-rule-intro">
                     <div>
                         <strong>사람이 읽는 규칙 요약</strong>
                         <span>${this.escapeHtml(this.describeRuleSummaryBasis(overview))} 조건 수나 결과 컬럼을 선택하면 아래 상세 규칙이 바뀝니다.</span>
                     </div>
-                    <div class="m04002-sample-controls">
-                        <button type="button" class="table-btn" onclick="M04002.exportCurrent()">
+                    <div class="M04002-sample-controls">
+                        <button type="button" class="table-btn" onclick="${PAGE_CODE}.exportCurrent()">
                             <i class="fas fa-file-export"></i>
                             Export
                         </button>
-                        ${this.renderSamplePageJump("ruleSummaryPage-M04002", { page: summary.page, pageSize: summary.pageSize, total: summary.total }, "M04002.goRuleSummaryPage()", "M04002.loadModelRuleSummary", {
-                            pageSizeId: "ruleSummaryPageSize-M04002",
+                        ${this.renderSamplePageJump("ruleSummaryPage-${PAGE_CODE}", { page: summary.page, pageSize: summary.pageSize, total: summary.total }, "${PAGE_CODE}.goRuleSummaryPage()", "${PAGE_CODE}.loadModelRuleSummary", {
+                            pageSizeId: "ruleSummaryPageSize-${PAGE_CODE}",
                             pageSizes: [20, 40, 100, 500, 1000],
-                            onPageSizeChange: "M04002.changeRuleSummaryPageSize(this.value)"
+                            onPageSizeChange: "${PAGE_CODE}.changeRuleSummaryPageSize(this.value)"
                         })}
                     </div>
                 </div>
-                <section class="m04002-readable-stats">
-                    <div class="m04002-readable-stat-block">
+                <section class="M04002-readable-stats">
+                    <div class="M04002-readable-stat-block">
                         <strong>규칙 요약</strong>
-                        <div class="m04002-readable-stat-metrics">
+                        <div class="M04002-readable-stat-metrics">
                             <span><b>${this.formatNumber(overview.TOTAL_RULES)}</b><small>전체 규칙</small></span>
                             <span><b>${this.formatNumber(overview.MAPPED_RULES)}</b><small>조건/결과 매핑</small></span>
                             <span><b>${this.formatNumber(overview.MISSING_RESULT_RULES)}</b><small>결과 값 없음</small></span>
                             <span><b>${this.formatNumber(summary.total)}</b><small>필터 결과</small></span>
                         </div>
                     </div>
-                    <div class="m04002-readable-condition-dist">
+                    <div class="M04002-readable-condition-dist">
                         <strong>조건 수 선택</strong>
-                        ${this.renderRuleConditionMatrix(conditionItems, this.ruleSummaryFilters.conditionCount, this.ruleSummaryFilters.confidenceScope || "ALL", "M04002.selectRuleSummaryCondition")}
+                        ${this.renderRuleConditionMatrix(conditionItems, this.ruleSummaryFilters.conditionCount, this.ruleSummaryFilters.confidenceScope || "ALL", "${PAGE_CODE}.selectRuleSummaryCondition")}
                     </div>
                 </section>
-                <section class="m04002-rule-facet-panel">
-                    <div class="m04002-rule-facet-block">
+                <section class="M04002-rule-facet-panel">
+                    <div class="M04002-rule-facet-block">
                         <header>
                             <strong>결과 컬럼 Top 12</strong>
-                            <div class="m04002-rule-facet-actions">
+                            <div class="M04002-rule-facet-actions">
                                 ${this.renderResultColumnPager(summary)}
-                                <button type="button" class="${this.ruleSummaryFilters.resultColumn === "ALL" ? "is-active" : ""}" onclick="M04002.selectRuleSummaryResult('ALL')">전체</button>
+                                <button type="button" class="${this.ruleSummaryFilters.resultColumn === "ALL" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectRuleSummaryResult('ALL')">전체</button>
                             </div>
                         </header>
-                        <div class="m04002-rule-facet-list">
+                        <div class="M04002-rule-facet-list">
                             ${(summary.resultTop || []).map((item) => {
                                 const rawColumn = item.RESULT_COLUMN === "(RESULT UNKNOWN)" ? "__NULL__" : item.RESULT_COLUMN;
                                 return `
-                                    <button type="button" class="${this.ruleSummaryFilters.resultColumn === rawColumn ? "is-active" : ""}" onclick="M04002.selectRuleSummaryResult('${this.escapeJs(rawColumn)}')">
+                                    <button type="button" class="${this.ruleSummaryFilters.resultColumn === rawColumn ? "is-active" : ""}" onclick="${PAGE_CODE}.selectRuleSummaryResult('${this.escapeJs(rawColumn)}')">
                                         <span>${this.renderColumnAwareCell(item.RESULT_COLUMN, summary)}</span>
                                         <b>${this.formatNumber(item.RULE_COUNT)}</b>
                                     </button>
@@ -867,21 +975,21 @@
                             }).join("")}
                         </div>
                     </div>
-                    <div class="m04002-rule-facet-block is-condition">
+                    <div class="M04002-rule-facet-block is-condition">
                         <header>
                             <strong>조건 컬럼 ID 검색</strong>
-                            <div class="m04002-rule-facet-actions">
-                                <button type="button" onclick="M04002.searchRuleSummaryConditionColumn()">Search</button>
-                                <button type="button" class="${this.ruleSummaryFilters.conditionColumn === "ALL" ? "is-active" : ""}" onclick="M04002.resetRuleSummaryConditionColumn()">Reset</button>
+                            <div class="M04002-rule-facet-actions">
+                                <button type="button" onclick="${PAGE_CODE}.searchRuleSummaryConditionColumn()">Search</button>
+                                <button type="button" class="${this.ruleSummaryFilters.conditionColumn === "ALL" ? "is-active" : ""}" onclick="${PAGE_CODE}.resetRuleSummaryConditionColumn()">Reset</button>
                             </div>
                         </header>
-                        <label class="m04002-rule-condition-search">
+                        <label class="M04002-rule-condition-search">
                             <span>Condition Column</span>
-                            <input id="ruleConditionColumnInput-M04002" type="search" value="${this.escapeHtml(conditionColumnFilter)}" placeholder="예: COL001" onkeydown="M04002.handleRuleSummaryConditionColumnKeydown(event)">
+                            <input id="ruleConditionColumnInput-${PAGE_CODE}" type="search" value="${this.escapeHtml(conditionColumnFilter)}" placeholder="예: COL001" onkeydown="${PAGE_CODE}.handleRuleSummaryConditionColumnKeydown(event)">
                         </label>
                     </div>
                 </section>
-                <div class="m04002-readable-rule-grid">
+                <div class="M04002-readable-rule-grid">
                     ${rules.length ? rules.map((rule) => this.renderReadableRuleCard(rule)).join("") : `<div class="table-empty">선택한 조건에 해당하는 규칙이 없습니다.</div>`}
                 </div>
                 ${this.renderRuleSummaryPager(summary.page, totalPages)}
@@ -892,7 +1000,7 @@
             const filtered = this.excludeEmptyConsequent
                 ? rules.filter((rule) => !/값 정보 없음/.test(rule.thenText))
                 : rules;
-            return `<div class="m04002-readable-rule-grid">${filtered.length ? filtered.map((rule) => this.renderReadableRuleCard(rule)).join("") : `<div class="table-empty">표시할 규칙 행이 없습니다.</div>`}</div>`;
+            return `<div class="M04002-readable-rule-grid">${filtered.length ? filtered.map((rule) => this.renderReadableRuleCard(rule)).join("") : `<div class="table-empty">표시할 규칙 행이 없습니다.</div>`}</div>`;
         },
 
         renderReadableRuleStats(rules = [], visibleRuleCount = 0, baseRuleCount = 0) {
@@ -907,25 +1015,26 @@
                 }))
             ];
             return `
-                <section class="m04002-readable-stats">
-                    <div class="m04002-readable-stat-block">
+                <section class="M04002-readable-stats">
+                    <div class="M04002-readable-stat-block">
                         <strong>규칙 요약</strong>
-                        <div class="m04002-readable-stat-metrics">
+                        <div class="M04002-readable-stat-metrics">
                             <span><b>${this.formatNumber(stats.total)}</b><small>현재 샘플 규칙</small></span>
                             <span><b>${this.formatNumber(stats.mapped)}</b><small>조건/결과 매핑</small></span>
                             <span><b>${this.formatNumber(stats.missingResult)}</b><small>결과 정보 없음</small></span>
                             <span><b>${this.formatNumber(visibleRuleCount)}</b><small>표시 중</small></span>
                         </div>
                     </div>
-                    <div class="m04002-readable-condition-dist">
+                    <div class="M04002-readable-condition-dist">
                         <strong>조건 수 선택</strong>
-                        ${this.renderRuleConditionMatrix(conditionItems, this.readableRuleConditionFilter, this.readableRuleConfidenceFilter, "M04002.selectReadableConditionFilter")}
+                        ${this.renderRuleConditionMatrix(conditionItems, this.readableRuleConditionFilter, this.readableRuleConfidenceFilter, "${PAGE_CODE}.selectReadableConditionFilter")}
                     </div>
                 </section>
             `;
         },
 
         renderRuleConditionMatrix(items = [], activeValue = "ALL", activeConfidenceScope = "ALL", handlerName = "") {
+            handlerName = resolvePageText(handlerName);
             const renderButtons = (countKey, confidenceScope) => items.map((item) => {
                 const value = String(item.value ?? "ALL");
                 const scope = String(confidenceScope || "ALL");
@@ -938,14 +1047,14 @@
                 `;
             }).join("");
             return `
-                <div class="m04002-condition-count-matrix">
-                    <div class="m04002-condition-count-row">
+                <div class="M04002-condition-count-matrix">
+                    <div class="M04002-condition-count-row">
                         <span>전체 규칙수</span>
-                        <div class="m04002-condition-count-buttons">${renderButtons("total", "ALL")}</div>
+                        <div class="M04002-condition-count-buttons">${renderButtons("total", "ALL")}</div>
                     </div>
-                    <div class="m04002-condition-count-row">
+                    <div class="M04002-condition-count-row">
                         <span>위반 후보 규칙수</span>
-                        <div class="m04002-condition-count-buttons">${renderButtons("nonPerfect", "NON_PERFECT")}</div>
+                        <div class="M04002-condition-count-buttons">${renderButtons("nonPerfect", "NON_PERFECT")}</div>
                     </div>
                 </div>
             `;
@@ -994,13 +1103,13 @@
         },
 
         searchRuleSummaryConditionColumn() {
-            const input = getContainerEl("#ruleConditionColumnInput-M04002");
+            const input = getContainerEl("#ruleConditionColumnInput-${PAGE_CODE}");
             const value = String(input?.value || "").trim().toUpperCase();
             this.selectRuleSummaryConditionColumn(value || "ALL");
         },
 
         resetRuleSummaryConditionColumn() {
-            const input = getContainerEl("#ruleConditionColumnInput-M04002");
+            const input = getContainerEl("#ruleConditionColumnInput-${PAGE_CODE}");
             if (input) input.value = "";
             this.selectRuleSummaryConditionColumn("ALL");
         },
@@ -1019,19 +1128,19 @@
             const start = total ? ((page - 1) * pageSize) + 1 : 0;
             const end = total ? Math.min(total, page * pageSize) : 0;
             if (totalPages <= 1) {
-                return `<span class="m04002-result-column-pager is-single"><small>전체 ${this.formatNumber(total)}개</small></span>`;
+                return `<span class="M04002-result-column-pager is-single"><small>전체 ${this.formatNumber(total)}개</small></span>`;
             }
             return `
-                <span class="m04002-result-column-pager">
-                    <button type="button" ${page <= 1 ? "disabled" : ""} onclick="M04002.moveRuleSummaryResultColumns(-1)"><i class="fas fa-chevron-left"></i></button>
+                <span class="M04002-result-column-pager">
+                    <button type="button" ${page <= 1 ? "disabled" : ""} onclick="${PAGE_CODE}.moveRuleSummaryResultColumns(-1)"><i class="fas fa-chevron-left"></i></button>
                     <small>${this.formatNumber(start)}-${this.formatNumber(end)} / ${this.formatNumber(total)}</small>
-                    <button type="button" ${page >= totalPages ? "disabled" : ""} onclick="M04002.moveRuleSummaryResultColumns(1)"><i class="fas fa-chevron-right"></i></button>
+                    <button type="button" ${page >= totalPages ? "disabled" : ""} onclick="${PAGE_CODE}.moveRuleSummaryResultColumns(1)"><i class="fas fa-chevron-right"></i></button>
                 </span>
             `;
         },
 
         goRuleSummaryPage() {
-            const input = getContainerEl("#ruleSummaryPage-M04002");
+            const input = getContainerEl("#ruleSummaryPage-${PAGE_CODE}");
             this.loadModelRuleSummary(input?.value || 1);
         },
 
@@ -1047,10 +1156,10 @@
             const prev = Math.max(1, current - 1);
             const next = Math.min(total, current + 1);
             return `
-                <footer class="m04002-pager">
-                    <button type="button" ${current <= 1 ? "disabled" : ""} onclick="M04002.loadModelRuleSummary(${prev})"><i class="fas fa-chevron-left"></i></button>
+                <footer class="M04002-pager">
+                    <button type="button" ${current <= 1 ? "disabled" : ""} onclick="${PAGE_CODE}.loadModelRuleSummary(${prev})"><i class="fas fa-chevron-left"></i></button>
                     <span>${this.formatNumber(current)} / ${this.formatNumber(total)}</span>
-                    <button type="button" ${current >= total ? "disabled" : ""} onclick="M04002.loadModelRuleSummary(${next})"><i class="fas fa-chevron-right"></i></button>
+                    <button type="button" ${current >= total ? "disabled" : ""} onclick="${PAGE_CODE}.loadModelRuleSummary(${next})"><i class="fas fa-chevron-right"></i></button>
                 </footer>
             `;
         },
@@ -1234,23 +1343,23 @@
             const qualityClass = rule.mappingLevel === "mapped" ? "is-mapped" : "is-limited";
             const plainRuleId = rule.rawRuleId || this.getPlainRuleId(rule.ruleId);
             return `
-                <article class="m04002-readable-rule-card ${qualityClass}">
+                <article class="M04002-readable-rule-card ${qualityClass}">
                     <header>
-                        <span class="m04002-rule-title">
+                        <span class="M04002-rule-title">
                             <small>Rule #</small>
                             <code title="${this.escapeHtml(plainRuleId)}">${this.escapeHtml(plainRuleId)}</code>
-                            <button type="button" class="m04002-rule-copy-btn" title="RULE ID 복사" onclick="M04002.copyRuleId('${this.escapeJs(plainRuleId)}', event)">
+                            <button type="button" class="M04002-rule-copy-btn" title="RULE ID 복사" onclick="${PAGE_CODE}.copyRuleId('${this.escapeJs(plainRuleId)}', event)">
                                 <i class="far fa-copy"></i>
                             </button>
                         </span>
-                        <span class="m04002-rule-card-actions">
+                        <span class="M04002-rule-card-actions">
                             <em>${this.escapeHtml(rule.mappingLabel)}</em>
                             ${rule.canOpenViolation
-                                ? `<button type="button" class="m04002-rule-open-link" title="이 RULE ID로 위반탐지 결과 검색" onclick="M04002.openViolationForRule('${this.escapeJs(plainRuleId)}')">위반 조회</button>`
+                                ? `<button type="button" class="M04002-rule-open-link" title="이 RULE ID로 위반탐지 결과 검색" onclick="${PAGE_CODE}.openViolationForRule('${this.escapeJs(plainRuleId)}')">위반 조회</button>`
                                 : ""}
                         </span>
                     </header>
-                    <div class="m04002-readable-rule-sentence">
+                    <div class="M04002-readable-rule-sentence">
                         <b>IF</b>
                         <strong>${this.renderColumnAwareText(rule.ifText)}</strong>
                         <b>THEN</b>
@@ -1317,24 +1426,24 @@
             const itemTags = this.extractItemsetTags(vi.data || []).slice(0, 28);
             const rules = this.extractRuleRows(vr.data || []).slice(0, 10);
             return `
-                <div class="m04002-model-visual-grid">
-                    <div class="m04002-model-view-card is-vi">
+                <div class="M04002-model-visual-grid">
+                    <div class="M04002-model-view-card is-vi">
                         ${this.renderModelViewHeader("VI", "Itemset/detail", vi)}
-                        <div class="m04002-model-view-note">
+                        <div class="M04002-model-view-note">
                             <strong>Extracted itemset values</strong>
                             <span>DM$VI 원본 행의 ITEM / ATTRIBUTE / VALUE / NAME 계열 컬럼에서 추출한 값입니다.</span>
                         </div>
-                        <div class="m04002-tag-cloud">
+                        <div class="M04002-tag-cloud">
                             ${itemTags.length ? itemTags.map((item) => `<span style="--tag-weight:${item.weight}">${this.escapeHtml(item.label)}</span>`).join("") : `<small>DM$VI itemset row가 없습니다.</small>`}
                         </div>
                         ${this.renderSampleTable("DM$VI sample rows", vi.columns || [], vi.data || [], 5)}
                     </div>
-                    <div class="m04002-model-view-card is-vr">
+                    <div class="M04002-model-view-card is-vr">
                         ${this.renderModelViewHeader("VR", "Top Rules", vr)}
                         ${rules.length ? `
-                            <div class="m04002-rule-bars">
+                            <div class="M04002-rule-bars">
                                 ${rules.map((rule) => `
-                                    <div class="m04002-rule-bar">
+                                    <div class="M04002-rule-bar">
                                         <span title="${this.escapeHtml(rule.label)}">${this.escapeHtml(rule.label)}</span>
                                         <em><i style="width:${Math.max(4, rule.score)}%"></i></em>
                                         <small>
@@ -1347,15 +1456,15 @@
                         ` : `<small>DM$VR rule row가 없습니다.</small>`}
                     </div>
                 </div>
-                <div class="m04002-model-view-card is-vg">
+                <div class="M04002-model-view-card is-vg">
                     ${this.renderModelViewHeader("VG", "Global/detail", vg)}
                     ${this.renderSampleTable("", vg.columns || [], vg.data || [], 4)}
                 </div>
-                <div class="m04002-model-view-card is-va">
+                <div class="M04002-model-view-card is-va">
                     ${this.renderModelViewHeader("VA", "Attribute/detail rows", va)}
                     ${this.renderSampleTable("", va.columns || [], va.data || [], 6)}
                 </div>
-                <div class="m04002-model-view-card is-vr">
+                <div class="M04002-model-view-card is-vr">
                     ${this.renderModelViewHeader("VR", "Rule/detail rows", vr)}
                     ${this.renderSampleTable("", vr.columns || [], vr.data || [], 8)}
                 </div>
@@ -1366,11 +1475,11 @@
             const exists = (view.existsYn || "N") === "Y";
             const hasRows = Array.isArray(view.data) && view.data.length > 0;
             const loadButton = exists && !hasRows
-                ? `<button type="button" class="table-btn" onclick="M04002.loadDetailViewPage('${this.escapeHtml(viewType)}', 1)">샘플 조회</button>`
+                ? `<button type="button" class="table-btn" onclick="${PAGE_CODE}.loadDetailViewPage('${this.escapeHtml(viewType)}', 1)">샘플 조회</button>`
                 : "";
             return `
-                <div class="m04002-model-view-header">
-                    <span class="m04002-model-view-type">${this.escapeHtml(viewType)}</span>
+                <div class="M04002-model-view-header">
+                    <span class="M04002-model-view-type">${this.escapeHtml(viewType)}</span>
                     <div>
                         <strong>${this.escapeHtml(title)}</strong>
                         <small>${this.escapeHtml(view.description || "")}</small>
@@ -1379,9 +1488,9 @@
                     </div>
                     <em>${hasRows ? `${this.formatNumber(view.total || 0)} rows` : (exists ? "ready" : "none")}</em>
                 </div>
-                <div class="m04002-view-sample-toolbar">
+                <div class="M04002-view-sample-toolbar">
                     <span>${hasRows ? "현재 표는 전체 데이터가 아니라 선택한 페이지의 샘플입니다." : "필요한 상세 뷰만 선택해서 조회합니다."}</span>
-                    ${loadButton || this.renderSamplePageJump(`detailViewPage-${viewType}-M04002`, view, `M04002.goDetailViewPage('${viewType}')`, `M04002.loadDetailViewPage('${viewType}', `)}
+                    ${loadButton || this.renderSamplePageJump(`detailViewPage-${viewType}-${PAGE_CODE}`, view, `${PAGE_CODE}.goDetailViewPage('${viewType}')`, `${PAGE_CODE}.loadDetailViewPage('${viewType}', `)}
                 </div>
             `;
         },
@@ -1391,9 +1500,9 @@
             const safeRows = (rows || []).slice(0, limit);
             if (!safeColumns.length || !safeRows.length) return `<div class="table-empty">표시할 샘플 행이 없습니다.</div>`;
             return `
-                <div class="m04002-sample-table-wrap">
+                <div class="M04002-sample-table-wrap">
                     ${title ? `<strong>${this.escapeHtml(title)} · 화면 표시 ${this.formatNumber(safeRows.length)}건</strong>` : `<strong>화면 표시 ${this.formatNumber(safeRows.length)}건</strong>`}
-                    <table class="table-grid m04002-sample-table">
+                    <table class="table-grid M04002-sample-table">
                         <thead><tr>${safeColumns.map((column) => `<th>${this.escapeHtml(column)}</th>`).join("")}</tr></thead>
                         <tbody>
                             ${safeRows.map((row) => `<tr>${safeColumns.map((column) => `<td title="${this.escapeHtml(row?.[column] ?? "")}">${this.escapeHtml(row?.[column] ?? "")}</td>`).join("")}</tr>`).join("")}
@@ -1420,6 +1529,11 @@
         },
 
         renderSamplePageJump(inputId, view = {}, goOnclick, pageCall, options = {}) {
+            inputId = resolvePageText(inputId);
+            goOnclick = resolvePageText(goOnclick);
+            pageCall = resolvePageText(pageCall);
+            const pageSizeId = resolvePageText(options.pageSizeId || `${inputId}-pageSize`);
+            const onPageSizeChange = resolvePageText(options.onPageSizeChange || "");
             const page = Math.max(1, Number(view.page || 1));
             const totalPages = this.getViewTotalPages(view);
             const callPage = (nextPage) => pageCall.endsWith(", ")
@@ -1428,13 +1542,13 @@
             const selectedPageSize = this.normalizeRuleCardPageSize(view.pageSize || options.defaultPageSize || 20);
             const pageSizeSelect = Array.isArray(options.pageSizes) && options.pageSizes.length
                 ? `
-                    <select id="${this.escapeHtml(options.pageSizeId || `${inputId}-pageSize`)}" title="Page size" onchange="${this.escapeHtml(options.onPageSizeChange || "")}">
+                    <select id="${this.escapeHtml(pageSizeId)}" title="Page size" onchange="${this.escapeHtml(onPageSizeChange)}">
                         ${options.pageSizes.map((size) => `<option value="${this.escapeHtml(size)}" ${Number(size) === selectedPageSize ? "selected" : ""}>${this.formatNumber(size)}</option>`).join("")}
                     </select>
                 `
                 : "";
             return `
-                <div class="m04002-page-jump">
+                <div class="M04002-page-jump">
                     <button type="button" ${page <= 1 ? "disabled" : ""} onclick="${callPage(page - 1)}"><i class="fas fa-chevron-left"></i></button>
                     <label>
                         <span>Page</span>
@@ -1448,12 +1562,19 @@
             `;
         },
 
+        renderTableResultSummary(json = {}) {
+            const resultLayout = this.getTableResultLayout(this.selectedNode, json);
+            const renderer = resultLayout.summaryRenderer;
+            if (!renderer || typeof this[renderer] !== "function") return "";
+            return this[renderer](json[resultLayout.summaryKey]);
+        },
+
         renderResultTable(json, title, type) {
-            const panel = getContainerEl("#resultPanel-M04002");
+            const panel = getContainerEl("#resultPanel-${PAGE_CODE}");
             if (!panel) return;
             panel.classList.remove("is-loading");
             panel.innerHTML = `
-                <header class="m04002-result-header">
+                <header class="M04002-result-header">
                     <div>
                         <span>${this.escapeHtml(type)}</span>
                         <strong>${this.escapeHtml(json.owner)}.${this.escapeHtml(json.objectName)}</strong>
@@ -1464,18 +1585,16 @@
                     </div>
                     ${this.renderSelectedNodeExecutionMeta()}
                 </header>
-                ${this.renderViolationSummary(json.violationSummary)}
-                ${this.renderCorrelationSummary(json.correlationSummary)}
-                ${this.renderPredictedTypeSummary(json.predictedTypeSummary)}
+                ${this.renderTableResultSummary(json)}
                 ${this.renderResultTableProfile(json.columns || [], json.data || [])}
                 ${this.renderGrid(json.columns || [], json.data || [], json)}
-                ${this.renderResultPager(json.page, json.pageSize, json.total, "M04002.loadResultTable(")}
+                ${this.renderResultPager(json.page, json.pageSize, json.total, "${PAGE_CODE}.loadResultTable(")}
             `;
             this.snapshotNodeResultCache();
         },
 
         renderResultError(message) {
-            const panel = getContainerEl("#resultPanel-M04002");
+            const panel = getContainerEl("#resultPanel-${PAGE_CODE}");
             if (!panel) return;
             panel.classList.remove("is-loading");
             panel.innerHTML = `<div class="table-error">${this.escapeHtml(message)}</div>`;
@@ -1485,9 +1604,9 @@
             const numericProfile = this.extractNumericProfile(rows || [], columns || []).slice(0, 8);
             if (!numericProfile.length) return "";
             return `
-                <div class="m04002-table-profile-bars">
+                <div class="M04002-table-profile-bars">
                     ${numericProfile.map((item) => `
-                        <div class="m04002-profile-bar">
+                        <div class="M04002-profile-bar">
                             <span>${this.escapeHtml(item.column)}</span>
                             <em><i style="width:${item.width}%"></i></em>
                             <small>${this.escapeHtml(item.label)}</small>
@@ -1538,19 +1657,19 @@
                     ? "선택 후보 중 실제 위반 Row가 없는 규칙을 표시합니다."
                     : "실제 위반 Row가 발생한 규칙을 표시합니다.";
             return `
-                <section class="m04002-violation-summary">
-                    <div class="m04002-violation-intro">
+                <section class="M04002-violation-summary">
+                    <div class="M04002-violation-intro">
                         <div>
                             <strong>규칙 위반 탐지 요약</strong>
                             <span>Target ${this.escapeHtml(summary.targetOwner || "-")}.${this.escapeHtml(summary.targetTable || "-")}${summary.ruleModelName ? ` · Rule Model ${this.escapeHtml(summary.ruleModelName)}` : ""} · ${this.escapeHtml(activeScopeLabel)} 기준</span>
                         </div>
                         ${this.renderViolationRulePager(summary)}
                     </div>
-                    <section class="m04002-violation-condition-panel">
+                    <section class="M04002-violation-condition-panel">
                         <strong>조건 수 선택</strong>
-                        ${this.renderRuleConditionMatrix(candidateItems, this.violationRuleFilters?.conditionCount || "ALL", this.violationRuleFilters?.confidenceScope || "NON_PERFECT", "M04002.selectViolationCondition")}
-                        <div class="m04002-violation-inline-summary">
-                            <button type="button" class="${resultScope === "CANDIDATE" ? "is-active" : ""}" onclick="M04002.selectViolationResultScope('CANDIDATE')">
+                        ${this.renderRuleConditionMatrix(candidateItems, this.violationRuleFilters?.conditionCount || "ALL", this.violationRuleFilters?.confidenceScope || "NON_PERFECT", "${PAGE_CODE}.selectViolationCondition")}
+                        <div class="M04002-violation-inline-summary">
+                            <button type="button" class="${resultScope === "CANDIDATE" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectViolationResultScope('CANDIDATE')">
                                 <small>선택 후보</small>
                                 <b>${this.formatNumber(candidateCount)}</b>
                                 <em>${this.escapeHtml(activeScopeLabel)}</em>
@@ -1560,12 +1679,12 @@
                                 <b>${this.formatNumber(detectionEligibleCount)}</b>
                                 <em>min/conf/lift/max 적용</em>
                             </button>
-                            <button type="button" class="is-hit ${resultScope === "HIT" ? "is-active" : ""}" onclick="M04002.selectViolationResultScope('HIT')">
+                            <button type="button" class="is-hit ${resultScope === "HIT" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectViolationResultScope('HIT')">
                                 <small>위반 발생</small>
                                 <b>${this.formatNumber(violatedRuleCount)}</b>
                                 <em>아래 목록 표시</em>
                             </button>
-                            <button type="button" class="is-muted ${resultScope === "MISS" ? "is-active" : ""}" onclick="M04002.selectViolationResultScope('MISS')">
+                            <button type="button" class="is-muted ${resultScope === "MISS" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectViolationResultScope('MISS')">
                                 <small>위반 없음</small>
                                 <b>${this.formatNumber(noViolationRuleCount)}</b>
                                 <em>위반 없음 표시</em>
@@ -1577,45 +1696,45 @@
                             </button>
                             ${ruleFilterDisplay ? `<b>RULE ID 검색: ${this.escapeHtml(ruleFilterDisplay)}</b>` : ""}
                         </div>
-                        <div class="m04002-violation-reason-strip">
+                        <div class="M04002-violation-reason-strip">
                             <span><small>confidence 미달</small><b>${this.formatNumber(confidenceCutoffCount)}</b></span>
                             <span><small>lift 미달</small><b>${this.formatNumber(liftCutoffCount)}</b></span>
                             <span><small>max rules 제외</small><b>${this.formatNumber(maxRulesCutoffCount)}</b></span>
                             <span><small>탐지 후 위반 없음</small><b>${this.formatNumber(noViolationAfterDetectionCount)}</b></span>
                             <em>탐지 기준: confidence >= ${this.formatPercentMetric(detectionCriteria.minConfidence)}, lift >= ${this.formatDecimal(detectionCriteria.minLift)}, max rules ${this.formatNumber(detectionCriteria.maxRules)}</em>
                         </div>
-                        <div class="m04002-violation-scope-note">${this.escapeHtml(resultScopeMessage)}</div>
+                        <div class="M04002-violation-scope-note">${this.escapeHtml(resultScopeMessage)}</div>
                     </section>
-                    <section class="m04002-rule-facet-panel is-violation">
-                        <div class="m04002-rule-facet-block">
+                    <section class="M04002-rule-facet-panel is-violation">
+                        <div class="M04002-rule-facet-block">
                             <header>
                                 <strong>위반 결과 컬럼 Top</strong>
                             </header>
-                            <div class="m04002-rule-facet-list">
+                            <div class="M04002-rule-facet-list">
                                 ${topColumns.length ? topColumns.map((item) => `
-                                    <button type="button" onclick="M04002.openViolationSqlPopup('column', '${this.escapeJs(item.RESULT_COLUMN)}')">
+                                    <button type="button" onclick="${PAGE_CODE}.openViolationSqlPopup('column', '${this.escapeJs(item.RESULT_COLUMN)}')">
                                         <span>${this.renderColumnAwareCell(item.RESULT_COLUMN, summary)}</span>
                                         <b>${this.formatNumber(item.VIOLATION_COUNT)}</b>
                                     </button>
                                 `).join("") : `<span>표시할 위반 결과 컬럼이 없습니다.</span>`}
                             </div>
                         </div>
-                        <div class="m04002-rule-facet-block is-condition">
+                        <div class="M04002-rule-facet-block is-condition">
                             <header>
                                 <strong>RULE ID 검색</strong>
-                                <div class="m04002-rule-facet-actions">
-                                    <button type="button" onclick="M04002.searchViolationRule()">Search</button>
-                                    <button type="button" onclick="M04002.resetViolationRuleSearch()">Reset</button>
+                                <div class="M04002-rule-facet-actions">
+                                    <button type="button" onclick="${PAGE_CODE}.searchViolationRule()">Search</button>
+                                    <button type="button" onclick="${PAGE_CODE}.resetViolationRuleSearch()">Reset</button>
                                 </div>
                             </header>
-                            <label class="m04002-rule-condition-search">
+                            <label class="M04002-rule-condition-search">
                                 <span>RULE ID</span>
-                                <input id="violationRuleSearch-M04002" type="search" value="${this.escapeHtml(ruleFilterDisplay)}" placeholder="예: COND_..." onkeydown="M04002.handleViolationRuleSearchKeydown(event)">
+                                <input id="violationRuleSearch-${PAGE_CODE}" type="search" value="${this.escapeHtml(ruleFilterDisplay)}" placeholder="예: COND_..." onkeydown="${PAGE_CODE}.handleViolationRuleSearchKeydown(event)">
                             </label>
                         </div>
                     </section>
                     ${topRules.length ? `
-                        <div class="m04002-violation-rule-grid">
+                        <div class="M04002-violation-rule-grid">
                             ${topRules.map((rule) => {
                                 const hasViolation = Number(rule.VIOLATION_COUNT || 0) > 0;
                                 return `
@@ -1623,7 +1742,7 @@
                                     <header>
                                         <strong>${this.escapeHtml(rule.RULE_ID)}</strong>
                                         ${hasViolation
-                                            ? `<button type="button" onclick="M04002.openViolationSqlPopup('rule', '${this.escapeJs(rule.RULE_ID)}')">${this.formatNumber(rule.VIOLATION_COUNT)}건</button>`
+                                            ? `<button type="button" onclick="${PAGE_CODE}.openViolationSqlPopup('rule', '${this.escapeJs(rule.RULE_ID)}')">${this.formatNumber(rule.VIOLATION_COUNT)}건</button>`
                                             : `<em>위반 없음</em>`}
                                     </header>
                                     <p>
@@ -1667,14 +1786,14 @@
             const pageSize = this.normalizeRuleCardPageSize(summary.topRulePageSize || this.violationRuleFilters?.pageSize || 20);
             const total = Math.max(0, Number(summary.topRuleTotal || 0));
             return this.renderSamplePageJump(
-                "violationRulePage-M04002",
+                "violationRulePage-${PAGE_CODE}",
                 { page, pageSize, total },
-                "M04002.goViolationRulePage()",
-                "M04002.loadViolationRulePage",
+                "${PAGE_CODE}.goViolationRulePage()",
+                "${PAGE_CODE}.loadViolationRulePage",
                 {
-                    pageSizeId: "violationRulePageSize-M04002",
+                    pageSizeId: "violationRulePageSize-${PAGE_CODE}",
                     pageSizes: [20, 40, 100, 500, 1000],
-                    onPageSizeChange: "M04002.changeViolationRulePageSize(this.value)"
+                    onPageSizeChange: "${PAGE_CODE}.changeViolationRulePageSize(this.value)"
                 }
             );
         },
@@ -1687,7 +1806,7 @@
         },
 
         async searchViolationRule() {
-            const input = getContainerEl("#violationRuleSearch-M04002");
+            const input = getContainerEl("#violationRuleSearch-${PAGE_CODE}");
             this.violationRuleFilters = {
                 ...(this.violationRuleFilters || {}),
                 ruleId: String(input?.value || "").trim(),
@@ -1748,7 +1867,7 @@
         },
 
         async goViolationRulePage() {
-            const input = getContainerEl("#violationRulePage-M04002");
+            const input = getContainerEl("#violationRulePage-${PAGE_CODE}");
             await this.loadViolationRulePage(input?.value || 1);
         },
 
@@ -1854,45 +1973,45 @@
         },
 
         renderViolationSqlPopup() {
-            let popup = document.getElementById("m04002ViolationSqlPopup");
+            let popup = document.getElementById(`${PAGE_ID_PREFIX}ViolationSqlPopup`);
             if (!popup) {
                 popup = document.createElement("div");
-                popup.id = "m04002ViolationSqlPopup";
+                popup.id = `${PAGE_ID_PREFIX}ViolationSqlPopup`;
                 document.body.appendChild(popup);
             }
             const state = this.violationSql || {};
             const totalPages = Math.max(1, Math.ceil(Number(state.total || 0) / Number(state.pageSize || 50)));
-            popup.className = "m04002-sql-popup";
+            popup.className = "M04002-sql-popup";
             popup.innerHTML = `
                 <section>
-                    <header class="m04002-sql-popup-title" onmousedown="M04002.startViolationSqlPopupDrag(event)">
+                    <header class="M04002-sql-popup-title" onmousedown="${PAGE_CODE}.startViolationSqlPopupDrag(event)">
                         <div>
                             <strong>${this.escapeHtml(state.title || "위반 Row SQL")}</strong>
                             <span>Ctrl+Enter로 현재 SQL을 실행합니다.</span>
                         </div>
-                        <button type="button" onclick="M04002.closeViolationSqlPopup()"><i class="fas fa-times"></i></button>
+                        <button type="button" onclick="${PAGE_CODE}.closeViolationSqlPopup()"><i class="fas fa-times"></i></button>
                     </header>
-                    <div class="m04002-sql-popup-body">
+                    <div class="M04002-sql-popup-body">
                         ${this.renderViolationSqlRuleContext(state.ruleDetail)}
-                        <textarea id="m04002ViolationSqlEditor" class="m04002-sql-editor" spellcheck="false" onkeydown="M04002.handleViolationSqlKeydown(event)">${this.escapeHtml(state.sql || "")}</textarea>
-                        <div class="m04002-sql-popup-toolbar">
-                            <button type="button" class="table-btn primary" onclick="M04002.executeViolationSql(1)"><i class="fas fa-play"></i> Run</button>
-                            <button type="button" class="table-btn" ${state.columns?.length ? "" : "disabled"} onclick="M04002.exportViolationSqlRows()"><i class="fas fa-file-export"></i> Export</button>
+                        <textarea id="${PAGE_ID_PREFIX}ViolationSqlEditor" class="M04002-sql-editor" spellcheck="false" onkeydown="${PAGE_CODE}.handleViolationSqlKeydown(event)">${this.escapeHtml(state.sql || "")}</textarea>
+                        <div class="M04002-sql-popup-toolbar">
+                            <button type="button" class="table-btn primary" onclick="${PAGE_CODE}.executeViolationSql(1)"><i class="fas fa-play"></i> Run</button>
+                            <button type="button" class="table-btn" ${state.columns?.length ? "" : "disabled"} onclick="${PAGE_CODE}.exportViolationSqlRows()"><i class="fas fa-file-export"></i> Export</button>
                             <label>Rows
-                                <select id="m04002ViolationSqlPageSize" onchange="M04002.executeViolationSql(1)">
+                                <select id="${PAGE_ID_PREFIX}ViolationSqlPageSize" onchange="${PAGE_CODE}.executeViolationSql(1)">
                                     ${[20, 50, 100, 200].map((size) => `<option value="${size}" ${Number(state.pageSize || 50) === size ? "selected" : ""}>${size}</option>`).join("")}
                                 </select>
                             </label>
                             <span>${this.formatNumber(state.total || 0)} rows</span>
-                            <div class="m04002-page-jump">
-                                <button type="button" ${Number(state.page || 1) <= 1 ? "disabled" : ""} onclick="M04002.executeViolationSql(${Math.max(1, Number(state.page || 1) - 1)})"><i class="fas fa-chevron-left"></i></button>
-                                <label><span>Page</span><input id="m04002ViolationSqlPage" type="number" min="1" max="${totalPages}" value="${this.escapeHtml(state.page || 1)}" onkeydown="if(event.key==='Enter'){M04002.goViolationSqlPage()}"><small>/ ${this.formatNumber(totalPages)}</small></label>
-                                <button type="button" onclick="M04002.goViolationSqlPage()">Go</button>
-                                <button type="button" ${Number(state.page || 1) >= totalPages ? "disabled" : ""} onclick="M04002.executeViolationSql(${Number(state.page || 1) + 1})"><i class="fas fa-chevron-right"></i></button>
+                            <div class="M04002-page-jump">
+                                <button type="button" ${Number(state.page || 1) <= 1 ? "disabled" : ""} onclick="${PAGE_CODE}.executeViolationSql(${Math.max(1, Number(state.page || 1) - 1)})"><i class="fas fa-chevron-left"></i></button>
+                                <label><span>Page</span><input id="${PAGE_ID_PREFIX}ViolationSqlPage" type="number" min="1" max="${totalPages}" value="${this.escapeHtml(state.page || 1)}" onkeydown="if(event.key==='Enter'){${PAGE_CODE}.goViolationSqlPage()}"><small>/ ${this.formatNumber(totalPages)}</small></label>
+                                <button type="button" onclick="${PAGE_CODE}.goViolationSqlPage()">Go</button>
+                                <button type="button" ${Number(state.page || 1) >= totalPages ? "disabled" : ""} onclick="${PAGE_CODE}.executeViolationSql(${Number(state.page || 1) + 1})"><i class="fas fa-chevron-right"></i></button>
                             </div>
                         </div>
-                        <div id="m04002ViolationSqlMessage" class="table-empty">${state.rows?.length ? "" : "SQL을 확인한 뒤 Run 또는 Ctrl+Enter로 조회하세요."}</div>
-                        <div class="m04002-sql-result">
+                        <div id="${PAGE_ID_PREFIX}ViolationSqlMessage" class="table-empty">${state.rows?.length ? "" : "SQL을 확인한 뒤 Run 또는 Ctrl+Enter로 조회하세요."}</div>
+                        <div class="M04002-sql-result">
                             ${state.columns?.length ? this.renderViolationSqlGrid(state.columns, state.rows, state.ruleColumns || []) : ""}
                         </div>
                     </div>
@@ -1903,7 +2022,7 @@
         renderViolationSqlRuleContext(rule = null) {
             if (!rule) return "";
             return `
-                <section class="m04002-violation-rule-context">
+                <section class="M04002-violation-rule-context">
                     <header>
                         <strong>${this.escapeHtml(rule.RULE_ID || "")}</strong>
                         <span>${this.formatNumber(rule.VIOLATION_COUNT)}건 · confidence ${this.formatPercentMetric(rule.RULE_CONFIDENCE)} · lift ${this.formatDecimal(rule.RULE_LIFT)}</span>
@@ -1924,8 +2043,8 @@
             const ruleColumnSet = new Set((ruleColumns || []).map((column) => String(column).toUpperCase()));
             if (!safeColumns.length) return `<div class="table-empty">조회 결과가 없습니다.</div>`;
             return `
-                <div class="m04002-violation-sql-grid-wrap">
-                    <table class="table-grid m04002-violation-sql-grid">
+                <div class="M04002-violation-sql-grid-wrap">
+                    <table class="table-grid M04002-violation-sql-grid">
                         <thead><tr>${safeColumns.map((column) => `<th class="${this.getViolationSqlColumnClass(column, keyColumns, ruleColumnSet)}">${this.renderColumnAwareCell(column, this.lastViolationSummary || {})}</th>`).join("")}</tr></thead>
                         <tbody>
                             ${(rows || []).map((row) => `
@@ -1961,7 +2080,7 @@
         },
 
         closeViolationSqlPopup() {
-            const popup = document.getElementById("m04002ViolationSqlPopup");
+            const popup = document.getElementById(`${PAGE_ID_PREFIX}ViolationSqlPopup`);
             if (popup) popup.remove();
         },
 
@@ -1973,13 +2092,13 @@
         },
 
         async executeViolationSql(page = 1) {
-            const editor = document.getElementById("m04002ViolationSqlEditor");
+            const editor = document.getElementById(`${PAGE_ID_PREFIX}ViolationSqlEditor`);
             if (!editor) return;
-            const pageSize = Number(document.getElementById("m04002ViolationSqlPageSize")?.value || this.violationSql.pageSize || 50);
-            const message = document.getElementById("m04002ViolationSqlMessage");
+            const pageSize = Number(document.getElementById(`${PAGE_ID_PREFIX}ViolationSqlPageSize`)?.value || this.violationSql.pageSize || 50);
+            const message = document.getElementById(`${PAGE_ID_PREFIX}ViolationSqlMessage`);
             if (message) message.textContent = "조회 중...";
             try {
-                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/sql`, {
+                const json = await CommonUtils.request(`${API_BASE_URL}/${API_PAGE_CODE}/sql`, {
                     method: "POST",
                     body: {
                         sql: editor.value || "",
@@ -2004,7 +2123,7 @@
         },
 
         goViolationSqlPage() {
-            const page = Number(document.getElementById("m04002ViolationSqlPage")?.value || 1);
+            const page = Number(document.getElementById(`${PAGE_ID_PREFIX}ViolationSqlPage`)?.value || 1);
             this.executeViolationSql(page);
         },
 
@@ -2023,7 +2142,7 @@
         },
 
         startViolationSqlPopupDrag(event) {
-            const popup = document.getElementById("m04002ViolationSqlPopup");
+            const popup = document.getElementById(`${PAGE_ID_PREFIX}ViolationSqlPopup`);
             if (!popup || event.target.closest("button")) return;
             event.preventDefault();
             const rect = popup.getBoundingClientRect();
@@ -2050,22 +2169,22 @@
             const visibleColumns = columns.slice(0, 80);
             const hiddenCount = Math.max(0, columns.length - visibleColumns.length);
             return `
-                <section class="m04002-corr-summary">
+                <section class="M04002-corr-summary">
                     <header>
                         <div>
                             <strong>상관 분석 요약</strong>
                             <span>Target ${this.escapeHtml(summary.targetOwner)}.${this.escapeHtml(summary.targetTable)}</span>
                         </div>
-                        <div class="m04002-corr-metrics">
+                        <div class="M04002-corr-metrics">
                             <span><b>${this.formatNumber(summary.totalColumnCount)}</b><small>전체 컬럼</small></span>
                             <span><b>${this.formatNumber(summary.associatedColumnCount)}</b><small>연관 컬럼</small></span>
                             <span><b>${this.formatNumber(summary.associatedPairCount)}</b><small>연관 쌍</small></span>
                         </div>
                     </header>
                     <p>PASS_YN=Y로 저장된 상관 컬럼은 ${this.formatNumber(summary.associatedColumnCount)}개입니다.</p>
-                    <div class="m04002-corr-tags">
+                    <div class="M04002-corr-tags">
                         ${visibleColumns.map((column) => this.renderColumnChip(column, summary)).join("")}
-                        ${hiddenCount ? `<em class="m04002-column-chip">+${this.formatNumber(hiddenCount)} more</em>` : ""}
+                        ${hiddenCount ? `<em class="M04002-column-chip">+${this.formatNumber(hiddenCount)} more</em>` : ""}
                     </div>
                 </section>
             `;
@@ -2076,24 +2195,24 @@
             const groups = Array.isArray(summary.summaryGroups) ? summary.summaryGroups : [];
             const detailGroups = Array.isArray(summary.detailGroups) ? summary.detailGroups : [];
             return `
-                <section class="m04002-type-summary">
+                <section class="M04002-type-summary">
                     <header>
                         <div>
                             <strong>컬럼 유형 예측 요약</strong>
                             <span>Target ${this.escapeHtml(summary.targetOwner)}.${this.escapeHtml(summary.targetTable)}</span>
                         </div>
-                        <div class="m04002-corr-metrics">
+                        <div class="M04002-corr-metrics">
                             <span><b>${this.formatNumber(summary.totalColumnCount)}</b><small>전체 컬럼</small></span>
                             ${groups.map((group) => `
                                 <span><b>${this.formatNumber(group.columnCount)}</b><small>${this.escapeHtml(group.typeGroup)}</small></span>
                             `).join("")}
                         </div>
                     </header>
-                    <div class="m04002-type-group-grid">
+                    <div class="M04002-type-group-grid">
                         ${groups.map((group) => this.renderPredictedTypeGroup(group, summary)).join("")}
                     </div>
                     ${detailGroups.length ? `
-                        <div class="m04002-type-detail">
+                        <div class="M04002-type-detail">
                             <strong>FINAL / MODEL / BASE 예측 유형 상세 그룹</strong>
                             <div>
                                 ${detailGroups.map((group) => `
@@ -2114,14 +2233,14 @@
             const visibleColumns = columns.slice(0, 80);
             const hiddenCount = Math.max(0, columns.length - visibleColumns.length);
             return `
-                <article class="m04002-type-group">
+                <article class="M04002-type-group">
                     <header>
                         <strong>${this.escapeHtml(group.typeGroup)}</strong>
                         <small>${this.formatNumber(group.columnCount)} columns</small>
                     </header>
-                    <div class="m04002-corr-tags">
+                    <div class="M04002-corr-tags">
                         ${visibleColumns.map((column) => this.renderColumnChip(column, summary || group)).join("")}
-                        ${hiddenCount ? `<em class="m04002-column-chip">+${this.formatNumber(hiddenCount)} more</em>` : ""}
+                        ${hiddenCount ? `<em class="M04002-column-chip">+${this.formatNumber(hiddenCount)} more</em>` : ""}
                     </div>
                 </article>
             `;
@@ -2140,7 +2259,7 @@
             const rules = filtered.slice(0, 12).map((rule) => {
                 const row = rule.row;
                 return `
-                    <article class="m04002-rule-card">
+                    <article class="M04002-rule-card">
                         <strong>Rule #${this.escapeHtml(rule.ruleId)}</strong>
                         <p><b>IF</b> ${this.escapeHtml(rule.ifText || "조건 정보 없음")}</p>
                         <p><b>THEN</b> ${this.escapeHtml(rule.thenText || "결과 정보 없음")}</p>
@@ -2148,14 +2267,14 @@
                     </article>
                 `;
             }).join("");
-            return `<section class="m04002-rule-grid">${rules || `<div class="table-empty">조건에 맞는 규칙 카드가 없습니다. 원본 행은 아래 테이블에서 확인할 수 있습니다.</div>`}</section>`;
+            return `<section class="M04002-rule-grid">${rules || `<div class="table-empty">조건에 맞는 규칙 카드가 없습니다. 원본 행은 아래 테이블에서 확인할 수 있습니다.</div>`}</section>`;
         },
 
         renderRuleFilterBar() {
             return `
-                <div class="m04002-rule-filter-bar">
+                <div class="M04002-rule-filter-bar">
                     <label>
-                        <input type="checkbox" ${this.excludeEmptyConsequent ? "checked" : ""} onchange="M04002.toggleExcludeEmptyConsequent(this.checked)">
+                        <input type="checkbox" ${this.excludeEmptyConsequent ? "checked" : ""} onchange="${PAGE_CODE}.toggleExcludeEmptyConsequent(this.checked)">
                         <span>결과 정보 없음 제외</span>
                     </label>
                 </div>
@@ -2169,7 +2288,7 @@
                 this.snapshotNodeResultCache();
                 return;
             }
-            const viewButton = getContainerEl("#resultPanel-M04002 .m04002-result-header nav button.is-active");
+            const viewButton = getContainerEl("#resultPanel-${PAGE_CODE} .M04002-result-header nav button.is-active");
             const viewType = viewButton?.textContent?.trim?.() || "VR";
             this.loadModelView(viewType, 1);
         },
@@ -2180,12 +2299,12 @@
 
         renderNodeJobDesc(node) {
             const desc = this.getNodeJobDesc(node);
-            return desc ? `<em class="m04002-node-desc" title="${this.escapeHtml(desc)}">Job Desc: ${this.escapeHtml(desc)}</em>` : "";
+            return desc ? `<em class="M04002-node-desc" title="${this.escapeHtml(desc)}">Job Desc: ${this.escapeHtml(desc)}</em>` : "";
         },
 
         renderSelectedNodeJobDesc() {
             const desc = this.getNodeJobDesc();
-            return desc ? `<p class="m04002-result-job-desc" title="${this.escapeHtml(desc)}"><b>Job Desc</b> ${this.escapeHtml(desc)}</p>` : "";
+            return desc ? `<p class="M04002-result-job-desc" title="${this.escapeHtml(desc)}"><b>Job Desc</b> ${this.escapeHtml(desc)}</p>` : "";
         },
 
         renderSelectedNodeExecutionMeta() {
@@ -2217,8 +2336,8 @@
                 .map(([key, value]) => [key, this.formatParamValue(value)]);
             if (!metaRows.length && !paramEntries.length) return "";
             return `
-                <section class="m04002-execution-meta ${this.getNodeTone(node)}">
-                    <div class="m04002-execution-meta-grid">
+                <section class="M04002-execution-meta ${this.getNodeTone(node)}">
+                    <div class="M04002-execution-meta-grid">
                         ${metaRows.map(([label, value]) => `
                             <span>
                                 <small>${this.escapeHtml(label)}</small>
@@ -2227,7 +2346,7 @@
                         `).join("")}
                     </div>
                     ${paramEntries.length ? `
-                        <details class="m04002-param-details">
+                        <details class="M04002-param-details">
                             <summary>호출 옵션 파라미터 ${this.formatNumber(paramEntries.length)}개</summary>
                             <div>
                                 ${paramEntries.map(([key, value]) => `
@@ -2354,7 +2473,7 @@
             const comment = this.getColumnComment(column, source);
             if (!comment) return this.escapeHtml(column);
             return `
-                <span class="m04002-column-ref" title="${this.escapeHtml(`${column}: ${comment}`)}">
+                <span class="M04002-column-ref" title="${this.escapeHtml(`${column}: ${comment}`)}">
                     <b>${this.escapeHtml(column)}</b>
                     <small>${this.escapeHtml(comment)}</small>
                 </span>
@@ -2366,7 +2485,7 @@
             if (!column) return "";
             const comment = this.getColumnComment(column, source);
             return `
-                <em class="m04002-column-chip" title="${this.escapeHtml(comment ? `${column}: ${comment}` : column)}">
+                <em class="M04002-column-chip" title="${this.escapeHtml(comment ? `${column}: ${comment}` : column)}">
                     <b>${this.escapeHtml(column)}</b>
                     ${comment ? `<small>${this.escapeHtml(comment)}</small>` : ""}
                 </em>
@@ -2626,8 +2745,8 @@
             const safeColumns = (columns || []).filter((column) => column !== "RN__");
             if (!safeColumns.length) return `<div class="table-empty">조회 결과가 없습니다.</div>`;
             return `
-                <div class="m04002-grid-wrap">
-                    <table class="table-grid m04002-grid">
+                <div class="M04002-grid-wrap">
+                    <table class="table-grid M04002-grid">
                         <thead><tr>${safeColumns.map((column) => `<th>${this.renderColumnAwareCell(column, source)}</th>`).join("")}</tr></thead>
                         <tbody>
                             ${(rows || []).map((row) => `<tr>${safeColumns.map((column) => {
@@ -2641,11 +2760,12 @@
         },
 
         renderResultPager(page, pageSize, total, callPrefix) {
+            callPrefix = resolvePageText(callPrefix);
             const totalPages = Math.max(1, Math.ceil(Number(total || 0) / Number(pageSize || 1)));
             const prev = Math.max(1, Number(page || 1) - 1);
             const next = Math.min(totalPages, Number(page || 1) + 1);
             return `
-                <footer class="m04002-pager">
+                <footer class="M04002-pager">
                     <button type="button" ${Number(page) <= 1 ? "disabled" : ""} onclick="${callPrefix}${prev})"><i class="fas fa-chevron-left"></i></button>
                     <span>${this.formatNumber(page)} / ${this.formatNumber(totalPages)}</span>
                     <button type="button" ${Number(page) >= totalPages ? "disabled" : ""} onclick="${callPrefix}${next})"><i class="fas fa-chevron-right"></i></button>
@@ -2818,5 +2938,18 @@
         }
     };
 
-    window[PAGE_CODE] = M04002;
+        window[PAGE_CODE] = page;
+        return page;
+    };
+
+    window.MCOMMON.initAnlyWorkPage = function(pageCode, config = {}) {
+        const defaults = DEFAULT_ANLY_WORK_CONFIGS[pageCode] || {};
+        if (window[pageCode] && typeof window[pageCode].init === "function") {
+            return window[pageCode];
+        }
+        return window.MCOMMON.createAnlyWorkPage({ ...defaults, ...config, pageCode });
+    };
 })();
+
+
+
