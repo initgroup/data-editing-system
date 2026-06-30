@@ -1,21 +1,20 @@
 
 -- [M01002_PROJECT_LIST]
-SELECT
-    P.PROJECT_ID,
-    P.USER_ID,
-    P.USER_EMAIL,
-    P.PROJECT_CODE,
-    P.PROJECT_NAME,
-    P.PROJECT_TYPE,
-    P.PROJECT_DESC,
-    P.USE_YN,
-    P.SORT_ORDER,
-    (
+SELECT P.PROJECT_ID
+     , P.USER_ID
+     , P.USER_EMAIL
+     , P.PROJECT_CODE
+     , P.PROJECT_NAME
+     , P.PROJECT_TYPE
+     , P.PROJECT_DESC
+     , P.USE_YN
+     , P.SORT_ORDER
+     , (
         SELECT COUNT(*)
           FROM INIT$_TB_SCENARIO S
          WHERE S.PROJECT_ID = P.PROJECT_ID
-    ) AS SCENARIO_COUNT,
-    CASE
+    ) AS SCENARIO_COUNT
+     , CASE
         WHEN EXISTS (
             SELECT 1
               FROM INIT$_TB_SCENARIO S
@@ -45,17 +44,16 @@ SELECT COUNT(*) AS CNT
 ;
 
 -- [M01002_SCENARIO_LIST]
-SELECT
-    SCENARIO_ID,
-    PROJECT_ID,
-    SCENARIO_CODE,
-    SCENARIO_NAME,
-    SCENARIO_TYPE,
-    SCENARIO_DESC,
-    USE_YN,
-    SORT_ORDER,
-    CREATED_AT,
-    UPDATED_AT
+SELECT SCENARIO_ID
+     , PROJECT_ID
+     , SCENARIO_CODE
+     , SCENARIO_NAME
+     , SCENARIO_TYPE
+     , SCENARIO_DESC
+     , USE_YN
+     , SORT_ORDER
+     , CREATED_AT
+     , UPDATED_AT
   FROM INIT$_TB_SCENARIO
  WHERE PROJECT_ID = :projectId
    AND EXISTS (
@@ -76,17 +74,16 @@ SELECT
 ;
 
 -- [M01002_SCENARIO_DETAIL]
-SELECT
-    SCENARIO_ID,
-    PROJECT_ID,
-    SCENARIO_CODE,
-    SCENARIO_NAME,
-    SCENARIO_TYPE,
-    SCENARIO_DESC,
-    USE_YN,
-    SORT_ORDER,
-    CREATED_AT,
-    UPDATED_AT
+SELECT SCENARIO_ID
+     , PROJECT_ID
+     , SCENARIO_CODE
+     , SCENARIO_NAME
+     , SCENARIO_TYPE
+     , SCENARIO_DESC
+     , USE_YN
+     , SORT_ORDER
+     , CREATED_AT
+     , UPDATED_AT
   FROM INIT$_TB_SCENARIO
  WHERE SCENARIO_ID = :scenarioId
    AND EXISTS (
@@ -99,23 +96,23 @@ SELECT
 
 -- [M01002_SCENARIO_INSERT]
 INSERT INTO INIT$_TB_SCENARIO (
-    PROJECT_ID,
-    SCENARIO_CODE,
-    SCENARIO_NAME,
-    SCENARIO_TYPE,
-    SCENARIO_DESC,
-    USE_YN,
-    SORT_ORDER,
-    CREATED_AT
+    PROJECT_ID
+  , SCENARIO_CODE
+  , SCENARIO_NAME
+  , SCENARIO_TYPE
+  , SCENARIO_DESC
+  , USE_YN
+  , SORT_ORDER
+  , CREATED_AT
 ) VALUES (
-    :projectId,
-    :scenarioCode,
-    :scenarioName,
-    :scenarioType,
-    :scenarioDesc,
-    :useYn,
-    :sortOrder,
-    SYSTIMESTAMP
+    :projectId
+  , :scenarioCode
+  , :scenarioName
+  , :scenarioType
+  , :scenarioDesc
+  , :useYn
+  , :sortOrder
+  , SYSTIMESTAMP
 )
 ;
 
@@ -134,13 +131,13 @@ SELECT SCENARIO_ID
 
 -- [M01002_SCENARIO_UPDATE]
 UPDATE INIT$_TB_SCENARIO
-   SET SCENARIO_CODE = :scenarioCode,
-       SCENARIO_NAME = :scenarioName,
-       SCENARIO_TYPE = :scenarioType,
-       SCENARIO_DESC = :scenarioDesc,
-       USE_YN = :useYn,
-       SORT_ORDER = :sortOrder,
-       UPDATED_AT = SYSTIMESTAMP
+   SET SCENARIO_CODE = :scenarioCode
+     , SCENARIO_NAME = :scenarioName
+     , SCENARIO_TYPE = :scenarioType
+     , SCENARIO_DESC = :scenarioDesc
+     , USE_YN = :useYn
+     , SORT_ORDER = :sortOrder
+     , UPDATED_AT = SYSTIMESTAMP
  WHERE SCENARIO_ID = :scenarioId
    AND PROJECT_ID = :projectId
    AND EXISTS (

@@ -60,10 +60,13 @@ npx tailwindcss -i ./frontend/css/input.css -o ./frontend/css/output.css --watch
 
 - SQL을 새로 작성하거나 요청 범위 안에서 정리할 때는 아래 comma-first 정렬 스타일을 우선 사용합니다.
 - `SELECT`는 서브쿼리의 시작점이자 정렬 기준입니다. `SELECT` 6글자 끝 위치를 기준으로 다음 컬럼의 콤마(`,`)와 `FROM`, `WHERE`, `GROUP`, `ORDER`, `HAVING` 같은 주요 절 키워드를 오른쪽 정렬합니다.
-- 첫 컬럼은 `SELECT 컬럼` 형태로 쓰고, 두 번째 컬럼부터는 `     , 컬럼` 형태로 콤마를 줄 앞에 둡니다.
+- 첫 컬럼은 반드시 `SELECT 컬럼` 형태로 같은 줄에 둡니다. `SELECT`만 단독으로 한 줄에 쓰고 다음 줄에 첫 컬럼을 두지 않습니다.
+- 두 번째 컬럼부터는 `     , 컬럼` 형태로 콤마를 줄 앞에 둡니다.
 - `FROM`, `JOIN`, `WHERE`는 앞 공백을 포함해 `SELECT` 기준에 맞추고, `ON`, `AND`, `OR` 조건도 같은 세로 정렬 감각으로 배치합니다.
 - `WHERE` 조건은 가능하면 `WHERE 1=1`로 시작하고, 이후 조건은 `   AND ...` 형태로 이어갑니다.
 - `GROUP BY`, `ORDER BY` 뒤의 두 번째 이후 표현식도 comma-first로 맞춥니다. 예: `        , 컬럼`
+- `INSERT` 컬럼 목록과 `VALUES` 값 목록도 같은 comma-first 규칙을 적용합니다. 괄호 안 첫 항목은 기존 들여쓰기 위치에 두고, 두 번째 항목부터는 첫 항목의 시작 위치보다 두 칸 앞에 콤마를 둡니다. 예: `  , USER_EMAIL`
+- `UPDATE ... SET` 목록도 첫 대입문은 `SET 컬럼 = 값` 형태로 두고, 두 번째 대입문부터는 `     , 컬럼 = 값` 형태로 콤마를 줄 앞에 둡니다. `MERGE ... UPDATE SET`처럼 `UPDATE SET`이 별도 줄이면 첫 대입문 줄의 시작 위치를 기준으로 comma-first 정렬합니다.
 - 서브쿼리는 여는 괄호 `(`를 별도 줄에 두고, 내부 `SELECT`는 괄호 위치보다 한 칸 뒤에서 시작합니다. 닫는 괄호 `)`는 여는 괄호와 같은 열에 둡니다.
 - 기존 SQL 전체를 요청 없이 대량 포맷팅하지 않습니다. 새로 작성하거나 직접 수정하는 SQL 블록에만 이 스타일을 적용합니다.
 
@@ -106,6 +109,23 @@ SELECT SYSDATE
      ) T2
  WHERE 1=1
    AND T2.LEV <= 5
+;
+
+INSERT INTO INIT$_TB_PROJECT (
+    USER_ID
+  , USER_EMAIL
+  , PROJECT_CODE
+) VALUES (
+    :userId
+  , :userEmail
+  , :projectCode
+);
+
+UPDATE INIT$_TB_PROJECT
+   SET PROJECT_CODE = :projectCode
+     , USER_EMAIL = :userEmail
+     , UPDATED_AT = SYSTIMESTAMP
+ WHERE PROJECT_ID = :projectId
 ;
 ```
 

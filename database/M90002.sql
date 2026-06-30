@@ -1,22 +1,21 @@
 -- [M90002_RESOURCE_LIST]
-SELECT
-    R.OML_RESOURCE_ID,
-    R.RESOURCE_NAME,
-    R.RESOURCE_LABEL,
-    R.RESOURCE_TYPE,
-    R.LANGUAGE,
-    R.EXEC_API,
-    R.EXEC_METHOD,
-    R.SCRIPT_NAME,
-    R.SCRIPT_OWNER,
-    R.INPUT_MODE,
-    R.DESCRIPTION,
-    R.TIMEOUT_SEC,
-    R.USE_YN,
-    R.SORT_ORDER,
-    R.CREATED_AT,
-    R.UPDATED_AT,
-    COUNT(P.PARAM_NAME) AS PARAM_COUNT
+SELECT R.OML_RESOURCE_ID
+     , R.RESOURCE_NAME
+     , R.RESOURCE_LABEL
+     , R.RESOURCE_TYPE
+     , R.LANGUAGE
+     , R.EXEC_API
+     , R.EXEC_METHOD
+     , R.SCRIPT_NAME
+     , R.SCRIPT_OWNER
+     , R.INPUT_MODE
+     , R.DESCRIPTION
+     , R.TIMEOUT_SEC
+     , R.USE_YN
+     , R.SORT_ORDER
+     , R.CREATED_AT
+     , R.UPDATED_AT
+     , COUNT(P.PARAM_NAME) AS PARAM_COUNT
   FROM INIT$_TB_OML_RESOURCE R
   LEFT JOIN INIT$_TB_OML_RESOURCE_PARAM P
     ON P.OML_RESOURCE_ID = R.OML_RESOURCE_ID
@@ -46,41 +45,39 @@ SELECT
 ;
 
 -- [M90002_RESOURCE_DETAIL]
-SELECT
-    OML_RESOURCE_ID,
-    RESOURCE_NAME,
-    RESOURCE_LABEL,
-    RESOURCE_TYPE,
-    LANGUAGE,
-    EXEC_API,
-    EXEC_METHOD,
-    SCRIPT_NAME,
-    SCRIPT_OWNER,
-    SCRIPT_SOURCE,
-    INPUT_MODE,
-    OUTPUT_FORMAT,
-    SPEC_JSON,
-    DESCRIPTION,
-    TIMEOUT_SEC,
-    USE_YN,
-    SORT_ORDER,
-    CREATED_AT,
-    UPDATED_AT
+SELECT OML_RESOURCE_ID
+     , RESOURCE_NAME
+     , RESOURCE_LABEL
+     , RESOURCE_TYPE
+     , LANGUAGE
+     , EXEC_API
+     , EXEC_METHOD
+     , SCRIPT_NAME
+     , SCRIPT_OWNER
+     , SCRIPT_SOURCE
+     , INPUT_MODE
+     , OUTPUT_FORMAT
+     , SPEC_JSON
+     , DESCRIPTION
+     , TIMEOUT_SEC
+     , USE_YN
+     , SORT_ORDER
+     , CREATED_AT
+     , UPDATED_AT
   FROM INIT$_TB_OML_RESOURCE
  WHERE OML_RESOURCE_ID = :resourceId
 ;
 
 -- [M90002_PARAM_LIST]
-SELECT
-    OML_RESOURCE_ID,
-    PARAM_NAME,
-    BIND_NAME,
-    DATA_TYPE,
-    REQUIRED_YN,
-    PARAM_DESC,
-    DEFAULT_VALUE,
-    ITEM_ORDER,
-    CREATED_AT
+SELECT OML_RESOURCE_ID
+     , PARAM_NAME
+     , BIND_NAME
+     , DATA_TYPE
+     , REQUIRED_YN
+     , PARAM_DESC
+     , DEFAULT_VALUE
+     , ITEM_ORDER
+     , CREATED_AT
   FROM INIT$_TB_OML_RESOURCE_PARAM
  WHERE OML_RESOURCE_ID = :resourceId
  ORDER BY ITEM_ORDER NULLS LAST, PARAM_NAME
@@ -88,63 +85,63 @@ SELECT
 
 -- [M90002_RESOURCE_UPDATE]
 UPDATE INIT$_TB_OML_RESOURCE
-   SET RESOURCE_NAME = :resourceName,
-       RESOURCE_LABEL = :resourceLabel,
-       RESOURCE_TYPE = :resourceType,
-       LANGUAGE = :language,
-       EXEC_API = :execApi,
-       EXEC_METHOD = :execMethod,
-       SCRIPT_NAME = :scriptName,
-       SCRIPT_OWNER = :scriptOwner,
-       SCRIPT_SOURCE = :scriptSource,
-       INPUT_MODE = :inputMode,
-       OUTPUT_FORMAT = :outputFormat,
-       SPEC_JSON = :specJson,
-       DESCRIPTION = :description,
-       TIMEOUT_SEC = :timeoutSec,
-       USE_YN = :useYn,
-       SORT_ORDER = :sortOrder,
-       UPDATED_AT = SYSTIMESTAMP
+   SET RESOURCE_NAME = :resourceName
+     , RESOURCE_LABEL = :resourceLabel
+     , RESOURCE_TYPE = :resourceType
+     , LANGUAGE = :language
+     , EXEC_API = :execApi
+     , EXEC_METHOD = :execMethod
+     , SCRIPT_NAME = :scriptName
+     , SCRIPT_OWNER = :scriptOwner
+     , SCRIPT_SOURCE = :scriptSource
+     , INPUT_MODE = :inputMode
+     , OUTPUT_FORMAT = :outputFormat
+     , SPEC_JSON = :specJson
+     , DESCRIPTION = :description
+     , TIMEOUT_SEC = :timeoutSec
+     , USE_YN = :useYn
+     , SORT_ORDER = :sortOrder
+     , UPDATED_AT = SYSTIMESTAMP
  WHERE OML_RESOURCE_ID = :resourceId
 ;
 
 -- [M90002_RESOURCE_INSERT]
 INSERT INTO INIT$_TB_OML_RESOURCE (
-    RESOURCE_NAME,
-    RESOURCE_LABEL,
-    RESOURCE_TYPE,
-    LANGUAGE,
-    EXEC_API,
-    EXEC_METHOD,
-    SCRIPT_NAME,
-    SCRIPT_OWNER,
-    SCRIPT_SOURCE,
-    INPUT_MODE,
-    OUTPUT_FORMAT,
-    SPEC_JSON,
-    DESCRIPTION,
-    TIMEOUT_SEC,
-    USE_YN,
-    SORT_ORDER,
-    CREATED_AT
+    RESOURCE_NAME
+  , RESOURCE_LABEL
+  , RESOURCE_TYPE
+  , LANGUAGE
+  , EXEC_API
+  , EXEC_METHOD
+  , SCRIPT_NAME
+  , SCRIPT_OWNER
+  , SCRIPT_SOURCE
+  , INPUT_MODE
+  , OUTPUT_FORMAT
+  , SPEC_JSON
+  , DESCRIPTION
+  , TIMEOUT_SEC
+  , USE_YN
+  , SORT_ORDER
+  , CREATED_AT
 ) VALUES (
-    :resourceName,
-    :resourceLabel,
-    :resourceType,
-    :language,
-    :execApi,
-    :execMethod,
-    :scriptName,
-    :scriptOwner,
-    :scriptSource,
-    :inputMode,
-    :outputFormat,
-    :specJson,
-    :description,
-    :timeoutSec,
-    :useYn,
-    :sortOrder,
-    SYSTIMESTAMP
+    :resourceName
+  , :resourceLabel
+  , :resourceType
+  , :language
+  , :execApi
+  , :execMethod
+  , :scriptName
+  , :scriptOwner
+  , :scriptSource
+  , :inputMode
+  , :outputFormat
+  , :specJson
+  , :description
+  , :timeoutSec
+  , :useYn
+  , :sortOrder
+  , SYSTIMESTAMP
 )
 ;
 
@@ -174,37 +171,37 @@ DELETE FROM INIT$_TB_OML_RESOURCE_PARAM
 
 -- [M90002_PARAM_UPDATE]
 UPDATE INIT$_TB_OML_RESOURCE_PARAM
-   SET BIND_NAME = :bindName,
-       DATA_TYPE = :dataType,
-       REQUIRED_YN = :requiredYn,
-       PARAM_DESC = :paramDesc,
-       DEFAULT_VALUE = :defaultValue,
-       ITEM_ORDER = :itemOrder
+   SET BIND_NAME = :bindName
+     , DATA_TYPE = :dataType
+     , REQUIRED_YN = :requiredYn
+     , PARAM_DESC = :paramDesc
+     , DEFAULT_VALUE = :defaultValue
+     , ITEM_ORDER = :itemOrder
  WHERE OML_RESOURCE_ID = :resourceId
    AND PARAM_NAME = :paramName
 ;
 
 -- [M90002_PARAM_INSERT]
 INSERT INTO INIT$_TB_OML_RESOURCE_PARAM (
-    OML_RESOURCE_ID,
-    PARAM_NAME,
-    BIND_NAME,
-    DATA_TYPE,
-    REQUIRED_YN,
-    PARAM_DESC,
-    DEFAULT_VALUE,
-    ITEM_ORDER,
-    CREATED_AT
+    OML_RESOURCE_ID
+  , PARAM_NAME
+  , BIND_NAME
+  , DATA_TYPE
+  , REQUIRED_YN
+  , PARAM_DESC
+  , DEFAULT_VALUE
+  , ITEM_ORDER
+  , CREATED_AT
 ) VALUES (
-    :resourceId,
-    :paramName,
-    :bindName,
-    :dataType,
-    :requiredYn,
-    :paramDesc,
-    :defaultValue,
-    :itemOrder,
-    SYSTIMESTAMP
+    :resourceId
+  , :paramName
+  , :bindName
+  , :dataType
+  , :requiredYn
+  , :paramDesc
+  , :defaultValue
+  , :itemOrder
+  , SYSTIMESTAMP
 )
 ;
 
@@ -214,27 +211,27 @@ DELETE FROM INIT$_TB_OML_RESOURCE
 ;
 
 -- [M90002_PYQ_SCRIPT_CREATE_OBJECTS]
-SELECT OWNER,
-       OBJECT_NAME,
-       OBJECT_TYPE
+SELECT OWNER
+     , OBJECT_NAME
+     , OBJECT_TYPE
   FROM ALL_OBJECTS
  WHERE UPPER(OBJECT_NAME) = 'PYQSCRIPTCREATE'
    AND OBJECT_TYPE IN ('PROCEDURE', 'FUNCTION')
 ;
 
 -- [M90002_PYQ_SCRIPT_CREATE_PROCEDURES]
-SELECT OWNER,
-       OBJECT_NAME,
-       PROCEDURE_NAME
+SELECT OWNER
+     , OBJECT_NAME
+     , PROCEDURE_NAME
   FROM ALL_PROCEDURES
  WHERE UPPER(OBJECT_NAME) = 'PYQSCRIPTCREATE'
     OR UPPER(PROCEDURE_NAME) = 'PYQSCRIPTCREATE'
 ;
 
 -- [M90002_PYQ_SCRIPT_CREATE_SYNONYMS]
-SELECT OWNER,
-       SYNONYM_NAME,
-       TABLE_OWNER || '.' || TABLE_NAME AS TARGET_NAME
+SELECT OWNER
+     , SYNONYM_NAME
+     , TABLE_OWNER || '.' || TABLE_NAME AS TARGET_NAME
   FROM ALL_SYNONYMS
  WHERE UPPER(SYNONYM_NAME) = 'PYQSCRIPTCREATE'
 ;

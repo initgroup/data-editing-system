@@ -1,15 +1,14 @@
 -- [FLOW_WORK_SCENARIO_TABLE_LIST]
-SELECT
-    SCENARIO_TABLE_ID,
-    PROJECT_ID,
-    SCENARIO_ID,
-    OWNER_NAME,
-    TABLE_NAME,
-    TABLE_COMMENT,
-    USE_YN,
-    SORT_ORDER,
-    CREATED_AT,
-    UPDATED_AT
+SELECT SCENARIO_TABLE_ID
+     , PROJECT_ID
+     , SCENARIO_ID
+     , OWNER_NAME
+     , TABLE_NAME
+     , TABLE_COMMENT
+     , USE_YN
+     , SORT_ORDER
+     , CREATED_AT
+     , UPDATED_AT
   FROM INIT$_TB_TABLES
  WHERE PROJECT_ID = :projectId
    AND SCENARIO_ID = :scenarioId
@@ -17,36 +16,35 @@ SELECT
 ;
 
 -- [FLOW_WORK_DATA_JOB_ASSET_LIST]
-SELECT
-    WORK_JOB_ID,
-    MENU_CODE,
-    PROJECT_ID,
-    SCENARIO_ID,
-    SCENARIO_TABLE_ID,
-    JOB_GROUP,
-    JOB_NAME,
-    JOB_DESC,
-    OWNER_NAME,
-    TABLE_NAME,
-    EXEC_SOURCE_TYPE,
-    EXEC_RESOURCE_ID,
-    EXEC_METHOD,
-    EXEC_SPEC_JSON,
-    EXEC_OBJECT_ID,
-    EXEC_OWNER,
-    EXEC_OBJECT_TYPE,
-    EXEC_OBJECT_NAME,
-    EXEC_OBJECT_LABEL,
-    EXEC_PLSQL,
-    PARAM_JSON,
-    USE_YN,
-    SORT_ORDER,
-    RESULT_CREATE_YN,
-    RESULT_OWNER,
-    RESULT_TABLE_NAME,
-    STATUS,
-    CREATED_AT,
-    UPDATED_AT
+SELECT WORK_JOB_ID
+     , MENU_CODE
+     , PROJECT_ID
+     , SCENARIO_ID
+     , SCENARIO_TABLE_ID
+     , JOB_GROUP
+     , JOB_NAME
+     , JOB_DESC
+     , OWNER_NAME
+     , TABLE_NAME
+     , EXEC_SOURCE_TYPE
+     , EXEC_RESOURCE_ID
+     , EXEC_METHOD
+     , EXEC_SPEC_JSON
+     , EXEC_OBJECT_ID
+     , EXEC_OWNER
+     , EXEC_OBJECT_TYPE
+     , EXEC_OBJECT_NAME
+     , EXEC_OBJECT_LABEL
+     , EXEC_PLSQL
+     , PARAM_JSON
+     , USE_YN
+     , SORT_ORDER
+     , RESULT_CREATE_YN
+     , RESULT_OWNER
+     , RESULT_TABLE_NAME
+     , STATUS
+     , CREATED_AT
+     , UPDATED_AT
   FROM INIT$_TB_DATA_WORK_JOB
  WHERE PROJECT_ID = :projectId
    AND SCENARIO_ID = :scenarioId
@@ -56,15 +54,14 @@ SELECT
 ;
 
 -- [FLOW_WORK_EXECUTABLE_OBJECT_LIST]
-SELECT
-    OBJECT_ID,
-    OWNER,
-    OBJECT_TYPE,
-    OBJECT_NAME,
-    OBJECT_LABEL,
-    DESCRIPTION,
-    USE_YN,
-    SORT_ORDER
+SELECT OBJECT_ID
+     , OWNER
+     , OBJECT_TYPE
+     , OBJECT_NAME
+     , OBJECT_LABEL
+     , DESCRIPTION
+     , USE_YN
+     , SORT_ORDER
   FROM INIT$_TB_OBJECT
  WHERE USE_YN = 'Y'
    AND OBJECT_TYPE IN (
@@ -78,37 +75,35 @@ SELECT
 ;
 
 -- [FLOW_WORK_EXECUTABLE_OBJECT_DETAIL]
-SELECT
-    OBJECT_ID,
-    OWNER,
-    OBJECT_TYPE,
-    OBJECT_NAME,
-    ITEM_NAME,
-    ITEM_VALUE,
-    ITEM_DESC,
-    ITEM_DEFAULT,
-    ITEM_ORDER
+SELECT OBJECT_ID
+     , OWNER
+     , OBJECT_TYPE
+     , OBJECT_NAME
+     , ITEM_NAME
+     , ITEM_VALUE
+     , ITEM_DESC
+     , ITEM_DEFAULT
+     , ITEM_ORDER
   FROM INIT$_TB_OBJECT_DETAIL
  WHERE OBJECT_ID = :objectId
  ORDER BY ITEM_ORDER NULLS LAST, ITEM_NAME
 ;
 
 -- [FLOW_WORK_LIST]
-SELECT
-    FLOW_ID,
-    MENU_CODE,
-    PROJECT_ID,
-    SCENARIO_ID,
-    FLOW_GROUP,
-    FLOW_NAME,
-    FLOW_DESC,
-    FLOW_TYPE,
-    EXECUTION_MODE,
-    USE_YN,
-    VERSION_NO,
-    STATUS,
-    CREATED_AT,
-    UPDATED_AT
+SELECT FLOW_ID
+     , MENU_CODE
+     , PROJECT_ID
+     , SCENARIO_ID
+     , FLOW_GROUP
+     , FLOW_NAME
+     , FLOW_DESC
+     , FLOW_TYPE
+     , EXECUTION_MODE
+     , USE_YN
+     , VERSION_NO
+     , STATUS
+     , CREATED_AT
+     , UPDATED_AT
   FROM INIT$_TB_FLOW_WORK
  WHERE MENU_CODE = :menuCode
    AND PROJECT_ID = :projectId
@@ -117,22 +112,21 @@ SELECT
 ;
 
 -- [FLOW_WORK_DETAIL]
-SELECT
-    FLOW_ID,
-    MENU_CODE,
-    PROJECT_ID,
-    SCENARIO_ID,
-    FLOW_GROUP,
-    FLOW_NAME,
-    FLOW_DESC,
-    FLOW_TYPE,
-    EXECUTION_MODE,
-    USE_YN,
-    VERSION_NO,
-    STATUS,
-    GRAPH_JSON,
-    CREATED_AT,
-    UPDATED_AT
+SELECT FLOW_ID
+     , MENU_CODE
+     , PROJECT_ID
+     , SCENARIO_ID
+     , FLOW_GROUP
+     , FLOW_NAME
+     , FLOW_DESC
+     , FLOW_TYPE
+     , EXECUTION_MODE
+     , USE_YN
+     , VERSION_NO
+     , STATUS
+     , GRAPH_JSON
+     , CREATED_AT
+     , UPDATED_AT
   FROM INIT$_TB_FLOW_WORK
  WHERE MENU_CODE = :menuCode
    AND FLOW_ID = :flowId
@@ -140,47 +134,47 @@ SELECT
 
 -- [FLOW_WORK_INSERT]
 INSERT INTO INIT$_TB_FLOW_WORK (
-    MENU_CODE,
-    PROJECT_ID,
-    SCENARIO_ID,
-    FLOW_GROUP,
-    FLOW_NAME,
-    FLOW_DESC,
-    FLOW_TYPE,
-    EXECUTION_MODE,
-    USE_YN,
-    VERSION_NO,
-    STATUS,
-    GRAPH_JSON,
-    CREATED_AT
+    MENU_CODE
+  , PROJECT_ID
+  , SCENARIO_ID
+  , FLOW_GROUP
+  , FLOW_NAME
+  , FLOW_DESC
+  , FLOW_TYPE
+  , EXECUTION_MODE
+  , USE_YN
+  , VERSION_NO
+  , STATUS
+  , GRAPH_JSON
+  , CREATED_AT
 ) VALUES (
-    :menuCode,
-    :projectId,
-    :scenarioId,
-    :flowGroup,
-    :flowName,
-    :flowDesc,
-    :flowType,
-    :executionMode,
-    :useYn,
-    1,
-    :status,
-    :graphJson,
-    SYSTIMESTAMP
+    :menuCode
+  , :projectId
+  , :scenarioId
+  , :flowGroup
+  , :flowName
+  , :flowDesc
+  , :flowType
+  , :executionMode
+  , :useYn
+  , 1
+  , :status
+  , :graphJson
+  , SYSTIMESTAMP
 )
 ;
 
 -- [FLOW_WORK_UPDATE]
 UPDATE INIT$_TB_FLOW_WORK
-   SET FLOW_GROUP = :flowGroup,
-       FLOW_NAME = :flowName,
-       FLOW_DESC = :flowDesc,
-       FLOW_TYPE = :flowType,
-       EXECUTION_MODE = :executionMode,
-       USE_YN = :useYn,
-       STATUS = :status,
-       GRAPH_JSON = :graphJson,
-       UPDATED_AT = SYSTIMESTAMP
+   SET FLOW_GROUP = :flowGroup
+     , FLOW_NAME = :flowName
+     , FLOW_DESC = :flowDesc
+     , FLOW_TYPE = :flowType
+     , EXECUTION_MODE = :executionMode
+     , USE_YN = :useYn
+     , STATUS = :status
+     , GRAPH_JSON = :graphJson
+     , UPDATED_AT = SYSTIMESTAMP
  WHERE MENU_CODE = :menuCode
    AND FLOW_ID = :flowId
    AND PROJECT_ID = :projectId
@@ -206,30 +200,29 @@ DELETE FROM INIT$_TB_FLOW_WORK
 ;
 
 -- [FLOW_WORK_NODE_LIST]
-SELECT
-    FLOW_NODE_ID,
-    FLOW_ID,
-    NODE_KEY,
-    NODE_TYPE,
-    NODE_NAME,
-    NODE_DESC,
-    USE_YN,
-    REF_MENU_CODE,
-    REF_WORK_JOB_ID,
-    REF_OBJECT_ID,
-    OWNER_NAME,
-    TABLE_NAME,
-    POSITION_LEFT,
-    POSITION_TOP,
-    NODE_WIDTH,
-    NODE_HEIGHT,
-    INPUT_JSON,
-    OUTPUT_JSON,
-    PARAM_JSON,
-    EXEC_PLSQL,
-    SORT_ORDER,
-    CREATED_AT,
-    UPDATED_AT
+SELECT FLOW_NODE_ID
+     , FLOW_ID
+     , NODE_KEY
+     , NODE_TYPE
+     , NODE_NAME
+     , NODE_DESC
+     , USE_YN
+     , REF_MENU_CODE
+     , REF_WORK_JOB_ID
+     , REF_OBJECT_ID
+     , OWNER_NAME
+     , TABLE_NAME
+     , POSITION_LEFT
+     , POSITION_TOP
+     , NODE_WIDTH
+     , NODE_HEIGHT
+     , INPUT_JSON
+     , OUTPUT_JSON
+     , PARAM_JSON
+     , EXEC_PLSQL
+     , SORT_ORDER
+     , CREATED_AT
+     , UPDATED_AT
   FROM INIT$_TB_FLOW_WORK_NODE
  WHERE FLOW_ID = :flowId
  ORDER BY SORT_ORDER NULLS LAST, FLOW_NODE_ID
@@ -248,73 +241,73 @@ SELECT NODE_KEY
 
 -- [FLOW_WORK_NODE_INSERT]
 INSERT INTO INIT$_TB_FLOW_WORK_NODE (
-    FLOW_ID,
-    NODE_KEY,
-    NODE_TYPE,
-    NODE_NAME,
-    NODE_DESC,
-    USE_YN,
-    REF_MENU_CODE,
-    REF_WORK_JOB_ID,
-    REF_OBJECT_ID,
-    OWNER_NAME,
-    TABLE_NAME,
-    POSITION_LEFT,
-    POSITION_TOP,
-    NODE_WIDTH,
-    NODE_HEIGHT,
-    INPUT_JSON,
-    OUTPUT_JSON,
-    PARAM_JSON,
-    EXEC_PLSQL,
-    SORT_ORDER,
-    CREATED_AT
+    FLOW_ID
+  , NODE_KEY
+  , NODE_TYPE
+  , NODE_NAME
+  , NODE_DESC
+  , USE_YN
+  , REF_MENU_CODE
+  , REF_WORK_JOB_ID
+  , REF_OBJECT_ID
+  , OWNER_NAME
+  , TABLE_NAME
+  , POSITION_LEFT
+  , POSITION_TOP
+  , NODE_WIDTH
+  , NODE_HEIGHT
+  , INPUT_JSON
+  , OUTPUT_JSON
+  , PARAM_JSON
+  , EXEC_PLSQL
+  , SORT_ORDER
+  , CREATED_AT
 ) VALUES (
-    :flowId,
-    :nodeKey,
-    :nodeType,
-    :nodeName,
-    :nodeDesc,
-    :useYn,
-    :refMenuCode,
-    :refWorkJobId,
-    :refObjectId,
-    :ownerName,
-    :tableName,
-    :positionLeft,
-    :positionTop,
-    :nodeWidth,
-    :nodeHeight,
-    :inputJson,
-    :outputJson,
-    :paramJson,
-    :execPlsql,
-    :sortOrder,
-    SYSTIMESTAMP
+    :flowId
+  , :nodeKey
+  , :nodeType
+  , :nodeName
+  , :nodeDesc
+  , :useYn
+  , :refMenuCode
+  , :refWorkJobId
+  , :refObjectId
+  , :ownerName
+  , :tableName
+  , :positionLeft
+  , :positionTop
+  , :nodeWidth
+  , :nodeHeight
+  , :inputJson
+  , :outputJson
+  , :paramJson
+  , :execPlsql
+  , :sortOrder
+  , SYSTIMESTAMP
 )
 ;
 
 -- [FLOW_WORK_NODE_UPDATE_BY_KEY]
 UPDATE INIT$_TB_FLOW_WORK_NODE
-   SET NODE_TYPE = :nodeType,
-       NODE_NAME = :nodeName,
-       NODE_DESC = :nodeDesc,
-       USE_YN = :useYn,
-       REF_MENU_CODE = :refMenuCode,
-       REF_WORK_JOB_ID = :refWorkJobId,
-       REF_OBJECT_ID = :refObjectId,
-       OWNER_NAME = :ownerName,
-       TABLE_NAME = :tableName,
-       POSITION_LEFT = :positionLeft,
-       POSITION_TOP = :positionTop,
-       NODE_WIDTH = :nodeWidth,
-       NODE_HEIGHT = :nodeHeight,
-       INPUT_JSON = :inputJson,
-       OUTPUT_JSON = :outputJson,
-       PARAM_JSON = :paramJson,
-       EXEC_PLSQL = :execPlsql,
-       SORT_ORDER = :sortOrder,
-       UPDATED_AT = SYSTIMESTAMP
+   SET NODE_TYPE = :nodeType
+     , NODE_NAME = :nodeName
+     , NODE_DESC = :nodeDesc
+     , USE_YN = :useYn
+     , REF_MENU_CODE = :refMenuCode
+     , REF_WORK_JOB_ID = :refWorkJobId
+     , REF_OBJECT_ID = :refObjectId
+     , OWNER_NAME = :ownerName
+     , TABLE_NAME = :tableName
+     , POSITION_LEFT = :positionLeft
+     , POSITION_TOP = :positionTop
+     , NODE_WIDTH = :nodeWidth
+     , NODE_HEIGHT = :nodeHeight
+     , INPUT_JSON = :inputJson
+     , OUTPUT_JSON = :outputJson
+     , PARAM_JSON = :paramJson
+     , EXEC_PLSQL = :execPlsql
+     , SORT_ORDER = :sortOrder
+     , UPDATED_AT = SYSTIMESTAMP
  WHERE FLOW_ID = :flowId
    AND NODE_KEY = :nodeKey
 ;
@@ -326,18 +319,17 @@ DELETE FROM INIT$_TB_FLOW_WORK_NODE
 ;
 
 -- [FLOW_WORK_EDGE_LIST]
-SELECT
-    FLOW_EDGE_ID,
-    FLOW_ID,
-    FROM_NODE_KEY,
-    FROM_PORT,
-    TO_NODE_KEY,
-    TO_PORT,
-    EDGE_MODE,
-    DASHED_YN,
-    SORT_ORDER,
-    PARAM_JSON,
-    CREATED_AT
+SELECT FLOW_EDGE_ID
+     , FLOW_ID
+     , FROM_NODE_KEY
+     , FROM_PORT
+     , TO_NODE_KEY
+     , TO_PORT
+     , EDGE_MODE
+     , DASHED_YN
+     , SORT_ORDER
+     , PARAM_JSON
+     , CREATED_AT
   FROM INIT$_TB_FLOW_WORK_EDGE
  WHERE FLOW_ID = :flowId
  ORDER BY SORT_ORDER NULLS LAST, FLOW_EDGE_ID
@@ -350,47 +342,47 @@ DELETE FROM INIT$_TB_FLOW_WORK_EDGE
 
 -- [FLOW_WORK_EDGE_INSERT]
 INSERT INTO INIT$_TB_FLOW_WORK_EDGE (
-    FLOW_ID,
-    FROM_NODE_KEY,
-    FROM_PORT,
-    TO_NODE_KEY,
-    TO_PORT,
-    EDGE_MODE,
-    DASHED_YN,
-    SORT_ORDER,
-    PARAM_JSON,
-    CREATED_AT
+    FLOW_ID
+  , FROM_NODE_KEY
+  , FROM_PORT
+  , TO_NODE_KEY
+  , TO_PORT
+  , EDGE_MODE
+  , DASHED_YN
+  , SORT_ORDER
+  , PARAM_JSON
+  , CREATED_AT
 ) VALUES (
-    :flowId,
-    :fromNodeKey,
-    :fromPort,
-    :toNodeKey,
-    :toPort,
-    :edgeMode,
-    :dashedYn,
-    :sortOrder,
-    :paramJson,
-    SYSTIMESTAMP
+    :flowId
+  , :fromNodeKey
+  , :fromPort
+  , :toNodeKey
+  , :toPort
+  , :edgeMode
+  , :dashedYn
+  , :sortOrder
+  , :paramJson
+  , SYSTIMESTAMP
 )
 ;
 
 -- [FLOW_WORK_RUN_INSERT]
 INSERT INTO INIT$_TB_FLOW_WORK_RUN (
-    FLOW_ID,
-    RUN_TYPE,
-    STATUS,
-    MESSAGE,
-    PLAN_JSON,
-    STARTED_AT,
-    CREATED_AT
+    FLOW_ID
+  , RUN_TYPE
+  , STATUS
+  , MESSAGE
+  , PLAN_JSON
+  , STARTED_AT
+  , CREATED_AT
 ) VALUES (
-    :flowId,
-    :runType,
-    :status,
-    :message,
-    :planJson,
-    SYSTIMESTAMP,
-    SYSTIMESTAMP
+    :flowId
+  , :runType
+  , :status
+  , :message
+  , :planJson
+  , SYSTIMESTAMP
+  , SYSTIMESTAMP
 )
 ;
 
@@ -402,103 +394,102 @@ SELECT MAX(FLOW_RUN_ID) AS FLOW_RUN_ID
 
 -- [FLOW_WORK_NODE_RUN_INSERT]
 INSERT INTO INIT$_TB_FLOW_WORK_NODE_RUN (
-    FLOW_RUN_ID,
-    FLOW_ID,
-    NODE_KEY,
-    NODE_NAME,
-    NODE_TYPE,
-    RUN_LEVEL,
-    SORT_ORDER,
-    STATUS,
-    MESSAGE,
-    RUNTIME_PARAM_JSON,
-    NODE_PAYLOAD_JSON,
-    CREATED_AT
+    FLOW_RUN_ID
+  , FLOW_ID
+  , NODE_KEY
+  , NODE_NAME
+  , NODE_TYPE
+  , RUN_LEVEL
+  , SORT_ORDER
+  , STATUS
+  , MESSAGE
+  , RUNTIME_PARAM_JSON
+  , NODE_PAYLOAD_JSON
+  , CREATED_AT
 ) VALUES (
-    :flowRunId,
-    :flowId,
-    :nodeKey,
-    :nodeName,
-    :nodeType,
-    :runLevel,
-    :sortOrder,
-    :status,
-    :message,
-    :runtimeParamJson,
-    :nodePayloadJson,
-    SYSTIMESTAMP
+    :flowRunId
+  , :flowId
+  , :nodeKey
+  , :nodeName
+  , :nodeType
+  , :runLevel
+  , :sortOrder
+  , :status
+  , :message
+  , :runtimeParamJson
+  , :nodePayloadJson
+  , SYSTIMESTAMP
 )
 ;
 
 -- [FLOW_WORK_NODE_RUN_UPDATE]
 UPDATE /*+ NO_PARALLEL(NR) */ INIT$_TB_FLOW_WORK_NODE_RUN NR
-   SET STATUS = :status,
-       MESSAGE = :message,
-       STARTED_AT = CASE WHEN :startedYn = 'Y' THEN COALESCE(STARTED_AT, SYSTIMESTAMP) ELSE STARTED_AT END,
-       FINISHED_AT = CASE WHEN :finishedYn = 'Y' THEN SYSTIMESTAMP ELSE FINISHED_AT END,
-       UPDATED_AT = SYSTIMESTAMP
+   SET STATUS = :status
+     , MESSAGE = :message
+     , STARTED_AT = CASE WHEN :startedYn = 'Y' THEN COALESCE(STARTED_AT, SYSTIMESTAMP) ELSE STARTED_AT END
+     , FINISHED_AT = CASE WHEN :finishedYn = 'Y' THEN SYSTIMESTAMP ELSE FINISHED_AT END
+     , UPDATED_AT = SYSTIMESTAMP
  WHERE NR.FLOW_NODE_RUN_ID = :flowNodeRunId
 ;
 
 -- [FLOW_WORK_NODE_RUN_UPDATE_BY_KEY]
 UPDATE /*+ NO_PARALLEL(NR) */ INIT$_TB_FLOW_WORK_NODE_RUN NR
-   SET STATUS = :status,
-       MESSAGE = :message,
-       STARTED_AT = CASE WHEN :startedYn = 'Y' THEN COALESCE(STARTED_AT, SYSTIMESTAMP) ELSE STARTED_AT END,
-       FINISHED_AT = CASE WHEN :finishedYn = 'Y' THEN SYSTIMESTAMP ELSE FINISHED_AT END,
-       UPDATED_AT = SYSTIMESTAMP
+   SET STATUS = :status
+     , MESSAGE = :message
+     , STARTED_AT = CASE WHEN :startedYn = 'Y' THEN COALESCE(STARTED_AT, SYSTIMESTAMP) ELSE STARTED_AT END
+     , FINISHED_AT = CASE WHEN :finishedYn = 'Y' THEN SYSTIMESTAMP ELSE FINISHED_AT END
+     , UPDATED_AT = SYSTIMESTAMP
  WHERE NR.FLOW_RUN_ID = :flowRunId
    AND NR.NODE_KEY = :nodeKey
 ;
 
 -- [FLOW_WORK_NODE_RUN_UPDATE_RUNTIME_PARAMS]
 UPDATE /*+ NO_PARALLEL(NR) */ INIT$_TB_FLOW_WORK_NODE_RUN NR
-   SET RUNTIME_PARAM_JSON = :runtimeParamJson,
-       UPDATED_AT = SYSTIMESTAMP
+   SET RUNTIME_PARAM_JSON = :runtimeParamJson
+     , UPDATED_AT = SYSTIMESTAMP
  WHERE NR.FLOW_RUN_ID = :flowRunId
    AND NR.NODE_KEY = :nodeKey
 ;
 
 -- [FLOW_WORK_NODE_RUN_START_BY_KEY]
 UPDATE /*+ NO_PARALLEL(NR) */ INIT$_TB_FLOW_WORK_NODE_RUN NR
-   SET STATUS = 'RUNNING',
-       MESSAGE = :message,
-       RUNTIME_PARAM_JSON = :runtimeParamJson,
-       STARTED_AT = COALESCE(STARTED_AT, SYSTIMESTAMP),
-       UPDATED_AT = SYSTIMESTAMP
+   SET STATUS = 'RUNNING'
+     , MESSAGE = :message
+     , RUNTIME_PARAM_JSON = :runtimeParamJson
+     , STARTED_AT = COALESCE(STARTED_AT, SYSTIMESTAMP)
+     , UPDATED_AT = SYSTIMESTAMP
  WHERE NR.FLOW_RUN_ID = :flowRunId
    AND NR.NODE_KEY = :nodeKey
 ;
 
 -- [FLOW_WORK_NODE_RUN_SKIP_BY_KEY]
 UPDATE /*+ NO_PARALLEL(NR) */ INIT$_TB_FLOW_WORK_NODE_RUN NR
-   SET STATUS = 'SKIPPED',
-       MESSAGE = :message,
-       RUNTIME_PARAM_JSON = :runtimeParamJson,
-       FINISHED_AT = SYSTIMESTAMP,
-       UPDATED_AT = SYSTIMESTAMP
+   SET STATUS = 'SKIPPED'
+     , MESSAGE = :message
+     , RUNTIME_PARAM_JSON = :runtimeParamJson
+     , FINISHED_AT = SYSTIMESTAMP
+     , UPDATED_AT = SYSTIMESTAMP
  WHERE NR.FLOW_RUN_ID = :flowRunId
    AND NR.NODE_KEY = :nodeKey
 ;
 
 -- [FLOW_WORK_NODE_RUN_LIST]
-SELECT
-    FLOW_NODE_RUN_ID,
-    FLOW_RUN_ID,
-    FLOW_ID,
-    NODE_KEY,
-    NODE_NAME,
-    NODE_TYPE,
-    RUN_LEVEL,
-    SORT_ORDER,
-    STATUS,
-    MESSAGE,
-    RUNTIME_PARAM_JSON,
-    NODE_PAYLOAD_JSON,
-    STARTED_AT,
-    FINISHED_AT,
-    CREATED_AT,
-    UPDATED_AT
+SELECT FLOW_NODE_RUN_ID
+     , FLOW_RUN_ID
+     , FLOW_ID
+     , NODE_KEY
+     , NODE_NAME
+     , NODE_TYPE
+     , RUN_LEVEL
+     , SORT_ORDER
+     , STATUS
+     , MESSAGE
+     , RUNTIME_PARAM_JSON
+     , NODE_PAYLOAD_JSON
+     , STARTED_AT
+     , FINISHED_AT
+     , CREATED_AT
+     , UPDATED_AT
   FROM INIT$_TB_FLOW_WORK_NODE_RUN
  WHERE FLOW_RUN_ID = :flowRunId
  ORDER BY RUN_LEVEL, SORT_ORDER NULLS LAST, FLOW_NODE_RUN_ID
@@ -506,38 +497,37 @@ SELECT
 
 -- [FLOW_WORK_RUN_UPDATE]
 UPDATE INIT$_TB_FLOW_WORK_RUN
-   SET STATUS = :status,
-       MESSAGE = :message,
-       PLAN_JSON = :planJson,
-       FINISHED_AT = SYSTIMESTAMP
+   SET STATUS = :status
+     , MESSAGE = :message
+     , PLAN_JSON = :planJson
+     , FINISHED_AT = SYSTIMESTAMP
  WHERE FLOW_RUN_ID = :flowRunId
 ;
 
 -- [FLOW_WORK_RUN_START]
 UPDATE INIT$_TB_FLOW_WORK_RUN
-   SET STATUS = 'STARTED',
-       MESSAGE = :message,
-       STARTED_AT = COALESCE(STARTED_AT, SYSTIMESTAMP),
-       FINISHED_AT = NULL
+   SET STATUS = 'STARTED'
+     , MESSAGE = :message
+     , STARTED_AT = COALESCE(STARTED_AT, SYSTIMESTAMP)
+     , FINISHED_AT = NULL
  WHERE FLOW_RUN_ID = :flowRunId
 ;
 
 -- [FLOW_WORK_RUN_LIST]
-SELECT
-    R.FLOW_RUN_ID,
-    R.FLOW_ID,
-    F.MENU_CODE,
-    F.PROJECT_ID,
-    F.SCENARIO_ID,
-    F.FLOW_GROUP,
-    F.FLOW_NAME,
-    R.RUN_TYPE,
-    R.STATUS,
-    R.MESSAGE,
-    R.PLAN_JSON,
-    R.STARTED_AT,
-    R.FINISHED_AT,
-    R.CREATED_AT
+SELECT R.FLOW_RUN_ID
+     , R.FLOW_ID
+     , F.MENU_CODE
+     , F.PROJECT_ID
+     , F.SCENARIO_ID
+     , F.FLOW_GROUP
+     , F.FLOW_NAME
+     , R.RUN_TYPE
+     , R.STATUS
+     , R.MESSAGE
+     , R.PLAN_JSON
+     , R.STARTED_AT
+     , R.FINISHED_AT
+     , R.CREATED_AT
   FROM INIT$_TB_FLOW_WORK_RUN R
   JOIN INIT$_TB_FLOW_WORK F
     ON F.FLOW_ID = R.FLOW_ID

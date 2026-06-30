@@ -1,30 +1,30 @@
 ﻿-- [MCOMMON_ANLY_WORK_FLOW_RUN_LIST]
 SELECT *
   FROM (
-        SELECT Q.*,
-               ROW_NUMBER() OVER (ORDER BY Q.FLOW_RUN_ID DESC) AS RN__
+        SELECT Q.*
+             , ROW_NUMBER() OVER (ORDER BY Q.FLOW_RUN_ID DESC) AS RN__
           FROM (
-                SELECT R.FLOW_RUN_ID,
-                       R.FLOW_ID,
-                       F.FLOW_NAME,
-                       F.FLOW_GROUP,
-                       F.PROJECT_ID,
-                       F.SCENARIO_ID,
-                       R.RUN_TYPE,
-                       R.STATUS,
-                       R.MESSAGE,
-                       R.STARTED_AT,
-                       R.FINISHED_AT,
-                       R.CREATED_AT,
-                       COUNT(*) OVER () AS TOTAL_COUNT,
-                       (SELECT COUNT(*)
+                SELECT R.FLOW_RUN_ID
+                     , R.FLOW_ID
+                     , F.FLOW_NAME
+                     , F.FLOW_GROUP
+                     , F.PROJECT_ID
+                     , F.SCENARIO_ID
+                     , R.RUN_TYPE
+                     , R.STATUS
+                     , R.MESSAGE
+                     , R.STARTED_AT
+                     , R.FINISHED_AT
+                     , R.CREATED_AT
+                     , COUNT(*) OVER () AS TOTAL_COUNT
+                     , (SELECT COUNT(*)
                           FROM "INIT$_TB_FLOW_WORK_NODE_RUN" NR
-                         WHERE NR.FLOW_RUN_ID = R.FLOW_RUN_ID) AS NODE_COUNT,
-                       (SELECT COUNT(*)
+                         WHERE NR.FLOW_RUN_ID = R.FLOW_RUN_ID) AS NODE_COUNT
+                     , (SELECT COUNT(*)
                           FROM "INIT$_TB_FLOW_WORK_NODE_RUN" NR
                          WHERE NR.FLOW_RUN_ID = R.FLOW_RUN_ID
-                           AND NR.STATUS = 'SUCCESS') AS SUCCESS_NODE_COUNT,
-                       (SELECT COUNT(*)
+                           AND NR.STATUS = 'SUCCESS') AS SUCCESS_NODE_COUNT
+                     , (SELECT COUNT(*)
                           FROM "INIT$_TB_FLOW_WORK_NODE_RUN" NR
                          WHERE NR.FLOW_RUN_ID = R.FLOW_RUN_ID
                            AND NR.STATUS IN ('FAILED', 'SKIPPED', 'ERROR')) AS FAILED_NODE_COUNT
@@ -50,8 +50,8 @@ SELECT *
 -- [MCOMMON_ANLY_WORK_FLOW_RUN_POSITION]
 SELECT RN__
   FROM (
-        SELECT Q.FLOW_RUN_ID,
-               ROW_NUMBER() OVER (ORDER BY Q.FLOW_RUN_ID DESC) AS RN__
+        SELECT Q.FLOW_RUN_ID
+             , ROW_NUMBER() OVER (ORDER BY Q.FLOW_RUN_ID DESC) AS RN__
           FROM (
                 SELECT R.FLOW_RUN_ID
                   FROM "INIT$_TB_FLOW_WORK_RUN" R
@@ -83,8 +83,8 @@ SELECT COUNT(*) AS COLUMN_COUNT
    AND TABLE_NAME = :tableName;
 
 -- [MCOMMON_ANLY_WORK_TARGET_COLUMN_COMMENTS]
-SELECT C.COLUMN_NAME,
-       CC.COMMENTS AS COLUMN_COMMENT
+SELECT C.COLUMN_NAME
+     , CC.COMMENTS AS COLUMN_COMMENT
   FROM ALL_TAB_COLUMNS C
   LEFT OUTER JOIN ALL_COL_COMMENTS CC
     ON CC.OWNER = C.OWNER
@@ -95,35 +95,35 @@ SELECT C.COLUMN_NAME,
  ORDER BY C.COLUMN_ID;
 
 -- [MCOMMON_ANLY_WORK_MODEL_METADATA]
-SELECT OWNER,
-       MODEL_NAME,
-       MINING_FUNCTION,
-       ALGORITHM,
-       CREATION_DATE
+SELECT OWNER
+     , MODEL_NAME
+     , MINING_FUNCTION
+     , ALGORITHM
+     , CREATION_DATE
   FROM ALL_MINING_MODELS
  WHERE OWNER = :owner
    AND MODEL_NAME = :modelName;
 
 -- [MCOMMON_ANLY_WORK_ASSOC_RULE_OVERVIEW]
-SELECT COUNT(*) AS TOTAL_RULES,
-       SUM(CASE WHEN CONDITION_COUNT > 0 AND RESULT_COLUMN IS NOT NULL THEN 1 ELSE 0 END) AS MAPPED_RULES,
-       SUM(CASE WHEN RESULT_HAS_VALUE_YN = 'N' THEN 1 ELSE 0 END) AS MISSING_RESULT_RULES,
-       SUM(CASE
+SELECT COUNT(*) AS TOTAL_RULES
+     , SUM(CASE WHEN CONDITION_COUNT > 0 AND RESULT_COLUMN IS NOT NULL THEN 1 ELSE 0 END) AS MAPPED_RULES
+     , SUM(CASE WHEN RESULT_HAS_VALUE_YN = 'N' THEN 1 ELSE 0 END) AS MISSING_RESULT_RULES
+     , SUM(CASE
                WHEN RULE_CONFIDENCE IS NOT NULL
                 AND (
                     (RULE_CONFIDENCE <= 1 AND RULE_CONFIDENCE < 0.999999)
                     OR (RULE_CONFIDENCE > 1 AND RULE_CONFIDENCE < 99.9999)
                 )
                THEN 1 ELSE 0
-           END) AS NON_PERFECT_CONF_RULES,
-       MAX(MODEL_TYPE) AS MODEL_TYPE,
-       MAX(RULE_SOURCE) AS RULE_SOURCE,
-       AVG(RULE_SUPPORT) AS AVG_SUPPORT,
-       AVG(RULE_CONFIDENCE) AS AVG_CONFIDENCE,
-       AVG(RULE_LIFT) AS AVG_LIFT,
-       MAX(RULE_SUPPORT) AS MAX_SUPPORT,
-       MAX(RULE_CONFIDENCE) AS MAX_CONFIDENCE,
-       MAX(RULE_LIFT) AS MAX_LIFT
+           END) AS NON_PERFECT_CONF_RULES
+     , MAX(MODEL_TYPE) AS MODEL_TYPE
+     , MAX(RULE_SOURCE) AS RULE_SOURCE
+     , AVG(RULE_SUPPORT) AS AVG_SUPPORT
+     , AVG(RULE_CONFIDENCE) AS AVG_CONFIDENCE
+     , AVG(RULE_LIFT) AS AVG_LIFT
+     , MAX(RULE_SUPPORT) AS MAX_SUPPORT
+     , MAX(RULE_CONFIDENCE) AS MAX_CONFIDENCE
+     , MAX(RULE_LIFT) AS MAX_LIFT
   FROM "INIT$_TB_ASSOC_RULE_SUMMARY"
  WHERE OWNER = :owner
    AND TARGET_OWNER = :targetOwner
@@ -131,19 +131,19 @@ SELECT COUNT(*) AS TOTAL_RULES,
    AND MODEL_NAME = :modelName;
 
 -- [MCOMMON_ANLY_WORK_ASSOC_RULE_CONDITION_DIST]
-SELECT CONDITION_COUNT,
-       COUNT(*) AS RULE_COUNT,
-       SUM(CASE
+SELECT CONDITION_COUNT
+     , COUNT(*) AS RULE_COUNT
+     , SUM(CASE
                WHEN RULE_CONFIDENCE IS NOT NULL
                 AND (
                     (RULE_CONFIDENCE <= 1 AND RULE_CONFIDENCE < 0.999999)
                     OR (RULE_CONFIDENCE > 1 AND RULE_CONFIDENCE < 99.9999)
                 )
                THEN 1 ELSE 0
-           END) AS NON_PERFECT_CONF_RULES,
-       AVG(RULE_SUPPORT) AS AVG_SUPPORT,
-       AVG(RULE_CONFIDENCE) AS AVG_CONFIDENCE,
-       AVG(RULE_LIFT) AS AVG_LIFT
+           END) AS NON_PERFECT_CONF_RULES
+     , AVG(RULE_SUPPORT) AS AVG_SUPPORT
+     , AVG(RULE_CONFIDENCE) AS AVG_CONFIDENCE
+     , AVG(RULE_LIFT) AS AVG_LIFT
   FROM "INIT$_TB_ASSOC_RULE_SUMMARY"
  WHERE OWNER = :owner
    AND TARGET_OWNER = :targetOwner
@@ -155,16 +155,16 @@ SELECT CONDITION_COUNT,
 -- [MCOMMON_ANLY_WORK_ASSOC_RULE_RESULT_TOP]
 SELECT *
   FROM (
-        SELECT Q.*,
-               ROW_NUMBER() OVER (ORDER BY Q.RULE_COUNT DESC, Q.RESULT_COLUMN) AS RN__,
-               COUNT(*) OVER () AS TOTAL_COUNT
+        SELECT Q.*
+             , ROW_NUMBER() OVER (ORDER BY Q.RULE_COUNT DESC, Q.RESULT_COLUMN) AS RN__
+             , COUNT(*) OVER () AS TOTAL_COUNT
           FROM (
-                SELECT NVL(RESULT_COLUMN, '(RESULT UNKNOWN)') AS RESULT_COLUMN,
-                       COUNT(*) AS RULE_COUNT,
-                       SUM(CASE WHEN RESULT_HAS_VALUE_YN = 'Y' THEN 1 ELSE 0 END) AS VALUE_RULE_COUNT,
-                       SUM(SUPPORT_COUNT) AS SUPPORT_COUNT,
-                       AVG(RULE_CONFIDENCE) AS AVG_CONFIDENCE,
-                       AVG(RULE_LIFT) AS AVG_LIFT
+                SELECT NVL(RESULT_COLUMN, '(RESULT UNKNOWN)') AS RESULT_COLUMN
+                     , COUNT(*) AS RULE_COUNT
+                     , SUM(CASE WHEN RESULT_HAS_VALUE_YN = 'Y' THEN 1 ELSE 0 END) AS VALUE_RULE_COUNT
+                     , SUM(SUPPORT_COUNT) AS SUPPORT_COUNT
+                     , AVG(RULE_CONFIDENCE) AS AVG_CONFIDENCE
+                     , AVG(RULE_LIFT) AS AVG_LIFT
                   FROM "INIT$_TB_ASSOC_RULE_SUMMARY"
                  WHERE OWNER = :owner
                    AND TARGET_OWNER = :targetOwner
@@ -180,33 +180,33 @@ SELECT *
 -- [MCOMMON_ANLY_WORK_ASSOC_RULE_DETAIL_LIST]
 SELECT *
   FROM (
-        SELECT Q.*,
-               ROW_NUMBER() OVER (ORDER BY Q.RULE_CONFIDENCE DESC NULLS LAST, Q.RULE_LIFT DESC NULLS LAST, Q.RULE_SUPPORT DESC NULLS LAST, Q.RULE_ID) AS RN__,
-               COUNT(*) OVER () AS TOTAL_COUNT
+        SELECT Q.*
+             , ROW_NUMBER() OVER (ORDER BY Q.RULE_CONFIDENCE DESC NULLS LAST, Q.RULE_LIFT DESC NULLS LAST, Q.RULE_SUPPORT DESC NULLS LAST, Q.RULE_ID) AS RN__
+             , COUNT(*) OVER () AS TOTAL_COUNT
           FROM (
-                SELECT OWNER,
-                       TARGET_OWNER,
-                       TARGET_TABLE,
-                       MODEL_NAME,
-                        RULE_ID,
-                        MODEL_TYPE,
-                        RULE_SOURCE,
-                        CONDITION_COUNT,
-                        CONDITION_COLUMN,
-                        CONDITION_VALUE,
-                        RESULT_COLUMN,
-                        RESULT_VALUE,
-                        RESULT_HAS_VALUE_YN,
-                        RULE_SUPPORT,
-                        RULE_CONFIDENCE,
-                        RULE_LIFT,
-                        SUPPORT_COUNT,
-                        CONDITION_TOTAL_COUNT,
-                        RESULT_TOTAL_COUNT,
-                         TOTAL_COUNT AS RULE_TOTAL_COUNT,
-                        CONDITION_TEXT,
-                        RESULT_TEXT,
-                        CREATE_DT
+                SELECT OWNER
+                     , TARGET_OWNER
+                     , TARGET_TABLE
+                     , MODEL_NAME
+                     , RULE_ID
+                     , MODEL_TYPE
+                     , RULE_SOURCE
+                     , CONDITION_COUNT
+                     , CONDITION_COLUMN
+                     , CONDITION_VALUE
+                     , RESULT_COLUMN
+                     , RESULT_VALUE
+                     , RESULT_HAS_VALUE_YN
+                     , RULE_SUPPORT
+                     , RULE_CONFIDENCE
+                     , RULE_LIFT
+                     , SUPPORT_COUNT
+                     , CONDITION_TOTAL_COUNT
+                     , RESULT_TOTAL_COUNT
+                     , TOTAL_COUNT AS RULE_TOTAL_COUNT
+                     , CONDITION_TEXT
+                     , RESULT_TEXT
+                     , CREATE_DT
                   FROM "INIT$_TB_ASSOC_RULE_SUMMARY"
                  WHERE OWNER = :owner
                    AND TARGET_OWNER = :targetOwner

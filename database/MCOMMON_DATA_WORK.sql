@@ -1,35 +1,34 @@
 -- [DATA_WORK_JOB_LIST]
-SELECT
-    WORK_JOB_ID AS PROFILE_JOB_ID,
-    WORK_JOB_ID,
-    MENU_CODE,
-    PROJECT_ID,
-    SCENARIO_ID,
-    SCENARIO_TABLE_ID,
-    JOB_GROUP,
-    JOB_NAME,
-    JOB_DESC,
-    OWNER_NAME,
-    TABLE_NAME,
-    EXEC_SOURCE_TYPE,
-    EXEC_RESOURCE_ID,
-    EXEC_METHOD,
-    EXEC_SPEC_JSON,
-    EXEC_OBJECT_ID,
-    EXEC_OWNER,
-    EXEC_OBJECT_TYPE,
-    EXEC_OBJECT_NAME,
-    EXEC_OBJECT_LABEL,
-    USE_YN,
-    SORT_ORDER,
-    RESULT_CREATE_YN,
-    RESULT_OWNER,
-    RESULT_TABLE_NAME,
-    STATUS,
-    STARTED_AT,
-    FINISHED_AT,
-    CREATED_AT,
-    UPDATED_AT
+SELECT WORK_JOB_ID AS PROFILE_JOB_ID
+     , WORK_JOB_ID
+     , MENU_CODE
+     , PROJECT_ID
+     , SCENARIO_ID
+     , SCENARIO_TABLE_ID
+     , JOB_GROUP
+     , JOB_NAME
+     , JOB_DESC
+     , OWNER_NAME
+     , TABLE_NAME
+     , EXEC_SOURCE_TYPE
+     , EXEC_RESOURCE_ID
+     , EXEC_METHOD
+     , EXEC_SPEC_JSON
+     , EXEC_OBJECT_ID
+     , EXEC_OWNER
+     , EXEC_OBJECT_TYPE
+     , EXEC_OBJECT_NAME
+     , EXEC_OBJECT_LABEL
+     , USE_YN
+     , SORT_ORDER
+     , RESULT_CREATE_YN
+     , RESULT_OWNER
+     , RESULT_TABLE_NAME
+     , STATUS
+     , STARTED_AT
+     , FINISHED_AT
+     , CREATED_AT
+     , UPDATED_AT
   FROM INIT$_TB_DATA_WORK_JOB
  WHERE MENU_CODE = :menuCode
    AND PROJECT_ID = :projectId
@@ -38,21 +37,20 @@ ORDER BY JOB_GROUP, SORT_ORDER NULLS LAST, WORK_JOB_ID
 ;
 
 -- [DATA_WORK_OML_RESOURCE_LIST]
-SELECT
-    OML_RESOURCE_ID,
-    RESOURCE_NAME,
-    RESOURCE_LABEL,
-    RESOURCE_TYPE,
-    LANGUAGE,
-    EXEC_API,
-    EXEC_METHOD,
-    SCRIPT_NAME,
-    SCRIPT_OWNER,
-    INPUT_MODE,
-    DESCRIPTION,
-    TIMEOUT_SEC,
-    USE_YN,
-    SORT_ORDER
+SELECT OML_RESOURCE_ID
+     , RESOURCE_NAME
+     , RESOURCE_LABEL
+     , RESOURCE_TYPE
+     , LANGUAGE
+     , EXEC_API
+     , EXEC_METHOD
+     , SCRIPT_NAME
+     , SCRIPT_OWNER
+     , INPUT_MODE
+     , DESCRIPTION
+     , TIMEOUT_SEC
+     , USE_YN
+     , SORT_ORDER
   FROM INIT$_TB_OML_RESOURCE
  WHERE USE_YN = 'Y'
    AND LANGUAGE = 'PYTHON'
@@ -60,28 +58,27 @@ SELECT
 ;
 
 -- [DATA_WORK_OML_RESOURCE_DETAIL]
-SELECT
-    R.OML_RESOURCE_ID,
-    R.RESOURCE_NAME,
-    R.RESOURCE_LABEL,
-    R.RESOURCE_TYPE,
-    R.LANGUAGE,
-    R.EXEC_API,
-    R.EXEC_METHOD,
-    R.SCRIPT_NAME,
-    R.SCRIPT_OWNER,
-    R.INPUT_MODE,
-    R.OUTPUT_FORMAT,
-    R.SPEC_JSON,
-    R.DESCRIPTION,
-    R.TIMEOUT_SEC,
-    P.PARAM_NAME,
-    P.BIND_NAME,
-    P.DATA_TYPE,
-    P.REQUIRED_YN,
-    P.PARAM_DESC,
-    P.DEFAULT_VALUE,
-    P.ITEM_ORDER
+SELECT R.OML_RESOURCE_ID
+     , R.RESOURCE_NAME
+     , R.RESOURCE_LABEL
+     , R.RESOURCE_TYPE
+     , R.LANGUAGE
+     , R.EXEC_API
+     , R.EXEC_METHOD
+     , R.SCRIPT_NAME
+     , R.SCRIPT_OWNER
+     , R.INPUT_MODE
+     , R.OUTPUT_FORMAT
+     , R.SPEC_JSON
+     , R.DESCRIPTION
+     , R.TIMEOUT_SEC
+     , P.PARAM_NAME
+     , P.BIND_NAME
+     , P.DATA_TYPE
+     , P.REQUIRED_YN
+     , P.PARAM_DESC
+     , P.DEFAULT_VALUE
+     , P.ITEM_ORDER
   FROM INIT$_TB_OML_RESOURCE R
   LEFT JOIN INIT$_TB_OML_RESOURCE_PARAM P
     ON P.OML_RESOURCE_ID = R.OML_RESOURCE_ID
@@ -99,11 +96,11 @@ WITH VIEW_TYPES AS (
     SELECT 'VR', 'Rule/detail view', :viewNameVr FROM DUAL UNION ALL
     SELECT 'VT', 'Transformation/detail view', :viewNameVt FROM DUAL
 )
-SELECT V.VIEW_TYPE,
-       V.VIEW_NAME,
-       V.DESCRIPTION,
-       O.OBJECT_TYPE,
-       CASE WHEN O.OBJECT_NAME IS NULL THEN 'N' ELSE 'Y' END AS EXISTS_YN
+SELECT V.VIEW_TYPE
+     , V.VIEW_NAME
+     , V.DESCRIPTION
+     , O.OBJECT_TYPE
+     , CASE WHEN O.OBJECT_NAME IS NULL THEN 'N' ELSE 'Y' END AS EXISTS_YN
   FROM VIEW_TYPES V
   LEFT JOIN ALL_OBJECTS O
     ON O.OWNER = :owner
@@ -120,39 +117,38 @@ SELECT COLUMN_NAME
 ;
 
 -- [DATA_WORK_JOB_DETAIL]
-SELECT
-    WORK_JOB_ID AS PROFILE_JOB_ID,
-    WORK_JOB_ID,
-    MENU_CODE,
-    PROJECT_ID,
-    SCENARIO_ID,
-    SCENARIO_TABLE_ID,
-    JOB_GROUP,
-    JOB_NAME,
-    JOB_DESC,
-    OWNER_NAME,
-    TABLE_NAME,
-    EXEC_SOURCE_TYPE,
-    EXEC_RESOURCE_ID,
-    EXEC_METHOD,
-    EXEC_SPEC_JSON,
-    EXEC_OBJECT_ID,
-    EXEC_OWNER,
-    EXEC_OBJECT_TYPE,
-    EXEC_OBJECT_NAME,
-    EXEC_OBJECT_LABEL,
-    USE_YN,
-    SORT_ORDER,
-    PARAM_JSON,
-    EXEC_PLSQL,
-    RESULT_CREATE_YN,
-    RESULT_OWNER,
-    RESULT_TABLE_NAME,
-    STATUS,
-    STARTED_AT,
-    FINISHED_AT,
-    CREATED_AT,
-    UPDATED_AT
+SELECT WORK_JOB_ID AS PROFILE_JOB_ID
+     , WORK_JOB_ID
+     , MENU_CODE
+     , PROJECT_ID
+     , SCENARIO_ID
+     , SCENARIO_TABLE_ID
+     , JOB_GROUP
+     , JOB_NAME
+     , JOB_DESC
+     , OWNER_NAME
+     , TABLE_NAME
+     , EXEC_SOURCE_TYPE
+     , EXEC_RESOURCE_ID
+     , EXEC_METHOD
+     , EXEC_SPEC_JSON
+     , EXEC_OBJECT_ID
+     , EXEC_OWNER
+     , EXEC_OBJECT_TYPE
+     , EXEC_OBJECT_NAME
+     , EXEC_OBJECT_LABEL
+     , USE_YN
+     , SORT_ORDER
+     , PARAM_JSON
+     , EXEC_PLSQL
+     , RESULT_CREATE_YN
+     , RESULT_OWNER
+     , RESULT_TABLE_NAME
+     , STATUS
+     , STARTED_AT
+     , FINISHED_AT
+     , CREATED_AT
+     , UPDATED_AT
   FROM INIT$_TB_DATA_WORK_JOB
  WHERE MENU_CODE = :menuCode
    AND WORK_JOB_ID = :profileJobId
@@ -160,90 +156,90 @@ SELECT
 
 -- [DATA_WORK_JOB_INSERT]
 INSERT INTO INIT$_TB_DATA_WORK_JOB (
-    MENU_CODE,
-    PROJECT_ID,
-    SCENARIO_ID,
-    SCENARIO_TABLE_ID,
-    JOB_GROUP,
-    JOB_NAME,
-    JOB_DESC,
-    OWNER_NAME,
-    TABLE_NAME,
-    EXEC_SOURCE_TYPE,
-    EXEC_RESOURCE_ID,
-    EXEC_METHOD,
-    EXEC_SPEC_JSON,
-    EXEC_OBJECT_ID,
-    EXEC_OWNER,
-    EXEC_OBJECT_TYPE,
-    EXEC_OBJECT_NAME,
-    EXEC_OBJECT_LABEL,
-    USE_YN,
-    SORT_ORDER,
-    PARAM_JSON,
-    EXEC_PLSQL,
-    RESULT_CREATE_YN,
-    RESULT_OWNER,
-    RESULT_TABLE_NAME,
-    STATUS,
-    CREATED_AT
+    MENU_CODE
+  , PROJECT_ID
+  , SCENARIO_ID
+  , SCENARIO_TABLE_ID
+  , JOB_GROUP
+  , JOB_NAME
+  , JOB_DESC
+  , OWNER_NAME
+  , TABLE_NAME
+  , EXEC_SOURCE_TYPE
+  , EXEC_RESOURCE_ID
+  , EXEC_METHOD
+  , EXEC_SPEC_JSON
+  , EXEC_OBJECT_ID
+  , EXEC_OWNER
+  , EXEC_OBJECT_TYPE
+  , EXEC_OBJECT_NAME
+  , EXEC_OBJECT_LABEL
+  , USE_YN
+  , SORT_ORDER
+  , PARAM_JSON
+  , EXEC_PLSQL
+  , RESULT_CREATE_YN
+  , RESULT_OWNER
+  , RESULT_TABLE_NAME
+  , STATUS
+  , CREATED_AT
 ) VALUES (
-    :menuCode,
-    :projectId,
-    :scenarioId,
-    :scenarioTableId,
-    :jobGroup,
-    :jobName,
-    :jobDesc,
-    :ownerName,
-    :tableName,
-    :execSourceType,
-    :execResourceId,
-    :execMethod,
-    :execSpecJson,
-    :execObjectId,
-    :execOwner,
-    :execObjectType,
-    :execObjectName,
-    :execObjectLabel,
-    :useYn,
-    :sortOrder,
-    :paramJson,
-    :execPlsql,
-    :resultCreateYn,
-    :resultOwner,
-    :resultTableName,
-    :status,
-    SYSTIMESTAMP
+    :menuCode
+  , :projectId
+  , :scenarioId
+  , :scenarioTableId
+  , :jobGroup
+  , :jobName
+  , :jobDesc
+  , :ownerName
+  , :tableName
+  , :execSourceType
+  , :execResourceId
+  , :execMethod
+  , :execSpecJson
+  , :execObjectId
+  , :execOwner
+  , :execObjectType
+  , :execObjectName
+  , :execObjectLabel
+  , :useYn
+  , :sortOrder
+  , :paramJson
+  , :execPlsql
+  , :resultCreateYn
+  , :resultOwner
+  , :resultTableName
+  , :status
+  , SYSTIMESTAMP
 )
 ;
 
 -- [DATA_WORK_JOB_UPDATE]
 UPDATE INIT$_TB_DATA_WORK_JOB
-   SET SCENARIO_TABLE_ID = :scenarioTableId,
-       JOB_GROUP = :jobGroup,
-       JOB_NAME = :jobName,
-       JOB_DESC = :jobDesc,
-       OWNER_NAME = :ownerName,
-       TABLE_NAME = :tableName,
-       EXEC_SOURCE_TYPE = :execSourceType,
-       EXEC_RESOURCE_ID = :execResourceId,
-       EXEC_METHOD = :execMethod,
-       EXEC_SPEC_JSON = :execSpecJson,
-       EXEC_OBJECT_ID = :execObjectId,
-       EXEC_OWNER = :execOwner,
-       EXEC_OBJECT_TYPE = :execObjectType,
-       EXEC_OBJECT_NAME = :execObjectName,
-       EXEC_OBJECT_LABEL = :execObjectLabel,
-       USE_YN = :useYn,
-       SORT_ORDER = :sortOrder,
-       PARAM_JSON = :paramJson,
-       EXEC_PLSQL = :execPlsql,
-       RESULT_CREATE_YN = :resultCreateYn,
-       RESULT_OWNER = :resultOwner,
-       RESULT_TABLE_NAME = :resultTableName,
-       STATUS = :status,
-       UPDATED_AT = SYSTIMESTAMP
+   SET SCENARIO_TABLE_ID = :scenarioTableId
+     , JOB_GROUP = :jobGroup
+     , JOB_NAME = :jobName
+     , JOB_DESC = :jobDesc
+     , OWNER_NAME = :ownerName
+     , TABLE_NAME = :tableName
+     , EXEC_SOURCE_TYPE = :execSourceType
+     , EXEC_RESOURCE_ID = :execResourceId
+     , EXEC_METHOD = :execMethod
+     , EXEC_SPEC_JSON = :execSpecJson
+     , EXEC_OBJECT_ID = :execObjectId
+     , EXEC_OWNER = :execOwner
+     , EXEC_OBJECT_TYPE = :execObjectType
+     , EXEC_OBJECT_NAME = :execObjectName
+     , EXEC_OBJECT_LABEL = :execObjectLabel
+     , USE_YN = :useYn
+     , SORT_ORDER = :sortOrder
+     , PARAM_JSON = :paramJson
+     , EXEC_PLSQL = :execPlsql
+     , RESULT_CREATE_YN = :resultCreateYn
+     , RESULT_OWNER = :resultOwner
+     , RESULT_TABLE_NAME = :resultTableName
+     , STATUS = :status
+     , UPDATED_AT = SYSTIMESTAMP
  WHERE MENU_CODE = :menuCode
    AND WORK_JOB_ID = :profileJobId
    AND PROJECT_ID = :projectId
@@ -272,14 +268,13 @@ DELETE /*+ NO_PARALLEL */
 ;
 
 -- [DATA_WORK_JOB_FLOW_REF_LIST]
-SELECT
-    F.MENU_CODE AS FLOW_MENU_CODE,
-    F.FLOW_ID,
-    F.FLOW_GROUP,
-    F.FLOW_NAME,
-    N.FLOW_NODE_ID,
-    N.NODE_KEY,
-    N.NODE_NAME
+SELECT F.MENU_CODE AS FLOW_MENU_CODE
+     , F.FLOW_ID
+     , F.FLOW_GROUP
+     , F.FLOW_NAME
+     , N.FLOW_NODE_ID
+     , N.NODE_KEY
+     , N.NODE_NAME
   FROM INIT$_TB_FLOW_WORK_NODE N
   JOIN INIT$_TB_FLOW_WORK F
     ON F.FLOW_ID = N.FLOW_ID
@@ -297,36 +292,35 @@ DELETE /*+ NO_PARALLEL */
 ;
 
 -- [DATA_WORK_JOB_RUN_LIST]
-SELECT
-    WORK_JOB_ID AS PROFILE_JOB_ID,
-    WORK_JOB_ID,
-    MENU_CODE,
-    PROJECT_ID,
-    SCENARIO_ID,
-    SCENARIO_TABLE_ID,
-    JOB_GROUP,
-    JOB_NAME,
-    JOB_DESC,
-    OWNER_NAME,
-    TABLE_NAME,
-    EXEC_SOURCE_TYPE,
-    EXEC_RESOURCE_ID,
-    EXEC_METHOD,
-    EXEC_OBJECT_ID,
-    EXEC_OWNER,
-    EXEC_OBJECT_TYPE,
-    EXEC_OBJECT_NAME,
-    EXEC_OBJECT_LABEL,
-    USE_YN,
-    SORT_ORDER,
-    RESULT_CREATE_YN,
-    RESULT_OWNER,
-    RESULT_TABLE_NAME,
-    STATUS,
-    STARTED_AT,
-    FINISHED_AT,
-    CREATED_AT,
-    UPDATED_AT
+SELECT WORK_JOB_ID AS PROFILE_JOB_ID
+     , WORK_JOB_ID
+     , MENU_CODE
+     , PROJECT_ID
+     , SCENARIO_ID
+     , SCENARIO_TABLE_ID
+     , JOB_GROUP
+     , JOB_NAME
+     , JOB_DESC
+     , OWNER_NAME
+     , TABLE_NAME
+     , EXEC_SOURCE_TYPE
+     , EXEC_RESOURCE_ID
+     , EXEC_METHOD
+     , EXEC_OBJECT_ID
+     , EXEC_OWNER
+     , EXEC_OBJECT_TYPE
+     , EXEC_OBJECT_NAME
+     , EXEC_OBJECT_LABEL
+     , USE_YN
+     , SORT_ORDER
+     , RESULT_CREATE_YN
+     , RESULT_OWNER
+     , RESULT_TABLE_NAME
+     , STATUS
+     , STARTED_AT
+     , FINISHED_AT
+     , CREATED_AT
+     , UPDATED_AT
   FROM INIT$_TB_DATA_WORK_JOB
  WHERE MENU_CODE = :menuCode
    AND PROJECT_ID = :projectId
@@ -337,35 +331,35 @@ SELECT
 
 -- [DATA_WORK_JOB_STATUS_UPDATE]
 UPDATE INIT$_TB_DATA_WORK_JOB
-   SET STATUS = :status,
-       RESULT_OWNER = :resultOwner,
-       RESULT_TABLE_NAME = :resultTableName,
-       STARTED_AT = CASE WHEN :startedYn = 'Y' THEN SYSTIMESTAMP ELSE STARTED_AT END,
-       FINISHED_AT = CASE WHEN :finishedYn = 'Y' THEN SYSTIMESTAMP ELSE FINISHED_AT END,
-       UPDATED_AT = SYSTIMESTAMP
+   SET STATUS = :status
+     , RESULT_OWNER = :resultOwner
+     , RESULT_TABLE_NAME = :resultTableName
+     , STARTED_AT = CASE WHEN :startedYn = 'Y' THEN SYSTIMESTAMP ELSE STARTED_AT END
+     , FINISHED_AT = CASE WHEN :finishedYn = 'Y' THEN SYSTIMESTAMP ELSE FINISHED_AT END
+     , UPDATED_AT = SYSTIMESTAMP
  WHERE MENU_CODE = :menuCode
    AND WORK_JOB_ID = :profileJobId
 ;
 
 -- [DATA_WORK_RUN_INSERT]
 INSERT INTO INIT$_TB_DATA_WORK_RUN (
-    WORK_JOB_ID,
-    RUN_TYPE,
-    STATUS,
-    MESSAGE,
-    RESULT_OWNER,
-    RESULT_TABLE_NAME,
-    STARTED_AT,
-    CREATED_AT
+    WORK_JOB_ID
+  , RUN_TYPE
+  , STATUS
+  , MESSAGE
+  , RESULT_OWNER
+  , RESULT_TABLE_NAME
+  , STARTED_AT
+  , CREATED_AT
 ) VALUES (
-    :profileJobId,
-    :runType,
-    :status,
-    :message,
-    :resultOwner,
-    :resultTableName,
-    SYSTIMESTAMP,
-    SYSTIMESTAMP
+    :profileJobId
+  , :runType
+  , :status
+  , :message
+  , :resultOwner
+  , :resultTableName
+  , SYSTIMESTAMP
+  , SYSTIMESTAMP
 )
 ;
 
@@ -377,32 +371,31 @@ SELECT MAX(WORK_RUN_ID) AS PROFILE_RUN_ID
 
 -- [DATA_WORK_RUN_UPDATE]
 UPDATE INIT$_TB_DATA_WORK_RUN
-   SET STATUS = :status,
-       MESSAGE = :message,
-       RESULT_OWNER = :resultOwner,
-       RESULT_TABLE_NAME = :resultTableName,
-       FINISHED_AT = SYSTIMESTAMP
+   SET STATUS = :status
+     , MESSAGE = :message
+     , RESULT_OWNER = :resultOwner
+     , RESULT_TABLE_NAME = :resultTableName
+     , FINISHED_AT = SYSTIMESTAMP
  WHERE WORK_RUN_ID = :profileRunId
 ;
 
 -- [DATA_WORK_RUN_LIST]
-SELECT
-    R.WORK_RUN_ID AS PROFILE_RUN_ID,
-    R.WORK_JOB_ID AS PROFILE_JOB_ID,
-    R.WORK_RUN_ID,
-    R.WORK_JOB_ID,
-    J.MENU_CODE,
-    J.JOB_GROUP,
-    J.JOB_NAME,
-    J.SORT_ORDER,
-    R.RUN_TYPE,
-    R.STATUS,
-    R.MESSAGE,
-    R.RESULT_OWNER,
-    R.RESULT_TABLE_NAME,
-    R.STARTED_AT,
-    R.FINISHED_AT,
-    R.CREATED_AT
+SELECT R.WORK_RUN_ID AS PROFILE_RUN_ID
+     , R.WORK_JOB_ID AS PROFILE_JOB_ID
+     , R.WORK_RUN_ID
+     , R.WORK_JOB_ID
+     , J.MENU_CODE
+     , J.JOB_GROUP
+     , J.JOB_NAME
+     , J.SORT_ORDER
+     , R.RUN_TYPE
+     , R.STATUS
+     , R.MESSAGE
+     , R.RESULT_OWNER
+     , R.RESULT_TABLE_NAME
+     , R.STARTED_AT
+     , R.FINISHED_AT
+     , R.CREATED_AT
   FROM INIT$_TB_DATA_WORK_RUN R
   JOIN INIT$_TB_DATA_WORK_JOB J
     ON J.WORK_JOB_ID = R.WORK_JOB_ID

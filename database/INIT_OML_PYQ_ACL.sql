@@ -50,11 +50,11 @@ DECLARE
     BEGIN
         print_line('[INFO] DBA_HOST_ACES for ' || c_app_user);
         FOR rec IN (
-            SELECT HOST,
-                   LOWER_PORT,
-                   UPPER_PORT,
-                   PRIVILEGE,
-                   GRANT_TYPE
+            SELECT HOST
+                 , LOWER_PORT
+                 , UPPER_PORT
+                 , PRIVILEGE
+                 , GRANT_TYPE
               FROM DBA_HOST_ACES
              WHERE PRINCIPAL = c_app_user
              ORDER BY HOST, PRIVILEGE

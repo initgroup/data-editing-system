@@ -1230,8 +1230,8 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_APRIORI_ASSOC_MODEL" (
                    AND "PASS_YN" = 'Y'
             ),
             CATEGORICAL_COLS AS (
-                SELECT "COLUMN_NAME",
-                       MIN(NVL("COLUMN_ID", 999999)) AS COLUMN_ID
+                SELECT "COLUMN_NAME"
+                     , MIN(NVL("COLUMN_ID", 999999)) AS COLUMN_ID
                  FROM "INIT$_TB_PREDICTED_TYPE"
                 WHERE "OWNER" = v_target_owner
                   AND "TABLE_NAME" = v_target_table
@@ -1260,8 +1260,8 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_APRIORI_ASSOC_MODEL" (
             FOR col_rec IN (
                 SELECT "COLUMN_NAME"
                   FROM (
-                        SELECT "COLUMN_NAME",
-                               MIN(NVL("COLUMN_ID", 999999)) AS COLUMN_ID
+                        SELECT "COLUMN_NAME"
+                             , MIN(NVL("COLUMN_ID", 999999)) AS COLUMN_ID
                           FROM "INIT$_TB_PREDICTED_TYPE"
                          WHERE "OWNER" = v_target_owner
                            AND "TABLE_NAME" = v_target_table
@@ -2065,8 +2065,8 @@ BEGIN
     FOR rule_rec IN (
         SELECT *
           FROM (
-                SELECT S.*,
-                       ROW_NUMBER() OVER (
+                SELECT S.*
+                     , ROW_NUMBER() OVER (
                            ORDER BY S.RULE_CONFIDENCE DESC NULLS LAST,
                                     S.RULE_LIFT DESC NULLS LAST,
                                     S.SUPPORT_COUNT DESC NULLS LAST,
@@ -2183,11 +2183,11 @@ BEGIN
             SELECT 'VR', 'Rule/detail view' FROM DUAL UNION ALL
             SELECT 'VT', 'Transformation/detail view' FROM DUAL
         )
-        SELECT V.VIEW_TYPE,
-               'DM$' || V.VIEW_TYPE || v_model_name AS VIEW_NAME,
-               V.DESCRIPTION,
-               O.OBJECT_TYPE,
-               CASE WHEN O.OBJECT_NAME IS NULL THEN 'N' ELSE 'Y' END AS EXISTS_YN
+        SELECT V.VIEW_TYPE
+             , 'DM$' || V.VIEW_TYPE || v_model_name AS VIEW_NAME
+             , V.DESCRIPTION
+             , O.OBJECT_TYPE
+             , CASE WHEN O.OBJECT_NAME IS NULL THEN 'N' ELSE 'Y' END AS EXISTS_YN
           FROM VIEW_TYPES V
           LEFT JOIN USER_OBJECTS O
             ON O.OBJECT_NAME = 'DM$' || V.VIEW_TYPE || v_model_name
@@ -2398,8 +2398,8 @@ BEGIN
       FROM (
             SELECT COLUMN_NAME
               FROM (
-                    SELECT COLUMN_NAME,
-                           MIN(NVL(COLUMN_ID, 999999)) AS COLUMN_ID
+                    SELECT COLUMN_NAME
+                         , MIN(NVL(COLUMN_ID, 999999)) AS COLUMN_ID
                      FROM "INIT$_TB_PREDICTED_TYPE"
                     WHERE "OWNER" = v_owner
                       AND "TABLE_NAME" = v_table_name
@@ -2510,44 +2510,44 @@ SELECT TOT.TOTAL_CNT,
                          END;
 
             INSERT /*+ NO_PARALLEL */ INTO "INIT$_TB_CAT_CORR_PAIR" (
-                "OWNER",
-                "TABLE_NAME",
-                "COL_A",
-                "COL_B",
-                "ROW_COUNT",
-                "DF",
-                "CHI_SQUARE",
-                "P_VALUE",
-                "CRAMERS_V",
-                "PASS_YN",
-                "CREATE_DT"
+                "OWNER"
+              , "TABLE_NAME"
+              , "COL_A"
+              , "COL_B"
+              , "ROW_COUNT"
+              , "DF"
+              , "CHI_SQUARE"
+              , "P_VALUE"
+              , "CRAMERS_V"
+              , "PASS_YN"
+              , "CREATE_DT"
             ) VALUES (
-                v_owner,
-                v_table_name,
-                v_col_a,
-                v_col_b,
-                v_row_count,
-                v_df,
-                v_chi_square,
-                v_p_value,
-                v_cramers_v,
-                v_pass_yn,
-                SYSDATE
+                v_owner
+              , v_table_name
+              , v_col_a
+              , v_col_b
+              , v_row_count
+              , v_df
+              , v_chi_square
+              , v_p_value
+              , v_cramers_v
+              , v_pass_yn
+              , SYSDATE
             );
         END LOOP;
     END LOOP;
 
     INSERT /*+ NO_PARALLEL */ INTO "INIT$_TB_CAT_CORR_SUMMARY" (
-        "OWNER",
-        "TABLE_NAME",
-        "COLUMN_NAME",
-        "PAIR_COUNT",
-        "PASS_PAIR_COUNT",
-        "AVG_CRAMERS_V",
-        "MAX_CRAMERS_V",
-        "RANK_NO",
-        "SELECTED_YN",
-        "CREATE_DT"
+        "OWNER"
+      , "TABLE_NAME"
+      , "COLUMN_NAME"
+      , "PAIR_COUNT"
+      , "PASS_PAIR_COUNT"
+      , "AVG_CRAMERS_V"
+      , "MAX_CRAMERS_V"
+      , "RANK_NO"
+      , "SELECTED_YN"
+      , "CREATE_DT"
     )
     WITH PAIRS AS (
         SELECT COL_A AS COLUMN_NAME, CRAMERS_V, PASS_YN
@@ -2561,24 +2561,24 @@ SELECT TOT.TOTAL_CNT,
            AND "TABLE_NAME" = v_table_name
     ),
     SUMMARY AS (
-        SELECT COLUMN_NAME,
-               COUNT(*) AS PAIR_COUNT,
-               SUM(CASE WHEN PASS_YN = 'Y' THEN 1 ELSE 0 END) AS PASS_PAIR_COUNT,
-               AVG(CASE WHEN PASS_YN = 'Y' THEN CRAMERS_V END) AS AVG_CRAMERS_V,
-               MAX(CASE WHEN PASS_YN = 'Y' THEN CRAMERS_V END) AS MAX_CRAMERS_V
+        SELECT COLUMN_NAME
+             , COUNT(*) AS PAIR_COUNT
+             , SUM(CASE WHEN PASS_YN = 'Y' THEN 1 ELSE 0 END) AS PASS_PAIR_COUNT
+             , AVG(CASE WHEN PASS_YN = 'Y' THEN CRAMERS_V END) AS AVG_CRAMERS_V
+             , MAX(CASE WHEN PASS_YN = 'Y' THEN CRAMERS_V END) AS MAX_CRAMERS_V
           FROM PAIRS
          GROUP BY COLUMN_NAME
     )
-    SELECT v_owner,
-           v_table_name,
-           COLUMN_NAME,
-           PAIR_COUNT,
-           PASS_PAIR_COUNT,
-           AVG_CRAMERS_V,
-           MAX_CRAMERS_V,
-           ROW_NUMBER() OVER (ORDER BY AVG_CRAMERS_V DESC NULLS LAST, COLUMN_NAME) AS RANK_NO,
-           CASE WHEN NVL(AVG_CRAMERS_V, 0) >= NVL(p_min_avg_v, 0.5) THEN 'Y' ELSE 'N' END AS SELECTED_YN,
-           SYSDATE
+    SELECT v_owner
+         , v_table_name
+         , COLUMN_NAME
+         , PAIR_COUNT
+         , PASS_PAIR_COUNT
+         , AVG_CRAMERS_V
+         , MAX_CRAMERS_V
+         , ROW_NUMBER() OVER (ORDER BY AVG_CRAMERS_V DESC NULLS LAST, COLUMN_NAME) AS RANK_NO
+         , CASE WHEN NVL(AVG_CRAMERS_V, 0) >= NVL(p_min_avg_v, 0.5) THEN 'Y' ELSE 'N' END AS SELECTED_YN
+         , SYSDATE
       FROM SUMMARY;
 
     DBMS_OUTPUT.PUT_LINE('[OK] INIT$_SP_CAT_CORR_ANALYZE analyzed '

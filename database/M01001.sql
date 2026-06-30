@@ -1,16 +1,15 @@
 -- [M01001_PROJECT_LIST]
-SELECT
-    PROJECT_ID,
-    USER_ID,
-    USER_EMAIL,
-    PROJECT_CODE,
-    PROJECT_NAME,
-    PROJECT_TYPE,
-    PROJECT_DESC,
-    USE_YN,
-    SORT_ORDER,
-    CREATED_AT,
-    UPDATED_AT
+SELECT PROJECT_ID
+     , USER_ID
+     , USER_EMAIL
+     , PROJECT_CODE
+     , PROJECT_NAME
+     , PROJECT_TYPE
+     , PROJECT_DESC
+     , USE_YN
+     , SORT_ORDER
+     , CREATED_AT
+     , UPDATED_AT
   FROM INIT$_TB_PROJECT
  WHERE USER_ID = :userId
    AND (
@@ -25,18 +24,17 @@ SELECT
 ;
 
 -- [M01001_PROJECT_DETAIL]
-SELECT
-    PROJECT_ID,
-    USER_ID,
-    USER_EMAIL,
-    PROJECT_CODE,
-    PROJECT_NAME,
-    PROJECT_TYPE,
-    PROJECT_DESC,
-    USE_YN,
-    SORT_ORDER,
-    CREATED_AT,
-    UPDATED_AT
+SELECT PROJECT_ID
+     , USER_ID
+     , USER_EMAIL
+     , PROJECT_CODE
+     , PROJECT_NAME
+     , PROJECT_TYPE
+     , PROJECT_DESC
+     , USE_YN
+     , SORT_ORDER
+     , CREATED_AT
+     , UPDATED_AT
   FROM INIT$_TB_PROJECT
  WHERE PROJECT_ID = :projectId
    AND USER_ID = :userId
@@ -44,25 +42,25 @@ SELECT
 
 -- [M01001_PROJECT_INSERT]
 INSERT INTO INIT$_TB_PROJECT (
-    USER_ID,
-    USER_EMAIL,
-    PROJECT_CODE,
-    PROJECT_NAME,
-    PROJECT_TYPE,
-    PROJECT_DESC,
-    USE_YN,
-    SORT_ORDER,
-    CREATED_AT
+    USER_ID
+  , USER_EMAIL
+  , PROJECT_CODE
+  , PROJECT_NAME
+  , PROJECT_TYPE
+  , PROJECT_DESC
+  , USE_YN
+  , SORT_ORDER
+  , CREATED_AT
 ) VALUES (
-    :userId,
-    :userEmail,
-    :projectCode,
-    :projectName,
-    :projectType,
-    :projectDesc,
-    :useYn,
-    :sortOrder,
-    SYSTIMESTAMP
+    :userId
+  , :userEmail
+  , :projectCode
+  , :projectName
+  , :projectType
+  , :projectDesc
+  , :useYn
+  , :sortOrder
+  , SYSTIMESTAMP
 )
 ;
 
@@ -75,14 +73,14 @@ SELECT PROJECT_ID
 
 -- [M01001_PROJECT_UPDATE]
 UPDATE INIT$_TB_PROJECT
-   SET PROJECT_CODE = :projectCode,
-       USER_EMAIL = :userEmail,
-       PROJECT_NAME = :projectName,
-       PROJECT_TYPE = :projectType,
-       PROJECT_DESC = :projectDesc,
-       USE_YN = :useYn,
-       SORT_ORDER = :sortOrder,
-       UPDATED_AT = SYSTIMESTAMP
+   SET PROJECT_CODE = :projectCode
+     , USER_EMAIL = :userEmail
+     , PROJECT_NAME = :projectName
+     , PROJECT_TYPE = :projectType
+     , PROJECT_DESC = :projectDesc
+     , USE_YN = :useYn
+     , SORT_ORDER = :sortOrder
+     , UPDATED_AT = SYSTIMESTAMP
  WHERE PROJECT_ID = :projectId
    AND USER_ID = :userId
 ;
@@ -94,8 +92,7 @@ DELETE FROM INIT$_TB_PROJECT
 ;
 
 -- [M01001_PROJECT_CHILD_COUNT]
-SELECT
-    (
+SELECT (
         SELECT COUNT(*)
           FROM INIT$_TB_SCENARIO
          WHERE PROJECT_ID = :projectId
@@ -105,8 +102,8 @@ SELECT
                  WHERE P.PROJECT_ID = :projectId
                    AND P.USER_ID = :userId
            )
-    ) AS SCENARIO_COUNT,
-    (
+    ) AS SCENARIO_COUNT
+     , (
         SELECT COUNT(*)
           FROM INIT$_TB_TABLES
          WHERE PROJECT_ID = :projectId
