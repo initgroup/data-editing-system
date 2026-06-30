@@ -62,6 +62,7 @@ npx tailwindcss -i ./frontend/css/input.css -o ./frontend/css/output.css --watch
 - `SELECT`는 서브쿼리의 시작점이자 정렬 기준입니다. `SELECT` 6글자 끝 위치를 기준으로 다음 컬럼의 콤마(`,`)와 `FROM`, `WHERE`, `GROUP`, `ORDER`, `HAVING` 같은 주요 절 키워드를 오른쪽 정렬합니다.
 - 첫 컬럼은 반드시 `SELECT 컬럼` 형태로 같은 줄에 둡니다. `SELECT`만 단독으로 한 줄에 쓰고 다음 줄에 첫 컬럼을 두지 않습니다.
 - 두 번째 컬럼부터는 `     , 컬럼` 형태로 콤마를 줄 앞에 둡니다.
+- 함수 인자, `DECODE(...)`, `NVL2(...)`, `IN (...)`처럼 표현식 내부의 콤마는 컬럼/값 구분용 콤마로 보지 않고 임의 줄바꿈하지 않습니다. `CASE WHEN`은 `WHEN 조건 THEN 결과` 한 쌍을 가능하면 한 줄에 둡니다. 긴 산식이나 긴 조건처럼 줄바꿈이 필요한 표현식은 컬럼 구분 콤마 정렬 위치보다 최소 한 칸 더 안쪽으로 들여써 컬럼 구분 콤마와 구별합니다.
 - `FROM`, `JOIN`, `WHERE`는 앞 공백을 포함해 `SELECT` 기준에 맞추고, `ON`, `AND`, `OR` 조건도 같은 세로 정렬 감각으로 배치합니다.
 - `WHERE` 조건은 가능하면 `WHERE 1=1`로 시작하고, 이후 조건은 `   AND ...` 형태로 이어갑니다.
 - `GROUP BY`, `ORDER BY` 뒤의 두 번째 이후 표현식도 comma-first로 맞춥니다. 예: `        , 컬럼`
@@ -77,6 +78,11 @@ SELECT P.CONDITION_VALUE1
      , P.CONDITION_VALUE2
      , P.RESULT_VALUE
      , P.SUPPORT_COUNT
+     , DECODE(P.RESULT_VALUE, 'Y', 'YES', 'N', 'NO', 'UNKNOWN') AS RESULT_LABEL
+     , CASE
+           WHEN P.RULE_CONFIDENCE >= 0.9 AND P.RULE_LIFT >= 1 THEN 'HIGH'
+           ELSE 'LOW'
+       END AS RULE_GRADE
      , C.CONDITION_TOTAL_COUNT
      , R.RESULT_TOTAL_COUNT
      , T.TOTAL_COUNT

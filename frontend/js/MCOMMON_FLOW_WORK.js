@@ -813,6 +813,7 @@
                 const flowName = flow.FLOW_NAME || "Untitled Flow";
                 const flowDesc = flow.FLOW_DESC || flow.FLOW_TYPE || "";
                 const updatedAt = flow.UPDATED_AT || flow.CREATED_AT || "";
+                const updatedAtLabel = this.formatKstDateTime(updatedAt);
                 return `
                     <button type="button" class="data-job-row flow-version-row ${selectedClass}${runningClass}" data-flow-id="${this.escapeHtml(flowId)}" onclick="${PAGE_CODE}.loadFlowVersion('${this.escapeJs(flowId)}')">
                         <span class="data-job-order">${this.escapeHtml(index + 1)}</span>
@@ -825,7 +826,7 @@
                             ` : ""}
                         </span>
                         <span class="flow-version-desc" title="${this.escapeHtml(flowDesc)}">${this.escapeHtml(flowDesc || "-")}</span>
-                        <span class="flow-version-updated" title="${this.escapeHtml(updatedAt)}">${this.escapeHtml(updatedAt || "-")}</span>
+                        <span class="flow-version-updated" title="${this.escapeHtml(updatedAt)}">${this.escapeHtml(updatedAtLabel || "-")}</span>
                         <em><span>${this.escapeHtml(flow.USE_YN || "Y")}</span><span>${this.escapeHtml(flow.EXECUTION_MODE || "DAG")}</span></em>
                     </button>
                 `;
@@ -2261,7 +2262,10 @@
                     "INIT$PreTargetOwner": "INIT$PreTargetOwner",
                     "INIT$PreTargetTable": "INIT$PreTargetTable",
                     "INIT$PreResultOwner": "INIT$PreResultOwner",
-                    "INIT$PreResultTable": "INIT$PreResultTable"
+                    "INIT$PreResultTable": "INIT$PreResultTable",
+                    "INIT$RunSourceType": "INIT$RunSourceType",
+                    "INIT$RunId": "INIT$RunId",
+                    "INIT$FlowRunId": "INIT$FlowRunId"
                 };
                 return aliases[String(name || "")] || "";
             },
@@ -2291,7 +2295,10 @@
                     "INIT$PreTargetOwner": sourceNode.dataset.ownerName || "",
                     "INIT$PreTargetTable": sourceNode.dataset.tableName || "",
                     "INIT$PreResultOwner": resultOwner,
-                    "INIT$PreResultTable": resultTable
+                    "INIT$PreResultTable": resultTable,
+                    "INIT$RunSourceType": "FLOW_WORK",
+                    "INIT$RunId": "",
+                    "INIT$FlowRunId": ""
                 };
                 return values[canonicalName] || "";
             },
@@ -3183,8 +3190,8 @@
                                     <td>${this.escapeHtml(row.RUN_TYPE || "")}</td>
                                     <td>${this.escapeHtml(row.STATUS || "")}</td>
                                     <td>${this.renderRunHistoryMessageCell(row)}</td>
-                                    <td>${this.escapeHtml(row.STARTED_AT || "")}</td>
-                                    <td>${this.escapeHtml(row.FINISHED_AT || "")}</td>
+                                    <td title="${this.escapeHtml(row.STARTED_AT || "")}">${this.escapeHtml(this.formatKstDateTime(row.STARTED_AT))}</td>
+                                    <td title="${this.escapeHtml(row.FINISHED_AT || "")}">${this.escapeHtml(this.formatKstDateTime(row.FINISHED_AT))}</td>
                                     <td>${this.escapeHtml(this.formatElapsedTime(row.STARTED_AT, row.FINISHED_AT, row.STATUS))}</td>
                                 </tr>
                                 ${expanded ? this.renderRunHistoryDetailRow(row) : ""}
@@ -3375,8 +3382,8 @@
                 const elapsed = this.formatElapsedTime(row.STARTED_AT, row.FINISHED_AT, row.STATUS);
                 return `
                     <span class="flow-node-run-timing">
-                        <small><b>Start</b>${this.escapeHtml(row.STARTED_AT || "-")}</small>
-                        <small><b>End</b>${this.escapeHtml(row.FINISHED_AT || "-")}</small>
+                        <small title="${this.escapeHtml(row.STARTED_AT || "")}"><b>Start</b>${this.escapeHtml(this.formatKstDateTime(row.STARTED_AT) || "-")}</small>
+                        <small title="${this.escapeHtml(row.FINISHED_AT || "")}"><b>End</b>${this.escapeHtml(this.formatKstDateTime(row.FINISHED_AT) || "-")}</small>
                         <strong>${this.escapeHtml(elapsed || "-")}</strong>
                     </span>
                 `;
@@ -3391,6 +3398,7 @@
                 const targetTable = runtimeParams["INIT$TargetTable"] || runtimeParams.targetTable || payload.targetTable || payload.tableName || "";
                 return {
                     flowNodeRunId: row?.FLOW_NODE_RUN_ID || "",
+                    flowRunId: row?.FLOW_RUN_ID || "",
                     nodeName: row?.NODE_NAME || row?.NODE_KEY || "",
                     status: String(row?.STATUS || "").toUpperCase(),
                     mode,
@@ -3414,7 +3422,8 @@
                     owner: info.owner,
                     objectName: info.objectName,
                     targetOwner: info.targetOwner || "",
-                    targetTable: info.targetTable || ""
+                    targetTable: info.targetTable || "",
+                    flowRunId: info.flowRunId || ""
                 });
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/result-sql?${params.toString()}`, {
                     method: "GET",
@@ -3724,6 +3733,24 @@
                 const elapsed = `${hours}h ${minutes}m ${seconds}s`;
                 return elapsed;
             },
+            formatKstDateTime(value) {
+                const date = this.parseDateTime(value);
+                if (!date) return value || "";
+                const parts = new Intl.DateTimeFormat("ko-KR", {
+                    timeZone: "Asia/Seoul",
+                    year: "numeric",
+                    month: "2-digit",
+                    day: "2-digit",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    second: "2-digit",
+                    hour12: false
+                }).formatToParts(date).reduce((acc, part) => {
+                    acc[part.type] = part.value;
+                    return acc;
+                }, {});
+                return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second} KST`;
+            },
             parseDateTime(value) {
                 if (!value) return null;
                 if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
@@ -3731,14 +3758,18 @@
                 const match = text.match(/^(\d{4})[-/](\d{2})[-/](\d{2})[ T](\d{2}):(\d{2}):(\d{2})/);
                 if (match) {
                     const [, year, month, day, hour, minute, second] = match;
-                    return new Date(
+                    if (/[zZ]|[+-]\d{2}:?\d{2}$/.test(text)) {
+                        const parsedWithZone = new Date(text);
+                        return Number.isNaN(parsedWithZone.getTime()) ? null : parsedWithZone;
+                    }
+                    return new Date(Date.UTC(
                         Number(year),
                         Number(month) - 1,
                         Number(day),
                         Number(hour),
                         Number(minute),
                         Number(second)
-                    );
+                    ));
                 }
                 const parsed = new Date(text);
                 return Number.isNaN(parsed.getTime()) ? null : parsed;

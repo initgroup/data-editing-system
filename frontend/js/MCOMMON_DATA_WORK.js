@@ -25,33 +25,91 @@
                 },
 
                 shouldApplyTargetResultFilter(tableName) {
-                    return new Set(["INIT$_TB_PREDICTED_TYPE", "INIT$_TB_CAT_CORR_PAIR"])
+                    return new Set([
+                        "INIT$_TB_PREDICTED_TYPE",
+                        "INIT$_TB_PREDICTED_TYPE_FINAL",
+                        "INIT$_TB_CAT_CORR_PAIR",
+                        "INIT$_TB_CAT_CORR_SUMMARY",
+                        "INIT$_TB_ASSOC_RULE_SUMMARY",
+                        "INIT$_TB_RULE_VIOLATION_RESULT"
+                    ])
                         .has(String(tableName || "").trim().toUpperCase());
                 },
 
+                getLatestDataWorkRunId() {
+                    const jobId = String(this.currentJob?.profileJobId || this.currentJob?.workJobId || "").trim();
+                    if (!jobId) return "";
+                    const row = (this.runHistory || []).find((item) => (
+                        String(item.PROFILE_JOB_ID || item.WORK_JOB_ID || "").trim() === jobId
+                        && (item.PROFILE_RUN_ID || item.WORK_RUN_ID)
+                    ));
+                    return row ? String(row.PROFILE_RUN_ID || row.WORK_RUN_ID || "").trim() : "";
+                },
+
                 createTargetResultWhereClause(tableName, targetOwner = "", targetTable = "") {
-                    const table = String(tableName || "").trim();
+                    const table = String(tableName || "").trim().toUpperCase();
                     const owner = String(targetOwner || "").trim();
                     const target = String(targetTable || "").trim();
                     if (!this.shouldApplyTargetResultFilter(table) || !owner || !target) return "";
-                    return [
-                        `OWNER = '${this.escapeSqlLiteral(owner.toUpperCase())}'`,
-                        `AND TABLE_NAME = '${this.escapeSqlLiteral(target.toUpperCase())}'`
-                    ].join("\n");
+                    const clauses = table === "INIT$_TB_ASSOC_RULE_SUMMARY" || table === "INIT$_TB_RULE_VIOLATION_RESULT"
+                        ? [
+                            `TARGET_OWNER = '${this.escapeSqlLiteral(owner.toUpperCase())}'`,
+                            ` AND TARGET_TABLE = '${this.escapeSqlLiteral(target.toUpperCase())}'`
+                        ]
+                        : [
+                            `OWNER = '${this.escapeSqlLiteral(owner.toUpperCase())}'`,
+                            ` AND TABLE_NAME = '${this.escapeSqlLiteral(target.toUpperCase())}'`
+                        ];
+                    if (table === "INIT$_TB_PREDICTED_TYPE_FINAL") {
+                        return clauses.join("\n");
+                    }
+                    const runId = this.getLatestDataWorkRunId?.();
+                    if (runId && /^\d+$/.test(runId)) {
+                        clauses.push(" AND RUN_SOURCE_TYPE = 'DATA_WORK'");
+                        clauses.push(` AND RUN_ID = ${runId}`);
+                    }
+                    return clauses.join("\n");
+                },
+
+                isPredictedTypeResultTable(tableName) {
+                    const table = String(tableName || "").trim().toUpperCase();
+                    return table === "INIT$_TB_PREDICTED_TYPE" || table === "INIT$_TB_PREDICTED_TYPE_FINAL";
+                },
+
+                getPredictedTypeFinalTableName(tableName) {
+                    return this.isPredictedTypeResultTable(tableName)
+                        ? "INIT$_TB_PREDICTED_TYPE_FINAL"
+                        : String(tableName || "").trim();
                 },
 
                 createTargetFilteredSelectSql(ownerName, tableName, targetOwner = "", targetTable = "") {
                     const owner = String(ownerName || "").trim();
-                    const table = String(tableName || "").trim();
+                    const requestedTable = String(tableName || "").trim();
+                    const table = pageCode === "M03001"
+                        ? this.getPredictedTypeFinalTableName(requestedTable)
+                        : requestedTable;
                     if (!table) return "";
                     const objectName = owner ? `${this.quoteName(owner)}.${this.quoteName(table)}` : this.quoteName(table);
                     const whereClause = this.createTargetResultWhereClause(table, targetOwner, targetTable);
-                    if (!whereClause) return `SELECT *\n  FROM ${objectName};`;
-                    return [
+                    const mainSql = !whereClause ? `SELECT *\n  FROM ${objectName};` : [
                         "SELECT *",
                         `  FROM ${objectName}`,
-                        ` WHERE ${whereClause.replace(/\nAND /g, "\n   AND ")};`
+                        ` WHERE ${whereClause.replace(/\n\s*AND /g, "\n   AND ")};`
                     ].join("\n");
+                    if (pageCode !== "M03001" || !this.isPredictedTypeResultTable(requestedTable)) {
+                        return mainSql;
+                    }
+
+                    const historyObjectName = owner
+                        ? `${this.quoteName(owner)}.${this.quoteName("INIT$_TB_PREDICTED_TYPE")}`
+                        : this.quoteName("INIT$_TB_PREDICTED_TYPE");
+                    const historyWhereClause = this.createTargetResultWhereClause("INIT$_TB_PREDICTED_TYPE", targetOwner, targetTable);
+                    const historySql = !historyWhereClause ? `SELECT *\n  FROM ${historyObjectName};` : [
+                        "SELECT *",
+                        `  FROM ${historyObjectName}`,
+                        ` WHERE ${historyWhereClause.replace(/\n\s*AND /g, "\n   AND ")};`
+                    ].join("\n");
+                    return `${mainSql}\n\n${historySql}`;
                 },
 
                 setText(selector, value) {
@@ -1284,10 +1342,14 @@
                         <span><code>:INIT$TargetTable</code><small>현재 Target Table</small></span>
                         <span><code>:INIT$ResultOwner</code><small>현재 Result Owner</small></span>
                         <span><code>:INIT$ResultTable</code><small>현재 Result Table</small></span>
+                        <span><code>:INIT$RunSourceType</code><small>DATA_WORK/FLOW_WORK</small></span>
+                        <span><code>:INIT$RunId</code><small>현재 실행 이력 ID</small></span>
                     </div>
                     <h3>생성 예시</h3>
                     <pre class="data-help-code"><code>P_TARGET_OWNER       =&gt; :INIT$TargetOwner
 P_TARGET_TABLE       =&gt; :INIT$TargetTable
+P_RUN_SOURCE_TYPE    =&gt; :INIT$RunSourceType
+P_RUN_ID             =&gt; :INIT$RunId
 P_DYNAMIC_MODEL_NAME =&gt; :pDynamicModelName
 P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                 `;
@@ -1597,6 +1659,8 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                 "STARTED_AT",
                 "FINISHED_AT",
                 "ELAPSED_TIME",
+                "RUN_SOURCE_TYPE",
+                "RUN_ID",
                 "RESULT_OWNER",
                 "RESULT_TABLE_NAME",
                 "CREATED_AT",
@@ -1681,7 +1745,8 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
         renderRunHistoryCell(row, rowIndex, column, isExpanded) {
             const value = row[column] ?? "";
             if (column !== "MESSAGE") {
-                return `<td title="${this.escapeHtml(value)}">${this.escapeHtml(value)}</td>`;
+                const displayValue = /_AT$/i.test(column) ? this.formatKstDateTime(value) : value;
+                return `<td title="${this.escapeHtml(value)}">${this.escapeHtml(displayValue)}</td>`;
             }
             const message = String(value ?? "");
             if (!message) {
@@ -1737,6 +1802,25 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
             return `${hours}h ${minutes}m ${seconds}s`;
         },
 
+        formatKstDateTime(value) {
+            const date = this.parseDateTime(value);
+            if (!date) return value || "";
+            const parts = new Intl.DateTimeFormat("ko-KR", {
+                timeZone: "Asia/Seoul",
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+                hour12: false
+            }).formatToParts(date).reduce((acc, part) => {
+                acc[part.type] = part.value;
+                return acc;
+            }, {});
+            return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second} KST`;
+        },
+
         parseDateTime(value) {
             if (!value) return null;
             if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
@@ -1745,14 +1829,18 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
             const match = text.match(/^(\d{4})[-/](\d{2})[-/](\d{2})[ T](\d{2}):(\d{2}):(\d{2})/);
             if (match) {
                 const [, year, month, day, hour, minute, second] = match;
-                return new Date(
+                if (/[zZ]|[+-]\d{2}:?\d{2}$/.test(text)) {
+                    const parsedWithZone = new Date(text);
+                    return Number.isNaN(parsedWithZone.getTime()) ? null : parsedWithZone;
+                }
+                return new Date(Date.UTC(
                     Number(year),
                     Number(month) - 1,
                     Number(day),
                     Number(hour),
                     Number(minute),
                     Number(second)
-                );
+                ));
             }
 
             const parsed = new Date(text);
@@ -2060,7 +2148,9 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                 "INIT$PreTargetOwner": "INIT$PreTargetOwner",
                 "INIT$PreTargetTable": "INIT$PreTargetTable",
                 "INIT$PreResultOwner": "INIT$PreResultOwner",
-                "INIT$PreResultTable": "INIT$PreResultTable"
+                "INIT$PreResultTable": "INIT$PreResultTable",
+                "INIT$RunSourceType": "INIT$RunSourceType",
+                "INIT$RunId": "INIT$RunId"
             };
             return aliases[key] || "";
         },
@@ -2110,7 +2200,9 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                 "INIT$PreTargetOwner": "",
                 "INIT$PreTargetTable": "",
                 "INIT$PreResultOwner": "",
-                "INIT$PreResultTable": ""
+                "INIT$PreResultTable": "",
+                "INIT$RunSourceType": "DATA_WORK",
+                "INIT$RunId": this.getLatestDataWorkRunId?.() || ""
             };
             return values[canonicalName] ?? "";
         },
@@ -2364,7 +2456,7 @@ END;`;
             if (configured?.length) {
                 return new Set(configured.map((column) => String(column).trim().toUpperCase()).filter(Boolean));
             }
-            if (PAGE_CODE === "M03001" && tableKey === "INIT$_TB_PREDICTED_TYPE") {
+            if (PAGE_CODE === "M03001" && (tableKey === "INIT$_TB_PREDICTED_TYPE" || tableKey === "INIT$_TB_PREDICTED_TYPE_FINAL")) {
                 return new Set(["FINAL_PREDICTED_TYPE", "FINAL_REASON"]);
             }
             return new Set();
@@ -3170,7 +3262,17 @@ END;`;
                 && job.resultOwner
                 && job.resultTableName;
             if (useResultObject && this.isResultModelMode(job.resultCreateYn)) {
-                return this.fetchModelDetailSql(job.resultTableName, job.resultOwner);
+                const modelDetailSql = await this.fetchModelDetailSql(job.resultTableName, job.resultOwner);
+                const sourceTable = this.getModelPredictionSourceTable(job);
+                const predictionSql = this.createModelPredictionTargetSql(
+                    job.resultTableName,
+                    job.resultOwner,
+                    job.ownerName,
+                    job.tableName,
+                    sourceTable.ownerName,
+                    sourceTable.tableName
+                );
+                return [modelDetailSql, predictionSql].filter(Boolean).join("\n\n");
             }
             const ownerName = useResultObject ? job.resultOwner : job.ownerName;
             const tableName = useResultObject ? job.resultTableName : job.tableName;
@@ -3198,6 +3300,49 @@ END;`;
             } catch (error) {
                 return this.createModelDetailSql(model, owner);
             }
+        },
+
+        getModelPredictionSourceTable(job = this.currentJob || {}) {
+            const scenarioTable = (this.scenarioTables || []).find((row) => (
+                String(row.SCENARIO_TABLE_ID || "") === String(job.scenarioTableId || "")
+            ));
+            return {
+                ownerName: scenarioTable?.OWNER_NAME || job.ownerName || "",
+                tableName: scenarioTable?.TABLE_NAME || job.tableName || ""
+            };
+        },
+
+        createModelPredictionTargetSql(modelName, modelOwner = "", targetOwner = "", targetTable = "", filterOwner = "", filterTable = "") {
+            const model = String(modelName || "").trim().toUpperCase();
+            const owner = String(modelOwner || "").trim().toUpperCase();
+            const tableOwner = String(targetOwner || "").trim().toUpperCase();
+            const table = String(targetTable || "").trim().toUpperCase();
+            if (!model || !tableOwner || !table) return "";
+
+            const modelObject = owner ? `${this.quoteName(owner)}.${this.quoteName(model)}` : this.quoteName(model);
+            const targetObject = `${this.quoteName(tableOwner)}.${this.quoteName(table)}`;
+            const whereClause = this.createTargetResultWhereClause(table, tableOwner, table);
+            const lines = [
+                "-- Target table prediction by model",
+                "SELECT T.*",
+                `     , PREDICTION(${modelObject} USING *) AS PREDICTED_MODEL`,
+                `  FROM ${targetObject} T`
+            ];
+            if (table === "INIT$_TB_PREDICTED_TYPE" || table === "INIT$_TB_PREDICTED_TYPE_FINAL") {
+                const sourceOwner = String(filterOwner || tableOwner).trim().toUpperCase();
+                const sourceTable = String(filterTable || "").trim().toUpperCase();
+                if (sourceOwner && sourceTable) {
+                    lines.push(` WHERE OWNER = '${this.escapeSqlLiteral(sourceOwner)}'`);
+                    lines.push(`   AND TABLE_NAME = '${this.escapeSqlLiteral(sourceTable)}'`);
+                } else if (whereClause) {
+                    lines.push(` WHERE ${whereClause.replace(/\n\s*AND /g, "\n   AND ")}`);
+                }
+                lines.push(" ORDER BY T.COLUMN_ID");
+            } else if (whereClause) {
+                lines.push(` WHERE ${whereClause.replace(/\n\s*AND /g, "\n   AND ")}`);
+            }
+            lines[lines.length - 1] = `${lines[lines.length - 1]};`;
+            return lines.join("\n");
         },
 
         createModelDetailSql(modelName, ownerName = "") {

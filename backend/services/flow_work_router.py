@@ -37,7 +37,13 @@ MODEL_DETAIL_VIEW_TYPES = [
     ("VR", "Rule/detail view"),
     ("VT", "Transformation/detail view")
 ]
-TARGET_FILTER_RESULT_TABLES = {"INIT$_TB_PREDICTED_TYPE", "INIT$_TB_CAT_CORR_PAIR"}
+TARGET_FILTER_RESULT_COLUMNS = {
+    "INIT$_TB_PREDICTED_TYPE": ("OWNER", "TABLE_NAME"),
+    "INIT$_TB_CAT_CORR_PAIR": ("OWNER", "TABLE_NAME"),
+    "INIT$_TB_CAT_CORR_SUMMARY": ("OWNER", "TABLE_NAME"),
+    "INIT$_TB_ASSOC_RULE_SUMMARY": ("TARGET_OWNER", "TARGET_TABLE"),
+    "INIT$_TB_RULE_VIOLATION_RESULT": ("TARGET_OWNER", "TARGET_TABLE"),
+}
 
 
 def quote_identifier(value: str) -> str:
@@ -69,13 +75,30 @@ def normalize_limit(value: Optional[int]) -> int:
     return max(1, min(limit, 1000))
 
 
-def build_table_result_sql(owner: str, table_name: str, target_owner: str = "", target_table: str = "") -> str:
+def build_table_result_sql(
+    owner: str,
+    table_name: str,
+    target_owner: str = "",
+    target_table: str = "",
+    run_source_type: str = "",
+    run_id: Optional[int] = None
+) -> str:
     sql = f"SELECT *\n  FROM {quote_identifier(owner)}.{quote_identifier(table_name)}"
-    if table_name.upper() in TARGET_FILTER_RESULT_TABLES and target_owner and target_table:
-        sql += (
-            f"\n WHERE OWNER = {quote_sql_literal(target_owner.upper())}"
-            f"\n   AND TABLE_NAME = {quote_sql_literal(target_table.upper())}"
-        )
+    clauses = []
+    target_columns = TARGET_FILTER_RESULT_COLUMNS.get(table_name.upper())
+    if target_columns and target_owner and target_table:
+        owner_column, table_column = target_columns
+        clauses.extend([
+            f"{owner_column} = {quote_sql_literal(target_owner.upper())}",
+            f"{table_column} = {quote_sql_literal(target_table.upper())}"
+        ])
+    if target_columns and run_source_type and run_id is not None:
+        clauses.extend([
+            f"RUN_SOURCE_TYPE = {quote_sql_literal(run_source_type.upper())}",
+            f"RUN_ID = {int(run_id)}"
+        ])
+    if clauses:
+        sql += "\n WHERE " + "\n   AND ".join(clauses)
     return sql
 
 
@@ -653,6 +676,7 @@ def create_flow_work_router(
         objectName: str,
         targetOwner: Optional[str] = None,
         targetTable: Optional[str] = None,
+        flowRunId: Optional[int] = None,
     ):
         conn = None
         try:
@@ -666,7 +690,7 @@ def create_flow_work_router(
                     "status": "success",
                     "data": {
                         "mode": mode,
-                        "sql": build_table_result_sql(result_owner, result_object, target_owner, target_table),
+                        "sql": build_table_result_sql(result_owner, result_object, target_owner, target_table, "FLOW_WORK" if flowRunId else "", flowRunId),
                         "views": []
                     }
                 }

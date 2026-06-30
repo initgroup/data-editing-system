@@ -435,7 +435,7 @@
             this.setText("#selectedObject-M99002", this.selectedObject?.OBJECT_NAME || "-");
             this.setText("#selectedObjectComment-M99002", this.selectedObject?.OBJECT_COMMENT || "-");
             this.setText("#selectedType-M99002", this.selectedObject?.OBJECT_TYPE || "-");
-            this.setText("#selectedCreatedAt-M99002", this.selectedObject?.CREATED_AT || "-");
+            this.setText("#selectedCreatedAt-M99002", this.formatKstDateTime(this.selectedObject?.CREATED_AT));
             const desc = this.selectedObject
                 ? `${this.selectedObject.OWNER}.${this.selectedObject.OBJECT_NAME}`
                 : "Select an object from the schema tree.";
@@ -774,9 +774,13 @@
                         ${rows.map((row, rowIndex) => `
                             <tr>
                                 <td class="grid-row-no">${rowIndex + 1}</td>
-                                ${columns.map((column, columnIndex) => `
-                                    <td title="${this.escapeHtml(row[column] ?? "")}" onclick="M99002.selectGridCell('${gridKey}', ${rowIndex}, ${columnIndex + 1})">${this.escapeHtml(row[column] ?? "")}</td>
-                                `).join("")}
+                                ${columns.map((column, columnIndex) => {
+                                    const rawValue = row[column] ?? "";
+                                    const displayValue = this.isDateTimeColumn(column) ? this.formatKstDateTime(rawValue) : rawValue;
+                                    return `
+                                    <td title="${this.escapeHtml(rawValue)}" onclick="M99002.selectGridCell('${gridKey}', ${rowIndex}, ${columnIndex + 1})">${this.escapeHtml(displayValue)}</td>
+                                `;
+                                }).join("")}
                             </tr>
                         `).join("")}
                     </tbody>
@@ -792,6 +796,56 @@
                 if (Number.isFinite(existing) && existing >= 80) return existing;
                 return Math.min(Math.max(String(column).length * 9 + 42, 120), 280);
             });
+        },
+
+        isDateTimeColumn(column) {
+            return /(^|_)(CREATED|UPDATED|STARTED|FINISHED|DEPLOYED|MODIFIED)_AT$/i.test(String(column || ""))
+                || /(^|_)(CREATE|UPDATE|START|END|DDL)_DT$/i.test(String(column || ""))
+                || /TIME$/i.test(String(column || ""));
+        },
+
+        formatKstDateTime(value) {
+            const date = this.parseDateTime(value);
+            if (!date) return value || "-";
+            const parts = new Intl.DateTimeFormat("ko-KR", {
+                timeZone: "Asia/Seoul",
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+                hour12: false
+            }).formatToParts(date).reduce((acc, part) => {
+                acc[part.type] = part.value;
+                return acc;
+            }, {});
+            return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second} KST`;
+        },
+
+        parseDateTime(value) {
+            if (!value) return null;
+            if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+            const text = String(value).trim();
+            const match = text.match(/^(\d{4})[-/](\d{2})[-/](\d{2})[ T](\d{2}):(\d{2}):(\d{2})(?:[.,](\d+))?/);
+            if (match) {
+                const [, year, month, day, hour, minute, second, fraction] = match;
+                if (/[zZ]|[+-]\d{2}:?\d{2}$/.test(text)) {
+                    const parsedWithZone = new Date(text);
+                    return Number.isNaN(parsedWithZone.getTime()) ? null : parsedWithZone;
+                }
+                return new Date(Date.UTC(
+                    Number(year),
+                    Number(month) - 1,
+                    Number(day),
+                    Number(hour),
+                    Number(minute),
+                    Number(second),
+                    Number(String(fraction || "0").padEnd(3, "0").slice(0, 3))
+                ));
+            }
+            const parsed = new Date(text);
+            return Number.isNaN(parsed.getTime()) ? null : parsed;
         },
 
         selectGridCell(gridKey, rowIndex, columnIndex) {

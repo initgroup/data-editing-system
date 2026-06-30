@@ -236,7 +236,8 @@
 
         getFlowRunLabel(row) {
             const value = row?.CREATED_AT || row?.STARTED_AT || "";
-            const match = String(value || "").match(/^\d{4}-(\d{2})-(\d{2})/);
+            const formatted = this.formatDateTime(value);
+            const match = String(formatted || "").match(/^\d{4}-(\d{2})-(\d{2})/);
             if (match) return `${match[1]}-${match[2]}`;
             const compact = String(value || "").match(/^(\d{2})-(\d{2})/);
             return compact ? `${compact[1]}-${compact[2]}` : "";
@@ -1434,15 +1435,53 @@
         },
 
         formatDateTime(value) {
-            const text = String(value || "");
-            if (!text) return "-";
-            return text.replace("T", " ").slice(0, 16);
+            const date = this.parseDateTime(value);
+            if (!date) return String(value || "").trim() || "-";
+            const parts = new Intl.DateTimeFormat("ko-KR", {
+                timeZone: "Asia/Seoul",
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+                hour12: false
+            }).formatToParts(date).reduce((acc, part) => {
+                acc[part.type] = part.value;
+                return acc;
+            }, {});
+            return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second} KST`;
+        },
+
+        parseDateTime(value) {
+            if (!value) return null;
+            if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+            const text = String(value).trim();
+            const match = text.match(/^(\d{4})[-/](\d{2})[-/](\d{2})[ T](\d{2}):(\d{2}):(\d{2})(?:[.,](\d+))?/);
+            if (match) {
+                const [, year, month, day, hour, minute, second, fraction] = match;
+                if (/[zZ]|[+-]\d{2}:?\d{2}$/.test(text)) {
+                    const parsedWithZone = new Date(text);
+                    return Number.isNaN(parsedWithZone.getTime()) ? null : parsedWithZone;
+                }
+                return new Date(Date.UTC(
+                    Number(year),
+                    Number(month) - 1,
+                    Number(day),
+                    Number(hour),
+                    Number(minute),
+                    Number(second),
+                    Number(String(fraction || "0").padEnd(3, "0").slice(0, 3))
+                ));
+            }
+            const parsed = new Date(text);
+            return Number.isNaN(parsed.getTime()) ? null : parsed;
         },
 
         formatElapsedTime(startedAt, finishedAt, status = "") {
             if (!startedAt) return "-";
-            const start = new Date(startedAt);
-            const end = finishedAt ? new Date(finishedAt) : (String(status || "").toUpperCase() === "RUNNING" ? new Date() : null);
+            const start = this.parseDateTime(startedAt);
+            const end = finishedAt ? this.parseDateTime(finishedAt) : (String(status || "").toUpperCase() === "RUNNING" ? new Date() : null);
             if (!end || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return "-";
             const seconds = Math.max(0, Math.round((end.getTime() - start.getTime()) / 1000));
             if (seconds < 60) return `${seconds}s`;

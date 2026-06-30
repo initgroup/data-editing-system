@@ -569,13 +569,22 @@ def create_data_work_router(
                     if not re.match(r"^[A-Za-z0-9+/=._-]+$", row_id):
                         raise HTTPException(status_code=400, detail="Invalid row identifier.")
 
+                    if is_predicted_type_table(table_name):
+                        updated_count += merge_predicted_type_final(
+                            cursor,
+                            owner,
+                            table_name,
+                            row_id,
+                            column_name,
+                            normalize_update_value(change.value),
+                            get_request_user_id(request),
+                            where_clause
+                        )
+                        continue
+
                     set_items = [f"{quote_identifier(column_name)} = :value"]
                     params = {"value": normalize_update_value(change.value), "row_id": row_id}
-                    if (
-                        MENU_CODE == "M03001"
-                        and str(table_name or "").upper() == "INIT$_TB_PREDICTED_TYPE"
-                        and column_name == "FINAL_PREDICTED_TYPE"
-                    ):
+                    if is_predicted_type_final_table(table_name):
                         if "FINAL_UPDATE_DT" in column_names:
                             set_items.append('"FINAL_UPDATE_DT" = SYSDATE')
                         if "FINAL_UPDATE_USER" in column_names:
@@ -811,7 +820,7 @@ def create_data_work_router(
                 )
                 return {"status": "skipped", "message": message}
     
-            message = execute_saved_script(conn, executable_script, job, runtime_bind_values or {})
+            message = execute_saved_script(conn, executable_script, job, runtime_bind_values or {}, run_id)
             data_work.update_run(conn, run_id, "SUCCESS", message, result_table_name, result_owner)
             data_work.update_job_status(
                 conn,
@@ -844,10 +853,16 @@ def create_data_work_router(
             raise
     
     
-    def execute_saved_script(conn, executable_script: Dict[str, str], job: Dict[str, Any], runtime_bind_values: Optional[Dict[str, Any]] = None) -> str:
+    def execute_saved_script(
+        conn,
+        executable_script: Dict[str, str],
+        job: Dict[str, Any],
+        runtime_bind_values: Optional[Dict[str, Any]] = None,
+        run_id: Optional[int] = None
+    ) -> str:
         cursor = conn.cursor()
         try:
-            script_text, bind_values = prepare_saved_script(executable_script["text"], job, runtime_bind_values or {})
+            script_text, bind_values = prepare_saved_script(executable_script["text"], job, runtime_bind_values or {}, run_id)
             cursor.execute(script_text, bind_values)
             script_type = executable_script["type"]
             label = job.get("EXEC_OBJECT_LABEL") or job.get("EXEC_OBJECT_NAME") or script_type
@@ -860,7 +875,12 @@ def create_data_work_router(
             cursor.close()
 
 
-    def prepare_saved_script(script_text: str, job: Dict[str, Any], runtime_bind_values: Optional[Dict[str, Any]] = None) -> tuple[str, Dict[str, Any]]:
+    def prepare_saved_script(
+        script_text: str,
+        job: Dict[str, Any],
+        runtime_bind_values: Optional[Dict[str, Any]] = None,
+        run_id: Optional[int] = None
+    ) -> tuple[str, Dict[str, Any]]:
         params = job.get("PARAMS") or []
         param_values = {
             str(param.get("itemName") or param.get("ITEM_NAME") or ""): param.get("itemDefault", param.get("ITEM_DEFAULT"))
@@ -868,10 +888,13 @@ def create_data_work_router(
             if param.get("itemName") or param.get("ITEM_NAME")
         }
 
+        system_values = build_system_bind_values(job, run_id)
         runtime_values = {
-            **build_system_bind_values(job),
+            **system_values,
             **(runtime_bind_values or {})
         }
+        for run_key in ("INIT$RunSourceType", "INIT$RunId", "runSourceType", "runId"):
+            runtime_values[run_key] = system_values[run_key]
 
         def replace_dynamic_token(match):
             key = match.group(1).strip()
@@ -905,16 +928,21 @@ def create_data_work_router(
         return prepared_text, bind_values
 
 
-    def build_system_bind_values(job: Dict[str, Any]) -> Dict[str, Any]:
+    def build_system_bind_values(job: Dict[str, Any], run_id: Optional[int] = None) -> Dict[str, Any]:
         target_owner = job.get("OWNER_NAME") or job.get("ownerName") or ""
         target_table = job.get("TABLE_NAME") or job.get("tableName") or ""
         result_owner = job.get("RESULT_OWNER") or job.get("resultOwner") or ""
         result_table = job.get("RESULT_TABLE_NAME") or job.get("resultTableName") or ""
+        effective_run_id = int(run_id or 0)
         return {
             "INIT$TargetOwner": target_owner,
             "INIT$TargetTable": target_table,
             "INIT$ResultOwner": result_owner,
-            "INIT$ResultTable": result_table
+            "INIT$ResultTable": result_table,
+            "INIT$RunSourceType": "DATA_WORK",
+            "INIT$RunId": effective_run_id,
+            "runSourceType": "DATA_WORK",
+            "runId": effective_run_id
         }
 
 
@@ -1144,13 +1172,17 @@ def create_data_work_router(
 
 
     def get_table_column_names(conn, owner: str, table_name: str) -> set[str]:
+        return set(get_table_column_list(conn, owner, table_name))
+
+
+    def get_table_column_list(conn, owner: str, table_name: str) -> List[str]:
         result = execute_query(conn, "DATA_WORK_TABLE_COLUMN_NAMES", {"owner": owner, "tableName": table_name})
         rows = data_work.require_success(result, "Target table column query failed.").get("data", [])
-        return {str(row.get("COLUMN_NAME") or "").upper() for row in rows}
+        return [str(row.get("COLUMN_NAME") or "").upper() for row in rows if row.get("COLUMN_NAME")]
 
 
     def get_editable_data_columns(table_name: str) -> set[str]:
-        if MENU_CODE == "M03001" and str(table_name or "").upper() == "INIT$_TB_PREDICTED_TYPE":
+        if MENU_CODE == "M03001" and (is_predicted_type_table(table_name) or is_predicted_type_final_table(table_name)):
             return {"FINAL_PREDICTED_TYPE", "FINAL_REASON"}
         return set()
 
@@ -1182,6 +1214,150 @@ def create_data_work_router(
             }
         finally:
             cursor.close()
+
+
+    def is_predicted_type_table(table_name: str) -> bool:
+        return str(table_name or "").upper() == "INIT$_TB_PREDICTED_TYPE"
+
+
+    def is_predicted_type_final_table(table_name: str) -> bool:
+        return str(table_name or "").upper() == "INIT$_TB_PREDICTED_TYPE_FINAL"
+
+
+    def final_table_object(owner: str) -> str:
+        return quote_identifier(owner) + "." + quote_identifier("INIT$_TB_PREDICTED_TYPE_FINAL")
+
+
+    def merge_predicted_type_final(
+        cursor,
+        owner: str,
+        table_name: str,
+        row_id: str,
+        column_name: str,
+        value: Any,
+        user_id: Any,
+        where_clause: str = ""
+    ) -> int:
+        target_object = quote_identifier(owner) + "." + quote_identifier(table_name)
+        final_object = final_table_object(owner)
+        where_sql = f" AND ({where_clause})" if where_clause else ""
+        source_sql = (
+            'SELECT R."RUN_SOURCE_TYPE", R."RUN_ID", R."OWNER", R."TABLE_NAME", R."MODEL_NAME", '
+            '       R."COLUMN_ID", R."COLUMN_NAME", R."DATA_TYPE", R."BASE_PREDICTED_TYPE", '
+            '       R."MODL_PREDICTED_TYPE", R."FINAL_PREDICTED_TYPE", R."FINAL_REASON", '
+            '       F."FINAL_PREDICTED_TYPE" AS "SAVED_FINAL_PREDICTED_TYPE", '
+            '       F."FINAL_REASON" AS "SAVED_FINAL_REASON" '
+            "  FROM ("
+            f"SELECT T.* FROM {target_object} T "
+            " WHERE T.ROWID = CHARTOROWID(:row_id)"
+            f"{where_sql}"
+            ") R "
+            f"  LEFT JOIN {final_object} F "
+            '    ON F."OWNER" = R."OWNER" '
+            '   AND F."TABLE_NAME" = R."TABLE_NAME" '
+            '   AND F."COLUMN_NAME" = R."COLUMN_NAME" '
+        )
+        cursor.execute(source_sql, {"row_id": row_id})
+        row = cursor.fetchone()
+        if not row:
+            return 0
+        columns = [desc[0] for desc in cursor.description]
+        source = {col: row[index] for index, col in enumerate(columns)}
+        final_type = value if column_name == "FINAL_PREDICTED_TYPE" else (
+            source.get("SAVED_FINAL_PREDICTED_TYPE") or source.get("FINAL_PREDICTED_TYPE")
+        )
+        final_reason = value if column_name == "FINAL_REASON" else (
+            source.get("SAVED_FINAL_REASON") or source.get("FINAL_REASON")
+        )
+        if final_type is None or str(final_type).strip() == "":
+            final_type = source.get("MODL_PREDICTED_TYPE") or source.get("BASE_PREDICTED_TYPE")
+        if final_type is None or str(final_type).strip() == "":
+            raise HTTPException(status_code=400, detail="FINAL_PREDICTED_TYPE is required before saving final reason.")
+
+        merge_sql = f"""
+MERGE INTO {final_object} F
+USING (
+    SELECT :owner AS "OWNER"
+         , :table_name AS "TABLE_NAME"
+         , :column_name AS "COLUMN_NAME"
+         , :column_id AS "COLUMN_ID"
+         , :data_type AS "DATA_TYPE"
+         , :source_run_source_type AS "SOURCE_RUN_SOURCE_TYPE"
+         , :source_run_id AS "SOURCE_RUN_ID"
+         , :source_model_name AS "SOURCE_MODEL_NAME"
+         , :base_predicted_type AS "BASE_PREDICTED_TYPE"
+         , :modl_predicted_type AS "MODL_PREDICTED_TYPE"
+         , :final_predicted_type AS "FINAL_PREDICTED_TYPE"
+         , :final_reason AS "FINAL_REASON"
+         , :final_update_user AS "FINAL_UPDATE_USER"
+      FROM DUAL
+) S
+   ON (F."OWNER" = S."OWNER"
+  AND F."TABLE_NAME" = S."TABLE_NAME"
+  AND F."COLUMN_NAME" = S."COLUMN_NAME")
+ WHEN MATCHED THEN UPDATE
+      SET F."COLUMN_ID" = S."COLUMN_ID"
+        , F."DATA_TYPE" = S."DATA_TYPE"
+        , F."SOURCE_RUN_SOURCE_TYPE" = S."SOURCE_RUN_SOURCE_TYPE"
+        , F."SOURCE_RUN_ID" = S."SOURCE_RUN_ID"
+        , F."SOURCE_MODEL_NAME" = S."SOURCE_MODEL_NAME"
+        , F."BASE_PREDICTED_TYPE" = S."BASE_PREDICTED_TYPE"
+        , F."MODL_PREDICTED_TYPE" = S."MODL_PREDICTED_TYPE"
+        , F."FINAL_PREDICTED_TYPE" = S."FINAL_PREDICTED_TYPE"
+        , F."FINAL_REASON" = S."FINAL_REASON"
+        , F."FINAL_UPDATE_DT" = SYSDATE
+        , F."FINAL_UPDATE_USER" = S."FINAL_UPDATE_USER"
+ WHEN NOT MATCHED THEN INSERT (
+        "OWNER"
+      , "TABLE_NAME"
+      , "COLUMN_NAME"
+      , "COLUMN_ID"
+      , "DATA_TYPE"
+      , "SOURCE_RUN_SOURCE_TYPE"
+      , "SOURCE_RUN_ID"
+      , "SOURCE_MODEL_NAME"
+      , "BASE_PREDICTED_TYPE"
+      , "MODL_PREDICTED_TYPE"
+      , "FINAL_PREDICTED_TYPE"
+      , "FINAL_REASON"
+      , "FINAL_UPDATE_DT"
+      , "FINAL_UPDATE_USER"
+      , "CREATE_DT"
+      )
+      VALUES (
+        S."OWNER"
+      , S."TABLE_NAME"
+      , S."COLUMN_NAME"
+      , S."COLUMN_ID"
+      , S."DATA_TYPE"
+      , S."SOURCE_RUN_SOURCE_TYPE"
+      , S."SOURCE_RUN_ID"
+      , S."SOURCE_MODEL_NAME"
+      , S."BASE_PREDICTED_TYPE"
+      , S."MODL_PREDICTED_TYPE"
+      , S."FINAL_PREDICTED_TYPE"
+      , S."FINAL_REASON"
+      , SYSDATE
+      , S."FINAL_UPDATE_USER"
+      , SYSDATE
+      )
+"""
+        cursor.execute(merge_sql, {
+            "owner": source.get("OWNER"),
+            "table_name": source.get("TABLE_NAME"),
+            "column_name": source.get("COLUMN_NAME"),
+            "column_id": source.get("COLUMN_ID"),
+            "data_type": source.get("DATA_TYPE"),
+            "source_run_source_type": source.get("RUN_SOURCE_TYPE"),
+            "source_run_id": source.get("RUN_ID"),
+            "source_model_name": source.get("MODEL_NAME"),
+            "base_predicted_type": source.get("BASE_PREDICTED_TYPE"),
+            "modl_predicted_type": source.get("MODL_PREDICTED_TYPE"),
+            "final_predicted_type": final_type,
+            "final_reason": final_reason,
+            "final_update_user": str(user_id or "")
+        })
+        return 1
 
 
     def normalize_update_value(value: Any) -> Any:

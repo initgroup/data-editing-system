@@ -256,6 +256,30 @@ def _page_window(page: int, page_size: int) -> tuple[int, int]:
     return offset, offset + page_size
 
 
+def _normalize_run_context(
+    run_source_type: str | None = None,
+    run_id: int | None = None,
+    flow_run_id: int | None = None,
+) -> tuple[str, int | None]:
+    if flow_run_id is not None:
+        try:
+            value = int(flow_run_id)
+        except (TypeError, ValueError):
+            value = 0
+        return ("FLOW_WORK", value) if value > 0 else ("", None)
+
+    source = str(run_source_type or "").strip().upper()
+    if source not in {"DATA_WORK", "FLOW_WORK"}:
+        source = ""
+    try:
+        value = int(run_id) if run_id is not None else None
+    except (TypeError, ValueError):
+        value = None
+    if not source or value is None or value < 0:
+        return "", None
+    return source, value
+
+
 def _normalize_node_result(row: dict[str, Any]) -> dict[str, Any]:
     payload = _json_object(_parse_json(row.get("NODE_PAYLOAD_JSON"), {}) or {})
     runtime_params = _json_object(_parse_json(row.get("RUNTIME_PARAM_JSON"), {}) or {})
@@ -313,7 +337,15 @@ def _fetch_column_comment_map(cursor, owner_name: str, table_name: str) -> dict[
     return comments
 
 
-def _fetch_cat_corr_summary(cursor, owner_name: str, object_name: str, target_owner: str, target_table: str) -> dict[str, Any] | None:
+def _fetch_cat_corr_summary(
+    cursor,
+    owner_name: str,
+    object_name: str,
+    target_owner: str,
+    target_table: str,
+    run_source_type: str = "",
+    run_id: int | None = None,
+) -> dict[str, Any] | None:
     if object_name != "INIT$_TB_CAT_CORR_PAIR" or not target_owner or not target_table:
         return None
     cursor.execute(SqlLoader.get_sql("MCOMMON_ANLY_WORK_TARGET_TABLE_COLUMN_COUNT"), {
@@ -323,24 +355,29 @@ def _fetch_cat_corr_summary(cursor, owner_name: str, object_name: str, target_ow
     row = cursor.fetchone()
     total_columns = int(row[0] or 0) if row else 0
     result_object = f"{_quote_identifier(owner_name)}.{_quote_identifier(object_name)}"
+    run_filter_sql = ""
+    run_params: dict[str, Any] = {}
+    if run_source_type and run_id is not None:
+        run_filter_sql = " AND RUN_SOURCE_TYPE = :runSourceType AND RUN_ID = :runId "
+        run_params = {"runSourceType": run_source_type, "runId": run_id}
     cursor.execute(
         "SELECT DISTINCT COL1 "
         "  FROM ("
         f"        SELECT COL_A AS COL1 FROM {result_object} "
-        "         WHERE OWNER = :targetOwner AND TABLE_NAME = :targetTable AND PASS_YN = 'Y' "
+        f"         WHERE OWNER = :targetOwner AND TABLE_NAME = :targetTable {run_filter_sql}AND PASS_YN = 'Y' "
         "         UNION ALL "
         f"        SELECT COL_B AS COL1 FROM {result_object} "
-        "         WHERE OWNER = :targetOwner AND TABLE_NAME = :targetTable AND PASS_YN = 'Y' "
+        f"         WHERE OWNER = :targetOwner AND TABLE_NAME = :targetTable {run_filter_sql}AND PASS_YN = 'Y' "
         "       ) "
         " WHERE COL1 IS NOT NULL "
         " ORDER BY COL1",
-        {"targetOwner": target_owner, "targetTable": target_table},
+        {"targetOwner": target_owner, "targetTable": target_table, **run_params},
     )
     associated_columns = [str(item[0]) for item in cursor.fetchall() if item and item[0]]
     cursor.execute(
         f"SELECT COUNT(*) FROM {result_object} "
-        " WHERE OWNER = :targetOwner AND TABLE_NAME = :targetTable AND PASS_YN = 'Y'",
-        {"targetOwner": target_owner, "targetTable": target_table},
+        f" WHERE OWNER = :targetOwner AND TABLE_NAME = :targetTable {run_filter_sql}AND PASS_YN = 'Y'",
+        {"targetOwner": target_owner, "targetTable": target_table, **run_params},
     )
     pair_row = cursor.fetchone()
     column_comments = _fetch_column_comment_map(cursor, target_owner, target_table)
@@ -355,7 +392,15 @@ def _fetch_cat_corr_summary(cursor, owner_name: str, object_name: str, target_ow
     }
 
 
-def _fetch_predicted_type_summary(cursor, owner_name: str, object_name: str, target_owner: str, target_table: str) -> dict[str, Any] | None:
+def _fetch_predicted_type_summary(
+    cursor,
+    owner_name: str,
+    object_name: str,
+    target_owner: str,
+    target_table: str,
+    run_source_type: str = "",
+    run_id: int | None = None,
+) -> dict[str, Any] | None:
     if object_name != "INIT$_TB_PREDICTED_TYPE" or not target_owner or not target_table:
         return None
     cursor.execute(SqlLoader.get_sql("MCOMMON_ANLY_WORK_TARGET_TABLE_COLUMN_COUNT"), {
@@ -367,6 +412,11 @@ def _fetch_predicted_type_summary(cursor, owner_name: str, object_name: str, tar
     result_object = f"{_quote_identifier(owner_name)}.{_quote_identifier(object_name)}"
     effective_type_expr = "COALESCE(TRIM(FINAL_PREDICTED_TYPE), TRIM(MODL_PREDICTED_TYPE), TRIM(BASE_PREDICTED_TYPE))"
     predicted_case_expr = _predicted_type_case_expr()
+    run_filter_sql = ""
+    run_params: dict[str, Any] = {}
+    if run_source_type and run_id is not None:
+        run_filter_sql = "   AND RUN_SOURCE_TYPE = :runSourceType AND RUN_ID = :runId "
+        run_params = {"runSourceType": run_source_type, "runId": run_id}
     cursor.execute(
         "SELECT TYPE_GROUP, COLUMN_NAME "
         "  FROM ("
@@ -380,6 +430,7 @@ def _fetch_predicted_type_summary(cursor, owner_name: str, object_name: str, tar
         f"          FROM {result_object} "
         "         WHERE OWNER = :targetOwner "
         "           AND TABLE_NAME = :targetTable "
+        f"{run_filter_sql}"
         "           AND COLUMN_NAME IS NOT NULL "
         "         GROUP BY CASE "
         f"                    WHEN {effective_type_expr} LIKE '%범주형' THEN '범주형' "
@@ -388,7 +439,7 @@ def _fetch_predicted_type_summary(cursor, owner_name: str, object_name: str, tar
         "                  END, COLUMN_NAME "
         "       ) "
         " ORDER BY DECODE(TYPE_GROUP, '범주형', 1, '연속형', 2, 3), COLUMN_ORDER, COLUMN_NAME",
-        {"targetOwner": target_owner, "targetTable": target_table},
+        {"targetOwner": target_owner, "targetTable": target_table, **run_params},
     )
     group_map: dict[str, list[str]] = {"범주형": [], "연속형": [], "기타": []}
     for type_group, column_name in cursor.fetchall():
@@ -400,9 +451,10 @@ def _fetch_predicted_type_summary(cursor, owner_name: str, object_name: str, tar
         f"  FROM {result_object} "
         " WHERE OWNER = :targetOwner "
         "   AND TABLE_NAME = :targetTable "
+        f"{run_filter_sql}"
         f" GROUP BY NVL({effective_type_expr}, '(값 없음)') "
         " ORDER BY COLUMN_COUNT DESC, TYPE_NAME",
-        {"targetOwner": target_owner, "targetTable": target_table},
+        {"targetOwner": target_owner, "targetTable": target_table, **run_params},
     )
     detail_groups = [
         {"typeName": str(type_name), "columnCount": int(column_count or 0)}
@@ -415,8 +467,9 @@ def _fetch_predicted_type_summary(cursor, owner_name: str, object_name: str, tar
         " WHERE OWNER = :targetOwner "
         "   AND TABLE_NAME = :targetTable "
         "   AND COLUMN_NAME IS NOT NULL "
+        f"{run_filter_sql}"
         f" GROUP BY {predicted_case_expr}",
-        {"targetOwner": target_owner, "targetTable": target_table},
+        {"targetOwner": target_owner, "targetTable": target_table, **run_params},
     )
     match_count_map = {str(case_code or "ALL_DIFFERENT"): int(column_count or 0) for case_code, column_count in cursor.fetchall()}
     prediction_match_groups = []
@@ -463,6 +516,8 @@ def _fetch_rule_violation_summary(
     detection_max_rules: int = 500,
     rule_page: int = 1,
     rule_page_size: int = 8,
+    run_source_type: str = "",
+    run_id: int | None = None,
 ) -> dict[str, Any] | None:
     if object_name != "INIT$_TB_RULE_VIOLATION_RESULT":
         return None
@@ -475,6 +530,11 @@ def _fetch_rule_violation_summary(
     if target_table:
         where_clauses.append("TARGET_TABLE = :targetTable")
         bind_params["targetTable"] = target_table
+    if run_source_type and run_id is not None:
+        where_clauses.append("RUN_SOURCE_TYPE = :runSourceType")
+        where_clauses.append("RUN_ID = :runId")
+        bind_params["runSourceType"] = run_source_type
+        bind_params["runId"] = run_id
     if rule_model_name:
         where_clauses.append("MODEL_NAME = :ruleModelName")
         bind_params["ruleModelName"] = rule_model_name
@@ -547,6 +607,8 @@ def _fetch_rule_violation_summary(
         "targetOwner": target_owner,
         "targetTable": target_table,
         "modelName": rule_model_name,
+        "runSourceType": run_source_type or None,
+        "runId": run_id,
     }
     candidate_overview = fetch_one(
         SqlLoader.get_sql("MCOMMON_ANLY_WORK_ASSOC_RULE_OVERVIEW"),
@@ -576,6 +638,11 @@ def _fetch_rule_violation_summary(
         "detectMinLift": detection_min_lift,
         "detectMaxRules": detection_max_rules,
     }
+    if run_source_type and run_id is not None:
+        candidate_filter_clauses.append('"RUN_SOURCE_TYPE" = :runSourceType')
+        candidate_filter_clauses.append('"RUN_ID" = :runId')
+        candidate_filter_params["runSourceType"] = run_source_type
+        candidate_filter_params["runId"] = run_id
     if condition_count is not None:
         candidate_filter_clauses.append('"CONDITION_COUNT" = :candidateConditionCount')
         candidate_filter_params["candidateConditionCount"] = condition_count
@@ -628,6 +695,11 @@ def _fetch_rule_violation_summary(
         "ruleOffset": rule_offset,
         "ruleEndRow": rule_end_row,
     }
+    if run_source_type and run_id is not None:
+        candidate_rule_clauses.append('S."RUN_SOURCE_TYPE" = :candidateRunSourceType')
+        candidate_rule_clauses.append('S."RUN_ID" = :candidateRunId')
+        candidate_rule_params["candidateRunSourceType"] = run_source_type
+        candidate_rule_params["candidateRunId"] = run_id
     if condition_count is not None:
         candidate_rule_clauses.append('S."CONDITION_COUNT" = :candidateConditionCount')
         candidate_rule_params["candidateConditionCount"] = condition_count
@@ -719,6 +791,8 @@ def _fetch_rule_violation_summary(
         "candidateConditionDist": candidate_condition_dist,
         "topColumns": top_columns,
         "columnComments": _fetch_column_comment_map(cursor, target_owner, target_table),
+        "runSourceType": run_source_type,
+        "runId": run_id,
     }
 
 
@@ -983,6 +1057,9 @@ def get_result_table(
     violationRulePage: int = 1,
     violationRulePageSize: int = 20,
     predictedTypeCase: str | None = None,
+    runSourceType: str | None = None,
+    runId: int | None = None,
+    flowRunId: int | None = None,
     page: int = 1,
     pageSize: int = 50,
 ):
@@ -999,6 +1076,7 @@ def get_result_table(
     if normalized_violation_result_scope not in {"CANDIDATE", "HIT", "MISS"}:
         normalized_violation_result_scope = "HIT"
     normalized_predicted_type_case = _normalize_predicted_type_case(predictedTypeCase)
+    run_source_type, normalized_run_id = _normalize_run_context(runSourceType, runId, flowRunId)
     result_layout = _get_table_result_layout(object_name)
     page = _normalize_page(page)
     page_size = _normalize_page_size(pageSize, 50, 500)
@@ -1052,6 +1130,11 @@ def get_result_table(
         ):
             where_clauses.append(f"{_predicted_type_case_expr()} = :predictedTypeCase")
             bind_params["predictedTypeCase"] = normalized_predicted_type_case
+        if run_source_type and normalized_run_id is not None and {"RUN_SOURCE_TYPE", "RUN_ID"}.issubset(columns):
+            where_clauses.append("RUN_SOURCE_TYPE = :runSourceType")
+            where_clauses.append("RUN_ID = :runId")
+            bind_params["runSourceType"] = run_source_type
+            bind_params["runId"] = normalized_run_id
         where_sql = f" WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
         base_sql = f"SELECT * FROM {_quote_identifier(owner_name)}.{_quote_identifier(object_name)}{where_sql}{order_sql}"
         result = _fetch_dynamic_page(cursor, base_sql, page, page_size, bind_params)
@@ -1059,9 +1142,9 @@ def get_result_table(
         predicted_type_summary = None
         violation_summary = None
         if result_layout.get("summary") == "correlationSummary":
-            cat_corr_summary = _fetch_cat_corr_summary(cursor, owner_name, object_name, target_owner, target_table)
+            cat_corr_summary = _fetch_cat_corr_summary(cursor, owner_name, object_name, target_owner, target_table, run_source_type, normalized_run_id)
         elif result_layout.get("summary") == "predictedTypeSummary":
-            predicted_type_summary = _fetch_predicted_type_summary(cursor, owner_name, object_name, target_owner, target_table)
+            predicted_type_summary = _fetch_predicted_type_summary(cursor, owner_name, object_name, target_owner, target_table, run_source_type, normalized_run_id)
         elif result_layout.get("summary") == "violationSummary":
             violation_summary = _fetch_rule_violation_summary(
                 cursor,
@@ -1079,6 +1162,8 @@ def get_result_table(
                 violationMaxRules,
                 violationRulePage,
                 violationRulePageSize,
+                run_source_type,
+                normalized_run_id,
             )
         column_comments = _fetch_column_comment_map(cursor, target_owner, target_table)
         return {
@@ -1089,6 +1174,8 @@ def get_result_table(
             "targetOwner": target_owner,
             "targetTable": target_table,
             "ruleModelName": rule_model_name,
+            "runSourceType": run_source_type,
+            "runId": normalized_run_id,
             "filteredByTarget": bool(bind_params),
             "correlationSummary": cat_corr_summary,
             "predictedTypeSummary": predicted_type_summary,
@@ -1301,6 +1388,9 @@ def get_model_rule_summary(
     pageSize: int = 20,
     resultColumnPage: int = 1,
     resultColumnPageSize: int = 12,
+    runSourceType: str | None = None,
+    runId: int | None = None,
+    flowRunId: int | None = None,
 ):
     owner_name = _validate_identifier(owner, "owner")
     model_name = _validate_identifier(modelName, "model name")
@@ -1324,6 +1414,7 @@ def get_model_rule_summary(
     normalized_condition_column = str(conditionColumn or "").strip().upper() or None
     if normalized_condition_column and normalized_condition_column != "__NULL__":
         normalized_condition_column = _validate_identifier(normalized_condition_column, "condition column")
+    run_source_type, normalized_run_id = _normalize_run_context(runSourceType, runId, flowRunId)
     conn = None
     cursor = None
     try:
@@ -1335,18 +1426,24 @@ def get_model_rule_summary(
             "targetOwner": target_owner,
             "targetTable": target_table,
             "modelName": model_name,
+            "runSourceType": run_source_type or None,
+            "runId": normalized_run_id,
         })
         condition_dist = execute_query(conn, "MCOMMON_ANLY_WORK_ASSOC_RULE_CONDITION_DIST", {
             "owner": owner_name,
             "targetOwner": target_owner,
             "targetTable": target_table,
             "modelName": model_name,
+            "runSourceType": run_source_type or None,
+            "runId": normalized_run_id,
         })
         result_top = execute_query(conn, "MCOMMON_ANLY_WORK_ASSOC_RULE_RESULT_TOP", {
             "owner": owner_name,
             "targetOwner": target_owner,
             "targetTable": target_table,
             "modelName": model_name,
+            "runSourceType": run_source_type or None,
+            "runId": normalized_run_id,
             "resultOffset": result_column_offset,
             "resultEndRow": result_column_end_row,
         })
@@ -1355,6 +1452,8 @@ def get_model_rule_summary(
             "targetOwner": target_owner,
             "targetTable": target_table,
             "modelName": model_name,
+            "runSourceType": run_source_type or None,
+            "runId": normalized_run_id,
             "conditionCount": conditionCount,
             "resultColumn": normalized_result_column,
             "conditionColumn": normalized_condition_column,
@@ -1392,6 +1491,8 @@ def get_model_rule_summary(
             "modelName": model_name,
             "targetOwner": target_owner,
             "targetTable": target_table,
+            "runSourceType": run_source_type,
+            "runId": normalized_run_id,
             "columnComments": column_comments,
             "overview": overview_row,
             "conditionDist": condition_rows,

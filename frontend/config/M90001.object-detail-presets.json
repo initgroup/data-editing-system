@@ -82,6 +82,16 @@
           "key": "P_TARGET_TABLE",
           "comment": "대상 테이블명",
           "defaultValue": ":INIT$TargetTable"
+        },
+        {
+          "key": "P_RUN_SOURCE_TYPE",
+          "comment": "실행 출처 구분(DATA_WORK/FLOW_WORK)",
+          "defaultValue": ":INIT$RunSourceType"
+        },
+        {
+          "key": "P_RUN_ID",
+          "comment": "실행 이력 ID",
+          "defaultValue": ":INIT$RunId"
         }
       ]
     },
@@ -99,17 +109,17 @@
         {
           "key": "P_DATA_QUERY",
           "comment": "학습 입력 데이터 SELECT 문",
-          "defaultValue": "'SELECT * FROM '||:INIT$TargetOwner||'.'||:INIT$TargetTable"
+          "defaultValue": "'SELECT CAST(R.OWNER || ''|'' || R.TABLE_NAME || ''|'' || R.MODEL_NAME || ''|'' || R.COLUMN_NAME AS VARCHAR2(4000)) AS CASE_ID, R.DATA_TYPE, R.TOTAL_ROWS, R.NUM_DISTINCT, R.DIST_VAL_RT, R.LOG_DATA_TYPE, R.ENTROPY, R.NORM_ENTROPY, COALESCE(F.FINAL_PREDICTED_TYPE, R.FINAL_PREDICTED_TYPE, R.MODL_PREDICTED_TYPE, R.BASE_PREDICTED_TYPE) AS TARGET_TYPE FROM (SELECT R.*, ROW_NUMBER() OVER (PARTITION BY R.OWNER, R.TABLE_NAME, R.MODEL_NAME, R.COLUMN_NAME ORDER BY R.RUN_ID DESC) AS RN FROM '||:INIT$TargetOwner||'.'||:INIT$TargetTable||' R WHERE R.RUN_SOURCE_TYPE = '''||:INIT$RunSourceType||''' AND ('''||:INIT$RunSourceType||''' <> ''FLOW_WORK'' OR R.RUN_ID = '||:INIT$RunId||')) R LEFT JOIN '||:INIT$TargetOwner||'.INIT$_TB_PREDICTED_TYPE_FINAL F ON F.OWNER = R.OWNER AND F.TABLE_NAME = R.TABLE_NAME AND F.COLUMN_NAME = R.COLUMN_NAME WHERE R.RN = 1 AND COALESCE(F.FINAL_PREDICTED_TYPE, R.FINAL_PREDICTED_TYPE, R.MODL_PREDICTED_TYPE, R.BASE_PREDICTED_TYPE) IS NOT NULL'"
         },
         {
           "key": "P_CASE_ID_COLUMN_NAME",
           "comment": "행 식별 컬럼명",
-          "defaultValue": "FILE_ROW_NO"
+          "defaultValue": "CASE_ID"
         },
         {
           "key": "P_TARGET_COLUMN_NAME",
           "comment": "예측/분류 대상 컬럼명",
-          "defaultValue": "PREDICTED_TYPE"
+          "defaultValue": "TARGET_TYPE"
         },
         {
           "key": "P_CANDIDATE_COLUMNS",
@@ -160,6 +170,16 @@
           "key": "P_TARGET_TABLE",
           "comment": "대상 테이블명",
           "defaultValue": ":INIT$TargetTable"
+        },
+        {
+          "key": "P_RUN_SOURCE_TYPE",
+          "comment": "실행 출처 구분(DATA_WORK/FLOW_WORK)",
+          "defaultValue": ":INIT$RunSourceType"
+        },
+        {
+          "key": "P_RUN_ID",
+          "comment": "실행 이력 ID",
+          "defaultValue": ":INIT$RunId"
         }
       ]
     },
@@ -233,6 +253,16 @@
           "key": "P_COMMIT_YN",
           "comment": "프로시저 내부 커밋 여부",
           "defaultValue": "Y"
+        },
+        {
+          "key": "P_RUN_SOURCE_TYPE",
+          "comment": "실행 출처 구분(DATA_WORK/FLOW_WORK)",
+          "defaultValue": ":INIT$RunSourceType"
+        },
+        {
+          "key": "P_RUN_ID",
+          "comment": "실행 이력 ID",
+          "defaultValue": ":INIT$RunId"
         }
       ]
     },
@@ -281,6 +311,16 @@
           "key": "P_MAX_COLUMNS",
           "comment": "분석 대상 최대 컬럼 수",
           "defaultValue": "80"
+        },
+        {
+          "key": "P_RUN_SOURCE_TYPE",
+          "comment": "실행 출처 구분(DATA_WORK/FLOW_WORK)",
+          "defaultValue": ":INIT$RunSourceType"
+        },
+        {
+          "key": "P_RUN_ID",
+          "comment": "실행 이력 ID",
+          "defaultValue": ":INIT$RunId"
         }
       ]
     },
@@ -308,7 +348,17 @@
         {
           "key": "P_PREDICTION_METHOD",
           "comment": "예측 방식 선택(ONLY_RULE: BASE 컬럼만, ONLY_MODEL: MODL 컬럼만, ONLY_BOTH: BASE/MODL 컬럼, FINAL_RULE/MODEL/BOTH: FINAL 자동 반영)",
-          "defaultValue": "ONLY_RULE"
+          "defaultValue": "ONLY_BOTH"
+        },
+        {
+          "key": "P_RUN_SOURCE_TYPE",
+          "comment": "실행 출처 구분(DATA_WORK/FLOW_WORK)",
+          "defaultValue": ":INIT$RunSourceType"
+        },
+        {
+          "key": "P_RUN_ID",
+          "comment": "실행 이력 ID",
+          "defaultValue": ":INIT$RunId"
         }
       ]
     },

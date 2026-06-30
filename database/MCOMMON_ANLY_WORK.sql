@@ -5,6 +5,8 @@ SELECT *
              , ROW_NUMBER() OVER (ORDER BY Q.FLOW_RUN_ID DESC) AS RN__
           FROM (
                 SELECT R.FLOW_RUN_ID
+                     , 'FLOW_WORK' AS RUN_SOURCE_TYPE
+                     , R.FLOW_RUN_ID AS RUN_ID
                      , R.FLOW_ID
                      , F.FLOW_NAME
                      , F.FLOW_GROUP
@@ -128,7 +130,9 @@ SELECT COUNT(*) AS TOTAL_RULES
  WHERE OWNER = :owner
    AND TARGET_OWNER = :targetOwner
    AND TARGET_TABLE = :targetTable
-   AND MODEL_NAME = :modelName;
+   AND MODEL_NAME = :modelName
+   AND (:runSourceType IS NULL OR RUN_SOURCE_TYPE = :runSourceType)
+   AND (:runId IS NULL OR RUN_ID = :runId);
 
 -- [MCOMMON_ANLY_WORK_ASSOC_RULE_CONDITION_DIST]
 SELECT CONDITION_COUNT
@@ -149,6 +153,8 @@ SELECT CONDITION_COUNT
    AND TARGET_OWNER = :targetOwner
    AND TARGET_TABLE = :targetTable
    AND MODEL_NAME = :modelName
+   AND (:runSourceType IS NULL OR RUN_SOURCE_TYPE = :runSourceType)
+   AND (:runId IS NULL OR RUN_ID = :runId)
  GROUP BY CONDITION_COUNT
  ORDER BY CONDITION_COUNT;
 
@@ -165,11 +171,13 @@ SELECT *
                      , SUM(SUPPORT_COUNT) AS SUPPORT_COUNT
                      , AVG(RULE_CONFIDENCE) AS AVG_CONFIDENCE
                      , AVG(RULE_LIFT) AS AVG_LIFT
-                  FROM "INIT$_TB_ASSOC_RULE_SUMMARY"
+                 FROM "INIT$_TB_ASSOC_RULE_SUMMARY"
                  WHERE OWNER = :owner
                    AND TARGET_OWNER = :targetOwner
                    AND TARGET_TABLE = :targetTable
                    AND MODEL_NAME = :modelName
+                   AND (:runSourceType IS NULL OR RUN_SOURCE_TYPE = :runSourceType)
+                   AND (:runId IS NULL OR RUN_ID = :runId)
                  GROUP BY NVL(RESULT_COLUMN, '(RESULT UNKNOWN)')
                ) Q
        )
@@ -207,11 +215,13 @@ SELECT *
                      , CONDITION_TEXT
                      , RESULT_TEXT
                      , CREATE_DT
-                  FROM "INIT$_TB_ASSOC_RULE_SUMMARY"
+                 FROM "INIT$_TB_ASSOC_RULE_SUMMARY"
                  WHERE OWNER = :owner
                    AND TARGET_OWNER = :targetOwner
                    AND TARGET_TABLE = :targetTable
                    AND MODEL_NAME = :modelName
+                   AND (:runSourceType IS NULL OR RUN_SOURCE_TYPE = :runSourceType)
+                   AND (:runId IS NULL OR RUN_ID = :runId)
                    AND (:conditionCount IS NULL OR CONDITION_COUNT = :conditionCount)
                    AND (
                         :resultColumn IS NULL

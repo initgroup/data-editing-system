@@ -584,6 +584,7 @@
                 menuCode: node.REF_MENU_CODE || "",
                 targetOwner: node.TARGET_OWNER || "",
                 targetTable: node.TARGET_TABLE || "",
+                flowRunId: String(this.selectedRun?.FLOW_RUN_ID || ""),
                 page: String(this.resultPage),
                 pageSize: String(this.resultPageSize)
             });
@@ -674,6 +675,7 @@
                 modelName: node.RESULT_OBJECT_NAME,
                 targetOwner: node.TARGET_OWNER || "",
                 targetTable: node.TARGET_TABLE || "",
+                flowRunId: String(this.selectedRun?.FLOW_RUN_ID || ""),
                 page: String(Math.max(1, Number(page || 1))),
                 pageSize: String(this.normalizeRuleCardPageSize(filters.pageSize || 20)),
                 resultColumnPage: String(Math.max(1, Number(filters.resultColumnPage || 1))),
@@ -2946,12 +2948,48 @@
         },
 
         formatDateTime(value) {
-            const text = String(value || "").trim();
-            if (!text) return "-";
-            const match = text.match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2})(?:[.,](\d+))?/);
-            if (!match) return text.replace("T", " ");
-            const milliseconds = String(match[3] || "000").padEnd(3, "0").slice(0, 3);
-            return `${match[1]} ${match[2]}:${milliseconds}`;
+            const date = this.parseDateTime(value);
+            if (!date) return String(value || "").trim() || "-";
+            const parts = new Intl.DateTimeFormat("ko-KR", {
+                timeZone: "Asia/Seoul",
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+                hour12: false
+            }).formatToParts(date).reduce((acc, part) => {
+                acc[part.type] = part.value;
+                return acc;
+            }, {});
+            const milliseconds = String(date.getUTCMilliseconds()).padStart(3, "0");
+            return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}.${milliseconds} KST`;
+        },
+
+        parseDateTime(value) {
+            if (!value) return null;
+            if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+            const text = String(value).trim();
+            const match = text.match(/^(\d{4})[-/](\d{2})[-/](\d{2})[ T](\d{2}):(\d{2}):(\d{2})(?:[.,](\d+))?/);
+            if (match) {
+                const [, year, month, day, hour, minute, second, fraction] = match;
+                if (/[zZ]|[+-]\d{2}:?\d{2}$/.test(text)) {
+                    const parsedWithZone = new Date(text);
+                    return Number.isNaN(parsedWithZone.getTime()) ? null : parsedWithZone;
+                }
+                return new Date(Date.UTC(
+                    Number(year),
+                    Number(month) - 1,
+                    Number(day),
+                    Number(hour),
+                    Number(minute),
+                    Number(second),
+                    Number(String(fraction || "0").padEnd(3, "0").slice(0, 3))
+                ));
+            }
+            const parsed = new Date(text);
+            return Number.isNaN(parsed.getTime()) ? null : parsed;
         },
 
         formatPercent(value) {
@@ -2969,8 +3007,8 @@
 
         formatElapsedTime(startedAt, finishedAt, status = "") {
             if (!startedAt) return "-";
-            const start = new Date(startedAt);
-            const end = finishedAt ? new Date(finishedAt) : (String(status).toUpperCase() === "RUNNING" ? new Date() : null);
+            const start = this.parseDateTime(startedAt);
+            const end = finishedAt ? this.parseDateTime(finishedAt) : (String(status).toUpperCase() === "RUNNING" ? new Date() : null);
             if (!end || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return "-";
             const seconds = Math.max(0, Math.round((end.getTime() - start.getTime()) / 1000));
             if (seconds < 60) return `${seconds}s`;

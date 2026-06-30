@@ -255,7 +255,9 @@ CREATE OR REPLACE PACKAGE "INIT$_PKG_RULE_SUMMARY" AS
         p_max_input_rows      IN NUMBER   DEFAULT NULL,
         p_clear_existing_yn   IN VARCHAR2 DEFAULT 'Y',
         p_target_owner        IN VARCHAR2 DEFAULT NULL,
-        p_target_table        IN VARCHAR2 DEFAULT NULL
+        p_target_table        IN VARCHAR2 DEFAULT NULL,
+        p_run_source_type     IN VARCHAR2 DEFAULT 'DATA_WORK',
+        p_run_id              IN NUMBER   DEFAULT 0
     );
 END "INIT$_PKG_RULE_SUMMARY";
 /
@@ -300,6 +302,15 @@ CREATE OR REPLACE PACKAGE BODY "INIT$_PKG_RULE_SUMMARY" AS
         RETURN p_value IS NULL
             OR TRIM(p_value) IS NULL
             OR UPPER(TRIM(p_value)) IN ('NULL', '(NULL)');
+    END;
+
+    FUNCTION normalize_run_source_type(p_value IN VARCHAR2) RETURN VARCHAR2 IS
+        v_value VARCHAR2(30) := UPPER(TRIM(NVL(p_value, 'DATA_WORK')));
+    BEGIN
+        IF v_value NOT IN ('DATA_WORK', 'FLOW_WORK') THEN
+            RETURN 'DATA_WORK';
+        END IF;
+        RETURN v_value;
     END;
 
     FUNCTION contains_column(p_cols IN t_column_list, p_col IN VARCHAR2) RETURN BOOLEAN IS
@@ -430,7 +441,9 @@ CREATE OR REPLACE PACKAGE BODY "INIT$_PKG_RULE_SUMMARY" AS
         p_exclude IN VARCHAR2,
         p_max_columns IN PLS_INTEGER,
         p_target_owner IN VARCHAR2,
-        p_target_table IN VARCHAR2
+        p_target_table IN VARCHAR2,
+        p_run_source_type IN VARCHAR2,
+        p_run_id IN NUMBER
     ) RETURN t_column_list IS
         v_cols t_column_list := t_column_list();
         v_limit PLS_INTEGER := GREATEST(1, NVL(p_max_columns, 25));
@@ -449,15 +462,19 @@ CREATE OR REPLACE PACKAGE BODY "INIT$_PKG_RULE_SUMMARY" AS
                     SELECT DISTINCT COL1
                       FROM (
                             SELECT "COL_A" AS COL1
-                              FROM "INIT$_TB_CAT_CORR_PAIR"
+                             FROM "INIT$_TB_CAT_CORR_PAIR"
                              WHERE "OWNER" = p_target_owner
                                AND "TABLE_NAME" = p_target_table
+                               AND "RUN_SOURCE_TYPE" = p_run_source_type
+                               AND (p_run_source_type = 'DATA_WORK' OR "RUN_ID" = p_run_id)
                                AND "PASS_YN" = 'Y'
                             UNION
                             SELECT "COL_B" AS COL1
                               FROM "INIT$_TB_CAT_CORR_PAIR"
                              WHERE "OWNER" = p_target_owner
                                AND "TABLE_NAME" = p_target_table
+                               AND "RUN_SOURCE_TYPE" = p_run_source_type
+                               AND (p_run_source_type = 'DATA_WORK' OR "RUN_ID" = p_run_id)
                                AND "PASS_YN" = 'Y'
                            )
                      WHERE COL1 IS NOT NULL
@@ -492,7 +509,9 @@ CREATE OR REPLACE PACKAGE BODY "INIT$_PKG_RULE_SUMMARY" AS
         p_max_input_rows      IN NUMBER   DEFAULT NULL,
         p_clear_existing_yn   IN VARCHAR2 DEFAULT 'Y',
         p_target_owner        IN VARCHAR2 DEFAULT NULL,
-        p_target_table        IN VARCHAR2 DEFAULT NULL
+        p_target_table        IN VARCHAR2 DEFAULT NULL,
+        p_run_source_type     IN VARCHAR2 DEFAULT 'DATA_WORK',
+        p_run_id              IN NUMBER   DEFAULT 0
     ) IS
         v_model_name VARCHAR2(128);
         v_case_id_col VARCHAR2(128);
@@ -517,6 +536,8 @@ CREATE OR REPLACE PACKAGE BODY "INIT$_PKG_RULE_SUMMARY" AS
         v_effective_max_condition_count NUMBER := 1;
         v_loaded_count NUMBER := 0;
         v_symmetric_pair_mode VARCHAR2(1) := 'N';
+        v_run_source_type VARCHAR2(30);
+        v_run_id NUMBER;
 
         PROCEDURE load_multi_condition_rule(p_indexes IN t_index_list) IS
             v_condition_count PLS_INTEGER := p_indexes.COUNT;
@@ -566,6 +587,8 @@ CREATE OR REPLACE PACKAGE BODY "INIT$_PKG_RULE_SUMMARY" AS
 
             v_sql := q'[
 INSERT /*+ NO_PARALLEL */ INTO "INIT$_TB_ASSOC_RULE_SUMMARY" (
+    "RUN_SOURCE_TYPE",
+    "RUN_ID",
     "OWNER",
     "TARGET_OWNER",
     "TARGET_TABLE",
@@ -652,7 +675,9 @@ RANKED AS (
        AND M.RULE_CONFIDENCE >= ]' || TO_CHAR(v_min_confidence, 'TM9', 'NLS_NUMERIC_CHARACTERS=.,') || q'[
        AND M.RULE_LIFT >= ]' || TO_CHAR(v_min_lift, 'TM9', 'NLS_NUMERIC_CHARACTERS=.,') || q'[
 )
-SELECT SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA'),
+SELECT ]' || sql_literal(v_run_source_type) || q'[,
+       ]' || TO_CHAR(v_run_id, 'TM9', 'NLS_NUMERIC_CHARACTERS=.,') || q'[,
+       SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA'),
        ]' || sql_literal(v_target_owner) || q'[,
        ]' || sql_literal(v_target_table) || q'[,
        ]' || sql_literal(v_model_name) || q'[,
@@ -730,6 +755,8 @@ SELECT SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA'),
 
         v_model_type := SUBSTR(UPPER(TRIM(NVL(p_model_type, 'CONDITIONAL_RULE'))), 1, 80);
         v_rule_source := SUBSTR(UPPER(TRIM(NVL(p_rule_source, 'CONDITIONAL_FREQUENCY'))), 1, 80);
+        v_run_source_type := normalize_run_source_type(p_run_source_type);
+        v_run_id := NVL(p_run_id, 0);
         v_base_query := clean_query(p_data_query);
         IF v_target_owner IS NULL THEN
             v_target_owner := NVL(infer_query_owner(v_base_query), SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA'));
@@ -757,7 +784,9 @@ SELECT SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA'),
                 v_case_id_col,
                 v_max_columns,
                 v_target_owner,
-                v_target_table
+                v_target_table,
+                v_run_source_type,
+                v_run_id
             );
 
             IF v_candidates.COUNT > 0 THEN
@@ -801,6 +830,8 @@ SELECT SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA'),
         IF UPPER(TRIM(NVL(p_clear_existing_yn, 'Y'))) = 'Y' THEN
             DELETE /*+ NO_PARALLEL */ FROM "INIT$_TB_ASSOC_RULE_SUMMARY"
              WHERE "OWNER" = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')
+               AND "RUN_SOURCE_TYPE" = v_run_source_type
+               AND "RUN_ID" = v_run_id
                AND "TARGET_OWNER" = v_target_owner
                AND "TARGET_TABLE" = v_target_table
                AND "MODEL_NAME" = v_model_name;
@@ -820,6 +851,8 @@ SELECT SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA'),
 
                 v_sql := q'[
 INSERT /*+ NO_PARALLEL */ INTO "INIT$_TB_ASSOC_RULE_SUMMARY" (
+    "RUN_SOURCE_TYPE",
+    "RUN_ID",
     "OWNER",
     "TARGET_OWNER",
     "TARGET_TABLE",
@@ -906,7 +939,9 @@ RANKED AS (
        AND M.RULE_CONFIDENCE >= ]' || TO_CHAR(v_min_confidence, 'TM9', 'NLS_NUMERIC_CHARACTERS=.,') || q'[
        AND M.RULE_LIFT >= ]' || TO_CHAR(v_min_lift, 'TM9', 'NLS_NUMERIC_CHARACTERS=.,') || q'[
 )
-SELECT SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA'),
+SELECT ]' || sql_literal(v_run_source_type) || q'[,
+       ]' || TO_CHAR(v_run_id, 'TM9', 'NLS_NUMERIC_CHARACTERS=.,') || q'[,
+       SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA'),
        ]' || sql_literal(v_target_owner) || q'[,
        ]' || sql_literal(v_target_table) || q'[,
        ]' || sql_literal(v_model_name) || q'[,
@@ -954,6 +989,8 @@ SELECT SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA'),
 
                         v_sql := q'[
 INSERT /*+ NO_PARALLEL */ INTO "INIT$_TB_ASSOC_RULE_SUMMARY" (
+    "RUN_SOURCE_TYPE",
+    "RUN_ID",
     "OWNER",
     "TARGET_OWNER",
     "TARGET_TABLE",
@@ -1047,7 +1084,9 @@ RANKED AS (
        AND M.RULE_CONFIDENCE >= ]' || TO_CHAR(v_min_confidence, 'TM9', 'NLS_NUMERIC_CHARACTERS=.,') || q'[
        AND M.RULE_LIFT >= ]' || TO_CHAR(v_min_lift, 'TM9', 'NLS_NUMERIC_CHARACTERS=.,') || q'[
 )
-SELECT SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA'),
+SELECT ]' || sql_literal(v_run_source_type) || q'[,
+       ]' || TO_CHAR(v_run_id, 'TM9', 'NLS_NUMERIC_CHARACTERS=.,') || q'[,
+       SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA'),
        ]' || sql_literal(v_target_owner) || q'[,
        ]' || sql_literal(v_target_table) || q'[,
        ]' || sql_literal(v_model_name) || q'[,
@@ -1118,7 +1157,9 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_APRIORI_ASSOC_MODEL" (
     p_max_rule_summary_columns IN NUMBER DEFAULT 50,
     p_max_rule_summary_per_pair IN NUMBER DEFAULT 50,
     p_target_owner        IN VARCHAR2 DEFAULT NULL,
-    p_target_table        IN VARCHAR2 DEFAULT NULL
+    p_target_table        IN VARCHAR2 DEFAULT NULL,
+    p_run_source_type     IN VARCHAR2 DEFAULT 'DATA_WORK',
+    p_run_id              IN NUMBER   DEFAULT 0
 ) AUTHID CURRENT_USER IS
     TYPE t_column_list IS TABLE OF VARCHAR2(128);
 
@@ -1153,6 +1194,8 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_APRIORI_ASSOC_MODEL" (
     v_lift_expr VARCHAR2(1000);
     v_conditional_loaded BOOLEAN := FALSE;
     v_conditional_rule_count NUMBER := 0;
+    v_run_source_type VARCHAR2(30);
+    v_run_id NUMBER;
 
     FUNCTION normalize_identifier(p_value IN VARCHAR2, p_label IN VARCHAR2) RETURN VARCHAR2 IS
         v_value VARCHAR2(128);
@@ -1160,6 +1203,15 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_APRIORI_ASSOC_MODEL" (
         v_value := UPPER(TRIM(BOTH '"' FROM TRIM(p_value)));
         IF v_value IS NULL OR NOT REGEXP_LIKE(v_value, '^[A-Z][A-Z0-9_$#]{0,127}$') THEN
             RAISE_APPLICATION_ERROR(-20206, 'Invalid ' || p_label || ' parameter: ' || SUBSTR(NVL(p_value, '(null)'), 1, 200));
+        END IF;
+        RETURN v_value;
+    END;
+
+    FUNCTION normalize_run_source_type(p_value IN VARCHAR2) RETURN VARCHAR2 IS
+        v_value VARCHAR2(30) := UPPER(TRIM(NVL(p_value, 'DATA_WORK')));
+    BEGIN
+        IF v_value NOT IN ('DATA_WORK', 'FLOW_WORK') THEN
+            RETURN 'DATA_WORK';
         END IF;
         RETURN v_value;
     END;
@@ -1221,22 +1273,32 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_APRIORI_ASSOC_MODEL" (
                   FROM "INIT$_TB_CAT_CORR_PAIR"
                  WHERE "OWNER" = v_target_owner
                    AND "TABLE_NAME" = v_target_table
+                   AND "RUN_SOURCE_TYPE" = v_run_source_type
+                   AND (v_run_source_type = 'DATA_WORK' OR "RUN_ID" = v_run_id)
                    AND "PASS_YN" = 'Y'
                 UNION
                 SELECT "COL_B" AS COLUMN_NAME
                   FROM "INIT$_TB_CAT_CORR_PAIR"
                  WHERE "OWNER" = v_target_owner
                    AND "TABLE_NAME" = v_target_table
+                   AND "RUN_SOURCE_TYPE" = v_run_source_type
+                   AND (v_run_source_type = 'DATA_WORK' OR "RUN_ID" = v_run_id)
                    AND "PASS_YN" = 'Y'
             ),
             CATEGORICAL_COLS AS (
-                SELECT "COLUMN_NAME"
-                     , MIN(NVL("COLUMN_ID", 999999)) AS COLUMN_ID
-                 FROM "INIT$_TB_PREDICTED_TYPE"
-                WHERE "OWNER" = v_target_owner
-                  AND "TABLE_NAME" = v_target_table
-                  AND COALESCE(TRIM("FINAL_PREDICTED_TYPE"), TRIM("MODL_PREDICTED_TYPE"), TRIM("BASE_PREDICTED_TYPE")) LIKE '%범주형'
-                 GROUP BY "COLUMN_NAME"
+                SELECT P."COLUMN_NAME"
+                     , MIN(NVL(P."COLUMN_ID", 999999)) AS COLUMN_ID
+                  FROM "INIT$_TB_PREDICTED_TYPE" P
+                  LEFT JOIN "INIT$_TB_PREDICTED_TYPE_FINAL" F
+                    ON F."OWNER" = P."OWNER"
+                   AND F."TABLE_NAME" = P."TABLE_NAME"
+                   AND F."COLUMN_NAME" = P."COLUMN_NAME"
+                 WHERE P."OWNER" = v_target_owner
+                   AND P."TABLE_NAME" = v_target_table
+                   AND P."RUN_SOURCE_TYPE" = v_run_source_type
+                   AND (v_run_source_type = 'DATA_WORK' OR P."RUN_ID" = v_run_id)
+                   AND COALESCE(TRIM(F."FINAL_PREDICTED_TYPE"), TRIM(P."FINAL_PREDICTED_TYPE"), TRIM(P."MODL_PREDICTED_TYPE"), TRIM(P."BASE_PREDICTED_TYPE")) LIKE '%범주형'
+                 GROUP BY P."COLUMN_NAME"
             )
             SELECT C."COLUMN_NAME"
               FROM CATEGORICAL_COLS C
@@ -1260,15 +1322,21 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_APRIORI_ASSOC_MODEL" (
             FOR col_rec IN (
                 SELECT "COLUMN_NAME"
                   FROM (
-                        SELECT "COLUMN_NAME"
-                             , MIN(NVL("COLUMN_ID", 999999)) AS COLUMN_ID
-                          FROM "INIT$_TB_PREDICTED_TYPE"
-                         WHERE "OWNER" = v_target_owner
-                           AND "TABLE_NAME" = v_target_table
-                           AND COALESCE(TRIM("FINAL_PREDICTED_TYPE"), TRIM("MODL_PREDICTED_TYPE"), TRIM("BASE_PREDICTED_TYPE")) LIKE '%범주형'
-                         GROUP BY "COLUMN_NAME"
-                         ORDER BY COLUMN_ID, "COLUMN_NAME"
-                       )
+                    SELECT P."COLUMN_NAME"
+                         , MIN(NVL(P."COLUMN_ID", 999999)) AS COLUMN_ID
+                      FROM "INIT$_TB_PREDICTED_TYPE" P
+                      LEFT JOIN "INIT$_TB_PREDICTED_TYPE_FINAL" F
+                        ON F."OWNER" = P."OWNER"
+                       AND F."TABLE_NAME" = P."TABLE_NAME"
+                       AND F."COLUMN_NAME" = P."COLUMN_NAME"
+                     WHERE P."OWNER" = v_target_owner
+                       AND P."TABLE_NAME" = v_target_table
+                       AND P."RUN_SOURCE_TYPE" = v_run_source_type
+                       AND (v_run_source_type = 'DATA_WORK' OR P."RUN_ID" = v_run_id)
+                       AND COALESCE(TRIM(F."FINAL_PREDICTED_TYPE"), TRIM(P."FINAL_PREDICTED_TYPE"), TRIM(P."MODL_PREDICTED_TYPE"), TRIM(P."BASE_PREDICTED_TYPE")) LIKE '%범주형'
+                     GROUP BY P."COLUMN_NAME"
+                     ORDER BY COLUMN_ID, "COLUMN_NAME"
+                   )
             ) LOOP
                 v_col := UPPER(TRIM(col_rec.COLUMN_NAME));
                 IF REGEXP_LIKE(v_col, '^[A-Z][A-Z0-9_$#]{0,127}$')
@@ -1294,24 +1362,34 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_APRIORI_ASSOC_MODEL" (
         v_candidate_before_query_count NUMBER := 0;
         v_reason VARCHAR2(1000);
     BEGIN
-        SELECT COUNT(DISTINCT "COLUMN_NAME")
+        SELECT COUNT(DISTINCT P."COLUMN_NAME")
           INTO v_predicted_categorical_cols
-          FROM "INIT$_TB_PREDICTED_TYPE"
-         WHERE "OWNER" = v_target_owner
-           AND "TABLE_NAME" = v_target_table
-           AND COALESCE(TRIM("FINAL_PREDICTED_TYPE"), TRIM("MODL_PREDICTED_TYPE"), TRIM("BASE_PREDICTED_TYPE")) LIKE '%범주형';
+          FROM "INIT$_TB_PREDICTED_TYPE" P
+          LEFT JOIN "INIT$_TB_PREDICTED_TYPE_FINAL" F
+            ON F."OWNER" = P."OWNER"
+           AND F."TABLE_NAME" = P."TABLE_NAME"
+           AND F."COLUMN_NAME" = P."COLUMN_NAME"
+         WHERE P."OWNER" = v_target_owner
+           AND P."TABLE_NAME" = v_target_table
+           AND P."RUN_SOURCE_TYPE" = v_run_source_type
+           AND (v_run_source_type = 'DATA_WORK' OR P."RUN_ID" = v_run_id)
+           AND COALESCE(TRIM(F."FINAL_PREDICTED_TYPE"), TRIM(P."FINAL_PREDICTED_TYPE"), TRIM(P."MODL_PREDICTED_TYPE"), TRIM(P."BASE_PREDICTED_TYPE")) LIKE '%범주형';
 
         SELECT COUNT(*)
           INTO v_corr_pair_count
           FROM "INIT$_TB_CAT_CORR_PAIR"
          WHERE "OWNER" = v_target_owner
-           AND "TABLE_NAME" = v_target_table;
+           AND "TABLE_NAME" = v_target_table
+           AND "RUN_SOURCE_TYPE" = v_run_source_type
+           AND (v_run_source_type = 'DATA_WORK' OR "RUN_ID" = v_run_id);
 
         SELECT COUNT(*)
           INTO v_pass_pair_count
           FROM "INIT$_TB_CAT_CORR_PAIR"
          WHERE "OWNER" = v_target_owner
            AND "TABLE_NAME" = v_target_table
+           AND "RUN_SOURCE_TYPE" = v_run_source_type
+           AND (v_run_source_type = 'DATA_WORK' OR "RUN_ID" = v_run_id)
            AND "PASS_YN" = 'Y';
 
         SELECT COUNT(DISTINCT COLUMN_NAME)
@@ -1321,12 +1399,16 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_APRIORI_ASSOC_MODEL" (
                   FROM "INIT$_TB_CAT_CORR_PAIR"
                  WHERE "OWNER" = v_target_owner
                    AND "TABLE_NAME" = v_target_table
+                   AND "RUN_SOURCE_TYPE" = v_run_source_type
+                   AND (v_run_source_type = 'DATA_WORK' OR "RUN_ID" = v_run_id)
                    AND "PASS_YN" = 'Y'
                 UNION
                 SELECT "COL_B" AS COLUMN_NAME
                   FROM "INIT$_TB_CAT_CORR_PAIR"
                  WHERE "OWNER" = v_target_owner
                    AND "TABLE_NAME" = v_target_table
+                   AND "RUN_SOURCE_TYPE" = v_run_source_type
+                   AND (v_run_source_type = 'DATA_WORK' OR "RUN_ID" = v_run_id)
                    AND "PASS_YN" = 'Y'
                );
 
@@ -1338,20 +1420,30 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_APRIORI_ASSOC_MODEL" (
                       FROM "INIT$_TB_CAT_CORR_PAIR"
                      WHERE "OWNER" = v_target_owner
                        AND "TABLE_NAME" = v_target_table
+                       AND "RUN_SOURCE_TYPE" = v_run_source_type
+                       AND (v_run_source_type = 'DATA_WORK' OR "RUN_ID" = v_run_id)
                        AND "PASS_YN" = 'Y'
                     UNION
                     SELECT "COL_B" AS COLUMN_NAME
                       FROM "INIT$_TB_CAT_CORR_PAIR"
                      WHERE "OWNER" = v_target_owner
                        AND "TABLE_NAME" = v_target_table
+                       AND "RUN_SOURCE_TYPE" = v_run_source_type
+                       AND (v_run_source_type = 'DATA_WORK' OR "RUN_ID" = v_run_id)
                        AND "PASS_YN" = 'Y'
                 ),
                 CATEGORICAL_COLS AS (
-                    SELECT DISTINCT "COLUMN_NAME"
-                      FROM "INIT$_TB_PREDICTED_TYPE"
-                     WHERE "OWNER" = v_target_owner
-                       AND "TABLE_NAME" = v_target_table
-                       AND COALESCE(TRIM("FINAL_PREDICTED_TYPE"), TRIM("MODL_PREDICTED_TYPE"), TRIM("BASE_PREDICTED_TYPE")) LIKE '%범주형'
+                    SELECT DISTINCT P."COLUMN_NAME"
+                      FROM "INIT$_TB_PREDICTED_TYPE" P
+                      LEFT JOIN "INIT$_TB_PREDICTED_TYPE_FINAL" F
+                        ON F."OWNER" = P."OWNER"
+                       AND F."TABLE_NAME" = P."TABLE_NAME"
+                       AND F."COLUMN_NAME" = P."COLUMN_NAME"
+                     WHERE P."OWNER" = v_target_owner
+                       AND P."TABLE_NAME" = v_target_table
+                       AND P."RUN_SOURCE_TYPE" = v_run_source_type
+                       AND (v_run_source_type = 'DATA_WORK' OR P."RUN_ID" = v_run_id)
+                       AND COALESCE(TRIM(F."FINAL_PREDICTED_TYPE"), TRIM(P."FINAL_PREDICTED_TYPE"), TRIM(P."MODL_PREDICTED_TYPE"), TRIM(P."BASE_PREDICTED_TYPE")) LIKE '%범주형'
                 )
                 SELECT C."COLUMN_NAME"
                   FROM CATEGORICAL_COLS C
@@ -1509,6 +1601,8 @@ BEGIN
     v_model_name := UPPER(TRIM(p_model_name));
     v_case_id_col := UPPER(TRIM(p_case_id_column_name));
     v_drop_existing := CASE WHEN UPPER(TRIM(NVL(p_drop_existing_yn, 'Y'))) = 'Y' THEN 'Y' ELSE 'N' END;
+    v_run_source_type := normalize_run_source_type(p_run_source_type);
+    v_run_id := NVL(p_run_id, 0);
 
     IF NOT REGEXP_LIKE(v_model_name, '^[A-Z][A-Z0-9_$#]{0,127}$') THEN
         RAISE_APPLICATION_ERROR(-20201, 'Invalid model_name parameter.');
@@ -1615,13 +1709,17 @@ BEGIN
             p_max_input_rows      => NULL,
             p_clear_existing_yn   => 'Y',
             p_target_owner        => p_target_owner,
-            p_target_table        => p_target_table
+            p_target_table        => p_target_table,
+            p_run_source_type     => v_run_source_type,
+            p_run_id              => v_run_id
         );
 
         SELECT COUNT(*)
           INTO v_conditional_rule_count
           FROM "INIT$_TB_ASSOC_RULE_SUMMARY"
          WHERE "OWNER" = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')
+           AND "RUN_SOURCE_TYPE" = v_run_source_type
+           AND "RUN_ID" = v_run_id
            AND "TARGET_OWNER" = v_target_owner
            AND "TARGET_TABLE" = v_target_table
            AND "MODEL_NAME" = v_model_name
@@ -1666,15 +1764,17 @@ BEGIN
 
             DELETE /*+ NO_PARALLEL */ FROM "INIT$_TB_ASSOC_RULE_SUMMARY"
              WHERE "OWNER" = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')
+               AND "RUN_SOURCE_TYPE" = v_run_source_type
+               AND "RUN_ID" = v_run_id
                AND "TARGET_OWNER" = v_target_owner
                AND "TARGET_TABLE" = v_target_table
                AND "MODEL_NAME" = v_model_name;
 
             EXECUTE IMMEDIATE
                 'INSERT /*+ NO_PARALLEL */ INTO "INIT$_TB_ASSOC_RULE_SUMMARY" (' ||
-                ' "OWNER", "TARGET_OWNER", "TARGET_TABLE", "MODEL_NAME", "MODEL_TYPE", "RULE_SOURCE", "RULE_ID", "CONDITION_COUNT", "RESULT_COLUMN", "RESULT_VALUE", ' ||
+                ' "RUN_SOURCE_TYPE", "RUN_ID", "OWNER", "TARGET_OWNER", "TARGET_TABLE", "MODEL_NAME", "MODEL_TYPE", "RULE_SOURCE", "RULE_ID", "CONDITION_COUNT", "RESULT_COLUMN", "RESULT_VALUE", ' ||
                 ' "RESULT_HAS_VALUE_YN", "RULE_SUPPORT", "RULE_CONFIDENCE", "RULE_LIFT", "CONDITION_TEXT", "RESULT_TEXT", "CREATE_DT") ' ||
-                'SELECT SYS_CONTEXT(''USERENV'', ''CURRENT_SCHEMA''), :target_owner, :target_table, :model_name, ''APRIORI_ASSOCIATION'', ''ORACLE_DM_VR'', ' || v_rule_id_expr || ', ' ||
+                'SELECT :run_source_type, :run_id, SYS_CONTEXT(''USERENV'', ''CURRENT_SCHEMA''), :target_owner, :target_table, :model_name, ''APRIORI_ASSOCIATION'', ''ORACLE_DM_VR'', ' || v_rule_id_expr || ', ' ||
                 '       REGEXP_COUNT(NVL(' || v_antecedent_expr || ', ''''), ''<item([[:space:]>])'', 1, ''i''), ' ||
                 '       REGEXP_SUBSTR(' || v_consequent_expr || ', ''<item_name>([^<]+)</item_name>'', 1, 1, ''i'', 1), ' ||
                 '       REGEXP_SUBSTR(' || v_consequent_expr || ', ''<item_value>([^<]+)</item_value>'', 1, 1, ''i'', 1), ' ||
@@ -1682,7 +1782,7 @@ BEGIN
                 '       ' || v_support_expr || ', ' || v_confidence_expr || ', ' || v_lift_expr || ', ' ||
                 '       ' || v_antecedent_expr || ', ' || v_consequent_expr || ', SYSDATE ' ||
                 '  FROM "' || REPLACE(v_rule_view_name, '"', '""') || '"'
-            USING v_target_owner, v_target_table, v_model_name;
+            USING v_run_source_type, v_run_id, v_target_owner, v_target_table, v_model_name;
 
             DBMS_OUTPUT.PUT_LINE('[OK] Association rule summary loaded: ' || SQL%ROWCOUNT || ' rows');
             DBMS_OUTPUT.PUT_LINE('[INFO] Rule summary columns: rule_id=' || NVL(v_rule_id_col, '(ROWNUM)') ||
@@ -1725,7 +1825,9 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_DECISION_TREE_RULE_MODEL" (
     p_max_rule_summary_columns IN NUMBER DEFAULT 25,
     p_max_rule_summary_per_pair IN NUMBER DEFAULT 50,
     p_target_owner        IN VARCHAR2 DEFAULT NULL,
-    p_target_table        IN VARCHAR2 DEFAULT NULL
+    p_target_table        IN VARCHAR2 DEFAULT NULL,
+    p_run_source_type     IN VARCHAR2 DEFAULT 'DATA_WORK',
+    p_run_id              IN NUMBER   DEFAULT 0
 ) AUTHID CURRENT_USER IS
     v_setlist DBMS_DATA_MINING.SETTING_LIST;
     v_model_name VARCHAR2(128);
@@ -1738,6 +1840,8 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_DECISION_TREE_RULE_MODEL" (
     v_rule_count NUMBER := 0;
     v_target_owner VARCHAR2(128);
     v_target_table VARCHAR2(128);
+    v_run_source_type VARCHAR2(30);
+    v_run_id NUMBER;
 
     FUNCTION normalize_identifier(p_value IN VARCHAR2, p_label IN VARCHAR2) RETURN VARCHAR2 IS
         v_value VARCHAR2(128);
@@ -1745,6 +1849,15 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_DECISION_TREE_RULE_MODEL" (
         v_value := UPPER(TRIM(BOTH '"' FROM TRIM(p_value)));
         IF v_value IS NULL OR NOT REGEXP_LIKE(v_value, '^[A-Z][A-Z0-9_$#]{0,127}$') THEN
             RAISE_APPLICATION_ERROR(-20407, 'Invalid ' || p_label || ' parameter: ' || SUBSTR(NVL(p_value, '(null)'), 1, 200));
+        END IF;
+        RETURN v_value;
+    END;
+
+    FUNCTION normalize_run_source_type(p_value IN VARCHAR2) RETURN VARCHAR2 IS
+        v_value VARCHAR2(30) := UPPER(TRIM(NVL(p_value, 'DATA_WORK')));
+    BEGIN
+        IF v_value NOT IN ('DATA_WORK', 'FLOW_WORK') THEN
+            RETURN 'DATA_WORK';
         END IF;
         RETURN v_value;
     END;
@@ -1775,6 +1888,8 @@ BEGIN
     v_case_id_col := UPPER(TRIM(p_case_id_column_name));
     v_target_col := UPPER(TRIM(p_target_column_name));
     v_drop_existing := CASE WHEN UPPER(TRIM(NVL(p_drop_existing_yn, 'Y'))) = 'Y' THEN 'Y' ELSE 'N' END;
+    v_run_source_type := normalize_run_source_type(p_run_source_type);
+    v_run_id := NVL(p_run_id, 0);
 
     IF NOT REGEXP_LIKE(v_model_name, '^[A-Z][A-Z0-9_$#]{0,127}$') THEN
         RAISE_APPLICATION_ERROR(-20401, 'Invalid model_name parameter.');
@@ -1853,13 +1968,17 @@ BEGIN
         p_max_input_rows      => NULL,
         p_clear_existing_yn   => 'Y',
         p_target_owner        => v_target_owner,
-        p_target_table        => v_target_table
+        p_target_table        => v_target_table,
+        p_run_source_type     => v_run_source_type,
+        p_run_id              => v_run_id
     );
 
     SELECT COUNT(*)
       INTO v_rule_count
       FROM "INIT$_TB_ASSOC_RULE_SUMMARY"
      WHERE "OWNER" = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')
+       AND "RUN_SOURCE_TYPE" = v_run_source_type
+       AND "RUN_ID" = v_run_id
        AND "TARGET_OWNER" = v_target_owner
        AND "TARGET_TABLE" = v_target_table
        AND "MODEL_NAME" = v_model_name
@@ -1887,7 +2006,9 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_RULE_VIOLATION_DETECT" (
     p_max_rules             IN NUMBER   DEFAULT 500,
     p_max_violations_per_rule IN NUMBER DEFAULT 1000,
     p_clear_existing_yn     IN VARCHAR2 DEFAULT 'Y',
-    p_commit_yn             IN VARCHAR2 DEFAULT 'Y'
+    p_commit_yn             IN VARCHAR2 DEFAULT 'Y',
+    p_run_source_type       IN VARCHAR2 DEFAULT 'DATA_WORK',
+    p_run_id                IN NUMBER   DEFAULT 0
 ) AUTHID CURRENT_USER IS
     v_rule_owner VARCHAR2(128);
     v_rule_model VARCHAR2(128);
@@ -1906,6 +2027,8 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_RULE_VIOLATION_DETECT" (
     v_max_rules NUMBER;
     v_max_violations_per_rule NUMBER;
     v_inserted_total NUMBER := 0;
+    v_run_source_type VARCHAR2(30);
+    v_run_id NUMBER;
 
     FUNCTION is_null_token(p_value IN VARCHAR2) RETURN BOOLEAN IS
     BEGIN
@@ -1917,6 +2040,15 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_RULE_VIOLATION_DETECT" (
     BEGIN
         IF NOT REGEXP_LIKE(v_value, '^[A-Z][A-Z0-9_$#]{0,127}$') THEN
             RAISE_APPLICATION_ERROR(-20501, 'Invalid ' || p_name || ' parameter.');
+        END IF;
+        RETURN v_value;
+    END;
+
+    FUNCTION normalize_run_source_type(p_value IN VARCHAR2) RETURN VARCHAR2 IS
+        v_value VARCHAR2(30) := UPPER(TRIM(NVL(p_value, 'DATA_WORK')));
+    BEGIN
+        IF v_value NOT IN ('DATA_WORK', 'FLOW_WORK') THEN
+            RETURN 'DATA_WORK';
         END IF;
         RETURN v_value;
     END;
@@ -2033,6 +2165,8 @@ BEGIN
     v_min_lift := GREATEST(0, NVL(p_min_lift, 1));
     v_max_rules := GREATEST(1, LEAST(10000, NVL(p_max_rules, 500)));
     v_max_violations_per_rule := GREATEST(1, LEAST(100000, NVL(p_max_violations_per_rule, 1000)));
+    v_run_source_type := normalize_run_source_type(p_run_source_type);
+    v_run_id := NVL(p_run_id, 0);
     v_target_object := qualified_name(v_target_owner, v_target_table);
     v_result_object := qualified_name(v_result_owner, v_result_table);
 
@@ -2055,11 +2189,13 @@ BEGIN
     IF v_clear_existing = 'Y' THEN
         EXECUTE IMMEDIATE
             'DELETE /*+ NO_PARALLEL */ FROM ' || v_result_object ||
-            ' WHERE "TARGET_OWNER" = :target_owner' ||
+            ' WHERE "RUN_SOURCE_TYPE" = :run_source_type' ||
+            '   AND "RUN_ID" = :run_id' ||
+            '   AND "TARGET_OWNER" = :target_owner' ||
             '   AND "TARGET_TABLE" = :target_table' ||
             '   AND "RULE_OWNER" = :rule_owner' ||
             '   AND "MODEL_NAME" = :model_name'
-            USING v_target_owner, v_target_table, v_rule_owner, v_rule_model;
+            USING v_run_source_type, v_run_id, v_target_owner, v_target_table, v_rule_owner, v_rule_model;
     END IF;
 
     FOR rule_rec IN (
@@ -2074,6 +2210,8 @@ BEGIN
                        ) AS RN__
                  FROM "INIT$_TB_ASSOC_RULE_SUMMARY" S
                  WHERE S."OWNER" = v_rule_owner
+                   AND S."RUN_SOURCE_TYPE" = v_run_source_type
+                   AND (v_run_source_type = 'DATA_WORK' OR S."RUN_ID" = v_run_id)
                    AND S."TARGET_OWNER" = v_target_owner
                    AND S."TARGET_TABLE" = v_target_table
                    AND S."MODEL_NAME" = v_rule_model
@@ -2108,12 +2246,14 @@ BEGIN
 
             v_sql :=
                 'INSERT /*+ NO_PARALLEL */ INTO ' || v_result_object || ' (' ||
-                '"TARGET_OWNER", "TARGET_TABLE", "RULE_OWNER", "MODEL_NAME", "RULE_ID", ' ||
+                '"RUN_SOURCE_TYPE", "RUN_ID", "TARGET_OWNER", "TARGET_TABLE", "RULE_OWNER", "MODEL_NAME", "RULE_ID", ' ||
                 '"CASE_ID", "CASE_ROWID", "CONDITION_COUNT", "CONDITION_TEXT", "RESULT_COLUMN", ' ||
                 '"EXPECTED_VALUE", "ACTUAL_VALUE", "RULE_SUPPORT", "RULE_CONFIDENCE", "RULE_LIFT", ' ||
                 '"SUPPORT_COUNT", "CONDITION_TOTAL_COUNT", "RESULT_TOTAL_COUNT", "TOTAL_COUNT", ' ||
                 '"VIOLATION_SCORE", "VIOLATION_REASON", "CREATE_DT") ' ||
                 'SELECT ' ||
+                sql_literal(v_run_source_type) || ', ' ||
+                number_literal(v_run_id) || ', ' ||
                 sql_literal(v_target_owner) || ', ' ||
                 sql_literal(v_target_table) || ', ' ||
                 sql_literal(v_rule_owner) || ', ' ||
@@ -2253,7 +2393,9 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_CAT_CORR_ANALYZE" (
     p_min_avg_v   IN NUMBER DEFAULT 0.5,
     p_sample_rows IN NUMBER DEFAULT 100000,
     p_max_distinct IN NUMBER DEFAULT 100,
-    p_max_columns IN NUMBER DEFAULT 80
+    p_max_columns IN NUMBER DEFAULT 80,
+    p_run_source_type IN VARCHAR2 DEFAULT 'DATA_WORK',
+    p_run_id IN NUMBER DEFAULT 0
 ) AUTHID CURRENT_USER IS
     TYPE t_column_list IS TABLE OF VARCHAR2(128);
 
@@ -2272,10 +2414,21 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_CAT_CORR_ANALYZE" (
     v_sample_rows NUMBER;
     v_max_distinct NUMBER;
     v_max_columns NUMBER;
+    v_run_source_type VARCHAR2(30);
+    v_run_id NUMBER;
 
     FUNCTION quote_name(p_name IN VARCHAR2) RETURN VARCHAR2 IS
     BEGIN
         RETURN '"' || REPLACE(p_name, '"', '""') || '"';
+    END;
+
+    FUNCTION normalize_run_source_type(p_value IN VARCHAR2) RETURN VARCHAR2 IS
+        v_value VARCHAR2(30) := UPPER(TRIM(NVL(p_value, 'DATA_WORK')));
+    BEGIN
+        IF v_value NOT IN ('DATA_WORK', 'FLOW_WORK') THEN
+            RETURN 'DATA_WORK';
+        END IF;
+        RETURN v_value;
     END;
 
     FUNCTION ln_gamma(p_x IN NUMBER) RETURN NUMBER IS
@@ -2372,6 +2525,8 @@ BEGIN
     v_sample_rows := CASE WHEN p_sample_rows IS NULL OR p_sample_rows <= 0 THEN NULL ELSE p_sample_rows END;
     v_max_distinct := CASE WHEN p_max_distinct IS NULL OR p_max_distinct <= 0 THEN 100 ELSE p_max_distinct END;
     v_max_columns := CASE WHEN p_max_columns IS NULL OR p_max_columns <= 0 THEN 80 ELSE p_max_columns END;
+    v_run_source_type := normalize_run_source_type(p_run_source_type);
+    v_run_id := NVL(p_run_id, 0);
 
     IF NOT REGEXP_LIKE(v_owner, '^[A-Z][A-Z0-9_$#]{0,127}$') THEN
         RAISE_APPLICATION_ERROR(-20101, 'Invalid owner parameter.');
@@ -2386,25 +2541,35 @@ BEGIN
     DELETE /*+ NO_PARALLEL */
       FROM "INIT$_TB_CAT_CORR_SUMMARY"
      WHERE "OWNER" = v_owner
-       AND "TABLE_NAME" = v_table_name;
+       AND "TABLE_NAME" = v_table_name
+       AND "RUN_SOURCE_TYPE" = v_run_source_type
+       AND "RUN_ID" = v_run_id;
 
     DELETE /*+ NO_PARALLEL */
       FROM "INIT$_TB_CAT_CORR_PAIR"
      WHERE "OWNER" = v_owner
-       AND "TABLE_NAME" = v_table_name;
+       AND "TABLE_NAME" = v_table_name
+       AND "RUN_SOURCE_TYPE" = v_run_source_type
+       AND "RUN_ID" = v_run_id;
 
     SELECT COLUMN_NAME
       BULK COLLECT INTO v_cols
       FROM (
             SELECT COLUMN_NAME
               FROM (
-                    SELECT COLUMN_NAME
-                         , MIN(NVL(COLUMN_ID, 999999)) AS COLUMN_ID
-                     FROM "INIT$_TB_PREDICTED_TYPE"
-                    WHERE "OWNER" = v_owner
-                      AND "TABLE_NAME" = v_table_name
-                      AND COALESCE(TRIM("FINAL_PREDICTED_TYPE"), TRIM("MODL_PREDICTED_TYPE"), TRIM("BASE_PREDICTED_TYPE")) LIKE '%범주형'
-                     GROUP BY COLUMN_NAME
+                    SELECT P.COLUMN_NAME
+                         , MIN(NVL(P.COLUMN_ID, 999999)) AS COLUMN_ID
+                      FROM "INIT$_TB_PREDICTED_TYPE" P
+                      LEFT JOIN "INIT$_TB_PREDICTED_TYPE_FINAL" F
+                        ON F."OWNER" = P."OWNER"
+                       AND F."TABLE_NAME" = P."TABLE_NAME"
+                       AND F."COLUMN_NAME" = P."COLUMN_NAME"
+                     WHERE P."OWNER" = v_owner
+                       AND P."TABLE_NAME" = v_table_name
+                       AND P."RUN_SOURCE_TYPE" = v_run_source_type
+                       AND (v_run_source_type = 'DATA_WORK' OR P."RUN_ID" = v_run_id)
+                       AND COALESCE(TRIM(F."FINAL_PREDICTED_TYPE"), TRIM(P."FINAL_PREDICTED_TYPE"), TRIM(P."MODL_PREDICTED_TYPE"), TRIM(P."BASE_PREDICTED_TYPE")) LIKE '%범주형'
+                     GROUP BY P.COLUMN_NAME
                      ORDER BY COLUMN_ID, COLUMN_NAME
                    )
              WHERE ROWNUM <= v_max_columns
@@ -2510,7 +2675,9 @@ SELECT TOT.TOTAL_CNT,
                          END;
 
             INSERT /*+ NO_PARALLEL */ INTO "INIT$_TB_CAT_CORR_PAIR" (
-                "OWNER"
+                "RUN_SOURCE_TYPE"
+              , "RUN_ID"
+              , "OWNER"
               , "TABLE_NAME"
               , "COL_A"
               , "COL_B"
@@ -2522,7 +2689,9 @@ SELECT TOT.TOTAL_CNT,
               , "PASS_YN"
               , "CREATE_DT"
             ) VALUES (
-                v_owner
+                v_run_source_type
+              , v_run_id
+              , v_owner
               , v_table_name
               , v_col_a
               , v_col_b
@@ -2538,7 +2707,9 @@ SELECT TOT.TOTAL_CNT,
     END LOOP;
 
     INSERT /*+ NO_PARALLEL */ INTO "INIT$_TB_CAT_CORR_SUMMARY" (
-        "OWNER"
+        "RUN_SOURCE_TYPE"
+      , "RUN_ID"
+      , "OWNER"
       , "TABLE_NAME"
       , "COLUMN_NAME"
       , "PAIR_COUNT"
@@ -2554,11 +2725,15 @@ SELECT TOT.TOTAL_CNT,
           FROM "INIT$_TB_CAT_CORR_PAIR"
          WHERE "OWNER" = v_owner
            AND "TABLE_NAME" = v_table_name
+           AND "RUN_SOURCE_TYPE" = v_run_source_type
+           AND "RUN_ID" = v_run_id
         UNION ALL
         SELECT COL_B AS COLUMN_NAME, CRAMERS_V, PASS_YN
           FROM "INIT$_TB_CAT_CORR_PAIR"
          WHERE "OWNER" = v_owner
            AND "TABLE_NAME" = v_table_name
+           AND "RUN_SOURCE_TYPE" = v_run_source_type
+           AND "RUN_ID" = v_run_id
     ),
     SUMMARY AS (
         SELECT COLUMN_NAME
@@ -2569,7 +2744,9 @@ SELECT TOT.TOTAL_CNT,
           FROM PAIRS
          GROUP BY COLUMN_NAME
     )
-    SELECT v_owner
+    SELECT v_run_source_type
+         , v_run_id
+         , v_owner
          , v_table_name
          , COLUMN_NAME
          , PAIR_COUNT
@@ -2980,7 +3157,9 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_PREDICTED_TYPE" (
     p_target_owner       IN VARCHAR2,
     p_target_table       IN VARCHAR2,
     p_dynamic_model_name IN VARCHAR2 DEFAULT 'OML_DECISION_TREE_MODEL_01',
-    p_prediction_method  IN VARCHAR2 DEFAULT 'ONLY_RULE'
+    p_prediction_method  IN VARCHAR2 DEFAULT 'ONLY_RULE',
+    p_run_source_type    IN VARCHAR2 DEFAULT 'DATA_WORK',
+    p_run_id             IN NUMBER   DEFAULT 0
 ) AUTHID CURRENT_USER IS
     v_owner                   VARCHAR2(128);
     v_table_name              VARCHAR2(128);
@@ -3000,10 +3179,23 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_PREDICTED_TYPE" (
     v_final_reason_expr       VARCHAR2(1000) := 'CAST(NULL AS VARCHAR2(1000))';
     v_final_dt_expr           VARCHAR2(1000) := 'CAST(NULL AS DATE)';
     v_final_user_expr         VARCHAR2(1000) := 'CAST(NULL AS VARCHAR2(128))';
+    v_run_source_type         VARCHAR2(30);
+    v_run_id                  NUMBER;
+    v_predicted_rowcount      NUMBER := 0;
+    v_final_rowcount          NUMBER := 0;
 
     FUNCTION sql_literal(p_value IN VARCHAR2) RETURN VARCHAR2 IS
     BEGIN
         RETURN '''' || REPLACE(NVL(p_value, ''), '''', '''''') || '''';
+    END;
+
+    FUNCTION normalize_run_source_type(p_value IN VARCHAR2) RETURN VARCHAR2 IS
+        v_value VARCHAR2(30) := UPPER(TRIM(NVL(p_value, 'DATA_WORK')));
+    BEGIN
+        IF v_value NOT IN ('DATA_WORK', 'FLOW_WORK') THEN
+            RETURN 'DATA_WORK';
+        END IF;
+        RETURN v_value;
     END;
 
     FUNCTION prediction_type_rank_expr(p_sql_expr IN VARCHAR2) RETURN VARCHAR2 IS
@@ -3027,6 +3219,8 @@ BEGIN
     v_table_name := UPPER(TRIM(p_target_table));
     v_model_name := DBMS_ASSERT.QUALIFIED_SQL_NAME(UPPER(NVL(NULLIF(TRIM(p_dynamic_model_name), ''), 'OML_DECISION_TREE_MODEL_01')));
     v_method := UPPER(TRIM(NVL(p_prediction_method, 'ONLY_RULE')));
+    v_run_source_type := normalize_run_source_type(p_run_source_type);
+    v_run_id := NVL(p_run_id, 0);
 
     IF NOT REGEXP_LIKE(v_owner, '^[A-Z][A-Z0-9_$#]{0,127}$') THEN
         RAISE_APPLICATION_ERROR(-20001, 'Invalid owner parameter.');
@@ -3250,7 +3444,9 @@ USING (
                        MAX_NUM_VALUE              NUMBER PATH 'MAX_NUM_VALUE'
                ) X
     )
-    SELECT P.OWNER AS "OWNER",
+    SELECT ~' || sql_literal(v_run_source_type) || q'~ AS "RUN_SOURCE_TYPE",
+           ~' || TO_CHAR(v_run_id, 'TM9', 'NLS_NUMERIC_CHARACTERS=.,') || q'~ AS "RUN_ID",
+           P.OWNER AS "OWNER",
            P.TABLE_NAME AS "TABLE_NAME",
            P.MODEL_NAME AS "MODEL_NAME",
            P.COLUMN_ID AS "COLUMN_ID",
@@ -3286,7 +3482,9 @@ USING (
       FROM PROFILE P
 ) S
 ON (
-       T."OWNER" = S."OWNER"
+       T."RUN_SOURCE_TYPE" = S."RUN_SOURCE_TYPE"
+   AND T."RUN_ID" = S."RUN_ID"
+   AND T."OWNER" = S."OWNER"
    AND T."TABLE_NAME" = S."TABLE_NAME"
    AND T."MODEL_NAME" = S."MODEL_NAME"
    AND T."COLUMN_NAME" = S."COLUMN_NAME"
@@ -3302,6 +3500,8 @@ WHEN MATCHED THEN UPDATE SET
         T."NORM_ENTROPY" = S."NORM_ENTROPY",
 ~' || v_update_rule_sql || v_update_model_sql || v_update_final_sql || q'~        T."CREATE_DT" = SYSDATE
 WHEN NOT MATCHED THEN INSERT (
+        "RUN_SOURCE_TYPE",
+        "RUN_ID",
         "OWNER",
         "TABLE_NAME",
         "MODEL_NAME",
@@ -3323,6 +3523,8 @@ WHEN NOT MATCHED THEN INSERT (
         "FINAL_UPDATE_USER",
         "CREATE_DT"
 ) VALUES (
+        S."RUN_SOURCE_TYPE",
+        S."RUN_ID",
         S."OWNER",
         S."TABLE_NAME",
         S."MODEL_NAME",
@@ -3346,9 +3548,80 @@ WHEN NOT MATCHED THEN INSERT (
 )~';
 
     EXECUTE IMMEDIATE v_sql;
+    v_predicted_rowcount := SQL%ROWCOUNT;
+
+    MERGE /*+ NO_PARALLEL */ INTO "INIT$_TB_PREDICTED_TYPE_FINAL" T
+    USING (
+        SELECT "RUN_SOURCE_TYPE"
+             , "RUN_ID"
+             , "OWNER"
+             , "TABLE_NAME"
+             , "MODEL_NAME"
+             , "COLUMN_ID"
+             , "COLUMN_NAME"
+             , "DATA_TYPE"
+             , "BASE_PREDICTED_TYPE"
+             , "MODL_PREDICTED_TYPE"
+             , COALESCE("FINAL_PREDICTED_TYPE", "MODL_PREDICTED_TYPE", "BASE_PREDICTED_TYPE") AS "FINAL_PREDICTED_TYPE"
+             , "FINAL_REASON"
+          FROM "INIT$_TB_PREDICTED_TYPE"
+         WHERE "RUN_SOURCE_TYPE" = v_run_source_type
+           AND "RUN_ID" = v_run_id
+           AND "OWNER" = v_owner
+           AND "TABLE_NAME" = v_table_name
+           AND "MODEL_NAME" = v_model_name
+           AND COALESCE("FINAL_PREDICTED_TYPE", "MODL_PREDICTED_TYPE", "BASE_PREDICTED_TYPE") IS NOT NULL
+    ) S
+       ON (T."OWNER" = S."OWNER"
+      AND T."TABLE_NAME" = S."TABLE_NAME"
+      AND T."COLUMN_NAME" = S."COLUMN_NAME")
+     WHEN MATCHED THEN UPDATE
+          SET T."COLUMN_ID" = S."COLUMN_ID"
+            , T."DATA_TYPE" = S."DATA_TYPE"
+            , T."SOURCE_RUN_SOURCE_TYPE" = S."RUN_SOURCE_TYPE"
+            , T."SOURCE_RUN_ID" = S."RUN_ID"
+            , T."SOURCE_MODEL_NAME" = S."MODEL_NAME"
+            , T."BASE_PREDICTED_TYPE" = S."BASE_PREDICTED_TYPE"
+            , T."MODL_PREDICTED_TYPE" = S."MODL_PREDICTED_TYPE"
+     WHEN NOT MATCHED THEN INSERT (
+            "OWNER"
+          , "TABLE_NAME"
+          , "COLUMN_NAME"
+          , "COLUMN_ID"
+          , "DATA_TYPE"
+          , "SOURCE_RUN_SOURCE_TYPE"
+          , "SOURCE_RUN_ID"
+          , "SOURCE_MODEL_NAME"
+          , "BASE_PREDICTED_TYPE"
+          , "MODL_PREDICTED_TYPE"
+          , "FINAL_PREDICTED_TYPE"
+          , "FINAL_REASON"
+          , "FINAL_UPDATE_DT"
+          , "FINAL_UPDATE_USER"
+          , "CREATE_DT"
+          )
+          VALUES (
+            S."OWNER"
+          , S."TABLE_NAME"
+          , S."COLUMN_NAME"
+          , S."COLUMN_ID"
+          , S."DATA_TYPE"
+          , S."RUN_SOURCE_TYPE"
+          , S."RUN_ID"
+          , S."MODEL_NAME"
+          , S."BASE_PREDICTED_TYPE"
+          , S."MODL_PREDICTED_TYPE"
+          , S."FINAL_PREDICTED_TYPE"
+          , S."FINAL_REASON"
+          , SYSDATE
+          , SYS_CONTEXT('USERENV', 'SESSION_USER')
+          , SYSDATE
+          );
+    v_final_rowcount := SQL%ROWCOUNT;
 
     DBMS_OUTPUT.PUT_LINE('[OK] INIT$_SP_PREDICTED_TYPE loaded '
-        || SQL%ROWCOUNT || ' column prediction rows for '
+        || v_predicted_rowcount || ' column prediction rows and merged '
+        || v_final_rowcount || ' final rows for '
         || v_owner || '.' || v_table_name || ' using ' || v_method || ' / ' || v_model_name);
 EXCEPTION
     WHEN OTHERS THEN

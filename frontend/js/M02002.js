@@ -701,7 +701,7 @@
         updateSelectedMeta() {
             this.setText("#selectedOwner-M02002", this.selectedTable?.OWNER || "-");
             this.setText("#selectedTable-M02002", this.selectedTable?.TABLE_NAME || "-");
-            this.setText("#selectedCreatedAt-M02002", this.selectedTable?.CREATED_AT || "-");
+            this.setText("#selectedCreatedAt-M02002", this.formatKstDateTime(this.selectedTable?.CREATED_AT));
             this.setText("#selectedComment-M02002", this.selectedTable?.COMMENTS || "-");
             const desc = this.selectedTable
                 ? `${this.selectedTable.OWNER}.${this.selectedTable.TABLE_NAME}`
@@ -977,11 +977,62 @@
         },
 
         renderGridCellValue(gridKey, column, value) {
-            const text = this.escapeHtml(value ?? "");
+            const displayValue = this.isDateTimeColumn(column) ? this.formatKstDateTime(value) : value;
+            const text = this.escapeHtml(displayValue ?? "");
             if (gridKey === "columns" && column === "TABLE_ID") {
                 return `<span class="table-copy-cell" ondblclick="M02002.selectCopyCellText(event)" title="${text}">${text}</span>`;
             }
             return text;
+        },
+
+        isDateTimeColumn(column) {
+            return /(^|_)(CREATED|UPDATED|STARTED|FINISHED|DEPLOYED|MODIFIED)_AT$/i.test(String(column || ""))
+                || /(^|_)(CREATE|UPDATE|START|END|DDL)_DT$/i.test(String(column || ""))
+                || /TIME$/i.test(String(column || ""));
+        },
+
+        formatKstDateTime(value) {
+            const date = this.parseDateTime(value);
+            if (!date) return value || "-";
+            const parts = new Intl.DateTimeFormat("ko-KR", {
+                timeZone: "Asia/Seoul",
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+                hour12: false
+            }).formatToParts(date).reduce((acc, part) => {
+                acc[part.type] = part.value;
+                return acc;
+            }, {});
+            return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second} KST`;
+        },
+
+        parseDateTime(value) {
+            if (!value) return null;
+            if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+            const text = String(value).trim();
+            const match = text.match(/^(\d{4})[-/](\d{2})[-/](\d{2})[ T](\d{2}):(\d{2}):(\d{2})(?:[.,](\d+))?/);
+            if (match) {
+                const [, year, month, day, hour, minute, second, fraction] = match;
+                if (/[zZ]|[+-]\d{2}:?\d{2}$/.test(text)) {
+                    const parsedWithZone = new Date(text);
+                    return Number.isNaN(parsedWithZone.getTime()) ? null : parsedWithZone;
+                }
+                return new Date(Date.UTC(
+                    Number(year),
+                    Number(month) - 1,
+                    Number(day),
+                    Number(hour),
+                    Number(minute),
+                    Number(second),
+                    Number(String(fraction || "0").padEnd(3, "0").slice(0, 3))
+                ));
+            }
+            const parsed = new Date(text);
+            return Number.isNaN(parsed.getTime()) ? null : parsed;
         },
 
         getGridCellClass(gridKey, column) {

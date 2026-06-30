@@ -803,8 +803,8 @@
                             <tr>
                                 <td>${this.escapeHtml(row.TABLE_NAME || "")}</td>
                                 <td>${row.EXISTS_YN === "Y" ? "Installed" : "Missing"}</td>
-                                <td>${this.escapeHtml(row.CREATED_AT || "")}</td>
-                                <td>${this.escapeHtml(row.LAST_DDL_TIME || "")}</td>
+                                <td title="${this.escapeHtml(row.CREATED_AT || "")}">${this.escapeHtml(this.formatKstDateTime(row.CREATED_AT))}</td>
+                                <td title="${this.escapeHtml(row.LAST_DDL_TIME || "")}">${this.escapeHtml(this.formatKstDateTime(row.LAST_DDL_TIME))}</td>
                             </tr>
                         `).join("")}
                     </tbody>
@@ -891,7 +891,7 @@
                                     <td>${this.escapeHtml(row.OBJECT_VERSION || "")}</td>
                                     <td class="m99001-checksum-cell" title="${this.escapeHtml(row.CHECKSUM || "")}">${this.escapeHtml(row.CHECKSUM || "")}</td>
                                     <td class="${statusClass}">${this.escapeHtml(status)}</td>
-                                    <td>${this.escapeHtml(row.DEPLOYED_AT || "")}</td>
+                                    <td title="${this.escapeHtml(row.DEPLOYED_AT || "")}">${this.escapeHtml(this.formatKstDateTime(row.DEPLOYED_AT))}</td>
                                     <td class="m99001-error-cell" title="${this.escapeHtml(row.ERROR_MESSAGE || "")}">${this.escapeHtml(row.ERROR_MESSAGE || "")}</td>
                                 </tr>
                             `;
@@ -927,6 +927,50 @@
                 else if (failStatuses.has(status)) failed += 1;
             });
             el.textContent = `전체건수 ${list.length} / 성공건수 ${success} / 실패건수 ${failed}`;
+        },
+
+        formatKstDateTime(value) {
+            const date = this.parseDateTime(value);
+            if (!date) return value || "";
+            const parts = new Intl.DateTimeFormat("ko-KR", {
+                timeZone: "Asia/Seoul",
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+                hour12: false
+            }).formatToParts(date).reduce((acc, part) => {
+                acc[part.type] = part.value;
+                return acc;
+            }, {});
+            return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second} KST`;
+        },
+
+        parseDateTime(value) {
+            if (!value) return null;
+            if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+            const text = String(value).trim();
+            const match = text.match(/^(\d{4})[-/](\d{2})[-/](\d{2})[ T](\d{2}):(\d{2}):(\d{2})(?:[.,](\d+))?/);
+            if (match) {
+                const [, year, month, day, hour, minute, second, fraction] = match;
+                if (/[zZ]|[+-]\d{2}:?\d{2}$/.test(text)) {
+                    const parsedWithZone = new Date(text);
+                    return Number.isNaN(parsedWithZone.getTime()) ? null : parsedWithZone;
+                }
+                return new Date(Date.UTC(
+                    Number(year),
+                    Number(month) - 1,
+                    Number(day),
+                    Number(hour),
+                    Number(minute),
+                    Number(second),
+                    Number(String(fraction || "0").padEnd(3, "0").slice(0, 3))
+                ));
+            }
+            const parsed = new Date(text);
+            return Number.isNaN(parsed.getTime()) ? null : parsed;
         },
 
         renderLog(message, type = "info", selector = "#setupLog-M99001") {

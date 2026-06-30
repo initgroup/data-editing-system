@@ -83,6 +83,9 @@ def create_anly_work_router(
         violationRulePage: int = 1,
         violationRulePageSize: int = 20,
         predictedTypeCase: str | None = None,
+        runSourceType: str | None = None,
+        runId: int | None = None,
+        flowRunId: int | None = None,
         page: int = 1,
         pageSize: int = 50,
     ):
@@ -104,6 +107,9 @@ def create_anly_work_router(
             violationRulePage=violationRulePage,
             violationRulePageSize=violationRulePageSize,
             predictedTypeCase=predictedTypeCase,
+            runSourceType=runSourceType,
+            runId=runId,
+            flowRunId=flowRunId,
             page=page,
             pageSize=pageSize,
         )
@@ -155,6 +161,9 @@ def create_anly_work_router(
         pageSize: int = 20,
         resultColumnPage: int = 1,
         resultColumnPageSize: int = 12,
+        runSourceType: str | None = None,
+        runId: int | None = None,
+        flowRunId: int | None = None,
     ):
         return anly_work.get_model_rule_summary(
             request=request,
@@ -171,6 +180,9 @@ def create_anly_work_router(
             pageSize=pageSize,
             resultColumnPage=resultColumnPage,
             resultColumnPageSize=resultColumnPageSize,
+            runSourceType=runSourceType,
+            runId=runId,
+            flowRunId=flowRunId,
         )
 
     @router.get("/model-readable-summary")

@@ -96,6 +96,7 @@ BEGIN
     drop_table_if_exists('INIT$_TB_CAT_CORR_PAIR');
     drop_table_if_exists('INIT$_TB_RULE_VIOLATION_RESULT');
     drop_table_if_exists('INIT$_TB_ASSOC_RULE_SUMMARY');
+    drop_table_if_exists('INIT$_TB_PREDICTED_TYPE_FINAL');
     drop_table_if_exists('INIT$_TB_PREDICTED_TYPE');
     drop_table_if_exists('INIT$_TB_DATA_WORK_RUN');
     drop_table_if_exists('INIT$_TB_DATA_WORK_JOB');
@@ -117,6 +118,8 @@ BEGIN
     drop_index_if_exists('IX_INIT$_TB_ASSOC_RULE_SUMMARY_03');
     drop_index_if_exists('IX_INIT$_TB_ASSOC_RULE_SUMMARY_02');
     drop_index_if_exists('IX_INIT$_TB_ASSOC_RULE_SUMMARY_01');
+    drop_index_if_exists('IX_INIT$_TB_PRED_TYPE_FINAL_02');
+    drop_index_if_exists('IX_INIT$_TB_PRED_TYPE_FINAL_01');
     drop_index_if_exists('IX_INIT$_TB_PREDICTED_TYPE_01');
     drop_index_if_exists('IX_INIT$_TB_TARGET_SETTING_01');
     drop_index_if_exists('IX_INIT$_TB_OML_RESOURCE_01');

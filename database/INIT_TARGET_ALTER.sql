@@ -49,6 +49,22 @@ DECLARE
             RETURN NULL;
     END;
 
+    FUNCTION column_nullable_yn(p_table_name IN VARCHAR2, p_column_name IN VARCHAR2) RETURN VARCHAR2 IS
+        v_nullable VARCHAR2(1);
+    BEGIN
+        SELECT NULLABLE
+          INTO v_nullable
+          FROM USER_TAB_COLS
+         WHERE TABLE_NAME = UPPER(p_table_name)
+           AND COLUMN_NAME = UPPER(p_column_name)
+           AND ROWNUM = 1;
+
+        RETURN v_nullable;
+    EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+            RETURN NULL;
+    END;
+
     FUNCTION index_exists(p_index_name IN VARCHAR2) RETURN BOOLEAN IS
         v_count NUMBER;
     BEGIN
@@ -136,6 +152,31 @@ DECLARE
         END IF;
     END;
 
+    PROCEDURE modify_column_default_not_null(
+        p_table_name IN VARCHAR2,
+        p_column_name IN VARCHAR2,
+        p_default_sql IN VARCHAR2
+    ) IS
+        v_nullable VARCHAR2(1);
+        v_column_sql VARCHAR2(4000);
+    BEGIN
+        IF table_exists(p_table_name) AND column_exists(p_table_name, p_column_name) THEN
+            v_nullable := column_nullable_yn(p_table_name, p_column_name);
+            v_column_sql := '"' || UPPER(p_column_name) || '" DEFAULT ' || p_default_sql;
+
+            IF v_nullable = 'Y' THEN
+                v_column_sql := v_column_sql || ' NOT NULL ENABLE';
+            END IF;
+
+            run_ddl(
+                'MODIFY ' || p_table_name || '.' || p_column_name,
+                'ALTER TABLE "' || UPPER(p_table_name) || '" MODIFY (' || v_column_sql || ')'
+            );
+        ELSE
+            DBMS_OUTPUT.PUT_LINE('[SKIP] COLUMN ' || p_table_name || '.' || p_column_name || ' is missing.');
+        END IF;
+    END;
+
     PROCEDURE set_column_visibility(p_table_name IN VARCHAR2, p_column_name IN VARCHAR2, p_visibility IN VARCHAR2) IS
         v_hidden VARCHAR2(3);
         v_target_hidden VARCHAR2(3);
@@ -158,6 +199,8 @@ DECLARE
     PROCEDURE reorder_assoc_rule_summary_columns IS
         TYPE t_col_list IS TABLE OF VARCHAR2(128);
         v_cols t_col_list := t_col_list(
+            'RUN_SOURCE_TYPE',
+            'RUN_ID',
             'OWNER',
             'TARGET_OWNER',
             'TARGET_TABLE',
@@ -204,6 +247,8 @@ DECLARE
          WHERE TABLE_NAME = 'INIT$_TB_ASSOC_RULE_SUMMARY'
            AND HIDDEN_COLUMN = 'NO'
            AND COLUMN_NAME IN (
+               'RUN_SOURCE_TYPE',
+               'RUN_ID',
                'OWNER',
                'TARGET_OWNER',
                'TARGET_TABLE',
@@ -234,7 +279,7 @@ DECLARE
             RETURN;
         END IF;
 
-        -- Keep OWNER visible so the table never has zero visible columns.
+        -- Keep RUN_SOURCE_TYPE visible so the table never has zero visible columns.
         FOR i IN 2 .. v_cols.COUNT LOOP
             set_column_visibility('INIT$_TB_ASSOC_RULE_SUMMARY', v_cols(i), 'INVISIBLE');
         END LOOP;
@@ -249,6 +294,8 @@ DECLARE
     PROCEDURE reorder_predicted_type_columns IS
         TYPE t_col_list IS TABLE OF VARCHAR2(128);
         v_cols t_col_list := t_col_list(
+            'RUN_SOURCE_TYPE',
+            'RUN_ID',
             'OWNER',
             'TABLE_NAME',
             'MODEL_NAME',
@@ -292,6 +339,8 @@ DECLARE
          WHERE TABLE_NAME = 'INIT$_TB_PREDICTED_TYPE'
            AND HIDDEN_COLUMN = 'NO'
            AND COLUMN_NAME IN (
+               'RUN_SOURCE_TYPE',
+               'RUN_ID',
                'OWNER',
                'TABLE_NAME',
                'MODEL_NAME',
@@ -319,7 +368,7 @@ DECLARE
             RETURN;
         END IF;
 
-        -- Keep OWNER visible so the table never has zero visible columns.
+        -- Keep RUN_SOURCE_TYPE visible so the table never has zero visible columns.
         FOR i IN 2 .. v_cols.COUNT LOOP
             set_column_visibility('INIT$_TB_PREDICTED_TYPE', v_cols(i), 'INVISIBLE');
         END LOOP;
@@ -329,6 +378,241 @@ DECLARE
         END LOOP;
 
         DBMS_OUTPUT.PUT_LINE('[OK] INIT$_TB_PREDICTED_TYPE column display order refreshed.');
+    END;
+
+    PROCEDURE reorder_cat_corr_pair_columns IS
+        TYPE t_col_list IS TABLE OF VARCHAR2(128);
+        v_cols t_col_list := t_col_list(
+            'RUN_SOURCE_TYPE',
+            'RUN_ID',
+            'OWNER',
+            'TABLE_NAME',
+            'COL_A',
+            'COL_B',
+            'ROW_COUNT',
+            'DF',
+            'CHI_SQUARE',
+            'P_VALUE',
+            'CRAMERS_V',
+            'PASS_YN',
+            'CREATE_DT'
+        );
+        v_current_order VARCHAR2(32767);
+        v_expected_order VARCHAR2(32767);
+    BEGIN
+        IF NOT table_exists('INIT$_TB_CAT_CORR_PAIR') THEN
+            DBMS_OUTPUT.PUT_LINE('[SKIP] TABLE INIT$_TB_CAT_CORR_PAIR does not exist.');
+            RETURN;
+        END IF;
+
+        FOR i IN 1 .. v_cols.COUNT LOOP
+            IF NOT column_exists('INIT$_TB_CAT_CORR_PAIR', v_cols(i)) THEN
+                DBMS_OUTPUT.PUT_LINE('[SKIP] INIT$_TB_CAT_CORR_PAIR column order refresh skipped. Missing column: ' || v_cols(i));
+                RETURN;
+            END IF;
+            v_expected_order := v_expected_order || CASE WHEN i > 1 THEN ',' END || v_cols(i);
+        END LOOP;
+
+        SELECT LISTAGG(COLUMN_NAME, ',') WITHIN GROUP (ORDER BY COLUMN_ID)
+          INTO v_current_order
+          FROM USER_TAB_COLS
+         WHERE TABLE_NAME = 'INIT$_TB_CAT_CORR_PAIR'
+           AND HIDDEN_COLUMN = 'NO'
+           AND COLUMN_NAME IN (
+               'RUN_SOURCE_TYPE',
+               'RUN_ID',
+               'OWNER',
+               'TABLE_NAME',
+               'COL_A',
+               'COL_B',
+               'ROW_COUNT',
+               'DF',
+               'CHI_SQUARE',
+               'P_VALUE',
+               'CRAMERS_V',
+               'PASS_YN',
+               'CREATE_DT'
+           );
+
+        IF v_current_order = v_expected_order THEN
+            DBMS_OUTPUT.PUT_LINE('[SKIP] INIT$_TB_CAT_CORR_PAIR column display order already matches.');
+            RETURN;
+        END IF;
+
+        -- Keep RUN_SOURCE_TYPE visible so the table never has zero visible columns.
+        FOR i IN 2 .. v_cols.COUNT LOOP
+            set_column_visibility('INIT$_TB_CAT_CORR_PAIR', v_cols(i), 'INVISIBLE');
+        END LOOP;
+
+        FOR i IN 2 .. v_cols.COUNT LOOP
+            set_column_visibility('INIT$_TB_CAT_CORR_PAIR', v_cols(i), 'VISIBLE');
+        END LOOP;
+
+        DBMS_OUTPUT.PUT_LINE('[OK] INIT$_TB_CAT_CORR_PAIR column display order refreshed.');
+    END;
+
+    PROCEDURE reorder_cat_corr_summary_columns IS
+        TYPE t_col_list IS TABLE OF VARCHAR2(128);
+        v_cols t_col_list := t_col_list(
+            'RUN_SOURCE_TYPE',
+            'RUN_ID',
+            'OWNER',
+            'TABLE_NAME',
+            'COLUMN_NAME',
+            'PAIR_COUNT',
+            'PASS_PAIR_COUNT',
+            'AVG_CRAMERS_V',
+            'MAX_CRAMERS_V',
+            'RANK_NO',
+            'SELECTED_YN',
+            'CREATE_DT'
+        );
+        v_current_order VARCHAR2(32767);
+        v_expected_order VARCHAR2(32767);
+    BEGIN
+        IF NOT table_exists('INIT$_TB_CAT_CORR_SUMMARY') THEN
+            DBMS_OUTPUT.PUT_LINE('[SKIP] TABLE INIT$_TB_CAT_CORR_SUMMARY does not exist.');
+            RETURN;
+        END IF;
+
+        FOR i IN 1 .. v_cols.COUNT LOOP
+            IF NOT column_exists('INIT$_TB_CAT_CORR_SUMMARY', v_cols(i)) THEN
+                DBMS_OUTPUT.PUT_LINE('[SKIP] INIT$_TB_CAT_CORR_SUMMARY column order refresh skipped. Missing column: ' || v_cols(i));
+                RETURN;
+            END IF;
+            v_expected_order := v_expected_order || CASE WHEN i > 1 THEN ',' END || v_cols(i);
+        END LOOP;
+
+        SELECT LISTAGG(COLUMN_NAME, ',') WITHIN GROUP (ORDER BY COLUMN_ID)
+          INTO v_current_order
+          FROM USER_TAB_COLS
+         WHERE TABLE_NAME = 'INIT$_TB_CAT_CORR_SUMMARY'
+           AND HIDDEN_COLUMN = 'NO'
+           AND COLUMN_NAME IN (
+               'RUN_SOURCE_TYPE',
+               'RUN_ID',
+               'OWNER',
+               'TABLE_NAME',
+               'COLUMN_NAME',
+               'PAIR_COUNT',
+               'PASS_PAIR_COUNT',
+               'AVG_CRAMERS_V',
+               'MAX_CRAMERS_V',
+               'RANK_NO',
+               'SELECTED_YN',
+               'CREATE_DT'
+           );
+
+        IF v_current_order = v_expected_order THEN
+            DBMS_OUTPUT.PUT_LINE('[SKIP] INIT$_TB_CAT_CORR_SUMMARY column display order already matches.');
+            RETURN;
+        END IF;
+
+        -- Keep RUN_SOURCE_TYPE visible so the table never has zero visible columns.
+        FOR i IN 2 .. v_cols.COUNT LOOP
+            set_column_visibility('INIT$_TB_CAT_CORR_SUMMARY', v_cols(i), 'INVISIBLE');
+        END LOOP;
+
+        FOR i IN 2 .. v_cols.COUNT LOOP
+            set_column_visibility('INIT$_TB_CAT_CORR_SUMMARY', v_cols(i), 'VISIBLE');
+        END LOOP;
+
+        DBMS_OUTPUT.PUT_LINE('[OK] INIT$_TB_CAT_CORR_SUMMARY column display order refreshed.');
+    END;
+
+    PROCEDURE reorder_rule_violation_result_columns IS
+        TYPE t_col_list IS TABLE OF VARCHAR2(128);
+        v_cols t_col_list := t_col_list(
+            'VIOLATION_ID',
+            'RUN_SOURCE_TYPE',
+            'RUN_ID',
+            'TARGET_OWNER',
+            'TARGET_TABLE',
+            'RULE_OWNER',
+            'MODEL_NAME',
+            'RULE_ID',
+            'CASE_ID',
+            'CASE_ROWID',
+            'CONDITION_COUNT',
+            'CONDITION_TEXT',
+            'RESULT_COLUMN',
+            'EXPECTED_VALUE',
+            'ACTUAL_VALUE',
+            'RULE_SUPPORT',
+            'RULE_CONFIDENCE',
+            'RULE_LIFT',
+            'SUPPORT_COUNT',
+            'CONDITION_TOTAL_COUNT',
+            'RESULT_TOTAL_COUNT',
+            'TOTAL_COUNT',
+            'VIOLATION_SCORE',
+            'VIOLATION_REASON',
+            'CREATE_DT'
+        );
+        v_current_order VARCHAR2(32767);
+        v_expected_order VARCHAR2(32767);
+    BEGIN
+        IF NOT table_exists('INIT$_TB_RULE_VIOLATION_RESULT') THEN
+            DBMS_OUTPUT.PUT_LINE('[SKIP] TABLE INIT$_TB_RULE_VIOLATION_RESULT does not exist.');
+            RETURN;
+        END IF;
+
+        FOR i IN 1 .. v_cols.COUNT LOOP
+            IF NOT column_exists('INIT$_TB_RULE_VIOLATION_RESULT', v_cols(i)) THEN
+                DBMS_OUTPUT.PUT_LINE('[SKIP] INIT$_TB_RULE_VIOLATION_RESULT column order refresh skipped. Missing column: ' || v_cols(i));
+                RETURN;
+            END IF;
+            v_expected_order := v_expected_order || CASE WHEN i > 1 THEN ',' END || v_cols(i);
+        END LOOP;
+
+        SELECT LISTAGG(COLUMN_NAME, ',') WITHIN GROUP (ORDER BY COLUMN_ID)
+          INTO v_current_order
+          FROM USER_TAB_COLS
+         WHERE TABLE_NAME = 'INIT$_TB_RULE_VIOLATION_RESULT'
+           AND HIDDEN_COLUMN = 'NO'
+           AND COLUMN_NAME IN (
+               'VIOLATION_ID',
+               'RUN_SOURCE_TYPE',
+               'RUN_ID',
+               'TARGET_OWNER',
+               'TARGET_TABLE',
+               'RULE_OWNER',
+               'MODEL_NAME',
+               'RULE_ID',
+               'CASE_ID',
+               'CASE_ROWID',
+               'CONDITION_COUNT',
+               'CONDITION_TEXT',
+               'RESULT_COLUMN',
+               'EXPECTED_VALUE',
+               'ACTUAL_VALUE',
+               'RULE_SUPPORT',
+               'RULE_CONFIDENCE',
+               'RULE_LIFT',
+               'SUPPORT_COUNT',
+               'CONDITION_TOTAL_COUNT',
+               'RESULT_TOTAL_COUNT',
+               'TOTAL_COUNT',
+               'VIOLATION_SCORE',
+               'VIOLATION_REASON',
+               'CREATE_DT'
+           );
+
+        IF v_current_order = v_expected_order THEN
+            DBMS_OUTPUT.PUT_LINE('[SKIP] INIT$_TB_RULE_VIOLATION_RESULT column display order already matches.');
+            RETURN;
+        END IF;
+
+        -- Keep VIOLATION_ID visible so the table never has zero visible columns.
+        FOR i IN 2 .. v_cols.COUNT LOOP
+            set_column_visibility('INIT$_TB_RULE_VIOLATION_RESULT', v_cols(i), 'INVISIBLE');
+        END LOOP;
+
+        FOR i IN 2 .. v_cols.COUNT LOOP
+            set_column_visibility('INIT$_TB_RULE_VIOLATION_RESULT', v_cols(i), 'VISIBLE');
+        END LOOP;
+
+        DBMS_OUTPUT.PUT_LINE('[OK] INIT$_TB_RULE_VIOLATION_RESULT column display order refreshed.');
     END;
 BEGIN
     DBMS_OUTPUT.PUT_LINE('=== INIT_TARGET ALTER START ===');
@@ -353,6 +637,8 @@ BEGIN
     drop_constraint_if_exists('FK_INIT$_TB_FLOW_NODE_RUN_FLOW', 'INIT$_TB_FLOW_WORK_NODE_RUN');
 
     add_column_if_missing('INIT$_TB_ASSOC_RULE_SUMMARY', 'MODEL_TYPE', '"MODEL_TYPE" VARCHAR2(80 BYTE)');
+    add_column_if_missing('INIT$_TB_ASSOC_RULE_SUMMARY', 'RUN_SOURCE_TYPE', '"RUN_SOURCE_TYPE" VARCHAR2(30 BYTE) DEFAULT ''DATA_WORK'' NOT NULL ENABLE');
+    add_column_if_missing('INIT$_TB_ASSOC_RULE_SUMMARY', 'RUN_ID', '"RUN_ID" NUMBER DEFAULT 0 NOT NULL ENABLE');
     add_column_if_missing('INIT$_TB_ASSOC_RULE_SUMMARY', 'TARGET_OWNER', '"TARGET_OWNER" VARCHAR2(128 BYTE) DEFAULT ''UNKNOWN'' NOT NULL ENABLE');
     add_column_if_missing('INIT$_TB_ASSOC_RULE_SUMMARY', 'TARGET_TABLE', '"TARGET_TABLE" VARCHAR2(128 BYTE) DEFAULT ''UNKNOWN'' NOT NULL ENABLE');
     add_column_if_missing('INIT$_TB_ASSOC_RULE_SUMMARY', 'RULE_SOURCE', '"RULE_SOURCE" VARCHAR2(80 BYTE)');
@@ -362,19 +648,148 @@ BEGIN
     add_column_if_missing('INIT$_TB_ASSOC_RULE_SUMMARY', 'CONDITION_TOTAL_COUNT', '"CONDITION_TOTAL_COUNT" NUMBER');
     add_column_if_missing('INIT$_TB_ASSOC_RULE_SUMMARY', 'RESULT_TOTAL_COUNT', '"RESULT_TOTAL_COUNT" NUMBER');
     add_column_if_missing('INIT$_TB_ASSOC_RULE_SUMMARY', 'TOTAL_COUNT', '"TOTAL_COUNT" NUMBER');
+    add_column_if_missing('INIT$_TB_PREDICTED_TYPE', 'RUN_SOURCE_TYPE', '"RUN_SOURCE_TYPE" VARCHAR2(30 BYTE) DEFAULT ''DATA_WORK'' NOT NULL ENABLE');
+    add_column_if_missing('INIT$_TB_PREDICTED_TYPE', 'RUN_ID', '"RUN_ID" NUMBER DEFAULT 0 NOT NULL ENABLE');
     add_column_if_missing('INIT$_TB_PREDICTED_TYPE', 'BASE_REASON', '"BASE_REASON" VARCHAR2(4000 BYTE)');
     add_column_if_missing('INIT$_TB_PREDICTED_TYPE', 'FINAL_PREDICTED_TYPE', '"FINAL_PREDICTED_TYPE" VARCHAR2(4000 BYTE)');
     add_column_if_missing('INIT$_TB_PREDICTED_TYPE', 'FINAL_REASON', '"FINAL_REASON" VARCHAR2(1000 BYTE)');
     add_column_if_missing('INIT$_TB_PREDICTED_TYPE', 'FINAL_UPDATE_DT', '"FINAL_UPDATE_DT" DATE');
     add_column_if_missing('INIT$_TB_PREDICTED_TYPE', 'FINAL_UPDATE_USER', '"FINAL_UPDATE_USER" VARCHAR2(128 BYTE)');
+    add_column_if_missing('INIT$_TB_CAT_CORR_PAIR', 'RUN_SOURCE_TYPE', '"RUN_SOURCE_TYPE" VARCHAR2(30 BYTE) DEFAULT ''DATA_WORK'' NOT NULL ENABLE');
+    add_column_if_missing('INIT$_TB_CAT_CORR_PAIR', 'RUN_ID', '"RUN_ID" NUMBER DEFAULT 0 NOT NULL ENABLE');
+    add_column_if_missing('INIT$_TB_CAT_CORR_SUMMARY', 'RUN_SOURCE_TYPE', '"RUN_SOURCE_TYPE" VARCHAR2(30 BYTE) DEFAULT ''DATA_WORK'' NOT NULL ENABLE');
+    add_column_if_missing('INIT$_TB_CAT_CORR_SUMMARY', 'RUN_ID', '"RUN_ID" NUMBER DEFAULT 0 NOT NULL ENABLE');
+    add_column_if_missing('INIT$_TB_RULE_VIOLATION_RESULT', 'RUN_SOURCE_TYPE', '"RUN_SOURCE_TYPE" VARCHAR2(30 BYTE) DEFAULT ''DATA_WORK'' NOT NULL ENABLE');
+    add_column_if_missing('INIT$_TB_RULE_VIOLATION_RESULT', 'RUN_ID', '"RUN_ID" NUMBER DEFAULT 0 NOT NULL ENABLE');
     add_column_if_missing('INIT$_TB_FLOW_WORK_NODE', 'USE_YN', '"USE_YN" CHAR(1 BYTE) DEFAULT ''Y'' NOT NULL ENABLE');
 
+    FOR table_rec IN (
+        SELECT 'INIT$_TB_PREDICTED_TYPE' AS TABLE_NAME, 'CK_INIT$_TB_PREDICTED_RUN_SRC' AS CONSTRAINT_NAME FROM DUAL UNION ALL
+        SELECT 'INIT$_TB_CAT_CORR_PAIR', 'CK_INIT$_TB_CAT_CORR_PAIR_RUN' FROM DUAL UNION ALL
+        SELECT 'INIT$_TB_CAT_CORR_SUMMARY', 'CK_INIT$_TB_CAT_CORR_SUM_RUN' FROM DUAL UNION ALL
+        SELECT 'INIT$_TB_ASSOC_RULE_SUMMARY', 'CK_INIT$_TB_ASSOC_RULE_RUN' FROM DUAL UNION ALL
+        SELECT 'INIT$_TB_RULE_VIOLATION_RESULT', 'CK_INIT$_TB_RULE_VIOL_RUN' FROM DUAL
+    ) LOOP
+        IF table_exists(table_rec.TABLE_NAME) AND column_exists(table_rec.TABLE_NAME, 'RUN_SOURCE_TYPE') THEN
+            run_ddl(
+                'NORMALIZE ' || table_rec.TABLE_NAME || '.RUN_SOURCE_TYPE',
+                'UPDATE "' || table_rec.TABLE_NAME || '" ' ||
+                '   SET "RUN_SOURCE_TYPE" = CASE WHEN UPPER(TRIM(NVL("RUN_SOURCE_TYPE", ''DATA_WORK''))) = ''FLOW_WORK'' THEN ''FLOW_WORK'' ELSE ''DATA_WORK'' END, ' ||
+                '       "RUN_ID" = NVL("RUN_ID", 0)'
+            );
+
+            modify_column_default_not_null(table_rec.TABLE_NAME, 'RUN_SOURCE_TYPE', q'['DATA_WORK']');
+            modify_column_default_not_null(table_rec.TABLE_NAME, 'RUN_ID', '0');
+
+            IF NOT constraint_exists(table_rec.CONSTRAINT_NAME) THEN
+                run_ddl(
+                    'ADD ' || table_rec.CONSTRAINT_NAME,
+                    'ALTER TABLE "' || table_rec.TABLE_NAME || '" ADD CONSTRAINT "' || table_rec.CONSTRAINT_NAME || '" CHECK ("RUN_SOURCE_TYPE" IN (''DATA_WORK'', ''FLOW_WORK'')) ENABLE'
+                );
+            ELSE
+                DBMS_OUTPUT.PUT_LINE('[SKIP] CONSTRAINT ' || table_rec.CONSTRAINT_NAME || ' already exists.');
+            END IF;
+        END IF;
+    END LOOP;
+
     IF table_exists('INIT$_TB_PREDICTED_TYPE') THEN
+        run_ddl('COMMENT INIT$_TB_PREDICTED_TYPE.RUN_SOURCE_TYPE', q'[COMMENT ON COLUMN "INIT$_TB_PREDICTED_TYPE"."RUN_SOURCE_TYPE" IS 'Run source type: DATA_WORK or FLOW_WORK']');
+        run_ddl('COMMENT INIT$_TB_PREDICTED_TYPE.RUN_ID', q'[COMMENT ON COLUMN "INIT$_TB_PREDICTED_TYPE"."RUN_ID" IS 'WORK_RUN_ID for DATA_WORK or FLOW_RUN_ID for FLOW_WORK']');
         run_ddl('COMMENT INIT$_TB_PREDICTED_TYPE.BASE_REASON', q'[COMMENT ON COLUMN "INIT$_TB_PREDICTED_TYPE"."BASE_REASON" IS 'Reason produced by rule-based profiling logic']');
-        run_ddl('COMMENT INIT$_TB_PREDICTED_TYPE.FINAL_PREDICTED_TYPE', q'[COMMENT ON COLUMN "INIT$_TB_PREDICTED_TYPE"."FINAL_PREDICTED_TYPE" IS 'User-confirmed final predicted type']');
-        run_ddl('COMMENT INIT$_TB_PREDICTED_TYPE.FINAL_REASON', q'[COMMENT ON COLUMN "INIT$_TB_PREDICTED_TYPE"."FINAL_REASON" IS 'User note for final predicted type decision']');
-        run_ddl('COMMENT INIT$_TB_PREDICTED_TYPE.FINAL_UPDATE_DT', q'[COMMENT ON COLUMN "INIT$_TB_PREDICTED_TYPE"."FINAL_UPDATE_DT" IS 'Final predicted type update date']');
-        run_ddl('COMMENT INIT$_TB_PREDICTED_TYPE.FINAL_UPDATE_USER', q'[COMMENT ON COLUMN "INIT$_TB_PREDICTED_TYPE"."FINAL_UPDATE_USER" IS 'Final predicted type update user']');
+        run_ddl('COMMENT INIT$_TB_PREDICTED_TYPE.FINAL_PREDICTED_TYPE', q'[COMMENT ON COLUMN "INIT$_TB_PREDICTED_TYPE"."FINAL_PREDICTED_TYPE" IS 'Deprecated execution snapshot final predicted type. Source of truth is INIT$_TB_PREDICTED_TYPE_FINAL']');
+        run_ddl('COMMENT INIT$_TB_PREDICTED_TYPE.FINAL_REASON', q'[COMMENT ON COLUMN "INIT$_TB_PREDICTED_TYPE"."FINAL_REASON" IS 'Deprecated execution snapshot final reason. Source of truth is INIT$_TB_PREDICTED_TYPE_FINAL']');
+        run_ddl('COMMENT INIT$_TB_PREDICTED_TYPE.FINAL_UPDATE_DT', q'[COMMENT ON COLUMN "INIT$_TB_PREDICTED_TYPE"."FINAL_UPDATE_DT" IS 'Deprecated execution snapshot final update date. Source of truth is INIT$_TB_PREDICTED_TYPE_FINAL']');
+        run_ddl('COMMENT INIT$_TB_PREDICTED_TYPE.FINAL_UPDATE_USER', q'[COMMENT ON COLUMN "INIT$_TB_PREDICTED_TYPE"."FINAL_UPDATE_USER" IS 'Deprecated execution snapshot final update user. Source of truth is INIT$_TB_PREDICTED_TYPE_FINAL']');
+
+        drop_constraint_if_exists('PK_INIT$_TB_PREDICTED_TYPE', 'INIT$_TB_PREDICTED_TYPE');
+        IF NOT constraint_exists('PK_INIT$_TB_PREDICTED_TYPE') THEN
+            run_ddl(
+                'ADD PK_INIT$_TB_PREDICTED_TYPE',
+                q'[ALTER TABLE "INIT$_TB_PREDICTED_TYPE" ADD CONSTRAINT "PK_INIT$_TB_PREDICTED_TYPE" PRIMARY KEY ("RUN_SOURCE_TYPE", "RUN_ID", "OWNER", "TABLE_NAME", "MODEL_NAME", "COLUMN_NAME") ENABLE]'
+            );
+        END IF;
+
+        drop_index_if_exists('IX_INIT$_TB_PREDICTED_TYPE_01');
+    END IF;
+
+    create_table_if_missing('INIT$_TB_PREDICTED_TYPE_FINAL', q'[
+CREATE TABLE "INIT$_TB_PREDICTED_TYPE_FINAL" (
+    "OWNER" VARCHAR2(128 BYTE) NOT NULL ENABLE,
+    "TABLE_NAME" VARCHAR2(128 BYTE) NOT NULL ENABLE,
+    "COLUMN_NAME" VARCHAR2(128 BYTE) NOT NULL ENABLE,
+    "COLUMN_ID" NUMBER,
+    "DATA_TYPE" VARCHAR2(128 BYTE),
+    "SOURCE_RUN_SOURCE_TYPE" VARCHAR2(30 BYTE),
+    "SOURCE_RUN_ID" NUMBER,
+    "SOURCE_MODEL_NAME" VARCHAR2(261 BYTE),
+    "BASE_PREDICTED_TYPE" VARCHAR2(100 BYTE),
+    "MODL_PREDICTED_TYPE" VARCHAR2(4000 BYTE),
+    "FINAL_PREDICTED_TYPE" VARCHAR2(4000 BYTE) NOT NULL ENABLE,
+    "FINAL_REASON" VARCHAR2(1000 BYTE),
+    "FINAL_UPDATE_DT" DATE DEFAULT SYSDATE NOT NULL ENABLE,
+    "FINAL_UPDATE_USER" VARCHAR2(128 BYTE),
+    "CREATE_DT" DATE DEFAULT SYSDATE NOT NULL ENABLE,
+    CONSTRAINT "CK_INIT$_TB_PRED_FINAL_SRC" CHECK ("SOURCE_RUN_SOURCE_TYPE" IS NULL OR "SOURCE_RUN_SOURCE_TYPE" IN ('DATA_WORK', 'FLOW_WORK')) ENABLE,
+    CONSTRAINT "PK_INIT$_TB_PRED_TYPE_FINAL" PRIMARY KEY ("OWNER", "TABLE_NAME", "COLUMN_NAME")
+)]');
+
+    IF table_exists('INIT$_TB_PREDICTED_TYPE_FINAL') THEN
+        run_ddl('COMMENT INIT$_TB_PREDICTED_TYPE_FINAL', q'[COMMENT ON TABLE "INIT$_TB_PREDICTED_TYPE_FINAL" IS 'User-confirmed final column logical type master']');
+        run_ddl('COMMENT INIT$_TB_PREDICTED_TYPE_FINAL.OWNER', q'[COMMENT ON COLUMN "INIT$_TB_PREDICTED_TYPE_FINAL"."OWNER" IS 'Target table owner']');
+        run_ddl('COMMENT INIT$_TB_PREDICTED_TYPE_FINAL.TABLE_NAME', q'[COMMENT ON COLUMN "INIT$_TB_PREDICTED_TYPE_FINAL"."TABLE_NAME" IS 'Target table name']');
+        run_ddl('COMMENT INIT$_TB_PREDICTED_TYPE_FINAL.COLUMN_NAME', q'[COMMENT ON COLUMN "INIT$_TB_PREDICTED_TYPE_FINAL"."COLUMN_NAME" IS 'Column name']');
+        run_ddl('COMMENT INIT$_TB_PREDICTED_TYPE_FINAL.COLUMN_ID', q'[COMMENT ON COLUMN "INIT$_TB_PREDICTED_TYPE_FINAL"."COLUMN_ID" IS 'Column order captured from the latest confirmation source']');
+        run_ddl('COMMENT INIT$_TB_PREDICTED_TYPE_FINAL.DATA_TYPE', q'[COMMENT ON COLUMN "INIT$_TB_PREDICTED_TYPE_FINAL"."DATA_TYPE" IS 'Physical data type captured from the latest confirmation source']');
+        run_ddl('COMMENT INIT$_TB_PREDICTED_TYPE_FINAL.SOURCE_RUN_SOURCE_TYPE', q'[COMMENT ON COLUMN "INIT$_TB_PREDICTED_TYPE_FINAL"."SOURCE_RUN_SOURCE_TYPE" IS 'Run source type that produced the latest confirmed evidence']');
+        run_ddl('COMMENT INIT$_TB_PREDICTED_TYPE_FINAL.SOURCE_RUN_ID', q'[COMMENT ON COLUMN "INIT$_TB_PREDICTED_TYPE_FINAL"."SOURCE_RUN_ID" IS 'WORK_RUN_ID or FLOW_RUN_ID that produced the latest confirmed evidence']');
+        run_ddl('COMMENT INIT$_TB_PREDICTED_TYPE_FINAL.SOURCE_MODEL_NAME', q'[COMMENT ON COLUMN "INIT$_TB_PREDICTED_TYPE_FINAL"."SOURCE_MODEL_NAME" IS 'Prediction model name used as confirmation evidence']');
+        run_ddl('COMMENT INIT$_TB_PREDICTED_TYPE_FINAL.BASE_PREDICTED_TYPE', q'[COMMENT ON COLUMN "INIT$_TB_PREDICTED_TYPE_FINAL"."BASE_PREDICTED_TYPE" IS 'Rule-based predicted type captured when confirmed']');
+        run_ddl('COMMENT INIT$_TB_PREDICTED_TYPE_FINAL.MODL_PREDICTED_TYPE', q'[COMMENT ON COLUMN "INIT$_TB_PREDICTED_TYPE_FINAL"."MODL_PREDICTED_TYPE" IS 'Model predicted type captured when confirmed']');
+        run_ddl('COMMENT INIT$_TB_PREDICTED_TYPE_FINAL.FINAL_PREDICTED_TYPE', q'[COMMENT ON COLUMN "INIT$_TB_PREDICTED_TYPE_FINAL"."FINAL_PREDICTED_TYPE" IS 'User-confirmed final predicted type']');
+        run_ddl('COMMENT INIT$_TB_PREDICTED_TYPE_FINAL.FINAL_REASON', q'[COMMENT ON COLUMN "INIT$_TB_PREDICTED_TYPE_FINAL"."FINAL_REASON" IS 'User note for final predicted type decision']');
+        run_ddl('COMMENT INIT$_TB_PREDICTED_TYPE_FINAL.FINAL_UPDATE_DT', q'[COMMENT ON COLUMN "INIT$_TB_PREDICTED_TYPE_FINAL"."FINAL_UPDATE_DT" IS 'Final predicted type update date']');
+        run_ddl('COMMENT INIT$_TB_PREDICTED_TYPE_FINAL.FINAL_UPDATE_USER', q'[COMMENT ON COLUMN "INIT$_TB_PREDICTED_TYPE_FINAL"."FINAL_UPDATE_USER" IS 'Final predicted type update user']');
+        run_ddl('COMMENT INIT$_TB_PREDICTED_TYPE_FINAL.CREATE_DT', q'[COMMENT ON COLUMN "INIT$_TB_PREDICTED_TYPE_FINAL"."CREATE_DT" IS 'Create date']');
+    END IF;
+
+    create_index_if_missing('IX_INIT$_TB_PRED_TYPE_FINAL_01', 'INIT$_TB_PREDICTED_TYPE_FINAL', q'[
+CREATE INDEX "IX_INIT$_TB_PRED_TYPE_FINAL_01"
+    ON "INIT$_TB_PREDICTED_TYPE_FINAL" ("FINAL_PREDICTED_TYPE", "OWNER", "TABLE_NAME")
+]');
+
+    create_index_if_missing('IX_INIT$_TB_PRED_TYPE_FINAL_02', 'INIT$_TB_PREDICTED_TYPE_FINAL', q'[
+CREATE INDEX "IX_INIT$_TB_PRED_TYPE_FINAL_02"
+    ON "INIT$_TB_PREDICTED_TYPE_FINAL" ("SOURCE_RUN_SOURCE_TYPE", "SOURCE_RUN_ID", "SOURCE_MODEL_NAME")
+]');
+
+    IF table_exists('INIT$_TB_CAT_CORR_PAIR') THEN
+        run_ddl('COMMENT INIT$_TB_CAT_CORR_PAIR.RUN_SOURCE_TYPE', q'[COMMENT ON COLUMN "INIT$_TB_CAT_CORR_PAIR"."RUN_SOURCE_TYPE" IS 'Run source type: DATA_WORK or FLOW_WORK']');
+        run_ddl('COMMENT INIT$_TB_CAT_CORR_PAIR.RUN_ID', q'[COMMENT ON COLUMN "INIT$_TB_CAT_CORR_PAIR"."RUN_ID" IS 'WORK_RUN_ID for DATA_WORK or FLOW_RUN_ID for FLOW_WORK']');
+
+        drop_constraint_if_exists('PK_INIT$_TB_CAT_CORR_PAIR', 'INIT$_TB_CAT_CORR_PAIR');
+        IF NOT constraint_exists('PK_INIT$_TB_CAT_CORR_PAIR') THEN
+            run_ddl(
+                'ADD PK_INIT$_TB_CAT_CORR_PAIR',
+                q'[ALTER TABLE "INIT$_TB_CAT_CORR_PAIR" ADD CONSTRAINT "PK_INIT$_TB_CAT_CORR_PAIR" PRIMARY KEY ("RUN_SOURCE_TYPE", "RUN_ID", "OWNER", "TABLE_NAME", "COL_A", "COL_B") ENABLE]'
+            );
+        END IF;
+
+        drop_index_if_exists('IX_INIT$_TB_CAT_CORR_PAIR_01');
+    END IF;
+
+    IF table_exists('INIT$_TB_CAT_CORR_SUMMARY') THEN
+        run_ddl('COMMENT INIT$_TB_CAT_CORR_SUMMARY.RUN_SOURCE_TYPE', q'[COMMENT ON COLUMN "INIT$_TB_CAT_CORR_SUMMARY"."RUN_SOURCE_TYPE" IS 'Run source type: DATA_WORK or FLOW_WORK']');
+        run_ddl('COMMENT INIT$_TB_CAT_CORR_SUMMARY.RUN_ID', q'[COMMENT ON COLUMN "INIT$_TB_CAT_CORR_SUMMARY"."RUN_ID" IS 'WORK_RUN_ID for DATA_WORK or FLOW_RUN_ID for FLOW_WORK']');
+
+        drop_constraint_if_exists('PK_INIT$_TB_CAT_CORR_SUMMARY', 'INIT$_TB_CAT_CORR_SUMMARY');
+        IF NOT constraint_exists('PK_INIT$_TB_CAT_CORR_SUMMARY') THEN
+            run_ddl(
+                'ADD PK_INIT$_TB_CAT_CORR_SUMMARY',
+                q'[ALTER TABLE "INIT$_TB_CAT_CORR_SUMMARY" ADD CONSTRAINT "PK_INIT$_TB_CAT_CORR_SUMMARY" PRIMARY KEY ("RUN_SOURCE_TYPE", "RUN_ID", "OWNER", "TABLE_NAME", "COLUMN_NAME") ENABLE]'
+            );
+        END IF;
+
+        drop_index_if_exists('IX_INIT$_TB_CAT_CORR_SUMMARY_01');
     END IF;
 
     IF table_exists('INIT$_TB_FLOW_WORK_NODE') AND column_exists('INIT$_TB_FLOW_WORK_NODE', 'USE_YN') THEN
@@ -422,20 +837,14 @@ CREATE INDEX "IX_INIT$_TB_FLOW_NODE_RUN_02"
                        OR TRIM("TARGET_TABLE") IS NULL]'
             );
 
-            run_ddl(
-                'MODIFY INIT$_TB_ASSOC_RULE_SUMMARY.TARGET_OWNER',
-                q'[ALTER TABLE "INIT$_TB_ASSOC_RULE_SUMMARY" MODIFY ("TARGET_OWNER" DEFAULT 'UNKNOWN' NOT NULL ENABLE)]'
-            );
-            run_ddl(
-                'MODIFY INIT$_TB_ASSOC_RULE_SUMMARY.TARGET_TABLE',
-                q'[ALTER TABLE "INIT$_TB_ASSOC_RULE_SUMMARY" MODIFY ("TARGET_TABLE" DEFAULT 'UNKNOWN' NOT NULL ENABLE)]'
-            );
+            modify_column_default_not_null('INIT$_TB_ASSOC_RULE_SUMMARY', 'TARGET_OWNER', q'['UNKNOWN']');
+            modify_column_default_not_null('INIT$_TB_ASSOC_RULE_SUMMARY', 'TARGET_TABLE', q'['UNKNOWN']');
 
             drop_constraint_if_exists('PK_INIT$_TB_ASSOC_RULE_SUMMARY', 'INIT$_TB_ASSOC_RULE_SUMMARY');
             IF NOT constraint_exists('PK_INIT$_TB_ASSOC_RULE_SUMMARY') THEN
                 run_ddl(
                     'ADD PK_INIT$_TB_ASSOC_RULE_SUMMARY',
-                    q'[ALTER TABLE "INIT$_TB_ASSOC_RULE_SUMMARY" ADD CONSTRAINT "PK_INIT$_TB_ASSOC_RULE_SUMMARY" PRIMARY KEY ("OWNER", "TARGET_OWNER", "TARGET_TABLE", "MODEL_NAME", "RULE_ID") ENABLE]'
+                    q'[ALTER TABLE "INIT$_TB_ASSOC_RULE_SUMMARY" ADD CONSTRAINT "PK_INIT$_TB_ASSOC_RULE_SUMMARY" PRIMARY KEY ("RUN_SOURCE_TYPE", "RUN_ID", "OWNER", "TARGET_OWNER", "TARGET_TABLE", "MODEL_NAME", "RULE_ID") ENABLE]'
                 );
             END IF;
 
@@ -445,6 +854,8 @@ CREATE INDEX "IX_INIT$_TB_FLOW_NODE_RUN_02"
         END IF;
 
         run_ddl('COMMENT INIT$_TB_ASSOC_RULE_SUMMARY', q'[COMMENT ON TABLE "INIT$_TB_ASSOC_RULE_SUMMARY" IS 'Association model rule summary for fast drill-down analysis']');
+        run_ddl('COMMENT INIT$_TB_ASSOC_RULE_SUMMARY.RUN_SOURCE_TYPE', q'[COMMENT ON COLUMN "INIT$_TB_ASSOC_RULE_SUMMARY"."RUN_SOURCE_TYPE" IS 'Run source type: DATA_WORK or FLOW_WORK']');
+        run_ddl('COMMENT INIT$_TB_ASSOC_RULE_SUMMARY.RUN_ID', q'[COMMENT ON COLUMN "INIT$_TB_ASSOC_RULE_SUMMARY"."RUN_ID" IS 'WORK_RUN_ID for DATA_WORK or FLOW_RUN_ID for FLOW_WORK']');
         run_ddl('COMMENT INIT$_TB_ASSOC_RULE_SUMMARY.TARGET_OWNER', q'[COMMENT ON COLUMN "INIT$_TB_ASSOC_RULE_SUMMARY"."TARGET_OWNER" IS 'Target table owner used to calculate this rule summary']');
         run_ddl('COMMENT INIT$_TB_ASSOC_RULE_SUMMARY.TARGET_TABLE', q'[COMMENT ON COLUMN "INIT$_TB_ASSOC_RULE_SUMMARY"."TARGET_TABLE" IS 'Target table used to calculate this rule summary']');
         run_ddl('COMMENT INIT$_TB_ASSOC_RULE_SUMMARY.MODEL_TYPE', q'[COMMENT ON COLUMN "INIT$_TB_ASSOC_RULE_SUMMARY"."MODEL_TYPE" IS 'Human-readable rule model type such as Apriori or Decision Tree']');
@@ -459,22 +870,39 @@ CREATE INDEX "IX_INIT$_TB_FLOW_NODE_RUN_02"
 
     create_index_if_missing('IX_INIT$_TB_ASSOC_RULE_SUMMARY_01', 'INIT$_TB_ASSOC_RULE_SUMMARY', q'[
 CREATE INDEX "IX_INIT$_TB_ASSOC_RULE_SUMMARY_01"
-    ON "INIT$_TB_ASSOC_RULE_SUMMARY" ("OWNER", "TARGET_OWNER", "TARGET_TABLE", "MODEL_NAME", "CONDITION_COUNT", "RULE_CONFIDENCE", "RULE_LIFT", "RULE_SUPPORT")
+    ON "INIT$_TB_ASSOC_RULE_SUMMARY" ("RUN_SOURCE_TYPE", "RUN_ID", "OWNER", "TARGET_OWNER", "TARGET_TABLE", "MODEL_NAME", "CONDITION_COUNT", "RULE_CONFIDENCE", "RULE_LIFT", "RULE_SUPPORT")
 ]');
 
     create_index_if_missing('IX_INIT$_TB_ASSOC_RULE_SUMMARY_02', 'INIT$_TB_ASSOC_RULE_SUMMARY', q'[
 CREATE INDEX "IX_INIT$_TB_ASSOC_RULE_SUMMARY_02"
-    ON "INIT$_TB_ASSOC_RULE_SUMMARY" ("OWNER", "TARGET_OWNER", "TARGET_TABLE", "MODEL_NAME", "RESULT_COLUMN", "RESULT_HAS_VALUE_YN")
+    ON "INIT$_TB_ASSOC_RULE_SUMMARY" ("RUN_SOURCE_TYPE", "RUN_ID", "OWNER", "TARGET_OWNER", "TARGET_TABLE", "MODEL_NAME", "RESULT_COLUMN", "RESULT_HAS_VALUE_YN")
 ]');
 
     create_index_if_missing('IX_INIT$_TB_ASSOC_RULE_SUMMARY_03', 'INIT$_TB_ASSOC_RULE_SUMMARY', q'[
 CREATE INDEX "IX_INIT$_TB_ASSOC_RULE_SUMMARY_03"
-    ON "INIT$_TB_ASSOC_RULE_SUMMARY" ("OWNER", "TARGET_OWNER", "TARGET_TABLE", "MODEL_NAME", "MODEL_TYPE", "RULE_SOURCE")
+    ON "INIT$_TB_ASSOC_RULE_SUMMARY" ("RUN_SOURCE_TYPE", "RUN_ID", "OWNER", "TARGET_OWNER", "TARGET_TABLE", "MODEL_NAME", "MODEL_TYPE", "RULE_SOURCE")
+]');
+
+    create_index_if_missing('IX_INIT$_TB_PREDICTED_TYPE_01', 'INIT$_TB_PREDICTED_TYPE', q'[
+CREATE INDEX "IX_INIT$_TB_PREDICTED_TYPE_01"
+    ON "INIT$_TB_PREDICTED_TYPE" ("RUN_SOURCE_TYPE", "RUN_ID", "OWNER", "TABLE_NAME", "MODEL_NAME", "COLUMN_ID")
+]');
+
+    create_index_if_missing('IX_INIT$_TB_CAT_CORR_PAIR_01', 'INIT$_TB_CAT_CORR_PAIR', q'[
+CREATE INDEX "IX_INIT$_TB_CAT_CORR_PAIR_01"
+    ON "INIT$_TB_CAT_CORR_PAIR" ("RUN_SOURCE_TYPE", "RUN_ID", "OWNER", "TABLE_NAME", "PASS_YN", "CRAMERS_V")
+]');
+
+    create_index_if_missing('IX_INIT$_TB_CAT_CORR_SUMMARY_01', 'INIT$_TB_CAT_CORR_SUMMARY', q'[
+CREATE INDEX "IX_INIT$_TB_CAT_CORR_SUMMARY_01"
+    ON "INIT$_TB_CAT_CORR_SUMMARY" ("RUN_SOURCE_TYPE", "RUN_ID", "OWNER", "TABLE_NAME", "SELECTED_YN", "RANK_NO")
 ]');
 
     create_table_if_missing('INIT$_TB_RULE_VIOLATION_RESULT', q'[
 CREATE TABLE "INIT$_TB_RULE_VIOLATION_RESULT" (
     "VIOLATION_ID" NUMBER GENERATED BY DEFAULT AS IDENTITY NOT NULL ENABLE,
+    "RUN_SOURCE_TYPE" VARCHAR2(30 BYTE) DEFAULT 'DATA_WORK' NOT NULL ENABLE,
+    "RUN_ID" NUMBER DEFAULT 0 NOT NULL ENABLE,
     "TARGET_OWNER" VARCHAR2(128 BYTE) NOT NULL ENABLE,
     "TARGET_TABLE" VARCHAR2(128 BYTE) NOT NULL ENABLE,
     "RULE_OWNER" VARCHAR2(128 BYTE) NOT NULL ENABLE,
@@ -497,27 +925,34 @@ CREATE TABLE "INIT$_TB_RULE_VIOLATION_RESULT" (
     "VIOLATION_SCORE" NUMBER,
     "VIOLATION_REASON" VARCHAR2(4000 BYTE),
     "CREATE_DT" DATE DEFAULT SYSDATE NOT NULL ENABLE,
+    CONSTRAINT "CK_INIT$_TB_RULE_VIOL_RUN" CHECK ("RUN_SOURCE_TYPE" IN ('DATA_WORK', 'FLOW_WORK')) ENABLE,
     CONSTRAINT "PK_INIT$_TB_RULE_VIOLATION" PRIMARY KEY ("VIOLATION_ID")
 )]');
 
     IF table_exists('INIT$_TB_RULE_VIOLATION_RESULT') THEN
         run_ddl('COMMENT INIT$_TB_RULE_VIOLATION_RESULT', q'[COMMENT ON TABLE "INIT$_TB_RULE_VIOLATION_RESULT" IS 'Rows that violate discovered human-readable rules']');
+        run_ddl('COMMENT INIT$_TB_RULE_VIOLATION_RESULT.RUN_SOURCE_TYPE', q'[COMMENT ON COLUMN "INIT$_TB_RULE_VIOLATION_RESULT"."RUN_SOURCE_TYPE" IS 'Run source type: DATA_WORK or FLOW_WORK']');
+        run_ddl('COMMENT INIT$_TB_RULE_VIOLATION_RESULT.RUN_ID', q'[COMMENT ON COLUMN "INIT$_TB_RULE_VIOLATION_RESULT"."RUN_ID" IS 'WORK_RUN_ID for DATA_WORK or FLOW_RUN_ID for FLOW_WORK']');
         run_ddl('COMMENT INIT$_TB_RULE_VIOLATION_RESULT.VIOLATION_SCORE', q'[COMMENT ON COLUMN "INIT$_TB_RULE_VIOLATION_RESULT"."VIOLATION_SCORE" IS 'Rule confidence/lift based priority score']');
+
+        drop_index_if_exists('IX_INIT$_TB_RULE_VIOLATION_01');
+        drop_index_if_exists('IX_INIT$_TB_RULE_VIOLATION_02');
+        drop_index_if_exists('IX_INIT$_TB_RULE_VIOLATION_03');
     END IF;
 
     create_index_if_missing('IX_INIT$_TB_RULE_VIOLATION_01', 'INIT$_TB_RULE_VIOLATION_RESULT', q'[
 CREATE INDEX "IX_INIT$_TB_RULE_VIOLATION_01"
-    ON "INIT$_TB_RULE_VIOLATION_RESULT" ("TARGET_OWNER", "TARGET_TABLE", "MODEL_NAME", "VIOLATION_SCORE")
+    ON "INIT$_TB_RULE_VIOLATION_RESULT" ("RUN_SOURCE_TYPE", "RUN_ID", "TARGET_OWNER", "TARGET_TABLE", "MODEL_NAME", "VIOLATION_SCORE")
 ]');
 
     create_index_if_missing('IX_INIT$_TB_RULE_VIOLATION_02', 'INIT$_TB_RULE_VIOLATION_RESULT', q'[
 CREATE INDEX "IX_INIT$_TB_RULE_VIOLATION_02"
-    ON "INIT$_TB_RULE_VIOLATION_RESULT" ("RULE_OWNER", "MODEL_NAME", "RULE_ID")
+    ON "INIT$_TB_RULE_VIOLATION_RESULT" ("RUN_SOURCE_TYPE", "RUN_ID", "RULE_OWNER", "MODEL_NAME", "RULE_ID")
 ]');
 
     create_index_if_missing('IX_INIT$_TB_RULE_VIOLATION_03', 'INIT$_TB_RULE_VIOLATION_RESULT', q'[
 CREATE INDEX "IX_INIT$_TB_RULE_VIOLATION_03"
-    ON "INIT$_TB_RULE_VIOLATION_RESULT" ("TARGET_OWNER", "TARGET_TABLE", "CASE_ID")
+    ON "INIT$_TB_RULE_VIOLATION_RESULT" ("RUN_SOURCE_TYPE", "RUN_ID", "TARGET_OWNER", "TARGET_TABLE", "CASE_ID")
 ]');
 
     IF table_exists('INIT$_TB_FLOW_WORK_NODE') THEN
@@ -526,6 +961,9 @@ CREATE INDEX "IX_INIT$_TB_RULE_VIOLATION_03"
 
     reorder_assoc_rule_summary_columns;
     reorder_predicted_type_columns;
+    reorder_cat_corr_pair_columns;
+    reorder_cat_corr_summary_columns;
+    reorder_rule_violation_result_columns;
 
     DBMS_OUTPUT.PUT_LINE('=== INIT_TARGET ALTER END ===');
 END;

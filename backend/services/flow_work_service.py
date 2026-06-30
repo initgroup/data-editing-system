@@ -448,7 +448,7 @@ def execute_flow_plan(conn, flow_run_id: int, plan: List[Dict[str, Any]]) -> Dic
         node_key = step.get("nodeKey") or ""
         node_name = step.get("nodeName") or node_key
         step_result = {**step}
-        runtime_values = create_runtime_values(step, node_outputs)
+        runtime_values = create_runtime_values(step, node_outputs, flow_run_id)
         if str(step.get("useYn") or "Y").upper() == "N":
             output = build_node_output(step, {})
             node_outputs[node_key] = output
@@ -591,7 +591,11 @@ def collect_dbms_output(cursor) -> List[str]:
     return lines
 
 
-def create_runtime_values(step: Dict[str, Any], node_outputs: Optional[Dict[str, Dict[str, Any]]] = None) -> Dict[str, Any]:
+def create_runtime_values(
+    step: Dict[str, Any],
+    node_outputs: Optional[Dict[str, Dict[str, Any]]] = None,
+    flow_run_id: Optional[int] = None
+) -> Dict[str, Any]:
     values = {}
     for item in step.get("params") or []:
         if not isinstance(item, dict):
@@ -601,7 +605,7 @@ def create_runtime_values(step: Dict[str, Any], node_outputs: Optional[Dict[str,
         if key:
             values[str(key)] = value
     apply_upstream_result_mappings(values, step, node_outputs or {})
-    values.update(build_step_system_bind_values(step, node_outputs or {}))
+    values.update(build_step_system_bind_values(step, node_outputs or {}, flow_run_id))
     return values
 
 
@@ -617,9 +621,14 @@ def get_flow_param_runtime_value(item: Dict[str, Any]) -> Any:
     return item.get("value", item.get("VALUE", item.get("itemDefault", item.get("ITEM_DEFAULT"))))
 
 
-def build_step_system_bind_values(step: Dict[str, Any], node_outputs: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+def build_step_system_bind_values(
+    step: Dict[str, Any],
+    node_outputs: Dict[str, Dict[str, Any]],
+    flow_run_id: Optional[int] = None
+) -> Dict[str, Any]:
     current = build_node_output(step, {})
     previous = find_previous_node_output(step, node_outputs)
+    effective_run_id = int(flow_run_id or 0)
     return {
         "INIT$TargetOwner": current.get("targetOwner") or "",
         "INIT$TargetTable": current.get("targetTable") or "",
@@ -628,7 +637,13 @@ def build_step_system_bind_values(step: Dict[str, Any], node_outputs: Dict[str, 
         "INIT$PreTargetOwner": previous.get("targetOwner") or "",
         "INIT$PreTargetTable": previous.get("targetTable") or "",
         "INIT$PreResultOwner": previous.get("resultOwner") or "",
-        "INIT$PreResultTable": previous.get("resultTableName") or ""
+        "INIT$PreResultTable": previous.get("resultTableName") or "",
+        "INIT$RunSourceType": "FLOW_WORK",
+        "INIT$RunId": effective_run_id,
+        "INIT$FlowRunId": effective_run_id,
+        "runSourceType": "FLOW_WORK",
+        "runId": effective_run_id,
+        "flowRunId": effective_run_id
     }
 
 
