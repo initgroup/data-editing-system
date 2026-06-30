@@ -2300,6 +2300,8 @@ body.panel-resizing-y #pageConsoleHolder {
 
 .sidebar-flyout-portal a {
     align-items: center;
+    border: 1px solid transparent;
+    border-left-width: 4px;
     color: #cbd5e1;
     display: flex !important;
     gap: 10px;
@@ -2314,6 +2316,54 @@ body.panel-resizing-y #pageConsoleHolder {
 .sidebar-flyout-portal a.menu-active {
     background: #202b42;
     color: #ffffff;
+}
+
+#mainNav .menu-folder.is-child-visited > button {
+    background: #18283a !important;
+    border-left-color: #2dd4bf !important;
+}
+
+#mainNav .menu-folder.is-child-active > button {
+    background: #202b42 !important;
+    border-color: #334155 !important;
+    border-left-color: #facc15 !important;
+    color: #f8fafc !important;
+}
+
+#mainNav .menu-folder.is-child-active > button i,
+#mainNav .menu-folder.is-child-active > button span {
+    color: #f8fafc !important;
+}
+
+body.sidebar-user-collapsed #mainNav .menu-folder.is-child-active > button {
+    background: #20314a !important;
+    border-left-color: #facc15 !important;
+    box-shadow: inset 4px 0 0 #facc15, inset 0 0 0 1px rgba(96, 165, 250, 0.35);
+}
+
+body.sidebar-user-collapsed #mainNav .menu-folder.is-child-visited:not(.is-child-active) > button {
+    background: #123139 !important;
+    border-left-color: #2dd4bf !important;
+}
+
+.sidebar-flyout-portal a.visited-menu:not(.menu-active) {
+    background: #123139;
+    border-left-color: #2dd4bf;
+    color: #d7f7ef;
+}
+
+.sidebar-flyout-portal a.menu-active,
+.sidebar-flyout-portal a.bg-blue-700 {
+    background: #2563eb !important;
+    border-color: #60a5fa !important;
+    border-left-color: #facc15 !important;
+    color: #ffffff !important;
+}
+
+.sidebar-flyout-portal .menu-folder.is-child-active > button {
+    background: #202b42 !important;
+    border-left-color: #facc15 !important;
+    color: #ffffff !important;
 }
 
 .sidebar-flyout-portal a span {

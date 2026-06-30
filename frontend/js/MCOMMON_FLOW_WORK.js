@@ -37,6 +37,7 @@
             flowNodeRunResultRows: [],
             flowResultSqlGridData: { rows: [], columns: [] },
             activeRunPlanFlowRunId: "",
+            activeRunPlanLoadedId: "",
             selectedProjectId: "",
             selectedScenarioId: "",
             selectedScenarioTableKey: "",
@@ -106,6 +107,7 @@
                 this.flowNodeRunResultRows = [];
                 this.flowResultSqlGridData = { rows: [], columns: [] };
                 this.activeRunPlanFlowRunId = "";
+                this.activeRunPlanLoadedId = "";
                 this.selectedProjectId = "";
                 this.selectedScenarioId = "";
                 this.selectedScenarioTableKey = "";
@@ -177,8 +179,7 @@
                 if (this.contextLoadFailed) return;
                 await this.loadScenarioTables();
                 await this.loadFlowAssets();
-                await this.loadFlowVersions(false, { forceDraft: true });
-                await this.loadFlowRunHistory();
+                await this.loadFlowVersions(true, { refreshHistory: true });
                 this.setWorkContextCollapsed(Boolean(this.selectedProjectId && this.selectedScenarioId));
             },
 
@@ -195,8 +196,7 @@
                 if (this.contextLoadFailed) return;
                 await this.loadScenarioTables();
                 await this.loadFlowAssets();
-                await this.loadFlowVersions(false);
-                await this.loadFlowRunHistory();
+                await this.loadFlowVersions(false, { refreshHistory: true });
                 this.setWorkContextCollapsed(Boolean(this.selectedProjectId && this.selectedScenarioId));
             },
 
@@ -248,8 +248,7 @@
                 await this.loadContextScenarios("");
                 await this.loadScenarioTables();
                 await this.loadFlowAssets();
-                await this.loadFlowVersions(false, { forceDraft: true });
-                await this.loadFlowRunHistory();
+                await this.loadFlowVersions(true, { refreshHistory: true });
                 this.setWorkContextCollapsed(Boolean(this.selectedProjectId && this.selectedScenarioId));
             },
 
@@ -304,14 +303,18 @@
                 this.saveStoredContext();
                 await this.loadScenarioTables();
                 await this.loadFlowAssets();
-                await this.loadFlowVersions(false, { forceDraft: true });
-                await this.loadFlowRunHistory();
+                await this.loadFlowVersions(true, { refreshHistory: true });
                 this.setWorkContextCollapsed(Boolean(this.selectedProjectId && this.selectedScenarioId));
             },
 
             async loadScenarioTables() {
                 const container = getContainerEl(`#scenarioTablesGrid-${PAGE_CODE}`);
-                if (!container) return;
+                if (!container) {
+                    this.scenarioTables = [];
+                    this.selectedScenarioTableKey = "";
+                    this.updateWorkContextSummary();
+                    return;
+                }
 
                 const preferredTableKey = this.selectedScenarioTableKey || "";
                 this.selectedScenarioTableKey = "";
@@ -380,8 +383,7 @@
                 await this.loadFlowNodeTypes();
                 await Promise.all([
                     this.loadRegisteredJobs(),
-                    this.loadDefaultVariables(),
-                    this.loadFlowVersions(false)
+                    this.loadDefaultVariables()
                 ]);
                 this.bindFlowPalette();
             },
@@ -665,13 +667,15 @@
                 const grid = getContainerEl(`#flowVersionGrid-${PAGE_CODE}`);
                 if (!select && !grid) return;
                 const forceDraft = Boolean(options.forceDraft);
+                const refreshHistory = Boolean(options.refreshHistory);
                 const currentFlowId = forceDraft ? "" : this.getValue(`#flowId-${PAGE_CODE}`);
                 if (!this.selectedProjectId || !this.selectedScenarioId) {
                     this.flowList = [];
                     if (select) select.innerHTML = `<option value="">Draft</option>`;
-                    if (grid) grid.innerHTML = `<div class="table-empty">Select project and scenario first.</div>${this.renderListFooter(0)}`;
+                    if (grid) grid.innerHTML = `<div class="table-empty">Select project and scenario first.</div>`;
                     this.updateFlowVersionCount();
                     this.newFlow(false);
+                    if (refreshHistory) await this.loadFlowRunHistory();
                     return;
                 }
 
@@ -685,11 +689,12 @@
                     this.flowList = Array.isArray(json.data) ? json.data : [];
                     if (forceDraft) {
                         this.newFlow(true);
+                        if (refreshHistory) await this.loadFlowRunHistory();
                         return;
                     }
                     this.renderFlowVersions();
                     if (loadLatest && this.flowList.length) {
-                        await this.loadFlowVersion(this.flowList[0].FLOW_ID);
+                        await this.loadFlowVersion(this.flowList[0].FLOW_ID, { refreshHistory });
                     } else if (/^\d+$/.test(currentFlowId)) {
                         const exists = this.flowList.some((flow) => String(flow.FLOW_ID) === String(currentFlowId));
                         if (exists) {
@@ -700,10 +705,13 @@
                             this.renderFlowVersions();
                         }
                     }
+                    if (!(loadLatest && this.flowList.length) && refreshHistory) {
+                        await this.loadFlowRunHistory();
+                    }
                 } catch (error) {
                     this.flowList = [];
                     if (select) select.innerHTML = `<option value="">Flow list load failed</option>`;
-                    if (grid) grid.innerHTML = `<div class="table-error">${this.escapeHtml(error.message || "Flow list load failed.")}</div>${this.renderListFooter(0)}`;
+                    if (grid) grid.innerHTML = `<div class="table-error">${this.escapeHtml(error.message || "Flow list load failed.")}</div>`;
                     this.updateFlowVersionCount();
                 } finally {
                     this.setFlowVersionLoading(false);
@@ -735,7 +743,6 @@
                             <i class="fas fa-sync-alt fa-spin"></i>
                             <span>Loading saved flows...</span>
                         </div>
-                        ${this.renderListFooter(0)}
                     `;
                 }
             },
@@ -758,16 +765,9 @@
                 }
                 if (grid) {
                     grid.innerHTML = `
-                        <button type="button" class="data-job-row flow-version-row ${/^\d+$/.test(currentFlowId) ? "" : "is-selected"}" data-flow-id="" onclick="${PAGE_CODE}.newFlow()">
-                            <span class="data-job-order">NEW</span>
-                            <span>
-                                <strong>Draft</strong>
-                                <small>${this.escapeHtml(config.defaultFlowGroup || PAGE_CODE)} / unsaved flow</small>
-                            </span>
-                            <em><span>NEW</span><span>DRAFT</span></em>
-                        </button>
-                        ${this.flowList.map((flow, index) => this.renderFlowVersionRow(flow, index, currentFlowId)).join("")}
-                        ${this.renderListFooter(this.flowList.length)}
+                        ${this.flowList.length
+                            ? this.flowList.map((flow, index) => this.renderFlowVersionRow(flow, index, currentFlowId)).join("")
+                            : `<div class="table-empty">No saved flows. Use the + button to start a draft.</div>`}
                     `;
                 }
                 this.updateFlowVersionCount();
@@ -812,18 +812,21 @@
                 const flowCode = flow.FLOW_GROUP || config.defaultFlowGroup || PAGE_CODE;
                 const flowName = flow.FLOW_NAME || "Untitled Flow";
                 const flowDesc = flow.FLOW_DESC || flow.FLOW_TYPE || "";
+                const updatedAt = flow.UPDATED_AT || flow.CREATED_AT || "";
                 return `
                     <button type="button" class="data-job-row flow-version-row ${selectedClass}${runningClass}" data-flow-id="${this.escapeHtml(flowId)}" onclick="${PAGE_CODE}.loadFlowVersion('${this.escapeJs(flowId)}')">
                         <span class="data-job-order">${this.escapeHtml(index + 1)}</span>
-                        <span>
+                        <span class="flow-version-main">
                             <strong>${this.escapeHtml(flowName)}</strong>
-                            <small>#${this.escapeHtml(flowId)} / ${this.escapeHtml(flowCode)}${flowDesc ? ` / ${this.escapeHtml(flowDesc)}` : ""}</small>
+                            <small>#${this.escapeHtml(flowId)} / ${this.escapeHtml(flowCode)}</small>
                             ${running ? `
                                 <small class="flow-version-progress-label"><i class="fas fa-spinner fa-spin"></i>${this.escapeHtml(running.label || "Running...")}</small>
                                 <span class="data-job-progress flow-version-progress"></span>
                             ` : ""}
                         </span>
-                        <em><span>${this.escapeHtml(flow.USE_YN || "Y")}</span><span>DAG</span></em>
+                        <span class="flow-version-desc" title="${this.escapeHtml(flowDesc)}">${this.escapeHtml(flowDesc || "-")}</span>
+                        <span class="flow-version-updated" title="${this.escapeHtml(updatedAt)}">${this.escapeHtml(updatedAt || "-")}</span>
+                        <em><span>${this.escapeHtml(flow.USE_YN || "Y")}</span><span>${this.escapeHtml(flow.EXECUTION_MODE || "DAG")}</span></em>
                     </button>
                 `;
             },
@@ -852,7 +855,7 @@
                 event?.preventDefault?.();
                 event?.stopPropagation?.();
                 if (!/^\d+$/.test(String(flowId || ""))) return;
-                await this.loadFlowVersion(flowId);
+                await this.loadFlowVersion(flowId, { refreshHistory: false });
                 this.copyFlowAsDraft();
             },
 
@@ -866,6 +869,7 @@
                 this.setSampleFlowState(false);
                 this.renderFlowVersions();
                 this.updateFlowCopyButton();
+                this.updateWorkContextSummary();
                 const label = getContainerEl(`#selectedFlowLabel-${PAGE_CODE}`);
                 if (label) label.textContent = "Copied as a new draft. Save it to create a new FLOW.";
             },
@@ -899,9 +903,11 @@
                 }
             },
 
-            async loadFlowVersion(flowId) {
+            async loadFlowVersion(flowId, options = {}) {
+                const refreshHistory = options.refreshHistory !== false;
                 if (!flowId) {
                     this.newFlow(false);
+                    if (refreshHistory) await this.loadFlowRunHistory();
                     return;
                 }
                 try {
@@ -909,6 +915,7 @@
                     if (json.data) {
                         this.applyFlowData(json.data, { preserveZoom: true });
                         this.renderFlowVersions();
+                        if (refreshHistory) await this.loadFlowRunHistory();
                     }
                 } catch (error) {
                     alert(error.message || "Flow load failed.");
@@ -948,13 +955,27 @@
             updateWorkContextSummary() {
                 const project = this.contextProjects.find((row) => String(row.PROJECT_ID) === String(this.selectedProjectId));
                 const scenario = this.contextScenarios.find((row) => String(row.SCENARIO_ID) === String(this.selectedScenarioId));
-                const table = this.getSelectedScenarioTable();
                 const parts = [
                     project ? `Project: ${project.PROJECT_NAME || project.PROJECT_CODE || "-"}` : "Project: -",
                     scenario ? `Scenario: ${scenario.SCENARIO_NAME || scenario.SCENARIO_CODE || "-"}` : "Scenario: -",
-                    table ? `Table: ${table.OWNER_NAME || "-"}.${table.TABLE_NAME || "-"}` : "Table: -"
+                    this.getCurrentFlowSummary()
                 ];
                 this.setText(`#workContextSummary-${PAGE_CODE}`, parts.join(" / "));
+            },
+
+            getCurrentFlowSummary() {
+                const flowId = this.getValue(`#flowId-${PAGE_CODE}`);
+                const flowName = this.getValue(`#flowName-${PAGE_CODE}`).trim();
+                const flowGroup = this.getValue(`#flowGroup-${PAGE_CODE}`).trim() || config.defaultFlowGroup || PAGE_CODE;
+                const flowUseYn = this.getValue(`#flowUseYn-${PAGE_CODE}`).trim() || "Y";
+                if (/^\d+$/.test(flowId)) {
+                    const saved = this.flowList.find((flow) => String(flow.FLOW_ID) === String(flowId)) || {};
+                    const name = flowName || saved.FLOW_NAME || `Flow #${flowId}`;
+                    const group = flowGroup || saved.FLOW_GROUP || PAGE_CODE;
+                    const mode = saved.EXECUTION_MODE || "DAG";
+                    return `Flow: ${name} (#${flowId} / ${group} / ${flowUseYn} / ${mode})`;
+                }
+                return `Flow: ${flowName || "Draft"} (${flowGroup} / ${flowUseYn})`;
             },
 
             toggleWorkContext(event) {
@@ -988,7 +1009,7 @@
                     }
                     const label = toggle.querySelector("span");
                     if (label) label.textContent = this.workContextCollapsed
-                        ? (FLOW_UI_LABELS.changeContext || "Change")
+                        ? (FLOW_UI_LABELS.showContext || "Show")
                         : (FLOW_UI_LABELS.hideContext || "Hide");
                 }
             },
@@ -2130,7 +2151,9 @@
                 if (element) element.value = value ?? "";
             },
 
-            updateFlowField() {},
+            updateFlowField() {
+                this.updateWorkContextSummary();
+            },
             handleNodeJobChange() {},
 
             stringifyNodeJson(value) {
@@ -2585,6 +2608,7 @@
                 this.updateFlowCopyButton();
                 this.isFlowRunning = this.isFlowRunActive();
                 this.updateFlowActionButtons();
+                this.updateWorkContextSummary();
             },
 
             renderFlowCanvasFromData(nodes, edges) {
@@ -3124,6 +3148,10 @@
                     container.innerHTML = `<div class="table-empty">No run history.</div>${this.renderListFooter(0)}`;
                     return;
                 }
+                if (this.activeRunPlanFlowRunId && !this.flowRunHistoryRows.some((row) => String(row.FLOW_RUN_ID || "") === String(this.activeRunPlanFlowRunId))) {
+                    this.activeRunPlanFlowRunId = "";
+                    this.flowNodeRunResultRows = [];
+                }
                 container.innerHTML = `
                     <table class="table-grid">
                         <thead>
@@ -3140,14 +3168,17 @@
                             </tr>
                         </thead>
                         <tbody>
-                            ${rows.map((row) => `
-                                <tr ondblclick="${PAGE_CODE}.openRunPlanLayer('${this.escapeJs(row.FLOW_RUN_ID || "")}')">
+                            ${rows.map((row) => {
+                                const flowRunId = String(row.FLOW_RUN_ID || "");
+                                const expanded = flowRunId && flowRunId === String(this.activeRunPlanFlowRunId || "");
+                                return `
+                                <tr class="${expanded ? "is-expanded" : ""}" ondblclick="${PAGE_CODE}.openRunPlanLayer('${this.escapeJs(flowRunId)}')">
                                     <td>
-                                        <button type="button" class="table-icon-btn" title="View execution plan" onclick="event.stopPropagation(); ${PAGE_CODE}.openRunPlanLayer('${this.escapeJs(row.FLOW_RUN_ID || "")}')">
-                                            <i class="fas fa-ellipsis"></i>
+                                        <button type="button" class="table-icon-btn" title="${expanded ? "Close execution details" : "View execution details"}" onclick="event.stopPropagation(); ${PAGE_CODE}.openRunPlanLayer('${this.escapeJs(flowRunId)}')">
+                                            <i class="fas ${expanded ? "fa-chevron-up" : "fa-ellipsis"}"></i>
                                         </button>
                                     </td>
-                                    <td>${this.escapeHtml(row.FLOW_RUN_ID || "")}</td>
+                                    <td><button type="button" class="flow-run-id-link" onclick="${PAGE_CODE}.openRunPlanLayer('${this.escapeJs(flowRunId)}')">${this.escapeHtml(flowRunId)}</button></td>
                                     <td>${this.escapeHtml(row.FLOW_NAME || "")}</td>
                                     <td>${this.escapeHtml(row.RUN_TYPE || "")}</td>
                                     <td>${this.escapeHtml(row.STATUS || "")}</td>
@@ -3156,7 +3187,9 @@
                                     <td>${this.escapeHtml(row.FINISHED_AT || "")}</td>
                                     <td>${this.escapeHtml(this.formatElapsedTime(row.STARTED_AT, row.FINISHED_AT, row.STATUS))}</td>
                                 </tr>
-                            `).join("")}
+                                ${expanded ? this.renderRunHistoryDetailRow(row) : ""}
+                            `;
+                            }).join("")}
                         </tbody>
                     </table>
                     ${this.renderListFooter(rows.length)}
@@ -3192,198 +3225,160 @@
                 }
             },
             async openRunPlanLayer(flowRunId, options = {}) {
-                this.activeRunPlanFlowRunId = String(flowRunId || "");
+                const nextFlowRunId = String(flowRunId || "");
+                if (!nextFlowRunId) return;
+                if (!options.refreshing && this.activeRunPlanFlowRunId === nextFlowRunId) {
+                    this.closeRunPlanLayer();
+                    return;
+                }
+                this.activeRunPlanFlowRunId = nextFlowRunId;
+                this.flowNodeRunResultRows = [];
+                this.activeRunPlanLoadedId = "";
+                this.renderFlowRunHistory(this.flowRunHistoryRows);
+                await this.loadInlineRunPlan(nextFlowRunId);
+            },
+            async loadInlineRunPlan(flowRunId) {
                 const row = this.flowRunHistoryRows.find((item) => String(item.FLOW_RUN_ID || "") === String(flowRunId || ""));
                 if (!row) return;
-                const layer = getContainerEl(`#flowRunPlanLayer-${PAGE_CODE}`);
-                const title = getContainerEl(`#flowRunPlanTitle-${PAGE_CODE}`);
-                const summary = getContainerEl(`#flowRunPlanSummary-${PAGE_CODE}`);
-                const grid = getContainerEl(`#flowRunPlanGrid-${PAGE_CODE}`);
-                if (!layer || !grid) return;
-
-                layer.hidden = false;
-                this.enableRunPlanLayerDrag(layer);
-                this.setRunPlanRefreshing(Boolean(options.refreshing));
-                if (title) title.textContent = `Execution Plan - Run #${row.FLOW_RUN_ID || ""}`;
-                if (summary) {
-                    summary.innerHTML = `
-                        <span><strong>Flow</strong> ${this.escapeHtml(row.FLOW_NAME || "")}</span>
-                        <span><strong>Type</strong> ${this.escapeHtml(row.RUN_TYPE || "")}</span>
-                        <span><strong>Status</strong> ${this.escapeHtml(row.STATUS || "")}</span>
-                        <span><strong>Started</strong> ${this.escapeHtml(row.STARTED_AT || "")}</span>
-                        <span><strong>Finished</strong> ${this.escapeHtml(row.FINISHED_AT || "-")}</span>
-                        <span><strong>Elapsed</strong> ${this.escapeHtml(this.formatElapsedTime(row.STARTED_AT, row.FINISHED_AT, row.STATUS))}</span>
-                        <label class="flow-run-summary-message">
-                            <span><strong>Message</strong></span>
-                            <textarea readonly>${this.escapeHtml(row.MESSAGE || "")}</textarea>
-                            <button type="button" class="table-btn" onclick="${PAGE_CODE}.copyRunHistoryMessage('${this.escapeHtml(row.FLOW_RUN_ID || "")}', event)">
-                                <i class="far fa-copy"></i>
-                                <span>Copy message</span>
-                            </button>
-                        </label>
-                    `;
-                }
-                if (options.focusMessage) {
-                    setTimeout(() => summary?.querySelector("textarea")?.focus(), 0);
-                }
-                if (!options.refreshing) {
-                    grid.innerHTML = `<div class="table-empty">Loading node execution results...</div>${this.renderListFooter(0)}`;
-                }
                 try {
                     const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/run/${encodeURIComponent(flowRunId)}/nodes`, {
                         method: "GET",
                         showLoading: false
                     });
+                    if (String(this.activeRunPlanFlowRunId || "") !== String(flowRunId || "")) return;
                     const nodeRuns = Array.isArray(json.data) ? json.data : [];
-                    if (nodeRuns.length) {
-                        this.renderNodeRunResultTable(grid, nodeRuns);
-                    } else {
-                        this.renderExecutionPlanTable(grid, this.extractRunPlan(row));
-                    }
+                    this.flowNodeRunResultRows = nodeRuns;
+                    this.activeRunPlanLoadedId = String(flowRunId || "");
+                    this.renderFlowRunHistory(this.flowRunHistoryRows);
                 } catch (error) {
-                    grid.innerHTML = `<div class="table-error">${this.escapeHtml(error.message || "Node run result load failed.")}</div>${this.renderListFooter(0)}`;
-                } finally {
-                    this.setRunPlanRefreshing(false);
+                    if (String(this.activeRunPlanFlowRunId || "") !== String(flowRunId || "")) return;
+                    this.flowNodeRunResultRows = [];
+                    this.activeRunPlanLoadedId = String(flowRunId || "");
+                    this.renderFlowRunHistory(this.flowRunHistoryRows);
+                    const panel = getContainerEl(`#flowRunInlineDetail-${PAGE_CODE}-${flowRunId}`);
+                    if (panel) {
+                        panel.innerHTML = `<div class="table-error">${this.escapeHtml(error.message || "Node run result load failed.")}</div>`;
+                    }
                 }
             },
             async refreshRunPlanLayer() {
                 const flowRunId = this.activeRunPlanFlowRunId;
                 if (!flowRunId) return;
+                this.flowNodeRunResultRows = [];
+                this.activeRunPlanLoadedId = "";
+                this.renderFlowRunHistory(this.flowRunHistoryRows);
                 await this.loadFlowRunHistory({ silent: true });
-                await this.openRunPlanLayer(flowRunId, { refreshing: true });
-                const button = getContainerEl(`#flowRunPlanRefresh-${PAGE_CODE}`);
-                if (button) {
-                    const refreshedAt = new Date().toLocaleTimeString("ko-KR", { hour12: false });
-                    button.title = `Refresh run details - last refreshed ${refreshedAt}`;
+                if (this.activeRunPlanFlowRunId) {
+                    await this.loadInlineRunPlan(this.activeRunPlanFlowRunId);
                 }
-            },
-            setRunPlanRefreshing(isRefreshing) {
-                const button = getContainerEl(`#flowRunPlanRefresh-${PAGE_CODE}`);
-                if (!button) return;
-                const icon = button.querySelector("i");
-                button.disabled = Boolean(isRefreshing);
-                button.classList.toggle("is-loading", Boolean(isRefreshing));
-                icon?.classList.toggle("fa-spin", Boolean(isRefreshing));
             },
             closeRunPlanLayer() {
-                const layer = getContainerEl(`#flowRunPlanLayer-${PAGE_CODE}`);
-                if (layer) layer.hidden = true;
                 this.activeRunPlanFlowRunId = "";
+                this.flowNodeRunResultRows = [];
+                this.activeRunPlanLoadedId = "";
+                this.renderFlowRunHistory(this.flowRunHistoryRows);
             },
-            enableRunPlanLayerDrag(layer) {
-                const dialog = layer?.querySelector(".flow-run-plan-dialog");
-                const header = dialog?.querySelector("header");
-                if (!dialog || !header || dialog.dataset.dragBound === "Y") return;
-                dialog.dataset.dragBound = "Y";
-                header.classList.add("is-draggable");
-                header.addEventListener("pointerdown", (event) => {
-                    if (event.target.closest("button")) return;
-                    event.preventDefault();
-                    const rect = dialog.getBoundingClientRect();
-                    const startX = event.clientX;
-                    const startY = event.clientY;
-                    const startLeft = rect.left;
-                    const startTop = rect.top;
-                    dialog.style.position = "fixed";
-                    dialog.style.margin = "0";
-                    dialog.style.left = `${startLeft}px`;
-                    dialog.style.top = `${startTop}px`;
-                    header.setPointerCapture?.(event.pointerId);
-                    const move = (moveEvent) => {
-                        const nextLeft = Math.max(8, Math.min(window.innerWidth - rect.width - 8, startLeft + moveEvent.clientX - startX));
-                        const nextTop = Math.max(8, Math.min(window.innerHeight - rect.height - 8, startTop + moveEvent.clientY - startY));
-                        dialog.style.left = `${nextLeft}px`;
-                        dialog.style.top = `${nextTop}px`;
-                    };
-                    const up = () => {
-                        header.removeEventListener("pointermove", move);
-                        header.removeEventListener("pointerup", up);
-                        header.removeEventListener("pointercancel", up);
-                    };
-                    header.addEventListener("pointermove", move);
-                    header.addEventListener("pointerup", up);
-                    header.addEventListener("pointercancel", up);
-                });
+            renderRunHistoryDetailRow(row) {
+                const flowRunId = String(row?.FLOW_RUN_ID || "");
+                const hasLoaded = String(this.activeRunPlanLoadedId || "") === flowRunId;
+                const message = String(row?.MESSAGE || "").trim();
+                return `
+                    <tr class="flow-run-inline-detail-row">
+                        <td colspan="9">
+                            <section id="flowRunInlineDetail-${PAGE_CODE}-${this.escapeHtml(flowRunId)}" class="flow-run-inline-detail">
+                                <header>
+                                    <strong>Run #${this.escapeHtml(flowRunId)} details</strong>
+                                    <span class="flow-run-plan-tools">
+                                        <button type="button" class="table-icon-btn" title="Refresh run details" onclick="${PAGE_CODE}.refreshRunPlanLayer()">
+                                            <i class="fas fa-sync-alt"></i>
+                                        </button>
+                                        <button type="button" class="table-icon-btn" title="Close" onclick="${PAGE_CODE}.closeRunPlanLayer()">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </span>
+                                </header>
+                                ${message ? `
+                                    <div class="flow-run-inline-message">
+                                        <strong>Message</strong>
+                                        <pre>${this.escapeHtml(message)}</pre>
+                                        <button type="button" class="table-btn" onclick="${PAGE_CODE}.copyRunHistoryMessage('${this.escapeHtml(flowRunId)}', event)">
+                                            <i class="far fa-copy"></i>
+                                            <span>Copy</span>
+                                        </button>
+                                    </div>
+                                ` : ""}
+                                ${hasLoaded
+                                    ? this.renderNodeRunResultContent(this.flowNodeRunResultRows)
+                                    : `<div class="table-empty">Loading node execution results...</div>`}
+                            </section>
+                        </td>
+                    </tr>
+                `;
             },
-            extractRunPlan(row) {
-                const raw = row?.PLAN_JSON || "";
-                if (!raw) return [];
-                try {
-                    const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
-                    return Array.isArray(parsed?.plan) ? parsed.plan : (Array.isArray(parsed) ? parsed : []);
-                } catch (error) {
-                    return [];
-                }
-            },
-            renderNodeRunResultTable(container, rows = []) {
-                if (!container) return;
-                this.flowNodeRunResultRows = Array.isArray(rows) ? rows : [];
+            renderNodeRunResultContent(rows = []) {
                 if (!rows.length) {
-                    container.innerHTML = `<div class="table-empty">No node execution results.</div>${this.renderListFooter(0)}`;
-                    return;
+                    return `<div class="table-empty">No node execution results.</div>`;
                 }
-                container.innerHTML = `
-                    ${this.renderNodeResultsPanel(rows)}
+                return `
                     <table class="table-grid flow-node-run-result-table">
                         <thead>
                             <tr>
                                 <th>Level</th>
                                 <th>Node</th>
+                                <th>Result</th>
                                 <th>Type</th>
                                 <th>Status</th>
-                                <th>Started</th>
-                                <th>Finished</th>
-                                <th>Elapsed</th>
+                                <th>Timing</th>
                                 <th>Message / Error</th>
                             </tr>
                         </thead>
                         <tbody>
-                            ${rows.map((row) => `
+                            ${rows.map((row) => {
+                                const resultInfo = this.getNodeResultInfo(row);
+                                const canOpenResult = resultInfo.mode !== "N" && resultInfo.owner && resultInfo.objectName && resultInfo.status === "SUCCESS";
+                                return `
                                 <tr class="${this.getRunStatusClass(row.STATUS)}">
                                     <td>${this.escapeHtml(row.RUN_LEVEL ?? "")}</td>
                                     <td>${this.escapeHtml(row.NODE_NAME || row.NODE_KEY || "")}</td>
+                                    <td>${this.renderNodeRunResultCell(resultInfo)}</td>
                                     <td>${this.escapeHtml(row.NODE_TYPE || "")}</td>
                                     <td><span class="flow-run-status-pill">${this.escapeHtml(row.STATUS || "")}</span></td>
-                                    <td>${this.escapeHtml(row.STARTED_AT || "")}</td>
-                                    <td>${this.escapeHtml(row.FINISHED_AT || "")}</td>
-                                    <td>${this.escapeHtml(this.formatElapsedTime(row.STARTED_AT, row.FINISHED_AT, row.STATUS))}</td>
+                                    <td>${this.renderNodeRunTimingCell(row)}</td>
                                     <td class="flow-run-message-cell">${this.renderNodeRunMessageCell(row)}</td>
                                 </tr>
-                            `).join("")}
+                            `;
+                            }).join("")}
                         </tbody>
                     </table>
                     ${this.renderListFooter(rows.length)}
                 `;
             },
-            renderNodeResultsPanel(rows = []) {
-                const resultRows = rows
-                    .map((row) => this.getNodeResultInfo(row))
-                    .filter((item) => item.mode !== "N" && item.owner && item.objectName);
-                if (!resultRows.length) {
-                    return `
-                        <section class="flow-node-results-panel">
-                            <header><strong>Node Results</strong><small>No result table or model in this run.</small></header>
-                        </section>
-                    `;
+            renderNodeRunResultCell(info = {}) {
+                if (info.mode === "N" || !info.owner || !info.objectName) {
+                    return `<span class="flow-node-result-inline is-empty">-</span>`;
+                }
+                const clickable = info.status === "SUCCESS";
+                const content = `
+                        <strong>${this.escapeHtml(info.modeLabel)}</strong>
+                        <small>${this.escapeHtml(info.owner)}.${this.escapeHtml(info.objectName)}</small>
+                `;
+                if (!clickable) {
+                    return `<span class="flow-node-result-inline is-disabled" title="${this.escapeHtml(`${info.modeLabel}: ${info.owner}.${info.objectName}`)}">${content}</span>`;
                 }
                 return `
-                    <section class="flow-node-results-panel">
-                        <header><strong>Node Results</strong><small>Open result SQL using the same table/model rule as M030xx.</small></header>
-                        <div class="flow-node-results-list">
-                            ${resultRows.map((item) => {
-                                const disabled = item.status !== "SUCCESS" ? " disabled" : "";
-                                return `
-                                    <button type="button" class="flow-node-result-row"${disabled} onclick="${PAGE_CODE}.openFlowNodeResultSql('${this.escapeJs(item.flowNodeRunId)}')">
-                                        <span class="flow-node-result-main">
-                                            <strong>${this.escapeHtml(item.nodeName)}</strong>
-                                            <small>${this.escapeHtml(item.owner)}.${this.escapeHtml(item.objectName)}</small>
-                                        </span>
-                                        <em><span>${this.escapeHtml(item.modeLabel)}</span><span>${this.escapeHtml(item.status)}</span></em>
-                                    </button>
-                                `;
-                            }).join("")}
-                        </div>
-                    </section>
+                    <button type="button" class="flow-node-result-inline is-openable" title="${this.escapeHtml(`${info.modeLabel}: ${info.owner}.${info.objectName}`)}" onclick="${PAGE_CODE}.openFlowNodeResultSql('${this.escapeJs(info.flowNodeRunId)}')">
+                        ${content}
+                    </button>
+                `;
+            },
+            renderNodeRunTimingCell(row) {
+                const elapsed = this.formatElapsedTime(row.STARTED_AT, row.FINISHED_AT, row.STATUS);
+                return `
+                    <span class="flow-node-run-timing">
+                        <small><b>Start</b>${this.escapeHtml(row.STARTED_AT || "-")}</small>
+                        <small><b>End</b>${this.escapeHtml(row.FINISHED_AT || "-")}</small>
+                        <strong>${this.escapeHtml(elapsed || "-")}</strong>
+                    </span>
                 `;
             },
             getNodeResultInfo(row) {
@@ -3411,7 +3406,6 @@
                 const info = this.getNodeResultInfo(row || {});
                 if (!info.owner || !info.objectName || info.mode === "N") return;
                 await this.loadFlowResultSql(info);
-                this.closeRunPlanLayer();
                 this.switchTab("resultSql");
             },
             async loadFlowResultSql(info) {
@@ -3798,6 +3792,7 @@
                 this.flowLayoutRestoredFromDb = false;
                 this.renderFlowVersions();
                 this.updateFlowCopyButton();
+                this.updateWorkContextSummary();
             },
 
             async saveFlow() {
@@ -3899,8 +3894,8 @@
                         await this.loadFlowVersion(this.flowList[0].FLOW_ID);
                     } else {
                         this.newFlow(true);
+                        await this.loadFlowRunHistory();
                     }
-                    await this.loadFlowRunHistory();
                     alert(json.message || "Flow deleted.");
                 } catch (error) {
                     alert(error.message || "Flow delete failed.");

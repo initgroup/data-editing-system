@@ -82,6 +82,7 @@ def create_anly_work_router(
         violationMaxRules: int = 500,
         violationRulePage: int = 1,
         violationRulePageSize: int = 20,
+        predictedTypeCase: str | None = None,
         page: int = 1,
         pageSize: int = 50,
     ):
@@ -102,6 +103,7 @@ def create_anly_work_router(
             violationMaxRules=violationMaxRules,
             violationRulePage=violationRulePage,
             violationRulePageSize=violationRulePageSize,
+            predictedTypeCase=predictedTypeCase,
             page=page,
             pageSize=pageSize,
         )

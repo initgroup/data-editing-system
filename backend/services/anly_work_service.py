@@ -64,6 +64,15 @@ MODEL_RESULT_LAYOUTS = {
 }
 READABLE_RULE_SUMMARY_CACHE: dict[tuple[str, str], tuple[float, dict[str, Any] | None]] = {}
 READABLE_RULE_SUMMARY_CACHE_TTL_SECONDS = 600
+PREDICTED_TYPE_CASE_LABELS = {
+    "ALL": ("전체", "모든 예측 결과"),
+    "ALL_MATCH": ("FINAL = MODEL = RULE", "세 예측이 모두 같은 높은 추천"),
+    "FINAL_MODEL": ("FINAL = MODEL, RULE 다름", "최종 결정이 모델 예측과 일치"),
+    "FINAL_BASE": ("FINAL = RULE, MODEL 다름", "최종 결정이 RULE 예측과 일치"),
+    "MODEL_BASE": ("MODEL = RULE, FINAL 다름", "모델과 RULE이 같은 예측"),
+    "ALL_DIFFERENT": ("셋 다 다름", "세 예측이 모두 달라 확인 필요"),
+    "HAS_MISSING": ("값 없음 포함", "FINAL / MODEL / RULE 중 비어 있는 값이 있음"),
+}
 
 
 class SqlRequest(BaseModel):
@@ -175,6 +184,44 @@ def _validate_identifier(value: str, label: str) -> str:
 
 def _quote_identifier(value: str) -> str:
     return '"' + str(value).replace('"', '""') + '"'
+
+
+def _normalize_predicted_type_case(value: str | None) -> str:
+    normalized = str(value or "ALL").strip().upper()
+    return normalized if normalized in PREDICTED_TYPE_CASE_LABELS else "ALL"
+
+
+def _predicted_type_value_expr(column_name: str) -> str:
+    return f"TRIM({column_name})"
+
+
+def _predicted_type_compare_expr(column_name: str) -> str:
+    value_expr = _predicted_type_value_expr(column_name)
+    return (
+        "CASE "
+        f"WHEN {value_expr} IS NULL THEN NULL "
+        f"WHEN {value_expr} LIKE '%범주형' THEN '범주형' "
+        f"WHEN {value_expr} LIKE '%연속형' THEN '연속형' "
+        f"ELSE {value_expr} END"
+    )
+
+
+def _predicted_type_case_expr() -> str:
+    final_value_expr = _predicted_type_value_expr("FINAL_PREDICTED_TYPE")
+    model_value_expr = _predicted_type_value_expr("MODL_PREDICTED_TYPE")
+    base_value_expr = _predicted_type_value_expr("BASE_PREDICTED_TYPE")
+    final_expr = _predicted_type_compare_expr("FINAL_PREDICTED_TYPE")
+    model_expr = _predicted_type_compare_expr("MODL_PREDICTED_TYPE")
+    base_expr = _predicted_type_compare_expr("BASE_PREDICTED_TYPE")
+    return (
+        "CASE "
+        f"WHEN {final_value_expr} IS NULL OR {model_value_expr} IS NULL OR {base_value_expr} IS NULL THEN 'HAS_MISSING' "
+        f"WHEN {final_expr} = {model_expr} AND {model_expr} = {base_expr} THEN 'ALL_MATCH' "
+        f"WHEN {final_expr} = {model_expr} AND {final_expr} <> {base_expr} THEN 'FINAL_MODEL' "
+        f"WHEN {final_expr} = {base_expr} AND {final_expr} <> {model_expr} THEN 'FINAL_BASE' "
+        f"WHEN {model_expr} = {base_expr} AND {final_expr} <> {model_expr} THEN 'MODEL_BASE' "
+        "ELSE 'ALL_DIFFERENT' END"
+    )
 
 
 def _find_column(columns: set[str], candidates: list[str]) -> str | None:
@@ -319,6 +366,7 @@ def _fetch_predicted_type_summary(cursor, owner_name: str, object_name: str, tar
     total_columns = int(row[0] or 0) if row else 0
     result_object = f"{_quote_identifier(owner_name)}.{_quote_identifier(object_name)}"
     effective_type_expr = "COALESCE(TRIM(FINAL_PREDICTED_TYPE), TRIM(MODL_PREDICTED_TYPE), TRIM(BASE_PREDICTED_TYPE))"
+    predicted_case_expr = _predicted_type_case_expr()
     cursor.execute(
         "SELECT TYPE_GROUP, COLUMN_NAME "
         "  FROM ("
@@ -360,6 +408,29 @@ def _fetch_predicted_type_summary(cursor, owner_name: str, object_name: str, tar
         {"typeName": str(type_name), "columnCount": int(column_count or 0)}
         for type_name, column_count in cursor.fetchall()
     ]
+    cursor.execute(
+        f"SELECT {predicted_case_expr} AS CASE_CODE, "
+        "       COUNT(DISTINCT COLUMN_NAME) AS COLUMN_COUNT "
+        f"  FROM {result_object} "
+        " WHERE OWNER = :targetOwner "
+        "   AND TABLE_NAME = :targetTable "
+        "   AND COLUMN_NAME IS NOT NULL "
+        f" GROUP BY {predicted_case_expr}",
+        {"targetOwner": target_owner, "targetTable": target_table},
+    )
+    match_count_map = {str(case_code or "ALL_DIFFERENT"): int(column_count or 0) for case_code, column_count in cursor.fetchall()}
+    prediction_match_groups = []
+    denominator = max(1, total_columns)
+    for case_code in ("ALL_MATCH", "FINAL_MODEL", "FINAL_BASE", "MODEL_BASE", "ALL_DIFFERENT", "HAS_MISSING"):
+        label, description = PREDICTED_TYPE_CASE_LABELS[case_code]
+        column_count = int(match_count_map.get(case_code, 0))
+        prediction_match_groups.append({
+            "caseCode": case_code,
+            "label": label,
+            "description": description,
+            "columnCount": column_count,
+            "rate": round((column_count / denominator) * 100, 1),
+        })
     column_comments = _fetch_column_comment_map(cursor, target_owner, target_table)
     return {
         "targetOwner": target_owner,
@@ -372,6 +443,7 @@ def _fetch_predicted_type_summary(cursor, owner_name: str, object_name: str, tar
             if columns or key in ("범주형", "연속형")
         ],
         "detailGroups": detail_groups,
+        "predictionMatchGroups": prediction_match_groups,
     }
 
 
@@ -910,6 +982,7 @@ def get_result_table(
     violationMaxRules: int = 500,
     violationRulePage: int = 1,
     violationRulePageSize: int = 20,
+    predictedTypeCase: str | None = None,
     page: int = 1,
     pageSize: int = 50,
 ):
@@ -925,6 +998,7 @@ def get_result_table(
     normalized_violation_result_scope = str(violationResultScope or "").strip().upper()
     if normalized_violation_result_scope not in {"CANDIDATE", "HIT", "MISS"}:
         normalized_violation_result_scope = "HIT"
+    normalized_predicted_type_case = _normalize_predicted_type_case(predictedTypeCase)
     result_layout = _get_table_result_layout(object_name)
     page = _normalize_page(page)
     page_size = _normalize_page_size(pageSize, 50, 500)
@@ -971,6 +1045,13 @@ def get_result_table(
         if object_name == "INIT$_TB_RULE_VIOLATION_RESULT" and normalized_violation_rule_id and "RULE_ID" in columns:
             where_clauses.append("UPPER(RULE_ID) LIKE '%' || UPPER(:violationRuleId) || '%'")
             bind_params["violationRuleId"] = normalized_violation_rule_id
+        if (
+            object_name == "INIT$_TB_PREDICTED_TYPE"
+            and normalized_predicted_type_case != "ALL"
+            and {"FINAL_PREDICTED_TYPE", "MODL_PREDICTED_TYPE", "BASE_PREDICTED_TYPE"}.issubset(columns)
+        ):
+            where_clauses.append(f"{_predicted_type_case_expr()} = :predictedTypeCase")
+            bind_params["predictedTypeCase"] = normalized_predicted_type_case
         where_sql = f" WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
         base_sql = f"SELECT * FROM {_quote_identifier(owner_name)}.{_quote_identifier(object_name)}{where_sql}{order_sql}"
         result = _fetch_dynamic_page(cursor, base_sql, page, page_size, bind_params)
@@ -1012,6 +1093,7 @@ def get_result_table(
             "correlationSummary": cat_corr_summary,
             "predictedTypeSummary": predicted_type_summary,
             "violationSummary": violation_summary,
+            "predictedTypeCase": normalized_predicted_type_case,
             "columnComments": column_comments,
             **result,
         }

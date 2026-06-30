@@ -30,7 +30,26 @@
                 </select>
             </label>
         </div>
-        <div id="scenarioTablesGrid-__PAGE_CODE__" class="scenario-table-grid"></div>
+        <section class="data-param-card flow-saved-card flow-context-saved-card" aria-label="Saved flow list">
+            <div class="data-panel-toolbar">
+                <span>
+                    <strong data-label-key="flowVersion">Saved Flows</strong>
+                    <em id="flowVersionCount-__PAGE_CODE__" class="flow-version-count">0 items</em>
+                </span>
+                <button type="button" id="flowVersionRefresh-__PAGE_CODE__" class="table-icon-btn" title="Refresh saved flows" data-title-key="refreshSavedFlowsTitle" onclick="__PAGE_CODE__.refreshSavedFlows()">
+                    <i class="fas fa-sync-alt"></i>
+                </button>
+                <button type="button" id="flowVersionCopy-__PAGE_CODE__" class="table-icon-btn" title="Copy selected saved flow" data-title-key="copySavedFlowTitle" onclick="__PAGE_CODE__.copySelectedSavedFlow()">
+                    <i class="far fa-copy"></i>
+                </button>
+            </div>
+            <select id="flowVersion-__PAGE_CODE__" class="flow-version-hidden-select" onchange="__PAGE_CODE__.loadFlowVersion(this.value)" aria-hidden="true" tabindex="-1">
+                <option value="">Draft</option>
+            </select>
+            <div id="flowVersionGrid-__PAGE_CODE__" class="data-job-grid flow-version-grid">
+                <div class="table-empty">Select project and scenario first.</div>
+            </div>
+        </section>
     </section>
 
     <nav class="table-tabs data-work-tabs flow-work-tabs" aria-label="Flow work workspace tabs">
@@ -67,27 +86,6 @@
                         </button>
                     </div>
                 </header>
-
-                <section class="data-param-card flow-saved-card" aria-label="Saved flow list">
-                    <div class="data-panel-toolbar">
-                        <span>
-                            <strong data-label-key="flowVersion">Saved Flows</strong>
-                            <em id="flowVersionCount-__PAGE_CODE__" class="flow-version-count">0 items</em>
-                        </span>
-                        <button type="button" id="flowVersionRefresh-__PAGE_CODE__" class="table-icon-btn" title="Refresh saved flows" data-title-key="refreshSavedFlowsTitle" onclick="__PAGE_CODE__.refreshSavedFlows()">
-                            <i class="fas fa-sync-alt"></i>
-                        </button>
-                        <button type="button" id="flowVersionCopy-__PAGE_CODE__" class="table-icon-btn" title="Copy selected saved flow" data-title-key="copySavedFlowTitle" onclick="__PAGE_CODE__.copySelectedSavedFlow()">
-                            <i class="far fa-copy"></i>
-                        </button>
-                    </div>
-                    <select id="flowVersion-__PAGE_CODE__" class="flow-version-hidden-select" onchange="__PAGE_CODE__.loadFlowVersion(this.value)" aria-hidden="true" tabindex="-1">
-                        <option value="">Draft</option>
-                    </select>
-                    <div id="flowVersionGrid-__PAGE_CODE__" class="data-job-grid flow-version-grid">
-                        <div class="table-empty">Select project and scenario first.</div>
-                    </div>
-                </section>
 
                 <section class="data-param-card flow-palette-card" aria-label="Registered job palette">
                     <div class="data-panel-toolbar">
@@ -390,27 +388,6 @@ END;</textarea>
             </div>
         </div>
     </section>
-
-    <div id="flowRunPlanLayer-__PAGE_CODE__" class="data-help-layer flow-run-plan-layer" hidden>
-        <section class="data-help-dialog flow-run-plan-dialog" role="dialog" aria-modal="true" aria-labelledby="flowRunPlanTitle-__PAGE_CODE__">
-            <header>
-                <h2 id="flowRunPlanTitle-__PAGE_CODE__">Execution Plan</h2>
-                <span class="flow-run-plan-tools">
-                    <button type="button" id="flowRunPlanRefresh-__PAGE_CODE__" class="table-icon-btn" title="Refresh run details" onclick="__PAGE_CODE__.refreshRunPlanLayer()">
-                        <i class="fas fa-sync-alt"></i>
-                    </button>
-                    <button type="button" class="table-icon-btn" title="Close" onclick="__PAGE_CODE__.closeRunPlanLayer()">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </span>
-            </header>
-            <div id="flowRunPlanSummary-__PAGE_CODE__" class="flow-run-plan-summary"></div>
-            <div id="flowRunPlanGrid-__PAGE_CODE__" class="table-result-grid"></div>
-            <footer>
-                <button type="button" class="env-btn" onclick="__PAGE_CODE__.closeRunPlanLayer()">Close</button>
-            </footer>
-        </section>
-    </div>
 
     <div id="portHelpLayer-__PAGE_CODE__" class="data-help-layer" hidden>
         <section class="data-help-dialog" role="dialog" aria-modal="true" aria-labelledby="portHelpTitle-__PAGE_CODE__">

@@ -126,11 +126,11 @@
                         </label>
                         <label class="data-target-owner-field">
                             <span data-label-key="targetOwner">Target Owner</span>
-                            <input id="targetOwner-__PAGE_CODE__" class="env-field" type="text" readonly>
+                            <input id="targetOwner-__PAGE_CODE__" class="env-field" type="text" oninput="__PAGE_CODE__.updateCurrentJobField('ownerName', this.value)">
                         </label>
                         <label class="data-target-table-field">
                             <span data-label-key="targetTable">Target Table</span>
-                            <input id="targetTable-__PAGE_CODE__" class="env-field" type="text" readonly>
+                            <input id="targetTable-__PAGE_CODE__" class="env-field" type="text" oninput="__PAGE_CODE__.updateCurrentJobField('tableName', this.value)">
                         </label>
                         <label class="data-use-field">
                             <span data-label-key="use">Use</span>

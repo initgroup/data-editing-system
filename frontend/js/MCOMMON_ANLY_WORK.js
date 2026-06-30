@@ -82,6 +82,7 @@
         excludeEmptyConsequent: false,
         readableRuleConditionFilter: "ALL",
         readableRuleConfidenceFilter: "ALL",
+        predictedTypeFilter: "ALL",
         ruleSummaryFilters: { conditionCount: "ALL", confidenceScope: "ALL", resultColumn: "ALL", conditionColumn: "ALL", resultHasValueYn: "ALL", page: 1, pageSize: 20, resultColumnPage: 1 },
         violationRuleFilters: { ruleId: "", conditionCount: "ALL", confidenceScope: "NON_PERFECT", resultScope: "HIT", page: 1, pageSize: 20 },
         violationSql: { sql: "", page: 1, pageSize: 50, total: 0, columns: [], rows: [], title: "" },
@@ -125,6 +126,7 @@
             this.lastViolationSummary = null;
             this.readableRuleConditionFilter = "ALL";
             this.readableRuleConfidenceFilter = "ALL";
+            this.predictedTypeFilter = "ALL";
             this.violationRuleFilters = { ruleId: "", conditionCount: "ALL", confidenceScope: "NON_PERFECT", resultScope: "HIT", page: 1, pageSize: 20 };
             this.closeViolationSqlPopup();
             this.pendingRunId = "";
@@ -159,6 +161,7 @@
                 excludeEmptyConsequent: this.excludeEmptyConsequent,
                 readableRuleConditionFilter: this.readableRuleConditionFilter,
                 readableRuleConfidenceFilter: this.readableRuleConfidenceFilter,
+                predictedTypeFilter: this.predictedTypeFilter,
                 ruleSummaryFilters: this.cloneCacheValue(this.ruleSummaryFilters),
                 violationRuleFilters: this.cloneCacheValue(this.violationRuleFilters),
                 violationSql: this.cloneCacheValue(this.violationSql),
@@ -178,6 +181,7 @@
             this.excludeEmptyConsequent = Boolean(cached.excludeEmptyConsequent);
             this.readableRuleConditionFilter = cached.readableRuleConditionFilter || "ALL";
             this.readableRuleConfidenceFilter = cached.readableRuleConfidenceFilter || "ALL";
+            this.predictedTypeFilter = cached.predictedTypeFilter || "ALL";
             this.ruleSummaryFilters = {
                 conditionCount: "ALL",
                 confidenceScope: "ALL",
@@ -429,6 +433,7 @@
                 el.innerHTML = `<div class="table-empty">실행 이력을 선택하세요.</div>`;
                 return;
             }
+            const runMessage = String(run.MESSAGE || "").trim();
             el.innerHTML = `
                 <article>
                     <span>Selected Run</span>
@@ -436,8 +441,29 @@
                     <small>Run #${this.escapeHtml(run.FLOW_RUN_ID)} · ${this.escapeHtml(run.STATUS || "-")} · ${this.escapeHtml(this.formatElapsedTime(run.STARTED_AT, run.FINISHED_AT, run.STATUS))}</small>
                 </article>
                 <article><span>Nodes</span><strong>${this.formatNumber(run.NODE_COUNT)}</strong><small>${this.formatNumber(run.SUCCESS_NODE_COUNT)} success / ${this.formatNumber(run.FAILED_NODE_COUNT)} failed</small></article>
-                <article><span>Started</span><strong>${this.escapeHtml(this.formatDateTime(run.STARTED_AT))}</strong><small>${this.escapeHtml(run.MESSAGE || "")}</small></article>
+                <article>
+                    <span>Started</span>
+                    <strong>${this.escapeHtml(this.formatDateTime(run.STARTED_AT))}</strong>
+                    <span class="M04002-summary-message">
+                        <small title="${this.escapeHtml(runMessage)}">${this.escapeHtml(runMessage || "-")}</small>
+                        ${runMessage ? `
+                            <button type="button" class="M04002-summary-copy" title="메시지 복사" onclick="${PAGE_CODE}.copyRunMessage(event)" hidden>
+                                <i class="far fa-copy"></i>
+                            </button>
+                        ` : ""}
+                    </span>
+                </article>
             `;
+            requestAnimationFrame(() => this.updateRunSummaryCopyVisibility());
+        },
+
+        updateRunSummaryCopyVisibility() {
+            const box = getContainerEl(".M04002-summary-message");
+            if (!box) return;
+            const textEl = box.querySelector("small");
+            const copyBtn = box.querySelector(".M04002-summary-copy");
+            if (!textEl || !copyBtn) return;
+            copyBtn.hidden = !(textEl.scrollWidth > textEl.clientWidth + 1);
         },
 
         renderNodes() {
@@ -452,6 +478,7 @@
                     <span>
                         <i class="fas ${this.getNodeIcon(node)}"></i>
                         <strong>${this.escapeHtml(node.NODE_NAME || node.NODE_KEY || "-")}</strong>
+                        ${this.renderNodeExecutionObject(node)}
                         <small>${this.escapeHtml(node.RESULT_KIND || "NONE")} ${node.RESULT_OBJECT_NAME ? `· ${this.escapeHtml(node.RESULT_OBJECT_NAME)}` : ""}</small>
                         ${this.renderNodeJobDesc(node)}
                     </span>
@@ -505,6 +532,7 @@
             this.currentModelDetail = null;
             this.readableRuleConditionFilter = "ALL";
             this.readableRuleConfidenceFilter = "ALL";
+            this.predictedTypeFilter = "ALL";
             this.ruleSummaryFilters = { conditionCount: "ALL", confidenceScope: "ALL", resultColumn: "ALL", conditionColumn: "ALL", resultHasValueYn: "ALL", page: 1, pageSize: 20, resultColumnPage: 1 };
             if (!options.preserveViolationRuleFilter) {
                 this.violationRuleFilters = { ruleId: "", conditionCount: "ALL", confidenceScope: "NON_PERFECT", resultScope: "HIT", page: 1, pageSize: 20 };
@@ -560,6 +588,9 @@
                 pageSize: String(this.resultPageSize)
             });
             if (ruleModelName) params.set("ruleModelName", ruleModelName);
+            if (this.isPredictedTypeNode(node) && this.predictedTypeFilter !== "ALL") {
+                params.set("predictedTypeCase", this.predictedTypeFilter);
+            }
             if (this.isViolationNode(node)) {
                 const filters = this.violationRuleFilters || {};
                 const criteria = this.getViolationDetectionCriteria(node);
@@ -637,6 +668,7 @@
             this.currentModelDetail.ruleSummaryLoading = true;
             this.currentModelDetail.ruleSummaryError = "";
             this.renderModelAnalysis(this.currentModelDetail, this.getActiveModelAnalysisTab());
+            this.showResultLoading("규칙 요약 조회 중...");
             const params = new URLSearchParams({
                 owner: node.RESULT_OWNER,
                 modelName: node.RESULT_OBJECT_NAME,
@@ -703,12 +735,13 @@
             panel.classList.remove("is-loading");
             const viewType = json.viewType || "VR";
             const readable = viewType === "VR" ? this.renderReadableRules(json.data || []) : "";
+            const executionTitle = this.getNodeExecutionTitle(this.selectedNode, `${json.owner}.${json.modelName}`);
             panel.innerHTML = `
                 <header class="M04002-result-header">
                     <div>
                         <span>Oracle ML Model View</span>
-                        <strong>${this.escapeHtml(json.owner)}.${this.escapeHtml(json.modelName)}</strong>
-                        <small>${this.escapeHtml(json.viewName || "")} · ${this.formatNumber(json.total)} rows</small>
+                        <strong class="M04002-result-exec-object">${this.escapeHtml(executionTitle)}</strong>
+                        <small>Result Model ${this.escapeHtml(json.owner)}.${this.escapeHtml(json.modelName)} · ${this.escapeHtml(json.viewName || "")} · ${this.formatNumber(json.total)} rows</small>
                         ${this.renderSelectedNodeJobDesc()}
                     </div>
                     <nav>
@@ -736,11 +769,15 @@
             panel.classList.remove("is-loading");
             const readableActive = activeTab !== "detail";
             const modelHeaderLabel = this.getModelHeaderLabel(json);
+            const modelOwner = json.owner || this.selectedNode?.RESULT_OWNER || "";
+            const modelName = json.modelName || this.selectedNode?.RESULT_OBJECT_NAME || "";
+            const executionTitle = this.getNodeExecutionTitle(this.selectedNode, `${modelOwner}.${modelName}`);
             panel.innerHTML = `
                 <header class="M04002-result-header">
                     <div>
                         <span>${this.escapeHtml(this.selectedNode?.NODE_NAME || "Oracle ML Model View")}</span>
-                        <strong>${this.escapeHtml(json.owner || this.selectedNode?.RESULT_OWNER)}.${this.escapeHtml(json.modelName || this.selectedNode?.RESULT_OBJECT_NAME)}</strong>
+                        <strong class="M04002-result-exec-object">${this.escapeHtml(executionTitle)}</strong>
+                        <small>Result Model ${this.escapeHtml(modelOwner)}.${this.escapeHtml(modelName)}</small>
                         ${this.renderSelectedNodeJobDesc()}
                     </div>
                     <em>${this.escapeHtml(modelHeaderLabel)}</em>
@@ -1386,11 +1423,23 @@
             event?.preventDefault?.();
             event?.stopPropagation?.();
             const text = String(ruleId || "").trim();
+            await this.copyTextValue(text, "RULE ID copied.");
+        },
+
+        async copyRunMessage(event) {
+            event?.preventDefault?.();
+            event?.stopPropagation?.();
+            const text = String(this.selectedRun?.MESSAGE || "").trim();
+            await this.copyTextValue(text, "Run message copied.");
+        },
+
+        async copyTextValue(text, successMessage = "Copied.") {
+            text = String(text || "").trim();
             if (!text) return;
             try {
                 if (window.CommonMessage?.copyText) {
                     await CommonMessage.copyText(text);
-                    CommonMessage.success?.("RULE ID copied.", { copyable: false, autoCloseMs: 1200 });
+                    CommonMessage.success?.(successMessage, { copyable: false, autoCloseMs: 1200 });
                     return;
                 }
                 await navigator.clipboard.writeText(text);
@@ -1566,19 +1615,21 @@
             const resultLayout = this.getTableResultLayout(this.selectedNode, json);
             const renderer = resultLayout.summaryRenderer;
             if (!renderer || typeof this[renderer] !== "function") return "";
-            return this[renderer](json[resultLayout.summaryKey]);
+            return this[renderer](json[resultLayout.summaryKey], json);
         },
 
         renderResultTable(json, title, type) {
             const panel = getContainerEl("#resultPanel-${PAGE_CODE}");
             if (!panel) return;
             panel.classList.remove("is-loading");
+            const resultObject = `${json.owner}.${json.objectName}`;
+            const executionTitle = this.getNodeExecutionTitle(this.selectedNode, resultObject);
             panel.innerHTML = `
                 <header class="M04002-result-header">
                     <div>
                         <span>${this.escapeHtml(type)}</span>
-                        <strong>${this.escapeHtml(json.owner)}.${this.escapeHtml(json.objectName)}</strong>
-                        <small>${this.formatNumber(json.total)} rows</small>
+                        <strong class="M04002-result-exec-object">${this.escapeHtml(executionTitle)}</strong>
+                        <small>Result Table ${this.escapeHtml(resultObject)} · ${this.formatNumber(json.total)} rows</small>
                         ${json.filteredByTarget ? `<small>Target ${this.escapeHtml(json.targetOwner)}.${this.escapeHtml(json.targetTable)}</small>` : ""}
                         ${json.ruleModelName ? `<small>Rule Model ${this.escapeHtml(json.ruleModelName)}</small>` : ""}
                         ${this.renderSelectedNodeJobDesc()}
@@ -2190,10 +2241,11 @@
             `;
         },
 
-        renderPredictedTypeSummary(summary) {
+        renderPredictedTypeSummary(summary, json = {}) {
             if (!summary) return "";
             const groups = Array.isArray(summary.summaryGroups) ? summary.summaryGroups : [];
-            const detailGroups = Array.isArray(summary.detailGroups) ? summary.detailGroups : [];
+            const matchGroups = Array.isArray(summary.predictionMatchGroups) ? summary.predictionMatchGroups : [];
+            const activeCase = String(json.predictedTypeCase || this.predictedTypeFilter || "ALL").toUpperCase();
             return `
                 <section class="M04002-type-summary">
                     <header>
@@ -2201,25 +2253,37 @@
                             <strong>컬럼 유형 예측 요약</strong>
                             <span>Target ${this.escapeHtml(summary.targetOwner)}.${this.escapeHtml(summary.targetTable)}</span>
                         </div>
-                        <div class="M04002-corr-metrics">
-                            <span><b>${this.formatNumber(summary.totalColumnCount)}</b><small>전체 컬럼</small></span>
-                            ${groups.map((group) => `
-                                <span><b>${this.formatNumber(group.columnCount)}</b><small>${this.escapeHtml(group.typeGroup)}</small></span>
-                            `).join("")}
+                        <div class="M04002-type-summary-actions">
+                            <div class="M04002-corr-metrics">
+                                <span><b>${this.formatNumber(summary.totalColumnCount)}</b><small>전체 컬럼</small></span>
+                                ${groups.map((group) => `
+                                    <span><b>${this.formatNumber(group.columnCount)}</b><small>${this.escapeHtml(group.typeGroup)}</small></span>
+                                `).join("")}
+                            </div>
+                            ${this.renderSamplePageJump("predictedTypePage-${PAGE_CODE}", json, "${PAGE_CODE}.goPredictedTypePage()", "${PAGE_CODE}.loadResultTable", {
+                                pageSizeId: "predictedTypePageSize-${PAGE_CODE}",
+                                pageSizes: [20, 50, 100, 200, 500],
+                                onPageSizeChange: "${PAGE_CODE}.changeResultPageSize(this.value)"
+                            })}
                         </div>
                     </header>
                     <div class="M04002-type-group-grid">
                         ${groups.map((group) => this.renderPredictedTypeGroup(group, summary)).join("")}
                     </div>
-                    ${detailGroups.length ? `
+                    ${matchGroups.length ? `
                         <div class="M04002-type-detail">
-                            <strong>FINAL / MODEL / BASE 예측 유형 상세 그룹</strong>
-                            <div>
-                                ${detailGroups.map((group) => `
-                                    <span title="${this.escapeHtml(group.typeName)}">
-                                        <b>${this.escapeHtml(group.typeName)}</b>
-                                        <small>${this.formatNumber(group.columnCount)} columns</small>
-                                    </span>
+                            <strong>FINAL / MODEL / RULE 예측 유형 상세 그룹</strong>
+                            <div class="M04002-type-case-grid">
+                                <button type="button" class="${activeCase === "ALL" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectPredictedTypeCase('ALL')" title="모든 예측 결과">
+                                    <b>전체</b>
+                                    <small>${this.formatNumber(summary.totalColumnCount)} columns</small>
+                                </button>
+                                ${matchGroups.map((group) => `
+                                    <button type="button" class="${activeCase === group.caseCode ? "is-active" : ""}" onclick="${PAGE_CODE}.selectPredictedTypeCase('${this.escapeJs(group.caseCode)}')" title="${this.escapeHtml(group.description || group.label)}">
+                                        <b>${this.escapeHtml(group.label)}</b>
+                                        <small>${this.formatNumber(group.columnCount)} columns · ${this.formatDecimal(group.rate)}%</small>
+                                        <em>${this.escapeHtml(group.description || "")}</em>
+                                    </button>
                                 `).join("")}
                             </div>
                         </div>
@@ -2244,6 +2308,25 @@
                     </div>
                 </article>
             `;
+        },
+
+        async selectPredictedTypeCase(caseCode = "ALL") {
+            this.predictedTypeFilter = String(caseCode || "ALL").trim().toUpperCase();
+            if (!["ALL", "ALL_MATCH", "FINAL_MODEL", "FINAL_BASE", "MODEL_BASE", "ALL_DIFFERENT", "HAS_MISSING"].includes(this.predictedTypeFilter)) {
+                this.predictedTypeFilter = "ALL";
+            }
+            await this.loadResultTable(1);
+        },
+
+        async goPredictedTypePage() {
+            const input = getContainerEl("#predictedTypePage-${PAGE_CODE}");
+            const page = Math.max(1, Number(input?.value || this.resultPage || 1));
+            await this.loadResultTable(page);
+        },
+
+        async changeResultPageSize(value) {
+            this.resultPageSize = Math.max(1, Math.min(500, Number(value || this.resultPageSize || 50)));
+            await this.loadResultTable(1);
         },
 
         renderReadableRules(rows) {
@@ -2302,6 +2385,31 @@
             return desc ? `<em class="M04002-node-desc" title="${this.escapeHtml(desc)}">Job Desc: ${this.escapeHtml(desc)}</em>` : "";
         },
 
+        getNodeExecutionTitle(node = this.selectedNode, fallback = "") {
+            const payload = this.normalizeObject(node?.PAYLOAD);
+            const params = this.normalizeObject(node?.RUNTIME_PARAMS);
+            const getValue = (...keys) => {
+                for (const key of keys) {
+                    const value = node?.[key] ?? payload[key] ?? params[key];
+                    if (value !== undefined && value !== null && String(value).trim() !== "") return String(value).trim();
+                }
+                return "";
+            };
+            const objectType = getValue("EXEC_OBJECT_TYPE", "execObjectType", "objectType");
+            const objectName = getValue("EXEC_OBJECT_NAME", "execObjectName", "objectName");
+            const objectLabel = getValue("EXEC_OBJECT_LABEL", "execObjectLabel", "objectLabel");
+            const parts = [];
+            if (objectType) parts.push(objectType.toUpperCase());
+            if (objectName) parts.push(objectName);
+            if (objectLabel && objectLabel !== objectName) parts.push(objectLabel);
+            return parts.length ? parts.join(" · ") : String(fallback || "").trim();
+        },
+
+        renderNodeExecutionObject(node) {
+            const title = this.getNodeExecutionTitle(node);
+            return title ? `<small class="M04002-node-exec" title="${this.escapeHtml(title)}">${this.escapeHtml(title)}</small>` : "";
+        },
+
         renderSelectedNodeJobDesc() {
             const desc = this.getNodeJobDesc();
             return desc ? `<p class="M04002-result-job-desc" title="${this.escapeHtml(desc)}"><b>Job Desc</b> ${this.escapeHtml(desc)}</p>` : "";
@@ -2324,13 +2432,16 @@
             const resultOwner = getValue("RESULT_OWNER", "resultOwner", "ownerName");
             const resultObject = getValue("RESULT_OBJECT_NAME", "resultTableName", "tableName", "RESULT_TABLE_NAME");
             const resultMode = getValue("RESULT_CREATE_YN", "resultCreateYn");
+            const resultModeLabel = String(resultMode || "").toUpperCase() === "M"
+                ? "M (모델)"
+                : (String(resultMode || "").toUpperCase() === "T" ? "T (테이블)" : resultMode);
             const metaRows = [
-                ["Target Owner", targetOwner],
-                ["Target Table", targetTable],
-                ["Result Owner", resultOwner],
-                ["Result Table", resultObject],
-                ["Result Mode", resultMode]
-            ].filter(([, value]) => value !== undefined && value !== null && String(value).trim() !== "");
+                { key: "target-owner", label: "Target Owner", value: targetOwner },
+                { key: "target-table", label: "Target Table", value: targetTable },
+                { key: "result-mode", label: "Result Mode", value: resultModeLabel },
+                { key: "result-owner", label: "Result Owner", value: resultOwner },
+                { key: "result-table", label: "Result Table", value: resultObject }
+            ].filter(({ value }) => value !== undefined && value !== null && String(value).trim() !== "");
             const paramEntries = Object.entries(params)
                 .filter(([, value]) => value !== undefined && value !== null && String(value).trim() !== "")
                 .map(([key, value]) => [key, this.formatParamValue(value)]);
@@ -2338,8 +2449,8 @@
             return `
                 <section class="M04002-execution-meta ${this.getNodeTone(node)}">
                     <div class="M04002-execution-meta-grid">
-                        ${metaRows.map(([label, value]) => `
-                            <span>
+                        ${metaRows.map(({ key, label, value }) => `
+                            <span class="is-${this.escapeHtml(key)}">
                                 <small>${this.escapeHtml(label)}</small>
                                 <b title="${this.escapeHtml(value)}">${this.escapeHtml(value)}</b>
                             </span>
@@ -2897,6 +3008,10 @@
 
         isViolationNode(node) {
             return this.matchesNodeWork(node, "M03004", "INIT$_SP_RULE_VIOLATION_DETECT");
+        },
+
+        isPredictedTypeNode(node) {
+            return String(node?.RESULT_OBJECT_NAME || "").trim().toUpperCase() === "INIT$_TB_PREDICTED_TYPE";
         },
 
         matchesNodeWork(node, menuCode, procedureName) {

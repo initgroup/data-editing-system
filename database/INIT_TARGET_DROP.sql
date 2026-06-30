@@ -81,6 +81,7 @@ BEGIN
     drop_function_if_exists('INIT$_FN_PREDICT_BASE_TYPE');
     drop_function_if_exists('INIT$_FN_PREDICT_LOG_DATA_TYPE');
     drop_function_if_exists('INIT$_FN_TOKEN_LIST_CONTAINS');
+    drop_function_if_exists('INIT$_FN_TARGET_SETTING_USE_YN');
     drop_function_if_exists('INIT$_FN_TARGET_SETTING_NUMBER');
     drop_function_if_exists('INIT$_FN_TARGET_SETTING_VALUE');
 

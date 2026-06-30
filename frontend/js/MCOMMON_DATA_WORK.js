@@ -146,6 +146,7 @@
         systemUserSqlValue: "",
         dataWhereDirty: false,
         systemDataWhereValue: "",
+        expandedRunHistoryKey: "",
         sqlTransactionId: "",
         gridData: {},
         dataGridRows: [],
@@ -1044,8 +1045,8 @@
             this.renderParameters();
             this.resetEditableDataGrid();
             this.setEditorValue(`#execPlsqlEditor-${PAGE_CODE}`, job.EXEC_PLSQL || "");
-            this.setEditorValue(`#resultSqlEditor-${PAGE_CODE}`, this.createResultSql(job.RESULT_TABLE_NAME || "", job.RESULT_OWNER || "", this.currentJob.resultCreateYn || "N"));
             this.setFieldValue(`#resultQueryTable-${PAGE_CODE}`, job.RESULT_TABLE_NAME || "");
+            await this.setResultTableSql(job.RESULT_TABLE_NAME || "", job.RESULT_OWNER || "", this.currentJob.resultCreateYn || "N");
             await this.setDefaultUserSql(false);
         },
 
@@ -1582,7 +1583,7 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                 ELAPSED_TIME: this.formatElapsedTime(row.STARTED_AT, row.FINISHED_AT)
             }));
             const columns = this.createRunHistoryColumns(rows);
-            this.renderGrid(`#runHistoryGrid-${PAGE_CODE}`, rows, columns);
+            this.renderRunHistoryGrid(rows, columns);
         },
 
         createRunHistoryColumns(rows) {
@@ -1613,6 +1614,111 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                 .filter((column) => column !== "ELAPSED_TIME")
                 .filter((column) => !orderedColumns.includes(column));
             return [...orderedColumns, ...remainingColumns];
+        },
+
+        getRunHistoryKey(row, rowIndex) {
+            return String(
+                row?.PROFILE_RUN_ID
+                || row?.WORK_RUN_ID
+                || row?.RUN_ID
+                || `${row?.JOB_NAME || ""}:${row?.STARTED_AT || ""}:${rowIndex}`
+            );
+        },
+
+        renderRunHistoryGrid(rows, columns) {
+            const container = getContainerEl(`#runHistoryGrid-${PAGE_CODE}`);
+            if (!container) return;
+            if (!Array.isArray(rows) || !rows.length || !columns.length) {
+                this.renderGrid(`#runHistoryGrid-${PAGE_CODE}`, rows, columns);
+                return;
+            }
+
+            container.innerHTML = `
+                <table class="table-grid data-history-table">
+                    <thead>
+                        <tr>
+                            <th class="grid-row-no">No</th>
+                            ${columns.map((column) => `<th title="${this.escapeHtml(column)}">${this.escapeHtml(column)}</th>`).join("")}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rows.map((row, rowIndex) => this.renderRunHistoryRow(row, rowIndex, columns)).join("")}
+                    </tbody>
+                </table>
+                ${this.renderListFooter(rows.length)}
+            `;
+        },
+
+        renderRunHistoryRow(row, rowIndex, columns) {
+            const rowKey = this.getRunHistoryKey(row, rowIndex);
+            const message = String(row.MESSAGE ?? "");
+            const isExpanded = rowKey === this.expandedRunHistoryKey;
+            const detailRow = isExpanded ? `
+                <tr class="data-history-message-row">
+                    <td class="grid-row-no"></td>
+                    <td colspan="${columns.length}">
+                        <div class="data-history-message-detail">
+                            <div class="data-history-message-toolbar">
+                                <strong>MESSAGE</strong>
+                                <button type="button" class="table-icon-btn data-history-copy-btn" title="Copy message" onclick="${PAGE_CODE}.copyRunHistoryMessage(${rowIndex})">
+                                    <i class="fas fa-copy"></i>
+                                </button>
+                            </div>
+                            <pre>${this.escapeHtml(message || "(empty)")}</pre>
+                        </div>
+                    </td>
+                </tr>
+            ` : "";
+            return `
+                <tr class="${isExpanded ? "is-expanded" : ""}">
+                    <td class="grid-row-no">${rowIndex + 1}</td>
+                    ${columns.map((column) => this.renderRunHistoryCell(row, rowIndex, column, isExpanded)).join("")}
+                </tr>
+                ${detailRow}
+            `;
+        },
+
+        renderRunHistoryCell(row, rowIndex, column, isExpanded) {
+            const value = row[column] ?? "";
+            if (column !== "MESSAGE") {
+                return `<td title="${this.escapeHtml(value)}">${this.escapeHtml(value)}</td>`;
+            }
+            const message = String(value ?? "");
+            if (!message) {
+                return `<td class="data-history-message-cell"></td>`;
+            }
+            return `
+                <td class="data-history-message-cell" title="${this.escapeHtml(message)}">
+                    <span>${this.escapeHtml(message)}</span>
+                    <button type="button" class="table-icon-btn data-history-message-btn" title="${isExpanded ? "Hide full message" : "Show full message"}" onclick="${PAGE_CODE}.toggleRunHistoryMessage(${rowIndex})">
+                        <i class="fas ${isExpanded ? "fa-chevron-up" : "fa-ellipsis-h"}"></i>
+                    </button>
+                </td>
+            `;
+        },
+
+        toggleRunHistoryMessage(rowIndex) {
+            const rows = this.runHistory || [];
+            const row = rows[rowIndex];
+            if (!row) return;
+            const rowKey = this.getRunHistoryKey(row, rowIndex);
+            this.expandedRunHistoryKey = this.expandedRunHistoryKey === rowKey ? "" : rowKey;
+            this.renderRunHistory();
+        },
+
+        async copyRunHistoryMessage(rowIndex) {
+            const message = String((this.runHistory || [])[rowIndex]?.MESSAGE ?? "");
+            if (!message) return;
+            try {
+                if (window.CommonMessage?.copyText) {
+                    await CommonMessage.copyText(message);
+                } else {
+                    await navigator.clipboard.writeText(message);
+                }
+                CommonMessage.success?.("Run history message copied.", { copyable: false, autoCloseMs: 1200 });
+            } catch (error) {
+                CommonMessage.error?.(error.message || "Message copy failed.");
+            }
         },
 
         formatElapsedTime(startedAt, finishedAt) {
@@ -2462,6 +2568,7 @@ END;`;
                 "문자형식별자",
                 "숫자형범주형",
                 "순서형범주형",
+                "이산형연속형",
                 "문자형범주형",
                 "일반적범주형",
                 "숫자형연속형",
@@ -2994,7 +3101,7 @@ END;`;
                 this.currentJob.resultCreateYn = "T";
                 this.currentJob.status = "RESULT_SAVED";
                 this.renderCurrentJob();
-                this.setResultTableSql();
+                await this.setResultTableSql();
                 await this.loadJobs();
             } catch (error) {
                 alert(error.message || "SQL result table save failed.");
@@ -3105,18 +3212,26 @@ END;`;
             ].join("\n");
         },
 
-        setResultTableSql() {
-            const tableName = getContainerEl(`#resultQueryTable-${PAGE_CODE}`)?.value.trim() || getContainerEl(`#resultTable-${PAGE_CODE}`)?.value.trim();
-            const ownerName = getContainerEl(`#resultOwner-${PAGE_CODE}`)?.value.trim();
-            const createMode = this.normalizeResultCreateMode(getContainerEl(`#resultCreateYn-${PAGE_CODE}`)?.value || this.currentJob?.resultCreateYn || "N");
-            this.setEditorValue(`#resultSqlEditor-${PAGE_CODE}`, this.createResultSql(tableName, ownerName, createMode));
+        async setResultTableSql(tableNameValue = "", ownerNameValue = "", resultCreateYnValue = "") {
+            const tableName = String(tableNameValue || "").trim()
+                || getContainerEl(`#resultQueryTable-${PAGE_CODE}`)?.value.trim()
+                || getContainerEl(`#resultTable-${PAGE_CODE}`)?.value.trim();
+            const ownerName = String(ownerNameValue || "").trim()
+                || getContainerEl(`#resultOwner-${PAGE_CODE}`)?.value.trim();
+            const createMode = this.normalizeResultCreateMode(
+                resultCreateYnValue
+                || getContainerEl(`#resultCreateYn-${PAGE_CODE}`)?.value
+                || this.currentJob?.resultCreateYn
+                || "N"
+            );
+            this.setEditorValue(`#resultSqlEditor-${PAGE_CODE}`, await this.createResultSql(tableName, ownerName, createMode));
         },
 
-        createResultSql(tableName, ownerName = "", resultCreateYn = "N") {
+        async createResultSql(tableName, ownerName = "", resultCreateYn = "N") {
             const table = String(tableName || "").trim();
             const owner = String(ownerName || "").trim();
             if (this.isResultModelMode(resultCreateYn)) {
-                return this.createModelDetailSql(table, owner);
+                return this.fetchModelDetailSql(table, owner);
             }
             const targetOwner = getContainerEl(`#targetOwner-${PAGE_CODE}`)?.value.trim() || this.currentJob?.ownerName || "";
             const targetTable = getContainerEl(`#targetTable-${PAGE_CODE}`)?.value.trim() || this.currentJob?.tableName || "";

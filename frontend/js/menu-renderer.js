@@ -2,6 +2,8 @@ const MenuRenderer = {
     pageMap: {},
     activeFlyout: null,
     activeOutsideHandler: null,
+    activePage: "",
+    visitedPages: new Set(),
 
     render(navId, onPageClick) {
         const nav = document.getElementById(navId);
@@ -25,12 +27,34 @@ const MenuRenderer = {
             });
         window.MENU_PAGE_MAP = this.pageMap;
         this.bindControls();
+        this.markActivePage(this.activePage || sessionStorage.getItem("initCurrentPage") || "");
     },
 
     collectPageMap(menus) {
         (menus || []).forEach(menu => {
             if (menu.page) this.pageMap[menu.page] = menu;
             if (Array.isArray(menu.children)) this.collectPageMap(menu.children);
+        });
+    },
+
+    collectPageCodes(menus) {
+        const pages = [];
+        (menus || []).forEach(menu => {
+            if (menu.page) pages.push(menu.page);
+            if (Array.isArray(menu.children)) pages.push(...this.collectPageCodes(menu.children));
+        });
+        return pages;
+    },
+
+    clearState() {
+        this.activePage = "";
+        this.visitedPages = new Set();
+        this.closeCollapsedFlyouts();
+        document.querySelectorAll('#mainNav [data-page], .sidebar-flyout-portal [data-page]').forEach(el => {
+            el.classList.remove('menu-active', 'visited-menu', 'bg-blue-700');
+        });
+        document.querySelectorAll('#mainNav .menu-folder, .sidebar-flyout-portal .menu-folder').forEach(folder => {
+            folder.classList.remove('is-child-active', 'is-child-visited');
         });
     },
 
@@ -46,8 +70,11 @@ const MenuRenderer = {
             ? 'block p-3 hover:bg-slate-700 flex items-center gap-2'
             : `block p-3 hover:bg-slate-700 text-sm text-slate-300 ${depth > 0 ? 'pl-14' : 'pl-10'}`;
 
-        if (menu.active) {
+        if (menu.active || this.activePage === menu.page) {
             link.classList.add('menu-active');
+        }
+        if (this.visitedPages.has(menu.page)) {
+            link.classList.add('visited-menu');
         }
 
         if (menu.iconClass) {
@@ -67,9 +94,13 @@ const MenuRenderer = {
     createFolder(menu, onPageClick, isNested = false) {
         const children = this.filterByRole(menu.children || []).filter(child => child.enabled !== false);
         if (children.length === 0) return null;
+        const childPages = this.collectPageCodes(children);
 
         const folder = document.createElement('div');
         folder.className = 'menu-folder';
+        folder.dataset.pages = childPages.join(',');
+        folder.classList.toggle('is-child-active', childPages.includes(this.activePage));
+        folder.classList.toggle('is-child-visited', childPages.some(page => this.visitedPages.has(page)));
 
         const button = document.createElement('button');
         button.type = 'button';
@@ -127,6 +158,36 @@ const MenuRenderer = {
         folder.appendChild(submenu);
 
         return folder;
+    },
+
+    markActivePage(pageCode) {
+        const page = String(pageCode || "");
+        if (page) {
+            this.activePage = page;
+            this.visitedPages.add(page);
+        }
+
+        document.querySelectorAll('#mainNav [data-page], .sidebar-flyout-portal [data-page]').forEach(el => {
+            const isActive = Boolean(page) && el.dataset.page === page;
+            el.classList.toggle('menu-active', isActive);
+            el.classList.toggle('bg-blue-700', isActive);
+            el.classList.toggle('visited-menu', this.visitedPages.has(el.dataset.page));
+        });
+
+        document.querySelectorAll('#mainNav .menu-folder, .sidebar-flyout-portal .menu-folder').forEach(folder => {
+            const pages = String(folder.dataset.pages || "").split(',').filter(Boolean);
+            const hasActive = Boolean(page) && pages.includes(page);
+            const hasVisited = pages.some(item => this.visitedPages.has(item));
+            folder.classList.toggle('is-child-active', hasActive);
+            folder.classList.toggle('is-child-visited', hasVisited);
+
+            if (hasActive && folder.closest('#mainNav') && !document.body.classList.contains('sidebar-user-collapsed')) {
+                const submenu = folder.querySelector(':scope > .submenu');
+                const arrow = folder.querySelector(':scope > button .fa-chevron-down');
+                if (submenu) submenu.classList.remove('hidden');
+                if (arrow) arrow.classList.add('rotate-180');
+            }
+        });
     },
 
     getCurrentRoleCode() {
@@ -208,6 +269,7 @@ const MenuRenderer = {
         folder.classList.add('is-flyout-open');
         document.body.appendChild(flyout);
         this.activeFlyout = flyout;
+        this.markActivePage(this.activePage);
 
         const onOutsideClick = (event) => {
             if (folder.contains(event.target) || flyout.contains(event.target)) return;

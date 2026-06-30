@@ -56,6 +56,59 @@ Tailwind 결과물이 필요하면 다음 명령을 사용합니다.
 npx tailwindcss -i ./frontend/css/input.css -o ./frontend/css/output.css --watch
 ```
 
+## SQL 작성 스타일
+
+- SQL을 새로 작성하거나 요청 범위 안에서 정리할 때는 아래 comma-first 정렬 스타일을 우선 사용합니다.
+- `SELECT`는 서브쿼리의 시작점이자 정렬 기준입니다. `SELECT` 6글자 끝 위치를 기준으로 다음 컬럼의 콤마(`,`)와 `FROM`, `WHERE`, `GROUP`, `ORDER`, `HAVING` 같은 주요 절 키워드를 오른쪽 정렬합니다.
+- 첫 컬럼은 `SELECT 컬럼` 형태로 쓰고, 두 번째 컬럼부터는 `     , 컬럼` 형태로 콤마를 줄 앞에 둡니다.
+- `FROM`, `JOIN`, `WHERE`는 앞 공백을 포함해 `SELECT` 기준에 맞추고, `ON`, `AND`, `OR` 조건도 같은 세로 정렬 감각으로 배치합니다.
+- `WHERE` 조건은 가능하면 `WHERE 1=1`로 시작하고, 이후 조건은 `   AND ...` 형태로 이어갑니다.
+- `GROUP BY`, `ORDER BY` 뒤의 두 번째 이후 표현식도 comma-first로 맞춥니다. 예: `        , 컬럼`
+- 서브쿼리는 여는 괄호 `(`를 별도 줄에 두고, 내부 `SELECT`는 괄호 위치보다 한 칸 뒤에서 시작합니다. 닫는 괄호 `)`는 여는 괄호와 같은 열에 둡니다.
+- 기존 SQL 전체를 요청 없이 대량 포맷팅하지 않습니다. 새로 작성하거나 직접 수정하는 SQL 블록에만 이 스타일을 적용합니다.
+
+예시:
+
+```sql
+SELECT P.CONDITION_VALUE1
+     , P.CONDITION_VALUE2
+     , P.RESULT_VALUE
+     , P.SUPPORT_COUNT
+     , C.CONDITION_TOTAL_COUNT
+     , R.RESULT_TOTAL_COUNT
+     , T.TOTAL_COUNT
+     , P.SUPPORT_COUNT / NULLIF(T.TOTAL_COUNT, 0) AS RULE_SUPPORT
+     , P.SUPPORT_COUNT / NULLIF(C.CONDITION_TOTAL_COUNT, 0) AS RULE_CONFIDENCE
+     , (P.SUPPORT_COUNT / NULLIF(C.CONDITION_TOTAL_COUNT, 0))
+         / NULLIF(R.RESULT_TOTAL_COUNT / NULLIF(T.TOTAL_COUNT, 0), 0) AS RULE_LIFT
+  FROM PAIR_COUNTS P
+  JOIN CONDITION_COUNTS C
+    ON C.CONDITION_VALUE1 = P.CONDITION_VALUE1
+   AND C.CONDITION_VALUE2 = P.CONDITION_VALUE2
+  JOIN RESULT_COUNTS R
+    ON R.RESULT_VALUE = P.RESULT_VALUE
+ CROSS JOIN TOTALS T
+ WHERE 1=1
+   AND P.RESULT_VALUE IS NOT NULL
+ GROUP BY P.CONDITION_VALUE1
+        , P.CONDITION_VALUE2
+        , P.RESULT_VALUE
+;
+
+SELECT SYSDATE
+     , T2.LEV
+  FROM DUAL T1
+     ,
+     (
+      SELECT LEVEL AS LEV
+        FROM DUAL
+      CONNECT BY LEVEL <= 10
+     ) T2
+ WHERE 1=1
+   AND T2.LEV <= 5
+;
+```
+
 ## 백엔드 패턴
 
 라우터 기본 구조:

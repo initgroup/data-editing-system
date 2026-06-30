@@ -5,6 +5,7 @@
     const login = {
         hasConnections: false,
         targetSelectionRequired: false,
+        isLoggingIn: false,
 
         async init() {
             document.body.classList.add("intro-mode");
@@ -100,6 +101,20 @@
             el.className = type === "error" ? "intro-step-msg is-error" : "intro-step-msg";
         },
 
+        setLoginBusy(isBusy) {
+            this.isLoggingIn = Boolean(isBusy);
+            const button = getContainerEl("#loginSubmitButton");
+            if (button) {
+                button.disabled = this.isLoggingIn;
+                button.textContent = this.isLoggingIn ? "Logging in..." : "Login";
+            }
+            getContainerEl("#loginId")?.toggleAttribute("disabled", this.isLoggingIn);
+            getContainerEl("#loginPassword")?.toggleAttribute("disabled", this.isLoggingIn);
+            getContainerEl("#loginConnectionList")?.querySelectorAll("input[name='loginConnectionId']").forEach((input) => {
+                input.disabled = this.isLoggingIn;
+            });
+        },
+
         handleLoginKey(event) {
             if (event.key === "Enter") {
                 event.preventDefault();
@@ -182,6 +197,7 @@
         },
 
         async login() {
+            if (this.isLoggingIn) return;
             const payload = {
                 loginId: this.getValue("#loginId").trim(),
                 loginPassword: this.getValue("#loginPassword")
@@ -200,23 +216,25 @@
                 return;
             }
             this.setMessage("Logging in...");
+            this.setLoginBusy(true);
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/M91001/login`, {
                     method: "POST",
                     body: payload
                 });
 
-                if (json.user) {
-                    sessionStorage.setItem("initLoginUser", JSON.stringify(json.user || {}));
-                    PageManager.extendSession?.();
-                }
-
                 if (json.targetSelectionRequired) {
                     this.showTargetSelection(json.connections || []);
                     this.setMessage(json.message || "Select a target DB, then click Login again.");
+                    this.setLoginBusy(false);
                     this.focusLoginButton();
                     setTimeout(() => this.focusLoginButton(), 100);
                     return;
+                }
+
+                if (json.user) {
+                    sessionStorage.setItem("initLoginUser", JSON.stringify(json.user || {}));
+                    PageManager.extendSession?.();
                 }
 
                 this.setValue("#loginPassword", "");
@@ -239,6 +257,8 @@
                 PageManager.load("home", "Data Editing System");
             } catch (error) {
                 this.setMessage(error.message || "Login failed.", "error");
+            } finally {
+                this.setLoginBusy(false);
             }
         },
 

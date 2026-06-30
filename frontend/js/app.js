@@ -286,6 +286,7 @@ const PageManager = {
                 }
             }
         }
+        window.MenuRenderer?.markActivePage?.(pageCode);
     },
 
     closeAll() {
@@ -312,6 +313,7 @@ const PageManager = {
         document.querySelectorAll("#mainNav [data-page]").forEach((el) => {
             el.classList.remove("visited-menu", "menu-active", "bg-blue-700", "text-green-500");
         });
+        window.MenuRenderer?.clearState?.();
         if (!keepLoginSession) {
             this.clearLoginSession();
         }
@@ -351,6 +353,7 @@ const PageManager = {
         if (closedMenu) {
             closedMenu.classList.remove('visited-menu', 'menu-active', 'bg-blue-700', 'text-green-500');
         }
+        window.MenuRenderer?.visitedPages?.delete?.(pageCode);
 
         if (window[pageCode]) {
             if (typeof window[pageCode].destroy === 'function') {

@@ -236,8 +236,8 @@ window.MENU_CONFIG = [
             },
             {
                 page: 'M91003',
-                title: 'Target DB 설정',
-                label: 'Target DB 설정',
+                title: '에디팅 기본 설정',
+                label: '에디팅 기본 설정',
                 iconClass: 'fas fa-database text-slate-300',
                 enabled: true
             }
