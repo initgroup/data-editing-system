@@ -6,12 +6,16 @@
       "owner": "*",
       "objectType": "PROCEDURE",
       "objectName": "INIT$_SP_APRIORI_ASSOC_MODEL",
-      "label": "Automatic Rule Discovery model creation",
+      "label": "M03_APRIORI_ASSOCIATION_RULES_모델생성",
+      "description": "대상 테이블의 고유 행 식별 컬럼을 기준으로 Apriori 연관규칙 모델을 생성하고, 생성된 규칙 요약 결과를 분석용 결과로 활용할 수 있도록 준비하는 프로시저입니다.",
+      "resultCreateYn": "M",
+      "resultOwner": "__CURRENT_OWNER__",
+      "resultTableName": "OML_ASSOCIATION_MODEL_01",
       "items": [
         {
           "key": "P_MODEL_NAME",
           "comment": "연관규칙학습모델명",
-          "defaultValue": "OML_ASSOCIATION_MODEL_01"
+          "defaultValue": ":INIT$ResultModelName"
         },
         {
           "key": "P_DATA_QUERY",
@@ -99,12 +103,16 @@
       "owner": "*",
       "objectType": "PROCEDURE",
       "objectName": "INIT$_SP_DECISION_TREE_RULE_MODEL",
-      "label": "Decision tree rule model creation",
+      "label": "M04_DECISION_TREE_RULE_모델생성",
+      "description": "데이터 프로파일링 결과와 최종 분류값을 학습 데이터로 사용하여 의사결정트리 기반 규칙 모델을 생성하고, 컬럼 분류 규칙 요약을 만들기 위한 프로시저입니다.",
+      "resultCreateYn": "M",
+      "resultOwner": "__CURRENT_OWNER__",
+      "resultTableName": "OML_DECISION_TREE_MODEL_01",
       "items": [
         {
           "key": "P_MODEL_NAME",
           "comment": "의사결정트리 규칙 모델명",
-          "defaultValue": "OML_DECISION_TREE_MODEL_01"
+          "defaultValue": ":INIT$ResultModelName"
         },
         {
           "key": "P_DATA_QUERY",
@@ -187,7 +195,11 @@
       "owner": "*",
       "objectType": "PROCEDURE",
       "objectName": "INIT$_SP_RULE_VIOLATION_DETECT",
-      "label": "Rule violation detection",
+      "label": "M05_규칙위반탐지결과생성",
+      "description": "생성된 연관규칙 모델을 기준으로 대상 테이블의 행을 검사하여 규칙 위반 후보를 탐지하고, 위반 점수와 규칙 정보를 결과 테이블에 적재하는 프로시저입니다.",
+      "resultCreateYn": "T",
+      "resultOwner": "__CURRENT_OWNER__",
+      "resultTableName": "INIT$_TB_RULE_VIOLATION_RESULT",
       "items": [
         {
           "key": "P_RULE_OWNER_NAME",
@@ -270,7 +282,11 @@
       "owner": "*",
       "objectType": "PROCEDURE",
       "objectName": "INIT$_SP_CAT_CORR_ANALYZE",
-      "label": "Categorical correlation analysis",
+      "label": "M02_범주형상관관계분석",
+      "description": "대상 테이블의 범주형 후보 컬럼 조합을 분석하여 p-value와 Cramer V 기준의 상관관계를 계산하고, 컬럼 쌍 및 요약 결과를 생성하는 프로시저입니다.",
+      "resultCreateYn": "T",
+      "resultOwner": "__CURRENT_OWNER__",
+      "resultTableName": "INIT$_TB_CAT_CORR_PAIR",
       "items": [
         {
           "key": "P_TARGET_OWNER",
@@ -328,7 +344,11 @@
       "owner": "*",
       "objectType": "PROCEDURE",
       "objectName": "INIT$_SP_PREDICTED_TYPE",
-      "label": "Predicted type feature summary",
+      "label": "M01_분류모델(DECISION_TREE)_범주형_연속형",
+      "description": "대상 테이블에 대해서 논리적데이터타입(LOG_DATA_TYPE), 고유값비율(DIST_VAL_RT), 정규화 엔트로피(NORM_ENTROPY)를 자동으로 계산한 후에 기본 분류모델인 \"OML_DECISION_TREE_MODEL_01\"을 사용하여 최종적으로 항목 분류결과(MODL_PREDICTED_TYPE)를 적재하는 프로시저입니다.",
+      "resultCreateYn": "T",
+      "resultOwner": "__CURRENT_OWNER__",
+      "resultTableName": "INIT$_TB_PREDICTED_TYPE_FINAL",
       "items": [
         {
           "key": "P_TARGET_OWNER",
@@ -367,6 +387,7 @@
       "objectType": "PROCEDURE",
       "objectName": "INIT$_SP_DM_MODEL_VIEW_LIST",
       "label": "Oracle ML model detail view list",
+      "description": "Oracle ML 모델명에 대해 사용 가능한 DM$ 모델 상세 뷰 목록을 조회하는 프로시저입니다.",
       "items": [
         {
           "key": "P_MODEL_NAME",
@@ -385,6 +406,7 @@
       "objectType": "PROCEDURE",
       "objectName": "INIT$_SP_DM_MODEL_VIEW_OPEN",
       "label": "Oracle ML model detail view open",
+      "description": "Oracle ML 모델명과 상세 뷰 유형을 받아 해당 DM$ 모델 상세 데이터를 조회하는 프로시저입니다.",
       "items": [
         {
           "key": "P_MODEL_NAME",

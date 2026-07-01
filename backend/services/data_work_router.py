@@ -544,6 +544,36 @@ def create_data_work_router(
         finally:
             if conn:
                 conn.close()
+
+
+    @router.post("/job/test-draft")
+    def test_draft_profile_job(req: RunJobRequest, request: Request):
+        conn = None
+        try:
+            conn = get_target_db_connection(request)
+            profile_job_id = data_work.require_int(req.profileJobId, "profileJobId")
+            saved_job = data_work.load_job(conn, MENU_CODE, profile_job_id)
+            draft_job = data_work.build_draft_job(conn, MENU_CODE, req, saved_job, DEFAULT_JOB_GROUP)
+            result = execute_draft_profile_job(conn, profile_job_id, draft_job, req.runtimeBindValues or {})
+            conn.commit()
+            return {
+                "status": "success",
+                "message": result.get("message", "Draft test executed."),
+                "profileJobId": profile_job_id,
+                "data": result
+            }
+        except HTTPException:
+            if conn:
+                conn.rollback()
+            raise
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            logger.error(f"{MENU_CODE} draft profile job test failed: {str(e)}")
+            raise HTTPException(status_code=500, detail=str(e))
+        finally:
+            if conn:
+                conn.close()
     
     
     @router.post("/jobs/run-all")
@@ -896,7 +926,36 @@ def create_data_work_router(
     
     def execute_profile_job(conn, profile_job_id: int, runtime_bind_values: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         job = data_work.load_job(conn, MENU_CODE, profile_job_id)
+        return execute_job_payload(conn, profile_job_id, job, runtime_bind_values or {}, update_saved_job=True)
+
+
+    def execute_draft_profile_job(
+        conn,
+        profile_job_id: int,
+        job: Dict[str, Any],
+        runtime_bind_values: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        return execute_job_payload(
+            conn,
+            profile_job_id,
+            job,
+            runtime_bind_values or {},
+            run_type_override="DRAFT_TEST",
+            update_saved_job=False
+        )
+
+
+    def execute_job_payload(
+        conn,
+        profile_job_id: int,
+        job: Dict[str, Any],
+        runtime_bind_values: Optional[Dict[str, Any]] = None,
+        run_type_override: Optional[str] = None,
+        update_saved_job: bool = True
+    ) -> Dict[str, Any]:
         run_type = "OML_PYTHON" if str(job.get("EXEC_SOURCE_TYPE") or "").upper() == "OML_PYTHON" else "PLSQL"
+        if run_type_override:
+            run_type = run_type_override
         result_owner = job.get("RESULT_OWNER") or ""
         result_table_name = job.get("RESULT_TABLE_NAME") or ""
         manual_run_id = parse_manual_run_id(runtime_bind_values)
@@ -910,17 +969,18 @@ def create_data_work_router(
             result_owner,
             manual_run_id
         )
-        data_work.update_job_status(
-            conn,
-            MENU_CODE,
-            profile_job_id,
-            "RUNNING",
-            ROUTER_MESSAGES["job_started"],
-            result_table_name,
-            result_owner,
-            True,
-            False
-        )
+        if update_saved_job:
+            data_work.update_job_status(
+                conn,
+                MENU_CODE,
+                profile_job_id,
+                "RUNNING",
+                ROUTER_MESSAGES["job_started"],
+                result_table_name,
+                result_owner,
+                True,
+                False
+            )
         conn.commit()
     
         try:
@@ -928,48 +988,54 @@ def create_data_work_router(
             if not executable_script:
                 message = "No executable script was saved."
                 data_work.update_run(conn, run_id, "SKIPPED", message, result_table_name, result_owner)
+                if update_saved_job:
+                    data_work.update_job_status(
+                        conn,
+                        MENU_CODE,
+                        profile_job_id,
+                        "DRAFT",
+                        message,
+                        result_table_name,
+                        result_owner,
+                        False,
+                        True
+                    )
+                return {"status": "skipped", "message": message}
+    
+            message = execute_saved_script(conn, executable_script, job, runtime_bind_values or {}, run_id)
+            if not update_saved_job:
+                draft_name = job.get("JOB_NAME") or f"Job #{profile_job_id}"
+                message = f"Draft test: {draft_name}. {message}"
+            data_work.update_run(conn, run_id, "SUCCESS", message, result_table_name, result_owner)
+            if update_saved_job:
                 data_work.update_job_status(
                     conn,
                     MENU_CODE,
                     profile_job_id,
-                    "DRAFT",
+                    "SUCCESS",
                     message,
                     result_table_name,
                     result_owner,
                     False,
                     True
                 )
-                return {"status": "skipped", "message": message}
-    
-            message = execute_saved_script(conn, executable_script, job, runtime_bind_values or {}, run_id)
-            data_work.update_run(conn, run_id, "SUCCESS", message, result_table_name, result_owner)
-            data_work.update_job_status(
-                conn,
-                MENU_CODE,
-                profile_job_id,
-                "SUCCESS",
-                message,
-                result_table_name,
-                result_owner,
-                False,
-                True
-            )
             return {"status": "success", "message": message}
         except Exception as e:
             message = str(e)
             conn.rollback()
             data_work.update_run(conn, run_id, "FAILED", message, result_table_name, result_owner)
-            data_work.update_job_status(
-                conn,
-                MENU_CODE,
-                profile_job_id,
-                "FAILED",
-                message,
-                result_table_name,
-                result_owner,
-                False,
-                True
-            )
+            if update_saved_job:
+                data_work.update_job_status(
+                    conn,
+                    MENU_CODE,
+                    profile_job_id,
+                    "FAILED",
+                    message,
+                    result_table_name,
+                    result_owner,
+                    False,
+                    True
+                )
             conn.commit()
             raise
     

@@ -1,63 +1,6 @@
 {
-  "geminiSettingCategory": "MY_ACCOUNT",
-  "geminiSettingKey": "GEMINI_API_KEY",
-  "systemSettingCategories": [
-    {
-      "CATEGORY_CODE": "MY_ACCOUNT",
-      "CATEGORY_NAME": "나의 회원정보",
-      "CATEGORY_DESC": "내 로그인 정보, 이메일, 비밀번호를 관리합니다.",
-      "SORT_ORDER": 0,
-      "DEFAULTS": []
-    },
-    {
-      "CATEGORY_CODE": "GENERAL",
-      "CATEGORY_NAME": "System General",
-      "CATEGORY_DESC": "Basic system display settings.",
-      "SORT_ORDER": 10,
-      "DEFAULTS": [
-        {
-          "SETTING_KEY": "SYSTEM_DISPLAY_NAME",
-          "SETTING_VALUE": "Data Editing System",
-          "SETTING_DESC": "System display name.",
-          "SORT_ORDER": 10
-        }
-      ]
-    },
-    {
-      "CATEGORY_CODE": "M02002_TABLE_FILTER",
-      "CATEGORY_NAME": "M02002 Table Filter",
-      "CATEGORY_DESC": "M02002 Table Explorer include/exclude settings.",
-      "SORT_ORDER": 20,
-      "DEFAULTS": [
-        {
-          "SETTING_KEY": "EXCLUDE_TABLE_LIKE",
-          "SETTING_VALUE": "INIT$%\nBIN$%\nDM$%",
-          "SETTING_DESC": "Exclude table LIKE patterns. Enter one pattern per line.",
-          "SORT_ORDER": 10
-        },
-        {
-          "SETTING_KEY": "INCLUDE_OWNER",
-          "SETTING_VALUE": "__CURRENT_OWNER__",
-          "SETTING_DESC": "Included owners. Enter one owner per line.",
-          "SORT_ORDER": 20
-        }
-      ]
-    },
-    {
-      "CATEGORY_CODE": "OTHER",
-      "CATEGORY_NAME": "Other Settings",
-      "CATEGORY_DESC": "Additional system settings.",
-      "SORT_ORDER": 90,
-      "DEFAULTS": [
-        {
-          "SETTING_KEY": "CONSOLE_LOG_MAX_ENTRIES",
-          "SETTING_VALUE": "500",
-          "SETTING_DESC": "Maximum browser log lines retained in the bottom Network / Run Log panel.",
-          "SORT_ORDER": 10
-        }
-      ]
-    }
-  ],
+  "version": 1,
+  "description": "M91003 default target database settings. The UI fetches this file when loading categories and when Create default settings is clicked.",
   "targetSettingCategories": [
     {
       "CATEGORY_CODE": "DATA_PROFILING",

@@ -95,13 +95,17 @@
                             <i class="fas fa-trash-alt"></i>
                             <span data-label-key="deleteWork">Delete work</span>
                         </button>
+                        <button type="button" id="testDraft-__PAGE_CODE__" class="table-btn" onclick="__PAGE_CODE__.testCurrentDraft()" disabled>
+                            <i class="fas fa-vial"></i>
+                            <span data-label-key="testDraft">Test current draft</span>
+                        </button>
                         <button type="button" id="runNow-__PAGE_CODE__" class="table-btn" onclick="__PAGE_CODE__.runJob(false)" disabled>
                             <i class="fas fa-play"></i>
-                            <span data-label-key="runNow">Run now</span>
+                            <span data-label-key="runNow">Run saved work</span>
                         </button>
                         <button type="button" id="queueBatch-__PAGE_CODE__" class="table-btn" onclick="__PAGE_CODE__.runJob(true)" disabled>
                             <i class="fas fa-clock"></i>
-                            <span data-label-key="queueBatch">Queue batch</span>
+                            <span data-label-key="queueBatch">Queue saved work</span>
                         </button>
                     </div>
                 </header>
@@ -245,7 +249,7 @@
                     </section>
                     <section class="data-help-step">
                         <strong>3. 실행 시 실제 값으로 바인딩</strong>
-                        <span>Run now / Queue Batch에서 저장된 Default, Runtime Bind, 현재 Job 정보를 합쳐 실행합니다.</span>
+                        <span>Run saved work / Queue saved work는 저장된 Work를 실행하고, Test current draft는 현재 화면값을 저장하지 않고 1회 실행합니다.</span>
                     </section>
                 </div>
                 <h3>자동 예약 변수</h3>
@@ -280,7 +284,7 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                 </button>
             </header>
             <div class="data-help-content">
-                <p>실행에 사용할 런타임 바인드 값을 확인하세요. 기본값과 예약 변수 값은 미리 채워지며 필요하면 수정할 수 있습니다.</p>
+                <p id="runtimeBindIntro-__PAGE_CODE__">실행에 사용할 런타임 바인드 값을 확인하세요. 기본값과 예약 변수 값은 미리 채워지며 필요하면 수정할 수 있습니다.</p>
                 <div id="runtimeBindGrid-__PAGE_CODE__" class="data-bind-grid"></div>
             </div>
             <footer>

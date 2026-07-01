@@ -1282,11 +1282,16 @@ const CommonMessage = {
         popup.setAttribute("role", options.type === "confirm" || options.modal ? "dialog" : "status");
         popup.setAttribute("aria-modal", String(Boolean(options.modal)));
         popup.setAttribute("aria-describedby", bodyId);
+        const confirmButtons = options.type === "confirm"
+            ? `
+                <button type="button" class="common-message-primary" data-common-message-action="cancel" autofocus>${this.escapeHtml(options.cancelText)}</button>
+                <button type="button" class="common-message-secondary" data-common-message-action="ok">${this.escapeHtml(options.okText)}</button>
+            `
+            : `<button type="button" class="common-message-primary" data-common-message-action="ok">${this.escapeHtml(options.okText)}</button>`;
         const footerHtml = options.toast ? "" : `
             <footer class="common-message-footer">
                 ${options.copyable ? `<button type="button" class="common-message-secondary" data-common-message-action="copy"><i class="fas fa-copy"></i><span>Copy</span></button>` : ""}
-                ${options.type === "confirm" ? `<button type="button" class="common-message-secondary" data-common-message-action="cancel">${this.escapeHtml(options.cancelText)}</button>` : ""}
-                <button type="button" class="common-message-primary" data-common-message-action="ok">${this.escapeHtml(options.okText)}</button>
+                ${confirmButtons}
             </footer>
         `;
         popup.innerHTML = `
@@ -1342,7 +1347,12 @@ const CommonMessage = {
                 popup.addEventListener("pointerleave", startAutoClose);
                 startAutoClose();
             } else {
-                setTimeout(() => popup.querySelector(".common-message-primary")?.focus(), 0);
+                setTimeout(() => {
+                    const focusTarget = options.type === "confirm"
+                        ? popup.querySelector('[data-common-message-action="cancel"]')
+                        : popup.querySelector(".common-message-primary");
+                    focusTarget?.focus();
+                }, 0);
             }
         });
     },

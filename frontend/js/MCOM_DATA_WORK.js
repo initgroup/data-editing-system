@@ -228,6 +228,7 @@
         contextLoadFailed: false,
         runtimeBindDialog: null,
         runtimeBindValues: {},
+        savedJobSnapshot: null,
 
         async init() {
             if (this.isInit) return;
@@ -292,6 +293,7 @@
             this.contextLoadFailed = false;
             this.runtimeBindDialog = null;
             this.runtimeBindValues = {};
+            this.savedJobSnapshot = null;
             this.isInit = false;
         },
 
@@ -1168,6 +1170,10 @@
                 itemOrder: row.itemOrder || row.ITEM_ORDER || "",
                 bindName: row.bindName || row.BIND_NAME || ""
             })) : [];
+            this.savedJobSnapshot = {
+                ...this.currentJob,
+                parameters: this.cloneParameterRows(this.parameters)
+            };
             this.selectedScenarioTableKey = job.SCENARIO_TABLE_ID ? `ID:${job.SCENARIO_TABLE_ID}` : "";
             this.renderScenarioTables();
             this.renderJobs();
@@ -1185,6 +1191,7 @@
             this.selectedJobId = "";
             const selectedTable = this.getSelectedScenarioTable();
             this.currentJob = this.createEmptyJob();
+            this.savedJobSnapshot = null;
             this.parameters = [];
             this.resetEditableDataGrid();
             if (selectedTable) {
@@ -1217,6 +1224,14 @@
                 this.resetEditableDataGrid();
             }
             this.renderUserSqlJobContext();
+        },
+
+        cloneParameterRows(rows = []) {
+            return (rows || []).map((row) => ({ ...row }));
+        },
+
+        getSavedJobSnapshot() {
+            return this.savedJobSnapshot?.profileJobId ? this.savedJobSnapshot : null;
         },
 
         handleResultCreateChange(value) {
@@ -1383,7 +1398,7 @@
             const running = this.isJobExecutionActive();
             const saveButton = getContainerEl(`#saveJob-${PAGE_CODE}`);
             if (saveButton) saveButton.disabled = running;
-            [`#runNow-${PAGE_CODE}`, `#queueBatch-${PAGE_CODE}`, `#deleteJob-${PAGE_CODE}`].forEach((selector) => {
+            [`#runNow-${PAGE_CODE}`, `#queueBatch-${PAGE_CODE}`, `#testDraft-${PAGE_CODE}`, `#deleteJob-${PAGE_CODE}`].forEach((selector) => {
                 const button = getContainerEl(selector);
                 if (button) button.disabled = !enabled || running;
             });
@@ -1426,7 +1441,7 @@
                         <li><strong>입력 데이터</strong>: 테이블 입력 방식은 현재 Owner/Table을 <code>CURSOR(SELECT * FROM OWNER.TABLE)</code> 형태로 전달합니다.</li>
                         <li><strong>Parameter List</strong>: 파라미터는 <code>par_lst =&gt; JSON_OBJECT(... RETURNING CLOB)</code>로 생성됩니다. 기본값이 있으면 값이 직접 들어가고, 기본값이 없으면 <code>:abcDef</code> 형식의 런타임 바인드 변수로 생성됩니다.</li>
                         <li><strong>Result Table Create</strong>: T이면 생성 SQL이 <code>CREATE TABLE OWNER.TABLE AS SELECT ...</code> 형태로 바뀌고, M이면 결과명을 모델명으로 사용합니다.</li>
-                        <li><strong>Run now / Queue Batch</strong>: 실행 시 저장된 Parameter List와 런타임 바인드 값을 사용해 OML SQL을 실행합니다.</li>
+                        <li><strong>Run saved work / Queue saved work</strong>: 저장된 Parameter List와 저장된 Job 설정을 실행합니다. <strong>Test current draft</strong>는 현재 화면값을 저장하지 않고 1회 실행합니다.</li>
                     </ul>
                 `
                 : `
@@ -1442,7 +1457,7 @@
                         </section>
                         <section class="data-help-step">
                             <strong>3. 실행 시 실제 값으로 바인딩</strong>
-                            <span>Run now / Queue Batch에서 저장된 Default, Runtime Bind, 현재 Job 정보를 합쳐 실행합니다.</span>
+                            <span>Run saved work / Queue saved work는 저장된 Work를 실행하고, Test current draft는 현재 화면값을 저장하지 않고 1회 실행합니다.</span>
                         </section>
                         <section class="data-help-step">
                             <strong>4. Result 정보는 선택된 등록 오브젝트 기준으로 동기화</strong>
@@ -1615,23 +1630,28 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                 alert("A job is already running. Please wait until execution finishes.");
                 return;
             }
-            if (!this.currentJob?.profileJobId) {
+            const savedJob = this.getSavedJobSnapshot();
+            if (!savedJob?.profileJobId) {
                 alert("Save work first, then run the saved work.");
                 return;
             }
             const message = batch
-                ? "Queue this work for batch execution?"
-                : "Run this work now?";
+                ? "Queue the saved work for batch execution?"
+                : "Run the saved work now?";
             if (!(await CommonMessage.confirm(message))) return;
-            const runtimeBindValues = await this.collectRuntimeBindValues();
+            const runtimeBindValues = await this.collectRuntimeBindValues(savedJob.execPlsql || "", {
+                parameterRows: savedJob.parameters || [],
+                systemBindJob: savedJob,
+                dialogIntro: "저장된 PL/SQL과 저장된 Job 설정을 실행합니다. 아래 Runtime Bind 값만 이번 실행에 임시 적용됩니다."
+            });
             if (runtimeBindValues === null) return;
             const payload = {
-                profileJobId: Number(this.currentJob.profileJobId),
+                profileJobId: Number(savedJob.profileJobId),
                 batch: Boolean(batch),
                 runtimeBindValues
             };
 
-            const jobId = String(this.currentJob.profileJobId);
+            const jobId = String(savedJob.profileJobId);
             this.setJobRunState(jobId, batch ? "QUEUING" : "RUNNING", true);
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/job/run`, {
@@ -1649,6 +1669,50 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
             } catch (error) {
                 this.setJobRunState(jobId, "FAILED", false);
                 alert(error.message || "Job run failed.");
+            }
+        },
+
+        async testCurrentDraft() {
+            if (this.isJobExecutionActive()) {
+                alert("A job is already running. Please wait until execution finishes.");
+                return;
+            }
+            if (!this.currentJob?.profileJobId) {
+                alert("Save work once to create a job, then test draft changes without saving them.");
+                return;
+            }
+            if (!this.ensureJobReady(false)) return;
+            if (!this.ensureExecutableScriptReady()) return;
+            if (!(await CommonMessage.confirm("Test the current draft without saving it?"))) return;
+
+            const runtimeBindValues = await this.collectRuntimeBindValues(null, {
+                parameterRows: this.parameters || [],
+                systemBindJob: null,
+                dialogIntro: "현재 화면의 Job 설정과 PL/SQL을 저장하지 않고 1회 테스트 실행합니다. Runtime Bind 값은 이번 테스트에만 적용됩니다."
+            });
+            if (runtimeBindValues === null) return;
+
+            const payload = {
+                ...this.getJobPayload("DRAFT_TEST", ""),
+                profileJobId: Number(this.currentJob.profileJobId),
+                batch: false,
+                runtimeBindValues
+            };
+            const jobId = String(this.currentJob.profileJobId);
+            this.setJobRunState(jobId, "DRAFT_TEST", true);
+            try {
+                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/job/test-draft`, {
+                    method: "POST",
+                    body: payload,
+                    showLoading: false
+                });
+                this.setJobRunState(jobId, "DRAFT_TEST", false);
+                alert(json.message || "Draft test executed.");
+                await this.loadJobs(false);
+                await this.loadRunHistory(false);
+            } catch (error) {
+                this.setJobRunState(jobId, "FAILED", false);
+                alert(error.message || "Draft test failed.");
             }
         },
 
@@ -2194,9 +2258,12 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
             const dynamicTokenNames = this.extractDynamicTokens(script);
             const bindOptions = {
                 useParameterDefaults: options.useParameterDefaults !== false,
-                useSystemBindContext: options.useSystemBindContext !== false
+                useSystemBindContext: options.useSystemBindContext !== false,
+                systemBindJob: options.systemBindJob || null
             };
-            const parameterRows = options.useParameterDefaults === false ? [] : (this.parameters || []);
+            const parameterRows = options.useParameterDefaults === false
+                ? []
+                : (options.parameterRows || this.parameters || []);
             const parameterBindMap = new Map(parameterRows
                 .map((row) => [this.toBindVariableName(row.itemName || ""), row])
                 .filter(([name]) => Boolean(name)));
@@ -2231,7 +2298,7 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
             });
 
             if (!prompts.length) return {};
-            return this.openRuntimeBindDialog(prompts);
+            return this.openRuntimeBindDialog(prompts, options);
         },
 
         extractBindVariables(sqlText) {
@@ -2310,14 +2377,15 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
 
         getSystemBindValue(name, options = {}) {
             if (options.useSystemBindContext === false) return "";
-            const job = this.currentJob || {};
+            const job = options.systemBindJob || this.currentJob || {};
+            const useDomValues = !options.systemBindJob;
             const canonicalName = this.normalizeSystemBindName(name);
             const values = {
-                "INIT$TargetOwner": getContainerEl(`#targetOwner-${PAGE_CODE}`)?.value || job.ownerName || "",
-                "INIT$TargetTable": getContainerEl(`#targetTable-${PAGE_CODE}`)?.value || job.tableName || "",
-                "INIT$ResultOwner": getContainerEl(`#resultOwner-${PAGE_CODE}`)?.value || job.resultOwner || "",
-                "INIT$ResultTable": getContainerEl(`#resultTable-${PAGE_CODE}`)?.value || job.resultTableName || "",
-                "INIT$ResultModelName": getContainerEl(`#resultTable-${PAGE_CODE}`)?.value || job.resultTableName || "",
+                "INIT$TargetOwner": (useDomValues ? getContainerEl(`#targetOwner-${PAGE_CODE}`)?.value : "") || job.ownerName || "",
+                "INIT$TargetTable": (useDomValues ? getContainerEl(`#targetTable-${PAGE_CODE}`)?.value : "") || job.tableName || "",
+                "INIT$ResultOwner": (useDomValues ? getContainerEl(`#resultOwner-${PAGE_CODE}`)?.value : "") || job.resultOwner || "",
+                "INIT$ResultTable": (useDomValues ? getContainerEl(`#resultTable-${PAGE_CODE}`)?.value : "") || job.resultTableName || "",
+                "INIT$ResultModelName": (useDomValues ? getContainerEl(`#resultTable-${PAGE_CODE}`)?.value : "") || job.resultTableName || "",
                 "INIT$PreTargetOwner": "",
                 "INIT$PreTargetTable": "",
                 "INIT$PreResultOwner": "",
@@ -2412,10 +2480,15 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                 .replace(/--[^\r\n]*/gm, (match) => " ".repeat(match.length));
         },
 
-        openRuntimeBindDialog(bindPrompts) {
+        openRuntimeBindDialog(bindPrompts, options = {}) {
             const layer = getContainerEl(`#runtimeBindLayer-${PAGE_CODE}`);
             const grid = getContainerEl(`#runtimeBindGrid-${PAGE_CODE}`);
             if (!layer || !grid) return Promise.resolve({});
+            const intro = getContainerEl(`#runtimeBindIntro-${PAGE_CODE}`);
+            if (intro) {
+                intro.textContent = options.dialogIntro
+                    || "실행에 사용할 런타임 바인드 값을 확인하세요. 기본값과 예약 변수 값은 미리 채워지며 필요하면 수정할 수 있습니다.";
+            }
             grid.innerHTML = bindPrompts.map((item) => `
                 <label class="data-bind-row">
                     <span class="data-bind-meta">

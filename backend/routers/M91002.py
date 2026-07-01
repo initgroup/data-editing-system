@@ -5,21 +5,17 @@
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 import base64
 import logging
 import oracledb
+import re
 from threading import Lock
 
 from backend.database import get_db_connection
 from backend.database_helper import SqlLoader
 from backend.auth_context import get_request_user_id
 from backend.target_database import get_target_connection_id, get_target_db_connection
-from backend.setting_defaults import (
-    get_gemini_setting_category,
-    get_gemini_setting_key,
-    get_system_setting_categories,
-)
 from backend.routers.M99001 import _hash_password, _verify_password
 
 
@@ -27,6 +23,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 _gemini_api_key_cache = {}
 _gemini_api_key_cache_lock = Lock()
+GEMINI_SETTING_CATEGORY = "MY_ACCOUNT"
+GEMINI_SETTING_KEY = "GEMINI_API_KEY"
 
 
 class SettingSaveRequest(BaseModel):
@@ -42,6 +40,11 @@ class SettingSaveRequest(BaseModel):
 class SettingDeleteRequest(BaseModel):
     categoryCode: str
     settingKey: str
+    model_config = ConfigDict(extra="allow")
+
+
+class SettingDefaultsRequest(BaseModel):
+    categories: List[Dict[str, Any]] = []
     model_config = ConfigDict(extra="allow")
 
 
@@ -102,14 +105,10 @@ def list_settings(request: Request, categoryCode: Optional[str] = None):
 
 @router.get("/setting-categories")
 def list_setting_categories():
-    categories = get_system_setting_categories()
     return {
         "status": "success",
-        "data": [
-            {key: value for key, value in category.items() if key != "DEFAULTS"}
-            for category in categories
-        ],
-        "total": len(categories),
+        "data": [],
+        "total": 0,
     }
 
 
@@ -190,10 +189,11 @@ def delete_setting(req: SettingDeleteRequest, request: Request):
 
 
 @router.post("/setting/defaults")
-def create_default_settings(request: Request):
+def create_default_settings(req: SettingDefaultsRequest, request: Request):
     user_id = get_request_user_id(request)
     connection_id = get_target_connection_id(request)
     current_owner = get_current_target_owner(request)
+    categories = normalize_default_categories(req.categories)
     conn = None
     cursor = None
     try:
@@ -202,8 +202,9 @@ def create_default_settings(request: Request):
         cursor = conn.cursor()
         merge_sql = SqlLoader.get_sql("M91002_SETTING_MERGE")
         created = 0
+        updated = 0
         skipped = 0
-        for category in get_system_setting_categories():
+        for category in categories:
             if category["CATEGORY_CODE"] == "MY_ACCOUNT":
                 continue
             for item in category.get("DEFAULTS", []):
@@ -213,9 +214,7 @@ def create_default_settings(request: Request):
                     "categoryCode": category["CATEGORY_CODE"],
                     "settingKey": item["SETTING_KEY"],
                 })
-                if cursor.fetchone()[0] > 0:
-                    skipped += 1
-                    continue
+                exists = cursor.fetchone()[0] > 0
                 setting_value = item.get("SETTING_VALUE", "")
                 if setting_value == "__CURRENT_OWNER__":
                     setting_value = current_owner
@@ -229,12 +228,16 @@ def create_default_settings(request: Request):
                     "sortOrder": item.get("SORT_ORDER", 0),
                     "useYn": "Y",
                 })
-                created += 1
+                if exists:
+                    updated += 1
+                else:
+                    created += 1
         conn.commit()
         return {
             "status": "success",
-            "message": f"{created} missing default setting(s) saved. {skipped} existing setting(s) skipped.",
+            "message": f"{created} default setting(s) created. {updated} existing setting(s) updated. {skipped} skipped.",
             "createdCount": created,
+            "updatedCount": updated,
             "skippedCount": skipped,
         }
     except Exception as e:
@@ -644,10 +647,54 @@ def mask_secret(value: Optional[str]) -> str:
 
 def normalize_category_code(value: Optional[str]) -> str:
     text = str(value or "GENERAL").strip().upper()
-    allowed = {category["CATEGORY_CODE"] for category in get_system_setting_categories()}
-    if text not in allowed:
+    if not re.fullmatch(r"[A-Z][A-Z0-9_$#]{0,127}", text):
         raise HTTPException(status_code=400, detail="Invalid categoryCode.")
     return text
+
+
+def get_gemini_setting_category() -> str:
+    return GEMINI_SETTING_CATEGORY
+
+
+def get_gemini_setting_key() -> str:
+    return GEMINI_SETTING_KEY
+
+
+def normalize_default_categories(categories: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    if not isinstance(categories, list) or not categories:
+        raise HTTPException(status_code=400, detail="Default setting categories are required.")
+
+    normalized = []
+    for category in categories:
+        if not isinstance(category, dict):
+            raise HTTPException(status_code=400, detail="Invalid default setting category.")
+        category_code = normalize_category_code(category.get("CATEGORY_CODE"))
+        defaults = category.get("DEFAULTS") or []
+        if not isinstance(defaults, list):
+            raise HTTPException(status_code=400, detail="Invalid default setting item list.")
+        normalized.append({
+            "CATEGORY_CODE": category_code,
+            "DEFAULTS": [normalize_default_item(item) for item in defaults]
+        })
+    return normalized
+
+
+def normalize_default_item(item: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(item, dict):
+        raise HTTPException(status_code=400, detail="Invalid default setting item.")
+    setting_key = str(item.get("SETTING_KEY") or "").strip()
+    if not setting_key:
+        raise HTTPException(status_code=400, detail="Default setting key is required.")
+    try:
+        sort_order = int(item.get("SORT_ORDER") or 0)
+    except (TypeError, ValueError):
+        sort_order = 0
+    return {
+        "SETTING_KEY": setting_key[:200],
+        "SETTING_VALUE": str(item.get("SETTING_VALUE") or ""),
+        "SETTING_DESC": str(item.get("SETTING_DESC") or "")[:1000],
+        "SORT_ORDER": sort_order
+    }
 
 
 def re_match_email(value: str) -> bool:

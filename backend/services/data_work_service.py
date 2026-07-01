@@ -169,6 +169,77 @@ def save_job(
         cursor.close()
 
 
+def build_draft_job(
+    conn,
+    menu_code: str,
+    req: DataWorkJobRequest,
+    saved_job: Dict[str, Any],
+    default_job_group: Optional[str] = None
+) -> Dict[str, Any]:
+    menu_code = normalize_menu_code(menu_code)
+    profile_job_id = require_int(req.profileJobId, "profileJobId")
+    project_id = require_int(req.projectId or saved_job.get("PROJECT_ID"), "projectId")
+    scenario_id = require_int(req.scenarioId or saved_job.get("SCENARIO_ID"), "scenarioId")
+    if int(saved_job.get("PROFILE_JOB_ID") or saved_job.get("WORK_JOB_ID") or 0) != profile_job_id:
+        raise HTTPException(status_code=400, detail="Draft test job does not match the saved job.")
+    if int(saved_job.get("PROJECT_ID") or 0) != project_id or int(saved_job.get("SCENARIO_ID") or 0) != scenario_id:
+        raise HTTPException(status_code=400, detail="Draft test context does not match the saved job.")
+
+    owner_name = require_identifier(req.ownerName or saved_job.get("OWNER_NAME"), "ownerName")
+    table_name = require_identifier(req.tableName or saved_job.get("TABLE_NAME"), "tableName")
+    job_group = normalize_text(req.jobGroup, default_job_group or menu_code, 100) or menu_code
+    job_name = normalize_text(req.jobName, saved_job.get("JOB_NAME") or "", 200)
+    if not job_name:
+        raise HTTPException(status_code=400, detail="jobName is required.")
+
+    result_create_yn = normalize_result_create_mode(req.resultCreateYn)
+    result_owner = normalize_optional_identifier(req.resultOwner)
+    result_table_name = normalize_optional_identifier(req.resultTableName)
+    if result_create_yn != "N" and (not result_owner or not result_table_name):
+        raise HTTPException(
+            status_code=400,
+            detail="resultOwner and resultTableName are required when resultCreateYn is T or M."
+        )
+
+    exec_source_type = normalize_exec_source_type(req.execSourceType)
+    exec_resource_id = require_positive_optional_int(req.execResourceId, "execResourceId")
+    exec_plsql = normalize_required_executable_script(req.execPlsql)
+    validation_plsql = prepare_executable_script_for_validation(exec_plsql, req.params or [])
+    validate_executable_script_syntax(conn, validation_plsql)
+
+    return {
+        "PROFILE_JOB_ID": profile_job_id,
+        "WORK_JOB_ID": profile_job_id,
+        "MENU_CODE": menu_code,
+        "PROJECT_ID": project_id,
+        "SCENARIO_ID": scenario_id,
+        "SCENARIO_TABLE_ID": req.scenarioTableId,
+        "JOB_GROUP": job_group,
+        "JOB_NAME": job_name,
+        "JOB_DESC": normalize_text(req.jobDesc, "", 1000),
+        "OWNER_NAME": owner_name,
+        "TABLE_NAME": table_name,
+        "EXEC_SOURCE_TYPE": exec_source_type,
+        "EXEC_RESOURCE_ID": exec_resource_id,
+        "EXEC_METHOD": normalize_optional_token(req.execMethod),
+        "EXEC_SPEC_JSON": normalize_text(req.execSpecJson, "", 4000),
+        "EXEC_OBJECT_ID": req.execObjectId if exec_source_type == "DB_OBJECT" else None,
+        "EXEC_OWNER": normalize_optional_identifier(req.execOwner) if exec_source_type == "DB_OBJECT" else None,
+        "EXEC_OBJECT_TYPE": normalize_optional_token(req.execObjectType),
+        "EXEC_OBJECT_NAME": normalize_optional_object_name(req.execObjectName) if exec_source_type == "DB_OBJECT" else normalize_text(req.execObjectName, "", 300),
+        "EXEC_OBJECT_LABEL": normalize_text(req.execObjectLabel, "", 300),
+        "USE_YN": "N" if str(req.useYn or "Y").upper() == "N" else "Y",
+        "SORT_ORDER": req.sortOrder,
+        "PARAMS": req.params or [],
+        "PARAM_JSON": json.dumps(req.params or [], ensure_ascii=False),
+        "EXEC_PLSQL": exec_plsql,
+        "RESULT_CREATE_YN": result_create_yn,
+        "RESULT_OWNER": result_owner,
+        "RESULT_TABLE_NAME": result_table_name,
+        "STATUS": "DRAFT_TEST"
+    }
+
+
 def normalize_required_executable_script(script: Optional[str]) -> str:
     text = (script or "").strip()
     text = re.sub(r"(?m)^\s*/\s*$", "", text).strip()

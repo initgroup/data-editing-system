@@ -1,6 +1,7 @@
 (function() {
     const PAGE_CODE = "M91003";
     const API_CODE = "M91003";
+    const DEFAULT_PRESET_URL = "./config/M91003.object-detail-presets.json";
     const DEFAULT_CATEGORY_CODE = "DATA_PROFILING";
     const { getContainerEl } = PageManager.createHelper(PAGE_CODE);
 
@@ -39,8 +40,7 @@
             const list = getContainerEl("#settingCategoryList-M91003");
             if (list) list.innerHTML = `<div class="project-empty">Loading categories...</div>`;
             try {
-                const json = await CommonUtils.request(`${API_BASE_URL}/${API_CODE}/setting-categories`, { method: "GET", showLoading: false });
-                this.categories = Array.isArray(json.data) ? json.data : [];
+                this.categories = await this.loadDefaultCategories();
                 if (!this.categories.some((item) => item.CATEGORY_CODE === this.selectedCategoryCode)) {
                     this.selectedCategoryCode = this.categories[0]?.CATEGORY_CODE || DEFAULT_CATEGORY_CODE;
                 }
@@ -48,6 +48,22 @@
             } catch (error) {
                 if (list) list.innerHTML = `<div class="env-tree-error">${this.escapeHtml(error.message || "Category load failed.")}</div>`;
             }
+        },
+
+        async loadDefaultPreset() {
+            const response = await fetch(`${DEFAULT_PRESET_URL}?v=${Date.now()}`, { cache: "no-store" });
+            if (!response.ok) {
+                throw new Error(`Target default setting preset load failed. HTTP ${response.status}`);
+            }
+            return response.json();
+        },
+
+        async loadDefaultCategories() {
+            const preset = await this.loadDefaultPreset();
+            const categories = Array.isArray(preset?.targetSettingCategories)
+                ? preset.targetSettingCategories
+                : [];
+            return categories.map((category) => ({ ...category }));
         },
 
         renderCategories() {
@@ -244,6 +260,7 @@
         },
 
         async createDefaultSettings() {
+            if (!(await CommonMessage.confirm("Create or update default target settings in the target database?"))) return;
             const button = getContainerEl("#createDefaultSettingsBtn-M91003");
             const originalHtml = button?.innerHTML || "";
             if (button) {
@@ -252,10 +269,15 @@
             }
             this.setSystemMessage("Creating missing target default settings...");
             try {
-                const json = await CommonUtils.request(`${API_BASE_URL}/${API_CODE}/setting/defaults`, { method: "POST" });
+                const categories = await this.loadDefaultCategories();
+                const json = await CommonUtils.request(`${API_BASE_URL}/${API_CODE}/setting/defaults`, {
+                    method: "POST",
+                    body: { categories }
+                });
                 const created = Number(json.createdCount || 0);
                 const skipped = Number(json.skippedCount || 0);
                 const message = json.message || `Target default settings checked. ${created} created, ${skipped} skipped.`;
+                this.categories = categories;
                 this.selectedCategoryCode = DEFAULT_CATEGORY_CODE;
                 this.renderCategories();
                 this.setSystemMessage(message);

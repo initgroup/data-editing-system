@@ -3,16 +3,16 @@
 @description    Target database settings API
 """
 
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 import logging
 import oracledb
+import re
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict
 
 from backend.auth_context import get_request_user_id
 from backend.database_helper import SqlLoader
-from backend.setting_defaults import get_target_setting_categories
 from backend.target_database import get_target_db_connection
 
 
@@ -33,6 +33,11 @@ class TargetSettingSaveRequest(BaseModel):
 class TargetSettingDeleteRequest(BaseModel):
     categoryCode: str
     settingKey: str
+    model_config = ConfigDict(extra="allow")
+
+
+class TargetSettingDefaultsRequest(BaseModel):
+    categories: List[Dict[str, Any]] = []
     model_config = ConfigDict(extra="allow")
 
 
@@ -62,14 +67,10 @@ def list_settings(request: Request, categoryCode: Optional[str] = None):
 
 @router.get("/setting-categories")
 def list_setting_categories():
-    categories = get_target_setting_categories()
     return {
         "status": "success",
-        "data": [
-            {key: value for key, value in category.items() if key != "DEFAULTS"}
-            for category in categories
-        ],
-        "total": len(categories),
+        "data": [],
+        "total": 0,
     }
 
 
@@ -142,8 +143,9 @@ def delete_setting(req: TargetSettingDeleteRequest, request: Request):
 
 
 @router.post("/setting/defaults")
-def create_default_settings(request: Request):
+def create_default_settings(req: TargetSettingDefaultsRequest, request: Request):
     get_request_user_id(request)
+    categories = normalize_default_categories(req.categories)
     conn = None
     cursor = None
     try:
@@ -151,16 +153,15 @@ def create_default_settings(request: Request):
         cursor = conn.cursor()
         merge_sql = SqlLoader.get_sql("M91003_SETTING_MERGE")
         created = 0
+        updated = 0
         skipped = 0
-        for category in get_target_setting_categories():
+        for category in categories:
             for item in category.get("DEFAULTS", []):
                 cursor.execute(SqlLoader.get_sql("M91003_SETTING_EXISTS"), {
                     "categoryCode": category["CATEGORY_CODE"],
                     "settingKey": item["SETTING_KEY"],
                 })
-                if cursor.fetchone()[0] > 0:
-                    skipped += 1
-                    continue
+                exists = cursor.fetchone()[0] > 0
                 cursor.setinputsizes(settingValue=oracledb.DB_TYPE_CLOB)
                 cursor.execute(merge_sql, {
                     "categoryCode": category["CATEGORY_CODE"],
@@ -170,12 +171,16 @@ def create_default_settings(request: Request):
                     "sortOrder": item.get("SORT_ORDER", 0),
                     "useYn": "Y",
                 })
-                created += 1
+                if exists:
+                    updated += 1
+                else:
+                    created += 1
         conn.commit()
         return {
             "status": "success",
-            "message": f"{created} missing target default setting(s) saved. {skipped} existing setting(s) skipped.",
+            "message": f"{created} target default setting(s) created. {updated} existing setting(s) updated. {skipped} skipped.",
             "createdCount": created,
+            "updatedCount": updated,
             "skippedCount": skipped,
         }
     except Exception as e:
@@ -218,7 +223,43 @@ def normalize_db_value(value):
 
 def normalize_category_code(value: Optional[str]) -> str:
     text = str(value or "DATA_PROFILING").strip().upper()
-    allowed = {category["CATEGORY_CODE"] for category in get_target_setting_categories()}
-    if text not in allowed:
+    if not re.fullmatch(r"[A-Z][A-Z0-9_$#]{0,127}", text):
         raise HTTPException(status_code=400, detail="Invalid categoryCode.")
     return text
+
+
+def normalize_default_categories(categories: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    if not isinstance(categories, list) or not categories:
+        raise HTTPException(status_code=400, detail="Target default setting categories are required.")
+
+    normalized = []
+    for category in categories:
+        if not isinstance(category, dict):
+            raise HTTPException(status_code=400, detail="Invalid target default setting category.")
+        category_code = normalize_category_code(category.get("CATEGORY_CODE"))
+        defaults = category.get("DEFAULTS") or []
+        if not isinstance(defaults, list):
+            raise HTTPException(status_code=400, detail="Invalid target default setting item list.")
+        normalized.append({
+            "CATEGORY_CODE": category_code,
+            "DEFAULTS": [normalize_default_item(item) for item in defaults]
+        })
+    return normalized
+
+
+def normalize_default_item(item: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(item, dict):
+        raise HTTPException(status_code=400, detail="Invalid target default setting item.")
+    setting_key = str(item.get("SETTING_KEY") or "").strip().upper()
+    if not setting_key:
+        raise HTTPException(status_code=400, detail="Target default setting key is required.")
+    try:
+        sort_order = int(item.get("SORT_ORDER") or 0)
+    except (TypeError, ValueError):
+        sort_order = 0
+    return {
+        "SETTING_KEY": setting_key[:200],
+        "SETTING_VALUE": str(item.get("SETTING_VALUE") or ""),
+        "SETTING_DESC": str(item.get("SETTING_DESC") or "")[:1000],
+        "SORT_ORDER": sort_order
+    }

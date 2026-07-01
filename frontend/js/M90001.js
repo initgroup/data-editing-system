@@ -1276,39 +1276,79 @@
                     return;
                 }
 
-                const itemMap = this.createPresetItemMap(preset);
-                let changedCount = 0;
-                this.rows = this.rows.map((row) => {
-                    const item = itemMap.get(this.normalizePresetKey(row.key));
-                    if (!item) return row;
-
-                    const next = { ...row };
-                    const hasComment = Object.prototype.hasOwnProperty.call(item, "comment")
-                        || Object.prototype.hasOwnProperty.call(item, "desc");
-                    const hasDefault = Object.prototype.hasOwnProperty.call(item, "defaultValue")
-                        || Object.prototype.hasOwnProperty.call(item, "default");
-                    if (hasComment) {
-                        next.desc = item.comment ?? item.desc ?? "";
-                    }
-                    if (hasDefault) {
-                        next.defaultValue = item.defaultValue ?? item.default ?? "";
-                    }
-                    if (next.desc !== row.desc || next.defaultValue !== row.defaultValue) {
-                        changedCount += 1;
-                    }
-                    return next;
-                });
+                const changedCount = this.applyPresetRows(preset);
+                const metaChanged = this.applyPresetMetadata(preset);
 
                 this.renderRows();
-                this.detailSource = changedCount > 0 ? "Preset applied" : this.detailSource;
+                this.renderObjectMeta();
+                this.detailSource = changedCount > 0 || metaChanged ? "Preset applied" : this.detailSource;
                 this.renderDetailSource();
-                alert(changedCount > 0
-                    ? `${changedCount} comment/default value(s) applied from preset. Review and click Save to store.`
+                alert(changedCount > 0 || metaChanged
+                    ? `${changedCount} comment/default value(s) and ${metaChanged ? "metadata" : "no metadata"} applied from preset. Review and click Save to store.`
                     : "Preset found, but no matching parameter keys were changed.");
             } catch (error) {
                 console.error("[M90001] detail preset apply failed", error);
                 alert(error.message || "Comment/default preset load failed.");
             }
+        },
+
+        applyPresetRows(preset) {
+            const itemMap = this.createPresetItemMap(preset);
+            let changedCount = 0;
+            this.rows = this.rows.map((row) => {
+                const item = itemMap.get(this.normalizePresetKey(row.key));
+                if (!item) return row;
+
+                const next = { ...row };
+                const hasComment = Object.prototype.hasOwnProperty.call(item, "comment")
+                    || Object.prototype.hasOwnProperty.call(item, "desc");
+                const hasDefault = Object.prototype.hasOwnProperty.call(item, "defaultValue")
+                    || Object.prototype.hasOwnProperty.call(item, "default");
+                if (hasComment) {
+                    next.desc = item.comment ?? item.desc ?? "";
+                }
+                if (hasDefault) {
+                    next.defaultValue = item.defaultValue ?? item.default ?? "";
+                }
+                if (next.desc !== row.desc || next.defaultValue !== row.defaultValue) {
+                    changedCount += 1;
+                }
+                return next;
+            });
+            return changedCount;
+        },
+
+        applyPresetMetadata(preset) {
+            if (!preset) return false;
+            const source = preset.metadata && typeof preset.metadata === "object" ? preset.metadata : preset;
+            const nextMeta = this.objectMeta || this.createDefaultObjectMeta(this.selectedObject);
+            const mappings = [
+                ["label", "objectLabel"],
+                ["objectLabel", "objectLabel"],
+                ["description", "description"],
+                ["resultCreateYn", "resultCreateYn"],
+                ["resultOwner", "resultOwner"],
+                ["resultTableName", "resultTableName"]
+            ];
+            let changed = false;
+            mappings.forEach(([sourceKey, targetKey]) => {
+                if (!Object.prototype.hasOwnProperty.call(source, sourceKey)) return;
+                const value = this.resolvePresetMetadataValue(source[sourceKey]);
+                if (String(nextMeta[targetKey] ?? "") !== String(value ?? "")) {
+                    nextMeta[targetKey] = value;
+                    changed = true;
+                }
+            });
+            this.objectMeta = nextMeta;
+            return changed;
+        },
+
+        resolvePresetMetadataValue(value) {
+            const text = String(value ?? "");
+            if (text === "__CURRENT_OWNER__") return this.selectedObject?.OWNER || "";
+            if (text === ":OBJECT_OWNER") return this.selectedObject?.OWNER || "";
+            if (text === ":OBJECT_NAME") return this.selectedObject?.OBJECT_NAME || "";
+            return text;
         },
 
         async findDetailPresetForSelectedObject() {
@@ -1330,7 +1370,6 @@
         },
 
         async loadDetailPresets() {
-            if (this.detailPresets) return this.detailPresets;
             try {
                 const response = await fetch(`${DETAIL_PRESET_URL}?v=${Date.now()}`, { cache: "no-store" });
                 if (!response.ok) {
@@ -1365,10 +1404,21 @@
             return this.normalizePresetKey(value).replace(/\s+/g, "");
         },
 
-        resetVariables() {
+        async resetVariables() {
             this.rows = this.originalRows.map((row) => ({ ...row }));
             this.selectedRowIndex = this.rows.length > 0 ? 0 : null;
+            try {
+                const preset = await this.findDetailPresetForSelectedObject();
+                if (preset) {
+                    this.applyPresetRows(preset);
+                    this.applyPresetMetadata(preset);
+                    this.detailSource = "Preset reset";
+                }
+            } catch (error) {
+                console.warn("[M90001] detail preset reset failed", error);
+            }
             this.renderRows();
+            this.renderObjectMeta();
         },
 
         selectDetailRow(index) {
