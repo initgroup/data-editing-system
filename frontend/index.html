@@ -5,38 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>INIT Data Editing System</title>
     <script>
-        window.APP_CACHE_VERSION = "1.0.264";
+        window.APP_CACHE_VERSION = "1.1.0";
         window.APP_ASSET_VERSION_OVERRIDES = {
             // 전체 캐시 갱신: APP_CACHE_VERSION만 올립니다.
             // 부분 캐시 갱신: "js/M90001.js": "1.0.1" 처럼 파일별 버전을 지정합니다.
-            // "pages/M02001.html": "1.0.3",
-            // "js/M02001.js": "1.0.8",
-            // "pages/M02002.html": "1.0.1",
-            // "js/M02002.js": "1.0.2",
-            // "pages/login.html": "1.0.1",
-            // "js/login.js": "1.0.1",
-            // "pages/M99001.html": "1.0.9",
-            // "js/M99001.js": "1.0.13",
-            // "pages/M91002.html": "1.0.1",
-            // "pages/M99002.html": "1.0.2",
-            // "js/M99002.js": "1.0.2",
-            "js/common.js": "1.0.4",
-            "pages/MCOMMON_DATA_WORK.html": "1.0.8",
-            "js/MCOMMON_DATA_WORK.js": "1.0.20",
-            "pages/MCOMMON_FLOW_WORK.html": "1.0.14",
-            "js/MCOMMON_FLOW_WORK.js": "1.0.27",
-            "pages/MCOMMON_ANLY_WORK.html": "1.0.1",
-            "js/MCOMMON_ANLY_WORK.js": "1.0.3",
-            "css/flow-work.css": "1.0.2",
-            "js/app.js": "1.0.7",
-            "js/menu-renderer.js": "1.0.4",
-            "js/M04001.js": "1.0.1",
-            "js/M02002.js": "1.0.3",
-            "js/M99002.js": "1.0.7",
-            "pages/M99004.html": "1.0.2",
-            "js/M99004.js": "1.0.3",
-            "css/styleMenu.css": "1.0.10",
-            "css/style.css": "1.0.2",
         };
         window.APP_ASSET_URL = function(path) {
             const normalized = String(path || "").replace(/^\.\//, "");
@@ -261,9 +233,9 @@
             "./js/app.js",
             "./js/gridjs.umd.js",
             "./js/common.js",
-            "./js/MCOMMON_DATA_WORK.js",
-            "./js/MCOMMON_FLOW_WORK.js",
-            "./js/MCOMMON_ANLY_WORK.js",
+            "./js/MCOM_DATA_WORK.js",
+            "./js/MCOM_FLOW_WORK.js",
+            "./js/MCOM_ANLY_WORK.js",
             "./help/help-utils.js",
             "./js/chart.js",
             "./config/menu.config.js",
@@ -1242,8 +1214,8 @@
             const isDataTemplate = PageManager.dataWorkTemplatePages?.includes(pageCode);
             const isFlowTemplate = PageManager.flowWorkTemplatePages?.includes(pageCode);
             const isAnlyTemplate = PageManager.anlyWorkTemplatePages?.includes(pageCode);
-            const htmlFileName = isDataTemplate ? "MCOMMON_DATA_WORK" : (isFlowTemplate ? "MCOMMON_FLOW_WORK" : (isAnlyTemplate ? "MCOMMON_ANLY_WORK" : pageCode));
-            const scriptFileName = isDataTemplate ? "MCOMMON_DATA_WORK" : (isFlowTemplate ? "MCOMMON_FLOW_WORK" : (isAnlyTemplate ? "MCOMMON_ANLY_WORK" : pageCode));
+            const htmlFileName = isDataTemplate ? "MCOM_DATA_WORK" : (isFlowTemplate ? "MCOM_FLOW_WORK" : (isAnlyTemplate ? "MCOM_ANLY_WORK" : pageCode));
+            const scriptFileName = isDataTemplate ? "MCOM_DATA_WORK" : (isFlowTemplate ? "MCOM_FLOW_WORK" : (isAnlyTemplate ? "MCOM_ANLY_WORK" : pageCode));
 
             const sourceAssets = [
                 [`./pages/${htmlFileName}.html`, `${htmlFileName}.html`, "Original page HTML template", 30],

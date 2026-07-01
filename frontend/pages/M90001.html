@@ -113,6 +113,22 @@
                         <span>Description</span>
                         <textarea id="objectDescription-M90001" class="env-field env-meta-textarea" rows="2" oninput="M90001.updateObjectMeta('description', this.value)"></textarea>
                     </label>
+                    <label>
+                        <span>Result Table Create</span>
+                        <select id="objectResultCreateYn-M90001" class="env-field env-meta-field" onchange="M90001.handleResultCreateChange(this.value)">
+                            <option value="N">N (사용안함)</option>
+                            <option value="T">T (테이블사용)</option>
+                            <option value="M">M (모델사용)</option>
+                        </select>
+                    </label>
+                    <label>
+                        <span>Result Owner</span>
+                        <input id="objectResultOwner-M90001" class="env-field env-meta-field" type="text" oninput="M90001.updateObjectMeta('resultOwner', this.value)">
+                    </label>
+                    <label>
+                        <span>Result Table</span>
+                        <input id="objectResultTable-M90001" class="env-field env-meta-field" type="text" oninput="M90001.updateObjectMeta('resultTableName', this.value)">
+                    </label>
                 </div>
             </section>
 

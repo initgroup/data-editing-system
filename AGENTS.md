@@ -184,8 +184,8 @@ router = APIRouter()
 - API 호출은 `CommonUtils.request`를 사용합니다. 이 함수가 로그인/Target DB 헤더를 자동으로 붙입니다.
 - 페이지 리소스 정리는 `destroy()`에 넣습니다.
 - 화면 등록 시 `frontend/config/menu.config.js`의 `MENU_CONFIG`, `PAGE_FILE_CONFIG.htmlPages`, `PAGE_FILE_CONFIG.scriptPages`를 함께 수정합니다.
-- `M02003`, `M02004`, `M03001`처럼 데이터 작업 공통 템플릿을 쓰는 화면은 `frontend/pages/MCOMMON_DATA_WORK.html`, `frontend/js/MCOMMON_DATA_WORK.js`, `backend/services/data_work_router.py` 패턴을 먼저 확인합니다.
-- `M03100`처럼 FLOW 작업 공통 템플릿을 쓰는 화면은 `frontend/pages/MCOMMON_FLOW_WORK.html`, `frontend/js/MCOMMON_FLOW_WORK.js`, `backend/services/flow_work_router.py` 패턴을 먼저 확인합니다.
+- `M02003`, `M02004`, `M03001`처럼 데이터 작업 공통 템플릿을 쓰는 화면은 `frontend/pages/MCOM_DATA_WORK.html`, `frontend/js/MCOM_DATA_WORK.js`, `backend/services/data_work_router.py` 패턴을 먼저 확인합니다.
+- `M03100`처럼 FLOW 작업 공통 템플릿을 쓰는 화면은 `frontend/pages/MCOM_FLOW_WORK.html`, `frontend/js/MCOM_FLOW_WORK.js`, `backend/services/flow_work_router.py` 패턴을 먼저 확인합니다.
 
 ## 새 화면 추가 절차
 

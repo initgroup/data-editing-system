@@ -391,7 +391,7 @@ const PageManager = {
         if (!container) throw new Error(`Page container was not created: ${pageCode}`);
 
         if (!this.hasRegisteredPageFile(pageCode, 'html')) {
-            container.innerHTML = this.createMissingPageHtml(pageCode);
+            container.innerHTML = this.createMissingPageHtml(pageCode, "not-registered");
             return false;
         }
 
@@ -401,12 +401,12 @@ const PageManager = {
             const isAnlyTemplate = this.anlyWorkTemplatePages.includes(pageCode);
             const useCommonTemplate = isDataTemplate || isFlowTemplate || isAnlyTemplate;
             const htmlFileName = this.dataWorkTemplatePages.includes(pageCode)
-                ? 'MCOMMON_DATA_WORK'
-                : (this.flowWorkTemplatePages.includes(pageCode) ? 'MCOMMON_FLOW_WORK' : (isAnlyTemplate ? 'MCOMMON_ANLY_WORK' : pageCode));
+                ? 'MCOM_DATA_WORK'
+                : (this.flowWorkTemplatePages.includes(pageCode) ? 'MCOM_FLOW_WORK' : (isAnlyTemplate ? 'MCOM_ANLY_WORK' : pageCode));
             const htmlUrl = this.getAssetUrl(`./pages/${htmlFileName}.html`);
             const response = await fetch(htmlUrl);
             if (!response.ok) {
-                container.innerHTML = this.createMissingPageHtml(pageCode);
+                container.innerHTML = this.createMissingPageHtml(pageCode, response.status === 404 ? "not-found" : "load-failed");
                 return false;
             }
 
@@ -416,20 +416,39 @@ const PageManager = {
                 : html;
             return true;
         } catch (error) {
-            container.innerHTML = this.createMissingPageHtml(pageCode);
+            container.innerHTML = this.createMissingPageHtml(pageCode, "server-unavailable");
             return false;
         }
     },
 
-    createMissingPageHtml(pageCode) {
+    createMissingPageHtml(pageCode, reason = "not-found") {
+        const messages = {
+            "not-registered": {
+                title: "등록되지 않은 화면입니다.",
+                detail: `${pageCode} 화면이 메뉴 설정에 연결되어 있지 않습니다.`
+            },
+            "not-found": {
+                title: "페이지 파일을 찾을 수 없습니다.",
+                detail: `${pageCode}.html 파일 경로 또는 배포 상태를 확인해 주세요.`
+            },
+            "server-unavailable": {
+                title: "WAS 서버가 응답하지 않습니다.",
+                detail: "서버 실행 상태 또는 네트워크 연결을 확인해 주세요."
+            },
+            "load-failed": {
+                title: "페이지를 불러오지 못했습니다.",
+                detail: "잠시 후 다시 시도하거나 서버 상태를 확인해 주세요."
+            }
+        };
+        const message = messages[reason] || messages["not-found"];
         return `
             <div id="container-${pageCode}" class="h-full min-h-[360px] flex items-center justify-center">
                 <div class="text-center text-slate-500">
                     <div class="text-4xl mb-4 text-slate-300">
                         <i class="fas fa-file-circle-question"></i>
                     </div>
-                    <div class="text-lg font-semibold text-slate-700">화면 준비 중입니다.</div>
-                    <div class="mt-2 text-sm">${pageCode}.html 파일이 아직 연결되지 않았습니다.</div>
+                    <div class="text-lg font-semibold text-slate-700">${message.title}</div>
+                    <div class="mt-2 text-sm">${message.detail}</div>
                 </div>
             </div>
         `;
@@ -452,7 +471,7 @@ const PageManager = {
      */
     async injectScript(pageCode, force = false) {
         const isAnlyTemplate = this.anlyWorkTemplatePages.includes(pageCode);
-        const scriptFileName = isAnlyTemplate ? 'MCOMMON_ANLY_WORK' : pageCode;
+        const scriptFileName = isAnlyTemplate ? 'MCOM_ANLY_WORK' : pageCode;
 
         if (!force && document.querySelector(`script[src*="${scriptFileName}.js"]`)) {
             if (isAnlyTemplate) this.ensureAnlyWorkPage(pageCode);

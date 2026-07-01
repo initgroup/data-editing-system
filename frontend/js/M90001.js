@@ -1074,7 +1074,10 @@
                 objectLabel: meta.OBJECT_LABEL || meta.objectLabel || base.objectLabel,
                 description: meta.DESCRIPTION || meta.description || meta.DICTIONARY_COMMENT || base.description,
                 useYn: meta.USE_YN || meta.useYn || base.useYn,
-                sortOrder: meta.SORT_ORDER ?? meta.sortOrder ?? base.sortOrder
+                sortOrder: meta.SORT_ORDER ?? meta.sortOrder ?? base.sortOrder,
+                resultCreateYn: meta.RESULT_CREATE_YN || meta.resultCreateYn || base.resultCreateYn,
+                resultOwner: meta.RESULT_OWNER || meta.resultOwner || base.resultOwner,
+                resultTableName: meta.RESULT_TABLE_NAME || meta.resultTableName || base.resultTableName
             };
         },
 
@@ -1087,7 +1090,10 @@
                 objectLabel: objectRow?.OBJECT_LABEL || objectRow?.OBJECT_NAME || "",
                 description: objectRow?.OBJECT_LABEL || objectRow?.OBJECT_NAME || "",
                 useYn: "Y",
-                sortOrder: 0
+                sortOrder: 0,
+                resultCreateYn: "N",
+                resultOwner: objectRow?.OWNER || "",
+                resultTableName: ""
             };
         },
 
@@ -1100,6 +1106,10 @@
             this.setFieldValue("#objectUseYn-M90001", meta.useYn || "Y");
             this.setFieldValue("#objectSortOrder-M90001", meta.sortOrder ?? 0);
             this.setFieldValue("#objectDescription-M90001", meta.description || "");
+            this.setFieldValue("#objectResultCreateYn-M90001", meta.resultCreateYn || "N");
+            this.setFieldValue("#objectResultOwner-M90001", meta.resultOwner || "");
+            this.setFieldValue("#objectResultTable-M90001", meta.resultTableName || "");
+            this.syncResultMetaFields();
             this.renderDetailSource();
         },
 
@@ -1128,6 +1138,20 @@
         updateObjectMeta(field, value) {
             this.objectMeta = this.objectMeta || this.createDefaultObjectMeta(this.selectedObject);
             this.objectMeta[field] = value;
+        },
+
+        handleResultCreateChange(value) {
+            this.updateObjectMeta("resultCreateYn", value);
+            this.syncResultMetaFields();
+        },
+
+        syncResultMetaFields() {
+            const mode = String(getContainerEl("#objectResultCreateYn-M90001")?.value || this.objectMeta?.resultCreateYn || "N").trim().toUpperCase();
+            const disabled = mode === "N";
+            ["#objectResultOwner-M90001", "#objectResultTable-M90001"].forEach((selector) => {
+                const field = getContainerEl(selector);
+                if (field) field.disabled = disabled;
+            });
         },
 
         setFieldValue(selector, value) {

@@ -393,20 +393,76 @@ const CommonUtils = {
         return Array.isArray(fallback) ? fallback : [];
     },
 
-    formatErrorMessage(errorJson) {
+    formatErrorMessage(errorJson, context = {}) {
         const detail = errorJson?.detail || errorJson?.message;
+        const status = Number(context.status || 0);
         if (Array.isArray(detail)) {
-            return detail.map((item) => {
+            const message = detail.map((item) => {
                 if (typeof item === "string") return item;
                 const location = Array.isArray(item.loc) ? item.loc.join(".") : "";
                 const message = item.msg || JSON.stringify(item);
                 return location ? `${location}: ${message}` : message;
             }).join("\n");
+            return this.formatMainErrorMessage(message, { ...context, status });
         }
         if (detail && typeof detail === "object") {
-            return detail.msg || JSON.stringify(detail);
+            return this.formatMainErrorMessage(detail.msg || JSON.stringify(detail), { ...context, status });
         }
-        return detail || "Request failed.";
+        return this.formatMainErrorMessage(detail || "Request failed.", { ...context, status });
+    },
+
+    formatMainErrorMessage(message, context = {}) {
+        const raw = String(message || "").trim();
+        const lower = raw.toLowerCase();
+        const status = Number(context.status || 0);
+        const url = String(context.url || "");
+        const isApiRequest = /\/api\//.test(url) || url.startsWith("/api/");
+        const appendDetail = (friendly) => {
+            if (!raw || raw === friendly) return friendly;
+            if (raw.length > 160) return `${friendly}\n상세: ${raw.slice(0, 160)}...`;
+            return `${friendly}\n상세: ${raw}`;
+        };
+
+        if (status === 404) {
+            return isApiRequest
+                ? "요청한 기능(API)을 찾을 수 없습니다. 화면과 서버 버전이 맞는지 확인해 주세요."
+                : "요청한 페이지 파일을 찾을 수 없습니다. 화면 파일 연결 상태를 확인해 주세요.";
+        }
+
+        if ([502, 503, 504].includes(status)) {
+            return "WAS 서버가 응답하지 않습니다. 서버 실행 상태 또는 네트워크 연결을 확인해 주세요.";
+        }
+
+        if (
+            lower.includes("failed to fetch")
+            || lower.includes("networkerror")
+            || lower.includes("network error")
+            || lower.includes("load failed")
+            || lower.includes("connection refused")
+            || lower.includes("err_connection_refused")
+        ) {
+            return "WAS 서버에 연결할 수 없습니다. 서버가 실행 중인지와 접속 주소를 확인해 주세요.";
+        }
+
+        if (
+            lower.includes("getaddrinfo failed")
+            || lower.includes("ora-12154")
+            || lower.includes("ora-12514")
+            || lower.includes("ora-12541")
+            || lower.includes("ora-12545")
+            || lower.includes("dpy-6005")
+            || lower.includes("dpi-1047")
+            || lower.includes("database connection")
+            || lower.includes("target db")
+        ) {
+            return appendDetail("Target DB에 접속할 수 없습니다. DB 서버 주소, 서비스명, 포트, 네트워크 상태를 확인해 주세요.");
+        }
+
+        if (status >= 500) {
+            return appendDetail("서버 처리 중 오류가 발생했습니다. 잠시 후 다시 시도하거나 관리자에게 문의해 주세요.");
+        }
+
+        return raw || "요청을 처리하지 못했습니다.";
     },
 
     async request(url, options = {}) {
@@ -450,7 +506,7 @@ const CommonUtils = {
             
             if (!response.ok) {
                 const errorJson = await response.json().catch(() => ({}));
-                const errorMsg = this.formatErrorMessage(errorJson);
+                const errorMsg = this.formatErrorMessage(errorJson, { status: response.status, url });
                 window.ConsoleLogger?.requestEnd?.(requestLog, response, { message: errorMsg });
                 responseLogged = true;
                 throw new Error(errorMsg);
@@ -463,7 +519,9 @@ const CommonUtils = {
 
         } catch (err) {
             if (err?.name === "AbortError") {
-                err = new Error(options.timeoutMessage || "Request timed out.");
+                err = new Error(options.timeoutMessage || "요청 시간이 초과되었습니다. WAS 서버 상태 또는 네트워크 연결을 확인해 주세요.");
+            } else if (!responseLogged) {
+                err = new Error(this.formatMainErrorMessage(err?.message || err || "Request failed.", { url }));
             }
             if (!responseLogged) {
                 window.ConsoleLogger?.requestError?.(requestLog, err);

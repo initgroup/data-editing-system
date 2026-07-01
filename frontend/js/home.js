@@ -128,6 +128,7 @@
                         x: { grid: { display: false } },
                         y: {
                             beginAtZero: true,
+                            grace: "5%",
                             ticks: { precision: 0 },
                             grid: { color: "rgba(148, 163, 184, 0.24)" }
                         }
@@ -1177,7 +1178,7 @@
 
             const id = notice.noticeId || notice.title || "";
             sessionStorage.setItem(`homeNoticePopup:${id}`, "Y");
-            await CommonMessage.info(`${notice.title || "Notice"}\n\n${notice.popupText || notice.text || ""}`, {
+            await CommonMessage.info(`${notice.title || "Notice"}\n${this.getNoticeDefaultMetaText(notice)}\n\n${notice.popupText || notice.text || ""}`, {
                 title: "공지사항",
                 modal: true
             });
@@ -1271,6 +1272,8 @@
             if (meta) {
                 meta.innerHTML = `
                     <span><strong>Type</strong> ${this.escapeHtml(notice.noticeType || "")}</span>
+                    <span><strong>Writer</strong> ${this.escapeHtml(this.getNoticeWriterLabel(notice))}</span>
+                    <span><strong>Created</strong> ${this.escapeHtml(this.getNoticeCreatedLabel(notice))}</span>
                     <span><strong>Period</strong> ${this.escapeHtml([notice.postStartAt, notice.postEndAt].filter(Boolean).join(" ~ ") || "-")}</span>
                     <span><strong>Popup</strong> ${this.escapeHtml(notice.popupYn || "N")}</span>
                 `;
@@ -1296,6 +1299,24 @@
         closeNoticeLayer() {
             const layer = document.getElementById("homeNoticeLayer");
             if (layer) layer.hidden = true;
+        },
+
+        getNoticeWriterLabel(notice) {
+            return String(
+                notice?.createdByDisplay
+                || notice?.createdByName
+                || notice?.createdByLoginId
+                || notice?.createdBy
+                || "-"
+            ).trim() || "-";
+        },
+
+        getNoticeCreatedLabel(notice) {
+            return this.formatDateTime(notice?.createdAt);
+        },
+
+        getNoticeDefaultMetaText(notice) {
+            return `작성자 ${this.getNoticeWriterLabel(notice)}\n작성일 ${this.getNoticeCreatedLabel(notice)}`;
         },
 
         enableNoticeLayerDrag(layer) {

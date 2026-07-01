@@ -457,6 +457,11 @@ def save_object_detail(req: ObjectDetailSaveRequest, request: Request):
             "useYn": metadata.get("useYn") or metadata.get("USE_YN") or "Y",
             "sortOrder": int(metadata.get("sortOrder") or metadata.get("SORT_ORDER") or 0)
         }
+        result_create_yn = str(metadata.get("resultCreateYn") or metadata.get("RESULT_CREATE_YN") or "N").strip().upper()
+        if result_create_yn not in {"N", "T", "M"}:
+            result_create_yn = "N"
+        result_owner = str(metadata.get("resultOwner") or metadata.get("RESULT_OWNER") or "").strip().upper()
+        result_table_name = str(metadata.get("resultTableName") or metadata.get("RESULT_TABLE_NAME") or "").strip().upper()
 
         cursor.execute(object_upsert_sql, object_params)
         cursor.execute(
@@ -479,8 +484,30 @@ def save_object_detail(req: ObjectDetailSaveRequest, request: Request):
             }
         )
 
+        result_items = [
+            {
+                "key": "INIT$RESULT_CREATE_YN",
+                "value": "INTERNAL",
+                "desc": "Registered result create mode",
+                "defaultValue": result_create_yn
+            },
+            {
+                "key": "INIT$RESULT_OWNER",
+                "value": "INTERNAL",
+                "desc": "Registered result owner",
+                "defaultValue": result_owner
+            },
+            {
+                "key": "INIT$RESULT_TABLE_NAME",
+                "value": "INTERNAL",
+                "desc": "Registered result table name",
+                "defaultValue": result_table_name
+            }
+        ]
+        detail_items = list(items) + result_items
+
         saved_count = 0
-        for index, item in enumerate(items, start=1):
+        for index, item in enumerate(detail_items, start=1):
             item_name = (item.get("key") or "").strip()
             item_value = item.get("value") or ""
             item_desc = item.get("desc") or item.get("itemDesc") or ""
@@ -520,7 +547,10 @@ def save_object_detail(req: ObjectDetailSaveRequest, request: Request):
                     "OBJECT_LABEL": object_params["objectLabel"],
                     "DESCRIPTION": object_params["description"],
                     "USE_YN": object_params["useYn"],
-                    "SORT_ORDER": object_params["sortOrder"]
+                    "SORT_ORDER": object_params["sortOrder"],
+                    "RESULT_CREATE_YN": result_create_yn,
+                    "RESULT_OWNER": result_owner,
+                    "RESULT_TABLE_NAME": result_table_name
                 },
                 "savedCount": saved_count,
                 "items": items

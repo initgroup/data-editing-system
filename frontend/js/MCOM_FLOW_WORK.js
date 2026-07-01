@@ -2253,12 +2253,18 @@
                 return Boolean(this.normalizeSystemBindName(name));
             },
 
+            isRunIdSystemBindName(name) {
+                const canonicalName = this.normalizeSystemBindName(name);
+                return canonicalName === "INIT$RunId" || canonicalName === "INIT$FlowRunId";
+            },
+
             normalizeSystemBindName(name) {
                 const aliases = {
                     "INIT$TargetOwner": "INIT$TargetOwner",
                     "INIT$TargetTable": "INIT$TargetTable",
                     "INIT$ResultOwner": "INIT$ResultOwner",
                     "INIT$ResultTable": "INIT$ResultTable",
+                    "INIT$ResultModelName": "INIT$ResultModelName",
                     "INIT$PreTargetOwner": "INIT$PreTargetOwner",
                     "INIT$PreTargetTable": "INIT$PreTargetTable",
                     "INIT$PreResultOwner": "INIT$PreResultOwner",
@@ -2292,6 +2298,7 @@
                     "INIT$TargetTable": sourceNode.dataset.tableName || "",
                     "INIT$ResultOwner": resultOwner,
                     "INIT$ResultTable": resultTable,
+                    "INIT$ResultModelName": resultTable,
                     "INIT$PreTargetOwner": sourceNode.dataset.ownerName || "",
                     "INIT$PreTargetTable": sourceNode.dataset.tableName || "",
                     "INIT$PreResultOwner": resultOwner,
@@ -2305,6 +2312,9 @@
 
             getSystemBindComment(name, node) {
                 const canonicalName = this.normalizeSystemBindName(name);
+                if (canonicalName === "INIT$RunId" || canonicalName === "INIT$FlowRunId") {
+                    return "Use (auto) or blank for a new flow run id. Enter an existing flow run id to overwrite that run.";
+                }
                 if (canonicalName.includes("$Pre") && !this.getPreviousNodeForSystemBind(node)) {
                     return "No upstream node is connected.";
                 }
@@ -2376,6 +2386,14 @@
                 return this.resolveNodeRuntimeDefaultValue(this.getNodeParamDefault(item), node);
             },
 
+            getNodeRunIdBindValue(item) {
+                if (this.hasNodeParamValue(item)) {
+                    const value = String(item.value ?? "").trim();
+                    return value || "(auto)";
+                }
+                return "(auto)";
+            },
+
             getNodeRuntimeBindComment(item) {
                 const comment = this.getNodeParamComment(item);
                 if (comment) return comment;
@@ -2439,6 +2457,18 @@
                 container.innerHTML = entries.map(({ name, label }) => {
                     if (this.isSystemBindName(name)) {
                         const value = this.getSystemBindValue(name, node);
+                        if (this.isRunIdSystemBindName(name)) {
+                            const saved = paramMap.get(this.normalizeBindParamKey(name));
+                            return `
+                                <label class="data-bind-row flow-system-bind-row">
+                                    <span class="data-bind-meta">
+                                        <span class="flow-bind-name">${this.escapeHtml(label)}</span>
+                                        <small class="flow-bind-comment">${this.escapeHtml(this.getSystemBindComment(name, node))}</small>
+                                    </span>
+                                    <input class="env-field flow-node-bind-input" data-bind-name="${this.escapeHtml(name)}" type="text" value="${this.escapeHtml(this.getNodeRunIdBindValue(saved))}" oninput="${PAGE_CODE}.updateNodeBindValue(this.dataset.bindName, this.value)">
+                                </label>
+                            `;
+                        }
                         return `
                             <label class="data-bind-row flow-system-bind-row">
                                 <span class="data-bind-meta">
@@ -2491,6 +2521,75 @@
                     edge.from === nodeId && String(edge.fromPort || "output") === String(portName || "")
                 );
                 return exact.length ? exact : this.flowEdges.filter((edge) => edge.from === nodeId);
+            },
+
+            isAutoRunIdValue(value) {
+                const text = String(value ?? "").trim().toLowerCase();
+                return !text || text === "(auto)" || text === "auto";
+            },
+
+            readManualFlowRunIdValue(value) {
+                const text = String(value ?? "").trim();
+                if (this.isAutoRunIdValue(text)) return "";
+                if (!/^[1-9][0-9]*$/.test(text)) {
+                    throw new Error("Flow run id must be (auto), blank, or a positive integer.");
+                }
+                return text;
+            },
+
+            getManualFlowRunIdFromPayload(payload, nodeKey = "") {
+                const ids = [];
+                const runKeys = new Set(["INIT$RunId", "INIT$FlowRunId", "runId", "flowRunId"]);
+                (payload?.nodes || []).forEach((node) => {
+                    if (nodeKey && String(node.nodeKey || "") !== String(nodeKey)) return;
+                    (node.params || []).forEach((item) => {
+                        const name = String(item?.name || item?.itemName || item?.key || "");
+                        if (!runKeys.has(name)) return;
+                        const value = Object.prototype.hasOwnProperty.call(item, "value")
+                            ? item.value
+                            : (item.itemDefault ?? item.defaultValue ?? "");
+                        const runId = this.readManualFlowRunIdValue(value);
+                        if (runId) ids.push(runId);
+                    });
+                });
+                if (!ids.length) return "";
+                if (new Set(ids).size > 1) {
+                    throw new Error("Manual flow run id values must match.");
+                }
+                return ids[0];
+            },
+
+            hasFlowRunIdForCurrentFlow(runId) {
+                const flowId = String(this.getValue(`#flowId-${PAGE_CODE}`) || "").trim();
+                const targetRunId = String(runId || "").trim();
+                if (!flowId || !targetRunId) return false;
+                return (this.flowRunHistoryRows || []).some((row) => (
+                    String(row.FLOW_ID || "").trim() === flowId
+                    && String(row.FLOW_RUN_ID || row.RUN_ID || "").trim() === targetRunId
+                ));
+            },
+
+            async confirmManualFlowRunIdOverwrite(payload, nodeKey = "") {
+                let runId = "";
+                try {
+                    runId = this.getManualFlowRunIdFromPayload(payload, nodeKey);
+                } catch (error) {
+                    await CommonMessage.warn(error.message || "Invalid flow run id.");
+                    return null;
+                }
+                if (!runId) return "";
+                if (!this.hasFlowRunIdForCurrentFlow(runId)) {
+                    await CommonMessage.warn(`FLOW_RUN_ID ${runId} is not an existing run id for the selected flow.`);
+                    return null;
+                }
+                const confirmed = await CommonMessage.confirm([
+                    `FLOW_RUN_ID ${runId} will be overwritten.`,
+                    `FLOW_RUN_ID ${runId} 결과를 다시 생성합니다.`,
+                    "",
+                    "Existing node run records and result rows for this flow run may be deleted and inserted again.",
+                    "Continue?"
+                ].join("\n"));
+                return confirmed ? runId : null;
             },
 
             inferPortType(portName, nodeType) {
@@ -3970,6 +4069,12 @@
                     ...this.buildFlowPayload(),
                     batch: Boolean(batch)
                 };
+                const manualRunId = await this.confirmManualFlowRunIdOverwrite(payload);
+                if (manualRunId === null) {
+                    this.setFlowRunning(false, flowKey);
+                    return;
+                }
+                if (manualRunId) payload.manualRunId = Number(manualRunId);
                 try {
                     const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/flow/run`, {
                         method: "POST",
@@ -4031,6 +4136,12 @@
                     ...this.buildFlowPayload(),
                     nodeKey: nodeId
                 };
+                const manualRunId = await this.confirmManualFlowRunIdOverwrite(payload, nodeId);
+                if (manualRunId === null) {
+                    this.setFlowRunning(false, flowKey);
+                    return;
+                }
+                if (manualRunId) payload.manualRunId = Number(manualRunId);
                 try {
                     const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/flow/run-node`, {
                         method: "POST",

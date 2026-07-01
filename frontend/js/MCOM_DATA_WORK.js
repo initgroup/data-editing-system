@@ -46,7 +46,7 @@
                     return row ? String(row.PROFILE_RUN_ID || row.WORK_RUN_ID || "").trim() : "";
                 },
 
-                createTargetResultWhereClause(tableName, targetOwner = "", targetTable = "") {
+                createTargetResultWhereClause(tableName, targetOwner = "", targetTable = "", runIdOverride = null) {
                     const table = String(tableName || "").trim().toUpperCase();
                     const owner = String(targetOwner || "").trim();
                     const target = String(targetTable || "").trim();
@@ -63,7 +63,9 @@
                     if (table === "INIT$_TB_PREDICTED_TYPE_FINAL") {
                         return clauses.join("\n");
                     }
-                    const runId = this.getLatestDataWorkRunId?.();
+                    const runId = runIdOverride !== null
+                        ? String(runIdOverride || "")
+                        : this.getLatestDataWorkRunId?.();
                     if (runId && /^\d+$/.test(runId)) {
                         clauses.push(" AND RUN_SOURCE_TYPE = 'DATA_WORK'");
                         clauses.push(` AND RUN_ID = ${runId}`);
@@ -76,13 +78,23 @@
                     return table === "INIT$_TB_PREDICTED_TYPE" || table === "INIT$_TB_PREDICTED_TYPE_FINAL";
                 },
 
+                shouldLookupExistingResultRunId(tableName) {
+                    const table = String(tableName || "").trim().toUpperCase();
+                    return new Set([
+                        "INIT$_TB_CAT_CORR_PAIR",
+                        "INIT$_TB_CAT_CORR_SUMMARY",
+                        "INIT$_TB_ASSOC_RULE_SUMMARY",
+                        "INIT$_TB_RULE_VIOLATION_RESULT"
+                    ]).has(table);
+                },
+
                 getPredictedTypeFinalTableName(tableName) {
                     return this.isPredictedTypeResultTable(tableName)
                         ? "INIT$_TB_PREDICTED_TYPE_FINAL"
                         : String(tableName || "").trim();
                 },
 
-                createTargetFilteredSelectSql(ownerName, tableName, targetOwner = "", targetTable = "") {
+                createTargetFilteredSelectSql(ownerName, tableName, targetOwner = "", targetTable = "", runIdOverride = null) {
                     const owner = String(ownerName || "").trim();
                     const requestedTable = String(tableName || "").trim();
                     const table = pageCode === "M03001"
@@ -90,7 +102,7 @@
                         : requestedTable;
                     if (!table) return "";
                     const objectName = owner ? `${this.quoteName(owner)}.${this.quoteName(table)}` : this.quoteName(table);
-                    const whereClause = this.createTargetResultWhereClause(table, targetOwner, targetTable);
+                    const whereClause = this.createTargetResultWhereClause(table, targetOwner, targetTable, runIdOverride);
                     const mainSql = !whereClause ? `SELECT *\n  FROM ${objectName};` : [
                         "SELECT *",
                         `  FROM ${objectName}`,
@@ -103,7 +115,7 @@
                     const historyObjectName = owner
                         ? `${this.quoteName(owner)}.${this.quoteName("INIT$_TB_PREDICTED_TYPE")}`
                         : this.quoteName("INIT$_TB_PREDICTED_TYPE");
-                    const historyWhereClause = this.createTargetResultWhereClause("INIT$_TB_PREDICTED_TYPE", targetOwner, targetTable);
+                    const historyWhereClause = this.createTargetResultWhereClause("INIT$_TB_PREDICTED_TYPE", targetOwner, targetTable, runIdOverride);
                     const historySql = !historyWhereClause ? `SELECT *\n  FROM ${historyObjectName};` : [
                         "SELECT *",
                         `  FROM ${historyObjectName}`,
@@ -662,6 +674,54 @@
                 `).join("")}
             `;
             select.value = this.currentJob?.execObjectId || "";
+            if (this.currentJob?.execObjectId) {
+                this.syncRegisteredResultInfo();
+            }
+        },
+
+        getSelectedExecutableObject() {
+            const objectId = this.currentJob?.execObjectId || getContainerEl(`#execObject-${PAGE_CODE}`)?.value || "";
+            return this.executableObjects.find((row) => String(row.OBJECT_ID || "") === String(objectId)) || null;
+        },
+
+        getRegisteredResultInfo(object = this.getSelectedExecutableObject()) {
+            if (!object) return null;
+            const createMode = this.normalizeResultCreateMode(object.RESULT_CREATE_YN || "N");
+            const owner = String(object.RESULT_OWNER || "").trim();
+            const tableName = String(object.RESULT_TABLE_NAME || "").trim();
+            if (createMode === "N" && !owner && !tableName) return null;
+            return {
+                resultCreateYn: createMode,
+                resultOwner: owner,
+                resultTableName: tableName
+            };
+        },
+
+        applyRegisteredResultInfo(object = this.getSelectedExecutableObject()) {
+            const info = this.getRegisteredResultInfo(object);
+            if (!info) return false;
+            const changed = this.currentJob?.resultCreateYn !== info.resultCreateYn
+                || this.currentJob?.resultOwner !== info.resultOwner
+                || this.currentJob?.resultTableName !== info.resultTableName;
+            this.currentJob = {
+                ...this.currentJob,
+                ...info
+            };
+            this.setFieldValue(`#resultCreateYn-${PAGE_CODE}`, info.resultCreateYn);
+            this.setFieldValue(`#resultOwner-${PAGE_CODE}`, info.resultOwner);
+            this.setFieldValue(`#resultTable-${PAGE_CODE}`, info.resultTableName);
+            this.setFieldValue(`#resultQueryTable-${PAGE_CODE}`, info.resultTableName);
+            if (changed) this.resetEditableDataGrid();
+            this.updateResultModeLabels();
+            return true;
+        },
+
+        syncRegisteredResultInfo() {
+            const applied = this.applyRegisteredResultInfo();
+            this.syncResultFields();
+            this.updateResultModeLabels();
+            this.renderUserSqlJobContext();
+            return applied;
         },
 
         async loadOmlResources() {
@@ -744,6 +804,7 @@
                 execObjectName: object.OBJECT_NAME,
                 execObjectLabel: object.OBJECT_LABEL || object.OBJECT_NAME
             };
+            this.syncRegisteredResultInfo();
             this.parameters = [];
             this.renderParameters();
             await this.loadParameters(object.OBJECT_ID);
@@ -867,6 +928,8 @@
                         CommonMessage.warning?.("Select a DB object first.");
                         return;
                     }
+                    await this.loadExecutableObjects();
+                    this.syncRegisteredResultInfo();
                     await this.loadParameters(objectId);
                 }
                 CommonMessage.success?.("Parameters refreshed.", { copyable: false });
@@ -953,7 +1016,17 @@
             container.hidden = false;
             const metaText = `${objectType || "-"} · ${objectName || "-"}`;
             container.innerHTML = `
-                <b title="${this.escapeHtml(metaText)}">${this.escapeHtml(metaText)}</b>
+                <b title="${this.escapeHtml(metaText)}">
+                    <span class="data-object-meta-type">${this.escapeHtml(objectType || "-")}</span>
+                    <input
+                        class="data-object-meta-name"
+                        type="text"
+                        value="${this.escapeAttr(objectName || "-")}"
+                        readonly
+                        ondblclick="this.select()"
+                        aria-label="Selected object name"
+                    >
+                </b>
             `;
         },
 
@@ -1147,12 +1220,16 @@
         },
 
         handleResultCreateChange(value) {
+            if (this.syncRegisteredResultInfo()) {
+                return;
+            }
             const createMode = this.normalizeResultCreateMode(value);
             this.updateCurrentJobField("resultCreateYn", createMode);
             if (createMode !== "N") {
                 this.applyDefaultResultOwner();
             }
             this.syncResultFields();
+            this.updateResultModeLabels();
             if (createMode !== "N") {
                 getContainerEl(`#resultTable-${PAGE_CODE}`)?.focus();
             }
@@ -1188,11 +1265,42 @@
 
         syncResultFields() {
             const createMode = this.normalizeResultCreateMode(getContainerEl(`#resultCreateYn-${PAGE_CODE}`)?.value || this.currentJob?.resultCreateYn || "N");
-            const disabled = createMode === "N";
+            const registeredResult = this.getRegisteredResultInfo();
+            const disabled = createMode === "N" || (Boolean(registeredResult) && createMode !== "M");
+            const createField = getContainerEl(`#resultCreateYn-${PAGE_CODE}`);
+            if (createField) createField.disabled = Boolean(registeredResult);
             [`#resultOwner-${PAGE_CODE}`, `#resultTable-${PAGE_CODE}`].forEach((selector) => {
                 const field = getContainerEl(selector);
                 if (field) field.disabled = disabled;
             });
+        },
+
+        updateResultModeLabels() {
+            const createMode = this.normalizeResultCreateMode(getContainerEl(`#resultCreateYn-${PAGE_CODE}`)?.value || this.currentJob?.resultCreateYn || "N");
+            const createTitle = getContainerEl(`#resultCreateTitle-${PAGE_CODE}`);
+            const tableTitle = getContainerEl(`#resultTableTitle-${PAGE_CODE}`);
+            const tableField = getContainerEl(`#resultTable-${PAGE_CODE}`);
+            const labels = {
+                N: {
+                    createTitle: "Result Use",
+                    tableTitle: "Result Table",
+                    placeholder: "RESULT_TABLE"
+                },
+                T: {
+                    createTitle: "Result Table Create",
+                    tableTitle: "Result Table",
+                    placeholder: "RESULT_TABLE"
+                },
+                M: {
+                    createTitle: "Result Model Create",
+                    tableTitle: "Result Model",
+                    placeholder: "MODEL_NAME"
+                }
+            };
+            const label = labels[createMode] || labels.N;
+            if (createTitle) createTitle.textContent = label.createTitle;
+            if (tableTitle) tableTitle.textContent = label.tableTitle;
+            if (tableField) tableField.setAttribute("placeholder", label.placeholder);
         },
 
         renderCurrentJob() {
@@ -1223,6 +1331,7 @@
             this.setText(`#selectedExecObjectLabel-${PAGE_CODE}`, job.execObjectLabel || job.execObjectName || this.getLabel("noExecutableObject"));
             this.syncExecutionSourceFields();
             this.syncResultFields();
+            this.updateResultModeLabels();
             const desc = job.ownerName && job.tableName
                 ? `${job.ownerName}.${job.tableName}`
                 : this.getLabel("workDescriptionEmpty");
@@ -1335,19 +1444,26 @@
                             <strong>3. 실행 시 실제 값으로 바인딩</strong>
                             <span>Run now / Queue Batch에서 저장된 Default, Runtime Bind, 현재 Job 정보를 합쳐 실행합니다.</span>
                         </section>
+                        <section class="data-help-step">
+                            <strong>4. Result 정보는 선택된 등록 오브젝트 기준으로 동기화</strong>
+                            <span><code>T</code>는 M90001에 등록된 Result Table을 사용하고, <code>M</code>은 화면의 Result Model 입력값을 사용합니다.</span>
+                        </section>
                     </div>
                     <h3>자동 예약 변수</h3>
                     <div class="data-help-token-grid">
                         <span><code>:INIT$TargetOwner</code><small>현재 Target Owner</small></span>
                         <span><code>:INIT$TargetTable</code><small>현재 Target Table</small></span>
                         <span><code>:INIT$ResultOwner</code><small>현재 Result Owner</small></span>
-                        <span><code>:INIT$ResultTable</code><small>현재 Result Table</small></span>
+                        <span><code>:INIT$ResultTable</code><small>현재 Result Table 또는 Result Model 입력값</small></span>
+                        <span><code>:INIT$ResultModelName</code><small>Result Model 입력값을 기본값으로 사용</small></span>
                         <span><code>:INIT$RunSourceType</code><small>DATA_WORK/FLOW_WORK</small></span>
-                        <span><code>:INIT$RunId</code><small>현재 실행 이력 ID</small></span>
+                        <span><code>:INIT$RunId</code><small><code>(auto)</code>면 자동 발급, 숫자면 수동 실행 ID</small></span>
                     </div>
+                    <p class="data-help-summary">Result Table Create가 <code>T</code>이면 Result Owner/Table은 등록값으로 고정됩니다. <code>M</code>이면 Result Owner와 Result Model을 사용자가 수정할 수 있고, <code>:INIT$ResultModelName</code>은 그 Result Model 값을 기본값으로 표시합니다.</p>
                     <h3>생성 예시</h3>
                     <pre class="data-help-code"><code>P_TARGET_OWNER       =&gt; :INIT$TargetOwner
 P_TARGET_TABLE       =&gt; :INIT$TargetTable
+P_MODEL_NAME         =&gt; :INIT$ResultModelName
 P_RUN_SOURCE_TYPE    =&gt; :INIT$RunSourceType
 P_RUN_ID             =&gt; :INIT$RunId
 P_DYNAMIC_MODEL_NAME =&gt; :pDynamicModelName
@@ -2145,6 +2261,7 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                 "INIT$TargetTable": "INIT$TargetTable",
                 "INIT$ResultOwner": "INIT$ResultOwner",
                 "INIT$ResultTable": "INIT$ResultTable",
+                "INIT$ResultModelName": "INIT$ResultModelName",
                 "INIT$PreTargetOwner": "INIT$PreTargetOwner",
                 "INIT$PreTargetTable": "INIT$PreTargetTable",
                 "INIT$PreResultOwner": "INIT$PreResultOwner",
@@ -2180,6 +2297,9 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                 if (options.useSystemBindContext === false) {
                     return "System bind. Select a saved Data Work job to fill this automatically.";
                 }
+                if (this.normalizeSystemBindName(name) === "INIT$RunId") {
+                    return "Use (auto) or blank for a new run id. Enter an existing run id to overwrite that run.";
+                }
                 return "System bind default. You can override it for this run.";
             }
             if (row) {
@@ -2197,12 +2317,13 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                 "INIT$TargetTable": getContainerEl(`#targetTable-${PAGE_CODE}`)?.value || job.tableName || "",
                 "INIT$ResultOwner": getContainerEl(`#resultOwner-${PAGE_CODE}`)?.value || job.resultOwner || "",
                 "INIT$ResultTable": getContainerEl(`#resultTable-${PAGE_CODE}`)?.value || job.resultTableName || "",
+                "INIT$ResultModelName": getContainerEl(`#resultTable-${PAGE_CODE}`)?.value || job.resultTableName || "",
                 "INIT$PreTargetOwner": "",
                 "INIT$PreTargetTable": "",
                 "INIT$PreResultOwner": "",
                 "INIT$PreResultTable": "",
                 "INIT$RunSourceType": "DATA_WORK",
-                "INIT$RunId": this.getLatestDataWorkRunId?.() || ""
+                "INIT$RunId": "(auto)"
             };
             return values[canonicalName] ?? "";
         },
@@ -2226,6 +2347,61 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
             if (!name || seen.has(name)) return;
             seen.add(name);
             prompts.push({ name, label, value, comment });
+        },
+
+        isAutoRunIdValue(value) {
+            const text = String(value ?? "").trim().toLowerCase();
+            return !text || text === "(auto)" || text === "auto";
+        },
+
+        readManualRunIdValue(values = {}) {
+            const ids = [];
+            ["INIT$RunId", "runId"].forEach((key) => {
+                if (!Object.prototype.hasOwnProperty.call(values, key)) return;
+                const text = String(values[key] ?? "").trim();
+                if (this.isAutoRunIdValue(text)) return;
+                if (!/^[1-9][0-9]*$/.test(text)) {
+                    throw new Error(":INIT$RunId must be (auto), blank, or a positive integer.");
+                }
+                ids.push(text);
+            });
+            if (!ids.length) return "";
+            if (new Set(ids).size > 1) {
+                throw new Error(":INIT$RunId values must match.");
+            }
+            return ids[0];
+        },
+
+        hasRunHistoryIdForCurrentJob(runId) {
+            const jobId = String(this.currentJob?.profileJobId || this.currentJob?.workJobId || "").trim();
+            const targetRunId = String(runId || "").trim();
+            if (!jobId || !targetRunId) return false;
+            return (this.runHistory || []).some((item) => (
+                String(item.PROFILE_JOB_ID || item.WORK_JOB_ID || "").trim() === jobId
+                && String(item.PROFILE_RUN_ID || item.WORK_RUN_ID || item.RUN_ID || "").trim() === targetRunId
+            ));
+        },
+
+        async confirmManualRunIdOverwrite(values = {}) {
+            let runId = "";
+            try {
+                runId = this.readManualRunIdValue(values);
+            } catch (error) {
+                await CommonMessage.warn(error.message || "Invalid run id.");
+                return false;
+            }
+            if (!runId) return true;
+            if (!this.hasRunHistoryIdForCurrentJob(runId)) {
+                await CommonMessage.warn(`RUN_ID ${runId} is not an existing run id for the selected job.`);
+                return false;
+            }
+            return CommonMessage.confirm([
+                `RUN_ID ${runId} will be overwritten.`,
+                `RUN_ID ${runId} 결과를 다시 생성합니다.`,
+                "",
+                "Existing result rows for this run id may be deleted and inserted again.",
+                "Continue?"
+            ].join("\n"));
         },
 
         maskSqlForBindScan(sqlText) {
@@ -2257,12 +2433,13 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
             });
         },
 
-        confirmRuntimeBindDialog() {
+        async confirmRuntimeBindDialog() {
             const layer = getContainerEl(`#runtimeBindLayer-${PAGE_CODE}`);
             const values = {};
             getContainerEl(`#runtimeBindGrid-${PAGE_CODE}`)?.querySelectorAll(".data-runtime-bind-input").forEach((input) => {
                 values[input.dataset.bindName] = input.value;
             });
+            if (!(await this.confirmManualRunIdOverwrite(values))) return;
             this.runtimeBindValues = { ...this.runtimeBindValues, ...values };
             if (layer) layer.hidden = true;
             this.runtimeBindDialog?.resolve(values);
@@ -3263,8 +3440,11 @@ END;`;
                 && job.resultTableName;
             if (useResultObject && this.isResultModelMode(job.resultCreateYn)) {
                 const modelDetailSql = await this.fetchModelDetailSql(job.resultTableName, job.resultOwner);
+                if (this.isAssociationModelJob(job, job.resultTableName)) {
+                    return modelDetailSql;
+                }
                 const sourceTable = this.getModelPredictionSourceTable(job);
-                const predictionSql = this.createModelPredictionTargetSql(
+                const predictionSql = await this.createModelPredictionTargetSql(
                     job.resultTableName,
                     job.resultOwner,
                     job.ownerName,
@@ -3276,12 +3456,19 @@ END;`;
             }
             const ownerName = useResultObject ? job.resultOwner : job.ownerName;
             const tableName = useResultObject ? job.resultTableName : job.tableName;
+            let runId = "";
+            if (useResultObject && PAGE_CODE === "M03001" && this.isPredictedTypeResultTable(tableName)) {
+                runId = await this.fetchExistingPredictedTypeRunId(ownerName, job.ownerName, job.tableName);
+            } else if (useResultObject && this.shouldLookupExistingResultRunId(tableName)) {
+                runId = await this.fetchExistingResultTableRunId(ownerName, tableName, job.ownerName, job.tableName);
+            }
             return ownerName && tableName
                 ? this.createTargetFilteredSelectSql(
                     ownerName,
                     tableName,
                     useResultObject ? job.ownerName : "",
-                    useResultObject ? job.tableName : ""
+                    useResultObject ? job.tableName : "",
+                    runId
                 )
                 : "";
         },
@@ -3312,33 +3499,125 @@ END;`;
             };
         },
 
-        createModelPredictionTargetSql(modelName, modelOwner = "", targetOwner = "", targetTable = "", filterOwner = "", filterTable = "") {
+        isAssociationModelJob(job = this.currentJob || {}, modelName = "") {
+            const tokens = [
+                modelName,
+                job.resultTableName,
+                job.execObjectName,
+                job.execObjectLabel,
+                job.execMethod,
+                job.execPlsql
+            ]
+                .map((value) => String(value || "").toUpperCase())
+                .join(" ");
+            return tokens.includes("APRIORI") || tokens.includes("ASSOCIATION");
+        },
+
+        async fetchExistingPredictedTypeRunId(resultOwner = "", targetOwner = "", targetTable = "", modelName = "") {
+            const owner = String(resultOwner || "").trim().toUpperCase();
+            const sourceOwner = String(targetOwner || "").trim().toUpperCase();
+            const sourceTable = String(targetTable || "").trim().toUpperCase();
+            if (PAGE_CODE !== "M03001" || !owner || !sourceOwner || !sourceTable) {
+                return this.getLatestDataWorkRunId?.() || "";
+            }
+            try {
+                const params = new URLSearchParams({
+                    owner,
+                    targetOwner: sourceOwner,
+                    targetTable: sourceTable
+                });
+                const model = String(modelName || "").trim().toUpperCase();
+                if (model) params.set("modelName", model);
+                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/predicted-type-run-id?${params.toString()}`, {
+                    method: "GET",
+                    showLoading: false
+                });
+                return json?.data?.runId ? String(json.data.runId) : "";
+            } catch (error) {
+                return this.getLatestDataWorkRunId?.() || "";
+            }
+        },
+
+        async fetchExistingResultTableRunId(resultOwner = "", resultTable = "", targetOwner = "", targetTable = "") {
+            const owner = String(resultOwner || "").trim().toUpperCase();
+            const table = String(resultTable || "").trim().toUpperCase();
+            const sourceOwner = String(targetOwner || "").trim().toUpperCase();
+            const sourceTable = String(targetTable || "").trim().toUpperCase();
+            if (!this.shouldLookupExistingResultRunId(table) || !owner || !sourceOwner || !sourceTable) {
+                return "";
+            }
+            try {
+                const params = new URLSearchParams({
+                    owner,
+                    tableName: table,
+                    targetOwner: sourceOwner,
+                    targetTable: sourceTable
+                });
+                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/result-run-id?${params.toString()}`, {
+                    method: "GET",
+                    showLoading: false
+                });
+                return json?.data?.runId || json?.data?.runId === 0 ? String(json.data.runId) : "";
+            } catch (error) {
+                return this.getLatestDataWorkRunId?.() || "";
+            }
+        },
+
+        async createModelPredictionTargetSql(modelName, modelOwner = "", targetOwner = "", targetTable = "", filterOwner = "", filterTable = "") {
             const model = String(modelName || "").trim().toUpperCase();
             const owner = String(modelOwner || "").trim().toUpperCase();
             const tableOwner = String(targetOwner || "").trim().toUpperCase();
             const table = String(targetTable || "").trim().toUpperCase();
             if (!model || !tableOwner || !table) return "";
 
+            if (this.isAssociationModelJob(this.currentJob || {}, model)) {
+                return "";
+            }
+
             const modelObject = owner ? `${this.quoteName(owner)}.${this.quoteName(model)}` : this.quoteName(model);
+            const existingRunId = await this.fetchExistingPredictedTypeRunId(tableOwner, filterOwner || tableOwner, filterTable || table, model);
+            const whereClause = this.createTargetResultWhereClause(table, tableOwner, table, existingRunId);
+            const buildPredictionSql = (targetTableName, includeRunId = false) => {
+                const targetObject = `${this.quoteName(tableOwner)}.${this.quoteName(targetTableName)}`;
+                const lines = [
+                    "-- Target table prediction by model",
+                    "SELECT T.*",
+                    `     , PREDICTION(${modelObject} USING *) AS PREDICTED_MODEL`,
+                    `  FROM ${targetObject} T`
+                ];
+                const sourceOwner = String(filterOwner || tableOwner).trim().toUpperCase();
+                const sourceTable = String(filterTable || "").trim().toUpperCase();
+                if (sourceOwner && sourceTable) {
+                    lines.push(` WHERE OWNER = '${this.escapeSqlLiteral(sourceOwner)}'`);
+                    lines.push(`   AND TABLE_NAME = '${this.escapeSqlLiteral(sourceTable)}'`);
+                    const runId = existingRunId || this.getLatestDataWorkRunId?.();
+                    if (includeRunId && runId && /^\d+$/.test(runId)) {
+                        lines.push(`   AND RUN_ID = ${runId}`);
+                    }
+                } else {
+                    const targetWhereClause = this.createTargetResultWhereClause(targetTableName, tableOwner, table, existingRunId);
+                    if (targetWhereClause) {
+                        lines.push(` WHERE ${targetWhereClause.replace(/\n\s*AND /g, "\n   AND ")}`);
+                    }
+                }
+                lines.push(" ORDER BY T.COLUMN_ID");
+                lines[lines.length - 1] = `${lines[lines.length - 1]};`;
+                return lines.join("\n");
+            };
+            if (table === "INIT$_TB_PREDICTED_TYPE" || table === "INIT$_TB_PREDICTED_TYPE_FINAL") {
+                return [
+                    buildPredictionSql("INIT$_TB_PREDICTED_TYPE", true),
+                    buildPredictionSql("INIT$_TB_PREDICTED_TYPE_FINAL", false)
+                ].join("\n\n");
+            }
             const targetObject = `${this.quoteName(tableOwner)}.${this.quoteName(table)}`;
-            const whereClause = this.createTargetResultWhereClause(table, tableOwner, table);
             const lines = [
                 "-- Target table prediction by model",
                 "SELECT T.*",
                 `     , PREDICTION(${modelObject} USING *) AS PREDICTED_MODEL`,
                 `  FROM ${targetObject} T`
             ];
-            if (table === "INIT$_TB_PREDICTED_TYPE" || table === "INIT$_TB_PREDICTED_TYPE_FINAL") {
-                const sourceOwner = String(filterOwner || tableOwner).trim().toUpperCase();
-                const sourceTable = String(filterTable || "").trim().toUpperCase();
-                if (sourceOwner && sourceTable) {
-                    lines.push(` WHERE OWNER = '${this.escapeSqlLiteral(sourceOwner)}'`);
-                    lines.push(`   AND TABLE_NAME = '${this.escapeSqlLiteral(sourceTable)}'`);
-                } else if (whereClause) {
-                    lines.push(` WHERE ${whereClause.replace(/\n\s*AND /g, "\n   AND ")}`);
-                }
-                lines.push(" ORDER BY T.COLUMN_ID");
-            } else if (whereClause) {
+            if (whereClause) {
                 lines.push(` WHERE ${whereClause.replace(/\n\s*AND /g, "\n   AND ")}`);
             }
             lines[lines.length - 1] = `${lines[lines.length - 1]};`;
@@ -3380,7 +3659,13 @@ END;`;
             }
             const targetOwner = getContainerEl(`#targetOwner-${PAGE_CODE}`)?.value.trim() || this.currentJob?.ownerName || "";
             const targetTable = getContainerEl(`#targetTable-${PAGE_CODE}`)?.value.trim() || this.currentJob?.tableName || "";
-            return this.createTargetFilteredSelectSql(owner, table, targetOwner, targetTable);
+            let runId = "";
+            if (PAGE_CODE === "M03001" && this.isPredictedTypeResultTable(table)) {
+                runId = await this.fetchExistingPredictedTypeRunId(owner, targetOwner, targetTable);
+            } else if (this.shouldLookupExistingResultRunId(table)) {
+                runId = await this.fetchExistingResultTableRunId(owner, table, targetOwner, targetTable);
+            }
+            return this.createTargetFilteredSelectSql(owner, table, targetOwner, targetTable, runId);
         },
 
         handleSqlEditorKeydown(event, editorSelector, gridSelector, gridKey) {

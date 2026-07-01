@@ -160,7 +160,7 @@ const PageManager = {
 
         try {
             const useDataWorkTemplate = this.dataWorkTemplatePages.includes(pageCode);
-            const htmlFileName = useDataWorkTemplate ? 'MCOMMON_DATA_WORK' : pageCode;
+            const htmlFileName = useDataWorkTemplate ? 'MCOM_DATA_WORK' : pageCode;
             const response = await fetch(`./pages/${htmlFileName}.html?v=${APP_VERSION}`);
             if (!response.ok) {
                 container.innerHTML = this.createMissingPageHtml(pageCode);

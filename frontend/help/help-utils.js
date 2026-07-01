@@ -73,14 +73,14 @@
     }
 
     function getFrontendHtml(pageCode) {
-        if (DATA_WORK_PAGES.has(pageCode)) return "frontend/pages/MCOMMON_DATA_WORK.html";
-        if (FLOW_WORK_PAGES.has(pageCode)) return "frontend/pages/MCOMMON_FLOW_WORK.html";
+        if (DATA_WORK_PAGES.has(pageCode)) return "frontend/pages/MCOM_DATA_WORK.html";
+        if (FLOW_WORK_PAGES.has(pageCode)) return "frontend/pages/MCOM_FLOW_WORK.html";
         return `frontend/pages/${pageCode}.html`;
     }
 
     function getFrontendJs(pageCode) {
-        if (DATA_WORK_PAGES.has(pageCode)) return "frontend/js/MCOMMON_DATA_WORK.js";
-        if (FLOW_WORK_PAGES.has(pageCode)) return "frontend/js/MCOMMON_FLOW_WORK.js";
+        if (DATA_WORK_PAGES.has(pageCode)) return "frontend/js/MCOM_DATA_WORK.js";
+        if (FLOW_WORK_PAGES.has(pageCode)) return "frontend/js/MCOM_FLOW_WORK.js";
         return `frontend/js/${pageCode}.js`;
     }
 
@@ -90,8 +90,8 @@
     }
 
     function getSqlFiles(pageCode) {
-        if (DATA_WORK_PAGES.has(pageCode)) return [`database/${pageCode}.sql`, "database/MCOMMON_DATA_WORK.sql"];
-        if (FLOW_WORK_PAGES.has(pageCode)) return [`database/${pageCode}.sql`, "database/MCOMMON_FLOW_WORK.sql"];
+        if (DATA_WORK_PAGES.has(pageCode)) return [`database/${pageCode}.sql`, "database/MCOM_DATA_WORK.sql"];
+        if (FLOW_WORK_PAGES.has(pageCode)) return [`database/${pageCode}.sql`, "database/MCOM_FLOW_WORK.sql"];
         if (pageCode === "home") return ["database/home.sql"];
         return [`database/${pageCode}.sql`];
     }

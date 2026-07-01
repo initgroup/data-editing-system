@@ -239,6 +239,7 @@ def _get_active_system_notices(limit: int = 5) -> list[dict[str, Any]]:
             if len(text) > 180:
                 text = f"{text[:177]}..."
             notice_type = str(row[1] or "INFO").upper()
+            created_by_display = row[10] or row[11] or row[8]
             notices.append({
                 "noticeId": row[0],
                 "noticeType": notice_type,
@@ -251,7 +252,11 @@ def _get_active_system_notices(limit: int = 5) -> list[dict[str, Any]]:
                 "pinYn": row[5] or "N",
                 "postStartAt": row[6].isoformat(timespec="minutes") if isinstance(row[6], datetime) else row[6],
                 "postEndAt": row[7].isoformat(timespec="minutes") if isinstance(row[7], datetime) else row[7],
-                "createdAt": row[8].isoformat(timespec="minutes") if isinstance(row[8], datetime) else row[8],
+                "createdBy": row[8],
+                "createdByName": row[10],
+                "createdByLoginId": row[11],
+                "createdByDisplay": str(created_by_display) if created_by_display else "",
+                "createdAt": row[9].isoformat(timespec="minutes") if isinstance(row[9], datetime) else row[9],
                 "attachments": [],
             })
         cursor.execute(SqlLoader.get_sql("HOME_NOTICE_FILE_TABLE_EXISTS"))

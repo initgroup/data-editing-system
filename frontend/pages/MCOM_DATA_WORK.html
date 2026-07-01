@@ -126,11 +126,11 @@
                         </label>
                         <label class="data-target-owner-field">
                             <span data-label-key="targetOwner">Target Owner</span>
-                            <input id="targetOwner-__PAGE_CODE__" class="env-field" type="text" oninput="__PAGE_CODE__.updateCurrentJobField('ownerName', this.value)">
+                            <input id="targetOwner-__PAGE_CODE__" class="env-field" type="text" readonly>
                         </label>
                         <label class="data-target-table-field">
                             <span data-label-key="targetTable">Target Table</span>
-                            <input id="targetTable-__PAGE_CODE__" class="env-field" type="text" oninput="__PAGE_CODE__.updateCurrentJobField('tableName', this.value)">
+                            <input id="targetTable-__PAGE_CODE__" class="env-field" type="text" readonly>
                         </label>
                         <label class="data-use-field">
                             <span data-label-key="use">Use</span>
@@ -168,7 +168,7 @@
                             </select>
                         </label>
                         <label class="data-result-create-field">
-                            <span data-label-key="resultTableCreate">Result Table Create</span>
+                            <span id="resultCreateTitle-__PAGE_CODE__" data-label-key="resultTableCreate">Result Table Create</span>
                             <select id="resultCreateYn-__PAGE_CODE__" class="env-field" onchange="__PAGE_CODE__.handleResultCreateChange(this.value)">
                                 <option value="N">N (사용안함)</option>
                                 <option value="T">T (테이블사용)</option>
@@ -180,7 +180,7 @@
                             <input id="resultOwner-__PAGE_CODE__" class="env-field" type="text" placeholder="OWNER" oninput="__PAGE_CODE__.updateCurrentJobField('resultOwner', this.value)">
                         </label>
                         <label class="data-result-table-field">
-                            <span data-label-key="resultTable">Result Table</span>
+                            <span id="resultTableTitle-__PAGE_CODE__" data-label-key="resultTable">Result Table</span>
                             <input id="resultTable-__PAGE_CODE__" class="env-field" type="text" placeholder="RESULT_TABLE" data-placeholder-key="resultTablePlaceholder" oninput="__PAGE_CODE__.updateCurrentJobField('resultTableName', this.value)">
                         </label>
                     </div>

@@ -486,7 +486,12 @@ def create_flow_work_router(
             run_type = "BATCH" if req.batch else "MANUAL"
             run_status = "QUEUED" if req.batch else "STARTED"
             message = ROUTER_MESSAGES["run_queued"] if req.batch else "Flow execution started."
-            run_id = flow_work.create_run(conn, flow_id, run_type, run_status, message, validation)
+            payload_manual_run_id = flow_work.parse_manual_run_id(req.manualRunId)
+            plan_manual_run_id = flow_work.extract_manual_run_id_from_plan(validation.get("plan", []))
+            if payload_manual_run_id and plan_manual_run_id and payload_manual_run_id != plan_manual_run_id:
+                raise HTTPException(status_code=400, detail="Manual flow run id values must match.")
+            manual_run_id = payload_manual_run_id or plan_manual_run_id
+            run_id = flow_work.create_run(conn, flow_id, run_type, run_status, message, validation, manual_run_id)
             flow_work.create_node_run_records(conn, run_id, flow_id, validation.get("plan", []))
             conn.commit()
             if req.batch:
@@ -600,7 +605,12 @@ def create_flow_work_router(
             run_type = "MANUAL_NODE"
             message = f"Node execution started: {selected_step.get('nodeName') or selected_node_key}"
             run_plan = {**validation, "selectedNodeKey": selected_node_key, "plan": [selected_step]}
-            run_id = flow_work.create_run(conn, flow_id, run_type, "STARTED", message, run_plan)
+            payload_manual_run_id = flow_work.parse_manual_run_id(req.manualRunId)
+            plan_manual_run_id = flow_work.extract_manual_run_id_from_plan([selected_step])
+            if payload_manual_run_id and plan_manual_run_id and payload_manual_run_id != plan_manual_run_id:
+                raise HTTPException(status_code=400, detail="Manual flow run id values must match.")
+            manual_run_id = payload_manual_run_id or plan_manual_run_id
+            run_id = flow_work.create_run(conn, flow_id, run_type, "STARTED", message, run_plan, manual_run_id)
             flow_work.create_node_run_records(conn, run_id, flow_id, [selected_step])
             conn.commit()
 

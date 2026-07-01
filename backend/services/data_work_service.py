@@ -304,10 +304,30 @@ def create_run(
     status: str,
     message: str,
     result_table_name: Optional[str],
-    result_owner: Optional[str]
+    result_owner: Optional[str],
+    manual_run_id: Optional[int] = None
 ) -> int:
     cursor = conn.cursor()
     try:
+        if manual_run_id is not None:
+            cursor.execute(SqlLoader.get_sql("DATA_WORK_RUN_EXISTS_FOR_JOB"), {
+                "profileJobId": profile_job_id,
+                "profileRunId": manual_run_id
+            })
+            row = cursor.fetchone()
+            if not row or int(row[0] or 0) <= 0:
+                raise HTTPException(status_code=400, detail="Manual run id must be an existing run id for the selected job.")
+            cursor.execute(SqlLoader.get_sql("DATA_WORK_RUN_RESTART"), {
+                "profileJobId": profile_job_id,
+                "profileRunId": manual_run_id,
+                "runType": normalize_status(run_type),
+                "status": normalize_status(status),
+                "message": normalize_text(message, "", 4000),
+                "resultOwner": normalize_optional_identifier(result_owner),
+                "resultTableName": normalize_optional_identifier(result_table_name)
+            })
+            return int(manual_run_id)
+
         cursor.execute(SqlLoader.get_sql("DATA_WORK_RUN_INSERT"), {
             "profileJobId": profile_job_id,
             "runType": normalize_status(run_type),

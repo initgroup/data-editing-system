@@ -16,7 +16,7 @@ import uuid
 
 from backend.target_database import get_target_connection_id, get_target_db_connection, get_target_db_connection_by_id
 from backend.auth_context import get_request_user_id
-from backend.database_helper import execute_query
+from backend.database_helper import execute_query, SqlLoader
 from backend.services.background_jobs import submit_background_job
 from backend.services import data_work_service as data_work
 from backend.services.data_work_service import (
@@ -68,6 +68,25 @@ class SaveSqlTableRequest(BaseModel):
     resultOwner: Optional[str] = None
     profileJobId: Optional[int] = None
     model_config = ConfigDict(extra="allow")
+
+
+def parse_manual_run_id(runtime_bind_values: Optional[Dict[str, Any]]) -> Optional[int]:
+    values = runtime_bind_values or {}
+    run_values = []
+    for key in ("INIT$RunId", "runId"):
+        if key not in values:
+            continue
+        text = str(values.get(key) if values.get(key) is not None else "").strip()
+        if not text or text.lower() in {"(auto)", "auto"}:
+            continue
+        if not re.fullmatch(r"[1-9][0-9]*", text):
+            raise HTTPException(status_code=400, detail="Manual INIT$RunId must be a positive integer or (auto).")
+        run_values.append(int(text))
+    if not run_values:
+        return None
+    if len(set(run_values)) > 1:
+        raise HTTPException(status_code=400, detail="Manual INIT$RunId values must match.")
+    return run_values[0]
 
 
 MODEL_DETAIL_VIEW_TYPES = [
@@ -275,6 +294,106 @@ def create_data_work_router(
                 "total": len([row for row in views if row.get("existsYn") == "Y"])
             }
         finally:
+            if conn:
+                conn.close()
+
+
+    @router.get("/predicted-type-run-id")
+    def get_predicted_type_run_id(
+        request: Request,
+        owner: str,
+        targetOwner: str,
+        targetTable: str,
+        modelName: Optional[str] = None
+    ):
+        conn = None
+        cursor = None
+        try:
+            result_owner = data_work.require_identifier(owner, "owner")
+            source_owner = data_work.require_identifier(targetOwner, "targetOwner")
+            source_table = data_work.require_identifier(targetTable, "targetTable")
+            model_name = data_work.normalize_optional_identifier(modelName)
+            conn = get_target_db_connection(request)
+            cursor = conn.cursor()
+            target_object = quote_identifier(result_owner) + "." + quote_identifier("INIT$_TB_PREDICTED_TYPE")
+            sql = SqlLoader.get_sql("DATA_WORK_PREDICTED_TYPE_RUN_ID").replace(
+                "/* --PREDICTED_TYPE_OBJECT-- */",
+                target_object
+            )
+            params = {
+                "sourceOwner": source_owner,
+                "sourceTable": source_table
+            }
+            if model_name:
+                sql = sql.replace("/* --MODEL_NAME_FILTER-- */", "   AND MODEL_NAME = :modelName")
+                params["modelName"] = model_name
+            else:
+                sql = sql.replace("/* --MODEL_NAME_FILTER-- */", "")
+            cursor.execute(sql, params)
+            row = cursor.fetchone()
+            run_id = row[0] if row and row[0] is not None else None
+            return {
+                "status": "success",
+                "data": {
+                    "runId": int(run_id) if run_id is not None else None
+                }
+            }
+        finally:
+            if cursor:
+                cursor.close()
+            if conn:
+                conn.close()
+    
+
+    @router.get("/result-run-id")
+    def get_result_table_run_id(
+        request: Request,
+        owner: str,
+        tableName: str,
+        targetOwner: str,
+        targetTable: str
+    ):
+        conn = None
+        cursor = None
+        try:
+            result_owner = data_work.require_identifier(owner, "owner")
+            result_table = data_work.require_identifier(tableName, "tableName")
+            source_owner = data_work.require_identifier(targetOwner, "targetOwner")
+            source_table = data_work.require_identifier(targetTable, "targetTable")
+            filter_columns = {
+                "INIT$_TB_CAT_CORR_PAIR": ("OWNER", "TABLE_NAME"),
+                "INIT$_TB_CAT_CORR_SUMMARY": ("OWNER", "TABLE_NAME"),
+                "INIT$_TB_ASSOC_RULE_SUMMARY": ("TARGET_OWNER", "TARGET_TABLE"),
+                "INIT$_TB_RULE_VIOLATION_RESULT": ("TARGET_OWNER", "TARGET_TABLE")
+            }
+            if result_table not in filter_columns:
+                raise HTTPException(status_code=400, detail="Unsupported result table for run id lookup.")
+
+            owner_column, table_column = filter_columns[result_table]
+            conn = get_target_db_connection(request)
+            cursor = conn.cursor()
+            target_object = quote_identifier(result_owner) + "." + quote_identifier(result_table)
+            sql = (
+                SqlLoader.get_sql("DATA_WORK_RESULT_TABLE_RUN_ID")
+                .replace("/* --RESULT_TABLE_OBJECT-- */", target_object)
+                .replace("/* --OWNER_COLUMN-- */", owner_column)
+                .replace("/* --TABLE_COLUMN-- */", table_column)
+            )
+            cursor.execute(sql, {
+                "sourceOwner": source_owner,
+                "sourceTable": source_table
+            })
+            row = cursor.fetchone()
+            run_id = row[0] if row and row[0] is not None else None
+            return {
+                "status": "success",
+                "data": {
+                    "runId": int(run_id) if run_id is not None else None
+                }
+            }
+        finally:
+            if cursor:
+                cursor.close()
             if conn:
                 conn.close()
     
@@ -780,6 +899,7 @@ def create_data_work_router(
         run_type = "OML_PYTHON" if str(job.get("EXEC_SOURCE_TYPE") or "").upper() == "OML_PYTHON" else "PLSQL"
         result_owner = job.get("RESULT_OWNER") or ""
         result_table_name = job.get("RESULT_TABLE_NAME") or ""
+        manual_run_id = parse_manual_run_id(runtime_bind_values)
         run_id = data_work.create_run(
             conn,
             profile_job_id,
@@ -787,7 +907,8 @@ def create_data_work_router(
             "STARTED",
             ROUTER_MESSAGES["job_started"],
             result_table_name,
-            result_owner
+            result_owner,
+            manual_run_id
         )
         data_work.update_job_status(
             conn,
@@ -939,6 +1060,7 @@ def create_data_work_router(
             "INIT$TargetTable": target_table,
             "INIT$ResultOwner": result_owner,
             "INIT$ResultTable": result_table,
+            "INIT$ResultModelName": result_table,
             "INIT$RunSourceType": "DATA_WORK",
             "INIT$RunId": effective_run_id,
             "runSourceType": "DATA_WORK",
@@ -1004,8 +1126,9 @@ def create_data_work_router(
                 continue
             lines.extend([
                 f"-- {view_type} - {description}",
-                f"SELECT *",
-                f"  FROM {owner_prefix}{quote_identifier(view_name)};",
+                "SELECT *",
+                f"  FROM {owner_prefix}{quote_identifier(view_name)}",
+                " WHERE ROWNUM <= 100;",
                 ""
             ])
 

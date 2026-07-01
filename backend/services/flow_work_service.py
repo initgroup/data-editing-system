@@ -86,10 +86,12 @@ class FlowWorkRequest(BaseModel):
 
 class FlowRunRequest(FlowWorkRequest):
     batch: Optional[bool] = False
+    manualRunId: Optional[int] = None
 
 
 class FlowNodeRunRequest(FlowWorkRequest):
     nodeKey: str
+    manualRunId: Optional[int] = None
 
 
 def list_flows(conn, menu_code: str, project_id: int, scenario_id: int) -> Dict[str, Any]:
@@ -313,9 +315,69 @@ def list_node_runs(conn, flow_run_id: int) -> Dict[str, Any]:
     return response
 
 
-def create_run(conn, flow_id: int, run_type: str, status: str, message: str, plan: Dict[str, Any]) -> int:
+def parse_manual_run_id(value: Any) -> Optional[int]:
+    text = str(value if value is not None else "").strip()
+    if not text or text.lower() in {"(auto)", "auto"}:
+        return None
+    if not re.fullmatch(r"[1-9][0-9]*", text):
+        raise HTTPException(status_code=400, detail="Manual flow run id must be a positive integer or (auto).")
+    return int(text)
+
+
+def extract_manual_run_id_from_plan(plan: List[Dict[str, Any]]) -> Optional[int]:
+    run_ids: List[int] = []
+    run_keys = {"INIT$RunId", "INIT$FlowRunId", "runId", "flowRunId"}
+    for step in plan or []:
+        for item in step.get("params") or []:
+            if not isinstance(item, dict):
+                continue
+            key = item.get("itemName") or item.get("ITEM_NAME") or item.get("name") or item.get("key")
+            if str(key or "") not in run_keys:
+                continue
+            value = get_flow_param_runtime_value(item)
+            parsed = parse_manual_run_id(value)
+            if parsed is not None:
+                run_ids.append(parsed)
+    if not run_ids:
+        return None
+    if len(set(run_ids)) > 1:
+        raise HTTPException(status_code=400, detail="Manual flow run id values must match across run id bind variables.")
+    return run_ids[0]
+
+
+def create_run(
+    conn,
+    flow_id: int,
+    run_type: str,
+    status: str,
+    message: str,
+    plan: Dict[str, Any],
+    manual_run_id: Optional[int] = None
+) -> int:
     cursor = conn.cursor()
     try:
+        if manual_run_id is not None:
+            execute_flow_dml(cursor, "FLOW_WORK_RUN_EXISTS_FOR_FLOW", "FLOW_WORK_RUN_EXISTS_FOR_FLOW", {
+                "flowId": flow_id,
+                "flowRunId": manual_run_id
+            })
+            row = cursor.fetchone()
+            if not row or int(row[0] or 0) <= 0:
+                raise HTTPException(status_code=400, detail="Manual flow run id must be an existing run id for the selected flow.")
+            execute_flow_dml(cursor, "FLOW_WORK_RUN_RESTART", "FLOW_WORK_RUN_RESTART", {
+                "flowId": flow_id,
+                "flowRunId": manual_run_id,
+                "runType": normalize_status(run_type, "MANUAL"),
+                "status": normalize_status(status, "STARTED"),
+                "message": normalize_text(message, "", 4000),
+                "planJson": json.dumps(plan or {}, ensure_ascii=False),
+                "startedYn": "Y" if normalize_status(status, "STARTED") != "QUEUED" else "N"
+            })
+            execute_flow_dml(cursor, "FLOW_WORK_NODE_RUN_DELETE_BY_RUN", "FLOW_WORK_NODE_RUN_DELETE_BY_RUN", {
+                "flowRunId": manual_run_id
+            })
+            return int(manual_run_id)
+
         execute_flow_dml(cursor, "FLOW_WORK_RUN_INSERT", "FLOW_WORK_RUN_INSERT", {
             "flowId": flow_id,
             "runType": normalize_status(run_type, "MANUAL"),
@@ -634,6 +696,7 @@ def build_step_system_bind_values(
         "INIT$TargetTable": current.get("targetTable") or "",
         "INIT$ResultOwner": current.get("resultOwner") or "",
         "INIT$ResultTable": current.get("resultTableName") or "",
+        "INIT$ResultModelName": current.get("resultTableName") or "",
         "INIT$PreTargetOwner": previous.get("targetOwner") or "",
         "INIT$PreTargetTable": previous.get("targetTable") or "",
         "INIT$PreResultOwner": previous.get("resultOwner") or "",

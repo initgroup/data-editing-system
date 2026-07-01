@@ -200,7 +200,7 @@
         "Result/Data/SQL: 결과 확인"
       ],
       "aiGuidance": [
-        "이 화면은 MCOMMON_DATA_WORK 템플릿 기반입니다.",
+        "이 화면은 MCOM_DATA_WORK 템플릿 기반입니다.",
         "질문 답변 시 선택 시나리오, 대상 테이블, 실행 객체, 바인드 변수 설정을 우선 확인합니다."
       ]
     },
@@ -348,7 +348,7 @@
         "Input and Output Contracts: TABLE, VALUE, ARRAY, JOIN 포트 규칙 확인"
       ],
       "aiGuidance": [
-        "이 화면은 MCOMMON_FLOW_WORK 템플릿 기반입니다.",
+        "이 화면은 MCOM_FLOW_WORK 템플릿 기반입니다.",
         "노드 연결 문제는 입력 포트, 출력 포트, 실행 순서, 대상 테이블을 기준으로 설명합니다.",
         "사용자가 '왜 실행이 안 되는지' 묻는 경우 프로젝트/시나리오 선택, Flow 저장 여부, DAG 검증 결과, 노드 Execute 여부, 런타임 바인드 변수를 우선 확인합니다.",
         "테이블명이나 내부 프로시저명은 노출하지 않고 '대상 테이블', '결과 테이블', '실행 객체'처럼 논리명으로 설명합니다."
@@ -375,9 +375,9 @@
         "Result SQL이 비어 있으면 선택한 노드가 결과 테이블/모델을 생성하지 않는 노드인지 확인합니다."
       ],
       "implementationNotes": [
-        "프론트는 MCOMMON_FLOW_WORK.html과 MCOMMON_FLOW_WORK.js 공통 템플릿을 사용하며, M04001 페이지 코드로 치환되어 동작합니다.",
+        "프론트는 MCOM_FLOW_WORK.html과 MCOM_FLOW_WORK.js 공통 템플릿을 사용하며, M04001 페이지 코드로 치환되어 동작합니다.",
         "백엔드는 create_flow_work_router 기반 공통 라우터를 사용하고, 노드/엣지 저장, 검증, 실행, 결과 SQL 조회 API를 제공합니다.",
-        "SQL은 M04001 전용 SQL과 MCOMMON_FLOW_WORK 공통 SQL 템플릿을 함께 사용합니다.",
+        "SQL은 M04001 전용 SQL과 MCOM_FLOW_WORK 공통 SQL 템플릿을 함께 사용합니다.",
         "실제 물리 테이블/프로시저명은 도움말에 공개하지 않고, 프로젝트/시나리오/Flow/Node/Edge/Run/Result 같은 논리 도메인으로 설명합니다."
       ]
     },
@@ -447,9 +447,9 @@
         "CSV 내보내기 결과가 비어 있으면 현재 화면에 표시된 분석 데이터가 있는지 먼저 확인합니다."
       ],
       "implementationNotes": [
-        "프론트는 MCOMMON_ANLY_WORK.html과 MCOMMON_ANLY_WORK.js 공통 분석 화면을 사용합니다.",
+        "프론트는 MCOM_ANLY_WORK.html과 MCOM_ANLY_WORK.js 공통 분석 화면을 사용합니다.",
         "백엔드는 backend/services/anly_work_router.py와 backend/services/anly_work_service.py가 실행 이력, 노드 결과, 모델 상세, 연관 규칙 요약, 결과 샘플 API를 제공합니다.",
-        "SQL은 database/MCOMMON_ANLY_WORK.sql의 실행 이력/모델 메타/연관 규칙 요약/결과 샘플 조회 SQL ID를 사용합니다.",
+        "SQL은 database/MCOM_ANLY_WORK.sql의 실행 이력/모델 메타/연관 규칙 요약/결과 샘플 조회 SQL ID를 사용합니다.",
         "Oracle ML 모델 상세는 공개적으로 설명 가능한 모델 해석 개념을 사용하되, 내부 물리 객체명은 도움말에서 숨깁니다."
       ]
     },
