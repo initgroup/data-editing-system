@@ -186,7 +186,7 @@ const PageManager = {
     },
 
     getCloseFallbackPage() {
-        return { pageCode: "home", title: "Data Editing System" };
+        return { pageCode: "home", title: window.getShellHomeTitle?.() || "Data Editing System" };
     },
 
     async runPageBeforeCloseHooks(pageCodes) {
@@ -371,7 +371,7 @@ const PageManager = {
             } else {
                 location.hash = '#';
                 const titleEl = document.getElementById('contentTitle');
-                if (titleEl) titleEl.innerText = fallback.title;
+                if (titleEl) window.updateShellPageHeader?.(fallback.pageCode, fallback.title);
 
                 document.querySelectorAll('#mainNav a, #mainNav button').forEach(el => {
                     el.classList.remove('menu-active', 'bg-blue-700');
@@ -539,7 +539,7 @@ const PageManager = {
             this.extendSession();
         }
         if (this.requiresAuth(pageCode) && !this.isPageAllowed(pageCode)) {
-            await this.load("home", "Data Editing System", false);
+            await this.load("home", window.getShellHomeTitle?.() || "Data Editing System", false);
             return;
         }
 
@@ -555,7 +555,7 @@ const PageManager = {
                 await module.onShow();
             }
             const displayTitle = this.formatPageTitle(pageCode, title);
-            if (displayTitle) document.getElementById('contentTitle').innerText = displayTitle;
+            if (displayTitle) window.updateShellPageHeader?.(pageCode, displayTitle);
             this.rememberCurrentPage(pageCode, displayTitle);
             return;
         }
@@ -595,7 +595,7 @@ const PageManager = {
         } finally {
             CommonUI.hideLoading();
             const displayTitle = this.formatPageTitle(pageCode, title);
-            if (displayTitle) document.getElementById('contentTitle').innerText = displayTitle;
+            if (displayTitle) window.updateShellPageHeader?.(pageCode, displayTitle);
             this.rememberCurrentPage(pageCode, displayTitle);
             this.lastLoadedVersion = APP_VERSION;
         }
@@ -1208,7 +1208,8 @@ async function applyTargetDbChange() {
         sessionStorage.removeItem(CURRENT_PAGE_TITLE_KEY);
         closeTargetDbChangeDialog();
         updateCurrentTargetDbSelect();
-        await PageManager.load("home", "Data Editing System");
+        await window.reloadShellDisplaySettings?.();
+        await PageManager.load("home", window.getShellHomeTitle?.() || "Data Editing System");
     } catch (error) {
         alert(error.message || "Target DB change failed.");
     }
@@ -1239,7 +1240,7 @@ function getInitialPageConfig() {
             const menu = window.MENU_PAGE_MAP?.[savedPage];
             return { pageCode: savedPage, title: savedTitle || menu?.title || menu?.label || savedPage };
         }
-        return { pageCode: "home", title: "Data Editing System" };
+        return { pageCode: "home", title: window.getShellHomeTitle?.() || "Data Editing System" };
     }
 
     return { pageCode: DEFAULT_PAGE_CODE, title: DEFAULT_PAGE_TITLE };
@@ -1251,6 +1252,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     ConsoleLogger.init();
     updateCurrentTargetDbSelect();
     PageManager.startSessionTimer();
+    await window.reloadShellDisplaySettings?.();
     const initialPage = getInitialPageConfig();
     await PageManager.load(initialPage.pageCode, initialPage.title);
+    await window.reloadShellDisplaySettings?.();
 });

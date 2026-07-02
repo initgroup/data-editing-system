@@ -1432,6 +1432,7 @@ def create_data_work_router(
         where_sql = f" AND ({where_clause})" if where_clause else ""
         source_sql = (
             'SELECT R."RUN_SOURCE_TYPE", R."RUN_ID", R."OWNER", R."TABLE_NAME", R."MODEL_NAME", '
+            '       COALESCE(R."COLUMN_DESC", TC.COMMENTS) AS "COLUMN_DESC", '
             '       R."COLUMN_ID", R."COLUMN_NAME", R."DATA_TYPE", R."BASE_PREDICTED_TYPE", '
             '       R."MODL_PREDICTED_TYPE", R."FINAL_PREDICTED_TYPE", R."FINAL_REASON", '
             '       F."FINAL_PREDICTED_TYPE" AS "SAVED_FINAL_PREDICTED_TYPE", '
@@ -1445,6 +1446,10 @@ def create_data_work_router(
             '    ON F."OWNER" = R."OWNER" '
             '   AND F."TABLE_NAME" = R."TABLE_NAME" '
             '   AND F."COLUMN_NAME" = R."COLUMN_NAME" '
+            '  LEFT JOIN ALL_COL_COMMENTS TC '
+            '    ON TC.OWNER = R."OWNER" '
+            '   AND TC.TABLE_NAME = R."TABLE_NAME" '
+            '   AND TC.COLUMN_NAME = R."COLUMN_NAME" '
         )
         cursor.execute(source_sql, {"row_id": row_id})
         row = cursor.fetchone()
@@ -1469,6 +1474,7 @@ USING (
     SELECT :owner AS "OWNER"
          , :table_name AS "TABLE_NAME"
          , :column_name AS "COLUMN_NAME"
+         , :column_desc AS "COLUMN_DESC"
          , :column_id AS "COLUMN_ID"
          , :data_type AS "DATA_TYPE"
          , :source_run_source_type AS "SOURCE_RUN_SOURCE_TYPE"
@@ -1485,7 +1491,8 @@ USING (
   AND F."TABLE_NAME" = S."TABLE_NAME"
   AND F."COLUMN_NAME" = S."COLUMN_NAME")
  WHEN MATCHED THEN UPDATE
-      SET F."COLUMN_ID" = S."COLUMN_ID"
+      SET F."COLUMN_DESC" = S."COLUMN_DESC"
+        , F."COLUMN_ID" = S."COLUMN_ID"
         , F."DATA_TYPE" = S."DATA_TYPE"
         , F."SOURCE_RUN_SOURCE_TYPE" = S."SOURCE_RUN_SOURCE_TYPE"
         , F."SOURCE_RUN_ID" = S."SOURCE_RUN_ID"
@@ -1500,6 +1507,7 @@ USING (
         "OWNER"
       , "TABLE_NAME"
       , "COLUMN_NAME"
+      , "COLUMN_DESC"
       , "COLUMN_ID"
       , "DATA_TYPE"
       , "SOURCE_RUN_SOURCE_TYPE"
@@ -1517,6 +1525,7 @@ USING (
         S."OWNER"
       , S."TABLE_NAME"
       , S."COLUMN_NAME"
+      , S."COLUMN_DESC"
       , S."COLUMN_ID"
       , S."DATA_TYPE"
       , S."SOURCE_RUN_SOURCE_TYPE"
@@ -1535,6 +1544,7 @@ USING (
             "owner": source.get("OWNER"),
             "table_name": source.get("TABLE_NAME"),
             "column_name": source.get("COLUMN_NAME"),
+            "column_desc": source.get("COLUMN_DESC"),
             "column_id": source.get("COLUMN_ID"),
             "data_type": source.get("DATA_TYPE"),
             "source_run_source_type": source.get("RUN_SOURCE_TYPE"),

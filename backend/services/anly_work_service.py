@@ -1,4 +1,4 @@
-﻿"""
+"""
 @file           anly_work_service.py
 @description    Reusable analysis result work service
 """
@@ -35,6 +35,11 @@ GENERIC_TABLE_RESULT_LAYOUT = {
 }
 TABLE_RESULT_LAYOUTS = {
     "INIT$_TB_PREDICTED_TYPE": {
+        "kind": "TABLE",
+        "key": "TABLE:INIT$_TB_PREDICTED_TYPE",
+        "summary": "predictedTypeSummary",
+    },
+    "INIT$_TB_PREDICTED_TYPE_FINAL": {
         "kind": "TABLE",
         "key": "TABLE:INIT$_TB_PREDICTED_TYPE",
         "summary": "predictedTypeSummary",
@@ -189,6 +194,10 @@ def _quote_identifier(value: str) -> str:
 def _normalize_predicted_type_case(value: str | None) -> str:
     normalized = str(value or "ALL").strip().upper()
     return normalized if normalized in PREDICTED_TYPE_CASE_LABELS else "ALL"
+
+
+def _is_predicted_type_result_table(object_name: str) -> bool:
+    return str(object_name or "").strip().upper() in {"INIT$_TB_PREDICTED_TYPE", "INIT$_TB_PREDICTED_TYPE_FINAL"}
 
 
 def _predicted_type_value_expr(column_name: str) -> str:
@@ -401,7 +410,7 @@ def _fetch_predicted_type_summary(
     run_source_type: str = "",
     run_id: int | None = None,
 ) -> dict[str, Any] | None:
-    if object_name != "INIT$_TB_PREDICTED_TYPE" or not target_owner or not target_table:
+    if not _is_predicted_type_result_table(object_name) or not target_owner or not target_table:
         return None
     cursor.execute(SqlLoader.get_sql("MCOMMON_ANLY_WORK_TARGET_TABLE_COLUMN_COUNT"), {
         "owner": target_owner,
@@ -415,7 +424,10 @@ def _fetch_predicted_type_summary(
     run_filter_sql = ""
     run_params: dict[str, Any] = {}
     if run_source_type and run_id is not None:
-        run_filter_sql = "   AND RUN_SOURCE_TYPE = :runSourceType AND RUN_ID = :runId "
+        if object_name == "INIT$_TB_PREDICTED_TYPE_FINAL":
+            run_filter_sql = "   AND SOURCE_RUN_SOURCE_TYPE = :runSourceType AND SOURCE_RUN_ID = :runId "
+        else:
+            run_filter_sql = "   AND RUN_SOURCE_TYPE = :runSourceType AND RUN_ID = :runId "
         run_params = {"runSourceType": run_source_type, "runId": run_id}
     cursor.execute(
         "SELECT TYPE_GROUP, COLUMN_NAME "
@@ -1092,7 +1104,7 @@ def get_result_table(
         if str(menuCode or "").upper() == "M03002" and object_name == "INIT$_TB_CAT_CORR_PAIR":
             where_clauses.append("PASS_YN = 'Y'")
             order_sql = " ORDER BY CRAMERS_V DESC, P_VALUE ASC"
-        if object_name == "INIT$_TB_PREDICTED_TYPE" and "COLUMN_ID" in columns:
+        if _is_predicted_type_result_table(object_name) and "COLUMN_ID" in columns:
             order_sql = " ORDER BY COLUMN_ID NULLS LAST, COLUMN_NAME"
         if object_name == "INIT$_TB_RULE_VIOLATION_RESULT":
             order_sql = " ORDER BY VIOLATION_SCORE DESC NULLS LAST, RULE_CONFIDENCE DESC NULLS LAST, VIOLATION_ID"
@@ -1124,7 +1136,7 @@ def get_result_table(
             where_clauses.append("UPPER(RULE_ID) LIKE '%' || UPPER(:violationRuleId) || '%'")
             bind_params["violationRuleId"] = normalized_violation_rule_id
         if (
-            object_name == "INIT$_TB_PREDICTED_TYPE"
+            _is_predicted_type_result_table(object_name)
             and normalized_predicted_type_case != "ALL"
             and {"FINAL_PREDICTED_TYPE", "MODL_PREDICTED_TYPE", "BASE_PREDICTED_TYPE"}.issubset(columns)
         ):
@@ -1133,6 +1145,11 @@ def get_result_table(
         if run_source_type and normalized_run_id is not None and {"RUN_SOURCE_TYPE", "RUN_ID"}.issubset(columns):
             where_clauses.append("RUN_SOURCE_TYPE = :runSourceType")
             where_clauses.append("RUN_ID = :runId")
+            bind_params["runSourceType"] = run_source_type
+            bind_params["runId"] = normalized_run_id
+        elif run_source_type and normalized_run_id is not None and {"SOURCE_RUN_SOURCE_TYPE", "SOURCE_RUN_ID"}.issubset(columns):
+            where_clauses.append("SOURCE_RUN_SOURCE_TYPE = :runSourceType")
+            where_clauses.append("SOURCE_RUN_ID = :runId")
             bind_params["runSourceType"] = run_source_type
             bind_params["runId"] = normalized_run_id
         where_sql = f" WHERE {' AND '.join(where_clauses)}" if where_clauses else ""

@@ -39,7 +39,10 @@
 <body class="flex h-screen overflow-hidden intro-mode">
     <aside id="sidebar" class="sidebar w-64 bg-slate-900 text-white flex-shrink-0 flex flex-col z-20">
         <div class="p-4 border-b border-slate-700 flex items-center justify-between gap-3">
-            <div class="text-xl font-bold">Data Editing</div>
+            <div class="app-brand">
+                <img id="appBrandLogo" class="app-brand-logo" alt="" hidden>
+                <div id="appBrandName" class="text-xl font-bold app-brand-name">Data Editing</div>
+            </div>
             <div class="flex items-center gap-1">
                 <button id="btnExpandAllMenus" type="button" class="w-8 h-8 rounded hover:bg-slate-700 text-slate-300 hover:text-white" title="메뉴 모두 펼치기">
                     <i class="fas fa-folder-open"></i>
@@ -59,7 +62,13 @@
     <main class="main-content">
         <div>         
             <header class="content-header flex justify-between items-center px-6 py-6 border-b h-20">
-                <h1 id="contentTitle" class="text-2xl font-bold leading-none flex items-center"></h1>
+                <div class="content-title-block">
+                    <h1 id="contentTitle" class="text-2xl font-bold leading-none flex items-center"></h1>
+                    <div class="content-header-meta">
+                        <div id="shellSystemName" class="shell-system-name" hidden></div>
+                        <nav id="contentBreadcrumb" class="content-breadcrumb" aria-label="Breadcrumb" hidden></nav>
+                    </div>
+                </div>
                 <div class="header-actions flex items-center">
                     <div id="sessionStatusBox" class="header-session-box" hidden>
                         <span id="sessionUserName" class="header-session-user">-</span>
@@ -212,7 +221,7 @@
                         </div>
                         <input id="geminiFileInput" type="file" multiple hidden>
                         <div id="geminiDropZone" class="geminiInputFrame">
-                            <textarea id="geminiQuery" name="query" placeholder="Type a question or search request. Press Ctrl+Enter to send."></textarea>
+                            <textarea id="geminiQuery" name="query" placeholder="질문을 입력하세요. 현재 화면 기능이 더 궁금하면 캡처 아이콘이나 옆의 컨텍스트 아이콘을 클릭한 뒤 질문하세요. Ctrl+Enter로 전송합니다."></textarea>
                         </div>
                         <div id="geminiAttachmentList" class="geminiAttachmentList" hidden></div>
                         <div class="actionsGemini">
@@ -269,7 +278,7 @@
             
             // 5. 홈 예외 처리
             if (page === 'home') {
-                title = 'INIT Data Editing 시스템';
+                title = window.getShellHomeTitle?.() || 'INIT Data Editing System';
             }
 
             // 6. 페이지 로드 (명확하게 페이지가 있는지 확인 후 실행)
@@ -318,6 +327,80 @@
                 setTimeout(() => icon.classList.remove('fa-spin'), 500);
             }
         }
+
+        function applyShellDisplaySettings(settings = {}) {
+            const displayName = String(settings.systemDisplayName || "").trim() || "INIT Data Editing System";
+            const logoImage = String(settings.systemLogoImage || "").trim();
+            const shortName = displayName.replace(/\s*System\s*$/i, "").trim() || displayName;
+            const brandName = document.getElementById("appBrandName");
+            const brandLogo = document.getElementById("appBrandLogo");
+            const systemName = document.getElementById("shellSystemName");
+
+            window.shellDisplaySettings = { systemDisplayName: displayName, systemLogoImage: logoImage };
+            document.title = displayName;
+            if (systemName) systemName.textContent = displayName;
+            if (brandName) brandName.textContent = shortName;
+            if (brandLogo) {
+                if (logoImage) {
+                    brandLogo.src = logoImage;
+                    brandLogo.hidden = false;
+                    if (brandName) brandName.hidden = true;
+                } else {
+                    brandLogo.removeAttribute("src");
+                    brandLogo.hidden = true;
+                    if (brandName) brandName.hidden = false;
+                }
+            }
+
+            const activeSection = document.querySelector(".page-section.active");
+            const activeCode = activeSection?.id?.replace("page-section-", "");
+            const title = document.getElementById("contentTitle");
+            if (title && (!activeCode || activeCode === "home")) {
+                window.updateShellPageHeader?.(activeCode || "home", displayName);
+            }
+        }
+
+        function updateShellPageHeader(pageCode, titleText) {
+            const displayName = window.getShellDisplayName?.() || "INIT Data Editing System";
+            const menu = window.MENU_PAGE_MAP?.[pageCode] || {};
+            const title = document.getElementById("contentTitle");
+            const systemName = document.getElementById("shellSystemName");
+            const breadcrumb = document.getElementById("contentBreadcrumb");
+            const isHome = !pageCode || pageCode === "home";
+            const resolvedTitle = titleText || menu.title || menu.label || pageCode || displayName;
+
+            if (title) title.textContent = resolvedTitle;
+            if (systemName) {
+                systemName.textContent = displayName;
+                systemName.hidden = isHome;
+            }
+            if (breadcrumb) {
+                const items = Array.isArray(menu.breadcrumb) && menu.breadcrumb.length
+                    ? menu.breadcrumb
+                    : (isHome ? ["Home"] : ["Home", menu.label || menu.title || pageCode]);
+                breadcrumb.textContent = items.join(" > ");
+                breadcrumb.hidden = isHome;
+            }
+        }
+
+        async function loadShellDisplaySettings() {
+            if (!window.CommonUtils || !window.PageManager?.isAuthenticated?.()) {
+                applyShellDisplaySettings();
+                return;
+            }
+            try {
+                const json = await CommonUtils.request(`${API_BASE_URL}/M91002/display-settings`, { method: "GET", showLoading: false });
+                applyShellDisplaySettings(json.data || {});
+            } catch (error) {
+                console.warn("[System] Display setting load failed.", error);
+                applyShellDisplaySettings();
+            }
+        }
+
+        window.reloadShellDisplaySettings = loadShellDisplaySettings;
+        window.getShellDisplayName = () => window.shellDisplaySettings?.systemDisplayName || "INIT Data Editing System";
+        window.getShellHomeTitle = () => window.getShellDisplayName();
+        window.updateShellPageHeader = updateShellPageHeader;
 
         async function handlePageClose() {
             const activeSection = document.querySelector('.page-section.active');
@@ -456,6 +539,7 @@
             const btnSideRClose = document.getElementById("btnCloseRightSidebar");
             const btnCloseGeminiSidebar = document.getElementById("btnCloseGeminiSidebar");
             const consoleBar = document.getElementById("pageConsoleHolder");
+            const consoleHeader = consoleBar?.querySelector(".console-header");
             const btnConsoleClose = document.getElementById("btnCloseConsolebar");
             
             // 1. 우측 사이드바: 영역을 빈 곳 클릭하면 열리는 기능 추가
@@ -481,12 +565,37 @@
                 });
             }
 
-            // 3. 하단 콘솔창 영역을 빈 곳 클릭하면 열리는 기능 추가
-            consoleBar.addEventListener("click", function() {
-                if (this.classList.contains("collapsed")) {
+            // 3. 하단 콘솔창 상단바의 빈 곳을 클릭하면 열리는 기능 추가
+            if (consoleHeader) {
+                consoleHeader.addEventListener("click", function(event) {
+                    const isInteractive = event.target.closest(
+                        ".console-tab, .console-actions, button, input, select, textarea, a, .log-toggle"
+                    );
+                    if (isInteractive) return;
+                    if (consoleBar.classList.contains("collapsed")) {
+                        toggleConsole();
+                    }
+                });
+            }
+
+            if (consoleBar) {
+                consoleBar.addEventListener("click", function(event) {
+                    if (event.target.closest(".console-header")) return;
+                    if (this.classList.contains("collapsed")) {
+                        toggleConsole();
+                    }
+                });
+            }
+
+            if (consoleHeader) {
+                consoleHeader.addEventListener("dblclick", function(event) {
+                    const isInteractive = event.target.closest(
+                        ".console-tab, .console-actions, button, input, select, textarea, a, .log-toggle"
+                    );
+                    if (isInteractive) return;
                     toggleConsole();
-                }
-            });
+                });
+            }
 
             // 4. 닫기 버튼 클릭 이벤트 (닫기 전용)
             if (btnConsoleClose) {
@@ -1499,28 +1608,40 @@
 
         async function attachCurrentPageCapture() {
             setGeminiError("");
-            const snapshot = buildCurrentElementsSnapshot();
             try {
-                const image = await captureCurrentGeminiPageLongImage();
-                addGeminiAttachments([image, snapshot]);
-            } catch (error) {
+                const pageInfo = getCurrentGeminiPageInfo();
+                const helpContext = await buildGeminiHelpContext(pageInfo.pageCode);
+                const snapshot = buildCurrentElementsSnapshot();
                 try {
-                    const image = await captureCurrentGeminiPageImage();
-                    addGeminiAttachments([image, snapshot]);
-                    setGeminiError(`Full scroll capture failed, so a visible screen capture was attached. ${error.message || ""}`.trim());
-                } catch (fallbackError) {
-                    addGeminiAttachments([snapshot]);
-                    setGeminiError(`${fallbackError.message || error.message || "Screen capture failed."} Elements snapshot was attached instead.`);
+                    const image = await captureCurrentGeminiPageLongImage();
+                    addGeminiAttachments([...helpContext, image, snapshot]);
+                } catch (error) {
+                    try {
+                        const image = await captureCurrentGeminiPageImage();
+                        addGeminiAttachments([...helpContext, image, snapshot]);
+                        setGeminiError(`Full scroll capture failed, so a visible screen capture was attached. ${error.message || ""}`.trim());
+                    } catch (fallbackError) {
+                        addGeminiAttachments([...helpContext, snapshot]);
+                        setGeminiError(`${fallbackError.message || error.message || "Screen capture failed."} Elements snapshot was attached instead.`);
+                    }
                 }
+            } finally {
+                geminiQueryEl.focus();
             }
         }
 
         async function attachCurrentPageSourceContext() {
             setGeminiError("");
             try {
-                addGeminiAttachments(await buildCurrentPageSourceContext());
+                const pageInfo = getCurrentGeminiPageInfo();
+                addGeminiAttachments([
+                    ...(await buildGeminiHelpContext(pageInfo.pageCode)),
+                    ...(await buildCurrentPageSourceContext())
+                ]);
             } catch (error) {
                 setGeminiError(error.message || "Unable to attach current page source context.");
+            } finally {
+                geminiQueryEl.focus();
             }
         }
 
@@ -1559,11 +1680,7 @@
 
             setGeminiError("");
             geminiButton.disabled = true;
-            const pageInfo = getCurrentGeminiPageInfo();
-            const contextAttachments = [
-                ...(await buildGeminiHelpContext(pageInfo.pageCode)),
-                ...geminiAttachments
-            ];
+            const contextAttachments = [...geminiAttachments];
             const questionMessage = appendGeminiMessage("user", { text: renderGeminiUserQuestion(query, contextAttachments) });
             geminiQueryEl.value = "";
             clearGeminiAttachments();

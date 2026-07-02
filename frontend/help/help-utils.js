@@ -126,7 +126,7 @@
         const serviceFiles = implementation.serviceFiles.length ? implementation.serviceFiles : ["없음 또는 화면 전용 라우터에서 직접 처리"];
         const publicModels = implementation.publicModelDetails.length
             ? toList(implementation.publicModelDetails)
-            : "- 이 메뉴에서 공개 ML/AI 모델 상세 설명은 별도 공개 범위가 확인될 때만 제공합니다.";
+            : "- 이 메뉴에서 안내할 모델/AI 리소스 정보는 별도 공개 범위가 확인될 때만 제공합니다.";
         const optionalSections = [
             ["상세 이해 가이드", page.deepDive],
             ["결과 해석 기준", page.interpretationGuide],
@@ -171,10 +171,10 @@
             "## 논리 데이터 도메인",
             toList(implementation.logicalDataDomains),
             "",
-            "## 공개 ML/AI 설명 가능 범위",
+            "## 모델/AI 리소스 안내 범위",
             publicModels,
             "",
-            "## AI 답변 기준",
+            "## 질문 답변 참고 기준",
             toList(page.aiGuidance),
             "",
             "## 비공개 원칙",

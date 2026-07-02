@@ -1230,6 +1230,7 @@ const CommonMessage = {
             copyable: options.copyable !== false,
             okText: options.okText || "OK",
             cancelText: options.cancelText || "Cancel",
+            defaultAction: options.defaultAction === "cancel" ? "cancel" : "ok",
             message: String(message ?? "")
         };
     },
@@ -1284,8 +1285,8 @@ const CommonMessage = {
         popup.setAttribute("aria-describedby", bodyId);
         const confirmButtons = options.type === "confirm"
             ? `
-                <button type="button" class="common-message-primary" data-common-message-action="cancel" autofocus>${this.escapeHtml(options.cancelText)}</button>
-                <button type="button" class="common-message-secondary" data-common-message-action="ok">${this.escapeHtml(options.okText)}</button>
+                <button type="button" class="common-message-secondary common-message-confirm-action" data-common-message-action="cancel"${options.defaultAction === "cancel" ? " autofocus" : ""}>${this.escapeHtml(options.cancelText)}</button>
+                <button type="button" class="common-message-secondary common-message-confirm-action" data-common-message-action="ok"${options.defaultAction === "ok" ? " autofocus" : ""}>${this.escapeHtml(options.okText)}</button>
             `
             : `<button type="button" class="common-message-primary" data-common-message-action="ok">${this.escapeHtml(options.okText)}</button>`;
         const footerHtml = options.toast ? "" : `
@@ -1349,7 +1350,7 @@ const CommonMessage = {
             } else {
                 setTimeout(() => {
                     const focusTarget = options.type === "confirm"
-                        ? popup.querySelector('[data-common-message-action="cancel"]')
+                        ? popup.querySelector(`[data-common-message-action="${options.defaultAction}"]`)
                         : popup.querySelector(".common-message-primary");
                     focusTarget?.focus();
                 }, 0);

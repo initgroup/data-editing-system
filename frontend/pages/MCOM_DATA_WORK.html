@@ -214,13 +214,16 @@
                                     <button id="scriptHelpButton-__PAGE_CODE__" type="button" class="table-icon-btn data-help-btn" title="Bind variable rules" onclick="__PAGE_CODE__.openPlsqlHelp()">
                                         <i class="fas fa-question"></i>
                                     </button>
+                                    <button id="scriptWrapToggle-__PAGE_CODE__" type="button" class="table-icon-btn data-script-wrap-toggle" title="표시 모드: 한 줄 표시" aria-pressed="false" onclick="__PAGE_CODE__.toggleScriptWrapMode()">
+                                        <i class="fas fa-align-left"></i>
+                                    </button>
                                 </span>
                                 <button type="button" class="table-btn" onclick="__PAGE_CODE__.generateExecutablePlsql(true)">
                                     <i class="fas fa-arrow-right"></i>
                                     <span id="generateScriptLabel-__PAGE_CODE__" data-label-key="generateScript">Generate PL/SQL</span>
                                 </button>
                             </header>
-                            <textarea id="execPlsqlEditor-__PAGE_CODE__" class="sql-editor data-script-editor" spellcheck="false" aria-label="Generated executable script"></textarea>
+                            <textarea id="execPlsqlEditor-__PAGE_CODE__" class="sql-editor data-script-editor" spellcheck="false" wrap="off" aria-label="Generated executable script"></textarea>
                         </section>
                     </div>
                 </section>
@@ -307,10 +310,6 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                 </span>
             </div>
             <div class="table-toolbar query-filter-toolbar data-edit-toolbar">
-                <button type="button" class="table-btn" onclick="__PAGE_CODE__.loadEditableTableData()">
-                    <i class="fas fa-play"></i>
-                    <span data-label-key="queryData">Query Data</span>
-                </button>
                 <div class="data-filter-stack">
                     <label class="query-filter-field data-where-field">
                         <span data-label-key="whereCondition">Where</span>
@@ -321,14 +320,22 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                         <input id="dataOrderBy-__PAGE_CODE__" class="env-field" type="text" placeholder="COLUMN_ID ASC">
                     </label>
                 </div>
-                <label class="table-limit-control data-freeze-control" title="Freeze No plus this many data columns while scrolling horizontally">
-                    <span>Freeze</span>
-                    <input id="dataFreezeColumns-__PAGE_CODE__" type="number" min="0" max="50" value="0" onchange="__PAGE_CODE__.applyEditableDataFrozenColumns()" oninput="__PAGE_CODE__.applyEditableDataFrozenColumns()">
-                </label>
-                <label class="table-limit-control">
-                    <span data-label-key="rows">Rows</span>
-                    <input id="dataLimit-__PAGE_CODE__" type="number" min="1" max="1000" value="100">
-                </label>
+                <div class="data-query-actions">
+                    <div class="data-query-options">
+                        <label class="table-limit-control data-freeze-control" title="Freeze No plus this many data columns while scrolling horizontally">
+                            <span>Freeze</span>
+                            <input id="dataFreezeColumns-__PAGE_CODE__" type="number" min="0" max="50" value="0" onchange="__PAGE_CODE__.applyEditableDataFrozenColumns()" oninput="__PAGE_CODE__.applyEditableDataFrozenColumns()">
+                        </label>
+                        <label class="table-limit-control">
+                            <span data-label-key="rows">Rows</span>
+                            <input id="dataLimit-__PAGE_CODE__" type="number" min="1" max="1000" value="100">
+                        </label>
+                    </div>
+                    <button type="button" class="table-btn data-query-button" onclick="__PAGE_CODE__.loadEditableTableData()">
+                        <i class="fas fa-play"></i>
+                        <span data-label-key="queryData">Query Data</span>
+                    </button>
+                </div>
             </div>
             <div class="data-grid-topbar">
                 <div id="dataEditMessage-__PAGE_CODE__" class="table-empty data-grid-message" aria-live="polite" hidden></div>

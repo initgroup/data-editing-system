@@ -254,7 +254,8 @@
                     PageManager.load("M99001", "DB Connection Setup");
                     return;
                 }
-                PageManager.load("home", "Data Editing System");
+                await window.reloadShellDisplaySettings?.();
+                PageManager.load("home", window.getShellHomeTitle?.() || "Data Editing System");
             } catch (error) {
                 this.setMessage(error.message || "Login failed.", "error");
             } finally {

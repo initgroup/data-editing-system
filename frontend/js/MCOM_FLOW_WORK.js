@@ -503,9 +503,8 @@
                 const nodeTypeLabel = this.getNodeTypeLabel(nodeType, job.JOB_GROUP || job.MENU_CODE || "JOB");
                 const jobId = job.WORK_JOB_ID || job.PROFILE_JOB_ID || "";
                 const tableLabel = `${job.OWNER_NAME || "-"}.${job.TABLE_NAME || "-"}`;
-                const desc = job.JOB_DESC ? ` - ${job.JOB_DESC}` : "";
-                const subtitle = `${tableLabel}${desc}`;
                 const metaLabel = [job.MENU_CODE, this.getNodeDisplayLabel(nodeTypeLabel)].filter(Boolean).join(" - ");
+                const descLabel = job.JOB_DESC || metaLabel || tableLabel;
                 return `
                     <button type="button" class="data-job-row flow-palette-job" draggable="true"
                         data-node-type="${this.escapeHtml(nodeType)}"
@@ -519,8 +518,8 @@
                         <span class="flow-palette-job-main">
                             <strong title="${this.escapeHtml(job.JOB_NAME || "(Untitled job)")}" class="flow-palette-job-name">${this.escapeHtml(job.JOB_NAME || "(Untitled job)")}</strong>
                             <small class="flow-palette-job-meta">
-                                <span>${this.escapeHtml(metaLabel)}</span>
-                                <span>${this.escapeHtml(subtitle)}</span>
+                                <span class="flow-palette-job-desc" title="${this.escapeHtml(descLabel)}">${this.escapeHtml(descLabel)}</span>
+                                <span title="${this.escapeHtml(tableLabel)}">${this.escapeHtml(tableLabel)}</span>
                             </small>
                         </span>
                     </button>
@@ -1101,7 +1100,7 @@
                     node.classList.toggle("is-sample-node", this.isSampleFlowVisible && node.dataset.sampleNode === "Y");
                 });
                 if (label && this.isSampleFlowVisible) {
-                    label.textContent = "JOB TEMPLATE - review and save when ready.";
+                    label.textContent = "작업 템플릿입니다. 필요한 노드와 연결을 확인한 뒤 저장하세요.";
                 }
             },
 
@@ -1224,7 +1223,7 @@
                 this.clearNodeInspector();
                 this.setSampleFlowState(false);
                 const label = getContainerEl(`#selectedFlowLabel-${PAGE_CODE}`);
-                if (label) label.textContent = "Canvas cleared. Drag assets or use the canvas menu to build a flow.";
+                if (label) label.textContent = "캔버스가 비었습니다. 왼쪽 작업을 끌어오거나 캔버스 메뉴에서 노드를 추가해 Flow를 구성하세요.";
                 this.resizeFlowViewportToNodes();
                 this.updateFlowEdges();
                 this.renderFlowEdgeGrid();
@@ -1293,6 +1292,12 @@
                 node.addEventListener("click", (event) => {
                     event.stopPropagation();
                     this.selectFlowNode(node.dataset.nodeId || "");
+                });
+                node.addEventListener("dblclick", (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    this.selectFlowNode(node.dataset.nodeId || "");
+                    this.setFlowInspectorCollapsed(false);
                 });
                 this.bindFlowPorts(node);
             },
@@ -2772,8 +2777,10 @@
                         this.setSampleFlowState(true);
                         return;
                     }
-                    const dashedHint = this.dashedConnectionMode ? " Dashed connection mode is ON." : " Hold Shift while connecting for one dashed edge.";
-                    label.textContent = `Canvas zoom: ${Math.round(this.flowZoom * 100)}% / Click a right connector, move the mouse, then click a left connector to connect.${dashedHint}`;
+                    const dashedHint = this.dashedConnectionMode
+                        ? "현재 점선 연결 모드가 켜져 있습니다."
+                        : "Shift를 누르고 연결하면 한 번만 점선 연결을 만들 수 있습니다.";
+                    label.textContent = `캔버스 확대 ${Math.round(this.flowZoom * 100)}%. 오른쪽 출력 커넥터를 클릭한 뒤 연결할 노드의 왼쪽 입력 커넥터를 클릭하세요. ${dashedHint}`;
                 }
             },
 

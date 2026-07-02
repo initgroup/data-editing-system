@@ -54,12 +54,25 @@
                     </label>
                     <label class="env-meta-wide">
                         <span class="required-title">Key</span>
-                        <input id="settingKey-M91002" class="env-field env-meta-field" type="text" placeholder="SYSTEM_DISPLAY_NAME">
+                        <input id="settingKey-M91002" class="env-field env-meta-field" type="text" placeholder="SYSTEM_DISPLAY_NAME" oninput="M91002.syncLogoSettingHelper()">
                     </label>
                     <label class="env-meta-wide">
                         <span>Value</span>
-                        <textarea id="settingValue-M91002" class="env-field env-meta-textarea" rows="5"></textarea>
+                        <textarea id="settingValue-M91002" class="env-field env-meta-textarea" rows="5" oninput="M91002.syncLogoSettingHelper()"></textarea>
                     </label>
+                    <div id="logoSettingHelper-M91002" class="env-meta-wide setting-logo-helper" hidden>
+                        <div class="setting-logo-helper-row">
+                            <span>Logo image. Recommended 160 x 40px. Large images are shown with automatic proportional scaling.</span>
+                            <button type="button" class="env-btn env-cancel" onclick="M91002.pickLogoImage()">
+                                <i class="fas fa-image"></i>
+                                <span>Upload logo</span>
+                            </button>
+                            <input id="settingLogoFile-M91002" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden onchange="M91002.uploadLogoImage(this.files && this.files[0])">
+                        </div>
+                        <div class="setting-logo-preview">
+                            <img id="settingLogoPreview-M91002" alt="Logo preview" hidden>
+                        </div>
+                    </div>
                     <label class="env-meta-wide">
                         <span>Description</span>
                         <textarea id="settingDesc-M91002" class="env-field env-meta-textarea" rows="3"></textarea>

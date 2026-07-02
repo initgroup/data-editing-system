@@ -10,6 +10,8 @@ import base64
 import logging
 import oracledb
 import re
+import time
+from pathlib import Path
 from threading import Lock
 
 from backend.database import get_db_connection
@@ -25,6 +27,15 @@ _gemini_api_key_cache = {}
 _gemini_api_key_cache_lock = Lock()
 GEMINI_SETTING_CATEGORY = "MY_ACCOUNT"
 GEMINI_SETTING_KEY = "GEMINI_API_KEY"
+FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend"
+LOGO_UPLOAD_REL_DIR = Path("assets") / "user-uploads" / "system-logo"
+LOGO_UPLOAD_MAX_BYTES = 2 * 1024 * 1024
+LOGO_UPLOAD_CONTENT_TYPES = {
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/webp": "webp",
+    "image/svg+xml": "svg",
+}
 
 
 class SettingSaveRequest(BaseModel):
@@ -45,6 +56,12 @@ class SettingDeleteRequest(BaseModel):
 
 class SettingDefaultsRequest(BaseModel):
     categories: List[Dict[str, Any]] = []
+    model_config = ConfigDict(extra="allow")
+
+
+class LogoUploadRequest(BaseModel):
+    fileName: Optional[str] = ""
+    dataUrl: str
     model_config = ConfigDict(extra="allow")
 
 
@@ -112,6 +129,49 @@ def list_setting_categories():
     }
 
 
+@router.get("/display-settings")
+def get_display_settings(request: Request):
+    user_id = get_request_user_id(request)
+    connection_id = get_target_connection_id(request)
+    defaults = {
+        "systemDisplayName": "INIT Data Editing System",
+        "systemLogoImage": "./assets/init-logo.png",
+    }
+    conn = None
+    cursor = None
+    try:
+        conn = get_db_connection()
+        ensure_connection_owner(conn, user_id, connection_id)
+        cursor = conn.cursor()
+        values = {}
+        for key in ("SYSTEM_DISPLAY_NAME", "SYSTEM_LOGO_IMAGE"):
+            cursor.execute(SqlLoader.get_sql("M91002_ACTIVE_SETTING_VALUE"), {
+                "userId": user_id,
+                "connectionId": connection_id,
+                "categoryCode": "GENERAL",
+                "settingKey": key,
+            })
+            row = cursor.fetchone()
+            values[key] = normalize_db_value(row[0]) if row and row[0] is not None else ""
+        return {
+            "status": "success",
+            "data": {
+                "systemDisplayName": values.get("SYSTEM_DISPLAY_NAME") or defaults["systemDisplayName"],
+                "systemLogoImage": values.get("SYSTEM_LOGO_IMAGE") or defaults["systemLogoImage"],
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"M91002 display setting load failed, using defaults: {str(e)}")
+        return {"status": "success", "data": defaults}
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
 @router.post("/setting/save")
 def save_setting(req: SettingSaveRequest, request: Request):
     user_id = get_request_user_id(request)
@@ -151,6 +211,53 @@ def save_setting(req: SettingSaveRequest, request: Request):
             cursor.close()
         if conn:
             conn.close()
+
+
+@router.post("/setting/logo-upload")
+def upload_logo_image(req: LogoUploadRequest, request: Request):
+    user_id = get_request_user_id(request)
+    connection_id = get_target_connection_id(request)
+    data_url = (req.dataUrl or "").strip()
+    if "," not in data_url or not data_url.lower().startswith("data:image/"):
+        raise HTTPException(status_code=400, detail="Image data URL is required.")
+
+    header, encoded = data_url.split(",", 1)
+    match = re.match(r"^data:(image/(?:png|jpeg|webp|svg\+xml));base64$", header, re.IGNORECASE)
+    if not match:
+        raise HTTPException(status_code=400, detail="Only PNG, JPG, WEBP, or SVG logo images are allowed.")
+    content_type = match.group(1).lower()
+    extension = LOGO_UPLOAD_CONTENT_TYPES.get(content_type)
+    if not extension:
+        raise HTTPException(status_code=400, detail="Unsupported logo image type.")
+
+    try:
+        image_bytes = base64.b64decode(encoded, validate=True)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid logo image data.")
+    if not image_bytes:
+        raise HTTPException(status_code=400, detail="Logo image is empty.")
+    if len(image_bytes) > LOGO_UPLOAD_MAX_BYTES:
+        raise HTTPException(status_code=400, detail="Logo image must be 2 MB or smaller.")
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        ensure_connection_owner(conn, user_id, connection_id)
+    finally:
+        if conn:
+            conn.close()
+
+    upload_dir = FRONTEND_DIR / LOGO_UPLOAD_REL_DIR
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    safe_name = f"system-logo-u{user_id}-c{connection_id}-{int(time.time() * 1000)}.{extension}"
+    upload_path = upload_dir / safe_name
+    upload_path.write_bytes(image_bytes)
+    logo_url = "./" + (LOGO_UPLOAD_REL_DIR / safe_name).as_posix()
+    return {
+        "status": "success",
+        "url": logo_url,
+        "message": "Logo image uploaded. Click Save setting to apply it.",
+    }
 
 
 @router.post("/setting/delete")

@@ -30,11 +30,27 @@ const MenuRenderer = {
         this.markActivePage(this.activePage || sessionStorage.getItem("initCurrentPage") || "");
     },
 
-    collectPageMap(menus) {
+    collectPageMap(menus, ancestors = []) {
         (menus || []).forEach(menu => {
-            if (menu.page) this.pageMap[menu.page] = menu;
-            if (Array.isArray(menu.children)) this.collectPageMap(menu.children);
+            if (menu.page) {
+                this.pageMap[menu.page] = {
+                    ...menu,
+                    breadcrumb: this.buildBreadcrumb(menu, ancestors)
+                };
+            }
+            if (Array.isArray(menu.children)) {
+                const nextAncestors = menu.type === "folder" && menu.label
+                    ? [...ancestors, menu.label]
+                    : ancestors;
+                this.collectPageMap(menu.children, nextAncestors);
+            }
         });
+    },
+
+    buildBreadcrumb(menu, ancestors = []) {
+        if (menu.page === "home") return ["Home"];
+        const current = menu.label || menu.title || menu.page;
+        return ["Home", ...ancestors, current].filter(Boolean);
     },
 
     collectPageCodes(menus) {

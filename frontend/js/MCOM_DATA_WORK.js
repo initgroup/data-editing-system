@@ -229,11 +229,13 @@
         runtimeBindDialog: null,
         runtimeBindValues: {},
         savedJobSnapshot: null,
+        scriptWrapMode: false,
 
         async init() {
             if (this.isInit) return;
             this.currentJob = this.createEmptyJob();
             this.applyUiLabels();
+            this.syncScriptWrapMode();
             this.syncDataEditTabVisibility();
             this.renderSqlTransactionState();
             this.sqlKeydownBound = (event) => this.handleSqlEditorKeydown(event, `#sqlEditor-${PAGE_CODE}`, `#sqlGrid-${PAGE_CODE}`, "sql");
@@ -294,6 +296,7 @@
             this.runtimeBindDialog = null;
             this.runtimeBindValues = {};
             this.savedJobSnapshot = null;
+            this.scriptWrapMode = false;
             this.isInit = false;
         },
 
@@ -1486,6 +1489,28 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                 `;
         },
 
+        toggleScriptWrapMode() {
+            this.scriptWrapMode = !this.scriptWrapMode;
+            this.syncScriptWrapMode();
+        },
+
+        syncScriptWrapMode() {
+            const editor = getContainerEl(`#execPlsqlEditor-${PAGE_CODE}`);
+            const button = getContainerEl(`#scriptWrapToggle-${PAGE_CODE}`);
+            const enabled = Boolean(this.scriptWrapMode);
+            if (editor) {
+                editor.classList.toggle("is-wrap-mode", enabled);
+                editor.setAttribute("wrap", enabled ? "soft" : "off");
+            }
+            if (button) {
+                button.classList.toggle("is-active", enabled);
+                button.setAttribute("aria-pressed", String(enabled));
+                button.setAttribute("title", enabled ? "표시 모드: 자동 줄바꿈" : "표시 모드: 한 줄 표시");
+                const icon = button.querySelector("i");
+                if (icon) icon.className = enabled ? "fas fa-align-justify" : "fas fa-align-left";
+            }
+        },
+
         applyUiLabels() {
             const container = document.getElementById(`container-${PAGE_CODE}`);
             if (!container) return;
@@ -2532,13 +2557,14 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
             const args = rows.map((row, index) => {
                 const paramName = row.itemName || `P${index + 1}`;
                 const direction = this.getParamDirection(row.itemValue);
+                const comment = this.createPlsqlParameterComment(row);
                 if (direction.includes("OUT")) {
                     const varName = `v_${paramName.toLowerCase()}`.replace(/[^a-z0-9_$#]/g, "_");
                     const initialValue = direction.includes("IN") ? ` := ${this.createPlsqlArgument(row)}` : "";
                     declarations.push(`  ${varName} ${this.getParamDataType(row.itemValue)}${initialValue};`);
-                    return `    ${this.padRight(paramName, 22)} => ${varName}`;
+                    return `    ${this.padRight(paramName, 22)} => ${varName}${comment}`;
                 }
-                return `    ${this.padRight(paramName, 22)} => ${this.createPlsqlArgument(row)}`;
+                return `    ${this.padRight(paramName, 22)} => ${this.createPlsqlArgument(row)}${comment}`;
             }).join(",\n");
 
             const declareBlock = declarations.length
@@ -2560,6 +2586,12 @@ END;`;
             const defaultValue = String(row?.itemDefault || "").trim();
             if (defaultValue.includes(":")) return defaultValue;
             return `:${this.toBindVariableName(row?.itemName || "")}`;
+        },
+
+        createPlsqlParameterComment(row) {
+            const comment = String(row?.itemDesc || "").replace(/\s+/g, " ").trim();
+            if (!comment) return "";
+            return ` /* ${comment.replace(/\*\//g, "* /")} */`;
         },
 
         toBindVariableName(parameterName) {

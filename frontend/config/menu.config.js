@@ -2,8 +2,8 @@ window.MENU_CONFIG = [
     {
         type: 'page',
         page: 'home',
-        title: '인아이티 Data Editing 시스템',
-        label: '메인',
+        title: 'INIT Data Editing System',
+        label: '메인홈',
         iconClass: 'fas fa-house text-teal-300',
         active: false,
         enabled: true
@@ -95,7 +95,7 @@ window.MENU_CONFIG = [
         type: 'folder',
         key: 'edit-flow',
         label: '에디팅 시나리오',
-        iconClass: 'fas fa-lightbulb text-amber-400',
+        iconClass: 'fas fa-diagram-project text-blue-300',
         enabled: true,
         children: [
             {

@@ -131,7 +131,7 @@
 
     <main>
         <section class="ai-note" data-ai-section="summary">
-            <h2>AI 우선 요약</h2>
+            <h2>메뉴 요약</h2>
             <p>사용자가 HOME 화면에서 질문하면 이 문서를 먼저 기준으로 삼습니다. HOME은 작업을 직접 편집하는 화면이라기보다 현재 사용자 세션과 데이터 편집 작업 준비 상태를 확인하고, 다음 업무 화면으로 이동하는 시작점입니다.</p>
         </section>
 
@@ -141,7 +141,7 @@
                 <li>현재 로그인 사용자, 권한, Target DB 선택 상태를 확인합니다.</li>
                 <li>통합 플로우와 데이터 품질 관련 주요 지표를 요약합니다.</li>
                 <li>공지사항과 작업 바로가기를 통해 사용자가 다음 작업으로 빠르게 이동하게 합니다.</li>
-                <li>Gemini 질문 context에서 현재 메뉴가 HOME임을 알려주는 기준 문서로 사용됩니다.</li>
+                <li>현재 메뉴가 HOME임을 설명하는 도움말 기준 문서로 사용됩니다.</li>
             </ul>
         </section>
 
@@ -179,7 +179,7 @@
         </section>
 
         <section data-ai-section="gemini-context">
-            <h2>Gemini 질문 context 기준</h2>
+            <h2>질문 참고 자료 기준</h2>
             <ol>
                 <li>HOME 관련 질문이면 이 도움말을 가장 먼저 요약합니다.</li>
                 <li>현재 화면의 Elements DOM 스냅샷이 첨부되면 실제 렌더링 상태를 기준으로 답변합니다.</li>

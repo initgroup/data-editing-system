@@ -299,6 +299,7 @@ DECLARE
             'OWNER',
             'TABLE_NAME',
             'MODEL_NAME',
+            'COLUMN_DESC',
             'COLUMN_ID',
             'COLUMN_NAME',
             'DATA_TYPE',
@@ -344,6 +345,7 @@ DECLARE
                'OWNER',
                'TABLE_NAME',
                'MODEL_NAME',
+               'COLUMN_DESC',
                'COLUMN_ID',
                'COLUMN_NAME',
                'DATA_TYPE',
@@ -378,6 +380,83 @@ DECLARE
         END LOOP;
 
         DBMS_OUTPUT.PUT_LINE('[OK] INIT$_TB_PREDICTED_TYPE column display order refreshed.');
+    END;
+
+    PROCEDURE reorder_predicted_type_final_columns IS
+        TYPE t_col_list IS TABLE OF VARCHAR2(128);
+        v_cols t_col_list := t_col_list(
+            'OWNER',
+            'TABLE_NAME',
+            'COLUMN_NAME',
+            'COLUMN_DESC',
+            'COLUMN_ID',
+            'DATA_TYPE',
+            'SOURCE_RUN_SOURCE_TYPE',
+            'SOURCE_RUN_ID',
+            'SOURCE_MODEL_NAME',
+            'BASE_PREDICTED_TYPE',
+            'MODL_PREDICTED_TYPE',
+            'FINAL_PREDICTED_TYPE',
+            'FINAL_REASON',
+            'FINAL_UPDATE_DT',
+            'FINAL_UPDATE_USER',
+            'CREATE_DT'
+        );
+        v_current_order VARCHAR2(32767);
+        v_expected_order VARCHAR2(32767);
+    BEGIN
+        IF NOT table_exists('INIT$_TB_PREDICTED_TYPE_FINAL') THEN
+            DBMS_OUTPUT.PUT_LINE('[SKIP] TABLE INIT$_TB_PREDICTED_TYPE_FINAL does not exist.');
+            RETURN;
+        END IF;
+
+        FOR i IN 1 .. v_cols.COUNT LOOP
+            IF NOT column_exists('INIT$_TB_PREDICTED_TYPE_FINAL', v_cols(i)) THEN
+                DBMS_OUTPUT.PUT_LINE('[SKIP] INIT$_TB_PREDICTED_TYPE_FINAL column order refresh skipped. Missing column: ' || v_cols(i));
+                RETURN;
+            END IF;
+            v_expected_order := v_expected_order || CASE WHEN i > 1 THEN ',' END || v_cols(i);
+        END LOOP;
+
+        SELECT LISTAGG(COLUMN_NAME, ',') WITHIN GROUP (ORDER BY COLUMN_ID)
+          INTO v_current_order
+          FROM USER_TAB_COLS
+         WHERE TABLE_NAME = 'INIT$_TB_PREDICTED_TYPE_FINAL'
+           AND HIDDEN_COLUMN = 'NO'
+           AND COLUMN_NAME IN (
+               'OWNER',
+               'TABLE_NAME',
+               'COLUMN_NAME',
+               'COLUMN_DESC',
+               'COLUMN_ID',
+               'DATA_TYPE',
+               'SOURCE_RUN_SOURCE_TYPE',
+               'SOURCE_RUN_ID',
+               'SOURCE_MODEL_NAME',
+               'BASE_PREDICTED_TYPE',
+               'MODL_PREDICTED_TYPE',
+               'FINAL_PREDICTED_TYPE',
+               'FINAL_REASON',
+               'FINAL_UPDATE_DT',
+               'FINAL_UPDATE_USER',
+               'CREATE_DT'
+           );
+
+        IF v_current_order = v_expected_order THEN
+            DBMS_OUTPUT.PUT_LINE('[SKIP] INIT$_TB_PREDICTED_TYPE_FINAL column display order already matches.');
+            RETURN;
+        END IF;
+
+        -- Keep OWNER visible so the table never has zero visible columns.
+        FOR i IN 2 .. v_cols.COUNT LOOP
+            set_column_visibility('INIT$_TB_PREDICTED_TYPE_FINAL', v_cols(i), 'INVISIBLE');
+        END LOOP;
+
+        FOR i IN 2 .. v_cols.COUNT LOOP
+            set_column_visibility('INIT$_TB_PREDICTED_TYPE_FINAL', v_cols(i), 'VISIBLE');
+        END LOOP;
+
+        DBMS_OUTPUT.PUT_LINE('[OK] INIT$_TB_PREDICTED_TYPE_FINAL column display order refreshed.');
     END;
 
     PROCEDURE reorder_cat_corr_pair_columns IS
@@ -650,6 +729,7 @@ BEGIN
     add_column_if_missing('INIT$_TB_ASSOC_RULE_SUMMARY', 'TOTAL_COUNT', '"TOTAL_COUNT" NUMBER');
     add_column_if_missing('INIT$_TB_PREDICTED_TYPE', 'RUN_SOURCE_TYPE', '"RUN_SOURCE_TYPE" VARCHAR2(30 BYTE) DEFAULT ''DATA_WORK'' NOT NULL ENABLE');
     add_column_if_missing('INIT$_TB_PREDICTED_TYPE', 'RUN_ID', '"RUN_ID" NUMBER DEFAULT 0 NOT NULL ENABLE');
+    add_column_if_missing('INIT$_TB_PREDICTED_TYPE', 'COLUMN_DESC', '"COLUMN_DESC" VARCHAR2(4000 BYTE)');
     add_column_if_missing('INIT$_TB_PREDICTED_TYPE', 'BASE_REASON', '"BASE_REASON" VARCHAR2(4000 BYTE)');
     add_column_if_missing('INIT$_TB_PREDICTED_TYPE', 'FINAL_PREDICTED_TYPE', '"FINAL_PREDICTED_TYPE" VARCHAR2(4000 BYTE)');
     add_column_if_missing('INIT$_TB_PREDICTED_TYPE', 'FINAL_REASON', '"FINAL_REASON" VARCHAR2(1000 BYTE)');
@@ -695,6 +775,7 @@ BEGIN
     IF table_exists('INIT$_TB_PREDICTED_TYPE') THEN
         run_ddl('COMMENT INIT$_TB_PREDICTED_TYPE.RUN_SOURCE_TYPE', q'[COMMENT ON COLUMN "INIT$_TB_PREDICTED_TYPE"."RUN_SOURCE_TYPE" IS 'Run source type: DATA_WORK or FLOW_WORK']');
         run_ddl('COMMENT INIT$_TB_PREDICTED_TYPE.RUN_ID', q'[COMMENT ON COLUMN "INIT$_TB_PREDICTED_TYPE"."RUN_ID" IS 'WORK_RUN_ID for DATA_WORK or FLOW_RUN_ID for FLOW_WORK']');
+        run_ddl('COMMENT INIT$_TB_PREDICTED_TYPE.COLUMN_DESC', q'[COMMENT ON COLUMN "INIT$_TB_PREDICTED_TYPE"."COLUMN_DESC" IS 'Target table column comment']');
         run_ddl('COMMENT INIT$_TB_PREDICTED_TYPE.BASE_REASON', q'[COMMENT ON COLUMN "INIT$_TB_PREDICTED_TYPE"."BASE_REASON" IS 'Reason produced by rule-based profiling logic']');
         run_ddl('COMMENT INIT$_TB_PREDICTED_TYPE.FINAL_PREDICTED_TYPE', q'[COMMENT ON COLUMN "INIT$_TB_PREDICTED_TYPE"."FINAL_PREDICTED_TYPE" IS 'Deprecated execution snapshot final predicted type. Source of truth is INIT$_TB_PREDICTED_TYPE_FINAL']');
         run_ddl('COMMENT INIT$_TB_PREDICTED_TYPE.FINAL_REASON', q'[COMMENT ON COLUMN "INIT$_TB_PREDICTED_TYPE"."FINAL_REASON" IS 'Deprecated execution snapshot final reason. Source of truth is INIT$_TB_PREDICTED_TYPE_FINAL']');
@@ -717,6 +798,7 @@ CREATE TABLE "INIT$_TB_PREDICTED_TYPE_FINAL" (
     "OWNER" VARCHAR2(128 BYTE) NOT NULL ENABLE,
     "TABLE_NAME" VARCHAR2(128 BYTE) NOT NULL ENABLE,
     "COLUMN_NAME" VARCHAR2(128 BYTE) NOT NULL ENABLE,
+    "COLUMN_DESC" VARCHAR2(4000 BYTE),
     "COLUMN_ID" NUMBER,
     "DATA_TYPE" VARCHAR2(128 BYTE),
     "SOURCE_RUN_SOURCE_TYPE" VARCHAR2(30 BYTE),
@@ -734,10 +816,12 @@ CREATE TABLE "INIT$_TB_PREDICTED_TYPE_FINAL" (
 )]');
 
     IF table_exists('INIT$_TB_PREDICTED_TYPE_FINAL') THEN
+        add_column_if_missing('INIT$_TB_PREDICTED_TYPE_FINAL', 'COLUMN_DESC', '"COLUMN_DESC" VARCHAR2(4000 BYTE)');
         run_ddl('COMMENT INIT$_TB_PREDICTED_TYPE_FINAL', q'[COMMENT ON TABLE "INIT$_TB_PREDICTED_TYPE_FINAL" IS 'User-confirmed final column logical type master']');
         run_ddl('COMMENT INIT$_TB_PREDICTED_TYPE_FINAL.OWNER', q'[COMMENT ON COLUMN "INIT$_TB_PREDICTED_TYPE_FINAL"."OWNER" IS 'Target table owner']');
         run_ddl('COMMENT INIT$_TB_PREDICTED_TYPE_FINAL.TABLE_NAME', q'[COMMENT ON COLUMN "INIT$_TB_PREDICTED_TYPE_FINAL"."TABLE_NAME" IS 'Target table name']');
         run_ddl('COMMENT INIT$_TB_PREDICTED_TYPE_FINAL.COLUMN_NAME', q'[COMMENT ON COLUMN "INIT$_TB_PREDICTED_TYPE_FINAL"."COLUMN_NAME" IS 'Column name']');
+        run_ddl('COMMENT INIT$_TB_PREDICTED_TYPE_FINAL.COLUMN_DESC', q'[COMMENT ON COLUMN "INIT$_TB_PREDICTED_TYPE_FINAL"."COLUMN_DESC" IS 'Target table column comment captured from the latest confirmation source']');
         run_ddl('COMMENT INIT$_TB_PREDICTED_TYPE_FINAL.COLUMN_ID', q'[COMMENT ON COLUMN "INIT$_TB_PREDICTED_TYPE_FINAL"."COLUMN_ID" IS 'Column order captured from the latest confirmation source']');
         run_ddl('COMMENT INIT$_TB_PREDICTED_TYPE_FINAL.DATA_TYPE', q'[COMMENT ON COLUMN "INIT$_TB_PREDICTED_TYPE_FINAL"."DATA_TYPE" IS 'Physical data type captured from the latest confirmation source']');
         run_ddl('COMMENT INIT$_TB_PREDICTED_TYPE_FINAL.SOURCE_RUN_SOURCE_TYPE', q'[COMMENT ON COLUMN "INIT$_TB_PREDICTED_TYPE_FINAL"."SOURCE_RUN_SOURCE_TYPE" IS 'Run source type that produced the latest confirmed evidence']');
@@ -961,6 +1045,7 @@ CREATE INDEX "IX_INIT$_TB_RULE_VIOLATION_03"
 
     reorder_assoc_rule_summary_columns;
     reorder_predicted_type_columns;
+    reorder_predicted_type_final_columns;
     reorder_cat_corr_pair_columns;
     reorder_cat_corr_summary_columns;
     reorder_rule_violation_result_columns;

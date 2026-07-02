@@ -22,6 +22,12 @@
           "SETTING_VALUE": "INIT Data Editing System",
           "SETTING_DESC": "System display name.",
           "SORT_ORDER": 10
+        },
+        {
+          "SETTING_KEY": "SYSTEM_LOGO_IMAGE",
+          "SETTING_VALUE": "./assets/init-logo.png",
+          "SETTING_DESC": "System logo image URL or data URL. Recommended 160x40px. It is displayed with automatic proportional scaling.",
+          "SORT_ORDER": 20
         }
       ]
     },

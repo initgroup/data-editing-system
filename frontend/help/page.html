@@ -231,11 +231,11 @@
 
             const publicModels = implementation.publicModelDetails.length
                 ? renderList(implementation.publicModelDetails)
-                : "<p>이 메뉴에서 공개 ML/AI 모델 상세 설명은 별도 공개 범위가 확인될 때만 제공합니다.</p>";
+                : "<p>이 메뉴에서 안내할 모델/AI 리소스 정보는 별도 공개 범위가 확인될 때만 제공합니다.</p>";
 
             document.getElementById("helpMain").innerHTML = `
                 <section class="ai-note" data-ai-section="summary">
-                    <h2>AI 우선 요약</h2>
+                    <h2>메뉴 요약</h2>
                     <p>${escapeHtml(page.summary || "")}</p>
                 </section>
 
@@ -261,7 +261,7 @@
                     </section>
 
                     <section data-ai-section="ai-guidance">
-                        <h2>Gemini 답변 기준</h2>
+                        <h2>질문 답변 참고 기준</h2>
                         ${renderList(page.aiGuidance)}
                     </section>
 
@@ -281,7 +281,7 @@
                     </section>
 
                     <section class="full" data-ai-section="public-models">
-                        <h2>공개 ML/AI 설명 가능 범위</h2>
+                        <h2>모델/AI 리소스 안내 범위</h2>
                         ${publicModels}
                     </section>
 

@@ -1,4 +1,4 @@
-﻿(function() {
+(function() {
     if (!window.MCOMMON) {
         window.MCOMMON = {};
     }
@@ -27,6 +27,13 @@
     });
     const TABLE_RESULT_LAYOUTS = Object.freeze({
         "INIT$_TB_PREDICTED_TYPE": Object.freeze({
+            kind: "TABLE",
+            key: "TABLE:INIT$_TB_PREDICTED_TYPE",
+            title: "Result Table",
+            summaryKey: "predictedTypeSummary",
+            summaryRenderer: "renderPredictedTypeSummary"
+        }),
+        "INIT$_TB_PREDICTED_TYPE_FINAL": Object.freeze({
             kind: "TABLE",
             key: "TABLE:INIT$_TB_PREDICTED_TYPE",
             title: "Result Table",
@@ -85,7 +92,7 @@
         predictedTypeFilter: "ALL",
         ruleSummaryFilters: { conditionCount: "ALL", confidenceScope: "ALL", resultColumn: "ALL", conditionColumn: "ALL", resultHasValueYn: "ALL", page: 1, pageSize: 20, resultColumnPage: 1 },
         violationRuleFilters: { ruleId: "", conditionCount: "ALL", confidenceScope: "NON_PERFECT", resultScope: "HIT", page: 1, pageSize: 20 },
-        violationSql: { sql: "", page: 1, pageSize: 50, total: 0, columns: [], rows: [], title: "" },
+        violationSql: { sql: "", page: 1, pageSize: 50, freezeColumns: 2, total: 0, columns: [], rows: [], title: "", columnWidths: {} },
         currentModelDetail: null,
         lastViolationSummary: null,
         pendingRunId: "",
@@ -1936,9 +1943,11 @@
                 sql,
                 page: 1,
                 pageSize: 50,
+                freezeColumns: 2,
                 total: 0,
                 columns: [],
                 rows: [],
+                columnWidths: {},
                 ruleColumns,
                 ruleDetail,
                 title: `${label} 위반 Row 조회`
@@ -1995,6 +2004,11 @@
                 `V.TARGET_OWNER = ${this.sqlLiteral(targetOwner)}`,
                 `V.TARGET_TABLE = ${this.sqlLiteral(targetTable)}`
             ];
+            const flowRunId = Number(this.selectedRun?.FLOW_RUN_ID || 0);
+            if (flowRunId > 0) {
+                filters.push("V.RUN_SOURCE_TYPE = 'FLOW_WORK'");
+                filters.push(`V.RUN_ID = ${flowRunId}`);
+            }
             if (ruleModelName) filters.push(`V.MODEL_NAME = ${this.sqlLiteral(ruleModelName)}`);
             const violationFilters = this.violationRuleFilters || {};
             if (violationFilters.conditionCount !== "ALL") {
@@ -2055,6 +2069,9 @@
                                     ${[20, 50, 100, 200].map((size) => `<option value="${size}" ${Number(state.pageSize || 50) === size ? "selected" : ""}>${size}</option>`).join("")}
                                 </select>
                             </label>
+                            <label>Freeze
+                                <input id="${PAGE_ID_PREFIX}ViolationSqlFreezeColumns" type="number" min="0" max="50" value="${this.escapeHtml(state.freezeColumns ?? 2)}" onchange="${PAGE_CODE}.changeViolationSqlFreezeColumns(this.value)" oninput="${PAGE_CODE}.changeViolationSqlFreezeColumns(this.value)">
+                            </label>
                             <span>${this.formatNumber(state.total || 0)} rows</span>
                             <div class="M04002-page-jump">
                                 <button type="button" ${Number(state.page || 1) <= 1 ? "disabled" : ""} onclick="${PAGE_CODE}.executeViolationSql(${Math.max(1, Number(state.page || 1) - 1)})"><i class="fas fa-chevron-left"></i></button>
@@ -2095,21 +2112,52 @@
             const keyColumns = new Set(["V_VIOLATION_ID", "V_RULE_ID", "V_CASE_ID", "V_RESULT_COLUMN", "V_EXPECTED_VALUE", "V_ACTUAL_VALUE", "V_VIOLATION_SCORE"]);
             const ruleColumnSet = new Set((ruleColumns || []).map((column) => String(column).toUpperCase()));
             if (!safeColumns.length) return `<div class="table-empty">조회 결과가 없습니다.</div>`;
+            const columnWidths = this.violationSql?.columnWidths || {};
+            const freezeColumns = Math.max(0, Math.min(Number(this.violationSql?.freezeColumns ?? 2), safeColumns.length));
+            let left = 0;
+            const columnMeta = safeColumns.map((column, index) => {
+                const width = this.getViolationSqlColumnWidth(column, columnWidths);
+                const frozen = index < freezeColumns;
+                const stickyStyle = frozen ? `position: sticky; left: ${left}px;` : "";
+                if (frozen) left += width;
+                return { column, index, width, frozen, stickyStyle };
+            });
             return `
                 <div class="M04002-violation-sql-grid-wrap">
                     <table class="table-grid M04002-violation-sql-grid">
-                        <thead><tr>${safeColumns.map((column) => `<th class="${this.getViolationSqlColumnClass(column, keyColumns, ruleColumnSet)}">${this.renderColumnAwareCell(column, this.lastViolationSummary || {})}</th>`).join("")}</tr></thead>
+                        <colgroup>
+                            ${columnMeta.map((meta) => `<col style="width: ${meta.width}px;">`).join("")}
+                        </colgroup>
+                        <thead><tr>${columnMeta.map((meta) => `
+                            <th class="is-resizable ${meta.frozen ? "is-frozen-col" : ""} ${this.getViolationSqlColumnClass(meta.column, keyColumns, ruleColumnSet)}" data-col-index="${meta.index}" style="${meta.stickyStyle}">
+                                <span class="table-th-content">${this.renderColumnAwareCell(meta.column, this.lastViolationSummary || {})}</span>
+                                <span class="column-resizer" onmousedown="${PAGE_CODE}.startViolationSqlColumnResize(event, ${meta.index})"></span>
+                            </th>
+                        `).join("")}</tr></thead>
                         <tbody>
                             ${(rows || []).map((row) => `
-                                <tr>${safeColumns.map((column) => {
-                                    const value = row?.[column] ?? "";
-                                    return `<td class="${this.getViolationSqlColumnClass(column, keyColumns, ruleColumnSet)}" title="${this.escapeHtml(value)}">${this.renderColumnAwareCell(value, this.lastViolationSummary || {})}</td>`;
+                                <tr>${columnMeta.map((meta) => {
+                                    const value = row?.[meta.column] ?? "";
+                                    return `<td class="${meta.frozen ? "is-frozen-col" : ""} ${this.getViolationSqlColumnClass(meta.column, keyColumns, ruleColumnSet)}" data-col-index="${meta.index}" style="${meta.stickyStyle}" title="${this.escapeHtml(value)}">${this.renderColumnAwareCell(value, this.lastViolationSummary || {})}</td>`;
                                 }).join("")}</tr>
                             `).join("")}
                         </tbody>
                     </table>
                 </div>
             `;
+        },
+
+        getViolationSqlColumnWidth(column, columnWidths = this.violationSql?.columnWidths || {}) {
+            const key = String(column || "");
+            const saved = Number(columnWidths[key]);
+            if (Number.isFinite(saved) && saved >= 70) return saved;
+            const name = key.toUpperCase();
+            if (name === "V_RULE_ID") return 260;
+            if (name === "V_RESULT_COLUMN") return 150;
+            if (name === "V_EXPECTED_VALUE" || name === "V_ACTUAL_VALUE") return 136;
+            if (name === "V_VIOLATION_SCORE") return 160;
+            if (name === "V_VIOLATION_ID" || name === "V_CASE_ID") return 118;
+            return 132;
         },
 
         orderViolationSqlColumns(columns, ruleColumns = []) {
@@ -2130,6 +2178,60 @@
             if (keyColumns.has(name)) return "is-key";
             if (ruleColumnSet.has(name)) return "is-rule";
             return "";
+        },
+
+        changeViolationSqlFreezeColumns(value) {
+            const maxColumns = Math.max(0, (this.violationSql?.columns || []).filter((column) => column !== "RN__").length);
+            let freezeColumns = Number.parseInt(value, 10);
+            if (!Number.isFinite(freezeColumns)) freezeColumns = 0;
+            freezeColumns = Math.max(0, Math.min(maxColumns, freezeColumns));
+            this.violationSql = {
+                ...(this.violationSql || {}),
+                freezeColumns
+            };
+            const input = document.getElementById(`${PAGE_ID_PREFIX}ViolationSqlFreezeColumns`);
+            if (input && input.value !== String(freezeColumns)) input.value = String(freezeColumns);
+            this.refreshViolationSqlGrid();
+        },
+
+        refreshViolationSqlGrid() {
+            const result = document.querySelector(`#${PAGE_ID_PREFIX}ViolationSqlPopup .M04002-sql-result`);
+            const state = this.violationSql || {};
+            if (!result) return;
+            result.innerHTML = state.columns?.length
+                ? this.renderViolationSqlGrid(state.columns, state.rows || [], state.ruleColumns || [])
+                : "";
+        },
+
+        startViolationSqlColumnResize(event, columnIndex) {
+            event.preventDefault();
+            event.stopPropagation();
+            const table = event.currentTarget?.closest?.("table");
+            const col = table?.querySelectorAll("col")?.[columnIndex];
+            const columns = this.orderViolationSqlColumns(this.violationSql?.columns || [], this.violationSql?.ruleColumns || []);
+            const column = columns[columnIndex];
+            if (!table || !col || !column) return;
+            const startWidth = Number.parseInt(col.style.width, 10) || col.getBoundingClientRect().width || 120;
+            const startX = event.clientX;
+            document.body.classList.add("is-column-resizing");
+            const move = (moveEvent) => {
+                const nextWidth = Math.max(70, startWidth + moveEvent.clientX - startX);
+                this.violationSql = {
+                    ...(this.violationSql || {}),
+                    columnWidths: {
+                        ...(this.violationSql?.columnWidths || {}),
+                        [column]: nextWidth
+                    }
+                };
+                this.refreshViolationSqlGrid();
+            };
+            const stop = () => {
+                document.body.classList.remove("is-column-resizing");
+                document.removeEventListener("mousemove", move);
+                document.removeEventListener("mouseup", stop);
+            };
+            document.addEventListener("mousemove", move);
+            document.addEventListener("mouseup", stop);
         },
 
         closeViolationSqlPopup() {
@@ -3049,7 +3151,9 @@
         },
 
         isPredictedTypeNode(node) {
-            return String(node?.RESULT_OBJECT_NAME || "").trim().toUpperCase() === "INIT$_TB_PREDICTED_TYPE";
+            return ["INIT$_TB_PREDICTED_TYPE", "INIT$_TB_PREDICTED_TYPE_FINAL"].includes(
+                String(node?.RESULT_OBJECT_NAME || "").trim().toUpperCase()
+            );
         },
 
         matchesNodeWork(node, menuCode, procedureName) {

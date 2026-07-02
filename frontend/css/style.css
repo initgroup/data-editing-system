@@ -54,6 +54,30 @@ body {
     overflow: hidden;
 }
 
+.app-brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.app-brand-logo {
+    display: block;
+    flex: 0 0 auto;
+    max-width: 128px;
+    max-height: 32px;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+}
+
+.app-brand-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 /* 페이지 컨테이너 홀더 */
 #pageContainerHolder {
     flex: 1;
@@ -674,6 +698,23 @@ body {
 
 .common-message-popup.is-confirm .common-message-icon {
   color: #4f6f9f;
+}
+
+.common-message-popup.is-confirm .common-message-confirm-action {
+  min-width: 82px;
+}
+
+.common-message-popup.is-confirm .common-message-confirm-action:focus,
+.common-message-popup.is-confirm .common-message-confirm-action:focus-visible {
+  background: #2563eb;
+  border-color: #2563eb;
+  box-shadow:
+    0 0 0 2px #ffffff,
+    0 0 0 5px rgba(37, 99, 235, 0.65);
+  color: #ffffff;
+  font-weight: 700;
+  outline: 2px solid transparent;
+  outline-offset: 2px;
 }
 
 .common-message-popup.is-error .common-message-primary {
@@ -1764,7 +1805,6 @@ main { min-width: 0; flex: 1; }
 #pageConsoleHolder.collapsed {
     height: 35px !important; /* 최소한의 바 형태 유지 */
     min-height: 35px !important;
-    cursor: pointer;
     overflow: hidden !important;
 }
 
@@ -1772,8 +1812,15 @@ main { min-width: 0; flex: 1; }
     background-color: gray !important;
 }
 
-#pageConsoleHolder.collapsed * {
-    pointer-events: none; /* 클릭 가로채기 방지 */
+#pageConsoleHolder.collapsed .console-header {
+    cursor: pointer;
+}
+
+#pageConsoleHolder.collapsed .console-tab,
+#pageConsoleHolder.collapsed .console-actions,
+#pageConsoleHolder.collapsed .btn-console-action,
+#pageConsoleHolder.collapsed .log-toggle {
+    pointer-events: auto;
 }
 
 

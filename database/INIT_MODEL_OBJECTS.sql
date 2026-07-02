@@ -3305,12 +3305,17 @@ USING (
     WITH BASE_COL AS (
         SELECT C.OWNER,
                C.TABLE_NAME,
+               CM.COMMENTS AS COLUMN_DESC,
                C.COLUMN_ID,
                C.COLUMN_NAME,
                C.DATA_TYPE,
                C.NUM_DISTINCT,
                TT.TOTAL_ROWS
           FROM ALL_TAB_COLUMNS C
+               LEFT JOIN ALL_COL_COMMENTS CM
+                 ON CM.OWNER = C.OWNER
+                AND CM.TABLE_NAME = C.TABLE_NAME
+                AND CM.COLUMN_NAME = C.COLUMN_NAME
                CROSS JOIN (
                    SELECT COUNT(*) AS TOTAL_ROWS
                      FROM "~' || REPLACE(v_owner, '"', '""') || q'~"."~' || REPLACE(v_table_name, '"', '""') || q'~"
@@ -3322,6 +3327,7 @@ USING (
         SELECT B.OWNER,
                B.TABLE_NAME,
                ~' || sql_literal(v_model_name) || q'~ AS MODEL_NAME,
+               B.COLUMN_DESC,
                B.COLUMN_ID,
                B.COLUMN_NAME,
                B.DATA_TYPE,
@@ -3449,6 +3455,7 @@ USING (
            P.OWNER AS "OWNER",
            P.TABLE_NAME AS "TABLE_NAME",
            P.MODEL_NAME AS "MODEL_NAME",
+           P.COLUMN_DESC AS "COLUMN_DESC",
            P.COLUMN_ID AS "COLUMN_ID",
            P.COLUMN_NAME AS "COLUMN_NAME",
            P.DATA_TYPE AS "DATA_TYPE",
@@ -3490,6 +3497,7 @@ ON (
    AND T."COLUMN_NAME" = S."COLUMN_NAME"
 )
 WHEN MATCHED THEN UPDATE SET
+        T."COLUMN_DESC" = S."COLUMN_DESC",
         T."COLUMN_ID" = S."COLUMN_ID",
         T."DATA_TYPE" = S."DATA_TYPE",
         T."TOTAL_ROWS" = S."TOTAL_ROWS",
@@ -3505,6 +3513,7 @@ WHEN NOT MATCHED THEN INSERT (
         "OWNER",
         "TABLE_NAME",
         "MODEL_NAME",
+        "COLUMN_DESC",
         "COLUMN_ID",
         "COLUMN_NAME",
         "DATA_TYPE",
@@ -3528,6 +3537,7 @@ WHEN NOT MATCHED THEN INSERT (
         S."OWNER",
         S."TABLE_NAME",
         S."MODEL_NAME",
+        S."COLUMN_DESC",
         S."COLUMN_ID",
         S."COLUMN_NAME",
         S."DATA_TYPE",
@@ -3557,6 +3567,7 @@ WHEN NOT MATCHED THEN INSERT (
              , "OWNER"
              , "TABLE_NAME"
              , "MODEL_NAME"
+             , "COLUMN_DESC"
              , "COLUMN_ID"
              , "COLUMN_NAME"
              , "DATA_TYPE"
@@ -3576,7 +3587,8 @@ WHEN NOT MATCHED THEN INSERT (
       AND T."TABLE_NAME" = S."TABLE_NAME"
       AND T."COLUMN_NAME" = S."COLUMN_NAME")
      WHEN MATCHED THEN UPDATE
-          SET T."COLUMN_ID" = S."COLUMN_ID"
+          SET T."COLUMN_DESC" = S."COLUMN_DESC"
+            , T."COLUMN_ID" = S."COLUMN_ID"
             , T."DATA_TYPE" = S."DATA_TYPE"
             , T."SOURCE_RUN_SOURCE_TYPE" = S."RUN_SOURCE_TYPE"
             , T."SOURCE_RUN_ID" = S."RUN_ID"
@@ -3587,6 +3599,7 @@ WHEN NOT MATCHED THEN INSERT (
             "OWNER"
           , "TABLE_NAME"
           , "COLUMN_NAME"
+          , "COLUMN_DESC"
           , "COLUMN_ID"
           , "DATA_TYPE"
           , "SOURCE_RUN_SOURCE_TYPE"
@@ -3604,6 +3617,7 @@ WHEN NOT MATCHED THEN INSERT (
             S."OWNER"
           , S."TABLE_NAME"
           , S."COLUMN_NAME"
+          , S."COLUMN_DESC"
           , S."COLUMN_ID"
           , S."DATA_TYPE"
           , S."RUN_SOURCE_TYPE"

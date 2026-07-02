@@ -224,6 +224,84 @@
             this.setValue("#settingDesc-M91002", row.SETTING_DESC || "");
             this.setValue("#settingSortOrder-M91002", row.SORT_ORDER ?? 0);
             this.setValue("#settingUseYn-M91002", row.USE_YN || "Y");
+            this.syncLogoSettingHelper();
+        },
+
+        isLogoSetting() {
+            const categoryCode = (getContainerEl("#settingCategory-M91002")?.value || this.selectedCategoryCode || "").trim().toUpperCase();
+            const settingKey = (getContainerEl("#settingKey-M91002")?.value || "").trim().toUpperCase();
+            return categoryCode === "GENERAL" && settingKey === "SYSTEM_LOGO_IMAGE";
+        },
+
+        syncLogoSettingHelper() {
+            const helper = getContainerEl("#logoSettingHelper-M91002");
+            if (!helper) return;
+            const isLogoSetting = this.isLogoSetting();
+            helper.hidden = !isLogoSetting;
+            if (!isLogoSetting) return;
+
+            const value = (getContainerEl("#settingValue-M91002")?.value || "").trim();
+            const preview = getContainerEl("#settingLogoPreview-M91002");
+            if (preview) {
+                if (value) {
+                    preview.src = value;
+                    preview.hidden = false;
+                } else {
+                    preview.removeAttribute("src");
+                    preview.hidden = true;
+                }
+            }
+        },
+
+        pickLogoImage() {
+            getContainerEl("#settingLogoFile-M91002")?.click();
+        },
+
+        async uploadLogoImage(file) {
+            const input = getContainerEl("#settingLogoFile-M91002");
+            if (!file) return;
+            if (!file.type || !/^image\/(png|jpeg|webp|svg\+xml)$/i.test(file.type)) {
+                this.setSystemMessage("Only PNG, JPG, WEBP, or SVG logo images are allowed.", "error");
+                if (input) input.value = "";
+                return;
+            }
+            if (file.size > 2 * 1024 * 1024) {
+                this.setSystemMessage("Logo image must be 2 MB or smaller.", "error");
+                if (input) input.value = "";
+                return;
+            }
+            try {
+                const dataUrl = await this.readFileAsDataUrl(file);
+                const json = await CommonUtils.request(`${API_BASE_URL}/${API_CODE}/setting/logo-upload`, {
+                    method: "POST",
+                    body: {
+                        fileName: file.name,
+                        dataUrl
+                    }
+                });
+                this.setValue("#settingValue-M91002", json.url || "");
+                this.syncLogoSettingHelper();
+                this.setSystemMessage(json.message || "Logo image uploaded. Click Save setting to apply it.");
+            } catch (error) {
+                this.setSystemMessage(error.message || "Logo image upload failed.", "error");
+            } finally {
+                if (input) input.value = "";
+            }
+        },
+
+        readFileAsDataUrl(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(String(reader.result || ""));
+                reader.onerror = () => reject(new Error("Logo image read failed."));
+                reader.readAsDataURL(file);
+            });
+        },
+
+        isShellDisplaySetting(categoryCode, settingKey) {
+            const category = String(categoryCode || "").trim().toUpperCase();
+            const key = String(settingKey || "").trim().toUpperCase();
+            return category === "GENERAL" && ["SYSTEM_DISPLAY_NAME", "SYSTEM_LOGO_IMAGE"].includes(key);
         },
 
         async saveSetting() {
@@ -247,6 +325,9 @@
                 this.setSystemMessage(json.message || "Setting saved.");
                 await this.loadSettings();
                 this.selectSetting(payload.settingKey);
+                if (this.isShellDisplaySetting(payload.categoryCode, payload.settingKey)) {
+                    await window.reloadShellDisplaySettings?.();
+                }
             } catch (error) {
                 this.setSystemMessage(error.message || "Setting save failed.", "error");
             }
@@ -273,7 +354,7 @@
         },
 
         async createDefaultSettings() {
-            if (!(await CommonMessage.confirm("Create or update default settings in the database?"))) return;
+            if (!(await CommonMessage.confirm("Create or update default settings in the database?", { defaultAction: "cancel" }))) return;
             const button = getContainerEl("#createDefaultSettingsBtn-M91002");
             const originalHtml = button?.innerHTML || "";
             if (button) {
@@ -297,6 +378,7 @@
                 this.setSystemMessage(message);
                 await this.loadSettings();
                 this.selectFirstSettingOrNew();
+                await window.reloadShellDisplaySettings?.();
             } catch (error) {
                 this.setSystemMessage(error.message || "Default setting save failed.", "error");
             } finally {

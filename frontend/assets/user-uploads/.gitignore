@@ -1,0 +1,5 @@
+*
+!.gitignore
+!system-logo/
+system-logo/*
+!system-logo/.gitkeep

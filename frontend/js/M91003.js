@@ -260,7 +260,7 @@
         },
 
         async createDefaultSettings() {
-            if (!(await CommonMessage.confirm("Create or update default target settings in the target database?"))) return;
+            if (!(await CommonMessage.confirm("Create or update default target settings in the target database?", { defaultAction: "cancel" }))) return;
             const button = getContainerEl("#createDefaultSettingsBtn-M91003");
             const originalHtml = button?.innerHTML || "";
             if (button) {
