@@ -110,9 +110,12 @@ def save_job(
 
     exec_source_type = normalize_exec_source_type(req.execSourceType)
     exec_resource_id = require_positive_optional_int(req.execResourceId, "execResourceId")
-    exec_plsql = normalize_required_executable_script(req.execPlsql)
-    validation_plsql = prepare_executable_script_for_validation(exec_plsql, req.params or [])
-    validate_executable_script_syntax(conn, validation_plsql)
+    if exec_source_type == "WEB_API":
+        exec_plsql = normalize_text(req.execPlsql, "", 4000)
+    else:
+        exec_plsql = normalize_required_executable_script(req.execPlsql)
+        validation_plsql = prepare_executable_script_for_validation(exec_plsql, req.params or [])
+        validate_executable_script_syntax(conn, validation_plsql)
 
     params = {
         "menuCode": menu_code,
@@ -203,9 +206,12 @@ def build_draft_job(
 
     exec_source_type = normalize_exec_source_type(req.execSourceType)
     exec_resource_id = require_positive_optional_int(req.execResourceId, "execResourceId")
-    exec_plsql = normalize_required_executable_script(req.execPlsql)
-    validation_plsql = prepare_executable_script_for_validation(exec_plsql, req.params or [])
-    validate_executable_script_syntax(conn, validation_plsql)
+    if exec_source_type == "WEB_API":
+        exec_plsql = normalize_text(req.execPlsql, "", 4000)
+    else:
+        exec_plsql = normalize_required_executable_script(req.execPlsql)
+        validation_plsql = prepare_executable_script_for_validation(exec_plsql, req.params or [])
+        validate_executable_script_syntax(conn, validation_plsql)
 
     return {
         "PROFILE_JOB_ID": profile_job_id,
@@ -502,7 +508,7 @@ def require_positive_optional_int(value: Optional[int], field_name: str) -> Opti
 
 def normalize_exec_source_type(value: Any) -> str:
     text = str(value or "DB_OBJECT").strip().upper()
-    if text not in {"DB_OBJECT", "OML_PYTHON"}:
+    if text not in {"DB_OBJECT", "OML_PYTHON", "WEB_API"}:
         raise HTTPException(status_code=400, detail="Invalid execSourceType.")
     return text
 

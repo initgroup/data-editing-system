@@ -33,6 +33,7 @@ Get-Content -Encoding UTF8 frontend/js/app.js
 - `Get-Content`, `Select-String`, `rg`, `git diff` 출력에서 한글이 깨져 보이면 파일이 깨졌다고 단정하지 않습니다. UTF-8 셸 가드를 적용한 뒤 다시 확인합니다.
 - VS Code에서 정상으로 보이는 한글 주석/라벨은 사용자가 요청하지 않는 한 수정하지 않습니다.
 - 깨진 출력 내용을 그대로 `apply_patch`에 포함하지 않습니다. 화면에 노출되는 문자열을 고칠 때만 정확한 새 UTF-8 문자열로 좁게 교체합니다.
+- Codex 셸에서 Python 명령을 실행할 때는 기본 `python` 대신 `.\venv\Scripts\python.exe`를 우선 사용합니다. UTF-8 가드가 함께 필요하면 `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\codex-venv.ps1 ...` 형태로 실행합니다.
 
 ## 프로젝트 이해
 
@@ -199,8 +200,8 @@ router = APIRouter()
 
 ## 검증 체크리스트
 
-- `python -m compileall main.py backend`
-- `uvicorn main:app --reload --host 127.0.0.1 --port 8000`
+- `.\venv\Scripts\python.exe -m compileall main.py backend`
+- `.\venv\Scripts\python.exe -m uvicorn main:app --reload --host 127.0.0.1 --port 8000`
 - `GET /api/health`
 - 변경한 화면이 메뉴에서 열리는지 확인
 - 저장/삭제/DML 변경은 트랜잭션과 rollback 경로 확인

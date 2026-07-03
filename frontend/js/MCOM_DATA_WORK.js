@@ -30,6 +30,10 @@
                         "INIT$_TB_PREDICTED_TYPE_FINAL",
                         "INIT$_TB_CAT_CORR_PAIR",
                         "INIT$_TB_CAT_CORR_SUMMARY",
+                        "INIT$_TB_NUM_CORR_PAIR",
+                        "INIT$_TB_NUM_CORR_SUMMARY",
+                        "INIT$_TB_LASSO_FEATURE",
+                        "INIT$_TB_SYMBOLIC_RULE",
                         "INIT$_TB_ASSOC_RULE_SUMMARY",
                         "INIT$_TB_RULE_VIOLATION_RESULT"
                     ])
@@ -83,6 +87,10 @@
                     return new Set([
                         "INIT$_TB_CAT_CORR_PAIR",
                         "INIT$_TB_CAT_CORR_SUMMARY",
+                        "INIT$_TB_NUM_CORR_PAIR",
+                        "INIT$_TB_NUM_CORR_SUMMARY",
+                        "INIT$_TB_LASSO_FEATURE",
+                        "INIT$_TB_SYMBOLIC_RULE",
                         "INIT$_TB_ASSOC_RULE_SUMMARY",
                         "INIT$_TB_RULE_VIOLATION_RESULT"
                     ]).has(table);
@@ -732,15 +740,19 @@
         async loadOmlResources() {
             const select = getContainerEl(`#omlResource-${PAGE_CODE}`);
             if (select) select.innerHTML = `<option value="">Loading OML4Py resources...</option>`;
+            const webSelect = getContainerEl(`#webApiMethod-${PAGE_CODE}`);
+            if (webSelect) webSelect.innerHTML = `<option value="">Loading Python API resources...</option>`;
 
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/oml-resources`, { method: "GET", showLoading: false });
                 this.omlResources = Array.isArray(json.data) ? json.data : [];
                 this.renderOmlResources();
+                this.renderWebApiResources();
             } catch (error) {
                 const message = error.message || "OML4Py resource load failed.";
                 console.error("[${PAGE_CODE}] OML resource load failed", error);
                 if (select) select.innerHTML = `<option value="">OML resource load failed</option>`;
+                if (webSelect) webSelect.innerHTML = `<option value="">Python API resource load failed</option>`;
                 this.renderSqlMessage("sql", message, "error");
             }
         },
@@ -748,9 +760,10 @@
         renderOmlResources() {
             const select = getContainerEl(`#omlResource-${PAGE_CODE}`);
             if (!select) return;
+            const resources = this.omlResources.filter((resource) => this.isOmlResource(resource));
             select.innerHTML = `
                 <option value="">-- Select OML4Py resource --</option>
-                ${this.omlResources.map((resource) => `
+                ${resources.map((resource) => `
                     <option value="${this.escapeHtml(resource.OML_RESOURCE_ID ?? "")}">
                         ${this.escapeHtml(resource.RESOURCE_LABEL || resource.RESOURCE_NAME || "(Unnamed OML resource)")}
                     </option>
@@ -759,8 +772,83 @@
             select.value = this.currentJob?.execResourceId || "";
         },
 
+        renderWebApiResources() {
+            const select = getContainerEl(`#webApiMethod-${PAGE_CODE}`);
+            if (!select) return;
+            const resources = this.omlResources.filter((resource) => this.isWebApiResource(resource));
+            select.innerHTML = `
+                <option value="">-- Select Python API resource --</option>
+                ${resources.map((resource) => {
+                    const method = resource.EXEC_METHOD || resource.RESOURCE_NAME || "";
+                    const label = resource.RESOURCE_LABEL || resource.RESOURCE_NAME || method || "(Unnamed Python API)";
+                    return `
+                        <option value="${this.escapeHtml(resource.OML_RESOURCE_ID ?? "")}">
+                            ${this.escapeHtml(label)}${method ? ` / ${this.escapeHtml(method)}` : ""}
+                        </option>
+                    `;
+                }).join("")}
+            `;
+            const current = String(this.currentJob?.execSourceType || "").toUpperCase() === "WEB_API"
+                ? (this.currentJob?.execResourceId || this.findWebApiResource(this.currentJob?.execMethod)?.OML_RESOURCE_ID || "")
+                : "";
+            select.value = current;
+        },
+
+        isWebApiResource(resource) {
+            const execApi = String(resource?.EXEC_API || "").toUpperCase();
+            return ["WEB_API", "PYTHON_API", "REST_API"].includes(execApi);
+        },
+
+        isOmlResource(resource) {
+            const execApi = String(resource?.EXEC_API || "SQL_API").toUpperCase();
+            return !this.isWebApiResource(resource) && execApi === "SQL_API";
+        },
+
+        parseSpecJson(value) {
+            try {
+                const parsed = JSON.parse(String(value || "").trim() || "{}");
+                return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+            } catch (error) {
+                return {};
+            }
+        },
+
+        findWebApiResource(value) {
+            const key = String(value || "").trim().toUpperCase();
+            if (!key) return null;
+            return this.omlResources.find((resource) => {
+                if (!this.isWebApiResource(resource)) return false;
+                return [
+                    resource.OML_RESOURCE_ID,
+                    resource.EXEC_METHOD,
+                    resource.RESOURCE_NAME,
+                    resource.SCRIPT_NAME
+                ].some((item) => String(item || "").trim().toUpperCase() === key);
+            }) || null;
+        },
+
+        createWebApiDefinitionFromResource(resource) {
+            if (!resource) return null;
+            const spec = this.parseSpecJson(resource.SPEC_JSON);
+            const method = resource.EXEC_METHOD || spec.method || resource.RESOURCE_NAME || resource.SCRIPT_NAME || "";
+            const endpoint = spec.serviceUrl || spec.endpoint || "";
+            const output = spec.output && typeof spec.output === "object" ? spec.output : {};
+            const resultTable = output.resultTableName || output.resultTable || spec.resultTableName || spec.resultTable || "";
+            return {
+                resourceId: resource.OML_RESOURCE_ID || "",
+                method,
+                label: resource.RESOURCE_LABEL || resource.RESOURCE_NAME || method,
+                endpoint,
+                resultTable,
+                specJson: resource.SPEC_JSON || "",
+                outputFormat: resource.OUTPUT_FORMAT || "",
+                params: []
+            };
+        },
+
         handleExecutionSourceChange(value) {
-            const nextSource = String(value || "DB_OBJECT").toUpperCase() === "OML_PYTHON" ? "OML_PYTHON" : "DB_OBJECT";
+            const source = String(value || "DB_OBJECT").toUpperCase();
+            const nextSource = source === "WEB_API" ? "WEB_API" : (source === "OML_PYTHON" ? "OML_PYTHON" : "DB_OBJECT");
             this.currentJob = {
                 ...this.currentJob,
                 execSourceType: nextSource
@@ -770,18 +858,123 @@
                 this.currentJob.execMethod = "";
                 this.currentJob.execSpecJson = "";
                 this.setFieldValue(`#omlResource-${PAGE_CODE}`, "");
+                this.setFieldValue(`#webApiMethod-${PAGE_CODE}`, "");
             } else {
                 this.currentJob.execObjectId = "";
                 this.currentJob.execOwner = "";
-                this.currentJob.execObjectType = "OML_PYTHON";
+                this.currentJob.execObjectType = nextSource;
                 this.currentJob.execObjectName = "";
                 this.currentJob.execObjectLabel = "";
                 this.setFieldValue(`#execObject-${PAGE_CODE}`, "");
+                if (nextSource === "WEB_API") {
+                    this.currentJob.execResourceId = "";
+                    this.setFieldValue(`#omlResource-${PAGE_CODE}`, "");
+                } else {
+                    this.setFieldValue(`#webApiMethod-${PAGE_CODE}`, "");
+                }
             }
             this.parameters = [];
             this.renderParameters();
             this.renderCurrentJob();
             this.generateExecutablePlsql(true);
+        },
+
+        async handleWebApiMethodChange(value) {
+            const resource = this.findWebApiResource(value);
+            const api = this.getWebApiDefinition(value);
+            if (!api) {
+                this.currentJob = {
+                    ...this.currentJob,
+                    execSourceType: "WEB_API",
+                    execResourceId: "",
+                    execMethod: "",
+                    execSpecJson: "",
+                    execObjectType: "WEB_API",
+                    execObjectName: "",
+                    execObjectLabel: ""
+                };
+                this.parameters = [];
+                this.renderParameters();
+                this.renderCurrentJob();
+                this.generateExecutablePlsql(true);
+                return;
+            }
+
+            this.currentJob = {
+                ...this.currentJob,
+                execSourceType: "WEB_API",
+                execResourceId: api.resourceId || resource?.OML_RESOURCE_ID || "",
+                execMethod: api.method,
+                execSpecJson: api.specJson || JSON.stringify({ endpoint: api.endpoint || "" }),
+                execObjectId: "",
+                execOwner: "",
+                execObjectType: "WEB_API",
+                execObjectName: api.method,
+                execObjectLabel: api.label,
+                resultCreateYn: "T",
+                resultOwner: this.currentJob?.resultOwner || this.getDefaultResultOwner(),
+                resultTableName: api.resultTable || this.currentJob?.resultTableName || ""
+            };
+            this.parameters = api.params.map((row, index) => ({ ...row, itemOrder: index + 1 }));
+            this.renderParameters();
+            this.renderCurrentJob();
+            if (api.resourceId || resource?.OML_RESOURCE_ID) {
+                await this.loadWebApiParameters(api.resourceId || resource.OML_RESOURCE_ID);
+            }
+            this.generateExecutablePlsql(true);
+        },
+
+        getWebApiDefinition(method) {
+            const resource = this.findWebApiResource(method);
+            if (resource) return this.createWebApiDefinitionFromResource(resource);
+            return this.getBuiltinWebApiDefinition(method);
+        },
+
+        getBuiltinWebApiDefinition(method) {
+            const targetOwner = ":INIT$TargetOwner";
+            const targetTable = ":INIT$TargetTable";
+            const runSourceType = ":INIT$RunSourceType";
+            const runId = ":INIT$RunId";
+            const definitions = {
+                LASSO_FEATURE_SELECT: {
+                    method: "LASSO_FEATURE_SELECT",
+                    label: "LASSO Feature Select",
+                    endpoint: "/api/mlAnalysis/lasso-feature-select",
+                    resultTable: "INIT$_TB_LASSO_FEATURE",
+                    params: [
+                        { itemName: "P_TARGET_OWNER", itemValue: "VARCHAR2", itemDesc: "분석 대상 테이블 계정", itemDefault: targetOwner },
+                        { itemName: "P_TARGET_TABLE", itemValue: "VARCHAR2", itemDesc: "분석 대상 테이블명", itemDefault: targetTable },
+                        { itemName: "P_TARGET_COLUMN", itemValue: "VARCHAR2", itemDesc: "종속변수 컬럼명", itemDefault: "(auto)" },
+                        { itemName: "P_MAX_FEATURES", itemValue: "NUMBER", itemDesc: "선택할 최대 독립변수 수", itemDefault: "10" },
+                        { itemName: "P_SAMPLE_ROWS", itemValue: "NUMBER", itemDesc: "분석 샘플 최대 행 수", itemDefault: "100000" },
+                        { itemName: "P_ALPHA", itemValue: "NUMBER", itemDesc: "LASSO alpha. 비우면 교차검증 자동 선택", itemDefault: "" },
+                        { itemName: "P_MAX_AUTO_TARGETS", itemValue: "NUMBER", itemDesc: "자동 target 최대 개수", itemDefault: "10" },
+                        { itemName: "P_CONTINUE_ON_ERROR", itemValue: "VARCHAR2", itemDesc: "자동 target 일부 실패 시 계속 실행 여부", itemDefault: "Y" },
+                        { itemName: "P_RUN_SOURCE_TYPE", itemValue: "VARCHAR2", itemDesc: "실행 출처 구분(DATA_WORK/FLOW_WORK)", itemDefault: runSourceType },
+                        { itemName: "P_RUN_ID", itemValue: "NUMBER", itemDesc: "실행 이력 ID", itemDefault: runId }
+                    ]
+                },
+                SYMBOLIC_REGRESSION_RULE: {
+                    method: "SYMBOLIC_REGRESSION_RULE",
+                    label: "Symbolic Regression Rule",
+                    endpoint: "/api/mlAnalysis/symbolic-regression-rule",
+                    resultTable: "INIT$_TB_SYMBOLIC_RULE",
+                    params: [
+                        { itemName: "P_TARGET_OWNER", itemValue: "VARCHAR2", itemDesc: "분석 대상 테이블 계정", itemDefault: targetOwner },
+                        { itemName: "P_TARGET_TABLE", itemValue: "VARCHAR2", itemDesc: "분석 대상 테이블명", itemDefault: targetTable },
+                        { itemName: "P_TARGET_COLUMN", itemValue: "VARCHAR2", itemDesc: "종속변수 컬럼명", itemDefault: "(auto)" },
+                        { itemName: "P_MAX_FEATURES", itemValue: "NUMBER", itemDesc: "Symbolic Regression 입력 독립변수 최대 수", itemDefault: "10" },
+                        { itemName: "P_SAMPLE_ROWS", itemValue: "NUMBER", itemDesc: "분석 샘플 최대 행 수", itemDefault: "50000" },
+                        { itemName: "P_MAX_ITERATIONS", itemValue: "NUMBER", itemDesc: "Symbolic 탐색 최대 반복 수", itemDefault: "10000" },
+                        { itemName: "P_MIN_R2_SCORE", itemValue: "NUMBER", itemDesc: "Symbolic Regression에 사용할 LASSO 최소 R2 점수", itemDefault: "0.7" },
+                        { itemName: "P_MAX_AUTO_TARGETS", itemValue: "NUMBER", itemDesc: "자동 target 최대 개수", itemDefault: "10" },
+                        { itemName: "P_CONTINUE_ON_ERROR", itemValue: "VARCHAR2", itemDesc: "자동 target 일부 실패 시 계속 실행 여부", itemDefault: "Y" },
+                        { itemName: "P_RUN_SOURCE_TYPE", itemValue: "VARCHAR2", itemDesc: "실행 출처 구분(DATA_WORK/FLOW_WORK)", itemDefault: runSourceType },
+                        { itemName: "P_RUN_ID", itemValue: "NUMBER", itemDesc: "실행 이력 ID", itemDefault: runId }
+                    ]
+                }
+            };
+            return definitions[String(method || "").toUpperCase()] || null;
         },
 
         async handleExecutableObjectChange(objectId) {
@@ -908,6 +1101,49 @@
             }
         },
 
+        async loadWebApiParameters(resourceId) {
+            const container = getContainerEl(`#parameterGrid-${PAGE_CODE}`);
+            if (container) container.innerHTML = `<div class="table-empty">Loading Python API parameters...</div>`;
+
+            try {
+                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/oml-resource/${resourceId}/parameters`, { method: "GET", showLoading: false });
+                const resource = json.resource || {};
+                const api = this.createWebApiDefinitionFromResource(resource);
+                if (api?.resourceId) {
+                    const cachedResource = this.omlResources.find((row) => String(row.OML_RESOURCE_ID) === String(api.resourceId));
+                    if (cachedResource) Object.assign(cachedResource, resource);
+                    this.currentJob = {
+                        ...this.currentJob,
+                        execSourceType: "WEB_API",
+                        execResourceId: api.resourceId,
+                        execMethod: api.method || this.currentJob?.execMethod || "",
+                        execSpecJson: api.specJson || "",
+                        execObjectId: "",
+                        execOwner: "",
+                        execObjectType: "WEB_API",
+                        execObjectName: resource.RESOURCE_NAME || api.method || this.currentJob?.execObjectName || "",
+                        execObjectLabel: api.label || resource.RESOURCE_NAME || this.currentJob?.execObjectLabel || "",
+                        resultCreateYn: "T",
+                        resultOwner: this.currentJob?.resultOwner || this.getDefaultResultOwner(),
+                        resultTableName: api.resultTable || this.currentJob?.resultTableName || ""
+                    };
+                }
+                this.parameters = (Array.isArray(json.data) ? json.data : []).map((row) => ({
+                    itemName: row.itemName || "",
+                    itemValue: row.itemValue || "",
+                    itemDesc: row.itemDesc || "",
+                    itemDefault: row.itemDefault || "",
+                    itemOrder: row.itemOrder ?? "",
+                    bindName: row.bindName || ""
+                }));
+                this.renderParameters();
+                this.renderCurrentJob();
+            } catch (error) {
+                this.parameters = [];
+                if (container) container.innerHTML = `<div class="table-error">${this.escapeHtml(error.message || "Python API parameter load failed.")}</div>`;
+            }
+        },
+
         async refreshParameters() {
             const selectedSourceType = getContainerEl(`#execSourceType-${PAGE_CODE}`)?.value || "";
             const sourceType = String(this.currentJob?.execSourceType || selectedSourceType || "DB_OBJECT").toUpperCase();
@@ -916,7 +1152,26 @@
             button?.setAttribute("disabled", "disabled");
             icon?.classList.add("fa-spin");
             try {
-                if (sourceType === "OML_PYTHON") {
+                if (sourceType === "WEB_API") {
+                    const resourceId = this.currentJob?.execResourceId || getContainerEl(`#webApiMethod-${PAGE_CODE}`)?.value || "";
+                    if (!resourceId) {
+                        this.parameters = [];
+                        this.renderParameters();
+                        CommonMessage.warning?.("Select a Python API resource first.");
+                        return;
+                    }
+                    const api = this.getWebApiDefinition(resourceId);
+                    if (api?.resourceId) {
+                        await this.loadWebApiParameters(api.resourceId);
+                    } else if (api) {
+                        this.parameters = api.params.map((row, index) => ({ ...row, itemOrder: index + 1 }));
+                        this.renderParameters();
+                    } else {
+                        this.parameters = [];
+                        this.renderParameters();
+                        CommonMessage.warning?.("Select a Python API resource first.");
+                    }
+                } else if (sourceType === "OML_PYTHON") {
                     const resourceId = this.currentJob?.execResourceId || getContainerEl(`#omlResource-${PAGE_CODE}`)?.value || "";
                     if (!resourceId) {
                         this.parameters = [];
@@ -953,7 +1208,10 @@
             this.renderSelectedResourceMeta();
 
             if (!this.parameters.length) {
-                const emptyMessage = String(this.currentJob?.execSourceType || "DB_OBJECT").toUpperCase() === "OML_PYTHON"
+                const sourceType = String(this.currentJob?.execSourceType || "DB_OBJECT").toUpperCase();
+                const emptyMessage = sourceType === "WEB_API"
+                    ? "No registered parameters. Check M90002 Python API resource registration."
+                    : sourceType === "OML_PYTHON"
                     ? "No registered parameters. Check M90002 OML4Py resource registration."
                     : "No registered parameters. Check M90001 object detail registration.";
                 container.innerHTML = `<div class="table-empty">${this.escapeHtml(emptyMessage)}</div>${this.renderListFooter(0)}`;
@@ -996,6 +1254,15 @@
                 return {
                     objectType: job.execObjectType || "OML_PYTHON",
                     objectName: job.execObjectName || resource.RESOURCE_NAME || resource.SCRIPT_NAME || job.execObjectLabel || ""
+                };
+            }
+
+            if (sourceType === "WEB_API") {
+                const selectedResourceId = job.execResourceId || getContainerEl(`#webApiMethod-${PAGE_CODE}`)?.value || "";
+                const resource = this.findWebApiResource(selectedResourceId || job.execMethod) || {};
+                return {
+                    objectType: job.execObjectType || "WEB_API",
+                    objectName: job.execObjectName || resource.RESOURCE_NAME || resource.EXEC_METHOD || job.execObjectLabel || ""
                 };
             }
 
@@ -1281,6 +1548,14 @@
             this.setFieldValue(`#resultOwner-${PAGE_CODE}`, targetOwner);
         },
 
+        getDefaultResultOwner() {
+            return getContainerEl(`#resultOwner-${PAGE_CODE}`)?.value.trim()
+                || getContainerEl(`#targetOwner-${PAGE_CODE}`)?.value.trim()
+                || this.currentJob?.resultOwner
+                || this.currentJob?.ownerName
+                || "";
+        },
+
         syncResultFields() {
             const createMode = this.normalizeResultCreateMode(getContainerEl(`#resultCreateYn-${PAGE_CODE}`)?.value || this.currentJob?.resultCreateYn || "N");
             const registeredResult = this.getRegisteredResultInfo();
@@ -1326,7 +1601,7 @@
             const titleSuffix = job.profileJobId
                 ? (job.jobName || "(Untitled job)")
                 : "New Job";
-            this.setText(`#work-title-${PAGE_CODE}`, `${this.getLabel("workTitle")} - ${titleSuffix}`);
+            this.setText(`#work-title-${PAGE_CODE}`, titleSuffix);
             this.syncRunButtons();
             this.setFieldValue(`#workJobId-${PAGE_CODE}`, job.profileJobId || "NEW");
             this.setFieldValue(`#workJobGroup-${PAGE_CODE}`, DEFAULT_JOB_GROUP);
@@ -1339,6 +1614,12 @@
             this.setFieldValue(`#execSourceType-${PAGE_CODE}`, job.execSourceType || "DB_OBJECT");
             this.setFieldValue(`#execObject-${PAGE_CODE}`, job.execObjectId || "");
             this.setFieldValue(`#omlResource-${PAGE_CODE}`, job.execResourceId || "");
+            this.setFieldValue(
+                `#webApiMethod-${PAGE_CODE}`,
+                String(job.execSourceType || "").toUpperCase() === "WEB_API"
+                    ? (job.execResourceId || this.findWebApiResource(job.execMethod || job.execObjectName)?.OML_RESOURCE_ID || "")
+                    : ""
+            );
             this.setFieldValue(`#resultCreateYn-${PAGE_CODE}`, this.normalizeResultCreateMode(job.resultCreateYn || "N"));
             this.setFieldValue(`#resultOwner-${PAGE_CODE}`, job.resultOwner || "");
             this.setFieldValue(`#resultTable-${PAGE_CODE}`, job.resultTableName || "");
@@ -1413,30 +1694,45 @@
 
         syncExecutionSourceFields() {
             const sourceType = getContainerEl(`#execSourceType-${PAGE_CODE}`)?.value || this.currentJob?.execSourceType || "DB_OBJECT";
-            const isOml = String(sourceType).toUpperCase() === "OML_PYTHON";
+            const normalizedSource = String(sourceType).toUpperCase();
+            const isOml = normalizedSource === "OML_PYTHON";
+            const isWebApi = normalizedSource === "WEB_API";
             const execObject = getContainerEl(`#execObject-${PAGE_CODE}`);
             const omlWrap = getContainerEl(`#omlResourceWrap-${PAGE_CODE}`);
             const omlResource = getContainerEl(`#omlResource-${PAGE_CODE}`);
-            if (execObject) execObject.closest("label").hidden = isOml;
+            const webApiWrap = getContainerEl(`#webApiWrap-${PAGE_CODE}`);
+            const webApiMethod = getContainerEl(`#webApiMethod-${PAGE_CODE}`);
+            if (execObject) execObject.closest("label").hidden = isOml || isWebApi;
             if (omlWrap) omlWrap.hidden = !isOml;
             if (omlResource) omlResource.disabled = !isOml;
-            this.syncExecutableScriptUi(isOml);
+            if (webApiWrap) webApiWrap.hidden = !isWebApi;
+            if (webApiMethod) webApiMethod.disabled = !isWebApi;
+            this.syncExecutableScriptUi(isOml, isWebApi);
         },
 
-        syncExecutableScriptUi(isOml = false) {
+        syncExecutableScriptUi(isOml = false, isWebApi = false) {
             const title = getContainerEl(`#generatedScriptTitle-${PAGE_CODE}`);
             const generateLabel = getContainerEl(`#generateScriptLabel-${PAGE_CODE}`);
             const helpButton = getContainerEl(`#scriptHelpButton-${PAGE_CODE}`);
             const helpTitle = getContainerEl(`#plsqlHelpTitle-${PAGE_CODE}`);
             const helpContent = getContainerEl(`#scriptHelpContent-${PAGE_CODE}`);
 
-            if (title) title.textContent = isOml ? "Generated OML SQL" : (this.getLabel("generatedScript") || "Generated PL/SQL");
-            if (generateLabel) generateLabel.textContent = isOml ? "Generate OML SQL" : (this.getLabel("generateScript") || "Generate PL/SQL");
-            if (helpButton) helpButton.setAttribute("title", isOml ? "OML4Py SQL API rules" : "PL/SQL bind variable rules");
-            if (helpTitle) helpTitle.textContent = isOml ? "OML4Py SQL API 실행 규칙" : "PL/SQL 바인드 변수 규칙";
+            if (title) title.textContent = isWebApi ? "Generated Web API spec" : (isOml ? "Generated OML SQL" : (this.getLabel("generatedScript") || "Generated PL/SQL"));
+            if (generateLabel) generateLabel.textContent = isWebApi ? "Generate API spec" : (isOml ? "Generate OML SQL" : (this.getLabel("generateScript") || "Generate PL/SQL"));
+            if (helpButton) helpButton.setAttribute("title", isWebApi ? "WAS Python API rules" : (isOml ? "OML4Py SQL API rules" : "PL/SQL bind variable rules"));
+            if (helpTitle) helpTitle.textContent = isWebApi ? "WAS Python API 실행 규칙" : (isOml ? "OML4Py SQL API 실행 규칙" : "PL/SQL 바인드 변수 규칙");
             if (!helpContent) return;
 
-            helpContent.innerHTML = isOml
+            helpContent.innerHTML = isWebApi
+                ? `
+                    <p>Web API 선택 시 실행은 Oracle PL/SQL이 아니라 WAS 서버의 Python 분석 API로 위임됩니다.</p>
+                    <ul>
+                        <li><strong>LASSO Feature Select</strong>: 연속형 상관분석 결과를 후보로 사용하고, 종속변수에 영향이 큰 독립변수를 <code>INIT$_TB_LASSO_FEATURE</code>에 적재합니다.</li>
+                        <li><strong>Symbolic Regression Rule</strong>: LASSO에서 선택된 상위 5~10개 변수만 사용해 수식 규칙을 탐색하고 <code>INIT$_TB_SYMBOLIC_RULE</code>에 적재합니다.</li>
+                        <li><strong>주의</strong>: Symbolic Regression은 계산량이 크므로 <code>P_MAX_FEATURES</code>는 10 이하로 제한됩니다.</li>
+                    </ul>
+                `
+                : isOml
                 ? `
                     <p>OML Python 선택 시 생성되는 스크립트는 PL/SQL 블록이 아니라 Autonomous Database Embedded Python Execution SQL API 호출 SQL입니다.</p>
                     <ul>
@@ -1577,6 +1873,12 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                 table ? `Table: ${table.OWNER_NAME || "-"}.${table.TABLE_NAME || "-"}` : "Table: -"
             ];
             this.setText(`#workContextSummary-${PAGE_CODE}`, parts.join(" | "));
+            this.updateJobsTitle(scenario);
+        },
+
+        updateJobsTitle(scenario = null) {
+            const scenarioName = scenario ? (scenario.SCENARIO_NAME || scenario.SCENARIO_CODE || "") : "";
+            this.setText(`#jobs-title-${PAGE_CODE}`, scenarioName || "");
         },
 
         async saveJob(showAlert = true) {
@@ -1664,10 +1966,14 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                 ? "Queue the saved work for batch execution?"
                 : "Run the saved work now?";
             if (!(await CommonMessage.confirm(message))) return;
+            const isWebApi = String(savedJob.execSourceType || "").toUpperCase() === "WEB_API";
             const runtimeBindValues = await this.collectRuntimeBindValues(savedJob.execPlsql || "", {
+                sourceType: savedJob.execSourceType || "DB_OBJECT",
                 parameterRows: savedJob.parameters || [],
                 systemBindJob: savedJob,
-                dialogIntro: "저장된 PL/SQL과 저장된 Job 설정을 실행합니다. 아래 Runtime Bind 값만 이번 실행에 임시 적용됩니다."
+                dialogIntro: isWebApi
+                    ? "저장된 API Parameter List 기준으로 이번 실행에 사용할 값을 확인합니다. 변경한 값만 이번 실행에 임시 적용됩니다."
+                    : "저장된 PL/SQL과 저장된 Job 설정을 실행합니다. 아래 Runtime Bind 값만 이번 실행에 임시 적용됩니다."
             });
             if (runtimeBindValues === null) return;
             const payload = {
@@ -1710,10 +2016,14 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
             if (!this.ensureExecutableScriptReady()) return;
             if (!(await CommonMessage.confirm("Test the current draft without saving it?"))) return;
 
+            const isWebApi = String(this.currentJob?.execSourceType || "").toUpperCase() === "WEB_API";
             const runtimeBindValues = await this.collectRuntimeBindValues(null, {
+                sourceType: this.currentJob?.execSourceType || "DB_OBJECT",
                 parameterRows: this.parameters || [],
                 systemBindJob: null,
-                dialogIntro: "현재 화면의 Job 설정과 PL/SQL을 저장하지 않고 1회 테스트 실행합니다. Runtime Bind 값은 이번 테스트에만 적용됩니다."
+                dialogIntro: isWebApi
+                    ? "현재 화면의 API Parameter List 기준으로 1회 테스트 실행할 값을 확인합니다. 변경한 값만 이번 테스트에 적용됩니다."
+                    : "현재 화면의 Job 설정과 PL/SQL을 저장하지 않고 1회 테스트 실행합니다. Runtime Bind 값은 이번 테스트에만 적용됩니다."
             });
             if (runtimeBindValues === null) return;
 
@@ -2070,7 +2380,10 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
             }
             const execSourceType = getContainerEl(`#execSourceType-${PAGE_CODE}`)?.value || this.currentJob?.execSourceType || "DB_OBJECT";
             const isOml = String(execSourceType).toUpperCase() === "OML_PYTHON";
-            const hasExecutableObject = isOml
+            const isWebApi = String(execSourceType).toUpperCase() === "WEB_API";
+            const hasExecutableObject = isWebApi
+                ? Boolean(getContainerEl(`#webApiMethod-${PAGE_CODE}`)?.value || this.currentJob?.execMethod)
+                : isOml
                 ? Boolean(getContainerEl(`#omlResource-${PAGE_CODE}`)?.value || this.currentJob?.execResourceId)
                 : Boolean(
                     getContainerEl(`#execObject-${PAGE_CODE}`)?.value
@@ -2079,13 +2392,15 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                     || this.currentJob?.execObjectLabel
                 );
             if (requireObject && !hasExecutableObject) {
-                alert(isOml
+                alert(isWebApi
+                    ? "Web API method is required.\nWeb API 실행 방법은 필수입니다."
+                    : isOml
                     ? "OML4Py Resource is required.\nOML4Py 리소스는 필수입니다."
                     : "Registered Model / Procedure is required.\n등록된 모델/프로시저는 필수입니다.");
-                getContainerEl(isOml ? `#omlResource-${PAGE_CODE}` : `#execObject-${PAGE_CODE}`)?.focus();
+                getContainerEl(isWebApi ? `#webApiMethod-${PAGE_CODE}` : (isOml ? `#omlResource-${PAGE_CODE}` : `#execObject-${PAGE_CODE}`))?.focus();
                 return false;
             }
-            if (requireObject && !getContainerEl(`#execPlsqlEditor-${PAGE_CODE}`)?.value.trim()) {
+            if (requireObject && !isWebApi && !getContainerEl(`#execPlsqlEditor-${PAGE_CODE}`)?.value.trim()) {
                 alert(isOml
                     ? "Executable OML SQL is required. Generate or enter the SQL first.\n실행할 OML SQL이 필요합니다. SQL을 생성하거나 직접 입력해 주세요."
                     : "Executable PL/SQL script is required. Generate or enter the script first.\n실행할 PL/SQL 스크립트가 필요합니다. 스크립트를 생성하거나 직접 입력해 주세요.");
@@ -2112,6 +2427,8 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
             const editor = getContainerEl(`#execPlsqlEditor-${PAGE_CODE}`);
             const execSourceType = getContainerEl(`#execSourceType-${PAGE_CODE}`)?.value || this.currentJob?.execSourceType || "DB_OBJECT";
             const isOml = String(execSourceType).toUpperCase() === "OML_PYTHON";
+            const isWebApi = String(execSourceType).toUpperCase() === "WEB_API";
+            if (isWebApi) return true;
             if (!editor?.value.trim()) {
                 alert(isOml
                     ? "Executable OML SQL is required. Generate or enter the SQL first.\n실행할 OML SQL이 필요합니다. SQL을 생성하거나 직접 입력해 주세요."
@@ -2125,8 +2442,21 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
         getJobPayload(status, message) {
             const execSourceType = getContainerEl(`#execSourceType-${PAGE_CODE}`)?.value || this.currentJob?.execSourceType || "DB_OBJECT";
             const isOml = String(execSourceType).toUpperCase() === "OML_PYTHON";
+            const isWebApi = String(execSourceType).toUpperCase() === "WEB_API";
             const execObject = this.executableObjects.find((row) => String(row.OBJECT_ID) === String(getContainerEl(`#execObject-${PAGE_CODE}`)?.value || ""));
             const omlResource = this.omlResources.find((row) => String(row.OML_RESOURCE_ID) === String(getContainerEl(`#omlResource-${PAGE_CODE}`)?.value || ""));
+            const webApiResource = this.findWebApiResource(
+                getContainerEl(`#webApiMethod-${PAGE_CODE}`)?.value
+                || this.currentJob?.execResourceId
+                || this.currentJob?.execMethod
+                || ""
+            );
+            const webApi = this.getWebApiDefinition(
+                webApiResource?.OML_RESOURCE_ID
+                || getContainerEl(`#webApiMethod-${PAGE_CODE}`)?.value
+                || this.currentJob?.execMethod
+                || ""
+            );
             return {
                 profileJobId: this.currentJob?.profileJobId || null,
                 projectId: Number(this.selectedProjectId),
@@ -2137,22 +2467,22 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                 jobDesc: getContainerEl(`#workJobDesc-${PAGE_CODE}`)?.value.trim() || "",
                 ownerName: this.currentJob?.ownerName || "",
                 tableName: this.currentJob?.tableName || "",
-                execSourceType: isOml ? "OML_PYTHON" : "DB_OBJECT",
-                execResourceId: isOml ? (omlResource?.OML_RESOURCE_ID || null) : null,
-                execMethod: isOml ? (omlResource?.EXEC_METHOD || this.currentJob?.execMethod || "") : "",
-                execSpecJson: isOml ? (omlResource?.SPEC_JSON || this.currentJob?.execSpecJson || "") : "",
-                execObjectId: isOml ? null : (execObject?.OBJECT_ID || null),
-                execOwner: isOml ? (omlResource?.SCRIPT_OWNER || "") : (execObject?.OWNER || ""),
-                execObjectType: isOml ? "OML_PYTHON" : (execObject?.OBJECT_TYPE || ""),
-                execObjectName: isOml ? (omlResource?.RESOURCE_NAME || omlResource?.SCRIPT_NAME || "") : (execObject?.OBJECT_NAME || ""),
-                execObjectLabel: isOml ? (omlResource?.RESOURCE_LABEL || omlResource?.RESOURCE_NAME || omlResource?.SCRIPT_NAME || "") : (execObject?.OBJECT_LABEL || execObject?.OBJECT_NAME || ""),
+                execSourceType: isWebApi ? "WEB_API" : (isOml ? "OML_PYTHON" : "DB_OBJECT"),
+                execResourceId: isWebApi ? (webApi?.resourceId || webApiResource?.OML_RESOURCE_ID || null) : (isOml ? (omlResource?.OML_RESOURCE_ID || null) : null),
+                execMethod: isWebApi ? (webApi?.method || this.currentJob?.execMethod || "") : (isOml ? (omlResource?.EXEC_METHOD || this.currentJob?.execMethod || "") : ""),
+                execSpecJson: isWebApi ? (webApi?.specJson || this.currentJob?.execSpecJson || JSON.stringify({ endpoint: webApi?.endpoint || "" })) : (isOml ? (omlResource?.SPEC_JSON || this.currentJob?.execSpecJson || "") : ""),
+                execObjectId: (isOml || isWebApi) ? null : (execObject?.OBJECT_ID || null),
+                execOwner: isOml ? (omlResource?.SCRIPT_OWNER || "") : "",
+                execObjectType: isWebApi ? "WEB_API" : (isOml ? "OML_PYTHON" : (execObject?.OBJECT_TYPE || "")),
+                execObjectName: isWebApi ? (webApiResource?.RESOURCE_NAME || webApi?.method || "") : (isOml ? (omlResource?.RESOURCE_NAME || omlResource?.SCRIPT_NAME || "") : (execObject?.OBJECT_NAME || "")),
+                execObjectLabel: isWebApi ? (webApi?.label || "") : (isOml ? (omlResource?.RESOURCE_LABEL || omlResource?.RESOURCE_NAME || omlResource?.SCRIPT_NAME || "") : (execObject?.OBJECT_LABEL || execObject?.OBJECT_NAME || "")),
                 useYn: getContainerEl(`#jobUseYn-${PAGE_CODE}`)?.value || "Y",
                 sortOrder: this.parseOptionalNumber(getContainerEl(`#jobSortOrder-${PAGE_CODE}`)?.value),
                 params: this.parameters,
                 execPlsql: getContainerEl(`#execPlsqlEditor-${PAGE_CODE}`)?.value || "",
                 resultCreateYn: this.normalizeResultCreateMode(getContainerEl(`#resultCreateYn-${PAGE_CODE}`)?.value || "N"),
                 resultOwner: getContainerEl(`#resultOwner-${PAGE_CODE}`)?.value.trim() || "",
-                resultTableName: getContainerEl(`#resultTable-${PAGE_CODE}`)?.value.trim() || "",
+                resultTableName: getContainerEl(`#resultTable-${PAGE_CODE}`)?.value.trim() || (isWebApi ? (webApi?.resultTable || this.currentJob?.resultTableName || "") : ""),
                 status
             };
         },
@@ -2162,7 +2492,20 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
             if (!editor) return;
             if (!force && editor.value.trim()) return;
 
-            if (String(this.currentJob?.execSourceType || "DB_OBJECT").toUpperCase() === "OML_PYTHON") {
+            const sourceType = String(this.currentJob?.execSourceType || "DB_OBJECT").toUpperCase();
+            if (sourceType === "WEB_API") {
+                const api = this.getWebApiDefinition(
+                    this.currentJob?.execResourceId
+                    || getContainerEl(`#webApiMethod-${PAGE_CODE}`)?.value
+                    || this.currentJob?.execMethod
+                    || ""
+                );
+                editor.value = api ? this.createWebApiSpecTemplate(api) : "";
+                this.currentJob.execPlsql = editor.value;
+                return;
+            }
+
+            if (sourceType === "OML_PYTHON") {
                 const resource = this.omlResources.find((row) => String(row.OML_RESOURCE_ID) === String(this.currentJob?.execResourceId || getContainerEl(`#omlResource-${PAGE_CODE}`)?.value || ""));
                 if (!resource) {
                     editor.value = "";
@@ -2181,6 +2524,17 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
 
             editor.value = this.createPlsqlTemplate(objectName);
             this.currentJob.execPlsql = editor.value;
+        },
+
+        createWebApiSpecTemplate(api) {
+            return JSON.stringify({
+                type: "WEB_API",
+                method: api.method,
+                endpoint: api.endpoint,
+                resultTable: api.resultTable,
+                output: api.outputFormat || null,
+                note: "Executed by WAS Python API. Parameters are supplied from Parameter List."
+            }, null, 2);
         },
 
         createOmlSqlTemplate(resource) {
@@ -2227,7 +2581,7 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
 
         openPlsqlHelp() {
             const sourceType = getContainerEl(`#execSourceType-${PAGE_CODE}`)?.value || this.currentJob?.execSourceType || "DB_OBJECT";
-            this.syncExecutableScriptUi(String(sourceType).toUpperCase() === "OML_PYTHON");
+            this.syncExecutableScriptUi(String(sourceType).toUpperCase() === "OML_PYTHON", String(sourceType).toUpperCase() === "WEB_API");
             const layer = getContainerEl(`#plsqlHelpLayer-${PAGE_CODE}`);
             if (layer) {
                 layer.hidden = false;
@@ -2279,8 +2633,6 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
         async collectRuntimeBindValues(scriptText = null, options = {}) {
             const editor = getContainerEl(`#execPlsqlEditor-${PAGE_CODE}`);
             const script = scriptText ?? (editor?.value || this.currentJob?.execPlsql || "");
-            const bindNames = this.extractBindVariables(script);
-            const dynamicTokenNames = this.extractDynamicTokens(script);
             const bindOptions = {
                 useParameterDefaults: options.useParameterDefaults !== false,
                 useSystemBindContext: options.useSystemBindContext !== false,
@@ -2289,6 +2641,18 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
             const parameterRows = options.useParameterDefaults === false
                 ? []
                 : (options.parameterRows || this.parameters || []);
+            const sourceType = String(
+                options.sourceType
+                || this.currentJob?.execSourceType
+                || getContainerEl(`#execSourceType-${PAGE_CODE}`)?.value
+                || "DB_OBJECT"
+            ).toUpperCase();
+            if (sourceType === "WEB_API") {
+                return this.collectWebApiRuntimeValues(parameterRows, bindOptions, options);
+            }
+
+            const bindNames = this.extractBindVariables(script);
+            const dynamicTokenNames = this.extractDynamicTokens(script);
             const parameterBindMap = new Map(parameterRows
                 .map((row) => [this.toBindVariableName(row.itemName || ""), row])
                 .filter(([name]) => Boolean(name)));
@@ -2324,6 +2688,90 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
 
             if (!prompts.length) return {};
             return this.openRuntimeBindDialog(prompts, options);
+        },
+
+        collectWebApiRuntimeValues(parameterRows = [], bindOptions = {}, options = {}) {
+            const prompts = [];
+            const seen = new Set();
+            const rows = [...(parameterRows || [])].sort((a, b) => {
+                const orderA = Number(a?.itemOrder ?? a?.ITEM_ORDER ?? 0) || 0;
+                const orderB = Number(b?.itemOrder ?? b?.ITEM_ORDER ?? 0) || 0;
+                return orderA - orderB;
+            });
+
+            rows.forEach((row) => {
+                const name = String(row?.itemName || row?.ITEM_NAME || "").trim();
+                if (!name) return;
+                const rawDefault = this.getParameterDefaultText(row);
+                const resolvedDefault = this.resolveRuntimeDefaultValue(rawDefault, bindOptions);
+                const savedValue = this.runtimeBindValues?.[name];
+                const value = savedValue !== undefined ? savedValue : resolvedDefault;
+                this.addRuntimeBindPrompt(
+                    prompts,
+                    seen,
+                    name,
+                    name,
+                    value,
+                    this.createWebApiRuntimeComment(row, rawDefault, resolvedDefault),
+                    { defaultValue: resolvedDefault }
+                );
+            });
+
+            this.addWebApiAuthRuntimePrompts(prompts, seen, options);
+
+            if (!prompts.length) return {};
+            return this.openRuntimeBindDialog(prompts, {
+                ...options,
+                dialogTitle: "API Runtime Parameters",
+                includeUnchangedRuntimeValues: false
+            });
+        },
+
+        getParameterDefaultText(row) {
+            if (!row) return "";
+            return String(row.itemDefault ?? row.ITEM_DEFAULT ?? row.value ?? row.VALUE ?? "").trim();
+        },
+
+        createWebApiRuntimeComment(row, rawDefault, resolvedDefault) {
+            const parts = [];
+            const comment = String(row?.itemDesc || row?.ITEM_DESC || "").trim();
+            const type = String(row?.itemValue || row?.ITEM_VALUE || "").trim();
+            if (comment) parts.push(comment);
+            if (type) parts.push(`Type: ${type}`);
+            const rawText = String(rawDefault ?? "").trim();
+            const resolvedText = String(resolvedDefault ?? "").trim();
+            if (rawText && rawText !== resolvedText) {
+                parts.push(`Default: ${rawText}`);
+            }
+            return parts.join(" / ");
+        },
+
+        addWebApiAuthRuntimePrompts(prompts, seen, options = {}) {
+            const spec = this.getCurrentWebApiSpec(options);
+            const auth = spec.auth && typeof spec.auth === "object" ? spec.auth : {};
+            const authType = String(auth.type || "NONE").toUpperCase();
+            const keyName = String(auth.keyName || auth.key || "").trim();
+            if (!keyName || authType === "NONE") return;
+            const savedValue = this.runtimeBindValues?.[keyName];
+            const defaultValue = auth.value ?? "";
+            this.addRuntimeBindPrompt(
+                prompts,
+                seen,
+                keyName,
+                keyName,
+                savedValue !== undefined ? savedValue : defaultValue,
+                `API authentication value. Type: ${authType}`,
+                { defaultValue }
+            );
+        },
+
+        getCurrentWebApiSpec(options = {}) {
+            const job = options.systemBindJob || this.currentJob || {};
+            const specText = job.execSpecJson || job.EXEC_SPEC_JSON || "";
+            const spec = this.parseSpecJson(specText);
+            if (Object.keys(spec).length) return spec;
+            const editorText = getContainerEl(`#execPlsqlEditor-${PAGE_CODE}`)?.value || "";
+            return this.parseSpecJson(editorText);
         },
 
         extractBindVariables(sqlText) {
@@ -2436,10 +2884,16 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
             return names;
         },
 
-        addRuntimeBindPrompt(prompts, seen, name, label, value = "", comment = "") {
+        addRuntimeBindPrompt(prompts, seen, name, label, value = "", comment = "", meta = {}) {
             if (!name || seen.has(name)) return;
             seen.add(name);
-            prompts.push({ name, label, value, comment });
+            prompts.push({
+                name,
+                label,
+                value,
+                comment,
+                defaultValue: meta.defaultValue ?? value
+            });
         },
 
         isAutoRunIdValue(value) {
@@ -2449,18 +2903,18 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
 
         readManualRunIdValue(values = {}) {
             const ids = [];
-            ["INIT$RunId", "runId"].forEach((key) => {
+            ["INIT$RunId", "runId", "P_RUN_ID"].forEach((key) => {
                 if (!Object.prototype.hasOwnProperty.call(values, key)) return;
                 const text = String(values[key] ?? "").trim();
                 if (this.isAutoRunIdValue(text)) return;
                 if (!/^[1-9][0-9]*$/.test(text)) {
-                    throw new Error(":INIT$RunId must be (auto), blank, or a positive integer.");
+                    throw new Error(":INIT$RunId/P_RUN_ID must be (auto), blank, or a positive integer.");
                 }
                 ids.push(text);
             });
             if (!ids.length) return "";
             if (new Set(ids).size > 1) {
-                throw new Error(":INIT$RunId values must match.");
+                throw new Error(":INIT$RunId/P_RUN_ID values must match.");
             }
             return ids[0];
         },
@@ -2509,6 +2963,8 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
             const layer = getContainerEl(`#runtimeBindLayer-${PAGE_CODE}`);
             const grid = getContainerEl(`#runtimeBindGrid-${PAGE_CODE}`);
             if (!layer || !grid) return Promise.resolve({});
+            const title = getContainerEl(`#runtimeBindTitle-${PAGE_CODE}`);
+            if (title) title.textContent = options.dialogTitle || "Runtime Bind Variables";
             const intro = getContainerEl(`#runtimeBindIntro-${PAGE_CODE}`);
             if (intro) {
                 intro.textContent = options.dialogIntro
@@ -2520,25 +2976,39 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                         <span class="flow-bind-name">${this.escapeHtml(item.label || item.name)}</span>
                         ${item.comment ? `<small class="flow-bind-comment">${this.escapeHtml(item.comment)}</small>` : ""}
                     </span>
-                    <input class="env-field data-runtime-bind-input" data-bind-name="${this.escapeHtml(item.name)}" type="text" value="${this.escapeAttr(item.value ?? "")}">
+                    <input class="env-field data-runtime-bind-input" data-bind-name="${this.escapeHtml(item.name)}" data-default-value="${this.escapeAttr(item.defaultValue ?? item.value ?? "")}" type="text" value="${this.escapeAttr(item.value ?? "")}">
                 </label>
             `).join("");
             layer.hidden = false;
             this.enableHelpLayerDrag(layer);
             setTimeout(() => grid.querySelector("input")?.focus(), 0);
             return new Promise((resolve) => {
-                this.runtimeBindDialog = { resolve };
+                this.runtimeBindDialog = {
+                    resolve,
+                    promptNames: bindPrompts.map((item) => item.name),
+                    includeUnchangedRuntimeValues: options.includeUnchangedRuntimeValues !== false
+                };
             });
         },
 
         async confirmRuntimeBindDialog() {
             const layer = getContainerEl(`#runtimeBindLayer-${PAGE_CODE}`);
             const values = {};
+            const includeUnchanged = this.runtimeBindDialog?.includeUnchangedRuntimeValues !== false;
             getContainerEl(`#runtimeBindGrid-${PAGE_CODE}`)?.querySelectorAll(".data-runtime-bind-input").forEach((input) => {
+                if (!includeUnchanged && input.value === (input.dataset.defaultValue ?? "")) return;
                 values[input.dataset.bindName] = input.value;
             });
             if (!(await this.confirmManualRunIdOverwrite(values))) return;
-            this.runtimeBindValues = { ...this.runtimeBindValues, ...values };
+            if (includeUnchanged) {
+                this.runtimeBindValues = { ...this.runtimeBindValues, ...values };
+            } else {
+                const nextRuntimeValues = { ...this.runtimeBindValues };
+                (this.runtimeBindDialog?.promptNames || []).forEach((name) => {
+                    delete nextRuntimeValues[name];
+                });
+                this.runtimeBindValues = { ...nextRuntimeValues, ...values };
+            }
             if (layer) layer.hidden = true;
             this.runtimeBindDialog?.resolve(values);
             this.runtimeBindDialog = null;

@@ -57,7 +57,8 @@
             <aside class="data-job-panel">
                 <header class="table-object-header">
                     <div class="data-job-title-block">
-                        <h2 class="table-section-title" data-label-key="jobsTitle">Jobs</h2>
+                        <span class="panel-surface-title" data-label-key="jobsTitle">Jobs</span>
+                        <h2 class="table-section-title" id="jobs-title-__PAGE_CODE__"></h2>
                     </div>
                     <div class="data-job-subtitle-block">
                         <p class="table-section-desc" data-label-key="jobsDescription">Saved work for the selected scenario.</p>
@@ -83,7 +84,8 @@
             <section class="data-main-panel">
                 <header class="table-header">
                     <div>
-                        <h1 class="table-title" id="work-title-__PAGE_CODE__" data-label-key="workTitle">Column Correlation Analysis</h1>
+                        <span class="panel-surface-title" data-label-key="workTitle">work</span>
+                        <h1 class="table-title" id="work-title-__PAGE_CODE__">New Job</h1>
                         <p class="table-desc" id="workDescription-__PAGE_CODE__" data-label-key="workDescriptionEmpty">Select a scenario table and registered correlation analysis object.</p>
                     </div>
                     <div class="table-export-actions">
@@ -157,6 +159,7 @@
                             <select id="execSourceType-__PAGE_CODE__" class="env-field" onchange="__PAGE_CODE__.handleExecutionSourceChange(this.value)">
                                 <option value="DB_OBJECT">DB Object</option>
                                 <option value="OML_PYTHON">OML Python</option>
+                                <option value="WEB_API">Web API</option>
                             </select>
                         </label>
                         <label class="data-exec-object-field">
@@ -169,6 +172,12 @@
                             <span class="required-title" data-label-key="omlResource">OML4Py Resource</span>
                             <select id="omlResource-__PAGE_CODE__" class="env-field" onchange="__PAGE_CODE__.handleOmlResourceChange(this.value)">
                                 <option value="">-- Select OML4Py resource --</option>
+                            </select>
+                        </label>
+                        <label id="webApiWrap-__PAGE_CODE__" class="data-oml-resource-field" hidden>
+                            <span class="required-title">Python API Resource</span>
+                            <select id="webApiMethod-__PAGE_CODE__" class="env-field" onchange="__PAGE_CODE__.handleWebApiMethodChange(this.value)">
+                                <option value="">-- Select Python API resource --</option>
                             </select>
                         </label>
                         <label class="data-result-create-field">

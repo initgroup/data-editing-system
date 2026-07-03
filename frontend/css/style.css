@@ -706,6 +706,14 @@ body {
 
 .common-message-popup.is-confirm .common-message-confirm-action:focus,
 .common-message-popup.is-confirm .common-message-confirm-action:focus-visible {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.22);
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+}
+
+.common-message-popup.is-confirm .common-message-confirm-action.is-default-action:focus,
+.common-message-popup.is-confirm .common-message-confirm-action.is-default-action:focus-visible {
   background: #2563eb;
   border-color: #2563eb;
   box-shadow:

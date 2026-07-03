@@ -19,6 +19,7 @@ from backend.auth_context import get_request_user_id
 from backend.database_helper import execute_query, SqlLoader
 from backend.services.background_jobs import submit_background_job
 from backend.services import data_work_service as data_work
+from backend.services import api_call_service
 from backend.services.data_work_service import (
     DataWorkJobRequest as ProfileJobRequest,
     DataWorkRunAllJobsRequest as RunAllJobsRequest,
@@ -73,19 +74,19 @@ class SaveSqlTableRequest(BaseModel):
 def parse_manual_run_id(runtime_bind_values: Optional[Dict[str, Any]]) -> Optional[int]:
     values = runtime_bind_values or {}
     run_values = []
-    for key in ("INIT$RunId", "runId"):
+    for key in ("INIT$RunId", "runId", "P_RUN_ID"):
         if key not in values:
             continue
         text = str(values.get(key) if values.get(key) is not None else "").strip()
         if not text or text.lower() in {"(auto)", "auto"}:
             continue
         if not re.fullmatch(r"[1-9][0-9]*", text):
-            raise HTTPException(status_code=400, detail="Manual INIT$RunId must be a positive integer or (auto).")
+            raise HTTPException(status_code=400, detail="Manual INIT$RunId/P_RUN_ID must be a positive integer or (auto).")
         run_values.append(int(text))
     if not run_values:
         return None
     if len(set(run_values)) > 1:
-        raise HTTPException(status_code=400, detail="Manual INIT$RunId values must match.")
+        raise HTTPException(status_code=400, detail="Manual INIT$RunId/P_RUN_ID values must match.")
     return run_values[0]
 
 
@@ -363,6 +364,10 @@ def create_data_work_router(
             filter_columns = {
                 "INIT$_TB_CAT_CORR_PAIR": ("OWNER", "TABLE_NAME"),
                 "INIT$_TB_CAT_CORR_SUMMARY": ("OWNER", "TABLE_NAME"),
+                "INIT$_TB_NUM_CORR_PAIR": ("OWNER", "TABLE_NAME"),
+                "INIT$_TB_NUM_CORR_SUMMARY": ("OWNER", "TABLE_NAME"),
+                "INIT$_TB_LASSO_FEATURE": ("OWNER", "TABLE_NAME"),
+                "INIT$_TB_SYMBOLIC_RULE": ("OWNER", "TABLE_NAME"),
                 "INIT$_TB_ASSOC_RULE_SUMMARY": ("TARGET_OWNER", "TARGET_TABLE"),
                 "INIT$_TB_RULE_VIOLATION_RESULT": ("TARGET_OWNER", "TARGET_TABLE")
             }
@@ -953,7 +958,8 @@ def create_data_work_router(
         run_type_override: Optional[str] = None,
         update_saved_job: bool = True
     ) -> Dict[str, Any]:
-        run_type = "OML_PYTHON" if str(job.get("EXEC_SOURCE_TYPE") or "").upper() == "OML_PYTHON" else "PLSQL"
+        exec_source_type = str(job.get("EXEC_SOURCE_TYPE") or "").upper()
+        run_type = "WEB_API" if exec_source_type == "WEB_API" else ("OML_PYTHON" if exec_source_type == "OML_PYTHON" else "PLSQL")
         if run_type_override:
             run_type = run_type_override
         result_owner = job.get("RESULT_OWNER") or ""
@@ -984,6 +990,26 @@ def create_data_work_router(
         conn.commit()
     
         try:
+            if exec_source_type == "WEB_API":
+                message = execute_web_api_job(conn, job, runtime_bind_values or {}, run_id)
+                if not update_saved_job:
+                    draft_name = job.get("JOB_NAME") or f"Job #{profile_job_id}"
+                    message = f"Draft test: {draft_name}. {message}"
+                data_work.update_run(conn, run_id, "SUCCESS", message, result_table_name, result_owner)
+                if update_saved_job:
+                    data_work.update_job_status(
+                        conn,
+                        MENU_CODE,
+                        profile_job_id,
+                        "SUCCESS",
+                        message,
+                        result_table_name,
+                        result_owner,
+                        False,
+                        True
+                    )
+                return {"status": "success", "message": message}
+
             executable_script = normalize_executable_script(job.get("EXEC_PLSQL") or "")
             if not executable_script:
                 message = "No executable script was saved."
@@ -1038,6 +1064,21 @@ def create_data_work_router(
                 )
             conn.commit()
             raise
+
+
+    def execute_web_api_job(
+        conn,
+        job: Dict[str, Any],
+        runtime_bind_values: Optional[Dict[str, Any]] = None,
+        run_id: Optional[int] = None
+    ) -> str:
+        runtime_values = {
+            **build_system_bind_values(job, run_id),
+            **(runtime_bind_values or {})
+        }
+        for run_key in ("INIT$RunSourceType", "INIT$RunId", "runSourceType", "runId"):
+            runtime_values[run_key] = build_system_bind_values(job, run_id)[run_key]
+        return api_call_service.execute_api_job(conn, job, runtime_values, run_id)
     
     
     def execute_saved_script(

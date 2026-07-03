@@ -1,6 +1,6 @@
 """
 @file           M90002.py
-@description    OML4Py resource registry API
+@description    API object registry API
 """
 
 import json
@@ -8,8 +8,7 @@ import logging
 import re
 from typing import Any, Dict, List, Optional
 
-import oracledb
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.database_helper import execute_query, SqlLoader
@@ -19,59 +18,79 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-class OmlResourceSaveRequest(BaseModel):
-    resource: Dict[str, Any] = Field(default_factory=dict)
-    params: List[Dict[str, Any]] = Field(default_factory=list)
+RESERVED_VARIABLES = [
+    ":INIT$TargetOwner",
+    ":INIT$TargetTable",
+    ":INIT$RunSourceType",
+    ":INIT$RunId",
+    ":INIT$ResultModelName",
+]
+
+
+class ApiObjectSaveRequest(BaseModel):
+    apiObject: Dict[str, Any] = Field(default_factory=dict)
+    details: List[Dict[str, Any]] = Field(default_factory=list)
     model_config = ConfigDict(extra="allow")
 
 
-class OmlResourceDeleteRequest(BaseModel):
-    resourceId: int
+class ApiObjectDeleteRequest(BaseModel):
+    objectId: int
     model_config = ConfigDict(extra="allow")
 
 
-@router.get("/resources")
-def list_resources(
-    request: Request,
-    keyword: str = Query(""),
-    useYn: str = Query("ALL")
-):
+@router.get("/api-objects")
+def list_api_objects(request: Request):
     conn = None
     try:
         conn = get_target_db_connection(request)
-        params = {
-            "keyword": f"%{keyword.strip().upper()}%" if keyword.strip() else None,
-            "useYn": useYn.upper() if useYn.upper() in {"Y", "N"} else "ALL"
+        result = execute_query(conn, "M90002_RESOURCE_LIST", {
+            "keyword": None,
+            "useYn": "ALL"
+        })
+        rows = [
+            normalize_lob_row(row)
+            for row in require_success(result, "API object query failed.").get("data", [])
+        ]
+        api_objects = [normalize_api_row(row) for row in rows if is_api_registry_row(row)]
+        return {
+            "status": "success",
+            "data": api_objects,
+            "total": len(api_objects)
         }
-        result = execute_query(conn, "M90002_RESOURCE_LIST", params)
-        normalized = require_success(result, "OML resource query failed.")
-        normalized["data"] = [normalize_lob_row(row) for row in normalized.get("data", [])]
-        return normalized
     finally:
         if conn:
             conn.close()
 
 
-@router.get("/resource/{resource_id}")
-def get_resource(resource_id: int, request: Request):
+@router.get("/api-object/{object_id}")
+def get_api_object(object_id: int, request: Request):
     conn = None
     try:
         conn = get_target_db_connection(request)
-        resource_result = execute_query(conn, "M90002_RESOURCE_DETAIL", {"resourceId": resource_id})
-        resource_data = [
+        resource_result = execute_query(conn, "M90002_RESOURCE_DETAIL", {"resourceId": object_id})
+        resource_rows = [
             normalize_lob_row(row)
-            for row in require_success(resource_result, "OML resource detail query failed.").get("data", [])
+            for row in require_success(resource_result, "API object detail query failed.").get("data", [])
         ]
-        if not resource_data:
-            raise HTTPException(status_code=404, detail="OML resource was not found.")
+        if not resource_rows:
+            raise HTTPException(status_code=404, detail="API object was not found.")
+        resource = resource_rows[0]
+        if not is_api_registry_row(resource):
+            raise HTTPException(status_code=404, detail="API object was not found.")
 
-        param_result = execute_query(conn, "M90002_PARAM_LIST", {"resourceId": resource_id})
-        params = require_success(param_result, "OML resource parameter query failed.").get("data", [])
+        param_result = execute_query(conn, "M90002_PARAM_LIST", {"resourceId": object_id})
+        param_rows = [
+            normalize_lob_row(row)
+            for row in require_success(param_result, "API object parameter query failed.").get("data", [])
+        ]
+        api_object = normalize_api_row(resource)
+        details = normalize_detail_rows(resource, param_rows)
         return {
             "status": "success",
             "data": {
-                "resource": resource_data[0],
-                "params": params
+                "apiObject": api_object,
+                "details": details,
+                "source": "SAVED"
             }
         }
     finally:
@@ -79,88 +98,78 @@ def get_resource(resource_id: int, request: Request):
             conn.close()
 
 
-@router.post("/resource/save")
-def save_resource(req: OmlResourceSaveRequest, request: Request):
+@router.post("/api-object/save")
+def save_api_object(req: ApiObjectSaveRequest, request: Request):
     conn = None
     save_step = "REQUEST"
     try:
         conn = get_target_db_connection(request)
-        resource = req.resource or {}
-        resource_name = require_code(resource.get("resourceName") or resource.get("RESOURCE_NAME"), "resourceName")
-        resource_id = optional_int(resource.get("resourceId") or resource.get("OML_RESOURCE_ID"))
+        api_object = normalize_api_object_payload(req.apiObject or {})
+        details = normalize_detail_payload(req.details or [])
+        spec = build_api_spec(api_object, details)
+        output = spec.get("output") or {}
+        output_text = json.dumps(output, ensure_ascii=False, indent=2)
+        spec_text = json.dumps(spec, ensure_ascii=False, indent=2)
+        object_id = optional_int(api_object.get("objectId"))
+        object_name = api_object["objectName"]
 
         params = {
-            "resourceId": resource_id,
-            "resourceName": resource_name,
-            "resourceLabel": trim_text(resource.get("resourceLabel") or resource.get("RESOURCE_LABEL"), 200) or resource_name,
-            "resourceType": normalize_choice(resource.get("resourceType") or resource.get("RESOURCE_TYPE"), {"SCRIPT", "MODEL", "NOTEBOOK_JOB", "SERVICE"}, "SCRIPT"),
-            "language": normalize_choice(resource.get("language") or resource.get("LANGUAGE"), {"PYTHON", "R"}, "PYTHON"),
-            "execApi": normalize_choice(resource.get("execApi") or resource.get("EXEC_API"), {"SQL_API", "PYTHON_API", "REST_API"}, "SQL_API"),
-            "execMethod": normalize_choice(resource.get("execMethod") or resource.get("EXEC_METHOD"), {
-                "PYQ_EVAL",
-                "PYQ_TABLE_EVAL",
-                "PYQ_ROW_EVAL",
-                "PYQ_GROUP_EVAL",
-                "PYQ_INDEX_EVAL",
-                "DO_EVAL",
-                "TABLE_APPLY",
-                "ROW_APPLY",
-                "GROUP_APPLY",
-                "INDEX_APPLY"
-            }, "PYQ_TABLE_EVAL"),
-            "scriptName": require_code(resource.get("scriptName") or resource.get("SCRIPT_NAME"), "scriptName"),
-            "scriptOwner": optional_code(resource.get("scriptOwner") or resource.get("SCRIPT_OWNER")),
-            "scriptSource": str(resource.get("scriptSource") or resource.get("SCRIPT_SOURCE") or ""),
-            "inputMode": normalize_choice(resource.get("inputMode") or resource.get("INPUT_MODE"), {"NONE", "TABLE", "ROW", "GROUP", "INDEX"}, "TABLE"),
-            "outputFormat": trim_text(resource.get("outputFormat") or resource.get("OUTPUT_FORMAT"), 4000),
-            "specJson": normalize_json_text(resource.get("specJson") or resource.get("SPEC_JSON")),
-            "description": trim_text(resource.get("description") or resource.get("DESCRIPTION"), 4000),
-            "timeoutSec": optional_int(resource.get("timeoutSec") or resource.get("TIMEOUT_SEC")) or 300,
-            "useYn": "N" if str(resource.get("useYn") or resource.get("USE_YN") or "Y").upper() == "N" else "Y",
-            "sortOrder": optional_int(resource.get("sortOrder") or resource.get("SORT_ORDER")) or 0
+            "resourceId": object_id,
+            "resourceName": object_name,
+            "resourceLabel": trim_text(api_object.get("label"), 200) or object_name,
+            "resourceType": "SERVICE",
+            "language": "PYTHON",
+            "execApi": "REST_API" if api_object["objectType"] == "EXTERNAL_API" else "WEB_API",
+            "execMethod": object_name,
+            "scriptName": object_name,
+            "scriptOwner": None,
+            "scriptSource": "",
+            "inputMode": "TABLE",
+            "outputFormat": output_text,
+            "specJson": spec_text,
+            "description": trim_text(api_object.get("description"), 4000),
+            "timeoutSec": optional_int(api_object.get("timeoutSec")) or 300,
+            "useYn": "N" if str(api_object.get("useYn") or "Y").upper() == "N" else "Y",
+            "sortOrder": optional_int(api_object.get("sortOrder")) or 0
         }
 
         cursor = conn.cursor()
-        save_step = "RESOURCE_ID_SELECT"
         try:
-            if not resource_id:
-                cursor.execute(SqlLoader.get_sql("M90002_RESOURCE_ID_SELECT"), {"resourceName": resource_name})
+            save_step = "API_OBJECT_ID_SELECT"
+            if not object_id:
+                cursor.execute(SqlLoader.get_sql("M90002_RESOURCE_ID_SELECT"), {"resourceName": object_name})
                 row = cursor.fetchone()
-                resource_id = int(row[0]) if row and row[0] else None
-                params["resourceId"] = resource_id
+                object_id = int(row[0]) if row and row[0] else None
+                params["resourceId"] = object_id
 
-            if resource_id:
-                save_step = "RESOURCE_UPDATE"
+            if object_id:
+                save_step = "API_OBJECT_UPDATE"
                 cursor.execute(SqlLoader.get_sql("M90002_RESOURCE_UPDATE"), params)
             else:
-                save_step = "RESOURCE_INSERT"
+                save_step = "API_OBJECT_INSERT"
                 insert_params = {key: value for key, value in params.items() if key != "resourceId"}
                 cursor.execute(SqlLoader.get_sql("M90002_RESOURCE_INSERT"), insert_params)
 
-            saved_resource_id = resource_id
-            if not saved_resource_id:
-                save_step = "RESOURCE_ID_SELECT_AFTER_INSERT"
-                cursor.execute(SqlLoader.get_sql("M90002_RESOURCE_ID_SELECT"), {"resourceName": resource_name})
+            saved_object_id = object_id
+            if not saved_object_id:
+                save_step = "API_OBJECT_ID_SELECT_AFTER_INSERT"
+                cursor.execute(SqlLoader.get_sql("M90002_RESOURCE_ID_SELECT"), {"resourceName": object_name})
                 row = cursor.fetchone()
-                saved_resource_id = int(row[0]) if row and row[0] else None
-            if not saved_resource_id:
-                raise HTTPException(status_code=500, detail="Saved OML resource ID could not be found.")
+                saved_object_id = int(row[0]) if row and row[0] else None
+            if not saved_object_id:
+                raise HTTPException(status_code=500, detail="Saved API object ID could not be found.")
 
-            save_step = "RESOURCE_LOCK"
-            cursor.execute(SqlLoader.get_sql("M90002_RESOURCE_LOCK"), {"resourceId": saved_resource_id})
+            save_step = "API_OBJECT_LOCK"
+            cursor.execute(SqlLoader.get_sql("M90002_RESOURCE_LOCK"), {"resourceId": saved_object_id})
             if not cursor.fetchone():
-                raise HTTPException(status_code=404, detail="Saved OML resource was not found for locking.")
+                raise HTTPException(status_code=404, detail="Saved API object was not found for locking.")
 
-            sync_resource_params(cursor, saved_resource_id, req.params or [])
-            if should_register_pyq_script(params):
-                save_step = "PYQ_SCRIPT_CREATE"
-                ensure_pyq_script_create_api_available(cursor)
-                register_pyq_script(cursor, params["scriptName"], params["scriptSource"])
+            sync_input_params(cursor, saved_object_id, details)
             conn.commit()
             return {
                 "status": "success",
-                "message": "OML4Py resource saved and script registered.",
-                "resourceId": saved_resource_id
+                "message": "API object saved.",
+                "objectId": saved_object_id
             }
         finally:
             cursor.close()
@@ -168,41 +177,62 @@ def save_resource(req: OmlResourceSaveRequest, request: Request):
         if conn:
             conn.rollback()
         raise
-    except Exception as e:
+    except Exception as exc:
         if conn:
             conn.rollback()
-        logger.error(f"M90002 resource save failed: {str(e)}")
-        if is_row_lock_error(e):
+        logger.error("M90002 API object save failed: %s", str(exc))
+        if is_row_lock_error(exc):
             raise HTTPException(
                 status_code=409,
-                detail=f"OML4Py resource save hit a database row lock at {save_step}. This is a DB transaction/lock conflict, not invalid resource data. Please wait a moment and save again.\n{save_step} 단계에서 DB row lock 충돌이 발생했습니다. 리소스 데이터 값 오류가 아니라 DB 트랜잭션/락 충돌입니다. 잠시 후 다시 저장해 주세요."
+                detail=(
+                    f"API object save hit a database row lock at {save_step}. "
+                    "Please wait a moment and save again."
+                )
             )
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(exc))
     finally:
         if conn:
             conn.close()
 
 
-@router.post("/resource/delete")
-def delete_resource(req: OmlResourceDeleteRequest, request: Request):
+@router.post("/api-object/delete")
+def delete_api_object(req: ApiObjectDeleteRequest, request: Request):
     conn = None
     try:
         conn = get_target_db_connection(request)
         cursor = conn.cursor()
         try:
-            cursor.execute(SqlLoader.get_sql("M90002_RESOURCE_DELETE"), {"resourceId": req.resourceId})
+            cursor.execute(SqlLoader.get_sql("M90002_RESOURCE_DELETE"), {"resourceId": req.objectId})
             conn.commit()
-            return {"status": "success", "message": "OML4Py resource deleted."}
+            return {"status": "success", "message": "API object deleted."}
         finally:
             cursor.close()
-    except Exception as e:
+    except Exception as exc:
         if conn:
             conn.rollback()
-        logger.error(f"M90002 resource delete failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("M90002 API object delete failed: %s", str(exc))
+        raise HTTPException(status_code=500, detail=str(exc))
     finally:
         if conn:
             conn.close()
+
+
+@router.get("/resources")
+def list_resources_compat(request: Request):
+    return list_api_objects(request)
+
+
+@router.get("/resource/{resource_id}")
+def get_resource_compat(resource_id: int, request: Request):
+    data = get_api_object(resource_id, request)
+    detail = data.get("data") or {}
+    return {
+        "status": "success",
+        "data": {
+            "resource": detail.get("apiObject") or {},
+            "params": detail.get("details") or []
+        }
+    }
 
 
 def require_success(result: Dict[str, Any], default_message: str) -> Dict[str, Any]:
@@ -211,227 +241,266 @@ def require_success(result: Dict[str, Any], default_message: str) -> Dict[str, A
     return result
 
 
-def sync_resource_params(cursor, resource_id: int, items: List[Dict[str, Any]]) -> None:
-    cursor.execute(SqlLoader.get_sql("M90002_PARAM_LIST"), {"resourceId": resource_id})
+def normalize_api_object_payload(value: Dict[str, Any]) -> Dict[str, Any]:
+    object_type = normalize_choice(value.get("objectType") or value.get("apiType"), {"INTERNAL_API", "EXTERNAL_API"}, "INTERNAL_API")
+    object_name = require_api_code(value.get("objectName") or value.get("resourceName"), "objectName")
+    endpoint = trim_text(value.get("endpoint") or value.get("serviceUrl"), 500)
+    if not endpoint:
+        raise HTTPException(status_code=400, detail="endpoint is required.")
+    if object_type == "INTERNAL_API":
+        if not endpoint.startswith("/") or endpoint.startswith("//") or re.match(r"(?i)^https?://", endpoint):
+            raise HTTPException(status_code=400, detail="Internal API endpoint must be a relative URL starting with '/'.")
+    if object_type == "EXTERNAL_API":
+        if not re.match(r"(?i)^https?://", endpoint):
+            raise HTTPException(status_code=400, detail="External API endpoint must be an absolute http(s) URL.")
+
+    result_create_yn = normalize_choice(value.get("resultCreateYn"), {"N", "T", "M"}, "N")
+    result_owner = trim_text(value.get("resultOwner"), 128)
+    result_name = trim_text(value.get("resultName"), 128)
+    if object_type == "EXTERNAL_API":
+        result_create_yn = "T"
+        result_owner = result_owner or ":INIT$TargetOwner"
+        result_name = "INIT$_TB_API_RESULT"
+
+    return {
+        "objectId": optional_int(value.get("objectId")),
+        "objectType": object_type,
+        "objectName": object_name,
+        "label": trim_text(value.get("label") or value.get("objectLabel"), 200) or object_name,
+        "apiGroup": trim_text(value.get("apiGroup"), 100) or ("Additional APIs" if object_type == "EXTERNAL_API" else "Python API 기본 JSON"),
+        "endpoint": endpoint,
+        "httpMethod": normalize_choice(value.get("httpMethod"), {"GET", "POST", "PUT", "PATCH", "DELETE"}, "POST"),
+        "authType": normalize_choice(value.get("authType"), {"NONE", "API_KEY", "BEARER", "BASIC"}, "NONE"),
+        "authKeyName": trim_text(value.get("authKeyName"), 128),
+        "timeoutSec": optional_int(value.get("timeoutSec")) or 300,
+        "resultCreateYn": result_create_yn,
+        "resultOwner": result_owner,
+        "resultName": result_name,
+        "useYn": "N" if str(value.get("useYn") or "Y").upper() == "N" else "Y",
+        "sortOrder": optional_int(value.get("sortOrder")) or 0,
+        "description": trim_text(value.get("description"), 4000)
+    }
+
+
+def build_api_spec(api_object: Dict[str, Any], details: List[Dict[str, Any]]) -> Dict[str, Any]:
+    input_rows = [row for row in details if get_detail_section(row.get("key")) == "INPUT"]
+    auth_rows = [row for row in details if get_detail_section(row.get("key")) == "AUTH"]
+    output_rows = [row for row in details if get_detail_section(row.get("key")) == "OUTPUT"]
+    result_key = "resultModelName" if api_object.get("resultCreateYn") == "M" else "resultTableName"
+    return {
+        "apiRegistryVersion": 2,
+        "apiGroup": api_object.get("apiGroup") or "",
+        "apiType": api_object.get("objectType") or "INTERNAL_API",
+        "method": api_object.get("objectName") or "",
+        "httpMethod": api_object.get("httpMethod") or "POST",
+        "endpoint": api_object.get("endpoint") or "",
+        "serviceUrl": api_object.get("endpoint") or "",
+        "timeoutSec": api_object.get("timeoutSec") or 300,
+        "adapter": "INTERNAL_PYTHON_API" if api_object.get("objectType") == "INTERNAL_API" else "HTTP_JSON_API",
+        "auth": {
+            "type": api_object.get("authType") or "NONE",
+            "keyName": api_object.get("authKeyName") or "",
+            "rules": auth_rows
+        },
+        "input": input_rows,
+        "output": {
+            "resultCreateYn": api_object.get("resultCreateYn") or "N",
+            "resultOwner": api_object.get("resultOwner") or "",
+            result_key: api_object.get("resultName") or "",
+            "persistMode": "SERVICE_MANAGED" if api_object.get("objectType") == "INTERNAL_API" else "GENERIC_JSON",
+            "rules": output_rows
+        },
+        "reservedVariables": RESERVED_VARIABLES,
+        "details": details
+    }
+
+
+def sync_input_params(cursor, object_id: int, details: List[Dict[str, Any]]) -> None:
+    cursor.execute(SqlLoader.get_sql("M90002_PARAM_LIST"), {"resourceId": object_id})
     existing_names = {str(row[1] or "").upper() for row in cursor.fetchall()}
+    input_rows = [row for row in details if get_detail_section(row.get("key")) == "INPUT"]
     incoming_names = set()
 
-    if not items:
-        cursor.execute(SqlLoader.get_sql("M90002_PARAM_DELETE"), {"resourceId": resource_id})
+    if not input_rows:
+        cursor.execute(SqlLoader.get_sql("M90002_PARAM_DELETE"), {"resourceId": object_id})
         return
 
-    for index, item in enumerate(items):
-        param_name = require_code(item.get("paramName") or item.get("PARAM_NAME"), f"params[{index}].paramName")
+    for index, row in enumerate(input_rows):
+        key = strip_detail_prefix(row.get("key"))
+        param_name = normalize_param_name(key, index)
         if param_name in incoming_names:
-            raise HTTPException(status_code=400, detail=f"Duplicate parameter name: {param_name}")
+            raise HTTPException(status_code=400, detail=f"Duplicate input parameter name: {param_name}")
         incoming_names.add(param_name)
-
+        value_text = str(row.get("value") or "")
         param_values = {
-            "resourceId": resource_id,
+            "resourceId": object_id,
             "paramName": param_name,
-            "bindName": trim_text(item.get("bindName") or item.get("BIND_NAME"), 128),
-            "dataType": trim_text(item.get("dataType") or item.get("DATA_TYPE"), 50),
-            "requiredYn": "Y" if str(item.get("requiredYn") or item.get("REQUIRED_YN") or "N").upper() == "Y" else "N",
-            "paramDesc": trim_text(item.get("paramDesc") or item.get("PARAM_DESC"), 4000),
-            "defaultValue": trim_text(item.get("defaultValue") or item.get("DEFAULT_VALUE"), 4000),
-            "itemOrder": optional_int(item.get("itemOrder") or item.get("ITEM_ORDER")) or index + 1
+            "bindName": extract_bind_name(value_text, param_name),
+            "dataType": extract_data_type(value_text),
+            "requiredYn": "Y" if " REQUIRED" in f" {value_text.upper()} " else "N",
+            "paramDesc": trim_text(row.get("comment") or row.get("desc"), 4000),
+            "defaultValue": trim_text(row.get("defaultValue"), 4000),
+            "itemOrder": optional_int(row.get("order")) or index + 1
         }
-
         cursor.execute(SqlLoader.get_sql("M90002_PARAM_UPDATE"), param_values)
         if cursor.rowcount == 0:
             cursor.execute(SqlLoader.get_sql("M90002_PARAM_INSERT"), param_values)
 
     for stale_name in sorted(existing_names - incoming_names):
         cursor.execute(SqlLoader.get_sql("M90002_PARAM_DELETE_ONE"), {
-            "resourceId": resource_id,
+            "resourceId": object_id,
             "paramName": stale_name
         })
 
 
-def should_register_pyq_script(params: Dict[str, Any]) -> bool:
-    return (
-        params.get("language") == "PYTHON"
-        and params.get("resourceType") == "SCRIPT"
-        and params.get("execApi") == "SQL_API"
-        and bool(str(params.get("scriptSource") or "").strip())
+def normalize_detail_payload(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    normalized = []
+    for index, row in enumerate(rows):
+        key = trim_text(row.get("key") or row.get("KEY"), 200)
+        if not key:
+            continue
+        normalized.append({
+            "order": optional_int(row.get("order") or row.get("ORDER")) or index + 1,
+            "key": key,
+            "value": trim_text(row.get("value") or row.get("VALUE"), 4000),
+            "comment": trim_text(row.get("comment") or row.get("desc") or row.get("COMMENT"), 4000),
+            "defaultValue": trim_text(row.get("defaultValue") or row.get("DEFAULT_VALUE"), 4000)
+        })
+    return sorted(normalized, key=lambda item: item["order"])
+
+
+def normalize_api_row(row: Dict[str, Any]) -> Dict[str, Any]:
+    spec = parse_json_object(row.get("SPEC_JSON"))
+    output = parse_json_object(row.get("OUTPUT_FORMAT")) or spec.get("output") or {}
+    api_type = spec.get("apiType") or ("EXTERNAL_API" if row.get("EXEC_API") == "REST_API" else "INTERNAL_API")
+    result_name = (
+        output.get("resultModelName")
+        or output.get("resultTableName")
+        or output.get("resultTable")
+        or spec.get("resultModelName")
+        or spec.get("resultTableName")
+        or spec.get("resultTable")
+        or ""
     )
-
-
-def register_pyq_script(cursor, script_name: str, script_source: str) -> None:
-    source = str(script_source or "").strip()
-    if not source:
-        raise HTTPException(
-            status_code=400,
-            detail="Script Source is required to register an OML4Py script.\nOML4Py 스크립트를 등록하려면 Script Source가 필요합니다."
-        )
-
-    cursor.setinputsizes(scriptSource=oracledb.DB_TYPE_CLOB)
-    bind_values = {
-        "scriptName": script_name,
-        "scriptSource": source
+    return {
+        "objectId": row.get("OML_RESOURCE_ID"),
+        "objectType": api_type,
+        "objectName": row.get("RESOURCE_NAME") or spec.get("method") or "",
+        "label": row.get("RESOURCE_LABEL") or row.get("RESOURCE_NAME") or "",
+        "apiGroup": spec.get("apiGroup") or ("Additional APIs" if api_type == "EXTERNAL_API" else "Python API 기본 JSON"),
+        "endpoint": spec.get("endpoint") or spec.get("serviceUrl") or "",
+        "httpMethod": spec.get("httpMethod") or "POST",
+        "authType": (spec.get("auth") or {}).get("type") or "NONE",
+        "authKeyName": (spec.get("auth") or {}).get("keyName") or "",
+        "timeoutSec": row.get("TIMEOUT_SEC") or spec.get("timeoutSec") or 300,
+        "resultCreateYn": output.get("resultCreateYn") or "N",
+        "resultOwner": output.get("resultOwner") or "",
+        "resultName": result_name,
+        "useYn": row.get("USE_YN") or "Y",
+        "sortOrder": row.get("SORT_ORDER") or 0,
+        "description": row.get("DESCRIPTION") or ""
     }
-    attempts = [
-        (
-            "SYS.PYQSCRIPTCREATE(v_script_name, v_script, v_overwrite)",
-            """
-            BEGIN
-                SYS.PYQSCRIPTCREATE(
-                    v_script_name => :scriptName,
-                    v_script => :scriptSource,
-                    v_overwrite => TRUE
-                );
-            END;
-            """
-        ),
-        (
-            "SYS.PYQSCRIPTCREATE(script_name, script, overwrite)",
-            """
-            BEGIN
-                SYS.PYQSCRIPTCREATE(
-                    script_name => :scriptName,
-                    script => :scriptSource,
-                    overwrite => TRUE
-                );
-            END;
-            """
-        ),
-        (
-            "SYS.PYQSCRIPTCREATE(name, script, overwrite)",
-            """
-            BEGIN
-                SYS.PYQSCRIPTCREATE(
-                    name => :scriptName,
-                    script => :scriptSource,
-                    overwrite => TRUE
-                );
-            END;
-            """
-        ),
-        (
-            "SYS.PYQSCRIPTCREATE positional name/script/overwrite",
-            "BEGIN SYS.PYQSCRIPTCREATE(:scriptName, :scriptSource, TRUE); END;"
-        ),
-        (
-            "SYS.PYQSCRIPTCREATE positional name/script/global/overwrite",
-            "BEGIN SYS.PYQSCRIPTCREATE(:scriptName, :scriptSource, FALSE, TRUE); END;"
-        ),
-        (
-            "PYQSCRIPTCREATE positional name/script/overwrite",
-            "BEGIN PYQSCRIPTCREATE(:scriptName, :scriptSource, TRUE); END;"
-        ),
-        (
-            "PYQSCRIPTCREATE positional name/script/global/overwrite",
-            "BEGIN PYQSCRIPTCREATE(:scriptName, :scriptSource, FALSE, TRUE); END;"
-        )
-    ]
-
-    errors = []
-    if has_oml_script_wrapper(cursor):
-        try:
-            cursor.execute(
-                """
-                BEGIN
-                    INIT$_PKG_OML_SCRIPT.CREATE_SCRIPT(
-                        p_script_name => :scriptName,
-                        p_script_source => :scriptSource
-                    );
-                END;
-                """,
-                bind_values
-            )
-            verify_pyq_script_registered(cursor, script_name)
-            return
-        except Exception as exc:
-            errors.append(f"INIT$_PKG_OML_SCRIPT.CREATE_SCRIPT: {str(exc)}")
-
-    for label, block in attempts:
-        try:
-            cursor.execute(block, bind_values)
-            verify_pyq_script_registered(cursor, script_name)
-            return
-        except Exception as exc:
-            errors.append(f"{label}: {str(exc)}")
-
-    detail = errors[0] if errors else "No OML4Py script create API attempt was executed."
-    raise HTTPException(
-        status_code=500,
-        detail=(
-            "OML4Py script repository registration failed. "
-            "The target DB did not accept the known pyqScriptCreate call signatures. "
-            f"First error: {detail}\n"
-            "OML4Py 스크립트 저장소 등록에 실패했습니다. "
-            "Target DB에서 알려진 pyqScriptCreate 호출 형식을 허용하지 않았습니다. "
-            f"첫 번째 오류: {detail}"
-        )
-    )
 
 
-def ensure_pyq_script_create_api_available(cursor) -> None:
-    if has_oml_script_wrapper(cursor):
-        return
+def normalize_detail_rows(resource: Dict[str, Any], params: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    spec = parse_json_object(resource.get("SPEC_JSON"))
+    details = spec.get("details")
+    if isinstance(details, list):
+        return normalize_detail_payload(details)
 
-    checks = [
-        ("ALL_OBJECTS", SqlLoader.get_sql("M90002_PYQ_SCRIPT_CREATE_OBJECTS")),
-        ("ALL_PROCEDURES", SqlLoader.get_sql("M90002_PYQ_SCRIPT_CREATE_PROCEDURES")),
-        ("ALL_SYNONYMS", SqlLoader.get_sql("M90002_PYQ_SCRIPT_CREATE_SYNONYMS")),
-    ]
-
-    errors = []
-    for label, sql in checks:
-        try:
-            cursor.execute(sql)
-            if cursor.fetchone():
-                return
-        except Exception as exc:
-            errors.append(f"{label}: {str(exc)}")
-
-    extra = f" Checks failed: {' | '.join(errors)}" if errors else ""
-    raise HTTPException(
-        status_code=500,
-        detail=(
-            "OML4Py script create API was not found in this target DB session. "
-            "Grant or enable the DB-side PYQSCRIPTCREATE API before saving OML4Py scripts."
-            f"{extra}\n"
-            "현재 Target DB 세션에서 OML4Py 스크립트 생성 API를 찾지 못했습니다. "
-            "OML4Py 스크립트를 저장하려면 DB 안의 PYQSCRIPTCREATE API 권한 또는 기능을 먼저 활성화해야 합니다."
-            f"{extra}"
-        )
-    )
+    rows = []
+    for index, param in enumerate(params):
+        param_name = param.get("PARAM_NAME") or ""
+        bind_name = param.get("BIND_NAME") or to_camel_name(param_name)
+        data_type = param.get("DATA_TYPE") or "VARCHAR2"
+        rows.append({
+            "order": param.get("ITEM_ORDER") or index + 1,
+            "key": f"INPUT.{param_name}",
+            "value": f"{bind_name} IN {data_type}",
+            "comment": param.get("PARAM_DESC") or "",
+            "defaultValue": param.get("DEFAULT_VALUE") or ""
+        })
+    output = spec.get("output") or parse_json_object(resource.get("OUTPUT_FORMAT"))
+    for rule in output.get("rules") or []:
+        if isinstance(rule, dict):
+            rows.append({
+                "order": rule.get("order") or len(rows) + 1,
+                "key": rule.get("key") or "",
+                "value": rule.get("value") or "",
+                "comment": rule.get("comment") or "",
+                "defaultValue": rule.get("defaultValue") or ""
+            })
+    return normalize_detail_payload(rows)
 
 
-def has_oml_script_wrapper(cursor) -> bool:
+def is_api_registry_row(row: Dict[str, Any]) -> bool:
+    spec = parse_json_object(row.get("SPEC_JSON"))
+    exec_api = str(row.get("EXEC_API") or "").upper()
+    return bool(spec.get("apiRegistryVersion") or spec.get("apiType") or exec_api in {"WEB_API", "REST_API", "PYTHON_API"})
+
+
+def parse_json_object(value: Any) -> Dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    text = str(value or "").strip()
+    if not text:
+        return {}
     try:
-        cursor.execute(SqlLoader.get_sql("M90002_OML_SCRIPT_WRAPPER_EXISTS"))
-        row = cursor.fetchone()
-        return bool(row and int(row[0] or 0) > 0)
+        parsed = json.loads(text)
+        return parsed if isinstance(parsed, dict) else {}
     except Exception:
-        return False
+        return {}
 
 
-def verify_pyq_script_registered(cursor, script_name: str) -> None:
-    cursor.execute(SqlLoader.get_sql("M90002_PYQ_SCRIPT_REGISTERED"), {"scriptName": script_name})
-    row = cursor.fetchone()
-    if row and int(row[0] or 0) > 0:
-        return
-    raise HTTPException(
-        status_code=500,
-        detail=(
-            f"OML4Py script create call completed, but {script_name} was not found in USER_PYQ_SCRIPTS.\n"
-            f"OML4Py 스크립트 생성 호출은 완료됐지만 USER_PYQ_SCRIPTS에서 {script_name}을 찾지 못했습니다."
-        )
-    )
+def get_detail_section(key: Any) -> str:
+    return str(key or "INPUT").split(".", 1)[0].strip().upper() or "INPUT"
 
 
-def require_code(value: Any, field_name: str) -> str:
+def strip_detail_prefix(key: Any) -> str:
+    text = str(key or "").strip()
+    return text.split(".", 1)[1] if "." in text else text
+
+
+def normalize_param_name(value: Any, index: int) -> str:
+    text = str(value or "").strip()
+    text = re.sub(r"[^A-Za-z0-9_$#]", "_", text).strip("_").upper()
+    return (text or f"PARAM_{index + 1}")[:128]
+
+
+def extract_bind_name(value: str, param_name: str) -> str:
+    token = str(value or "").strip().split()[0] if str(value or "").strip() else ""
+    token = token.split(".")[-1]
+    token = re.sub(r"[^A-Za-z0-9_$#]", "_", token).strip("_")
+    return token[:128] or to_camel_name(param_name)
+
+
+def extract_data_type(value: str) -> str:
+    text = str(value or "").upper()
+    for data_type in ("VARCHAR2", "NUMBER", "DATE", "TIMESTAMP", "BOOLEAN", "JSON", "CLOB"):
+        if re.search(rf"\b{data_type}\b", text):
+            return data_type
+    return "VARCHAR2"
+
+
+def to_camel_name(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    text = re.sub(r"^p_", "", text)
+    parts = [part for part in re.split(r"[_\W]+", text) if part]
+    if not parts:
+        return ""
+    return parts[0] + "".join(part[:1].upper() + part[1:] for part in parts[1:])
+
+
+def require_api_code(value: Any, field_name: str) -> str:
     text = str(value or "").strip().upper()
-    if not re.fullmatch(r"[A-Z][A-Z0-9_$#]{0,127}", text):
+    if not re.fullmatch(r"[A-Z][A-Z0-9_$#]{0,49}", text):
         raise HTTPException(status_code=400, detail=f"Invalid {field_name}.")
     return text
 
 
-def optional_code(value: Any) -> Optional[str]:
-    text = str(value or "").strip()
-    return require_code(text, "code") if text else None
+def normalize_choice(value: Any, allowed: set[str], default: str) -> str:
+    text = str(value or default).strip().upper()
+    return text if text in allowed else default
 
 
 def optional_int(value: Any) -> Optional[int]:
@@ -445,22 +514,6 @@ def optional_int(value: Any) -> Optional[int]:
 
 def trim_text(value: Any, max_length: int) -> str:
     return str(value if value is not None else "").strip()[:max_length]
-
-
-def normalize_choice(value: Any, allowed: set[str], default: str) -> str:
-    text = str(value or default).strip().upper()
-    return text if text in allowed else default
-
-
-def normalize_json_text(value: Any) -> str:
-    text = trim_text(value, 4000)
-    if not text:
-        return ""
-    try:
-        json.loads(text)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid specJson.")
-    return text
 
 
 def is_row_lock_error(error: Exception) -> bool:

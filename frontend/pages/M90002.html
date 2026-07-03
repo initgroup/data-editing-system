@@ -1,171 +1,218 @@
-<div class="page-container env-page oml-page" id="container-M90002">
-    <section class="env-workspace oml-workspace" aria-labelledby="oml-title-M90002">
-        <aside class="env-object-panel oml-resource-panel" aria-label="OML4Py resources">
+<div class="page-container env-page api-page" id="container-M90002">
+    <section class="env-workspace api-workspace" aria-labelledby="api-title-M90002">
+        <aside class="env-object-panel api-object-panel" aria-label="API object groups">
             <header class="env-object-header">
                 <div>
-                    <h2 class="env-object-title">OML4Py Resources</h2>
-                    <p class="env-object-desc">Registered embedded Python scripts.</p>
+                    <h2 class="env-section-title">API Object Groups</h2>
+                    <p class="env-section-desc">Internal Python APIs and registered external APIs.</p>
                 </div>
                 <div class="env-object-actions">
-                    <button type="button" class="env-icon-btn" title="New resource" onclick="M90002.newResource()">
+                    <label class="env-registered-filter" title="Load registered API objects only">
+                        <input id="registeredOnly-M90002" type="checkbox" onchange="M90002.loadApiObjects()">
+                        <span>Registered</span>
+                    </label>
+                    <button id="createDefaultApisBtn-M90002" type="button" class="env-icon-btn" title="Create default Python APIs" onclick="M90002.createDefaultApiObjects()">
+                        <i class="fas fa-wand-magic-sparkles"></i>
+                    </button>
+                    <button type="button" class="env-icon-btn" title="New external API" onclick="M90002.newApiObject()">
                         <i class="fas fa-plus"></i>
                     </button>
-                    <button type="button" class="env-icon-btn env-refresh" title="Refresh resources" onclick="M90002.loadResources()">
+                    <button type="button" class="env-icon-btn env-refresh" title="Expand all groups" onclick="M90002.expandAllGroups()">
+                        <i class="fas fa-folder-open"></i>
+                    </button>
+                    <button type="button" class="env-icon-btn env-refresh" title="Collapse all groups" onclick="M90002.collapseAllGroups()">
+                        <i class="fas fa-folder"></i>
+                    </button>
+                    <button type="button" class="env-icon-btn env-refresh" title="Refresh API objects" onclick="M90002.loadApiObjects()">
                         <i class="fas fa-sync-alt"></i>
                     </button>
                 </div>
             </header>
-            <div class="env-object-search oml-search-row">
-                <input id="resourceSearch-M90002" class="env-search-input" type="search" placeholder="Search resource or script" onkeydown="M90002.handleSearchKey(event)">
-                <select id="resourceUseFilter-M90002" class="env-field" onchange="M90002.loadResources()">
-                    <option value="ALL">ALL</option>
-                    <option value="Y">Y</option>
-                    <option value="N">N</option>
-                </select>
+
+            <div class="env-category-filter" aria-label="API object category filter">
+                <label>
+                    <input type="checkbox" id="apiCategoryAll-M90002" checked onchange="M90002.handleCategoryAllChange(this)">
+                    <span>All</span>
+                </label>
+                <label>
+                    <input type="checkbox" class="api-category-M90002" value="INTERNAL_API" onchange="M90002.handleCategoryChange()">
+                    <span>Internal</span>
+                </label>
+                <label>
+                    <input type="checkbox" class="api-category-M90002" value="EXTERNAL_API" onchange="M90002.handleCategoryChange()">
+                    <span>External</span>
+                </label>
             </div>
-            <div id="resourceGrid-M90002" class="env-tree-grid oml-resource-grid"></div>
+
+            <div class="env-object-search">
+                <i class="fas fa-search"></i>
+                <input
+                    id="apiSearch-M90002"
+                    type="search"
+                    placeholder="Search API object"
+                    aria-label="Search API object"
+                    oninput="M90002.renderObjectTree()"
+                    onkeydown="M90002.handleSearchKey(event)"
+                >
+            </div>
+
+            <div id="apiObjectTree-M90002" class="env-tree-grid api-object-grid"></div>
         </aside>
 
-        <section class="env-panel oml-detail-panel" aria-labelledby="oml-title-M90002">
-            <header class="env-panel-header">
-                <div>
-                    <h1 class="env-title" id="oml-title-M90002">OML4Py Resource Registry</h1>
-                    <p class="env-desc">Register Autonomous Database Embedded Python Execution scripts for Data Work jobs.</p>
+        <section class="env-panel api-detail-panel" aria-labelledby="api-title-M90002">
+            <header class="env-header">
+                <div class="env-header-main">
+                    <h1 class="env-title" id="api-title-M90002">API Object Registry</h1>
+                    <p class="env-desc" id="apiDescription-M90002">
+                        Select an API object from the group tree. Input, auth, and output rules will appear here.
+                    </p>
                 </div>
-                <div class="env-actions">
-                    <button type="button" class="env-btn" title="Load runnable OML4Py hello sample" onclick="M90002.loadHelloPythonSample()">
-                        <i class="fas fa-flask"></i>
-                        <span>Python Sample</span>
-                    </button>
-                    <button type="button" id="saveResource-M90002" class="env-btn env-save" onclick="M90002.saveResource()">
+                <div class="env-header-actions">
+                    <button type="button" id="saveApiObject-M90002" class="env-btn env-save" onclick="M90002.saveApiObject()">
                         <i class="fas fa-save"></i>
                         <span>Save</span>
                     </button>
-                    <button type="button" class="env-btn" onclick="M90002.newResource()">New</button>
-                    <button type="button" class="env-btn env-danger" onclick="M90002.deleteResource()">Delete</button>
+                    <button type="button" class="env-btn env-cancel" onclick="M90002.resetApiObject()">
+                        <i class="fas fa-undo"></i>
+                        <span>Reset</span>
+                    </button>
+                    <button type="button" class="env-btn env-danger" onclick="M90002.deleteApiObject()">
+                        <i class="far fa-trash-alt"></i>
+                        <span>Delete</span>
+                    </button>
                 </div>
             </header>
 
-            <section class="env-meta-grid" aria-label="OML resource metadata">
-                <label>
-                    <span>Resource ID</span>
-                    <input id="resourceId-M90002" class="env-field env-meta-field" type="text" readonly>
-                </label>
-                <label>
-                    <span class="required-title">Resource Name</span>
-                    <input id="resourceName-M90002" class="env-field env-meta-field" type="text" placeholder="APR_RULE_MODEL">
-                </label>
-                <label class="oml-field-wide">
-                    <span>Display Label</span>
-                    <input id="resourceLabel-M90002" class="env-field env-meta-field" type="text" placeholder="Apriori rule model">
-                </label>
-                <label>
-                    <span>Use</span>
-                    <select id="resourceUseYn-M90002" class="env-field env-meta-field">
-                        <option value="Y">Y</option>
-                        <option value="N">N</option>
-                    </select>
-                </label>
-                <label>
-                    <span>Language</span>
-                    <select id="resourceLanguage-M90002" class="env-field env-meta-field">
-                        <option value="PYTHON">PYTHON</option>
-                        <option value="R">R</option>
-                    </select>
-                </label>
-                <label class="oml-field-wide">
-                    <span>Resource Type</span>
-                    <select id="resourceType-M90002" class="env-field env-meta-field">
-                        <option value="SCRIPT">SCRIPT</option>
-                        <option value="MODEL">MODEL</option>
-                        <option value="NOTEBOOK_JOB">NOTEBOOK_JOB</option>
-                        <option value="SERVICE">SERVICE</option>
-                    </select>
-                </label>
-                <label>
-                    <span>Exec API</span>
-                    <select id="execApi-M90002" class="env-field env-meta-field">
-                        <option value="SQL_API">SQL_API</option>
-                        <option value="PYTHON_API">PYTHON_API</option>
-                        <option value="REST_API">REST_API</option>
-                    </select>
-                </label>
-                <label>
-                    <span>Exec Method</span>
-                    <select id="execMethod-M90002" class="env-field env-meta-field">
-                        <option value="PYQ_TABLE_EVAL">PYQ_TABLE_EVAL</option>
-                        <option value="PYQ_EVAL">PYQ_EVAL</option>
-                        <option value="PYQ_ROW_EVAL">PYQ_ROW_EVAL</option>
-                        <option value="PYQ_GROUP_EVAL">PYQ_GROUP_EVAL</option>
-                        <option value="PYQ_INDEX_EVAL">PYQ_INDEX_EVAL</option>
-                        <option value="TABLE_APPLY">TABLE_APPLY</option>
-                        <option value="DO_EVAL">DO_EVAL</option>
-                        <option value="ROW_APPLY">ROW_APPLY</option>
-                        <option value="GROUP_APPLY">GROUP_APPLY</option>
-                        <option value="INDEX_APPLY">INDEX_APPLY</option>
-                    </select>
-                </label>
-                <label class="oml-field-wide">
-                    <span class="required-title">Script Name</span>
-                    <input id="scriptName-M90002" class="env-field env-meta-field" type="text" placeholder="SCRIPT_NAME">
-                </label>
-                <label>
-                    <span>Script Owner</span>
-                    <input id="scriptOwner-M90002" class="env-field env-meta-field" type="text" placeholder="OWNER">
-                </label>
-                <label>
-                    <span>Input Mode</span>
-                    <select id="inputMode-M90002" class="env-field env-meta-field">
-                        <option value="TABLE">TABLE</option>
-                        <option value="NONE">NONE</option>
-                        <option value="ROW">ROW</option>
-                        <option value="GROUP">GROUP</option>
-                        <option value="INDEX">INDEX</option>
-                    </select>
-                </label>
-                <label class="oml-field-wide">
-                    <span>Timeout Sec</span>
-                    <input id="timeoutSec-M90002" class="env-field env-meta-field" type="number" min="1" value="300">
-                </label>
-                <label>
-                    <span>Sort</span>
-                    <input id="sortOrder-M90002" class="env-field env-meta-field" type="number" value="0">
-                </label>
+            <section class="env-object-meta" aria-label="API object master information">
+                <div class="env-meta-grid api-meta-grid">
+                    <label class="api-object-id-field">
+                        <span>Object ID</span>
+                        <input id="apiObjectId-M90002" class="env-field env-meta-field" type="text" readonly>
+                    </label>
+                    <label class="api-object-type-field">
+                        <span>Object Type</span>
+                        <select id="apiObjectType-M90002" class="env-field env-meta-field" onchange="M90002.handleObjectTypeChange(this.value)">
+                            <option value="INTERNAL_API">INTERNAL_API</option>
+                            <option value="EXTERNAL_API">EXTERNAL_API</option>
+                        </select>
+                    </label>
+                    <label class="api-object-name-field">
+                        <span class="required-title">Object Name</span>
+                        <input id="apiObjectName-M90002" class="env-field env-meta-field" type="text" placeholder="LASSO_FEATURE_SELECT" oninput="M90002.updateApiMeta('objectName', this.value)">
+                    </label>
+                    <div class="env-meta-wide env-meta-inline">
+                        <label class="env-meta-label">
+                            <span>Label</span>
+                            <input id="apiLabel-M90002" class="env-field env-meta-field" type="text" oninput="M90002.updateApiMeta('label', this.value)">
+                        </label>
+                        <label>
+                            <span>Use</span>
+                            <select id="apiUseYn-M90002" class="env-field env-meta-field" onchange="M90002.updateApiMeta('useYn', this.value)">
+                                <option value="Y">Y</option>
+                                <option value="N">N</option>
+                            </select>
+                        </label>
+                        <label>
+                            <span>Sort</span>
+                            <input id="apiSortOrder-M90002" class="env-field env-meta-field" type="number" value="0" oninput="M90002.updateApiMeta('sortOrder', this.value)">
+                        </label>
+                    </div>
+                    <label class="env-meta-wide">
+                        <span>Description</span>
+                        <textarea id="apiDescriptionText-M90002" class="env-field env-meta-textarea" rows="2" oninput="M90002.updateApiMeta('description', this.value)"></textarea>
+                    </label>
+                    <label class="api-http-method-field">
+                        <span>HTTP Method</span>
+                        <select id="apiHttpMethod-M90002" class="env-field env-meta-field" onchange="M90002.updateApiMeta('httpMethod', this.value)">
+                            <option value="POST">POST</option>
+                            <option value="GET">GET</option>
+                            <option value="PUT">PUT</option>
+                            <option value="PATCH">PATCH</option>
+                        </select>
+                    </label>
+                    <label class="api-endpoint-field">
+                        <span class="required-title">Endpoint URL</span>
+                        <input id="apiEndpoint-M90002" class="env-field env-meta-field" type="text" placeholder="/api/mlAnalysis/lasso-feature-select" oninput="M90002.updateApiMeta('endpoint', this.value)">
+                    </label>
+                    <label class="api-timeout-field">
+                        <span>Timeout Sec</span>
+                        <input id="apiTimeoutSec-M90002" class="env-field env-meta-field" type="number" min="1" value="300" oninput="M90002.updateApiMeta('timeoutSec', this.value)">
+                    </label>
+                    <label class="api-auth-type-field">
+                        <span>Auth Type</span>
+                        <select id="apiAuthType-M90002" class="env-field env-meta-field" onchange="M90002.updateApiMeta('authType', this.value)">
+                            <option value="NONE">NONE</option>
+                            <option value="API_KEY">API_KEY</option>
+                            <option value="BEARER">BEARER</option>
+                            <option value="BASIC">BASIC</option>
+                        </select>
+                    </label>
+                    <label class="api-auth-key-field">
+                        <span>Auth Key Name</span>
+                        <input id="apiAuthKeyName-M90002" class="env-field env-meta-field" type="text" placeholder="OPEN_API_KEY" oninput="M90002.updateApiMeta('authKeyName', this.value)">
+                    </label>
+                    <label class="api-result-create-field">
+                        <span>Result Table Create</span>
+                        <select id="apiResultCreateYn-M90002" class="env-field env-meta-field" onchange="M90002.handleResultCreateChange(this.value)">
+                            <option value="N">N (사용안함)</option>
+                            <option value="T">T (테이블사용)</option>
+                            <option value="M">M (모델사용)</option>
+                        </select>
+                    </label>
+                    <label class="api-result-owner-field">
+                        <span>Result Owner</span>
+                        <input id="apiResultOwner-M90002" class="env-field env-meta-field" type="text" placeholder="OWNER" oninput="M90002.updateApiMeta('resultOwner', this.value)">
+                    </label>
+                    <label class="api-result-name-field">
+                        <span id="apiResultNameTitle-M90002">Result Table</span>
+                        <input id="apiResultName-M90002" class="env-field env-meta-field" type="text" placeholder="RESULT_TABLE" oninput="M90002.updateApiMeta('resultName', this.value)">
+                    </label>
+                </div>
             </section>
 
-            <label class="env-detail-block">
-                <span>Description</span>
-                <textarea id="description-M90002" class="env-field env-meta-textarea" rows="2"></textarea>
-            </label>
-
-            <div class="data-param-script-layout">
-                <section class="data-param-panel" aria-label="OML parameters">
-                    <header class="data-param-panel-header">
-                        <strong>Parameters</strong>
-                        <button type="button" class="table-icon-btn" title="Add parameter" onclick="M90002.addParam()">
-                            <i class="fas fa-plus"></i>
-                        </button>
-                    </header>
-                    <div id="paramGrid-M90002" class="data-param-grid"></div>
-                </section>
-                <section class="data-param-panel oml-exec-options-panel" aria-label="OML execution options">
-                    <header class="data-param-panel-header">
-                        <strong>Execution Options</strong>
-                    </header>
-                    <label class="env-detail-block">
-                        <span>OUT_FMT / Output Format</span>
-                        <textarea id="outputFormat-M90002" class="sql-editor data-script-editor" rows="7" spellcheck="false" placeholder="NULL or JSON/table definition for OML SQL API"></textarea>
-                    </label>
-                    <label class="env-detail-block">
-                        <span>Spec JSON</span>
-                        <textarea id="specJson-M90002" class="sql-editor data-script-editor" rows="7" spellcheck="false" placeholder="{&quot;notes&quot;:&quot;optional execution metadata&quot;}"></textarea>
-                    </label>
-                    <label class="env-detail-block">
-                        <span>Python Source</span>
-                        <textarea id="scriptSource-M90002" class="sql-editor data-script-editor" rows="10" spellcheck="false" placeholder="def hello_world(...):"></textarea>
-                    </label>
-                </section>
+            <div class="env-detail-source-bar">
+                <label>
+                    <span>Detail Object ID</span>
+                    <input id="apiDetailObjectId-M90002" class="env-field env-detail-source-field" type="text" readonly>
+                </label>
+                <label>
+                    <span>Detail Source</span>
+                    <input id="apiDetailSource-M90002" class="env-field env-detail-source-field" type="text" readonly>
+                </label>
             </div>
+
+            <div class="env-detail-toolbar api-detail-toolbar">
+                <span class="env-detail-hint">Define INPUT, AUTH, and OUTPUT rows. Reserved variables can be used in DEFAULT.</span>
+                <select id="apiDetailKind-M90002" class="env-field api-detail-kind" title="Detail row type">
+                    <option value="INPUT">INPUT</option>
+                    <option value="OUTPUT">OUTPUT</option>
+                    <option value="AUTH">AUTH</option>
+                </select>
+                <button type="button" id="addApiDetailRow-M90002" class="table-icon-btn" title="Add detail row" onclick="M90002.addDetailRow()">
+                    <i class="fas fa-plus"></i>
+                </button>
+                <button type="button" id="removeApiDetailRow-M90002" class="table-icon-btn" title="Remove selected row" onclick="M90002.removeSelectedRow()">
+                    <i class="fas fa-trash"></i>
+                </button>
+                <button type="button" id="apiPresetButton-M90002" class="table-icon-btn env-detail-preset-btn" title="Apply Python API base JSON" onclick="M90002.applySelectedPreset()" hidden>
+                    <i class="fas fa-file-import"></i>
+                </button>
+            </div>
+
+            <div id="apiRows-M90002" class="env-detail-grid" role="grid" aria-label="API detail items"></div>
+
+            <section class="env-source-panel api-contract-panel" aria-label="API JSON contract preview">
+                <header class="env-source-header">
+                    <span class="env-source-title">
+                        <strong>API JSON Contract</strong>
+                        <span id="apiContractStatus-M90002" class="env-detail-hint">Generated from current screen values.</span>
+                    </span>
+                    <button type="button" class="table-icon-btn env-source-copy-btn" title="Copy API JSON contract" onclick="M90002.copyContract()">
+                        <i class="far fa-copy"></i>
+                    </button>
+                </header>
+                <textarea id="apiContractViewer-M90002" class="sql-editor env-source-viewer" spellcheck="false" readonly aria-label="API JSON contract preview"></textarea>
+            </section>
         </section>
     </section>
 </div>

@@ -84,7 +84,7 @@ git add .
 git add -u
 
 # 3. 커밋 생성
-git commit -m "INIT Data Editing System - 2026.07.01-3"
+git commit -m "INIT Data Editing System - 2026.07.02-1"
 # 4. 원격 저장소 최신 상태 반영
 git pull origin main
 # 5. 원격 저장소에 푸시
@@ -457,8 +457,7 @@ FROM DUAL;
 
 
 --------------------------
-김진열상무
-연속형변수에 대한 연관규칙 발굴하는 프로세스가 어느 정도 정리가 되었어.
+
 1단계: 상관분석을 통해 모든 연속형변수간의 상관도를 계산해서 상관도가 높은 변수만 추출
 
 2단계 : LASSO Regression을 통해서 상관분석에 연관성이 높은 변수에 대해 종속변수에 영향을 많이 주는 독립변수를 추출
@@ -467,7 +466,6 @@ FROM DUAL;
 3단계 : Symbolic Regression을 통해 종속변수와 2단계에서 선택된 독립변수간의 연관규칙을 발굴
  Symbolic Regression은 파이썬 코드로 작성해서 오라클과 연동하면 될 듯 하다.
 
-우선 위 내용에 대해 검토해보고 궁금한 사항 있으면 연락줘. 
 ---------------------------
 단점: 엄청난 계산량
 100개의 변수로 만들 수 있는 기호의 조합은 우주에 있는 원자의 수보다 많을 수 있습니다. 
@@ -482,3 +480,38 @@ Kim의 통계적 제안:
 구체적인 공식 규칙을 뽑아내는 것이 통계학적으로 가장 완벽한 마스터플랜입니다.
 
 ---------------------------
+
+
+M03002 컬럼간상관분석
+→ INIT$_SP_NUM_CORR_ANALYZE  => INIT$_TB_NUM_CORR_PAIR
+
+→ LASSO Feature Select       =>  INIT$_TB_LASSO_FEATURE
+
+→ Symbolic Regression Rule   => INIT$_TB_SYMBOLIC_RULE
+
+
+
+--------
+
+LASSO => L1 정규화, L2 정규화 ....
+ => 계산식은 없고, 종속변수 1개에 대한 후보 독립변수중에 선형관계에 영향을 주는 독립변수를 찾는다
+ => R 스퀘어 최소기준 0.7 이상만 뽑아라.
+
+
+
+Symbolic Regression Rule\
+
+==> LASSO 결과에서 SELECTED_YN = Y 이고, R2_SCORE >= 0.7 이상 인
+     TARGET_COLUMN => 종속변수	FEATURE_NAME =독립변수
+     
+      
+
+
+INPUT.P_SAMPLE_ROWS = 100
+
+
+INPUT.P_MAX_ITERATIONS = 100
+
+Maximum auto target columns when P_TARGET_COLUMN is (auto) = 10
+
+Continue remaining auto targets when one target fails

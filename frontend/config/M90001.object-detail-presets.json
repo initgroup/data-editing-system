@@ -343,6 +343,197 @@
     {
       "owner": "*",
       "objectType": "PROCEDURE",
+      "objectName": "INIT$_SP_NUM_CORR_ANALYZE",
+      "label": "M02_연속형상관관계분석",
+      "description": "대상 테이블의 연속형 후보 컬럼 조합을 분석하여 Pearson r와 p-value 기준의 상관관계를 계산하고, 컬럼 쌍 및 요약 결과를 생성하는 프로시저입니다.",
+      "resultCreateYn": "T",
+      "resultOwner": "__CURRENT_OWNER__",
+      "resultTableName": "INIT$_TB_NUM_CORR_PAIR",
+      "items": [
+        {
+          "key": "P_TARGET_OWNER",
+          "comment": "분석 대상 테이블 계정",
+          "defaultValue": ":INIT$TargetOwner"
+        },
+        {
+          "key": "P_TARGET_TABLE",
+          "comment": "분석 대상 테이블명",
+          "defaultValue": ":INIT$TargetTable"
+        },
+        {
+          "key": "P_MIN_PVALUE",
+          "comment": "상관 후보 최소 p-value 기준",
+          "defaultValue": "0.05"
+        },
+        {
+          "key": "P_MIN_ABS_CORR",
+          "comment": "통과 판정 최소 절대 Pearson 상관계수",
+          "defaultValue": "0.6"
+        },
+        {
+          "key": "P_MIN_AVG_ABS_CORR",
+          "comment": "선택 후보 평균 절대 Pearson 상관계수 기준",
+          "defaultValue": "0.6"
+        },
+        {
+          "key": "P_SAMPLE_ROWS",
+          "comment": "분석 샘플 최대 행 수",
+          "defaultValue": "100000"
+        },
+        {
+          "key": "P_MAX_COLUMNS",
+          "comment": "분석 대상 최대 컬럼 수",
+          "defaultValue": "80"
+        },
+        {
+          "key": "P_MIN_ROWS",
+          "comment": "상관계수 계산 최소 유효 행 수",
+          "defaultValue": "30"
+        },
+        {
+          "key": "P_RUN_SOURCE_TYPE",
+          "comment": "실행 출처 구분(DATA_WORK/FLOW_WORK)",
+          "defaultValue": ":INIT$RunSourceType"
+        },
+        {
+          "key": "P_RUN_ID",
+          "comment": "실행 이력 ID",
+          "defaultValue": ":INIT$RunId"
+        }
+      ]
+    },
+    {
+      "owner": "*",
+      "objectType": "WEB_API",
+      "objectName": "LASSO_FEATURE_SELECT",
+      "label": "M02_LASSO_중요변수선택",
+      "description": "WAS Python API에서 LASSO Regression을 실행하여 상관분석 후보 변수 중 종속변수에 영향이 큰 독립변수를 선택하고 INIT$_TB_LASSO_FEATURE에 적재합니다.",
+      "resultCreateYn": "T",
+      "resultOwner": "__CURRENT_OWNER__",
+      "resultTableName": "INIT$_TB_LASSO_FEATURE",
+      "items": [
+        {
+          "key": "P_TARGET_OWNER",
+          "comment": "분석 대상 테이블 계정",
+          "defaultValue": ":INIT$TargetOwner"
+        },
+        {
+          "key": "P_TARGET_TABLE",
+          "comment": "분석 대상 테이블명",
+          "defaultValue": ":INIT$TargetTable"
+        },
+        {
+          "key": "P_TARGET_COLUMN",
+          "comment": "종속변수 컬럼명",
+          "defaultValue": "(auto)"
+        },
+        {
+          "key": "P_MAX_FEATURES",
+          "comment": "선택할 최대 독립변수 수",
+          "defaultValue": "10"
+        },
+        {
+          "key": "P_SAMPLE_ROWS",
+          "comment": "분석 샘플 최대 행 수",
+          "defaultValue": "100000"
+        },
+        {
+          "key": "P_ALPHA",
+          "comment": "LASSO alpha. 비우면 교차검증으로 자동 선택",
+          "defaultValue": ""
+        },
+        {
+          "key": "P_MAX_AUTO_TARGETS",
+          "comment": "P_TARGET_COLUMN이 (auto)일 때 자동 target 최대 개수",
+          "defaultValue": "10"
+        },
+        {
+          "key": "P_CONTINUE_ON_ERROR",
+          "comment": "자동 target 중 일부 실패 시 나머지 계속 실행 여부",
+          "defaultValue": "Y"
+        },
+        {
+          "key": "P_RUN_SOURCE_TYPE",
+          "comment": "실행 출처 구분(DATA_WORK/FLOW_WORK)",
+          "defaultValue": ":INIT$RunSourceType"
+        },
+        {
+          "key": "P_RUN_ID",
+          "comment": "실행 이력 ID",
+          "defaultValue": ":INIT$RunId"
+        }
+      ]
+    },
+    {
+      "owner": "*",
+      "objectType": "WEB_API",
+      "objectName": "SYMBOLIC_REGRESSION_RULE",
+      "label": "M02_SymbolicRegression_공식규칙발굴",
+      "description": "WAS Python API에서 LASSO로 선택된 상위 5~10개 변수만 사용해 Symbolic Regression 또는 경량 polynomial fallback을 실행하고 INIT$_TB_SYMBOLIC_RULE에 적재합니다.",
+      "resultCreateYn": "T",
+      "resultOwner": "__CURRENT_OWNER__",
+      "resultTableName": "INIT$_TB_SYMBOLIC_RULE",
+      "items": [
+        {
+          "key": "P_TARGET_OWNER",
+          "comment": "분석 대상 테이블 계정",
+          "defaultValue": ":INIT$TargetOwner"
+        },
+        {
+          "key": "P_TARGET_TABLE",
+          "comment": "분석 대상 테이블명",
+          "defaultValue": ":INIT$TargetTable"
+        },
+        {
+          "key": "P_TARGET_COLUMN",
+          "comment": "종속변수 컬럼명",
+          "defaultValue": "(auto)"
+        },
+        {
+          "key": "P_MAX_FEATURES",
+          "comment": "Symbolic Regression 입력 독립변수 최대 수",
+          "defaultValue": "10"
+        },
+        {
+          "key": "P_SAMPLE_ROWS",
+          "comment": "분석 샘플 최대 행 수",
+          "defaultValue": "50000"
+        },
+        {
+          "key": "P_MAX_ITERATIONS",
+          "comment": "Symbolic 탐색 최대 반복 수",
+          "defaultValue": "10000"
+        },
+        {
+          "key": "P_MIN_R2_SCORE",
+          "comment": "Symbolic Regression에 사용할 LASSO 최소 R2 점수",
+          "defaultValue": "0.7"
+        },
+        {
+          "key": "P_MAX_AUTO_TARGETS",
+          "comment": "P_TARGET_COLUMN이 (auto)일 때 자동 target 최대 개수",
+          "defaultValue": "10"
+        },
+        {
+          "key": "P_CONTINUE_ON_ERROR",
+          "comment": "자동 target 중 일부 실패 시 나머지 계속 실행 여부",
+          "defaultValue": "Y"
+        },
+        {
+          "key": "P_RUN_SOURCE_TYPE",
+          "comment": "실행 출처 구분(DATA_WORK/FLOW_WORK)",
+          "defaultValue": ":INIT$RunSourceType"
+        },
+        {
+          "key": "P_RUN_ID",
+          "comment": "실행 이력 ID",
+          "defaultValue": ":INIT$RunId"
+        }
+      ]
+    },
+    {
+      "owner": "*",
+      "objectType": "PROCEDURE",
       "objectName": "INIT$_SP_PREDICTED_TYPE",
       "label": "M01_분류모델(DECISION_TREE)_범주형_연속형",
       "description": "대상 테이블에 대해서 논리적데이터타입(LOG_DATA_TYPE), 고유값비율(DIST_VAL_RT), 정규화 엔트로피(NORM_ENTROPY)를 자동으로 계산한 후에 기본 분류모델인 \"OML_DECISION_TREE_MODEL_01\"을 사용하여 최종적으로 항목 분류결과(MODL_PREDICTED_TYPE)를 적재하는 프로시저입니다.",

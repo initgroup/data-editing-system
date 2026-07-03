@@ -1285,8 +1285,8 @@ const CommonMessage = {
         popup.setAttribute("aria-describedby", bodyId);
         const confirmButtons = options.type === "confirm"
             ? `
-                <button type="button" class="common-message-secondary common-message-confirm-action" data-common-message-action="cancel"${options.defaultAction === "cancel" ? " autofocus" : ""}>${this.escapeHtml(options.cancelText)}</button>
-                <button type="button" class="common-message-secondary common-message-confirm-action" data-common-message-action="ok"${options.defaultAction === "ok" ? " autofocus" : ""}>${this.escapeHtml(options.okText)}</button>
+                <button type="button" class="common-message-secondary common-message-confirm-action${options.defaultAction === "cancel" ? " is-default-action" : ""}" data-common-message-action="cancel"${options.defaultAction === "cancel" ? " autofocus" : ""}>${this.escapeHtml(options.cancelText)}</button>
+                <button type="button" class="common-message-secondary common-message-confirm-action${options.defaultAction === "ok" ? " is-default-action" : ""}" data-common-message-action="ok"${options.defaultAction === "ok" ? " autofocus" : ""}>${this.escapeHtml(options.okText)}</button>
             `
             : `<button type="button" class="common-message-primary" data-common-message-action="ok">${this.escapeHtml(options.okText)}</button>`;
         const footerHtml = options.toast ? "" : `
@@ -1367,7 +1367,9 @@ const CommonMessage = {
             return;
         }
         popup.style.right = "22px";
-        popup.style.top = `${22 + document.querySelectorAll(".common-message-popup.is-modeless").length * 14}px`;
+        const headerRect = document.querySelector(".content-header")?.getBoundingClientRect();
+        const baseTop = headerRect ? Math.max(22, Math.ceil(headerRect.bottom + 12)) : 22;
+        popup.style.top = `${baseTop + document.querySelectorAll(".common-message-popup.is-modeless").length * 14}px`;
     },
     bindDrag(popup) {
         const header = popup.querySelector(".common-message-header");

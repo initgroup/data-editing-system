@@ -41,6 +41,10 @@ TARGET_FILTER_RESULT_COLUMNS = {
     "INIT$_TB_PREDICTED_TYPE": ("OWNER", "TABLE_NAME"),
     "INIT$_TB_CAT_CORR_PAIR": ("OWNER", "TABLE_NAME"),
     "INIT$_TB_CAT_CORR_SUMMARY": ("OWNER", "TABLE_NAME"),
+    "INIT$_TB_NUM_CORR_PAIR": ("OWNER", "TABLE_NAME"),
+    "INIT$_TB_NUM_CORR_SUMMARY": ("OWNER", "TABLE_NAME"),
+    "INIT$_TB_LASSO_FEATURE": ("OWNER", "TABLE_NAME"),
+    "INIT$_TB_SYMBOLIC_RULE": ("OWNER", "TABLE_NAME"),
     "INIT$_TB_ASSOC_RULE_SUMMARY": ("TARGET_OWNER", "TARGET_TABLE"),
     "INIT$_TB_RULE_VIOLATION_RESULT": ("TARGET_OWNER", "TARGET_TABLE"),
 }
@@ -219,6 +223,26 @@ def get_flow_error_step(error: Exception) -> str:
             return step
         current = getattr(current, "__cause__", None) or getattr(current, "original", None)
     return "UNKNOWN_STEP"
+
+
+def build_node_downstream_plan(plan: list[dict], selected_node_key: str) -> list[dict]:
+    downstream_by_node: dict[str, set[str]] = {}
+    for step in plan or []:
+        node_key = str(step.get("nodeKey") or "")
+        downstream_by_node.setdefault(node_key, set())
+        for next_key in step.get("downstream") or []:
+            downstream_by_node[node_key].add(str(next_key))
+
+    selected = str(selected_node_key or "")
+    reachable = set()
+    stack = [selected] if selected else []
+    while stack:
+        node_key = stack.pop()
+        if node_key in reachable:
+            continue
+        reachable.add(node_key)
+        stack.extend(sorted(downstream_by_node.get(node_key, set()), reverse=True))
+    return [step for step in plan or [] if str(step.get("nodeKey") or "") in reachable]
 
 
 def create_flow_work_router(
@@ -494,19 +518,15 @@ def create_flow_work_router(
             run_id = flow_work.create_run(conn, flow_id, run_type, run_status, message, validation, manual_run_id)
             flow_work.create_node_run_records(conn, run_id, flow_id, validation.get("plan", []))
             conn.commit()
-            if req.batch:
-                submit_background_job(
-                    f"{MENU_CODE} flow_run_id={run_id}",
-                    run_flow_background,
-                    run_id,
-                    get_target_connection_id(request),
-                    get_request_user_id(request),
-                    validation.get("plan", []),
-                )
-            else:
-                run_result = flow_work.execute_flow_plan(conn, run_id, validation.get("plan", []))
-                run_status = run_result.get("status") or run_status
-                message = run_result.get("message") or message
+            submit_background_job(
+                f"{MENU_CODE} flow_run_id={run_id}",
+                run_flow_background,
+                run_id,
+                get_target_connection_id(request),
+                get_request_user_id(request),
+                validation.get("plan", []),
+                "Flow batch execution started." if req.batch else "Flow execution started.",
+            )
             save_lock.release()
             save_lock = None
             return {
@@ -550,11 +570,11 @@ def create_flow_work_router(
             if save_lock:
                 save_lock.release()
 
-    def run_flow_background(flow_run_id: int, connection_id: int, user_id: int, plan: list[dict]):
+    def run_flow_background(flow_run_id: int, connection_id: int, user_id: int, plan: list[dict], start_message: str = "Flow execution started."):
         conn = None
         try:
             conn = get_target_db_connection_by_id(connection_id, user_id)
-            flow_work.start_run(conn, flow_run_id, "Flow batch execution started.")
+            flow_work.start_run(conn, flow_run_id, start_message)
             conn.commit()
             flow_work.execute_flow_plan(conn, flow_run_id, plan or [])
         except Exception as e:
@@ -565,7 +585,7 @@ def create_flow_work_router(
                         conn,
                         flow_run_id,
                         "FAILED",
-                        f"Batch flow execution failed: {str(e)}",
+                        f"Flow execution failed: {str(e)}",
                         {"plan": plan or []}
                     )
                     conn.commit()
@@ -602,21 +622,70 @@ def create_flow_work_router(
             if not selected_step:
                 raise HTTPException(status_code=400, detail="Selected node was not found in the current flow.")
 
-            run_type = "MANUAL_NODE"
-            message = f"Node execution started: {selected_step.get('nodeName') or selected_node_key}"
-            run_plan = {**validation, "selectedNodeKey": selected_node_key, "plan": [selected_step]}
+            selected_plan = build_node_downstream_plan(validation.get("plan", []), selected_node_key) if req.downstream else [selected_step]
+            if not selected_plan:
+                raise HTTPException(status_code=400, detail="Selected node execution plan could not be built.")
+
+            run_type = "MANUAL_FROM_NODE" if req.downstream else "MANUAL_NODE"
+            message = (
+                f"Node and downstream execution started: {selected_step.get('nodeName') or selected_node_key}"
+                if req.downstream
+                else f"Node execution started: {selected_step.get('nodeName') or selected_node_key}"
+            )
+            run_plan = {**validation, "selectedNodeKey": selected_node_key, "downstream": bool(req.downstream), "plan": selected_plan}
             payload_manual_run_id = flow_work.parse_manual_run_id(req.manualRunId)
-            plan_manual_run_id = flow_work.extract_manual_run_id_from_plan([selected_step])
+            plan_manual_run_id = flow_work.extract_manual_run_id_from_plan(selected_plan)
             if payload_manual_run_id and plan_manual_run_id and payload_manual_run_id != plan_manual_run_id:
                 raise HTTPException(status_code=400, detail="Manual flow run id values must match.")
             manual_run_id = payload_manual_run_id or plan_manual_run_id
-            run_id = flow_work.create_run(conn, flow_id, run_type, "STARTED", message, run_plan, manual_run_id)
-            flow_work.create_node_run_records(conn, run_id, flow_id, [selected_step])
-            conn.commit()
+            continue_run_id = flow_work.parse_manual_run_id(req.continueRunId)
+            if continue_run_id and manual_run_id and continue_run_id != manual_run_id:
+                raise HTTPException(status_code=400, detail="Continue flow run id and manual flow run id values must match.")
 
-            run_result = flow_work.execute_flow_plan(conn, run_id, [selected_step])
-            run_status = run_result.get("status") or "STARTED"
-            message = run_result.get("message") or message
+            external_requirements = flow_work.get_external_dependency_requirements(validation.get("plan", []), selected_plan)
+            continuing = False
+            if req.downstream and external_requirements:
+                run_id = continue_run_id or manual_run_id or flow_work.find_latest_compatible_run_id(
+                    conn,
+                    flow_id,
+                    validation.get("plan", []),
+                    selected_plan
+                )
+                if not run_id:
+                    required_nodes = ", ".join(
+                        f"{item.get('nodeName') or item.get('nodeKey')}({item.get('nodeKey')})"
+                        for item in external_requirements
+                    )
+                    raise HTTPException(
+                        status_code=400,
+                        detail=(
+                            "Run from selected node requires a previous flow run where upstream node(s) already completed successfully. "
+                            f"Required upstream node(s): {required_nodes}. "
+                            "Run the upstream node first, or use the top Run now button to execute from the beginning.\n"
+                            "선택 노드부터 실행하려면 같은 FLOW_RUN_ID 안에 선행 노드 실행 결과가 먼저 있어야 합니다. "
+                            f"필요한 선행 노드: {required_nodes}. "
+                            "선행 노드를 먼저 실행하거나 상단 Run now로 처음부터 실행해 주세요."
+                        )
+                    )
+                flow_work.require_compatible_continue_run(conn, flow_id, run_id, validation.get("plan", []), selected_plan)
+                continuing = True
+                message = f"{message} Continuing FLOW_RUN_ID {run_id} with existing upstream results."
+                run_plan = {**run_plan, "continueRunId": run_id, "continuedFromExistingRun": True}
+                flow_work.resume_run(conn, flow_id, run_id, run_type, "STARTED", message, run_plan)
+                flow_work.create_node_run_records(conn, run_id, flow_id, selected_plan, replace_existing=True)
+            else:
+                run_id = flow_work.create_run(conn, flow_id, run_type, "STARTED", message, run_plan, manual_run_id)
+                flow_work.create_node_run_records(conn, run_id, flow_id, selected_plan)
+            conn.commit()
+            submit_background_job(
+                f"{MENU_CODE} flow_node_run_id={run_id}",
+                run_flow_background,
+                run_id,
+                get_target_connection_id(request),
+                get_request_user_id(request),
+                selected_plan,
+                message,
+            )
             return {
                 "status": "success",
                 "message": message,
@@ -624,8 +693,9 @@ def create_flow_work_router(
                     "flowId": flow_id,
                     "flowRunId": run_id,
                     "runType": run_type,
-                    "runStatus": run_status,
-                    "plan": [selected_step]
+                    "runStatus": "STARTED",
+                    "continuedFromExistingRun": continuing,
+                    "plan": selected_plan
                 }
             }
         except HTTPException:

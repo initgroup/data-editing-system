@@ -1,0 +1,262 @@
+{
+  "description": "M90002 API object presets. The Python API base group contains internal project APIs that can be registered together from the wand icon.",
+  "reservedVariables": [
+    ":INIT$TargetOwner",
+    ":INIT$TargetTable",
+    ":INIT$RunSourceType",
+    ":INIT$RunId",
+    ":INIT$ResultModelName"
+  ],
+  "groups": [
+    {
+      "groupName": "Python API 기본 JSON",
+      "resources": [
+        {
+          "objectType": "INTERNAL_API",
+          "objectName": "LASSO_FEATURE_SELECT",
+          "label": "LASSO Feature Select",
+          "apiGroup": "Python API 기본 JSON",
+          "endpoint": "/api/mlAnalysis/lasso-feature-select",
+          "httpMethod": "POST",
+          "auth": { "type": "NONE", "keyName": "" },
+          "timeoutSec": 300,
+          "sortOrder": 10,
+          "useYn": "Y",
+          "description": "Run the project internal Python LASSO feature selection API and create feature result rows.",
+          "output": {
+            "resultCreateYn": "T",
+            "resultOwner": ":INIT$TargetOwner",
+            "resultTableName": "INIT$_TB_LASSO_FEATURE",
+            "persistMode": "SERVICE_MANAGED",
+            "rules": [
+              {
+                "key": "OUTPUT.status",
+                "value": "$.status",
+                "comment": "API success status",
+                "defaultValue": ""
+              },
+              {
+                "key": "OUTPUT.resultTable",
+                "value": "$.resultTable -> INIT$_TB_LASSO_FEATURE",
+                "comment": "Result table managed by the internal Python service",
+                "defaultValue": "INIT$_TB_LASSO_FEATURE"
+              }
+            ]
+          },
+          "details": [
+            {
+              "key": "INPUT.P_TARGET_OWNER",
+              "value": "IN VARCHAR2",
+              "comment": "Target table owner",
+              "defaultValue": ":INIT$TargetOwner",
+              "order": 1
+            },
+            {
+              "key": "INPUT.P_TARGET_TABLE",
+              "value": "IN VARCHAR2",
+              "comment": "Target table name",
+              "defaultValue": ":INIT$TargetTable",
+              "order": 2
+            },
+            {
+              "key": "INPUT.P_TARGET_COLUMN",
+              "value": "IN VARCHAR2",
+              "comment": "Dependent variable column",
+              "defaultValue": "(auto)",
+              "order": 3
+            },
+            {
+              "key": "INPUT.P_MAX_FEATURES",
+              "value": "IN NUMBER",
+              "comment": "Maximum selected feature count",
+              "defaultValue": "10",
+              "order": 4
+            },
+            {
+              "key": "INPUT.P_SAMPLE_ROWS",
+              "value": "IN NUMBER",
+              "comment": "Maximum sampled rows",
+              "defaultValue": "100000",
+              "order": 5
+            },
+            {
+              "key": "INPUT.P_ALPHA",
+              "value": "IN NUMBER",
+              "comment": "LASSO alpha. Blank value uses cross validation.",
+              "defaultValue": "",
+              "order": 6
+            },
+            {
+              "key": "INPUT.P_MAX_AUTO_TARGETS",
+              "value": "IN NUMBER",
+              "comment": "Maximum auto target columns when P_TARGET_COLUMN is (auto)",
+              "defaultValue": "10",
+              "order": 7
+            },
+            {
+              "key": "INPUT.P_CONTINUE_ON_ERROR",
+              "value": "IN VARCHAR2",
+              "comment": "Continue remaining auto targets when one target fails",
+              "defaultValue": "Y",
+              "order": 8
+            },
+            {
+              "key": "INPUT.P_RUN_SOURCE_TYPE",
+              "value": "IN VARCHAR2",
+              "comment": "DATA_WORK or FLOW_WORK",
+              "defaultValue": ":INIT$RunSourceType",
+              "order": 9
+            },
+            {
+              "key": "INPUT.P_RUN_ID",
+              "value": "IN NUMBER",
+              "comment": "Run history ID",
+              "defaultValue": ":INIT$RunId",
+              "order": 10
+            },
+            {
+              "key": "OUTPUT.status",
+              "value": "$.status",
+              "comment": "API success status",
+              "defaultValue": "",
+              "order": 11
+            },
+            {
+              "key": "OUTPUT.resultTable",
+              "value": "$.resultTable -> INIT$_TB_LASSO_FEATURE",
+              "comment": "Result table managed by the internal Python service",
+              "defaultValue": "INIT$_TB_LASSO_FEATURE",
+              "order": 12
+            }
+          ]
+        },
+        {
+          "objectType": "INTERNAL_API",
+          "objectName": "SYMBOLIC_REGRESSION_RULE",
+          "label": "Symbolic Regression Rule",
+          "apiGroup": "Python API 기본 JSON",
+          "endpoint": "/api/mlAnalysis/symbolic-regression-rule",
+          "httpMethod": "POST",
+          "auth": { "type": "NONE", "keyName": "" },
+          "timeoutSec": 600,
+          "sortOrder": 20,
+          "useYn": "Y",
+          "description": "Run the project internal Python symbolic regression API and create expression rule rows.",
+          "output": {
+            "resultCreateYn": "T",
+            "resultOwner": ":INIT$TargetOwner",
+            "resultTableName": "INIT$_TB_SYMBOLIC_RULE",
+            "persistMode": "SERVICE_MANAGED",
+            "rules": [
+              {
+                "key": "OUTPUT.status",
+                "value": "$.status",
+                "comment": "API success status",
+                "defaultValue": ""
+              },
+              {
+                "key": "OUTPUT.resultTable",
+                "value": "$.resultTable -> INIT$_TB_SYMBOLIC_RULE",
+                "comment": "Result table managed by the internal Python service",
+                "defaultValue": "INIT$_TB_SYMBOLIC_RULE"
+              }
+            ]
+          },
+          "details": [
+            {
+              "key": "INPUT.P_TARGET_OWNER",
+              "value": "IN VARCHAR2",
+              "comment": "Target table owner",
+              "defaultValue": ":INIT$TargetOwner",
+              "order": 1
+            },
+            {
+              "key": "INPUT.P_TARGET_TABLE",
+              "value": "IN VARCHAR2",
+              "comment": "Target table name",
+              "defaultValue": ":INIT$TargetTable",
+              "order": 2
+            },
+            {
+              "key": "INPUT.P_TARGET_COLUMN",
+              "value": "IN VARCHAR2",
+              "comment": "Dependent variable column",
+              "defaultValue": "(auto)",
+              "order": 3
+            },
+            {
+              "key": "INPUT.P_MAX_FEATURES",
+              "value": "IN NUMBER",
+              "comment": "Maximum feature count",
+              "defaultValue": "10",
+              "order": 4
+            },
+            {
+              "key": "INPUT.P_SAMPLE_ROWS",
+              "value": "IN NUMBER",
+              "comment": "Maximum sampled rows",
+              "defaultValue": "50000",
+              "order": 5
+            },
+            {
+              "key": "INPUT.P_MAX_ITERATIONS",
+              "value": "IN NUMBER",
+              "comment": "Maximum symbolic search iterations",
+              "defaultValue": "10000",
+              "order": 6
+            },
+            {
+              "key": "INPUT.P_MIN_R2_SCORE",
+              "value": "IN NUMBER",
+              "comment": "Minimum LASSO R2 score used for selected symbolic regression features",
+              "defaultValue": "0.7",
+              "order": 7
+            },
+            {
+              "key": "INPUT.P_MAX_AUTO_TARGETS",
+              "value": "IN NUMBER",
+              "comment": "Maximum auto target columns when P_TARGET_COLUMN is (auto)",
+              "defaultValue": "10",
+              "order": 8
+            },
+            {
+              "key": "INPUT.P_CONTINUE_ON_ERROR",
+              "value": "IN VARCHAR2",
+              "comment": "Continue remaining auto targets when one target fails",
+              "defaultValue": "Y",
+              "order": 9
+            },
+            {
+              "key": "INPUT.P_RUN_SOURCE_TYPE",
+              "value": "IN VARCHAR2",
+              "comment": "DATA_WORK or FLOW_WORK",
+              "defaultValue": ":INIT$RunSourceType",
+              "order": 10
+            },
+            {
+              "key": "INPUT.P_RUN_ID",
+              "value": "IN NUMBER",
+              "comment": "Run history ID",
+              "defaultValue": ":INIT$RunId",
+              "order": 11
+            },
+            {
+              "key": "OUTPUT.status",
+              "value": "$.status",
+              "comment": "API success status",
+              "defaultValue": "",
+              "order": 12
+            },
+            {
+              "key": "OUTPUT.resultTable",
+              "value": "$.resultTable -> INIT$_TB_SYMBOLIC_RULE",
+              "comment": "Result table managed by the internal Python service",
+              "defaultValue": "INIT$_TB_SYMBOLIC_RULE",
+              "order": 13
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

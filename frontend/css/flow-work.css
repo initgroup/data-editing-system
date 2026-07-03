@@ -1,8 +1,18 @@
+#page-section-M04001.page-section.active {
+    display: flex !important;
+    flex-direction: column;
+    height: 100% !important;
+    min-height: 0;
+    overflow: hidden;
+}
+
+#page-section-M04001 > .flow-work-page,
 .flow-work-page {
     display: flex;
     flex-direction: column;
-    min-height: calc(100vh - 128px);
-    overflow: visible;
+    height: 100% !important;
+    min-height: 0;
+    overflow: hidden;
 }
 
 .flow-work-page .work-context-card,
@@ -14,10 +24,10 @@
 .flow-work-page .flow-history-panel.is-active,
 .flow-work-page .flow-result-sql-panel.is-active {
     display: flex;
-    flex: 0 0 auto;
+    flex: 1 1 0;
     flex-direction: column;
-    height: calc(100vh - 320px);
-    max-height: calc(100vh - 320px);
+    height: auto !important;
+    max-height: none;
     min-height: 0;
     overflow: hidden;
 }
@@ -27,7 +37,7 @@
     flex: 1 1 0;
     grid-template-columns: minmax(260px, 300px) minmax(0, 1fr);
     height: 100%;
-    margin-top: 12px;
+    margin-top: 0;
     min-height: 0;
     overflow: hidden;
 }
@@ -49,8 +59,23 @@
     flex-direction: column;
 }
 
+.flow-work-page .flow-main-panel > .table-header,
 .flow-work-page .flow-meta-card {
     flex: 0 0 auto;
+}
+
+.flow-work-page .flow-palette-card {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.flow-work-page .flow-palette-card .data-job-grid {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-y: auto;
 }
 
 .flow-work-page .flow-designer-card {
@@ -77,6 +102,11 @@
 .flow-work-page .flow-inspector-panel {
     min-height: 0;
     overflow: hidden;
+}
+
+.flow-work-page .flow-canvas-panel {
+    display: flex;
+    flex-direction: column;
 }
 
 .flow-work-page .flow-inspector-panel {
@@ -145,6 +175,7 @@
 }
 
 .flow-work-page .flow-node {
+    --flow-node-bg: #fffaf0;
     background: #fffaf0;
     border-color: #cbd5e1;
     border-style: solid;
@@ -157,6 +188,7 @@
 }
 
 .flow-work-page .flow-node.is-selected {
+    --flow-node-bg: #fffaf0;
     background: #fffaf0;
     border-color: #2563eb;
     border-style: solid;
@@ -168,7 +200,9 @@
 
 .flow-work-page .flow-history-panel.is-active,
 .flow-work-page .flow-result-sql-panel.is-active {
-    padding: 20px 24px;
+    background: transparent;
+    border: 0;
+    padding: 0;
 }
 
 .flow-work-page .flow-history-panel > .data-panel-toolbar,
@@ -219,7 +253,7 @@
 }
 
 #container-M04001.flow-work-page.is-flow-canvas-maximized .flow-designer-panel.is-active {
-    height: calc(100vh - 128px);
+    height: 100%;
     max-height: none;
     min-height: 0;
 }
@@ -244,7 +278,7 @@
 
 #container-M04001.flow-work-page.is-flow-canvas-maximized .flow-canvas-stage {
     flex: 1 1 0;
-    height: calc(100vh - 190px);
+    height: auto;
     min-height: 0;
 }
 

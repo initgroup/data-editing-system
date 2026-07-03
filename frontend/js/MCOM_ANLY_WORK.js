@@ -480,8 +480,8 @@
                 el.innerHTML = `<div class="table-empty">노드 실행 결과가 없습니다.</div>`;
                 return;
             }
-            el.innerHTML = this.nodes.map((node) => `
-                <button type="button" class="M04002-node-card ${this.getNodeTone(node)} ${this.selectedNode?.FLOW_NODE_RUN_ID === node.FLOW_NODE_RUN_ID ? "is-selected" : ""}" onclick="${PAGE_CODE}.selectNode(${Number(node.FLOW_NODE_RUN_ID)})">
+            el.innerHTML = this.nodes.map((node, index) => `
+                <button type="button" class="M04002-node-card ${this.getNodeTone(node)} ${this.getNodeLevelFlowClass(node, index)} ${this.selectedNode?.FLOW_NODE_RUN_ID === node.FLOW_NODE_RUN_ID ? "is-selected" : ""}" onclick="${PAGE_CODE}.selectNode(${Number(node.FLOW_NODE_RUN_ID)})">
                     <span>
                         <i class="fas ${this.getNodeIcon(node)}"></i>
                         <strong>${this.escapeHtml(node.NODE_NAME || node.NODE_KEY || "-")}</strong>
@@ -492,6 +492,14 @@
                     <b class="${this.getStatusClass(node.STATUS)}">${this.escapeHtml(node.STATUS || "-")}</b>
                 </button>
             `).join("");
+        },
+
+        getNodeLevelFlowClass(node, index) {
+            if (index <= 0) return "";
+            const prev = this.nodes[index - 1] || {};
+            const currentLevel = String(node?.RUN_LEVEL ?? "");
+            const previousLevel = String(prev?.RUN_LEVEL ?? "");
+            return currentLevel && previousLevel && currentLevel !== previousLevel ? "has-level-flow-marker" : "";
         },
 
         getNodeResultLayout(node = this.selectedNode, json = null) {
@@ -3207,6 +3215,5 @@
         return window.MCOMMON.createAnlyWorkPage({ ...defaults, ...config, pageCode });
     };
 })();
-
 
 

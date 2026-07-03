@@ -6,7 +6,7 @@ import logging
 from fastapi.middleware.cors import CORSMiddleware
 from backend.database import close_db_pool
 from backend.target_database import close_all_target_db_pools
-from backend.routers import common_router, googleGenai, home, M01001, M01002, M02001, M02002, M03001, M03002, M03003, M03004, M04001, M90001, M90002, M91001, M91002, M91003, M99001, M99002, M99003, M99004, metadata, population_api
+from backend.routers import common_router, googleGenai, home, M01001, M01002, M02001, M02002, M03001, M03002, M03003, M03004, M04001, M90001, M90002, M91001, M91002, M91003, M99001, M99002, M99003, M99004, metadata, ml_analysis, population_api
 from backend.services.anly_work_router import create_anly_work_router
 
 # 로깅 설정
@@ -58,6 +58,7 @@ routers = [
     (M99003.router, "M99003"),
     (M99004.router, "M99004"),
     (metadata.router, "metadata"),
+    (ml_analysis.router, "mlAnalysis"),
     (population_api.router, "populationApi"),
     (googleGenai.router, "googleGenai"),
 ]

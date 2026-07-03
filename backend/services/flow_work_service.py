@@ -8,13 +8,14 @@ multiple flow screens.
 
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 import json
 import re
 import time
 
 from backend.database_helper import execute_query, SqlLoader
 from backend.services import data_work_service as data_work
+from backend.services import api_call_service
 
 
 class FlowWorkDmlError(Exception):
@@ -91,7 +92,9 @@ class FlowRunRequest(FlowWorkRequest):
 
 class FlowNodeRunRequest(FlowWorkRequest):
     nodeKey: str
+    downstream: Optional[bool] = False
     manualRunId: Optional[int] = None
+    continueRunId: Optional[int] = None
 
 
 def list_flows(conn, menu_code: str, project_id: int, scenario_id: int) -> Dict[str, Any]:
@@ -315,6 +318,16 @@ def list_node_runs(conn, flow_run_id: int) -> Dict[str, Any]:
     return response
 
 
+def list_runs_by_flow(conn, flow_id: int) -> List[Dict[str, Any]]:
+    result = execute_query(conn, "FLOW_WORK_RUN_LIST_BY_FLOW", {"flowId": flow_id})
+    response = data_work.require_success(result, "Flow run query failed.")
+    rows = response.get("data", [])
+    for row in rows:
+        row["MESSAGE"] = data_work.read_lob(row.get("MESSAGE"))
+        row["PLAN_JSON"] = data_work.read_lob(row.get("PLAN_JSON"))
+    return rows
+
+
 def parse_manual_run_id(value: Any) -> Optional[int]:
     text = str(value if value is not None else "").strip()
     if not text or text.lower() in {"(auto)", "auto"}:
@@ -392,16 +405,51 @@ def create_run(
         cursor.close()
 
 
-def create_node_run_records(conn, flow_run_id: int, flow_id: int, plan: List[Dict[str, Any]]):
+def resume_run(
+    conn,
+    flow_id: int,
+    flow_run_id: int,
+    run_type: str,
+    status: str,
+    message: str,
+    plan: Dict[str, Any]
+):
+    cursor = conn.cursor()
+    try:
+        execute_flow_dml(cursor, "FLOW_WORK_RUN_EXISTS_FOR_FLOW", "FLOW_WORK_RUN_EXISTS_FOR_FLOW", {
+            "flowId": flow_id,
+            "flowRunId": flow_run_id
+        })
+        row = cursor.fetchone()
+        if not row or int(row[0] or 0) <= 0:
+            raise HTTPException(status_code=400, detail="Continue flow run id must be an existing run id for the selected flow.")
+        execute_flow_dml(cursor, "FLOW_WORK_RUN_RESUME", "FLOW_WORK_RUN_RESUME", {
+            "flowId": flow_id,
+            "flowRunId": flow_run_id,
+            "runType": normalize_status(run_type, "MANUAL_FROM_NODE"),
+            "status": normalize_status(status, "STARTED"),
+            "message": normalize_text(message, "", 4000),
+            "planJson": json.dumps(plan or {}, ensure_ascii=False)
+        })
+    finally:
+        cursor.close()
+
+
+def create_node_run_records(conn, flow_run_id: int, flow_id: int, plan: List[Dict[str, Any]], replace_existing: bool = False):
     cursor = conn.cursor()
     try:
         for index, step in enumerate(plan or [], start=1):
+            if replace_existing:
+                execute_flow_dml(cursor, f"FLOW_WORK_NODE_RUN_DELETE_BY_RUN_KEY[{step.get('nodeKey')}]", "FLOW_WORK_NODE_RUN_DELETE_BY_RUN_KEY", {
+                    "flowRunId": flow_run_id,
+                    "nodeKey": step.get("nodeKey")
+                })
             execute_flow_dml(cursor, f"FLOW_WORK_NODE_RUN_INSERT[{index}]", "FLOW_WORK_NODE_RUN_INSERT", {
                 "flowRunId": flow_run_id,
                 "flowId": flow_id,
                 "nodeKey": step.get("nodeKey"),
-            "nodeName": step.get("nodeName") or step.get("nodeKey"),
-            "nodeType": step.get("nodeType") or "JOB",
+                "nodeName": step.get("nodeName") or step.get("nodeKey"),
+                "nodeType": step.get("nodeType") or "JOB",
                 "runLevel": step.get("level", 0),
                 "sortOrder": index,
                 "status": "PENDING",
@@ -498,19 +546,174 @@ def start_run(conn, flow_run_id: int, message: str):
         cursor.close()
 
 
+TERMINAL_NODE_STATUSES = {"SUCCESS", "FAILED", "SKIPPED"}
+
+
+def is_on_complete_edge(edge: Dict[str, Any]) -> bool:
+    edge_mode = str(edge.get("edgeMode") or "").upper()
+    dashed_yn = str(edge.get("dashedYn") or "").upper()
+    return dashed_yn == "Y" or edge_mode in {"REFERENCE", "ON_COMPLETE"}
+
+
+def get_external_dependency_requirements(plan: List[Dict[str, Any]], selected_plan: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    selected_keys = {str(step.get("nodeKey") or "") for step in selected_plan or []}
+    plan_by_key = {str(step.get("nodeKey") or ""): step for step in plan or []}
+    requirements: Dict[str, Dict[str, Any]] = {}
+    for step in selected_plan or []:
+        for edge in step.get("incomingEdges") or []:
+            if not isinstance(edge, dict):
+                continue
+            source_key = str(edge.get("fromNodeKey") or "")
+            if not source_key or source_key in selected_keys:
+                continue
+            source_step = plan_by_key.get(source_key, {})
+            required_status = "TERMINAL" if is_on_complete_edge(edge) else "SUCCESS"
+            existing = requirements.get(source_key)
+            if existing and existing.get("requiredStatus") == "SUCCESS":
+                continue
+            requirements[source_key] = {
+                "nodeKey": source_key,
+                "nodeName": source_step.get("nodeName") or source_key,
+                "requiredStatus": required_status,
+                "edgeMode": edge.get("edgeMode") or ("ON_COMPLETE" if is_on_complete_edge(edge) else "SERIAL")
+            }
+    return list(requirements.values())
+
+
+def is_dependency_requirement_satisfied(requirement: Dict[str, Any], status: str) -> bool:
+    value = str(status or "").upper()
+    if requirement.get("requiredStatus") == "TERMINAL":
+        return value in TERMINAL_NODE_STATUSES
+    return value == "SUCCESS"
+
+
+def build_dependency_requirement_message(requirements: List[Dict[str, Any]], status_by_key: Dict[str, str]) -> str:
+    missing = []
+    for requirement in requirements:
+        node_key = requirement.get("nodeKey") or ""
+        status = str(status_by_key.get(node_key) or "NOT_RUN").upper()
+        if is_dependency_requirement_satisfied(requirement, status):
+            continue
+        required = "finished" if requirement.get("requiredStatus") == "TERMINAL" else "SUCCESS"
+        missing.append(f"{requirement.get('nodeName') or node_key}({node_key}) needs {required}, current={status}")
+    if not missing:
+        return ""
+    return "; ".join(missing)
+
+
+def get_node_status_map(conn, flow_run_id: int) -> Dict[str, str]:
+    rows = list_node_runs(conn, flow_run_id).get("data", [])
+    status_by_key: Dict[str, str] = {}
+    for row in rows:
+        node_key = str(row.get("NODE_KEY") or "")
+        if node_key:
+            status_by_key[node_key] = str(row.get("STATUS") or "").upper()
+    return status_by_key
+
+
+def find_latest_compatible_run_id(
+    conn,
+    flow_id: int,
+    plan: List[Dict[str, Any]],
+    selected_plan: List[Dict[str, Any]]
+) -> Optional[int]:
+    requirements = get_external_dependency_requirements(plan, selected_plan)
+    if not requirements:
+        return None
+    for row in list_runs_by_flow(conn, flow_id):
+        status = str(row.get("STATUS") or "").upper()
+        if status in {"STARTED", "RUNNING", "QUEUED", "PENDING"}:
+            continue
+        flow_run_id = int(row.get("FLOW_RUN_ID") or 0)
+        if flow_run_id <= 0:
+            continue
+        status_by_key = get_node_status_map(conn, flow_run_id)
+        if not build_dependency_requirement_message(requirements, status_by_key):
+            return flow_run_id
+    return None
+
+
+def require_compatible_continue_run(
+    conn,
+    flow_id: int,
+    flow_run_id: int,
+    plan: List[Dict[str, Any]],
+    selected_plan: List[Dict[str, Any]]
+):
+    requirements = get_external_dependency_requirements(plan, selected_plan)
+    if not requirements:
+        return
+    status_by_key = get_node_status_map(conn, flow_run_id)
+    missing = build_dependency_requirement_message(requirements, status_by_key)
+    if missing:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Run from selected node cannot start because upstream results are missing in the selected FLOW_RUN_ID. "
+                f"FLOW_RUN_ID={flow_run_id}. Missing upstream status: {missing}. "
+                "Run the upstream node(s) first in the same flow run context, or use Run now from the beginning.\n"
+                "선택 노드부터 실행하려면 같은 FLOW_RUN_ID 안에 선행 노드의 실행 결과가 있어야 합니다. "
+                f"FLOW_RUN_ID={flow_run_id}, 부족한 선행 노드 상태: {missing}. "
+                "선행 노드를 먼저 실행하거나 상단 Run now로 처음부터 실행해 주세요."
+            )
+        )
+
+
+def get_dependency_skip_message(
+    step: Dict[str, Any],
+    node_status: Dict[str, str],
+    plan_node_keys: Set[str]
+) -> str:
+    blocking: List[str] = []
+    waiting: List[str] = []
+    for edge in step.get("incomingEdges") or []:
+        if not isinstance(edge, dict):
+            continue
+        source_key = str(edge.get("fromNodeKey") or "")
+        if not source_key or source_key not in plan_node_keys:
+            continue
+        source_status = str(node_status.get(source_key) or "PENDING").upper()
+        if is_on_complete_edge(edge):
+            if source_status not in TERMINAL_NODE_STATUSES:
+                waiting.append(f"{source_key}({source_status})")
+            continue
+        if source_status != "SUCCESS":
+            blocking.append(f"{source_key}({source_status})")
+    if blocking:
+        return "Skipped because solid upstream node(s) did not finish with SUCCESS: " + ", ".join(blocking)
+    if waiting:
+        return "Skipped because upstream node(s) did not finish yet: " + ", ".join(waiting)
+    return ""
+
+
 def execute_flow_plan(conn, flow_run_id: int, plan: List[Dict[str, Any]]) -> Dict[str, Any]:
     prepare_flow_run_session(conn)
     executed = 0
     failed = 0
     skipped = 0
     enriched_plan = []
+    plan_steps = plan or []
+    plan_node_keys = {str(step.get("nodeKey") or "") for step in plan_steps}
+    node_status: Dict[str, str] = {}
     node_outputs: Dict[str, Dict[str, Any]] = {}
 
-    for step_index, step in enumerate(plan or []):
+    for step in plan_steps:
         node_key = step.get("nodeKey") or ""
         node_name = step.get("nodeName") or node_key
         step_result = {**step}
         runtime_values = create_runtime_values(step, node_outputs, flow_run_id)
+        dependency_skip_message = get_dependency_skip_message(step, node_status, plan_node_keys)
+        if dependency_skip_message:
+            output = build_node_output(step, {})
+            node_outputs[node_key] = output
+            skip_node_run_by_key(conn, flow_run_id, node_key, dependency_skip_message, runtime_values)
+            conn.commit()
+            step_result.update({"status": "SKIPPED", "message": dependency_skip_message, "output": output})
+            enriched_plan.append(step_result)
+            node_status[node_key] = "SKIPPED"
+            skipped += 1
+            continue
+
         if str(step.get("useYn") or "Y").upper() == "N":
             output = build_node_output(step, {})
             node_outputs[node_key] = output
@@ -519,6 +722,7 @@ def execute_flow_plan(conn, flow_run_id: int, plan: List[Dict[str, Any]]) -> Dic
             conn.commit()
             step_result.update({"status": "SKIPPED", "message": message, "output": output})
             enriched_plan.append(step_result)
+            node_status[node_key] = "SKIPPED"
             skipped += 1
             continue
 
@@ -531,42 +735,35 @@ def execute_flow_plan(conn, flow_run_id: int, plan: List[Dict[str, Any]]) -> Dic
             conn.commit()
             node_outputs[node_key] = node_result.get("output") or {}
             step_result.update({"status": "SUCCESS", "message": message, "output": node_outputs[node_key]})
+            node_status[node_key] = "SUCCESS"
             executed += 1
         except Exception as exc:
             message = str(exc)
             conn.rollback()
+            output = build_node_output(step, {})
+            node_outputs[node_key] = output
             step_result.update({"status": "FAILED", "message": message})
             update_node_run_by_key(conn, flow_run_id, node_key, "FAILED", message, False, True)
-            update_run(conn, flow_run_id, "FAILED", f"{node_name} failed: {message}", {"plan": enriched_plan + [step_result]})
             conn.commit()
+            node_status[node_key] = "FAILED"
             failed += 1
             enriched_plan.append(step_result)
-            break
+            continue
         enriched_plan.append(step_result)
 
     if failed:
-        remaining_steps = (plan or [])[step_index + 1:]
-        skipped += len(remaining_steps)
-        for step in remaining_steps:
-            update_node_run_by_key(
-                conn,
-                flow_run_id,
-                step.get("nodeKey") or "",
-                "SKIPPED",
-                "Skipped because an upstream node failed.",
-                False,
-                True
-            )
-        conn.commit()
-        failed_step = enriched_plan[-1] if enriched_plan else {}
+        failed_step = next((step for step in enriched_plan if step.get("status") == "FAILED"), {}) if enriched_plan else {}
         failed_name = failed_step.get("nodeName") or failed_step.get("nodeKey") or "Unknown node"
         failed_message = normalize_text(failed_step.get("message") or "", "", 1000)
+        message = (
+            f"Flow execution completed with failures. {executed} node(s) succeeded, "
+            f"{failed} failed, {skipped} skipped. First failed node: {failed_name}. {failed_message}"
+        ).strip()
+        update_run(conn, flow_run_id, "FAILED", message, {"plan": enriched_plan})
+        conn.commit()
         return {
             "status": "FAILED",
-            "message": (
-                f"Flow execution failed. {executed} node(s) succeeded, {failed} failed, {skipped} skipped. "
-                f"First failed node: {failed_name}. {failed_message}"
-            ).strip(),
+            "message": message,
             "plan": enriched_plan
         }
 
@@ -585,6 +782,13 @@ def execute_flow_node(conn, step: Dict[str, Any], runtime_values: Optional[Dict[
     ref_menu_code = step.get("refMenuCode")
     if ref_work_job_id and ref_menu_code:
         job = data_work.load_job(conn, ref_menu_code, int(ref_work_job_id))
+        if str(job.get("EXEC_SOURCE_TYPE") or "").upper() == "WEB_API":
+            values = runtime_values if runtime_values is not None else create_runtime_values(step)
+            message = api_call_service.execute_api_job(conn, job, values, values.get("INIT$RunId") or values.get("runId"))
+            return {
+                "message": message,
+                "output": build_node_output(step, job)
+            }
         executable_script = normalize_executable_script(job.get("EXEC_PLSQL") or "")
         if not executable_script:
             return {
@@ -717,7 +921,7 @@ def find_previous_node_output(step: Dict[str, Any], node_outputs: Dict[str, Dict
     preferred_edges = [
         edge for edge in incoming_edges
         if str(edge.get("dashedYn") or "").upper() != "Y"
-        and str(edge.get("edgeMode") or "SERIAL").upper() != "REFERENCE"
+        and str(edge.get("edgeMode") or "SERIAL").upper() not in {"REFERENCE", "ON_COMPLETE"}
     ] or incoming_edges
     edge = preferred_edges[0] if preferred_edges else {}
     source_key = edge.get("fromNodeKey")
@@ -1029,12 +1233,15 @@ def normalize_node(node: FlowNodeRequest, sort_order: int) -> Dict[str, Any]:
 
 def normalize_edge(edge: FlowEdgeRequest, sort_order: int) -> Dict[str, Any]:
     dashed = bool(edge.dashed) or str(edge.dashedYn or "N").upper() == "Y"
+    edge_mode = edge.edgeMode
+    if dashed and str(edge_mode or "").strip().upper() in {"", "SERIAL"}:
+        edge_mode = "ON_COMPLETE"
     return {
         "fromNodeKey": normalize_key(edge.fromNodeKey),
         "fromPort": normalize_text(edge.fromPort, "output", 100) or "output",
         "toNodeKey": normalize_key(edge.toNodeKey),
         "toPort": normalize_text(edge.toPort, "input", 100) or "input",
-        "edgeMode": normalize_mode(edge.edgeMode, "REFERENCE" if dashed else "SERIAL"),
+        "edgeMode": normalize_mode(edge_mode, "ON_COMPLETE" if dashed else "SERIAL"),
         "dashedYn": "Y" if dashed else "N",
         "params": edge.params or {},
         "sortOrder": edge.sortOrder or sort_order

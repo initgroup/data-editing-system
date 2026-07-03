@@ -15,7 +15,7 @@
             { from: "profiling-01", to: "rule-mining-01" },
             { from: "correlation-01", to: "violation-search-01" },
             { from: "rule-mining-01", to: "violation-search-01" },
-            { from: "threshold-01", to: "rule-mining-01", dashed: true }
+            { from: "threshold-01", to: "rule-mining-01", dashed: true, mode: "ON_COMPLETE" }
         ];
         const CONTEXT_STORAGE_KEY = config.contextStorageKey || "DATA_EDITING_WORK_CONTEXT";
         const SCENARIO_TABLE_API = config.scenarioTableApi || "M02002";
@@ -61,12 +61,17 @@
             flowSidebarCollapsedBeforeMaximize: null,
             appSidebarCollapsedBeforeMaximize: null,
             flowInspectorCollapsed: false,
+            flowInspectorCollapsedBeforeMaximize: null,
             flowDesignerBound: false,
             flowLayoutRestoredFromDb: false,
             isSampleFlowVisible: false,
             isFlowSaving: false,
             isFlowRunning: false,
             activeFlowRuns: new Map(),
+            activeCanvasRunId: "",
+            activeCanvasRunFlowKey: "",
+            activeCanvasRunPollTimer: null,
+            activeCanvasRunPollFailures: 0,
             flowNodePointerMoveBound: null,
             flowNodePointerUpBound: null,
             flowCanvasPointerMoveBound: null,
@@ -93,7 +98,7 @@
             },
 
             destroy() {
-                this.restoreAppSidebarAfterCanvasMaximize();
+                this.restoreSidebarsAfterCanvasMaximize();
                 this.teardownFlowDesigner();
                 this.contextProjects = [];
                 this.contextScenarios = [];
@@ -125,11 +130,16 @@
                 this.flowSidebarCollapsedBeforeMaximize = null;
                 this.appSidebarCollapsedBeforeMaximize = null;
                 this.flowInspectorCollapsed = true;
+                this.flowInspectorCollapsedBeforeMaximize = null;
                 this.flowLayoutRestoredFromDb = false;
                 this.isSampleFlowVisible = false;
                 this.isFlowSaving = false;
                 this.isFlowRunning = false;
                 this.activeFlowRuns = new Map();
+                this.stopCanvasRunStatusPolling();
+                this.activeCanvasRunId = "";
+                this.activeCanvasRunFlowKey = "";
+                this.activeCanvasRunPollFailures = 0;
                 this.flowEdges = [];
                 this.nodeSequence = 100;
                 this.isInit = false;
@@ -141,6 +151,10 @@
                     const container = document.getElementById(`container-${PAGE_CODE}`);
                     if (!container) return;
                     container.querySelectorAll(selector).forEach((element) => {
+                        if (key === "sampleFlowLabel") {
+                            this.setMultilineText(element, value);
+                            return;
+                        }
                         element.textContent = value;
                     });
                     container.querySelectorAll(`[data-title-key="${key}"]`).forEach((element) => {
@@ -149,6 +163,15 @@
                     container.querySelectorAll(`[data-placeholder-key="${key}"]`).forEach((element) => {
                         element.setAttribute("placeholder", value);
                     });
+                });
+            },
+
+            setMultilineText(element, value = "") {
+                if (!element) return;
+                element.textContent = "";
+                String(value || "").split(/\r?\n/).forEach((line, index) => {
+                    if (index > 0) element.appendChild(document.createElement("br"));
+                    element.appendChild(document.createTextNode(line));
                 });
             },
 
@@ -922,6 +945,15 @@
                 }
             },
 
+            async reloadCurrentFlowCanvas() {
+                const flowId = this.getValue(`#flowId-${PAGE_CODE}`) || getContainerEl(`#flowVersion-${PAGE_CODE}`)?.value || "";
+                if (!/^\d+$/.test(String(flowId))) {
+                    alert("Saved FLOW를 선택한 뒤 캔버스를 새로고침할 수 있습니다.");
+                    return;
+                }
+                await this.loadFlowVersion(flowId, { refreshHistory: false });
+            },
+
             createScenarioTableRow(row) {
                 const key = this.getScenarioTableKey(row);
                 const selectedClass = key === this.selectedScenarioTableKey ? "is-selected" : "";
@@ -961,6 +993,17 @@
                     this.getCurrentFlowSummary()
                 ];
                 this.setText(`#workContextSummary-${PAGE_CODE}`, parts.join(" / "));
+                this.updateFlowPanelTitles(scenario);
+            },
+
+            updateFlowPanelTitles(scenario = null) {
+                const scenarioName = scenario ? (scenario.SCENARIO_NAME || scenario.SCENARIO_CODE || "") : "";
+                const flowName = this.getValue(`#flowName-${PAGE_CODE}`).trim();
+                const flowId = this.getValue(`#flowId-${PAGE_CODE}`);
+                const saved = this.flowList.find((flow) => String(flow.FLOW_ID) === String(flowId)) || {};
+                const displayFlowName = flowName || saved.FLOW_NAME || (flowId && flowId !== "NEW" ? `Flow #${flowId}` : "Draft Flow");
+                this.setText(`#flow-assets-scenario-title-${PAGE_CODE}`, scenarioName || "");
+                this.setText(`#flow-main-flow-title-${PAGE_CODE}`, displayFlowName);
             },
 
             getCurrentFlowSummary() {
@@ -1018,6 +1061,15 @@
                 this.activeTab = tabName || "designer";
                 const container = document.getElementById(`container-${PAGE_CODE}`);
                 if (!container) return;
+                if (this.activeTab !== "designer" && container.classList.contains("is-flow-canvas-maximized")) {
+                    container.classList.remove("is-flow-canvas-maximized");
+                    this.restoreSidebarsAfterCanvasMaximize();
+                    const icon = getContainerEl(`#flowCanvasMaximize-${PAGE_CODE}`)?.querySelector("i");
+                    if (icon) {
+                        icon.classList.add("fa-expand");
+                        icon.classList.remove("fa-compress");
+                    }
+                }
                 container.querySelectorAll(".table-tab").forEach((tab) => {
                     tab.classList.toggle("is-active", tab.dataset.tab === this.activeTab);
                 });
@@ -1438,6 +1490,18 @@
             },
 
             getNodeConnectorPoint(node, connectorType) {
+                const connector = node?.querySelector(connectorType === "in" ? ".flow-connector-in" : ".flow-connector-out");
+                const viewport = this.getFlowViewport();
+                if (connector && viewport) {
+                    const connectorRect = connector.getBoundingClientRect();
+                    const viewportRect = viewport.getBoundingClientRect();
+                    const zoom = this.flowZoom || 1;
+                    const edgeX = connectorType === "in" ? connectorRect.left : connectorRect.right;
+                    return {
+                        x: (edgeX - viewportRect.left) / zoom,
+                        y: (connectorRect.top + connectorRect.height / 2 - viewportRect.top) / zoom
+                    };
+                }
                 const position = this.getNodePosition(node);
                 return {
                     x: connectorType === "in" ? position.left : position.left + position.width,
@@ -1518,7 +1582,7 @@
                             to: nodeId,
                             toPort: this.getDefaultInputPort(node.dataset.nodeType || "") || "input",
                             dashed: this.edgeDragState.dashed,
-                            mode: this.edgeDragState.dashed ? "REFERENCE" : "SERIAL",
+                            mode: this.edgeDragState.dashed ? "ON_COMPLETE" : "SERIAL",
                             params: this.buildDefaultEdgeParams(this.getFlowNode(this.edgeDragState.fromNodeId), node, this.getDefaultInputPort(node.dataset.nodeType || "") || "input", this.edgeDragState.dashed)
                         });
                         this.selectFlowNode(nodeId);
@@ -1548,7 +1612,7 @@
                 event.stopPropagation();
                 const node = port.closest(".flow-node");
                 if (!node) return;
-                this.startEdgeConnection(node.dataset.nodeId || "", port.textContent.trim(), node.querySelector(".flow-connector-out"), "drag", event.shiftKey);
+                this.startEdgeConnection(node.dataset.nodeId || "", this.getFlowPortName(port), node.querySelector(".flow-connector-out"), "drag", event.shiftKey);
                 port.classList.add("is-connecting");
                 this.updateConnectionPreview(event);
             },
@@ -1560,15 +1624,16 @@
                 const targetNode = port.closest(".flow-node");
                 if (!targetNode) return;
                 const toNodeId = targetNode.dataset.nodeId || "";
+                const toPort = this.getFlowPortName(port);
                 if (toNodeId && toNodeId !== this.edgeDragState.fromNodeId) {
                     this.addFlowEdge({
                         from: this.edgeDragState.fromNodeId,
                         fromPort: this.edgeDragState.fromPort,
                         to: toNodeId,
-                        toPort: port.textContent.trim(),
+                        toPort,
                         dashed: this.edgeDragState.dashed,
-                        mode: this.edgeDragState.dashed ? "REFERENCE" : "SERIAL",
-                        params: this.buildDefaultEdgeParams(this.getFlowNode(this.edgeDragState.fromNodeId), targetNode, port.textContent.trim(), this.edgeDragState.dashed)
+                        mode: this.edgeDragState.dashed ? "ON_COMPLETE" : "SERIAL",
+                        params: this.buildDefaultEdgeParams(this.getFlowNode(this.edgeDragState.fromNodeId), targetNode, toPort, this.edgeDragState.dashed)
                     });
                     this.selectFlowNode(toNodeId);
                 }
@@ -1616,8 +1681,14 @@
                 this.edgeDragState = null;
             },
 
+            getFlowPortName(port) {
+                return port?.dataset?.portName || port?.querySelector?.(".flow-port-name")?.textContent?.trim() || port?.textContent?.trim() || "";
+            },
+
             handleCanvasPointerDown(event) {
                 if (event.button !== 0 || event.target.closest?.(".flow-node")) return;
+                if (event.target.closest?.(".flow-edge-path, .flow-edge-hit-path, .flow-edge-delete")) return;
+                this.clearSelectedFlowEdge();
                 const stage = this.getFlowStage();
                 if (!stage) return;
                 this.canvasPanState = {
@@ -1783,7 +1854,7 @@
                 const menu = getContainerEl(`#flowCanvasMenu-${PAGE_CODE}`);
                 if (!menu) return;
                 const hasNode = Boolean(this.flowContextMenuState?.nodeId || this.selectedNodeId);
-                menu.querySelectorAll('[data-flow-menu-action="runSelectedNode"], [data-flow-menu-action="duplicateNode"], [data-flow-menu-action="deleteNode"]').forEach((button) => {
+                menu.querySelectorAll('[data-flow-menu-action="runSelectedNode"], [data-flow-menu-action="runFromSelectedNode"], [data-flow-menu-action="duplicateNode"], [data-flow-menu-action="deleteNode"]').forEach((button) => {
                     button.classList.toggle("is-disabled", !hasNode);
                     button.disabled = !hasNode;
                 });
@@ -1810,6 +1881,7 @@
             async runContextMenuAction(action) {
                 const actions = {
                     runSelectedNode: () => this.runSelectedNode(),
+                    runFromSelectedNode: () => this.runSelectedNode({ downstream: true }),
                     duplicateNode: () => this.duplicateSelectedNode(),
                     deleteNode: () => this.removeSelectedNode(),
                     toggleDashedConnection: () => this.toggleDashedConnectionMode(),
@@ -1833,7 +1905,7 @@
                 button.classList.toggle("is-active", this.dashedConnectionMode);
                 const label = button.querySelector("span");
                 if (label) {
-                    label.textContent = `Dashed connection: ${this.dashedConnectionMode ? "ON" : "OFF"}`;
+                    label.textContent = `Dashed on-complete: ${this.dashedConnectionMode ? "ON" : "OFF"}`;
                 }
             },
 
@@ -1853,8 +1925,12 @@
                 const nodeType = data.nodeType || "JOB";
                 const nodeTypeLabel = data.nodeTypeLabel || this.getNodeTypeLabel(nodeType);
                 const nodeId = `${String(nodeType).toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${this.nodeSequence++}`;
-                const inputHtml = this.renderNodePortSpans(this.getRenderInputPorts(nodeType, data), "in");
-                const outputHtml = this.renderNodePortSpans(this.getRenderOutputPorts(nodeType, data), "out");
+                const inputHtml = this.renderNodePortSpans(this.getRenderInputPorts(nodeType, data), "in", "TABLE");
+                const outputHtml = this.renderNodePortSpans(
+                    this.getRenderOutputPorts(nodeType, data),
+                    "out",
+                    this.getNodeOutputAssetKind(data)
+                );
                 const article = document.createElement("article");
                 article.id = `flowNode-${PAGE_CODE}-${nodeId}`;
                 article.className = "data-param-card flow-node flow-node-step";
@@ -1903,8 +1979,12 @@
                 const nodeTypeLabel = data.nodeTypeLabel || this.getNodeTypeLabel(nodeType);
                 const refJob = this.getRegisteredJobAsset(data.refWorkJobId || "");
                 const nodeId = data.nodeKey || `${String(nodeType).toLowerCase()}-${this.nodeSequence++}`;
-                const inputHtml = this.renderNodePortSpans(this.getRenderInputPorts(nodeType, data), "in");
-                const outputHtml = this.renderNodePortSpans(this.getRenderOutputPorts(nodeType, data, refJob), "out");
+                const inputHtml = this.renderNodePortSpans(this.getRenderInputPorts(nodeType, data), "in", "TABLE");
+                const outputHtml = this.renderNodePortSpans(
+                    this.getRenderOutputPorts(nodeType, data, refJob),
+                    "out",
+                    this.getNodeOutputAssetKind(data, refJob)
+                );
                 const article = document.createElement("article");
                 article.id = `flowNode-${PAGE_CODE}-${nodeId}`;
                 article.className = "data-param-card flow-node flow-node-step";
@@ -1955,12 +2035,55 @@
                 node.setAttribute("data-node-use-yn", disabled ? "N" : "Y");
             },
 
-            renderNodePortSpans(ports, direction) {
+            renderNodePortSpans(ports, direction, assetKind = "TABLE") {
                 const className = direction === "in" ? "flow-port-in" : "flow-port-out";
+                const normalizedKind = this.normalizeFlowAssetKind(assetKind);
+                if (direction === "out" && normalizedKind === "NONE") {
+                    return this.renderFlowPortInfo("out", "NONE", false);
+                }
                 return (ports || [])
                     .filter((port) => String(port || "").trim())
-                    .map((port) => `<span class="flow-port ${className}">${this.escapeHtml(port)}</span>`)
+                    .map((port) => {
+                        const label = this.escapeHtml(port);
+                        const directionLabel = direction === "in" ? "Input" : "Output";
+                        return this.renderFlowPortInfo(direction, normalizedKind, true, className, label, directionLabel);
+                    })
                     .join("");
+            },
+
+            renderFlowPortInfo(direction, assetKind, connectable = true, className = "", portLabel = "", directionLabel = "") {
+                const kind = this.normalizeFlowAssetKind(assetKind);
+                const directionText = direction === "in" ? "IN" : "OUT";
+                const kindText = kind === "MODEL" ? "model" : kind === "NONE" ? "none" : "table";
+                const iconClass = kind === "MODEL" ? "fas fa-brain" : kind === "NONE" ? "fas fa-minus" : "fas fa-table";
+                const title = `${directionLabel || directionText}: ${kindText}${portLabel ? ` (${portLabel})` : ""}`;
+                const classes = [
+                    connectable ? "flow-port" : "flow-port-info",
+                    className,
+                    `is-${kindText}`
+                ].filter(Boolean).join(" ");
+                const dataPortName = connectable ? ` data-port-name="${this.escapeHtml(portLabel)}"` : "";
+                return `
+                    <span class="${classes}"${dataPortName} title="${this.escapeHtml(title)}" aria-label="${this.escapeHtml(title)}">
+                        <em>${directionText}</em>
+                        <i class="${iconClass}" aria-hidden="true"></i>
+                        ${connectable ? `<span class="flow-port-name">${portLabel}</span>` : ""}
+                    </span>
+                `;
+            },
+
+            getNodeOutputAssetKind(data = {}, refJob = null) {
+                const mode = this.normalizeResultCreateMode(data.resultCreateYn || refJob?.RESULT_CREATE_YN || "N");
+                if (mode === "M") return "MODEL";
+                if (mode === "T") return "TABLE";
+                return "NONE";
+            },
+
+            normalizeFlowAssetKind(value) {
+                const kind = String(value || "").trim().toUpperCase();
+                if (kind === "M" || kind === "MODEL") return "MODEL";
+                if (kind === "N" || kind === "NONE") return "NONE";
+                return "TABLE";
             },
 
             getRenderInputPorts(nodeType, data = {}) {
@@ -1973,7 +2096,7 @@
             getRenderOutputPorts(nodeType, data = {}, refJob = null) {
                 const explicitPorts = this.normalizePortNames(data.outputs, "output");
                 const resultCreateMode = this.normalizeResultCreateMode(data.resultCreateYn || refJob?.RESULT_CREATE_YN || "N");
-                if (resultCreateMode !== "T") {
+                if (resultCreateMode === "N") {
                     return [];
                 }
                 return explicitPorts.length ? explicitPorts : [this.getDefaultOutputPort(nodeType)];
@@ -2286,7 +2409,7 @@
                 const incoming = this.flowEdges.find((edge) =>
                     edge.to === nodeId
                     && !edge.dashed
-                    && String(edge.mode || "SERIAL").toUpperCase() !== "REFERENCE"
+                    && !["REFERENCE", "ON_COMPLETE"].includes(String(edge.mode || "SERIAL").toUpperCase())
                 ) || this.flowEdges.find((edge) => edge.to === nodeId);
                 return incoming ? this.getFlowNode(incoming.from) : null;
             },
@@ -2502,15 +2625,18 @@
             collectNodePorts(node, direction) {
                 const selector = direction === "in" ? ".flow-port-in" : ".flow-port-out";
                 const nodeId = node.dataset.nodeId || "";
+                const portType = direction === "out"
+                    ? this.getNodeOutputAssetKind({ resultCreateYn: node.dataset.resultCreateYn || "N" })
+                    : "TABLE";
                 return Array.from(node.querySelectorAll(selector)).map((port) => ({
-                    port: port.textContent.trim(),
-                    type: this.inferPortType(port.textContent.trim(), node.dataset.nodeType || ""),
+                    port: this.getFlowPortName(port),
+                    type: portType,
                     ownerName: node.dataset.ownerName || "",
                     tableName: node.dataset.tableName || "",
-                    sourceNodeKey: direction === "in" ? this.findPortSource(nodeId, port.textContent.trim())?.from || "" : "",
-                    sourcePort: direction === "in" ? this.findPortSource(nodeId, port.textContent.trim())?.fromPort || "" : "",
-                    targetNodeKeys: direction === "out" ? this.findPortTargets(nodeId, port.textContent.trim()).map((edge) => edge.to) : [],
-                    targetPorts: direction === "out" ? this.findPortTargets(nodeId, port.textContent.trim()).map((edge) => edge.toPort || "input") : []
+                    sourceNodeKey: direction === "in" ? this.findPortSource(nodeId, this.getFlowPortName(port))?.from || "" : "",
+                    sourcePort: direction === "in" ? this.findPortSource(nodeId, this.getFlowPortName(port))?.fromPort || "" : "",
+                    targetNodeKeys: direction === "out" ? this.findPortTargets(nodeId, this.getFlowPortName(port)).map((edge) => edge.to) : [],
+                    targetPorts: direction === "out" ? this.findPortTargets(nodeId, this.getFlowPortName(port)).map((edge) => edge.toPort || "input") : []
                 }));
             },
 
@@ -2661,7 +2787,7 @@
                         fromPort: this.normalizeFlowPortName(edge.fromPort, "output"),
                         toNodeKey: edge.to,
                         toPort: this.normalizeFlowPortName(edge.toPort, "input"),
-                        edgeMode: edge.mode || (edge.dashed ? "REFERENCE" : "SERIAL"),
+                        edgeMode: edge.mode || (edge.dashed ? "ON_COMPLETE" : "SERIAL"),
                         dashedYn: edge.dashed ? "Y" : "N",
                         dashed: Boolean(edge.dashed),
                         params: this.getEdgeParams(edge),
@@ -2725,6 +2851,7 @@
             renderFlowCanvasFromData(nodes, edges) {
                 const viewport = this.getFlowViewport();
                 if (!viewport) return;
+                this.clearCanvasRunStatusOverlay();
                 viewport.querySelectorAll(".flow-node").forEach((node) => node.remove());
                 this.setSampleFlowState(false);
                 this.flowEdges = (edges || []).map((edge) => ({
@@ -2733,7 +2860,7 @@
                     to: edge.toNodeKey,
                     toPort: this.normalizeFlowPortName(edge.toPort, "input"),
                     dashed: Boolean(edge.dashed || edge.dashedYn === "Y"),
-                    mode: edge.edgeMode || (edge.dashed || edge.dashedYn === "Y" ? "REFERENCE" : "SERIAL"),
+                    mode: edge.edgeMode || (edge.dashed || edge.dashedYn === "Y" ? "ON_COMPLETE" : "SERIAL"),
                     params: edge.params || {}
                 }));
                 (nodes || []).forEach((node) => {
@@ -2779,8 +2906,11 @@
                     }
                     const dashedHint = this.dashedConnectionMode
                         ? "현재 점선 연결 모드가 켜져 있습니다."
-                        : "Shift를 누르고 연결하면 한 번만 점선 연결을 만들 수 있습니다.";
-                    label.textContent = `캔버스 확대 ${Math.round(this.flowZoom * 100)}%. 오른쪽 출력 커넥터를 클릭한 뒤 연결할 노드의 왼쪽 입력 커넥터를 클릭하세요. ${dashedHint}`;
+                        : "Shift를 누르고 연결하면 선행 노드 종료 후 실행되는 점선 연결을 한 번 만들 수 있습니다.";
+                    this.setMultilineText(
+                        label,
+                        `오른쪽 출력 커넥터를 클릭한 뒤 연결할 노드의 왼쪽 입력 커넥터를 클릭하세요.\n${dashedHint}`
+                    );
                 }
             },
 
@@ -2833,17 +2963,10 @@
                 if (!container) return;
                 const nextMaximized = !container.classList.contains("is-flow-canvas-maximized");
                 container.classList.toggle("is-flow-canvas-maximized", nextMaximized);
-                this.syncAppSidebarForCanvasMaximize(nextMaximized);
                 if (nextMaximized) {
-                    this.flowSidebarCollapsedBeforeMaximize = this.flowSidebarCollapsed;
-                    if (!this.flowSidebarCollapsed) {
-                        this.flowSidebarCollapsed = true;
-                        container.classList.add("is-flow-sidebar-collapsed");
-                    }
-                } else if (this.flowSidebarCollapsedBeforeMaximize !== null) {
-                    this.flowSidebarCollapsed = this.flowSidebarCollapsedBeforeMaximize;
-                    container.classList.toggle("is-flow-sidebar-collapsed", this.flowSidebarCollapsed);
-                    this.flowSidebarCollapsedBeforeMaximize = null;
+                    this.collapseSidebarsForCanvasMaximize();
+                } else {
+                    this.restoreSidebarsAfterCanvasMaximize();
                 }
                 this.renderFlowSidebarToggle();
                 const icon = getContainerEl(`#flowCanvasMaximize-${PAGE_CODE}`)?.querySelector("i");
@@ -2858,10 +2981,43 @@
                 }, 0);
             },
 
+            collapseSidebarsForCanvasMaximize() {
+                const container = document.getElementById(`container-${PAGE_CODE}`);
+                if (!container) return;
+                if (this.flowSidebarCollapsedBeforeMaximize === null) {
+                    this.flowSidebarCollapsedBeforeMaximize = this.flowSidebarCollapsed;
+                }
+                if (this.flowInspectorCollapsedBeforeMaximize === null) {
+                    this.flowInspectorCollapsedBeforeMaximize = this.flowInspectorCollapsed;
+                }
+                this.syncAppSidebarForCanvasMaximize(true);
+                this.flowSidebarCollapsed = true;
+                container.classList.add("is-flow-sidebar-collapsed");
+                this.setFlowInspectorCollapsed(true);
+            },
+
+            restoreSidebarsAfterCanvasMaximize() {
+                const container = document.getElementById(`container-${PAGE_CODE}`);
+                if (container && this.flowSidebarCollapsedBeforeMaximize !== null) {
+                    this.flowSidebarCollapsed = Boolean(this.flowSidebarCollapsedBeforeMaximize);
+                    container.classList.toggle("is-flow-sidebar-collapsed", this.flowSidebarCollapsed);
+                    this.flowSidebarCollapsedBeforeMaximize = null;
+                }
+                if (this.flowInspectorCollapsedBeforeMaximize !== null) {
+                    this.setFlowInspectorCollapsed(Boolean(this.flowInspectorCollapsedBeforeMaximize));
+                    this.flowInspectorCollapsedBeforeMaximize = null;
+                }
+                this.restoreAppSidebarAfterCanvasMaximize();
+                this.renderFlowSidebarToggle();
+                this.renderFlowInspectorToggle();
+            },
+
             syncAppSidebarForCanvasMaximize(maximized) {
                 if (!window.LayoutManager?.applySidebarCollapsed) return;
                 if (maximized) {
-                    this.appSidebarCollapsedBeforeMaximize = document.body.classList.contains("sidebar-user-collapsed");
+                    if (this.appSidebarCollapsedBeforeMaximize === null) {
+                        this.appSidebarCollapsedBeforeMaximize = document.body.classList.contains("sidebar-user-collapsed");
+                    }
                     window.LayoutManager.applySidebarCollapsed(true, { persist: false });
                     return;
                 }
@@ -2900,19 +3056,59 @@
                 icon.classList.toggle("fa-chevron-left", this.flowInspectorCollapsed);
             },
 
+            hasFlowCycle(edges = this.flowEdges) {
+                const nodeIds = new Set(this.getFlowNodes().map((node) => node.dataset.nodeId || "").filter(Boolean));
+                (edges || []).forEach((edge) => {
+                    if (edge?.from) nodeIds.add(edge.from);
+                    if (edge?.to) nodeIds.add(edge.to);
+                });
+                const outgoing = new Map(Array.from(nodeIds).map((nodeId) => [nodeId, []]));
+                (edges || []).forEach((edge) => {
+                    const from = edge?.from;
+                    const to = edge?.to;
+                    if (!from || !to || from === to || !outgoing.has(from) || !outgoing.has(to)) return;
+                    outgoing.get(from).push(to);
+                });
+                const visiting = new Set();
+                const visited = new Set();
+                const visit = (nodeId) => {
+                    if (visiting.has(nodeId)) return true;
+                    if (visited.has(nodeId)) return false;
+                    visiting.add(nodeId);
+                    for (const next of outgoing.get(nodeId) || []) {
+                        if (visit(next)) return true;
+                    }
+                    visiting.delete(nodeId);
+                    visited.add(nodeId);
+                    return false;
+                };
+                return Array.from(nodeIds).some((nodeId) => visit(nodeId));
+            },
+
+            wouldCreateFlowCycle(edge) {
+                if (!edge?.from || !edge?.to || edge.from === edge.to) return true;
+                return this.hasFlowCycle([...this.flowEdges, edge]);
+            },
+
             autoLayoutFlow() {
                 const nodes = this.getFlowNodes();
                 if (!nodes.length) return;
 
                 const nodeIds = nodes.map((node) => node.dataset.nodeId || "").filter(Boolean);
+                if (this.hasFlowCycle()) {
+                    CommonMessage.warn("순환 연결이 있어 Tree layout을 적용할 수 없습니다. 순환 루프 연결을 삭제한 뒤 다시 시도해 주세요.", { copyable: false });
+                    return;
+                }
                 const nodeSet = new Set(nodeIds);
                 const outgoing = new Map(nodeIds.map((nodeId) => [nodeId, []]));
                 const incomingCount = new Map(nodeIds.map((nodeId) => [nodeId, 0]));
+                const layoutEdges = [];
 
                 this.flowEdges.forEach((edge) => {
                     if (!nodeSet.has(edge.from) || !nodeSet.has(edge.to) || edge.from === edge.to) return;
                     outgoing.get(edge.from)?.push(edge.to);
                     incomingCount.set(edge.to, (incomingCount.get(edge.to) || 0) + 1);
+                    layoutEdges.push({ from: edge.from, to: edge.to });
                 });
 
                 const queue = nodeIds
@@ -2940,6 +3136,39 @@
                     if (!levels.has(nodeId)) levels.set(nodeId, fallbackLevel);
                 });
 
+                const canReach = (source, target) => {
+                    if (source === target) return true;
+                    const stack = [...(outgoing.get(source) || [])];
+                    const seen = new Set();
+                    while (stack.length) {
+                        const current = stack.pop();
+                        if (current === target) return true;
+                        if (seen.has(current)) continue;
+                        seen.add(current);
+                        stack.push(...(outgoing.get(current) || []));
+                    }
+                    return false;
+                };
+                const laneByNode = new Map(nodeIds.map((nodeId) => [nodeId, 0]));
+                layoutEdges
+                    .filter((edge) => (levels.get(edge.to) || 0) - (levels.get(edge.from) || 0) > 1)
+                    .sort((a, b) => {
+                        const aSpan = (levels.get(a.to) || 0) - (levels.get(a.from) || 0);
+                        const bSpan = (levels.get(b.to) || 0) - (levels.get(b.from) || 0);
+                        return bSpan - aSpan || a.from.localeCompare(b.from) || a.to.localeCompare(b.to);
+                    })
+                    .forEach((edge, edgeIndex) => {
+                        const fromLevel = levels.get(edge.from) || 0;
+                        const toLevel = levels.get(edge.to) || 0;
+                        const lane = edgeIndex % 2 === 0 ? -1 : 1;
+                        nodeIds.forEach((candidate) => {
+                            const level = levels.get(candidate) || 0;
+                            if (candidate === edge.from || candidate === edge.to || level <= fromLevel || level >= toLevel) return;
+                            if (!canReach(edge.from, candidate) || !canReach(candidate, edge.to)) return;
+                            if ((laneByNode.get(candidate) || 0) === 0) laneByNode.set(candidate, lane);
+                        });
+                    });
+
                 const levelGroups = new Map();
                 nodeIds.forEach((nodeId) => {
                     const level = levels.get(nodeId) || 0;
@@ -2951,16 +3180,36 @@
                 const rowHeight = 170;
                 const startX = 80;
                 const startY = 90;
+                const rowByNode = new Map();
                 Array.from(levelGroups.keys()).sort((a, b) => a - b).forEach((level) => {
+                    const usedRows = new Set();
                     const group = levelGroups.get(level).sort((a, b) => {
+                        const laneDiff = (laneByNode.get(a) || 0) - (laneByNode.get(b) || 0);
+                        if (laneDiff) return laneDiff;
                         const aOut = (outgoing.get(a) || []).length;
                         const bOut = (outgoing.get(b) || []).length;
                         return bOut - aOut || a.localeCompare(b);
                     });
-                    group.forEach((nodeId, rowIndex) => {
+                    group.forEach((nodeId) => {
+                        const preferredLane = laneByNode.get(nodeId) || 0;
+                        let row = preferredLane;
+                        let spread = 0;
+                        while (usedRows.has(row)) {
+                            spread += 1;
+                            row = preferredLane <= 0 ? preferredLane - spread : preferredLane + spread;
+                            if (usedRows.has(row)) row = preferredLane + spread;
+                        }
+                        usedRows.add(row);
+                        rowByNode.set(nodeId, row);
+                    });
+                });
+                const minRow = Math.min(0, ...Array.from(rowByNode.values()), 0);
+                const baseY = startY + Math.abs(minRow) * rowHeight;
+                Array.from(levelGroups.keys()).sort((a, b) => a - b).forEach((level) => {
+                    levelGroups.get(level).forEach((nodeId) => {
                         const node = this.getFlowNode(nodeId);
                         if (!node) return;
-                        this.setNodePosition(node, startX + level * columnWidth, startY + rowIndex * rowHeight);
+                        this.setNodePosition(node, startX + level * columnWidth, baseY + (rowByNode.get(nodeId) || 0) * rowHeight);
                     });
                 });
 
@@ -3045,6 +3294,16 @@
                 this.updateFlowEdges();
             },
 
+            clearSelectedFlowEdge() {
+                if (!this.selectedEdgeId) {
+                    this.hideSelectedEdgeDelete();
+                    return;
+                }
+                this.selectedEdgeId = "";
+                this.hideSelectedEdgeDelete();
+                this.updateFlowEdges();
+            },
+
             updateSelectedEdgeDeleteButton() {
                 const button = getContainerEl(`#flowEdgeDelete-${PAGE_CODE}`);
                 if (!button) return;
@@ -3099,10 +3358,14 @@
                     to: edge.to,
                     toPort: this.normalizeFlowPortName(edge.toPort, "input"),
                     dashed: Boolean(edge.dashed),
-                    mode: edge.mode || (edge.dashed ? "REFERENCE" : "SERIAL"),
+                    mode: edge.mode || (edge.dashed ? "ON_COMPLETE" : "SERIAL"),
                     params: edge.params || {}
                 };
-                if (!nextEdge.from || !nextEdge.to || nextEdge.from === nextEdge.to) return;
+                if (!nextEdge.from || !nextEdge.to) return;
+                if (this.wouldCreateFlowCycle(nextEdge)) {
+                    CommonMessage.warn("순환 루프가 되는 연결은 만들 수 없습니다. Flow는 마지막 노드에서 처음 노드로 되돌아가지 않는 DAG 구조여야 합니다.", { copyable: false });
+                    return;
+                }
                 const exists = this.flowEdges.some((item) =>
                     item.from === nextEdge.from
                     && item.to === nextEdge.to
@@ -3154,7 +3417,7 @@
                                     <td>${this.escapeHtml(edge.to || "")}</td>
                                     <td>${this.escapeHtml(edge.toPort || "input")}</td>
                                     <td>${this.escapeHtml(this.getEdgeParams(edge)?.inputSource === "UPSTREAM_RESULT" ? "Upstream result table" : "-")}</td>
-                                    <td>${this.escapeHtml(edge.mode || (edge.dashed ? "REFERENCE" : "SERIAL"))}</td>
+                                    <td>${this.escapeHtml(edge.mode || (edge.dashed ? "ON_COMPLETE" : "SERIAL"))}</td>
                                 </tr>
                             `).join("")}
                         </tbody>
@@ -3974,6 +4237,17 @@
                 return this.activeFlowRuns.has(String(flowKey || "NEW"));
             },
 
+            transferFlowRunKey(fromKey, toKey) {
+                const sourceKey = String(fromKey || "NEW");
+                const targetKey = String(toKey || "NEW");
+                if (sourceKey === targetKey || !this.activeFlowRuns.has(sourceKey)) return;
+                this.activeFlowRuns.set(targetKey, this.activeFlowRuns.get(sourceKey));
+                this.activeFlowRuns.delete(sourceKey);
+                this.isFlowRunning = this.isFlowRunActive();
+                this.updateFlowActionButtons();
+                this.renderFlowVersions();
+            },
+
             setFlowRunning(isRunning, flowKey = this.getCurrentFlowRunKey(), label = "") {
                 const key = String(flowKey || "NEW");
                 if (isRunning) {
@@ -4001,6 +4275,219 @@
                 const saveButton = getContainerEl(`#saveFlowButton-${PAGE_CODE}`);
                 const saveLabel = saveButton?.querySelector("span");
                 if (saveLabel) saveLabel.textContent = this.isFlowSaving ? "Saving..." : (FLOW_UI_LABELS.saveFlow || "Save flow");
+            },
+
+            stopCanvasRunStatusPolling() {
+                if (this.activeCanvasRunPollTimer) {
+                    clearTimeout(this.activeCanvasRunPollTimer);
+                    this.activeCanvasRunPollTimer = null;
+                }
+            },
+
+            clearCanvasRunStatusOverlay() {
+                this.stopCanvasRunStatusPolling();
+                this.activeCanvasRunId = "";
+                this.activeCanvasRunFlowKey = "";
+                this.activeCanvasRunPollFailures = 0;
+                this.getFlowNodes().forEach((node) => {
+                    node.classList.remove(
+                        "is-flow-run-pending",
+                        "is-flow-run-running",
+                        "is-flow-run-success",
+                        "is-flow-run-failed",
+                        "is-flow-run-skipped"
+                    );
+                    node.querySelector(".flow-node-run-badge")?.remove();
+                });
+            },
+
+            setCanvasNodeRunStatus(nodeKey, status = "", message = "") {
+                const node = this.getFlowNode(nodeKey);
+                if (!node) return;
+                const value = String(status || "PENDING").toUpperCase();
+                node.classList.remove(
+                    "is-flow-run-pending",
+                    "is-flow-run-running",
+                    "is-flow-run-success",
+                    "is-flow-run-failed",
+                    "is-flow-run-skipped"
+                );
+                const statusClass = this.getCanvasNodeRunStatusClass(value);
+                if (statusClass) node.classList.add(statusClass);
+                let badge = node.querySelector(".flow-node-run-badge");
+                if (!badge) {
+                    badge = document.createElement("span");
+                    badge.className = "flow-node-run-badge";
+                    node.appendChild(badge);
+                }
+                badge.textContent = this.getCanvasNodeRunStatusLabel(value);
+                badge.title = message || value;
+            },
+
+            getCanvasNodeRunStatusClass(status) {
+                const value = String(status || "").toUpperCase();
+                if (value === "SUCCESS") return "is-flow-run-success";
+                if (value === "FAILED" || value === "ERROR") return "is-flow-run-failed";
+                if (value === "SKIPPED") return "is-flow-run-skipped";
+                if (value === "RUNNING" || value === "STARTED") return "is-flow-run-running";
+                if (value === "PENDING" || value === "QUEUED") return "is-flow-run-pending";
+                return "";
+            },
+
+            getCanvasNodeRunStatusLabel(status) {
+                const value = String(status || "").toUpperCase();
+                if (value === "SUCCESS") return "SUCCESS";
+                if (value === "FAILED" || value === "ERROR") return "FAILED";
+                if (value === "SKIPPED") return "SKIPPED";
+                if (value === "RUNNING" || value === "STARTED") return "RUNNING";
+                return "PENDING";
+            },
+
+            focusCanvasRunNode(nodeKey) {
+                const node = this.getFlowNode(nodeKey);
+                const stage = this.getFlowStage();
+                if (!node || !stage) return;
+                this.selectFlowNode(nodeKey);
+                const position = this.getNodePosition(node);
+                const zoom = this.flowZoom || 1;
+                stage.scrollTo({
+                    left: Math.max(0, (position.left + position.width / 2) * zoom - stage.clientWidth / 2),
+                    top: Math.max(0, (position.top + position.height / 2) * zoom - stage.clientHeight / 2),
+                    behavior: "smooth"
+                });
+            },
+
+            startCanvasRunStatusMonitor(flowRunId, plan = [], flowKey = this.getCurrentFlowRunKey()) {
+                if (!flowRunId) return;
+                this.clearCanvasRunStatusOverlay();
+                this.activeCanvasRunId = String(flowRunId);
+                this.activeCanvasRunFlowKey = String(flowKey || this.getCurrentFlowRunKey());
+                this.activeCanvasRunPollFailures = 0;
+                (plan || []).forEach((step) => {
+                    if (step?.nodeKey) this.setCanvasNodeRunStatus(step.nodeKey, "PENDING", "Waiting for execution.");
+                });
+                this.scheduleCanvasRunStatusPoll(250);
+            },
+
+            scheduleCanvasRunStatusPoll(delayMs = 1000) {
+                this.stopCanvasRunStatusPolling();
+                if (!this.activeCanvasRunId) return;
+                this.activeCanvasRunPollTimer = setTimeout(() => {
+                    this.pollCanvasRunStatus();
+                }, Math.max(150, delayMs));
+            },
+
+            async pollCanvasRunStatus() {
+                const flowRunId = this.activeCanvasRunId;
+                if (!flowRunId) return;
+                try {
+                    const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/run/${encodeURIComponent(flowRunId)}/nodes`, {
+                        method: "GET",
+                        showLoading: false
+                    });
+                    const rows = Array.isArray(json.data) ? json.data : [];
+                    this.activeCanvasRunPollFailures = 0;
+                    rows.forEach((row) => {
+                        this.setCanvasNodeRunStatus(row.NODE_KEY, row.STATUS, row.MESSAGE || "");
+                    });
+                    const runningRow = rows.find((row) => ["RUNNING", "STARTED"].includes(String(row.STATUS || "").toUpperCase()));
+                    if (runningRow?.NODE_KEY) this.focusCanvasRunNode(runningRow.NODE_KEY);
+                    const hasRows = rows.length > 0;
+                    const isDone = hasRows && rows.every((row) => this.isTerminalCanvasRunStatus(row.STATUS));
+                    if (isDone) {
+                        const failedRows = rows.filter((row) => String(row.STATUS || "").toUpperCase() === "FAILED");
+                        const failed = failedRows.length > 0;
+                        const skipped = rows.some((row) => String(row.STATUS || "").toUpperCase() === "SKIPPED");
+                        await this.finishCanvasRunStatusMonitor(
+                            failed ? "FAILED" : (skipped ? "COMPLETED_WITH_SKIPS" : "SUCCESS"),
+                            failed ? this.buildCanvasRunFailureMessage(failedRows, rows) : ""
+                        );
+                        return;
+                    }
+                    const active = this.activeFlowRuns.get(String(this.activeCanvasRunFlowKey || ""));
+                    if (active?.startedAt && Date.now() - active.startedAt > 30 * 60 * 1000) {
+                        await this.finishCanvasRunStatusMonitor("TIMEOUT");
+                        return;
+                    }
+                    this.scheduleCanvasRunStatusPoll(1000);
+                } catch (error) {
+                    this.activeCanvasRunPollFailures += 1;
+                    if (this.activeCanvasRunPollFailures >= 5) {
+                        await this.finishCanvasRunStatusMonitor("POLL_FAILED", error.message || "Run status polling failed.");
+                        return;
+                    }
+                    this.scheduleCanvasRunStatusPoll(1500);
+                }
+            },
+
+            isTerminalCanvasRunStatus(status) {
+                return ["SUCCESS", "FAILED", "SKIPPED"].includes(String(status || "").toUpperCase());
+            },
+
+            buildCanvasRunFailureMessage(failedRows = [], allRows = []) {
+                const first = failedRows[0] || {};
+                const nodeName = first.NODE_NAME || first.NODE_KEY || "Unknown node";
+                const nodeKey = first.NODE_KEY || "";
+                const rawMessage = String(first.MESSAGE || "").trim();
+                const lines = [
+                    `Flow run failed at node: ${nodeName}${nodeKey ? ` (${nodeKey})` : ""}`,
+                    `실패 노드: ${nodeName}${nodeKey ? ` (${nodeKey})` : ""}`
+                ];
+                if (rawMessage) {
+                    lines.push("", rawMessage);
+                }
+                const explanation = this.explainCanvasRunFailure(rawMessage, allRows);
+                if (explanation) {
+                    lines.push("", explanation);
+                }
+                return lines.join("\n");
+            },
+
+            explainCanvasRunFailure(message, allRows = []) {
+                const text = String(message || "");
+                if (/No Apriori input columns found/i.test(text)) {
+                    const runContextHint = /categorical_cols=0/i.test(text)
+                        ? "현재 FLOW_RUN_ID에서 M03001 예측 타입 결과 중 범주형 컬럼을 찾지 못했습니다."
+                        : "Apriori 학습 후보 컬럼을 만들 수 없습니다.";
+                    const upstreamHint = (allRows || []).some((row) => String(row.STATUS || "").toUpperCase() === "SUCCESS")
+                        ? "선행 노드 일부는 성공했지만, M03003이 요구하는 M03001 범주형 예측 결과가 현재 실행 컨텍스트에 없거나 0건입니다."
+                        : "선행 M03001/M03002 결과가 현재 실행 컨텍스트에 없습니다.";
+                    return [
+                        "원인 해석:",
+                        runContextHint,
+                        upstreamHint,
+                        "조치: 같은 FLOW_RUN_ID에서 M03001을 RULE 또는 BOTH 방식으로 먼저 실행하거나, 상단 Run now로 처음부터 실행해 주세요."
+                    ].join("\n");
+                }
+                if (/upstream results are missing|선행 노드 실행 결과/i.test(text)) {
+                    return [
+                        "원인 해석:",
+                        "선택 노드부터 실행하려면 같은 FLOW_RUN_ID에 선행 노드의 성공 결과가 먼저 있어야 합니다.",
+                        "조치: 선행 노드를 먼저 실행하거나 상단 Run now로 처음부터 실행해 주세요."
+                    ].join("\n");
+                }
+                return "";
+            },
+
+            async finishCanvasRunStatusMonitor(resultStatus = "SUCCESS", message = "") {
+                const flowKey = String(this.activeCanvasRunFlowKey || this.getCurrentFlowRunKey());
+                this.stopCanvasRunStatusPolling();
+                this.activeCanvasRunId = "";
+                this.activeCanvasRunFlowKey = "";
+                this.activeCanvasRunPollFailures = 0;
+                this.setFlowRunning(false, flowKey);
+                await this.loadFlowRunHistory();
+                if (resultStatus === "SUCCESS") {
+                    CommonMessage.success("Flow run completed.", { copyable: false });
+                } else if (resultStatus === "COMPLETED_WITH_SKIPS") {
+                    CommonMessage.warn("Flow run completed with skipped node(s).", { copyable: false });
+                } else if (resultStatus === "FAILED") {
+                    CommonMessage.error(message || "Flow run finished with failed node(s).", { copyable: true });
+                } else if (resultStatus === "TIMEOUT") {
+                    CommonMessage.warn("Flow run is still not finished. Check Run History.", { copyable: false });
+                } else if (message) {
+                    CommonMessage.warn(message, { copyable: false });
+                }
             },
 
             async deleteFlow() {
@@ -4082,6 +4569,8 @@
                     return;
                 }
                 if (manualRunId) payload.manualRunId = Number(manualRunId);
+                let keepCanvasRunActive = false;
+                let activeFlowKey = flowKey;
                 try {
                     const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/flow/run`, {
                         method: "POST",
@@ -4093,12 +4582,21 @@
                         if (stillSelected || flowKey === "NEW") {
                             this.setValue(`#flowId-${PAGE_CODE}`, json.data.flowId);
                         }
+                        if (flowKey === "NEW") {
+                            this.transferFlowRunKey(flowKey, String(json.data.flowId));
+                        }
+                        activeFlowKey = String(json.data.flowId);
                         await this.loadFlowVersions(false);
                         const selector = getContainerEl(`#flowVersion-${PAGE_CODE}`);
                         if (selector && (stillSelected || flowKey === "NEW")) selector.value = json.data.flowId;
                     }
                     await this.loadFlowRunHistory();
-                    if (stillSelected || flowKey === "NEW") {
+                    if (!batch && json.data?.flowRunId && (stillSelected || flowKey === "NEW")) {
+                        keepCanvasRunActive = true;
+                        this.switchTab("designer");
+                        this.startCanvasRunStatusMonitor(json.data.flowRunId, json.data.plan || [], activeFlowKey);
+                        CommonMessage.success(json.message || "Flow execution started.", { copyable: false });
+                    } else if (stillSelected || flowKey === "NEW") {
                         this.switchTab("history");
                         alert(json.message || "Flow run recorded.");
                     } else {
@@ -4107,11 +4605,12 @@
                 } catch (error) {
                     alert(error.message || "Flow run failed.");
                 } finally {
-                    this.setFlowRunning(false, flowKey);
+                    if (!keepCanvasRunActive) this.setFlowRunning(false, activeFlowKey);
                 }
             },
 
-            async runSelectedNode() {
+            async runSelectedNode(options = {}) {
+                const runDownstream = Boolean(options.downstream);
                 const flowKey = this.getCurrentFlowRunKey();
                 if (this.isFlowRunActive(flowKey)) return;
                 const nodeId = this.flowContextMenuState?.nodeId || this.selectedNodeId;
@@ -4125,23 +4624,37 @@
                     return;
                 }
                 const nodeName = node.querySelector(".flow-node-body strong")?.textContent?.trim() || nodeId;
+                const actionTitle = runDownstream ? "Run from selected node" : "Run selected node";
+                const actionTitleKo = runDownstream ? "선택 노드부터 이후 실행" : "선택 노드 실행";
                 const confirmMessage = [
-                    `Run selected node: "${nodeName}"`,
-                    `선택 노드 실행: "${nodeName}"`,
+                    `${actionTitle}: "${nodeName}"`,
+                    `${actionTitleKo}: "${nodeName}"`,
                     "",
-                    "This will save the current flow, validate the DAG, and create a node run history record.",
-                    "현재 플로우를 저장하고 DAG를 검증한 뒤 선택 노드 실행 이력 기록을 생성합니다.",
+                    runDownstream
+                        ? "This will save the current flow, validate the DAG, and run the selected node plus downstream nodes."
+                        : "This will save the current flow, validate the DAG, and run only the selected node.",
+                    runDownstream
+                        ? "현재 플로우를 저장하고 DAG를 검증한 뒤 선택 노드와 이후 연결 노드를 실행합니다."
+                        : "현재 플로우를 저장하고 DAG를 검증한 뒤 선택 노드만 실행합니다.",
+                    ...(runDownstream ? [
+                        "",
+                        "If the selected node has upstream dependencies, the run will continue from a previous FLOW_RUN_ID with successful upstream node results.",
+                        "선택 노드에 선행 노드가 있으면, 선행 노드가 성공한 기존 FLOW_RUN_ID를 이어서 실행합니다.",
+                        "If no compatible run exists, execution stops before running the node.",
+                        "이어 쓸 실행 컨텍스트가 없으면 노드를 실행하기 전에 중단합니다."
+                    ] : []),
                     "",
                     "Continue?"
                 ].join("\n");
-                this.setFlowRunning(true, flowKey, `Node running: ${nodeName}`);
+                this.setFlowRunning(true, flowKey, runDownstream ? `Running from node: ${nodeName}` : `Node running: ${nodeName}`);
                 if (!(await CommonMessage.confirm(confirmMessage))) {
                     this.setFlowRunning(false, flowKey);
                     return;
                 }
                 const payload = {
                     ...this.buildFlowPayload(),
-                    nodeKey: nodeId
+                    nodeKey: nodeId,
+                    downstream: runDownstream
                 };
                 const manualRunId = await this.confirmManualFlowRunIdOverwrite(payload, nodeId);
                 if (manualRunId === null) {
@@ -4149,6 +4662,8 @@
                     return;
                 }
                 if (manualRunId) payload.manualRunId = Number(manualRunId);
+                let keepCanvasRunActive = false;
+                let activeFlowKey = flowKey;
                 try {
                     const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/flow/run-node`, {
                         method: "POST",
@@ -4160,21 +4675,27 @@
                         if (stillSelected || flowKey === "NEW") {
                             this.setValue(`#flowId-${PAGE_CODE}`, json.data.flowId);
                         }
+                        if (flowKey === "NEW") {
+                            this.transferFlowRunKey(flowKey, String(json.data.flowId));
+                        }
+                        activeFlowKey = String(json.data.flowId);
                         await this.loadFlowVersions(false);
                         const selector = getContainerEl(`#flowVersion-${PAGE_CODE}`);
                         if (selector && (stillSelected || flowKey === "NEW")) selector.value = json.data.flowId;
                     }
                     await this.loadFlowRunHistory();
-                    if (stillSelected || flowKey === "NEW") {
-                        this.switchTab("history");
-                        alert(json.message || "Selected node run recorded.");
+                    if (json.data?.flowRunId && (stillSelected || flowKey === "NEW")) {
+                        keepCanvasRunActive = true;
+                        this.switchTab("designer");
+                        this.startCanvasRunStatusMonitor(json.data.flowRunId, json.data.plan || [], activeFlowKey);
+                        CommonMessage.success(json.message || `${actionTitle} started.`, { copyable: false });
                     } else {
-                        CommonMessage.success(json.message || "Selected node run recorded.", { copyable: false });
+                        CommonMessage.success(json.message || `${actionTitle} started.`, { copyable: false });
                     }
                 } catch (error) {
-                    alert(error.message || "Selected node run failed.");
+                    CommonMessage.error(error.message || `${actionTitle} failed.`, { copyable: true });
                 } finally {
-                    this.setFlowRunning(false, flowKey);
+                    if (!keepCanvasRunActive) this.setFlowRunning(false, activeFlowKey);
                 }
             }
         };

@@ -72,7 +72,8 @@
             <aside class="data-job-panel flow-sidebar">
                 <header class="table-object-header">
                     <div class="data-job-title-block">
-                        <h2 class="table-section-title" data-label-key="flowAssetsTitle">Flow Assets</h2>
+                        <span class="panel-surface-title" data-label-key="flowAssetsTitle">Flow Assets</span>
+                        <h2 class="table-section-title" id="flow-assets-scenario-title-__PAGE_CODE__"></h2>
                     </div>
                     <div class="data-job-subtitle-block">
                         <p class="table-section-desc" data-label-key="flowAssetsDescription">Drag a step, registered job, input, or output onto the canvas.</p>
@@ -114,7 +115,8 @@
             <section class="data-main-panel flow-main-panel">
                 <header class="table-header">
                     <div>
-                        <h1 class="table-title" id="flow-title-__PAGE_CODE__" data-label-key="flowTitle">Data Editing Flow</h1>
+                        <h1 class="panel-surface-title" id="flow-title-__PAGE_CODE__" data-label-key="flowTitle">Data Editing Flow</h1>
+                        <h2 class="table-title flow-main-flow-title" id="flow-main-flow-title-__PAGE_CODE__"></h2>
                         <p class="table-desc" id="flowDescription-__PAGE_CODE__" data-label-key="flowDescription">Design a reusable graph that connects data editing jobs, tables, values, and arrays.</p>
                     </div>
                     <div class="table-export-actions">
@@ -174,8 +176,11 @@
                         <strong data-label-key="flowCanvas">Flow Canvas</strong>
                         <span id="flowZoomLabel-__PAGE_CODE__" class="flow-zoom-label">100%</span>
                         <span>&nbsp;</span>
-                        <span id="selectedFlowLabel-__PAGE_CODE__" class="data-selected-object" data-label-key="sampleFlowLabel">오른쪽 출력 커넥터를 클릭한 뒤 연결할 노드의 왼쪽 입력 커넥터를 클릭하세요. Shift를 누르고 연결하면 참조/값 전달용 점선 연결을 만들 수 있습니다.</span>
+                        <span id="selectedFlowLabel-__PAGE_CODE__" class="data-selected-object" data-label-key="sampleFlowLabel">오른쪽 출력 커넥터를 클릭한 뒤 연결할 노드의 왼쪽 입력 커넥터를 클릭하세요.<br>Shift를 누르고 연결하면 선행 노드 종료 후 실행되는 점선 연결을 만들 수 있습니다.</span>
                         <span class="flow-canvas-actions">
+                            <button type="button" class="table-icon-btn" title="Reload saved canvas" data-title-key="reloadCanvasTitle" onclick="__PAGE_CODE__.reloadCurrentFlowCanvas()">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
                             <button type="button" class="table-icon-btn" title="Show sample nodes" data-title-key="showSampleNodesTitle" onclick="__PAGE_CODE__.showSampleFlowCanvas()">
                                 <i class="fas fa-diagram-project"></i>
                             </button>
@@ -210,14 +215,14 @@
                         <section class="data-param-panel flow-canvas-panel" aria-label="Flow designer canvas">
                             <header class="data-param-panel-header">
                                 <strong data-label-key="graph">Graph</strong>
-                                <span class="env-detail-hint" data-label-key="graphHint">실선은 실행 순서를 정의하고, 점선은 실행 단계를 만들지 않는 참조/값 입력 연결입니다.</span>
+                                <span class="env-detail-hint" data-label-key="graphHint">실선은 선행 노드가 SUCCESS일 때 후행 노드를 실행하고, 점선은 선행 노드가 종료되면 성공 여부와 관계없이 후행 노드를 실행합니다.</span>
                             </header>
 
                             <div id="flowCanvas-__PAGE_CODE__" class="flow-canvas-stage" tabindex="0">
                                 <div id="flowCanvasViewport-__PAGE_CODE__" class="flow-canvas-viewport">
                                     <svg class="flow-edge-layer" width="1200" height="760" viewBox="0 0 1200 760" aria-hidden="true">
                                         <defs>
-                                            <marker id="flow-arrow-__PAGE_CODE__" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                                            <marker id="flow-arrow-__PAGE_CODE__" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
                                                 <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"></path>
                                             </marker>
                                         </defs>
@@ -225,6 +230,7 @@
                                 </div>
                                 <div id="flowCanvasMenu-__PAGE_CODE__" class="flow-context-menu" hidden>
                                     <button type="button" data-flow-menu-action="runSelectedNode"><i class="fas fa-play"></i><span>Run selected node</span></button>
+                                    <button type="button" data-flow-menu-action="runFromSelectedNode"><i class="fas fa-forward-step"></i><span>Run from selected node</span></button>
                                     <hr>
                                     <button type="button" data-flow-menu-action="duplicateNode"><i class="far fa-copy"></i><span>Duplicate node</span></button>
                                     <button type="button" data-flow-menu-action="deleteNode"><i class="far fa-trash-alt"></i><span>Delete node</span></button>
@@ -403,7 +409,9 @@ END;</textarea>
                     <li><strong>TABLE</strong>: Usually an owner/table name, temporary table, or result table produced by a prior node.</li>
                     <li><strong>VALUE</strong>: A scalar runtime value such as threshold, owner, date, or option code.</li>
                     <li><strong>ARRAY</strong>: A list such as selected columns, discovered rules, or validation messages.</li>
-                    <li><strong>JOIN</strong>: A node can wait until multiple upstream outputs are ready before it runs.</li>
+                    <li><strong>SOLID EDGE</strong>: Runs the downstream node only when the connected upstream node finishes with SUCCESS.</li>
+                    <li><strong>DASHED EDGE</strong>: Runs the downstream node after the connected upstream node finishes, regardless of SUCCESS or FAILED status.</li>
+                    <li><strong>JOIN</strong>: A node can wait for multiple upstream edges; each solid edge must be SUCCESS, while dashed edges only need to be finished.</li>
                 </ul>
             </div>
             <footer>
