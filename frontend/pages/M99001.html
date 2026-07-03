@@ -189,6 +189,14 @@
                             <i class="fas fa-sync-alt"></i>
                         </button>
                         <span id="modelDeployStatusSummary-M99001" class="env-detail-hint m99001-status-summary"></span>
+                        <select id="modelObjectGroup-M99001" class="env-field m99001-status-action" data-requires-connection disabled title="PL/SQL object deploy group">
+                            <option value="ALL">All groups</option>
+                            <option value="CORE">Core packages</option>
+                            <option value="RULE_SUMMARY">Rule summary package</option>
+                            <option value="RULE_MODELS">Rule models and violation detection</option>
+                            <option value="CORRELATION">Correlation analysis</option>
+                            <option value="PREDICTED_TYPE">Predicted type analysis</option>
+                        </select>
                         <button type="button" class="env-btn env-save m99001-status-action" data-requires-connection disabled onclick="M99001.deployModelObjects()">Deploy PL/SQL Objects</button>
                     </div>
                     <div id="modelDeployStatus-M99001" class="table-result-grid"></div>

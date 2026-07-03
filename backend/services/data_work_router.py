@@ -369,7 +369,8 @@ def create_data_work_router(
                 "INIT$_TB_LASSO_FEATURE": ("OWNER", "TABLE_NAME"),
                 "INIT$_TB_SYMBOLIC_RULE": ("OWNER", "TABLE_NAME"),
                 "INIT$_TB_ASSOC_RULE_SUMMARY": ("TARGET_OWNER", "TARGET_TABLE"),
-                "INIT$_TB_RULE_VIOLATION_RESULT": ("TARGET_OWNER", "TARGET_TABLE")
+                "INIT$_TB_RULE_VIOLATION_RESULT": ("TARGET_OWNER", "TARGET_TABLE"),
+                "INIT$_TB_SYMBOLIC_RULE_VIOLATION": ("TARGET_OWNER", "TARGET_TABLE")
             }
             if result_table not in filter_columns:
                 raise HTTPException(status_code=400, detail="Unsupported result table for run id lookup.")

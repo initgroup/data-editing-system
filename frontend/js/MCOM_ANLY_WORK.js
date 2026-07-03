@@ -47,12 +47,40 @@
             summaryKey: "correlationSummary",
             summaryRenderer: "renderCorrelationSummary"
         }),
+        "INIT$_TB_NUM_CORR_PAIR": Object.freeze({
+            kind: "TABLE",
+            key: "TABLE:INIT$_TB_NUM_CORR_PAIR",
+            title: "Result Table",
+            summaryKey: "correlationSummary",
+            summaryRenderer: "renderCorrelationSummary"
+        }),
+        "INIT$_TB_LASSO_FEATURE": Object.freeze({
+            kind: "TABLE",
+            key: "TABLE:INIT$_TB_LASSO_FEATURE",
+            title: "Result Table",
+            summaryKey: "lassoSummary",
+            summaryRenderer: "renderLassoSummary"
+        }),
+        "INIT$_TB_SYMBOLIC_RULE": Object.freeze({
+            kind: "TABLE",
+            key: "TABLE:INIT$_TB_SYMBOLIC_RULE",
+            title: "Result Table",
+            summaryKey: "symbolicRuleSummary",
+            summaryRenderer: "renderSymbolicRuleSummary"
+        }),
         "INIT$_TB_RULE_VIOLATION_RESULT": Object.freeze({
             kind: "TABLE",
             key: "TABLE:INIT$_TB_RULE_VIOLATION_RESULT",
             title: "Result Table",
             summaryKey: "violationSummary",
             summaryRenderer: "renderViolationSummary"
+        }),
+        "INIT$_TB_SYMBOLIC_RULE_VIOLATION": Object.freeze({
+            kind: "TABLE",
+            key: "TABLE:INIT$_TB_SYMBOLIC_RULE_VIOLATION",
+            title: "Result Table",
+            summaryKey: "symbolicViolationSummary",
+            summaryRenderer: "renderSymbolicViolationSummary"
         })
     });
     const MODEL_RESULT_LAYOUTS = Object.freeze({
@@ -95,6 +123,8 @@
         violationSql: { sql: "", page: 1, pageSize: 50, freezeColumns: 2, total: 0, columns: [], rows: [], title: "", columnWidths: {} },
         currentModelDetail: null,
         lastViolationSummary: null,
+        lastSymbolicRuleSummary: null,
+        symbolicRuleChart: null,
         pendingRunId: "",
         currentExport: { filename: "integrated-result.csv", columns: [], rows: [] },
         nodeResultCache: new Map(),
@@ -131,11 +161,13 @@
             this.selectedNode = null;
             this.currentModelDetail = null;
             this.lastViolationSummary = null;
+            this.lastSymbolicRuleSummary = null;
             this.readableRuleConditionFilter = "ALL";
             this.readableRuleConfidenceFilter = "ALL";
             this.predictedTypeFilter = "ALL";
             this.violationRuleFilters = { ruleId: "", conditionCount: "ALL", confidenceScope: "NON_PERFECT", resultScope: "HIT", page: 1, pageSize: 20 };
             this.closeViolationSqlPopup();
+            this.closeSymbolicRulePopup();
             this.pendingRunId = "";
             this.currentExport = { filename: "integrated-result.csv", columns: [], rows: [] };
             this.nodeResultCache = new Map();
@@ -174,6 +206,7 @@
                 violationSql: this.cloneCacheValue(this.violationSql),
                 currentModelDetail: this.cloneCacheValue(this.currentModelDetail),
                 lastViolationSummary: this.cloneCacheValue(this.lastViolationSummary),
+                lastSymbolicRuleSummary: this.cloneCacheValue(this.lastSymbolicRuleSummary),
                 currentExport: this.cloneCacheValue(this.currentExport)
             });
         },
@@ -212,6 +245,7 @@
             this.violationSql = this.cloneCacheValue(cached.violationSql) || { sql: "", page: 1, pageSize: 50, total: 0, columns: [], rows: [], title: "" };
             this.currentModelDetail = this.cloneCacheValue(cached.currentModelDetail);
             this.lastViolationSummary = this.cloneCacheValue(cached.lastViolationSummary);
+            this.lastSymbolicRuleSummary = this.cloneCacheValue(cached.lastSymbolicRuleSummary);
             this.currentExport = this.cloneCacheValue(cached.currentExport) || { filename: "integrated-result.csv", columns: [], rows: [] };
             panel.classList.remove("is-loading");
             panel.innerHTML = cached.html || `<div class="table-empty">노드를 선택하면 결과 상세가 표시됩니다.</div>`;
@@ -246,9 +280,10 @@
                 this.runTotal = 0;
                 this.selectedRun = null;
                 this.selectedNode = null;
-                this.currentModelDetail = null;
-                this.lastViolationSummary = null;
-                this.nodeResultCache = new Map();
+            this.currentModelDetail = null;
+            this.lastViolationSummary = null;
+            this.lastSymbolicRuleSummary = null;
+            this.nodeResultCache = new Map();
                 this.renderRuns();
                 this.renderRunSummary();
                 const nodeList = getContainerEl("#nodeList-${PAGE_CODE}");
@@ -553,6 +588,8 @@
                 this.violationRuleFilters = { ruleId: "", conditionCount: "ALL", confidenceScope: "NON_PERFECT", resultScope: "HIT", page: 1, pageSize: 20 };
             }
             this.lastViolationSummary = null;
+            this.lastSymbolicRuleSummary = null;
+            this.closeSymbolicRulePopup();
             const resultLayout = this.getNodeResultLayout(this.selectedNode);
             if (resultLayout.kind === "NONE") {
                 panel.innerHTML = `<div class="table-empty">이 노드는 저장된 결과 테이블/모델이 없습니다.</div>`;
@@ -584,7 +621,10 @@
         },
 
         findViolationNode() {
-            return (this.nodes || []).find((node) => this.isViolationNode(node)) || null;
+            return (this.nodes || []).find((node) => (
+                this.matchesNodeWork(node, "M03004", "INIT$_SP_RULE_VIOLATION_DETECT")
+                || String(node?.RESULT_OBJECT_NAME || "").trim().toUpperCase() === "INIT$_TB_RULE_VIOLATION_RESULT"
+            )) || null;
         },
 
         async loadResultTable(page = 1) {
@@ -2331,26 +2371,514 @@
             const columns = Array.isArray(summary.associatedColumns) ? summary.associatedColumns : [];
             const visibleColumns = columns.slice(0, 80);
             const hiddenCount = Math.max(0, columns.length - visibleColumns.length);
+            const isNumeric = String(summary.correlationKind || "").toUpperCase() === "NUMERIC";
+            const topPairs = Array.isArray(summary.topPairs) ? summary.topPairs : [];
+            const metricLabel = summary.metricLabel || (isNumeric ? "|Pearson r|" : "Cramer's V");
+            const signedMetricLabel = summary.signedMetricLabel || metricLabel;
             return `
                 <section class="M04002-corr-summary">
                     <header>
                         <div>
-                            <strong>상관 분석 요약</strong>
-                            <span>Target ${this.escapeHtml(summary.targetOwner)}.${this.escapeHtml(summary.targetTable)}</span>
+                            <strong>${isNumeric ? "연속형 상관 분석 요약" : "범주형 상관 분석 요약"}</strong>
+                            <span>Target ${this.escapeHtml(summary.targetOwner)}.${this.escapeHtml(summary.targetTable)} · ${this.escapeHtml(metricLabel)} 기준</span>
                         </div>
                         <div class="M04002-corr-metrics">
                             <span><b>${this.formatNumber(summary.totalColumnCount)}</b><small>전체 컬럼</small></span>
                             <span><b>${this.formatNumber(summary.associatedColumnCount)}</b><small>연관 컬럼</small></span>
                             <span><b>${this.formatNumber(summary.associatedPairCount)}</b><small>연관 쌍</small></span>
+                            <span><b>${this.formatDecimal(summary.maxMetricValue)}</b><small>최대 지표</small></span>
                         </div>
                     </header>
-                    <p>PASS_YN=Y로 저장된 상관 컬럼은 ${this.formatNumber(summary.associatedColumnCount)}개입니다.</p>
+                    <p>PASS_YN=Y로 저장된 ${isNumeric ? "연속형 상관" : "범주형 상관"} 컬럼은 ${this.formatNumber(summary.associatedColumnCount)}개이고, 통과 쌍은 전체 ${this.formatNumber(summary.totalPairCount)}개 중 ${this.formatNumber(summary.associatedPairCount)}개입니다.</p>
                     <div class="M04002-corr-tags">
                         ${visibleColumns.map((column) => this.renderColumnChip(column, summary)).join("")}
                         ${hiddenCount ? `<em class="M04002-column-chip">+${this.formatNumber(hiddenCount)} more</em>` : ""}
                     </div>
+                    ${topPairs.length ? `
+                        <div class="M04002-corr-pair-strip">
+                            ${topPairs.map((pair) => `
+                                <span>
+                                    <b>${this.renderColumnAwareCell(pair.COL_A, summary)} ↔ ${this.renderColumnAwareCell(pair.COL_B, summary)}</b>
+                                    <small>${this.escapeHtml(signedMetricLabel)} ${this.formatDecimal(pair.METRIC_VALUE)} · ${this.escapeHtml(metricLabel)} ${this.formatDecimal(pair.SORT_METRIC_VALUE)} · p ${this.formatDecimal(pair.P_VALUE)}</small>
+                                </span>
+                            `).join("")}
+                        </div>
+                    ` : ""}
                 </section>
             `;
+        },
+
+        renderLassoSummary(summary) {
+            if (!summary) return "";
+            const overview = summary.overview || {};
+            const topTargets = Array.isArray(summary.topTargets) ? summary.topTargets : [];
+            const topFeatures = Array.isArray(summary.topFeatures) ? summary.topFeatures : [];
+            return `
+                <section class="M04002-lasso-summary">
+                    <header>
+                        <div>
+                            <strong>LASSO 주요 피처 요약</strong>
+                            <span>Target ${this.escapeHtml(summary.targetOwner)}.${this.escapeHtml(summary.targetTable)} · 계수 절대값과 R2 기준</span>
+                        </div>
+                        <div class="M04002-corr-metrics">
+                            <span><b>${this.formatNumber(overview.TARGET_COLUMN_COUNT)}</b><small>target</small></span>
+                            <span><b>${this.formatNumber(overview.SELECTED_FEATURE_COUNT)}</b><small>selected</small></span>
+                            <span><b>${this.formatDecimal(overview.MAX_R2_SCORE)}</b><small>max R2</small></span>
+                            <span><b>${this.formatDecimal(overview.MODEL_ALPHA)}</b><small>alpha</small></span>
+                        </div>
+                    </header>
+                    <div class="M04002-lasso-direction-grid">
+                        <span><b>${this.formatNumber(overview.POSITIVE_FEATURE_COUNT)}</b><small>양의 영향 계수</small></span>
+                        <span><b>${this.formatNumber(overview.NEGATIVE_FEATURE_COUNT)}</b><small>음의 영향 계수</small></span>
+                        <span><b>${this.formatNumber(overview.FEATURE_NAME_COUNT)}</b><small>고유 feature</small></span>
+                    </div>
+                    ${topTargets.length ? `
+                        <div class="M04002-type-detail">
+                            <strong>Target별 선택 결과</strong>
+                            <div class="M04002-type-case-grid">
+                                ${topTargets.map((item) => `
+                                    <span>
+                                        <b>${this.renderColumnAwareCell(item.TARGET_COLUMN, summary)}</b>
+                                        <small>${this.formatNumber(item.SELECTED_FEATURE_COUNT)} selected · R2 ${this.formatDecimal(item.R2_SCORE)}</small>
+                                        <em>max coef ${this.formatDecimal(item.MAX_ABS_COEFFICIENT)}</em>
+                                    </span>
+                                `).join("")}
+                            </div>
+                        </div>
+                    ` : ""}
+                    ${topFeatures.length ? `
+                        <div class="M04002-lasso-feature-list">
+                            ${topFeatures.map((item) => {
+                                const width = Math.max(6, Math.min(100, Number(item.ABS_COEFFICIENT || 0) * 100));
+                                const direction = Number(item.COEFFICIENT || 0) >= 0 ? "is-positive" : "is-negative";
+                                return `
+                                    <article class="${direction}">
+                                        <header>
+                                            <strong>${this.renderColumnAwareCell(item.FEATURE_NAME, summary)}</strong>
+                                            <small>${this.renderColumnAwareCell(item.TARGET_COLUMN, summary)}</small>
+                                        </header>
+                                        <em><i style="width:${width}%"></i></em>
+                                        <footer>
+                                            <span>coef ${this.formatDecimal(item.COEFFICIENT)}</span>
+                                            <span>rank ${this.formatNumber(item.RANK_NO)}</span>
+                                            <span>R2 ${this.formatDecimal(item.R2_SCORE)}</span>
+                                        </footer>
+                                    </article>
+                                `;
+                            }).join("")}
+                        </div>
+                    ` : ""}
+                </section>
+            `;
+        },
+
+        renderSymbolicRuleSummary(summary) {
+            if (!summary) return "";
+            this.lastSymbolicRuleSummary = summary;
+            const overview = summary.overview || {};
+            const methodGroups = Array.isArray(summary.methodGroups) ? summary.methodGroups : [];
+            const targetGroups = Array.isArray(summary.targetGroups) ? summary.targetGroups : [];
+            const topRules = Array.isArray(summary.topRules) ? summary.topRules : [];
+            return `
+                <section class="M04002-symbolic-summary">
+                    <header>
+                        <div>
+                            <strong>Symbolic Rule 수식 요약</strong>
+                            <span>Target ${this.escapeHtml(summary.targetOwner)}.${this.escapeHtml(summary.targetTable)} · f(x)=y 수식 규칙</span>
+                        </div>
+                        <div class="M04002-corr-metrics">
+                            <span><b>${this.formatNumber(overview.RULE_COUNT)}</b><small>rules</small></span>
+                            <span><b>${this.formatNumber(overview.SELECTED_RULE_COUNT)}</b><small>selected</small></span>
+                            <span><b>${this.formatDecimal(overview.MAX_SCORE)}</b><small>max score</small></span>
+                            <span><b>${this.formatDecimal(overview.AVG_COMPLEXITY)}</b><small>avg complexity</small></span>
+                        </div>
+                    </header>
+                    ${methodGroups.length ? `
+                        <div class="M04002-symbolic-methods">
+                            ${methodGroups.map((item) => `
+                                <span>
+                                    <b>${this.escapeHtml(item.METHOD)}</b>
+                                    <small>${this.formatNumber(item.RULE_COUNT)} rules · score ${this.formatDecimal(item.AVG_SCORE)}</small>
+                                </span>
+                            `).join("")}
+                        </div>
+                    ` : ""}
+                    ${targetGroups.length ? `
+                        <div class="M04002-corr-tags">
+                            ${targetGroups.slice(0, 30).map((item) => `
+                                <em class="M04002-column-chip" title="${this.escapeHtml(`${item.TARGET_COLUMN}: ${this.formatNumber(item.SELECTED_RULE_COUNT)} selected`)}">
+                                    <b>${this.renderColumnAwareCell(item.TARGET_COLUMN, summary)}</b>
+                                    <small>${this.formatNumber(item.SELECTED_RULE_COUNT)} rules</small>
+                                </em>
+                            `).join("")}
+                        </div>
+                    ` : ""}
+                    ${topRules.length ? `
+                        <div class="M04002-symbolic-rule-grid">
+                            ${topRules.map((rule, index) => this.renderSymbolicRuleCard(rule, index)).join("")}
+                        </div>
+                    ` : `<div class="table-empty">표시할 Symbolic Rule이 없습니다.</div>`}
+                </section>
+            `;
+        },
+
+        renderSymbolicRuleCard(rule, index = 0) {
+            const key = this.getSymbolicRuleKey(rule, index);
+            const features = Array.isArray(rule.FEATURE_LIST) ? rule.FEATURE_LIST : this.parseFeatureList(rule.FEATURE_COLUMNS);
+            return `
+                <article class="M04002-symbolic-rule-card ${String(rule.SELECTED_YN || "").toUpperCase() === "Y" ? "is-selected" : ""}">
+                    <header>
+                        <span>
+                            <strong>${this.escapeHtml(rule.RULE_ID || `Rule ${index + 1}`)}</strong>
+                            <small>${this.renderColumnAwareCell(rule.TARGET_COLUMN, this.lastSymbolicRuleSummary || {})}</small>
+                        </span>
+                        <button type="button" title="수식 그래프 보기" onclick="${PAGE_CODE}.openSymbolicRulePopup('${this.escapeJs(key)}')">
+                            <i class="fas fa-chart-line"></i>
+                        </button>
+                    </header>
+                    <code>f(${features.map((item) => this.escapeHtml(item)).join(", ") || "x"}) = ${this.escapeHtml(rule.EXPRESSION || "")}</code>
+                    <div class="M04002-corr-tags">
+                        ${features.slice(0, 10).map((column) => this.renderColumnChip(column, this.lastSymbolicRuleSummary || {})).join("")}
+                    </div>
+                    <footer>
+                        <span><small>score</small><b>${this.formatDecimal(rule.SCORE)}</b></span>
+                        <span><small>complexity</small><b>${this.formatNumber(rule.COMPLEXITY)}</b></span>
+                        <span><small>rank</small><b>${this.formatNumber(rule.RANK_NO)}</b></span>
+                        <span><small>method</small><b>${this.escapeHtml(rule.METHOD || "-")}</b></span>
+                    </footer>
+                </article>
+            `;
+        },
+
+        renderSymbolicViolationSummary(summary) {
+            if (!summary) return "";
+            const overview = summary.overview || {};
+            const topRules = Array.isArray(summary.topRules) ? summary.topRules : [];
+            const topTargets = Array.isArray(summary.topTargets) ? summary.topTargets : [];
+            return `
+                <section class="M04002-symbolic-violation-summary">
+                    <header>
+                        <div>
+                            <strong>Symbolic Rule 오차범위 위반 요약</strong>
+                            <span>Target ${this.escapeHtml(summary.targetOwner)}.${this.escapeHtml(summary.targetTable)} · 예측값 대비 허용 오차율 기준</span>
+                        </div>
+                        <div class="M04002-corr-metrics">
+                            <span><b>${this.formatNumber(overview.VIOLATION_COUNT)}</b><small>violations</small></span>
+                            <span><b>${this.formatNumber(overview.VIOLATED_ROW_COUNT)}</b><small>rows</small></span>
+                            <span><b>${this.formatNumber(overview.VIOLATED_RULE_COUNT)}</b><small>rules</small></span>
+                            <span><b>${this.formatPercentMetric(overview.TOLERANCE_PCT)}</b><small>tolerance</small></span>
+                        </div>
+                    </header>
+                    <div class="M04002-violation-reason-strip">
+                        <span><small>평균 오차율</small><b>${this.formatPercentMetric(overview.AVG_ERROR_PCT)}</b></span>
+                        <span><small>최대 오차율</small><b>${this.formatPercentMetric(overview.MAX_ERROR_PCT)}</b></span>
+                        <span><small>평균 절대오차</small><b>${this.formatDecimal(overview.AVG_ABS_ERROR)}</b></span>
+                        <span><small>최대 절대오차</small><b>${this.formatDecimal(overview.MAX_ABS_ERROR)}</b></span>
+                    </div>
+                    ${topTargets.length ? `
+                        <div class="M04002-rule-facet-panel is-symbolic">
+                            <div class="M04002-rule-facet-block">
+                                <header><strong>위반 Target Top</strong></header>
+                                <div class="M04002-rule-facet-list">
+                                    ${topTargets.map((item) => `
+                                        <button type="button">
+                                            <span>${this.renderColumnAwareCell(item.TARGET_COLUMN, summary)}</span>
+                                            <b>${this.formatNumber(item.VIOLATION_COUNT)}</b>
+                                        </button>
+                                    `).join("")}
+                                </div>
+                            </div>
+                            <div class="M04002-rule-facet-block is-condition">
+                                <header><strong>오차율 상위 규칙</strong></header>
+                                <div class="M04002-rule-facet-list">
+                                    ${topRules.map((item) => `
+                                        <button type="button">
+                                            <span>${this.escapeHtml(item.RULE_ID)}</span>
+                                            <b>${this.formatPercentMetric(item.MAX_ERROR_PCT)}</b>
+                                        </button>
+                                    `).join("")}
+                                </div>
+                            </div>
+                        </div>
+                    ` : ""}
+                </section>
+            `;
+        },
+
+        getSymbolicRuleKey(rule, index = 0) {
+            return [
+                rule?.TARGET_COLUMN || "",
+                rule?.RULE_ID || `Rule ${index + 1}`,
+                rule?.RANK_NO || index + 1
+            ].map((value) => String(value).replace(/\|/g, "/")).join("|");
+        },
+
+        findSymbolicRuleByKey(key) {
+            const rules = this.lastSymbolicRuleSummary?.topRules || [];
+            return rules.find((rule, index) => this.getSymbolicRuleKey(rule, index) === key) || null;
+        },
+
+        parseFeatureList(value) {
+            return String(value || "")
+                .split(/[,;\s]+/)
+                .map((item) => item.trim())
+                .filter(Boolean);
+        },
+
+        openSymbolicRulePopup(key) {
+            const rule = this.findSymbolicRuleByKey(String(key || ""));
+            if (!rule) {
+                alert("선택한 Symbolic Rule 정보를 찾을 수 없습니다.");
+                return;
+            }
+            this.closeSymbolicRulePopup();
+            const popup = document.createElement("div");
+            popup.id = `${PAGE_ID_PREFIX}SymbolicRulePopup`;
+            popup.className = "M04002-symbolic-popup";
+            popup.innerHTML = this.renderSymbolicRulePopup(rule);
+            document.body.appendChild(popup);
+            setTimeout(() => this.drawSymbolicRuleChart(rule), 0);
+        },
+
+        renderSymbolicRulePopup(rule) {
+            const features = Array.isArray(rule.FEATURE_LIST) ? rule.FEATURE_LIST : this.parseFeatureList(rule.FEATURE_COLUMNS);
+            const ranges = Array.isArray(rule.FEATURE_RANGES) ? rule.FEATURE_RANGES : [];
+            return `
+                <section>
+                    <header class="M04002-sql-popup-title" onmousedown="${PAGE_CODE}.startSymbolicRulePopupDrag(event)">
+                        <div>
+                            <strong>${this.escapeHtml(rule.RULE_ID || "Symbolic Rule")}</strong>
+                            <span>${this.renderColumnAwareCell(rule.TARGET_COLUMN, this.lastSymbolicRuleSummary || {})} = f(${features.map((item) => this.escapeHtml(item)).join(", ") || "x"})</span>
+                        </div>
+                        <button type="button" title="Close" onclick="${PAGE_CODE}.closeSymbolicRulePopup()"><i class="fas fa-times"></i></button>
+                    </header>
+                    <div class="M04002-symbolic-popup-body">
+                        <div class="M04002-symbolic-expression-box">
+                            <strong>Expression</strong>
+                            <code>${this.escapeHtml(rule.EXPRESSION || "")}</code>
+                            ${rule.MESSAGE ? `<span>${this.escapeHtml(rule.MESSAGE)}</span>` : ""}
+                        </div>
+                        <div class="M04002-symbolic-chart-wrap">
+                            <canvas id="${PAGE_ID_PREFIX}SymbolicRuleChart" height="260"></canvas>
+                            <div id="${PAGE_ID_PREFIX}SymbolicRuleChartMessage" class="table-empty"></div>
+                        </div>
+                        <div class="M04002-symbolic-range-grid">
+                            ${ranges.length ? ranges.map((range) => `
+                                <span>
+                                    <b>${this.renderColumnAwareCell(range.COLUMN_NAME, this.lastSymbolicRuleSummary || {})}</b>
+                                    <small>min ${this.formatDecimal(range.MIN_VALUE)} · avg ${this.formatDecimal(range.AVG_VALUE)} · max ${this.formatDecimal(range.MAX_VALUE)}</small>
+                                </span>
+                            `).join("") : `<span><b>Feature range</b><small>대상 테이블의 숫자 범위를 계산하지 못했습니다. 기본 -1~1 범위로 그래프를 시도합니다.</small></span>`}
+                        </div>
+                    </div>
+                </section>
+            `;
+        },
+
+        closeSymbolicRulePopup() {
+            if (this.symbolicRuleChart && typeof this.symbolicRuleChart.destroy === "function") {
+                this.symbolicRuleChart.destroy();
+            }
+            this.symbolicRuleChart = null;
+            const popup = document.getElementById(`${PAGE_ID_PREFIX}SymbolicRulePopup`);
+            if (popup) popup.remove();
+        },
+
+        startSymbolicRulePopupDrag(event) {
+            const popup = document.getElementById(`${PAGE_ID_PREFIX}SymbolicRulePopup`);
+            if (!popup || event.target.closest("button")) return;
+            event.preventDefault();
+            const rect = popup.getBoundingClientRect();
+            const startX = event.clientX;
+            const startY = event.clientY;
+            const startLeft = rect.left;
+            const startTop = rect.top;
+            const move = (moveEvent) => {
+                popup.style.left = `${Math.max(8, startLeft + moveEvent.clientX - startX)}px`;
+                popup.style.top = `${Math.max(8, startTop + moveEvent.clientY - startY)}px`;
+                popup.style.transform = "none";
+            };
+            const stop = () => {
+                document.removeEventListener("mousemove", move);
+                document.removeEventListener("mouseup", stop);
+            };
+            document.addEventListener("mousemove", move);
+            document.addEventListener("mouseup", stop);
+        },
+
+        drawSymbolicRuleChart(rule) {
+            const message = document.getElementById(`${PAGE_ID_PREFIX}SymbolicRuleChartMessage`);
+            const canvas = document.getElementById(`${PAGE_ID_PREFIX}SymbolicRuleChart`);
+            if (!canvas || !window.Chart) {
+                if (message) message.textContent = "Chart.js가 로드되지 않아 그래프를 표시할 수 없습니다.";
+                return;
+            }
+            const chartData = this.buildSymbolicRuleChartData(rule);
+            if (!chartData.ok) {
+                if (message) message.textContent = chartData.message || "이 수식은 현재 화면에서 그래프로 계산할 수 없습니다.";
+                canvas.hidden = true;
+                return;
+            }
+            if (message) message.textContent = chartData.message || "";
+            if (this.symbolicRuleChart && typeof this.symbolicRuleChart.destroy === "function") {
+                this.symbolicRuleChart.destroy();
+            }
+            this.symbolicRuleChart = new Chart(canvas.getContext("2d"), {
+                type: "line",
+                data: {
+                    labels: chartData.labels,
+                    datasets: chartData.datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: "index", intersect: false },
+                    plugins: {
+                        legend: { position: "bottom" },
+                        tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${this.formatDecimal(ctx.parsed.y)}` } }
+                    },
+                    scales: {
+                        x: { title: { display: true, text: chartData.xLabel } },
+                        y: { title: { display: true, text: rule.TARGET_COLUMN || "Predicted y" } }
+                    }
+                }
+            });
+        },
+
+        buildSymbolicRuleChartData(rule) {
+            const features = Array.isArray(rule.FEATURE_LIST) && rule.FEATURE_LIST.length
+                ? rule.FEATURE_LIST
+                : this.parseFeatureList(rule.FEATURE_COLUMNS);
+            const expression = String(rule.EXPRESSION || "").trim();
+            if (!features.length || !expression) {
+                return { ok: false, message: "수식 또는 입력 feature 정보가 없습니다." };
+            }
+            const compiled = this.compileSymbolicExpression(expression, features);
+            if (!compiled.ok) return compiled;
+            const rangeMap = new Map((rule.FEATURE_RANGES || []).map((range) => [String(range.COLUMN_NAME || "").toUpperCase(), range]));
+            const getRange = (feature) => {
+                const found = rangeMap.get(String(feature || "").toUpperCase()) || {};
+                let min = Number(found.MIN_VALUE);
+                let max = Number(found.MAX_VALUE);
+                let avg = Number(found.AVG_VALUE);
+                if (!Number.isFinite(min) || !Number.isFinite(max) || min === max) {
+                    min = -1;
+                    max = 1;
+                }
+                if (!Number.isFinite(avg)) avg = (min + max) / 2;
+                return { min, max, avg };
+            };
+            const primary = features[0];
+            const primaryRange = getRange(primary);
+            const second = features[1] || "";
+            const secondRange = second ? getRange(second) : null;
+            const variants = secondRange
+                ? [
+                    { label: `${second} min`, value: secondRange.min, color: "#2563eb" },
+                    { label: `${second} avg`, value: secondRange.avg, color: "#059669" },
+                    { label: `${second} max`, value: secondRange.max, color: "#dc2626" }
+                ]
+                : [{ label: "predicted", value: null, color: "#2563eb" }];
+            const points = 25;
+            const xs = Array.from({ length: points }, (_, index) => primaryRange.min + ((primaryRange.max - primaryRange.min) * index) / Math.max(1, points - 1));
+            const labels = xs.map((value) => this.formatDecimal(value));
+            const datasets = variants.map((variant) => {
+                const data = xs.map((xValue) => {
+                    const values = {};
+                    features.forEach((feature) => {
+                        if (feature === primary) values[feature] = xValue;
+                        else if (feature === second && variant.value !== null) values[feature] = variant.value;
+                        else values[feature] = getRange(feature).avg;
+                    });
+                    const yValue = compiled.evaluate(values);
+                    return Number.isFinite(yValue) ? yValue : null;
+                });
+                return {
+                    label: variant.label,
+                    data,
+                    borderColor: variant.color,
+                    backgroundColor: variant.color,
+                    tension: 0.25,
+                    pointRadius: 2,
+                    spanGaps: true
+                };
+            }).filter((dataset) => dataset.data.some((value) => value !== null));
+            if (!datasets.length) {
+                return { ok: false, message: "계산 결과가 모두 비어 있어 그래프를 만들 수 없습니다." };
+            }
+            return {
+                ok: true,
+                labels,
+                datasets,
+                xLabel: primary,
+                message: second
+                    ? `${primary} 값을 움직이고, ${second}는 min/avg/max 세 기준으로 비교합니다. 나머지 feature는 평균값으로 고정합니다.`
+                    : `${primary} 값을 움직이며 예측 y 변화를 표시합니다.`
+            };
+        },
+
+        compileSymbolicExpression(expression, features) {
+            let expr = String(expression || "").replace(/\^/g, "**").trim();
+            if (!expr || /[`"';&{}\[\]]/.test(expr)) {
+                return { ok: false, message: "수식에 그래프 계산에서 허용하지 않는 문자가 포함되어 있습니다." };
+            }
+            expr = expr.replace(/\bsquare\s*\(/gi, "square(");
+            const allowedFunctions = {
+                square: (x) => x * x,
+                sqrt: Math.sqrt,
+                log: Math.log,
+                exp: Math.exp,
+                sin: Math.sin,
+                cos: Math.cos,
+                tan: Math.tan,
+                abs: Math.abs,
+                pow: Math.pow,
+                max: Math.max,
+                min: Math.min
+            };
+            const featureSet = new Set(features.map((item) => String(item || "").trim()).filter(Boolean));
+            const lowerFeatureSet = new Set([...featureSet].map((item) => item.toLowerCase()));
+            const allowedNames = new Set([...Object.keys(allowedFunctions), "pi", "e"]);
+            const identifiers = expr.match(/\b[A-Za-z_$][A-Za-z0-9_$#]*\b/g) || [];
+            const unknown = identifiers.find((name) => !lowerFeatureSet.has(name.toLowerCase()) && !allowedNames.has(name.toLowerCase()));
+            if (unknown) {
+                return { ok: false, message: `수식의 ${unknown} 항목은 feature 목록에 없어 그래프로 계산하지 않았습니다.` };
+            }
+            const mappedFeatures = features.map((feature, index) => ({ feature, arg: `v${index}` }));
+            mappedFeatures.forEach(({ feature, arg }) => {
+                const escapedFeature = String(feature).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+                const pattern = new RegExp(`(^|[^A-Za-z0-9_$#])${escapedFeature}(?=$|[^A-Za-z0-9_$#])`, "gi");
+                expr = expr.replace(pattern, (_match, prefix) => `${prefix}${arg}`);
+            });
+            const argNames = [
+                ...mappedFeatures.map((item) => item.arg),
+                ...Object.keys(allowedFunctions),
+                "pi",
+                "e"
+            ];
+            let fn;
+            try {
+                fn = new Function(...argNames, `"use strict"; return (${expr});`);
+            } catch (error) {
+                return { ok: false, message: `수식을 그래프 함수로 변환하지 못했습니다: ${error.message}` };
+            }
+            return {
+                ok: true,
+                evaluate: (values) => {
+                    const args = [
+                        ...mappedFeatures.map(({ feature }) => Number(values[feature])),
+                        ...Object.values(allowedFunctions),
+                        Math.PI,
+                        Math.E
+                    ];
+                    try {
+                        const result = Number(fn(...args));
+                        return Number.isFinite(result) ? result : null;
+                    } catch (_error) {
+                        return null;
+                    }
+                }
+            };
         },
 
         renderPredictedTypeSummary(summary, json = {}) {
@@ -2679,7 +3207,10 @@
                 ...(this.currentModelDetail?.ruleSummary?.columnComments || {}),
                 ...(source?.columnComments || {}),
                 ...(source?.correlationSummary?.columnComments || {}),
-                ...(source?.predictedTypeSummary?.columnComments || {})
+                ...(source?.predictedTypeSummary?.columnComments || {}),
+                ...(source?.lassoSummary?.columnComments || {}),
+                ...(source?.symbolicRuleSummary?.columnComments || {}),
+                ...(source?.symbolicViolationSummary?.columnComments || {})
             };
         },
 
@@ -3155,7 +3686,10 @@
         },
 
         isViolationNode(node) {
-            return this.matchesNodeWork(node, "M03004", "INIT$_SP_RULE_VIOLATION_DETECT");
+            const resultObject = String(node?.RESULT_OBJECT_NAME || "").trim().toUpperCase();
+            return this.matchesNodeWork(node, "M03004", "INIT$_SP_RULE_VIOLATION_DETECT")
+                || this.matchesNodeWork(node, "M03004", "INIT$_SP_SYMBOLIC_RULE_VIOLATION_DETECT")
+                || resultObject === "INIT$_TB_SYMBOLIC_RULE_VIOLATION";
         },
 
         isPredictedTypeNode(node) {
@@ -3215,5 +3749,3 @@
         return window.MCOMMON.createAnlyWorkPage({ ...defaults, ...config, pageCode });
     };
 })();
-
-

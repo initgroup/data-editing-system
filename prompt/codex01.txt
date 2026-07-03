@@ -67,6 +67,10 @@ PROJECT_MEMORY.md
 
 --------------------------
 
+uvicorn main:app --reload
+
+
+--------------------------
 
 GIT 배포
 
@@ -450,6 +454,52 @@ ORDER BY waiter.seconds_in_wait DESC;
  WHERE o.owner = 'INIT$EDIT01'
  ORDER BY o.owner, o.object_name;
 
+
+
+SELECT s.sid
+     , s.serial#
+     , s.username
+     , s.status
+     , s.event
+     , s.wait_class
+     , s.seconds_in_wait
+     , s.sql_id
+     , s.module
+     , s.action
+     , s.client_info
+     , t.used_ublk
+     , t.used_urec
+     , o.object_name
+     , 'ALTER SYSTEM KILL SESSION ''' || s.sid || ',' || s.serial# || ''';' AS kill_sql
+  FROM v$session s
+  LEFT JOIN v$transaction t
+    ON t.addr = s.taddr
+  LEFT JOIN v$locked_object lo
+    ON lo.session_id = s.sid
+  LEFT JOIN dba_objects o
+    ON o.object_id = lo.object_id
+ WHERE s.username = 'INIT$EDIT01'
+ ORDER BY s.status, s.seconds_in_wait DESC;
+
+SELECT sql_id
+     , child_number
+     , elapsed_time / 1000000 AS elapsed_sec
+     , rows_processed
+     , sql_fulltext
+  FROM v$sql
+ WHERE sql_id = :sql_id; 
+
+SELECT COUNT(*) AS rule_count
+  FROM INIT$_TB_SYMBOLIC_RULE
+ WHERE RUN_SOURCE_TYPE = 'FLOW_WORK'
+   AND RUN_ID = :flow_run_id
+   AND OWNER = :target_owner
+   AND TABLE_NAME = :target_table
+   AND SELECTED_YN = 'Y'
+   AND EXPRESSION IS NOT NULL
+   AND FEATURE_COLUMNS IS NOT NULL; 
+
+   
  --------
  SELECT SYS_CONTEXT('USERENV', 'SERVICE_NAME') AS SERVICE_NAME
 FROM DUAL;

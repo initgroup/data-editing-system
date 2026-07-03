@@ -72,6 +72,14 @@ npx tailwindcss -i ./frontend/css/input.css -o ./frontend/css/output.css --watch
 - 서브쿼리는 여는 괄호 `(`를 별도 줄에 두고, 내부 `SELECT`는 괄호 위치보다 한 칸 뒤에서 시작합니다. 닫는 괄호 `)`는 여는 괄호와 같은 열에 둡니다.
 - 기존 SQL 전체를 요청 없이 대량 포맷팅하지 않습니다. 새로 작성하거나 직접 수정하는 SQL 블록에만 이 스타일을 적용합니다.
 
+## Oracle Cloud Target DB / 대용량 DML 주의
+
+- Oracle Cloud 기반 Target DB에서 대용량 `DELETE`, `UPDATE`, `MERGE`, `INSERT SELECT` 또는 분석 프로시저를 수정할 때는 병렬 실행으로 인한 대기 가능성을 기본 점검합니다.
+- 실행 중 `enq: PS - contention` 이벤트가 보이면 일반적인 행 락보다 Parallel Statement/Parallel Server 자원 경합 가능성을 먼저 의심합니다.
+- 대용량 DML을 의도적으로 병렬 처리하지 않는 프로시저는 `ALTER SESSION DISABLE PARALLEL DML`만으로 충분한지 확인하고, `INSERT SELECT`처럼 조회부가 큰 경우 `ALTER SESSION DISABLE PARALLEL QUERY`와 `NO_PARALLEL` 힌트 적용 여부도 함께 검토합니다.
+- 대용량 결과 생성 프로시저는 한 번에 너무 큰 DML을 수행하지 않도록 블록 단위 커밋 파라미터, 진행 상태 기록(`DBMS_APPLICATION_INFO` 등), 중간 건수 확인 방법을 함께 고려합니다.
+- 병렬 차단은 Oracle Cloud 기반 Target DB에서 특히 필요한 방어이며, 모든 환경에 무조건 적용하기보다 대상 DB 특성과 작업량을 보고 좁게 적용합니다.
+
 예시:
 
 ```sql

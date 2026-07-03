@@ -33,6 +33,7 @@ BEGIN
     truncate_table_if_exists('INIT$_TB_FLOW_WORK_EDGE');
     truncate_table_if_exists('INIT$_TB_FLOW_WORK_NODE');
     truncate_table_if_exists('INIT$_TB_FLOW_WORK');
+    truncate_table_if_exists('INIT$_TB_SYMBOLIC_RULE_VIOLATION');
     truncate_table_if_exists('INIT$_TB_SYMBOLIC_RULE');
     truncate_table_if_exists('INIT$_TB_LASSO_FEATURE');
     truncate_table_if_exists('INIT$_TB_NUM_CORR_SUMMARY');

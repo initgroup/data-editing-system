@@ -1452,6 +1452,10 @@
             async resolveLatestFlowNodeData(data) {
                 const jobId = String(data?.jobId || data?.refWorkJobId || "").trim();
                 if (!jobId) return data;
+                const cachedJob = this.getRegisteredJobAsset(jobId);
+                if (cachedJob) {
+                    return this.buildFlowNodeDataFromJob(cachedJob, data);
+                }
                 await this.loadRegisteredJobs();
                 const latestJob = this.getRegisteredJobAsset(jobId);
                 return latestJob ? this.buildFlowNodeDataFromJob(latestJob, data) : data;
@@ -3471,8 +3475,6 @@
                         projectId: this.selectedProjectId,
                         scenarioId: this.selectedScenarioId
                     });
-                    const flowId = this.getValue(`#flowId-${PAGE_CODE}`);
-                    if (/^\d+$/.test(flowId)) params.set("flowId", flowId);
                     const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/runs?${params.toString()}`, { method: "GET", showLoading: false });
                     this.renderFlowRunHistory(Array.isArray(json.data) ? json.data : []);
                     if (showFeedback) {

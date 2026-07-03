@@ -209,7 +209,7 @@
         {
           "key": "P_RULE_MODEL_NAME",
           "comment": "위반 탐지에 사용할 규칙 모델명",
-          "defaultValue": "OML_ASSOCIATION_MODEL_01"
+          "defaultValue": ":INIT$ResultModelName"
         },
         {
           "key": "P_TARGET_OWNER",
@@ -249,12 +249,12 @@
         {
           "key": "P_MAX_RULES",
           "comment": "적용할 최대 규칙 수",
-          "defaultValue": "500"
+          "defaultValue": "100"
         },
         {
           "key": "P_MAX_VIOLATIONS_PER_RULE",
           "comment": "규칙별 최대 위반 건수",
-          "defaultValue": "1000"
+          "defaultValue": "500"
         },
         {
           "key": "P_CLEAR_EXISTING_YN",
@@ -265,6 +265,11 @@
           "key": "P_COMMIT_YN",
           "comment": "프로시저 내부 커밋 여부",
           "defaultValue": "Y"
+        },
+        {
+          "key": "P_COMMIT_INTERVAL",
+          "comment": "대용량 결과 적재 시 중간 커밋할 DML 건수. 0이면 마지막에 한 번만 커밋",
+          "defaultValue": "5000"
         },
         {
           "key": "P_RUN_SOURCE_TYPE",
@@ -517,6 +522,103 @@
         {
           "key": "P_CONTINUE_ON_ERROR",
           "comment": "자동 target 중 일부 실패 시 나머지 계속 실행 여부",
+          "defaultValue": "Y"
+        },
+        {
+          "key": "P_RUN_SOURCE_TYPE",
+          "comment": "실행 출처 구분(DATA_WORK/FLOW_WORK)",
+          "defaultValue": ":INIT$RunSourceType"
+        },
+        {
+          "key": "P_RUN_ID",
+          "comment": "실행 이력 ID",
+          "defaultValue": ":INIT$RunId"
+        }
+      ]
+    },
+    {
+      "owner": "*",
+      "objectType": "PROCEDURE",
+      "objectName": "INIT$_SP_SYMBOLIC_RULE_VIOLATION_DETECT",
+      "label": "M05_SymbolicRule_오차범위위반탐지",
+      "description": "INIT$_TB_SYMBOLIC_RULE에 저장된 f(x)=y 수식 규칙으로 대상 테이블의 예측값을 계산하고, 실제값이 허용 오차율 또는 절대 오차 기준을 벗어난 행을 INIT$_TB_SYMBOLIC_RULE_VIOLATION에 적재하는 프로시저입니다.",
+      "resultCreateYn": "T",
+      "resultOwner": "__CURRENT_OWNER__",
+      "resultTableName": "INIT$_TB_SYMBOLIC_RULE_VIOLATION",
+      "items": [
+        {
+          "key": "P_RULE_OWNER_NAME",
+          "comment": "Symbolic Rule 결과 테이블 계정",
+          "defaultValue": ":INIT$TargetOwner"
+        },
+        {
+          "key": "P_RULE_TABLE_NAME",
+          "comment": "Symbolic Rule 결과 테이블명",
+          "defaultValue": "INIT$_TB_SYMBOLIC_RULE"
+        },
+        {
+          "key": "P_RULE_ID",
+          "comment": "특정 RULE_ID만 검사할 때 입력. 비우면 선택된 전체 규칙 검사",
+          "defaultValue": ""
+        },
+        {
+          "key": "P_TARGET_OWNER",
+          "comment": "검사 대상 테이블 계정",
+          "defaultValue": ":INIT$TargetOwner"
+        },
+        {
+          "key": "P_TARGET_TABLE",
+          "comment": "검사 대상 테이블명",
+          "defaultValue": ":INIT$TargetTable"
+        },
+        {
+          "key": "P_CASE_ID_COLUMN_NAME",
+          "comment": "행 식별 컬럼명",
+          "defaultValue": "FILE_ROW_NO"
+        },
+        {
+          "key": "P_RESULT_OWNER",
+          "comment": "결과 테이블 계정",
+          "defaultValue": ":INIT$ResultOwner"
+        },
+        {
+          "key": "P_RESULT_TABLE",
+          "comment": "결과 테이블명",
+          "defaultValue": ":INIT$ResultTable"
+        },
+        {
+          "key": "P_ERROR_PCT_THRESHOLD",
+          "comment": "수식 예측값 기준 허용 오차율. 0.05는 ±5%",
+          "defaultValue": "0.05"
+        },
+        {
+          "key": "P_ABS_ERROR_THRESHOLD",
+          "comment": "예측값이 0에 가까울 때 사용할 절대 오차 기준. 비우면 허용 오차율 값을 절대 기준으로 사용",
+          "defaultValue": ""
+        },
+        {
+          "key": "P_MAX_RULES",
+          "comment": "적용할 최대 Symbolic Rule 수",
+          "defaultValue": "100"
+        },
+        {
+          "key": "P_MAX_VIOLATIONS_PER_RULE",
+          "comment": "규칙별 최대 위반 행 수",
+          "defaultValue": "500"
+        },
+        {
+          "key": "P_CLEAR_EXISTING_YN",
+          "comment": "기존 Symbolic Rule 위반 결과 삭제 여부",
+          "defaultValue": "Y"
+        },
+        {
+          "key": "P_COMMIT_INTERVAL",
+          "comment": "대용량 결과 적재 시 중간 커밋할 DML 건수. 0이면 마지막에 한 번만 커밋",
+          "defaultValue": "5000"
+        },
+        {
+          "key": "P_COMMIT_YN",
+          "comment": "프로시저 내부 커밋 여부",
           "defaultValue": "Y"
         },
         {

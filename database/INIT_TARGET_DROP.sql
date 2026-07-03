@@ -93,6 +93,7 @@ BEGIN
     drop_table_if_exists('INIT$_TB_FLOW_WORK_NODE');
     drop_table_if_exists('INIT$_TB_FLOW_WORK');
     drop_table_if_exists('INIT$_TB_API_RESULT');
+    drop_table_if_exists('INIT$_TB_SYMBOLIC_RULE_VIOLATION');
     drop_table_if_exists('INIT$_TB_SYMBOLIC_RULE');
     drop_table_if_exists('INIT$_TB_LASSO_FEATURE');
     drop_table_if_exists('INIT$_TB_NUM_CORR_SUMMARY');
@@ -118,6 +119,8 @@ BEGIN
     drop_index_if_exists('IX_INIT$_TB_CAT_CORR_SUMMARY_01');
     drop_index_if_exists('IX_INIT$_TB_CAT_CORR_PAIR_01');
     drop_index_if_exists('IX_INIT$_TB_API_RESULT_01');
+    drop_index_if_exists('IX_INIT$_TB_SYM_RULE_VIOL_02');
+    drop_index_if_exists('IX_INIT$_TB_SYM_RULE_VIOL_01');
     drop_index_if_exists('IX_INIT$_TB_SYMBOLIC_RULE_01');
     drop_index_if_exists('IX_INIT$_TB_LASSO_FEATURE_01');
     drop_index_if_exists('IX_INIT$_TB_NUM_CORR_SUMMARY_01');

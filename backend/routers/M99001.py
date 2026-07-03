@@ -29,6 +29,33 @@ router = APIRouter()
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 INIT_OBJECT_NAME_PATTERN = "INIT$%"
+MODEL_OBJECT_SCRIPT_GROUPS = [
+    {
+        "code": "CORE",
+        "label": "Core packages",
+        "filename": "model_objects/INIT_MODEL_OBJECTS_00_CORE.sql",
+    },
+    {
+        "code": "RULE_SUMMARY",
+        "label": "Rule summary package",
+        "filename": "model_objects/INIT_MODEL_OBJECTS_10_RULE_SUMMARY.sql",
+    },
+    {
+        "code": "RULE_MODELS",
+        "label": "Rule models and violation detection",
+        "filename": "model_objects/INIT_MODEL_OBJECTS_20_RULE_MODELS.sql",
+    },
+    {
+        "code": "CORRELATION",
+        "label": "Correlation analysis",
+        "filename": "model_objects/INIT_MODEL_OBJECTS_30_CORRELATION.sql",
+    },
+    {
+        "code": "PREDICTED_TYPE",
+        "label": "Predicted type analysis",
+        "filename": "model_objects/INIT_MODEL_OBJECTS_40_PREDICTED_TYPE.sql",
+    },
+]
 
 
 class ConnectionRequest(BaseModel):
@@ -708,8 +735,21 @@ def _read_init_ddl_block() -> str:
     return _strip_sqlcl_commands(path.read_text(encoding="utf-8"))
 
 
-def _read_model_objects_script() -> str:
-    return _read_database_script("INIT_MODEL_OBJECTS.sql")
+def _get_model_object_script_groups(group_code: Optional[str] = None) -> list[dict]:
+    normalized = (group_code or "ALL").strip().upper()
+    if normalized in ("", "ALL"):
+        return MODEL_OBJECT_SCRIPT_GROUPS
+    groups = [item for item in MODEL_OBJECT_SCRIPT_GROUPS if item["code"] == normalized]
+    if not groups:
+        raise HTTPException(status_code=400, detail=f"Unknown model object group: {group_code}")
+    return groups
+
+
+def _read_model_objects_script(group_code: Optional[str] = None) -> str:
+    return "\n\n".join(
+        _read_database_script(item["filename"])
+        for item in _get_model_object_script_groups(group_code)
+    )
 
 
 def _read_init_target_truncate_block() -> str:
@@ -769,7 +809,7 @@ def _strip_trailing_sqlcl_slash(statement: str) -> str:
     return "\n".join(lines).strip()
 
 
-def _extract_created_objects(script: str) -> list[dict]:
+def _extract_created_objects(script: str, object_group: str = "INIT_MODEL_OBJECTS") -> list[dict]:
     results = []
     pattern = re.compile(
         r"(?is)\bCREATE\s+OR\s+REPLACE\s+(PACKAGE\s+BODY|PACKAGE|PROCEDURE|FUNCTION)\s+\"?([A-Z0-9_$#]+)\"?"
@@ -787,6 +827,7 @@ def _extract_created_objects(script: str) -> list[dict]:
             continue
         object_type = "PACKAGE BODY" if "BODY" in match.group(1) else match.group(1).strip()
         results.append({
+            "objectGroup": object_group,
             "objectType": object_type,
             "objectName": match.group(2).strip('"').upper(),
         })
@@ -796,6 +837,10 @@ def _extract_created_objects(script: str) -> list[dict]:
 def _extract_model_bundle_version(script: str) -> str:
     match = re.search(r"(?is)\bv_version\s+CONSTANT\s+VARCHAR2\s*\([^)]*\)\s*:=\s*'([^']+)'", script)
     return match.group(1).strip() if match else "1.0.0"
+
+
+def _extract_model_objects_version() -> str:
+    return _extract_model_bundle_version(_read_database_script(MODEL_OBJECT_SCRIPT_GROUPS[0]["filename"]))
 
 
 def _fetch_compile_errors(conn, created_objects: list[dict]) -> list[str]:
@@ -1245,17 +1290,20 @@ def _record_created_object_deploy_statuses(conn, created_objects: list[dict], ob
                 """
                 SELECT STATUS
                   FROM USER_OBJECTS
-                 WHERE OBJECT_NAME = :objectName
+                WHERE OBJECT_NAME = :objectName
                    AND OBJECT_TYPE = :objectType
                 """,
-                item,
+                {
+                    "objectName": item["objectName"],
+                    "objectType": item["objectType"],
+                },
             )
             row = cursor.fetchone()
             if not row:
                 message = "Object was not found in USER_OBJECTS."
                 _record_deploy_status(
                     conn,
-                    "INIT_MODEL_OBJECTS",
+                    item.get("objectGroup") or "INIT_MODEL_OBJECTS",
                     item["objectName"],
                     item["objectType"],
                     object_version,
@@ -1272,7 +1320,7 @@ def _record_created_object_deploy_statuses(conn, created_objects: list[dict], ob
                 message = "\n".join(compile_errors)
                 _record_deploy_status(
                     conn,
-                    "INIT_MODEL_OBJECTS",
+                    item.get("objectGroup") or "INIT_MODEL_OBJECTS",
                     item["objectName"],
                     item["objectType"],
                     object_version,
@@ -1284,7 +1332,7 @@ def _record_created_object_deploy_statuses(conn, created_objects: list[dict], ob
             else:
                 _record_deploy_status(
                     conn,
-                    "INIT_MODEL_OBJECTS",
+                    item.get("objectGroup") or "INIT_MODEL_OBJECTS",
                     item["objectName"],
                     item["objectType"],
                     object_version,
@@ -1682,20 +1730,38 @@ def deploy_model_objects(req: ConnectionRequest, request: Request):
         existing = _get_owned_connection_detail(system_conn, int(req.connectionId), user_id) if req.connectionId else {}
         params = _normalize_connection(req, existing, user_id)
         target_payload = {**params, "password": _decode_secret(params["passwordEnc"])}
-        script = _read_model_objects_script()
+        requested_group = str(getattr(req, "modelObjectGroup", None) or "ALL").strip().upper()
+        script_groups = _get_model_object_script_groups(requested_group)
+        script_parts = [
+            {
+                **item,
+                "script": _read_database_script(item["filename"]),
+            }
+            for item in script_groups
+        ]
+        script = "\n\n".join(item["script"] for item in script_parts)
         checksum = hashlib.sha256(script.encode("utf-8")).hexdigest()
-        object_version = _extract_model_bundle_version(script)
-        statements = _split_sqlcl_script(script)
-        created_objects = _extract_created_objects(script)
+        object_version = _extract_model_objects_version()
+        created_objects = []
+        for item in script_parts:
+            created_objects.extend(_extract_created_objects(item["script"], item["code"]))
 
         target_conn = _connect_target(target_payload)
         target_cursor = target_conn.cursor()
         target_cursor.execute("ALTER SESSION DISABLE PARALLEL DML")
+        target_cursor.execute("ALTER SESSION DISABLE PARALLEL QUERY")
         target_cursor.callproc("DBMS_OUTPUT.ENABLE")
-        logs = ["Running INIT_MODEL_OBJECTS.sql..."]
-        for index, statement in enumerate(statements, start=1):
-            target_cursor.execute(statement)
-            logs.append(f"[OK] Statement {index}/{len(statements)} executed.")
+        logs = [
+            f"Running INIT_MODEL_OBJECTS group: {requested_group if requested_group else 'ALL'}",
+        ]
+        for group_index, item in enumerate(script_parts, start=1):
+            statements = _split_sqlcl_script(item["script"])
+            logs.append(
+                f"[INFO] {group_index}/{len(script_parts)} {item['code']} - {item['label']} ({len(statements)} statement(s))"
+            )
+            for index, statement in enumerate(statements, start=1):
+                target_cursor.execute(statement)
+                logs.append(f"[OK] {item['code']} statement {index}/{len(statements)} executed.")
         logs.extend(_collect_dbms_output(target_cursor))
 
         compile_errors = _record_created_object_deploy_statuses(target_conn, created_objects, object_version, checksum)
@@ -1714,7 +1780,7 @@ def deploy_model_objects(req: ConnectionRequest, request: Request):
         if params.get("connectionId"):
             execute_query(system_conn, "INIT_SETUP_LOG_INSERT", {
                 "connectionId": params["connectionId"],
-                "actionCode": "INIT_MODEL_OBJECTS",
+                "actionCode": "INIT_MODEL_OBJECTS" if requested_group == "ALL" else f"INIT_MODEL_OBJECTS_{requested_group}",
                 "status": "SUCCESS",
                 "message": "\n".join(logs),
             }, is_dml=True)
@@ -1723,6 +1789,8 @@ def deploy_model_objects(req: ConnectionRequest, request: Request):
             "message": "Model object deployment completed.",
             "logs": logs,
             "checksum": checksum,
+            "group": requested_group,
+            "groups": [{"code": item["code"], "label": item["label"], "filename": item["filename"]} for item in script_parts],
             "createdObjects": created_objects,
         }
     except HTTPException as e:

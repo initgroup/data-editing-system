@@ -6827,6 +6827,10 @@ body.intro-mode #container-M99001 .env-workspace {
     margin-left: 8px;
 }
 
+#container-M99001 select.m99001-status-action {
+    max-width: 260px;
+}
+
 #container-M99001 .m99001-status-action:disabled,
 #container-M99001 .m99001-status-action.is-disabled {
     cursor: not-allowed;
@@ -10998,6 +11002,362 @@ body.intro-mode #container-M99001 .env-workspace {
     padding: 4px 7px;
 }
 
+.M04002-corr-pair-strip,
+.M04002-symbolic-methods,
+.M04002-lasso-direction-grid {
+    display: grid;
+    gap: 8px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin-top: 10px;
+}
+
+.M04002-corr-pair-strip span,
+.M04002-symbolic-methods span,
+.M04002-lasso-direction-grid span {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    min-width: 0;
+    padding: 8px 9px;
+}
+
+.M04002-corr-pair-strip b,
+.M04002-corr-pair-strip small,
+.M04002-symbolic-methods b,
+.M04002-symbolic-methods small,
+.M04002-lasso-direction-grid b,
+.M04002-lasso-direction-grid small {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.M04002-corr-pair-strip b,
+.M04002-symbolic-methods b,
+.M04002-lasso-direction-grid b {
+    color: #0f172a;
+    font-size: 12px;
+    font-weight: 850;
+}
+
+.M04002-corr-pair-strip small,
+.M04002-symbolic-methods small,
+.M04002-lasso-direction-grid small {
+    color: #64748b;
+    font-size: 11px;
+    margin-top: 3px;
+}
+
+.M04002-lasso-summary,
+.M04002-symbolic-summary,
+.M04002-symbolic-violation-summary {
+    background: #f8fafc;
+    border: 1px solid #dbe3ef;
+    margin-bottom: 12px;
+    padding: 12px;
+}
+
+.M04002-lasso-summary > header,
+.M04002-symbolic-summary > header,
+.M04002-symbolic-violation-summary > header {
+    align-items: flex-start;
+    display: flex;
+    gap: 12px;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.M04002-lasso-summary > header strong,
+.M04002-symbolic-summary > header strong,
+.M04002-symbolic-violation-summary > header strong {
+    color: #0f172a;
+    display: block;
+    font-size: 14px;
+    font-weight: 850;
+}
+
+.M04002-lasso-summary > header span,
+.M04002-symbolic-summary > header span,
+.M04002-symbolic-violation-summary > header span {
+    color: #475569;
+    display: block;
+    font-size: 12px;
+    margin-top: 2px;
+}
+
+.M04002-lasso-feature-list,
+.M04002-symbolic-rule-grid {
+    display: grid;
+    gap: 10px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-top: 10px;
+}
+
+.M04002-lasso-feature-list article,
+.M04002-symbolic-rule-card {
+    background: #ffffff;
+    border: 1px solid #dbe3ef;
+    min-width: 0;
+    padding: 10px;
+}
+
+.M04002-lasso-feature-list article.is-positive {
+    border-left: 4px solid #059669;
+}
+
+.M04002-lasso-feature-list article.is-negative {
+    border-left: 4px solid #dc2626;
+}
+
+.M04002-lasso-feature-list article header,
+.M04002-lasso-feature-list article footer,
+.M04002-symbolic-rule-card header,
+.M04002-symbolic-rule-card footer {
+    align-items: center;
+    display: flex;
+    gap: 8px;
+    justify-content: space-between;
+}
+
+.M04002-lasso-feature-list article strong,
+.M04002-lasso-feature-list article small,
+.M04002-lasso-feature-list article footer span,
+.M04002-symbolic-rule-card strong,
+.M04002-symbolic-rule-card small {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.M04002-lasso-feature-list article strong,
+.M04002-symbolic-rule-card strong {
+    color: #0f172a;
+    font-size: 13px;
+    font-weight: 850;
+}
+
+.M04002-lasso-feature-list article small,
+.M04002-lasso-feature-list article footer span,
+.M04002-symbolic-rule-card small {
+    color: #64748b;
+    font-size: 11px;
+}
+
+.M04002-lasso-feature-list article > em {
+    background: #e2e8f0;
+    display: block;
+    height: 8px;
+    margin: 9px 0;
+    overflow: hidden;
+}
+
+.M04002-lasso-feature-list article > em i {
+    background: #2563eb;
+    display: block;
+    height: 100%;
+}
+
+.M04002-symbolic-summary {
+    background: #f0fdfa;
+    border-color: #99f6e4;
+}
+
+.M04002-symbolic-violation-summary {
+    background: #fff7ed;
+    border-color: #fed7aa;
+}
+
+.M04002-symbolic-rule-card.is-selected {
+    border-color: #14b8a6;
+}
+
+.M04002-symbolic-rule-card header span {
+    display: grid;
+    min-width: 0;
+}
+
+.M04002-symbolic-rule-card header button {
+    align-items: center;
+    background: #ffffff;
+    border: 1px solid #99f6e4;
+    color: #0f766e;
+    cursor: pointer;
+    display: inline-flex;
+    flex: 0 0 auto;
+    height: 30px;
+    justify-content: center;
+    width: 34px;
+}
+
+.M04002-symbolic-rule-card header button:hover {
+    border-color: #0f766e;
+    box-shadow: inset 0 0 0 1px rgba(15, 118, 110, 0.16);
+}
+
+.M04002-symbolic-rule-card code {
+    background: #f8fafc;
+    border: 1px solid #dbe3ef;
+    color: #0f172a;
+    display: block;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 12px;
+    line-height: 1.45;
+    margin: 8px 0;
+    max-height: 84px;
+    overflow: auto;
+    padding: 8px;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.M04002-symbolic-rule-card footer {
+    border-top: 1px solid #e2e8f0;
+    margin-top: 8px;
+    padding-top: 8px;
+}
+
+.M04002-symbolic-rule-card footer span,
+.M04002-symbolic-rule-card footer small,
+.M04002-symbolic-rule-card footer b {
+    display: block;
+    text-align: center;
+}
+
+.M04002-symbolic-rule-card footer small {
+    color: #64748b;
+    font-size: 10px;
+    text-transform: uppercase;
+}
+
+.M04002-symbolic-rule-card footer b {
+    color: #0f172a;
+    font-size: 12px;
+    font-weight: 850;
+    margin-top: 2px;
+    max-width: 96px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.M04002-rule-facet-panel.is-symbolic {
+    background: #fff7ed;
+    border-color: #fed7aa;
+}
+
+.M04002-rule-facet-panel.is-symbolic .M04002-rule-facet-block.is-condition {
+    border-left-color: #fed7aa;
+}
+
+.M04002-symbolic-popup {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    box-shadow: 0 22px 60px rgba(15, 23, 42, 0.28);
+    display: flex;
+    flex-direction: column;
+    left: 50%;
+    height: min(720px, calc(100vh - 32px));
+    position: fixed;
+    top: 58px;
+    transform: translateX(-50%);
+    width: min(980px, calc(100vw - 32px));
+    z-index: 11520;
+}
+
+.M04002-symbolic-popup > section {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.M04002-symbolic-popup-body {
+    display: grid;
+    flex: 1 1 auto;
+    gap: 10px;
+    grid-template-rows: auto minmax(260px, 1fr) auto;
+    min-height: 0;
+    overflow: hidden;
+    padding: 10px;
+}
+
+.M04002-symbolic-expression-box,
+.M04002-symbolic-chart-wrap,
+.M04002-symbolic-range-grid span {
+    background: #f8fafc;
+    border: 1px solid #dbe3ef;
+    min-width: 0;
+    padding: 10px;
+}
+
+.M04002-symbolic-expression-box strong,
+.M04002-symbolic-expression-box code,
+.M04002-symbolic-expression-box span {
+    display: block;
+}
+
+.M04002-symbolic-expression-box strong {
+    color: #0f172a;
+    font-size: 12px;
+    font-weight: 850;
+    margin-bottom: 6px;
+}
+
+.M04002-symbolic-expression-box code {
+    color: #0f172a;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 12px;
+    line-height: 1.45;
+    max-height: 96px;
+    overflow: auto;
+    white-space: pre-wrap;
+}
+
+.M04002-symbolic-expression-box span {
+    color: #64748b;
+    font-size: 11px;
+    margin-top: 6px;
+}
+
+.M04002-symbolic-chart-wrap {
+    min-height: 0;
+    position: relative;
+}
+
+.M04002-symbolic-chart-wrap canvas {
+    height: 100% !important;
+    width: 100% !important;
+}
+
+.M04002-symbolic-range-grid {
+    display: grid;
+    gap: 8px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.M04002-symbolic-range-grid b,
+.M04002-symbolic-range-grid small {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.M04002-symbolic-range-grid b {
+    color: #0f172a;
+    font-size: 12px;
+    font-weight: 850;
+}
+
+.M04002-symbolic-range-grid small {
+    color: #64748b;
+    font-size: 11px;
+    margin-top: 3px;
+}
+
 .M04002-column-chip b,
 .M04002-column-chip small,
 .M04002-column-ref b,
@@ -12865,7 +13225,13 @@ body.intro-mode #container-M99001 .env-workspace {
     .M04002-violation-stats,
     .M04002-rule-facet-panel,
     .M04002-type-group-grid,
-    .M04002-type-detail > div {
+    .M04002-type-detail > div,
+    .M04002-corr-pair-strip,
+    .M04002-symbolic-methods,
+    .M04002-lasso-direction-grid,
+    .M04002-lasso-feature-list,
+    .M04002-symbolic-rule-grid,
+    .M04002-symbolic-range-grid {
         grid-template-columns: 1fr;
     }
 

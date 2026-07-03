@@ -49,10 +49,30 @@ TABLE_RESULT_LAYOUTS = {
         "key": "TABLE:INIT$_TB_CAT_CORR_PAIR",
         "summary": "correlationSummary",
     },
+    "INIT$_TB_NUM_CORR_PAIR": {
+        "kind": "TABLE",
+        "key": "TABLE:INIT$_TB_NUM_CORR_PAIR",
+        "summary": "correlationSummary",
+    },
+    "INIT$_TB_LASSO_FEATURE": {
+        "kind": "TABLE",
+        "key": "TABLE:INIT$_TB_LASSO_FEATURE",
+        "summary": "lassoSummary",
+    },
+    "INIT$_TB_SYMBOLIC_RULE": {
+        "kind": "TABLE",
+        "key": "TABLE:INIT$_TB_SYMBOLIC_RULE",
+        "summary": "symbolicRuleSummary",
+    },
     "INIT$_TB_RULE_VIOLATION_RESULT": {
         "kind": "TABLE",
         "key": "TABLE:INIT$_TB_RULE_VIOLATION_RESULT",
         "summary": "violationSummary",
+    },
+    "INIT$_TB_SYMBOLIC_RULE_VIOLATION": {
+        "kind": "TABLE",
+        "key": "TABLE:INIT$_TB_SYMBOLIC_RULE_VIOLATION",
+        "summary": "symbolicViolationSummary",
     },
 }
 MODEL_RESULT_LAYOUTS = {
@@ -189,6 +209,10 @@ def _validate_identifier(value: str, label: str) -> str:
 
 def _quote_identifier(value: str) -> str:
     return '"' + str(value).replace('"', '""') + '"'
+
+
+def _sql_literal(value: Any) -> str:
+    return "'" + str(value).replace("'", "''") + "'"
 
 
 def _normalize_predicted_type_case(value: str | None) -> str:
@@ -355,8 +379,11 @@ def _fetch_cat_corr_summary(
     run_source_type: str = "",
     run_id: int | None = None,
 ) -> dict[str, Any] | None:
-    if object_name != "INIT$_TB_CAT_CORR_PAIR" or not target_owner or not target_table:
+    if object_name not in {"INIT$_TB_CAT_CORR_PAIR", "INIT$_TB_NUM_CORR_PAIR"} or not target_owner or not target_table:
         return None
+    is_numeric = object_name == "INIT$_TB_NUM_CORR_PAIR"
+    metric_column = "ABS_PEARSON_R" if is_numeric else "CRAMERS_V"
+    signed_metric_column = "PEARSON_R" if is_numeric else "CRAMERS_V"
     cursor.execute(SqlLoader.get_sql("MCOMMON_ANLY_WORK_TARGET_TABLE_COLUMN_COUNT"), {
         "owner": target_owner,
         "tableName": target_table,
@@ -384,20 +411,361 @@ def _fetch_cat_corr_summary(
     )
     associated_columns = [str(item[0]) for item in cursor.fetchall() if item and item[0]]
     cursor.execute(
-        f"SELECT COUNT(*) FROM {result_object} "
-        f" WHERE OWNER = :targetOwner AND TABLE_NAME = :targetTable {run_filter_sql}AND PASS_YN = 'Y'",
+        "SELECT COUNT(*) AS TOTAL_PAIR_COUNT, "
+        "       SUM(CASE WHEN PASS_YN = 'Y' THEN 1 ELSE 0 END) AS PASS_PAIR_COUNT, "
+        f"      AVG(CASE WHEN PASS_YN = 'Y' THEN {metric_column} END) AS AVG_METRIC_VALUE, "
+        f"      MAX(CASE WHEN PASS_YN = 'Y' THEN {metric_column} END) AS MAX_METRIC_VALUE "
+        f"  FROM {result_object} "
+        f" WHERE OWNER = :targetOwner AND TABLE_NAME = :targetTable {run_filter_sql}",
         {"targetOwner": target_owner, "targetTable": target_table, **run_params},
     )
     pair_row = cursor.fetchone()
+    pair_columns = [desc[0] for desc in cursor.description] if cursor.description else []
+    pair_metrics = _row_to_dict(pair_columns, pair_row) if pair_row else {}
+    cursor.execute(
+        "SELECT * "
+        "  FROM ("
+        f"        SELECT COL_A, COL_B, ROW_COUNT, {signed_metric_column} AS METRIC_VALUE, "
+        f"               {metric_column} AS SORT_METRIC_VALUE, P_VALUE, PASS_YN "
+        f"          FROM {result_object} "
+        f"         WHERE OWNER = :targetOwner AND TABLE_NAME = :targetTable {run_filter_sql}"
+        "           AND PASS_YN = 'Y' "
+        f"         ORDER BY {metric_column} DESC NULLS LAST, P_VALUE ASC NULLS LAST, COL_A, COL_B"
+        "       ) "
+        " WHERE ROWNUM <= 12",
+        {"targetOwner": target_owner, "targetTable": target_table, **run_params},
+    )
+    top_pair_columns = [desc[0] for desc in cursor.description] if cursor.description else []
+    top_pairs = [_row_to_dict(top_pair_columns, row) for row in cursor.fetchall()]
     column_comments = _fetch_column_comment_map(cursor, target_owner, target_table)
     return {
+        "correlationKind": "NUMERIC" if is_numeric else "CATEGORICAL",
+        "metricColumn": metric_column,
+        "metricLabel": "|Pearson r|" if is_numeric else "Cramer's V",
+        "signedMetricLabel": "Pearson r" if is_numeric else "Cramer's V",
         "targetOwner": target_owner,
         "targetTable": target_table,
         "totalColumnCount": total_columns,
         "associatedColumnCount": len(associated_columns),
         "associatedColumns": associated_columns,
         "columnComments": column_comments,
-        "associatedPairCount": int(pair_row[0] or 0) if pair_row else 0,
+        "associatedPairCount": int(pair_metrics.get("PASS_PAIR_COUNT") or 0),
+        "totalPairCount": int(pair_metrics.get("TOTAL_PAIR_COUNT") or 0),
+        "averageMetricValue": pair_metrics.get("AVG_METRIC_VALUE"),
+        "maxMetricValue": pair_metrics.get("MAX_METRIC_VALUE"),
+        "topPairs": top_pairs,
+    }
+
+
+def _split_column_list(value: Any, limit: int = 20) -> list[str]:
+    columns: list[str] = []
+    for part in re.split(r"[,;\s]+", str(value or "")):
+        column = part.strip().upper()
+        if not column or column in columns:
+            continue
+        if IDENTIFIER_RE.match(column):
+            columns.append(column)
+        if len(columns) >= limit:
+            break
+    return columns
+
+
+def _fetch_numeric_feature_ranges(
+    cursor,
+    owner_name: str,
+    table_name: str,
+    column_names: list[str],
+) -> dict[str, dict[str, Any]]:
+    if not owner_name or not table_name or not column_names:
+        return {}
+    available_columns = _get_table_columns(cursor, owner_name, table_name)
+    safe_columns = [
+        column
+        for column in column_names
+        if column in available_columns and IDENTIFIER_RE.match(column)
+    ][:20]
+    if not safe_columns:
+        return {}
+    target_object = f"{_quote_identifier(owner_name)}.{_quote_identifier(table_name)}"
+    union_sql = " UNION ALL ".join(
+        "SELECT "
+        f"       {_sql_literal(column)} AS COLUMN_NAME, "
+        f"       MIN(TO_NUMBER({_quote_identifier(column)})) AS MIN_VALUE, "
+        f"       MAX(TO_NUMBER({_quote_identifier(column)})) AS MAX_VALUE, "
+        f"       AVG(TO_NUMBER({_quote_identifier(column)})) AS AVG_VALUE, "
+        f"       COUNT({_quote_identifier(column)}) AS VALUE_COUNT "
+        f"  FROM {target_object}"
+        for column in safe_columns
+    )
+    try:
+        cursor.execute(union_sql)
+        columns = [desc[0] for desc in cursor.description]
+        return {
+            str(row[0]).upper(): _row_to_dict(columns, row)
+            for row in cursor.fetchall()
+            if row and row[0]
+        }
+    except Exception as error:
+        logger.info("MCOMMON_ANLY_WORK feature range query skipped: %s", error)
+        return {}
+
+
+def _fetch_lasso_summary(
+    cursor,
+    owner_name: str,
+    object_name: str,
+    target_owner: str,
+    target_table: str,
+    run_source_type: str = "",
+    run_id: int | None = None,
+) -> dict[str, Any] | None:
+    if object_name != "INIT$_TB_LASSO_FEATURE" or not target_owner or not target_table:
+        return None
+    result_object = f"{_quote_identifier(owner_name)}.{_quote_identifier(object_name)}"
+    run_filter_sql = ""
+    run_params: dict[str, Any] = {}
+    if run_source_type and run_id is not None:
+        run_filter_sql = " AND RUN_SOURCE_TYPE = :runSourceType AND RUN_ID = :runId "
+        run_params = {"runSourceType": run_source_type, "runId": run_id}
+    params = {"targetOwner": target_owner, "targetTable": target_table, **run_params}
+
+    def fetch_one(sql: str) -> dict[str, Any]:
+        cursor.execute(sql, params)
+        columns = [desc[0] for desc in cursor.description]
+        row = cursor.fetchone()
+        return _row_to_dict(columns, row) if row else {}
+
+    def fetch_many(sql: str) -> list[dict[str, Any]]:
+        cursor.execute(sql, params)
+        columns = [desc[0] for desc in cursor.description]
+        return [_row_to_dict(columns, row) for row in cursor.fetchall()]
+
+    overview = fetch_one(
+        "SELECT COUNT(*) AS FEATURE_ROW_COUNT, "
+        "       COUNT(DISTINCT TARGET_COLUMN) AS TARGET_COLUMN_COUNT, "
+        "       COUNT(DISTINCT FEATURE_NAME) AS FEATURE_NAME_COUNT, "
+        "       SUM(CASE WHEN SELECTED_YN = 'Y' THEN 1 ELSE 0 END) AS SELECTED_FEATURE_COUNT, "
+        "       SUM(CASE WHEN SELECTED_YN = 'Y' AND NVL(COEFFICIENT, 0) > 0 THEN 1 ELSE 0 END) AS POSITIVE_FEATURE_COUNT, "
+        "       SUM(CASE WHEN SELECTED_YN = 'Y' AND NVL(COEFFICIENT, 0) < 0 THEN 1 ELSE 0 END) AS NEGATIVE_FEATURE_COUNT, "
+        "       AVG(R2_SCORE) AS AVG_R2_SCORE, "
+        "       MAX(R2_SCORE) AS MAX_R2_SCORE, "
+        "       MAX(MODEL_ALPHA) AS MODEL_ALPHA "
+        f"  FROM {result_object} "
+        f" WHERE OWNER = :targetOwner AND TABLE_NAME = :targetTable {run_filter_sql}"
+    )
+    top_targets = fetch_many(
+        "SELECT * "
+        "  FROM ("
+        "        SELECT TARGET_COLUMN, "
+        "               COUNT(*) AS FEATURE_ROW_COUNT, "
+        "               SUM(CASE WHEN SELECTED_YN = 'Y' THEN 1 ELSE 0 END) AS SELECTED_FEATURE_COUNT, "
+        "               MAX(R2_SCORE) AS R2_SCORE, "
+        "               MAX(ABS_COEFFICIENT) AS MAX_ABS_COEFFICIENT, "
+        "               MIN(RANK_NO) AS BEST_RANK_NO "
+        f"          FROM {result_object} "
+        f"         WHERE OWNER = :targetOwner AND TABLE_NAME = :targetTable {run_filter_sql}"
+        "         GROUP BY TARGET_COLUMN "
+        "         ORDER BY R2_SCORE DESC NULLS LAST, SELECTED_FEATURE_COUNT DESC, TARGET_COLUMN"
+        "       ) "
+        " WHERE ROWNUM <= 12"
+    )
+    top_features = fetch_many(
+        "SELECT * "
+        "  FROM ("
+        "        SELECT TARGET_COLUMN, FEATURE_NAME, COEFFICIENT, ABS_COEFFICIENT, "
+        "               RANK_NO, SELECTED_YN, R2_SCORE "
+        f"          FROM {result_object} "
+        f"         WHERE OWNER = :targetOwner AND TABLE_NAME = :targetTable {run_filter_sql}"
+        "           AND SELECTED_YN = 'Y' "
+        "         ORDER BY ABS_COEFFICIENT DESC NULLS LAST, RANK_NO NULLS LAST, TARGET_COLUMN, FEATURE_NAME"
+        "       ) "
+        " WHERE ROWNUM <= 16"
+    )
+    return {
+        "targetOwner": target_owner,
+        "targetTable": target_table,
+        "overview": overview,
+        "topTargets": top_targets,
+        "topFeatures": top_features,
+        "columnComments": _fetch_column_comment_map(cursor, target_owner, target_table),
+        "runSourceType": run_source_type,
+        "runId": run_id,
+    }
+
+
+def _fetch_symbolic_rule_summary(
+    cursor,
+    owner_name: str,
+    object_name: str,
+    target_owner: str,
+    target_table: str,
+    run_source_type: str = "",
+    run_id: int | None = None,
+) -> dict[str, Any] | None:
+    if object_name != "INIT$_TB_SYMBOLIC_RULE" or not target_owner or not target_table:
+        return None
+    result_object = f"{_quote_identifier(owner_name)}.{_quote_identifier(object_name)}"
+    run_filter_sql = ""
+    run_params: dict[str, Any] = {}
+    if run_source_type and run_id is not None:
+        run_filter_sql = " AND RUN_SOURCE_TYPE = :runSourceType AND RUN_ID = :runId "
+        run_params = {"runSourceType": run_source_type, "runId": run_id}
+    params = {"targetOwner": target_owner, "targetTable": target_table, **run_params}
+
+    def fetch_one(sql: str) -> dict[str, Any]:
+        cursor.execute(sql, params)
+        columns = [desc[0] for desc in cursor.description]
+        row = cursor.fetchone()
+        return _row_to_dict(columns, row) if row else {}
+
+    def fetch_many(sql: str) -> list[dict[str, Any]]:
+        cursor.execute(sql, params)
+        columns = [desc[0] for desc in cursor.description]
+        return [_row_to_dict(columns, row) for row in cursor.fetchall()]
+
+    overview = fetch_one(
+        "SELECT COUNT(*) AS RULE_COUNT, "
+        "       COUNT(DISTINCT TARGET_COLUMN) AS TARGET_COLUMN_COUNT, "
+        "       SUM(CASE WHEN SELECTED_YN = 'Y' THEN 1 ELSE 0 END) AS SELECTED_RULE_COUNT, "
+        "       AVG(SCORE) AS AVG_SCORE, "
+        "       MAX(SCORE) AS MAX_SCORE, "
+        "       AVG(COMPLEXITY) AS AVG_COMPLEXITY, "
+        "       MAX(COMPLEXITY) AS MAX_COMPLEXITY "
+        f"  FROM {result_object} "
+        f" WHERE OWNER = :targetOwner AND TABLE_NAME = :targetTable {run_filter_sql}"
+    )
+    method_groups = fetch_many(
+        "SELECT NVL(METHOD, '(UNKNOWN)') AS METHOD, "
+        "       COUNT(*) AS RULE_COUNT, "
+        "       AVG(SCORE) AS AVG_SCORE, "
+        "       AVG(COMPLEXITY) AS AVG_COMPLEXITY "
+        f"  FROM {result_object} "
+        f" WHERE OWNER = :targetOwner AND TABLE_NAME = :targetTable {run_filter_sql}"
+        " GROUP BY NVL(METHOD, '(UNKNOWN)') "
+        " ORDER BY RULE_COUNT DESC, METHOD"
+    )
+    target_groups = fetch_many(
+        "SELECT TARGET_COLUMN, "
+        "       COUNT(*) AS RULE_COUNT, "
+        "       SUM(CASE WHEN SELECTED_YN = 'Y' THEN 1 ELSE 0 END) AS SELECTED_RULE_COUNT, "
+        "       MAX(SCORE) AS MAX_SCORE, "
+        "       MIN(RANK_NO) AS BEST_RANK_NO "
+        f"  FROM {result_object} "
+        f" WHERE OWNER = :targetOwner AND TABLE_NAME = :targetTable {run_filter_sql}"
+        " GROUP BY TARGET_COLUMN "
+        " ORDER BY SELECTED_RULE_COUNT DESC, MAX_SCORE DESC NULLS LAST, TARGET_COLUMN"
+    )
+    top_rules = fetch_many(
+        "SELECT * "
+        "  FROM ("
+        "        SELECT TARGET_COLUMN, RULE_ID, DBMS_LOB.SUBSTR(EXPRESSION, 4000, 1) AS EXPRESSION, "
+        "               SCORE, COMPLEXITY, RANK_NO, SELECTED_YN, FEATURE_COLUMNS, METHOD, MESSAGE "
+        f"          FROM {result_object} "
+        f"         WHERE OWNER = :targetOwner AND TABLE_NAME = :targetTable {run_filter_sql}"
+        "         ORDER BY CASE WHEN SELECTED_YN = 'Y' THEN 0 ELSE 1 END, "
+        "                  RANK_NO NULLS LAST, SCORE DESC NULLS LAST, TARGET_COLUMN, RULE_ID"
+        "       ) "
+        " WHERE ROWNUM <= 12"
+    )
+    range_columns: list[str] = []
+    for rule in top_rules:
+        range_columns.extend(_split_column_list(rule.get("FEATURE_COLUMNS"), 20))
+    range_map = _fetch_numeric_feature_ranges(cursor, target_owner, target_table, range_columns)
+    for rule in top_rules:
+        features = _split_column_list(rule.get("FEATURE_COLUMNS"), 20)
+        rule["FEATURE_LIST"] = features
+        rule["FEATURE_RANGES"] = [range_map[column] for column in features if column in range_map]
+    return {
+        "targetOwner": target_owner,
+        "targetTable": target_table,
+        "overview": overview,
+        "methodGroups": method_groups,
+        "targetGroups": target_groups,
+        "topRules": top_rules,
+        "columnComments": _fetch_column_comment_map(cursor, target_owner, target_table),
+        "runSourceType": run_source_type,
+        "runId": run_id,
+    }
+
+
+def _fetch_symbolic_violation_summary(
+    cursor,
+    owner_name: str,
+    object_name: str,
+    target_owner: str,
+    target_table: str,
+    run_source_type: str = "",
+    run_id: int | None = None,
+) -> dict[str, Any] | None:
+    if object_name != "INIT$_TB_SYMBOLIC_RULE_VIOLATION" or not target_owner or not target_table:
+        return None
+    result_object = f"{_quote_identifier(owner_name)}.{_quote_identifier(object_name)}"
+    run_filter_sql = ""
+    run_params: dict[str, Any] = {}
+    if run_source_type and run_id is not None:
+        run_filter_sql = " AND RUN_SOURCE_TYPE = :runSourceType AND RUN_ID = :runId "
+        run_params = {"runSourceType": run_source_type, "runId": run_id}
+    params = {"targetOwner": target_owner, "targetTable": target_table, **run_params}
+
+    def fetch_one(sql: str) -> dict[str, Any]:
+        cursor.execute(sql, params)
+        columns = [desc[0] for desc in cursor.description]
+        row = cursor.fetchone()
+        return _row_to_dict(columns, row) if row else {}
+
+    def fetch_many(sql: str) -> list[dict[str, Any]]:
+        cursor.execute(sql, params)
+        columns = [desc[0] for desc in cursor.description]
+        return [_row_to_dict(columns, row) for row in cursor.fetchall()]
+
+    overview = fetch_one(
+        "SELECT COUNT(*) AS VIOLATION_COUNT, "
+        "       COUNT(DISTINCT NVL(CASE_ID, CASE_ROWID)) AS VIOLATED_ROW_COUNT, "
+        "       COUNT(DISTINCT RULE_ID) AS VIOLATED_RULE_COUNT, "
+        "       COUNT(DISTINCT TARGET_COLUMN) AS TARGET_COLUMN_COUNT, "
+        "       AVG(ABS_ERROR) AS AVG_ABS_ERROR, "
+        "       MAX(ABS_ERROR) AS MAX_ABS_ERROR, "
+        "       AVG(ERROR_PCT) AS AVG_ERROR_PCT, "
+        "       MAX(ERROR_PCT) AS MAX_ERROR_PCT, "
+        "       MAX(TOLERANCE_PCT) AS TOLERANCE_PCT "
+        f"  FROM {result_object} "
+        f" WHERE TARGET_OWNER = :targetOwner AND TARGET_TABLE = :targetTable {run_filter_sql}"
+    )
+    top_rules = fetch_many(
+        "SELECT * "
+        "  FROM ("
+        "        SELECT RULE_ID, TARGET_COLUMN, COUNT(*) AS VIOLATION_COUNT, "
+        "               COUNT(DISTINCT NVL(CASE_ID, CASE_ROWID)) AS VIOLATED_ROW_COUNT, "
+        "               AVG(ERROR_PCT) AS AVG_ERROR_PCT, MAX(ERROR_PCT) AS MAX_ERROR_PCT, "
+        "               AVG(ABS_ERROR) AS AVG_ABS_ERROR, MAX(VIOLATION_SCORE) AS MAX_VIOLATION_SCORE "
+        f"          FROM {result_object} "
+        f"         WHERE TARGET_OWNER = :targetOwner AND TARGET_TABLE = :targetTable {run_filter_sql}"
+        "         GROUP BY RULE_ID, TARGET_COLUMN "
+        "         ORDER BY VIOLATION_COUNT DESC, MAX_ERROR_PCT DESC NULLS LAST, RULE_ID"
+        "       ) "
+        " WHERE ROWNUM <= 12"
+    )
+    top_targets = fetch_many(
+        "SELECT * "
+        "  FROM ("
+        "        SELECT TARGET_COLUMN, COUNT(*) AS VIOLATION_COUNT, "
+        "               COUNT(DISTINCT RULE_ID) AS RULE_COUNT, AVG(ERROR_PCT) AS AVG_ERROR_PCT "
+        f"          FROM {result_object} "
+        f"         WHERE TARGET_OWNER = :targetOwner AND TARGET_TABLE = :targetTable {run_filter_sql}"
+        "         GROUP BY TARGET_COLUMN "
+        "         ORDER BY VIOLATION_COUNT DESC, AVG_ERROR_PCT DESC NULLS LAST, TARGET_COLUMN"
+        "       ) "
+        " WHERE ROWNUM <= 12"
+    )
+    return {
+        "targetOwner": target_owner,
+        "targetTable": target_table,
+        "overview": overview,
+        "topRules": top_rules,
+        "topTargets": top_targets,
+        "columnComments": _fetch_column_comment_map(cursor, target_owner, target_table),
+        "runSourceType": run_source_type,
+        "runId": run_id,
     }
 
 
@@ -1101,13 +1469,22 @@ def get_result_table(
         where_clauses = []
         bind_params: dict[str, Any] = {}
         order_sql = ""
-        if str(menuCode or "").upper() == "M03002" and object_name == "INIT$_TB_CAT_CORR_PAIR":
+        if object_name in {"INIT$_TB_CAT_CORR_PAIR", "INIT$_TB_NUM_CORR_PAIR"} and str(menuCode or "").upper() == "M03002":
             where_clauses.append("PASS_YN = 'Y'")
-            order_sql = " ORDER BY CRAMERS_V DESC, P_VALUE ASC"
+            if object_name == "INIT$_TB_CAT_CORR_PAIR":
+                order_sql = " ORDER BY CRAMERS_V DESC, P_VALUE ASC"
+        if object_name == "INIT$_TB_NUM_CORR_PAIR":
+            order_sql = " ORDER BY PASS_YN DESC, ABS_PEARSON_R DESC NULLS LAST, P_VALUE ASC NULLS LAST, COL_A, COL_B"
+        if object_name == "INIT$_TB_LASSO_FEATURE":
+            order_sql = " ORDER BY TARGET_COLUMN, SELECTED_YN DESC, RANK_NO NULLS LAST, ABS_COEFFICIENT DESC NULLS LAST, FEATURE_NAME"
+        if object_name == "INIT$_TB_SYMBOLIC_RULE":
+            order_sql = " ORDER BY TARGET_COLUMN, SELECTED_YN DESC, RANK_NO NULLS LAST, SCORE DESC NULLS LAST, RULE_ID"
         if _is_predicted_type_result_table(object_name) and "COLUMN_ID" in columns:
             order_sql = " ORDER BY COLUMN_ID NULLS LAST, COLUMN_NAME"
         if object_name == "INIT$_TB_RULE_VIOLATION_RESULT":
             order_sql = " ORDER BY VIOLATION_SCORE DESC NULLS LAST, RULE_CONFIDENCE DESC NULLS LAST, VIOLATION_ID"
+        if object_name == "INIT$_TB_SYMBOLIC_RULE_VIOLATION":
+            order_sql = " ORDER BY VIOLATION_SCORE DESC NULLS LAST, ERROR_PCT DESC NULLS LAST, ABS_ERROR DESC NULLS LAST, VIOLATION_ID"
         if target_owner and "OWNER" in columns:
             where_clauses.append("OWNER = :targetOwner")
             bind_params["targetOwner"] = target_owner
@@ -1158,6 +1535,9 @@ def get_result_table(
         cat_corr_summary = None
         predicted_type_summary = None
         violation_summary = None
+        lasso_summary = None
+        symbolic_rule_summary = None
+        symbolic_violation_summary = None
         if result_layout.get("summary") == "correlationSummary":
             cat_corr_summary = _fetch_cat_corr_summary(cursor, owner_name, object_name, target_owner, target_table, run_source_type, normalized_run_id)
         elif result_layout.get("summary") == "predictedTypeSummary":
@@ -1182,6 +1562,12 @@ def get_result_table(
                 run_source_type,
                 normalized_run_id,
             )
+        elif result_layout.get("summary") == "lassoSummary":
+            lasso_summary = _fetch_lasso_summary(cursor, owner_name, object_name, target_owner, target_table, run_source_type, normalized_run_id)
+        elif result_layout.get("summary") == "symbolicRuleSummary":
+            symbolic_rule_summary = _fetch_symbolic_rule_summary(cursor, owner_name, object_name, target_owner, target_table, run_source_type, normalized_run_id)
+        elif result_layout.get("summary") == "symbolicViolationSummary":
+            symbolic_violation_summary = _fetch_symbolic_violation_summary(cursor, owner_name, object_name, target_owner, target_table, run_source_type, normalized_run_id)
         column_comments = _fetch_column_comment_map(cursor, target_owner, target_table)
         return {
             "status": "success",
@@ -1197,6 +1583,9 @@ def get_result_table(
             "correlationSummary": cat_corr_summary,
             "predictedTypeSummary": predicted_type_summary,
             "violationSummary": violation_summary,
+            "lassoSummary": lasso_summary,
+            "symbolicRuleSummary": symbolic_rule_summary,
+            "symbolicViolationSummary": symbolic_violation_summary,
             "predictedTypeCase": normalized_predicted_type_case,
             "columnComments": column_comments,
             **result,
@@ -1567,4 +1956,3 @@ def get_model_readable_summary(request: Request, owner: str, modelName: str):
             cursor.close()
         if conn:
             conn.close()
-

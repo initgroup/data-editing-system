@@ -35,7 +35,8 @@
                         "INIT$_TB_LASSO_FEATURE",
                         "INIT$_TB_SYMBOLIC_RULE",
                         "INIT$_TB_ASSOC_RULE_SUMMARY",
-                        "INIT$_TB_RULE_VIOLATION_RESULT"
+                        "INIT$_TB_RULE_VIOLATION_RESULT",
+                        "INIT$_TB_SYMBOLIC_RULE_VIOLATION"
                     ])
                         .has(String(tableName || "").trim().toUpperCase());
                 },
@@ -55,7 +56,9 @@
                     const owner = String(targetOwner || "").trim();
                     const target = String(targetTable || "").trim();
                     if (!this.shouldApplyTargetResultFilter(table) || !owner || !target) return "";
-                    const clauses = table === "INIT$_TB_ASSOC_RULE_SUMMARY" || table === "INIT$_TB_RULE_VIOLATION_RESULT"
+                    const clauses = table === "INIT$_TB_ASSOC_RULE_SUMMARY"
+                        || table === "INIT$_TB_RULE_VIOLATION_RESULT"
+                        || table === "INIT$_TB_SYMBOLIC_RULE_VIOLATION"
                         ? [
                             `TARGET_OWNER = '${this.escapeSqlLiteral(owner.toUpperCase())}'`,
                             ` AND TARGET_TABLE = '${this.escapeSqlLiteral(target.toUpperCase())}'`
@@ -92,7 +95,8 @@
                         "INIT$_TB_LASSO_FEATURE",
                         "INIT$_TB_SYMBOLIC_RULE",
                         "INIT$_TB_ASSOC_RULE_SUMMARY",
-                        "INIT$_TB_RULE_VIOLATION_RESULT"
+                        "INIT$_TB_RULE_VIOLATION_RESULT",
+                        "INIT$_TB_SYMBOLIC_RULE_VIOLATION"
                     ]).has(table);
                 },
 
@@ -1729,6 +1733,7 @@
                     <ul>
                         <li><strong>LASSO Feature Select</strong>: 연속형 상관분석 결과를 후보로 사용하고, 종속변수에 영향이 큰 독립변수를 <code>INIT$_TB_LASSO_FEATURE</code>에 적재합니다.</li>
                         <li><strong>Symbolic Regression Rule</strong>: LASSO에서 선택된 상위 5~10개 변수만 사용해 수식 규칙을 탐색하고 <code>INIT$_TB_SYMBOLIC_RULE</code>에 적재합니다.</li>
+                        <li><strong>Symbolic Rule Violation</strong>: 수식 규칙의 예측값 대비 허용 오차율을 벗어난 행은 <code>INIT$_TB_SYMBOLIC_RULE_VIOLATION</code>에서 확인합니다.</li>
                         <li><strong>주의</strong>: Symbolic Regression은 계산량이 크므로 <code>P_MAX_FEATURES</code>는 10 이하로 제한됩니다.</li>
                     </ul>
                 `
@@ -2647,7 +2652,7 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                 || getContainerEl(`#execSourceType-${PAGE_CODE}`)?.value
                 || "DB_OBJECT"
             ).toUpperCase();
-            if (sourceType === "WEB_API") {
+            if (sourceType === "WEB_API" && options.scriptBindOnly !== true) {
                 return this.collectWebApiRuntimeValues(parameterRows, bindOptions, options);
             }
 
@@ -3787,7 +3792,9 @@ END;`;
             const hasJob = this.hasUserSqlJobContext();
             return {
                 useParameterDefaults: hasJob,
-                useSystemBindContext: hasJob
+                useSystemBindContext: hasJob,
+                scriptBindOnly: true,
+                sourceType: "DB_OBJECT"
             };
         },
 

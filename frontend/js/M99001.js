@@ -645,14 +645,28 @@
             }
         },
 
+        getSelectedModelObjectGroup() {
+            const select = getContainerEl("#modelObjectGroup-M99001");
+            const value = String(select?.value || "ALL").trim().toUpperCase();
+            const label = select?.selectedOptions?.[0]?.textContent?.trim() || "All groups";
+            return {
+                value: value || "ALL",
+                label
+            };
+        },
+
         async deployModelObjects() {
             if (!this.requireSelectedConnection(this.renderDeployLog)) return;
-            if (!(await CommonMessage.confirm("Deploy PL/SQL model objects on the selected target database?"))) return;
-            this.renderDeployLog("Deploying PL/SQL model objects...", "info");
+            const group = this.getSelectedModelObjectGroup();
+            if (!(await CommonMessage.confirm(`Deploy PL/SQL model objects (${group.label}) on the selected target database?`))) return;
+            this.renderDeployLog(`Deploying PL/SQL model objects (${group.label})...`, "info");
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/schema/model-objects`, {
                     method: "POST",
-                    body: this.getPayload()
+                    body: {
+                        ...this.getPayload(),
+                        modelObjectGroup: group.value
+                    }
                 });
                 const logs = json.logs || [json.message || "Model object deployment completed."];
                 const summary = json.checksum ? [`Checksum: ${json.checksum}`, ...logs] : logs;
@@ -660,6 +674,10 @@
                 await this.loadModelDeployStatus(false);
                 const schema = await this.checkSchema(false);
                 this.markInstallTabAttention(false);
+                if (group.value !== "ALL") {
+                    this.renderDeployLog(`${summary.join("\n")}\n\nSelected PL/SQL object group deployment completed.`, "success");
+                    return;
+                }
                 if (await CommonMessage.confirm("Basic installation is complete. Move to the login screen?")) {
                     sessionStorage.setItem(
                         "loginNotice",
