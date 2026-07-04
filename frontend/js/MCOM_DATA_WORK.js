@@ -444,8 +444,8 @@
             select.innerHTML = `
                 <option value="">-- Select project --</option>
                 ${this.contextProjects.map((project) => `
-                    <option value="${this.escapeHtml(project.PROJECT_ID ?? "")}">
-                        ${this.escapeHtml(project.PROJECT_NAME || project.PROJECT_CODE || "(Untitled project)")}
+                    <option class="${this.escapeHtml(CommonUtils.getOwnerScopeClass(project))}" value="${this.escapeHtml(project.PROJECT_ID ?? "")}">
+                        ${this.escapeHtml(CommonUtils.formatOwnerScopedName(project, project.PROJECT_NAME || project.PROJECT_CODE || "(Untitled project)"))}
                     </option>
                 `).join("")}
             `;
@@ -453,10 +453,12 @@
             const exists = this.contextProjects.some((project) => String(project.PROJECT_ID) === String(preferredProjectId));
             this.selectedProjectId = exists ? String(preferredProjectId) : "";
             select.value = this.selectedProjectId;
+            CommonUtils.applyOwnerScopeToSelect(select, this.contextProjects, this.selectedProjectId);
         },
 
         async handleContextProjectChange(projectId) {
             this.selectedProjectId = projectId || "";
+            CommonUtils.applyOwnerScopeToSelect(getContainerEl(`#contextProject-${PAGE_CODE}`), this.contextProjects, this.selectedProjectId);
             this.selectedScenarioId = "";
             this.selectedScenarioTableKey = "";
             this.currentJob = this.createEmptyJob();
@@ -506,8 +508,8 @@
             select.innerHTML = `
                 <option value="">-- Select scenario --</option>
                 ${this.contextScenarios.map((scenario) => `
-                    <option value="${this.escapeHtml(scenario.SCENARIO_ID ?? "")}">
-                        ${this.escapeHtml(scenario.SCENARIO_NAME || scenario.SCENARIO_CODE || "(Untitled scenario)")}
+                    <option class="${this.escapeHtml(CommonUtils.getOwnerScopeClass(scenario))}" value="${this.escapeHtml(scenario.SCENARIO_ID ?? "")}">
+                        ${this.escapeHtml(CommonUtils.formatOwnerScopedName(scenario, scenario.SCENARIO_NAME || scenario.SCENARIO_CODE || "(Untitled scenario)"))}
                     </option>
                 `).join("")}
             `;
@@ -516,11 +518,13 @@
             const firstScenarioId = this.contextScenarios.length ? String(this.contextScenarios[0].SCENARIO_ID ?? "") : "";
             this.selectedScenarioId = exists ? String(preferredScenarioId) : firstScenarioId;
             select.value = this.selectedScenarioId;
+            CommonUtils.applyOwnerScopeToSelect(select, this.contextScenarios, this.selectedScenarioId, ["SCENARIO_ID", "scenarioId"]);
             this.saveStoredContext();
         },
 
         async handleContextScenarioChange(scenarioId) {
             this.selectedScenarioId = scenarioId || "";
+            CommonUtils.applyOwnerScopeToSelect(getContainerEl(`#contextScenario-${PAGE_CODE}`), this.contextScenarios, this.selectedScenarioId, ["SCENARIO_ID", "scenarioId"]);
             this.selectedScenarioTableKey = "";
             this.currentJob = this.createEmptyJob();
             this.parameters = [];
@@ -705,13 +709,29 @@
             if (!object) return null;
             const createMode = this.normalizeResultCreateMode(object.RESULT_CREATE_YN || "N");
             const owner = String(object.RESULT_OWNER || "").trim();
-            const tableName = String(object.RESULT_TABLE_NAME || "").trim();
+            const tableName = this.getScopedResultObjectName(object, String(object.RESULT_TABLE_NAME || "").trim());
             if (createMode === "N" && !owner && !tableName) return null;
             return {
                 resultCreateYn: createMode,
                 resultOwner: owner,
                 resultTableName: tableName
             };
+        },
+
+        getScopedResultObjectName(object = {}, registeredName = "") {
+            const baseName = String(registeredName || "").trim().toUpperCase();
+            const objectName = String(object.OBJECT_NAME || object.objectName || "").trim().toUpperCase();
+            if (objectName !== "INIT$_SP_APRIORI_ASSOC_MODEL") return registeredName;
+            if (baseName && baseName !== "OML_ASSOCIATION_MODEL_01") return registeredName;
+            const targetTable = String(this.currentJob?.tableName || getContainerEl(`#targetTable-${PAGE_CODE}`)?.value || "").trim().toUpperCase();
+            return this.createScopedModelName("OML_ASSOC", targetTable || baseName || "MODEL");
+        },
+
+        createScopedModelName(prefix, seed) {
+            const safePrefix = String(prefix || "OML_MODEL").toUpperCase().replace(/[^A-Z0-9_$#]/g, "_").replace(/^[^A-Z]+/, "") || "OML_MODEL";
+            const safeSeed = String(seed || "MODEL").toUpperCase().replace(/[^A-Z0-9_$#]/g, "_").replace(/^[^A-Z]+/, "") || "MODEL";
+            const maxSeedLength = Math.max(1, 128 - safePrefix.length - 1);
+            return `${safePrefix}_${safeSeed.slice(-maxSeedLength)}`.slice(0, 128);
         },
 
         applyRegisteredResultInfo(object = this.getSelectedExecutableObject()) {
@@ -835,18 +855,19 @@
             if (!resource) return null;
             const spec = this.parseSpecJson(resource.SPEC_JSON);
             const method = resource.EXEC_METHOD || spec.method || resource.RESOURCE_NAME || resource.SCRIPT_NAME || "";
-            const endpoint = spec.serviceUrl || spec.endpoint || "";
+            const builtin = this.getBuiltinWebApiDefinition(method);
+            const endpoint = spec.serviceUrl || spec.endpoint || builtin?.endpoint || "";
             const output = spec.output && typeof spec.output === "object" ? spec.output : {};
-            const resultTable = output.resultTableName || output.resultTable || spec.resultTableName || spec.resultTable || "";
+            const resultTable = output.resultTableName || output.resultTable || spec.resultTableName || spec.resultTable || builtin?.resultTable || "";
             return {
                 resourceId: resource.OML_RESOURCE_ID || "",
                 method,
-                label: resource.RESOURCE_LABEL || resource.RESOURCE_NAME || method,
+                label: resource.RESOURCE_LABEL || resource.RESOURCE_NAME || builtin?.label || method,
                 endpoint,
                 resultTable,
                 specJson: resource.SPEC_JSON || "",
-                outputFormat: resource.OUTPUT_FORMAT || "",
-                params: []
+                outputFormat: resource.OUTPUT_FORMAT || builtin?.outputFormat || "",
+                params: builtin?.params || []
             };
         },
 
@@ -970,6 +991,7 @@
                         { itemName: "P_MAX_FEATURES", itemValue: "NUMBER", itemDesc: "Symbolic Regression 입력 독립변수 최대 수", itemDefault: "10" },
                         { itemName: "P_SAMPLE_ROWS", itemValue: "NUMBER", itemDesc: "분석 샘플 최대 행 수", itemDefault: "50000" },
                         { itemName: "P_MAX_ITERATIONS", itemValue: "NUMBER", itemDesc: "Symbolic 탐색 최대 반복 수", itemDefault: "10000" },
+                        { itemName: "P_USE_PYSR", itemValue: "VARCHAR2", itemDesc: "PySR 사용 여부(Y/N). N이면 polynomial LASSO fallback 사용", itemDefault: "N" },
                         { itemName: "P_MIN_R2_SCORE", itemValue: "NUMBER", itemDesc: "Symbolic Regression에 사용할 LASSO 최소 R2 점수", itemDefault: "0.7" },
                         { itemName: "P_MAX_AUTO_TARGETS", itemValue: "NUMBER", itemDesc: "자동 target 최대 개수", itemDefault: "10" },
                         { itemName: "P_CONTINUE_ON_ERROR", itemValue: "VARCHAR2", itemDesc: "자동 target 일부 실패 시 계속 실행 여부", itemDefault: "Y" },
@@ -1051,7 +1073,8 @@
             this.generateExecutablePlsql(true);
         },
 
-        async loadParameters(objectId) {
+        async loadParameters(objectId, options = {}) {
+            const generateAfterLoad = options.generateAfterLoad !== false;
             const container = getContainerEl(`#parameterGrid-${PAGE_CODE}`);
             if (container) container.innerHTML = `<div class="table-empty">Loading parameters...</div>`;
 
@@ -1065,6 +1088,7 @@
                     itemOrder: row.ITEM_ORDER ?? ""
                 }));
                 this.renderParameters();
+                if (generateAfterLoad) this.generateExecutablePlsql(true);
             } catch (error) {
                 this.parameters = [];
                 if (container) container.innerHTML = `<div class="table-error">${this.escapeHtml(error.message || "Parameter load failed.")}</div>`;
@@ -1194,7 +1218,7 @@
                     }
                     await this.loadExecutableObjects();
                     this.syncRegisteredResultInfo();
-                    await this.loadParameters(objectId);
+                    await this.loadParameters(objectId, { generateAfterLoad: false });
                 }
                 CommonMessage.success?.("Parameters refreshed.", { copyable: false });
             } catch (error) {
@@ -1873,8 +1897,8 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
             const scenario = this.contextScenarios.find((row) => String(row.SCENARIO_ID) === String(this.selectedScenarioId));
             const table = this.getSelectedScenarioTable();
             const parts = [
-                project ? `Project: ${project.PROJECT_NAME || project.PROJECT_CODE || "-"}` : "Project: -",
-                scenario ? `Scenario: ${scenario.SCENARIO_NAME || scenario.SCENARIO_CODE || "-"}` : "Scenario: -",
+                project ? `Project: ${CommonUtils.formatOwnerScopedName(project, project.PROJECT_NAME || project.PROJECT_CODE || "-")}` : "Project: -",
+                scenario ? `Scenario: ${CommonUtils.formatOwnerScopedName(scenario, scenario.SCENARIO_NAME || scenario.SCENARIO_CODE || "-")}` : "Scenario: -",
                 table ? `Table: ${table.OWNER_NAME || "-"}.${table.TABLE_NAME || "-"}` : "Table: -"
             ];
             this.setText(`#workContextSummary-${PAGE_CODE}`, parts.join(" | "));
@@ -1882,7 +1906,7 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
         },
 
         updateJobsTitle(scenario = null) {
-            const scenarioName = scenario ? (scenario.SCENARIO_NAME || scenario.SCENARIO_CODE || "") : "";
+            const scenarioName = scenario ? CommonUtils.formatOwnerScopedName(scenario, scenario.SCENARIO_NAME || scenario.SCENARIO_CODE || "") : "";
             this.setText(`#jobs-title-${PAGE_CODE}`, scenarioName || "");
         },
 
@@ -2505,6 +2529,28 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                     || this.currentJob?.execMethod
                     || ""
                 );
+                if (api) {
+                    this.currentJob = {
+                        ...this.currentJob,
+                        execSourceType: "WEB_API",
+                        execResourceId: api.resourceId || this.currentJob?.execResourceId || getContainerEl(`#webApiMethod-${PAGE_CODE}`)?.value || "",
+                        execMethod: api.method || this.currentJob?.execMethod || "",
+                        execSpecJson: api.specJson || this.currentJob?.execSpecJson || "",
+                        execObjectType: "WEB_API",
+                        execObjectName: this.currentJob?.execObjectName || api.method || "",
+                        execObjectLabel: this.currentJob?.execObjectLabel || api.label || api.method || "",
+                        resultCreateYn: "T",
+                        resultOwner: this.currentJob?.resultOwner || this.getDefaultResultOwner(),
+                        resultTableName: this.currentJob?.resultTableName || api.resultTable || ""
+                    };
+                    if (!getContainerEl(`#resultTable-${PAGE_CODE}`)?.value && api.resultTable) {
+                        this.setFieldValue(`#resultCreateYn-${PAGE_CODE}`, "T");
+                        this.setFieldValue(`#resultOwner-${PAGE_CODE}`, this.currentJob.resultOwner || this.getDefaultResultOwner());
+                        this.setFieldValue(`#resultTable-${PAGE_CODE}`, api.resultTable);
+                        this.setFieldValue(`#resultQueryTable-${PAGE_CODE}`, api.resultTable);
+                        this.updateResultModeLabels();
+                    }
+                }
                 editor.value = api ? this.createWebApiSpecTemplate(api) : "";
                 this.currentJob.execPlsql = editor.value;
                 return;

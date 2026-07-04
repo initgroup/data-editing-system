@@ -1182,6 +1182,12 @@
     box-shadow: 0 0 0 1px #64748b inset;
 }
 
+select.owner-scope-other,
+option.owner-scope-other {
+    color: #b42318;
+    font-weight: 700;
+}
+
 .scenario-table-card {
     flex-basis: 150px;
     display: flex;
@@ -3074,6 +3080,16 @@ body.is-column-resizing {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.project-row.owner-scope-other .project-row-title,
+.scenario-row.owner-scope-other .project-row-title {
+    color: #b42318;
+}
+
+.project-row.owner-scope-other .project-row-sub,
+.scenario-row.owner-scope-other .project-row-sub {
+    color: #9f1239;
 }
 
 .project-row-title-text {
@@ -8397,6 +8413,7 @@ body.intro-mode #container-M99001 .env-workspace {
     height: min(620px, calc(100vh - 96px));
     left: 50%;
     max-height: min(620px, calc(100vh - 96px));
+    overflow: hidden;
     position: fixed;
     top: 50%;
     transform: translate(-50%, -50%);
@@ -8415,6 +8432,8 @@ body.intro-mode #container-M99001 .env-workspace {
     cursor: move;
     display: flex;
     justify-content: center;
+    position: relative;
+    z-index: 4;
 }
 
 .flow-node-run-param-dragbar span {
@@ -8432,11 +8451,14 @@ body.intro-mode #container-M99001 .env-workspace {
 
 .flow-node-run-param-dialog > header {
     align-items: center;
+    background: #ffffff;
     border-bottom: 1px solid #e2e8f0;
     display: flex;
     gap: 12px;
     justify-content: space-between;
     padding: 10px 12px;
+    position: relative;
+    z-index: 4;
 }
 
 .flow-node-run-param-dialog > header span {
@@ -8464,6 +8486,8 @@ body.intro-mode #container-M99001 .env-workspace {
     flex-wrap: wrap;
     gap: 8px 16px;
     padding: 8px 12px;
+    position: relative;
+    z-index: 3;
 }
 
 .flow-node-run-param-summary span {
@@ -8477,13 +8501,49 @@ body.intro-mode #container-M99001 .env-workspace {
 }
 
 .flow-node-run-param-body {
+    background: #ffffff;
+    isolation: isolate;
     min-height: 0;
     overflow: auto;
     padding: 10px 12px 12px;
+    position: relative;
+    z-index: 1;
 }
 
 .flow-node-run-param-table {
+    background: #ffffff;
+    border-collapse: separate;
+    border-spacing: 0;
     min-width: 720px;
+}
+
+.flow-node-run-param-table thead {
+    background: #ffffff;
+    isolation: isolate;
+    position: sticky;
+    top: 0;
+    z-index: 30;
+}
+
+.flow-node-run-param-table thead::before {
+    background: #ffffff;
+    content: "";
+    inset: -64px 0 0 0;
+    pointer-events: none;
+    position: absolute;
+    z-index: -1;
+}
+
+.flow-node-run-param-table thead tr,
+.flow-node-run-param-table th {
+    background: #ffffff !important;
+}
+
+.flow-node-run-param-table th {
+    box-shadow: 0 1px 0 #e5e7eb;
+    position: sticky;
+    top: 0;
+    z-index: 31;
 }
 
 .flow-node-run-param-table pre {
@@ -8636,6 +8696,53 @@ body.intro-mode #container-M99001 .env-workspace {
     z-index: 2;
 }
 
+.flow-result-sql-grid {
+    table-layout: fixed;
+}
+
+.flow-result-sql-grid th.flow-result-sql-resizable {
+    overflow: visible;
+    padding-right: 14px;
+}
+
+.flow-result-sql-grid .flow-result-sql-th-label {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.flow-result-sql-col-resizer {
+    bottom: 0;
+    cursor: col-resize;
+    position: absolute;
+    right: -4px;
+    top: 0;
+    width: 8px;
+    z-index: 4;
+}
+
+.flow-result-sql-col-resizer::after {
+    background: transparent;
+    bottom: 7px;
+    content: "";
+    position: absolute;
+    right: 3px;
+    top: 7px;
+    width: 1px;
+}
+
+.flow-result-sql-col-resizer:hover::after,
+body.is-resizing-flow-result-sql .flow-result-sql-col-resizer::after {
+    background: #2563eb;
+}
+
+body.is-resizing-flow-result-sql {
+    cursor: col-resize;
+    user-select: none;
+}
+
 .flow-work-page .data-tool-panel[data-panel="history"].is-active {
     min-height: 0;
     overflow: hidden;
@@ -8651,7 +8758,9 @@ body.intro-mode #container-M99001 .env-workspace {
 }
 
 .flow-result-sql-grid td {
-    max-width: 360px;
+    max-width: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
 }
 
@@ -11738,9 +11847,17 @@ body.intro-mode #container-M99001 .env-workspace {
     border-color: #14b8a6;
 }
 
-.M04002-symbolic-rule-card header span {
+.M04002-symbolic-rule-card header > span {
     display: grid;
-    gap: 2px;
+    gap: 6px;
+    min-width: 0;
+}
+
+.M04002-symbolic-rule-id-inline {
+    align-items: center;
+    display: grid !important;
+    gap: 8px;
+    grid-template-columns: auto minmax(0, 1fr);
     min-width: 0;
 }
 
@@ -11780,6 +11897,44 @@ body.intro-mode #container-M99001 .env-workspace {
     width: 28px;
 }
 
+.M04002-symbolic-y-panel,
+.M04002-symbolic-x-panel {
+    background: #f8fbff;
+    border: 1px solid #bfdbfe;
+    margin-top: 8px;
+    min-width: 0;
+    padding: 8px;
+}
+
+.M04002-symbolic-y-panel {
+    display: grid;
+    gap: 4px;
+}
+
+.M04002-symbolic-y-panel > small,
+.M04002-symbolic-x-panel > small {
+    color: #1d4ed8;
+    display: block;
+    font-size: 10px;
+    font-weight: 850;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+}
+
+.M04002-symbolic-y-panel strong {
+    display: block;
+    font-size: 12px;
+    white-space: normal;
+}
+
+.M04002-symbolic-y-panel .M04002-column-ref {
+    width: fit-content;
+}
+
+.M04002-symbolic-x-panel .M04002-corr-tags {
+    margin-top: 4px;
+}
+
 .M04002-symbolic-rule-card header > button {
     align-items: center;
     background: #ffffff;
@@ -11816,6 +11971,8 @@ body.intro-mode #container-M99001 .env-workspace {
 
 .M04002-symbolic-rule-card footer {
     border-top: 1px solid #e2e8f0;
+    display: grid;
+    grid-template-columns: minmax(52px, 0.7fr) minmax(76px, 0.85fr) minmax(52px, 0.65fr) minmax(142px, 1.8fr);
     margin-top: 8px;
     padding-top: 8px;
 }
@@ -11842,6 +11999,12 @@ body.intro-mode #container-M99001 .env-workspace {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.M04002-symbolic-rule-card footer .M04002-symbolic-rule-method small,
+.M04002-symbolic-rule-card footer .M04002-symbolic-rule-method b {
+    max-width: none;
+    text-align: right;
 }
 
 .M04002-rule-facet-panel.is-symbolic {

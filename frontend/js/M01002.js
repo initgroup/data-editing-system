@@ -94,7 +94,9 @@
         createProjectRow(project) {
             const projectId = project.PROJECT_ID ?? "";
             const selectedClass = String(projectId) === String(this.selectedProject?.projectId) ? "is-selected" : "";
+            const ownerScopeClass = CommonUtils.getOwnerScopeClass(project);
             const name = project.PROJECT_NAME || "";
+            const displayName = CommonUtils.formatOwnerScopedName(project, name || "(Untitled project)");
             const code = project.PROJECT_CODE || "";
             const type = project.PROJECT_TYPE || "";
             const useYn = project.USE_YN || "Y";
@@ -104,10 +106,10 @@
                 : "";
 
             return `
-                <button type="button" class="project-row ${selectedClass}" data-project-id="${this.escapeAttr(projectId)}" onclick="M01002.selectProject('${this.escapeAttr(projectId)}')">
+                <button type="button" class="project-row ${selectedClass} ${this.escapeAttr(ownerScopeClass)}" data-project-id="${this.escapeAttr(projectId)}" onclick="M01002.selectProject('${this.escapeAttr(projectId)}')">
                     <span class="project-row-main">
-                        <span class="project-row-title" title="${this.escapeHtml(name)}">
-                            <span class="project-row-title-text">${this.escapeHtml(name || "(Untitled project)")}</span>
+                        <span class="project-row-title" title="${this.escapeHtml(displayName)}">
+                            <span class="project-row-title-text">${this.escapeHtml(displayName)}</span>
                             <span class="project-scenario-status">${scenarioIcon}</span>
                         </span>
                         <span class="project-row-sub" title="${this.escapeHtml(code)}">${this.escapeHtml(code || "No code")}</span>
@@ -238,15 +240,17 @@
         createScenarioRow(scenario) {
             const scenarioId = scenario.SCENARIO_ID ?? "";
             const selectedClass = String(scenarioId) === String(this.selectedScenario.scenarioId) ? "is-selected" : "";
+            const ownerScopeClass = CommonUtils.getOwnerScopeClass(scenario);
             const name = scenario.SCENARIO_NAME || "";
+            const displayName = CommonUtils.formatOwnerScopedName(scenario, name || "(Untitled scenario)");
             const code = scenario.SCENARIO_CODE || "";
             const type = scenario.SCENARIO_TYPE || "";
             const useYn = scenario.USE_YN || "Y";
 
             return `
-                <button type="button" class="scenario-row ${selectedClass}" onclick="M01002.selectScenario('${this.escapeAttr(scenarioId)}')">
+                <button type="button" class="scenario-row ${selectedClass} ${this.escapeAttr(ownerScopeClass)}" onclick="M01002.selectScenario('${this.escapeAttr(scenarioId)}')">
                     <span class="project-row-main">
-                        <span class="project-row-title" title="${this.escapeHtml(name)}">${this.escapeHtml(name || "(Untitled scenario)")}</span>
+                        <span class="project-row-title" title="${this.escapeHtml(displayName)}">${this.escapeHtml(displayName)}</span>
                         <span class="project-row-sub" title="${this.escapeHtml(code)}">${this.escapeHtml(code || "No code")}</span>
                     </span>
                     <span class="project-row-meta">
@@ -527,4 +531,3 @@
 
     window[PAGE_CODE] = M01002;
 })();
-

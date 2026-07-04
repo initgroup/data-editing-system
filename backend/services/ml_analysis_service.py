@@ -14,13 +14,14 @@ import re
 
 try:
     import numpy as np
-    from sklearn.linear_model import Lasso, LassoCV
+    from sklearn.linear_model import Lasso, LassoCV, LinearRegression
     from sklearn.metrics import r2_score
     from sklearn.preprocessing import PolynomialFeatures, StandardScaler
 except Exception:  # pragma: no cover - dependency availability is runtime-specific.
     np = None
     Lasso = None
     LassoCV = None
+    LinearRegression = None
     PolynomialFeatures = None
     StandardScaler = None
     r2_score = None
@@ -248,6 +249,14 @@ def run_symbolic_regression_rule(conn, payload: Dict[str, Any]) -> Dict[str, Any
     sample_rows = parse_optional_positive_int(get_value(payload, "P_SAMPLE_ROWS", "sampleRows"), 50000)
     max_iterations = clamp(parse_int(get_value(payload, "P_MAX_ITERATIONS", "maxIterations"), 10000), 100, 100000)
     min_r2_score = clamp_float(parse_optional_float(get_value(payload, "P_MIN_R2_SCORE", "minR2Score")), 0.7, 0.0, 1.0)
+    use_pysr = parse_yes_no(get_value(payload, "P_USE_PYSR", "usePysr"), "N") == "Y"
+    linear_first = parse_yes_no(get_value(payload, "P_LINEAR_FIRST_YN", "linearFirstYn"), "Y") == "Y"
+    linear_r2_threshold = clamp_float(
+        parse_optional_float(get_value(payload, "P_LINEAR_R2_THRESHOLD", "linearR2Threshold")),
+        0.995,
+        0.0,
+        1.0,
+    )
 
     if is_auto_target(target_column_value):
         max_auto_targets = clamp(parse_int(get_value(payload, "P_MAX_AUTO_TARGETS", "maxAutoTargets"), 10), 1, 100)
@@ -275,6 +284,9 @@ def run_symbolic_regression_rule(conn, payload: Dict[str, Any]) -> Dict[str, Any
         y_values,
         used_features,
         max_iterations,
+        use_pysr,
+        linear_first,
+        linear_r2_threshold,
     )
     cursor = conn.cursor()
     try:
@@ -435,7 +447,26 @@ def fit_symbolic_expression(
     y_values,
     feature_names: Sequence[str],
     max_iterations: int,
+    use_pysr: bool = False,
+    linear_first: bool = True,
+    linear_r2_threshold: float = 0.995,
 ) -> Tuple[str, float, int, str, str]:
+    if linear_first:
+        linear_expression, linear_score, linear_complexity, linear_method, linear_message = fit_linear_expression(
+            x_values,
+            y_values,
+            feature_names,
+        )
+        if linear_score >= linear_r2_threshold:
+            return linear_expression, linear_score, linear_complexity, linear_method, linear_message
+
+    if not use_pysr:
+        return fit_polynomial_fallback(
+            x_values,
+            y_values,
+            feature_names,
+            "PySR disabled by P_USE_PYSR=N.",
+        )
     try:
         from pysr import PySRRegressor
 
@@ -457,6 +488,24 @@ def fit_symbolic_expression(
         return fit_polynomial_fallback(x_values, y_values, feature_names, str(exc))
 
 
+def fit_linear_expression(x_values, y_values, feature_names: Sequence[str]) -> Tuple[str, float, int, str, str]:
+    model = LinearRegression()
+    model.fit(x_values, y_values)
+    prediction = model.predict(x_values)
+    score = float(r2_score(y_values, prediction))
+    terms = []
+    for coefficient, feature_name in zip(model.coef_, feature_names):
+        coefficient = float(coefficient)
+        if abs(coefficient) <= 1.0e-8:
+            continue
+        terms.append((coefficient, str(feature_name).upper()))
+    intercept = float(model.intercept_)
+    expression = format_linear_expression(intercept, terms)
+    complexity = len(terms) + 1
+    message = "Simple linear regression matched the target well enough before symbolic/polynomial fallback."
+    return expression, score, complexity, "LINEAR_REGRESSION", message
+
+
 def fit_polynomial_fallback(x_values, y_values, feature_names: Sequence[str], reason: str) -> Tuple[str, float, int, str, str]:
     x_scaler = StandardScaler()
     y_scaler = StandardScaler()
@@ -464,24 +513,28 @@ def fit_polynomial_fallback(x_values, y_values, feature_names: Sequence[str], re
     y_scaled = y_scaler.fit_transform(y_values.reshape(-1, 1)).ravel()
     poly = PolynomialFeatures(degree=2, include_bias=False)
     x_poly = poly.fit_transform(x_scaled)
-    names = poly.get_feature_names_out(feature_names)
     cv = min(5, max(2, len(y_scaled) // 5))
     model = LassoCV(cv=cv, max_iter=10000, random_state=42)
     model.fit(x_poly, y_scaled)
     prediction = model.predict(x_poly)
     score = float(r2_score(y_scaled, prediction))
+    y_mean = float(y_scaler.mean_[0])
+    y_scale = float(y_scaler.scale_[0]) if abs(float(y_scaler.scale_[0])) > 1.0e-12 else 1.0
+    x_means = [float(value) for value in x_scaler.mean_]
+    x_scales = [float(value) if abs(float(value)) > 1.0e-12 else 1.0 for value in x_scaler.scale_]
     terms = []
-    for coef, name in sorted(zip(model.coef_, names), key=lambda item: -abs(float(item[0])))[:12]:
-        coef = float(coef)
-        if abs(coef) <= 1.0e-8:
+    for coef, powers in zip(model.coef_, poly.powers_):
+        raw_coef = float(coef) * y_scale
+        if abs(raw_coef) <= 1.0e-8:
             continue
-        terms.append(f"{coef:.6g}*{format_feature_term(name)}")
-    intercept = float(model.intercept_)
-    expression = f"{intercept:.6g}"
-    if terms:
-        expression += " + " + " + ".join(terms)
+        term_expr = format_polynomial_raw_term(powers, feature_names, x_means, x_scales)
+        if term_expr:
+            terms.append((raw_coef, term_expr))
+    terms = sorted(terms, key=lambda item: -abs(item[0]))[:12]
+    intercept = y_mean + y_scale * float(model.intercept_)
+    expression = format_polynomial_expression(intercept, terms)
     complexity = len(terms) + 1
-    message = "PySR was unavailable or failed; polynomial LASSO fallback was used."
+    message = "PySR was unavailable or failed; polynomial LASSO fallback was used with an original-scale expression."
     if reason:
         message = f"{message} First PySR error: {reason[:500]}"
     return expression, score, complexity, "POLYNOMIAL_LASSO_FALLBACK", message
@@ -828,7 +881,7 @@ def fetch_numeric_matrix(
 
 
 def require_sklearn() -> None:
-    if np is None or LassoCV is None or StandardScaler is None:
+    if np is None or LassoCV is None or LinearRegression is None or StandardScaler is None:
         raise HTTPException(
             status_code=500,
             detail=(
@@ -952,3 +1005,74 @@ def to_float(value: Any) -> Optional[float]:
 
 def format_feature_term(name: str) -> str:
     return str(name).replace(" ", "*").replace("^", "**")
+
+
+def format_model_number(value: float) -> str:
+    if not math.isfinite(value) or abs(value) <= 1.0e-12:
+        return "0"
+    return f"{value:.12g}"
+
+
+def format_linear_expression(intercept: float, terms: Sequence[Tuple[float, str]]) -> str:
+    expression = ""
+    if math.isfinite(intercept) and abs(intercept) > 1.0e-8:
+        expression = format_model_number(intercept)
+
+    for coefficient, feature_name in terms:
+        coefficient = float(coefficient)
+        if not math.isfinite(coefficient) or abs(coefficient) <= 1.0e-8:
+            continue
+
+        magnitude = abs(coefficient)
+        if abs(magnitude - 1.0) <= 1.0e-8:
+            term_expr = str(feature_name).upper()
+        else:
+            term_expr = f"{format_model_number(magnitude)}*{str(feature_name).upper()}"
+
+        if not expression:
+            expression = f"-{term_expr}" if coefficient < 0 else term_expr
+        else:
+            sign = " - " if coefficient < 0 else " + "
+            expression += f"{sign}{term_expr}"
+
+    return expression or "0"
+
+
+def format_scaled_feature_reference(feature_name: str, mean: float, scale: float) -> str:
+    feature = str(feature_name).upper()
+    if abs(mean) <= 1.0e-12:
+        centered = feature
+    elif mean > 0:
+        centered = f"({feature} - {format_model_number(mean)})"
+    else:
+        centered = f"({feature} + {format_model_number(abs(mean))})"
+    if abs(scale - 1.0) <= 1.0e-12:
+        return centered
+    return f"({centered}/{format_model_number(scale)})"
+
+
+def format_polynomial_raw_term(
+    powers,
+    feature_names: Sequence[str],
+    means: Sequence[float],
+    scales: Sequence[float],
+) -> str:
+    parts = []
+    for index, power in enumerate(powers):
+        power = int(power)
+        if power <= 0:
+            continue
+        base = format_scaled_feature_reference(feature_names[index], means[index], scales[index])
+        if power == 1:
+            parts.append(base)
+        else:
+            parts.append(f"POWER({base}, {power})")
+    return "*".join(parts)
+
+
+def format_polynomial_expression(intercept: float, terms: Sequence[Tuple[float, str]]) -> str:
+    expression = format_model_number(intercept)
+    for coefficient, term_expr in terms:
+        sign = " + " if coefficient >= 0 else " - "
+        expression += f"{sign}{format_model_number(abs(float(coefficient)))}*{term_expr}"
+    return expression

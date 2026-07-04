@@ -61,8 +61,8 @@ def create_anly_work_router(
         return anly_work.list_flow_run_nodes(flow_run_id, request)
 
     @router.delete("/runs/{flow_run_id}")
-    def delete_flow_run(flow_run_id: int, request: Request):
-        return anly_work.delete_flow_run(flow_run_id, request, flow_menu_code=FLOW_MENU_CODE)
+    def delete_flow_run(flow_run_id: int, request: Request, force: bool = False):
+        return anly_work.delete_flow_run(flow_run_id, request, flow_menu_code=FLOW_MENU_CODE, force=force)
 
     @router.post("/sql")
     def execute_select_sql(req: anly_work.SqlRequest, request: Request):

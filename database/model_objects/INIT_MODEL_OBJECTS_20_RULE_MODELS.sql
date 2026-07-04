@@ -1203,14 +1203,18 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_SYMBOLIC_RULE_VIOLATION_DETECT" (
     p_result_table            IN VARCHAR2 DEFAULT 'INIT$_TB_SYMBOLIC_RULE_VIOLATION',
     p_error_pct_threshold     IN NUMBER   DEFAULT 0.05,
     p_abs_error_threshold     IN NUMBER   DEFAULT NULL,
-    p_max_rules               IN NUMBER   DEFAULT 500,
-    p_max_violations_per_rule IN NUMBER   DEFAULT 1000,
+    p_max_rules               IN NUMBER   DEFAULT 50,
+    p_max_violations_per_rule IN NUMBER   DEFAULT 200,
     p_clear_existing_yn       IN VARCHAR2 DEFAULT 'Y',
-    p_commit_interval         IN NUMBER   DEFAULT 10000,
+    p_commit_interval         IN NUMBER   DEFAULT 1000,
     p_commit_yn               IN VARCHAR2 DEFAULT 'Y',
     p_run_source_type         IN VARCHAR2 DEFAULT 'DATA_WORK',
-    p_run_id                  IN NUMBER   DEFAULT 0
+    p_run_id                  IN NUMBER   DEFAULT 0,
+    p_max_scan_rows           IN NUMBER   DEFAULT 50000,
+    p_max_elapsed_seconds     IN NUMBER   DEFAULT 1800,
+    p_max_expression_length   IN NUMBER   DEFAULT 8000
 ) AUTHID CURRENT_USER IS
+    v_current_schema VARCHAR2(128) := UPPER(SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA'));
     v_rule_owner VARCHAR2(128);
     v_rule_table VARCHAR2(128);
     v_rule_id VARCHAR2(128);
@@ -1229,15 +1233,23 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_SYMBOLIC_RULE_VIOLATION_DETECT" (
     v_abs_error_threshold NUMBER;
     v_max_rules NUMBER;
     v_max_violations_per_rule NUMBER;
+    v_max_scan_rows NUMBER;
+    v_max_elapsed_seconds NUMBER;
+    v_max_expression_length NUMBER;
     v_commit_interval NUMBER;
+    v_delete_batch_size NUMBER;
     v_pending_dml_count NUMBER := 0;
     v_deleted_count NUMBER := 0;
+    v_deleted_chunk NUMBER := 0;
     v_inserted_total NUMBER := 0;
     v_skipped_total NUMBER := 0;
     v_committed_chunks NUMBER := 0;
     v_processed_rules NUMBER := 0;
+    v_rule_total NUMBER := 0;
     v_run_source_type VARCHAR2(30);
     v_run_id NUMBER;
+    v_rule_filter_sql VARCHAR2(32767);
+    v_rule_total_sql VARCHAR2(32767);
     v_rule_cursor SYS_REFCURSOR;
     v_rule_item_id VARCHAR2(128);
     v_rule_target_column VARCHAR2(128);
@@ -1246,6 +1258,13 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_SYMBOLIC_RULE_VIOLATION_DETECT" (
     v_rule_score NUMBER;
     v_rule_complexity NUMBER;
     v_rule_method VARCHAR2(80);
+    TYPE t_column_cache IS TABLE OF VARCHAR2(1) INDEX BY VARCHAR2(128);
+    TYPE t_column_type_cache IS TABLE OF VARCHAR2(128) INDEX BY VARCHAR2(128);
+    v_target_column_cache t_column_cache;
+    v_target_column_type_cache t_column_type_cache;
+    v_target_column_cache_loaded BOOLEAN := FALSE;
+    v_started_at DATE := SYSDATE;
+    v_stop_requested BOOLEAN := FALSE;
 
     FUNCTION is_null_token(p_value IN VARCHAR2) RETURN BOOLEAN IS
     BEGIN
@@ -1268,6 +1287,11 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_SYMBOLIC_RULE_VIOLATION_DETECT" (
             RETURN 'DATA_WORK';
         END IF;
         RETURN v_value;
+    END;
+
+    FUNCTION is_current_schema(p_owner IN VARCHAR2) RETURN BOOLEAN IS
+    BEGIN
+        RETURN UPPER(TRIM(p_owner)) = v_current_schema;
     END;
 
     FUNCTION quote_name(p_value IN VARCHAR2) RETURN VARCHAR2 IS
@@ -1299,24 +1323,97 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_SYMBOLIC_RULE_VIOLATION_DETECT" (
     FUNCTION table_exists(p_owner IN VARCHAR2, p_table IN VARCHAR2) RETURN BOOLEAN IS
         v_count NUMBER;
     BEGIN
-        SELECT COUNT(*)
-          INTO v_count
-          FROM ALL_TABLES
-         WHERE OWNER = p_owner
-           AND TABLE_NAME = p_table;
+        IF is_current_schema(p_owner) THEN
+            SELECT COUNT(*)
+              INTO v_count
+              FROM USER_TABLES
+             WHERE TABLE_NAME = p_table;
+        ELSE
+            SELECT COUNT(*)
+              INTO v_count
+              FROM ALL_TABLES
+             WHERE OWNER = p_owner
+               AND TABLE_NAME = p_table;
+        END IF;
         RETURN v_count > 0;
+    END;
+
+    PROCEDURE load_target_column_cache IS
+    BEGIN
+        IF v_target_column_cache_loaded THEN
+            RETURN;
+        END IF;
+
+        v_target_column_cache.DELETE;
+        v_target_column_type_cache.DELETE;
+        IF is_current_schema(v_target_owner) THEN
+            FOR r IN (
+                SELECT COLUMN_NAME
+                     , DATA_TYPE
+                  FROM USER_TAB_COLUMNS
+                 WHERE TABLE_NAME = v_target_table
+            ) LOOP
+                v_target_column_cache(r.COLUMN_NAME) := 'Y';
+                v_target_column_type_cache(r.COLUMN_NAME) := r.DATA_TYPE;
+            END LOOP;
+        ELSE
+            FOR r IN (
+                SELECT COLUMN_NAME
+                     , DATA_TYPE
+                  FROM ALL_TAB_COLUMNS
+                 WHERE OWNER = v_target_owner
+                   AND TABLE_NAME = v_target_table
+            ) LOOP
+                v_target_column_cache(r.COLUMN_NAME) := 'Y';
+                v_target_column_type_cache(r.COLUMN_NAME) := r.DATA_TYPE;
+            END LOOP;
+        END IF;
+        v_target_column_cache_loaded := TRUE;
     END;
 
     FUNCTION column_exists(p_owner IN VARCHAR2, p_table IN VARCHAR2, p_column IN VARCHAR2) RETURN BOOLEAN IS
         v_count NUMBER;
     BEGIN
-        SELECT COUNT(*)
-          INTO v_count
-          FROM ALL_TAB_COLUMNS
-         WHERE OWNER = p_owner
-           AND TABLE_NAME = p_table
-           AND COLUMN_NAME = p_column;
+        IF p_column IS NULL THEN
+            RETURN FALSE;
+        END IF;
+
+        IF UPPER(TRIM(p_owner)) = v_target_owner
+           AND UPPER(TRIM(p_table)) = v_target_table THEN
+            load_target_column_cache;
+            RETURN v_target_column_cache.EXISTS(UPPER(TRIM(p_column)));
+        END IF;
+
+        IF is_current_schema(p_owner) THEN
+            SELECT COUNT(*)
+              INTO v_count
+              FROM USER_TAB_COLUMNS
+             WHERE TABLE_NAME = p_table
+               AND COLUMN_NAME = p_column;
+        ELSE
+            SELECT COUNT(*)
+              INTO v_count
+              FROM ALL_TAB_COLUMNS
+             WHERE OWNER = p_owner
+               AND TABLE_NAME = p_table
+               AND COLUMN_NAME = p_column;
+        END IF;
         RETURN v_count > 0;
+    END;
+
+    FUNCTION numeric_column_expr(p_column IN VARCHAR2) RETURN VARCHAR2 IS
+        v_column VARCHAR2(128) := UPPER(TRIM(p_column));
+        v_data_type VARCHAR2(128);
+    BEGIN
+        load_target_column_cache;
+        v_data_type := UPPER(NVL(v_target_column_type_cache(v_column), ''));
+        IF v_data_type IN ('NUMBER', 'BINARY_FLOAT', 'BINARY_DOUBLE', 'FLOAT') THEN
+            RETURN quote_name(v_column);
+        END IF;
+        RETURN 'TO_NUMBER(NULLIF(TRIM(TO_CHAR(' || quote_name(v_column) || ')), '''') DEFAULT NULL ON CONVERSION ERROR)';
+    EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+            RETURN 'TO_NUMBER(NULLIF(TRIM(TO_CHAR(' || quote_name(v_column) || ')), '''') DEFAULT NULL ON CONVERSION ERROR)';
     END;
 
     FUNCTION regex_identifier(p_identifier IN VARCHAR2) RETURN VARCHAR2 IS
@@ -1325,10 +1422,10 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_SYMBOLIC_RULE_VIOLATION_DETECT" (
     END;
 
     FUNCTION replace_identifier_expr(
-        p_expr IN CLOB,
+        p_expr IN VARCHAR2,
         p_identifier IN VARCHAR2,
         p_replacement IN VARCHAR2
-    ) RETURN CLOB IS
+    ) RETURN VARCHAR2 IS
     BEGIN
         RETURN REGEXP_REPLACE(
             p_expr,
@@ -1343,21 +1440,33 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_SYMBOLIC_RULE_VIOLATION_DETECT" (
     FUNCTION translate_expression(
         p_expression IN CLOB,
         p_feature_columns IN VARCHAR2
-    ) RETURN CLOB IS
-        v_expr CLOB := DBMS_LOB.SUBSTR(p_expression, 32767, 1);
+    ) RETURN VARCHAR2 IS
+        v_expr VARCHAR2(32767) := DBMS_LOB.SUBSTR(p_expression, 32767, 1);
         v_rest VARCHAR2(32767) := p_feature_columns || ',';
         v_token VARCHAR2(4000);
         v_pos PLS_INTEGER;
         v_col VARCHAR2(128);
         v_feature_count PLS_INTEGER := 0;
-        v_check CLOB;
+        v_check VARCHAR2(32767);
     BEGIN
         IF v_expr IS NULL OR REGEXP_LIKE(v_expr, '[''";\[\]{}]') THEN
+            RETURN NULL;
+        END IF;
+        IF v_max_expression_length IS NOT NULL
+           AND DBMS_LOB.GETLENGTH(p_expression) > v_max_expression_length THEN
             RETURN NULL;
         END IF;
 
         v_expr := REGEXP_REPLACE(v_expr, '(^|[^A-Za-z0-9_$#])square[[:space:]]*\(([^()]*)\)', '\1POWER(\2, 2)', 1, 0, 'i');
         v_expr := REGEXP_REPLACE(v_expr, '(^|[^A-Za-z0-9_$#])log[[:space:]]*\(', '\1LN(', 1, 0, 'i');
+        v_expr := REGEXP_REPLACE(
+            v_expr,
+            '(^|[^A-Za-z0-9_$#])([A-Z][A-Z0-9_$#]*)[[:space:]]*\*\*[[:space:]]*([0-9]+(\.[0-9]+)?)',
+            '\1POWER(\2, \3)',
+            1,
+            0,
+            'i'
+        );
 
         LOOP
             v_pos := INSTR(v_rest, ',');
@@ -1369,10 +1478,13 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_SYMBOLIC_RULE_VIOLATION_DETECT" (
             END IF;
 
             v_col := normalize_identifier(v_token, 'feature column');
+            IF v_feature_count >= 200 THEN
+                RETURN NULL;
+            END IF;
             IF NOT column_exists(v_target_owner, v_target_table, v_col) THEN
                 RETURN NULL;
             END IF;
-            v_expr := replace_identifier_expr(v_expr, v_col, 'TO_NUMBER(' || quote_name(v_col) || ')');
+            v_expr := replace_identifier_expr(v_expr, v_col, numeric_column_expr(v_col));
             v_feature_count := v_feature_count + 1;
         END LOOP;
 
@@ -1382,8 +1494,8 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_SYMBOLIC_RULE_VIOLATION_DETECT" (
 
         v_expr := REGEXP_REPLACE(
             v_expr,
-            '(TO_NUMBER\("[A-Z0-9_$#]+"\))[[:space:]]*\*\*[[:space:]]*([0-9]+(\.[0-9]+)?)',
-            'POWER(\1, \2)',
+            '((TO_NUMBER\([^)]*\)|"[A-Z0-9_$#]+"))[[:space:]]*\*\*[[:space:]]*([0-9]+(\.[0-9]+)?)',
+            'POWER(\1, \3)',
             1,
             0,
             'i'
@@ -1391,7 +1503,7 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_SYMBOLIC_RULE_VIOLATION_DETECT" (
         v_check := UPPER(v_expr);
         v_check := REGEXP_REPLACE(v_check, '[0-9]+(\.[0-9]+)?E[-+]?[0-9]+', '0', 1, 0, 'i');
         v_check := REGEXP_REPLACE(v_check, '"[A-Z][A-Z0-9_$#]{0,127}"', '');
-        v_check := REGEXP_REPLACE(v_check, 'TO_NUMBER|POWER|SQRT|ABS|LN|EXP|SIN|COS|TAN|NULL', '', 1, 0, 'i');
+        v_check := REGEXP_REPLACE(v_check, 'TO_NUMBER|POWER|SQRT|ABS|LN|EXP|SIN|COS|TAN|NULLIF|TRIM|TO_CHAR|DEFAULT|ON|CONVERSION|ERROR|NULL', '', 1, 0, 'i');
         IF REGEXP_LIKE(v_check, '[A-Z][A-Z0-9_$#]*') THEN
             RETURN NULL;
         END IF;
@@ -1419,6 +1531,23 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_SYMBOLIC_RULE_VIOLATION_DETECT" (
     EXCEPTION
         WHEN OTHERS THEN
             NULL;
+    END;
+
+    PROCEDURE check_elapsed(p_phase IN VARCHAR2) IS
+        v_elapsed_seconds NUMBER;
+    BEGIN
+        IF v_max_elapsed_seconds IS NULL OR v_stop_requested THEN
+            RETURN;
+        END IF;
+
+        v_elapsed_seconds := ROUND((SYSDATE - v_started_at) * 86400);
+        IF v_elapsed_seconds > v_max_elapsed_seconds THEN
+            v_stop_requested := TRUE;
+            set_runtime_progress(
+                'TIME LIMIT',
+                'phase=' || SUBSTR(p_phase, 1, 16) || ' elapsed=' || v_elapsed_seconds || 's rules=' || v_processed_rules || ' ins=' || v_inserted_total
+            );
+        END IF;
     END;
 
     PROCEDURE commit_work_chunk(p_force IN BOOLEAN DEFAULT FALSE) IS
@@ -1464,9 +1593,28 @@ BEGIN
     END IF;
     v_tolerance_pct := GREATEST(0, LEAST(1, v_tolerance_pct));
     v_abs_error_threshold := CASE WHEN p_abs_error_threshold IS NULL THEN NULL ELSE GREATEST(0, p_abs_error_threshold) END;
-    v_max_rules := GREATEST(1, LEAST(10000, NVL(p_max_rules, 500)));
-    v_max_violations_per_rule := GREATEST(1, LEAST(100000, NVL(p_max_violations_per_rule, 1000)));
-    v_commit_interval := GREATEST(0, LEAST(1000000, NVL(p_commit_interval, 10000)));
+    v_max_rules := GREATEST(1, LEAST(10000, NVL(p_max_rules, 50)));
+    v_max_violations_per_rule := GREATEST(1, LEAST(100000, NVL(p_max_violations_per_rule, 200)));
+    v_max_scan_rows := CASE
+        WHEN p_max_scan_rows IS NULL THEN 50000
+        WHEN p_max_scan_rows <= 0 THEN NULL
+        ELSE GREATEST(1, LEAST(10000000, p_max_scan_rows))
+    END;
+    v_max_elapsed_seconds := CASE
+        WHEN p_max_elapsed_seconds IS NULL THEN 1800
+        WHEN p_max_elapsed_seconds <= 0 THEN NULL
+        ELSE GREATEST(60, LEAST(86400, p_max_elapsed_seconds))
+    END;
+    v_max_expression_length := CASE
+        WHEN p_max_expression_length IS NULL THEN 8000
+        WHEN p_max_expression_length <= 0 THEN NULL
+        ELSE GREATEST(1000, LEAST(32767, p_max_expression_length))
+    END;
+    v_commit_interval := GREATEST(0, LEAST(1000000, NVL(p_commit_interval, 1000)));
+    v_delete_batch_size := CASE
+        WHEN v_commit_interval > 0 THEN GREATEST(1000, LEAST(50000, v_commit_interval))
+        ELSE 10000
+    END;
     v_run_source_type := normalize_run_source_type(p_run_source_type);
     v_run_id := NVL(p_run_id, 0);
     v_target_object := qualified_name(v_target_owner, v_target_table);
@@ -1487,6 +1635,12 @@ BEGIN
         RAISE_APPLICATION_ERROR(-20604, 'Result table does not exist: ' || v_result_owner || '.' || v_result_table);
     END IF;
 
+    set_runtime_progress(
+        'LOAD COLUMNS',
+        'target=' || SUBSTR(v_target_table, 1, 30)
+    );
+    load_target_column_cache;
+
     IF v_case_id_col IS NOT NULL AND column_exists(v_target_owner, v_target_table, v_case_id_col) THEN
         v_case_id_expr := 'SUBSTR(TO_CHAR(' || quote_name(v_case_id_col) || '), 1, 4000)';
     ELSE
@@ -1495,26 +1649,55 @@ BEGIN
 
     EXECUTE IMMEDIATE 'ALTER SESSION DISABLE PARALLEL DML';
     EXECUTE IMMEDIATE 'ALTER SESSION DISABLE PARALLEL QUERY';
-    set_runtime_progress('READY', 'run=' || v_run_id || ' maxRules=' || v_max_rules);
+    set_runtime_progress(
+        'READY',
+        'run=' || v_run_id || ' maxRules=' || v_max_rules || ' maxViol=' || v_max_violations_per_rule || ' scan=' || NVL(TO_CHAR(v_max_scan_rows), 'ALL') || ' limit=' || NVL(TO_CHAR(v_max_elapsed_seconds), 'NONE') || ' expr=' || NVL(TO_CHAR(v_max_expression_length), 'ALL')
+    );
 
     IF v_clear_existing = 'Y' THEN
-        set_runtime_progress('DELETE OLD', 'run=' || v_run_id || ' ins=0 skip=0');
-        EXECUTE IMMEDIATE
-            'DELETE /*+ NO_PARALLEL */ FROM ' || v_result_object ||
-            ' WHERE "RUN_SOURCE_TYPE" = :run_source_type' ||
-            '   AND "RUN_ID" = :run_id' ||
-            '   AND "TARGET_OWNER" = :target_owner' ||
-            '   AND "TARGET_TABLE" = :target_table' ||
-            '   AND "RULE_OWNER" = :rule_owner' ||
-            '   AND "RULE_TABLE" = :rule_table'
-            USING v_run_source_type, v_run_id, v_target_owner, v_target_table, v_rule_owner, v_rule_table;
-        v_deleted_count := SQL%ROWCOUNT;
-        v_pending_dml_count := v_pending_dml_count + v_deleted_count;
-        commit_work_chunk(FALSE);
+        LOOP
+            set_runtime_progress('DELETE OLD', 'run=' || v_run_id || ' del=' || v_deleted_count || ' batch=' || v_delete_batch_size);
+            EXECUTE IMMEDIATE
+                'DELETE /*+ NO_PARALLEL */ FROM ' || v_result_object ||
+                ' WHERE "RUN_SOURCE_TYPE" = :run_source_type' ||
+                '   AND "RUN_ID" = :run_id' ||
+                '   AND "TARGET_OWNER" = :target_owner' ||
+                '   AND "TARGET_TABLE" = :target_table' ||
+                '   AND "RULE_OWNER" = :rule_owner' ||
+                '   AND "RULE_TABLE" = :rule_table' ||
+                '   AND ROWNUM <= :delete_batch'
+                USING v_run_source_type, v_run_id, v_target_owner, v_target_table, v_rule_owner, v_rule_table, v_delete_batch_size;
+            v_deleted_chunk := SQL%ROWCOUNT;
+            v_deleted_count := v_deleted_count + v_deleted_chunk;
+            v_pending_dml_count := v_pending_dml_count + v_deleted_chunk;
+            commit_work_chunk(TRUE);
+            check_elapsed('delete old');
+            EXIT WHEN v_deleted_chunk = 0 OR v_stop_requested;
+        END LOOP;
         set_runtime_progress('DELETE DONE', 'del=' || v_deleted_count || ' run=' || v_run_id);
     END IF;
 
-    set_runtime_progress('LOAD RULES', 'run=' || v_run_id || ' maxRules=' || v_max_rules);
+    v_rule_filter_sql :=
+        '          FROM ' || v_rule_object || ' R ' ||
+        '         WHERE R."RUN_SOURCE_TYPE" = ' || sql_literal(v_run_source_type) ||
+        '           AND (' || sql_literal(v_run_source_type) || ' = ''DATA_WORK'' OR R."RUN_ID" = ' || number_literal(v_run_id) || ') ' ||
+        '           AND R."OWNER" = ' || sql_literal(v_target_owner) ||
+        '           AND R."TABLE_NAME" = ' || sql_literal(v_target_table) ||
+        '           AND R."SELECTED_YN" = ''Y'' ' ||
+        '           AND R."EXPRESSION" IS NOT NULL ' ||
+        '           AND R."FEATURE_COLUMNS" IS NOT NULL ' ||
+        CASE
+            WHEN v_rule_id IS NULL THEN ''
+            ELSE '           AND R."RULE_ID" = ' || sql_literal(v_rule_id) || ' '
+        END;
+
+    v_rule_total_sql := 'SELECT LEAST(COUNT(*), ' || TO_CHAR(v_max_rules) || ') ' || v_rule_filter_sql;
+    EXECUTE IMMEDIATE v_rule_total_sql INTO v_rule_total;
+
+    set_runtime_progress(
+        'LOAD RULES',
+        'run=' || v_run_id || ' rules=' || v_rule_total || ' maxRules=' || v_max_rules
+    );
     OPEN v_rule_cursor FOR
         'SELECT RULE_ID, TARGET_COLUMN, EXPRESSION, FEATURE_COLUMNS, SCORE, COMPLEXITY, METHOD ' ||
         '  FROM (' ||
@@ -1532,22 +1715,14 @@ BEGIN
         '                            R."TARGET_COLUMN", ' ||
         '                            R."RULE_ID" ' ||
         '               ) AS RN__ ' ||
-        '          FROM ' || v_rule_object || ' R ' ||
-        '         WHERE R."RUN_SOURCE_TYPE" = ' || sql_literal(v_run_source_type) ||
-        '           AND (' || sql_literal(v_run_source_type) || ' = ''DATA_WORK'' OR R."RUN_ID" = ' || number_literal(v_run_id) || ') ' ||
-        '           AND R."OWNER" = ' || sql_literal(v_target_owner) ||
-        '           AND R."TABLE_NAME" = ' || sql_literal(v_target_table) ||
-        '           AND R."SELECTED_YN" = ''Y'' ' ||
-        '           AND R."EXPRESSION" IS NOT NULL ' ||
-        '           AND R."FEATURE_COLUMNS" IS NOT NULL ' ||
-        CASE
-            WHEN v_rule_id IS NULL THEN ''
-            ELSE '           AND R."RULE_ID" = ' || sql_literal(v_rule_id) || ' '
-        END ||
+        v_rule_filter_sql ||
         '       ) ' ||
         ' WHERE RN__ <= ' || TO_CHAR(v_max_rules);
 
     LOOP
+        check_elapsed('rule loop');
+        EXIT WHEN v_stop_requested;
+
         FETCH v_rule_cursor
          INTO v_rule_item_id,
               v_rule_target_column,
@@ -1559,30 +1734,45 @@ BEGIN
         EXIT WHEN v_rule_cursor%NOTFOUND;
         v_processed_rules := v_processed_rules + 1;
         set_runtime_progress(
-            'RULE ' || v_processed_rules || '/' || v_max_rules,
+            'RULE ' || v_processed_rules || '/' || GREATEST(v_rule_total, v_processed_rules),
             'rule=' || SUBSTR(v_rule_item_id, 1, 20) || ' ins=' || v_inserted_total || ' skip=' || v_skipped_total
         );
 
         DECLARE
             v_target_col VARCHAR2(128) := UPPER(TRIM(v_rule_target_column));
-            v_expr_sql CLOB;
+            v_expr_sql VARCHAR2(32767);
             v_sql CLOB;
+            v_scan_filter_sql VARCHAR2(1000);
             v_reason VARCHAR2(4000);
             v_inserted_count NUMBER := 0;
         BEGIN
+            set_runtime_progress(
+                'CHECK ' || v_processed_rules || '/' || GREATEST(v_rule_total, v_processed_rules),
+                'target=' || SUBSTR(v_target_col, 1, 20) || ' feat=' || SUBSTR(v_rule_feature_columns, 1, 35)
+            );
             IF NOT column_exists(v_target_owner, v_target_table, v_target_col) THEN
                 v_skipped_total := v_skipped_total + 1;
+                DBMS_OUTPUT.PUT_LINE('[WARN] Symbolic rule skipped: ' || v_rule_item_id || ' - target column not found: ' || v_target_col);
                 CONTINUE;
             END IF;
 
+            set_runtime_progress(
+                'TRANSLATE ' || v_processed_rules || '/' || GREATEST(v_rule_total, v_processed_rules),
+                'rule=' || SUBSTR(v_rule_item_id, 1, 20) || ' feat=' || SUBSTR(v_rule_feature_columns, 1, 35)
+            );
             v_expr_sql := translate_expression(v_rule_expression, v_rule_feature_columns);
             IF v_expr_sql IS NULL THEN
                 v_skipped_total := v_skipped_total + 1;
+                DBMS_OUTPUT.PUT_LINE('[WARN] Symbolic rule skipped: ' || v_rule_item_id || ' - expression could not be translated.');
                 CONTINUE;
             END IF;
 
             v_reason := 'Actual value is outside symbolic expression tolerance '
                 || TO_CHAR(v_tolerance_pct * 100, 'FM9999990D9999', 'NLS_NUMERIC_CHARACTERS=.,') || '%.';
+            v_scan_filter_sql := CASE
+                WHEN v_max_scan_rows IS NULL THEN ''
+                ELSE ' WHERE ROWNUM <= ' || TO_CHAR(v_max_scan_rows)
+            END;
 
             v_sql :=
                 'INSERT /*+ NO_PARALLEL */ INTO ' || v_result_object || ' (' ||
@@ -1621,8 +1811,8 @@ BEGIN
                 '                SELECT /*+ NO_PARALLEL */ ' || v_case_id_expr || ' AS CASE_ID, ' ||
                 '                       ROWIDTOCHAR(ROWID) AS CASE_ROWID, ' ||
                 '                       (' || v_expr_sql || ') AS PREDICTED_VALUE, ' ||
-                '                       TO_NUMBER(' || quote_name(v_target_col) || ') AS ACTUAL_VALUE ' ||
-                '                  FROM ' || v_target_object ||
+                '                       ' || numeric_column_expr(v_target_col) || ' AS ACTUAL_VALUE ' ||
+                '                  FROM ' || v_target_object || v_scan_filter_sql ||
                 '               ) P ' ||
                 '         WHERE P.PREDICTED_VALUE IS NOT NULL ' ||
                 '           AND P.ACTUAL_VALUE IS NOT NULL ' ||
@@ -1641,23 +1831,36 @@ BEGIN
 
             BEGIN
                 set_runtime_progress(
-                    'SCAN ' || v_processed_rules || '/' || v_max_rules,
-                    'rule=' || SUBSTR(v_rule_item_id, 1, 20) || ' ins=' || v_inserted_total || ' skip=' || v_skipped_total
+                    'SCAN ' || v_processed_rules || '/' || GREATEST(v_rule_total, v_processed_rules),
+                    'rule=' || SUBSTR(v_rule_item_id, 1, 20) || ' scan=' || NVL(TO_CHAR(v_max_scan_rows), 'ALL') || ' ins=' || v_inserted_total
                 );
+                check_elapsed('before scan');
+                IF v_stop_requested THEN
+                    CONTINUE;
+                END IF;
+
                 EXECUTE IMMEDIATE v_sql;
                 v_inserted_count := SQL%ROWCOUNT;
                 v_inserted_total := v_inserted_total + v_inserted_count;
                 v_pending_dml_count := v_pending_dml_count + v_inserted_count;
-                commit_work_chunk(FALSE);
-                set_runtime_progress(
-                    'DONE ' || v_processed_rules || '/' || v_max_rules,
-                    'last=' || v_inserted_count || ' ins=' || v_inserted_total || ' skip=' || v_skipped_total
-                );
+                commit_work_chunk(TRUE);
+                check_elapsed('after scan');
+                IF v_stop_requested THEN
+                    set_runtime_progress(
+                        'STOPPING',
+                        'last=' || v_inserted_count || ' ins=' || v_inserted_total || ' skip=' || v_skipped_total
+                    );
+                ELSE
+                    set_runtime_progress(
+                        'DONE ' || v_processed_rules || '/' || GREATEST(v_rule_total, v_processed_rules),
+                        'last=' || v_inserted_count || ' ins=' || v_inserted_total || ' skip=' || v_skipped_total
+                    );
+                END IF;
             EXCEPTION
                 WHEN OTHERS THEN
                     v_skipped_total := v_skipped_total + 1;
                     set_runtime_progress(
-                        'SKIP ' || v_processed_rules || '/' || v_max_rules,
+                        'SKIP ' || v_processed_rules || '/' || GREATEST(v_rule_total, v_processed_rules),
                         'rule=' || SUBSTR(v_rule_item_id, 1, 20) || ' ins=' || v_inserted_total || ' skip=' || v_skipped_total
                     );
                     DBMS_OUTPUT.PUT_LINE('[WARN] Symbolic rule skipped: ' || v_rule_item_id || ' - ' || SQLERRM);
@@ -1674,17 +1877,37 @@ BEGIN
         v_pending_dml_count := 0;
     END IF;
     set_runtime_progress(
-        'COMPLETE',
+        CASE WHEN v_stop_requested THEN 'STOPPED' ELSE 'COMPLETE' END,
         'rules=' || v_processed_rules || ' ins=' || v_inserted_total || ' skip=' || v_skipped_total
     );
 
-    DBMS_OUTPUT.PUT_LINE('[OK] Symbolic rule violation detection completed. inserted=' || v_inserted_total ||
+    IF v_stop_requested THEN
+        DBMS_OUTPUT.PUT_LINE('[WARN] Symbolic rule violation detection stopped by max elapsed seconds. inserted=' || v_inserted_total ||
+            ', deleted=' || v_deleted_count ||
+            ', skipped=' || v_skipped_total ||
+            ', maxRules=' || v_max_rules ||
+            ', maxViolationsPerRule=' || v_max_violations_per_rule ||
+            ', commitInterval=' || v_commit_interval ||
+            ', commits=' || v_committed_chunks ||
+            ', maxScanRows=' || NVL(TO_CHAR(v_max_scan_rows), 'ALL') ||
+            ', maxElapsedSeconds=' || NVL(TO_CHAR(v_max_elapsed_seconds), 'NONE') ||
+            ', maxExpressionLength=' || NVL(TO_CHAR(v_max_expression_length), 'ALL') ||
+            ', target=' || v_target_owner || '.' || v_target_table ||
+            ', tolerance=' || TO_CHAR(v_tolerance_pct));
+    ELSE
+        DBMS_OUTPUT.PUT_LINE('[OK] Symbolic rule violation detection completed. inserted=' || v_inserted_total ||
         ', deleted=' || v_deleted_count ||
         ', skipped=' || v_skipped_total ||
+        ', maxRules=' || v_max_rules ||
+        ', maxViolationsPerRule=' || v_max_violations_per_rule ||
         ', commitInterval=' || v_commit_interval ||
         ', commits=' || v_committed_chunks ||
+        ', maxScanRows=' || NVL(TO_CHAR(v_max_scan_rows), 'ALL') ||
+        ', maxElapsedSeconds=' || NVL(TO_CHAR(v_max_elapsed_seconds), 'NONE') ||
+        ', maxExpressionLength=' || NVL(TO_CHAR(v_max_expression_length), 'ALL') ||
         ', target=' || v_target_owner || '.' || v_target_table ||
         ', tolerance=' || TO_CHAR(v_tolerance_pct));
+    END IF;
 EXCEPTION
     WHEN OTHERS THEN
         set_runtime_progress(

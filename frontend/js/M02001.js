@@ -107,19 +107,21 @@
             select.innerHTML = `
                 <option value="">-- Select project --</option>
                 ${this.contextProjects.map((project) => `
-                    <option value="${this.escapeHtml(project.PROJECT_ID ?? "")}">
-                        ${this.escapeHtml(project.PROJECT_NAME || project.PROJECT_CODE || "(Untitled project)")}
+                    <option class="${this.escapeHtml(CommonUtils.getOwnerScopeClass(project))}" value="${this.escapeHtml(project.PROJECT_ID ?? "")}">
+                        ${this.escapeHtml(CommonUtils.formatOwnerScopedName(project, project.PROJECT_NAME || project.PROJECT_CODE || "(Untitled project)"))}
                     </option>
                 `).join("")}
             `;
             const exists = this.contextProjects.some((project) => String(project.PROJECT_ID) === String(preferredProjectId));
             this.selectedProjectId = exists ? String(preferredProjectId) : "";
             select.value = this.selectedProjectId;
+            CommonUtils.applyOwnerScopeToSelect(select, this.contextProjects, this.selectedProjectId);
             this.updateProjectMeta();
         },
 
         async handleContextProjectChange(projectId) {
             this.selectedProjectId = projectId || "";
+            CommonUtils.applyOwnerScopeToSelect(getContainerEl("#contextProject-M02001"), this.contextProjects, this.selectedProjectId);
             this.saveStoredContext();
             this.updateProjectMeta();
             this.uploadTables = [];

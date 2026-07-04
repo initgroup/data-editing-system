@@ -88,7 +88,7 @@ git add .
 git add -u
 
 # 3. 커밋 생성
-git commit -m "INIT Data Editing System - 2026.07.03-2"
+git commit -m "INIT Data Editing System - 2026.07.04-1"
 # 4. 원격 저장소 최신 상태 반영
 git pull origin main
 # 5. 원격 저장소에 푸시
@@ -204,21 +204,10 @@ oml.table_apply(oml_iris, func="build_lm1", oml_input_type="pandas.DataFrame")
 5. Flow에서 job을 노드로 사용
 이 흐름이 Oracle 방식에 가장 가깝습니다.
 ----------------------------------------------------------------------
-웹 Gemini 와 가장 유사하게  지금 api 기능을 개선해줘
-로컬pc의 파일 드래그로 입력창에 파일첨부도 가능하고,
-그리고, 내가 추가로 하고 싶은 것은
-제미나이 왼쪽에 현재 열려있는 페이지(보이는 페이지)를 캡쳐해서 첨부할수 있는
-버튼을 Question 박스 우측에 툴바 아이콘처럼 제공해줘
-툴바 아이콘은 다음과 같은 기능들이 있으면 좋겠어
-현재 열린 페이지 캡쳐하기, 현재 열린 페이지 소스(html, js, css) 첨부하기(이건 압축이 되고, 제미나이가 압축파일을 풀어서 활용할수 있다면 압축파일로 해줘), 
-그리고  마지막 하나는 모든 메뉴의 웹도움말 페이지를 만들건데
-우선은 메인 페이지(home)에 대한 도움말을 logout 버튼 우측에 도움말 아이콘 추가해서 팝업으로 (이건 레이어 말고 진짜 팝업) 제공해 주면 
-내용을 보고 수정할걸 알려줄게
-지금 말한 이 메뉴별 도움말 페이지는 제미나이에게 사용자가 질문을 할때 최우선으로 설명페이지가  context 에 포함해서 제미나이로부터 응답한 답변이 메뉴별 도움말 페이지에 관한 내용이 있으면  최우선으로 요약해주는 게 목적이야
-그런 목적이기 떄문에 웹 페이지가 사용자에게 보여주는 목적도 있지만
-제미나이 api에게 질문에 대한 답변지중에 먼저 찾아보기 위해서 주는 첨부자료의 목적이 크기때문에 웹 페이지 구성도 제미나이나 chatgpt 등 ai 가 잘 이해하는 메타 정보로 구성하면 좋겠어
-지금까지 내가 얘기한 내용을 우선 어떻게 이해했는지 설명부터 먼저 해줘
-바로 구현하지 말고.
+----------------------------------------------------------------------
+로컬 개발 PC: 필요하면 pysr 설치 후 P_USE_PYSR=Y 테스트
+Render 무료: P_USE_PYSR=N 유지
+Render 유료/충분한 서버: pysr + Julia 준비 후 P_USE_PYSR=Y 허용
 
 ----------------------------------------------------------------------
 
@@ -499,6 +488,126 @@ FROM DUAL;
 
 
 -------------------------
+-- 1. DB 프로시저 소스 기본값 확인: 500이 여기서 나오는지
+SELECT LINE
+     , TEXT
+  FROM USER_SOURCE
+ WHERE NAME = 'INIT$_SP_RULE_VIOLATION_DETECT'
+   AND TYPE = 'PROCEDURE'
+   AND (
+        UPPER(TEXT) LIKE '%P_MAX_RULES%'
+        OR UPPER(TEXT) LIKE '%V_MAX_RULES%'
+       )
+ ORDER BY LINE;
+
+
+ -- 2. 저장된 M03004 Job 파라미터와 EXEC_PLSQL 비교
+SELECT J.WORK_JOB_ID
+     , J.JOB_NAME
+     , J.EXEC_OBJECT_NAME
+     , P.PARAM_NAME
+     , P.DEFAULT_VALUE
+     , P.BIND_NAME
+     , CASE WHEN DBMS_LOB.INSTR(J.EXEC_PLSQL, 'P_MAX_RULES') > 0 THEN 'Y' ELSE 'N' END AS HAS_P_MAX_RULES_IN_EXEC
+     , DBMS_LOB.SUBSTR(J.EXEC_PLSQL, 4000, 1) AS EXEC_PLSQL_HEAD
+  FROM INIT$_TB_DATA_WORK_JOB J
+  LEFT JOIN JSON_TABLE(
+       J.PARAM_JSON, '$[*]'
+       COLUMNS (
+           PARAM_NAME    VARCHAR2(128)  PATH '$.itemName'
+         , DEFAULT_VALUE VARCHAR2(4000) PATH '$.itemDefault'
+         , BIND_NAME     VARCHAR2(128)  PATH '$.bindName'
+       )
+  ) P
+    ON 1=1
+ WHERE J.EXEC_OBJECT_NAME = 'INIT$_SP_RULE_VIOLATION_DETECT'
+   AND (P.PARAM_NAME IS NULL OR P.PARAM_NAME IN ('P_MAX_RULES', 'P_MAX_VIOLATIONS_PER_RULE', 'P_DROP_EXISTING_YN'))
+ ORDER BY J.WORK_JOB_ID, P.PARAM_NAME;
+
+ -- 3. Flow 실행 당시 실제 Runtime 값 확인
+SELECT NR.FLOW_RUN_ID
+     , NR.FLOW_NODE_RUN_ID
+     , NR.NODE_NAME
+     , NR.STATUS
+     , JSON_VALUE(NR.RUNTIME_PARAM_JSON, '$."P_MAX_RULES"') AS P_MAX_RULES
+     , JSON_VALUE(NR.RUNTIME_PARAM_JSON, '$."pMaxRules"') AS P_MAX_RULES_CAMEL
+     , JSON_VALUE(NR.RUNTIME_PARAM_JSON, '$."P_RULE_MODEL_NAME"') AS P_RULE_MODEL_NAME
+     , JSON_VALUE(NR.RUNTIME_PARAM_JSON, '$."INIT$RunId"') AS INIT_RUN_ID
+     , DBMS_LOB.SUBSTR(NR.RUNTIME_PARAM_JSON, 4000, 1) AS RUNTIME_PARAM_JSON_HEAD
+  FROM INIT$_TB_FLOW_WORK_NODE_RUN NR
+ WHERE NR.FLOW_RUN_ID = :FLOW_RUN_ID
+   AND (
+        NR.NODE_NAME LIKE '%규칙위반%'
+        OR DBMS_LOB.INSTR(NR.NODE_PAYLOAD_JSON, 'INIT$_SP_RULE_VIOLATION_DETECT') > 0
+       )
+ ORDER BY NR.FLOW_NODE_RUN_ID;
+
+ -- 4. 특정 RULE_ID가 max rules 100 안에 들어가는지 확인
+WITH R AS (
+    SELECT S.RULE_ID
+         , S.CONDITION_COUNT
+         , S.RULE_CONFIDENCE
+         , S.RULE_LIFT
+         , S.SUPPORT_COUNT
+         , S.CONDITION_TOTAL_COUNT
+         , ROW_NUMBER() OVER (
+               ORDER BY S.RULE_CONFIDENCE DESC NULLS LAST
+                      , S.RULE_LIFT DESC NULLS LAST
+                      , S.SUPPORT_COUNT DESC NULLS LAST
+                      , S.RULE_ID
+           ) AS DETECTION_RN
+      FROM INIT$_TB_ASSOC_RULE_SUMMARY S
+     WHERE S.RUN_SOURCE_TYPE = 'FLOW_WORK'
+       AND S.RUN_ID = :FLOW_RUN_ID
+       AND S.MODEL_NAME = 'OML_ASSOCIATION_MODEL_01'
+       AND S.RESULT_HAS_VALUE_YN = 'Y'
+       AND S.RESULT_COLUMN IS NOT NULL
+       AND S.RESULT_VALUE IS NOT NULL
+       AND S.CONDITION_TEXT IS NOT NULL
+       AND NVL(S.RULE_CONFIDENCE, 0) >= 0.8
+       AND NVL(S.RULE_LIFT, 0) >= 1
+)
+SELECT R.*
+     , CASE WHEN R.DETECTION_RN <= 100 THEN '탐지대상' ELSE 'max rules 제외' END AS DETECT_STATUS
+  FROM R
+ WHERE R.RULE_ID = :RULE_ID;
+
+ -- 5. 실제 위반 결과가 적재됐는지 확인
+SELECT RUN_SOURCE_TYPE
+     , RUN_ID
+     , MODEL_NAME
+     , RULE_ID
+     , COUNT(*) AS VIOLATION_COUNT
+  FROM INIT$_TB_RULE_VIOLATION_RESULT
+ WHERE RUN_SOURCE_TYPE = 'FLOW_WORK'
+   AND RUN_ID = :FLOW_RUN_ID
+   AND MODEL_NAME = 'OML_ASSOCIATION_MODEL_01'
+   AND RULE_ID = :RULE_ID
+ GROUP BY RUN_SOURCE_TYPE
+        , RUN_ID
+        , MODEL_NAME
+        , RULE_ID;
+
+
+-- 6. Apriori 모델 객체가 남아있는지, 언제 만들어졌는지
+SELECT MODEL_NAME
+     , MINING_FUNCTION
+     , ALGORITHM
+     , CREATION_DATE
+  FROM USER_MINING_MODELS
+ WHERE MODEL_NAME = 'OML_ASSOCIATION_MODEL_01';
+
+SELECT OBJECT_NAME
+     , OBJECT_TYPE
+     , STATUS
+     , CREATED
+     , LAST_DDL_TIME
+  FROM USER_OBJECTS
+ WHERE OBJECT_NAME = 'OML_ASSOCIATION_MODEL_01'
+    OR OBJECT_NAME LIKE 'DM$V%OML_ASSOCIATION_MODEL_01'
+ ORDER BY OBJECT_TYPE, OBJECT_NAME;        
+---------------------------------------------
+
 
 -- 1) 현재 상태 확인
 SELECT FLOW_RUN_ID

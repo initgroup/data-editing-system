@@ -162,8 +162,8 @@
             select.innerHTML = `
                 <option value="">-- Select project --</option>
                 ${this.contextProjects.map((project) => `
-                    <option value="${this.escapeHtml(project.PROJECT_ID ?? "")}">
-                        ${this.escapeHtml(project.PROJECT_NAME || project.PROJECT_CODE || "(Untitled project)")}
+                    <option class="${this.escapeHtml(CommonUtils.getOwnerScopeClass(project))}" value="${this.escapeHtml(project.PROJECT_ID ?? "")}">
+                        ${this.escapeHtml(CommonUtils.formatOwnerScopedName(project, project.PROJECT_NAME || project.PROJECT_CODE || "(Untitled project)"))}
                     </option>
                 `).join("")}
             `;
@@ -171,10 +171,12 @@
             const exists = this.contextProjects.some((project) => String(project.PROJECT_ID) === String(preferredProjectId));
             this.selectedProjectId = exists ? String(preferredProjectId) : "";
             select.value = this.selectedProjectId;
+            CommonUtils.applyOwnerScopeToSelect(select, this.contextProjects, this.selectedProjectId);
         },
 
         async handleContextProjectChange(projectId) {
             this.selectedProjectId = projectId || "";
+            CommonUtils.applyOwnerScopeToSelect(getContainerEl("#contextProject-M02002"), this.contextProjects, this.selectedProjectId);
             this.selectedScenarioId = "";
             this.saveStoredContext();
             await this.loadContextScenarios("");
@@ -218,8 +220,8 @@
             select.innerHTML = `
                 <option value="">-- Select scenario --</option>
                 ${this.contextScenarios.map((scenario) => `
-                    <option value="${this.escapeHtml(scenario.SCENARIO_ID ?? "")}">
-                        ${this.escapeHtml(scenario.SCENARIO_NAME || scenario.SCENARIO_CODE || "(Untitled scenario)")}
+                    <option class="${this.escapeHtml(CommonUtils.getOwnerScopeClass(scenario))}" value="${this.escapeHtml(scenario.SCENARIO_ID ?? "")}">
+                        ${this.escapeHtml(CommonUtils.formatOwnerScopedName(scenario, scenario.SCENARIO_NAME || scenario.SCENARIO_CODE || "(Untitled scenario)"))}
                     </option>
                 `).join("")}
             `;
@@ -228,11 +230,13 @@
             const firstScenarioId = this.contextScenarios.length ? String(this.contextScenarios[0].SCENARIO_ID ?? "") : "";
             this.selectedScenarioId = exists ? String(preferredScenarioId) : firstScenarioId;
             select.value = this.selectedScenarioId;
+            CommonUtils.applyOwnerScopeToSelect(select, this.contextScenarios, this.selectedScenarioId, ["SCENARIO_ID", "scenarioId"]);
             this.saveStoredContext();
         },
 
         async handleContextScenarioChange(scenarioId) {
             this.selectedScenarioId = scenarioId || "";
+            CommonUtils.applyOwnerScopeToSelect(getContainerEl("#contextScenario-M02002"), this.contextScenarios, this.selectedScenarioId, ["SCENARIO_ID", "scenarioId"]);
             this.saveStoredContext();
             await this.loadScenarioTables();
         },

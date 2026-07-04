@@ -964,7 +964,8 @@ def create_data_work_router(
         if run_type_override:
             run_type = run_type_override
         result_owner = job.get("RESULT_OWNER") or ""
-        result_table_name = job.get("RESULT_TABLE_NAME") or ""
+        saved_result_table_name = job.get("RESULT_TABLE_NAME") or ""
+        result_table_name = saved_result_table_name
         manual_run_id = parse_manual_run_id(runtime_bind_values)
         run_id = data_work.create_run(
             conn,
@@ -976,6 +977,9 @@ def create_data_work_router(
             result_owner,
             manual_run_id
         )
+        result_table_name = get_effective_result_table_name(job, runtime_bind_values or {}, run_id)
+        if result_table_name != saved_result_table_name:
+            job = {**job, "RESULT_TABLE_NAME": result_table_name}
         if update_saved_job:
             data_work.update_job_status(
                 conn,
@@ -983,7 +987,7 @@ def create_data_work_router(
                 profile_job_id,
                 "RUNNING",
                 ROUTER_MESSAGES["job_started"],
-                result_table_name,
+                saved_result_table_name or result_table_name,
                 result_owner,
                 True,
                 False
@@ -1004,7 +1008,7 @@ def create_data_work_router(
                         profile_job_id,
                         "SUCCESS",
                         message,
-                        result_table_name,
+                        saved_result_table_name or result_table_name,
                         result_owner,
                         False,
                         True
@@ -1022,7 +1026,7 @@ def create_data_work_router(
                         profile_job_id,
                         "DRAFT",
                         message,
-                        result_table_name,
+                        saved_result_table_name or result_table_name,
                         result_owner,
                         False,
                         True
@@ -1041,7 +1045,7 @@ def create_data_work_router(
                     profile_job_id,
                     "SUCCESS",
                     message,
-                    result_table_name,
+                    saved_result_table_name or result_table_name,
                     result_owner,
                     False,
                     True
@@ -1058,7 +1062,7 @@ def create_data_work_router(
                     profile_job_id,
                     "FAILED",
                     message,
-                    result_table_name,
+                    saved_result_table_name or result_table_name,
                     result_owner,
                     False,
                     True
@@ -1077,6 +1081,7 @@ def create_data_work_router(
             **build_system_bind_values(job, run_id),
             **(runtime_bind_values or {})
         }
+        apply_scoped_model_runtime_values(job, runtime_values, run_id)
         for run_key in ("INIT$RunSourceType", "INIT$RunId", "runSourceType", "runId"):
             runtime_values[run_key] = build_system_bind_values(job, run_id)[run_key]
         return api_call_service.execute_api_job(conn, job, runtime_values, run_id)
@@ -1122,6 +1127,7 @@ def create_data_work_router(
             **system_values,
             **(runtime_bind_values or {})
         }
+        apply_scoped_model_runtime_values(job, runtime_values, run_id)
         for run_key in ("INIT$RunSourceType", "INIT$RunId", "runSourceType", "runId"):
             runtime_values[run_key] = system_values[run_key]
 
@@ -1157,11 +1163,83 @@ def create_data_work_router(
         return prepared_text, bind_values
 
 
+    LEGACY_ASSOCIATION_MODEL_NAMES = {"OML_ASSOCIATION_MODEL_01"}
+
+
+    def is_apriori_association_job(job: Dict[str, Any]) -> bool:
+        object_name = str(job.get("EXEC_OBJECT_NAME") or job.get("execObjectName") or "").strip().upper()
+        return object_name == "INIT$_SP_APRIORI_ASSOC_MODEL"
+
+
+    def create_scoped_model_name(prefix: str, seed: str) -> str:
+        safe_prefix = re.sub(r"[^A-Z0-9_$#]", "_", str(prefix or "OML_MODEL").strip().upper())
+        safe_prefix = re.sub(r"^[^A-Z]+", "", safe_prefix) or "OML_MODEL"
+        safe_seed = re.sub(r"[^A-Z0-9_$#]", "_", str(seed or "MODEL").strip().upper())
+        safe_seed = re.sub(r"^[^A-Z]+", "", safe_seed) or "MODEL"
+        max_seed_length = max(1, 128 - len(safe_prefix) - 1)
+        return f"{safe_prefix}_{safe_seed[-max_seed_length:]}"[:128]
+
+
+    def resolve_scoped_apriori_model_name(
+        job: Dict[str, Any],
+        runtime_values: Optional[Dict[str, Any]] = None,
+        run_id: Optional[int] = None
+    ) -> str:
+        runtime_values = runtime_values or {}
+        base_name = (
+            runtime_values.get("INIT$ResultModelName")
+            or runtime_values.get("INIT$ResultTable")
+            or job.get("RESULT_TABLE_NAME")
+            or job.get("resultTableName")
+            or ""
+        )
+        normalized_base = str(base_name or "").strip().upper()
+        if not is_apriori_association_job(job) or normalized_base not in LEGACY_ASSOCIATION_MODEL_NAMES:
+            return normalized_base
+        target_table = (
+            runtime_values.get("INIT$TargetTable")
+            or job.get("TABLE_NAME")
+            or job.get("tableName")
+            or normalized_base
+        )
+        return create_scoped_model_name("OML_ASSOC", str(target_table or normalized_base))
+
+
+    def apply_scoped_model_runtime_values(
+        job: Dict[str, Any],
+        runtime_values: Dict[str, Any],
+        run_id: Optional[int] = None
+    ) -> None:
+        if not is_apriori_association_job(job):
+            return
+        model_name = resolve_scoped_apriori_model_name(job, runtime_values, run_id)
+        if not model_name:
+            return
+        runtime_values["INIT$ResultModelName"] = model_name
+        runtime_values["INIT$ResultTable"] = model_name
+        for key in ("P_MODEL_NAME", "pModelName", "modelName"):
+            value = str(runtime_values.get(key) or "").strip()
+            if not value or value.upper() in LEGACY_ASSOCIATION_MODEL_NAMES or value in {":INIT$ResultModelName", ":INIT$ResultTable"}:
+                runtime_values[key] = model_name
+
+
+    def get_effective_result_table_name(
+        job: Dict[str, Any],
+        runtime_values: Optional[Dict[str, Any]] = None,
+        run_id: Optional[int] = None
+    ) -> str:
+        result_table = job.get("RESULT_TABLE_NAME") or job.get("resultTableName") or ""
+        result_mode = str(job.get("RESULT_CREATE_YN") or job.get("resultCreateYn") or "").strip().upper()
+        if result_mode != "M":
+            return str(result_table or "")
+        return resolve_scoped_apriori_model_name(job, runtime_values or {}, run_id) or str(result_table or "")
+
+
     def build_system_bind_values(job: Dict[str, Any], run_id: Optional[int] = None) -> Dict[str, Any]:
         target_owner = job.get("OWNER_NAME") or job.get("ownerName") or ""
         target_table = job.get("TABLE_NAME") or job.get("tableName") or ""
         result_owner = job.get("RESULT_OWNER") or job.get("resultOwner") or ""
-        result_table = job.get("RESULT_TABLE_NAME") or job.get("resultTableName") or ""
+        result_table = get_effective_result_table_name(job, {}, run_id)
         effective_run_id = int(run_id or 0)
         return {
             "INIT$TargetOwner": target_owner,

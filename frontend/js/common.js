@@ -367,6 +367,89 @@ const CommonUtils = {
         }
         return this.activeRequestCount === 0;
     },
+
+    getLoginUser() {
+        try {
+            return JSON.parse(sessionStorage.getItem("initLoginUser") || "{}");
+        } catch (_error) {
+            return {};
+        }
+    },
+
+    isAdminUser() {
+        const user = this.getLoginUser();
+        return String(user.roleCode || user.ROLE_CODE || user.role || "").toUpperCase() === "ADMIN";
+    },
+
+    getLoginUserId() {
+        const user = this.getLoginUser();
+        return String(user.userId ?? user.USER_ID ?? "").trim();
+    },
+
+    getRecordOwnerUserId(row = {}) {
+        return String(row.USER_ID ?? row.userId ?? row.PROJECT_USER_ID ?? row.projectUserId ?? row.OWNER_USER_ID ?? row.ownerUserId ?? "").trim();
+    },
+
+    getRecordOwnerLabel(row = {}) {
+        return String(
+            row.LOGIN_ID
+            ?? row.loginId
+            ?? row.PROJECT_LOGIN_ID
+            ?? row.projectLoginId
+            ?? row.OWNER_LOGIN_ID
+            ?? row.ownerLoginId
+            ?? row.USER_LOGIN_ID
+            ?? row.userLoginId
+            ?? row.USER_EMAIL
+            ?? row.userEmail
+            ?? row.PROJECT_USER_EMAIL
+            ?? row.projectUserEmail
+            ?? row.OWNER_USER_EMAIL
+            ?? row.ownerUserEmail
+            ?? ""
+        ).trim();
+    },
+
+    getOwnerDisplayId(row = {}) {
+        const label = this.getRecordOwnerLabel(row);
+        if (label.includes("@")) return label.split("@")[0] || label;
+        if (label) return label;
+        const ownerUserId = this.getRecordOwnerUserId(row);
+        return ownerUserId ? `User #${ownerUserId}` : "";
+    },
+
+    getOwnerScopeClass(row = {}) {
+        if (!this.isAdminUser()) return "";
+        const ownerUserId = this.getRecordOwnerUserId(row);
+        if (!ownerUserId) return "";
+        const currentUserId = this.getLoginUserId();
+        return currentUserId && ownerUserId === currentUserId ? "owner-scope-my" : "owner-scope-other";
+    },
+
+    getOwnerScopeSuffix(row = {}) {
+        if (!this.isAdminUser()) return "";
+        const ownerUserId = this.getRecordOwnerUserId(row);
+        if (!ownerUserId) return "";
+        const currentUserId = this.getLoginUserId();
+        if (currentUserId && ownerUserId === currentUserId) return "";
+        const ownerLabel = this.getOwnerDisplayId(row) || `User #${ownerUserId}`;
+        return ` [${ownerLabel}]`;
+    },
+
+    formatOwnerScopedName(row = {}, name = "") {
+        return `${String(name || "").trim()}${this.getOwnerScopeSuffix(row)}`;
+    },
+
+    applyOwnerScopeToSelect(select, rows = [], selectedValue = "", idKeys = ["PROJECT_ID", "projectId"]) {
+        if (!select) return;
+        select.classList.remove("owner-scope-my", "owner-scope-other");
+        const selectedText = String(selectedValue ?? "");
+        const row = (Array.isArray(rows) ? rows : []).find((item) =>
+            idKeys.some((key) => String(item?.[key] ?? "") === selectedText)
+        );
+        const className = this.getOwnerScopeClass(row || {});
+        if (className) select.classList.add(className);
+    },
     // 그리드 데이터 구조 표준화
     createGridModel: (itemsPerPage = 10) => ({
         gridInstance: null,

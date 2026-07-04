@@ -701,8 +701,9 @@
         "등록할 프로시저 또는 모델 객체를 선택합니다.",
         "파라미터와 설명을 확인합니다.",
         "실행 리소스로 저장합니다.",
+        "Symbolic Regression API는 P_USE_PYSR 기본값 N으로 polynomial LASSO fallback을 사용하고, PySR 환경이 준비된 경우에만 Y로 켭니다.",
         "Symbolic Rule 위반 탐지처럼 결과 테이블이 필요한 객체는 Result Table 기본값과 허용 오차 기본값을 확인합니다.",
-        "대용량 규칙 위반 결과 적재로 LOCK 대기처럼 보이면 P_COMMIT_INTERVAL 기본값을 조정해 중간 커밋 단위를 줄입니다."
+        "대용량 규칙 위반 결과 적재로 LOCK 대기처럼 보이면 P_MAX_RULES, P_MAX_VIOLATIONS_PER_RULE, P_MAX_SCAN_ROWS, P_COMMIT_INTERVAL 순서로 실행 범위와 커밋 단위를 줄입니다."
       ],
       "controls": [
         "Object tree: DB 객체 탐색",
@@ -714,8 +715,9 @@
       "aiGuidance": [
         "객체 등록 질문은 DB 객체 타입, 파라미터, 권한, Target DB 연결 상태를 기준으로 답변합니다.",
         "정적 SQL은 database SQL 파일 패턴을 따르는 프로젝트 규칙을 함께 고려합니다.",
+        "PySR은 로컬 Python/Julia 환경 준비가 필요하므로 기본 미사용이며, P_USE_PYSR=Y일 때만 실제 PySR 탐색을 시도한다고 안내합니다.",
         "Symbolic Rule 위반 탐지 객체는 허용 오차율 기본값 0.05가 ±5% 기준임을 함께 안내합니다.",
-        "규칙 위반 결과 테이블 적재가 오래 걸리면 P_MAX_RULES, P_MAX_VIOLATIONS_PER_RULE, P_COMMIT_INTERVAL 순서로 실행 범위와 커밋 단위를 확인하도록 안내합니다."
+        "규칙 위반 결과 테이블 적재가 오래 걸리면 P_MAX_RULES, P_MAX_VIOLATIONS_PER_RULE, P_MAX_SCAN_ROWS, P_COMMIT_INTERVAL 순서로 실행 범위와 커밋 단위를 확인하도록 안내합니다."
       ]
     },
     "M90002": {

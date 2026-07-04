@@ -732,6 +732,7 @@ def execute_flow_plan(conn, flow_run_id: int, plan: List[Dict[str, Any]]) -> Dic
         try:
             node_result = execute_flow_node(conn, step, runtime_values)
             message = node_result.get("message") or "Node executed."
+            update_node_run_runtime_params(conn, flow_run_id, node_key, runtime_values)
             update_node_run_by_key(conn, flow_run_id, node_key, "SUCCESS", message, False, True)
             conn.commit()
             node_outputs[node_key] = node_result.get("output") or {}
@@ -788,24 +789,26 @@ def execute_flow_node(conn, step: Dict[str, Any], runtime_values: Optional[Dict[
             message = api_call_service.execute_api_job(conn, job, values, values.get("INIT$RunId") or values.get("runId"))
             return {
                 "message": message,
-                "output": build_node_output(step, job)
+                "output": build_node_output(step, job, values)
             }
         executable_script = normalize_executable_script(job.get("EXEC_PLSQL") or "")
         if not executable_script:
             return {
                 "message": "No executable script was saved. Node skipped.",
-                "output": build_node_output(step, job)
+                "output": build_node_output(step, job, runtime_values or {})
             }
-        message = execute_saved_job_script(conn, executable_script, job, runtime_values if runtime_values is not None else create_runtime_values(step))
+        values = runtime_values if runtime_values is not None else create_runtime_values(step)
+        apply_scoped_model_runtime_values(step, job, values)
+        message = execute_saved_job_script(conn, executable_script, job, values)
         return {
             "message": message,
-            "output": build_node_output(step, job)
+            "output": build_node_output(step, job, values)
         }
     if node_type in {"JOB", "DATA_PROFILE", "COLUMN_CORR", "AUTO_RULE", "RULE_VIOLATION"}:
         raise HTTPException(status_code=400, detail="Job node does not reference a saved work job.")
     return {
         "message": f"{node_type or 'NODE'} node has no executable job. Marked as success.",
-        "output": build_node_output(step, {})
+        "output": build_node_output(step, {}, runtime_values or {})
     }
 
 
@@ -962,13 +965,73 @@ def resolve_upstream_expression(expression: Any, source: Dict[str, Any]) -> Any:
     return source.get(expression[6:])
 
 
-def build_node_output(step: Dict[str, Any], job: Dict[str, Any]) -> Dict[str, Any]:
+LEGACY_ASSOCIATION_MODEL_NAMES = {"OML_ASSOCIATION_MODEL_01"}
+
+
+def is_apriori_association_job(job: Dict[str, Any]) -> bool:
+    object_name = str(job.get("EXEC_OBJECT_NAME") or job.get("execObjectName") or "").strip().upper()
+    return object_name == "INIT$_SP_APRIORI_ASSOC_MODEL"
+
+
+def create_scoped_model_name(prefix: str, seed: str, run_id: Optional[int] = None) -> str:
+    safe_prefix = re.sub(r"[^A-Z0-9_$#]", "_", str(prefix or "OML_MODEL").strip().upper())
+    safe_prefix = re.sub(r"^[^A-Z]+", "", safe_prefix) or "OML_MODEL"
+    safe_seed = re.sub(r"[^A-Z0-9_$#]", "_", str(seed or "MODEL").strip().upper())
+    safe_seed = re.sub(r"^[^A-Z]+", "", safe_seed) or "MODEL"
+    suffix = f"{safe_seed}_{int(run_id or 0)}" if run_id else safe_seed
+    max_suffix_length = max(1, 128 - len(safe_prefix) - 1)
+    return f"{safe_prefix}_{suffix[-max_suffix_length:]}"[:128]
+
+
+def resolve_scoped_apriori_model_name(step: Dict[str, Any], job: Dict[str, Any], runtime_values: Optional[Dict[str, Any]] = None) -> str:
+    runtime_values = runtime_values or {}
+    current = step.get("nodePayload") or {}
+    base_name = (
+        runtime_values.get("INIT$ResultModelName")
+        or runtime_values.get("INIT$ResultTable")
+        or current.get("resultTableName")
+        or job.get("RESULT_TABLE_NAME")
+        or ""
+    )
+    normalized_base = str(base_name or "").strip().upper()
+    if not is_apriori_association_job(job) or normalized_base not in LEGACY_ASSOCIATION_MODEL_NAMES:
+        return normalized_base
+    target_table = (
+        runtime_values.get("INIT$TargetTable")
+        or current.get("tableName")
+        or job.get("TABLE_NAME")
+        or normalized_base
+    )
+    run_id = runtime_values.get("INIT$RunId") or runtime_values.get("runId") or runtime_values.get("flowRunId")
+    return create_scoped_model_name("OML_ASSOC", str(target_table or normalized_base), int(run_id or 0))
+
+
+def apply_scoped_model_runtime_values(step: Dict[str, Any], job: Dict[str, Any], runtime_values: Dict[str, Any]):
+    if not is_apriori_association_job(job):
+        return
+    model_name = resolve_scoped_apriori_model_name(step, job, runtime_values)
+    if not model_name:
+        return
+    runtime_values["INIT$ResultModelName"] = model_name
+    runtime_values["INIT$ResultTable"] = model_name
+    for key in ("P_MODEL_NAME", "pModelName", "modelName"):
+        value = str(runtime_values.get(key) or "").strip()
+        if not value or value.upper() in LEGACY_ASSOCIATION_MODEL_NAMES or value in {":INIT$ResultModelName", ":INIT$ResultTable"}:
+            runtime_values[key] = model_name
+
+
+def build_node_output(step: Dict[str, Any], job: Dict[str, Any], runtime_values: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     payload = step.get("nodePayload") or {}
+    runtime_values = runtime_values or {}
     target_owner = payload.get("ownerName") or job.get("OWNER_NAME")
     target_table = payload.get("tableName") or job.get("TABLE_NAME")
     result_create_yn = data_work.normalize_result_create_mode(payload.get("resultCreateYn") or job.get("RESULT_CREATE_YN"))
     result_owner = payload.get("resultOwner") or job.get("RESULT_OWNER") or payload.get("ownerName") or job.get("OWNER_NAME")
-    result_table = payload.get("resultTableName") or job.get("RESULT_TABLE_NAME") or payload.get("tableName") or job.get("TABLE_NAME")
+    result_table = (
+        runtime_values.get("INIT$ResultModelName")
+        if result_create_yn == "M" and runtime_values.get("INIT$ResultModelName")
+        else payload.get("resultTableName") or job.get("RESULT_TABLE_NAME") or payload.get("tableName") or job.get("TABLE_NAME")
+    )
     target_owner = str(target_owner or "").strip().upper()
     target_table = str(target_table or "").strip().upper()
     result_owner = str(result_owner or "").strip().upper()

@@ -10,7 +10,7 @@ import logging
 
 from backend.database_helper import execute_query, SqlLoader
 from backend.target_database import get_target_db_connection
-from backend.auth_context import get_request_user_id
+from backend.auth_context import get_request_role_code, get_request_user_id
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -68,12 +68,14 @@ def _ensure_project_owner(conn, project_id: int, user_id: int):
 @router.get("/projects")
 def get_projects(request: Request, keyword: str = Query("")):
     user_id = get_request_user_id(request)
+    include_all_users = get_request_role_code(request) == "ADMIN"
     conn = None
     try:
         conn = get_target_db_connection(request)
         result = execute_query(conn, "M01002_PROJECT_LIST", {
             "keyword": keyword or "",
             "userId": user_id,
+            "includeAllUsers": "Y" if include_all_users else "N",
         })
         if result.get("status") != "success":
             raise HTTPException(status_code=500, detail=result.get("message") or result.get("detail") or "Project list query failed.")
@@ -96,6 +98,7 @@ def get_projects(request: Request, keyword: str = Query("")):
 @router.get("/scenarios")
 def get_scenarios(request: Request, projectId: int = Query(...), keyword: str = Query("")):
     user_id = get_request_user_id(request)
+    include_all_users = get_request_role_code(request) == "ADMIN"
     conn = None
     try:
         conn = get_target_db_connection(request)
@@ -103,6 +106,7 @@ def get_scenarios(request: Request, projectId: int = Query(...), keyword: str = 
             "projectId": projectId,
             "keyword": keyword or "",
             "userId": user_id,
+            "includeAllUsers": "Y" if include_all_users else "N",
         })
         if result.get("status") != "success":
             raise HTTPException(status_code=500, detail=result.get("message") or result.get("detail") or "Scenario list query failed.")
@@ -125,12 +129,14 @@ def get_scenarios(request: Request, projectId: int = Query(...), keyword: str = 
 @router.get("/scenario")
 def get_scenario(request: Request, scenarioId: int = Query(...)):
     user_id = get_request_user_id(request)
+    include_all_users = get_request_role_code(request) == "ADMIN"
     conn = None
     try:
         conn = get_target_db_connection(request)
         result = execute_query(conn, "M01002_SCENARIO_DETAIL", {
             "scenarioId": scenarioId,
             "userId": user_id,
+            "includeAllUsers": "Y" if include_all_users else "N",
         })
         if result.get("status") != "success":
             raise HTTPException(status_code=500, detail=result.get("message") or result.get("detail") or "Scenario detail query failed.")
@@ -203,6 +209,7 @@ def save_scenario(req: ScenarioSaveRequest, request: Request):
         result = execute_query(conn, "M01002_SCENARIO_DETAIL", {
             "scenarioId": saved_id,
             "userId": user_id,
+            "includeAllUsers": "N",
         })
         data = result.get("data", [{}])[0] if result.get("data") else {}
         return {

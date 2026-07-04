@@ -323,6 +323,23 @@
                 const json = await CommonUtils.request(`${API_BASE_URL}/${API_PAGE_CODE}/runs?${params.toString()}`, { method: "GET", showLoading: false });
                 this.runs = Array.isArray(json.data) ? json.data : [];
                 this.runTotal = Number(json.total || 0);
+                if (!this.runs.length) {
+                    this.selectedRun = null;
+                    this.selectedNode = null;
+                    this.nodes = [];
+                    this.currentModelDetail = null;
+                    this.lastResultTableJson = null;
+                    this.lastViolationSummary = null;
+                    this.lastSymbolicRuleSummary = null;
+                    this.nodeResultCache = new Map();
+                    this.renderRuns();
+                    this.renderRunSummary();
+                    const nodeList = getContainerEl("#nodeList-${PAGE_CODE}");
+                    const resultPanel = getContainerEl("#resultPanel-${PAGE_CODE}");
+                    if (nodeList) nodeList.innerHTML = `<div class="table-empty">실행 이력이 없습니다.</div>`;
+                    if (resultPanel) resultPanel.innerHTML = `<div class="table-empty">실행 이력을 선택하면 결과 상세가 표시됩니다.</div>`;
+                    return;
+                }
                 this.renderRuns();
                 const targetRunId = this.pendingRunId && this.runs.some((run) => String(run.FLOW_RUN_ID) === String(this.pendingRunId))
                     ? this.pendingRunId
@@ -373,13 +390,14 @@
                     select.innerHTML = `
                         <option value="">-- Select project --</option>
                         ${this.projects.map((project) => `
-                            <option value="${this.escapeHtml(project.PROJECT_ID ?? "")}">
-                                ${this.escapeHtml(project.PROJECT_NAME || project.PROJECT_CODE || `Project #${project.PROJECT_ID}`)}
+                            <option class="${this.escapeHtml(CommonUtils.getOwnerScopeClass(project))}" value="${this.escapeHtml(project.PROJECT_ID ?? "")}">
+                                ${this.escapeHtml(CommonUtils.formatOwnerScopedName(project, project.PROJECT_NAME || project.PROJECT_CODE || `Project #${project.PROJECT_ID}`))}
                             </option>
                         `).join("")}
                     `;
                     const exists = this.projects.some((project) => String(project.PROJECT_ID) === String(preferredProjectId));
                     select.value = exists ? String(preferredProjectId) : String(this.projects[0]?.PROJECT_ID || "");
+                    CommonUtils.applyOwnerScopeToSelect(select, this.projects, select.value);
                 }
             } catch (error) {
                 if (select) select.innerHTML = `<option value="">Project load failed</option>`;
@@ -401,13 +419,14 @@
                     select.innerHTML = `
                         <option value="">ALL</option>
                         ${this.scenarios.map((scenario) => `
-                            <option value="${this.escapeHtml(scenario.SCENARIO_ID ?? "")}">
-                                ${this.escapeHtml(scenario.SCENARIO_NAME || scenario.SCENARIO_CODE || `Scenario #${scenario.SCENARIO_ID}`)}
+                            <option class="${this.escapeHtml(CommonUtils.getOwnerScopeClass(scenario))}" value="${this.escapeHtml(scenario.SCENARIO_ID ?? "")}">
+                                ${this.escapeHtml(CommonUtils.formatOwnerScopedName(scenario, scenario.SCENARIO_NAME || scenario.SCENARIO_CODE || `Scenario #${scenario.SCENARIO_ID}`))}
                             </option>
                         `).join("")}
                     `;
                     const exists = this.scenarios.some((scenario) => String(scenario.SCENARIO_ID) === String(preferredScenarioId));
                     select.value = exists ? String(preferredScenarioId) : "";
+                    CommonUtils.applyOwnerScopeToSelect(select, this.scenarios, select.value, ["SCENARIO_ID", "scenarioId"]);
                 }
             } catch (error) {
                 if (select) select.innerHTML = `<option value="">Scenario load failed</option>`;
@@ -416,7 +435,16 @@
         },
 
         async handleProjectChange() {
+            const projectSelect = getContainerEl("#projectId-${PAGE_CODE}");
+            CommonUtils.applyOwnerScopeToSelect(projectSelect, this.projects, projectSelect?.value || "");
             await this.loadScenarios("");
+            this.persistWorkContext();
+            await this.loadRuns(1);
+        },
+
+        async handleScenarioChange() {
+            const scenarioSelect = getContainerEl("#scenarioId-${PAGE_CODE}");
+            CommonUtils.applyOwnerScopeToSelect(scenarioSelect, this.scenarios, scenarioSelect?.value || "", ["SCENARIO_ID", "scenarioId"]);
             this.persistWorkContext();
             await this.loadRuns(1);
         },
@@ -534,11 +562,33 @@
                 : window.confirm(confirmMessage);
             if (!confirmed) return;
 
+            let forceDelete = false;
+            const runStatus = String(run.STATUS || "").trim().toUpperCase();
+            const isActiveRun = ["RUNNING", "STARTED", "QUEUED", "PENDING"].includes(runStatus);
+            if (CommonUtils.isAdminUser?.() && isActiveRun) {
+                const forceMessage = [
+                    "Running or pending run history cannot be deleted.",
+                    "",
+                    "관리자 권한으로 실행 중/대기 중 이력을 강제 삭제할 수 있습니다.",
+                    "그래도 삭제하시겠습니까?"
+                ].join("\n");
+                const forceConfirmed = window.CommonMessage?.confirm
+                    ? await window.CommonMessage.confirm(forceMessage, {
+                        defaultAction: "cancel",
+                        okText: "강제 삭제",
+                        cancelText: "취소"
+                    })
+                    : window.confirm(forceMessage);
+                if (!forceConfirmed) return;
+                forceDelete = true;
+            }
+
             this.isRunDeleteInProgress = true;
             const buttons = getContainerEl("#runSummary-${PAGE_CODE}")?.querySelectorAll(".M04002-run-delete-btn") || [];
             buttons.forEach((button) => button.setAttribute("disabled", "disabled"));
             try {
-                const json = await CommonUtils.request(`${API_BASE_URL}/${API_PAGE_CODE}/runs/${encodeURIComponent(flowRunId)}`, {
+                const query = forceDelete ? "?force=true" : "";
+                const json = await CommonUtils.request(`${API_BASE_URL}/${API_PAGE_CODE}/runs/${encodeURIComponent(flowRunId)}${query}`, {
                     method: "DELETE"
                 });
                 this.selectedRun = null;
@@ -676,7 +726,7 @@
             }
         },
 
-        async openViolationForRule(ruleId) {
+        async openViolationForRule(ruleId, conditionCount = "ALL") {
             const normalizedRuleId = String(ruleId || "").trim();
             if (!normalizedRuleId) return;
             const violationNode = this.findViolationNode();
@@ -684,7 +734,18 @@
                 alert("현재 Flow에서 규칙 위반 탐지 노드를 찾을 수 없습니다.");
                 return;
             }
-            this.violationRuleFilters = { ...(this.violationRuleFilters || {}), ruleId: normalizedRuleId, confidenceScope: "NON_PERFECT", resultScope: "HIT", page: 1, pageSize: 20 };
+            const normalizedConditionCount = conditionCount === undefined || conditionCount === null || String(conditionCount).trim() === ""
+                ? "ALL"
+                : String(conditionCount);
+            this.violationRuleFilters = {
+                ...(this.violationRuleFilters || {}),
+                ruleId: normalizedRuleId,
+                conditionCount: normalizedConditionCount,
+                confidenceScope: "NON_PERFECT",
+                resultScope: "HIT",
+                page: 1,
+                pageSize: 20
+            };
             if (!this.selectedNode || Number(this.selectedNode.FLOW_NODE_RUN_ID) !== Number(violationNode.FLOW_NODE_RUN_ID)) {
                 await this.selectNode(violationNode.FLOW_NODE_RUN_ID, 1, { preserveViolationRuleFilter: true, forceRefresh: true });
                 return;
@@ -1522,7 +1583,7 @@
                         <span class="M04002-rule-card-actions">
                             <em>${this.escapeHtml(rule.mappingLabel)}</em>
                             ${rule.canOpenViolation
-                                ? `<button type="button" class="M04002-rule-open-link" title="이 RULE ID로 위반탐지 결과 검색" onclick="${PAGE_CODE}.openViolationForRule('${this.escapeJs(plainRuleId)}')">위반 조회</button>`
+                                ? `<button type="button" class="M04002-rule-open-link" title="이 RULE ID로 위반탐지 결과 검색" onclick="${PAGE_CODE}.openViolationForRule('${this.escapeJs(plainRuleId)}', '${this.escapeJs(rule.conditionCount)}')">위반 조회</button>`
                                 : ""}
                         </span>
                     </header>
@@ -1827,12 +1888,13 @@
             const candidateCount = this.getViolationCandidateCount(summary);
             const detectionOverview = summary.detectionOverview || {};
             const detectionCriteria = summary.detectionCriteria || this.getViolationDetectionCriteria();
+            const scopedCandidateCount = Number(detectionOverview.CANDIDATE_RULE_COUNT ?? candidateCount ?? 0);
             const detectionEligibleCount = Number(detectionOverview.DETECTION_ELIGIBLE_RULE_COUNT || 0);
             const confidenceCutoffCount = Number(detectionOverview.CONFIDENCE_CUTOFF_COUNT || 0);
             const liftCutoffCount = Number(detectionOverview.LIFT_CUTOFF_COUNT || 0);
             const maxRulesCutoffCount = Number(detectionOverview.MAX_RULES_CUTOFF_COUNT || 0);
             const violatedRuleCount = Number(overview.VIOLATED_RULE_COUNT || 0);
-            const noViolationRuleCount = Math.max(0, Number(candidateCount || 0) - violatedRuleCount);
+            const noViolationRuleCount = Math.max(0, detectionEligibleCount - violatedRuleCount);
             const noViolationAfterDetectionCount = Math.max(0, detectionEligibleCount - violatedRuleCount);
             const activeScopeLabel = this.violationRuleFilters?.confidenceScope === "ALL" ? "전체 규칙" : "100% 아닌 규칙";
             const resultScope = summary.resultScope || this.violationRuleFilters?.resultScope || "HIT";
@@ -1856,7 +1918,7 @@
                         <div class="M04002-violation-inline-summary">
                             <button type="button" class="${resultScope === "CANDIDATE" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectViolationResultScope('CANDIDATE')">
                                 <small>선택 후보</small>
-                                <b>${this.formatNumber(candidateCount)}</b>
+                                <b>${this.formatNumber(scopedCandidateCount)}</b>
                                 <em>${this.escapeHtml(activeScopeLabel)}</em>
                             </button>
                             <button type="button" disabled>
@@ -1928,7 +1990,7 @@
                                         <strong>${this.escapeHtml(rule.RULE_ID)}</strong>
                                         ${hasViolation
                                             ? `<button type="button" onclick="${PAGE_CODE}.openViolationSqlPopup('rule', '${this.escapeJs(rule.RULE_ID)}')">${this.formatNumber(rule.VIOLATION_COUNT)}건</button>`
-                                            : `<em>위반 없음</em>`}
+                                            : `<em>${rule.DETECTION_SCANNED_YN === "N" ? "max rules 제외" : "위반 없음"}</em>`}
                                     </header>
                                     <p>
                                         <b>IF</b>
@@ -1941,15 +2003,32 @@
                                         <span><small>예상 위반</small><b>${this.formatExpectedViolationRate(rule.RULE_CONFIDENCE)}</b></span>
                                         <span><small>lift</small><b>${this.formatDecimal(rule.RULE_LIFT)}</b></span>
                                         <span><small>support</small><b>${this.formatPercentMetric(rule.RULE_SUPPORT)}</b></span>
+                                        <span><small>탐지 순위</small><b>${rule.DETECTION_RN ? this.formatNumber(rule.DETECTION_RN) : "-"}</b></span>
                                         <span><small>score</small><b>${this.formatDecimal(rule.AVG_VIOLATION_SCORE)}</b></span>
                                     </footer>
                                 </article>
                             `;
                             }).join("")}
                         </div>
-                    ` : `<div class="table-empty">${ruleFilter ? "검색한 RULE ID에 해당하는 규칙이 없습니다." : "표시할 규칙이 없습니다."}</div>`}
+                    ` : `<div class="table-empty">${this.getViolationEmptyMessage(ruleFilter, resultScope, scopedCandidateCount, detectionEligibleCount, maxRulesCutoffCount)}</div>`}
                 </section>
             `;
+        },
+
+        getViolationEmptyMessage(ruleFilter, resultScope, candidateCount, detectionEligibleCount, maxRulesCutoffCount) {
+            if (ruleFilter && Number(candidateCount || 0) === 0) {
+                return "검색한 RULE ID에 해당하는 후보 규칙이 없습니다.";
+            }
+            if (Number(maxRulesCutoffCount || 0) > 0 && Number(detectionEligibleCount || 0) === 0) {
+                return "해당 후보 규칙은 이번 실행의 max rules 범위 밖이라 실제 위반 탐지 대상에서 제외되었습니다.";
+            }
+            if (resultScope === "HIT") {
+                return "실제 위반 Row가 발생한 규칙이 없습니다. 후보 전체나 max rules 제외 건수도 함께 확인하세요.";
+            }
+            if (resultScope === "MISS") {
+                return "실제 탐지 대상 중 위반 Row가 없는 규칙이 없습니다.";
+            }
+            return "표시할 규칙이 없습니다.";
         },
 
         getViolationCandidateCount(summary = {}) {
@@ -2078,6 +2157,7 @@
                 title: `${label} 위반 Row 조회`
             };
             this.renderViolationSqlPopup();
+            window.setTimeout(() => this.executeViolationSql(1), 0);
         },
 
         getViolationRuleDetail(kind = "all", value = "") {
@@ -2239,7 +2319,8 @@
             if (!safeColumns.length) return `<div class="table-empty">조회 결과가 없습니다.</div>`;
             const columnWidths = this.violationSql?.columnWidths || {};
             const freezeColumns = Math.max(0, Math.min(Number(this.violationSql?.freezeColumns ?? 2), safeColumns.length));
-            let left = 0;
+            const rowNoWidth = 64;
+            let left = rowNoWidth;
             const columnMeta = safeColumns.map((column, index) => {
                 const width = this.getViolationSqlColumnWidth(column, columnWidths);
                 const frozen = index < freezeColumns;
@@ -2247,21 +2328,27 @@
                 if (frozen) left += width;
                 return { column, index, width, frozen, stickyStyle };
             });
+            const rowOffset = (Math.max(1, Number(this.violationSql?.page || 1)) - 1) * Math.max(1, Number(this.violationSql?.pageSize || 50));
             return `
                 <div class="M04002-violation-sql-grid-wrap">
                     <table class="table-grid M04002-violation-sql-grid">
                         <colgroup>
+                            <col style="width: ${rowNoWidth}px;">
                             ${columnMeta.map((meta) => `<col style="width: ${meta.width}px;">`).join("")}
                         </colgroup>
-                        <thead><tr>${columnMeta.map((meta) => `
+                        <thead><tr>
+                            <th class="is-frozen-col is-row-no" style="position: sticky; left: 0;">No</th>
+                            ${columnMeta.map((meta) => `
                             <th class="is-resizable ${meta.frozen ? "is-frozen-col" : ""} ${this.getViolationSqlColumnClass(meta.column, keyColumns, ruleColumnSet)}" data-col-index="${meta.index}" style="${meta.stickyStyle}">
                                 <span class="table-th-content">${this.renderColumnAwareCell(meta.column, this.lastViolationSummary || {})}</span>
                                 <span class="column-resizer" onmousedown="${PAGE_CODE}.startViolationSqlColumnResize(event, ${meta.index})"></span>
                             </th>
                         `).join("")}</tr></thead>
                         <tbody>
-                            ${(rows || []).map((row) => `
-                                <tr>${columnMeta.map((meta) => {
+                            ${(rows || []).map((row, rowIndex) => `
+                                <tr>
+                                    <td class="is-frozen-col is-row-no" style="position: sticky; left: 0;">${this.formatNumber(rowOffset + rowIndex + 1)}</td>
+                                    ${columnMeta.map((meta) => {
                                     const value = row?.[meta.column] ?? "";
                                     return `<td class="${meta.frozen ? "is-frozen-col" : ""} ${this.getViolationSqlColumnClass(meta.column, keyColumns, ruleColumnSet)}" data-col-index="${meta.index}" style="${meta.stickyStyle}" title="${this.escapeHtml(value)}">${this.renderColumnAwareCell(value, this.lastViolationSummary || {})}</td>`;
                                 }).join("")}</tr>
@@ -2603,32 +2690,43 @@
             const key = this.getSymbolicRuleKey(rule, index);
             const features = Array.isArray(rule.FEATURE_LIST) ? rule.FEATURE_LIST : this.parseFeatureList(rule.FEATURE_COLUMNS);
             const displayRuleId = this.getSymbolicRuleDisplayId(rule, index);
+            const featureLabel = features.map((item) => this.escapeHtml(item)).join(", ") || "x";
+            const targetColumn = String(rule.TARGET_COLUMN || "Y").trim() || "Y";
+            const targetCell = this.renderColumnAwareCell(targetColumn, this.lastSymbolicRuleSummary || {});
             return `
                 <article class="M04002-symbolic-rule-card ${String(rule.SELECTED_YN || "").toUpperCase() === "Y" ? "is-selected" : ""}">
                     <header>
                         <span>
-                            <small class="M04002-symbolic-rule-id-label">Rule ID</small>
-                            <span class="M04002-symbolic-rule-id-row">
-                                <code>${this.escapeHtml(displayRuleId)}</code>
-                                <button type="button" class="M04002-rule-copy-btn" title="RULE ID 복사" onclick="${PAGE_CODE}.copyRuleId('${this.escapeJs(displayRuleId)}', event)">
-                                    <i class="far fa-copy"></i>
-                                </button>
+                            <span class="M04002-symbolic-rule-id-inline">
+                                <small class="M04002-symbolic-rule-id-label">Rule ID</small>
+                                <span class="M04002-symbolic-rule-id-row">
+                                    <code>${this.escapeHtml(displayRuleId)}</code>
+                                    <button type="button" class="M04002-rule-copy-btn" title="RULE ID 복사" onclick="${PAGE_CODE}.copyRuleId('${this.escapeJs(displayRuleId)}', event)">
+                                        <i class="far fa-copy"></i>
+                                    </button>
+                                </span>
                             </span>
-                            <small>${this.renderColumnAwareCell(rule.TARGET_COLUMN, this.lastSymbolicRuleSummary || {})}</small>
                         </span>
                         <button type="button" title="수식 그래프 보기" onclick="${PAGE_CODE}.openSymbolicRulePopup('${this.escapeJs(key)}')">
                             <i class="fas fa-chart-line"></i>
                         </button>
                     </header>
-                    <code>f(${features.map((item) => this.escapeHtml(item)).join(", ") || "x"}) = ${this.escapeHtml(rule.EXPRESSION || "")}</code>
-                    <div class="M04002-corr-tags">
-                        ${features.slice(0, 10).map((column) => this.renderColumnChip(column, this.lastSymbolicRuleSummary || {})).join("")}
+                    <div class="M04002-symbolic-y-panel">
+                        <small>Y 결과값</small>
+                        <strong>${targetCell}</strong>
+                    </div>
+                    <code>f(${featureLabel}) = ${this.escapeHtml(rule.EXPRESSION || "")} = ${this.escapeHtml(targetColumn)}</code>
+                    <div class="M04002-symbolic-x-panel">
+                        <small>X 인자</small>
+                        <div class="M04002-corr-tags">
+                            ${features.length ? features.slice(0, 10).map((column) => this.renderColumnChip(column, this.lastSymbolicRuleSummary || {})).join("") : `<em class="M04002-column-chip"><b>x</b></em>`}
+                        </div>
                     </div>
                     <footer>
                         <span><small>score</small><b>${this.formatDecimal(rule.SCORE)}</b></span>
                         <span><small>complexity</small><b>${this.formatNumber(rule.COMPLEXITY)}</b></span>
                         <span><small>rank</small><b>${this.formatNumber(rule.RANK_NO)}</b></span>
-                        <span><small>method</small><b>${this.escapeHtml(rule.METHOD || "-")}</b></span>
+                        <span class="M04002-symbolic-rule-method"><small>method</small><b>${this.escapeHtml(rule.METHOD || "-")}</b></span>
                     </footer>
                 </article>
             `;
@@ -2769,17 +2867,21 @@
             const features = Array.isArray(rule.FEATURE_LIST) ? rule.FEATURE_LIST : this.parseFeatureList(rule.FEATURE_COLUMNS);
             const ranges = Array.isArray(rule.FEATURE_RANGES) ? rule.FEATURE_RANGES : [];
             const featureLabel = features.length ? features.map((item) => this.escapeHtml(item)).join(", ") : "x";
+            const targetColumn = String(rule.TARGET_COLUMN || "Y").trim() || "Y";
+            const targetCell = this.renderColumnAwareCell(targetColumn, this.lastSymbolicRuleSummary || {});
             const displayRuleId = this.getSymbolicRuleDisplayId(rule, this.findSymbolicRuleIndex(rule));
             return `
                 <section>
                     <header class="M04002-sql-popup-title" onmousedown="${PAGE_CODE}.startSymbolicRulePopupDrag(event)">
                         <div>
-                            <small class="M04002-symbolic-rule-id-label">Rule ID</small>
-                            <span class="M04002-symbolic-rule-id-row">
-                                <code>${this.escapeHtml(displayRuleId)}</code>
-                                <button type="button" class="M04002-rule-copy-btn" title="RULE ID 복사" onclick="${PAGE_CODE}.copyRuleId('${this.escapeJs(displayRuleId)}', event)">
-                                    <i class="far fa-copy"></i>
-                                </button>
+                            <span class="M04002-symbolic-rule-id-inline">
+                                <small class="M04002-symbolic-rule-id-label">Rule ID</small>
+                                <span class="M04002-symbolic-rule-id-row">
+                                    <code>${this.escapeHtml(displayRuleId)}</code>
+                                    <button type="button" class="M04002-rule-copy-btn" title="RULE ID 복사" onclick="${PAGE_CODE}.copyRuleId('${this.escapeJs(displayRuleId)}', event)">
+                                        <i class="far fa-copy"></i>
+                                    </button>
+                                </span>
                             </span>
                             <span>Symbolic regression rule</span>
                         </div>
@@ -2787,7 +2889,7 @@
                     </header>
                     <div class="M04002-symbolic-formula-banner">
                         <span>F(X) = Y</span>
-                        <strong>f(${featureLabel}) = ${this.renderColumnAwareCell(rule.TARGET_COLUMN, this.lastSymbolicRuleSummary || {})}</strong>
+                        <strong>f(${featureLabel}) = ${this.escapeHtml(rule.EXPRESSION || "")} = ${targetCell}</strong>
                     </div>
                     <div class="M04002-symbolic-popup-body">
                         <div class="M04002-symbolic-expression-box">

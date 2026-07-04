@@ -37,6 +37,10 @@
             flowRunHistoryRows: [],
             flowNodeRunResultRows: [],
             flowResultSqlGridData: { rows: [], columns: [] },
+            flowResultSqlColumnWidths: {},
+            flowResultSqlResizeState: null,
+            flowResultSqlResizeMoveBound: null,
+            flowResultSqlResizeUpBound: null,
             activeRunPlanFlowRunId: "",
             activeRunPlanLoadedId: "",
             selectedProjectId: "",
@@ -100,6 +104,7 @@
 
             destroy() {
                 this.closeNodeRunParamsLayer();
+                this.endFlowResultSqlColumnResize();
                 this.restoreSidebarsAfterCanvasMaximize();
                 this.teardownFlowDesigner();
                 this.contextProjects = [];
@@ -114,6 +119,8 @@
                 this.flowRunHistoryRows = [];
                 this.flowNodeRunResultRows = [];
                 this.flowResultSqlGridData = { rows: [], columns: [] };
+                this.flowResultSqlColumnWidths = {};
+                this.flowResultSqlResizeState = null;
                 this.activeRunPlanFlowRunId = "";
                 this.activeRunPlanLoadedId = "";
                 this.selectedProjectId = "";
@@ -186,10 +193,17 @@
                 }
             },
 
-            saveStoredContext() {
+            saveStoredContext(options = {}) {
+                const optionKeys = options && typeof options === "object" ? Object.keys(options) : [];
+                const hasFlowIdOption = optionKeys.includes("flowId");
+                const currentFlowId = String(this.getValue(`#flowId-${PAGE_CODE}`) || "").trim();
+                const storedFlowId = hasFlowIdOption
+                    ? String(options.flowId || "").trim()
+                    : (/^\d+$/.test(currentFlowId) ? currentFlowId : "");
                 localStorage.setItem(CONTEXT_STORAGE_KEY, JSON.stringify({
                     projectId: this.selectedProjectId || "",
-                    scenarioId: this.selectedScenarioId || ""
+                    scenarioId: this.selectedScenarioId || "",
+                    flowId: /^\d+$/.test(storedFlowId) ? storedFlowId : ""
                 }));
             },
 
@@ -205,7 +219,7 @@
                 if (this.contextLoadFailed) return;
                 await this.loadScenarioTables();
                 await this.loadFlowAssets();
-                await this.loadFlowVersions(true, { refreshHistory: true });
+                await this.loadFlowVersions(true, { refreshHistory: true, preferredFlowId: stored.flowId || "" });
                 this.setWorkContextCollapsed(Boolean(this.selectedProjectId && this.selectedScenarioId));
             },
 
@@ -255,8 +269,8 @@
                 select.innerHTML = `
                     <option value="">-- Select project --</option>
                     ${this.contextProjects.map((project) => `
-                        <option value="${this.escapeHtml(project.PROJECT_ID ?? "")}">
-                            ${this.escapeHtml(project.PROJECT_NAME || project.PROJECT_CODE || "(Untitled project)")}
+                        <option class="${this.escapeHtml(CommonUtils.getOwnerScopeClass(project))}" value="${this.escapeHtml(project.PROJECT_ID ?? "")}">
+                            ${this.escapeHtml(CommonUtils.formatOwnerScopedName(project, project.PROJECT_NAME || project.PROJECT_CODE || "(Untitled project)"))}
                         </option>
                     `).join("")}
                 `;
@@ -264,13 +278,15 @@
                 const exists = this.contextProjects.some((project) => String(project.PROJECT_ID) === String(preferredProjectId));
                 this.selectedProjectId = exists ? String(preferredProjectId) : "";
                 select.value = this.selectedProjectId;
+                CommonUtils.applyOwnerScopeToSelect(select, this.contextProjects, this.selectedProjectId);
             },
 
             async handleContextProjectChange(projectId) {
                 this.selectedProjectId = projectId || "";
+                CommonUtils.applyOwnerScopeToSelect(getContainerEl(`#contextProject-${PAGE_CODE}`), this.contextProjects, this.selectedProjectId);
                 this.selectedScenarioId = "";
                 this.selectedScenarioTableKey = "";
-                this.saveStoredContext();
+                this.saveStoredContext({ flowId: "" });
                 await this.loadContextScenarios("");
                 await this.loadScenarioTables();
                 await this.loadFlowAssets();
@@ -310,8 +326,8 @@
                 select.innerHTML = `
                     <option value="">-- Select scenario --</option>
                     ${this.contextScenarios.map((scenario) => `
-                        <option value="${this.escapeHtml(scenario.SCENARIO_ID ?? "")}">
-                            ${this.escapeHtml(scenario.SCENARIO_NAME || scenario.SCENARIO_CODE || "(Untitled scenario)")}
+                        <option class="${this.escapeHtml(CommonUtils.getOwnerScopeClass(scenario))}" value="${this.escapeHtml(scenario.SCENARIO_ID ?? "")}">
+                            ${this.escapeHtml(CommonUtils.formatOwnerScopedName(scenario, scenario.SCENARIO_NAME || scenario.SCENARIO_CODE || "(Untitled scenario)"))}
                         </option>
                     `).join("")}
                 `;
@@ -320,13 +336,15 @@
                 const firstScenarioId = this.contextScenarios.length ? String(this.contextScenarios[0].SCENARIO_ID ?? "") : "";
                 this.selectedScenarioId = exists ? String(preferredScenarioId) : firstScenarioId;
                 select.value = this.selectedScenarioId;
+                CommonUtils.applyOwnerScopeToSelect(select, this.contextScenarios, this.selectedScenarioId, ["SCENARIO_ID", "scenarioId"]);
                 this.saveStoredContext();
             },
 
             async handleContextScenarioChange(scenarioId) {
                 this.selectedScenarioId = scenarioId || "";
+                CommonUtils.applyOwnerScopeToSelect(getContainerEl(`#contextScenario-${PAGE_CODE}`), this.contextScenarios, this.selectedScenarioId, ["SCENARIO_ID", "scenarioId"]);
                 this.selectedScenarioTableKey = "";
-                this.saveStoredContext();
+                this.saveStoredContext({ flowId: "" });
                 await this.loadScenarioTables();
                 await this.loadFlowAssets();
                 await this.loadFlowVersions(true, { refreshHistory: true });
@@ -693,7 +711,10 @@
                 if (!select && !grid) return;
                 const forceDraft = Boolean(options.forceDraft);
                 const refreshHistory = Boolean(options.refreshHistory);
-                const currentFlowId = forceDraft ? "" : this.getValue(`#flowId-${PAGE_CODE}`);
+                const preferredFlowId = /^\d+$/.test(String(options.preferredFlowId || ""))
+                    ? String(options.preferredFlowId)
+                    : "";
+                const currentFlowId = forceDraft ? "" : (preferredFlowId || this.getValue(`#flowId-${PAGE_CODE}`));
                 if (!this.selectedProjectId || !this.selectedScenarioId) {
                     this.flowList = [];
                     if (select) select.innerHTML = `<option value="">Draft</option>`;
@@ -718,7 +739,11 @@
                         return;
                     }
                     this.renderFlowVersions();
-                    if (loadLatest && this.flowList.length) {
+                    const preferredExists = Boolean(preferredFlowId)
+                        && this.flowList.some((flow) => String(flow.FLOW_ID) === String(preferredFlowId));
+                    if (loadLatest && preferredExists) {
+                        await this.loadFlowVersion(preferredFlowId, { refreshHistory });
+                    } else if (loadLatest && this.flowList.length) {
                         await this.loadFlowVersion(this.flowList[0].FLOW_ID, { refreshHistory });
                     } else if (/^\d+$/.test(currentFlowId)) {
                         const exists = this.flowList.some((flow) => String(flow.FLOW_ID) === String(currentFlowId));
@@ -726,6 +751,7 @@
                             if (select) select.value = currentFlowId;
                             this.renderFlowVersions();
                         } else {
+                            this.saveStoredContext({ flowId: "" });
                             this.newFlow(false);
                             this.renderFlowVersions();
                         }
@@ -1239,8 +1265,8 @@
                 const project = this.contextProjects.find((row) => String(row.PROJECT_ID) === String(this.selectedProjectId));
                 const scenario = this.contextScenarios.find((row) => String(row.SCENARIO_ID) === String(this.selectedScenarioId));
                 const parts = [
-                    project ? `Project: ${project.PROJECT_NAME || project.PROJECT_CODE || "-"}` : "Project: -",
-                    scenario ? `Scenario: ${scenario.SCENARIO_NAME || scenario.SCENARIO_CODE || "-"}` : "Scenario: -",
+                    project ? `Project: ${CommonUtils.formatOwnerScopedName(project, project.PROJECT_NAME || project.PROJECT_CODE || "-")}` : "Project: -",
+                    scenario ? `Scenario: ${CommonUtils.formatOwnerScopedName(scenario, scenario.SCENARIO_NAME || scenario.SCENARIO_CODE || "-")}` : "Scenario: -",
                     this.getCurrentFlowSummary()
                 ];
                 this.setText(`#workContextSummary-${PAGE_CODE}`, parts.join(" / "));
@@ -1248,7 +1274,7 @@
             },
 
             updateFlowPanelTitles(scenario = null) {
-                const scenarioName = scenario ? (scenario.SCENARIO_NAME || scenario.SCENARIO_CODE || "") : "";
+                const scenarioName = scenario ? CommonUtils.formatOwnerScopedName(scenario, scenario.SCENARIO_NAME || scenario.SCENARIO_CODE || "") : "";
                 const flowName = this.getValue(`#flowName-${PAGE_CODE}`).trim();
                 const flowId = this.getValue(`#flowId-${PAGE_CODE}`);
                 const saved = this.flowList.find((flow) => String(flow.FLOW_ID) === String(flowId)) || {};
@@ -2607,6 +2633,17 @@
                     .filter((name) => !portNames.has(name.toLowerCase()));
             },
 
+            isWebApiFlowNode(node) {
+                if (!node) return false;
+                if (String(node.dataset.execSourceType || "").toUpperCase() === "WEB_API") return true;
+                const refJob = this.getRegisteredJobAsset(node.dataset.refWorkJobId || "");
+                if (String(refJob?.EXEC_SOURCE_TYPE || "").toUpperCase() === "WEB_API") return true;
+                const script = String(node.dataset.execPlsql || "");
+                const spec = String(node.dataset.execSpecJson || "");
+                return /"type"\s*:\s*"WEB_API"/i.test(script)
+                    || /"type"\s*:\s*"WEB_API"/i.test(spec);
+            },
+
             extractDynamicTokens(sqlText) {
                 const names = [];
                 const seen = new Set();
@@ -2623,6 +2660,22 @@
             },
 
             getRuntimeBindEntriesForNode(node) {
+                if (this.isWebApiFlowNode(node)) {
+                    const entries = [];
+                    const seen = new Set();
+                    this.getNodeParams(node)
+                        .filter((item) => this.isInputNodeParamDefinition(item))
+                        .forEach((item) => {
+                            const paramName = item?.itemName || item?.ITEM_NAME || item?.name || item?.NAME || item?.key || item?.KEY || "";
+                            const systemBindName = this.getNodeParamSystemBindName(item);
+                            const name = systemBindName || paramName;
+                            const key = this.normalizeBindParamKey(name);
+                            if (!name || seen.has(key)) return;
+                            seen.add(key);
+                            entries.push({ name, label: `:${name}` });
+                        });
+                    if (entries.length) return entries;
+                }
                 const portNames = this.getNodePortBindNames(node);
                 const script = node?.dataset?.execPlsql || "";
                 const entries = [];
@@ -2718,7 +2771,19 @@
 
             getNodeParams(node) {
                 const params = this.parseNodeJson(node?.dataset?.nodeParams, []);
-                return Array.isArray(params) ? params : [];
+                const safeParams = Array.isArray(params) ? params : [];
+                const refJob = this.getRegisteredJobAsset(node?.dataset?.refWorkJobId || "");
+                const refParams = this.parseNodeJson(refJob?.PARAM_JSON, []);
+                if (!Array.isArray(refParams) || !refParams.length) return safeParams;
+                const seen = new Set();
+                safeParams.forEach((item) => {
+                    this.getNodeParamMatchKeys(item).forEach((key) => seen.add(key));
+                });
+                const missingParams = refParams.filter((item) => {
+                    const keys = this.getNodeParamMatchKeys(item);
+                    return keys.length && !keys.some((key) => seen.has(key));
+                });
+                return [...safeParams, ...missingParams];
             },
 
             normalizeBindParamKey(value) {
@@ -2755,6 +2820,19 @@
 
             getNodeParamDefault(item) {
                 return item?.itemDefault ?? item?.ITEM_DEFAULT ?? item?.defaultValue ?? item?.DEFAULT_VALUE ?? "";
+            },
+
+            getNodeParamSystemBindName(item) {
+                const text = String(this.getNodeParamDefault(item) ?? "").trim();
+                const bindMatch = text.match(/^:([A-Za-z][A-Za-z0-9_$#]*)$/);
+                if (bindMatch && this.isSystemBindName(bindMatch[1])) {
+                    return this.normalizeSystemBindName(bindMatch[1]);
+                }
+                const tokenMatch = text.match(/^\/\*\s*--\s*([A-Za-z][A-Za-z0-9_$#]*)\s*--\s*\*\/$/);
+                if (tokenMatch && this.isSystemBindName(tokenMatch[1])) {
+                    return this.normalizeSystemBindName(tokenMatch[1]);
+                }
+                return "";
             },
 
             isInputNodeParamDefinition(item = {}) {
@@ -3133,6 +3211,7 @@
                 this.isFlowRunning = this.isFlowRunActive();
                 this.updateFlowActionButtons();
                 this.updateWorkContextSummary();
+                this.saveStoredContext({ flowId: flow.FLOW_ID || "" });
             },
 
             renderFlowCanvasFromData(nodes, edges) {
@@ -3781,7 +3860,7 @@
                             <tr>
                                 <th>Level</th>
                                 <th>Node</th>
-                                <th>Type</th>
+                                <th>Job Group</th>
                                 <th>Upstream</th>
                                 <th>Downstream</th>
                             </tr>
@@ -3983,7 +4062,7 @@
                                 <th>Level</th>
                                 <th>Node</th>
                                 <th>Result</th>
-                                <th>Type</th>
+                                <th>Job Group</th>
                                 <th>Status</th>
                                 <th>Timing</th>
                                 <th>Message / Error</th>
@@ -4327,6 +4406,7 @@
                 const targetHint = info.targetOwner && info.targetTable ? ` / Target ${info.targetOwner}.${info.targetTable}` : "";
                 this.setText(`#flowResultSqlHint-${PAGE_CODE}`, `${info.modeLabel}: ${info.owner}.${info.objectName}${targetHint}`);
                 this.flowResultSqlGridData = { rows: [], columns: [] };
+                this.flowResultSqlColumnWidths = {};
                 this.renderFlowResultSqlMessage("", "info");
                 const grid = getContainerEl(`#flowResultSqlGrid-${PAGE_CODE}`);
                 if (grid) grid.innerHTML = `<div class="table-empty">Run SQL to preview result data.</div>${this.renderListFooter(0)}`;
@@ -4522,6 +4602,8 @@
                 const columns = Array.isArray(columnNames) && columnNames.length
                     ? columnNames
                     : Object.keys(dataRows?.[0] || {});
+                const colGroupHtml = this.renderFlowResultSqlColGroup(columns);
+                const headerHtml = this.renderFlowResultSqlHeader(columns);
                 if (!dataRows.length) {
                     if (!columns.length) {
                         container.innerHTML = `<div class="table-empty">No data.</div>${this.renderListFooter(0)}`;
@@ -4529,24 +4611,25 @@
                     }
                     container.innerHTML = `
                         <table class="table-grid flow-result-sql-grid">
+                            ${colGroupHtml}
                             <thead>
                                 <tr>
-                                    <th class="grid-row-no">No</th>
-                                    ${columns.map((column) => `<th title="${this.escapeHtml(column)}">${this.escapeHtml(column)}</th>`).join("")}
+                                    ${headerHtml}
                                 </tr>
                             </thead>
                             <tbody></tbody>
                         </table>
                         ${this.renderListFooter(0)}
                     `;
+                    this.syncFlowResultSqlTableWidth();
                     return;
                 }
                 container.innerHTML = `
                     <table class="table-grid flow-result-sql-grid">
+                        ${colGroupHtml}
                         <thead>
                             <tr>
-                                <th class="grid-row-no">No</th>
-                                ${columns.map((column) => `<th title="${this.escapeHtml(column)}">${this.escapeHtml(column)}</th>`).join("")}
+                                ${headerHtml}
                             </tr>
                         </thead>
                         <tbody>
@@ -4560,6 +4643,103 @@
                     </table>
                     ${this.renderListFooter(dataRows.length)}
                 `;
+                this.syncFlowResultSqlTableWidth();
+            },
+            renderFlowResultSqlColGroup(columns = []) {
+                const rowNoWidth = this.getFlowResultSqlColumnWidth("__ROW_NO__", 0);
+                return `
+                    <colgroup>
+                        <col data-flow-result-col-index="0" style="width: ${rowNoWidth}px;">
+                        ${columns.map((column, index) => {
+                            const colIndex = index + 1;
+                            const width = this.getFlowResultSqlColumnWidth(column, colIndex);
+                            return `<col data-flow-result-col-index="${colIndex}" style="width: ${width}px;">`;
+                        }).join("")}
+                    </colgroup>
+                `;
+            },
+            renderFlowResultSqlHeader(columns = []) {
+                const rowNoWidth = this.getFlowResultSqlColumnWidth("__ROW_NO__", 0);
+                return `
+                    <th class="grid-row-no flow-result-sql-resizable" title="No" style="width: ${rowNoWidth}px;">
+                        No
+                        <span class="flow-result-sql-col-resizer" title="Resize column" onmousedown="${PAGE_CODE}.beginFlowResultSqlColumnResize(event, 0, '__ROW_NO__')"></span>
+                    </th>
+                    ${columns.map((column, index) => {
+                        const colIndex = index + 1;
+                        const width = this.getFlowResultSqlColumnWidth(column, colIndex);
+                        return `
+                            <th class="flow-result-sql-resizable" title="${this.escapeHtml(column)}" style="width: ${width}px;">
+                                <span class="flow-result-sql-th-label">${this.escapeHtml(column)}</span>
+                                <span class="flow-result-sql-col-resizer" title="Resize column" onmousedown="${PAGE_CODE}.beginFlowResultSqlColumnResize(event, ${colIndex}, '${this.escapeJs(column)}')"></span>
+                            </th>
+                        `;
+                    }).join("")}
+                `;
+            },
+            getFlowResultSqlColumnKey(column, index) {
+                return `${index}:${String(column || "")}`;
+            },
+            getFlowResultSqlColumnWidth(column, index) {
+                const key = this.getFlowResultSqlColumnKey(column, index);
+                const savedWidth = Number(this.flowResultSqlColumnWidths?.[key] || 0);
+                if (savedWidth > 0) return savedWidth;
+                const columnName = String(column || "").toUpperCase();
+                if (columnName === "__ROW_NO__") return 58;
+                if (/(MESSAGE|EXPRESSION|SQL|ERROR|FEATURE|REASON)/.test(columnName)) return 360;
+                if (/(CREATE|UPDATE|DATE|TIME|DT)$/.test(columnName)) return 170;
+                if (/(OWNER|TABLE|COLUMN|RULE|MODEL)/.test(columnName)) return 190;
+                return 150;
+            },
+            syncFlowResultSqlTableWidth() {
+                const table = getContainerEl(`#flowResultSqlGrid-${PAGE_CODE} table.flow-result-sql-grid`);
+                if (!table) return;
+                const columns = Array.from(table.querySelectorAll("col"));
+                const width = columns.reduce((sum, column) => sum + Math.max(48, parseInt(column.style.width || "0", 10) || 0), 0);
+                const tableWidth = Math.max(width, table.parentElement?.clientWidth || 0);
+                table.style.width = `${tableWidth}px`;
+                table.style.minWidth = `${tableWidth}px`;
+            },
+            beginFlowResultSqlColumnResize(event, columnIndex, columnName) {
+                event.preventDefault();
+                event.stopPropagation();
+                const header = event.currentTarget?.closest?.("th");
+                if (!header) return;
+                const key = this.getFlowResultSqlColumnKey(columnName, columnIndex);
+                const startWidth = header.getBoundingClientRect().width || this.getFlowResultSqlColumnWidth(columnName, columnIndex);
+                this.flowResultSqlResizeState = {
+                    columnIndex,
+                    key,
+                    startX: event.clientX,
+                    startWidth
+                };
+                this.flowResultSqlResizeMoveBound = this.flowResultSqlResizeMoveBound || this.handleFlowResultSqlColumnResizeMove.bind(this);
+                this.flowResultSqlResizeUpBound = this.flowResultSqlResizeUpBound || this.endFlowResultSqlColumnResize.bind(this);
+                document.addEventListener("mousemove", this.flowResultSqlResizeMoveBound);
+                document.addEventListener("mouseup", this.flowResultSqlResizeUpBound, { once: true });
+                document.body.classList.add("is-resizing-flow-result-sql");
+            },
+            handleFlowResultSqlColumnResizeMove(event) {
+                const state = this.flowResultSqlResizeState;
+                if (!state) return;
+                const width = Math.max(58, Math.min(900, Math.round(state.startWidth + event.clientX - state.startX)));
+                this.flowResultSqlColumnWidths[state.key] = width;
+                const table = getContainerEl(`#flowResultSqlGrid-${PAGE_CODE} table.flow-result-sql-grid`);
+                const col = table?.querySelector?.(`col[data-flow-result-col-index="${state.columnIndex}"]`);
+                if (col) col.style.width = `${width}px`;
+                const header = table?.querySelector?.(`thead th:nth-child(${state.columnIndex + 1})`);
+                if (header) header.style.width = `${width}px`;
+                this.syncFlowResultSqlTableWidth();
+            },
+            endFlowResultSqlColumnResize() {
+                if (this.flowResultSqlResizeMoveBound) {
+                    document.removeEventListener("mousemove", this.flowResultSqlResizeMoveBound);
+                }
+                if (this.flowResultSqlResizeUpBound) {
+                    document.removeEventListener("mouseup", this.flowResultSqlResizeUpBound);
+                }
+                document.body.classList.remove("is-resizing-flow-result-sql");
+                this.flowResultSqlResizeState = null;
             },
             formatFlowResultCell(value) {
                 if (value === null || value === undefined) return "";
@@ -5103,6 +5283,7 @@
                     if (json.data?.flowId) {
                         if (stillSelected || flowKey === "NEW") {
                             this.setValue(`#flowId-${PAGE_CODE}`, json.data.flowId);
+                            this.saveStoredContext({ flowId: json.data.flowId });
                         }
                         if (flowKey === "NEW") {
                             this.transferFlowRunKey(flowKey, String(json.data.flowId));
@@ -5196,6 +5377,7 @@
                     if (json.data?.flowId) {
                         if (stillSelected || flowKey === "NEW") {
                             this.setValue(`#flowId-${PAGE_CODE}`, json.data.flowId);
+                            this.saveStoredContext({ flowId: json.data.flowId });
                         }
                         if (flowKey === "NEW") {
                             this.transferFlowRunKey(flowKey, String(json.data.flowId));

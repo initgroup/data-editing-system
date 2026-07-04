@@ -446,6 +446,16 @@ def _normalize_node_result(row: dict[str, Any]) -> dict[str, Any]:
     row["REF_MENU_CODE"] = str(menu_code or "").strip().upper()
     row["RESULT_CREATE_YN"] = mode
     row["RESULT_OWNER"] = str(owner or "").strip().upper()
+    if mode == "M":
+        runtime_model_name = (
+            runtime_params.get("P_MODEL_NAME")
+            or runtime_params.get("pModelName")
+            or runtime_params.get("modelName")
+            or runtime_params.get("INIT$ResultModelName")
+            or ""
+        )
+        if runtime_model_name and re.match(r"^[A-Za-z][A-Za-z0-9_$#]{0,127}$", str(runtime_model_name).strip()):
+            object_name = runtime_model_name
     row["RESULT_OBJECT_NAME"] = str(object_name or "").strip().upper()
     row["TARGET_OWNER"] = str(target_owner or "").strip().upper()
     row["TARGET_TABLE"] = str(target_table or "").strip().upper()
@@ -1135,14 +1145,14 @@ def _fetch_rule_violation_summary(
     ) if rule_model_name else []
 
     candidate_filter_clauses = [
-        '"OWNER" = :owner',
-        '"TARGET_OWNER" = :targetOwner',
-        '"TARGET_TABLE" = :targetTable',
-        '"MODEL_NAME" = :modelName',
-        '"RESULT_HAS_VALUE_YN" = \'Y\'',
-        '"RESULT_COLUMN" IS NOT NULL',
-        '"RESULT_VALUE" IS NOT NULL',
-        '"CONDITION_TEXT" IS NOT NULL',
+        'S."OWNER" = :owner',
+        'S."TARGET_OWNER" = :targetOwner',
+        'S."TARGET_TABLE" = :targetTable',
+        'S."MODEL_NAME" = :modelName',
+        'S."RESULT_HAS_VALUE_YN" = \'Y\'',
+        'S."RESULT_COLUMN" IS NOT NULL',
+        'S."RESULT_VALUE" IS NOT NULL',
+        'S."CONDITION_TEXT" IS NOT NULL',
     ]
     candidate_filter_params = {
         "owner": owner_name,
@@ -1154,41 +1164,51 @@ def _fetch_rule_violation_summary(
         "detectMaxRules": detection_max_rules,
     }
     if run_source_type and run_id is not None:
-        candidate_filter_clauses.append('"RUN_SOURCE_TYPE" = :runSourceType')
-        candidate_filter_clauses.append('"RUN_ID" = :runId')
+        candidate_filter_clauses.append('S."RUN_SOURCE_TYPE" = :runSourceType')
+        candidate_filter_clauses.append('S."RUN_ID" = :runId')
         candidate_filter_params["runSourceType"] = run_source_type
         candidate_filter_params["runId"] = run_id
+    candidate_display_clauses = ["1 = 1"]
     if condition_count is not None:
-        candidate_filter_clauses.append('"CONDITION_COUNT" = :candidateConditionCount')
+        candidate_display_clauses.append('C."CONDITION_COUNT" = :candidateConditionCount')
         candidate_filter_params["candidateConditionCount"] = condition_count
     if normalized_confidence_scope == "NON_PERFECT":
-        candidate_filter_clauses.append(
-            '"RULE_CONFIDENCE" IS NOT NULL '
-            'AND (("RULE_CONFIDENCE" <= 1 AND "RULE_CONFIDENCE" < 0.999999) '
-            ' OR ("RULE_CONFIDENCE" > 1 AND "RULE_CONFIDENCE" < 99.9999))'
+        candidate_display_clauses.append(
+            'C."RULE_CONFIDENCE" IS NOT NULL '
+            'AND ((C."RULE_CONFIDENCE" <= 1 AND C."RULE_CONFIDENCE" < 0.999999) '
+            ' OR (C."RULE_CONFIDENCE" > 1 AND C."RULE_CONFIDENCE" < 99.9999))'
         )
     if normalized_rule_filter:
-        candidate_filter_clauses.append('UPPER("RULE_ID") LIKE \'%\' || UPPER(:candidateRuleIdFilter) || \'%\'')
+        candidate_display_clauses.append('UPPER(C."RULE_ID") LIKE \'%\' || UPPER(:candidateRuleIdFilter) || \'%\'')
         candidate_filter_params["candidateRuleIdFilter"] = normalized_rule_filter
     candidate_filter_sql = " AND ".join(candidate_filter_clauses)
+    candidate_display_sql = " AND ".join(candidate_display_clauses)
     detection_overview = fetch_one(
-        "WITH CANDIDATES AS ("
+        "WITH BASE_CANDIDATES AS ("
         "        SELECT S.* "
         "          FROM \"INIT$_TB_ASSOC_RULE_SUMMARY\" S "
         f"         WHERE {candidate_filter_sql}"
-        "     ), DETECTABLE AS ("
+        "     ), DISPLAY_CANDIDATES AS ("
+        "        SELECT C.* "
+        "          FROM BASE_CANDIDATES C "
+        f"         WHERE {candidate_display_sql}"
+        "     ), DETECTABLE_ALL AS ("
         "        SELECT C.*, "
         "               ROW_NUMBER() OVER (ORDER BY C.\"RULE_CONFIDENCE\" DESC NULLS LAST, C.\"RULE_LIFT\" DESC NULLS LAST, C.\"SUPPORT_COUNT\" DESC NULLS LAST, C.\"RULE_ID\") AS DETECTION_RN "
-        "          FROM CANDIDATES C "
+        "          FROM BASE_CANDIDATES C "
         "         WHERE NVL(C.\"RULE_CONFIDENCE\", 0) >= :detectMinConfidence "
         "           AND NVL(C.\"RULE_LIFT\", 0) >= :detectMinLift"
         "     ) "
-        "SELECT (SELECT COUNT(*) FROM CANDIDATES) AS CANDIDATE_RULE_COUNT, "
-        "       (SELECT COUNT(*) FROM CANDIDATES WHERE NVL(\"RULE_CONFIDENCE\", 0) < :detectMinConfidence) AS CONFIDENCE_CUTOFF_COUNT, "
-        "       (SELECT COUNT(*) FROM CANDIDATES WHERE NVL(\"RULE_LIFT\", 0) < :detectMinLift) AS LIFT_CUTOFF_COUNT, "
-        "       (SELECT COUNT(*) FROM DETECTABLE WHERE DETECTION_RN <= :detectMaxRules) AS DETECTION_ELIGIBLE_RULE_COUNT, "
-        "       (SELECT COUNT(*) FROM DETECTABLE WHERE DETECTION_RN > :detectMaxRules) AS MAX_RULES_CUTOFF_COUNT "
-        "  FROM DUAL",
+        "SELECT COUNT(*) AS CANDIDATE_RULE_COUNT, "
+        "       SUM(CASE WHEN NVL(C.\"RULE_CONFIDENCE\", 0) < :detectMinConfidence THEN 1 ELSE 0 END) AS CONFIDENCE_CUTOFF_COUNT, "
+        "       SUM(CASE WHEN NVL(C.\"RULE_LIFT\", 0) < :detectMinLift THEN 1 ELSE 0 END) AS LIFT_CUTOFF_COUNT, "
+        "       SUM(CASE WHEN D.DETECTION_RN <= :detectMaxRules THEN 1 ELSE 0 END) AS DETECTION_ELIGIBLE_RULE_COUNT, "
+        "       SUM(CASE WHEN D.DETECTION_RN > :detectMaxRules THEN 1 ELSE 0 END) AS MAX_RULES_CUTOFF_COUNT, "
+        "       MIN(D.DETECTION_RN) AS MIN_DETECTION_RN, "
+        "       MAX(D.DETECTION_RN) AS MAX_DETECTION_RN "
+        "  FROM DISPLAY_CANDIDATES C "
+        "  LEFT JOIN DETECTABLE_ALL D "
+        "    ON D.\"RULE_ID\" = C.\"RULE_ID\"",
         candidate_filter_params,
     ) if rule_model_name else {}
 
@@ -1207,6 +1227,9 @@ def _fetch_rule_violation_summary(
         "candidateTargetOwner": target_owner,
         "candidateTargetTable": target_table,
         "candidateModelName": rule_model_name,
+        "detectMinConfidence": detection_min_confidence,
+        "detectMinLift": detection_min_lift,
+        "detectMaxRules": detection_max_rules,
         "ruleOffset": rule_offset,
         "ruleEndRow": rule_end_row,
     }
@@ -1231,7 +1254,7 @@ def _fetch_rule_violation_summary(
     result_scope_predicate = {
         "CANDIDATE": "1 = 1",
         "HIT": "NVL(Q.VIOLATION_COUNT, 0) > 0",
-        "MISS": "NVL(Q.VIOLATION_COUNT, 0) = 0",
+        "MISS": "NVL(Q.VIOLATION_COUNT, 0) = 0 AND Q.DETECTION_SCANNED_YN = 'Y'",
     }[normalized_result_scope]
     top_rules = fetch_many(
         "SELECT * FROM ("
@@ -1247,10 +1270,33 @@ def _fetch_rule_violation_summary(
         '                       NVL(V.VIOLATION_COUNT, 0) AS VIOLATION_COUNT, '
         '                       NVL(V.VIOLATED_ROW_COUNT, 0) AS VIOLATED_ROW_COUNT, '
         '                       V.AVG_VIOLATION_SCORE AS AVG_VIOLATION_SCORE, '
+        '                       D.DETECTION_RN AS DETECTION_RN, '
+        "                       CASE WHEN D.DETECTION_RN <= :detectMaxRules THEN 'Y' "
+        "                            WHEN D.DETECTION_RN IS NOT NULL THEN 'N' "
+        "                            ELSE NULL "
+        "                       END AS DETECTION_SCANNED_YN, "
         '                       S."RULE_SUPPORT" AS RULE_SUPPORT, '
         '                       S."RULE_CONFIDENCE" AS RULE_CONFIDENCE, '
         '                       S."RULE_LIFT" AS RULE_LIFT '
         '                  FROM "INIT$_TB_ASSOC_RULE_SUMMARY" S '
+        "                  LEFT JOIN ("
+        '                        SELECT A."RULE_ID", '
+        '                               ROW_NUMBER() OVER (ORDER BY A."RULE_CONFIDENCE" DESC NULLS LAST, A."RULE_LIFT" DESC NULLS LAST, A."SUPPORT_COUNT" DESC NULLS LAST, A."RULE_ID") AS DETECTION_RN '
+        '                          FROM "INIT$_TB_ASSOC_RULE_SUMMARY" A '
+        '                         WHERE A."OWNER" = :candidateOwner '
+        '                           AND A."TARGET_OWNER" = :candidateTargetOwner '
+        '                           AND A."TARGET_TABLE" = :candidateTargetTable '
+        '                           AND A."MODEL_NAME" = :candidateModelName '
+        '                           AND A."RESULT_HAS_VALUE_YN" = \'Y\' '
+        '                           AND A."RESULT_COLUMN" IS NOT NULL '
+        '                           AND A."RESULT_VALUE" IS NOT NULL '
+        '                           AND A."CONDITION_TEXT" IS NOT NULL '
+        '                           AND NVL(A."RULE_CONFIDENCE", 0) >= :detectMinConfidence '
+        '                           AND NVL(A."RULE_LIFT", 0) >= :detectMinLift '
+        + ("                           AND A.\"RUN_SOURCE_TYPE\" = :candidateRunSourceType "
+           "                           AND A.\"RUN_ID\" = :candidateRunId " if run_source_type and run_id is not None else "") +
+        "                       ) D"
+        '                    ON D."RULE_ID" = S."RULE_ID" '
         "                  LEFT JOIN ("
         "                        SELECT RULE_ID, "
         "                               COUNT(*) AS VIOLATION_COUNT, "
@@ -1528,7 +1574,7 @@ def list_flow_run_nodes(flow_run_id: int, request: Request):
             conn.close()
 
 
-def delete_flow_run(flow_run_id: int, request: Request, flow_menu_code: str = "M04001"):
+def delete_flow_run(flow_run_id: int, request: Request, flow_menu_code: str = "M04001", force: bool = False):
     try:
         normalized_flow_run_id = int(flow_run_id)
     except (TypeError, ValueError):
@@ -1537,7 +1583,8 @@ def delete_flow_run(flow_run_id: int, request: Request, flow_menu_code: str = "M
         raise HTTPException(status_code=400, detail="Invalid run id.")
 
     user_id = get_request_user_id(request)
-    include_all_users = get_request_role_code(request) == "ADMIN"
+    is_admin = get_request_role_code(request) == "ADMIN"
+    include_all_users = is_admin
     conn = None
     cursor = None
     try:
@@ -1554,7 +1601,8 @@ def delete_flow_run(flow_run_id: int, request: Request, flow_menu_code: str = "M
         if not row:
             raise HTTPException(status_code=404, detail="Run history was not found or cannot be deleted by this user.")
         status = str(row[1] or "").strip().upper()
-        if status in {"RUNNING", "STARTED", "QUEUED", "PENDING"}:
+        force_delete_running = bool(force) and is_admin
+        if status in {"RUNNING", "STARTED", "QUEUED", "PENDING"} and not force_delete_running:
             raise HTTPException(status_code=409, detail="Running or pending run history cannot be deleted.")
 
         cursor.execute(SqlLoader.get_sql("MCOMMON_ANLY_WORK_FLOW_RUN_DELETE_BLOCK"), {
@@ -1565,6 +1613,7 @@ def delete_flow_run(flow_run_id: int, request: Request, flow_menu_code: str = "M
             "status": "success",
             "flowRunId": normalized_flow_run_id,
             "message": f"Run #{normalized_flow_run_id} history was deleted.",
+            "force": "Y" if force_delete_running else "N",
         }
     except HTTPException:
         if conn:
