@@ -808,16 +808,27 @@ def _fetch_symbolic_violation_summary(
     target_table: str,
     run_source_type: str = "",
     run_id: int | None = None,
+    rule_id_filter: str = "",
 ) -> dict[str, Any] | None:
     if object_name != "INIT$_TB_SYMBOLIC_RULE_VIOLATION" or not target_owner or not target_table:
         return None
     result_object = f"{_quote_identifier(owner_name)}.{_quote_identifier(object_name)}"
+    rule_object = f"{_quote_identifier(owner_name)}.\"INIT$_TB_SYMBOLIC_RULE\""
     run_filter_sql = ""
+    rule_run_filter_sql = ""
     run_params: dict[str, Any] = {}
     if run_source_type and run_id is not None:
         run_filter_sql = " AND RUN_SOURCE_TYPE = :runSourceType AND RUN_ID = :runId "
+        rule_run_filter_sql = " AND R.RUN_SOURCE_TYPE = :runSourceType AND R.RUN_ID = :runId "
         run_params = {"runSourceType": run_source_type, "runId": run_id}
+    rule_filter_sql = ""
+    violation_rule_filter_sql = ""
+    if rule_id_filter:
+        rule_filter_sql = " AND UPPER(R.RULE_ID) LIKE '%' || UPPER(:ruleIdFilter) || '%' "
+        violation_rule_filter_sql = " AND UPPER(RULE_ID) LIKE '%' || UPPER(:ruleIdFilter) || '%' "
     params = {"targetOwner": target_owner, "targetTable": target_table, **run_params}
+    if rule_id_filter:
+        params["ruleIdFilter"] = rule_id_filter
 
     def fetch_one(sql: str) -> dict[str, Any]:
         cursor.execute(sql, params)
@@ -831,50 +842,100 @@ def _fetch_symbolic_violation_summary(
         return [_row_to_dict(columns, row) for row in cursor.fetchall()]
 
     overview = fetch_one(
-        "SELECT COUNT(*) AS VIOLATION_COUNT, "
-        "       COUNT(DISTINCT NVL(CASE_ID, CASE_ROWID)) AS VIOLATED_ROW_COUNT, "
-        "       COUNT(DISTINCT RULE_ID) AS VIOLATED_RULE_COUNT, "
-        "       COUNT(DISTINCT TARGET_COLUMN) AS TARGET_COLUMN_COUNT, "
-        "       AVG(ABS_ERROR) AS AVG_ABS_ERROR, "
-        "       MAX(ABS_ERROR) AS MAX_ABS_ERROR, "
-        "       AVG(ERROR_PCT) AS AVG_ERROR_PCT, "
-        "       MAX(ERROR_PCT) AS MAX_ERROR_PCT, "
-        "       MAX(TOLERANCE_PCT) AS TOLERANCE_PCT "
-        f"  FROM {result_object} "
-        f" WHERE TARGET_OWNER = :targetOwner AND TARGET_TABLE = :targetTable {run_filter_sql}"
+        "WITH R AS ("
+        "        SELECT R.RULE_ID, R.TARGET_COLUMN "
+        f"          FROM {rule_object} R "
+        f"         WHERE R.OWNER = :targetOwner AND R.TABLE_NAME = :targetTable {rule_run_filter_sql}{rule_filter_sql}"
+        "       ), "
+        "V AS ("
+        "        SELECT RULE_ID, TARGET_COLUMN, COUNT(*) AS VIOLATION_COUNT, "
+        "               COUNT(DISTINCT NVL(CASE_ID, CASE_ROWID)) AS VIOLATED_ROW_COUNT, "
+        "               AVG(ABS_ERROR) AS AVG_ABS_ERROR, MAX(ABS_ERROR) AS MAX_ABS_ERROR, "
+        "               AVG(ERROR_PCT) AS AVG_ERROR_PCT, MAX(ERROR_PCT) AS MAX_ERROR_PCT, "
+        "               MAX(TOLERANCE_PCT) AS TOLERANCE_PCT "
+        f"          FROM {result_object} "
+        f"         WHERE TARGET_OWNER = :targetOwner AND TARGET_TABLE = :targetTable {run_filter_sql}{violation_rule_filter_sql}"
+        "         GROUP BY RULE_ID, TARGET_COLUMN "
+        "       ) "
+        "SELECT COUNT(R.RULE_ID) AS RULE_COUNT, "
+        "       COUNT(DISTINCT R.TARGET_COLUMN) AS TARGET_COLUMN_COUNT, "
+        "       NVL(SUM(V.VIOLATION_COUNT), 0) AS VIOLATION_COUNT, "
+        "       NVL(SUM(V.VIOLATED_ROW_COUNT), 0) AS VIOLATED_ROW_COUNT, "
+        "       SUM(CASE WHEN NVL(V.VIOLATION_COUNT, 0) > 0 THEN 1 ELSE 0 END) AS VIOLATED_RULE_COUNT, "
+        "       SUM(CASE WHEN NVL(V.VIOLATION_COUNT, 0) = 0 THEN 1 ELSE 0 END) AS NO_VIOLATION_RULE_COUNT, "
+        "       AVG(V.AVG_ABS_ERROR) AS AVG_ABS_ERROR, "
+        "       MAX(V.MAX_ABS_ERROR) AS MAX_ABS_ERROR, "
+        "       AVG(V.AVG_ERROR_PCT) AS AVG_ERROR_PCT, "
+        "       MAX(V.MAX_ERROR_PCT) AS MAX_ERROR_PCT, "
+        "       MAX(V.TOLERANCE_PCT) AS TOLERANCE_PCT "
+        "  FROM R "
+        "  LEFT JOIN V "
+        "    ON V.RULE_ID = R.RULE_ID "
+        "   AND V.TARGET_COLUMN = R.TARGET_COLUMN"
     )
     top_rules = fetch_many(
         "SELECT * "
         "  FROM ("
-        "        SELECT RULE_ID, TARGET_COLUMN, COUNT(*) AS VIOLATION_COUNT, "
-        "               COUNT(DISTINCT NVL(CASE_ID, CASE_ROWID)) AS VIOLATED_ROW_COUNT, "
-        "               AVG(ERROR_PCT) AS AVG_ERROR_PCT, MAX(ERROR_PCT) AS MAX_ERROR_PCT, "
-        "               AVG(ABS_ERROR) AS AVG_ABS_ERROR, MAX(VIOLATION_SCORE) AS MAX_VIOLATION_SCORE "
-        f"          FROM {result_object} "
-        f"         WHERE TARGET_OWNER = :targetOwner AND TARGET_TABLE = :targetTable {run_filter_sql}"
-        "         GROUP BY RULE_ID, TARGET_COLUMN "
-        "         ORDER BY VIOLATION_COUNT DESC, MAX_ERROR_PCT DESC NULLS LAST, RULE_ID"
+        "        SELECT R.RULE_ID, R.TARGET_COLUMN, DBMS_LOB.SUBSTR(R.EXPRESSION, 4000, 1) AS EXPRESSION, "
+        "               R.FEATURE_COLUMNS, R.SCORE AS RULE_SCORE, R.COMPLEXITY AS RULE_COMPLEXITY, R.METHOD AS RULE_METHOD, "
+        "               NVL(V.VIOLATION_COUNT, 0) AS VIOLATION_COUNT, "
+        "               NVL(V.VIOLATED_ROW_COUNT, 0) AS VIOLATED_ROW_COUNT, "
+        "               V.AVG_ERROR_PCT, V.MAX_ERROR_PCT, V.AVG_ABS_ERROR, V.MAX_VIOLATION_SCORE, V.TOLERANCE_PCT "
+        f"          FROM {rule_object} R "
+        "          LEFT JOIN ("
+        "                SELECT RULE_ID, TARGET_COLUMN, COUNT(*) AS VIOLATION_COUNT, "
+        "                       COUNT(DISTINCT NVL(CASE_ID, CASE_ROWID)) AS VIOLATED_ROW_COUNT, "
+        "                       AVG(ERROR_PCT) AS AVG_ERROR_PCT, MAX(ERROR_PCT) AS MAX_ERROR_PCT, "
+        "                       AVG(ABS_ERROR) AS AVG_ABS_ERROR, MAX(VIOLATION_SCORE) AS MAX_VIOLATION_SCORE, "
+        "                       MAX(TOLERANCE_PCT) AS TOLERANCE_PCT "
+        f"                  FROM {result_object} "
+        f"                 WHERE TARGET_OWNER = :targetOwner AND TARGET_TABLE = :targetTable {run_filter_sql}{violation_rule_filter_sql}"
+        "                 GROUP BY RULE_ID, TARGET_COLUMN "
+        "               ) V "
+        "            ON V.RULE_ID = R.RULE_ID "
+        "           AND V.TARGET_COLUMN = R.TARGET_COLUMN "
+        f"         WHERE R.OWNER = :targetOwner AND R.TABLE_NAME = :targetTable {rule_run_filter_sql}{rule_filter_sql}"
+        "         ORDER BY NVL(V.VIOLATION_COUNT, 0) DESC, V.MAX_ERROR_PCT DESC NULLS LAST, R.RANK_NO NULLS LAST, R.TARGET_COLUMN, R.RULE_ID"
         "       ) "
         " WHERE ROWNUM <= 12"
     )
     top_targets = fetch_many(
         "SELECT * "
         "  FROM ("
-        "        SELECT TARGET_COLUMN, COUNT(*) AS VIOLATION_COUNT, "
-        "               COUNT(DISTINCT RULE_ID) AS RULE_COUNT, AVG(ERROR_PCT) AS AVG_ERROR_PCT "
-        f"          FROM {result_object} "
-        f"         WHERE TARGET_OWNER = :targetOwner AND TARGET_TABLE = :targetTable {run_filter_sql}"
-        "         GROUP BY TARGET_COLUMN "
-        "         ORDER BY VIOLATION_COUNT DESC, AVG_ERROR_PCT DESC NULLS LAST, TARGET_COLUMN"
+        "        SELECT R.TARGET_COLUMN, COUNT(R.RULE_ID) AS RULE_COUNT, "
+        "               NVL(SUM(V.VIOLATION_COUNT), 0) AS VIOLATION_COUNT, "
+        "               SUM(CASE WHEN NVL(V.VIOLATION_COUNT, 0) > 0 THEN 1 ELSE 0 END) AS VIOLATED_RULE_COUNT, "
+        "               AVG(V.AVG_ERROR_PCT) AS AVG_ERROR_PCT "
+        f"          FROM {rule_object} R "
+        "          LEFT JOIN ("
+        "                SELECT RULE_ID, TARGET_COLUMN, COUNT(*) AS VIOLATION_COUNT, AVG(ERROR_PCT) AS AVG_ERROR_PCT "
+        f"                  FROM {result_object} "
+        f"                 WHERE TARGET_OWNER = :targetOwner AND TARGET_TABLE = :targetTable {run_filter_sql}{violation_rule_filter_sql}"
+        "                 GROUP BY RULE_ID, TARGET_COLUMN "
+        "               ) V "
+        "            ON V.RULE_ID = R.RULE_ID "
+        "           AND V.TARGET_COLUMN = R.TARGET_COLUMN "
+        f"         WHERE R.OWNER = :targetOwner AND R.TABLE_NAME = :targetTable {rule_run_filter_sql}{rule_filter_sql}"
+        "         GROUP BY R.TARGET_COLUMN "
+        "         ORDER BY VIOLATION_COUNT DESC, AVG_ERROR_PCT DESC NULLS LAST, R.TARGET_COLUMN"
         "       ) "
         " WHERE ROWNUM <= 12"
     )
+    range_columns: list[str] = []
+    for rule in top_rules:
+        range_columns.extend(_split_column_list(rule.get("FEATURE_COLUMNS"), 20))
+    range_map = _fetch_numeric_feature_ranges(cursor, target_owner, target_table, range_columns)
+    for rule in top_rules:
+        features = _split_column_list(rule.get("FEATURE_COLUMNS"), 20)
+        rule["FEATURE_LIST"] = features
+        rule["FEATURE_RANGES"] = [range_map[column] for column in features if column in range_map]
     return {
         "targetOwner": target_owner,
         "targetTable": target_table,
         "overview": overview,
         "topRules": top_rules,
         "topTargets": top_targets,
+        "ruleIdFilter": rule_id_filter,
         "columnComments": _fetch_column_comment_map(cursor, target_owner, target_table),
         "runSourceType": run_source_type,
         "runId": run_id,
@@ -1792,6 +1853,9 @@ def get_result_table(
         if object_name == "INIT$_TB_RULE_VIOLATION_RESULT" and normalized_violation_rule_id and "RULE_ID" in columns:
             where_clauses.append("UPPER(RULE_ID) LIKE '%' || UPPER(:violationRuleId) || '%'")
             bind_params["violationRuleId"] = normalized_violation_rule_id
+        if object_name == "INIT$_TB_SYMBOLIC_RULE_VIOLATION" and normalized_violation_rule_id and "RULE_ID" in columns:
+            where_clauses.append("UPPER(RULE_ID) LIKE '%' || UPPER(:violationRuleId) || '%'")
+            bind_params["violationRuleId"] = normalized_violation_rule_id
         if (
             _is_predicted_type_result_table(object_name)
             and normalized_predicted_type_case != "ALL"
@@ -1847,7 +1911,16 @@ def get_result_table(
         elif result_layout.get("summary") == "symbolicRuleSummary":
             symbolic_rule_summary = _fetch_symbolic_rule_summary(cursor, owner_name, object_name, target_owner, target_table, run_source_type, normalized_run_id)
         elif result_layout.get("summary") == "symbolicViolationSummary":
-            symbolic_violation_summary = _fetch_symbolic_violation_summary(cursor, owner_name, object_name, target_owner, target_table, run_source_type, normalized_run_id)
+            symbolic_violation_summary = _fetch_symbolic_violation_summary(
+                cursor,
+                owner_name,
+                object_name,
+                target_owner,
+                target_table,
+                run_source_type,
+                normalized_run_id,
+                normalized_violation_rule_id,
+            )
         column_comments = _fetch_column_comment_map(cursor, target_owner, target_table)
         return {
             "status": "success",

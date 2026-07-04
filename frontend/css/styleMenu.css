@@ -10655,9 +10655,47 @@ body.is-resizing-flow-result-sql {
 
 .M04002-node-grid {
     display: grid;
-    gap: 10px 28px;
+    gap: 12px 14px;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     margin-bottom: 12px;
+}
+
+.M04002-node-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+}
+
+.M04002-node-group-header {
+    align-items: center;
+    border-bottom: 1px solid #dbeafe;
+    color: #475569;
+    display: flex;
+    font-size: 11px;
+    justify-content: space-between;
+    min-height: 20px;
+    text-transform: uppercase;
+}
+
+.M04002-node-group-header strong {
+    color: #1e3a8a;
+    font-family: Consolas, "Courier New", monospace;
+}
+
+.M04002-node-group-header small {
+    color: #64748b;
+    font-size: 10px;
+}
+
+.M04002-node-group-empty {
+    align-items: center;
+    border: 1px dashed #cbd5e1;
+    color: #94a3b8;
+    display: flex;
+    font-size: 12px;
+    justify-content: center;
+    min-height: 82px;
 }
 
 .M04002-node-card {
@@ -11307,8 +11345,16 @@ body.is-resizing-flow-result-sql {
     white-space: nowrap;
 }
 
+.M04002-violation-rule-actions {
+    align-items: center;
+    display: inline-flex;
+    flex: 0 0 auto;
+    gap: 6px;
+}
+
 .M04002-violation-rule-grid article header em,
-.M04002-violation-rule-grid article header button {
+.M04002-violation-rule-grid article header button,
+.M04002-violation-rule-actions button {
     background: #ffe4e6;
     border: 1px solid transparent;
     color: #9f1239;
@@ -11320,7 +11366,12 @@ body.is-resizing-flow-result-sql {
     padding: 3px 6px;
 }
 
-.M04002-violation-rule-grid article.is-no-violation header em {
+.M04002-violation-rule-actions button:first-child {
+    min-width: 28px;
+}
+
+.M04002-violation-rule-grid article.is-no-violation header em,
+.M04002-violation-rule-grid article header button.is-muted {
     background: #dcfce7;
     color: #166534;
 }
@@ -11935,7 +11986,15 @@ body.is-resizing-flow-result-sql {
     margin-top: 4px;
 }
 
-.M04002-symbolic-rule-card header > button {
+.M04002-symbolic-rule-card header > .M04002-symbolic-rule-actions {
+    align-items: center;
+    display: inline-flex;
+    flex: 0 0 auto;
+    gap: 6px;
+    min-width: auto;
+}
+
+.M04002-symbolic-rule-actions button {
     align-items: center;
     background: #ffffff;
     border: 1px solid #99f6e4;
@@ -11945,10 +12004,14 @@ body.is-resizing-flow-result-sql {
     flex: 0 0 auto;
     height: 30px;
     justify-content: center;
+    padding: 0 9px;
+}
+
+.M04002-symbolic-rule-actions button:first-child {
     width: 34px;
 }
 
-.M04002-symbolic-rule-card header > button:hover {
+.M04002-symbolic-rule-actions button:hover {
     border-color: #0f766e;
     box-shadow: inset 0 0 0 1px rgba(15, 118, 110, 0.16);
 }

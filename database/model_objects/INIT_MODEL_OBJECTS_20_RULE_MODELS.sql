@@ -1561,6 +1561,153 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_SYMBOLIC_RULE_VIOLATION_DETECT" (
         RETURN v_result || SUBSTR(v_source, v_pos);
     END;
 
+    FUNCTION protect_division_denominators(p_expr IN VARCHAR2) RETURN VARCHAR2 IS
+        v_source VARCHAR2(32767) := p_expr;
+        v_result VARCHAR2(32767) := '';
+        v_pos PLS_INTEGER := 1;
+        v_len PLS_INTEGER := NVL(LENGTH(p_expr), 0);
+        v_start PLS_INTEGER;
+        v_end PLS_INTEGER;
+        v_scan PLS_INTEGER;
+        v_depth PLS_INTEGER;
+        v_char VARCHAR2(1);
+        v_spaces VARCHAR2(4000);
+        v_denom VARCHAR2(32767);
+
+        FUNCTION find_balanced_end(p_start IN PLS_INTEGER) RETURN PLS_INTEGER IS
+            v_i PLS_INTEGER := p_start;
+            v_level PLS_INTEGER := 0;
+            v_c VARCHAR2(1);
+        BEGIN
+            WHILE v_i <= v_len LOOP
+                v_c := SUBSTR(v_source, v_i, 1);
+                IF v_c = '(' THEN
+                    v_level := v_level + 1;
+                ELSIF v_c = ')' THEN
+                    v_level := v_level - 1;
+                    IF v_level = 0 THEN
+                        RETURN v_i;
+                    END IF;
+                END IF;
+                v_i := v_i + 1;
+            END LOOP;
+            RETURN NULL;
+        END;
+
+        PROCEDURE append_text(p_text IN VARCHAR2) IS
+        BEGIN
+            IF NVL(LENGTH(v_result), 0) + NVL(LENGTH(p_text), 0) > 32767 THEN
+                v_result := NULL;
+            ELSE
+                v_result := v_result || p_text;
+            END IF;
+        END;
+    BEGIN
+        IF v_source IS NULL OR INSTR(v_source, '/') = 0 THEN
+            RETURN v_source;
+        END IF;
+
+        WHILE v_pos <= v_len LOOP
+            v_char := SUBSTR(v_source, v_pos, 1);
+            IF v_char <> '/' THEN
+                append_text(v_char);
+                IF v_result IS NULL THEN
+                    RETURN NULL;
+                END IF;
+                v_pos := v_pos + 1;
+                CONTINUE;
+            END IF;
+
+            append_text('/');
+            IF v_result IS NULL THEN
+                RETURN NULL;
+            END IF;
+            v_pos := v_pos + 1;
+            v_spaces := '';
+            WHILE v_pos <= v_len AND SUBSTR(v_source, v_pos, 1) IN (' ', CHR(9), CHR(10), CHR(13)) LOOP
+                v_spaces := v_spaces || SUBSTR(v_source, v_pos, 1);
+                v_pos := v_pos + 1;
+            END LOOP;
+
+            IF v_pos > v_len THEN
+                append_text(v_spaces);
+                RETURN v_result;
+            END IF;
+
+            v_start := v_pos;
+            v_char := SUBSTR(v_source, v_pos, 1);
+            IF v_char = '(' THEN
+                v_end := find_balanced_end(v_pos);
+            ELSIF v_char = '"' THEN
+                v_scan := v_pos + 1;
+                WHILE v_scan <= v_len LOOP
+                    IF SUBSTR(v_source, v_scan, 1) = '"' THEN
+                        EXIT;
+                    END IF;
+                    v_scan := v_scan + 1;
+                END LOOP;
+                v_end := LEAST(v_scan, v_len);
+            ELSIF is_alpha_char(v_char) THEN
+                v_scan := v_pos;
+                WHILE v_scan <= v_len AND is_identifier_char(SUBSTR(v_source, v_scan, 1)) LOOP
+                    v_scan := v_scan + 1;
+                END LOOP;
+                v_end := v_scan - 1;
+                WHILE v_scan <= v_len AND SUBSTR(v_source, v_scan, 1) IN (' ', CHR(9), CHR(10), CHR(13)) LOOP
+                    v_scan := v_scan + 1;
+                END LOOP;
+                IF v_scan <= v_len AND SUBSTR(v_source, v_scan, 1) = '(' THEN
+                    v_end := find_balanced_end(v_scan);
+                END IF;
+            ELSIF INSTR('+-0123456789.', v_char) > 0 THEN
+                v_scan := v_pos;
+                IF SUBSTR(v_source, v_scan, 1) IN ('+', '-') THEN
+                    v_scan := v_scan + 1;
+                END IF;
+                WHILE v_scan <= v_len
+                  AND REGEXP_LIKE(SUBSTR(v_source, v_scan, 1), '[0-9.]')
+                LOOP
+                    v_scan := v_scan + 1;
+                END LOOP;
+                IF v_scan <= v_len AND UPPER(SUBSTR(v_source, v_scan, 1)) = 'E' THEN
+                    v_scan := v_scan + 1;
+                    IF v_scan <= v_len AND SUBSTR(v_source, v_scan, 1) IN ('+', '-') THEN
+                        v_scan := v_scan + 1;
+                    END IF;
+                    WHILE v_scan <= v_len
+                      AND REGEXP_LIKE(SUBSTR(v_source, v_scan, 1), '[0-9]')
+                    LOOP
+                        v_scan := v_scan + 1;
+                    END LOOP;
+                END IF;
+                v_end := v_scan - 1;
+            ELSE
+                append_text(v_spaces || v_char);
+                IF v_result IS NULL THEN
+                    RETURN NULL;
+                END IF;
+                v_pos := v_pos + 1;
+                CONTINUE;
+            END IF;
+
+            IF v_end IS NULL OR v_end < v_start THEN
+                RETURN NULL;
+            END IF;
+            v_denom := SUBSTR(v_source, v_start, v_end - v_start + 1);
+            IF UPPER(TRIM(v_denom)) LIKE 'NULLIF(%' THEN
+                append_text(v_spaces || v_denom);
+            ELSE
+                append_text(v_spaces || 'NULLIF(' || v_denom || ', 0)');
+            END IF;
+            IF v_result IS NULL THEN
+                RETURN NULL;
+            END IF;
+            v_pos := v_end + 1;
+        END LOOP;
+
+        RETURN v_result;
+    END;
+
     FUNCTION translate_expression(
         p_expression IN CLOB,
         p_feature_columns IN VARCHAR2
@@ -1613,12 +1760,20 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_SYMBOLIC_RULE_VIOLATION_DETECT" (
         mark_translate_step(CASE WHEN v_is_complex THEN 'COMPLEX' ELSE 'SIMPLE' END);
 
         LOOP
+            EXIT WHEN v_rest IS NULL;
             v_pos := INSTR(v_rest, ',');
-            EXIT WHEN NVL(v_pos, 0) = 0;
+            EXIT WHEN v_pos IS NULL OR v_pos = 0;
             v_token := TRIM(SUBSTR(v_rest, 1, v_pos - 1));
             v_rest := SUBSTR(v_rest, v_pos + 1);
             IF v_token IS NULL THEN
                 CONTINUE;
+            END IF;
+
+            IF v_max_elapsed_seconds IS NOT NULL
+               AND NOT v_stop_requested
+               AND ROUND((SYSDATE - v_started_at) * 86400) > v_max_elapsed_seconds THEN
+                v_stop_requested := TRUE;
+                RETURN NULL;
             END IF;
 
             v_col := normalize_identifier(v_token, 'feature column');
@@ -1649,6 +1804,14 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_SYMBOLIC_RULE_VIOLATION_DETECT" (
             RETURN NULL;
         END IF;
         IF v_is_complex AND LENGTH(v_expr) > NVL(v_max_expression_length, 8000) THEN
+            RETURN NULL;
+        END IF;
+        mark_translate_step('DIV0');
+        v_expr := protect_division_denominators(v_expr);
+        IF v_expr IS NULL THEN
+            RETURN NULL;
+        END IF;
+        IF LENGTH(v_expr) > NVL(v_max_expression_length, 8000) THEN
             RETURN NULL;
         END IF;
         RETURN v_expr;
@@ -1893,7 +2056,6 @@ BEGIN
             );
             IF NOT column_exists(v_target_owner, v_target_table, v_target_col) THEN
                 v_skipped_total := v_skipped_total + 1;
-                DBMS_OUTPUT.PUT_LINE('[WARN] Symbolic rule skipped: ' || v_rule_item_id || ' - target column not found: ' || v_target_col);
                 CONTINUE;
             END IF;
 
@@ -1901,10 +2063,19 @@ BEGIN
                 'TRANSLATE ' || v_processed_rules || '/' || GREATEST(v_rule_total, v_processed_rules),
                 'rule=' || SUBSTR(v_rule_item_id, 1, 20) || ' feat=' || SUBSTR(v_rule_feature_columns, 1, 35)
             );
+            check_elapsed('before translate');
+            IF v_stop_requested THEN
+                CONTINUE;
+            END IF;
+
             v_expr_sql := translate_expression(v_rule_expression, v_rule_feature_columns);
+            check_elapsed('after translate');
+            IF v_stop_requested THEN
+                CONTINUE;
+            END IF;
+
             IF v_expr_sql IS NULL THEN
                 v_skipped_total := v_skipped_total + 1;
-                DBMS_OUTPUT.PUT_LINE('[WARN] Symbolic rule skipped: ' || v_rule_item_id || ' - expression could not be translated.');
                 CONTINUE;
             END IF;
 
@@ -2004,7 +2175,6 @@ BEGIN
                         'SKIP ' || v_processed_rules || '/' || GREATEST(v_rule_total, v_processed_rules),
                         'rule=' || SUBSTR(v_rule_item_id, 1, 20) || ' ins=' || v_inserted_total || ' skip=' || v_skipped_total
                     );
-                    DBMS_OUTPUT.PUT_LINE('[WARN] Symbolic rule skipped: ' || v_rule_item_id || ' - ' || SQLERRM);
             END;
         END;
     END LOOP;
