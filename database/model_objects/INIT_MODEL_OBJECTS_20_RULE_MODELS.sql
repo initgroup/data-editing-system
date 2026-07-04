@@ -1416,9 +1416,100 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_SYMBOLIC_RULE_VIOLATION_DETECT" (
             RETURN 'TO_NUMBER(NULLIF(TRIM(TO_CHAR(' || quote_name(v_column) || ')), '''') DEFAULT NULL ON CONVERSION ERROR)';
     END;
 
-    FUNCTION regex_identifier(p_identifier IN VARCHAR2) RETURN VARCHAR2 IS
+    FUNCTION is_identifier_char(p_char IN VARCHAR2) RETURN BOOLEAN IS
     BEGIN
-        RETURN REPLACE(p_identifier, '$', '\$');
+        RETURN p_char IS NOT NULL
+           AND INSTR('ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_$#', UPPER(SUBSTR(p_char, 1, 1))) > 0;
+    END;
+
+    FUNCTION is_alpha_char(p_char IN VARCHAR2) RETURN BOOLEAN IS
+    BEGIN
+        RETURN p_char IS NOT NULL
+           AND INSTR('ABCDEFGHIJKLMNOPQRSTUVWXYZ', UPPER(SUBSTR(p_char, 1, 1))) > 0;
+    END;
+
+    FUNCTION is_allowed_expr_token(p_token IN VARCHAR2) RETURN BOOLEAN IS
+        v_token VARCHAR2(128) := UPPER(TRIM(p_token));
+    BEGIN
+        RETURN v_token IN (
+            'TO_NUMBER',
+            'POWER',
+            'SQRT',
+            'ABS',
+            'LN',
+            'EXP',
+            'SIN',
+            'COS',
+            'TAN',
+            'NULLIF',
+            'TRIM',
+            'TO_CHAR',
+            'DEFAULT',
+            'ON',
+            'CONVERSION',
+            'ERROR',
+            'NULL'
+        );
+    END;
+
+    FUNCTION has_blocked_expr_char(p_expr IN VARCHAR2) RETURN BOOLEAN IS
+        v_char VARCHAR2(1);
+    BEGIN
+        IF p_expr IS NULL THEN
+            RETURN TRUE;
+        END IF;
+        FOR i IN 1 .. LENGTH(p_expr) LOOP
+            v_char := SUBSTR(p_expr, i, 1);
+            IF INSTR('''";[]{}', v_char) > 0 THEN
+                RETURN TRUE;
+            END IF;
+        END LOOP;
+        RETURN FALSE;
+    END;
+
+    FUNCTION has_unknown_expression_token(p_expr IN VARCHAR2) RETURN BOOLEAN IS
+        v_pos PLS_INTEGER := 1;
+        v_len PLS_INTEGER := NVL(LENGTH(p_expr), 0);
+        v_char VARCHAR2(1);
+        v_start PLS_INTEGER;
+        v_token VARCHAR2(128);
+    BEGIN
+        WHILE v_pos <= v_len LOOP
+            v_char := SUBSTR(p_expr, v_pos, 1);
+            IF v_char = '"' THEN
+                v_pos := v_pos + 1;
+                WHILE v_pos <= v_len AND SUBSTR(p_expr, v_pos, 1) <> '"' LOOP
+                    v_pos := v_pos + 1;
+                END LOOP;
+                v_pos := v_pos + 1;
+            ELSIF is_alpha_char(v_char) THEN
+                v_start := v_pos;
+                WHILE v_pos <= v_len AND is_identifier_char(SUBSTR(p_expr, v_pos, 1)) LOOP
+                    v_pos := v_pos + 1;
+                END LOOP;
+                v_token := SUBSTR(p_expr, v_start, v_pos - v_start);
+                IF NOT is_allowed_expr_token(v_token) THEN
+                    RETURN TRUE;
+                END IF;
+            ELSE
+                v_pos := v_pos + 1;
+            END IF;
+        END LOOP;
+        RETURN FALSE;
+    END;
+
+    FUNCTION is_complex_symbolic_expression(p_expr IN VARCHAR2) RETURN BOOLEAN IS
+        v_expr VARCHAR2(32767) := UPPER(NVL(p_expr, ''));
+    BEGIN
+        RETURN INSTR(v_expr, 'POWER(') > 0
+            OR INSTR(v_expr, 'SQRT(') > 0
+            OR INSTR(v_expr, 'ABS(') > 0
+            OR INSTR(v_expr, 'LN(') > 0
+            OR INSTR(v_expr, 'EXP(') > 0
+            OR INSTR(v_expr, 'SIN(') > 0
+            OR INSTR(v_expr, 'COS(') > 0
+            OR INSTR(v_expr, 'TAN(') > 0
+            OR INSTR(v_expr, '**') > 0;
     END;
 
     FUNCTION replace_identifier_expr(
@@ -1426,30 +1517,88 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_SYMBOLIC_RULE_VIOLATION_DETECT" (
         p_identifier IN VARCHAR2,
         p_replacement IN VARCHAR2
     ) RETURN VARCHAR2 IS
+        v_source VARCHAR2(32767) := p_expr;
+        v_upper_source VARCHAR2(32767) := UPPER(p_expr);
+        v_identifier VARCHAR2(128) := UPPER(TRIM(p_identifier));
+        v_identifier_len PLS_INTEGER := LENGTH(UPPER(TRIM(p_identifier)));
+        v_pos PLS_INTEGER := 1;
+        v_found PLS_INTEGER;
+        v_result VARCHAR2(32767) := '';
+        v_prev_char VARCHAR2(1);
+        v_next_char VARCHAR2(1);
     BEGIN
-        RETURN REGEXP_REPLACE(
-            p_expr,
-            '(^|[^A-Za-z0-9_$#])' || regex_identifier(p_identifier) || '([^A-Za-z0-9_$#]|$)',
-            '\1' || p_replacement || '\2',
-            1,
-            0,
-            'i'
-        );
+        IF v_source IS NULL OR v_identifier IS NULL OR v_identifier_len = 0 THEN
+            RETURN v_source;
+        END IF;
+
+        LOOP
+            v_found := INSTR(v_upper_source, v_identifier, v_pos);
+            EXIT WHEN v_found = 0;
+
+            v_prev_char := CASE WHEN v_found > 1 THEN SUBSTR(v_source, v_found - 1, 1) END;
+            v_next_char := CASE
+                WHEN v_found + v_identifier_len <= LENGTH(v_source) THEN SUBSTR(v_source, v_found + v_identifier_len, 1)
+            END;
+
+            IF NOT is_identifier_char(v_prev_char) AND NOT is_identifier_char(v_next_char) THEN
+                IF NVL(LENGTH(v_result), 0) + (v_found - v_pos) + NVL(LENGTH(p_replacement), 0) > 32767 THEN
+                    RETURN NULL;
+                END IF;
+                v_result := v_result || SUBSTR(v_source, v_pos, v_found - v_pos) || p_replacement;
+                v_pos := v_found + v_identifier_len;
+            ELSE
+                IF NVL(LENGTH(v_result), 0) + (v_found - v_pos + v_identifier_len) > 32767 THEN
+                    RETURN NULL;
+                END IF;
+                v_result := v_result || SUBSTR(v_source, v_pos, v_found - v_pos + v_identifier_len);
+                v_pos := v_found + v_identifier_len;
+            END IF;
+        END LOOP;
+
+        IF NVL(LENGTH(v_result), 0) + NVL(LENGTH(SUBSTR(v_source, v_pos)), 0) > 32767 THEN
+            RETURN NULL;
+        END IF;
+        RETURN v_result || SUBSTR(v_source, v_pos);
     END;
 
     FUNCTION translate_expression(
         p_expression IN CLOB,
         p_feature_columns IN VARCHAR2
     ) RETURN VARCHAR2 IS
-        v_expr VARCHAR2(32767) := DBMS_LOB.SUBSTR(p_expression, 32767, 1);
+        v_expr VARCHAR2(32767);
         v_rest VARCHAR2(32767) := p_feature_columns || ',';
         v_token VARCHAR2(4000);
         v_pos PLS_INTEGER;
         v_col VARCHAR2(128);
+        v_replacement VARCHAR2(4000);
         v_feature_count PLS_INTEGER := 0;
-        v_check VARCHAR2(32767);
+        v_is_complex BOOLEAN := FALSE;
+        PROCEDURE mark_translate_step(p_step IN VARCHAR2) IS
+        BEGIN
+            DBMS_APPLICATION_INFO.SET_ACTION(
+                SUBSTR(
+                    'TR_' || p_step || ' ' || v_processed_rules || '/' || GREATEST(v_rule_total, v_processed_rules),
+                    1,
+                    32
+                )
+            );
+        EXCEPTION
+            WHEN OTHERS THEN
+                NULL;
+        END;
     BEGIN
-        IF v_expr IS NULL OR REGEXP_LIKE(v_expr, '[''";\[\]{}]') THEN
+        mark_translate_step('CLOB');
+        IF p_expression IS NULL THEN
+            RETURN NULL;
+        END IF;
+        v_expr := DBMS_LOB.SUBSTR(p_expression, 32767, 1);
+        mark_translate_step('START');
+        v_expr := TRIM(v_expr);
+        IF INSTR(v_expr, '=') > 0 THEN
+            v_expr := TRIM(SUBSTR(v_expr, INSTR(v_expr, '=', -1) + 1));
+        END IF;
+
+        IF has_blocked_expr_char(v_expr) THEN
             RETURN NULL;
         END IF;
         IF v_max_expression_length IS NOT NULL
@@ -1457,16 +1606,11 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_SYMBOLIC_RULE_VIOLATION_DETECT" (
             RETURN NULL;
         END IF;
 
-        v_expr := REGEXP_REPLACE(v_expr, '(^|[^A-Za-z0-9_$#])square[[:space:]]*\(([^()]*)\)', '\1POWER(\2, 2)', 1, 0, 'i');
-        v_expr := REGEXP_REPLACE(v_expr, '(^|[^A-Za-z0-9_$#])log[[:space:]]*\(', '\1LN(', 1, 0, 'i');
-        v_expr := REGEXP_REPLACE(
-            v_expr,
-            '(^|[^A-Za-z0-9_$#])([A-Z][A-Z0-9_$#]*)[[:space:]]*\*\*[[:space:]]*([0-9]+(\.[0-9]+)?)',
-            '\1POWER(\2, \3)',
-            1,
-            0,
-            'i'
-        );
+        IF INSTR(v_expr, '**') > 0 THEN
+            RETURN NULL;
+        END IF;
+        v_is_complex := is_complex_symbolic_expression(v_expr);
+        mark_translate_step(CASE WHEN v_is_complex THEN 'COMPLEX' ELSE 'SIMPLE' END);
 
         LOOP
             v_pos := INSTR(v_rest, ',');
@@ -1484,30 +1628,27 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_SYMBOLIC_RULE_VIOLATION_DETECT" (
             IF NOT column_exists(v_target_owner, v_target_table, v_col) THEN
                 RETURN NULL;
             END IF;
-            v_expr := replace_identifier_expr(v_expr, v_col, numeric_column_expr(v_col));
+            mark_translate_step('COL_' || SUBSTR(v_col, 1, 20));
+            mark_translate_step('TYPE_' || SUBSTR(v_col, 1, 19));
+            v_replacement := numeric_column_expr(v_col);
+            mark_translate_step('REPL_' || SUBSTR(v_col, 1, 19));
+            v_expr := replace_identifier_expr(v_expr, v_col, v_replacement);
+            IF v_expr IS NULL THEN
+                RETURN NULL;
+            END IF;
             v_feature_count := v_feature_count + 1;
+            mark_translate_step('NEXT');
         END LOOP;
 
         IF v_feature_count = 0 THEN
             RETURN NULL;
         END IF;
 
-        v_expr := REGEXP_REPLACE(
-            v_expr,
-            '((TO_NUMBER\([^)]*\)|"[A-Z0-9_$#]+"))[[:space:]]*\*\*[[:space:]]*([0-9]+(\.[0-9]+)?)',
-            'POWER(\1, \3)',
-            1,
-            0,
-            'i'
-        );
-        v_check := UPPER(v_expr);
-        v_check := REGEXP_REPLACE(v_check, '[0-9]+(\.[0-9]+)?E[-+]?[0-9]+', '0', 1, 0, 'i');
-        v_check := REGEXP_REPLACE(v_check, '"[A-Z][A-Z0-9_$#]{0,127}"', '');
-        v_check := REGEXP_REPLACE(v_check, 'TO_NUMBER|POWER|SQRT|ABS|LN|EXP|SIN|COS|TAN|NULLIF|TRIM|TO_CHAR|DEFAULT|ON|CONVERSION|ERROR|NULL', '', 1, 0, 'i');
-        IF REGEXP_LIKE(v_check, '[A-Z][A-Z0-9_$#]*') THEN
+        mark_translate_step('CHECK');
+        IF has_unknown_expression_token(v_expr) THEN
             RETURN NULL;
         END IF;
-        IF INSTR(v_expr, '**') > 0 THEN
+        IF v_is_complex AND LENGTH(v_expr) > NVL(v_max_expression_length, 8000) THEN
             RETURN NULL;
         END IF;
         RETURN v_expr;

@@ -8,6 +8,7 @@ still execute feature selection and symbolic rule discovery.
 
 from fastapi import HTTPException
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
+import hashlib
 import json
 import math
 import re
@@ -288,6 +289,8 @@ def run_symbolic_regression_rule(conn, payload: Dict[str, Any]) -> Dict[str, Any
         linear_first,
         linear_r2_threshold,
     )
+    expression = normalize_oracle_symbolic_expression(expression, used_features)
+    rule_id = build_symbolic_rule_id(run_source_type, run_id, owner, table, target_column, expression, used_features)
     cursor = conn.cursor()
     try:
         cursor.execute(
@@ -349,7 +352,7 @@ def run_symbolic_regression_rule(conn, payload: Dict[str, Any]) -> Dict[str, Any
                 "owner": owner,
                 "tableName": table,
                 "targetColumn": target_column,
-                "ruleId": "RULE_001",
+                "ruleId": rule_id,
                 "expression": expression,
                 "score": score,
                 "complexity": complexity,
@@ -367,6 +370,7 @@ def run_symbolic_regression_rule(conn, payload: Dict[str, Any]) -> Dict[str, Any
         "featureCount": len(used_features),
         "method": method,
         "score": score,
+        "ruleId": rule_id,
     }
 
 
@@ -480,7 +484,10 @@ def fit_symbolic_expression(
         )
         model.fit(x_values, y_values, variable_names=list(feature_names))
         best = model.get_best()
-        expression = str(best.get("sympy_format") or best.get("equation") or model)
+        expression = normalize_oracle_symbolic_expression(
+            str(best.get("sympy_format") or best.get("equation") or model),
+            feature_names,
+        )
         score = float(best.get("score") or 0)
         complexity = int(best.get("complexity") or len(expression))
         return expression, score, complexity, "PYSR", "PySR symbolic regression completed."
@@ -1004,7 +1011,68 @@ def to_float(value: Any) -> Optional[float]:
 
 
 def format_feature_term(name: str) -> str:
-    return str(name).replace(" ", "*").replace("^", "**")
+    return convert_caret_power_to_oracle(str(name).replace(" ", "*"))
+
+
+def build_symbolic_rule_id(
+    run_source_type: Any,
+    run_id: Any,
+    owner: str,
+    table_name: str,
+    target_column: str,
+    expression: str,
+    feature_names: Sequence[str],
+) -> str:
+    feature_text = ",".join(str(name).upper() for name in feature_names)
+    raw = "|".join(
+        [
+            str(run_source_type or "").upper(),
+            str(run_id or ""),
+            str(owner or "").upper(),
+            str(table_name or "").upper(),
+            str(target_column or "").upper(),
+            feature_text,
+            str(expression or ""),
+        ]
+    )
+    return "SYM_" + hashlib.sha1(raw.encode("utf-8")).hexdigest().upper()[:32]
+
+
+def normalize_oracle_symbolic_expression(expression: Any, feature_names: Sequence[str]) -> str:
+    text = str(expression or "").strip()
+    if not text:
+        return "0"
+    if "=" in text:
+        text = text.rsplit("=", 1)[-1].strip()
+    text = text.replace("**", "^")
+    text = re.sub(r"\bsquare\s*\(([^()]*)\)", r"POWER(\1, 2)", text, flags=re.IGNORECASE)
+    text = re.sub(r"\blog\s*\(", "LN(", text, flags=re.IGNORECASE)
+    text = convert_caret_power_to_oracle(text)
+    text = normalize_expression_feature_names(text, feature_names)
+    if "**" in text or "^" in text:
+        raise HTTPException(status_code=500, detail=f"Symbolic expression could not be converted to Oracle syntax: {text[:300]}")
+    if re.search(r"['\";\[\]{}]", text):
+        raise HTTPException(status_code=500, detail="Symbolic expression contains unsupported characters for Oracle execution.")
+    return text
+
+
+def convert_caret_power_to_oracle(expression: str) -> str:
+    text = str(expression or "")
+    pattern = re.compile(
+        r"(\([^()]*\)|[A-Za-z][A-Za-z0-9_$#]*|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\s*\^\s*(-?\d+(?:\.\d+)?)"
+    )
+    previous = None
+    while previous != text:
+        previous = text
+        text = pattern.sub(lambda match: f"POWER({match.group(1)}, {match.group(2)})", text)
+    return text
+
+
+def normalize_expression_feature_names(expression: str, feature_names: Sequence[str]) -> str:
+    text = str(expression or "")
+    for feature in sorted({str(name).upper() for name in feature_names}, key=len, reverse=True):
+        text = re.sub(rf"\b{re.escape(feature)}\b", feature, text, flags=re.IGNORECASE)
+    return text
 
 
 def format_model_number(value: float) -> str:
