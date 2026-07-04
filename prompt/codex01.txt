@@ -1,3 +1,68 @@
+
+--------------------------
+
+GIT 배포
+
+# 1. 현재 변경사항 확인
+git status --short
+# (필요시) 변경된 requirements.txt 파일이 있으면 Git 커밋 준비 영역에 추가합니다.
+git add requirements.txt
+
+# 2. 변경 파일 스테이징
+# 전체 저장소의 수정/추가/삭제 모두 스테이징
+git add -A
+# 현재 폴더 아래 수정/추가 중심, Git 버전에 따라 삭제 반영 차이 주의
+git add .
+# 추적 중인 파일의 수정/삭제만, 새 파일은 제외
+git add -u
+
+# 3. 커밋 생성
+git commit -m "INIT Data Editing System - 2026.07.04-3"
+# 4. 원격 저장소 최신 상태 반영
+git pull origin main
+# 5. 원격 저장소에 푸시
+git push origin main
+
+----------------------------------------------
+
+# 현재 브랜치 확인은:
+git branch
+
+# 원격과 로컬 커밋 차이 확인:
+git fetch
+git status
+
+# 원격 Git에 올라간 최신 상태로 내 작업 폴더를 강제로 되돌리려면:
+git fetch
+git reset --hard origin/main
+
+# 브랜치가 master면:
+git fetch
+git reset --hard origin/master
+=====================================================================
+# 백업은 Activate.ps1에 -Command를 붙이지 말고 scripts/backup-source.ps1을 powershell -File로 실행한다.
+---------------------------------------------------------------------
+# Git에 커밋된 소스만 백업
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\backup-source.ps1 -Mode Git
+
+# 커밋 전 작업본까지 백업하되 비밀/로컬 폴더 제외
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\backup-source.ps1 -Mode Working
+
+# 백업 위치를 바꾸고 싶을 때
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\backup-source.ps1 -Mode Working -BackupRoot "D:\work\backup"
+---------------------------------------------------------------------
+쉽게 백업하는 방법
+1. Ctrl + Shift + P
+2. Tasks: Run Task 입력
+3. 아래 중 선택
+INIT Backup Source: 실행할 때 Git / Working 선택
+INIT Backup Git Source: Git에 커밋된 소스만 백업
+INIT Backup Working Source: 현재 작업 폴더를 백업하되 비밀/로컬 폴더 제외
+
+
+=====================================================
+
+
 목표:
 현재 활성화된 파일의 조회 버튼 클릭 로직만 점검하고 수정해줘.
 
@@ -68,67 +133,6 @@ PROJECT_MEMORY.md
 --------------------------
 
 uvicorn main:app --reload
-
-
---------------------------
-
-GIT 배포
-
-# 1. 현재 변경사항 확인
-git status --short
-# (필요시) 변경된 requirements.txt 파일이 있으면 Git 커밋 준비 영역에 추가합니다.
-git add requirements.txt
-
-# 2. 변경 파일 스테이징
-# 전체 저장소의 수정/추가/삭제 모두 스테이징
-git add -A
-# 현재 폴더 아래 수정/추가 중심, Git 버전에 따라 삭제 반영 차이 주의
-git add .
-# 추적 중인 파일의 수정/삭제만, 새 파일은 제외
-git add -u
-
-# 3. 커밋 생성
-git commit -m "INIT Data Editing System - 2026.07.04-2"
-# 4. 원격 저장소 최신 상태 반영
-git pull origin main
-# 5. 원격 저장소에 푸시
-git push origin main
-
-----------------------------------------------
-
-# 현재 브랜치 확인은:
-git branch
-
-# 원격과 로컬 커밋 차이 확인:
-git fetch
-git status
-
-# 원격 Git에 올라간 최신 상태로 내 작업 폴더를 강제로 되돌리려면:
-git fetch
-git reset --hard origin/main
-
-# 브랜치가 master면:
-git fetch
-git reset --hard origin/master
-=====================================================================
-# 백업은 Activate.ps1에 -Command를 붙이지 말고 scripts/backup-source.ps1을 powershell -File로 실행한다.
----------------------------------------------------------------------
-# Git에 커밋된 소스만 백업
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\backup-source.ps1 -Mode Git
-
-# 커밋 전 작업본까지 백업하되 비밀/로컬 폴더 제외
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\backup-source.ps1 -Mode Working
-
-# 백업 위치를 바꾸고 싶을 때
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\backup-source.ps1 -Mode Working -BackupRoot "D:\work\backup"
----------------------------------------------------------------------
-쉽게 백업하는 방법
-1. Ctrl + Shift + P
-2. Tasks: Run Task 입력
-3. 아래 중 선택
-INIT Backup Source: 실행할 때 Git / Working 선택
-INIT Backup Git Source: Git에 커밋된 소스만 백업
-INIT Backup Working Source: 현재 작업 폴더를 백업하되 비밀/로컬 폴더 제외
 
 
 =====================================================================

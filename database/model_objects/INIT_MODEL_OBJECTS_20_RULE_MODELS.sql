@@ -1614,7 +1614,7 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_SYMBOLIC_RULE_VIOLATION_DETECT" (
 
         LOOP
             v_pos := INSTR(v_rest, ',');
-            EXIT WHEN v_pos = 0;
+            EXIT WHEN NVL(v_pos, 0) = 0;
             v_token := TRIM(SUBSTR(v_rest, 1, v_pos - 1));
             v_rest := SUBSTR(v_rest, v_pos + 1);
             IF v_token IS NULL THEN
