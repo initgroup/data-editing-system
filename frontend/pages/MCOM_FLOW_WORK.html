@@ -39,15 +39,19 @@
                 <button type="button" id="flowVersionRefresh-__PAGE_CODE__" class="table-icon-btn" title="Refresh saved flows" data-title-key="refreshSavedFlowsTitle" onclick="__PAGE_CODE__.refreshSavedFlows()">
                     <i class="fas fa-sync-alt"></i>
                 </button>
-                <button type="button" id="flowVersionCopy-__PAGE_CODE__" class="table-icon-btn" title="Copy selected saved flow" data-title-key="copySavedFlowTitle" onclick="__PAGE_CODE__.copySelectedSavedFlow()">
-                    <i class="far fa-copy"></i>
+                <button type="button" class="table-btn flow-switch-open-btn" onclick="__PAGE_CODE__.openFlowSwitcher(event)">
+                    <i class="fas fa-layer-group"></i>
+                    <span>Open</span>
                 </button>
             </div>
             <select id="flowVersion-__PAGE_CODE__" class="flow-version-hidden-select" onchange="__PAGE_CODE__.loadFlowVersion(this.value)" aria-hidden="true" tabindex="-1">
                 <option value="">Draft</option>
             </select>
-            <div id="flowVersionGrid-__PAGE_CODE__" class="data-job-grid flow-version-grid">
-                <div class="table-empty">Select project and scenario first.</div>
+            <div class="flow-saved-compact">
+                <button type="button" class="flow-saved-compact-main" onclick="__PAGE_CODE__.openFlowSwitcher(event)">
+                    <strong id="flowSavedCompactName-__PAGE_CODE__">Draft Flow</strong>
+                    <small id="flowSavedCompactMeta-__PAGE_CODE__">Select or create a saved flow.</small>
+                </button>
             </div>
         </section>
     </section>
@@ -68,7 +72,7 @@
     </nav>
 
     <section class="table-tab-panel is-active data-work-panel flow-designer-panel" data-panel="designer">
-        <section class="data-workspace flow-workspace" aria-labelledby="flow-title-__PAGE_CODE__">
+        <section class="data-workspace flow-workspace" aria-label="Data Editing Flow">
             <aside class="data-job-panel flow-sidebar">
                 <header class="table-object-header">
                     <div class="data-job-title-block">
@@ -76,7 +80,7 @@
                         <h2 class="table-section-title" id="flow-assets-scenario-title-__PAGE_CODE__"></h2>
                     </div>
                     <div class="data-job-subtitle-block">
-                        <p class="table-section-desc" data-label-key="flowAssetsDescription">Drag a step, registered job, input, or output onto the canvas.</p>
+                        <p class="table-section-desc" data-label-key="flowAssetsDescription">작업/입출력 노드를 캔버스로 끌어오세요.</p>
                     </div>
                     <div class="table-object-actions data-job-actions">
                         <button type="button" class="table-icon-btn" title="New flow" data-title-key="newFlowTitle" onclick="__PAGE_CODE__.newFlow()">
@@ -113,33 +117,65 @@
             </aside>
 
             <section class="data-main-panel flow-main-panel">
-                <header class="table-header">
-                    <div>
-                        <h1 class="panel-surface-title" id="flow-title-__PAGE_CODE__" data-label-key="flowTitle">Data Editing Flow</h1>
-                        <h2 class="table-title flow-main-flow-title" id="flow-main-flow-title-__PAGE_CODE__"></h2>
-                        <p class="table-desc" id="flowDescription-__PAGE_CODE__" data-label-key="flowDescription">Design a reusable graph that connects data editing jobs, tables, values, and arrays.</p>
+                <header class="table-header flow-main-header">
+                    <div class="flow-main-title-block">
+                        <div id="flowSwitcher-__PAGE_CODE__" class="flow-switcher">
+                            <button type="button" id="flowSwitcherButton-__PAGE_CODE__" class="flow-switcher-button" onclick="__PAGE_CODE__.toggleFlowSwitcher(event)" aria-haspopup="dialog" aria-expanded="false">
+                                <span>Selected Data Editing Flow</span>
+                                <strong id="flowSwitcherName-__PAGE_CODE__">Draft Flow</strong>
+                                <small id="flowSwitcherMeta-__PAGE_CODE__">NEW / M04001 / DAG</small>
+                                <i class="fas fa-chevron-down"></i>
+                            </button>
+                            <section id="flowSwitcherPopover-__PAGE_CODE__" class="flow-switcher-popover" hidden>
+                                <header>
+                                    <strong>Saved Flows</strong>
+                                    <span id="flowSwitcherCount-__PAGE_CODE__">0 items</span>
+                                    <button type="button" class="table-icon-btn" title="Close flow switcher" onclick="__PAGE_CODE__.closeFlowSwitcher()">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </header>
+                                <div class="flow-switcher-tools">
+                                    <label>
+                                        <i class="fas fa-magnifying-glass"></i>
+                                        <input id="flowSwitcherSearch-__PAGE_CODE__" type="search" placeholder="Search flow name, ID, or code" oninput="__PAGE_CODE__.handleFlowSwitcherSearch(this.value)" onkeydown="__PAGE_CODE__.handleFlowSwitcherSearchKeydown(event)">
+                                    </label>
+                                    <button type="button" class="table-icon-btn" title="Refresh saved flows" onclick="__PAGE_CODE__.refreshSavedFlows()">
+                                        <i class="fas fa-sync-alt"></i>
+                                    </button>
+                                </div>
+                                <div id="flowSwitcherList-__PAGE_CODE__" class="flow-switcher-list">
+                                    <div class="table-empty">Select project and scenario first.</div>
+                                </div>
+                            </section>
+                        </div>
                     </div>
-                    <div class="table-export-actions">
-                        <button type="button" id="saveFlowButton-__PAGE_CODE__" class="table-btn" onclick="__PAGE_CODE__.saveFlow()">
-                            <i class="fas fa-save"></i>
-                            <span data-label-key="saveFlow">Save flow</span>
-                        </button>
-                        <button type="button" id="deleteFlowButton-__PAGE_CODE__" class="table-btn" onclick="__PAGE_CODE__.deleteFlow()">
-                            <i class="far fa-trash-alt"></i>
-                            <span data-label-key="deleteFlow">Delete flow</span>
-                        </button>
-                        <button type="button" class="table-btn" onclick="__PAGE_CODE__.validateFlow()">
-                            <i class="fas fa-circle-check"></i>
-                            <span data-label-key="validateFlow">Validate</span>
-                        </button>
-                        <button type="button" id="runFlowNow-__PAGE_CODE__" class="table-btn" onclick="__PAGE_CODE__.runFlow(false)">
-                            <i class="fas fa-play"></i>
-                            <span data-label-key="runNow">Run now</span>
-                        </button>
-                        <button type="button" id="queueFlowBatch-__PAGE_CODE__" class="table-btn" onclick="__PAGE_CODE__.runFlow(true)">
-                            <i class="fas fa-clock"></i>
-                            <span data-label-key="queueBatch">Queue batch</span>
-                        </button>
+                    <div class="table-export-actions flow-main-actions">
+                        <div class="flow-main-action-buttons">
+                            <button type="button" id="saveFlowButton-__PAGE_CODE__" class="table-btn" onclick="__PAGE_CODE__.saveFlow()">
+                                <i class="fas fa-save"></i>
+                                <span data-label-key="saveFlow">Save flow</span>
+                            </button>
+                            <button type="button" id="flowVersionCopy-__PAGE_CODE__" class="table-btn flow-copy-saved-flow-button" title="Copy selected saved flow" data-title-key="copySavedFlowTitle" onclick="__PAGE_CODE__.copySelectedSavedFlow()">
+                                <i class="far fa-copy"></i>
+                                <span data-label-key="copySavedFlow">Copy saved flow</span>
+                            </button>
+                            <button type="button" id="deleteFlowButton-__PAGE_CODE__" class="table-btn" onclick="__PAGE_CODE__.deleteFlow()">
+                                <i class="far fa-trash-alt"></i>
+                                <span data-label-key="deleteFlow">Delete flow</span>
+                            </button>
+                            <button type="button" class="table-btn" onclick="__PAGE_CODE__.validateFlow()">
+                                <i class="fas fa-circle-check"></i>
+                                <span data-label-key="validateFlow">Validate</span>
+                            </button>
+                            <button type="button" id="runFlowNow-__PAGE_CODE__" class="table-btn" onclick="__PAGE_CODE__.runFlow(false)">
+                                <i class="fas fa-play"></i>
+                                <span data-label-key="runNow">Run now</span>
+                            </button>
+                            <button type="button" id="queueFlowBatch-__PAGE_CODE__" class="table-btn" onclick="__PAGE_CODE__.runFlow(true)">
+                                <i class="fas fa-clock"></i>
+                                <span data-label-key="queueBatch">Queue batch</span>
+                            </button>
+                        </div>
                     </div>
                 </header>
 

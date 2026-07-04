@@ -224,6 +224,104 @@ def _is_predicted_type_result_table(object_name: str) -> bool:
     return str(object_name or "").strip().upper() in {"INIT$_TB_PREDICTED_TYPE", "INIT$_TB_PREDICTED_TYPE_FINAL"}
 
 
+def _build_predicted_type_result_sql(
+    owner_name: str,
+    target_owner: str,
+    target_table: str,
+    run_source_type: str = "",
+    run_id: int | None = None,
+    predicted_type_case: str | None = None,
+    include_order: bool = True,
+) -> tuple[str, dict[str, Any]]:
+    predicted_object = f"{_quote_identifier(owner_name)}.\"INIT$_TB_PREDICTED_TYPE\""
+    final_object = f"{_quote_identifier(owner_name)}.\"INIT$_TB_PREDICTED_TYPE_FINAL\""
+    bind_params: dict[str, Any] = {}
+    predicted_filters = []
+    final_filters = []
+    final_only_filters = []
+    if target_owner:
+        predicted_filters.append('R."OWNER" = :targetOwner')
+        final_filters.append('F0."OWNER" = :targetOwner')
+        bind_params["targetOwner"] = target_owner
+    if target_table:
+        predicted_filters.append('R."TABLE_NAME" = :targetTable')
+        final_filters.append('F0."TABLE_NAME" = :targetTable')
+        bind_params["targetTable"] = target_table
+    if run_source_type and run_id is not None:
+        predicted_filters.append('R."RUN_SOURCE_TYPE" = :runSourceType')
+        predicted_filters.append('R."RUN_ID" = :runId')
+        final_only_filters.append('F."SOURCE_RUN_SOURCE_TYPE" = :runSourceType')
+        final_only_filters.append('F."SOURCE_RUN_ID" = :runId')
+        bind_params["runSourceType"] = run_source_type
+        bind_params["runId"] = run_id
+    predicted_where = f" WHERE {' AND '.join(predicted_filters)}" if predicted_filters else ""
+    final_where = f" WHERE {' AND '.join(final_filters)}" if final_filters else ""
+    final_only_where = ""
+    if final_only_filters:
+        final_only_where = "   AND (P.\"COLUMN_NAME\" IS NOT NULL OR (" + " AND ".join(final_only_filters) + "))"
+    joined_sql = f"""
+SELECT COALESCE(P."RUN_SOURCE_TYPE", F."SOURCE_RUN_SOURCE_TYPE") AS "RUN_SOURCE_TYPE"
+     , COALESCE(P."RUN_ID", F."SOURCE_RUN_ID") AS "RUN_ID"
+     , COALESCE(P."OWNER", F."OWNER") AS "OWNER"
+     , COALESCE(P."TABLE_NAME", F."TABLE_NAME") AS "TABLE_NAME"
+     , COALESCE(P."MODEL_NAME", F."SOURCE_MODEL_NAME") AS "MODEL_NAME"
+     , COALESCE(F."COLUMN_DESC", P."COLUMN_DESC") AS "COLUMN_DESC"
+     , COALESCE(F."COLUMN_ID", P."COLUMN_ID") AS "COLUMN_ID"
+     , COALESCE(F."COLUMN_NAME", P."COLUMN_NAME") AS "COLUMN_NAME"
+     , COALESCE(F."DATA_TYPE", P."DATA_TYPE") AS "DATA_TYPE"
+     , P."TOTAL_ROWS" AS "TOTAL_ROWS"
+     , P."NUM_DISTINCT" AS "NUM_DISTINCT"
+     , P."DIST_VAL_RT" AS "DIST_VAL_RT"
+     , P."LOG_DATA_TYPE" AS "LOG_DATA_TYPE"
+     , P."ENTROPY" AS "ENTROPY"
+     , P."NORM_ENTROPY" AS "NORM_ENTROPY"
+     , COALESCE(P."BASE_PREDICTED_TYPE", F."BASE_PREDICTED_TYPE") AS "BASE_PREDICTED_TYPE"
+     , P."BASE_REASON" AS "BASE_REASON"
+     , COALESCE(P."MODL_PREDICTED_TYPE", F."MODL_PREDICTED_TYPE") AS "MODL_PREDICTED_TYPE"
+     , COALESCE(F."FINAL_PREDICTED_TYPE", P."FINAL_PREDICTED_TYPE", P."MODL_PREDICTED_TYPE", P."BASE_PREDICTED_TYPE") AS "FINAL_PREDICTED_TYPE"
+     , P."FINAL_PREDICTED_TYPE" AS "RUN_FINAL_PREDICTED_TYPE"
+     , F."FINAL_PREDICTED_TYPE" AS "MASTER_FINAL_PREDICTED_TYPE"
+     , CASE
+           WHEN F."FINAL_PREDICTED_TYPE" IS NOT NULL THEN 'MASTER_FINAL'
+           WHEN P."FINAL_PREDICTED_TYPE" IS NOT NULL THEN 'RUN_FINAL'
+           WHEN P."MODL_PREDICTED_TYPE" IS NOT NULL THEN 'RUN_MODEL'
+           WHEN P."BASE_PREDICTED_TYPE" IS NOT NULL THEN 'RUN_RULE'
+           ELSE 'NONE'
+       END AS "FINAL_APPLY_SOURCE"
+     , COALESCE(F."FINAL_REASON", P."FINAL_REASON") AS "FINAL_REASON"
+     , COALESCE(F."FINAL_UPDATE_DT", P."FINAL_UPDATE_DT") AS "FINAL_UPDATE_DT"
+     , COALESCE(F."FINAL_UPDATE_USER", P."FINAL_UPDATE_USER") AS "FINAL_UPDATE_USER"
+     , F."SOURCE_RUN_SOURCE_TYPE" AS "SOURCE_RUN_SOURCE_TYPE"
+     , F."SOURCE_RUN_ID" AS "SOURCE_RUN_ID"
+     , F."SOURCE_MODEL_NAME" AS "SOURCE_MODEL_NAME"
+     , P."CREATE_DT" AS "RUN_CREATE_DT"
+     , F."CREATE_DT" AS "MASTER_CREATE_DT"
+  FROM (
+        SELECT R.*
+          FROM {predicted_object} R
+{predicted_where}
+       ) P
+  FULL OUTER JOIN (
+        SELECT F0.*
+          FROM {final_object} F0
+{final_where}
+       ) F
+    ON F."OWNER" = P."OWNER"
+   AND F."TABLE_NAME" = P."TABLE_NAME"
+   AND F."COLUMN_NAME" = P."COLUMN_NAME"
+ WHERE 1=1
+{final_only_where}
+"""
+    normalized_case = _normalize_predicted_type_case(predicted_type_case)
+    base_sql = f"SELECT * FROM ({joined_sql}) Q"
+    if normalized_case != "ALL":
+        base_sql += f" WHERE {_predicted_type_case_expr()} = :predictedTypeCase"
+        bind_params["predictedTypeCase"] = normalized_case
+    if include_order:
+        base_sql += ' ORDER BY "COLUMN_ID" NULLS LAST, "COLUMN_NAME", "MODEL_NAME"'
+    return base_sql, bind_params
+
+
 def _predicted_type_value_expr(column_name: str) -> str:
     return f"TRIM({column_name})"
 
@@ -316,6 +414,10 @@ def _normalize_run_context(
 def _normalize_node_result(row: dict[str, Any]) -> dict[str, Any]:
     payload = _json_object(_parse_json(row.get("NODE_PAYLOAD_JSON"), {}) or {})
     runtime_params = _json_object(_parse_json(row.get("RUNTIME_PARAM_JSON"), {}) or {})
+    job_params = _parse_json(row.get("JOB_PARAM_JSON"), []) or []
+    payload_params = payload.get("params") if isinstance(payload.get("params"), list) else payload.get("PARAMS")
+    if isinstance(job_params, list) and len(job_params) > len(payload_params or []):
+        payload["params"] = job_params
     mode = str(payload.get("resultCreateYn") or payload.get("RESULT_CREATE_YN") or "N").strip().upper()
     mode = mode if mode in ("N", "T", "M") else "N"
     owner = payload.get("resultOwner") or payload.get("RESULT_OWNER") or payload.get("ownerName") or ""
@@ -786,55 +888,92 @@ def _fetch_predicted_type_summary(
     })
     row = cursor.fetchone()
     total_columns = int(row[0] or 0) if row else 0
-    result_object = f"{_quote_identifier(owner_name)}.{_quote_identifier(object_name)}"
-    effective_type_expr = "COALESCE(TRIM(FINAL_PREDICTED_TYPE), TRIM(MODL_PREDICTED_TYPE), TRIM(BASE_PREDICTED_TYPE))"
-    predicted_case_expr = _predicted_type_case_expr()
-    run_filter_sql = ""
-    run_params: dict[str, Any] = {}
-    if run_source_type and run_id is not None:
-        if object_name == "INIT$_TB_PREDICTED_TYPE_FINAL":
-            run_filter_sql = "   AND SOURCE_RUN_SOURCE_TYPE = :runSourceType AND SOURCE_RUN_ID = :runId "
-        else:
-            run_filter_sql = "   AND RUN_SOURCE_TYPE = :runSourceType AND RUN_ID = :runId "
-        run_params = {"runSourceType": run_source_type, "runId": run_id}
-    cursor.execute(
-        "SELECT TYPE_GROUP, COLUMN_NAME "
-        "  FROM ("
-        "        SELECT CASE "
-        f"                 WHEN {effective_type_expr} LIKE '%범주형' THEN '범주형' "
-        f"                 WHEN {effective_type_expr} LIKE '%연속형' THEN '연속형' "
-        "                 ELSE '기타' "
-        "               END AS TYPE_GROUP, "
-        "               COLUMN_NAME, "
-        "               MIN(NVL(COLUMN_ID, 999999)) AS COLUMN_ORDER "
-        f"          FROM {result_object} "
-        "         WHERE OWNER = :targetOwner "
-        "           AND TABLE_NAME = :targetTable "
-        f"{run_filter_sql}"
-        "           AND COLUMN_NAME IS NOT NULL "
-        "         GROUP BY CASE "
-        f"                    WHEN {effective_type_expr} LIKE '%범주형' THEN '범주형' "
-        f"                    WHEN {effective_type_expr} LIKE '%연속형' THEN '연속형' "
-        "                    ELSE '기타' "
-        "                  END, COLUMN_NAME "
-        "       ) "
-        " ORDER BY DECODE(TYPE_GROUP, '범주형', 1, '연속형', 2, 3), COLUMN_ORDER, COLUMN_NAME",
-        {"targetOwner": target_owner, "targetTable": target_table, **run_params},
+    result_sql, result_params = _build_predicted_type_result_sql(
+        owner_name,
+        target_owner,
+        target_table,
+        run_source_type,
+        run_id,
+        "ALL",
+        include_order=False,
     )
-    group_map: dict[str, list[str]] = {"범주형": [], "연속형": [], "기타": []}
-    for type_group, column_name in cursor.fetchall():
-        key = str(type_group or "기타")
-        group_map.setdefault(key, []).append(str(column_name))
+    result_object = f"({result_sql})"
+    effective_type_expr = "COALESCE(TRIM(FINAL_PREDICTED_TYPE), TRIM(MODL_PREDICTED_TYPE), TRIM(BASE_PREDICTED_TYPE))"
+    final_type_expr = "TRIM(MASTER_FINAL_PREDICTED_TYPE)"
+    run_type_expr = "COALESCE(TRIM(RUN_FINAL_PREDICTED_TYPE), TRIM(MODL_PREDICTED_TYPE), TRIM(BASE_PREDICTED_TYPE))"
+    rule_type_expr = "TRIM(BASE_PREDICTED_TYPE)"
+    model_type_expr = "TRIM(MODL_PREDICTED_TYPE)"
+    predicted_case_expr = _predicted_type_case_expr()
+
+    def fetch_group_map(type_expr: str) -> dict[str, list[str]]:
+        cursor.execute(
+            "SELECT TYPE_GROUP, COLUMN_NAME "
+            "  FROM ("
+            "        SELECT CASE "
+            f"                 WHEN {type_expr} LIKE '%범주형' THEN '범주형' "
+            f"                 WHEN {type_expr} LIKE '%연속형' THEN '연속형' "
+            "                 ELSE '기타' "
+            "               END AS TYPE_GROUP, "
+            "               COLUMN_NAME, "
+            "               MIN(NVL(COLUMN_ID, 999999)) AS COLUMN_ORDER "
+            f"          FROM {result_object} "
+            "         WHERE COLUMN_NAME IS NOT NULL "
+            "         GROUP BY CASE "
+            f"                    WHEN {type_expr} LIKE '%범주형' THEN '범주형' "
+            f"                    WHEN {type_expr} LIKE '%연속형' THEN '연속형' "
+            "                    ELSE '기타' "
+            "                  END, COLUMN_NAME "
+            "       ) "
+            " ORDER BY DECODE(TYPE_GROUP, '범주형', 1, '연속형', 2, 3), COLUMN_ORDER, COLUMN_NAME",
+            result_params,
+        )
+        group_map: dict[str, list[str]] = {"범주형": [], "연속형": [], "기타": []}
+        for type_group, column_name in cursor.fetchall():
+            key = str(type_group or "기타")
+            group_map.setdefault(key, []).append(str(column_name))
+        return group_map
+
+    def to_summary_groups(group_map: dict[str, list[str]]) -> list[dict[str, Any]]:
+        return [
+            {"typeGroup": key, "columnCount": len(columns), "columns": columns}
+            for key, columns in group_map.items()
+            if columns or key in ("범주형", "연속형")
+        ]
+
+    group_map = fetch_group_map(effective_type_expr)
+    final_group_map = fetch_group_map(final_type_expr)
+    run_group_map = fetch_group_map(run_type_expr)
+    prediction_source_groups = [
+        {
+            "sourceCode": "RULE",
+            "sourceLabel": "RULE",
+            "sourceColumn": "BASE_PREDICTED_TYPE",
+            "description": "규칙 기반 BASE_PREDICTED_TYPE",
+            "groups": to_summary_groups(fetch_group_map(rule_type_expr)),
+        },
+        {
+            "sourceCode": "MODEL",
+            "sourceLabel": "MODEL",
+            "sourceColumn": "MODL_PREDICTED_TYPE",
+            "description": "모델 기반 MODL_PREDICTED_TYPE",
+            "groups": to_summary_groups(fetch_group_map(model_type_expr)),
+        },
+        {
+            "sourceCode": "FINAL",
+            "sourceLabel": "FINAL",
+            "sourceColumn": "MASTER_FINAL_PREDICTED_TYPE",
+            "description": "후속 노드에 적용되는 INIT$_TB_PREDICTED_TYPE_FINAL.FINAL_PREDICTED_TYPE",
+            "groups": to_summary_groups(fetch_group_map(final_type_expr)),
+        },
+    ]
     cursor.execute(
         f"SELECT NVL({effective_type_expr}, '(값 없음)') AS TYPE_NAME, "
         "       COUNT(DISTINCT COLUMN_NAME) AS COLUMN_COUNT "
         f"  FROM {result_object} "
-        " WHERE OWNER = :targetOwner "
-        "   AND TABLE_NAME = :targetTable "
-        f"{run_filter_sql}"
+        " WHERE COLUMN_NAME IS NOT NULL "
         f" GROUP BY NVL({effective_type_expr}, '(값 없음)') "
         " ORDER BY COLUMN_COUNT DESC, TYPE_NAME",
-        {"targetOwner": target_owner, "targetTable": target_table, **run_params},
+        result_params,
     )
     detail_groups = [
         {"typeName": str(type_name), "columnCount": int(column_count or 0)}
@@ -844,12 +983,9 @@ def _fetch_predicted_type_summary(
         f"SELECT {predicted_case_expr} AS CASE_CODE, "
         "       COUNT(DISTINCT COLUMN_NAME) AS COLUMN_COUNT "
         f"  FROM {result_object} "
-        " WHERE OWNER = :targetOwner "
-        "   AND TABLE_NAME = :targetTable "
-        "   AND COLUMN_NAME IS NOT NULL "
-        f"{run_filter_sql}"
+        " WHERE COLUMN_NAME IS NOT NULL "
         f" GROUP BY {predicted_case_expr}",
-        {"targetOwner": target_owner, "targetTable": target_table, **run_params},
+        result_params,
     )
     match_count_map = {str(case_code or "ALL_DIFFERENT"): int(column_count or 0) for case_code, column_count in cursor.fetchall()}
     prediction_match_groups = []
@@ -870,11 +1006,10 @@ def _fetch_predicted_type_summary(
         "targetTable": target_table,
         "totalColumnCount": total_columns,
         "columnComments": column_comments,
-        "summaryGroups": [
-            {"typeGroup": key, "columnCount": len(columns), "columns": columns}
-            for key, columns in group_map.items()
-            if columns or key in ("범주형", "연속형")
-        ],
+        "summaryGroups": to_summary_groups(group_map),
+        "finalSummaryGroups": to_summary_groups(final_group_map),
+        "runSummaryGroups": to_summary_groups(run_group_map),
+        "predictionSourceGroups": prediction_source_groups,
         "detailGroups": detail_groups,
         "predictionMatchGroups": prediction_match_groups,
     }
@@ -1393,6 +1528,60 @@ def list_flow_run_nodes(flow_run_id: int, request: Request):
             conn.close()
 
 
+def delete_flow_run(flow_run_id: int, request: Request, flow_menu_code: str = "M04001"):
+    try:
+        normalized_flow_run_id = int(flow_run_id)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Invalid run id.")
+    if normalized_flow_run_id <= 0:
+        raise HTTPException(status_code=400, detail="Invalid run id.")
+
+    user_id = get_request_user_id(request)
+    include_all_users = get_request_role_code(request) == "ADMIN"
+    conn = None
+    cursor = None
+    try:
+        conn = get_target_db_connection(request)
+        cursor = conn.cursor()
+        params = {
+            "flowRunId": normalized_flow_run_id,
+            "flowMenuCode": flow_menu_code,
+            "userId": user_id,
+            "includeAllUsers": "Y" if include_all_users else "N",
+        }
+        cursor.execute(SqlLoader.get_sql("MCOMMON_ANLY_WORK_FLOW_RUN_DELETE_TARGET"), params)
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Run history was not found or cannot be deleted by this user.")
+        status = str(row[1] or "").strip().upper()
+        if status in {"RUNNING", "STARTED", "QUEUED", "PENDING"}:
+            raise HTTPException(status_code=409, detail="Running or pending run history cannot be deleted.")
+
+        cursor.execute(SqlLoader.get_sql("MCOMMON_ANLY_WORK_FLOW_RUN_DELETE_BLOCK"), {
+            "flowRunId": normalized_flow_run_id,
+        })
+        conn.commit()
+        return {
+            "status": "success",
+            "flowRunId": normalized_flow_run_id,
+            "message": f"Run #{normalized_flow_run_id} history was deleted.",
+        }
+    except HTTPException:
+        if conn:
+            conn.rollback()
+        raise
+    except Exception as error:
+        if conn:
+            conn.rollback()
+        logger.warning("MCOMMON_ANLY_WORK run delete failed: %s", error)
+        raise HTTPException(status_code=500, detail=str(error))
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
 def execute_select_sql(req: SqlRequest, request: Request):
     sql = _normalize_select_sql(req.sql)
     page = _normalize_page(req.page)
@@ -1465,6 +1654,48 @@ def get_result_table(
     try:
         conn = get_target_db_connection(request)
         cursor = conn.cursor()
+        if _is_predicted_type_result_table(object_name):
+            base_sql, bind_params = _build_predicted_type_result_sql(
+                owner_name,
+                target_owner,
+                target_table,
+                run_source_type,
+                normalized_run_id,
+                normalized_predicted_type_case,
+                include_order=True,
+            )
+            result = _fetch_dynamic_page(cursor, base_sql, page, page_size, bind_params)
+            predicted_type_summary = _fetch_predicted_type_summary(
+                cursor,
+                owner_name,
+                object_name,
+                target_owner,
+                target_table,
+                run_source_type,
+                normalized_run_id,
+            )
+            column_comments = _fetch_column_comment_map(cursor, target_owner, target_table)
+            return {
+                "status": "success",
+                "owner": owner_name,
+                "objectName": object_name,
+                "resultLayout": result_layout,
+                "targetOwner": target_owner,
+                "targetTable": target_table,
+                "ruleModelName": rule_model_name,
+                "runSourceType": run_source_type,
+                "runId": normalized_run_id,
+                "filteredByTarget": bool(target_owner or target_table or bind_params),
+                "correlationSummary": None,
+                "predictedTypeSummary": predicted_type_summary,
+                "violationSummary": None,
+                "lassoSummary": None,
+                "symbolicRuleSummary": None,
+                "symbolicViolationSummary": None,
+                "predictedTypeCase": normalized_predicted_type_case,
+                "columnComments": column_comments,
+                **result,
+            }
         columns = _get_table_columns(cursor, owner_name, object_name)
         where_clauses = []
         bind_params: dict[str, Any] = {}

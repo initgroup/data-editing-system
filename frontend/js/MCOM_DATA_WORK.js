@@ -2655,6 +2655,10 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
             if (sourceType === "WEB_API" && options.scriptBindOnly !== true) {
                 return this.collectWebApiRuntimeValues(parameterRows, bindOptions, options);
             }
+            if (options.scriptBindOnly !== true) {
+                const parameterListValues = this.collectParameterListRuntimeValues(parameterRows, bindOptions, options);
+                if (parameterListValues) return parameterListValues;
+            }
 
             const bindNames = this.extractBindVariables(script);
             const dynamicTokenNames = this.extractDynamicTokens(script);
@@ -2695,6 +2699,36 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
             return this.openRuntimeBindDialog(prompts, options);
         },
 
+        collectParameterListRuntimeValues(parameterRows = [], bindOptions = {}, options = {}) {
+            const rows = [...(parameterRows || [])]
+                .filter((row) => this.isInputParameterRow(row))
+                .sort((a, b) => {
+                    const orderA = Number(a?.itemOrder ?? a?.ITEM_ORDER ?? 0) || 0;
+                    const orderB = Number(b?.itemOrder ?? b?.ITEM_ORDER ?? 0) || 0;
+                    return orderA - orderB;
+                });
+            if (!rows.length) return null;
+            const prompts = [];
+            const seen = new Set();
+            rows.forEach((row) => {
+                const name = String(row?.itemName || row?.ITEM_NAME || "").trim();
+                if (!name) return;
+                this.addRuntimeBindPrompt(
+                    prompts,
+                    seen,
+                    name,
+                    name,
+                    this.getRuntimeBindDefaultValue(name, row, bindOptions),
+                    this.getRuntimeBindComment(name, row, bindOptions)
+                );
+            });
+            if (!prompts.length) return {};
+            return this.openRuntimeBindDialog(prompts, {
+                ...options,
+                includeUnchangedRuntimeValues: false
+            });
+        },
+
         collectWebApiRuntimeValues(parameterRows = [], bindOptions = {}, options = {}) {
             const prompts = [];
             const seen = new Set();
@@ -2704,7 +2738,7 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                 return orderA - orderB;
             });
 
-            rows.forEach((row) => {
+            rows.filter((row) => this.isInputParameterRow(row)).forEach((row) => {
                 const name = String(row?.itemName || row?.ITEM_NAME || "").trim();
                 if (!name) return;
                 const rawDefault = this.getParameterDefaultText(row);
@@ -2749,6 +2783,26 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                 parts.push(`Default: ${rawText}`);
             }
             return parts.join(" / ");
+        },
+
+        isInputParameterRow(row = {}) {
+            const name = String(row?.itemName || row?.ITEM_NAME || row?.name || row?.NAME || "").trim();
+            if (!name) return false;
+            const directionText = String(
+                row?.inOut
+                || row?.IN_OUT
+                || row?.direction
+                || row?.DIRECTION
+                || row?.parameterMode
+                || row?.PARAMETER_MODE
+                || row?.itemMode
+                || row?.ITEM_MODE
+                || row?.itemValue
+                || row?.ITEM_VALUE
+                || ""
+            ).trim().toUpperCase().replace(/\s+/g, " ");
+            if (!directionText) return true;
+            return !/^(OUT|OUTPUT|RETURN)\b/.test(directionText);
         },
 
         addWebApiAuthRuntimePrompts(prompts, seen, options = {}) {

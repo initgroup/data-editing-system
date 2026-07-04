@@ -88,7 +88,7 @@ git add .
 git add -u
 
 # 3. 커밋 생성
-git commit -m "INIT Data Editing System - 2026.07.02-1"
+git commit -m "INIT Data Editing System - 2026.07.03-2"
 # 4. 원격 저장소 최신 상태 반영
 git pull origin main
 # 5. 원격 저장소에 푸시
@@ -111,23 +111,16 @@ git reset --hard origin/main
 git fetch
 git reset --hard origin/master
 =====================================================================
-# Git에 올라갈 소스만 백업됨
+# 백업은 Activate.ps1에 -Command를 붙이지 말고 scripts/backup-source.ps1을 powershell -File로 실행한다.
 ---------------------------------------------------------------------
-$backupRoot = "D:\work\backup"
-$stamp = Get-Date -Format "yyyyMMdd-HHmmss"
-$backupDir = Join-Path $backupRoot "data-editing-system-$stamp"
+# Git에 커밋된 소스만 백업
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\backup-source.ps1 -Mode Git
 
-New-Item -ItemType Directory -Force -Path $backupDir | Out-Null
-git archive HEAD | tar -x -C $backupDir
----------------------------------------------------------------------
-# 커밋 전 작업본까지 그대로 복사하고 싶다면 robocopy를 쓰되 제외 목록을 넣는 방식이 좋습니다.
----------------------------------------------------------------------
-$src = "D:\work\data-editing-system"
-$dst = "D:\work\backup\data-editing-system-working"
+# 커밋 전 작업본까지 백업하되 비밀/로컬 폴더 제외
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\backup-source.ps1 -Mode Working
 
-robocopy $src $dst /MIR `
-  /XD .git venv .venv node_modules secreats .secreats etc\secrets instantclient .instantclient __pycache__ `
-  /XF .env *.pyc
+# 백업 위치를 바꾸고 싶을 때
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\backup-source.ps1 -Mode Working -BackupRoot "D:\work\backup"
 ---------------------------------------------------------------------
 쉽게 백업하는 방법
 1. Ctrl + Shift + P
@@ -505,6 +498,73 @@ SELECT COUNT(*) AS rule_count
 FROM DUAL;
 
 
+-------------------------
+
+-- 1) 현재 상태 확인
+SELECT FLOW_RUN_ID
+     , STATUS
+     , STARTED_AT
+     , FINISHED_AT
+     , MESSAGE
+  FROM "INIT$_TB_FLOW_WORK_RUN"
+ WHERE FLOW_RUN_ID = 583;
+
+SELECT FLOW_NODE_RUN_ID
+     , NODE_NAME
+     , STATUS
+     , STARTED_AT
+     , FINISHED_AT
+     , RESULT_OBJECT_NAME
+  FROM "INIT$_TB_FLOW_WORK_NODE_RUN"
+ WHERE FLOW_RUN_ID = 583
+ ORDER BY NODE_SEQ;
+
+ 실제로 더 이상 수행 중이 아니라고 판단되면 삭제:
+
+ DECLARE
+    v_owner       VARCHAR2(128) := USER;
+    v_flow_run_id NUMBER := 583;
+    v_exists      NUMBER := 0;
+
+    PROCEDURE delete_run_result_table(p_table_name IN VARCHAR2) IS
+        v_sql VARCHAR2(2000);
+    BEGIN
+        SELECT COUNT(DISTINCT COLUMN_NAME)
+          INTO v_exists
+          FROM ALL_TAB_COLUMNS
+         WHERE OWNER = v_owner
+           AND TABLE_NAME = p_table_name
+           AND COLUMN_NAME IN ('RUN_SOURCE_TYPE', 'RUN_ID');
+
+        IF v_exists = 2 THEN
+            v_sql := 'DELETE FROM "' || v_owner || '"."' || p_table_name || '"'
+                  || ' WHERE "RUN_SOURCE_TYPE" = :1'
+                  || '   AND "RUN_ID" = :2';
+            EXECUTE IMMEDIATE v_sql USING 'FLOW_WORK', v_flow_run_id;
+        END IF;
+    END;
+BEGIN
+    delete_run_result_table('INIT$_TB_SYMBOLIC_RULE_VIOLATION');
+    delete_run_result_table('INIT$_TB_RULE_VIOLATION_RESULT');
+    delete_run_result_table('INIT$_TB_SYMBOLIC_RULE');
+    delete_run_result_table('INIT$_TB_LASSO_FEATURE');
+    delete_run_result_table('INIT$_TB_NUM_CORR_SUMMARY');
+    delete_run_result_table('INIT$_TB_NUM_CORR_PAIR');
+    delete_run_result_table('INIT$_TB_CAT_CORR_SUMMARY');
+    delete_run_result_table('INIT$_TB_CAT_CORR_PAIR');
+    delete_run_result_table('INIT$_TB_ASSOC_RULE_SUMMARY');
+    delete_run_result_table('INIT$_TB_PREDICTED_TYPE');
+    delete_run_result_table('INIT$_TB_API_RESULT');
+
+    DELETE FROM "INIT$_TB_FLOW_WORK_NODE_RUN"
+     WHERE FLOW_RUN_ID = v_flow_run_id;
+
+    DELETE FROM "INIT$_TB_FLOW_WORK_RUN"
+     WHERE FLOW_RUN_ID = v_flow_run_id;
+
+    COMMIT;
+END;
+/
 
 --------------------------
 

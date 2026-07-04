@@ -313,6 +313,7 @@ def list_node_runs(conn, flow_run_id: int) -> Dict[str, Any]:
     response = data_work.require_success(result, "Flow node run query failed.")
     for row in response.get("data", []):
         row["MESSAGE"] = data_work.read_lob(row.get("MESSAGE"))
+        row["JOB_PARAM_JSON"] = data_work.read_lob(row.get("JOB_PARAM_JSON"))
         row["RUNTIME_PARAM_JSON"] = data_work.read_lob(row.get("RUNTIME_PARAM_JSON"))
         row["NODE_PAYLOAD_JSON"] = data_work.read_lob(row.get("NODE_PAYLOAD_JSON"))
     return response

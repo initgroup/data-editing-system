@@ -538,6 +538,10 @@ def download_notice_file(file_id: int):
 def _normalize_node_result(row: dict[str, Any]) -> dict[str, Any]:
     payload = _parse_json(row.get("NODE_PAYLOAD_JSON"), {}) or {}
     runtime_params = _parse_json(row.get("RUNTIME_PARAM_JSON"), {}) or {}
+    job_params = _parse_json(row.get("JOB_PARAM_JSON"), []) or []
+    payload_params = payload.get("params") if isinstance(payload.get("params"), list) else payload.get("PARAMS")
+    if isinstance(job_params, list) and len(job_params) > len(payload_params or []):
+        payload["params"] = job_params
     mode = str(payload.get("resultCreateYn") or payload.get("RESULT_CREATE_YN") or "N").strip().upper()
     mode = mode if mode in ("N", "T", "M") else "N"
     menu_code = payload.get("refMenuCode") or payload.get("menuCode") or payload.get("REF_MENU_CODE") or row.get("REF_MENU_CODE") or ""

@@ -72,6 +72,60 @@ SELECT RN__
        )
  WHERE FLOW_RUN_ID = :flowRunId;
 
+-- [MCOMMON_ANLY_WORK_FLOW_RUN_DELETE_TARGET]
+SELECT R.FLOW_RUN_ID
+     , R.STATUS
+     , F.FLOW_NAME
+  FROM "INIT$_TB_FLOW_WORK_RUN" R
+  JOIN "INIT$_TB_FLOW_WORK" F
+    ON F.FLOW_ID = R.FLOW_ID
+  JOIN "INIT$_TB_PROJECT" P
+    ON P.PROJECT_ID = F.PROJECT_ID
+ WHERE R.FLOW_RUN_ID = :flowRunId
+   AND F.MENU_CODE = :flowMenuCode
+   AND (:includeAllUsers = 'Y' OR P.USER_ID = :userId);
+
+-- [MCOMMON_ANLY_WORK_FLOW_RUN_DELETE_BLOCK]
+DECLARE
+    v_flow_run_id NUMBER := :flowRunId;
+    v_exists      NUMBER := 0;
+    v_deleted     NUMBER := 0;
+
+    PROCEDURE delete_run_result_table(p_table_name IN VARCHAR2) IS
+        v_sql VARCHAR2(1000);
+    BEGIN
+        SELECT COUNT(DISTINCT COLUMN_NAME)
+          INTO v_exists
+          FROM USER_TAB_COLUMNS
+         WHERE TABLE_NAME = p_table_name
+           AND COLUMN_NAME IN ('RUN_SOURCE_TYPE', 'RUN_ID');
+
+        IF v_exists = 2 THEN
+            v_sql := 'DELETE FROM "' || p_table_name || '" WHERE "RUN_SOURCE_TYPE" = :1 AND "RUN_ID" = :2';
+            EXECUTE IMMEDIATE v_sql USING 'FLOW_WORK', v_flow_run_id;
+            v_deleted := v_deleted + SQL%ROWCOUNT;
+        END IF;
+    END;
+BEGIN
+    delete_run_result_table('INIT$_TB_SYMBOLIC_RULE_VIOLATION');
+    delete_run_result_table('INIT$_TB_RULE_VIOLATION_RESULT');
+    delete_run_result_table('INIT$_TB_SYMBOLIC_RULE');
+    delete_run_result_table('INIT$_TB_LASSO_FEATURE');
+    delete_run_result_table('INIT$_TB_NUM_CORR_SUMMARY');
+    delete_run_result_table('INIT$_TB_NUM_CORR_PAIR');
+    delete_run_result_table('INIT$_TB_CAT_CORR_SUMMARY');
+    delete_run_result_table('INIT$_TB_CAT_CORR_PAIR');
+    delete_run_result_table('INIT$_TB_ASSOC_RULE_SUMMARY');
+    delete_run_result_table('INIT$_TB_PREDICTED_TYPE');
+    delete_run_result_table('INIT$_TB_API_RESULT');
+
+    DELETE FROM "INIT$_TB_FLOW_WORK_NODE_RUN"
+     WHERE FLOW_RUN_ID = v_flow_run_id;
+
+    DELETE FROM "INIT$_TB_FLOW_WORK_RUN"
+     WHERE FLOW_RUN_ID = v_flow_run_id;
+END;
+
 -- [MCOMMON_ANLY_WORK_RESULT_TABLE_COLUMNS]
 SELECT COLUMN_NAME
   FROM ALL_TAB_COLUMNS

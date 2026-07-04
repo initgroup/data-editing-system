@@ -16,6 +16,7 @@
         const API_PAGE_CODE = config.apiCode || PAGE_CODE;
         const PAGE_ID_PREFIX = PAGE_CODE;
         const CONTEXT_STORAGE_KEY = config.contextStorageKey || "DATA_EDITING_WORK_CONTEXT";
+        const DETAIL_PRESET_URL = "./config/M90001.object-detail-presets.json";
         const pageHelper = PageManager.createHelper(PAGE_CODE);
         const resolvePageText = (value) => String(value ?? "").split("${PAGE_CODE}").join(PAGE_CODE);
         const getContainerEl = (selector) => pageHelper.getContainerEl(resolvePageText(selector));
@@ -118,16 +119,20 @@
         readableRuleConditionFilter: "ALL",
         readableRuleConfidenceFilter: "ALL",
         predictedTypeFilter: "ALL",
+        predictedTypeViewMode: "TYPE",
         ruleSummaryFilters: { conditionCount: "ALL", confidenceScope: "ALL", resultColumn: "ALL", conditionColumn: "ALL", resultHasValueYn: "ALL", page: 1, pageSize: 20, resultColumnPage: 1 },
         violationRuleFilters: { ruleId: "", conditionCount: "ALL", confidenceScope: "NON_PERFECT", resultScope: "HIT", page: 1, pageSize: 20 },
         violationSql: { sql: "", page: 1, pageSize: 50, freezeColumns: 2, total: 0, columns: [], rows: [], title: "", columnWidths: {} },
         currentModelDetail: null,
+        lastResultTableJson: null,
         lastViolationSummary: null,
         lastSymbolicRuleSummary: null,
         symbolicRuleChart: null,
         pendingRunId: "",
+        isRunDeleteInProgress: false,
         currentExport: { filename: "integrated-result.csv", columns: [], rows: [] },
         nodeResultCache: new Map(),
+        runtimeParamPresetMap: new Map(),
 
         async init() {
             const pendingRunId = sessionStorage.getItem(`${PAGE_CODE}:selectedRunId`) || "";
@@ -142,6 +147,7 @@
             sessionStorage.removeItem(`${PAGE_CODE}:selectedScenarioId`);
             const preferredProjectId = pendingProjectId || storedContext.projectId || "";
             const preferredScenarioId = pendingScenarioId || (pendingProjectId ? "" : storedContext.scenarioId || "");
+            await this.loadRuntimeParamPresetDefinitions();
             await this.loadProjects(preferredProjectId);
             await this.loadScenarios(preferredScenarioId);
             this.persistWorkContext();
@@ -160,17 +166,20 @@
             this.selectedRun = null;
             this.selectedNode = null;
             this.currentModelDetail = null;
+            this.lastResultTableJson = null;
             this.lastViolationSummary = null;
             this.lastSymbolicRuleSummary = null;
             this.readableRuleConditionFilter = "ALL";
             this.readableRuleConfidenceFilter = "ALL";
             this.predictedTypeFilter = "ALL";
+            this.predictedTypeViewMode = "TYPE";
             this.violationRuleFilters = { ruleId: "", conditionCount: "ALL", confidenceScope: "NON_PERFECT", resultScope: "HIT", page: 1, pageSize: 20 };
             this.closeViolationSqlPopup();
             this.closeSymbolicRulePopup();
             this.pendingRunId = "";
             this.currentExport = { filename: "integrated-result.csv", columns: [], rows: [] };
             this.nodeResultCache = new Map();
+            this.runtimeParamPresetMap = new Map();
         },
 
         cloneCacheValue(value) {
@@ -201,10 +210,12 @@
                 readableRuleConditionFilter: this.readableRuleConditionFilter,
                 readableRuleConfidenceFilter: this.readableRuleConfidenceFilter,
                 predictedTypeFilter: this.predictedTypeFilter,
+                predictedTypeViewMode: this.predictedTypeViewMode,
                 ruleSummaryFilters: this.cloneCacheValue(this.ruleSummaryFilters),
                 violationRuleFilters: this.cloneCacheValue(this.violationRuleFilters),
                 violationSql: this.cloneCacheValue(this.violationSql),
                 currentModelDetail: this.cloneCacheValue(this.currentModelDetail),
+                lastResultTableJson: this.cloneCacheValue(this.lastResultTableJson),
                 lastViolationSummary: this.cloneCacheValue(this.lastViolationSummary),
                 lastSymbolicRuleSummary: this.cloneCacheValue(this.lastSymbolicRuleSummary),
                 currentExport: this.cloneCacheValue(this.currentExport)
@@ -222,6 +233,7 @@
             this.readableRuleConditionFilter = cached.readableRuleConditionFilter || "ALL";
             this.readableRuleConfidenceFilter = cached.readableRuleConfidenceFilter || "ALL";
             this.predictedTypeFilter = cached.predictedTypeFilter || "ALL";
+            this.predictedTypeViewMode = cached.predictedTypeViewMode === "SOURCE" ? "SOURCE" : "TYPE";
             this.ruleSummaryFilters = {
                 conditionCount: "ALL",
                 confidenceScope: "ALL",
@@ -244,6 +256,7 @@
             };
             this.violationSql = this.cloneCacheValue(cached.violationSql) || { sql: "", page: 1, pageSize: 50, total: 0, columns: [], rows: [], title: "" };
             this.currentModelDetail = this.cloneCacheValue(cached.currentModelDetail);
+            this.lastResultTableJson = this.cloneCacheValue(cached.lastResultTableJson);
             this.lastViolationSummary = this.cloneCacheValue(cached.lastViolationSummary);
             this.lastSymbolicRuleSummary = this.cloneCacheValue(cached.lastSymbolicRuleSummary);
             this.currentExport = this.cloneCacheValue(cached.currentExport) || { filename: "integrated-result.csv", columns: [], rows: [] };
@@ -281,6 +294,7 @@
                 this.selectedRun = null;
                 this.selectedNode = null;
             this.currentModelDetail = null;
+            this.lastResultTableJson = null;
             this.lastViolationSummary = null;
             this.lastSymbolicRuleSummary = null;
             this.nodeResultCache = new Map();
@@ -477,10 +491,16 @@
             }
             const runMessage = String(run.MESSAGE || "").trim();
             el.innerHTML = `
-                <article>
-                    <span>Selected Run</span>
-                    <strong>${this.escapeHtml(run.FLOW_NAME || "-")}</strong>
-                    <small>Run #${this.escapeHtml(run.FLOW_RUN_ID)} · ${this.escapeHtml(run.STATUS || "-")} · ${this.escapeHtml(this.formatElapsedTime(run.STARTED_AT, run.FINISHED_AT, run.STATUS))}</small>
+                <article class="is-selected-run">
+                    <div>
+                        <span>Selected Run</span>
+                        <strong>${this.escapeHtml(run.FLOW_NAME || "-")}</strong>
+                        <small>Run #${this.escapeHtml(run.FLOW_RUN_ID)} · ${this.escapeHtml(run.STATUS || "-")} · ${this.escapeHtml(this.formatElapsedTime(run.STARTED_AT, run.FINISHED_AT, run.STATUS))}</small>
+                    </div>
+                    <button type="button" class="M04002-run-delete-btn" title="선택한 Run 이력 삭제" onclick="${PAGE_CODE}.deleteSelectedRun()">
+                        <i class="far fa-trash-alt"></i>
+                        <span>삭제</span>
+                    </button>
                 </article>
                 <article><span>Nodes</span><strong>${this.formatNumber(run.NODE_COUNT)}</strong><small>${this.formatNumber(run.SUCCESS_NODE_COUNT)} success / ${this.formatNumber(run.FAILED_NODE_COUNT)} failed</small></article>
                 <article>
@@ -497,6 +517,57 @@
                 </article>
             `;
             requestAnimationFrame(() => this.updateRunSummaryCopyVisibility());
+        },
+
+        async deleteSelectedRun() {
+            const run = this.selectedRun;
+            if (!run || !run.FLOW_RUN_ID || this.isRunDeleteInProgress) return;
+            const flowRunId = run.FLOW_RUN_ID;
+            const flowName = run.FLOW_NAME || `Run #${flowRunId}`;
+            const confirmMessage = [
+                `${flowName}`,
+                `Run #${flowRunId} 실행 이력과 노드 이력, RUN ID 기준 분석 결과 이력을 삭제합니다.`,
+                "삭제 후에는 되돌릴 수 없습니다. 계속할까요?"
+            ].join("\n");
+            const confirmed = window.CommonMessage?.confirm
+                ? await window.CommonMessage.confirm(confirmMessage, { defaultAction: "cancel" })
+                : window.confirm(confirmMessage);
+            if (!confirmed) return;
+
+            this.isRunDeleteInProgress = true;
+            const buttons = getContainerEl("#runSummary-${PAGE_CODE}")?.querySelectorAll(".M04002-run-delete-btn") || [];
+            buttons.forEach((button) => button.setAttribute("disabled", "disabled"));
+            try {
+                const json = await CommonUtils.request(`${API_BASE_URL}/${API_PAGE_CODE}/runs/${encodeURIComponent(flowRunId)}`, {
+                    method: "DELETE"
+                });
+                this.selectedRun = null;
+                this.selectedNode = null;
+                this.nodes = [];
+                this.currentModelDetail = null;
+                this.lastResultTableJson = null;
+                this.lastViolationSummary = null;
+                this.lastSymbolicRuleSummary = null;
+                this.nodeResultCache = new Map();
+                const nodeList = getContainerEl("#nodeList-${PAGE_CODE}");
+                const resultPanel = getContainerEl("#resultPanel-${PAGE_CODE}");
+                if (nodeList) nodeList.innerHTML = `<div class="table-empty">Run 이력이 삭제되었습니다.</div>`;
+                if (resultPanel) resultPanel.innerHTML = `<div class="table-empty">Run 이력이 삭제되었습니다.</div>`;
+                window.CommonMessage?.success?.(json.message || `Run #${flowRunId} 이력이 삭제되었습니다.`, { copyable: false });
+                const deletedPage = this.runPage || 1;
+                await this.loadRuns(deletedPage);
+                if (!this.runs.length && deletedPage > 1) {
+                    await this.loadRuns(deletedPage - 1);
+                }
+            } catch (error) {
+                window.CommonMessage?.error?.(error.message || "Run history delete failed.", { copyable: true });
+                if (!window.CommonMessage) alert(error.message || "Run history delete failed.");
+            } finally {
+                this.isRunDeleteInProgress = false;
+                getContainerEl("#runSummary-${PAGE_CODE}")?.querySelectorAll(".M04002-run-delete-btn").forEach((button) => {
+                    button.removeAttribute("disabled");
+                });
+            }
         },
 
         updateRunSummaryCopyVisibility() {
@@ -583,6 +654,7 @@
             this.readableRuleConditionFilter = "ALL";
             this.readableRuleConfidenceFilter = "ALL";
             this.predictedTypeFilter = "ALL";
+            this.predictedTypeViewMode = "TYPE";
             this.ruleSummaryFilters = { conditionCount: "ALL", confidenceScope: "ALL", resultColumn: "ALL", conditionColumn: "ALL", resultHasValueYn: "ALL", page: 1, pageSize: 20, resultColumnPage: 1 };
             if (!options.preserveViolationRuleFilter) {
                 this.violationRuleFilters = { ruleId: "", conditionCount: "ALL", confidenceScope: "NON_PERFECT", resultScope: "HIT", page: 1, pageSize: 20 };
@@ -664,6 +736,7 @@
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${API_PAGE_CODE}/result-table?${params.toString()}`, { method: "GET", showLoading: false });
                 if (this.selectedNode !== node) return;
+                this.lastResultTableJson = json;
                 this.currentExport = { filename: `${node.RESULT_OBJECT_NAME || "result"}.csv`, columns: json.columns || [], rows: json.data || [] };
                 const resultLayout = this.getTableResultLayout(node, json);
                 this.renderResultTable(json, resultLayout.title, resultLayout.kind);
@@ -1675,6 +1748,10 @@
             return this[renderer](json[resultLayout.summaryKey], json);
         },
 
+        renderTableResultSummaryShell(json = {}) {
+            return `<div id="tableResultSummary-${PAGE_CODE}">${this.renderTableResultSummary(json)}</div>`;
+        },
+
         renderResultTable(json, title, type) {
             const panel = getContainerEl("#resultPanel-${PAGE_CODE}");
             if (!panel) return;
@@ -1693,7 +1770,7 @@
                     </div>
                     ${this.renderSelectedNodeExecutionMeta()}
                 </header>
-                ${this.renderTableResultSummary(json)}
+                ${this.renderTableResultSummaryShell(json)}
                 ${this.renderResultTableProfile(json.columns || [], json.data || [])}
                 ${this.renderGrid(json.columns || [], json.data || [], json)}
                 ${this.renderResultPager(json.page, json.pageSize, json.total, "${PAGE_CODE}.loadResultTable(")}
@@ -2525,11 +2602,18 @@
         renderSymbolicRuleCard(rule, index = 0) {
             const key = this.getSymbolicRuleKey(rule, index);
             const features = Array.isArray(rule.FEATURE_LIST) ? rule.FEATURE_LIST : this.parseFeatureList(rule.FEATURE_COLUMNS);
+            const displayRuleId = this.getSymbolicRuleDisplayId(rule, index);
             return `
                 <article class="M04002-symbolic-rule-card ${String(rule.SELECTED_YN || "").toUpperCase() === "Y" ? "is-selected" : ""}">
                     <header>
                         <span>
-                            <strong>${this.escapeHtml(rule.RULE_ID || `Rule ${index + 1}`)}</strong>
+                            <small class="M04002-symbolic-rule-id-label">Rule ID</small>
+                            <span class="M04002-symbolic-rule-id-row">
+                                <code>${this.escapeHtml(displayRuleId)}</code>
+                                <button type="button" class="M04002-rule-copy-btn" title="RULE ID 복사" onclick="${PAGE_CODE}.copyRuleId('${this.escapeJs(displayRuleId)}', event)">
+                                    <i class="far fa-copy"></i>
+                                </button>
+                            </span>
                             <small>${this.renderColumnAwareCell(rule.TARGET_COLUMN, this.lastSymbolicRuleSummary || {})}</small>
                         </span>
                         <button type="button" title="수식 그래프 보기" onclick="${PAGE_CODE}.openSymbolicRulePopup('${this.escapeJs(key)}')">
@@ -2613,9 +2697,50 @@
             ].map((value) => String(value).replace(/\|/g, "/")).join("|");
         },
 
+        getSymbolicRuleDisplayId(rule, index = 0) {
+            const raw = [
+                this.selectedRun?.FLOW_RUN_ID || "",
+                rule?.TARGET_COLUMN || "",
+                rule?.RULE_ID || `Rule ${index + 1}`,
+                rule?.EXPRESSION || "",
+                rule?.FEATURE_COLUMNS || ""
+            ].join("|");
+            return `SYM_${this.hashStringHex(raw, 32)}`;
+        },
+
+        hashStringHex(value, length = 32) {
+            let hashA = 0x811c9dc5;
+            let hashB = 0x85ebca6b;
+            const text = String(value || "");
+            for (let index = 0; index < text.length; index += 1) {
+                const code = text.charCodeAt(index);
+                hashA ^= code;
+                hashA = Math.imul(hashA, 0x01000193) >>> 0;
+                hashB ^= code + index;
+                hashB = Math.imul(hashB, 0x27d4eb2d) >>> 0;
+            }
+            let hex = "";
+            let seedA = hashA;
+            let seedB = hashB;
+            while (hex.length < length) {
+                seedA = Math.imul(seedA ^ (seedA >>> 15), 0x2c1b3c6d) >>> 0;
+                seedB = Math.imul(seedB ^ (seedB >>> 13), 0x297a2d39) >>> 0;
+                hex += (seedA ^ seedB).toString(16).toUpperCase().padStart(8, "0");
+            }
+            return hex.slice(0, length);
+        },
+
         findSymbolicRuleByKey(key) {
             const rules = this.lastSymbolicRuleSummary?.topRules || [];
             return rules.find((rule, index) => this.getSymbolicRuleKey(rule, index) === key) || null;
+        },
+
+        findSymbolicRuleIndex(targetRule) {
+            const rules = this.lastSymbolicRuleSummary?.topRules || [];
+            const foundIndex = rules.findIndex((rule, index) =>
+                this.getSymbolicRuleKey(rule, index) === this.getSymbolicRuleKey(targetRule, index)
+            );
+            return foundIndex >= 0 ? foundIndex : 0;
         },
 
         parseFeatureList(value) {
@@ -2643,15 +2768,27 @@
         renderSymbolicRulePopup(rule) {
             const features = Array.isArray(rule.FEATURE_LIST) ? rule.FEATURE_LIST : this.parseFeatureList(rule.FEATURE_COLUMNS);
             const ranges = Array.isArray(rule.FEATURE_RANGES) ? rule.FEATURE_RANGES : [];
+            const featureLabel = features.length ? features.map((item) => this.escapeHtml(item)).join(", ") : "x";
+            const displayRuleId = this.getSymbolicRuleDisplayId(rule, this.findSymbolicRuleIndex(rule));
             return `
                 <section>
                     <header class="M04002-sql-popup-title" onmousedown="${PAGE_CODE}.startSymbolicRulePopupDrag(event)">
                         <div>
-                            <strong>${this.escapeHtml(rule.RULE_ID || "Symbolic Rule")}</strong>
-                            <span>${this.renderColumnAwareCell(rule.TARGET_COLUMN, this.lastSymbolicRuleSummary || {})} = f(${features.map((item) => this.escapeHtml(item)).join(", ") || "x"})</span>
+                            <small class="M04002-symbolic-rule-id-label">Rule ID</small>
+                            <span class="M04002-symbolic-rule-id-row">
+                                <code>${this.escapeHtml(displayRuleId)}</code>
+                                <button type="button" class="M04002-rule-copy-btn" title="RULE ID 복사" onclick="${PAGE_CODE}.copyRuleId('${this.escapeJs(displayRuleId)}', event)">
+                                    <i class="far fa-copy"></i>
+                                </button>
+                            </span>
+                            <span>Symbolic regression rule</span>
                         </div>
                         <button type="button" title="Close" onclick="${PAGE_CODE}.closeSymbolicRulePopup()"><i class="fas fa-times"></i></button>
                     </header>
+                    <div class="M04002-symbolic-formula-banner">
+                        <span>F(X) = Y</span>
+                        <strong>f(${featureLabel}) = ${this.renderColumnAwareCell(rule.TARGET_COLUMN, this.lastSymbolicRuleSummary || {})}</strong>
+                    </div>
                     <div class="M04002-symbolic-popup-body">
                         <div class="M04002-symbolic-expression-box">
                             <strong>Expression</strong>
@@ -2884,6 +3021,8 @@
         renderPredictedTypeSummary(summary, json = {}) {
             if (!summary) return "";
             const groups = Array.isArray(summary.summaryGroups) ? summary.summaryGroups : [];
+            const finalGroups = Array.isArray(summary.finalSummaryGroups) ? summary.finalSummaryGroups : groups;
+            const sourceGroups = Array.isArray(summary.predictionSourceGroups) ? summary.predictionSourceGroups : [];
             const matchGroups = Array.isArray(summary.predictionMatchGroups) ? summary.predictionMatchGroups : [];
             const activeCase = String(json.predictedTypeCase || this.predictedTypeFilter || "ALL").toUpperCase();
             return `
@@ -2907,12 +3046,10 @@
                             })}
                         </div>
                     </header>
-                    <div class="M04002-type-group-grid">
-                        ${groups.map((group) => this.renderPredictedTypeGroup(group, summary)).join("")}
-                    </div>
+                    ${this.renderPredictedTypeUnifiedMode(sourceGroups, finalGroups, summary)}
                     ${matchGroups.length ? `
                         <div class="M04002-type-detail">
-                            <strong>FINAL / MODEL / RULE 예측 유형 상세 그룹</strong>
+                            <strong>적용 FINAL / MODEL / RULE 예측 유형 상세 그룹</strong>
                             <div class="M04002-type-case-grid">
                                 <button type="button" class="${activeCase === "ALL" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectPredictedTypeCase('ALL')" title="모든 예측 결과">
                                     <b>전체</b>
@@ -2928,6 +3065,147 @@
                             </div>
                         </div>
                     ` : ""}
+                </section>
+            `;
+        },
+
+        renderPredictedTypeUnifiedMode(sourceGroups = [], finalGroups = [], summary = null) {
+            const safeGroups = this.getUnifiedPredictionSourceGroups(sourceGroups, finalGroups);
+            if (!safeGroups.length) {
+                return `<div class="table-empty">표시할 RULE / MODEL / FINAL 예측 컬럼 정보가 없습니다.</div>`;
+            }
+            return `
+                <div class="M04002-type-source-grid">
+                    ${safeGroups.map((source) => this.renderPredictedTypeSourceGroup(source, summary)).join("")}
+                </div>
+            `;
+        },
+
+        renderPredictedTypeSourceMode(sourceGroups = [], summary = null) {
+            return this.renderPredictedTypeUnifiedMode(sourceGroups, [], summary);
+        },
+
+        getSelectedPredictionMethod() {
+            const payload = this.normalizeObject(this.selectedNode?.PAYLOAD);
+            const params = this.normalizeObject(this.selectedNode?.RUNTIME_PARAMS);
+            const runtimeParamMap = this.buildRuntimeParamValueMap(params, this.selectedNode, payload);
+            const definition = this.getRuntimeParamDefinitions(payload, this.selectedNode)
+                .find((item, index) => this.normalizeRuntimeParamKey(this.getRuntimeParamDefinitionName(item, index)) === "ppredictionmethod");
+            const candidates = [
+                params.P_PREDICTION_METHOD,
+                params.pPredictionMethod,
+                params.predictionMethod,
+                definition
+                    ? this.getRuntimeParamValueByName(
+                        this.getRuntimeParamDefinitionName(definition),
+                        runtimeParamMap,
+                        this.getRuntimeParamDefinitionDefault(definition)
+                    )
+                    : "",
+                payload.P_PREDICTION_METHOD,
+                payload.pPredictionMethod,
+                payload.predictionMethod
+            ];
+            return String(candidates.find((value) => value !== undefined && value !== null && String(value).trim()) || "").trim().toUpperCase();
+        },
+
+        getPredictionMethodSourceCodes(method = this.getSelectedPredictionMethod()) {
+            const normalized = String(method || "").trim().toUpperCase();
+            if (normalized.includes("BOTH")) return ["RULE", "MODEL"];
+            if (normalized.includes("MODEL")) return ["MODEL"];
+            if (normalized.includes("RULE")) return ["RULE"];
+            return ["RULE", "MODEL"];
+        },
+
+        filterPredictionSourceGroups(sourceGroups = [], sourceCodes = []) {
+            const allowed = new Set((sourceCodes || []).map((code) => String(code || "").toUpperCase()));
+            return (Array.isArray(sourceGroups) ? sourceGroups : [])
+                .filter((source) => allowed.has(String(source.sourceCode || "").toUpperCase()));
+        },
+
+        getUnifiedPredictionSourceGroups(sourceGroups = [], finalGroups = []) {
+            const method = this.getSelectedPredictionMethod();
+            const methodLabel = method || "P_PREDICTION_METHOD";
+            const sourceMap = new Map((Array.isArray(sourceGroups) ? sourceGroups : [])
+                .map((source) => [String(source.sourceCode || "").toUpperCase(), source]));
+            const orderedCodes = [...this.getPredictionMethodSourceCodes(method), "FINAL"];
+            return orderedCodes.map((code) => {
+                const source = sourceMap.get(code);
+                if (source) {
+                    if (code === "FINAL") {
+                        return {
+                            ...source,
+                            description: "최종 적용 INIT$_TB_PREDICTED_TYPE_FINAL.FINAL_PREDICTED_TYPE"
+                        };
+                    }
+                    return {
+                        ...source,
+                        description: `${methodLabel} RUN ID 기준 ${source.sourceColumn || ""}`.trim()
+                    };
+                }
+                if (code === "FINAL" && Array.isArray(finalGroups) && finalGroups.length) {
+                    return {
+                        sourceCode: "FINAL",
+                        sourceLabel: "FINAL",
+                        sourceColumn: "FINAL_PREDICTED_TYPE",
+                        description: "최종 적용 INIT$_TB_PREDICTED_TYPE_FINAL.FINAL_PREDICTED_TYPE",
+                        groups: finalGroups
+                    };
+                }
+                return null;
+            }).filter(Boolean);
+        },
+
+        renderPredictedTypeRunVersion(sourceGroups = [], fallbackGroups = [], summary = null) {
+            const method = this.getSelectedPredictionMethod();
+            const sourceCodes = this.getPredictionMethodSourceCodes(method);
+            const safeSourceGroups = this.filterPredictionSourceGroups(sourceGroups, sourceCodes);
+            const methodLabel = method || "P_PREDICTION_METHOD";
+            if (!safeSourceGroups.length) {
+                return this.renderPredictedTypeVersion("RUN 기준", `${methodLabel} 실행 당시 INIT$_TB_PREDICTED_TYPE 예측값`, fallbackGroups, summary);
+            }
+            return `
+                <section class="M04002-type-version">
+                    <header>
+                        <strong>RUN 기준</strong>
+                        <span>${this.escapeHtml(methodLabel)} 실행 당시 INIT$_TB_PREDICTED_TYPE 예측값</span>
+                    </header>
+                    <div class="M04002-type-run-source-grid">
+                        ${safeSourceGroups.map((source) => this.renderPredictedTypeSourceGroup(source, summary, true)).join("")}
+                    </div>
+                </section>
+            `;
+        },
+
+        renderPredictedTypeSourceGroup(source = {}, summary = null, compact = false) {
+            const groups = Array.isArray(source.groups) ? source.groups : [];
+            const total = groups.reduce((sum, group) => sum + Number(group.columnCount || 0), 0);
+            const sourceClass = `is-source-${String(source.sourceCode || "").toLowerCase().replace(/[^a-z0-9_-]/g, "")}`;
+            return `
+                <section class="M04002-type-source ${sourceClass} ${compact ? "is-compact" : ""}">
+                    <header>
+                        <strong>${this.escapeHtml(source.sourceLabel || source.sourceCode || "-")}</strong>
+                        <span>${this.escapeHtml(source.description || source.sourceColumn || "")}</span>
+                        <small>${this.formatNumber(total)} columns</small>
+                    </header>
+                    <div class="M04002-type-source-groups">
+                        ${groups.map((group) => this.renderPredictedTypeGroup(group, summary)).join("")}
+                    </div>
+                </section>
+            `;
+        },
+
+        renderPredictedTypeVersion(title, note, groups = [], summary = null) {
+            const safeGroups = Array.isArray(groups) ? groups : [];
+            return `
+                <section class="M04002-type-version">
+                    <header>
+                        <strong>${this.escapeHtml(title)}</strong>
+                        <span>${this.escapeHtml(note)}</span>
+                    </header>
+                    <div class="M04002-type-group-grid">
+                        ${safeGroups.map((group) => this.renderPredictedTypeGroup(group, summary)).join("")}
+                    </div>
                 </section>
             `;
         },
@@ -2956,6 +3234,17 @@
                 this.predictedTypeFilter = "ALL";
             }
             await this.loadResultTable(1);
+        },
+
+        async selectPredictedTypeViewMode(mode = "TYPE") {
+            this.predictedTypeViewMode = String(mode || "").toUpperCase() === "SOURCE" ? "SOURCE" : "TYPE";
+            const summaryPanel = getContainerEl(`#tableResultSummary-${PAGE_CODE}`);
+            if (summaryPanel && this.lastResultTableJson) {
+                summaryPanel.innerHTML = this.renderTableResultSummary(this.lastResultTableJson);
+                this.snapshotNodeResultCache();
+                return;
+            }
+            await this.loadResultTable(this.resultPage || 1);
         },
 
         async goPredictedTypePage() {
@@ -3082,9 +3371,7 @@
                 { key: "result-owner", label: "Result Owner", value: resultOwner },
                 { key: "result-table", label: "Result Table", value: resultObject }
             ].filter(({ value }) => value !== undefined && value !== null && String(value).trim() !== "");
-            const paramEntries = Object.entries(params)
-                .filter(([, value]) => value !== undefined && value !== null && String(value).trim() !== "")
-                .map(([key, value]) => [key, this.formatParamValue(value)]);
+            const paramEntries = this.getDisplayRuntimeParamEntries(params, payload, node);
             if (!metaRows.length && !paramEntries.length) return "";
             return `
                 <section class="M04002-execution-meta ${this.getNodeTone(node)}">
@@ -3199,6 +3486,314 @@
             if (value === undefined || value === null) return "";
             if (typeof value === "object") return JSON.stringify(value);
             return String(value);
+        },
+
+        normalizeRuntimeParamKey(key) {
+            return String(key || "")
+                .replace(/^:/, "")
+                .replace(/[^A-Za-z0-9]/g, "")
+                .toLowerCase();
+        },
+
+        isInternalRuntimeParamKey(key, isDeclaredInputParam = false) {
+            const rawKey = String(key || "").trim();
+            if (!rawKey) return true;
+            if (rawKey.toUpperCase().startsWith("INIT$")) return true;
+            if (isDeclaredInputParam) return false;
+            const internalKeys = new Set([
+                "inputtable",
+                "inputowner",
+                "targetowner",
+                "targettable",
+                "runsourcetype",
+                "runid",
+                "flowrunid"
+            ]);
+            return internalKeys.has(this.normalizeRuntimeParamKey(rawKey));
+        },
+
+        normalizeRuntimeParamDefinitionList(value) {
+            if (Array.isArray(value)) return value;
+            if (typeof value !== "string") return [];
+            try {
+                const parsed = JSON.parse(value);
+                return Array.isArray(parsed) ? parsed : [];
+            } catch (_error) {
+                return [];
+            }
+        },
+
+        async loadRuntimeParamPresetDefinitions() {
+            this.runtimeParamPresetMap = new Map();
+            try {
+                const response = await fetch(`${DETAIL_PRESET_URL}?v=${Date.now()}`, { cache: "no-store" });
+                if (!response.ok) return;
+                const presets = await response.json();
+                (Array.isArray(presets) ? presets : []).forEach((preset) => {
+                    const keys = [
+                        preset?.objectName,
+                        preset?.OBJECT_NAME,
+                        preset?.label,
+                        preset?.LABEL,
+                        preset?.resultTableName,
+                        preset?.RESULT_TABLE_NAME
+                    ].map((value) => this.normalizePresetMatchKey(value)).filter(Boolean);
+                    const items = this.normalizeRuntimeParamDefinitionList(preset?.items || preset?.ITEMS || preset?.params || preset?.PARAMS || []);
+                    if (items.length) {
+                        keys.forEach((key) => {
+                            if (!this.runtimeParamPresetMap.has(key)) this.runtimeParamPresetMap.set(key, items);
+                        });
+                    }
+                });
+            } catch (error) {
+                console.warn(`[${PAGE_CODE}] runtime parameter presets load failed`, error);
+            }
+        },
+
+        normalizePresetMatchKey(value) {
+            return String(value || "")
+                .trim()
+                .toUpperCase()
+                .replace(/\s+/g, " ");
+        },
+
+        getNodeExecutableObjectNames(node = this.selectedNode, payload = null) {
+            const normalizedPayload = payload || this.normalizeObject(node?.PAYLOAD);
+            const candidates = [
+                node?.EXEC_OBJECT_NAME,
+                node?.EXEC_OBJECT_LABEL,
+                node?.JOB_NAME,
+                node?.execObjectName,
+                node?.execObjectLabel,
+                node?.jobName,
+                node?.NODE_NAME,
+                node?.RESULT_OBJECT_NAME,
+                normalizedPayload?.execObjectName,
+                normalizedPayload?.EXEC_OBJECT_NAME,
+                normalizedPayload?.execObjectLabel,
+                normalizedPayload?.EXEC_OBJECT_LABEL,
+                normalizedPayload?.jobName,
+                normalizedPayload?.JOB_NAME,
+                normalizedPayload?.nodeName,
+                normalizedPayload?.NODE_NAME,
+                normalizedPayload?.objectName,
+                normalizedPayload?.OBJECT_NAME,
+                normalizedPayload?.resultTableName,
+                normalizedPayload?.RESULT_TABLE_NAME,
+                normalizedPayload?.tableName,
+                normalizedPayload?.TABLE_NAME
+            ];
+            return [...new Set(candidates.map((value) => this.normalizePresetMatchKey(value)).filter(Boolean))];
+        },
+
+        getRuntimeParamPresetDefinitions(node = this.selectedNode, payload = null) {
+            if (!this.runtimeParamPresetMap) return [];
+            const names = this.getNodeExecutableObjectNames(node, payload);
+            for (const name of names) {
+                const items = this.runtimeParamPresetMap.get(name);
+                if (Array.isArray(items) && items.length) return items;
+                const simpleName = name.includes(".") ? name.split(".").pop() : "";
+                if (simpleName) {
+                    const simpleItems = this.runtimeParamPresetMap.get(simpleName);
+                    if (Array.isArray(simpleItems) && simpleItems.length) return simpleItems;
+                }
+            }
+            return [];
+        },
+
+        getBuiltInRuntimeParamDefinitions(node = this.selectedNode, payload = null) {
+            const names = this.getNodeExecutableObjectNames(node, payload);
+            const hasName = (...tokens) => names.some((name) =>
+                tokens.some((token) => name === token || name.endsWith(`.${token}`))
+            );
+            if (!hasName("INIT$_SP_PREDICTED_TYPE", "INIT$_TB_PREDICTED_TYPE", "INIT$_TB_PREDICTED_TYPE_FINAL")) {
+                return [];
+            }
+            return [
+                { key: "P_TARGET_OWNER", comment: "분석 대상 테이블 계정", defaultValue: ":INIT$TargetOwner" },
+                { key: "P_TARGET_TABLE", comment: "분석 대상 테이블명", defaultValue: ":INIT$TargetTable" },
+                { key: "P_DYNAMIC_MODEL_NAME", comment: "분류/예측 모델명", defaultValue: "OML_DECISION_TREE_MODEL_01" },
+                { key: "P_PREDICTION_METHOD", comment: "예측 방식 선택(ONLY_RULE: BASE 컬럼만, ONLY_MODEL: MODL 컬럼만, ONLY_BOTH: BASE/MODL 컬럼, FINAL_RULE/MODEL/BOTH: FINAL 자동 반영)", defaultValue: "ONLY_BOTH" },
+                { key: "P_RUN_SOURCE_TYPE", comment: "실행 출처 구분(DATA_WORK/FLOW_WORK)", defaultValue: ":INIT$RunSourceType" },
+                { key: "P_RUN_ID", comment: "실행 이력 ID", defaultValue: ":INIT$RunId" }
+            ];
+        },
+
+        countVisibleRuntimeParamDefinitions(definitions = []) {
+            return (Array.isArray(definitions) ? definitions : [])
+                .filter((item) => this.isInputRuntimeParamDefinition(item))
+                .filter((item, index) => !this.isInternalRuntimeParamKey(this.getRuntimeParamDefinitionName(item, index), true))
+                .length;
+        },
+
+        getRuntimeParamDefinitions(payload = {}, node = null) {
+            const normalized = this.normalizeObject(payload);
+            const payloadParams = Array.isArray(normalized.params)
+                ? normalized.params
+                : (Array.isArray(normalized.PARAMS) ? normalized.PARAMS : []);
+            const jobParams = this.normalizeRuntimeParamDefinitionList(node?.JOB_PARAM_JSON || node?.jobParamJson || node?.PARAM_JSON || node?.paramJson);
+            const presetParams = this.getRuntimeParamPresetDefinitions(node, normalized);
+            const builtInParams = this.getBuiltInRuntimeParamDefinitions(node, normalized);
+            const candidates = [
+                { source: "JOB", params: jobParams, priority: 30 },
+                { source: "PRESET", params: presetParams, priority: 20 },
+                { source: "BUILTIN", params: builtInParams, priority: 15 },
+                { source: "PAYLOAD", params: payloadParams, priority: 10 }
+            ].filter((candidate) => Array.isArray(candidate.params) && candidate.params.length);
+            if (!candidates.length) return [];
+            candidates.sort((left, right) => {
+                const visibleDiff = this.countVisibleRuntimeParamDefinitions(right.params) - this.countVisibleRuntimeParamDefinitions(left.params);
+                if (visibleDiff) return visibleDiff;
+                const lengthDiff = right.params.length - left.params.length;
+                if (lengthDiff) return lengthDiff;
+                return right.priority - left.priority;
+            });
+            return candidates[0].params;
+        },
+
+        isInputRuntimeParamDefinition(item = {}) {
+            const name = item?.itemName || item?.ITEM_NAME || item?.name || item?.NAME || item?.key || item?.KEY || "";
+            if (!String(name || "").trim()) return false;
+            const directionText = String(
+                item?.inOut
+                || item?.IN_OUT
+                || item?.direction
+                || item?.DIRECTION
+                || item?.parameterMode
+                || item?.PARAMETER_MODE
+                || item?.itemMode
+                || item?.ITEM_MODE
+                || item?.itemValue
+                || item?.ITEM_VALUE
+                || ""
+            ).trim().toUpperCase().replace(/\s+/g, " ");
+            if (!directionText) return true;
+            return !/^(OUT|OUTPUT|RETURN)\b/.test(directionText);
+        },
+
+        addRuntimeParamMapEntry(map, name, value) {
+            const key = this.normalizeRuntimeParamKey(name);
+            if (!key) return;
+            map.set(key, value);
+            const aliases = {
+                targetowner: ["inittargetowner"],
+                inittargetowner: ["targetowner"],
+                targettable: ["inittargettable"],
+                inittargettable: ["targettable"],
+                resultowner: ["initresultowner"],
+                initresultowner: ["resultowner"],
+                resulttable: ["initresulttable", "initresultmodelname"],
+                initresulttable: ["resulttable", "initresultmodelname"],
+                resultmodelname: ["initresultmodelname"],
+                initresultmodelname: ["resultmodelname", "resulttable"],
+                runsourcetype: ["initrunsourcetype"],
+                initrunsourcetype: ["runsourcetype"],
+                runid: ["initrunid", "initflowrunid", "flowrunid"],
+                initrunid: ["runid", "flowrunid", "initflowrunid"],
+                flowrunid: ["initflowrunid", "initrunid", "runid"],
+                initflowrunid: ["flowrunid", "runid", "initrunid"]
+            };
+            (aliases[key] || []).forEach((alias) => {
+                if (!map.has(alias)) map.set(alias, value);
+            });
+        },
+
+        addRuntimeParamContextValues(map, node = null, payload = {}) {
+            const normalizedPayload = this.normalizeObject(payload);
+            const getValue = (...keys) => {
+                for (const key of keys) {
+                    const value = node?.[key] ?? normalizedPayload?.[key];
+                    if (value !== undefined && value !== null && String(value).trim() !== "") return value;
+                }
+                return "";
+            };
+            const runId = this.selectedRun?.FLOW_RUN_ID || node?.FLOW_RUN_ID || normalizedPayload.flowRunId || normalizedPayload.runId || "";
+            [
+                ["INIT$TargetOwner", getValue("TARGET_OWNER", "targetOwner", "ownerName", "OWNER_NAME")],
+                ["INIT$TargetTable", getValue("TARGET_TABLE", "targetTable", "tableName", "TABLE_NAME")],
+                ["INIT$ResultOwner", getValue("RESULT_OWNER", "resultOwner")],
+                ["INIT$ResultTable", getValue("RESULT_OBJECT_NAME", "resultTableName", "tableName")],
+                ["INIT$ResultModelName", getValue("RESULT_OBJECT_NAME", "resultTableName", "tableName")],
+                ["INIT$RunSourceType", "FLOW_WORK"],
+                ["INIT$RunId", runId],
+                ["INIT$FlowRunId", runId],
+                ["runSourceType", "FLOW_WORK"],
+                ["runId", runId],
+                ["flowRunId", runId]
+            ].forEach(([name, value]) => {
+                if (value !== undefined && value !== null && String(value).trim() !== "") {
+                    this.addRuntimeParamMapEntry(map, name, value);
+                }
+            });
+        },
+
+        buildRuntimeParamValueMap(params = {}, node = null, payload = {}) {
+            const map = new Map();
+            Object.entries(this.normalizeObject(params)).forEach(([key, value]) => {
+                this.addRuntimeParamMapEntry(map, key, value);
+            });
+            this.addRuntimeParamContextValues(map, node, payload);
+            return map;
+        },
+
+        getRuntimeParamDefinitionName(item, index = 0) {
+            return String(item?.itemName || item?.ITEM_NAME || item?.name || item?.NAME || item?.key || item?.KEY || `PARAM_${index + 1}`);
+        },
+
+        getRuntimeParamDefinitionDefault(item) {
+            return item?.value
+                ?? item?.VALUE
+                ?? item?.actualValue
+                ?? item?.ACTUAL_VALUE
+                ?? item?.defaultValue
+                ?? item?.DEFAULT_VALUE
+                ?? item?.itemDefault
+                ?? item?.ITEM_DEFAULT
+                ?? item?.item_default
+                ?? "";
+        },
+
+        getRuntimeParamValueByName(name, runtimeParamMap, fallback = "") {
+            const key = this.normalizeRuntimeParamKey(name);
+            return runtimeParamMap.has(key) ? runtimeParamMap.get(key) : fallback;
+        },
+
+        resolveRuntimeParamDisplayValue(value, runtimeParamMap) {
+            const text = String(value ?? "").trim();
+            const bindMatch = text.match(/^:([A-Za-z][A-Za-z0-9_$#]*)$/);
+            if (bindMatch) {
+                const key = this.normalizeRuntimeParamKey(bindMatch[1]);
+                if (runtimeParamMap.has(key)) return runtimeParamMap.get(key);
+            }
+            const tokenMatch = text.match(/^\/\*\s*--\s*([A-Za-z][A-Za-z0-9_$#]*)\s*--\s*\*\/$/);
+            if (tokenMatch) {
+                const key = this.normalizeRuntimeParamKey(tokenMatch[1]);
+                if (runtimeParamMap.has(key)) return runtimeParamMap.get(key);
+            }
+            return value;
+        },
+
+        getDisplayRuntimeParamEntries(params = {}, payload = {}, node = null) {
+            const runtimeParamMap = this.buildRuntimeParamValueMap(params, node, payload);
+            const definitions = this.getRuntimeParamDefinitions(payload, node);
+            if (definitions.length) {
+                return definitions
+                    .filter((item) => this.isInputRuntimeParamDefinition(item))
+                    .map((item, index) => {
+                        const key = this.getRuntimeParamDefinitionName(item, index);
+                        const rawValue = this.getRuntimeParamValueByName(key, runtimeParamMap, this.getRuntimeParamDefinitionDefault(item));
+                        return [key, this.formatParamValue(this.resolveRuntimeParamDisplayValue(rawValue, runtimeParamMap))];
+                    })
+                    .filter(([key]) => !this.isInternalRuntimeParamKey(key, true));
+            }
+            return Object.entries(this.normalizeObject(params))
+                .filter(([key, value]) =>
+                    !this.isInternalRuntimeParamKey(key)
+                    && value !== undefined
+                    && value !== null
+                    && String(value).trim() !== ""
+                )
+                .map(([key, value]) => [key, this.formatParamValue(value)]);
         },
 
         getColumnComments(source = null) {

@@ -29,6 +29,7 @@
             contextScenarios: [],
             scenarioTables: [],
             flowList: [],
+            flowSwitcherSearch: "",
             flowNodeTypes: [],
             flowRegisteredJobs: [],
             flowJobGroupCollapsed: new Set(),
@@ -98,12 +99,14 @@
             },
 
             destroy() {
+                this.closeNodeRunParamsLayer();
                 this.restoreSidebarsAfterCanvasMaximize();
                 this.teardownFlowDesigner();
                 this.contextProjects = [];
                 this.contextScenarios = [];
                 this.scenarioTables = [];
                 this.flowList = [];
+                this.flowSwitcherSearch = "";
                 this.flowNodeTypes = [];
                 this.flowRegisteredJobs = [];
                 this.flowJobGroupCollapsed = new Set();
@@ -734,7 +737,10 @@
                     this.flowList = [];
                     if (select) select.innerHTML = `<option value="">Flow list load failed</option>`;
                     if (grid) grid.innerHTML = `<div class="table-error">${this.escapeHtml(error.message || "Flow list load failed.")}</div>`;
+                    const switcherList = getContainerEl(`#flowSwitcherList-${PAGE_CODE}`);
+                    if (switcherList) switcherList.innerHTML = `<div class="table-error">${this.escapeHtml(error.message || "Flow list load failed.")}</div>`;
                     this.updateFlowVersionCount();
+                    this.updateFlowSwitcherSummary();
                 } finally {
                     this.setFlowVersionLoading(false);
                 }
@@ -758,6 +764,19 @@
                 }
                 if (countLabel) {
                     countLabel.textContent = isLoading ? "loading..." : `${this.flowList.length.toLocaleString()} items`;
+                }
+                const switcherCount = getContainerEl(`#flowSwitcherCount-${PAGE_CODE}`);
+                if (switcherCount) {
+                    switcherCount.textContent = isLoading ? "loading..." : `${this.flowList.length.toLocaleString()} items`;
+                }
+                const switcherList = getContainerEl(`#flowSwitcherList-${PAGE_CODE}`);
+                if (isLoading && switcherList) {
+                    switcherList.innerHTML = `
+                        <div class="table-empty flow-list-loading">
+                            <i class="fas fa-sync-alt fa-spin"></i>
+                            <span>Loading saved flows...</span>
+                        </div>
+                    `;
                 }
                 if (isLoading && grid) {
                     grid.innerHTML = `
@@ -794,12 +813,244 @@
                 }
                 this.updateFlowVersionCount();
                 this.updateFlowCopyButton();
+                this.updateFlowSwitcherSummary();
+                this.renderFlowSwitcherList();
                 if (select && this.flowList.some((flow) => String(flow.FLOW_ID) === String(currentFlowId))) {
                     select.value = currentFlowId;
                 }
                 this.isFlowRunning = this.isFlowRunActive();
                 this.updateFlowActionButtons();
                 this.scrollSelectedFlowVersionIntoView();
+            },
+
+            isFlowSwitcherOpen() {
+                const popover = getContainerEl(`#flowSwitcherPopover-${PAGE_CODE}`);
+                return Boolean(popover && !popover.hidden);
+            },
+
+            openFlowSwitcher(event = null) {
+                event?.preventDefault?.();
+                event?.stopPropagation?.();
+                const popover = getContainerEl(`#flowSwitcherPopover-${PAGE_CODE}`);
+                const button = getContainerEl(`#flowSwitcherButton-${PAGE_CODE}`);
+                if (!popover) return;
+                const trigger = event?.currentTarget || event?.target || null;
+                const anchor = trigger?.closest?.(`#flowSwitcherButton-${PAGE_CODE}`) ? button : null;
+                popover.hidden = false;
+                button?.setAttribute("aria-expanded", "true");
+                this.renderFlowSwitcherList();
+                this.positionFlowSwitcherPopover(anchor);
+                window.setTimeout(() => {
+                    this.positionFlowSwitcherPopover(anchor);
+                    getContainerEl(`#flowSwitcherSearch-${PAGE_CODE}`)?.focus();
+                }, 0);
+            },
+
+            closeFlowSwitcher() {
+                const popover = getContainerEl(`#flowSwitcherPopover-${PAGE_CODE}`);
+                const button = getContainerEl(`#flowSwitcherButton-${PAGE_CODE}`);
+                if (!popover || popover.hidden) return;
+                popover.hidden = true;
+                button?.setAttribute("aria-expanded", "false");
+            },
+
+            positionFlowSwitcherPopover(anchor = null) {
+                const popover = getContainerEl(`#flowSwitcherPopover-${PAGE_CODE}`);
+                if (!popover) return;
+                popover.classList.toggle("is-anchor-positioned", Boolean(anchor));
+                popover.style.left = "";
+                popover.style.right = "";
+                popover.style.top = "";
+                popover.style.width = "";
+                popover.style.transform = "";
+                if (!anchor) return;
+
+                const margin = 12;
+                const gap = 8;
+                const rect = anchor.getBoundingClientRect();
+                const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 1200;
+                const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 800;
+                const width = Math.min(760, Math.max(320, viewportWidth - margin * 2));
+                popover.style.width = `${width}px`;
+                popover.style.transform = "none";
+
+                const height = Math.min(popover.offsetHeight || 420, viewportHeight - margin * 2);
+                const spaceBelow = viewportHeight - rect.bottom - gap - margin;
+                const spaceAbove = rect.top - gap - margin;
+                const preferBelow = spaceBelow >= height || spaceBelow >= spaceAbove;
+                const top = preferBelow
+                    ? Math.min(rect.bottom + gap, viewportHeight - height - margin)
+                    : Math.max(margin, rect.top - height - gap);
+                const left = Math.min(
+                    Math.max(margin, rect.left),
+                    viewportWidth - width - margin
+                );
+
+                popover.style.left = `${left}px`;
+                popover.style.top = `${Math.max(margin, top)}px`;
+            },
+
+            toggleFlowSwitcher(event = null) {
+                event?.preventDefault?.();
+                event?.stopPropagation?.();
+                if (this.isFlowSwitcherOpen()) {
+                    this.closeFlowSwitcher();
+                } else {
+                    this.openFlowSwitcher(event);
+                }
+            },
+
+            handleFlowSwitcherSearch(value) {
+                this.flowSwitcherSearch = String(value || "").trim();
+                this.renderFlowSwitcherList();
+            },
+
+            handleFlowSwitcherSearchKeydown(event) {
+                if (event.key === "Escape") {
+                    event.preventDefault();
+                    this.closeFlowSwitcher();
+                }
+            },
+
+            getCurrentFlowRecord() {
+                const flowId = this.getValue(`#flowId-${PAGE_CODE}`);
+                return this.flowList.find((flow) => String(flow.FLOW_ID || "") === String(flowId || "")) || null;
+            },
+
+            getSortedFlowList() {
+                const sortableTime = (flow) => {
+                    const text = String(flow.UPDATED_AT || flow.CREATED_AT || "").trim();
+                    if (!text) return 0;
+                    const parsed = Date.parse(text.replace(/\s+KST$/i, "").replace(" ", "T"));
+                    return Number.isFinite(parsed) ? parsed : 0;
+                };
+                return [...(this.flowList || [])].sort((a, b) => {
+                    const aTime = sortableTime(a);
+                    const bTime = sortableTime(b);
+                    if (aTime !== bTime) return bTime - aTime;
+                    return Number(b.FLOW_ID || 0) - Number(a.FLOW_ID || 0);
+                });
+            },
+
+            getFilteredFlowList() {
+                const keyword = this.flowSwitcherSearch.toLowerCase();
+                const list = this.getSortedFlowList();
+                if (!keyword) return list;
+                return list.filter((flow) => [
+                    flow.FLOW_ID,
+                    flow.FLOW_GROUP,
+                    flow.FLOW_NAME,
+                    flow.FLOW_DESC,
+                    flow.EXECUTION_MODE,
+                    flow.USE_YN,
+                    flow.UPDATED_AT,
+                    flow.CREATED_AT
+                ].some((value) => String(value || "").toLowerCase().includes(keyword)));
+            },
+
+            getFlowDisplayInfo(flow = null) {
+                const currentId = this.getValue(`#flowId-${PAGE_CODE}`);
+                const saved = flow || this.getCurrentFlowRecord() || {};
+                const flowId = saved.FLOW_ID || currentId || "NEW";
+                const flowName = this.getValue(`#flowName-${PAGE_CODE}`).trim() || saved.FLOW_NAME || (/^\d+$/.test(String(flowId)) ? `Flow #${flowId}` : "Draft Flow");
+                const flowGroup = this.getValue(`#flowGroup-${PAGE_CODE}`).trim() || saved.FLOW_GROUP || config.defaultFlowGroup || PAGE_CODE;
+                const useYn = this.getValue(`#flowUseYn-${PAGE_CODE}`).trim() || saved.USE_YN || "Y";
+                const mode = saved.EXECUTION_MODE || "DAG";
+                const updatedAt = saved.UPDATED_AT || saved.CREATED_AT || "";
+                return {
+                    flowId,
+                    flowName,
+                    flowGroup,
+                    useYn,
+                    mode,
+                    updatedAt,
+                    updatedAtLabel: this.formatKstDateTime(updatedAt)
+                };
+            },
+
+            updateFlowSwitcherSummary() {
+                const info = this.getFlowDisplayInfo();
+                const idLabel = /^\d+$/.test(String(info.flowId || "")) ? `#${info.flowId}` : "NEW";
+                const metaParts = [idLabel, info.flowGroup, info.useYn, info.mode].filter(Boolean);
+                if (info.updatedAtLabel) metaParts.push(info.updatedAtLabel);
+                this.setText(`#flowSwitcherName-${PAGE_CODE}`, info.flowName);
+                this.setText(`#flowSwitcherMeta-${PAGE_CODE}`, metaParts.join(" / "));
+                this.setText(`#flowSavedCompactName-${PAGE_CODE}`, info.flowName);
+                this.setText(`#flowSavedCompactMeta-${PAGE_CODE}`, `${metaParts.join(" / ")} · ${this.flowList.length.toLocaleString()} saved`);
+                this.setText(`#flowSwitcherCount-${PAGE_CODE}`, `${this.flowList.length.toLocaleString()} items`);
+            },
+
+            renderFlowSwitcherList() {
+                const listEl = getContainerEl(`#flowSwitcherList-${PAGE_CODE}`);
+                if (!listEl) return;
+                if (!this.selectedProjectId || !this.selectedScenarioId) {
+                    listEl.innerHTML = `<div class="table-empty">Select project and scenario first.</div>`;
+                    this.updateFlowSwitcherSummary();
+                    return;
+                }
+                const rows = this.getFilteredFlowList();
+                if (!this.flowList.length) {
+                    listEl.innerHTML = `<div class="table-empty">No saved flows. Use the + button to start a draft.</div>`;
+                    this.updateFlowSwitcherSummary();
+                    return;
+                }
+                if (!rows.length) {
+                    listEl.innerHTML = `<div class="table-empty">No saved flows match the search.</div>`;
+                    this.updateFlowSwitcherSummary();
+                    return;
+                }
+                const currentFlowId = this.getValue(`#flowId-${PAGE_CODE}`);
+                listEl.innerHTML = rows.map((flow, index) => this.renderFlowSwitcherRow(flow, index, currentFlowId)).join("");
+                this.updateFlowSwitcherSummary();
+            },
+
+            renderFlowSwitcherRow(flow, index, currentFlowId) {
+                const flowId = flow.FLOW_ID ?? "";
+                const selectedClass = String(flowId) === String(currentFlowId) ? " is-selected" : "";
+                const running = this.activeFlowRuns.get(String(flowId));
+                const runningClass = running ? " is-running" : "";
+                const flowCode = flow.FLOW_GROUP || config.defaultFlowGroup || PAGE_CODE;
+                const flowName = flow.FLOW_NAME || "Untitled Flow";
+                const flowDesc = flow.FLOW_DESC || "";
+                const updatedAt = flow.UPDATED_AT || flow.CREATED_AT || "";
+                const updatedAtLabel = this.formatKstDateTime(updatedAt);
+                const mode = flow.EXECUTION_MODE || "DAG";
+                const useYn = flow.USE_YN || "Y";
+                return `
+                    <div class="flow-switcher-row${selectedClass}${runningClass}" data-flow-id="${this.escapeHtml(flowId)}">
+                        <button type="button" class="flow-switcher-row-main" onclick="${PAGE_CODE}.selectFlowFromSwitcher('${this.escapeJs(flowId)}')">
+                            <span class="data-job-order">${this.escapeHtml(index + 1)}</span>
+                            <span class="flow-switcher-row-text">
+                                <strong>${this.escapeHtml(flowName)}</strong>
+                                <small>#${this.escapeHtml(flowId)} / ${this.escapeHtml(flowCode)}${flowDesc ? ` / ${this.escapeHtml(flowDesc)}` : ""}</small>
+                                ${running ? `<em><i class="fas fa-spinner fa-spin"></i>${this.escapeHtml(running.label || "Running...")}</em>` : ""}
+                            </span>
+                            <span class="flow-switcher-row-meta">
+                                <small title="${this.escapeHtml(updatedAt)}">${this.escapeHtml(updatedAtLabel || "-")}</small>
+                                <em><span>${this.escapeHtml(useYn)}</span><span>${this.escapeHtml(mode)}</span></em>
+                            </span>
+                        </button>
+                        <span class="flow-switcher-row-actions">
+                            <button type="button" class="table-icon-btn" title="Select flow" onclick="${PAGE_CODE}.selectFlowFromSwitcher('${this.escapeJs(flowId)}')">
+                                <i class="fas fa-check"></i>
+                            </button>
+                            <button type="button" class="table-icon-btn" title="Copy flow as draft" onclick="${PAGE_CODE}.copySavedFlowFromSwitcher('${this.escapeJs(flowId)}', event)">
+                                <i class="far fa-copy"></i>
+                            </button>
+                        </span>
+                    </div>
+                `;
+            },
+
+            async selectFlowFromSwitcher(flowId) {
+                if (!/^\d+$/.test(String(flowId || ""))) return;
+                await this.loadFlowVersion(flowId, { refreshHistory: false });
+                this.closeFlowSwitcher();
+            },
+
+            async copySavedFlowFromSwitcher(flowId, event = null) {
+                await this.copySavedFlowFromList(flowId, event);
+                this.closeFlowSwitcher();
             },
 
             scrollSelectedFlowVersionIntoView() {
@@ -1004,6 +1255,7 @@
                 const displayFlowName = flowName || saved.FLOW_NAME || (flowId && flowId !== "NEW" ? `Flow #${flowId}` : "Draft Flow");
                 this.setText(`#flow-assets-scenario-title-${PAGE_CODE}`, scenarioName || "");
                 this.setText(`#flow-main-flow-title-${PAGE_CODE}`, displayFlowName);
+                this.updateFlowSwitcherSummary();
             },
 
             getCurrentFlowSummary() {
@@ -1099,6 +1351,9 @@
                 this.flowDocumentClickBound = (event) => {
                     if (!event.target.closest?.(`#flowCanvasMenu-${PAGE_CODE}`)) {
                         this.hideCanvasContextMenu();
+                    }
+                    if (!event.target.closest?.(`#flowSwitcher-${PAGE_CODE}`)) {
+                        this.closeFlowSwitcher();
                     }
                 };
 
@@ -1743,6 +1998,14 @@
             },
 
             handleFlowKeydown(event) {
+                if (event.key === "Escape" && document.getElementById(`flowNodeRunParamsLayer-${PAGE_CODE}`)?.hidden === false) {
+                    this.closeNodeRunParamsLayer();
+                    return;
+                }
+                if (event.key === "Escape" && this.isFlowSwitcherOpen()) {
+                    this.closeFlowSwitcher();
+                    return;
+                }
                 if (event.key === "Escape" && this.edgeDragState) {
                     this.finishEdgeDrag();
                     return;
@@ -2492,6 +2755,26 @@
 
             getNodeParamDefault(item) {
                 return item?.itemDefault ?? item?.ITEM_DEFAULT ?? item?.defaultValue ?? item?.DEFAULT_VALUE ?? "";
+            },
+
+            isInputNodeParamDefinition(item = {}) {
+                const name = item?.itemName || item?.ITEM_NAME || item?.name || item?.NAME || item?.key || item?.KEY || "";
+                if (!String(name || "").trim()) return false;
+                const directionText = String(
+                    item?.inOut
+                    || item?.IN_OUT
+                    || item?.direction
+                    || item?.DIRECTION
+                    || item?.parameterMode
+                    || item?.PARAMETER_MODE
+                    || item?.itemMode
+                    || item?.ITEM_MODE
+                    || item?.itemValue
+                    || item?.ITEM_VALUE
+                    || ""
+                ).trim().toUpperCase().replace(/\s+/g, " ");
+                if (!directionText) return true;
+                return !/^(OUT|OUTPUT|RETURN)\b/.test(directionText);
             },
 
             hasNodeParamValue(item) {
@@ -3679,10 +3962,6 @@
                                     <div class="flow-run-inline-message">
                                         <strong>Message</strong>
                                         <pre>${this.escapeHtml(message)}</pre>
-                                        <button type="button" class="table-btn" onclick="${PAGE_CODE}.copyRunHistoryMessage('${this.escapeHtml(flowRunId)}', event)">
-                                            <i class="far fa-copy"></i>
-                                            <span>Copy</span>
-                                        </button>
                                     </div>
                                 ` : ""}
                                 ${hasLoaded
@@ -3717,7 +3996,7 @@
                                 return `
                                 <tr class="${this.getRunStatusClass(row.STATUS)}">
                                     <td>${this.escapeHtml(row.RUN_LEVEL ?? "")}</td>
-                                    <td>${this.escapeHtml(row.NODE_NAME || row.NODE_KEY || "")}</td>
+                                    <td>${this.renderNodeRunNodeCell(row)}</td>
                                     <td>${this.renderNodeRunResultCell(resultInfo)}</td>
                                     <td>${this.escapeHtml(row.NODE_TYPE || "")}</td>
                                     <td><span class="flow-run-status-pill">${this.escapeHtml(row.STATUS || "")}</span></td>
@@ -3749,6 +4028,21 @@
                     </button>
                 `;
             },
+            renderNodeRunNodeCell(row) {
+                const flowNodeRunId = row?.FLOW_NODE_RUN_ID || "";
+                const nodeName = row?.NODE_NAME || row?.NODE_KEY || "";
+                const count = this.getNodeRunRuntimeParamEntries(row).length;
+                return `
+                    <span class="flow-node-run-node-cell">
+                        <strong title="${this.escapeHtml(nodeName)}">${this.escapeHtml(nodeName)}</strong>
+                        ${count > 0 ? `
+                            <button type="button" class="flow-node-run-param-link" onclick="${PAGE_CODE}.openNodeRunParamsLayer('${this.escapeJs(flowNodeRunId)}', event)">
+                                호출 옵션 파라미터 ${this.escapeHtml(count.toLocaleString())}개
+                            </button>
+                        ` : `<small>호출 옵션 파라미터 0개</small>`}
+                    </span>
+                `;
+            },
             renderNodeRunTimingCell(row) {
                 const elapsed = this.formatElapsedTime(row.STARTED_AT, row.FINISHED_AT, row.STATUS);
                 return `
@@ -3758,6 +4052,233 @@
                         <strong>${this.escapeHtml(elapsed || "-")}</strong>
                     </span>
                 `;
+            },
+            getNodeRunRuntimeParamEntries(row) {
+                const params = this.parseNodeJson(row?.RUNTIME_PARAM_JSON, {});
+                const payload = this.parseNodeJson(row?.NODE_PAYLOAD_JSON, {});
+                const jobParams = this.parseNodeJson(row?.JOB_PARAM_JSON, []);
+                const payloadParams = Array.isArray(payload.params) ? payload.params
+                    : (Array.isArray(payload.PARAMS) ? payload.PARAMS : []);
+                const definitionParams = Array.isArray(jobParams) && jobParams.length > payloadParams.length
+                    ? jobParams
+                    : payloadParams;
+                const paramMap = this.buildNodeParamMap(definitionParams);
+                const runtimeParamMap = this.buildRuntimeParamValueMap(params);
+                const resolveComment = (name, item = null) => {
+                    const directComment = item?.comment || item?.COMMENT || item?.itemDesc || item?.ITEM_DESC || "";
+                    if (directComment) return String(directComment);
+                    const matched = paramMap.get(this.normalizeBindParamKey(name));
+                    const matchedComment = this.getNodeParamComment(matched);
+                    if (matchedComment) return matchedComment;
+                    if (this.isSystemBindName(name)) return this.getSystemBindComment(name, null);
+                    return "";
+                };
+                if (definitionParams.length) {
+                    return definitionParams.filter((item) => this.isInputNodeParamDefinition(item)).map((item, index) => {
+                        const name = item?.itemName || item?.ITEM_NAME || item?.name || item?.NAME || item?.key || item?.KEY || `PARAM_${index + 1}`;
+                        const rawValue = this.getRuntimeParamValueByName(name, runtimeParamMap, this.getNodeParamDefault(item));
+                        return {
+                            name: String(name),
+                            comment: resolveComment(name, item),
+                            value: this.resolveRuntimeParamDisplayValue(rawValue, runtimeParamMap)
+                        };
+                    }).filter((entry) => !this.isInternalNodeRunRuntimeParamName(entry.name, true));
+                }
+                if (Array.isArray(params)) {
+                    return params.map((item, index) => {
+                        if (item && typeof item === "object" && !Array.isArray(item)) {
+                            const name = item.name || item.NAME || item.key || item.KEY || item.paramName || item.PARAM_NAME || `PARAM_${index + 1}`;
+                            const value = Object.prototype.hasOwnProperty.call(item, "value")
+                                ? item.value
+                                : (Object.prototype.hasOwnProperty.call(item, "VALUE") ? item.VALUE : item);
+                            return { name: String(name), comment: resolveComment(name, item), value };
+                        }
+                        const name = `PARAM_${index + 1}`;
+                        return { name, comment: resolveComment(name), value: item };
+                    }).filter((entry) => !this.isInternalNodeRunRuntimeParamName(entry.name));
+                }
+                if (params && typeof params === "object") {
+                    return Object.keys(params).sort((a, b) => a.localeCompare(b)).map((name) => ({
+                        name,
+                        comment: resolveComment(name),
+                        value: params[name]
+                    })).filter((entry) => !this.isInternalNodeRunRuntimeParamName(entry.name));
+                }
+                return [];
+            },
+            buildRuntimeParamValueMap(params = {}) {
+                const map = new Map();
+                if (Array.isArray(params)) {
+                    params.forEach((item, index) => {
+                        if (item && typeof item === "object" && !Array.isArray(item)) {
+                            const name = item.name || item.NAME || item.key || item.KEY || item.paramName || item.PARAM_NAME || `PARAM_${index + 1}`;
+                            const value = Object.prototype.hasOwnProperty.call(item, "value")
+                                ? item.value
+                                : (Object.prototype.hasOwnProperty.call(item, "VALUE") ? item.VALUE : item);
+                            map.set(this.normalizeBindParamKey(name), value);
+                        } else {
+                            map.set(this.normalizeBindParamKey(`PARAM_${index + 1}`), item);
+                        }
+                    });
+                    return map;
+                }
+                if (params && typeof params === "object") {
+                    Object.entries(params).forEach(([name, value]) => {
+                        map.set(this.normalizeBindParamKey(name), value);
+                    });
+                }
+                return map;
+            },
+            getRuntimeParamValueByName(name, runtimeParamMap, fallback = "") {
+                const key = this.normalizeBindParamKey(name);
+                return runtimeParamMap.has(key) ? runtimeParamMap.get(key) : fallback;
+            },
+            resolveRuntimeParamDisplayValue(value, runtimeParamMap) {
+                const text = String(value ?? "").trim();
+                const bindMatch = text.match(/^:([A-Za-z][A-Za-z0-9_$#]*)$/);
+                if (bindMatch) {
+                    const key = this.normalizeBindParamKey(bindMatch[1]);
+                    if (runtimeParamMap.has(key)) return runtimeParamMap.get(key);
+                }
+                const tokenMatch = text.match(/^\/\*\s*--\s*([A-Za-z][A-Za-z0-9_$#]*)\s*--\s*\*\/$/);
+                if (tokenMatch) {
+                    const key = this.normalizeBindParamKey(tokenMatch[1]);
+                    if (runtimeParamMap.has(key)) return runtimeParamMap.get(key);
+                }
+                return value;
+            },
+            isInternalNodeRunRuntimeParamName(name, isDeclaredInputParam = false) {
+                const rawName = String(name || "");
+                if (!rawName) return true;
+                if (isDeclaredInputParam) return false;
+                if (this.isSystemBindName(rawName) || rawName.toUpperCase().startsWith("INIT$")) return true;
+                const internalKeys = new Set([
+                    "inputtable",
+                    "inputowner",
+                    "targetowner",
+                    "targettable",
+                    "runsourcetype",
+                    "runid",
+                    "flowrunid"
+                ]);
+                return internalKeys.has(this.normalizeBindParamKey(rawName));
+            },
+            formatNodeRunParamValue(value) {
+                if (value === null || value === undefined) return "";
+                if (typeof value === "object") {
+                    try {
+                        return JSON.stringify(value, null, 2);
+                    } catch {
+                        return String(value);
+                    }
+                }
+                return String(value);
+            },
+            openNodeRunParamsLayer(flowNodeRunId, event = null) {
+                event?.preventDefault?.();
+                event?.stopPropagation?.();
+                const row = this.flowNodeRunResultRows?.find((item) => String(item.FLOW_NODE_RUN_ID || "") === String(flowNodeRunId || ""));
+                if (!row) return;
+                const entries = this.getNodeRunRuntimeParamEntries(row);
+                const nodeName = row.NODE_NAME || row.NODE_KEY || "Flow node";
+                let layer = document.getElementById(`flowNodeRunParamsLayer-${PAGE_CODE}`);
+                if (!layer) {
+                    layer = document.createElement("div");
+                    layer.id = `flowNodeRunParamsLayer-${PAGE_CODE}`;
+                    layer.className = "flow-node-run-param-layer";
+                    document.body.appendChild(layer);
+                }
+                const rowsHtml = entries.length
+                    ? entries.map((entry, index) => `
+                        <tr>
+                            <td class="grid-row-no">${index + 1}</td>
+                            <td title="${this.escapeHtml([entry.name, entry.comment].filter(Boolean).join(" - "))}">
+                                <span class="flow-node-run-param-key">
+                                    <strong>${this.escapeHtml(entry.name)}</strong>
+                                    ${entry.comment ? `<small>${this.escapeHtml(entry.comment)}</small>` : ""}
+                                </span>
+                            </td>
+                            <td><pre>${this.escapeHtml(this.formatNodeRunParamValue(entry.value))}</pre></td>
+                        </tr>
+                    `).join("")
+                    : `<tr><td colspan="3" class="table-empty">호출 옵션 파라미터가 없습니다.</td></tr>`;
+                layer.innerHTML = `
+                    <div class="flow-node-run-param-backdrop" onclick="${PAGE_CODE}.closeNodeRunParamsLayer()"></div>
+                    <section class="flow-node-run-param-dialog" role="dialog" aria-modal="true" aria-label="호출 옵션 파라미터">
+                        <div class="flow-node-run-param-dragbar" title="Drag to move">
+                            <span></span>
+                        </div>
+                        <header>
+                            <span>
+                                <strong>${this.escapeHtml(nodeName)}</strong>
+                                <small>호출 옵션 파라미터 ${this.escapeHtml(entries.length.toLocaleString())}개</small>
+                            </span>
+                            <button type="button" class="table-icon-btn" title="Close" onclick="${PAGE_CODE}.closeNodeRunParamsLayer()">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </header>
+                        <div class="flow-node-run-param-summary">
+                            <span><strong>FLOW_RUN_ID</strong>${this.escapeHtml(row.FLOW_RUN_ID || "-")}</span>
+                            <span><strong>FLOW_NODE_RUN_ID</strong>${this.escapeHtml(row.FLOW_NODE_RUN_ID || "-")}</span>
+                            <span><strong>NODE_TYPE</strong>${this.escapeHtml(row.NODE_TYPE || "-")}</span>
+                        </div>
+                        <div class="flow-node-run-param-body">
+                            <table class="table-grid flow-node-run-param-table">
+                                <thead>
+                                    <tr>
+                                        <th class="grid-row-no">No</th>
+                                        <th>Parameter</th>
+                                        <th>Actual Value</th>
+                                    </tr>
+                                </thead>
+                                <tbody>${rowsHtml}</tbody>
+                            </table>
+                        </div>
+                    </section>
+                `;
+                layer.hidden = false;
+                this.bindNodeRunParamsLayerDrag(layer);
+            },
+            closeNodeRunParamsLayer() {
+                const layer = document.getElementById(`flowNodeRunParamsLayer-${PAGE_CODE}`);
+                if (layer) layer.hidden = true;
+            },
+            bindNodeRunParamsLayerDrag(layer) {
+                const dialog = layer?.querySelector(".flow-node-run-param-dialog");
+                const handle = layer?.querySelector(".flow-node-run-param-dragbar");
+                if (!dialog || !handle) return;
+                let dragState = null;
+                const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+                const moveDialog = (clientX, clientY) => {
+                    if (!dragState) return;
+                    const width = dialog.offsetWidth || dragState.width;
+                    const height = dialog.offsetHeight || dragState.height;
+                    const margin = 12;
+                    const left = clamp(clientX - dragState.offsetX, margin, window.innerWidth - width - margin);
+                    const top = clamp(clientY - dragState.offsetY, margin, window.innerHeight - height - margin);
+                    dialog.style.left = `${left}px`;
+                    dialog.style.top = `${top}px`;
+                    dialog.style.transform = "none";
+                };
+                handle.onpointerdown = (event) => {
+                    event.preventDefault();
+                    const rect = dialog.getBoundingClientRect();
+                    dragState = {
+                        offsetX: event.clientX - rect.left,
+                        offsetY: event.clientY - rect.top,
+                        width: rect.width,
+                        height: rect.height
+                    };
+                    handle.setPointerCapture?.(event.pointerId);
+                    dialog.classList.add("is-dragging");
+                };
+                handle.onpointermove = (event) => moveDialog(event.clientX, event.clientY);
+                handle.onpointerup = (event) => {
+                    dragState = null;
+                    dialog.classList.remove("is-dragging");
+                    handle.releasePointerCapture?.(event.pointerId);
+                };
+                handle.onpointercancel = handle.onpointerup;
             },
             getNodeResultInfo(row) {
                 const payload = this.parseNodeJson(row?.NODE_PAYLOAD_JSON, {});
@@ -4058,9 +4579,8 @@
                 return `
                     <div class="flow-node-run-message">
                         <textarea readonly>${this.escapeHtml(message)}</textarea>
-                        <button type="button" class="table-btn" onclick="${PAGE_CODE}.copyNodeRunMessage('${this.escapeJs(flowNodeRunId)}', event)">
+                        <button type="button" class="table-icon-btn" title="Copy message" onclick="${PAGE_CODE}.copyNodeRunMessage('${this.escapeJs(flowNodeRunId)}', event)">
                             <i class="far fa-copy"></i>
-                            <span>Copy</span>
                         </button>
                     </div>
                 `;
