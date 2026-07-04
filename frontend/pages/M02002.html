@@ -144,16 +144,20 @@
             <section class="table-tab-panel" data-panel="sql">
                 <div class="sql-workbench">
                     <div class="sql-toolbar">
-                        <button type="button" class="table-btn" onclick="M02002.executeSql()">
+                        <button type="button" class="table-icon-btn sql-tool-icon-btn sql-run-btn" title="Run SQL (Ctrl+Enter)" aria-label="Run SQL" onclick="M02002.executeSql()">
                             <i class="fas fa-play"></i>
-                            <span>Run SQL(Ctrl+Enter)</span>
                         </button>
+                        <label class="table-limit-control data-sql-freeze-control" title="Freeze No plus this many data columns while scrolling horizontally">
+                            <span>Freeze</span>
+                            <input id="sqlFreezeColumns-M02002" type="number" min="0" max="50" value="0" onchange="M02002.applyGridFrozenColumns('sql')" oninput="M02002.applyGridFrozenColumns('sql')">
+                        </label>
                         <label class="table-limit-control">
                             <span>Rows</span>
                             <input id="sqlLimit-M02002" type="number" min="1" max="1000" value="100">
                         </label>
                     </div>
                     <textarea id="sqlEditor-M02002" class="sql-editor table-sql-editor" spellcheck="false" aria-label="SQL worksheet"></textarea>
+                    <div id="sqlMessage-M02002" class="table-empty" aria-live="polite" hidden></div>
                     <div id="sqlGrid-M02002" class="table-result-grid"></div>
                 </div>
             </section>

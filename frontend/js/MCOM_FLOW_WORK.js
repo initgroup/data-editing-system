@@ -38,6 +38,7 @@
             flowNodeRunResultRows: [],
             flowResultSqlGridData: { rows: [], columns: [] },
             flowResultSqlColumnWidths: {},
+            flowResultSqlFrozenColumns: 0,
             flowResultSqlResizeState: null,
             flowResultSqlResizeMoveBound: null,
             flowResultSqlResizeUpBound: null,
@@ -120,6 +121,7 @@
                 this.flowNodeRunResultRows = [];
                 this.flowResultSqlGridData = { rows: [], columns: [] };
                 this.flowResultSqlColumnWidths = {};
+                this.flowResultSqlFrozenColumns = 0;
                 this.flowResultSqlResizeState = null;
                 this.activeRunPlanFlowRunId = "";
                 this.activeRunPlanLoadedId = "";
@@ -4407,6 +4409,8 @@
                 this.setText(`#flowResultSqlHint-${PAGE_CODE}`, `${info.modeLabel}: ${info.owner}.${info.objectName}${targetHint}`);
                 this.flowResultSqlGridData = { rows: [], columns: [] };
                 this.flowResultSqlColumnWidths = {};
+                this.flowResultSqlFrozenColumns = 0;
+                this.setValue(`#flowResultSqlFreezeColumns-${PAGE_CODE}`, "0");
                 this.renderFlowResultSqlMessage("", "info");
                 const grid = getContainerEl(`#flowResultSqlGrid-${PAGE_CODE}`);
                 if (grid) grid.innerHTML = `<div class="table-empty">Run SQL to preview result data.</div>${this.renderListFooter(0)}`;
@@ -4622,6 +4626,7 @@
                         ${this.renderListFooter(0)}
                     `;
                     this.syncFlowResultSqlTableWidth();
+                    this.applyFlowResultSqlFrozenColumns();
                     return;
                 }
                 container.innerHTML = `
@@ -4644,6 +4649,7 @@
                     ${this.renderListFooter(dataRows.length)}
                 `;
                 this.syncFlowResultSqlTableWidth();
+                this.applyFlowResultSqlFrozenColumns();
             },
             renderFlowResultSqlColGroup(columns = []) {
                 const rowNoWidth = this.getFlowResultSqlColumnWidth("__ROW_NO__", 0);
@@ -4700,6 +4706,45 @@
                 table.style.width = `${tableWidth}px`;
                 table.style.minWidth = `${tableWidth}px`;
             },
+            getFlowResultSqlFreezeCount() {
+                const input = getContainerEl(`#flowResultSqlFreezeColumns-${PAGE_CODE}`);
+                const maxDataColumns = Math.max(0, (this.flowResultSqlGridData?.columns || []).length);
+                let dataColumnCount = Number.parseInt(input?.value ?? this.flowResultSqlFrozenColumns ?? 0, 10);
+                if (!Number.isFinite(dataColumnCount)) dataColumnCount = 0;
+                dataColumnCount = Math.max(0, Math.min(maxDataColumns, dataColumnCount));
+                this.flowResultSqlFrozenColumns = dataColumnCount;
+                if (input && input.value !== String(dataColumnCount)) input.value = String(dataColumnCount);
+                return dataColumnCount + 1;
+            },
+            applyFlowResultSqlFrozenColumns() {
+                const table = getContainerEl(`#flowResultSqlGrid-${PAGE_CODE} table.flow-result-sql-grid`);
+                if (!table) return;
+                table.querySelectorAll(".is-frozen-col, .is-frozen-edge").forEach((cell) => {
+                    cell.classList.remove("is-frozen-col", "is-frozen-edge");
+                    cell.style.left = "";
+                });
+                table.classList.remove("has-frozen-cols");
+                const headerRow = table.tHead?.rows?.[0] || table.rows?.[0];
+                if (!headerRow) return;
+                const headerCells = Array.from(headerRow.children || []);
+                const visibleFreezeCount = Math.min(this.getFlowResultSqlFreezeCount(), headerCells.length);
+                if (visibleFreezeCount <= 0) return;
+                table.classList.add("has-frozen-cols");
+                const offsets = [];
+                let left = 0;
+                for (let index = 0; index < visibleFreezeCount; index += 1) {
+                    offsets[index] = left;
+                    left += headerCells[index].getBoundingClientRect().width || headerCells[index].offsetWidth || 0;
+                }
+                Array.from(table.rows || []).forEach((row) => {
+                    Array.from(row.children || []).forEach((cell, index) => {
+                        if (index >= visibleFreezeCount) return;
+                        cell.classList.add("is-frozen-col");
+                        if (index === visibleFreezeCount - 1) cell.classList.add("is-frozen-edge");
+                        cell.style.left = `${offsets[index]}px`;
+                    });
+                });
+            },
             beginFlowResultSqlColumnResize(event, columnIndex, columnName) {
                 event.preventDefault();
                 event.stopPropagation();
@@ -4730,6 +4775,7 @@
                 const header = table?.querySelector?.(`thead th:nth-child(${state.columnIndex + 1})`);
                 if (header) header.style.width = `${width}px`;
                 this.syncFlowResultSqlTableWidth();
+                this.applyFlowResultSqlFrozenColumns();
             },
             endFlowResultSqlColumnResize() {
                 if (this.flowResultSqlResizeMoveBound) {

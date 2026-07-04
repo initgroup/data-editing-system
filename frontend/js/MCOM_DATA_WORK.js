@@ -231,6 +231,11 @@
         expandedRunHistoryKey: "",
         sqlTransactionId: "",
         gridData: {},
+        gridColumnWidths: {},
+        gridResizeState: null,
+        gridResizeMoveBound: null,
+        gridResizeUpBound: null,
+        sqlGridFrozenColumns: { sql: 0 },
         dataGridRows: [],
         dataGridColumns: [],
         dataGridDirtyCells: new Map(),
@@ -269,6 +274,7 @@
         },
 
         destroy() {
+            this.endSqlGridColumnResize?.();
             getContainerEl(`#sqlEditor-${PAGE_CODE}`)?.removeEventListener("keydown", this.sqlKeydownBound);
             getContainerEl(`#sqlEditor-${PAGE_CODE}`)?.removeEventListener("input", this.userSqlInputBound);
             getContainerEl(`#dataWhere-${PAGE_CODE}`)?.removeEventListener("input", this.dataWhereInputBound);
@@ -298,6 +304,9 @@
             this.systemDataWhereValue = "";
             this.sqlTransactionId = "";
             this.gridData = {};
+            this.gridColumnWidths = {};
+            this.gridResizeState = null;
+            this.sqlGridFrozenColumns = { sql: 0 };
             this.dataGridRows = [];
             this.dataGridColumns = [];
             this.dataGridDirtyCells = new Map();
@@ -4459,26 +4468,173 @@ END;`;
             element.hidden = !message;
         },
 
+        getSqlGridColumnKey(gridKey, column, index) {
+            return `${gridKey}:${index}:${String(column || "")}`;
+        },
+
+        getSqlGridColumnWidth(gridKey, column, index) {
+            const key = this.getSqlGridColumnKey(gridKey, column, index);
+            const savedWidth = Number(this.gridColumnWidths?.[key] || 0);
+            if (savedWidth > 0) return savedWidth;
+            const columnName = String(column || "").toUpperCase();
+            if (columnName === "__ROW_NO__") return 58;
+            if (/(MESSAGE|EXPRESSION|SQL|ERROR|FEATURE|REASON)/.test(columnName)) return 360;
+            if (/(CREATE|UPDATE|DATE|TIME|DT)$/.test(columnName)) return 170;
+            if (/(OWNER|TABLE|COLUMN|RULE|MODEL|RESULT)/.test(columnName)) return 190;
+            return Math.min(Math.max(String(column || "").length * 9 + 44, 120), 260);
+        },
+
+        renderSqlGridColGroup(gridKey, columns = []) {
+            return `
+                <colgroup>
+                    <col data-sql-grid-col-index="0" style="width: ${this.getSqlGridColumnWidth(gridKey, "__ROW_NO__", 0)}px;">
+                    ${columns.map((column, index) => {
+                        const colIndex = index + 1;
+                        return `<col data-sql-grid-col-index="${colIndex}" style="width: ${this.getSqlGridColumnWidth(gridKey, column, colIndex)}px;">`;
+                    }).join("")}
+                </colgroup>
+            `;
+        },
+
+        renderSqlGridHeader(gridKey, columns = []) {
+            const rowNoWidth = this.getSqlGridColumnWidth(gridKey, "__ROW_NO__", 0);
+            return `
+                <th class="grid-row-no data-sql-grid-resizable" title="No" style="width: ${rowNoWidth}px;">
+                    No
+                    <span class="data-sql-grid-col-resizer" title="Resize column" onmousedown="${PAGE_CODE}.beginSqlGridColumnResize(event, '${this.escapeJs(gridKey)}', 0, '__ROW_NO__')"></span>
+                </th>
+                ${columns.map((column, index) => {
+                    const colIndex = index + 1;
+                    const width = this.getSqlGridColumnWidth(gridKey, column, colIndex);
+                    return `
+                        <th class="data-sql-grid-resizable" title="${this.escapeHtml(column)}" style="width: ${width}px;">
+                            <span class="table-th-content">${this.escapeHtml(column)}</span>
+                            <span class="data-sql-grid-col-resizer" title="Resize column" onmousedown="${PAGE_CODE}.beginSqlGridColumnResize(event, '${this.escapeJs(gridKey)}', ${colIndex}, '${this.escapeJs(column)}')"></span>
+                        </th>
+                    `;
+                }).join("")}
+            `;
+        },
+
+        syncSqlGridTableWidth(gridKey = "sql") {
+            const table = getContainerEl(`[data-sql-grid-key="${this.escapeCssIdentifier(gridKey)}"]`);
+            if (!table) return;
+            const columns = Array.from(table.querySelectorAll("col"));
+            const width = columns.reduce((sum, column) => sum + Math.max(48, parseInt(column.style.width || "0", 10) || 0), 0);
+            const tableWidth = Math.max(width, table.parentElement?.clientWidth || 0);
+            table.style.width = `${tableWidth}px`;
+            table.style.minWidth = `${tableWidth}px`;
+        },
+
+        getSqlGridFreezeCount(gridKey = "sql") {
+            const input = gridKey === "sql" ? getContainerEl(`#sqlFreezeColumns-${PAGE_CODE}`) : null;
+            const columns = this.gridData?.[gridKey]?.columns || [];
+            const maxDataColumns = Math.max(0, columns.length);
+            let dataColumnCount = Number.parseInt(input?.value ?? this.sqlGridFrozenColumns?.[gridKey] ?? 0, 10);
+            if (!Number.isFinite(dataColumnCount)) dataColumnCount = 0;
+            dataColumnCount = Math.max(0, Math.min(maxDataColumns, dataColumnCount));
+            this.sqlGridFrozenColumns = { ...(this.sqlGridFrozenColumns || {}), [gridKey]: dataColumnCount };
+            if (input && input.value !== String(dataColumnCount)) input.value = String(dataColumnCount);
+            return dataColumnCount + 1;
+        },
+
+        applySqlGridFrozenColumns(gridKey = "sql") {
+            const table = getContainerEl(`[data-sql-grid-key="${this.escapeCssIdentifier(gridKey)}"]`);
+            if (!table) return;
+            table.querySelectorAll(".is-frozen-col, .is-frozen-edge").forEach((cell) => {
+                cell.classList.remove("is-frozen-col", "is-frozen-edge");
+                cell.style.left = "";
+            });
+            table.classList.remove("has-frozen-cols");
+            const headerRow = table.tHead?.rows?.[0] || table.rows?.[0];
+            if (!headerRow) return;
+            const headerCells = Array.from(headerRow.children || []);
+            const visibleFreezeCount = Math.min(this.getSqlGridFreezeCount(gridKey), headerCells.length);
+            if (visibleFreezeCount <= 0) return;
+            table.classList.add("has-frozen-cols");
+            const offsets = [];
+            let left = 0;
+            for (let index = 0; index < visibleFreezeCount; index += 1) {
+                offsets[index] = left;
+                left += headerCells[index].getBoundingClientRect().width || headerCells[index].offsetWidth || 0;
+            }
+            Array.from(table.rows || []).forEach((row) => {
+                Array.from(row.children || []).forEach((cell, index) => {
+                    if (index >= visibleFreezeCount) return;
+                    cell.classList.add("is-frozen-col");
+                    if (index === visibleFreezeCount - 1) cell.classList.add("is-frozen-edge");
+                    cell.style.left = `${offsets[index]}px`;
+                });
+            });
+        },
+
+        beginSqlGridColumnResize(event, gridKey, columnIndex, columnName) {
+            event.preventDefault();
+            event.stopPropagation();
+            const header = event.currentTarget?.closest?.("th");
+            if (!header) return;
+            const key = this.getSqlGridColumnKey(gridKey, columnName, columnIndex);
+            const startWidth = header.getBoundingClientRect().width || this.getSqlGridColumnWidth(gridKey, columnName, columnIndex);
+            this.gridResizeState = {
+                gridKey,
+                columnIndex,
+                key,
+                startX: event.clientX,
+                startWidth
+            };
+            this.gridResizeMoveBound = this.gridResizeMoveBound || this.handleSqlGridColumnResizeMove.bind(this);
+            this.gridResizeUpBound = this.gridResizeUpBound || this.endSqlGridColumnResize.bind(this);
+            document.addEventListener("mousemove", this.gridResizeMoveBound);
+            document.addEventListener("mouseup", this.gridResizeUpBound, { once: true });
+            document.body.classList.add("is-column-resizing");
+        },
+
+        handleSqlGridColumnResizeMove(event) {
+            const state = this.gridResizeState;
+            if (!state) return;
+            const width = Math.max(58, Math.min(900, Math.round(state.startWidth + event.clientX - state.startX)));
+            this.gridColumnWidths[state.key] = width;
+            const table = getContainerEl(`[data-sql-grid-key="${this.escapeCssIdentifier(state.gridKey)}"]`);
+            const col = table?.querySelector?.(`col[data-sql-grid-col-index="${state.columnIndex}"]`);
+            if (col) col.style.width = `${width}px`;
+            const header = table?.querySelector?.(`thead th:nth-child(${state.columnIndex + 1})`);
+            if (header) header.style.width = `${width}px`;
+            this.syncSqlGridTableWidth(state.gridKey);
+            this.applySqlGridFrozenColumns(state.gridKey);
+        },
+
+        endSqlGridColumnResize() {
+            if (this.gridResizeMoveBound) document.removeEventListener("mousemove", this.gridResizeMoveBound);
+            if (this.gridResizeUpBound) document.removeEventListener("mouseup", this.gridResizeUpBound);
+            document.body.classList.remove("is-column-resizing");
+            this.gridResizeState = null;
+        },
+
         renderGrid(selector, rows, columnNames = []) {
             const container = getContainerEl(selector);
             if (!container) return;
+            const gridKey = selector.includes("sqlGrid") ? "sql" : (selector.includes("runHistoryGrid") ? "history" : "result");
             const columns = Array.isArray(columnNames) && columnNames.length
                 ? columnNames
                 : Object.keys(rows?.[0] || {});
+            const colGroupHtml = this.renderSqlGridColGroup(gridKey, columns);
+            const headerHtml = this.renderSqlGridHeader(gridKey, columns);
             if (!Array.isArray(rows) || !rows.length) {
                 if (columns.length) {
                     container.innerHTML = `
-                        <table class="table-grid">
+                        <table class="table-grid data-sql-result-table" data-sql-grid-key="${this.escapeHtml(gridKey)}">
+                            ${colGroupHtml}
                             <thead>
                                 <tr>
-                                    <th class="grid-row-no">No</th>
-                                    ${columns.map((column) => `<th title="${this.escapeHtml(column)}">${this.escapeHtml(column)}</th>`).join("")}
+                                    ${headerHtml}
                                 </tr>
                             </thead>
                             <tbody></tbody>
                         </table>
                         ${this.renderListFooter(0)}
                     `;
+                    this.syncSqlGridTableWidth(gridKey);
+                    this.applySqlGridFrozenColumns(gridKey);
                     return;
                 }
                 container.innerHTML = `<div class="table-empty">No data.</div>${this.renderListFooter(0)}`;
@@ -4486,11 +4642,11 @@ END;`;
             }
 
             container.innerHTML = `
-                <table class="table-grid">
+                <table class="table-grid data-sql-result-table" data-sql-grid-key="${this.escapeHtml(gridKey)}">
+                    ${colGroupHtml}
                     <thead>
                         <tr>
-                            <th class="grid-row-no">No</th>
-                            ${columns.map((column) => `<th title="${this.escapeHtml(column)}">${this.escapeHtml(column)}</th>`).join("")}
+                            ${headerHtml}
                         </tr>
                     </thead>
                     <tbody>
@@ -4504,6 +4660,8 @@ END;`;
                 </table>
                 ${this.renderListFooter(rows.length)}
             `;
+            this.syncSqlGridTableWidth(gridKey);
+            this.applySqlGridFrozenColumns(gridKey);
         }
     };;
             window[PAGE_CODE] = page;

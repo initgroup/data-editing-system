@@ -122,6 +122,8 @@
         predictedTypeViewMode: "TYPE",
         ruleSummaryFilters: { conditionCount: "ALL", confidenceScope: "ALL", resultColumn: "ALL", conditionColumn: "ALL", resultHasValueYn: "ALL", page: 1, pageSize: 20, resultColumnPage: 1 },
         violationRuleFilters: { ruleId: "", conditionCount: "ALL", confidenceScope: "NON_PERFECT", resultScope: "HIT", page: 1, pageSize: 20 },
+        symbolicRuleFilters: { method: "ALL", targetColumn: "ALL" },
+        symbolicViolationFilters: { method: "ALL", targetColumn: "ALL", resultScope: "ALL" },
         violationSql: { sql: "", page: 1, pageSize: 50, freezeColumns: 2, total: 0, columns: [], rows: [], title: "", columnWidths: {} },
         currentModelDetail: null,
         lastResultTableJson: null,
@@ -176,6 +178,8 @@
             this.predictedTypeFilter = "ALL";
             this.predictedTypeViewMode = "TYPE";
             this.violationRuleFilters = { ruleId: "", conditionCount: "ALL", confidenceScope: "NON_PERFECT", resultScope: "HIT", page: 1, pageSize: 20 };
+            this.symbolicRuleFilters = { method: "ALL", targetColumn: "ALL" };
+            this.symbolicViolationFilters = { method: "ALL", targetColumn: "ALL", resultScope: "ALL" };
             this.closeViolationSqlPopup();
             this.closeSymbolicRulePopup();
             this.pendingRunId = "";
@@ -215,6 +219,8 @@
                 predictedTypeViewMode: this.predictedTypeViewMode,
                 ruleSummaryFilters: this.cloneCacheValue(this.ruleSummaryFilters),
                 violationRuleFilters: this.cloneCacheValue(this.violationRuleFilters),
+                symbolicRuleFilters: this.cloneCacheValue(this.symbolicRuleFilters),
+                symbolicViolationFilters: this.cloneCacheValue(this.symbolicViolationFilters),
                 violationSql: this.cloneCacheValue(this.violationSql),
                 currentModelDetail: this.cloneCacheValue(this.currentModelDetail),
                 lastResultTableJson: this.cloneCacheValue(this.lastResultTableJson),
@@ -256,6 +262,17 @@
                 page: 1,
                 pageSize: 20,
                 ...(this.cloneCacheValue(cached.violationRuleFilters) || {})
+            };
+            this.symbolicRuleFilters = {
+                method: "ALL",
+                targetColumn: "ALL",
+                ...(this.cloneCacheValue(cached.symbolicRuleFilters) || {})
+            };
+            this.symbolicViolationFilters = {
+                method: "ALL",
+                targetColumn: "ALL",
+                resultScope: "ALL",
+                ...(this.cloneCacheValue(cached.symbolicViolationFilters) || {})
             };
             this.violationSql = this.cloneCacheValue(cached.violationSql) || { sql: "", page: 1, pageSize: 50, total: 0, columns: [], rows: [], title: "" };
             this.currentModelDetail = this.cloneCacheValue(cached.currentModelDetail);
@@ -769,6 +786,8 @@
             this.predictedTypeFilter = "ALL";
             this.predictedTypeViewMode = "TYPE";
             this.ruleSummaryFilters = { conditionCount: "ALL", confidenceScope: "ALL", resultColumn: "ALL", conditionColumn: "ALL", resultHasValueYn: "ALL", page: 1, pageSize: 20, resultColumnPage: 1 };
+            this.symbolicRuleFilters = { method: "ALL", targetColumn: "ALL" };
+            this.symbolicViolationFilters = { method: "ALL", targetColumn: "ALL", resultScope: "ALL" };
             if (!options.preserveViolationRuleFilter) {
                 this.violationRuleFilters = { ruleId: "", conditionCount: "ALL", confidenceScope: "NON_PERFECT", resultScope: "HIT", page: 1, pageSize: 20 };
             }
@@ -876,12 +895,28 @@
                 if (ruleId) params.set("violationRuleId", ruleId);
                 if (filters.conditionCount !== "ALL") params.set("violationConditionCount", String(filters.conditionCount));
                 params.set("violationConfidenceScope", filters.confidenceScope === "ALL" ? "ALL" : "NON_PERFECT");
-                params.set("violationResultScope", ["CANDIDATE", "MISS"].includes(filters.resultScope) ? filters.resultScope : "HIT");
+                params.set("violationResultScope", ["CANDIDATE", "MISS", "MAX_RULES"].includes(filters.resultScope) ? filters.resultScope : "HIT");
                 params.set("violationMinConfidence", String(criteria.minConfidence));
                 params.set("violationMinLift", String(criteria.minLift));
                 params.set("violationMaxRules", String(criteria.maxRules));
                 params.set("violationRulePage", String(Math.max(1, Number(filters.page || 1))));
                 params.set("violationRulePageSize", String(this.normalizeRuleCardPageSize(filters.pageSize || 20)));
+            }
+            if (this.isSymbolicRuleNode(node)) {
+                const filters = this.symbolicRuleFilters || {};
+                const method = String(filters.method || "ALL").trim();
+                const targetColumn = String(filters.targetColumn || "ALL").trim();
+                if (method && method !== "ALL") params.set("symbolicMethod", method);
+                if (targetColumn && targetColumn !== "ALL") params.set("symbolicTargetColumn", targetColumn);
+            }
+            if (this.isSymbolicViolationNode(node)) {
+                const filters = this.symbolicViolationFilters || {};
+                const method = String(filters.method || "ALL").trim();
+                const targetColumn = String(filters.targetColumn || "ALL").trim();
+                const resultScope = String(filters.resultScope || "ALL").trim().toUpperCase();
+                if (method && method !== "ALL") params.set("symbolicViolationMethod", method);
+                if (targetColumn && targetColumn !== "ALL") params.set("symbolicViolationTargetColumn", targetColumn);
+                if (["HIT", "CLEAN"].includes(resultScope)) params.set("symbolicViolationResultScope", resultScope);
             }
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${API_PAGE_CODE}/result-table?${params.toString()}`, { method: "GET", showLoading: false });
@@ -1713,6 +1748,14 @@
             await this.copyTextValue(text, "Run message copied.");
         },
 
+        async copyCurrentViolationSql(event) {
+            event?.preventDefault?.();
+            event?.stopPropagation?.();
+            const editor = document.getElementById(`${PAGE_ID_PREFIX}ViolationSqlEditor`);
+            const text = editor ? editor.value : String(this.violationSql?.sql || "");
+            await this.copyTextValue(text, "SQL copied.");
+        },
+
         async copyTextValue(text, successMessage = "Copied.") {
             text = String(text || "").trim();
             if (!text) return;
@@ -1989,6 +2032,8 @@
             const resultScope = summary.resultScope || this.violationRuleFilters?.resultScope || "HIT";
             const resultScopeMessage = resultScope === "CANDIDATE"
                 ? "선택 후보 규칙 전체를 표시합니다."
+                : resultScope === "MAX_RULES"
+                    ? "전체 후보 기준 탐지 순위가 max rules 범위 밖인 규칙을 표시합니다."
                 : resultScope === "MISS"
                     ? "선택 후보 중 실제 위반 Row가 없는 규칙을 표시합니다."
                     : "실제 위반 Row가 발생한 규칙을 표시합니다.";
@@ -2024,6 +2069,11 @@
                                 <small>위반 없음</small>
                                 <b>${this.formatNumber(noViolationRuleCount)}</b>
                                 <em>위반 없음 표시</em>
+                            </button>
+                            <button type="button" class="is-muted ${resultScope === "MAX_RULES" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectViolationResultScope('MAX_RULES')">
+                                <small>max rules 제외</small>
+                                <b>${this.formatNumber(maxRulesCutoffCount)}</b>
+                                <em>100위 밖 표시</em>
                             </button>
                             <button type="button" disabled>
                                 <small>위반 Row / 건수</small>
@@ -2114,6 +2164,9 @@
             if (resultScope === "HIT") {
                 return "실제 위반 Row가 발생한 규칙이 없습니다. 후보 전체나 max rules 제외 건수도 함께 확인하세요.";
             }
+            if (resultScope === "MAX_RULES") {
+                return "max rules 범위 밖으로 제외된 후보 규칙이 없습니다.";
+            }
             if (resultScope === "MISS") {
                 return "실제 탐지 대상 중 위반 Row가 없는 규칙이 없습니다.";
             }
@@ -2191,13 +2244,48 @@
         },
 
         async selectViolationResultScope(resultScope = "HIT") {
-            const normalizedScope = ["CANDIDATE", "MISS"].includes(resultScope) ? resultScope : "HIT";
+            const normalizedScope = ["CANDIDATE", "MISS", "MAX_RULES"].includes(resultScope) ? resultScope : "HIT";
             this.violationRuleFilters = {
                 ...(this.violationRuleFilters || {}),
                 resultScope: normalizedScope,
                 page: 1,
                 pageSize: this.normalizeRuleCardPageSize(this.violationRuleFilters?.pageSize || 20)
             };
+            await this.loadResultTable(1);
+        },
+
+        async selectSymbolicRuleFilter(kind, value = "ALL") {
+            const normalizedKind = String(kind || "").trim();
+            const normalizedValue = String(value || "ALL").trim() || "ALL";
+            this.symbolicRuleFilters = {
+                ...(this.symbolicRuleFilters || { method: "ALL", targetColumn: "ALL" }),
+                [normalizedKind === "targetColumn" ? "targetColumn" : "method"]: normalizedValue
+            };
+            await this.loadResultTable(1);
+        },
+
+        async resetSymbolicRuleFilters() {
+            this.symbolicRuleFilters = { method: "ALL", targetColumn: "ALL" };
+            await this.loadResultTable(1);
+        },
+
+        async selectSymbolicViolationFilter(kind, value = "ALL") {
+            const normalizedKind = String(kind || "").trim();
+            let normalizedValue = String(value || "ALL").trim() || "ALL";
+            if (normalizedKind === "resultScope") {
+                normalizedValue = ["ALL", "HIT", "CLEAN"].includes(normalizedValue.toUpperCase())
+                    ? normalizedValue.toUpperCase()
+                    : "ALL";
+            }
+            this.symbolicViolationFilters = {
+                ...(this.symbolicViolationFilters || { method: "ALL", targetColumn: "ALL", resultScope: "ALL" }),
+                [normalizedKind === "targetColumn" ? "targetColumn" : (normalizedKind === "resultScope" ? "resultScope" : "method")]: normalizedValue
+            };
+            await this.loadResultTable(1);
+        },
+
+        async resetSymbolicViolationFilters() {
+            this.symbolicViolationFilters = { method: "ALL", targetColumn: "ALL", resultScope: "ALL" };
             await this.loadResultTable(1);
         },
 
@@ -2229,11 +2317,16 @@
             if (!sql) return;
             const ruleColumns = this.getViolationRuleColumns(kind, value);
             const ruleDetail = this.getViolationRuleDetail(kind, value);
+            const supportsRealtime = Boolean(this.isViolationNode(this.selectedNode) && kind === "rule" && String(value || "").trim());
             const label = kind === "column"
                 ? `결과 컬럼 ${value}`
                 : (kind === "rule" ? `Rule ${value}` : "전체 위반");
             this.violationSql = {
                 sql,
+                mode: "SAVED",
+                kind,
+                value,
+                supportsRealtime,
                 page: 1,
                 pageSize: 50,
                 freezeColumns: 2,
@@ -2338,21 +2431,21 @@
             if (kind === "column" && value) filters.push(`V.RESULT_COLUMN = ${this.sqlLiteral(value)}`);
             if (kind === "rule" && value) filters.push(`V.RULE_ID = ${this.sqlLiteral(value)}`);
             return [
-                "SELECT",
-                "       V.VIOLATION_ID AS V_VIOLATION_ID,",
-                "       V.RULE_ID AS V_RULE_ID,",
-                "       V.RESULT_COLUMN AS V_RESULT_COLUMN,",
-                "       V.EXPECTED_VALUE AS V_EXPECTED_VALUE,",
-                "       V.ACTUAL_VALUE AS V_ACTUAL_VALUE,",
-                "       V.VIOLATION_SCORE AS V_VIOLATION_SCORE,",
-                "       V.RULE_CONFIDENCE AS V_RULE_CONFIDENCE,",
-                "       V.RULE_LIFT AS V_RULE_LIFT,",
-                "       V.CASE_ID AS V_CASE_ID,",
-                "       T.*",
+                "SELECT V.VIOLATION_ID AS V_VIOLATION_ID",
+                "     , V.RULE_ID AS V_RULE_ID",
+                "     , V.RESULT_COLUMN AS V_RESULT_COLUMN",
+                "     , V.EXPECTED_VALUE AS V_EXPECTED_VALUE",
+                "     , V.ACTUAL_VALUE AS V_ACTUAL_VALUE",
+                "     , V.VIOLATION_SCORE AS V_VIOLATION_SCORE",
+                "     , V.RULE_CONFIDENCE AS V_RULE_CONFIDENCE",
+                "     , V.RULE_LIFT AS V_RULE_LIFT",
+                "     , V.CASE_ID AS V_CASE_ID",
+                "     , T.*",
                 `  FROM ${this.quoteSqlName(resultOwner)}.${this.quoteSqlName(resultTable)} V`,
                 `  JOIN ${this.quoteSqlName(targetOwner)}.${this.quoteSqlName(targetTable)} T`,
                 "    ON ROWIDTOCHAR(T.ROWID) = V.CASE_ROWID",
-                ` WHERE ${filters.join("\n   AND ")}`,
+                " WHERE 1=1",
+                `${filters.map((filter) => `   AND ${filter}`).join("\n")}`,
                 " ORDER BY V.VIOLATION_SCORE DESC NULLS LAST, V.RULE_CONFIDENCE DESC NULLS LAST, V.VIOLATION_ID"
             ].join("\n");
         },
@@ -2379,25 +2472,213 @@
             if (kind === "column" && value) filters.push(`V.TARGET_COLUMN = ${this.sqlLiteral(value)}`);
             if (kind === "rule" && value) filters.push(`V.RULE_ID = ${this.sqlLiteral(value)}`);
             return [
-                "SELECT",
-                "       V.VIOLATION_ID AS V_VIOLATION_ID,",
-                "       V.RULE_ID AS V_RULE_ID,",
-                "       V.TARGET_COLUMN AS V_TARGET_COLUMN,",
-                "       V.PREDICTED_VALUE AS V_PREDICTED_VALUE,",
-                "       V.ACTUAL_VALUE AS V_ACTUAL_VALUE,",
-                "       V.LOWER_BOUND AS V_LOWER_BOUND,",
-                "       V.UPPER_BOUND AS V_UPPER_BOUND,",
-                "       V.ABS_ERROR AS V_ABS_ERROR,",
-                "       V.ERROR_PCT AS V_ERROR_PCT,",
-                "       V.VIOLATION_SCORE AS V_VIOLATION_SCORE,",
-                "       V.CASE_ID AS V_CASE_ID,",
-                "       T.*",
+                "SELECT V.VIOLATION_ID AS V_VIOLATION_ID",
+                "     , V.RULE_ID AS V_RULE_ID",
+                "     , V.TARGET_COLUMN AS V_TARGET_COLUMN",
+                "     , V.PREDICTED_VALUE AS V_PREDICTED_VALUE",
+                "     , V.ACTUAL_VALUE AS V_ACTUAL_VALUE",
+                "     , V.LOWER_BOUND AS V_LOWER_BOUND",
+                "     , V.UPPER_BOUND AS V_UPPER_BOUND",
+                "     , V.ABS_ERROR AS V_ABS_ERROR",
+                "     , V.ERROR_PCT AS V_ERROR_PCT",
+                "     , V.VIOLATION_SCORE AS V_VIOLATION_SCORE",
+                "     , V.CASE_ID AS V_CASE_ID",
+                "     , T.*",
                 `  FROM ${this.quoteSqlName(resultOwner)}.${this.quoteSqlName(resultTable)} V`,
                 `  JOIN ${this.quoteSqlName(targetOwner)}.${this.quoteSqlName(targetTable)} T`,
                 "    ON ROWIDTOCHAR(T.ROWID) = V.CASE_ROWID",
-                ` WHERE ${filters.join("\n   AND ")}`,
+                " WHERE 1=1",
+                `${filters.map((filter) => `   AND ${filter}`).join("\n")}`,
                 " ORDER BY V.VIOLATION_SCORE DESC NULLS LAST, V.ERROR_PCT DESC NULLS LAST, V.ABS_ERROR DESC NULLS LAST, V.VIOLATION_ID"
             ].join("\n");
+        },
+
+        getNodeParamValue(node, keys = [], fallback = "") {
+            const payload = this.normalizeObject(node?.PAYLOAD);
+            const params = this.normalizeObject(node?.RUNTIME_PARAMS);
+            for (const key of keys) {
+                const value = node?.[key] ?? params[key] ?? payload[key];
+                if (value !== undefined && value !== null && String(value).trim() !== "") return value;
+            }
+            return fallback;
+        },
+
+        sqlNumberLiteral(value, fallback = null) {
+            const number = Number(value);
+            if (Number.isFinite(number)) return String(number);
+            const fallbackNumber = Number(fallback);
+            return Number.isFinite(fallbackNumber) ? String(fallbackNumber) : "NULL";
+        },
+
+        createRealtimeViolationSqlLookup(kind = "all", value = "") {
+            if (kind !== "rule" || !String(value || "").trim()) {
+                alert("실시간 조회는 RULE ID 기준 조회에서 사용할 수 있습니다.");
+                return "";
+            }
+            if (this.isSymbolicViolationNode(this.selectedNode)) {
+                return this.createSymbolicRealtimeViolationSqlLookup(value);
+            }
+            if (this.isRuleViolationNode(this.selectedNode)) {
+                return this.createCategoricalRealtimeViolationSqlLookup(value);
+            }
+            alert("실시간 위반 조회를 지원하지 않는 노드입니다.");
+            return "";
+        },
+
+        createCategoricalRealtimeViolationSqlLookup(ruleId = "") {
+            const node = this.selectedNode;
+            const resultOwner = this.normalizeIdentifierParam(node?.RESULT_OWNER) || this.normalizeIdentifierParam(node?.TARGET_OWNER);
+            const targetOwner = this.normalizeIdentifierParam(node?.TARGET_OWNER);
+            const targetTable = this.normalizeIdentifierParam(node?.TARGET_TABLE);
+            const ruleModelName = this.getSelectedNodeRuleModelName(node);
+            const caseIdColumn = this.normalizeIdentifierParam(this.getNodeParamValue(node, [
+                "P_CASE_ID_COLUMN_NAME",
+                "pCaseIdColumnName",
+                "caseIdColumnName"
+            ], "FILE_ROW_NO")) || "FILE_ROW_NO";
+            const flowRunId = Number(this.selectedRun?.FLOW_RUN_ID || 0);
+            if (!resultOwner || !targetOwner || !targetTable || !ruleModelName) {
+                alert("실시간 조회에 필요한 Rule Model 또는 Target Table 정보가 부족합니다.");
+                return "";
+            }
+            return [
+                "SELECT INIT$_FN_RULE_VIOLATION_SQL(",
+                `           p_rule_owner_name     => ${this.sqlLiteral(resultOwner)},`,
+                `           p_rule_model_name     => ${this.sqlLiteral(ruleModelName)},`,
+                `           p_rule_id             => ${this.sqlLiteral(ruleId)},`,
+                `           p_target_owner        => ${this.sqlLiteral(targetOwner)},`,
+                `           p_target_table        => ${this.sqlLiteral(targetTable)},`,
+                `           p_case_id_column_name => ${this.sqlLiteral(caseIdColumn)},`,
+                "           p_run_source_type     => 'FLOW_WORK',",
+                `           p_run_id              => ${flowRunId > 0 ? flowRunId : 0}`,
+                "       ) AS LIVE_SQL",
+                "  FROM DUAL"
+            ].join("\n");
+        },
+
+        createSymbolicRealtimeViolationSqlLookup(ruleId = "") {
+            const node = this.selectedNode;
+            const targetOwner = this.normalizeIdentifierParam(node?.TARGET_OWNER);
+            const targetTable = this.normalizeIdentifierParam(node?.TARGET_TABLE);
+            const ruleOwner = this.normalizeIdentifierParam(this.getNodeParamValue(node, [
+                "P_RULE_OWNER_NAME",
+                "pRuleOwnerName",
+                "ruleOwnerName"
+            ], "")) || targetOwner || this.normalizeIdentifierParam(node?.RESULT_OWNER);
+            const ruleTable = this.normalizeIdentifierParam(this.getNodeParamValue(node, [
+                "P_RULE_TABLE_NAME",
+                "pRuleTableName",
+                "ruleTableName",
+                "INIT$PreResultTable"
+            ], "INIT$_TB_SYMBOLIC_RULE")) || "INIT$_TB_SYMBOLIC_RULE";
+            const caseIdColumn = this.normalizeIdentifierParam(this.getNodeParamValue(node, [
+                "P_CASE_ID_COLUMN_NAME",
+                "pCaseIdColumnName",
+                "caseIdColumnName"
+            ], "FILE_ROW_NO")) || "FILE_ROW_NO";
+            const ruleDetail = this.getViolationRuleDetail("rule", ruleId) || {};
+            const errorThreshold = this.readNumericParam([
+                this.getNodeParamValue(node, ["P_ERROR_PCT_THRESHOLD", "pErrorPctThreshold", "errorPctThreshold"], ""),
+                ruleDetail.TOLERANCE_PCT
+            ], 0.05);
+            const absErrorRaw = this.getNodeParamValue(node, ["P_ABS_ERROR_THRESHOLD", "pAbsErrorThreshold", "absErrorThreshold"], "");
+            const absError = String(absErrorRaw ?? "").trim() === "" ? null : Number(absErrorRaw);
+            const maxExpressionLength = this.readNumericParam([
+                this.getNodeParamValue(node, ["P_MAX_EXPRESSION_LENGTH", "pMaxExpressionLength", "maxExpressionLength"], "")
+            ], 8000);
+            const flowRunId = Number(this.selectedRun?.FLOW_RUN_ID || 0);
+            if (!ruleOwner || !targetOwner || !targetTable || !ruleTable) {
+                alert("실시간 조회에 필요한 Symbolic Rule 또는 Target Table 정보가 부족합니다.");
+                return "";
+            }
+            return [
+                "SELECT INIT$_FN_SYMBOLIC_RULE_VIOLATION_SQL(",
+                `           p_rule_owner_name       => ${this.sqlLiteral(ruleOwner)},`,
+                `           p_rule_table_name       => ${this.sqlLiteral(ruleTable)},`,
+                `           p_rule_id               => ${this.sqlLiteral(ruleId)},`,
+                `           p_target_owner          => ${this.sqlLiteral(targetOwner)},`,
+                `           p_target_table          => ${this.sqlLiteral(targetTable)},`,
+                `           p_case_id_column_name   => ${this.sqlLiteral(caseIdColumn)},`,
+                `           p_error_pct_threshold   => ${this.sqlNumberLiteral(errorThreshold, 0.05)},`,
+                `           p_abs_error_threshold   => ${Number.isFinite(absError) ? this.sqlNumberLiteral(absError) : "NULL"},`,
+                "           p_run_source_type       => 'FLOW_WORK',",
+                `           p_run_id                => ${flowRunId > 0 ? flowRunId : 0},`,
+                `           p_max_expression_length => ${this.sqlNumberLiteral(maxExpressionLength, 8000)}`,
+                "       ) AS LIVE_SQL",
+                "  FROM DUAL"
+            ].join("\n");
+        },
+
+        async changeViolationSqlMode(mode = "SAVED") {
+            const nextMode = String(mode || "").toUpperCase() === "LIVE" ? "LIVE" : "SAVED";
+            const state = this.violationSql || {};
+            if (!state.sql || state.mode === nextMode) return;
+            if (nextMode === "SAVED") {
+                const sql = this.createViolationSql(state.kind || "all", state.value || "");
+                if (!sql) return;
+                this.violationSql = {
+                    ...state,
+                    mode: "SAVED",
+                    sql,
+                    page: 1,
+                    total: 0,
+                    columns: [],
+                    rows: []
+                };
+                this.renderViolationSqlPopup();
+                window.setTimeout(() => this.executeViolationSql(1), 0);
+                return;
+            }
+            if (!state.supportsRealtime) {
+                alert("실시간 조회는 RULE ID 기준 조회에서 사용할 수 있습니다.");
+                return;
+            }
+            const lookupSql = this.createRealtimeViolationSqlLookup(state.kind || "all", state.value || "");
+            if (!lookupSql) return;
+            const message = document.getElementById(`${PAGE_ID_PREFIX}ViolationSqlMessage`);
+            if (message) message.textContent = "실시간 위반 조회 SQL 생성 중...";
+            try {
+                const json = await CommonUtils.request(`${API_BASE_URL}/${API_PAGE_CODE}/sql`, {
+                    method: "POST",
+                    body: {
+                        sql: lookupSql,
+                        page: 1,
+                        pageSize: 1
+                    },
+                    showLoading: false
+                });
+                const row = (json.data || [])[0] || {};
+                const liveSql = row.LIVE_SQL || row.live_sql || "";
+                if (!String(liveSql || "").trim()) {
+                    throw new Error("실시간 조회 SQL을 생성하지 못했습니다.");
+                }
+                this.violationSql = {
+                    ...state,
+                    mode: "LIVE",
+                    sql: String(liveSql),
+                    page: 1,
+                    total: 0,
+                    columns: [],
+                    rows: []
+                };
+                this.renderViolationSqlPopup();
+                window.setTimeout(() => this.executeViolationSql(1), 0);
+            } catch (error) {
+                if (message) message.textContent = error.message || "실시간 조회 SQL 생성에 실패했습니다.";
+            }
+        },
+
+        renderViolationSqlModeSwitch(state = this.violationSql || {}) {
+            if (!state.supportsRealtime) return "";
+            const mode = String(state.mode || "SAVED").toUpperCase();
+            return `
+                <div class="M04002-sql-mode-switch">
+                    <span>쿼리 모드</span>
+                    <button type="button" class="${mode === "SAVED" ? "is-active" : ""}" onclick="${PAGE_CODE}.changeViolationSqlMode('SAVED')">샘플링</button>
+                    <button type="button" class="${mode === "LIVE" ? "is-active" : ""}" onclick="${PAGE_CODE}.changeViolationSqlMode('LIVE')">실시간</button>
+                    <em>${mode === "LIVE" ? "대상 테이블을 현재 기준으로 다시 검사합니다." : "탐지 프로시저가 저장한 위반 Row를 조회합니다."}</em>
+                </div>
+            `;
         },
 
         renderViolationSqlPopup() {
@@ -2421,7 +2702,13 @@
                     </header>
                     <div class="M04002-sql-popup-body">
                         ${this.renderViolationSqlRuleContext(state.ruleDetail)}
-                        <textarea id="${PAGE_ID_PREFIX}ViolationSqlEditor" class="M04002-sql-editor" spellcheck="false" onkeydown="${PAGE_CODE}.handleViolationSqlKeydown(event)">${this.escapeHtml(state.sql || "")}</textarea>
+                        ${this.renderViolationSqlModeSwitch(state)}
+                        <div class="M04002-sql-editor-wrap">
+                            <button type="button" class="M04002-sql-copy-btn" title="현재 SQL 복사" onclick="${PAGE_CODE}.copyCurrentViolationSql(event)">
+                                <i class="far fa-copy"></i>
+                            </button>
+                            <textarea id="${PAGE_ID_PREFIX}ViolationSqlEditor" class="M04002-sql-editor" spellcheck="false" onkeydown="${PAGE_CODE}.handleViolationSqlKeydown(event)">${this.escapeHtml(state.sql || "")}</textarea>
+                        </div>
                         <div class="M04002-sql-popup-toolbar">
                             <button type="button" class="table-btn primary" onclick="${PAGE_CODE}.executeViolationSql(1)"><i class="fas fa-play"></i> Run</button>
                             <button type="button" class="table-btn" ${state.columns?.length ? "" : "disabled"} onclick="${PAGE_CODE}.exportViolationSqlRows()"><i class="fas fa-file-export"></i> Export</button>
@@ -2847,6 +3134,9 @@
             const methodGroups = Array.isArray(summary.methodGroups) ? summary.methodGroups : [];
             const targetGroups = Array.isArray(summary.targetGroups) ? summary.targetGroups : [];
             const topRules = Array.isArray(summary.topRules) ? summary.topRules : [];
+            const filters = this.symbolicRuleFilters || {};
+            const methodFilter = String(summary.methodFilter || filters.method || "ALL");
+            const targetFilter = String(summary.targetColumnFilter || filters.targetColumn || "ALL");
             return `
                 <section class="M04002-symbolic-summary">
                     <header>
@@ -2861,26 +3151,47 @@
                             <span><b>${this.formatDecimal(overview.AVG_COMPLEXITY)}</b><small>avg complexity</small></span>
                         </div>
                     </header>
-                    ${methodGroups.length ? `
-                        <div class="M04002-symbolic-methods">
-                            ${methodGroups.map((item) => `
-                                <span>
-                                    <b>${this.escapeHtml(item.METHOD)}</b>
-                                    <small>${this.formatNumber(item.RULE_COUNT)} rules · score ${this.formatDecimal(item.AVG_SCORE)}</small>
-                                </span>
-                            `).join("")}
+                    <section class="M04002-rule-facet-panel is-symbolic">
+                        <div class="M04002-rule-facet-block">
+                            <header>
+                                <strong>Method 유형</strong>
+                                <button type="button" onclick="${PAGE_CODE}.resetSymbolicRuleFilters()">Reset</button>
+                            </header>
+                            <div class="M04002-rule-facet-list">
+                                <button type="button" class="${methodFilter === "ALL" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectSymbolicRuleFilter('method', 'ALL')">
+                                    <span>전체</span>
+                                    <b>${this.formatNumber(overview.RULE_COUNT)} rules</b>
+                                </button>
+                                ${methodGroups.map((item) => {
+                                    const method = String(item.METHOD || "(UNKNOWN)");
+                                    return `
+                                        <button type="button" class="${methodFilter === method ? "is-active" : ""}" onclick="${PAGE_CODE}.selectSymbolicRuleFilter('method', '${this.escapeJs(method)}')">
+                                            <span>${this.escapeHtml(method)}</span>
+                                            <b>${this.formatNumber(item.RULE_COUNT)} rules · score ${this.formatDecimal(item.AVG_SCORE)}</b>
+                                        </button>
+                                    `;
+                                }).join("")}
+                            </div>
                         </div>
-                    ` : ""}
-                    ${targetGroups.length ? `
-                        <div class="M04002-corr-tags">
-                            ${targetGroups.slice(0, 30).map((item) => `
-                                <em class="M04002-column-chip" title="${this.escapeHtml(`${item.TARGET_COLUMN}: ${this.formatNumber(item.SELECTED_RULE_COUNT)} selected`)}">
-                                    <b>${this.renderColumnAwareCell(item.TARGET_COLUMN, summary)}</b>
-                                    <small>${this.formatNumber(item.SELECTED_RULE_COUNT)} rules</small>
-                                </em>
-                            `).join("")}
+                        <div class="M04002-rule-facet-block is-condition">
+                            <header><strong>Y 결과 컬럼</strong></header>
+                            <div class="M04002-rule-facet-list">
+                                <button type="button" class="${targetFilter === "ALL" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectSymbolicRuleFilter('targetColumn', 'ALL')">
+                                    <span>전체</span>
+                                    <b>${this.formatNumber(overview.TARGET_COLUMN_COUNT)} columns</b>
+                                </button>
+                                ${targetGroups.slice(0, 30).map((item) => {
+                                    const targetColumn = String(item.TARGET_COLUMN || "");
+                                    return `
+                                        <button type="button" class="${targetFilter === targetColumn ? "is-active" : ""}" title="${this.escapeHtml(`${targetColumn}: ${this.formatNumber(item.SELECTED_RULE_COUNT)} selected`)}" onclick="${PAGE_CODE}.selectSymbolicRuleFilter('targetColumn', '${this.escapeJs(targetColumn)}')">
+                                            <span>${this.renderColumnAwareCell(targetColumn, summary)}</span>
+                                            <b>${this.formatNumber(item.SELECTED_RULE_COUNT)} rules</b>
+                                        </button>
+                                    `;
+                                }).join("")}
+                            </div>
                         </div>
-                    ` : ""}
+                    </section>
                     ${topRules.length ? `
                         <div class="M04002-symbolic-rule-grid">
                             ${topRules.map((rule, index) => this.renderSymbolicRuleCard(rule, index)).join("")}
@@ -2946,8 +3257,13 @@
             const overview = summary.overview || {};
             const topRules = Array.isArray(summary.topRules) ? summary.topRules : [];
             const topTargets = Array.isArray(summary.topTargets) ? summary.topTargets : [];
+            const methodGroups = Array.isArray(summary.methodGroups) ? summary.methodGroups : [];
             const ruleFilter = summary.ruleIdFilter ?? this.violationRuleFilters?.ruleId ?? "";
             const ruleFilterDisplay = String(ruleFilter || "");
+            const filters = this.symbolicViolationFilters || {};
+            const methodFilter = String(summary.methodFilter || filters.method || "ALL");
+            const targetFilter = String(summary.targetColumnFilter || filters.targetColumn || "ALL");
+            const resultScope = String(summary.resultScope || filters.resultScope || "ALL").toUpperCase();
             return `
                 <section class="M04002-symbolic-violation-summary">
                     <header>
@@ -2973,14 +3289,59 @@
                     </div>
                     <section class="M04002-rule-facet-panel is-symbolic">
                         <div class="M04002-rule-facet-block">
+                            <header>
+                                <strong>Method 유형</strong>
+                                <button type="button" onclick="${PAGE_CODE}.resetSymbolicViolationFilters()">Reset</button>
+                            </header>
+                            <div class="M04002-rule-facet-list">
+                                <button type="button" class="${methodFilter === "ALL" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectSymbolicViolationFilter('method', 'ALL')">
+                                    <span>전체</span>
+                                    <b>${this.formatNumber(overview.RULE_COUNT)} rules</b>
+                                </button>
+                                ${methodGroups.length ? methodGroups.map((item) => {
+                                    const method = String(item.METHOD || "(UNKNOWN)");
+                                    return `
+                                        <button type="button" class="${methodFilter === method ? "is-active" : ""}" onclick="${PAGE_CODE}.selectSymbolicViolationFilter('method', '${this.escapeJs(method)}')">
+                                            <span>${this.escapeHtml(method)}</span>
+                                            <b>${this.formatNumber(item.VIOLATION_COUNT)} / ${this.formatNumber(item.RULE_COUNT)}</b>
+                                        </button>
+                                    `;
+                                }).join("") : `<span>표시할 Method 요약이 없습니다.</span>`}
+                            </div>
+                        </div>
+                        <div class="M04002-rule-facet-block is-condition">
+                            <header><strong>위반 상태</strong></header>
+                            <div class="M04002-rule-facet-list">
+                                <button type="button" class="${resultScope === "ALL" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectSymbolicViolationFilter('resultScope', 'ALL')">
+                                    <span>전체 규칙</span>
+                                    <b>${this.formatNumber(overview.RULE_COUNT)}</b>
+                                </button>
+                                <button type="button" class="${resultScope === "HIT" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectSymbolicViolationFilter('resultScope', 'HIT')">
+                                    <span>위반 있음</span>
+                                    <b>${this.formatNumber(overview.VIOLATED_RULE_COUNT)}</b>
+                                </button>
+                                <button type="button" class="${resultScope === "CLEAN" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectSymbolicViolationFilter('resultScope', 'CLEAN')">
+                                    <span>위반 없음</span>
+                                    <b>${this.formatNumber(overview.NO_VIOLATION_RULE_COUNT)}</b>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="M04002-rule-facet-block">
                             <header><strong>Target별 규칙/위반</strong></header>
                             <div class="M04002-rule-facet-list">
-                                ${topTargets.length ? topTargets.map((item) => `
-                                    <button type="button" onclick="${Number(item.VIOLATION_COUNT || 0) > 0 ? `${PAGE_CODE}.openViolationSqlPopup('column', '${this.escapeJs(item.TARGET_COLUMN)}')` : ""}">
-                                        <span>${this.renderColumnAwareCell(item.TARGET_COLUMN, summary)}</span>
+                                <button type="button" class="${targetFilter === "ALL" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectSymbolicViolationFilter('targetColumn', 'ALL')">
+                                    <span>전체</span>
+                                    <b>${this.formatNumber(overview.TARGET_COLUMN_COUNT)} columns</b>
+                                </button>
+                                ${topTargets.length ? topTargets.map((item) => {
+                                    const targetColumn = String(item.TARGET_COLUMN || "");
+                                    return `
+                                    <button type="button" class="${targetFilter === targetColumn ? "is-active" : ""}" onclick="${PAGE_CODE}.selectSymbolicViolationFilter('targetColumn', '${this.escapeJs(targetColumn)}')">
+                                        <span>${this.renderColumnAwareCell(targetColumn, summary)}</span>
                                         <b>${this.formatNumber(item.VIOLATION_COUNT)} / ${this.formatNumber(item.RULE_COUNT)}</b>
                                     </button>
-                                `).join("") : `<span>표시할 Target 규칙이 없습니다.</span>`}
+                                    `;
+                                }).join("") : `<span>표시할 Target 규칙이 없습니다.</span>`}
                             </div>
                         </div>
                         <div class="M04002-rule-facet-block is-condition">
@@ -3221,36 +3582,56 @@
                 if (message) message.textContent = "Chart.js가 로드되지 않아 그래프를 표시할 수 없습니다.";
                 return;
             }
-            const chartData = this.buildSymbolicRuleChartData(rule);
+            let chartData;
+            try {
+                chartData = this.buildSymbolicRuleChartData(rule);
+            } catch (error) {
+                if (message) message.textContent = `그래프 데이터를 만들지 못했습니다: ${error.message}`;
+                canvas.hidden = true;
+                return;
+            }
             if (!chartData.ok) {
                 if (message) message.textContent = chartData.message || "이 수식은 현재 화면에서 그래프로 계산할 수 없습니다.";
                 canvas.hidden = true;
                 return;
             }
+            canvas.hidden = false;
+            canvas.removeAttribute("hidden");
+            canvas.style.display = "block";
             if (message) message.textContent = chartData.message || "";
             if (this.symbolicRuleChart && typeof this.symbolicRuleChart.destroy === "function") {
                 this.symbolicRuleChart.destroy();
             }
-            this.symbolicRuleChart = new Chart(canvas.getContext("2d"), {
-                type: "line",
-                data: {
-                    labels: chartData.labels,
-                    datasets: chartData.datasets
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    interaction: { mode: "index", intersect: false },
-                    plugins: {
-                        legend: { position: "bottom" },
-                        tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${this.formatDecimal(ctx.parsed.y)}` } }
+            try {
+                this.symbolicRuleChart = new Chart(canvas.getContext("2d"), {
+                    type: "line",
+                    data: {
+                        labels: chartData.labels,
+                        datasets: chartData.datasets
                     },
-                    scales: {
-                        x: { title: { display: true, text: chartData.xLabel } },
-                        y: { title: { display: true, text: rule.TARGET_COLUMN || "Predicted y" } }
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: { mode: "index", intersect: false },
+                        plugins: {
+                            legend: { position: "bottom" },
+                            tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${this.formatDecimal(ctx.parsed.y)}` } }
+                        },
+                        scales: {
+                            x: { title: { display: true, text: chartData.xLabel } },
+                            y: { title: { display: true, text: rule.TARGET_COLUMN || "Predicted y" } }
+                        }
                     }
-                }
-            });
+                });
+                requestAnimationFrame(() => {
+                    if (this.symbolicRuleChart && typeof this.symbolicRuleChart.resize === "function") {
+                        this.symbolicRuleChart.resize();
+                    }
+                });
+            } catch (error) {
+                canvas.hidden = true;
+                if (message) message.textContent = `그래프를 렌더링하지 못했습니다: ${error.message}`;
+            }
         },
 
         buildSymbolicRuleChartData(rule) {
@@ -3287,7 +3668,7 @@
                     { label: `${second} max`, value: secondRange.max, color: "#dc2626" }
                 ]
                 : [{ label: "predicted", value: null, color: "#2563eb" }];
-            const points = 25;
+            const points = compiled.profile && compiled.profile.isCurved ? 80 : 25;
             const xs = Array.from({ length: points }, (_, index) => primaryRange.min + ((primaryRange.max - primaryRange.min) * index) / Math.max(1, points - 1));
             const labels = xs.map((value) => this.formatDecimal(value));
             const datasets = variants.map((variant) => {
@@ -3306,8 +3687,8 @@
                     data,
                     borderColor: variant.color,
                     backgroundColor: variant.color,
-                    tension: 0.25,
-                    pointRadius: 2,
+                    tension: compiled.profile && compiled.profile.isCurved ? 0.18 : 0.25,
+                    pointRadius: compiled.profile && compiled.profile.isCurved ? 1 : 2,
                     spanGaps: true
                 };
             }).filter((dataset) => dataset.data.some((value) => value !== null));
@@ -3320,21 +3701,80 @@
                 datasets,
                 xLabel: primary,
                 message: second
-                    ? `${primary} 값을 움직이고, ${second}는 min/avg/max 세 기준으로 비교합니다. 나머지 feature는 평균값으로 고정합니다.`
-                    : `${primary} 값을 움직이며 예측 y 변화를 표시합니다.`
+                    ? `${primary} 값을 움직이고, ${second}는 min/avg/max 세 기준으로 비교합니다. 나머지 feature는 평균값으로 고정합니다.${compiled.profile && compiled.profile.isCurved ? " POWER/EXP/LOG 등 함수식은 계산용으로 변환해 곡선 그래프로 표시합니다." : ""}`
+                    : `${primary} 값을 움직이며 예측 y 변화를 표시합니다.${compiled.profile && compiled.profile.isCurved ? " POWER/EXP/LOG 등 함수식은 계산용으로 변환해 곡선 그래프로 표시합니다." : ""}`
+            };
+        },
+
+        normalizeSymbolicExpressionForChart(expression) {
+            let expr = String(expression || "").trim();
+            const usedFunctions = new Set();
+            if (!expr) {
+                return { ok: false, message: "수식 정보가 없습니다." };
+            }
+            if (/[`"';&{}\[\]]/.test(expr)) {
+                return { ok: false, message: "수식에 그래프 계산에서 허용하지 않는 문자가 포함되어 있습니다." };
+            }
+            const aliases = {
+                abs: "abs",
+                ceil: "ceil",
+                ceiling: "ceil",
+                cos: "cos",
+                exp: "exp",
+                floor: "floor",
+                greatest: "max",
+                least: "min",
+                ln: "log",
+                log: "log",
+                max: "max",
+                min: "min",
+                mod: "mod",
+                nullif: "nullif",
+                nvl: "nvl",
+                power: "pow",
+                pow: "pow",
+                round: "round",
+                sign: "sign",
+                sin: "sin",
+                sqrt: "sqrt",
+                square: "square",
+                tan: "tan",
+                trunc: "trunc"
+            };
+            expr = expr.replace(/\^/g, "**");
+            expr = expr.replace(/\b([A-Za-z_][A-Za-z0-9_]*)\s*\(/g, (match, name) => {
+                const canonical = aliases[String(name || "").toLowerCase()];
+                if (!canonical) return match;
+                usedFunctions.add(canonical);
+                return `${canonical}(`;
+            });
+            const functionNames = [...usedFunctions];
+            return {
+                ok: true,
+                expression: expr,
+                usedFunctions: functionNames,
+                isCurved: functionNames.some((name) => ["exp", "log", "pow", "sqrt", "square", "sin", "cos", "tan"].includes(name)) || expr.includes("**")
             };
         },
 
         compileSymbolicExpression(expression, features) {
-            let expr = String(expression || "").replace(/\^/g, "**").trim();
-            if (!expr || /[`"';&{}\[\]]/.test(expr)) {
-                return { ok: false, message: "수식에 그래프 계산에서 허용하지 않는 문자가 포함되어 있습니다." };
-            }
-            expr = expr.replace(/\bsquare\s*\(/gi, "square(");
+            const normalized = this.normalizeSymbolicExpressionForChart(expression);
+            if (!normalized.ok) return normalized;
+            let expr = normalized.expression;
             const allowedFunctions = {
+                ceil: Math.ceil,
+                floor: Math.floor,
+                mod: (a, b) => (Number(b) === 0 ? NaN : a % b),
+                nullif: (a, b) => (a === b ? NaN : a),
+                nvl: (a, b) => (Number.isFinite(Number(a)) ? a : b),
+                round: (a, digits = 0) => {
+                    const scale = 10 ** Number(digits || 0);
+                    return Math.round(a * scale) / scale;
+                },
+                sign: Math.sign,
                 square: (x) => x * x,
                 sqrt: Math.sqrt,
-                log: Math.log,
+                log: (a, b) => (typeof b === "undefined" ? Math.log(a) : Math.log(b) / Math.log(a)),
                 exp: Math.exp,
                 sin: Math.sin,
                 cos: Math.cos,
@@ -3342,7 +3782,11 @@
                 abs: Math.abs,
                 pow: Math.pow,
                 max: Math.max,
-                min: Math.min
+                min: Math.min,
+                trunc: (a, digits = 0) => {
+                    const scale = 10 ** Number(digits || 0);
+                    return Math.trunc(a * scale) / scale;
+                }
             };
             const featureSet = new Set(features.map((item) => String(item || "").trim()).filter(Boolean));
             const lowerFeatureSet = new Set([...featureSet].map((item) => item.toLowerCase()));
@@ -3372,6 +3816,10 @@
             }
             return {
                 ok: true,
+                profile: {
+                    functions: normalized.usedFunctions,
+                    isCurved: normalized.isCurved
+                },
                 evaluate: (values) => {
                     const args = [
                         ...mappedFeatures.map(({ feature }) => Number(values[feature])),
@@ -4668,6 +5116,13 @@
             if (resultObject === "INIT$_TB_SYMBOLIC_RULE_VIOLATION") return true;
             if (resultObject === "INIT$_TB_RULE_VIOLATION_RESULT") return false;
             return this.nodeWorkContains(node, "INIT$_SP_SYMBOLIC_RULE_VIOLATION_DETECT");
+        },
+
+        isSymbolicRuleNode(node) {
+            const resultObject = String(node?.RESULT_OBJECT_NAME || "").trim().toUpperCase();
+            if (resultObject === "INIT$_TB_SYMBOLIC_RULE") return true;
+            if (resultObject === "INIT$_TB_SYMBOLIC_RULE_VIOLATION") return false;
+            return this.nodeWorkContains(node, "SYMBOLIC_REGRESSION_RULE");
         },
 
         isPredictedTypeNode(node) {

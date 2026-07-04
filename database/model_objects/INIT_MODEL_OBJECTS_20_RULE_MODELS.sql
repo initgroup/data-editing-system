@@ -1192,6 +1192,953 @@ EXCEPTION
 END;
 /
 
+CREATE OR REPLACE FUNCTION "INIT$_FN_RULE_VIOLATION_SQL" (
+    p_rule_owner_name     IN VARCHAR2 DEFAULT NULL,
+    p_rule_model_name     IN VARCHAR2,
+    p_rule_id             IN VARCHAR2,
+    p_target_owner        IN VARCHAR2 DEFAULT NULL,
+    p_target_table        IN VARCHAR2,
+    p_case_id_column_name IN VARCHAR2 DEFAULT 'FILE_ROW_NO',
+    p_run_source_type     IN VARCHAR2 DEFAULT 'DATA_WORK',
+    p_run_id              IN NUMBER   DEFAULT 0
+) RETURN CLOB AUTHID CURRENT_USER IS
+    v_rule_owner VARCHAR2(128);
+    v_rule_model VARCHAR2(128);
+    v_rule_id VARCHAR2(128);
+    v_target_owner VARCHAR2(128);
+    v_target_table VARCHAR2(128);
+    v_case_id_col VARCHAR2(128);
+    v_case_id_expr VARCHAR2(4000);
+    v_target_object VARCHAR2(600);
+    v_run_source_type VARCHAR2(30);
+    v_run_id NUMBER;
+    v_result_col VARCHAR2(128);
+    v_expected VARCHAR2(4000);
+    v_condition_text CLOB;
+    v_condition_count NUMBER;
+    v_rule_support NUMBER;
+    v_rule_confidence NUMBER;
+    v_rule_lift NUMBER;
+    v_support_count NUMBER;
+    v_condition_total_count NUMBER;
+    v_result_total_count NUMBER;
+    v_total_count NUMBER;
+    v_condition_where CLOB;
+    v_score NUMBER;
+    v_sql CLOB;
+
+    FUNCTION is_null_token(p_value IN VARCHAR2) RETURN BOOLEAN IS
+    BEGIN
+        RETURN p_value IS NULL OR TRIM(p_value) IS NULL OR UPPER(TRIM(p_value)) IN ('NULL', '-', 'NONE');
+    END;
+
+    FUNCTION normalize_identifier(p_value IN VARCHAR2, p_name IN VARCHAR2) RETURN VARCHAR2 IS
+        v_value VARCHAR2(128) := UPPER(TRIM(p_value));
+    BEGIN
+        IF NOT REGEXP_LIKE(v_value, '^[A-Z][A-Z0-9_$#]{0,127}$') THEN
+            RAISE_APPLICATION_ERROR(-20581, 'Invalid ' || p_name || ' parameter.');
+        END IF;
+        RETURN v_value;
+    END;
+
+    FUNCTION normalize_rule_id(p_value IN VARCHAR2) RETURN VARCHAR2 IS
+        v_value VARCHAR2(128) := TRIM(p_value);
+    BEGIN
+        IF v_value IS NULL OR NOT REGEXP_LIKE(v_value, '^[A-Za-z0-9_$#:-]{1,128}$') THEN
+            RAISE_APPLICATION_ERROR(-20582, 'Invalid rule_id parameter.');
+        END IF;
+        RETURN v_value;
+    END;
+
+    FUNCTION normalize_run_source_type(p_value IN VARCHAR2) RETURN VARCHAR2 IS
+        v_value VARCHAR2(30) := UPPER(TRIM(NVL(p_value, 'DATA_WORK')));
+    BEGIN
+        IF v_value NOT IN ('DATA_WORK', 'FLOW_WORK') THEN
+            RETURN 'DATA_WORK';
+        END IF;
+        RETURN v_value;
+    END;
+
+    FUNCTION quote_name(p_value IN VARCHAR2) RETURN VARCHAR2 IS
+    BEGIN
+        RETURN '"' || REPLACE(p_value, '"', '""') || '"';
+    END;
+
+    FUNCTION qualified_name(p_owner IN VARCHAR2, p_object IN VARCHAR2) RETURN VARCHAR2 IS
+    BEGIN
+        RETURN quote_name(p_owner) || '.' || quote_name(p_object);
+    END;
+
+    FUNCTION sql_literal(p_value IN VARCHAR2) RETURN VARCHAR2 IS
+    BEGIN
+        IF p_value IS NULL THEN
+            RETURN 'NULL';
+        END IF;
+        RETURN '''' || REPLACE(p_value, '''', '''''') || '''';
+    END;
+
+    FUNCTION number_literal(p_value IN NUMBER) RETURN VARCHAR2 IS
+    BEGIN
+        IF p_value IS NULL THEN
+            RETURN 'NULL';
+        END IF;
+        RETURN TO_CHAR(p_value, 'TM9', 'NLS_NUMERIC_CHARACTERS=.,');
+    END;
+
+    FUNCTION table_exists(p_owner IN VARCHAR2, p_table IN VARCHAR2) RETURN BOOLEAN IS
+        v_count NUMBER;
+    BEGIN
+        SELECT COUNT(*)
+          INTO v_count
+          FROM ALL_TABLES
+         WHERE OWNER = p_owner
+           AND TABLE_NAME = p_table;
+        RETURN v_count > 0;
+    END;
+
+    FUNCTION column_exists(p_owner IN VARCHAR2, p_table IN VARCHAR2, p_column IN VARCHAR2) RETURN BOOLEAN IS
+        v_count NUMBER;
+    BEGIN
+        IF p_column IS NULL THEN
+            RETURN FALSE;
+        END IF;
+        SELECT COUNT(*)
+          INTO v_count
+          FROM ALL_TAB_COLUMNS
+         WHERE OWNER = p_owner
+           AND TABLE_NAME = p_table
+           AND COLUMN_NAME = p_column;
+        RETURN v_count > 0;
+    END;
+
+    FUNCTION build_condition_where(p_condition_text IN CLOB) RETURN CLOB IS
+        v_text VARCHAR2(32767) := DBMS_LOB.SUBSTR(p_condition_text, 32767, 1);
+        v_rest VARCHAR2(32767);
+        v_token VARCHAR2(4000);
+        v_pos PLS_INTEGER;
+        v_col VARCHAR2(128);
+        v_val VARCHAR2(4000);
+        v_where CLOB := NULL;
+        v_count PLS_INTEGER := 0;
+    BEGIN
+        v_rest := TRIM(v_text);
+        WHILE v_rest IS NOT NULL LOOP
+            v_pos := INSTR(v_rest, ' AND ');
+            IF v_pos > 0 THEN
+                v_token := TRIM(SUBSTR(v_rest, 1, v_pos - 1));
+                v_rest := TRIM(SUBSTR(v_rest, v_pos + 5));
+            ELSE
+                v_token := TRIM(v_rest);
+                v_rest := NULL;
+            END IF;
+
+            v_col := UPPER(REGEXP_SUBSTR(v_token, '^[[:space:]]*([A-Za-z][A-Za-z0-9_$#]{0,127})[[:space:]]*=', 1, 1, 'i', 1));
+            v_val := REGEXP_REPLACE(v_token, '^[[:space:]]*[A-Za-z][A-Za-z0-9_$#]{0,127}[[:space:]]*=[[:space:]]*', '', 1, 1, 'i');
+
+            IF v_col IS NULL OR NOT column_exists(v_target_owner, v_target_table, v_col) THEN
+                RETURN NULL;
+            END IF;
+
+            IF v_count > 0 THEN
+                v_where := v_where || ' AND ';
+            END IF;
+            v_where := v_where || 'TO_CHAR(T.' || quote_name(v_col) || ') = ' || sql_literal(v_val);
+            v_count := v_count + 1;
+        END LOOP;
+
+        IF v_count > 0 THEN
+            RETURN v_where;
+        END IF;
+        RETURN NULL;
+    END;
+BEGIN
+    v_rule_owner := CASE
+        WHEN is_null_token(p_rule_owner_name) THEN SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')
+        ELSE normalize_identifier(p_rule_owner_name, 'rule_owner_name')
+    END;
+    v_rule_model := normalize_identifier(p_rule_model_name, 'rule_model_name');
+    v_rule_id := normalize_rule_id(p_rule_id);
+    v_target_owner := CASE
+        WHEN is_null_token(p_target_owner) THEN SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')
+        ELSE normalize_identifier(p_target_owner, 'target_owner')
+    END;
+    v_target_table := normalize_identifier(p_target_table, 'target_table');
+    v_case_id_col := CASE
+        WHEN is_null_token(p_case_id_column_name) THEN NULL
+        ELSE normalize_identifier(p_case_id_column_name, 'case_id_column_name')
+    END;
+    v_run_source_type := normalize_run_source_type(p_run_source_type);
+    v_run_id := NVL(p_run_id, 0);
+    v_target_object := qualified_name(v_target_owner, v_target_table);
+
+    IF NOT table_exists(v_target_owner, v_target_table) THEN
+        RAISE_APPLICATION_ERROR(-20583, 'Target table does not exist: ' || v_target_owner || '.' || v_target_table);
+    END IF;
+
+    IF v_case_id_col IS NOT NULL AND column_exists(v_target_owner, v_target_table, v_case_id_col) THEN
+        v_case_id_expr := 'SUBSTR(TO_CHAR(T.' || quote_name(v_case_id_col) || '), 1, 4000)';
+    ELSE
+        v_case_id_expr := 'NULL';
+    END IF;
+
+    SELECT UPPER(TRIM(S."RESULT_COLUMN"))
+         , DBMS_LOB.SUBSTR(TO_CLOB(S."RESULT_VALUE"), 4000, 1)
+         , S."CONDITION_TEXT"
+         , S."CONDITION_COUNT"
+         , S."RULE_SUPPORT"
+         , S."RULE_CONFIDENCE"
+         , S."RULE_LIFT"
+         , S."SUPPORT_COUNT"
+         , S."CONDITION_TOTAL_COUNT"
+         , S."RESULT_TOTAL_COUNT"
+         , S."TOTAL_COUNT"
+      INTO v_result_col
+         , v_expected
+         , v_condition_text
+         , v_condition_count
+         , v_rule_support
+         , v_rule_confidence
+         , v_rule_lift
+         , v_support_count
+         , v_condition_total_count
+         , v_result_total_count
+         , v_total_count
+      FROM "INIT$_TB_ASSOC_RULE_SUMMARY" S
+     WHERE S."OWNER" = v_rule_owner
+       AND S."RUN_SOURCE_TYPE" = v_run_source_type
+       AND (v_run_source_type = 'DATA_WORK' OR S."RUN_ID" = v_run_id)
+       AND S."TARGET_OWNER" = v_target_owner
+       AND S."TARGET_TABLE" = v_target_table
+       AND S."MODEL_NAME" = v_rule_model
+       AND S."RULE_ID" = v_rule_id
+       AND S."RESULT_HAS_VALUE_YN" = 'Y'
+       AND S."RESULT_COLUMN" IS NOT NULL
+       AND S."RESULT_VALUE" IS NOT NULL
+       AND S."CONDITION_TEXT" IS NOT NULL
+       AND ROWNUM = 1;
+
+    IF NOT column_exists(v_target_owner, v_target_table, v_result_col) THEN
+        RAISE_APPLICATION_ERROR(-20584, 'Rule result column does not exist: ' || v_result_col);
+    END IF;
+
+    v_condition_where := build_condition_where(v_condition_text);
+    IF v_condition_where IS NULL THEN
+        RAISE_APPLICATION_ERROR(-20585, 'Rule condition could not be translated to SQL.');
+    END IF;
+
+    v_score := NVL(v_rule_confidence, 0) * GREATEST(NVL(v_rule_lift, 1), 1);
+    v_sql :=
+        'SELECT CAST(NULL AS NUMBER) AS V_VIOLATION_ID' || CHR(10) ||
+        '     , ' || sql_literal(v_rule_id) || ' AS V_RULE_ID' || CHR(10) ||
+        '     , ' || sql_literal(v_result_col) || ' AS V_RESULT_COLUMN' || CHR(10) ||
+        '     , ' || sql_literal(v_expected) || ' AS V_EXPECTED_VALUE' || CHR(10) ||
+        '     , SUBSTR(TO_CHAR(T.' || quote_name(v_result_col) || '), 1, 4000) AS V_ACTUAL_VALUE' || CHR(10) ||
+        '     , ' || number_literal(v_score) || ' AS V_VIOLATION_SCORE' || CHR(10) ||
+        '     , ' || number_literal(v_rule_confidence) || ' AS V_RULE_CONFIDENCE' || CHR(10) ||
+        '     , ' || number_literal(v_rule_lift) || ' AS V_RULE_LIFT' || CHR(10) ||
+        '     , ' || v_case_id_expr || ' AS V_CASE_ID' || CHR(10) ||
+        '     , ' || number_literal(v_condition_count) || ' AS V_CONDITION_COUNT' || CHR(10) ||
+        '     , ' || sql_literal(DBMS_LOB.SUBSTR(v_condition_text, 4000, 1)) || ' AS V_CONDITION_TEXT' || CHR(10) ||
+        '     , ' || number_literal(v_rule_support) || ' AS V_RULE_SUPPORT' || CHR(10) ||
+        '     , ' || number_literal(v_support_count) || ' AS V_SUPPORT_COUNT' || CHR(10) ||
+        '     , ' || number_literal(v_condition_total_count) || ' AS V_CONDITION_TOTAL_COUNT' || CHR(10) ||
+        '     , ' || number_literal(v_result_total_count) || ' AS V_RESULT_TOTAL_COUNT' || CHR(10) ||
+        '     , ' || number_literal(v_total_count) || ' AS V_TOTAL_COUNT' || CHR(10) ||
+        '     , T.*' || CHR(10) ||
+        '  FROM ' || v_target_object || ' T' || CHR(10) ||
+        ' WHERE 1=1' || CHR(10) ||
+        '   AND ' || v_condition_where || CHR(10) ||
+        '   AND (T.' || quote_name(v_result_col) || ' IS NULL OR TO_CHAR(T.' || quote_name(v_result_col) || ') <> ' || sql_literal(v_expected) || ')' || CHR(10) ||
+        ' ORDER BY V_VIOLATION_SCORE DESC NULLS LAST, V_RULE_CONFIDENCE DESC NULLS LAST, V_CASE_ID';
+
+    RETURN v_sql;
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        RAISE_APPLICATION_ERROR(-20586, 'Rule summary row was not found for realtime violation query.');
+END;
+/
+
+CREATE OR REPLACE FUNCTION "INIT$_FN_SYMBOLIC_RULE_VIOLATION_SQL" (
+    p_rule_owner_name       IN VARCHAR2 DEFAULT NULL,
+    p_rule_table_name       IN VARCHAR2 DEFAULT 'INIT$_TB_SYMBOLIC_RULE',
+    p_rule_id               IN VARCHAR2,
+    p_target_owner          IN VARCHAR2 DEFAULT NULL,
+    p_target_table          IN VARCHAR2,
+    p_case_id_column_name   IN VARCHAR2 DEFAULT 'FILE_ROW_NO',
+    p_error_pct_threshold   IN NUMBER   DEFAULT 0.05,
+    p_abs_error_threshold   IN NUMBER   DEFAULT NULL,
+    p_run_source_type       IN VARCHAR2 DEFAULT 'DATA_WORK',
+    p_run_id                IN NUMBER   DEFAULT 0,
+    p_max_expression_length IN NUMBER   DEFAULT 8000
+) RETURN CLOB AUTHID CURRENT_USER IS
+    v_current_schema VARCHAR2(128) := UPPER(SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA'));
+    v_rule_owner VARCHAR2(128);
+    v_rule_table VARCHAR2(128);
+    v_rule_id VARCHAR2(128);
+    v_target_owner VARCHAR2(128);
+    v_target_table VARCHAR2(128);
+    v_case_id_col VARCHAR2(128);
+    v_case_id_expr VARCHAR2(4000);
+    v_target_object VARCHAR2(600);
+    v_rule_object VARCHAR2(600);
+    v_run_source_type VARCHAR2(30);
+    v_run_id NUMBER;
+    v_tolerance_pct NUMBER;
+    v_abs_error_threshold NUMBER;
+    v_max_expression_length NUMBER;
+    v_target_col VARCHAR2(128);
+    v_rule_expression CLOB;
+    v_rule_feature_columns VARCHAR2(4000);
+    v_rule_score NUMBER;
+    v_rule_complexity NUMBER;
+    v_rule_method VARCHAR2(80);
+    v_expr_sql VARCHAR2(32767);
+    v_sql CLOB;
+    TYPE t_column_cache IS TABLE OF VARCHAR2(1) INDEX BY VARCHAR2(128);
+    TYPE t_column_type_cache IS TABLE OF VARCHAR2(128) INDEX BY VARCHAR2(128);
+    v_target_column_cache t_column_cache;
+    v_target_column_type_cache t_column_type_cache;
+    v_target_column_cache_loaded BOOLEAN := FALSE;
+
+    FUNCTION is_null_token(p_value IN VARCHAR2) RETURN BOOLEAN IS
+    BEGIN
+        RETURN p_value IS NULL OR TRIM(p_value) IS NULL OR UPPER(TRIM(p_value)) IN ('NULL', '-', 'NONE');
+    END;
+
+    FUNCTION normalize_identifier(p_value IN VARCHAR2, p_name IN VARCHAR2) RETURN VARCHAR2 IS
+        v_value VARCHAR2(128) := UPPER(TRIM(p_value));
+    BEGIN
+        IF NOT REGEXP_LIKE(v_value, '^[A-Z][A-Z0-9_$#]{0,127}$') THEN
+            RAISE_APPLICATION_ERROR(-20681, 'Invalid ' || p_name || ' parameter.');
+        END IF;
+        RETURN v_value;
+    END;
+
+    FUNCTION normalize_rule_id(p_value IN VARCHAR2) RETURN VARCHAR2 IS
+        v_value VARCHAR2(128) := TRIM(p_value);
+    BEGIN
+        IF v_value IS NULL OR NOT REGEXP_LIKE(v_value, '^[A-Za-z0-9_$#:-]{1,128}$') THEN
+            RAISE_APPLICATION_ERROR(-20682, 'Invalid rule_id parameter.');
+        END IF;
+        RETURN v_value;
+    END;
+
+    FUNCTION normalize_run_source_type(p_value IN VARCHAR2) RETURN VARCHAR2 IS
+        v_value VARCHAR2(30) := UPPER(TRIM(NVL(p_value, 'DATA_WORK')));
+    BEGIN
+        IF v_value NOT IN ('DATA_WORK', 'FLOW_WORK') THEN
+            RETURN 'DATA_WORK';
+        END IF;
+        RETURN v_value;
+    END;
+
+    FUNCTION is_current_schema(p_owner IN VARCHAR2) RETURN BOOLEAN IS
+    BEGIN
+        RETURN UPPER(TRIM(p_owner)) = v_current_schema;
+    END;
+
+    FUNCTION quote_name(p_value IN VARCHAR2) RETURN VARCHAR2 IS
+    BEGIN
+        RETURN '"' || REPLACE(p_value, '"', '""') || '"';
+    END;
+
+    FUNCTION qualified_name(p_owner IN VARCHAR2, p_object IN VARCHAR2) RETURN VARCHAR2 IS
+    BEGIN
+        RETURN quote_name(p_owner) || '.' || quote_name(p_object);
+    END;
+
+    FUNCTION sql_literal(p_value IN VARCHAR2) RETURN VARCHAR2 IS
+    BEGIN
+        IF p_value IS NULL THEN
+            RETURN 'NULL';
+        END IF;
+        RETURN '''' || REPLACE(p_value, '''', '''''') || '''';
+    END;
+
+    FUNCTION number_literal(p_value IN NUMBER) RETURN VARCHAR2 IS
+    BEGIN
+        IF p_value IS NULL THEN
+            RETURN 'NULL';
+        END IF;
+        RETURN TO_CHAR(p_value, 'TM9', 'NLS_NUMERIC_CHARACTERS=.,');
+    END;
+
+    FUNCTION table_exists(p_owner IN VARCHAR2, p_table IN VARCHAR2) RETURN BOOLEAN IS
+        v_count NUMBER;
+    BEGIN
+        IF is_current_schema(p_owner) THEN
+            SELECT COUNT(*)
+              INTO v_count
+              FROM USER_TABLES
+             WHERE TABLE_NAME = p_table;
+        ELSE
+            SELECT COUNT(*)
+              INTO v_count
+              FROM ALL_TABLES
+             WHERE OWNER = p_owner
+               AND TABLE_NAME = p_table;
+        END IF;
+        RETURN v_count > 0;
+    END;
+
+    PROCEDURE load_target_column_cache IS
+    BEGIN
+        IF v_target_column_cache_loaded THEN
+            RETURN;
+        END IF;
+
+        v_target_column_cache.DELETE;
+        v_target_column_type_cache.DELETE;
+        IF is_current_schema(v_target_owner) THEN
+            FOR r IN (
+                SELECT COLUMN_NAME
+                     , DATA_TYPE
+                  FROM USER_TAB_COLUMNS
+                 WHERE TABLE_NAME = v_target_table
+            ) LOOP
+                v_target_column_cache(r.COLUMN_NAME) := 'Y';
+                v_target_column_type_cache(r.COLUMN_NAME) := r.DATA_TYPE;
+            END LOOP;
+        ELSE
+            FOR r IN (
+                SELECT COLUMN_NAME
+                     , DATA_TYPE
+                  FROM ALL_TAB_COLUMNS
+                 WHERE OWNER = v_target_owner
+                   AND TABLE_NAME = v_target_table
+            ) LOOP
+                v_target_column_cache(r.COLUMN_NAME) := 'Y';
+                v_target_column_type_cache(r.COLUMN_NAME) := r.DATA_TYPE;
+            END LOOP;
+        END IF;
+        v_target_column_cache_loaded := TRUE;
+    END;
+
+    FUNCTION column_exists(p_owner IN VARCHAR2, p_table IN VARCHAR2, p_column IN VARCHAR2) RETURN BOOLEAN IS
+        v_count NUMBER;
+    BEGIN
+        IF p_column IS NULL THEN
+            RETURN FALSE;
+        END IF;
+
+        IF UPPER(TRIM(p_owner)) = v_target_owner
+           AND UPPER(TRIM(p_table)) = v_target_table THEN
+            load_target_column_cache;
+            RETURN v_target_column_cache.EXISTS(UPPER(TRIM(p_column)));
+        END IF;
+
+        IF is_current_schema(p_owner) THEN
+            SELECT COUNT(*)
+              INTO v_count
+              FROM USER_TAB_COLUMNS
+             WHERE TABLE_NAME = p_table
+               AND COLUMN_NAME = p_column;
+        ELSE
+            SELECT COUNT(*)
+              INTO v_count
+              FROM ALL_TAB_COLUMNS
+             WHERE OWNER = p_owner
+               AND TABLE_NAME = p_table
+               AND COLUMN_NAME = p_column;
+        END IF;
+        RETURN v_count > 0;
+    END;
+
+    FUNCTION numeric_column_expr(p_column IN VARCHAR2, p_alias IN VARCHAR2 DEFAULT 'T') RETURN VARCHAR2 IS
+        v_column VARCHAR2(128) := UPPER(TRIM(p_column));
+        v_data_type VARCHAR2(128);
+        v_ref VARCHAR2(4000);
+    BEGIN
+        load_target_column_cache;
+        v_data_type := UPPER(NVL(v_target_column_type_cache(v_column), ''));
+        v_ref := CASE
+            WHEN p_alias IS NULL OR TRIM(p_alias) IS NULL THEN quote_name(v_column)
+            ELSE p_alias || '.' || quote_name(v_column)
+        END;
+        IF v_data_type IN ('NUMBER', 'BINARY_FLOAT', 'BINARY_DOUBLE', 'FLOAT') THEN
+            RETURN v_ref;
+        END IF;
+        RETURN 'TO_NUMBER(NULLIF(TRIM(TO_CHAR(' || v_ref || ')), '''') DEFAULT NULL ON CONVERSION ERROR)';
+    EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+            v_ref := CASE
+                WHEN p_alias IS NULL OR TRIM(p_alias) IS NULL THEN quote_name(v_column)
+                ELSE p_alias || '.' || quote_name(v_column)
+            END;
+            RETURN 'TO_NUMBER(NULLIF(TRIM(TO_CHAR(' || v_ref || ')), '''') DEFAULT NULL ON CONVERSION ERROR)';
+    END;
+
+    FUNCTION is_identifier_char(p_char IN VARCHAR2) RETURN BOOLEAN IS
+    BEGIN
+        RETURN p_char IS NOT NULL
+           AND INSTR('ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_$#', UPPER(SUBSTR(p_char, 1, 1))) > 0;
+    END;
+
+    FUNCTION is_alpha_char(p_char IN VARCHAR2) RETURN BOOLEAN IS
+    BEGIN
+        RETURN p_char IS NOT NULL
+           AND INSTR('ABCDEFGHIJKLMNOPQRSTUVWXYZ', UPPER(SUBSTR(p_char, 1, 1))) > 0;
+    END;
+
+    FUNCTION is_allowed_expr_token(p_token IN VARCHAR2) RETURN BOOLEAN IS
+        v_token VARCHAR2(128) := UPPER(TRIM(p_token));
+    BEGIN
+        RETURN v_token IN (
+            'T',
+            'TO_NUMBER',
+            'POWER',
+            'SQRT',
+            'ABS',
+            'LN',
+            'EXP',
+            'SIN',
+            'COS',
+            'TAN',
+            'NULLIF',
+            'TRIM',
+            'TO_CHAR',
+            'DEFAULT',
+            'ON',
+            'CONVERSION',
+            'ERROR',
+            'NULL'
+        );
+    END;
+
+    FUNCTION has_blocked_expr_char(p_expr IN VARCHAR2) RETURN BOOLEAN IS
+        v_char VARCHAR2(1);
+    BEGIN
+        IF p_expr IS NULL THEN
+            RETURN TRUE;
+        END IF;
+        FOR i IN 1 .. LENGTH(p_expr) LOOP
+            v_char := SUBSTR(p_expr, i, 1);
+            IF INSTR('''";[]{}', v_char) > 0 THEN
+                RETURN TRUE;
+            END IF;
+        END LOOP;
+        RETURN FALSE;
+    END;
+
+    FUNCTION has_unknown_expression_token(p_expr IN VARCHAR2) RETURN BOOLEAN IS
+        v_pos PLS_INTEGER := 1;
+        v_len PLS_INTEGER := NVL(LENGTH(p_expr), 0);
+        v_char VARCHAR2(1);
+        v_start PLS_INTEGER;
+        v_token VARCHAR2(128);
+    BEGIN
+        WHILE v_pos <= v_len LOOP
+            v_char := SUBSTR(p_expr, v_pos, 1);
+            IF v_char = '"' THEN
+                v_pos := v_pos + 1;
+                WHILE v_pos <= v_len AND SUBSTR(p_expr, v_pos, 1) <> '"' LOOP
+                    v_pos := v_pos + 1;
+                END LOOP;
+                v_pos := v_pos + 1;
+            ELSIF is_alpha_char(v_char) THEN
+                v_start := v_pos;
+                WHILE v_pos <= v_len AND is_identifier_char(SUBSTR(p_expr, v_pos, 1)) LOOP
+                    v_pos := v_pos + 1;
+                END LOOP;
+                v_token := SUBSTR(p_expr, v_start, v_pos - v_start);
+                IF NOT is_allowed_expr_token(v_token) THEN
+                    RETURN TRUE;
+                END IF;
+            ELSE
+                v_pos := v_pos + 1;
+            END IF;
+        END LOOP;
+        RETURN FALSE;
+    END;
+
+    FUNCTION replace_identifier_expr(
+        p_expr IN VARCHAR2,
+        p_identifier IN VARCHAR2,
+        p_replacement IN VARCHAR2
+    ) RETURN VARCHAR2 IS
+        v_source VARCHAR2(32767) := p_expr;
+        v_upper_source VARCHAR2(32767) := UPPER(p_expr);
+        v_identifier VARCHAR2(128) := UPPER(TRIM(p_identifier));
+        v_identifier_len PLS_INTEGER := LENGTH(UPPER(TRIM(p_identifier)));
+        v_pos PLS_INTEGER := 1;
+        v_found PLS_INTEGER;
+        v_result VARCHAR2(32767) := '';
+        v_prev_char VARCHAR2(1);
+        v_next_char VARCHAR2(1);
+    BEGIN
+        IF v_source IS NULL OR v_identifier IS NULL OR v_identifier_len = 0 THEN
+            RETURN v_source;
+        END IF;
+
+        LOOP
+            v_found := INSTR(v_upper_source, v_identifier, v_pos);
+            EXIT WHEN v_found = 0;
+
+            v_prev_char := CASE WHEN v_found > 1 THEN SUBSTR(v_source, v_found - 1, 1) END;
+            v_next_char := CASE
+                WHEN v_found + v_identifier_len <= LENGTH(v_source) THEN SUBSTR(v_source, v_found + v_identifier_len, 1)
+            END;
+
+            IF NOT is_identifier_char(v_prev_char) AND NOT is_identifier_char(v_next_char) THEN
+                IF NVL(LENGTH(v_result), 0) + (v_found - v_pos) + NVL(LENGTH(p_replacement), 0) > 32767 THEN
+                    RETURN NULL;
+                END IF;
+                v_result := v_result || SUBSTR(v_source, v_pos, v_found - v_pos) || p_replacement;
+                v_pos := v_found + v_identifier_len;
+            ELSE
+                IF NVL(LENGTH(v_result), 0) + (v_found - v_pos + v_identifier_len) > 32767 THEN
+                    RETURN NULL;
+                END IF;
+                v_result := v_result || SUBSTR(v_source, v_pos, v_found - v_pos + v_identifier_len);
+                v_pos := v_found + v_identifier_len;
+            END IF;
+        END LOOP;
+
+        IF NVL(LENGTH(v_result), 0) + NVL(LENGTH(SUBSTR(v_source, v_pos)), 0) > 32767 THEN
+            RETURN NULL;
+        END IF;
+        RETURN v_result || SUBSTR(v_source, v_pos);
+    END;
+
+    FUNCTION protect_division_denominators(p_expr IN VARCHAR2) RETURN VARCHAR2 IS
+        v_source VARCHAR2(32767) := p_expr;
+        v_result VARCHAR2(32767) := '';
+        v_pos PLS_INTEGER := 1;
+        v_len PLS_INTEGER := NVL(LENGTH(p_expr), 0);
+        v_start PLS_INTEGER;
+        v_end PLS_INTEGER;
+        v_scan PLS_INTEGER;
+        v_char VARCHAR2(1);
+        v_spaces VARCHAR2(4000);
+        v_denom VARCHAR2(32767);
+
+        FUNCTION find_balanced_end(p_start IN PLS_INTEGER) RETURN PLS_INTEGER IS
+            v_i PLS_INTEGER := p_start;
+            v_level PLS_INTEGER := 0;
+            v_c VARCHAR2(1);
+        BEGIN
+            WHILE v_i <= v_len LOOP
+                v_c := SUBSTR(v_source, v_i, 1);
+                IF v_c = '(' THEN
+                    v_level := v_level + 1;
+                ELSIF v_c = ')' THEN
+                    v_level := v_level - 1;
+                    IF v_level = 0 THEN
+                        RETURN v_i;
+                    END IF;
+                END IF;
+                v_i := v_i + 1;
+            END LOOP;
+            RETURN NULL;
+        END;
+
+        PROCEDURE append_text(p_text IN VARCHAR2) IS
+        BEGIN
+            IF NVL(LENGTH(v_result), 0) + NVL(LENGTH(p_text), 0) > 32767 THEN
+                v_result := NULL;
+            ELSE
+                v_result := v_result || p_text;
+            END IF;
+        END;
+    BEGIN
+        IF v_source IS NULL OR INSTR(v_source, '/') = 0 THEN
+            RETURN v_source;
+        END IF;
+
+        WHILE v_pos <= v_len LOOP
+            v_char := SUBSTR(v_source, v_pos, 1);
+            IF v_char <> '/' THEN
+                append_text(v_char);
+                IF v_result IS NULL THEN
+                    RETURN NULL;
+                END IF;
+                v_pos := v_pos + 1;
+                CONTINUE;
+            END IF;
+
+            append_text('/');
+            IF v_result IS NULL THEN
+                RETURN NULL;
+            END IF;
+            v_pos := v_pos + 1;
+            v_spaces := '';
+            WHILE v_pos <= v_len AND SUBSTR(v_source, v_pos, 1) IN (' ', CHR(9), CHR(10), CHR(13)) LOOP
+                v_spaces := v_spaces || SUBSTR(v_source, v_pos, 1);
+                v_pos := v_pos + 1;
+            END LOOP;
+
+            IF v_pos > v_len THEN
+                append_text(v_spaces);
+                RETURN v_result;
+            END IF;
+
+            v_start := v_pos;
+            v_char := SUBSTR(v_source, v_pos, 1);
+            IF v_char = '(' THEN
+                v_end := find_balanced_end(v_pos);
+            ELSIF v_char = '"' THEN
+                v_scan := v_pos + 1;
+                WHILE v_scan <= v_len LOOP
+                    IF SUBSTR(v_source, v_scan, 1) = '"' THEN
+                        EXIT;
+                    END IF;
+                    v_scan := v_scan + 1;
+                END LOOP;
+                v_end := LEAST(v_scan, v_len);
+            ELSIF is_alpha_char(v_char) THEN
+                v_scan := v_pos;
+                WHILE v_scan <= v_len AND is_identifier_char(SUBSTR(v_source, v_scan, 1)) LOOP
+                    v_scan := v_scan + 1;
+                END LOOP;
+                v_end := v_scan - 1;
+                WHILE v_scan <= v_len AND SUBSTR(v_source, v_scan, 1) IN (' ', CHR(9), CHR(10), CHR(13)) LOOP
+                    v_scan := v_scan + 1;
+                END LOOP;
+                IF v_scan <= v_len AND SUBSTR(v_source, v_scan, 1) = '(' THEN
+                    v_end := find_balanced_end(v_scan);
+                END IF;
+            ELSIF INSTR('+-0123456789.', v_char) > 0 THEN
+                v_scan := v_pos;
+                IF SUBSTR(v_source, v_scan, 1) IN ('+', '-') THEN
+                    v_scan := v_scan + 1;
+                END IF;
+                WHILE v_scan <= v_len
+                  AND REGEXP_LIKE(SUBSTR(v_source, v_scan, 1), '[0-9.]')
+                LOOP
+                    v_scan := v_scan + 1;
+                END LOOP;
+                IF v_scan <= v_len AND UPPER(SUBSTR(v_source, v_scan, 1)) = 'E' THEN
+                    v_scan := v_scan + 1;
+                    IF v_scan <= v_len AND SUBSTR(v_source, v_scan, 1) IN ('+', '-') THEN
+                        v_scan := v_scan + 1;
+                    END IF;
+                    WHILE v_scan <= v_len
+                      AND REGEXP_LIKE(SUBSTR(v_source, v_scan, 1), '[0-9]')
+                    LOOP
+                        v_scan := v_scan + 1;
+                    END LOOP;
+                END IF;
+                v_end := v_scan - 1;
+            ELSE
+                append_text(v_spaces || v_char);
+                IF v_result IS NULL THEN
+                    RETURN NULL;
+                END IF;
+                v_pos := v_pos + 1;
+                CONTINUE;
+            END IF;
+
+            IF v_end IS NULL OR v_end < v_start THEN
+                RETURN NULL;
+            END IF;
+            v_denom := SUBSTR(v_source, v_start, v_end - v_start + 1);
+            IF UPPER(TRIM(v_denom)) LIKE 'NULLIF(%' THEN
+                append_text(v_spaces || v_denom);
+            ELSE
+                append_text(v_spaces || 'NULLIF(' || v_denom || ', 0)');
+            END IF;
+            IF v_result IS NULL THEN
+                RETURN NULL;
+            END IF;
+            v_pos := v_end + 1;
+        END LOOP;
+
+        RETURN v_result;
+    END;
+
+    FUNCTION translate_expression(
+        p_expression IN CLOB,
+        p_feature_columns IN VARCHAR2
+    ) RETURN VARCHAR2 IS
+        v_expr VARCHAR2(32767);
+        v_rest VARCHAR2(32767) := p_feature_columns || ',';
+        v_token VARCHAR2(4000);
+        v_pos PLS_INTEGER;
+        v_col VARCHAR2(128);
+        v_replacement VARCHAR2(4000);
+        v_feature_count PLS_INTEGER := 0;
+    BEGIN
+        IF p_expression IS NULL THEN
+            RETURN NULL;
+        END IF;
+        IF v_max_expression_length IS NOT NULL
+           AND DBMS_LOB.GETLENGTH(p_expression) > v_max_expression_length THEN
+            RETURN NULL;
+        END IF;
+        v_expr := TRIM(DBMS_LOB.SUBSTR(p_expression, 32767, 1));
+        IF INSTR(v_expr, '=') > 0 THEN
+            v_expr := TRIM(SUBSTR(v_expr, INSTR(v_expr, '=', -1) + 1));
+        END IF;
+        IF has_blocked_expr_char(v_expr) OR INSTR(v_expr, '**') > 0 THEN
+            RETURN NULL;
+        END IF;
+
+        LOOP
+            EXIT WHEN v_rest IS NULL;
+            v_pos := INSTR(v_rest, ',');
+            EXIT WHEN v_pos IS NULL OR v_pos = 0;
+            v_token := TRIM(SUBSTR(v_rest, 1, v_pos - 1));
+            v_rest := SUBSTR(v_rest, v_pos + 1);
+            IF v_token IS NULL THEN
+                CONTINUE;
+            END IF;
+
+            v_col := normalize_identifier(v_token, 'feature column');
+            IF v_feature_count >= 200 THEN
+                RETURN NULL;
+            END IF;
+            IF NOT column_exists(v_target_owner, v_target_table, v_col) THEN
+                RETURN NULL;
+            END IF;
+            v_replacement := numeric_column_expr(v_col, NULL);
+            v_expr := replace_identifier_expr(v_expr, v_col, v_replacement);
+            IF v_expr IS NULL THEN
+                RETURN NULL;
+            END IF;
+            v_feature_count := v_feature_count + 1;
+        END LOOP;
+
+        IF v_feature_count = 0 OR has_unknown_expression_token(v_expr) THEN
+            RETURN NULL;
+        END IF;
+        v_expr := protect_division_denominators(v_expr);
+        IF v_expr IS NULL THEN
+            RETURN NULL;
+        END IF;
+        IF v_max_expression_length IS NOT NULL
+           AND LENGTH(v_expr) > v_max_expression_length THEN
+            RETURN NULL;
+        END IF;
+        RETURN v_expr;
+    EXCEPTION
+        WHEN OTHERS THEN
+            RETURN NULL;
+    END;
+BEGIN
+    v_rule_owner := CASE
+        WHEN is_null_token(p_rule_owner_name) THEN SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')
+        ELSE normalize_identifier(p_rule_owner_name, 'rule_owner_name')
+    END;
+    v_rule_table := normalize_identifier(NVL(p_rule_table_name, 'INIT$_TB_SYMBOLIC_RULE'), 'rule_table_name');
+    v_rule_id := normalize_rule_id(p_rule_id);
+    v_target_owner := CASE
+        WHEN is_null_token(p_target_owner) THEN SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')
+        ELSE normalize_identifier(p_target_owner, 'target_owner')
+    END;
+    v_target_table := normalize_identifier(p_target_table, 'target_table');
+    v_case_id_col := CASE
+        WHEN is_null_token(p_case_id_column_name) THEN NULL
+        ELSE normalize_identifier(p_case_id_column_name, 'case_id_column_name')
+    END;
+    v_tolerance_pct := NVL(p_error_pct_threshold, 0.05);
+    IF v_tolerance_pct > 1 THEN
+        v_tolerance_pct := v_tolerance_pct / 100;
+    END IF;
+    v_tolerance_pct := GREATEST(0, LEAST(1, v_tolerance_pct));
+    v_abs_error_threshold := CASE WHEN p_abs_error_threshold IS NULL THEN NULL ELSE GREATEST(0, p_abs_error_threshold) END;
+    v_run_source_type := normalize_run_source_type(p_run_source_type);
+    v_run_id := NVL(p_run_id, 0);
+    v_max_expression_length := CASE
+        WHEN p_max_expression_length IS NULL THEN 8000
+        WHEN p_max_expression_length <= 0 THEN NULL
+        ELSE GREATEST(1000, LEAST(32767, p_max_expression_length))
+    END;
+    v_target_object := qualified_name(v_target_owner, v_target_table);
+    v_rule_object := qualified_name(v_rule_owner, v_rule_table);
+
+    IF NOT table_exists(v_target_owner, v_target_table) THEN
+        RAISE_APPLICATION_ERROR(-20683, 'Target table does not exist: ' || v_target_owner || '.' || v_target_table);
+    END IF;
+    IF NOT table_exists(v_rule_owner, v_rule_table) THEN
+        RAISE_APPLICATION_ERROR(-20684, 'Symbolic rule table does not exist: ' || v_rule_owner || '.' || v_rule_table);
+    END IF;
+    load_target_column_cache;
+
+    IF v_case_id_col IS NOT NULL AND column_exists(v_target_owner, v_target_table, v_case_id_col) THEN
+        v_case_id_expr := 'SUBSTR(TO_CHAR(T.' || quote_name(v_case_id_col) || '), 1, 4000)';
+    ELSE
+        v_case_id_expr := 'NULL';
+    END IF;
+
+    EXECUTE IMMEDIATE
+        'SELECT R."TARGET_COLUMN", R."EXPRESSION", R."FEATURE_COLUMNS", R."SCORE", R."COMPLEXITY", R."METHOD" ' ||
+        '  FROM ' || v_rule_object || ' R ' ||
+        ' WHERE R."RUN_SOURCE_TYPE" = :run_source_type ' ||
+        '   AND (:run_source_type = ''DATA_WORK'' OR R."RUN_ID" = :run_id) ' ||
+        '   AND R."OWNER" = :target_owner ' ||
+        '   AND R."TABLE_NAME" = :target_table ' ||
+        '   AND R."RULE_ID" = :rule_id ' ||
+        '   AND R."EXPRESSION" IS NOT NULL ' ||
+        '   AND R."FEATURE_COLUMNS" IS NOT NULL ' ||
+        '   AND ROWNUM = 1'
+        INTO v_target_col, v_rule_expression, v_rule_feature_columns, v_rule_score, v_rule_complexity, v_rule_method
+        USING v_run_source_type, v_run_source_type, v_run_id, v_target_owner, v_target_table, v_rule_id;
+
+    v_target_col := normalize_identifier(v_target_col, 'target_column');
+    IF NOT column_exists(v_target_owner, v_target_table, v_target_col) THEN
+        RAISE_APPLICATION_ERROR(-20685, 'Rule target column does not exist: ' || v_target_col);
+    END IF;
+
+    v_expr_sql := translate_expression(v_rule_expression, v_rule_feature_columns);
+    IF v_expr_sql IS NULL THEN
+        RAISE_APPLICATION_ERROR(-20686, 'Symbolic expression could not be translated to SQL.');
+    END IF;
+
+    v_sql :=
+        'SELECT CAST(NULL AS NUMBER) AS V_VIOLATION_ID' || CHR(10) ||
+        '     , ' || sql_literal(v_rule_id) || ' AS V_RULE_ID' || CHR(10) ||
+        '     , ' || sql_literal(v_target_col) || ' AS V_TARGET_COLUMN' || CHR(10) ||
+        '     , Q.PREDICTED_VALUE AS V_PREDICTED_VALUE' || CHR(10) ||
+        '     , Q.ACTUAL_VALUE AS V_ACTUAL_VALUE' || CHR(10) ||
+        '     , Q.LOWER_BOUND AS V_LOWER_BOUND' || CHR(10) ||
+        '     , Q.UPPER_BOUND AS V_UPPER_BOUND' || CHR(10) ||
+        '     , Q.ABS_ERROR AS V_ABS_ERROR' || CHR(10) ||
+        '     , Q.ERROR_PCT AS V_ERROR_PCT' || CHR(10) ||
+        '     , NVL(Q.ERROR_PCT, Q.ABS_ERROR) AS V_VIOLATION_SCORE' || CHR(10) ||
+        '     , Q.CASE_ID AS V_CASE_ID' || CHR(10) ||
+        '     , T.*' || CHR(10) ||
+        '  FROM (' || CHR(10) ||
+        '        SELECT P.CASE_ID' || CHR(10) ||
+        '             , P.CASE_ROWID' || CHR(10) ||
+        '             , P.PREDICTED_VALUE' || CHR(10) ||
+        '             , P.ACTUAL_VALUE' || CHR(10) ||
+        '             , P.PREDICTED_VALUE - ABS(P.PREDICTED_VALUE) * ' || number_literal(v_tolerance_pct) || ' AS LOWER_BOUND' || CHR(10) ||
+        '             , P.PREDICTED_VALUE + ABS(P.PREDICTED_VALUE) * ' || number_literal(v_tolerance_pct) || ' AS UPPER_BOUND' || CHR(10) ||
+        '             , ABS(P.ACTUAL_VALUE - P.PREDICTED_VALUE) AS ABS_ERROR' || CHR(10) ||
+        '             , CASE WHEN ABS(P.PREDICTED_VALUE) > 0 THEN ABS(P.ACTUAL_VALUE - P.PREDICTED_VALUE) / ABS(P.PREDICTED_VALUE) END AS ERROR_PCT' || CHR(10) ||
+        '          FROM (' || CHR(10) ||
+        '                SELECT /*+ NO_PARALLEL */ ' || v_case_id_expr || ' AS CASE_ID' || CHR(10) ||
+        '                     , ROWIDTOCHAR(T.ROWID) AS CASE_ROWID' || CHR(10) ||
+        '                     , (' || v_expr_sql || ') AS PREDICTED_VALUE' || CHR(10) ||
+        '                     , ' || numeric_column_expr(v_target_col, 'T') || ' AS ACTUAL_VALUE' || CHR(10) ||
+        '                  FROM ' || v_target_object || ' T' || CHR(10) ||
+        '               ) P' || CHR(10) ||
+        '         WHERE 1=1' || CHR(10) ||
+        '           AND P.PREDICTED_VALUE IS NOT NULL' || CHR(10) ||
+        '           AND P.ACTUAL_VALUE IS NOT NULL' || CHR(10) ||
+        '       ) Q' || CHR(10) ||
+        '  JOIN ' || v_target_object || ' T' || CHR(10) ||
+        '    ON ROWIDTOCHAR(T.ROWID) = Q.CASE_ROWID' || CHR(10) ||
+        ' WHERE 1=1' || CHR(10) ||
+        '   AND (' || CHR(10) ||
+        '        (ABS(Q.PREDICTED_VALUE) > 0 AND Q.ERROR_PCT > ' || number_literal(v_tolerance_pct) || ')' || CHR(10) ||
+        '        OR (ABS(Q.PREDICTED_VALUE) = 0 AND Q.ABS_ERROR > ' || number_literal(NVL(v_abs_error_threshold, v_tolerance_pct)) || ')' || CHR(10);
+
+    IF v_abs_error_threshold IS NOT NULL THEN
+        v_sql := v_sql || '        OR Q.ABS_ERROR > ' || number_literal(v_abs_error_threshold) || CHR(10);
+    END IF;
+
+    v_sql := v_sql ||
+        '       )' || CHR(10) ||
+        ' ORDER BY V_VIOLATION_SCORE DESC NULLS LAST, V_ERROR_PCT DESC NULLS LAST, V_ABS_ERROR DESC NULLS LAST, V_CASE_ID';
+
+    RETURN v_sql;
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        RAISE_APPLICATION_ERROR(-20687, 'Symbolic rule row was not found for realtime violation query.');
+END;
+/
+
 CREATE OR REPLACE PROCEDURE "INIT$_SP_SYMBOLIC_RULE_VIOLATION_DETECT" (
     p_rule_owner_name         IN VARCHAR2 DEFAULT NULL,
     p_rule_table_name         IN VARCHAR2 DEFAULT 'INIT$_TB_SYMBOLIC_RULE',

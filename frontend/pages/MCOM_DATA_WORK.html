@@ -365,13 +365,11 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
     <section class="table-tab-panel data-tool-panel" data-panel="sql">
         <div class="sql-workbench data-sql-workbench">
             <div class="sql-toolbar">
-                <button type="button" class="table-btn" onclick="__PAGE_CODE__.executeSql('#sqlEditor-__PAGE_CODE__', '#sqlGrid-__PAGE_CODE__', 'sql')">
+                <button type="button" class="table-icon-btn sql-tool-icon-btn sql-run-btn" title="Run SQL (Ctrl+Enter)" aria-label="Run SQL" onclick="__PAGE_CODE__.executeSql('#sqlEditor-__PAGE_CODE__', '#sqlGrid-__PAGE_CODE__', 'sql')">
                     <i class="fas fa-play"></i>
-                    <span data-label-key="runSql">Run SQL(Ctrl+Enter)</span>
                 </button>
-                <button type="button" class="table-btn" onclick="__PAGE_CODE__.executeFullSql('#sqlEditor-__PAGE_CODE__', '#sqlGrid-__PAGE_CODE__', 'sql')">
-                    <i class="fas fa-forward"></i>
-                    <span data-label-key="runAllSql">Run All SQL(F5)</span>
+                <button type="button" class="table-icon-btn sql-tool-icon-btn sql-run-all-btn" title="Run All SQL (F5)" aria-label="Run All SQL" onclick="__PAGE_CODE__.executeFullSql('#sqlEditor-__PAGE_CODE__', '#sqlGrid-__PAGE_CODE__', 'sql')">
+                    <i class="fas fa-file-lines"></i>
                 </button>
                 <button type="button" id="sqlTxCommit-__PAGE_CODE__" class="table-btn" onclick="__PAGE_CODE__.commitSqlTransaction()" disabled>
                     <i class="fas fa-check"></i>
@@ -382,6 +380,10 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                     <span data-label-key="rollbackTransaction">Rollback</span>
                 </button>
                 <span id="sqlTxStatus-__PAGE_CODE__" class="table-empty" data-label-key="transactionOff">Auto commit</span>
+                <label class="table-limit-control data-sql-freeze-control" title="Freeze No plus this many data columns while scrolling horizontally">
+                    <span>Freeze</span>
+                    <input id="sqlFreezeColumns-__PAGE_CODE__" type="number" min="0" max="50" value="0" onchange="__PAGE_CODE__.applySqlGridFrozenColumns('sql')" oninput="__PAGE_CODE__.applySqlGridFrozenColumns('sql')">
+                </label>
                 <label class="table-limit-control">
                     <span data-label-key="rows">Rows</span>
                     <input id="sqlLimit-__PAGE_CODE__" type="number" min="1" max="1000" value="100">
@@ -409,9 +411,8 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
 
     <section class="table-tab-panel data-tool-panel" data-panel="history">
         <div class="data-panel-toolbar">
-            <button type="button" class="table-btn" onclick="__PAGE_CODE__.loadRunHistory()">
+            <button type="button" class="table-icon-btn" title="Refresh history" aria-label="Refresh history" onclick="__PAGE_CODE__.loadRunHistory()">
                 <i class="fas fa-sync-alt"></i>
-                <span data-label-key="refreshHistory">Refresh history</span>
             </button>
         </div>
         <div id="runHistoryGrid-__PAGE_CODE__" class="table-result-grid data-history-grid"></div>

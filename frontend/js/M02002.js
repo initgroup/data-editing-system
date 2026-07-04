@@ -34,6 +34,7 @@
             data: [],
             sql: []
         },
+        gridFrozenColumns: { sql: 0 },
         selectedCell: null,
         resizing: null,
         handleResizeMoveBound: null,
@@ -73,6 +74,7 @@
             this.activeTab = "columns";
             this.gridData = { columns: [], data: [], sql: [] };
             this.columnWidths = { columns: [], data: [], sql: [] };
+            this.gridFrozenColumns = { sql: 0 };
             this.selectedCell = null;
             this.resizing = null;
             this.contextLoadFailed = false;
@@ -789,11 +791,13 @@
         async executeSql() {
             const executable = this.getExecutableSqlFromEditor();
             if (!executable.sql) {
+                this.renderSqlMessage("No SQL statement found at the cursor.", "error");
                 this.renderError("#sqlGrid-M02002", "No SQL statement found at the cursor.");
                 return;
             }
             const sql = executable.sql;
             if (!this.validateSelectSql(sql)) {
+                this.renderSqlMessage("Only a single SELECT statement is allowed.", "error");
                 this.renderError("#sqlGrid-M02002", "Only a single SELECT statement is allowed.");
                 this.restoreSqlSelection(executable);
                 return;
@@ -802,6 +806,8 @@
             this.restoreSqlSelection(executable);
             const limit = this.getLimit("#sqlLimit-M02002");
             const grid = getContainerEl("#sqlGrid-M02002");
+            const startedAt = performance.now();
+            this.renderSqlMessage("Running SQL...", "info");
             if (grid) grid.innerHTML = `<div class="table-empty">Running SQL...</div>`;
 
             try {
@@ -810,12 +816,25 @@
                     showLoading: false,
                     body: { sql, limit }
                 });
+                const elapsedMs = Math.round(performance.now() - startedAt);
+                const rowCount = Array.isArray(json.data) ? json.data.length : 0;
+                this.renderSqlMessage(`${rowCount.toLocaleString()} rows selected. (${elapsedMs.toLocaleString()} ms)`, "success");
                 this.renderGrid("#sqlGrid-M02002", json.data || [], "sql", json.columns || []);
             } catch (error) {
+                const elapsedMs = Math.round(performance.now() - startedAt);
+                this.renderSqlMessage(`${error.message || "SQL execution failed."} (${elapsedMs.toLocaleString()} ms)`, "error");
                 this.renderError("#sqlGrid-M02002", error.message);
             } finally {
                 this.restoreSqlSelection(executable);
             }
+        },
+
+        renderSqlMessage(message, type = "info") {
+            const element = getContainerEl("#sqlMessage-M02002");
+            if (!element) return;
+            element.className = type === "error" ? "table-error" : "table-empty";
+            element.textContent = message || "";
+            element.hidden = !message;
         },
 
         handleSqlEditorKeydown(event) {
@@ -919,6 +938,7 @@
                         </table>
                         ${this.renderListFooter(0)}
                     `;
+                    this.applyGridFrozenColumns(gridKey);
                     return;
                 }
                 container.innerHTML = `
@@ -962,6 +982,48 @@
                 </table>
                 ${this.renderListFooter(rows.length)}
             `;
+            this.applyGridFrozenColumns(gridKey);
+        },
+
+        getGridFreezeCount(gridKey) {
+            const table = getContainerEl(`[data-grid-key="${gridKey}"]`);
+            const headerCells = Array.from(table?.tHead?.rows?.[0]?.children || []);
+            const maxDataColumns = Math.max(0, headerCells.length - 1);
+            const input = gridKey === "sql" ? getContainerEl("#sqlFreezeColumns-M02002") : null;
+            let dataColumnCount = Number.parseInt(input?.value ?? this.gridFrozenColumns?.[gridKey] ?? 0, 10);
+            if (!Number.isFinite(dataColumnCount)) dataColumnCount = 0;
+            dataColumnCount = Math.max(0, Math.min(maxDataColumns, dataColumnCount));
+            this.gridFrozenColumns = { ...(this.gridFrozenColumns || {}), [gridKey]: dataColumnCount };
+            if (input && input.value !== String(dataColumnCount)) input.value = String(dataColumnCount);
+            return dataColumnCount + 1;
+        },
+
+        applyGridFrozenColumns(gridKey = "sql") {
+            const table = getContainerEl(`[data-grid-key="${gridKey}"]`);
+            if (!table) return;
+            table.querySelectorAll(".is-frozen-col, .is-frozen-edge").forEach((cell) => {
+                cell.classList.remove("is-frozen-col", "is-frozen-edge");
+                cell.style.left = "";
+            });
+            table.classList.remove("has-frozen-cols");
+            const headerCells = Array.from(table.tHead?.rows?.[0]?.children || []);
+            const visibleFreezeCount = Math.min(this.getGridFreezeCount(gridKey), headerCells.length);
+            if (visibleFreezeCount <= 0) return;
+            table.classList.add("has-frozen-cols");
+            const offsets = [];
+            let left = 0;
+            for (let index = 0; index < visibleFreezeCount; index += 1) {
+                offsets[index] = left;
+                left += headerCells[index].getBoundingClientRect().width || headerCells[index].offsetWidth || 0;
+            }
+            Array.from(table.rows || []).forEach((row) => {
+                Array.from(row.children || []).forEach((cell, index) => {
+                    if (index >= visibleFreezeCount) return;
+                    cell.classList.add("is-frozen-col");
+                    if (index === visibleFreezeCount - 1) cell.classList.add("is-frozen-edge");
+                    cell.style.left = `${offsets[index]}px`;
+                });
+            });
         },
 
         getVisibleGridColumns(gridKey, columns) {
@@ -1088,6 +1150,7 @@
             const table = getContainerEl(`[data-grid-key="${this.resizing.gridKey}"]`);
             const col = table?.querySelectorAll("col")[this.resizing.columnIndex + 1];
             if (col) col.style.width = `${nextWidth}px`;
+            this.applyGridFrozenColumns(this.resizing.gridKey);
         },
 
         stopColumnResize() {
