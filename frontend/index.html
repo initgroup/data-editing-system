@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>INIT Data Editing System</title>
     <script>
-        window.APP_CACHE_VERSION = "1.1.7";
+        window.APP_CACHE_VERSION = "1.1.8";
         window.APP_ASSET_VERSION_OVERRIDES = {
             // 전체 캐시 갱신: APP_CACHE_VERSION만 올립니다.
             // 부분 캐시 갱신: "js/M90001.js": "1.0.1" 처럼 파일별 버전을 지정합니다.
@@ -242,6 +242,7 @@
 
     <script>
         [
+            "./js/cache-version-utils.js",
             "./js/app.js",
             "./js/gridjs.umd.js",
             "./js/common.js",
@@ -441,6 +442,8 @@
             const left = Math.max(0, Math.round((window.screen.width - width) / 2));
             const top = Math.max(0, Math.round((window.screen.height - height) / 2));
             const pageCode = encodeURIComponent(getCurrentHelpPageCode());
+            window.AssetCacheVersionUtils?.publishConfig?.();
+            const version = encodeURIComponent(window.AssetCacheVersionUtils?.getAssetVersion?.("help/page.html") || window.APP_CACHE_VERSION || "");
             const features = [
                 `width=${width}`,
                 `height=${height}`,
@@ -451,7 +454,7 @@
                 "noopener=yes"
             ].join(",");
 
-            window.open(`./help/page.html?page=${pageCode}`, "initMenuHelp", features);
+            window.open(`./help/page.html?page=${pageCode}&v=${version}`, "initMenuHelp", features);
         }
 
         // 전역 변수로 이전 크기 저장 (초기값 300px)

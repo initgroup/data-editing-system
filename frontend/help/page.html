@@ -6,6 +6,7 @@
     <title>메뉴 도움말 - INIT Data Editing System</title>
     <meta name="ai-context-kind" content="menu-help">
     <meta name="ai-context-priority" content="highest">
+    <script src="../js/cache-version-utils.js"></script>
     <script src="./help-utils.js"></script>
     <style>
         :root {
@@ -140,6 +141,36 @@
             grid-column: 1 / -1;
         }
 
+        .cache-version-table {
+            border-collapse: collapse;
+            font-size: 12px;
+            width: 100%;
+        }
+
+        .cache-version-table th,
+        .cache-version-table td {
+            border-bottom: 1px solid #e2e8f0;
+            padding: 7px 8px;
+            text-align: left;
+            vertical-align: top;
+        }
+
+        .cache-version-table th {
+            background: #f8fafc;
+            color: #475569;
+            font-weight: 800;
+        }
+
+        .cache-version-table code {
+            color: #0f172a;
+            word-break: break-all;
+        }
+
+        .cache-version-source {
+            color: #64748b;
+            white-space: nowrap;
+        }
+
         @media (max-width: 760px) {
             header,
             main {
@@ -205,6 +236,69 @@
                     <dd><code>${escapeHtml(value)}</code></dd>
                 </div>
             `).join("")}</dl>`;
+        }
+
+        function getHelpCacheAssets(pageCode, implementation) {
+            const normalizedPageCode = window.HelpContentUtils.normalizePageCode(pageCode);
+            const assets = [
+                { label: "Shell JS", path: "js/app.js" },
+                { label: "Common JS", path: "js/common.js" },
+                { label: "Menu config", path: "config/menu.config.js" },
+                { label: "Menu renderer", path: "js/menu-renderer.js" },
+                { label: "Help popup", path: "help/page.html" },
+                { label: "Help utility", path: "help/help-utils.js" },
+                { label: "Help content", path: "help/help-content.json" }
+            ];
+
+            if (implementation.frontendHtml) {
+                assets.push({ label: "Current menu HTML", path: implementation.frontendHtml });
+            }
+
+            if (["M03001", "M03002", "M03003", "M03004"].includes(normalizedPageCode)) {
+                assets.push({ label: "Data work template JS", path: "frontend/js/MCOM_DATA_WORK.js" });
+                assets.push({ label: "Current menu JS", path: `frontend/js/${normalizedPageCode}.js` });
+            } else if (normalizedPageCode === "M04001") {
+                assets.push({ label: "Flow work template JS", path: "frontend/js/MCOM_FLOW_WORK.js" });
+                assets.push({ label: "Current menu JS", path: "frontend/js/M04001.js" });
+            } else if (normalizedPageCode === "M04002") {
+                assets.push({ label: "Analysis work template JS", path: "frontend/js/MCOM_ANLY_WORK.js" });
+            } else if (implementation.frontendJs) {
+                assets.push({ label: "Current menu JS", path: implementation.frontendJs });
+            }
+
+            return assets;
+        }
+
+        function renderCacheVersions(pageCode, implementation) {
+            const rows = window.AssetCacheVersionUtils.buildRows(getHelpCacheAssets(pageCode, implementation));
+            const config = window.AssetCacheVersionUtils.getConfig();
+            const versionText = config.version || "unknown";
+            const body = rows.map((row) => `
+                <tr>
+                    <td>${escapeHtml(row.label)}</td>
+                    <td><code>${escapeHtml(row.path)}</code></td>
+                    <td><code>${escapeHtml(row.version || "unknown")}</code></td>
+                    <td class="cache-version-source">${escapeHtml(row.source)}</td>
+                </tr>
+            `).join("");
+
+            return `
+                <section class="full" data-ai-section="cache-version">
+                    <h2>현재 파일 캐시 버전</h2>
+                    <p>기본 버전은 <code>${escapeHtml(versionText)}</code>이며, 파일별 override가 있으면 해당 버전이 우선 적용됩니다.</p>
+                    <table class="cache-version-table">
+                        <thead>
+                            <tr>
+                                <th>구분</th>
+                                <th>파일</th>
+                                <th>적용 버전</th>
+                                <th>출처</th>
+                            </tr>
+                        </thead>
+                        <tbody>${body}</tbody>
+                    </table>
+                </section>
+            `;
         }
 
         function renderOptionalSection(title, items, sectionKey, extraClass = "") {
@@ -294,6 +388,8 @@
                         <h2>비공개 원칙</h2>
                         <p>${escapeHtml(implementation.privacyNote)}</p>
                     </section>
+
+                    ${renderCacheVersions(page.pageCode, implementation)}
                 </div>
             `;
         }
@@ -301,7 +397,8 @@
         async function initHelp() {
             const params = new URLSearchParams(window.location.search);
             const requestedPage = window.HelpContentUtils.normalizePageCode(params.get("page") || "home");
-            const response = await fetch("./help-content.json", { cache: "no-store" });
+            const helpContentUrl = window.AssetCacheVersionUtils.getAssetUrl("./help-content.json");
+            const response = await fetch(helpContentUrl, { cache: "no-store" });
             const content = await response.json();
             const page = content.pages[requestedPage] || content.pages.home;
             renderHelp(page);
