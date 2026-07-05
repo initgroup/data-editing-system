@@ -7359,6 +7359,19 @@ body.intro-mode #container-M99001 .env-workspace {
     min-height: 0;
 }
 
+#container-M91001.account-page .env-workspace {
+    display: block;
+}
+
+#container-M91001.account-page .env-object-panel {
+    display: none;
+}
+
+#container-M91001.account-page .env-panel {
+    height: 100%;
+    max-width: none;
+}
+
 #container-M91001 .m91002-account-panel,
 #container-M91002 .m91002-account-panel {
     flex: 1 1 auto;
