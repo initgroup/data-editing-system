@@ -18,6 +18,9 @@ instantclient/
 __pycache__/
 *.pyc
 
+# Local Codex prompts / screenshots
+prompt/
+
 # Oracle Wallet / 로컬 설치 파일
 Wallet_*.zip
 *Wallet*.zip
