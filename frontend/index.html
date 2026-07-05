@@ -5,12 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>INIT Data Editing System</title>
     <script>
-        window.APP_CACHE_VERSION = "1.1.8";
+        window.APP_CACHE_VERSION = "1.1.9";
         window.APP_ASSET_VERSION_OVERRIDES = {
             // 전체 캐시 갱신: APP_CACHE_VERSION만 올립니다.
             // 부분 캐시 갱신: "js/M90001.js": "1.0.1" 처럼 파일별 버전을 지정합니다.
             "js/MCOM_FLOW_WORK.js": "1.1.8",
             "pages/MCOM_FLOW_WORK.html": "1.1.1",
+            "css/style.css": "1.1.9",
             "css/styleMenu.css": "1.1.1"
         };
         window.APP_ASSET_URL = function(path) {
@@ -107,13 +108,24 @@
             </header>
         </div>
         <div id="contentWrapper" class="content-area">
-            <div id="customLoadingBar" class="hidden fixed inset-0 bg-gray-900/50 z-[9999] flex flex-col items-center justify-center">
-                <div class="bg-white p-8 rounded-2xl shadow-2xl flex flex-col items-center">
-                    <div class="relative w-16 h-16">
-                        <div class="absolute inset-0 border-4 border-blue-200 rounded-full"></div>
-                        <div class="absolute inset-0 border-4 border-blue-600 rounded-full border-t-transparent animate-spin"></div>
+            <div id="customLoadingBar" class="app-loading-overlay hidden" role="status" aria-live="polite" aria-label="Loading page">
+                <div class="app-loading-panel">
+                    <div class="app-loading-mark" aria-hidden="true">
+                        <span class="app-loading-ring"></span>
+                        <span class="app-loading-core">
+                            <i class="fas fa-database"></i>
+                        </span>
                     </div>
-                    <p class="text-lg font-bold text-gray-700 mt-4">Processing data...</p>
+                    <div class="app-loading-copy">
+                        <p>Processing data</p>
+                        <span>Preparing workspace</span>
+                    </div>
+                    <div class="app-loading-bars" aria-hidden="true">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
                 </div>
             </div>
             <section id="main-container" class="flex-1 flex flex-col min-h-0 relative">
