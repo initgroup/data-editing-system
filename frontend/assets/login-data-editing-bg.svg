@@ -1,0 +1,129 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900" role="img" aria-label="Data editing workflow background">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#06142f"/>
+      <stop offset="0.5" stop-color="#073b82"/>
+      <stop offset="1" stop-color="#0b6fbd"/>
+    </linearGradient>
+    <linearGradient id="flow" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#38bdf8" stop-opacity="0"/>
+      <stop offset="0.45" stop-color="#7dd3fc" stop-opacity="0.8"/>
+      <stop offset="1" stop-color="#bfdbfe" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#93c5fd" stop-opacity="0.62"/>
+      <stop offset="1" stop-color="#93c5fd" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="42" height="42" patternUnits="userSpaceOnUse">
+      <path d="M 42 0 L 0 0 0 42" fill="none" stroke="#7dd3fc" stroke-opacity="0.12" stroke-width="1"/>
+    </pattern>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="16" stdDeviation="22" flood-color="#020617" flood-opacity="0.22"/>
+    </filter>
+  </defs>
+
+  <rect width="1440" height="900" fill="url(#grid)"/>
+  <circle cx="1060" cy="160" r="360" fill="url(#glow)" opacity="0.24"/>
+  <circle cx="420" cy="760" r="420" fill="url(#glow)" opacity="0.14"/>
+
+  <g opacity="0.38" fill="none" stroke="#7dd3fc" stroke-width="2">
+    <path d="M-70 670 C160 560 280 790 520 655 S900 590 1135 710 1340 765 1510 660"/>
+    <path d="M-40 745 C200 660 336 830 585 708 S920 675 1168 768 1330 810 1515 742"/>
+    <path d="M-20 590 C180 470 310 650 560 540 S865 475 1120 560 1335 610 1510 532"/>
+  </g>
+
+  <g opacity="0.34">
+    <path d="M160 198 H485" stroke="url(#flow)" stroke-width="3"/>
+    <path d="M510 198 H820" stroke="url(#flow)" stroke-width="3"/>
+    <path d="M848 198 H1160" stroke="url(#flow)" stroke-width="3"/>
+    <path d="M315 310 H628" stroke="url(#flow)" stroke-width="2"/>
+    <path d="M656 310 H980" stroke="url(#flow)" stroke-width="2"/>
+  </g>
+
+  <g filter="url(#softShadow)" opacity="0.78">
+    <g transform="translate(128 118)">
+      <rect width="270" height="164" fill="#08245a" fill-opacity="0.78" stroke="#93c5fd" stroke-opacity="0.34"/>
+      <rect x="0" y="0" width="270" height="36" fill="#0ea5e9" fill-opacity="0.25"/>
+      <g fill="#dbeafe" font-family="Arial, sans-serif" font-size="13" font-weight="700">
+        <text x="18" y="24">SOURCE TABLE</text>
+      </g>
+      <g stroke="#bfdbfe" stroke-opacity="0.22">
+        <path d="M0 68 H270 M0 100 H270 M0 132 H270"/>
+        <path d="M78 36 V164 M172 36 V164"/>
+      </g>
+      <g fill="#93c5fd" font-family="Arial, sans-serif" font-size="12">
+        <text x="18" y="58">OWNER</text>
+        <text x="96" y="58">COLUMN</text>
+        <text x="190" y="58">TYPE</text>
+        <text x="18" y="90">INIT</text>
+        <text x="96" y="90">COL001</text>
+        <text x="190" y="90">VARCHAR</text>
+        <text x="18" y="122">INIT</text>
+        <text x="96" y="122">COL002</text>
+        <text x="190" y="122">NUMBER</text>
+      </g>
+    </g>
+
+    <g transform="translate(515 116)">
+      <rect width="276" height="168" fill="#062b66" fill-opacity="0.82" stroke="#7dd3fc" stroke-opacity="0.4"/>
+      <g fill="#e0f2fe" font-family="Arial, sans-serif">
+        <text x="20" y="32" font-size="13" font-weight="700">RULE DISCOVERY</text>
+        <text x="20" y="66" font-size="12">NULL CHECK</text>
+        <text x="20" y="96" font-size="12">CATEGORY MAP</text>
+        <text x="20" y="126" font-size="12">OUTLIER REVIEW</text>
+      </g>
+      <g fill="none" stroke="#38bdf8" stroke-width="2">
+        <path d="M158 62 L198 62 L216 48"/>
+        <path d="M158 92 L208 92 L232 116"/>
+        <path d="M158 122 L202 122 L236 78"/>
+      </g>
+      <g fill="#60a5fa">
+        <circle cx="158" cy="62" r="5"/>
+        <circle cx="158" cy="92" r="5"/>
+        <circle cx="158" cy="122" r="5"/>
+        <circle cx="216" cy="48" r="5"/>
+        <circle cx="232" cy="116" r="5"/>
+        <circle cx="236" cy="78" r="5"/>
+      </g>
+    </g>
+
+    <g transform="translate(908 118)">
+      <rect width="288" height="164" fill="#08245a" fill-opacity="0.78" stroke="#bfdbfe" stroke-opacity="0.34"/>
+      <g fill="#dbeafe" font-family="Arial, sans-serif">
+        <text x="20" y="32" font-size="13" font-weight="700">EDITING RUN</text>
+        <text x="20" y="70" font-size="12">4 WORKS</text>
+        <text x="20" y="104" font-size="12">4 SUCCESS</text>
+        <text x="20" y="138" font-size="12">0 FAILED</text>
+      </g>
+      <g fill="none" stroke="#22c55e" stroke-width="3">
+        <path d="M182 70 l18 18 42 -50"/>
+        <path d="M182 112 l18 18 42 -50" opacity="0.78"/>
+      </g>
+      <rect x="172" y="48" width="84" height="84" fill="#22c55e" fill-opacity="0.08" stroke="#86efac" stroke-opacity="0.35"/>
+    </g>
+  </g>
+
+  <g opacity="0.65">
+    <circle cx="160" cy="198" r="7" fill="#60a5fa"/>
+    <circle cx="485" cy="198" r="7" fill="#7dd3fc"/>
+    <circle cx="820" cy="198" r="7" fill="#7dd3fc"/>
+    <circle cx="1160" cy="198" r="7" fill="#bfdbfe"/>
+    <circle cx="315" cy="310" r="5" fill="#60a5fa"/>
+    <circle cx="628" cy="310" r="5" fill="#7dd3fc"/>
+    <circle cx="980" cy="310" r="5" fill="#bfdbfe"/>
+  </g>
+
+  <g opacity="0.26" fill="#dbeafe">
+    <circle cx="1030" cy="530" r="4"/>
+    <circle cx="1088" cy="584" r="5"/>
+    <circle cx="1172" cy="548" r="3"/>
+    <circle cx="1240" cy="632" r="5"/>
+    <circle cx="1322" cy="584" r="3"/>
+    <circle cx="924" cy="634" r="4"/>
+    <circle cx="750" cy="612" r="3"/>
+    <circle cx="680" cy="710" r="5"/>
+    <circle cx="532" cy="648" r="4"/>
+    <circle cx="380" cy="716" r="5"/>
+    <circle cx="226" cy="650" r="3"/>
+  </g>
+</svg>

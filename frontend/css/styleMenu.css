@@ -6351,18 +6351,250 @@ body.intro-mode #container-intro .env-panel {
     display: flex;
     align-items: center;
     justify-content: center;
+    overflow: auto;
+    padding: 32px;
+    position: relative;
+    background:
+        linear-gradient(90deg, rgba(10, 44, 102, 0.05) 1px, transparent 1px),
+        linear-gradient(0deg, rgba(10, 44, 102, 0.05) 1px, transparent 1px),
+        linear-gradient(135deg, #eef4fb 0%, #ffffff 44%, #e8f1fb 100%);
+    background-size: 32px 32px, 32px 32px, auto;
+}
+
+#container-login .login-stage {
+    border: 1px solid #c9d7ea;
+    box-shadow: 0 28px 90px rgba(15, 23, 42, 0.18);
+    display: grid;
+    grid-template-columns: minmax(0, 1.18fr) 420px;
+    height: min(536px, calc(100vh - 48px));
+    min-height: 500px;
+    overflow: hidden;
+    width: min(1040px, calc(100vw - 48px));
+    background: #ffffff;
+}
+
+#container-login .login-brand-panel {
+    background:
+        linear-gradient(135deg, rgba(5, 14, 36, 0.9) 0%, rgba(8, 38, 88, 0.72) 54%, rgba(8, 74, 143, 0.58) 100%),
+        url("../assets/login-data-editing-bg.svg"),
+        url("../assets/bg_intro.png");
+    background-position: center, center, center;
+    background-size: cover, cover, cover;
+    color: #ffffff;
+    display: grid;
+    grid-template-rows: 48px 28px 112px 66px 96px minmax(66px, 1fr);
+    min-width: 0;
+    overflow: hidden;
+    padding: 36px 40px;
+    position: relative;
+}
+
+#container-login .login-brand-panel::before {
+    border: 1px solid rgba(147, 197, 253, 0.26);
+    content: "";
+    height: 220px;
+    position: absolute;
+    right: -48px;
+    top: 52px;
+    transform: rotate(18deg);
+    width: 360px;
+}
+
+#container-login .login-brand-panel::after {
+    background: linear-gradient(0deg, rgba(7, 25, 61, 0.72), rgba(7, 25, 61, 0));
+    bottom: 0;
+    content: "";
+    height: 190px;
+    left: 0;
+    opacity: 0.9;
+    position: absolute;
+    right: 0;
+}
+
+#container-login .login-brand-mark,
+#container-login .login-brand-eyebrow,
+#container-login .login-brand-panel h1,
+#container-login .login-brand-lead,
+#container-login .login-flow-visual,
+#container-login .login-feature-row {
+    position: relative;
+    z-index: 1;
+}
+
+#container-login .login-brand-mark {
+    align-items: center;
+    background: rgba(255, 255, 255, 0.94);
+    border: 1px solid rgba(255, 255, 255, 0.72);
+    display: inline-flex;
+    grid-row: 1;
+    height: 48px;
+    justify-content: center;
+    padding: 0 16px;
+    width: 142px;
+}
+
+#container-login .login-brand-mark img {
+    display: block;
+    max-height: 28px;
+    max-width: 104px;
+    object-fit: contain;
+}
+
+#container-login .login-brand-eyebrow {
+    color: #93c5fd;
+    font-size: 12px;
+    font-weight: 800;
+    grid-row: 2;
+    margin: 0;
+    align-self: end;
+    text-transform: uppercase;
+}
+
+#container-login .login-brand-panel h1 {
+    color: #ffffff;
+    font-size: 42px;
+    font-weight: 900;
+    grid-row: 3;
+    line-height: 1.08;
+    margin: 0;
+    max-width: 500px;
+    align-self: start;
+}
+
+#container-login .login-brand-lead {
+    color: #dbeafe;
+    font-size: 15px;
+    grid-row: 4;
+    line-height: 1.65;
+    margin: 0;
+    max-width: 520px;
+    align-self: start;
+}
+
+#container-login .login-flow-visual {
+    align-items: center;
+    display: grid;
+    gap: 14px;
+    grid-row: 5;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin: 0;
+    align-self: center;
+}
+
+#container-login .login-flow-node {
+    align-items: center;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(191, 219, 254, 0.32);
+    color: #eff6ff;
+    display: grid;
+    gap: 8px;
+    justify-items: center;
+    min-height: 92px;
+    padding: 16px 10px;
+    position: relative;
+}
+
+#container-login .login-flow-node + .login-flow-node::before {
+    background: #7dd3fc;
+    content: "";
+    height: 2px;
+    left: -14px;
+    position: absolute;
+    top: 50%;
+    width: 14px;
+}
+
+#container-login .login-flow-node i {
+    align-items: center;
+    background: #ffffff;
+    color: #1d4ed8;
+    display: inline-flex;
+    font-size: 16px;
+    height: 34px;
+    justify-content: center;
+    width: 34px;
+}
+
+#container-login .login-flow-node span {
+    font-size: 12px;
+    font-weight: 800;
+}
+
+#container-login .login-feature-row {
+    border-top: 1px solid rgba(191, 219, 254, 0.28);
+    display: grid;
+    gap: 1px;
+    grid-row: 6;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin-top: 0;
+    align-self: end;
+}
+
+#container-login .login-feature-row div {
+    background: rgba(255, 255, 255, 0.08);
+    display: grid;
+    gap: 5px;
+    min-width: 0;
+    padding: 14px;
+}
+
+#container-login .login-feature-row strong {
+    color: #ffffff;
+    font-size: 13px;
+}
+
+#container-login .login-feature-row span {
+    color: #bfdbfe;
+    font-size: 11px;
+    line-height: 1.35;
+}
+
+#container-login .login-language-switcher {
+    align-items: center;
+    display: inline-flex;
+    gap: 4px;
+    justify-self: end;
+    margin: 0 0 8px;
+}
+
+#container-login .login-language-btn {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    color: #334155;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 700;
+    min-height: 30px;
+    padding: 0 10px;
+}
+
+#container-login .login-language-btn:hover,
+#container-login .login-language-btn:focus-visible {
+    background: #f8fafc;
+    color: #0f172a;
+}
+
+#container-login .login-language-btn.is-active,
+#container-login .login-language-btn[aria-current="true"] {
+    background: #eff6ff;
+    border-color: #2563eb;
+    color: #1d4ed8;
+    box-shadow: inset 0 -2px 0 #2563eb;
 }
 
 #container-login .login-main-dialog {
-    width: min(420px, 100%);
-    max-width: calc(100vw - 32px);
+    align-content: center;
+    width: 100%;
+    max-width: none;
+    min-height: 100%;
     box-sizing: border-box;
-    border: 1px solid #cbd5e1;
+    border: 0;
+    border-left: 1px solid #d9e3f0;
     background: #ffffff;
-    padding: 22px;
-    box-shadow: 0 18px 60px rgba(15, 23, 42, 0.16);
+    padding: 24px;
+    box-shadow: none;
     display: grid;
-    gap: 12px;
+    gap: 11px;
 }
 
 #container-login .login-main-dialog *,
@@ -6486,22 +6718,73 @@ body.intro-mode #container-intro .env-panel {
 
 #container-login .intro-login-actions {
     display: flex;
-    justify-content: flex-end;
+    justify-content: flex-start;
     gap: 8px;
     flex-wrap: wrap;
     min-width: 0;
 }
 
 #container-login .intro-login-actions .env-btn {
+    align-items: center;
+    display: inline-flex;
     flex: 1 1 112px;
+    gap: 6px;
+    justify-content: center;
     min-width: 0;
     max-width: 176px;
+    overflow: hidden;
+    padding-left: 8px;
+    padding-right: 8px;
+    text-align: center;
     white-space: nowrap;
 }
 
+#container-login .intro-login-actions .env-btn span {
+    line-height: 1.15;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 #container-login .login-main-dialog .intro-login-actions .env-btn {
-    flex-basis: 0;
-    min-width: 112px;
+    flex: 1 1 calc(50% - 4px);
+    max-width: none;
+    min-width: 0;
+}
+
+#container-login .login-main-dialog .intro-login-actions .login-primary-button {
+    flex: 0 0 100%;
+    margin-left: 0;
+    min-width: 0;
+    white-space: nowrap;
+}
+
+#container-login .intro-login-actions .env-btn i {
+    flex: 0 0 auto;
+    font-size: 13px;
+}
+
+#container-login .login-main-dialog .intro-login-actions .login-primary-button {
+    background: #2563eb;
+    border-color: #1d4ed8;
+    color: #ffffff;
+    font-weight: 800;
+    box-shadow: 0 8px 18px rgba(37, 99, 235, 0.28);
+}
+
+#container-login .login-main-dialog .intro-login-actions .login-primary-button:hover,
+#container-login .login-main-dialog .intro-login-actions .login-primary-button:focus-visible {
+    background: #1d4ed8;
+    border-color: #1e40af;
+    color: #ffffff;
+}
+
+#container-login .login-main-dialog .intro-login-actions .login-primary-button:disabled {
+    background: #93c5fd;
+    border-color: #60a5fa;
+    color: #ffffff;
+    cursor: not-allowed;
+    box-shadow: none;
 }
 
 #container-login #loginSubmitButton:focus,
@@ -6576,12 +6859,103 @@ body.intro-mode #container-intro .env-panel {
 }
 
 @media (max-width: 900px) {
+    #container-login {
+        align-items: flex-start;
+        padding: 20px;
+    }
+
+    #container-login .login-stage {
+        grid-template-columns: 1fr;
+        height: auto;
+        min-height: 0;
+        width: min(560px, calc(100vw - 32px));
+    }
+
+    #container-login .login-brand-panel {
+        grid-template-rows: 48px 28px minmax(76px, auto) minmax(48px, auto) 96px minmax(62px, auto);
+        min-height: 360px;
+        padding: 28px;
+    }
+
+    #container-login .login-brand-panel h1 {
+        font-size: 32px;
+    }
+
+    #container-login .login-brand-lead {
+        font-size: 14px;
+    }
+
+    #container-login .login-flow-visual {
+        margin: 0;
+    }
+
+    #container-login .login-main-dialog {
+        border-left: 0;
+        border-top: 1px solid #d9e3f0;
+        min-height: 0;
+    }
+
     #container-intro .intro-step-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
 
 @media (max-width: 560px) {
+    #container-login {
+        padding: 12px;
+    }
+
+    #container-login .login-stage {
+        width: 100%;
+    }
+
+    #container-login .login-brand-panel {
+        grid-template-rows: 42px 26px minmax(66px, auto) minmax(44px, auto) 84px auto;
+        min-height: 320px;
+        padding: 22px;
+    }
+
+    #container-login .login-brand-mark {
+        height: 42px;
+        width: 126px;
+    }
+
+    #container-login .login-brand-mark img {
+        max-height: 24px;
+        max-width: 92px;
+    }
+
+    #container-login .login-brand-eyebrow {
+        margin: 0;
+    }
+
+    #container-login .login-brand-panel h1 {
+        font-size: 27px;
+    }
+
+    #container-login .login-flow-visual {
+        gap: 8px;
+        margin: 0;
+    }
+
+    #container-login .login-flow-node {
+        min-height: 74px;
+        padding: 12px 6px;
+    }
+
+    #container-login .login-flow-node + .login-flow-node::before {
+        left: -8px;
+        width: 8px;
+    }
+
+    #container-login .login-feature-row {
+        grid-template-columns: 1fr;
+    }
+
+    #container-login .login-main-dialog {
+        padding: 22px;
+    }
+
     #container-intro .intro-step-grid {
         grid-template-columns: 1fr;
     }
@@ -15128,4 +15502,239 @@ body.is-resizing-flow-result-sql {
     .home-session-strip > div:last-child {
         border-bottom: 0;
     }
+}
+
+/* ==========================================================================
+   Final shell theme overlay
+   ========================================================================== */
+#sidebar.sidebar {
+    background:
+        linear-gradient(180deg, rgba(7, 25, 61, 0.94), rgba(15, 23, 42, 0.96)),
+        url("../assets/bg_intro.png") center bottom / cover no-repeat !important;
+    border-right: 1px solid #21314d !important;
+    box-shadow: 10px 0 28px rgba(15, 23, 42, 0.22) !important;
+    position: fixed !important;
+}
+
+#sidebar.sidebar::before {
+    background:
+        linear-gradient(90deg, rgba(125, 211, 252, 0.08) 1px, transparent 1px),
+        linear-gradient(0deg, rgba(125, 211, 252, 0.06) 1px, transparent 1px);
+    background-size: 32px 32px;
+    content: "";
+    inset: 0;
+    opacity: 0.48;
+    pointer-events: none;
+    position: absolute;
+}
+
+#sidebar > div:first-child {
+    background: rgba(7, 15, 32, 0.78) !important;
+    border-bottom: 1px solid rgba(147, 197, 253, 0.22) !important;
+    min-height: 72px !important;
+    position: relative;
+    z-index: 1;
+}
+
+#sidebar .app-brand {
+    align-items: center;
+    background: rgba(255, 255, 255, 0.94);
+    border: 1px solid rgba(255, 255, 255, 0.7);
+    box-shadow: 0 12px 24px rgba(2, 6, 23, 0.18);
+    height: 42px;
+    justify-content: center;
+    min-width: 122px;
+    padding: 0 12px;
+}
+
+#sidebar .app-brand-logo {
+    max-height: 26px;
+    max-width: 98px;
+}
+
+#sidebar #btnExpandAllMenus,
+#sidebar #btnCollapseAllMenus,
+#sidebar #btnSidebarCollapse {
+    background: rgba(15, 23, 42, 0.36) !important;
+    border: 1px solid rgba(147, 197, 253, 0.18) !important;
+    border-radius: 0 !important;
+    color: #bfdbfe !important;
+}
+
+#sidebar #btnExpandAllMenus:hover,
+#sidebar #btnCollapseAllMenus:hover,
+#sidebar #btnSidebarCollapse:hover {
+    background: rgba(37, 99, 235, 0.28) !important;
+    border-color: rgba(125, 211, 252, 0.58) !important;
+    color: #ffffff !important;
+}
+
+#mainNav {
+    background: transparent !important;
+    padding: 16px 12px !important;
+    position: relative;
+    z-index: 1;
+}
+
+#mainNav a,
+#mainNav .menu-folder > button {
+    border-left-width: 3px !important;
+    color: #dbeafe !important;
+    min-height: 44px;
+}
+
+#mainNav a:hover,
+#mainNav .menu-folder > button:hover {
+    background: rgba(15, 23, 42, 0.16) !important;
+    border-color: transparent !important;
+    border-left-color: rgba(56, 189, 248, 0.45) !important;
+    color: #ffffff !important;
+}
+
+#mainNav a.visited-menu:not(.menu-active):not(.bg-blue-700) {
+    background: transparent !important;
+    border-left-color: rgba(45, 212, 191, 0.46) !important;
+    color: #d5e5f7 !important;
+}
+
+#mainNav a.visited-menu:not(.menu-active):not(.bg-blue-700)::after {
+    background: rgba(45, 212, 191, 0.72);
+    border-radius: 999px;
+    content: "";
+    height: 6px;
+    margin-left: auto;
+    width: 6px;
+}
+
+#mainNav .menu-folder.is-child-visited > button:not(:hover):not(.bg-blue-700) {
+    background: transparent !important;
+    border-left-color: rgba(45, 212, 191, 0.34) !important;
+}
+
+#mainNav a.menu-active,
+#mainNav a.bg-blue-700,
+#mainNav .menu-folder.is-child-active > button {
+    background: rgba(15, 23, 42, 0.22) !important;
+    border-color: transparent !important;
+    border-left-color: rgba(250, 204, 21, 0.78) !important;
+    box-shadow: inset 0 -1px 0 rgba(147, 197, 253, 0.18);
+    color: #eef5ff !important;
+    font-weight: 800;
+}
+
+#mainNav i,
+.sidebar-flyout-portal i {
+    color: #93c5fd !important;
+}
+
+#mainNav a.menu-active i,
+#mainNav a.bg-blue-700 i,
+#mainNav .menu-folder.is-child-active > button i {
+    color: #bfdbfe !important;
+}
+
+body.sidebar-user-collapsed #sidebar .app-brand {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    min-width: 0;
+    padding: 0;
+}
+
+body.sidebar-user-collapsed #sidebar .app-brand-logo {
+    max-width: 34px;
+    object-position: left center;
+}
+
+#sideRBar.right-sidebar {
+    background:
+        linear-gradient(180deg, rgba(8, 18, 39, 0.96), rgba(15, 23, 42, 0.98)),
+        url("../assets/bg_intro.png") center / cover no-repeat !important;
+    border-left: 1px solid #21314d !important;
+    box-shadow: -12px 0 34px rgba(15, 23, 42, 0.28) !important;
+}
+
+#sideRBar .panelGemini,
+#sideRBar .bodyGemini {
+    background: transparent !important;
+}
+
+#sideRBar .headerGemini {
+    background: rgba(7, 15, 32, 0.86) !important;
+    border-bottom: 1px solid rgba(147, 197, 253, 0.2) !important;
+}
+
+#sideRBar .badgeGemini {
+    background: rgba(20, 184, 166, 0.16) !important;
+    border-color: rgba(45, 212, 191, 0.5) !important;
+    color: #ccfbf1 !important;
+}
+
+#sideRBar .geminiMessageContent,
+#sideRBar #geminiSearchForm {
+    background: rgba(8, 16, 34, 0.82) !important;
+    border-color: rgba(147, 197, 253, 0.18) !important;
+    box-shadow: 0 10px 28px rgba(2, 6, 23, 0.18);
+}
+
+#sideRBar .bodyGemini textarea {
+    background: rgba(5, 12, 28, 0.88) !important;
+    border-color: rgba(147, 197, 253, 0.26) !important;
+}
+
+#sideRBar .actionsGemini button {
+    background: linear-gradient(135deg, #2563eb, #0ea5e9) !important;
+    box-shadow: 0 10px 22px rgba(37, 99, 235, 0.28);
+}
+
+#sideRBar.collapsed {
+    background:
+        linear-gradient(180deg, rgba(8, 18, 39, 0.98), rgba(15, 23, 42, 0.98)),
+        url("../assets/bg_intro.png") center / cover no-repeat !important;
+}
+
+.bottom-console {
+    background:
+        linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(8, 13, 24, 0.98)),
+        url("../assets/bg_intro.png") center bottom / cover no-repeat !important;
+    border-top: 1px solid #21314d !important;
+    color: #dbeafe;
+}
+
+.console-header {
+    background: rgba(7, 15, 32, 0.88) !important;
+    border-top: 1px solid rgba(147, 197, 253, 0.2) !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.console-tab {
+    color: #93a4bd !important;
+    font-weight: 800;
+    letter-spacing: 0;
+}
+
+.console-tab.active {
+    background: rgba(15, 23, 42, 0.72) !important;
+    border-bottom: 2px solid rgba(96, 165, 250, 0.72) !important;
+    color: #e5edff !important;
+}
+
+.console-bodys,
+.console-body {
+    background: rgba(6, 10, 20, 0.9) !important;
+    border-top-color: rgba(147, 197, 253, 0.12) !important;
+}
+
+.console-log-stats,
+.console-header span {
+    color: #bfdbfe !important;
+}
+
+.btn-console-action {
+    color: #cbd5e1 !important;
+}
+
+.btn-console-action:hover {
+    background: rgba(37, 99, 235, 0.26) !important;
+    color: #ffffff !important;
 }

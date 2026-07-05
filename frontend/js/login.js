@@ -1,22 +1,207 @@
 ﻿(function() {
     const PAGE_CODE = "login";
     const { getContainerEl } = PageManager.createHelper(PAGE_CODE);
+    const LOGIN_LABEL_FALLBACKS = {
+        title: "INIT Data Editing System Login",
+        loginLanguage: "Login language",
+        introEyebrow: "INIT Data Editing Platform",
+        introHeadline: "Rules to trusted data.",
+        introLead: "Profile source data, discover editing rules, and run governed workflows from one workspace.",
+        introVisualSource: "Source",
+        introVisualRules: "Rules",
+        introVisualReview: "Review",
+        introStepProfile: "Profile",
+        introStepProfileDesc: "Read table signals",
+        introStepRule: "Discover",
+        introStepRuleDesc: "Shape edit rules",
+        introStepRun: "Execute",
+        introStepRunDesc: "Trace every run",
+        loginId: "Login ID",
+        password: "Password",
+        loginPassword: "Login Password",
+        confirmPassword: "Confirm Password",
+        targetDb: "Target DB",
+        messageEnterCredentials: "Enter your saved ID and password.",
+        invalidLogin: "Invalid login ID or password.",
+        targetDbDisabled: "Selected target DB connection is disabled.",
+        systemTablesNotInstalledSignup: "System tables are not installed. Sign up as the first administrator to start initial setup.",
+        adminSignupKeyNotConfigured: "Admin signup key is not configured.",
+        loginIdRequired: "Login ID is required.",
+        userNameRequired: "User name is required.",
+        invalidSignupRole: "Invalid signup role.",
+        duplicateLoginId: "This login ID is already registered.",
+        pendingLoginId: "This login ID is already waiting for approval.",
+        signupPendingApproval: "Your signup request is waiting for administrator approval. You can log in after approval.",
+        adminKeyMismatch: "Admin key does not match.",
+        forgotPassword: "Forgot password",
+        signup: "Signup",
+        login: "Login",
+        showPassword: "Show password",
+        hidePassword: "Hide password",
+        passwordHelpTitle: "Password Reset Request",
+        passwordHelpMessage: "Passwords cannot be viewed for security reasons. Contact your system administrator if a reset is required.",
+        adminTeam: "Admin Team",
+        email: "Email",
+        phone: "Phone",
+        requestInfo: "Request Info",
+        passwordHelpRequestInfo: "Send your login ID, name, and signup email together.",
+        close: "Close",
+        signupTitle: "Signup Draft",
+        userName: "User Name",
+        memberType: "Member Type",
+        generalMember: "General member",
+        adminMember: "Admin member",
+        adminKey: "Admin Key",
+        signupMessage: "Enter signup information.",
+        cancel: "Cancel",
+        saveSignup: "Save signup",
+        generalMemberApprovalMessage: "General members can log in after administrator approval.",
+        adminMemberSetupMessage: "Admin members can continue initial setup when the admin key matches.",
+        selectTargetDb: "Select a target DB.",
+        loginRequired: "Login ID and password are required.",
+        loggingIn: "Logging in...",
+        selectTargetThenLoginAgain: "Select a target DB, then click Login again.",
+        targetDbAutoSelectFailed: "Target DB could not be selected automatically. Login again after selecting a Target DB.",
+        loginFailed: "Login failed.",
+        signupGuide: "Enter signup information. Admin members need an admin key.",
+        loading: "Loading...",
+        loginIdUserNameRequired: "Login ID and User Name are required.",
+        emailRequired: "Email is required.",
+        validEmailRequired: "Enter a valid email address.",
+        loginPasswordRequired: "Login Password is required.",
+        passwordConfirmMismatch: "Password confirmation does not match.",
+        validMemberTypeRequired: "Select a valid member type.",
+        adminKeyRequired: "Admin key is required.",
+        savingSignup: "Saving signup...",
+        adminKeyVerified: "Admin key verified. Moving to initial setup.",
+        signupSubmitted: "Signup request submitted. You can log in after administrator approval.",
+        signupFailed: "Signup failed.",
+        defaultConnection: "Default",
+        sharedConnection: "Shared",
+        privateConnection: "Private"
+    };
+    const LOGIN_SERVER_MESSAGE_KEYS = {
+        "invalid login id or password.": "invalidLogin",
+        "login id and password are required.": "loginRequired",
+        "selected target db connection is disabled.": "targetDbDisabled",
+        "system tables are not installed. sign up as the first administrator to start initial setup.": "systemTablesNotInstalledSignup",
+        "admin signup key is not configured.": "adminSignupKeyNotConfigured",
+        "login id is required.": "loginIdRequired",
+        "user name is required.": "userNameRequired",
+        "email is required.": "emailRequired",
+        "login password is required.": "loginPasswordRequired",
+        "invalid signup role.": "invalidSignupRole",
+        "이미 등록된 로그인 id입니다.": "duplicateLoginId",
+        "이미 승인 대기 중인 로그인 id입니다.": "pendingLoginId",
+        "회원가입 신청이 승인 대기 중입니다. 관리자 승인 후 로그인할 수 있습니다.": "signupPendingApproval",
+        "관리자 인증키가 일치하지 않습니다.": "adminKeyMismatch"
+    };
 
     const login = {
         hasConnections: false,
         targetSelectionRequired: false,
         isLoggingIn: false,
         passwordVisible: false,
+        loginLanguage: "en",
+        messageKey: "messageEnterCredentials",
+        signupMessageKey: "signupMessage",
 
         async init() {
             document.body.classList.add("intro-mode");
+            await this.applyLoginLanguage("en", { resetMessage: true });
             this.resetLoginForm();
         },
 
         destroy() {},
 
         t(key, fallback = "") {
-            return window.I18nManager?.tPage?.(PAGE_CODE, key, fallback) || fallback;
+            const pack = window[`${PAGE_CODE}_PAGE_I18N`] || {};
+            const labels = pack && typeof pack.labels === "object" && !Array.isArray(pack.labels) ? pack.labels : {};
+            const defaultFallback = fallback || LOGIN_LABEL_FALLBACKS[key] || "";
+            return Object.prototype.hasOwnProperty.call(labels, key)
+                ? String(labels[key] ?? "")
+                : (window.I18nManager?.tPage?.(PAGE_CODE, key, defaultFallback) || defaultFallback);
+        },
+
+        normalizeLoginLanguage(languageCode) {
+            const code = String(languageCode || "en").trim().toLowerCase().replace("_", "-");
+            return code === "ko" || code === "ko-kr" || code === "kr" ? "ko" : "en";
+        },
+
+        normalizeServerMessage(message) {
+            return String(message || "").replace(/\s+/g, " ").trim().toLowerCase();
+        },
+
+        getServerMessageKey(message) {
+            return LOGIN_SERVER_MESSAGE_KEYS[this.normalizeServerMessage(message)] || "";
+        },
+
+        translateServerMessage(message, fallbackKey = "loginFailed") {
+            const messageText = String(message || "").trim();
+            const key = this.getServerMessageKey(messageText);
+            if (key) {
+                return {
+                    key,
+                    text: this.t(key)
+                };
+            }
+            return {
+                key: messageText ? "" : fallbackKey,
+                text: messageText || this.t(fallbackKey)
+            };
+        },
+
+        async changeLoginLanguage(languageCode) {
+            await this.applyLoginLanguage(languageCode, { resetMessage: false });
+        },
+
+        async applyLoginLanguage(languageCode, options = {}) {
+            const normalized = this.normalizeLoginLanguage(languageCode);
+            const root = document.getElementById("container-login") || document;
+            this.loginLanguage = normalized;
+            this.updateLanguageButtons();
+            await window.I18nManager?.applyLanguage?.(normalized);
+            await window.I18nManager?.ensurePagePack?.(PAGE_CODE, normalized);
+            if (normalized === "en") this.applyLoginFallbackLabels(root);
+            else window.I18nManager?.applyPagePack?.(PAGE_CODE, root);
+            this.updateLanguageButtons();
+            this.syncPasswordVisibility();
+            if (options.resetMessage || this.messageKey) this.setMessageByKey(this.messageKey || "messageEnterCredentials");
+            if (this.signupMessageKey) this.setSignupMessageByKey(this.signupMessageKey);
+        },
+
+        applyLoginFallbackLabels(root) {
+            const apply = (selector, dataKey, callback) => {
+                root.querySelectorAll?.(selector).forEach((element) => {
+                    const key = element.dataset?.[dataKey] || "";
+                    if (!Object.prototype.hasOwnProperty.call(LOGIN_LABEL_FALLBACKS, key)) return;
+                    callback(element, LOGIN_LABEL_FALLBACKS[key]);
+                });
+            };
+            apply("[data-label-key]", "labelKey", (element, value) => {
+                element.textContent = value;
+            });
+            apply("[data-title-key]", "titleKey", (element, value) => {
+                element.setAttribute("title", value);
+                if (element.hasAttribute("aria-label")) element.setAttribute("aria-label", value);
+            });
+            apply("[data-value-key]", "valueKey", (element, value) => {
+                if ("value" in element) element.value = value;
+                else element.setAttribute("value", value);
+            });
+            apply("[data-aria-label-key]", "ariaLabelKey", (element, value) => {
+                element.setAttribute("aria-label", value);
+            });
+        },
+
+        updateLanguageButtons() {
+            const root = document.getElementById("container-login") || document;
+            root.querySelectorAll("[data-login-language]").forEach((button) => {
+                const active = this.normalizeLoginLanguage(button.dataset.loginLanguage) === this.loginLanguage;
+                button.classList.toggle("is-active", active);
+                button.setAttribute("aria-pressed", String(active));
+                button.setAttribute("aria-current", active ? "true" : "false");
+            });
         },
 
         getValue(selector) {
@@ -123,6 +308,11 @@
             el.className = type === "error" ? "intro-step-msg is-error" : "intro-step-msg";
         },
 
+        setMessageByKey(key, type = "info", fallback = "") {
+            this.messageKey = key || "";
+            this.setMessage(this.t(key, fallback), type);
+        },
+
         setSignupMessage(message, type = "info") {
             const el = getContainerEl("#signupMessage");
             if (!el) return;
@@ -130,14 +320,22 @@
             el.className = type === "error" ? "intro-step-msg is-error" : "intro-step-msg";
         },
 
+        setSignupMessageByKey(key, type = "info", fallback = "") {
+            this.signupMessageKey = key || "";
+            this.setSignupMessage(this.t(key, fallback), type);
+        },
+
         setLoginBusy(isBusy) {
             this.isLoggingIn = Boolean(isBusy);
             const button = getContainerEl("#loginSubmitButton");
             if (button) {
                 button.disabled = this.isLoggingIn;
-                button.textContent = this.isLoggingIn
-                    ? this.t("loggingIn", "Logging in...")
-                    : this.t("login", "Login");
+                const label = button.querySelector("[data-label-key='login']");
+                if (label) {
+                    label.textContent = this.isLoggingIn
+                        ? this.t("loggingIn", "Logging in...")
+                        : this.t("login", "Login");
+                }
             }
             getContainerEl("#loginMessage")?.classList.toggle("is-loading", this.isLoggingIn);
             getContainerEl("#loginId")?.toggleAttribute("disabled", this.isLoggingIn);
@@ -164,9 +362,10 @@
             const notice = sessionStorage.getItem("loginNotice") || "";
             if (notice) {
                 sessionStorage.removeItem("loginNotice");
+                this.messageKey = "";
                 this.setMessage(notice);
             } else {
-                this.setMessage(this.t("messageEnterCredentials", "Enter your saved ID and password."));
+                this.setMessageByKey("messageEnterCredentials", "info", "Enter your saved ID and password.");
             }
             this.focusLoginId();
         },
@@ -190,10 +389,10 @@
             }
             if (!isAdmin) {
                 this.setValue("#signupAdminKey", "");
-                this.setSignupMessage(this.t("generalMemberApprovalMessage", "General members can log in after administrator approval."));
+                this.setSignupMessageByKey("generalMemberApprovalMessage", "info", "General members can log in after administrator approval.");
                 return;
             }
-            this.setSignupMessage(this.t("adminMemberSetupMessage", "Admin members can continue initial setup when the admin key matches."));
+            this.setSignupMessageByKey("adminMemberSetupMessage", "info", "Admin members can continue initial setup when the admin key matches.");
             setTimeout(() => input?.focus(), 0);
         },
 
@@ -218,7 +417,7 @@
                 const scope = row.connectionScope === "SHARED"
                     ? this.t("sharedConnection", "Shared")
                     : this.t("privateConnection", "Private");
-                const meta = [scope, row.dbType, row.defaultYn === "Y" ? "Default" : ""].filter(Boolean).join(" / ");
+                const meta = [scope, row.dbType, row.defaultYn === "Y" ? this.t("defaultConnection", "Default") : ""].filter(Boolean).join(" / ");
                 return `
                     <label class="login-target-db-option">
                         <input type="radio" name="loginConnectionId" value="${this.escapeHtml(id)}"${checked}>
@@ -244,15 +443,15 @@
             if (this.targetSelectionRequired) {
                 payload.connectionId = selectedConnectionId;
                 if (!payload.connectionId) {
-                    this.setMessage("Select a target DB.", "error");
+                    this.setMessageByKey("selectTargetDb", "error", "Select a target DB.");
                     return;
                 }
             }
             if (!payload.loginId || !payload.loginPassword) {
-                this.setMessage("Login ID and password are required.", "error");
+                this.setMessageByKey("loginRequired", "error", "Login ID and password are required.");
                 return;
             }
-            this.setMessage("Logging in...");
+            this.setMessageByKey("loggingIn", "info", "Logging in...");
             this.setLoginBusy(true);
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/M91001/login`, {
@@ -266,7 +465,9 @@
                         payload.connectionId = responseConnections[0].connectionId;
                     } else {
                         this.showTargetSelection(responseConnections);
-                        this.setMessage(json.message || "Select a target DB, then click Login again.");
+                        const translated = this.translateServerMessage(json.message, "selectTargetThenLoginAgain");
+                        this.messageKey = translated.key;
+                        this.setMessage(translated.text);
                         this.setLoginBusy(false);
                         this.focusLoginButton();
                         setTimeout(() => this.focusLoginButton(), 100);
@@ -282,7 +483,9 @@
                     Object.assign(json, retryJson || {});
                     if (json.targetSelectionRequired) {
                         this.showTargetSelection(json.connections || responseConnections);
-                        this.setMessage(json.message || "Select a target DB, then click Login again.");
+                        const translated = this.translateServerMessage(json.message, "selectTargetThenLoginAgain");
+                        this.messageKey = translated.key;
+                        this.setMessage(translated.text);
                         this.setLoginBusy(false);
                         this.focusLoginButton();
                         setTimeout(() => this.focusLoginButton(), 100);
@@ -296,7 +499,7 @@
 
                 if (!connectionId && !json.setupRequired) {
                     this.hideTargetSelection();
-                    this.setMessage("Target DB could not be selected automatically. Login again after selecting a Target DB.", "error");
+                    this.setMessageByKey("targetDbAutoSelectFailed", "error", "Target DB could not be selected automatically. Login again after selecting a Target DB.");
                     return;
                 }
 
@@ -328,7 +531,9 @@
                 await window.reloadShellDisplaySettings?.();
                 PageManager.load("home", window.getShellHomeTitle?.() || "Data Editing System");
             } catch (error) {
-                this.setMessage(error.message || "Login failed.", "error");
+                const translated = this.translateServerMessage(error.message, "loginFailed");
+                this.messageKey = translated.key;
+                this.setMessage(translated.text, "error");
             } finally {
                 this.setLoginBusy(false);
             }
@@ -351,7 +556,7 @@
             }
             const layer = getContainerEl("#signupLayer");
             if (layer) layer.hidden = false;
-            this.setSignupMessage(this.t("signupGuide", "Enter signup information. Admin members need an admin key."));
+            this.setSignupMessageByKey("signupGuide", "info", "Enter signup information. Admin members need an admin key.");
             setTimeout(() => getContainerEl("#signupLoginId")?.focus(), 0);
         },
 
@@ -363,7 +568,7 @@
         async openPasswordHelp() {
             const layer = getContainerEl("#passwordHelpLayer");
             if (layer) layer.hidden = false;
-            this.setValue("#passwordHelpAdminName", "Loading...");
+            this.setValue("#passwordHelpAdminName", this.t("loading", "Loading..."));
             this.setValue("#passwordHelpAdminEmail", "");
             this.setValue("#passwordHelpAdminPhone", "");
             try {
@@ -402,37 +607,37 @@
                 adminKey: signupRole === "ADMIN" ? this.getValue("#signupAdminKey") : ""
             };
             if (!payload.loginId || !payload.userName) {
-                this.setSignupMessage("Login ID and User Name are required.", "error");
+                this.setSignupMessageByKey("loginIdUserNameRequired", "error", "Login ID and User Name are required.");
                 return;
             }
             if (!payload.email) {
-                this.setSignupMessage("Email is required.", "error");
+                this.setSignupMessageByKey("emailRequired", "error", "Email is required.");
                 getContainerEl("#signupEmail")?.focus();
                 return;
             }
             if (!this.isValidEmail(payload.email)) {
-                this.setSignupMessage("Enter a valid email address.", "error");
+                this.setSignupMessageByKey("validEmailRequired", "error", "Enter a valid email address.");
                 getContainerEl("#signupEmail")?.focus();
                 return;
             }
             if (!password) {
-                this.setSignupMessage("Login Password is required.", "error");
+                this.setSignupMessageByKey("loginPasswordRequired", "error", "Login Password is required.");
                 return;
             }
             if (password !== passwordConfirm) {
-                this.setSignupMessage("Password confirmation does not match.", "error");
+                this.setSignupMessageByKey("passwordConfirmMismatch", "error", "Password confirmation does not match.");
                 return;
             }
             if (!["USER", "ADMIN"].includes(signupRole)) {
-                this.setSignupMessage("Select a valid member type.", "error");
+                this.setSignupMessageByKey("validMemberTypeRequired", "error", "Select a valid member type.");
                 return;
             }
             if (signupRole === "ADMIN" && !payload.adminKey) {
-                this.setSignupMessage(this.t("adminKeyRequired", "Admin key is required."), "error");
+                this.setSignupMessageByKey("adminKeyRequired", "error", "Admin key is required.");
                 getContainerEl("#signupAdminKey")?.focus();
                 return;
             }
-            this.setSignupMessage(this.t("savingSignup", "Saving signup..."));
+            this.setSignupMessageByKey("savingSignup", "info", "Saving signup...");
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/M91001/signup/save`, {
                     method: "POST",
@@ -442,7 +647,9 @@
                     sessionStorage.setItem("initBootstrapToken", json.bootstrapToken);
                     sessionStorage.setItem("initBootstrapAdminLoginId", json.loginId || payload.loginId);
                     const message = json.message || this.t("adminKeyVerified", "Admin key verified. Moving to initial setup.");
+                    this.signupMessageKey = json.message ? "" : "adminKeyVerified";
                     this.setSignupMessage(message);
+                    this.messageKey = json.message ? "" : "adminKeyVerified";
                     this.setMessage(message);
                     this.setValue("#signupPassword", "");
                     this.setValue("#signupPasswordConfirm", "");
@@ -452,7 +659,9 @@
                     return;
                 }
                 const message = json.message || this.t("signupSubmitted", "Signup request submitted. You can log in after administrator approval.");
+                this.signupMessageKey = json.message ? "" : "signupSubmitted";
                 this.setSignupMessage(message);
+                this.messageKey = json.message ? "" : "signupSubmitted";
                 this.setMessage(message);
                 this.setValue("#loginId", "");
                 this.setValue("#loginPassword", "");
@@ -461,7 +670,9 @@
                 this.setValue("#signupAdminKey", "");
                 this.closeSignup();
             } catch (error) {
-                this.setSignupMessage(error.message || "Signup failed.", "error");
+                const translated = this.translateServerMessage(error.message, "signupFailed");
+                this.signupMessageKey = translated.key;
+                this.setSignupMessage(translated.text, "error");
             }
         }
     };
