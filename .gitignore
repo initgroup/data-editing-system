@@ -5,10 +5,22 @@ node_modules/
 venv/
 .venv/
 .env
+.env.local
+.env.development
+.env.production
+*.env.local
 secreats/
 .secreats/
+secrets/
 etc/secrets/
 instantclient/
 .instantclient/
 __pycache__/
 *.pyc
+
+# Oracle Wallet / 로컬 설치 파일
+Wallet_*.zip
+*Wallet*.zip
+*.pem
+*.key
+*.whl

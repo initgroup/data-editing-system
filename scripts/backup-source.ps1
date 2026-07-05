@@ -2,12 +2,16 @@ param(
     [ValidateSet("Git", "Working")]
     [string]$Mode = "Git",
 
-    [string]$BackupRoot = "D:\work\backup"
+    [string]$BackupRoot = ""
 )
 
 $ErrorActionPreference = "Stop"
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+if ([string]::IsNullOrWhiteSpace($BackupRoot)) {
+    $BackupRoot = Join-Path (Split-Path -Parent $repoRoot) "backup"
+}
+
 $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $backupDir = Join-Path $BackupRoot "data-editing-system-$($Mode.ToLower())-$stamp"
 

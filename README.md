@@ -42,7 +42,7 @@ python -m venv venv
 pip install -r requirements.txt
 ```
 
-필요한 환경 변수는 `.env`에 설정합니다. `.env`, `secreats/`, `instantclient/`는 비밀 정보 또는 로컬 의존성이므로 Git에 올리지 않습니다.
+필요한 환경 변수는 `.env.example`을 복사해 `.env`에 설정합니다. `.env`, `secreats/`, `instantclient/`는 비밀 정보 또는 로컬 의존성이므로 Git에 올리지 않습니다.
 
 ```text
 DB_MODE=local 또는 cloud
@@ -55,7 +55,7 @@ DB_SERVICE=...
 DB_USER_CLD=...
 DB_PASSWORD_CLD=...
 DB_DSN_CLD=...
-DB_WALLET_PATH=/etc/secrets
+DB_WALLET_PATH=secreats/Wallet_INITGROUPEDITING
 DB_ORACLE_MODE=thin
 
 DB_POOL_MIN=1
@@ -70,7 +70,7 @@ TARGET_DB_POOL_INCREMENT=1
 개발 서버를 실행합니다.
 
 ```powershell
-uvicorn main:app --reload --host 127.0.0.1 --port 8000
+.\venv\Scripts\python.exe -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
 브라우저에서 `http://127.0.0.1:8000`을 엽니다. API 문서는 `http://127.0.0.1:8000/docs`에서 확인할 수 있습니다.
@@ -125,4 +125,4 @@ SELECT ...
 
 - 현재 일부 기존 파일의 한글 주석/문자열이 깨져 보일 수 있습니다. 기존 인코딩을 일괄 변환하지 말고, 수정 범위 안에서만 UTF-8로 정리합니다.
 - `.env`, 지갑 파일, Oracle Instant Client, DB 접속 정보는 커밋하지 않습니다.
-- 이 저장소에는 아직 표준 테스트 스크립트가 없습니다. 변경 후 최소한 `uvicorn main:app --reload`로 앱 기동과 `/api/health`를 확인합니다.
+- 이 저장소에는 아직 표준 테스트 스크립트가 없습니다. 변경 후 최소한 `.\venv\Scripts\python.exe -m uvicorn main:app --reload`로 앱 기동과 `/api/health`를 확인합니다.

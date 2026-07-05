@@ -48,7 +48,7 @@ Get-Content -Encoding UTF8 frontend/js/app.js
 
 ```powershell
 .\venv\Scripts\Activate.ps1
-uvicorn main:app --reload --host 127.0.0.1 --port 8000
+.\venv\Scripts\python.exe -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
 Tailwind 결과물이 필요하면 다음 명령을 사용합니다.
