@@ -1,0 +1,254 @@
+{
+  "version": "2026.07.05",
+  "language": "en",
+  "systemName": "INIT Data Editing System",
+  "pages": {
+    "login": {
+      "pageCode": "login",
+      "title": "Data Editing System Login",
+      "label": "Login",
+      "group": "System",
+      "status": "enabled",
+      "summary": "The entry screen where users sign in, request password-reset guidance, or start signup.",
+      "purpose": [
+        "Start a system session with a login ID and password.",
+        "Use English before login, then apply the user's configured language after successful login."
+      ],
+      "layout": [
+        { "name": "Login credentials", "description": "Enter the login ID and password." },
+        { "name": "Target DB area", "description": "Shows the Target DB context available after login." },
+        { "name": "Support actions", "description": "Provides forgot-password, signup, and login actions." }
+      ],
+      "workflow": [
+        "Enter the login ID and password.",
+        "Run Login.",
+        "After login, the system loads the user language setting and Target DB context."
+      ],
+      "controls": [
+        "Forgot password: shows administrator contact and request guidance.",
+        "Sign up: opens the new account request flow.",
+        "Login: signs in with the entered account."
+      ],
+      "aiGuidance": [
+        "Before login, use English as the default screen language.",
+        "Do not include passwords, API keys, or other secrets in answers."
+      ]
+    },
+    "home": {
+      "pageCode": "home",
+      "title": "INIT Data Editing System",
+      "label": "Main Home",
+      "group": "Main",
+      "status": "enabled",
+      "summary": "The start screen for checking the current user, role, Target DB, integrated scenario status, notices, and main shortcuts after login."
+    },
+    "M01001": {
+      "pageCode": "M01001",
+      "title": "Project Settings",
+      "label": "Project Settings",
+      "group": "Project Management",
+      "status": "enabled",
+      "summary": "Registers, reviews, updates, and deletes projects, which are the top-level work units for data editing."
+    },
+    "M01002": {
+      "pageCode": "M01002",
+      "title": "Scenario Definition",
+      "label": "Scenario Definition",
+      "group": "Project Management",
+      "status": "enabled",
+      "summary": "Defines and manages data editing scenarios under a selected project."
+    },
+    "M02001": {
+      "pageCode": "M02001",
+      "title": "File Upload Management",
+      "label": "File Upload",
+      "group": "Data Preparation & Exploration",
+      "status": "enabled",
+      "summary": "Uploads local files into Target DB work tables and supports preview, column review, and data lookup."
+    },
+    "M02002": {
+      "pageCode": "M02002",
+      "title": "Target Data Selection",
+      "label": "Target Data",
+      "group": "Data Preparation & Exploration",
+      "status": "enabled",
+      "summary": "Browses Target DB tables and selects the target tables used by projects and scenarios."
+    },
+    "M03001": {
+      "pageCode": "M03001",
+      "title": "Data Profiling",
+      "label": "Data Profiling",
+      "group": "Intelligent Rule Discovery",
+      "status": "enabled",
+      "summary": "Defines and runs profiling jobs for target-table statistics, missing values, duplicates, distributions, and column quality."
+    },
+    "M03002": {
+      "pageCode": "M03002",
+      "title": "Column Correlation Analysis",
+      "label": "Column Correlation Analysis",
+      "group": "Intelligent Rule Discovery",
+      "status": "enabled",
+      "summary": "Analyzes relationships, correlations, and dependencies between columns in the selected target data."
+    },
+    "M03003": {
+      "pageCode": "M03003",
+      "title": "Automatic Rule Discovery",
+      "label": "Automatic Rule Discovery",
+      "group": "Intelligent Rule Discovery",
+      "status": "enabled",
+      "summary": "Discovers candidate data-quality rules from profiling and analysis results."
+    },
+    "M03004": {
+      "pageCode": "M03004",
+      "title": "Rule Violation Detection",
+      "label": "Rule Violation Detection",
+      "group": "Intelligent Rule Discovery",
+      "status": "enabled",
+      "summary": "Runs rules or models to detect records that violate expected data-quality conditions."
+    },
+    "M04001": {
+      "pageCode": "M04001",
+      "title": "Editing Scenario Design",
+      "label": "Editing Scenario Design",
+      "group": "Editing Scenario",
+      "status": "enabled",
+      "summary": "Designs, validates, and runs reusable integrated editing DAGs by connecting data jobs and model executions as nodes and edges."
+    },
+    "M04002": {
+      "pageCode": "M04002",
+      "title": "Editing Scenario Analysis",
+      "label": "Editing Scenario Analysis",
+      "group": "Editing Scenario",
+      "status": "enabled",
+      "summary": "Interprets integrated flow run history, node results, result tables, Oracle ML model details, correlation, LASSO, symbolic rules, and violation summaries."
+    },
+    "M05001": {
+      "pageCode": "M05001",
+      "title": "Discovered Rule Selection",
+      "label": "Discovered Rule Selection",
+      "group": "Editing Rule Master",
+      "status": "planned",
+      "summary": "A planned screen for reviewing automatically discovered rule candidates and selecting rules for actual use."
+    },
+    "M05002": {
+      "pageCode": "M05002",
+      "title": "User Rule Registration",
+      "label": "User Rule Registration",
+      "group": "Editing Rule Master",
+      "status": "planned",
+      "summary": "A planned screen for registering manual data-quality rules or adjusting discovered rule candidates."
+    },
+    "M06001": {
+      "pageCode": "M06001",
+      "title": "Rule Violation Data View",
+      "label": "Rule Violation Data View",
+      "group": "Data Editing & Cleansing",
+      "status": "planned",
+      "summary": "A planned screen for reviewing detected violation records and identifying data that may need cleansing."
+    },
+    "M06002": {
+      "pageCode": "M06002",
+      "title": "Error Data Cleansing",
+      "label": "Error Data Cleansing",
+      "group": "Data Editing & Cleansing",
+      "status": "planned",
+      "summary": "A planned screen for cleansing, correcting, validating, and tracking changes to error or violation data."
+    },
+    "M07001": {
+      "pageCode": "M07001",
+      "title": "Editing Effect Validation",
+      "label": "Editing Effect Validation",
+      "group": "Validation & Apply",
+      "status": "planned",
+      "summary": "A planned screen for comparing data-quality indicators before and after cleansing to validate editing impact."
+    },
+    "M07002": {
+      "pageCode": "M07002",
+      "title": "Final DB Apply",
+      "label": "Final DB Apply",
+      "group": "Validation & Apply",
+      "status": "planned",
+      "summary": "A planned screen for applying validated cleansing results to the Target DB after impact and approval checks."
+    },
+    "M07003": {
+      "pageCode": "M07003",
+      "title": "Editing History",
+      "label": "Editing History",
+      "group": "Validation & Apply",
+      "status": "planned",
+      "summary": "A planned screen for reviewing cleansing, validation, apply, and audit history."
+    },
+    "M90001": {
+      "pageCode": "M90001",
+      "title": "Internal Model Registration",
+      "label": "Internal Model Registration",
+      "group": "Model Resources",
+      "status": "enabled",
+      "summary": "Browses Target DB procedures, packages, and model objects and registers them as executable internal model resources."
+    },
+    "M90002": {
+      "pageCode": "M90002",
+      "title": "External Model Registration",
+      "label": "External Model Registration",
+      "group": "Model Resources",
+      "status": "enabled",
+      "summary": "Registers and manages external models, OML4Py resources, script repository resources, and API contracts."
+    },
+    "M91001": {
+      "pageCode": "M91001",
+      "title": "My Account",
+      "label": "My Account",
+      "group": "My Environment Settings",
+      "status": "enabled",
+      "summary": "Manages the current user's account information and personal Gemini API key status."
+    },
+    "M91002": {
+      "pageCode": "M91002",
+      "title": "My System Settings",
+      "label": "My System Settings",
+      "group": "My Environment Settings",
+      "status": "enabled",
+      "summary": "Manages user-level system settings and personal account or Gemini key related settings."
+    },
+    "M91003": {
+      "pageCode": "M91003",
+      "title": "Editing Defaults",
+      "label": "Editing Defaults",
+      "group": "My Environment Settings",
+      "status": "enabled",
+      "summary": "Manages Target DB-level default values used by profiling, analysis, and editing workflows."
+    },
+    "M99001": {
+      "pageCode": "M99001",
+      "title": "DB Connection Settings",
+      "label": "DB Connection Settings",
+      "group": "Admin Settings",
+      "status": "enabled",
+      "summary": "Lets administrators register, test, initialize, and manage Target DB connection settings."
+    },
+    "M99002": {
+      "pageCode": "M99002",
+      "title": "Database Management",
+      "label": "Database Management",
+      "group": "Admin Settings",
+      "status": "enabled",
+      "summary": "Lets administrators browse Target DB objects and inspect table data, columns, source, and SQL results."
+    },
+    "M99003": {
+      "pageCode": "M99003",
+      "title": "System Management",
+      "label": "System Management",
+      "group": "Admin Settings",
+      "status": "enabled",
+      "summary": "Supports system initialization checks, system table review, user approval, password reset, and administrator operations."
+    },
+    "M99004": {
+      "pageCode": "M99004",
+      "title": "Notice Management",
+      "label": "Notice Management",
+      "group": "Admin Settings",
+      "status": "enabled",
+      "summary": "Lets administrators create, update, delete, and attach files to notices shown on the HOME screen and related areas."
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "language": "ko",
+  "pageCode": "M06001",
+  "description": "Korean labels for Rule Violation Data View.",
+  "labels": {},
+  "selectors": {
+    "text": {
+      "#violation-query-title-M06001": "규칙 위반 데이터 조회",
+      ".table-desc": "선택한 규칙과 대상 테이블 기준으로 위반 데이터를 조회합니다.",
+      ".table-actions .table-btn:nth-child(1) span": "새로고침",
+      ".table-actions .table-btn:nth-child(2) span": "내보내기",
+      ".query-filter-toolbar label:nth-child(1) span": "프로젝트",
+      ".query-filter-toolbar label:nth-child(2) span": "시나리오",
+      ".query-filter-toolbar label:nth-child(3) span": "규칙",
+      ".query-filter-toolbar label:nth-child(4) span": "상태",
+      ".query-filter-toolbar label:nth-child(5) span": "행",
+      ".query-filter-toolbar .table-btn span": "검색",
+      ".table-tabs .table-tab:nth-child(1)": "위반 행",
+      ".table-tabs .table-tab:nth-child(2)": "규칙 요약",
+      ".table-tabs .table-tab:nth-child(3)": "데이터 미리보기"
+    }
+  },
+  "messages": {}
+}

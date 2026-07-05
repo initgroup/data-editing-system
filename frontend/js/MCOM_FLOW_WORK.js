@@ -112,6 +112,7 @@
             async init() {
                 if (this.isInit) return;
                 this.applyUiLabels();
+                this.resetFlowResultSqlPlaceholder();
                 await this.loadWorkContext();
                 this.switchTab("designer");
                 this.setupFlowDesigner();
@@ -203,6 +204,28 @@
                         element.setAttribute("placeholder", value);
                     });
                 });
+            },
+
+            resetFlowResultSqlPlaceholder() {
+                const editor = getContainerEl(`#flowResultSqlEditor-${PAGE_CODE}`);
+                if (!editor) return;
+                const oldPlaceholder = "-- Select a node result from Run History details.";
+                if (!editor.value.trim() || editor.value.trim() === oldPlaceholder) {
+                    editor.value = `-- ${this.getMessage("resultSqlSelectHint", "Select a node result from Run History details.")}`;
+                }
+            },
+
+            getMessage(key, fallback = "", values = {}) {
+                const pack = window[`${PAGE_CODE}_PAGE_I18N`] || {};
+                const messages = pack.messages || {};
+                const labels = window[`${PAGE_CODE}_FLOW_UI_LABELS`] || FLOW_UI_LABELS || {};
+                let text = Object.prototype.hasOwnProperty.call(messages, key)
+                    ? String(messages[key] ?? "")
+                    : (Object.prototype.hasOwnProperty.call(labels, key) ? String(labels[key] ?? "") : String(fallback ?? ""));
+                Object.entries(values || {}).forEach(([name, value]) => {
+                    text = text.replace(new RegExp(`\\{${name}\\}`, "g"), String(value ?? ""));
+                });
+                return text;
             },
 
             setMultilineText(element, value = "") {
@@ -637,12 +660,12 @@
                 const type = String(nodeType || "").toUpperCase();
                 const match = this.flowNodeTypes.find((item) => String(item.NODE_TYPE || "").toUpperCase() === type);
                 const knownLabels = {
-                    M03001: "데이터 프로파일링",
-                    M03002: "컬럼간 상관 분석",
-                    M03003: "자동 규칙 발굴",
-                    M03004: "규칙 위반 탐지"
+                    M03001: this.getMessage("nodeTypeM03001", "Data Profiling"),
+                    M03002: this.getMessage("nodeTypeM03002", "Column Correlation"),
+                    M03003: this.getMessage("nodeTypeM03003", "Rule Discovery"),
+                    M03004: this.getMessage("nodeTypeM03004", "Rule Violation")
                 };
-                return match?.NODE_TYPE_NAME || knownLabels[type] || fallbackLabel || type || "JOB";
+                return knownLabels[type] || match?.NODE_TYPE_NAME || fallbackLabel || type || "JOB";
             },
 
             getNodeTypeConfig(nodeType) {
@@ -1254,7 +1277,7 @@
             async reloadCurrentFlowCanvas() {
                 const flowId = this.getValue(`#flowId-${PAGE_CODE}`) || getContainerEl(`#flowVersion-${PAGE_CODE}`)?.value || "";
                 if (!/^\d+$/.test(String(flowId))) {
-                    alert("Saved FLOW를 선택한 뒤 캔버스를 새로고침할 수 있습니다.");
+                    alert(this.getMessage("selectSavedFlowBeforeReload", "Select a saved flow before refreshing the canvas."));
                     return;
                 }
                 await this.loadFlowVersion(flowId, { refreshHistory: false });
@@ -1293,9 +1316,19 @@
             updateWorkContextSummary() {
                 const project = this.contextProjects.find((row) => String(row.PROJECT_ID) === String(this.selectedProjectId));
                 const scenario = this.contextScenarios.find((row) => String(row.SCENARIO_ID) === String(this.selectedScenarioId));
+                const summary = getContainerEl(`#workContextSummary-${PAGE_CODE}`);
+                if (!project && !scenario) {
+                    if (summary) {
+                        summary.dataset.labelKey = "contextSummaryEmpty";
+                        summary.textContent = this.getMessage("contextSummaryEmpty", "No context selected.");
+                    }
+                    this.updateFlowPanelTitles(scenario);
+                    return;
+                }
+                if (summary) delete summary.dataset.labelKey;
                 const parts = [
-                    project ? `Project: ${CommonUtils.formatOwnerScopedName(project, project.PROJECT_NAME || project.PROJECT_CODE || "-")}` : "Project: -",
-                    scenario ? `Scenario: ${CommonUtils.formatOwnerScopedName(scenario, scenario.SCENARIO_NAME || scenario.SCENARIO_CODE || "-")}` : "Scenario: -",
+                    project ? `${this.getMessage("contextSummaryProject", "Project")}: ${CommonUtils.formatOwnerScopedName(project, project.PROJECT_NAME || project.PROJECT_CODE || "-")}` : `${this.getMessage("contextSummaryProject", "Project")}: -`,
+                    scenario ? `${this.getMessage("contextSummaryScenario", "Scenario")}: ${CommonUtils.formatOwnerScopedName(scenario, scenario.SCENARIO_NAME || scenario.SCENARIO_CODE || "-")}` : `${this.getMessage("contextSummaryScenario", "Scenario")}: -`,
                     this.getCurrentFlowSummary()
                 ];
                 this.setText(`#workContextSummary-${PAGE_CODE}`, parts.join(" / "));
@@ -1469,7 +1502,7 @@
                     node.classList.toggle("is-sample-node", this.isSampleFlowVisible && node.dataset.sampleNode === "Y");
                 });
                 if (label && this.isSampleFlowVisible) {
-                    label.textContent = "작업 템플릿입니다. 필요한 노드와 연결을 확인한 뒤 저장하세요.";
+                    label.textContent = this.getMessage("sampleTemplateReady", "This is a job template. Review the nodes and edges, then save it.");
                 }
             },
 
@@ -1592,7 +1625,7 @@
                 this.clearFlowNodeSelection({ store: false, syncBeforeStore: false });
                 this.setSampleFlowState(false);
                 const label = getContainerEl(`#selectedFlowLabel-${PAGE_CODE}`);
-                if (label) label.textContent = "캔버스가 비었습니다. 왼쪽 작업을 끌어오거나 캔버스 메뉴에서 노드를 추가해 Flow를 구성하세요.";
+                if (label) label.textContent = this.getMessage("flowCanvasEmpty", "The canvas is empty. Drag jobs from the left or add nodes from the canvas menu to build a flow.");
                 this.resizeFlowViewportToNodes();
                 this.updateFlowEdges();
                 this.renderFlowEdgeGrid();
@@ -2846,7 +2879,7 @@
 
             createFlowNode(data, left, top) {
                 const nodeType = data.nodeType || "JOB";
-                const nodeTypeLabel = data.nodeTypeLabel || this.getNodeTypeLabel(nodeType);
+                const nodeTypeLabel = this.getNodeTypeLabel(nodeType, data.nodeTypeLabel || "");
                 const nodeId = this.createNextFlowNodeId(nodeType);
                 const inputHtml = this.renderNodePortSpans(this.getRenderInputPorts(nodeType, data), "in", "TABLE");
                 const outputHtml = this.renderNodePortSpans(
@@ -2899,7 +2932,7 @@
 
             createSavedFlowNode(data) {
                 const nodeType = data.nodeType || "JOB";
-                const nodeTypeLabel = data.nodeTypeLabel || this.getNodeTypeLabel(nodeType);
+                const nodeTypeLabel = this.getNodeTypeLabel(nodeType, data.nodeTypeLabel || "");
                 const refJob = this.getRegisteredJobAsset(data.refWorkJobId || "");
                 const nodeId = data.nodeKey || this.createNextFlowNodeId(nodeType);
                 const inputHtml = this.renderNodePortSpans(this.getRenderInputPorts(nodeType, data), "in", "TABLE");
@@ -3356,9 +3389,9 @@
             getResultCreateModeLabel(value) {
                 const mode = this.normalizeResultCreateMode(value);
                 const labels = {
-                    N: "N (사용안함)",
-                    T: "T (테이블사용)",
-                    M: "M (모델사용)"
+                    N: this.getMessage("resultCreateNone", "N (Not used)"),
+                    T: this.getMessage("resultCreateTable", "T (Table)"),
+                    M: this.getMessage("resultCreateModel", "M (Model)")
                 };
                 return labels[mode] || labels.N;
             },
@@ -3605,12 +3638,12 @@
             getSystemBindComment(name, node) {
                 const canonicalName = this.normalizeSystemBindName(name);
                 if (canonicalName === "INIT$RunId" || canonicalName === "INIT$FlowRunId") {
-                    return "Use (auto) or blank for a new flow run id. Enter an existing flow run id to overwrite that run.";
+                    return this.getMessage("paramDescFlowRunId", "Use (auto) or blank for a new flow run id. Enter an existing flow run id to overwrite that run.");
                 }
                 if (canonicalName.includes("$Pre") && !this.getPreviousNodeForSystemBind(node)) {
-                    return "No upstream node is connected.";
+                    return this.getMessage("paramDescNoUpstreamNode", "No upstream node is connected.");
                 }
-                return "System bind value. It is supplied automatically at run time.";
+                return this.getMessage("paramDescSystemBind", "System bind value. It is supplied automatically at run time.");
             },
 
             getNodeParams(node) {
@@ -3659,7 +3692,23 @@
             },
 
             getNodeParamComment(item) {
-                return String(item?.itemDesc || item?.ITEM_DESC || item?.comment || item?.COMMENT || "");
+                const comment = String(item?.itemDesc || item?.ITEM_DESC || item?.comment || item?.COMMENT || "");
+                const name = String(item?.itemName || item?.ITEM_NAME || item?.name || item?.NAME || item?.key || item?.KEY || "");
+                const commentKeys = {
+                    ptargetowner: "paramDescTargetOwner",
+                    ptargettable: "paramDescTargetTable",
+                    pdynamicmodelname: "paramDescDynamicModelName",
+                    ppredictionmethod: "paramDescPredictionMethod"
+                };
+                const fallbackComments = {
+                    ptargetowner: "Target table owner",
+                    ptargettable: "Target table name",
+                    pdynamicmodelname: "Classification/prediction model name",
+                    ppredictionmethod: "Prediction method (ONLY_RULE: BASE columns only, ONLY_MODEL: model columns only, ONLY_BOTH: BASE/MODEL columns, FINAL_RULE/MODEL/BOTH: apply FINAL automatically)"
+                };
+                const normalizedName = this.normalizeBindParamKey(name);
+                const key = commentKeys[normalizedName];
+                return key ? this.getMessage(key, fallbackComments[normalizedName] || comment) : comment;
             },
 
             getNodeParamDefault(item) {
@@ -3735,7 +3784,7 @@
                 const comment = this.getNodeParamComment(item);
                 if (comment) return comment;
                 if (String(this.getNodeParamDefault(item) ?? "").trim()) {
-                    return "Parameter default. You can override it for this node run.";
+                    return this.getMessage("paramDefaultOverrideHint", "Parameter default. You can override it for this node run.");
                 }
                 return "";
             },
@@ -3924,10 +3973,10 @@
                 }
                 const confirmed = await CommonMessage.confirm([
                     `FLOW_RUN_ID ${runId} will be overwritten.`,
-                    `FLOW_RUN_ID ${runId} 결과를 다시 생성합니다.`,
+                    this.getMessage("manualFlowRunIdRegenerate", "FLOW_RUN_ID {runId} results will be regenerated.", { runId }),
                     "",
-                    "Existing node run records and result rows for this flow run may be deleted and inserted again.",
-                    "Continue?"
+                    this.getMessage("manualFlowRunIdOverwriteWarning", "Existing node run records and result rows for this flow run may be deleted and inserted again."),
+                    this.getMessage("continueQuestion", "Continue?")
                 ].join("\n"));
                 return confirmed ? runId : null;
             },
@@ -4120,11 +4169,11 @@
                         return;
                     }
                     const dashedHint = this.dashedConnectionMode
-                        ? "현재 점선 연결 모드가 켜져 있습니다."
-                        : "Shift를 누르고 연결하면 선행 노드 종료 후 실행되는 점선 연결을 한 번 만들 수 있습니다.";
+                        ? this.getMessage("dashedConnectionOnHint", "Dashed connection mode is on.")
+                        : this.getMessage("dashedConnectionShiftHint", "Hold Shift while connecting to create a one-time dashed on-complete edge.");
                     this.setMultilineText(
                         label,
-                        `오른쪽 출력 커넥터를 클릭한 뒤 연결할 노드의 왼쪽 입력 커넥터를 클릭하세요.\n${dashedHint}`
+                        `${this.getMessage("connectorClickHint", "Click the right output connector, then click the left input connector of the node to connect.")}\n${dashedHint}`
                     );
                 }
             },
@@ -4352,7 +4401,7 @@
                     );
 
                 if (orderedNodes.length < 2) {
-                    CommonMessage.warn("자동 연결선을 적용하려면 노드가 2개 이상 필요합니다.", { copyable: false });
+                    CommonMessage.warn(this.getMessage("autoConnectNeedsTwoNodes", "At least two nodes are required to apply automatic connections."), { copyable: false });
                     return;
                 }
 
@@ -4365,7 +4414,7 @@
                 }
 
                 if (!nextEdges.length) {
-                    CommonMessage.warn("자동 연결선을 만들 수 있는 IN/OUT 포트가 없습니다.", { copyable: false });
+                    CommonMessage.warn(this.getMessage("autoConnectNoPorts", "No IN/OUT ports are available for automatic connections."), { copyable: false });
                     return;
                 }
 
@@ -4378,7 +4427,7 @@
                     this.renderNodeBindVariables(selectedNode);
                     this.setValue(`#nodeDependsOn-${PAGE_CODE}`, this.getUpstreamNodeIds(this.selectedNodeId).join(", "));
                 }
-                CommonMessage.success("x축 위치 기준 자동 연결선을 적용했습니다.", { copyable: false });
+                CommonMessage.success(this.getMessage("autoConnectAppliedByX", "Automatic connections were applied by x-axis position."), { copyable: false });
             },
 
             autoLayoutFlow() {
@@ -4387,7 +4436,7 @@
 
                 const nodeIds = nodes.map((node) => node.dataset.nodeId || "").filter(Boolean);
                 if (this.hasFlowCycle()) {
-                    CommonMessage.warn("순환 연결이 있어 Tree layout을 적용할 수 없습니다. 순환 루프 연결을 삭제한 뒤 다시 시도해 주세요.", { copyable: false });
+                    CommonMessage.warn(this.getMessage("treeLayoutCycleBlocked", "Tree layout cannot be applied because the flow has a cycle. Remove the loop and try again."), { copyable: false });
                     return;
                 }
                 const nodeSet = new Set(nodeIds);
@@ -4655,7 +4704,7 @@
                 };
                 if (!nextEdge.from || !nextEdge.to) return;
                 if (this.wouldCreateFlowCycle(nextEdge)) {
-                    CommonMessage.warn("순환 루프가 되는 연결은 만들 수 없습니다. Flow는 마지막 노드에서 처음 노드로 되돌아가지 않는 DAG 구조여야 합니다.", { copyable: false });
+                    CommonMessage.warn(this.getMessage("cyclicEdgeBlocked", "This connection would create a cycle. A flow must remain a DAG without looping back to an earlier node."), { copyable: false });
                     return;
                 }
                 const exists = this.flowEdges.some((item) =>
@@ -5042,9 +5091,9 @@
                         <strong title="${this.escapeHtml(nodeName)}">${this.escapeHtml(nodeName)}</strong>
                         ${count > 0 ? `
                             <button type="button" class="flow-node-run-param-link" onclick="${PAGE_CODE}.openNodeRunParamsLayer('${this.escapeJs(flowNodeRunId)}', event)">
-                                호출 옵션 파라미터 ${this.escapeHtml(count.toLocaleString())}개
+                                ${this.escapeHtml(this.getMessage("nodeRunParamsCount", "{count} call option parameter(s)", { count: count.toLocaleString() }))}
                             </button>
-                        ` : `<small>호출 옵션 파라미터 0개</small>`}
+                        ` : `<small>${this.escapeHtml(this.getMessage("nodeRunParamsCount", "{count} call option parameter(s)", { count: "0" }))}</small>`}
                     </span>
                 `;
             },
@@ -5070,8 +5119,8 @@
                 const paramMap = this.buildNodeParamMap(definitionParams);
                 const runtimeParamMap = this.buildRuntimeParamValueMap(params);
                 const resolveComment = (name, item = null) => {
-                    const directComment = item?.comment || item?.COMMENT || item?.itemDesc || item?.ITEM_DESC || "";
-                    if (directComment) return String(directComment);
+                    const directComment = this.getNodeParamComment(item);
+                    if (directComment) return directComment;
                     const matched = paramMap.get(this.normalizeBindParamKey(name));
                     const matchedComment = this.getNodeParamComment(matched);
                     if (matchedComment) return matchedComment;
@@ -5206,17 +5255,17 @@
                             <td><pre>${this.escapeHtml(this.formatNodeRunParamValue(entry.value))}</pre></td>
                         </tr>
                     `).join("")
-                    : `<tr><td colspan="3" class="table-empty">호출 옵션 파라미터가 없습니다.</td></tr>`;
+                    : `<tr><td colspan="3" class="table-empty">${this.escapeHtml(this.getMessage("noNodeRunParams", "No call option parameters."))}</td></tr>`;
                 layer.innerHTML = `
                     <div class="flow-node-run-param-backdrop" onclick="${PAGE_CODE}.closeNodeRunParamsLayer()"></div>
-                    <section class="flow-node-run-param-dialog" role="dialog" aria-modal="true" aria-label="호출 옵션 파라미터">
+                    <section class="flow-node-run-param-dialog" role="dialog" aria-modal="true" aria-label="${this.escapeHtml(this.getMessage("nodeRunParamsTitle", "Call option parameters"))}">
                         <div class="flow-node-run-param-dragbar" title="Drag to move">
                             <span></span>
                         </div>
                         <header>
                             <span>
                                 <strong>${this.escapeHtml(nodeName)}</strong>
-                                <small>호출 옵션 파라미터 ${this.escapeHtml(entries.length.toLocaleString())}개</small>
+                                <small>${this.escapeHtml(this.getMessage("nodeRunParamsCount", "{count} call option parameter(s)", { count: entries.length.toLocaleString() }))}</small>
                             </span>
                             <button type="button" class="table-icon-btn" title="Close" onclick="${PAGE_CODE}.closeNodeRunParamsLayer()">
                                 <i class="fas fa-times"></i>
@@ -5299,7 +5348,9 @@
                     nodeName: row?.NODE_NAME || row?.NODE_KEY || "",
                     status: String(row?.STATUS || "").toUpperCase(),
                     mode,
-                    modeLabel: mode === "M" ? "Model" : (mode === "T" ? "Table" : "None"),
+                    modeLabel: mode === "M"
+                        ? this.getMessage("resultModeModel", "Model")
+                        : (mode === "T" ? this.getMessage("resultModeTable", "Table") : this.getMessage("resultModeNone", "None")),
                     owner,
                     objectName,
                     targetOwner,
@@ -5328,8 +5379,17 @@
                 });
                 const sql = json.data?.sql || "";
                 this.setValue(`#flowResultSqlEditor-${PAGE_CODE}`, sql);
-                this.setText(`#flowResultSqlTitle-${PAGE_CODE}`, `${info.nodeName || "Node"} Result SQL`);
-                const targetHint = info.targetOwner && info.targetTable ? ` / Target ${info.targetOwner}.${info.targetTable}` : "";
+                const title = this.getMessage("selectedNodeResultSqlTitle", "{nodeName} Result SQL", {
+                    nodeName: info.nodeName || this.getMessage("node", "Node")
+                });
+                const titleEl = getContainerEl(`#flowResultSqlTitle-${PAGE_CODE}`);
+                if (titleEl) delete titleEl.dataset.labelKey;
+                this.setText(`#flowResultSqlTitle-${PAGE_CODE}`, title);
+                const hintEl = getContainerEl(`#flowResultSqlHint-${PAGE_CODE}`);
+                if (hintEl) delete hintEl.dataset.labelKey;
+                const targetHint = info.targetOwner && info.targetTable
+                    ? ` / ${this.getMessage("target", "Target")} ${info.targetOwner}.${info.targetTable}`
+                    : "";
                 this.setText(`#flowResultSqlHint-${PAGE_CODE}`, `${info.modeLabel}: ${info.owner}.${info.objectName}${targetHint}`);
                 this.flowResultSqlGridData = { rows: [], columns: [] };
                 this.flowResultSqlColumnWidths = {};
@@ -5337,7 +5397,7 @@
                 this.setValue(`#flowResultSqlFreezeColumns-${PAGE_CODE}`, "0");
                 this.renderFlowResultSqlMessage("", "info");
                 const grid = getContainerEl(`#flowResultSqlGrid-${PAGE_CODE}`);
-                if (grid) grid.innerHTML = `<div class="table-empty">Run SQL to preview result data.</div>${this.renderListFooter(0)}`;
+                if (grid) grid.innerHTML = `<div class="table-empty">${this.escapeHtml(this.getMessage("runSqlPreviewHint", "Run SQL to preview result data."))}</div>${this.renderListFooter(0)}`;
             },
             handleFlowResultSqlKeydown(event) {
                 if (event.key === "F5") {
@@ -5419,16 +5479,16 @@
                 const selection = this.getFlowResultSqlFromEditor(fullSql);
                 const sql = selection.sql || "";
                 if (!/^(select|with)\b/i.test(sql.replace(/;+\s*$/, ""))) {
-                    CommonMessage.warning("Result SQL must be a SELECT statement.");
+                    CommonMessage.warning(this.getMessage("resultSqlSelectOnly", "Result SQL must be a SELECT statement."));
                     return;
                 }
                 const limitValue = Number(this.getValue(`#flowResultSqlLimit-${PAGE_CODE}`) || 100);
                 const limit = Math.max(1, Math.min(Number.isFinite(limitValue) ? limitValue : 100, 1000));
                 const grid = getContainerEl(`#flowResultSqlGrid-${PAGE_CODE}`);
                 const startedAt = performance.now();
-                this.renderFlowResultSqlMessage("Running SQL...", "info");
+                this.renderFlowResultSqlMessage(this.getMessage("runningSql", "Running SQL..."), "info");
                 if (grid) {
-                    grid.innerHTML = `<div class="table-empty">Executing result SQL...</div>${this.renderListFooter(0)}`;
+                    grid.innerHTML = `<div class="table-empty">${this.escapeHtml(this.getMessage("executingResultSql", "Executing result SQL..."))}</div>${this.renderListFooter(0)}`;
                 }
                 try {
                     const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/result-sql`, {
@@ -5440,14 +5500,18 @@
                     const columns = json.columns || [];
                     const elapsedMs = Math.round(performance.now() - startedAt);
                     this.flowResultSqlGridData = { rows, columns };
-                    this.renderFlowResultSqlMessage(`${rows.length.toLocaleString()} rows selected. (${elapsedMs.toLocaleString()} ms)`, "success");
+                    this.renderFlowResultSqlMessage(this.getMessage("resultSqlRowsSelected", "{count} rows selected. ({elapsed} ms)", {
+                        count: rows.length.toLocaleString(),
+                        elapsed: elapsedMs.toLocaleString()
+                    }), "success");
                     this.renderFlowResultSqlGrid(rows, columns);
                     this.restoreFlowResultSqlSelection(selection);
                 } catch (error) {
                     const elapsedMs = Math.round(performance.now() - startedAt);
                     this.flowResultSqlGridData = { rows: [], columns: [] };
-                    this.renderFlowResultSqlMessage(`${error.message || "Result SQL execution failed."} (${elapsedMs.toLocaleString()} ms)`, "error");
-                    this.renderError(`#flowResultSqlGrid-${PAGE_CODE}`, error.message || "Result SQL execution failed.");
+                    const message = error.message || this.getMessage("resultSqlExecutionFailed", "Result SQL execution failed.");
+                    this.renderFlowResultSqlMessage(`${message} (${elapsedMs.toLocaleString()} ms)`, "error");
+                    this.renderError(`#flowResultSqlGrid-${PAGE_CODE}`, message);
                     this.restoreFlowResultSqlSelection(selection);
                 }
             },
@@ -5464,16 +5528,16 @@
                 if (!value.trim()) return;
                 try {
                     await CommonMessage.copyText(value);
-                    CommonMessage.success("Result SQL copied.", { copyable: false });
+                    CommonMessage.success(this.getMessage("resultSqlCopied", "Result SQL copied."), { copyable: false });
                 } catch (error) {
-                    CommonMessage.error(error.message || "Result SQL copy failed.");
+                    CommonMessage.error(error.message || this.getMessage("resultSqlCopyFailed", "Result SQL copy failed."));
                 }
             },
             exportFlowResultSqlGrid(format) {
                 const grid = this.flowResultSqlGridData || {};
                 const rows = grid.rows || [];
                 if (!rows.length) {
-                    CommonMessage.warning("No grid data to export.");
+                    CommonMessage.warning(this.getMessage("noGridDataToExport", "No grid data to export."));
                     return;
                 }
                 const baseName = this.createFlowResultSqlExportFileName();
@@ -5534,7 +5598,7 @@
                 const headerHtml = this.renderFlowResultSqlHeader(columns);
                 if (!dataRows.length) {
                     if (!columns.length) {
-                        container.innerHTML = `<div class="table-empty">No data.</div>${this.renderListFooter(0)}`;
+                        container.innerHTML = `<div class="table-empty">${this.escapeHtml(this.getMessage("noData", "No data."))}</div>${this.renderListFooter(0)}`;
                         return;
                     }
                     container.innerHTML = `
@@ -6162,8 +6226,10 @@
                 const nodeKey = first.NODE_KEY || "";
                 const rawMessage = String(first.MESSAGE || "").trim();
                 const lines = [
-                    `Flow run failed at node: ${nodeName}${nodeKey ? ` (${nodeKey})` : ""}`,
-                    `실패 노드: ${nodeName}${nodeKey ? ` (${nodeKey})` : ""}`
+                    this.getMessage("flowRunFailedAtNode", "Flow run failed at node: {nodeName}{nodeKey}", {
+                        nodeName,
+                        nodeKey: nodeKey ? ` (${nodeKey})` : ""
+                    })
                 ];
                 if (rawMessage) {
                     lines.push("", rawMessage);
@@ -6179,23 +6245,23 @@
                 const text = String(message || "");
                 if (/No Apriori input columns found/i.test(text)) {
                     const runContextHint = /categorical_cols=0/i.test(text)
-                        ? "현재 FLOW_RUN_ID에서 M03001 예측 타입 결과 중 범주형 컬럼을 찾지 못했습니다."
-                        : "Apriori 학습 후보 컬럼을 만들 수 없습니다.";
+                        ? this.getMessage("noAprioriCategoricalFlowRun", "No categorical column was found in the M03001 predicted type results for the current FLOW_RUN_ID.")
+                        : this.getMessage("noAprioriCandidateColumns", "Apriori training candidate columns could not be created.");
                     const upstreamHint = (allRows || []).some((row) => String(row.STATUS || "").toUpperCase() === "SUCCESS")
-                        ? "선행 노드 일부는 성공했지만, M03003이 요구하는 M03001 범주형 예측 결과가 현재 실행 컨텍스트에 없거나 0건입니다."
-                        : "선행 M03001/M03002 결과가 현재 실행 컨텍스트에 없습니다.";
+                        ? this.getMessage("noAprioriUpstreamPartial", "Some upstream nodes succeeded, but the M03001 categorical predicted type results required by M03003 are missing or empty in the current run context.")
+                        : this.getMessage("noAprioriUpstreamMissing", "Upstream M03001/M03002 results are missing in the current run context.");
                     return [
-                        "원인 해석:",
+                        this.getMessage("failureReasonTitle", "Reason:"),
                         runContextHint,
                         upstreamHint,
-                        "조치: 같은 FLOW_RUN_ID에서 M03001을 RULE 또는 BOTH 방식으로 먼저 실행하거나, 상단 Run now로 처음부터 실행해 주세요."
+                        this.getMessage("noAprioriAction", "Action: Run M03001 with RULE or BOTH first using the same FLOW_RUN_ID, or run the full flow from Run now.")
                     ].join("\n");
                 }
-                if (/upstream results are missing|선행 노드 실행 결과/i.test(text)) {
+                if (/upstream results are missing|\uC120\uD589 \uB178\uB4DC \uC2E4\uD589 \uACB0\uACFC/i.test(text)) {
                     return [
-                        "원인 해석:",
-                        "선택 노드부터 실행하려면 같은 FLOW_RUN_ID에 선행 노드의 성공 결과가 먼저 있어야 합니다.",
-                        "조치: 선행 노드를 먼저 실행하거나 상단 Run now로 처음부터 실행해 주세요."
+                        this.getMessage("failureReasonTitle", "Reason:"),
+                        this.getMessage("upstreamMissingReason", "To run from the selected node, successful upstream node results must already exist in the same FLOW_RUN_ID."),
+                        this.getMessage("upstreamMissingAction", "Action: Run the upstream nodes first, or run the full flow from Run now.")
                     ].join("\n");
                 }
                 return "";
@@ -6275,16 +6341,15 @@
                     return;
                 }
                 const flowName = this.getValue(`#flowName-${PAGE_CODE}`).trim() || this.getFlowNameForSave();
-                const actionNameEn = batch ? "Queue batch" : "Run now";
-                const actionNameKo = batch ? "배치 대기열 등록" : "지금 실행";
+                const actionName = batch
+                    ? this.getMessage("queueBatchAction", "Queue batch")
+                    : this.getMessage("runNowAction", "Run now");
                 const confirmMessage = [
-                    `${actionNameEn}: "${flowName}"`,
-                    `${actionNameKo}: "${flowName}"`,
+                    `${actionName}: "${flowName}"`,
                     "",
-                    "This will save the current flow, validate the DAG, and create a run history record.",
-                    "현재 플로우를 저장하고 DAG를 검증한 뒤 실행 이력 기록을 생성합니다.",
+                    this.getMessage("confirmRunFlowBody", "This will save the current flow, validate the DAG, and create a run history record."),
                     "",
-                    "Continue?"
+                    this.getMessage("continueQuestion", "Continue?")
                 ].join("\n");
                 this.setFlowRunning(true, flowKey, batch ? "Queue batch running..." : "Run now running...");
                 if (!(await CommonMessage.confirm(confirmMessage))) {
@@ -6350,35 +6415,30 @@
                 const nodeId = this.flowContextMenuState?.nodeId || actionNodeIds[0] || this.selectedNodeId || "";
                 const node = this.getFlowNode(nodeId);
                 if (!node) {
-                    alert("Select a node first.\n먼저 실행할 노드를 선택해 주세요.");
+                    alert(this.getMessage("selectNodeFirst", "Select a node first."));
                     return;
                 }
                 if (!this.selectedProjectId || !this.selectedScenarioId) {
-                    alert("Select project and scenario first.\n먼저 프로젝트와 시나리오를 선택해 주세요.");
+                    alert(this.getMessage("selectProjectScenarioFirst", "Select project and scenario first."));
                     return;
                 }
                 const nodeName = node.querySelector(".flow-node-body strong")?.textContent?.trim() || nodeId;
-                const actionTitle = runDownstream ? "Run from selected node" : "Run selected node";
-                const actionTitleKo = runDownstream ? "선택 노드부터 이후 실행" : "선택 노드 실행";
+                const actionTitle = runDownstream
+                    ? this.getMessage("runFromSelectedNodeAction", "Run from selected node")
+                    : this.getMessage("runSelectedNodeAction", "Run selected node");
                 const confirmMessage = [
                     `${actionTitle}: "${nodeName}"`,
-                    `${actionTitleKo}: "${nodeName}"`,
                     "",
                     runDownstream
-                        ? "This will save the current flow, validate the DAG, and run the selected node plus downstream nodes."
-                        : "This will save the current flow, validate the DAG, and run only the selected node.",
-                    runDownstream
-                        ? "현재 플로우를 저장하고 DAG를 검증한 뒤 선택 노드와 이후 연결 노드를 실행합니다."
-                        : "현재 플로우를 저장하고 DAG를 검증한 뒤 선택 노드만 실행합니다.",
+                        ? this.getMessage("confirmRunDownstreamBody", "This will save the current flow, validate the DAG, and run the selected node plus downstream nodes.")
+                        : this.getMessage("confirmRunSelectedNodeBody", "This will save the current flow, validate the DAG, and run only the selected node."),
                     ...(runDownstream ? [
                         "",
-                        "If the selected node has upstream dependencies, the run will continue from a previous FLOW_RUN_ID with successful upstream node results.",
-                        "선택 노드에 선행 노드가 있으면, 선행 노드가 성공한 기존 FLOW_RUN_ID를 이어서 실행합니다.",
-                        "If no compatible run exists, execution stops before running the node.",
-                        "이어 쓸 실행 컨텍스트가 없으면 노드를 실행하기 전에 중단합니다."
+                        this.getMessage("confirmRunDownstreamUpstreamHint", "If the selected node has upstream dependencies, the run will continue from a previous FLOW_RUN_ID with successful upstream node results."),
+                        this.getMessage("confirmRunDownstreamNoRunHint", "If no compatible run exists, execution stops before running the node.")
                     ] : []),
                     "",
-                    "Continue?"
+                    this.getMessage("continueQuestion", "Continue?")
                 ].join("\n");
                 this.setFlowRunning(true, flowKey, runDownstream ? `Running from node: ${nodeName}` : `Node running: ${nodeName}`);
                 if (!(await CommonMessage.confirm(confirmMessage))) {

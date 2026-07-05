@@ -690,7 +690,7 @@
         },
         {
           "key": "P_PREDICTION_METHOD",
-          "comment": "예측 방식 선택(ONLY_RULE: BASE 컬럼만, ONLY_MODEL: MODL 컬럼만, ONLY_BOTH: BASE/MODL 컬럼, FINAL_RULE/MODEL/BOTH: FINAL 자동 반영)",
+          "comment": "Prediction method (ONLY_RULE: BASE columns only, ONLY_MODEL: model columns only, ONLY_BOTH: BASE/MODEL columns, FINAL_RULE/MODEL/BOTH: apply FINAL automatically)",
           "defaultValue": "ONLY_BOTH"
         },
         {

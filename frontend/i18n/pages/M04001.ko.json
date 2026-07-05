@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "language": "ko",
+  "pageCode": "M04001",
+  "description": "Korean labels for integrated editing scenario flow page.",
+  "labels": {
+    "menuName": "통합 에디팅 시나리오",
+    "nodeTypeM03001": "데이터 프로파일링",
+    "nodeTypeM03002": "컬럼간 상관 분석",
+    "nodeTypeM03003": "자동 규칙 발굴",
+    "nodeTypeM03004": "규칙 위반 탐지",
+    "paramDescTargetOwner": "분석 대상 테이블 계정",
+    "paramDescTargetTable": "분석 대상 테이블명",
+    "paramDescDynamicModelName": "분류/예측 모델명",
+    "paramDescPredictionMethod": "예측 방식 선택(ONLY_RULE: BASE 컬럼만, ONLY_MODEL: MODL 컬럼만, ONLY_BOTH: BASE/MODL 컬럼, FINAL_RULE/MODEL/BOTH: FINAL 자동 반영)"
+  }
+}

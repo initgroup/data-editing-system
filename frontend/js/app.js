@@ -93,6 +93,7 @@ const PageManager = {
         sessionStorage.removeItem(SESSION_EXPIRES_AT_KEY);
         sessionStorage.removeItem(CURRENT_PAGE_KEY);
         sessionStorage.removeItem(CURRENT_PAGE_TITLE_KEY);
+        window.I18nManager?.clearSessionLanguage?.();
         updateCurrentTargetDbSelect?.();
         this.updateSessionStatus();
     },
@@ -128,7 +129,9 @@ const PageManager = {
         if (roleEl) {
             const roleCode = String(user.roleCode || user.ROLE_CODE || user.role || "USER").toUpperCase();
             const isAdmin = roleCode === "ADMIN";
-            roleEl.textContent = isAdmin ? "관리자" : "일반회원";
+            roleEl.textContent = isAdmin
+                ? (window.I18nManager?.t?.("roles.admin", "Admin") || "Admin")
+                : (window.I18nManager?.t?.("roles.user", "User") || "User");
             roleEl.className = `header-session-role ${isAdmin ? "is-admin" : "is-user"}`;
             roleEl.title = `Role: ${roleCode}`;
         }
@@ -422,22 +425,24 @@ const PageManager = {
     },
 
     createMissingPageHtml(pageCode, reason = "not-found") {
+        const t = (path, fallback) => window.I18nManager?.t?.(path, fallback) || fallback;
+        const format = (text) => String(text || "").replace(/\{pageCode\}/g, pageCode);
         const messages = {
             "not-registered": {
-                title: "등록되지 않은 화면입니다.",
-                detail: `${pageCode} 화면이 메뉴 설정에 연결되어 있지 않습니다.`
+                title: t("missingPage.notRegisteredTitle", "Page is not registered."),
+                detail: format(t("missingPage.notRegisteredDetail", "{pageCode} is not connected in the menu settings."))
             },
             "not-found": {
-                title: "페이지 파일을 찾을 수 없습니다.",
-                detail: `${pageCode}.html 파일 경로 또는 배포 상태를 확인해 주세요.`
+                title: t("missingPage.notFoundTitle", "Page file was not found."),
+                detail: format(t("missingPage.notFoundDetail", "Check the {pageCode}.html path or deployment status."))
             },
             "server-unavailable": {
-                title: "WAS 서버가 응답하지 않습니다.",
-                detail: "서버 실행 상태 또는 네트워크 연결을 확인해 주세요."
+                title: t("missingPage.serverUnavailableTitle", "The WAS server is not responding."),
+                detail: t("missingPage.serverUnavailableDetail", "Check the server status or network connection.")
             },
             "load-failed": {
-                title: "페이지를 불러오지 못했습니다.",
-                detail: "잠시 후 다시 시도하거나 서버 상태를 확인해 주세요."
+                title: t("missingPage.loadFailedTitle", "Page could not be loaded."),
+                detail: t("missingPage.loadFailedDetail", "Try again later or check the server status.")
             }
         };
         const message = messages[reason] || messages["not-found"];
@@ -537,6 +542,13 @@ const PageManager = {
         }
         if (this.requiresAuth(pageCode)) {
             this.extendSession();
+            if (window.I18nManager?.isLanguageLoading?.()) {
+                CommonUI.showLoading(
+                    window.I18nManager?.t?.("commonUi.loading.languageTitle", "Loading language pack"),
+                    window.I18nManager?.t?.("commonUi.loading.languageDetail", "Preparing labels and messages")
+                );
+            }
+            await window.I18nManager?.whenReady?.();
         }
         if (this.requiresAuth(pageCode) && !this.isPageAllowed(pageCode)) {
             await this.load("home", window.getShellHomeTitle?.() || "Data Editing System", false);
@@ -554,6 +566,9 @@ const PageManager = {
             if (module && typeof module.onShow === 'function') {
                 await module.onShow();
             }
+            await window.I18nManager?.ensurePagePack?.(pageCode);
+            window.I18nManager?.applyPagePack?.(pageCode, this.containers[pageCode]);
+            window.I18nManager?.applyCommonPack?.(window.I18nManager.commonPack || {});
             const displayTitle = this.formatPageTitle(pageCode, title);
             if (displayTitle) window.updateShellPageHeader?.(pageCode, displayTitle);
             this.rememberCurrentPage(pageCode, displayTitle);
@@ -577,6 +592,8 @@ const PageManager = {
         try {
             const hasHtml = await this.injectHtml(pageCode);
             if (hasHtml) {
+                await window.I18nManager?.ensurePagePack?.(pageCode);
+                window.I18nManager?.applyPagePack?.(pageCode, container);
                 await this.injectScript(pageCode, isRefresh);
             }
 
@@ -590,6 +607,8 @@ const PageManager = {
             if (module && typeof module.onShow === 'function') {
                 await module.onShow();
             }
+            window.I18nManager?.applyPagePack?.(pageCode, container);
+            window.I18nManager?.applyCommonPack?.(window.I18nManager.commonPack || {});
         } catch (e) {
             CommonUI.showPageError(pageCode, e.message);
         } finally {
@@ -725,7 +744,9 @@ const LayoutManager = {
         }
 
         if (this.collapseBtn) {
-            this.collapseBtn.title = enabled ? 'Expand sidebar' : 'Collapse sidebar';
+            this.collapseBtn.title = enabled
+                ? (window.I18nManager?.t?.("shellTitles.expandSidebar", "Expand sidebar") || "Expand sidebar")
+                : (window.I18nManager?.t?.("shellTitles.collapseSidebar", "Collapse sidebar") || "Collapse sidebar");
             this.collapseBtn.setAttribute('aria-label', this.collapseBtn.title);
             this.collapseBtn.setAttribute('aria-expanded', String(!enabled));
             this.collapseBtn.innerHTML = enabled
@@ -1023,8 +1044,9 @@ const AIChatManager = {
         this.appendMessage('user', question);
         input.value = '';
 
-        const loadingDiv = this.appendMessage('ai', '<i class="fas fa-spinner fa-spin mr-2"></i>AI가 생각 중입니다...');
-        ConsoleLogger.info(`AI 요청 시작: ${question}`, 'OracleLLM', 'sendQuestion');
+        const t = (path, fallback) => window.I18nManager?.t?.(path, fallback) || fallback;
+        const loadingDiv = this.appendMessage('ai', `<i class="fas fa-spinner fa-spin mr-2"></i>${t("ai.thinking", "AI is thinking...")}`);
+        ConsoleLogger.info(`AI request started: ${question}`, 'OracleLLM', 'sendQuestion');
 
         try {
             const response = await fetch(`${API_BASE_URL}/common/ai/ask`, {
@@ -1037,26 +1059,26 @@ const AIChatManager = {
 
             loadingDiv.remove();
             if (result.status === 'success') {
-                let html = `<div class="font-bold text-blue-600 mb-1">[생성된 SQL]</div>`;
+                let html = `<div class="font-bold text-blue-600 mb-1">${t("ai.generatedSql", "[Generated SQL]")}</div>`;
                 html += `<pre class="bg-slate-800 text-green-400 p-2 rounded text-xs overflow-x-auto mb-2">${result.generated_sql}</pre>`;
 
                 if (mode === 'data') {
-                    html += `<div class="font-bold text-purple-600 mb-1">[조회 결과: ${result.total}건]</div>`;
+                    html += `<div class="font-bold text-purple-600 mb-1">${t("ai.queryResult", "[Query result: {total} rows]").replace("{total}", result.total)}</div>`;
                     if (result.data.length > 0) {
                         html += this.makeSimpleTable(result.data, result.columns);
                     } else {
-                        html += `<div class="text-gray-500 italic text-xs">조회된 데이터가 없습니다.</div>`;
+                        html += `<div class="text-gray-500 italic text-xs">${t("ai.noData", "No data found.")}</div>`;
                     }
                 }
                 this.appendMessage('ai', html);
-                ConsoleLogger.info("SQL 변환 성공", 'OracleLLM', 'sendQuestion');
+                ConsoleLogger.info("SQL conversion succeeded", 'OracleLLM', 'sendQuestion');
             } else {
                 throw new Error(result.message);
             }
         } catch (err) {
             loadingDiv.remove();
-            this.appendMessage('error', `오류 발생: ${err.message}`);
-            ConsoleLogger.error(`AI 요청 실패: ${err.message}`, 'OracleLLM', 'sendQuestion');
+            this.appendMessage('error', `${t("ai.errorPrefix", "Error")}: ${err.message}`);
+            ConsoleLogger.error(`AI request failed: ${err.message}`, 'OracleLLM', 'sendQuestion');
         }
     },
 
@@ -1072,7 +1094,10 @@ const AIChatManager = {
             tableHtml += `</tr>`;
         });
         tableHtml += `</tbody></table></div>`;
-        if (data.length > 5) tableHtml += `<div class="text-[10px] text-right text-gray-400 mt-1">상위 5건만 표시됨</div>`;
+        if (data.length > 5) {
+            const text = window.I18nManager?.t?.("ai.topRowsOnly", "Only the first 5 rows are shown.") || "Only the first 5 rows are shown.";
+            tableHtml += `<div class="text-[10px] text-right text-gray-400 mt-1">${text}</div>`;
+        }
         return tableHtml;
     },
 
@@ -1250,6 +1275,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     LayoutManager.init();
     AIChatManager.init();
     ConsoleLogger.init();
+    await window.I18nManager?.initFromSession?.();
+    window.MenuRenderer?.render?.('mainNav', window.handleMenuClick);
     updateCurrentTargetDbSelect();
     PageManager.startSessionTimer();
     await window.reloadShellDisplaySettings?.();

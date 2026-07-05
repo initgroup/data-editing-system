@@ -1,0 +1,52 @@
+{
+  "language": "ko",
+  "pageCode": "M99002",
+  "description": "Korean labels for Database Management.",
+  "labels": {},
+  "selectors": {
+    "text": {
+      ".table-object-header .table-section-title": "DB 객체 스키마",
+      ".table-object-header .table-section-desc": "테이블, 뷰, 패키지, 프로시저, 함수입니다.",
+      ".env-category-filter label:nth-child(1) span": "전체",
+      ".env-category-filter label:nth-child(2) span": "테이블",
+      ".env-category-filter label:nth-child(3) span": "뷰",
+      ".env-category-filter label:nth-child(4) span": "패키지",
+      ".env-category-filter label:nth-child(5) span": "프로시저",
+      ".env-category-filter label:nth-child(6) span": "함수",
+      "#db-browser-title-M99002": "데이터베이스 브라우저",
+      "#objectDescription-M99002": "스키마 트리에서 객체를 선택하세요.",
+      ".table-tabs [data-tab=\"columns\"] span": "컬럼",
+      ".table-tabs [data-tab=\"data\"] span": "데이터",
+      ".table-tabs [data-tab=\"script\"] span": "스크립트",
+      ".table-tabs [data-tab=\"sql\"] span": "SQL",
+      ".table-meta-strip > div:nth-child(1) > span": "Owner",
+      ".table-meta-strip > div:nth-child(2) > span": "객체",
+      ".table-meta-strip > div:nth-child(3) > span": "유형",
+      ".table-meta-strip > div:nth-child(4) > span": "생성일시",
+      "[data-panel=\"data\"] .table-btn span": "데이터 조회",
+      "[data-panel=\"data\"] .table-limit-control span": "행",
+      "[data-panel=\"sql\"] .data-sql-freeze-control span": "고정",
+      "[data-panel=\"sql\"] .table-limit-control:last-child span": "행"
+    },
+    "title": {
+      ".table-object-actions .table-icon-btn:nth-child(1)": "모두 펼치기",
+      ".table-object-actions .table-icon-btn:nth-child(2)": "모두 접기",
+      ".table-object-actions .table-icon-btn:nth-child(3)": "객체 새로고침",
+      ".table-export-actions .export-excel": "Excel 내보내기",
+      ".table-export-actions .table-icon-btn:nth-child(2)": "CSV 내보내기",
+      ".table-export-actions .table-icon-btn:nth-child(3)": "TSV 내보내기",
+      "[data-panel=\"sql\"] .sql-run-btn": "SQL 실행(Ctrl+Enter)",
+      "[data-panel=\"sql\"] .data-sql-freeze-control": "가로 스크롤 시 No와 지정한 데이터 컬럼 수를 고정합니다."
+    },
+    "placeholder": {
+      "#objectSearch-M99002": "객체 검색"
+    },
+    "ariaLabel": {
+      "#objectSearch-M99002": "객체 검색",
+      "#scriptViewer-M99002": "객체 스크립트",
+      "#sqlEditor-M99002": "SQL 워크시트",
+      "[data-panel=\"sql\"] .sql-run-btn": "SQL 실행"
+    }
+  },
+  "messages": {}
+}

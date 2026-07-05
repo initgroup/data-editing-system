@@ -3,7 +3,7 @@ window.MENU_CONFIG = [
         type: 'page',
         page: 'home',
         title: 'INIT Data Editing System',
-        label: '메인홈',
+        label: 'Main Home',
         iconClass: 'fas fa-house text-teal-300',
         active: false,
         enabled: true
@@ -11,21 +11,21 @@ window.MENU_CONFIG = [
     {
         type: 'folder',
         key: 'project',
-        label: '프로젝트 관리',
+        label: 'Project Management',
         iconClass: 'fas fa-folder-tree text-sky-400',
         enabled: true,
         children: [
             {
                 page: 'M01001',
-                title: '프로젝트 설정',
-                label: '프로젝트 설정',
+                title: 'Project Settings',
+                label: 'Project Settings',
                 iconClass: 'fas fa-folder-plus text-sky-300',
                 enabled: true
             },
             {
                 page: 'M01002',
-                title: '시나리오 정의',
-                label: '시나리오 정의',
+                title: 'Scenario Definition',
+                label: 'Scenario Definition',
                 iconClass: 'fas fa-route text-sky-300',
                 enabled: true
             }
@@ -34,21 +34,21 @@ window.MENU_CONFIG = [
     {
         type: 'folder',
         key: 'data-prep',
-        label: '데이터 준비 및 탐색',
+        label: 'Data Preparation & Exploration',
         iconClass: 'fas fa-database text-emerald-400',
         enabled: true,
         children: [
             {
                 page: 'M02001',
-                title: '파일 업로드 관리',
-                label: '파일 업로드',
+                title: 'File Upload Management',
+                label: 'File Upload',
                 iconClass: 'fas fa-file-arrow-up text-emerald-300',
                 enabled: true
             },
             {
                 page: 'M02002',
-                title: '대상 데이터 선정',
-                label: '대상 데이터',
+                title: 'Target Data Selection',
+                label: 'Target Data',
                 iconClass: 'fas fa-table text-emerald-300',
                 enabled: true
             }
@@ -57,35 +57,35 @@ window.MENU_CONFIG = [
     {
         type: 'folder',
         key: 'rule-discovery',
-        label: '지능형 규칙 발굴',
+        label: 'Intelligent Rule Discovery',
         iconClass: 'fas fa-lightbulb text-amber-400',
         enabled: true,
         children: [
             {
                 page: 'M03001',
-                title: '데이터 프로파일링',
-                label: '데이터 프로파일링',
+                title: 'Data Profiling',
+                label: 'Data Profiling',
                 iconClass: 'fas fa-chart-column text-amber-300',
                 enabled: true
             },
             {
                 page: 'M03002',
-                title: '컬럼간 상관 분석',
-                label: '컬럼간 상관 분석',
+                title: 'Column Correlation Analysis',
+                label: 'Column Correlation Analysis',
                 iconClass: 'fas fa-link text-amber-300',
                 enabled: true
             },
             {
                 page: 'M03003',
-                title: '자동 규칙 발굴',
-                label: '자동 규칙 발굴',
+                title: 'Automatic Rule Discovery',
+                label: 'Automatic Rule Discovery',
                 iconClass: 'fas fa-wand-magic-sparkles text-amber-300',
                 enabled: true
             },
             {
                 page: 'M03004',
-                title: '규칙 위반 탐지',
-                label: '규칙 위반 탐지',
+                title: 'Rule Violation Detection',
+                label: 'Rule Violation Detection',
                 iconClass: 'fas fa-triangle-exclamation text-amber-300',
                 enabled: true
             }
@@ -94,21 +94,21 @@ window.MENU_CONFIG = [
     {
         type: 'folder',
         key: 'edit-flow',
-        label: '에디팅 시나리오',
+        label: 'Editing Scenario',
         iconClass: 'fas fa-diagram-project text-blue-300',
         enabled: true,
         children: [
             {
                 page: 'M04001',
-                title: '에디팅 시나리오 설계',
-                label: '에디팅 시나리오 설계',
+                title: 'Editing Scenario Design',
+                label: 'Editing Scenario Design',
                 iconClass: 'fas fa-wave-square text-amber-300',
                 enabled: true
             },
             {
                 page: 'M04002',
-                title: '에디팅 시나리오 분석',
-                label: '에디팅 시나리오 분석',
+                title: 'Editing Scenario Analysis',
+                label: 'Editing Scenario Analysis',
                 iconClass: 'fas fa-chart-simple text-amber-300',
                 enabled: true
             }
@@ -117,21 +117,21 @@ window.MENU_CONFIG = [
     {
         type: 'folder',
         key: 'edit-master',
-        label: '에디팅 규칙 마스터',
+        label: 'Editing Rule Master',
         iconClass: 'fas fa-clipboard-check text-violet-400',
         enabled: false,
         children: [
             {
                 page: 'M05001',
-                title: '발굴 규칙 선정 (발굴 규칙 후보 검토/저장)',
-                label: '발굴 규칙 선정',
+                title: 'Discovered Rule Selection',
+                label: 'Discovered Rule Selection',
                 iconClass: 'fas fa-list-check text-violet-300',
                 enabled: false
             },
             {
                 page: 'M05002',
-                title: '사용자 규칙 등록 (발굴 규칙 수정/수동 SQL)',
-                label: '사용자 규칙 등록',
+                title: 'User Rule Registration',
+                label: 'User Rule Registration',
                 iconClass: 'fas fa-pen-to-square text-violet-300',
                 enabled: false
             }
@@ -140,21 +140,21 @@ window.MENU_CONFIG = [
     {
         type: 'folder',
         key: 'edit-data',
-        label: '데이터 에디팅 및 정제',
+        label: 'Data Editing & Cleansing',
         iconClass: 'fas fa-broom text-lime-400',
         enabled: false,
         children: [
             {
                 page: 'M06001',
-                title: '규칙 위반 데이터 조회',
-                label: '규칙 위반 데이터 조회',
+                title: 'Rule Violation Data View',
+                label: 'Rule Violation Data View',
                 iconClass: 'fas fa-triangle-exclamation text-lime-300',
                 enabled: false
             },
             {
                 page: 'M06002',
-                title: '오류 데이터 정제/수정',
-                label: '오류 데이터 정제/수정',
+                title: 'Error Data Cleansing',
+                label: 'Error Data Cleansing',
                 iconClass: 'fas fa-eraser text-lime-300',
                 enabled: false
             }
@@ -163,28 +163,28 @@ window.MENU_CONFIG = [
     {
         type: 'folder',
         key: 'edit-apply',
-        label: '검증 및 반영',
+        label: 'Validation & Apply',
         iconClass: 'fas fa-circle-check text-cyan-400',
         enabled: false,
         children: [
             {
                 page: 'M07001',
-                title: '에디팅 효과 검증 (정제 전/후 품질 비교)',
-                label: '에디팅 효과 검증',
+                title: 'Editing Effect Validation',
+                label: 'Editing Effect Validation',
                 iconClass: 'fas fa-circle-check text-cyan-300',
                 enabled: false
             },
             {
                 page: 'M07002',
-                title: 'DB 최종 반영 (Commit)',
-                label: 'DB 최종 반영',
+                title: 'Final DB Apply (Commit)',
+                label: 'Final DB Apply',
                 iconClass: 'fas fa-database text-cyan-300',
                 enabled: false
             },
             {
                 page: 'M07003',
-                title: '에디팅 이력 조회',
-                label: '에디팅 이력 조회',
+                title: 'Editing History',
+                label: 'Editing History',
                 iconClass: 'fas fa-clock-rotate-left text-cyan-300',
                 enabled: false
             }
@@ -193,21 +193,21 @@ window.MENU_CONFIG = [
     {
         type: 'folder',
         key: 'model-resource',
-        label: '모델 리소스',
+        label: 'Model Resources',
         iconClass: 'fas fa-brain text-pink-400',
         enabled: true,
         children: [
             {
                 page: 'M90001',
-                title: '내부 모델 등록 (프로시저/모델)',
-                label: '내부 모델 등록',
+                title: 'Internal Model Registration',
+                label: 'Internal Model Registration',
                 iconClass: 'fas fa-microchip text-pink-300',
                 enabled: true
             },
             {
                 page: 'M90002',
-                title: '외부 모델 등록',
-                label: '외부 모델 등록',
+                title: 'External Model Registration',
+                label: 'External Model Registration',
                 iconClass: 'fas fa-code text-pink-300',
                 enabled: true
             }
@@ -216,28 +216,28 @@ window.MENU_CONFIG = [
     {
         type: 'folder',
         key: 'system-setting',
-        label: '내환경 설정',
+        label: 'My Environment Settings',
         iconClass: 'fas fa-sliders text-slate-300',
         enabled: true,
         children: [
             {
                 page: 'M91001',
-                title: '나의 회원정보',
-                label: '나의 회원정보',
+                title: 'My Account',
+                label: 'My Account',
                 iconClass: 'fas fa-user text-slate-300',
                 enabled: true
             },
             {
                 page: 'M91002',
-                title: '내 시스템 설정',
-                label: '내 시스템 설정',
+                title: 'My System Settings',
+                label: 'My System Settings',
                 iconClass: 'fas fa-sliders text-slate-300',
                 enabled: true
             },
             {
                 page: 'M91003',
-                title: '에디팅 기본 설정',
-                label: '에디팅 기본 설정',
+                title: 'Editing Defaults',
+                label: 'Editing Defaults',
                 iconClass: 'fas fa-database text-slate-300',
                 enabled: true
             }
@@ -246,23 +246,23 @@ window.MENU_CONFIG = [
     {
         type: 'folder',
         key: 'admin-setting',
-        label: '관리자설정',
+        label: 'Admin Settings',
         iconClass: 'fas fa-user-shield text-red-300',
         roles: ['ADMIN'],
         enabled: true,
         children: [
             {
                 page: 'M99001',
-                title: 'DB 접속 정보 설정',
-                label: 'DB 접속 정보 설정',
+                title: 'DB Connection Settings',
+                label: 'DB Connection Settings',
                 iconClass: 'fas fa-plug text-slate-300',
                 roles: ['ADMIN'],
                 enabled: true
             },
             {
                 page: 'M99002',
-                title: '데이터베이스관리',
-                label: '데이터베이스관리',
+                title: 'Database Management',
+                label: 'Database Management',
                 iconClass: 'fas fa-server text-slate-300',
                 roles: ['ADMIN'],
                 enabled: true
@@ -277,8 +277,8 @@ window.MENU_CONFIG = [
             },
             {
                 page: 'M99004',
-                title: '공지사항 관리',
-                label: '공지사항 관리',
+                title: 'Notice Management',
+                label: 'Notice Management',
                 iconClass: 'fas fa-bullhorn text-slate-300',
                 roles: ['ADMIN'],
                 enabled: true

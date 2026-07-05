@@ -39,6 +39,17 @@
                 || (sessionStorage.getItem("targetConnectionId") ? `Connection #${sessionStorage.getItem("targetConnectionId")}` : "");
         },
 
+        t(key, fallback = "") {
+            return window.I18nManager?.tPage?.(PAGE_CODE, key, fallback) || fallback;
+        },
+
+        tFormat(key, fallback = "", values = {}) {
+            const template = this.t(key, fallback);
+            return template.replace(/\{(\w+)\}/g, (match, name) => (
+                Object.prototype.hasOwnProperty.call(values, name) ? String(values[name] ?? "") : match
+            ));
+        },
+
         renderIdentity() {
             const user = this.getLoginUser();
             const displayName = user.userName || user.USER_NAME || user.loginId || user.LOGIN_ID || "User";
@@ -67,7 +78,7 @@
                     labels: trend.labels,
                     datasets: [
                         {
-                            label: "통합시나리오 성공",
+                            label: this.t("chartSuccessLabel", "Integrated scenario success"),
                             data: trend.success,
                             borderColor: "#2563eb",
                             backgroundColor: "rgba(37, 99, 235, 0.14)",
@@ -76,10 +87,10 @@
                             borderWidth: 2.5,
                             pointRadius: (context) => Number(context.raw || 0) > 0 ? 5 : 0,
                             pointHoverRadius: 8,
-                            statusLabel: "성공"
+                            statusLabel: this.t("statusSuccess", "Success")
                         },
                         {
-                            label: "통합시나리오 실패",
+                            label: this.t("chartFailedLabel", "Integrated scenario failed"),
                             data: trend.failed,
                             borderColor: "#dc2626",
                             backgroundColor: "#dc2626",
@@ -90,7 +101,7 @@
                             pointHoverRadius: (context) => Number(context.raw || 0) > 0 ? 10 : 0,
                             pointBorderColor: "#ffffff",
                             pointBorderWidth: 2,
-                            statusLabel: "실패",
+                            statusLabel: this.t("statusFailed", "Failed"),
                             hasData: trend.failed.some((value) => Number(value || 0) > 0)
                         }
                     ]
@@ -107,7 +118,7 @@
                                 usePointStyle: true,
                                 filter: (item, data) => {
                                     const dataset = data.datasets[item.datasetIndex];
-                                    return !dataset.label.includes("실패") || dataset.hasData;
+                                    return dataset.statusLabel !== this.t("statusFailed", "Failed") || dataset.hasData;
                                 }
                             }
                         },
@@ -115,11 +126,16 @@
                             callbacks: {
                                 label: (context) => {
                                     const dataset = context.dataset || {};
-                                    return `${dataset.statusLabel || ""} ${this.formatNumber(context.raw)}건`;
+                                    return this.tFormat("chartRunCount", "{status} {count} runs", {
+                                        status: dataset.statusLabel || "",
+                                        count: this.formatNumber(context.raw)
+                                    });
                                 },
                                 afterBody: (items) => {
-                                    const hasFailure = items.some((item) => item.dataset?.statusLabel === "실패" && Number(item.raw || 0) > 0);
-                                    return hasFailure ? ["실패 이벤트가 있는 날짜입니다.", "그래프 아래 날짜 버튼에서 실행 목록을 선택하세요."] : ["그래프 아래 날짜 버튼에서 실행 목록을 선택하세요."];
+                                    const hasFailure = items.some((item) => item.dataset?.statusLabel === this.t("statusFailed", "Failed") && Number(item.raw || 0) > 0);
+                                    return hasFailure
+                                        ? [this.t("tooltipFailureDate", "This date has failed events."), this.t("tooltipSelectDate", "Select a date button below the chart to view runs.")]
+                                        : [this.t("tooltipSelectDate", "Select a date button below the chart to view runs.")];
                                 }
                             }
                         }
@@ -146,30 +162,37 @@
             const latest = runs[0] || null;
             const cards = [
                 {
-                    label: "통합 실행",
+                    label: this.t("kpiTotalRuns", "Total runs"),
                     value: this.formatNumber(summary.totalRuns),
-                    trend: summary.lastActivity ? `최근 실행 ${summary.lastActivity}` : "최근 7일 실행 없음",
+                    trend: summary.lastActivity
+                        ? this.tFormat("kpiRecentRun", "Recent run {date}", { date: summary.lastActivity })
+                        : this.t("kpiNoRecentRuns", "No runs in the last 7 days"),
                     icon: "fa-diagram-project",
                     tone: "is-primary"
                 },
                 {
-                    label: "성공률",
+                    label: this.t("kpiSuccessRate", "Success rate"),
                     value: summary.totalRuns ? `${summary.successRate}%` : "-",
-                    trend: `${this.formatNumber(summary.successRuns)} 성공 / ${this.formatNumber(summary.failedRuns)} 실패`,
+                    trend: this.tFormat("kpiSuccessFailed", "{success} success / {failed} failed", {
+                        success: this.formatNumber(summary.successRuns),
+                        failed: this.formatNumber(summary.failedRuns)
+                    }),
                     icon: "fa-chart-line",
                     tone: summary.failedRuns ? "is-warn" : "is-good"
                 },
                 {
-                    label: "실패 건수",
+                    label: this.t("kpiFailedRuns", "Failed runs"),
                     value: this.formatNumber(summary.failedRuns),
-                    trend: summary.failedRuns ? "실패 날짜는 빨간 마커로 표시" : "최근 실패 없음",
+                    trend: summary.failedRuns
+                        ? this.t("kpiFailureMarker", "Failure dates are marked in red")
+                        : this.t("kpiNoRecentFailures", "No recent failures"),
                     icon: summary.failedRuns ? "fa-triangle-exclamation" : "fa-circle-check",
                     tone: summary.failedRuns ? "is-warn" : "is-good"
                 },
                 {
-                    label: "최근 시나리오",
-                    value: latest?.FLOW_NAME || "없음",
-                    trend: latest ? `${latest.STATUS || "-"} · Run #${latest.FLOW_RUN_ID}` : "실행 이력 없음",
+                    label: this.t("kpiLatestScenario", "Latest scenario"),
+                    value: latest?.FLOW_NAME || this.t("none", "None"),
+                    trend: latest ? `${latest.STATUS || "-"} · Run #${latest.FLOW_RUN_ID}` : this.t("noRunHistory", "No run history"),
                     icon: "fa-clock-rotate-left",
                     tone: latest?.STATUS === "SUCCESS" ? "is-good" : (latest ? "is-warn" : "is-neutral"),
                     wide: true
@@ -252,7 +275,7 @@
                 container.innerHTML = `
                     <div class="home-flow-selection-empty">
                         <i class="fas fa-inbox"></i>
-                        <span>최근 통합시나리오 실행 이력이 없습니다.</span>
+                        <span>${this.t("noIntegratedRunHistory", "No recent integrated scenario runs.")}</span>
                     </div>
                 `;
                 return;
@@ -269,8 +292,8 @@
                 <div class="home-flow-selection-summary">
                     <span><i class="fas fa-chart-line"></i></span>
                     <div>
-                        <small>선택일</small>
-                        <strong>${this.escapeHtml(this.selectedFlowRunLabel || "최근 실행")}</strong>
+                        <small>${this.t("selectedDate", "Selected date")}</small>
+                        <strong>${this.escapeHtml(this.selectedFlowRunLabel || this.t("recentRun", "Recent run"))}</strong>
                     </div>
                 </div>
                 <div class="home-flow-date-selector" aria-label="Integrated scenario run date selector">
@@ -286,9 +309,9 @@
                     }).join("")}
                 </div>
                 <div class="home-flow-selection-metrics">
-                    <span><strong>${this.formatNumber(dateRuns.length)}</strong><small>runs</small></span>
-                    <span><strong>${this.formatNumber(successCount)}</strong><small>success</small></span>
-                    <span><strong>${this.formatNumber(failedCount)}</strong><small>failed</small></span>
+                    <span><strong>${this.formatNumber(dateRuns.length)}</strong><small>${this.t("runs", "runs")}</small></span>
+                    <span><strong>${this.formatNumber(successCount)}</strong><small>${this.t("success", "success")}</small></span>
+                    <span><strong>${this.formatNumber(failedCount)}</strong><small>${this.t("failed", "failed")}</small></span>
                 </div>
             `;
             container.querySelectorAll("[data-home-flow-label]").forEach((button) => {
@@ -327,12 +350,12 @@
 
         getModuleMeta(menuCode) {
             const map = {
-                M03001: { title: "데이터 프로파일링", icon: "fa-table-columns", tone: "is-profile", description: "컬럼 품질과 분포" },
-                M03002: { title: "컬럼간 상관 분석", icon: "fa-grip", tone: "is-correlation", description: "상관쌍과 관계 강도" },
-                M03003: { title: "자동규칙발굴", icon: "fa-wand-magic-sparkles", tone: "is-discovery", description: "Itemset과 Association Rule" },
-                M03004: { title: "규칙위반탐지", icon: "fa-shield-halved", tone: "is-violation", description: "위반 유형과 샘플" }
+                M03001: { title: this.t("moduleProfiling", "Data Profiling"), icon: "fa-table-columns", tone: "is-profile", description: this.t("moduleProfilingDesc", "Column quality and distribution") },
+                M03002: { title: this.t("moduleCorrelation", "Column Correlation"), icon: "fa-grip", tone: "is-correlation", description: this.t("moduleCorrelationDesc", "Correlation pairs and strength") },
+                M03003: { title: this.t("moduleRuleDiscovery", "Rule Discovery"), icon: "fa-wand-magic-sparkles", tone: "is-discovery", description: this.t("moduleRuleDiscoveryDesc", "Itemsets and association rules") },
+                M03004: { title: this.t("moduleRuleViolation", "Rule Violation"), icon: "fa-shield-halved", tone: "is-violation", description: this.t("moduleRuleViolationDesc", "Violation types and samples") }
             };
-            return map[menuCode] || { title: "Flow Node", icon: "fa-cube", tone: "is-neutral", description: "노드 결과" };
+            return map[menuCode] || { title: "Flow Node", icon: "fa-cube", tone: "is-neutral", description: this.t("nodeResult", "Node result") };
         },
 
         async renderFlowDetailPanel(options = {}) {
@@ -345,8 +368,8 @@
                 panel.innerHTML = `
                     <div class="home-flow-detail-empty">
                         <i class="fas fa-calendar-xmark"></i>
-                        <strong>${this.escapeHtml(this.selectedFlowRunLabel)} 실행 이력이 없습니다</strong>
-                        <span>실행 건수가 있는 그래프 지점을 선택하면 노드별 결과가 표시됩니다.</span>
+                        <strong>${this.tFormat("noRunsForDate", "No run history for {date}", { date: this.escapeHtml(this.selectedFlowRunLabel) })}</strong>
+                        <span>${this.t("selectDateWithRuns", "Select a chart point with runs to view node results.")}</span>
                     </div>
                 `;
                 return;
@@ -356,8 +379,8 @@
                 panel.innerHTML = `
                     <div class="home-flow-detail-empty">
                         <i class="fas fa-diagram-project"></i>
-                        <strong>통합시나리오 실행을 선택하세요</strong>
-                        <span>라인 그래프의 실행 지점을 선택하면 노드별 결과가 표시됩니다.</span>
+                        <strong>${this.t("selectIntegratedScenarioRun", "Select an integrated scenario run")}</strong>
+                        <span>${this.t("selectIntegratedScenarioRunDesc", "Select a run point on the line chart to view that date's runs and node results.")}</span>
                     </div>
                 `;
                 return;
@@ -368,7 +391,7 @@
                 panel.innerHTML = `
                     <header class="home-flow-detail-header">
                         <div>
-                            <span>Scenario Run Summary</span>
+                            <span>${this.t("scenarioRunSummary", "Scenario Run Summary")}</span>
                             <strong>${this.escapeHtml(selectedRun.FLOW_NAME || "Integrated Scenario")}</strong>
                             <small>Run #${this.escapeHtml(selectedRun.FLOW_RUN_ID || "")} · ${this.escapeHtml(selectedRun.STATUS || "-")} · ${this.escapeHtml(this.formatElapsedTime(selectedRun.STARTED_AT, selectedRun.FINISHED_AT, selectedRun.STATUS))}</small>
                         </div>
@@ -391,7 +414,7 @@
             panel.innerHTML = `
                 <header class="home-flow-detail-header">
                     <div>
-                        <span>Scenario Run Summary</span>
+                        <span>${this.t("scenarioRunSummary", "Scenario Run Summary")}</span>
                         <strong>${this.escapeHtml(run.FLOW_NAME || "Integrated Scenario")}</strong>
                         <small>Run #${this.escapeHtml(run.FLOW_RUN_ID || "")} · ${this.escapeHtml(run.STATUS || "-")} · ${this.escapeHtml(elapsed)}</small>
                     </div>
@@ -414,7 +437,7 @@
                 if (run?.SCENARIO_ID) sessionStorage.setItem("M04002:selectedScenarioId", String(run.SCENARIO_ID));
             }
             const menu = window.MENU_PAGE_MAP?.M04002;
-            PageManager.load("M04002", menu?.title || menu?.label || "통합 에디팅 결과분석", true);
+            PageManager.load("M04002", menu?.title || menu?.label || this.t("integratedResultAnalysis", "Integrated Editing Result Analysis"), true);
         },
 
         showFlowDetailLoading(panel, message) {
@@ -487,13 +510,13 @@
                     <strong>Run #${this.escapeHtml(run.FLOW_RUN_ID || "")}</strong>
                 </div>
                 <div class="home-node-step-grid">
-                    ${nodes.map((node) => this.renderNodeCard(node)).join("") || `<div class="table-empty">노드 실행 결과가 없습니다.</div>`}
+                    ${nodes.map((node) => this.renderNodeCard(node)).join("") || `<div class="table-empty">${this.t("noNodeRunResults", "No node run results.")}</div>`}
                 </div>
                 <div class="home-node-visual-panel" id="homeNodeVisualPanel">
                     <div class="home-flow-detail-empty">
                         <i class="fas fa-chart-simple"></i>
-                        <strong>노드를 선택하세요</strong>
-                        <span>결과 테이블 또는 모델뷰 유형에 맞춰 시각화가 표시됩니다.</span>
+                        <strong>${this.t("selectNode", "Select a node")}</strong>
+                        <span>${this.t("selectNodeDesc", "A visualization appears based on the result table or model view type.")}</span>
                     </div>
                 </div>
             `;
@@ -508,7 +531,7 @@
         renderDateRunList(runs = []) {
             if (!runs.length) return "";
             return `
-                <p class="home-date-run-hint">아래 Run을 클릭하면 M04002에서 해당 Run 상세 분석 화면으로 이동합니다.</p>
+                <p class="home-date-run-hint">${this.t("runClickHint", "Click a run below to open its detailed analysis in M04002.")}</p>
                 <div class="home-date-run-list" aria-label="Selected date integrated scenario runs">
                     ${runs.map((run) => {
                         const selected = String(run.FLOW_RUN_ID || "") === String(this.selectedFlowRunId || "");
@@ -534,7 +557,7 @@
                     <span class="home-node-main">
                         <strong>${this.escapeHtml(node.title)}</strong>
                         <small>${this.escapeHtml(node.nodeName || node.description)}</small>
-                        ${node.resultObjectName ? `<em>${this.escapeHtml(node.resultKind)} · ${this.escapeHtml(node.resultOwner)}.${this.escapeHtml(node.resultObjectName)}</em>` : `<em>Result 없음</em>`}
+                        ${node.resultObjectName ? `<em>${this.escapeHtml(node.resultKind)} · ${this.escapeHtml(node.resultOwner)}.${this.escapeHtml(node.resultObjectName)}</em>` : `<em>${this.t("noResult", "No result")}</em>`}
                     </span>
                     <span class="home-node-status">${this.escapeHtml(node.status || "-")}</span>
                 </button>
@@ -554,7 +577,7 @@
             visual.innerHTML = `
                 <div class="home-flow-detail-loading">
                     <i class="fas fa-spinner fa-spin"></i>
-                    <span>${this.escapeHtml(node.title)} 결과를 불러오는 중입니다.</span>
+                    <span>${this.tFormat("loadingNodeResult", "Loading {title} result.", { title: this.escapeHtml(node.title) })}</span>
                 </div>
             `;
             if (node.status !== "SUCCESS") {
@@ -591,7 +614,7 @@
                     visual.innerHTML = this.renderTableVisual(node, json);
                 }
             } catch (error) {
-                visual.innerHTML = `<div class="table-error">${this.escapeHtml(error.message || "결과 시각화 조회에 실패했습니다.")}</div>`;
+                visual.innerHTML = `<div class="table-error">${this.escapeHtml(error.message || this.t("visualLoadFailed", "Result visualization load failed."))}</div>`;
             }
         },
 
@@ -600,7 +623,7 @@
                 <section class="home-node-visual-empty">
                     <i class="fas ${this.escapeHtml(node.icon)}"></i>
                     <strong>${this.escapeHtml(node.title)}</strong>
-                    <span>${this.escapeHtml(node.message || "표시할 결과 객체가 없습니다.")}</span>
+                    <span>${this.escapeHtml(node.message || this.t("noDisplayResultObject", "No displayable result object."))}</span>
                 </section>
             `;
         },
@@ -630,11 +653,11 @@
                     </div>
                     <div class="home-model-tab-panel is-active" data-model-tab="readable">
                         <div class="home-readable-rule-intro">
-                            <strong>사람이 읽는 규칙 요약</strong>
-                            <span>DM$VR의 XML itemset과 조건/결과 컬럼을 해석해 IF 컬럼 = 값 THEN 컬럼 = 값 형태로 표현합니다. 결과 값이 모델뷰에 없으면 값 정보 없음으로 표시합니다.</span>
+                            <strong>${this.t("readableRulesTitle", "Readable rule summary")}</strong>
+                            <span>${this.t("readableRulesDesc", "XML itemsets and condition/result columns from DM$VR are interpreted as IF column = value THEN column = value. If the result value is not available in the model view, it is shown as value unavailable.")}</span>
                         </div>
                         <div class="home-readable-rule-grid">
-                            ${readableRules.length ? readableRules.map((rule) => this.renderReadableRuleCard(rule)).join("") : `<div class="table-empty">표시할 규칙 행이 없습니다.</div>`}
+                            ${readableRules.length ? readableRules.map((rule) => this.renderReadableRuleCard(rule)).join("") : `<div class="table-empty">${this.t("noRuleRows", "No rule rows to display.")}</div>`}
                         </div>
                     </div>
                     <div class="home-model-tab-panel" data-model-tab="raw">
@@ -643,10 +666,10 @@
                                 ${this.renderModelViewHeader("VI", "Itemset/detail", vi)}
                                 <div class="home-model-view-note">
                                     <strong>Extracted itemset values</strong>
-                                    <span>DM$VI 원본 행의 ITEM / ATTRIBUTE / VALUE / NAME 계열 컬럼에서 추출한 값입니다. 숫자만 보이면 해당 모델뷰가 항목 ID 중심으로 제공되는 상태입니다.</span>
+                                    <span>${this.t("extractedItemsetDesc", "Values extracted from ITEM / ATTRIBUTE / VALUE / NAME columns in raw DM$VI rows. If only numbers appear, the model view is currently item-ID oriented.")}</span>
                                 </div>
                                 <div class="home-tag-cloud">
-                                    ${itemTags.length ? itemTags.map((item) => `<span style="--tag-weight:${item.weight}">${this.escapeHtml(item.label)}</span>`).join("") : `<small>DM$VI itemset row가 없습니다.</small>`}
+                                    ${itemTags.length ? itemTags.map((item) => `<span style="--tag-weight:${item.weight}">${this.escapeHtml(item.label)}</span>`).join("") : `<small>${this.t("noViItemsetRows", "No DM$VI itemset rows.")}</small>`}
                                 </div>
                                 ${this.renderSampleTable("DM$VI sample rows", vi.columns || [], vi.data || [], 5)}
                             </div>
@@ -665,7 +688,7 @@
                                             </div>
                                         `).join("")}
                                     </div>
-                                ` : `<small>DM$VR rule row가 없습니다.</small>`}
+                                ` : `<small>${this.t("noVrRuleRows", "No DM$VR rule rows.")}</small>`}
                             </div>
                         </div>
                         <div class="home-model-view-card is-vg">
@@ -763,7 +786,7 @@
                                 <em style="width:${item.width}%"></em>
                                 <small>${this.escapeHtml(item.label)}</small>
                             </div>
-                        `).join("") : `<small>숫자형 요약 대상 컬럼이 없어서 샘플 테이블을 표시합니다.</small>`}
+                        `).join("") : `<small>${this.t("noNumericProfile", "No numeric summary columns were found, so the sample table is shown.")}</small>`}
                     </div>
                     ${this.renderSampleTable("Result sample", columns, rows, 8)}
                 </section>
@@ -810,8 +833,9 @@
                 const consequent = this.findRuleValue(row, [/CONSEQUENT/i, /\bRHS\b/i, /PREDICT/i, /OUTCOME/i, /\bTHEN\b/i]);
                 const antecedentText = this.resolveRuleSideText(antecedent, itemDictionary);
                 const consequentText = this.resolveRuleSideText(consequent, itemDictionary);
-                const thenText = consequentText && !this.ruleTextHasExplicitValue(consequentText) && !/값 정보 없음/.test(consequentText)
-                    ? `${consequentText} (값 정보 없음)`
+                const unavailableLabel = this.t("valueUnavailable", "value unavailable");
+                const thenText = consequentText && !this.ruleTextHasExplicitValue(consequentText) && !consequentText.includes(unavailableLabel)
+                    ? `${consequentText} (${unavailableLabel})`
                     : consequentText;
                 const support = this.findMetricValue(row, [/RULE_SUPPORT/i, /^SUPPORT$/i]);
                 const confidence = this.findMetricValue(row, [/RULE_CONFIDENCE/i, /^CONFIDENCE$/i]);
@@ -821,14 +845,14 @@
                 return {
                     ruleId: `Rule #${ruleId}`,
                     mappingLevel: mapped ? "mapped" : "limited",
-                    mappingLabel: mapped ? "조건/결과 매핑됨" : "ID/지표 중심",
-                    ifText: mapped ? antecedentText : "조건 항목 조합을 뷰에서 직접 확인해야 합니다",
-                    thenText: mapped ? thenText : "결과 항목을 뷰에서 직접 확인해야 합니다",
+                    mappingLabel: mapped ? this.t("ruleMapped", "Condition/result mapped") : this.t("ruleLimited", "ID/metric based"),
+                    ifText: mapped ? antecedentText : this.t("ruleIfFallback", "Check condition item combinations directly in the view"),
+                    thenText: mapped ? thenText : this.t("ruleThenFallback", "Check result items directly in the view"),
                     note: mapped && missingConsequentValue
-                        ? "조건은 XML itemset에서 컬럼 = 값으로 해석했습니다. 결과는 모델뷰가 컬럼명만 제공해서 값은 현재 뷰에서 확인되지 않습니다."
+                        ? this.t("ruleMissingResultValueNote", "Conditions were interpreted from XML itemsets as column = value. The result view currently provides only the column name, so the value is not visible.")
                         : (mapped
-                            ? "모델 detail view의 XML itemset과 item dictionary 후보를 사용해 사람이 읽는 문장으로 구성했습니다."
-                            : "현재 DM$VR/DM$VI/DM$VA 샘플에는 컬럼명과 값으로 복원 가능한 조건/결과 매핑이 보이지 않습니다. 모델이 item id와 품질지표 중심으로 detail view를 제공하는 상태입니다."),
+                            ? this.t("ruleMappedNote", "Readable text was built from XML itemsets and item dictionary candidates in the model detail views.")
+                            : this.t("ruleLimitedNote", "The current DM$VR/DM$VI/DM$VA samples do not expose condition/result mappings that can be restored as column names and values. The detail views are item-ID and metric oriented.")),
                     metrics: [
                         { label: "support", value: support === null ? "-" : this.formatPercentMetric(support) },
                         { label: "confidence", value: confidence === null ? "-" : this.formatPercentMetric(confidence) },
@@ -934,7 +958,7 @@
             if (!name && !rawValue) return "";
             const field = rawSubname ? `${name}.${rawSubname}` : name;
             if (field && rawValue) return `${field} = ${rawValue}`;
-            if (field) return `${field} (값 정보 없음)`;
+            if (field) return `${field} (${this.t("valueUnavailable", "value unavailable")})`;
             return rawValue;
         },
 
@@ -965,7 +989,8 @@
             const number = Number(value);
             if (!Number.isFinite(number)) return "-";
             const percent = number <= 1 ? number * 100 : number;
-            return `${percent.toLocaleString("ko-KR", { maximumFractionDigits: 1 })}%`;
+            const locale = window.I18nManager?.getCurrentLanguage?.() === "ko" ? "ko-KR" : "en-US";
+            return `${percent.toLocaleString(locale, { maximumFractionDigits: 1 })}%`;
         },
 
         extractNumericProfile(rows, columns) {
@@ -1011,8 +1036,8 @@
                     <article class="home-alert is-info">
                         <span><i class="fas fa-spinner"></i></span>
                         <div>
-                            <strong>공지사항 조회 중</strong>
-                            <p>등록된 공지사항을 확인하고 있습니다.</p>
+                            <strong>${this.t("noticeLoading", "Loading notices")}</strong>
+                            <p>${this.t("noticeLoadingDesc", "Checking registered notices.")}</p>
                         </div>
                     </article>
                 `;
@@ -1023,7 +1048,7 @@
                     <article class="home-alert is-warn">
                         <span><i class="fas fa-triangle-exclamation"></i></span>
                         <div>
-                            <strong>대시보드 조회 지연</strong>
+                            <strong>${this.t("dashboardDelayed", "Dashboard load delayed")}</strong>
                             <p>${this.escapeHtml(errorMessage)}</p>
                         </div>
                     </article>
@@ -1035,8 +1060,8 @@
                     <article class="home-alert is-empty">
                         <span><i class="fas fa-inbox"></i></span>
                         <div>
-                            <strong>최근 공지사항 없음</strong>
-                            <p>현재 게시 기간에 해당하는 공지사항이 없습니다.</p>
+                            <strong>${this.t("noRecentNotices", "No recent notices")}</strong>
+                            <p>${this.t("noNoticesInPeriod", "There are no notices for the current posting period.")}</p>
                         </div>
                     </article>
                 `;
@@ -1067,10 +1092,10 @@
 
         renderLinks() {
             const links = [
-                { page: "M03003", title: "자동규칙발굴", icon: "fa-wand-magic-sparkles" },
-                { page: "M03004", title: "규칙위반탐지", icon: "fa-shield-halved" },
-                { page: "M04001", title: "통합에디팅실행", icon: "fa-diagram-project" },
-                { page: "M90001", title: "내부모델등록", icon: "fa-sliders" }
+                { page: "M03003", title: this.t("shortcutRuleDiscovery", "Rule Discovery"), icon: "fa-wand-magic-sparkles" },
+                { page: "M03004", title: this.t("shortcutRuleViolation", "Rule Violation"), icon: "fa-shield-halved" },
+                { page: "M04001", title: this.t("shortcutIntegratedEditing", "Integrated Editing Run"), icon: "fa-diagram-project" },
+                { page: "M90001", title: this.t("shortcutInternalModel", "Internal Model Registry"), icon: "fa-sliders" }
             ];
             const container = document.getElementById("homeLinkBanner");
             if (!container) return;
@@ -1179,7 +1204,7 @@
             const id = notice.noticeId || notice.title || "";
             sessionStorage.setItem(`homeNoticePopup:${id}`, "Y");
             await CommonMessage.info(`${notice.title || "Notice"}\n${this.getNoticeDefaultMetaText(notice)}\n\n${notice.popupText || notice.text || ""}`, {
-                title: "공지사항",
+                title: this.t("notice", "Notice"),
                 modal: true
             });
         },
@@ -1219,8 +1244,8 @@
         openNoticeLayer(noticeId = null, options = {}) {
             const notices = Array.isArray(this.dashboardData?.notices) ? this.dashboardData.notices : [];
             if (!notices.length) {
-                CommonMessage.info("현재 게시 기간에 해당하는 공지사항이 없습니다.", {
-                    title: "공지사항"
+                CommonMessage.info(this.t("noNoticesInPeriod", "There are no notices for the current posting period."), {
+                    title: this.t("notice", "Notice")
                 });
                 return;
             }
@@ -1266,8 +1291,8 @@
             const notice = notices.find((item) => String(item.noticeId || item.title || "") === String(this.selectedNoticeId || "")) || notices[0];
             if (!notice) return;
             this.selectedNoticeId = String(notice.noticeId || notice.title || "");
-            this.setText("homeNoticeTitle", this.noticeLayerMode === "detail" ? "Notice" : "Notices");
-            this.setText("homeNoticeDetailTitle", notice.title || "Notice");
+            this.setText("homeNoticeTitle", this.noticeLayerMode === "detail" ? this.t("notice", "Notice") : this.t("notices", "Notices"));
+            this.setText("homeNoticeDetailTitle", notice.title || this.t("notice", "Notice"));
             const meta = document.getElementById("homeNoticeMeta");
             if (meta) {
                 meta.innerHTML = `
@@ -1316,7 +1341,10 @@
         },
 
         getNoticeDefaultMetaText(notice) {
-            return `작성자 ${this.getNoticeWriterLabel(notice)}\n작성일 ${this.getNoticeCreatedLabel(notice)}`;
+            return this.tFormat("noticeDefaultMeta", "Writer {writer}\nCreated {created}", {
+                writer: this.getNoticeWriterLabel(notice),
+                created: this.getNoticeCreatedLabel(notice)
+            });
         },
 
         enableNoticeLayerDrag(layer) {

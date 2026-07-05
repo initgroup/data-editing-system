@@ -925,7 +925,7 @@
             if (!el) return;
             const list = Array.isArray(rows) ? rows : [];
             if (!list.length) {
-                el.textContent = "전체건수 0 / 성공건수 0 / 실패건수 0";
+                el.textContent = this.tl("statusSummary", "Total {total} / Success {success} / Failed {failed}", { total: 0, success: 0, failed: 0 });
                 return;
             }
             const statusGetter = options.statusGetter || ((row) => row.STATUS || "");
@@ -944,7 +944,7 @@
                 }
                 else if (failStatuses.has(status)) failed += 1;
             });
-            el.textContent = `전체건수 ${list.length} / 성공건수 ${success} / 실패건수 ${failed}`;
+            el.textContent = this.tl("statusSummary", "Total {total} / Success {success} / Failed {failed}", { total: list.length, success, failed });
         },
 
         formatKstDateTime(value) {

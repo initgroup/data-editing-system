@@ -9,13 +9,13 @@
   ],
   "groups": [
     {
-      "groupName": "Python API 기본 JSON",
+      "groupName": "Python API Base JSON",
       "resources": [
         {
           "objectType": "INTERNAL_API",
           "objectName": "LASSO_FEATURE_SELECT",
           "label": "LASSO Feature Select",
-          "apiGroup": "Python API 기본 JSON",
+          "apiGroup": "Python API Base JSON",
           "endpoint": "/api/mlAnalysis/lasso-feature-select",
           "httpMethod": "POST",
           "auth": { "type": "NONE", "keyName": "" },
@@ -134,7 +134,7 @@
           "objectType": "INTERNAL_API",
           "objectName": "SYMBOLIC_REGRESSION_RULE",
           "label": "Symbolic Regression Rule",
-          "apiGroup": "Python API 기본 JSON",
+          "apiGroup": "Python API Base JSON",
           "endpoint": "/api/mlAnalysis/symbolic-regression-rule",
           "httpMethod": "POST",
           "auth": { "type": "NONE", "keyName": "" },

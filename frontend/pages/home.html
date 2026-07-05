@@ -37,8 +37,8 @@
         <div class="home-panel home-panel-wide">
             <div class="home-panel-header">
                 <div>
-                    <h3>Integrated Scenario</h3>
-                    <p>최근 7일 통합시나리오 실행 추이와 노드별 결과</p>
+                    <h3 data-label-key="integratedScenario">Integrated Scenario</h3>
+                    <p data-label-key="integratedScenarioDesc">Recent 7-day integrated scenario runs and node results</p>
                 </div>
                 <span class="home-panel-actions">
                     <button type="button" id="homeRefreshWorkflowButton" class="home-icon-button" title="Refresh workflow readiness">
@@ -57,8 +57,8 @@
             <section class="home-flow-detail-panel" id="homeFlowDetailPanel" aria-label="Scenario run detail">
                 <div class="home-flow-detail-empty">
                     <i class="fas fa-diagram-project"></i>
-                    <strong>통합시나리오 실행을 선택하세요</strong>
-                    <span>라인 그래프의 실행 지점을 선택하면 해당 날짜의 실행 목록과 노드별 결과가 표시됩니다.</span>
+                    <strong data-label-key="selectIntegratedScenarioRun">Select an integrated scenario run</strong>
+                    <span data-label-key="selectIntegratedScenarioRunDesc">Select a run point on the line chart to view that date's runs and node results.</span>
                 </div>
             </section>
         </div>
@@ -66,8 +66,8 @@
         <div class="home-panel">
             <div class="home-panel-header">
                 <div>
-                    <h3>Quality Signal</h3>
-                    <p>최근 알림 메시지</p>
+                    <h3 data-label-key="qualitySignal">Notices</h3>
+                    <p data-label-key="qualitySignalDesc">Recent notice messages</p>
                 </div>
                 <span class="home-panel-actions">
                     <button type="button" id="homeOpenNoticeListButton" class="home-icon-button" title="Open all notices">
@@ -85,7 +85,7 @@
     <div id="homeNoticeLayer" class="data-help-layer home-notice-layer" hidden>
         <section class="data-help-dialog home-notice-dialog" role="dialog" aria-modal="true" aria-labelledby="homeNoticeTitle">
             <header>
-                <h2 id="homeNoticeTitle">Notices</h2>
+                <h2 id="homeNoticeTitle" data-label-key="notices">Notices</h2>
                 <button type="button" class="table-icon-btn" title="Close" onclick="home.closeNoticeLayer()">
                     <i class="fas fa-times"></i>
                 </button>
@@ -100,7 +100,7 @@
                 </article>
             </div>
             <footer>
-                <button type="button" class="env-btn" onclick="home.closeNoticeLayer()">Close</button>
+                <button type="button" class="env-btn" data-label-key="close" onclick="home.closeNoticeLayer()">Close</button>
             </footer>
         </section>
     </div>
@@ -109,7 +109,7 @@
 
     <a class="home-company-banner" href="https://initgroup.kr/" target="_blank" rel="noopener noreferrer" aria-label="Open iNiT homepage">
         <img src="/assets/init-logo.png" alt="iNiT">
-        <span>인아이티 홈페이지</span>
+        <span data-label-key="initHomepage">iNiT Homepage</span>
         <i class="fas fa-arrow-up-right-from-square"></i>
     </a>
 

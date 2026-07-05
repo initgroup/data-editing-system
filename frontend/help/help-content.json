@@ -1,14 +1,45 @@
 {
-  "version": "2026.06.27",
+  "version": "2026.07.05",
   "systemName": "INIT Data Editing System",
   "pages": {
+    "login": {
+      "pageCode": "login",
+      "title": "로그인",
+      "label": "로그인",
+      "group": "시스템",
+      "status": "enabled",
+      "summary": "사용자가 시스템에 로그인하고 필요한 경우 비밀번호 찾기 또는 회원가입을 요청하는 시작 화면입니다.",
+      "purpose": [
+        "로그인 ID와 비밀번호를 입력해 시스템 세션을 시작합니다.",
+        "로그인 전에는 기본 영문 화면을 사용하고, 로그인 후 사용자 언어 설정을 적용합니다."
+      ],
+      "layout": [
+        { "name": "로그인 정보", "description": "로그인 ID와 비밀번호를 입력합니다." },
+        { "name": "대상 DB", "description": "로그인 후 선택 가능한 Target DB 정보를 확인합니다." },
+        { "name": "보조 작업", "description": "비밀번호 찾기, 회원가입, 로그인을 실행합니다." }
+      ],
+      "workflow": [
+        "로그인 ID와 비밀번호를 입력합니다.",
+        "로그인을 실행합니다.",
+        "로그인 후 사용자 설정 언어와 Target DB 정보를 불러옵니다."
+      ],
+      "controls": [
+        "Forgot password: 관리자 연락처와 요청 정보를 확인합니다.",
+        "Sign up: 신규 계정 신청 화면을 엽니다.",
+        "Login: 입력한 계정으로 로그인합니다."
+      ],
+      "aiGuidance": [
+        "로그인 전 화면은 기본 영문을 우선 사용합니다.",
+        "비밀번호나 API Key 같은 민감 정보는 답변에 직접 포함하지 않습니다."
+      ]
+    },
     "home": {
       "pageCode": "home",
       "title": "인아이티 Data Editing 시스템",
       "label": "메인",
       "group": "메인",
       "status": "enabled",
-      "summary": "로그인 후 현재 사용자, 권한, Target DB, 통합 시나리오 상태, 품질 신호, 공지사항, 주요 바로가기를 확인하는 시작 화면입니다.",
+      "summary": "로그인 후 현재 사용자, 권한, Target DB, 통합 시나리오 상태, 공지 사항, 주요 바로가기를 확인하는 시작 화면입니다.",
       "purpose": [
         "현재 세션과 Target DB 선택 상태를 확인합니다.",
         "통합 플로우 실행 준비도와 최근 실행 결과를 요약합니다.",
@@ -17,12 +48,12 @@
       "layout": [
         { "name": "상단 요약", "description": "사용자명, 권한, Target DB 상태와 현재 작업 맥락을 보여줍니다." },
         { "name": "Integrated Scenario", "description": "통합 에디팅 시나리오 실행 흐름과 주요 KPI를 확인합니다." },
-        { "name": "Quality Signal", "description": "데이터 품질 알림, 공지사항, 최근 상태를 확인합니다." },
+        { "name": "공지 사항", "description": "공지사항과 최근 알림 메시지를 확인합니다." },
         { "name": "Main shortcuts", "description": "프로젝트, 데이터, 모델, 시스템 설정 메뉴로 이동합니다." }
       ],
       "workflow": [
         "로그인 후 Target DB가 선택되어 있는지 확인합니다.",
-        "공지사항과 품질 신호를 확인합니다.",
+        "공지 사항을 확인합니다.",
         "필요한 업무 메뉴로 이동합니다."
       ],
       "controls": [
@@ -815,6 +846,40 @@
         "민감 정보는 답변에 직접 포함하지 않습니다."
       ]
     },
+    "M91003": {
+      "pageCode": "M91003",
+      "title": "에디팅 기본값",
+      "label": "에디팅 기본값",
+      "group": "내환경 설정",
+      "status": "enabled",
+      "summary": "선택한 Target DB에 저장되는 데이터 프로파일링과 분석 기준 기본값을 관리하는 화면입니다.",
+      "purpose": [
+        "Target DB별 데이터 프로파일링 기준값과 기본 옵션을 조회, 저장, 삭제합니다.",
+        "프로파일링, 분석, 규칙 발굴 작업에서 반복 사용하는 기준값을 표준화합니다."
+      ],
+      "layout": [
+        { "name": "설정 카테고리", "description": "Target DB 설정 그룹을 선택합니다." },
+        { "name": "Target DB 설정", "description": "선택 카테고리의 키/값 목록과 사용 여부, 정렬 순서를 확인합니다." },
+        { "name": "설정 상세", "description": "설정 키, 값, 설명, 사용 여부를 입력하거나 수정합니다." }
+      ],
+      "workflow": [
+        "Target DB가 선택되어 있는지 확인합니다.",
+        "설정 카테고리를 선택합니다.",
+        "설정 값을 확인하거나 수정합니다.",
+        "필요하면 기본 설정을 생성한 뒤 저장합니다."
+      ],
+      "controls": [
+        "Create default target settings: 기본 Target DB 설정 생성",
+        "Refresh: 선택 카테고리 다시 조회",
+        "New setting: 새 설정 입력",
+        "Save setting: 설정 저장",
+        "Delete setting: 선택 설정 삭제"
+      ],
+      "aiGuidance": [
+        "이 설정은 사용자 개인 설정이 아니라 선택된 Target DB에 저장되는 업무 기준값입니다.",
+        "Target DB가 선택되지 않았거나 연결되지 않은 경우 먼저 Target DB 선택 상태를 확인하도록 안내합니다."
+      ]
+    },
     "M99001": {
       "pageCode": "M99001",
       "title": "DB 접속 정보 설정",
@@ -949,7 +1014,7 @@
         "Delete notice/file: 공지 또는 파일 삭제"
       ],
       "aiGuidance": [
-        "공지사항은 HOME Quality Signal/Notices 영역에 영향을 줄 수 있습니다.",
+        "공지사항은 HOME 공지 사항/Notices 영역에 영향을 줄 수 있습니다.",
         "첨부 파일 질문은 파일 ID, 다운로드 권한, 표시 기간을 함께 확인합니다."
       ]
     }

@@ -3,11 +3,11 @@
         <aside class="env-object-panel">
             <header class="env-object-header">
                 <div>
-                    <h2 class="env-section-title">Project List</h2>
-                    <p class="env-section-desc">Select a project to manage scenarios.</p>
+                    <h2 class="env-section-title" data-label-key="projectListTitle">Project List</h2>
+                    <p class="env-section-desc" data-label-key="projectListDescription">Select a project to manage scenarios.</p>
                 </div>
                 <div class="env-object-actions">
-                    <button type="button" class="env-icon-btn env-refresh" title="Refresh projects" onclick="M01002.loadProjects()">
+                    <button type="button" class="env-icon-btn env-refresh" title="Refresh projects" data-title-key="refreshProjectsTitle" onclick="M01002.loadProjects()">
                         <i class="fas fa-sync-alt"></i>
                     </button>
                 </div>
@@ -19,31 +19,33 @@
                     id="projectSearch-M01002"
                     type="search"
                     placeholder="Search project"
+                    data-placeholder-key="searchProject"
                     aria-label="Search project"
+                    data-aria-label-key="searchProject"
                     oninput="M01002.handleProjectSearchInput()"
                     onkeydown="M01002.handleProjectSearchKey(event)"
                 >
                 <div class="env-search-actions">
-                    <button type="button" class="env-icon-btn" title="Search" onclick="M01002.loadProjects()">
+                    <button type="button" class="env-icon-btn" title="Search" data-title-key="searchTitle" onclick="M01002.loadProjects()">
                         <i class="fas fa-arrow-right"></i>
                     </button>
                 </div>
             </div>
 
-            <div id="projectList-M01002" class="env-tree-grid project-list" aria-label="Registered projects"></div>
+            <div id="projectList-M01002" class="env-tree-grid project-list" aria-label="Registered projects" data-aria-label-key="registeredProjects"></div>
 
-            <section class="env-object-meta scenario-project-summary scenario-side-summary" aria-label="Selected project">
+            <section class="env-object-meta scenario-project-summary scenario-side-summary" aria-label="Selected project" data-aria-label-key="selectedProject">
                 <div class="env-meta-grid scenario-project-grid">
                     <label>
-                        <span>Project ID</span>
+                        <span data-label-key="projectId">Project ID</span>
                         <input id="selectedProjectId-M01002" class="env-field env-meta-field" type="text" readonly>
                     </label>
                     <label>
-                        <span>Project Code</span>
+                        <span data-label-key="projectCode">Project Code</span>
                         <input id="selectedProjectCode-M01002" class="env-field env-meta-field" type="text" readonly>
                     </label>
                     <label class="env-meta-wide">
-                        <span>Project Name</span>
+                        <span data-label-key="projectName">Project Name</span>
                         <input id="selectedProjectName-M01002" class="env-field env-meta-field" type="text" readonly>
                     </label>
                 </div>
@@ -52,13 +54,13 @@
 
         <section class="env-panel" aria-labelledby="scenario-title-M01002">
             <header class="env-header">
-                <h1 class="env-title" id="scenario-title-M01002">Scenario Definition</h1>
-                <p class="env-desc" id="scenarioDescription-M01002">
+                <h1 class="env-title" id="scenario-title-M01002" data-label-key="scenarioDefinitionTitle">Scenario Definition</h1>
+                <p class="env-desc" id="scenarioDescription-M01002" data-label-key="scenarioDefinitionDescription">
                     Select a project and register scenarios for it.
                 </p>
             </header>
 
-            <section class="scenario-list-panel" aria-label="Scenario list">
+            <section class="scenario-list-panel" aria-label="Scenario list" data-aria-label-key="scenarioList">
                 <div class="scenario-list-toolbar">
                     <div class="env-object-search scenario-search">
                         <i class="fas fa-search"></i>
@@ -66,53 +68,57 @@
                             id="scenarioSearch-M01002"
                             type="search"
                             placeholder="Search scenario"
+                            data-placeholder-key="searchScenario"
                             aria-label="Search scenario"
+                            data-aria-label-key="searchScenario"
                             oninput="M01002.handleScenarioSearchInput()"
                             onkeydown="M01002.handleScenarioSearchKey(event)"
                         >
                         <div class="env-search-actions">
-                            <button type="button" class="env-icon-btn" title="Search" onclick="M01002.loadScenarios()">
+                            <button type="button" class="env-icon-btn" title="Search" data-title-key="searchTitle" onclick="M01002.loadScenarios()">
                                 <i class="fas fa-arrow-right"></i>
                             </button>
                         </div>
                     </div>
                     <button type="button" class="env-btn env-cancel scenario-new-btn" onclick="M01002.newScenario()">
                         <i class="fas fa-plus"></i>
-                        <span>New scenario</span>
+                        <span data-label-key="newScenario">New scenario</span>
                     </button>
                 </div>
-                <div id="scenarioList-M01002" class="scenario-list" aria-label="Scenarios"></div>
+                <div id="scenarioList-M01002" class="scenario-list" aria-label="Scenarios" data-aria-label-key="scenarios"></div>
             </section>
 
-            <section class="env-object-meta scenario-detail" aria-label="Scenario detail">
+            <section class="env-object-meta scenario-detail" aria-label="Scenario detail" data-aria-label-key="scenarioDetail">
                 <div class="env-meta-grid scenario-meta-grid">
                     <label>
-                        <span>Scenario ID</span>
+                        <span data-label-key="scenarioId">Scenario ID</span>
                         <input id="scenarioId-M01002" class="env-field env-meta-field" type="text" readonly>
                     </label>
                     <label>
-                        <span>Use</span>
+                        <span data-label-key="use">Use</span>
                         <select id="scenarioUseYn-M01002" class="env-field env-meta-field" onchange="M01002.updateField('useYn', this.value)">
                             <option value="Y">Y</option>
                             <option value="N">N</option>
                         </select>
                     </label>
                     <label>
-                        <span>Sort</span>
+                        <span data-label-key="sort">Sort</span>
                         <input id="scenarioSortOrder-M01002" class="env-field env-meta-field" type="number" oninput="M01002.updateField('sortOrder', this.value)">
                     </label>
                     <label class="env-meta-wide">
-                        <span class="required-title">Scenario Name</span>
+                        <span class="required-title" data-label-key="scenarioName">Scenario Name</span>
                         <input id="scenarioName-M01002" class="env-field env-meta-field" type="text" oninput="M01002.updateField('scenarioName', this.value)">
                     </label>
                     <label>
                         <span class="project-label-line">
-                            <span class="required-title">Scenario Code</span>
+                            <span class="required-title" data-label-key="scenarioCode">Scenario Code</span>
                             <button
                                 type="button"
                                 class="project-help-btn"
                                 title="Scenario code help"
+                                data-title-key="scenarioCodeHelpButtonTitle"
                                 aria-label="Scenario code help"
+                                data-aria-label-key="scenarioCodeHelpButtonTitle"
                                 aria-expanded="false"
                                 onclick="M01002.toggleScenarioCodeHelp(event)"
                             >
@@ -120,23 +126,23 @@
                             </button>
                         </span>
                         <span id="scenarioCodeHelp-M01002" class="project-help-layer" role="tooltip" hidden>
-                            <strong>Scenario Code</strong>
-                            <span>선택한 프로젝트 안에서 시나리오를 구분하는 고유 키입니다. 규칙, 검증, 정제 단계를 식별할 수 있는 짧은 영문 코드로 관리하세요.</span>
-                            <em>예: RULE_MISSING_CHECK, CLEAN_CUSTOMER_NAME</em>
+                            <strong data-label-key="scenarioCode">Scenario Code</strong>
+                            <span data-label-key="scenarioCodeHelpDesc">A unique key that identifies the scenario inside the selected project. Use a short English code for rule, validation, or cleansing steps.</span>
+                            <em data-label-key="scenarioCodeHelpExample">Example: RULE_MISSING_CHECK, CLEAN_CUSTOMER_NAME</em>
                         </span>
                         <input id="scenarioCode-M01002" class="env-field env-meta-field" type="text" oninput="M01002.updateField('scenarioCode', this.value)">
                     </label>
                     <label>
-                        <span>Scenario Type</span>
+                        <span data-label-key="scenarioType">Scenario Type</span>
                         <select id="scenarioType-M01002" class="env-field env-meta-field" onchange="M01002.updateField('scenarioType', this.value)">
-                            <option value="RULE">Rule</option>
-                            <option value="VALIDATION">Validation</option>
-                            <option value="CLEANING">Cleaning</option>
-                            <option value="ANALYSIS">Analysis</option>
+                            <option value="RULE" data-label-key="scenarioTypeRule">Rule</option>
+                            <option value="VALIDATION" data-label-key="scenarioTypeValidation">Validation</option>
+                            <option value="CLEANING" data-label-key="scenarioTypeCleaning">Cleaning</option>
+                            <option value="ANALYSIS" data-label-key="scenarioTypeAnalysis">Analysis</option>
                         </select>
                     </label>
                     <label class="env-meta-wide">
-                        <span>Description</span>
+                        <span data-label-key="description">Description</span>
                         <textarea id="scenarioDesc-M01002" class="env-field env-meta-textarea" rows="4" oninput="M01002.updateField('scenarioDesc', this.value)"></textarea>
                     </label>
                 </div>
@@ -144,20 +150,24 @@
 
             <footer class="env-footer">
                 <div class="env-footer-group">
-                    <span class="env-detail-hint">Scenario code is unique inside the selected project.</span>
+                    <span class="env-detail-hint" data-label-key="scenarioFooterHint">Scenario code is unique inside the selected project.</span>
                 </div>
                 <div class="env-footer-group">
                     <button type="button" class="env-btn env-save" onclick="M01002.saveScenario()">
-                        <span>Save scenario</span>
+                        <i class="far fa-save" aria-hidden="true"></i>
+                        <span data-label-key="saveScenario">Save scenario</span>
                     </button>
-                    <button type="button" class="env-btn env-cancel" onclick="M01002.resetScenario()">Cancel</button>
+                    <button type="button" class="env-btn env-cancel" onclick="M01002.resetScenario()">
+                        <i class="fas fa-undo-alt" aria-hidden="true"></i>
+                        <span data-label-key="cancel">Cancel</span>
+                    </button>
                     <button type="button" class="env-btn env-danger" onclick="M01002.deleteScenario()">
-                        <i class="far fa-trash-alt"></i>
-                        <span>Delete scenario</span>
+                        <i class="far fa-trash-alt" aria-hidden="true"></i>
+                        <span data-label-key="deleteScenarioButton">Delete scenario</span>
                     </button>
                     <button type="button" class="env-btn env-danger" onclick="M01002.deleteAllScenarios()">
                         <i class="fas fa-trash-can"></i>
-                        <span>Delete all</span>
+                        <span data-label-key="deleteAll">Delete all</span>
                     </button>
                 </div>
             </footer>

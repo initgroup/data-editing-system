@@ -70,26 +70,26 @@
                     <label id="userStatusFilterWrap-M99003" class="table-limit-control" data-user-approval-control hidden style="display: none;">
                         <span>User Status</span>
                         <select id="userStatusFilter-M99003" onchange="M99003.loadSystemTableData()">
-                            <option value="ALL">전체</option>
-                            <option value="PENDING">신청중</option>
-                            <option value="APPROVED">신청완료</option>
+                            <option value="ALL">All</option>
+                            <option value="PENDING">Pending</option>
+                            <option value="APPROVED">Approved</option>
                         </select>
                     </label>
                     <button id="approveSelectedUsersBtn-M99003" type="button" class="table-btn" data-user-approval-control onclick="M99003.approveUsers(false)" hidden style="display: none;">
                         <i class="fas fa-user-check"></i>
-                        <span>선택 승인</span>
+                        <span>Approve selected</span>
                     </button>
                     <button id="approveAllUsersBtn-M99003" type="button" class="table-btn" data-user-approval-control onclick="M99003.approveUsers(true)" hidden style="display: none;">
                         <i class="fas fa-users"></i>
-                        <span>조회 전체 승인</span>
+                        <span>Approve all results</span>
                     </button>
                     <button id="resetSelectedPasswordsBtn-M99003" type="button" class="table-btn" data-user-approval-control onclick="M99003.resetSelectedPasswords()" hidden style="display: none;">
                         <i class="fas fa-key"></i>
-                        <span>비밀번호 초기화</span>
+                        <span>Reset password</span>
                     </button>
                     <button id="deactivateSelectedUsersBtn-M99003" type="button" class="table-btn" data-user-approval-control onclick="M99003.deactivateSelectedUsers()" hidden style="display: none;">
                         <i class="fas fa-user-slash"></i>
-                        <span>회원탈퇴</span>
+                        <span>Deactivate user</span>
                     </button>
                     <label class="table-limit-control">
                         <span>Rows</span>

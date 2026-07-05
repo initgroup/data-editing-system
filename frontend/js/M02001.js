@@ -26,6 +26,7 @@
             this.sqlKeydownBound = this.handleSqlEditorKeydown.bind(this);
             getContainerEl("#sqlEditor-M02001")?.addEventListener("keydown", this.sqlKeydownBound);
             this.handleFileTypeChange();
+            this.updateSelectedFileDisplay();
             await this.loadWorkContext();
             if (!this.contextLoadFailed) {
                 this.renderGrid("#previewGrid-M02001", [], "preview");
@@ -51,6 +52,10 @@
             this.contextLoadFailed = false;
             this.isUploading = false;
             this.isInit = false;
+        },
+
+        t(key, fallback = "") {
+            return window.I18nManager?.tPage?.(PAGE_CODE, key, fallback) || fallback;
         },
 
         getStoredContext() {
@@ -82,7 +87,7 @@
         async loadContextProjects(preferredProjectId = "") {
             const select = getContainerEl("#contextProject-M02001");
             if (!select) return;
-            select.innerHTML = `<option value="">Loading projects...</option>`;
+            select.innerHTML = `<option value="">${this.escapeHtml(this.t("loadingProjects", "Loading projects..."))}</option>`;
             try {
                 this.contextLoadFailed = false;
                 const json = await CommonUtils.request(`${API_BASE_URL}/M01002/projects?keyword=`, { method: "GET", showLoading: false });
@@ -91,11 +96,11 @@
                     : [];
                 this.renderContextProjects(preferredProjectId);
             } catch (error) {
-                const message = error.message || "Project load failed.";
+                const message = error.message || this.t("projectLoadFailed", "Project load failed.");
                 this.contextLoadFailed = true;
                 this.contextProjects = [];
                 this.selectedProjectId = "";
-                select.innerHTML = `<option value="">Project load failed</option>`;
+                select.innerHTML = `<option value="">${this.escapeHtml(this.t("projectLoadFailed", "Project load failed"))}</option>`;
                 this.setText("#uploadDescription-M02001", message);
                 this.renderError("#previewGrid-M02001", message);
             }
@@ -105,10 +110,10 @@
             const select = getContainerEl("#contextProject-M02001");
             if (!select) return;
             select.innerHTML = `
-                <option value="">-- Select project --</option>
+                <option value="">${this.escapeHtml(this.t("selectProject", "-- Select project --"))}</option>
                 ${this.contextProjects.map((project) => `
                     <option class="${this.escapeHtml(CommonUtils.getOwnerScopeClass(project))}" value="${this.escapeHtml(project.PROJECT_ID ?? "")}">
-                        ${this.escapeHtml(CommonUtils.formatOwnerScopedName(project, project.PROJECT_NAME || project.PROJECT_CODE || "(Untitled project)"))}
+                        ${this.escapeHtml(CommonUtils.formatOwnerScopedName(project, project.PROJECT_NAME || project.PROJECT_CODE || this.t("untitledProject", "(Untitled project)")))}
                     </option>
                 `).join("")}
             `;
@@ -183,8 +188,21 @@
             return String(value || "").toUpperCase().replace(/[^A-Z0-9_$#]/g, "_").replace(/_+/g, "_").replace(/^_+|_+$/g, "");
         },
 
+        openFilePicker() {
+            getContainerEl("#uploadFile-M02001")?.click();
+        },
+
+        updateSelectedFileDisplay(fileName = "") {
+            const nameEl = getContainerEl("#uploadFileName-M02001");
+            if (!nameEl) return;
+            const displayName = fileName || this.t("noFileSelected", "No file selected");
+            nameEl.textContent = displayName;
+            nameEl.title = displayName;
+        },
+
         handleFileChange() {
             const file = getContainerEl("#uploadFile-M02001")?.files?.[0];
+            this.updateSelectedFileDisplay(file?.name || "");
             const commentInput = getContainerEl("#tableComment-M02001");
             if (file && commentInput) {
                 commentInput.value = this.getFileBaseName(file.name);
@@ -283,7 +301,7 @@
         async previewFile() {
             if (!this.ensureWorkContextSelected()) return;
             const grid = getContainerEl("#previewGrid-M02001");
-            if (grid) grid.innerHTML = `<div class="table-empty">Loading preview...</div>`;
+            if (grid) grid.innerHTML = `<div class="table-empty">${this.escapeHtml(this.t("loadingPreview", "Loading preview..."))}</div>`;
             try {
                 const formData = this.buildUploadFormData();
                 if (!formData) return;
@@ -297,7 +315,7 @@
         async uploadFile() {
             if (!this.ensureWorkContextSelected()) return;
             this.setUploading(true);
-            this.showUploadProgress("Preparing upload...", 0);
+            this.showUploadProgress(this.t("preparingUpload", "Preparing upload..."), 0);
             try {
                 const formData = this.buildUploadFormData();
                 if (!formData) {
@@ -307,16 +325,16 @@
                 const json = await this.requestFormWithProgress(`${API_BASE_URL}/${PAGE_CODE}/upload`, formData);
                 this.uploadedTableName = json.tableName || "";
                 this.setValue("#uploadedTableId-M02001", this.uploadedTableName);
-                const statsText = json.statsGathered ? " Statistics gathered." : (json.statsMessage ? ` ${json.statsMessage}` : "");
-                this.setText("#uploadDescription-M02001", `${this.uploadedTableName} loaded. Rows: ${json.rowCount ?? 0}.${statsText}`);
-                this.showUploadProgress(`Upload completed. Rows: ${json.rowCount ?? 0}.${statsText}`, 100);
+                const statsText = json.statsGathered ? this.t("statisticsGathered", " Statistics gathered.") : (json.statsMessage ? ` ${json.statsMessage}` : "");
+                this.setText("#uploadDescription-M02001", this.tl("uploadedTableLoaded", "{tableName} loaded. Rows: {count}.{suffix}", { tableName: this.uploadedTableName, count: json.rowCount ?? 0, suffix: statsText }));
+                this.showUploadProgress(this.tl("uploadCompleted", "Upload completed. Rows: {count}.{suffix}", { count: json.rowCount ?? 0, suffix: statsText }), 100);
                 this.setDefaultSql();
                 this.switchUploadView("table");
                 await this.loadUploadTableTree(this.uploadedTableName);
                 await this.selectUploadTable(this.uploadedTableName);
                 alert("File uploaded.");
             } catch (error) {
-                this.showUploadProgress(error.message || "Upload failed.", 100);
+                this.showUploadProgress(error.message || this.t("uploadFailed", "Upload failed."), 100);
                 alert(error.message || "Upload failed.");
             } finally {
                 this.setUploading(false);
@@ -331,14 +349,14 @@
                 Object.entries(headers).forEach(([key, value]) => xhr.setRequestHeader(key, value));
                 xhr.upload.onprogress = (event) => {
                     if (!event.lengthComputable) {
-                        this.showUploadProgress("Uploading file...", 5);
+                        this.showUploadProgress(this.t("uploadingFile", "Uploading file..."), 5);
                         return;
                     }
                     const percent = Math.max(1, Math.min(95, Math.round((event.loaded / event.total) * 95)));
-                    this.showUploadProgress("Uploading file...", percent);
+                    this.showUploadProgress(this.t("uploadingFile", "Uploading file..."), percent);
                 };
                 xhr.upload.onload = () => {
-                    this.showUploadProgress("File transfer completed. Server is inserting rows in batches...", 96, { processing: true });
+                    this.showUploadProgress(this.t("fileTransferCompleted", "File transfer completed. Server is inserting rows in batches..."), 96, { processing: true });
                 };
                 xhr.onload = () => {
                     const json = this.parseXhrJson(xhr);
@@ -349,9 +367,9 @@
                     }
                     reject(new Error(CommonUtils.formatErrorMessage(json)));
                 };
-                xhr.onerror = () => reject(new Error("Upload request failed."));
-                xhr.onabort = () => reject(new Error("Upload request was aborted."));
-                this.showUploadProgress("Uploading file...", 1);
+                xhr.onerror = () => reject(new Error(this.t("uploadRequestFailed", "Upload request failed.")));
+                xhr.onabort = () => reject(new Error(this.t("uploadRequestAborted", "Upload request was aborted.")));
+                this.showUploadProgress(this.t("uploadingFile", "Uploading file..."), 1);
                 xhr.send(formData);
             });
         },
@@ -433,7 +451,7 @@
                 });
                 this.uploadedTableName = "";
                 this.setValue("#uploadedTableId-M02001", "");
-                this.setText("#uploadDescription-M02001", "Upload a file to create a temporary table.");
+                this.setText("#uploadDescription-M02001", this.t("uploadTableDescription", "Upload a file to create a temporary table."));
                 this.setValue("#sqlEditor-M02001", "");
                 this.renderGrid("#columnsGrid-M02001", [], "columns");
                 this.renderGrid("#dataGrid-M02001", [], "data");
@@ -447,7 +465,7 @@
 
         switchUploadView(viewName) {
             if (this.isUploading && viewName === "table") {
-                this.setText("#uploadDescription-M02001", "Upload is still running. The Table tab will open automatically after completion.");
+                this.setText("#uploadDescription-M02001", this.t("uploadStillRunning", "Upload is still running. The Table tab will open automatically after completion."));
                 return;
             }
             this.activeUploadView = viewName || "file";
@@ -471,7 +489,7 @@
             if (tableTab) {
                 tableTab.disabled = this.isUploading;
                 tableTab.classList.toggle("is-disabled", this.isUploading);
-                tableTab.title = this.isUploading ? "Upload is running. This tab opens after completion." : "";
+                tableTab.title = this.isUploading ? this.t("uploadRunningTabTitle", "Upload is running. This tab opens after completion.") : "";
             }
         },
 
@@ -482,13 +500,13 @@
                 this.uploadTables = [];
                 this.displayedUploadTables = [];
                 container.innerHTML = `
-                    <div class="table-empty">Select project first.</div>
+                    <div class="table-empty">${this.escapeHtml(this.t("selectProjectFirstShort", "Select project first."))}</div>
                     ${this.renderListFooter(0)}
                 `;
                 return;
             }
 
-            container.innerHTML = `<div class="table-empty">Loading uploaded tables...</div>`;
+            container.innerHTML = `<div class="table-empty">${this.escapeHtml(this.t("loadingUploadTables", "Loading uploaded tables..."))}</div>`;
             try {
                 this.setUploadTableSearchPrefix(false);
                 const params = new URLSearchParams({
@@ -497,7 +515,7 @@
                 });
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/upload-table-tree?${params.toString()}`, { method: "GET", showLoading: false });
                 if (json.status && json.status !== "success") {
-                    throw new Error(json.message || json.detail || "Upload table list load failed.");
+                    throw new Error(json.message || json.detail || this.t("uploadTableListLoadFailed", "Upload table list load failed."));
                 }
                 this.uploadTables = Array.isArray(json.data) ? json.data : [];
                 this.displayedUploadTables = this.uploadTables;
@@ -505,7 +523,7 @@
                 this.renderUploadTableTree();
                 if (this.focusedUploadTableKey) this.scrollToUploadTableRow(this.focusedUploadTableKey);
             } catch (error) {
-                container.innerHTML = `<div class="table-error">${this.escapeHtml(error.message || "Upload table list load failed.")}</div>`;
+                container.innerHTML = `<div class="table-error">${this.escapeHtml(error.message || this.t("uploadTableListLoadFailed", "Upload table list load failed."))}</div>`;
             }
         },
 
@@ -521,7 +539,7 @@
 
             if (!rows.length) {
                 container.innerHTML = `
-                    <div class="table-empty">No uploaded tables found.</div>
+                    <div class="table-empty">${this.escapeHtml(this.t("noUploadedTablesFound", "No uploaded tables found."))}</div>
                     ${this.renderListFooter(0)}
                 `;
                 return;
@@ -529,8 +547,8 @@
 
             container.innerHTML = `
                 <div class="table-tree-head">
-                    <div>Table</div>
-                    <div>Owner</div>
+                    <div>${this.escapeHtml(this.t("table", "Table"))}</div>
+                    <div>${this.escapeHtml(this.t("owner", "Owner"))}</div>
                 </div>
                 ${rows.map((row) => this.createUploadTableRow(row)).join("")}
                 ${this.renderListFooter(rows.length)}
@@ -565,8 +583,8 @@
             this.setValue("#uploadedTableId-M02001", name);
             const row = this.uploadTables.find((item) => item.TABLE_NAME === name);
             const desc = row
-                ? `${row.OWNER || ""}.${row.TABLE_NAME} selected.`
-                : `${name} selected.`;
+                ? this.tl("selectedTableDescription", "{objectName} selected.", { objectName: `${row.OWNER || ""}.${row.TABLE_NAME}` })
+                : this.tl("selectedTableDescription", "{objectName} selected.", { objectName: name });
             this.setText("#uploadDescription-M02001", desc);
             this.setDefaultSql();
             this.renderUploadTableTree();
@@ -651,7 +669,7 @@
         async loadColumns() {
             if (!this.ensureUploadedTable()) return;
             const grid = getContainerEl("#columnsGrid-M02001");
-            if (grid) grid.innerHTML = `<div class="table-empty">Loading columns...</div>`;
+            if (grid) grid.innerHTML = `<div class="table-empty">${this.escapeHtml(this.t("loadingColumns", "Loading columns..."))}</div>`;
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/columns`, {
                     method: "POST",
@@ -668,7 +686,7 @@
             if (!this.ensureUploadedTable()) return;
             const limit = this.getLimit("#dataLimit-M02001");
             const grid = getContainerEl("#dataGrid-M02001");
-            if (grid) grid.innerHTML = `<div class="table-empty">Loading data...</div>`;
+            if (grid) grid.innerHTML = `<div class="table-empty">${this.escapeHtml(this.t("loadingData", "Loading data..."))}</div>`;
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/data`, {
                     method: "POST",
@@ -684,7 +702,7 @@
         async executeSql() {
             const sql = (getContainerEl("#sqlEditor-M02001")?.value || "").trim();
             if (!sql) {
-                this.renderError("#sqlGrid-M02001", "No SQL statement found.");
+                this.renderError("#sqlGrid-M02001", this.t("noSqlStatement", "No SQL statement found."));
                 return;
             }
             const limit = this.getLimit("#sqlLimit-M02001");
@@ -716,7 +734,7 @@
             const inputValue = (getContainerEl("#uploadedTableId-M02001")?.value || "").trim().toUpperCase();
             this.uploadedTableName = inputValue || this.uploadedTableName;
             if (this.uploadedTableName) return true;
-            this.renderError(`#${this.activeTab}Grid-M02001`, "Upload a file or enter a table ID first.");
+            this.renderError(`#${this.activeTab}Grid-M02001`, this.t("uploadTableRequired", "Upload a file or enter a table ID first."));
             return false;
         },
 
@@ -727,7 +745,7 @@
             const columns = explicitColumns || Object.keys(rows?.[0] || {});
             if (!columns.length) {
                 container.innerHTML = `
-                    <div class="table-empty">No data.</div>
+                    <div class="table-empty">${this.escapeHtml(this.t("noData", "No data."))}</div>
                     ${this.renderListFooter(0)}
                 `;
                 return;

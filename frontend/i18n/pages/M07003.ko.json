@@ -1,0 +1,26 @@
+{
+  "language": "ko",
+  "pageCode": "M07003",
+  "description": "Korean labels for Editing History.",
+  "labels": {},
+  "selectors": {
+    "text": {
+      "#edit-history-title-M07003": "에디팅 이력 조회",
+      ".table-desc": "정제, 검증, 최종 반영까지의 데이터 에디팅 이력을 조회합니다.",
+      ".table-actions .table-btn span": "내보내기",
+      ".query-filter-toolbar label:nth-child(1) span": "시작일",
+      ".query-filter-toolbar label:nth-child(2) span": "종료일",
+      ".query-filter-toolbar label:nth-child(3) span": "상태",
+      ".query-filter-toolbar label:nth-child(4) span": "사용자",
+      ".query-filter-toolbar label:nth-child(5) span": "행",
+      ".query-filter-toolbar .table-btn span": "검색",
+      ".table-tabs .table-tab:nth-child(1)": "이력",
+      ".table-tabs .table-tab:nth-child(2)": "객체 변경",
+      ".table-tabs .table-tab:nth-child(3)": "반영 로그"
+    },
+    "placeholder": {
+      ".query-filter-toolbar input[type=\"search\"]": "사용자 검색"
+    }
+  },
+  "messages": {}
+}

@@ -4,7 +4,7 @@
     const REGISTERED_ROUTER_PAGES = new Set([
         "home", "M01001", "M01002", "M02001", "M02002",
         "M03001", "M03002", "M03003", "M03004", "M04001", "M04002",
-        "M90001", "M90002", "M91001", "M91002", "M99001", "M99002", "M99003", "M99004"
+        "M90001", "M90002", "M91001", "M91002", "M91003", "M99001", "M99002", "M99003", "M99004"
     ]);
 
     const LOGICAL_DATA_DOMAINS = {
@@ -102,6 +102,170 @@
         return [];
     }
 
+    function normalizeLanguageCode(value) {
+        const text = String(value || "en").trim().toLowerCase().replace("_", "-");
+        if (text === "ko" || text === "ko-kr" || text === "kr") return "ko";
+        return "en";
+    }
+
+    const HELP_MARKDOWN_TEXT = {
+        en: {
+            meta: {
+                menuCode: "Menu code",
+                status: "Status",
+                group: "Group"
+            },
+            sections: {
+                summary: "Summary",
+                purpose: "Purpose",
+                layout: "Screen Layout",
+                workflow: "Default Workflow",
+                controls: "Main Buttons / Actions",
+                implementation: "Implementation Links",
+                sqlPurpose: "SQL Roles",
+                logicalData: "Logical Data Domains",
+                publicModels: "Model / AI Resource Scope",
+                aiGuidance: "Answering Guidelines",
+                privacy: "Privacy Rule"
+            },
+            optionalSections: {
+                deepDive: "Detailed Guide",
+                interpretationGuide: "Result Interpretation",
+                troubleshooting: "Common Checks",
+                implementationNotes: "Implementation Notes"
+            },
+            implementation: {
+                frontendHtml: "Screen HTML",
+                frontendJs: "Screen JS",
+                backendRouter: "API router",
+                commonService: "Common service",
+                sqlTemplate: "SQL template",
+                noRouter: "No registered API router or planned implementation",
+                noService: "None or handled by the screen router"
+            },
+            defaults: {
+                group: "Menu",
+                status: "enabled",
+                summary: "Use this menu to review and operate the selected business function.",
+                purpose: (title) => [
+                    `Understand the purpose and current state of the ${title} screen.`,
+                    "Review the main data, settings, or execution results handled by this menu."
+                ],
+                layout: () => [
+                    { name: "Main workspace", description: "Shows the primary list, editor, canvas, result, or settings area for this menu." },
+                    { name: "Actions and messages", description: "Provides save, delete, refresh, run, validation, and status feedback where available." }
+                ],
+                workflow: (title) => [
+                    `Open ${title} from the left menu.`,
+                    "Select the required project, scenario, object, or setting context.",
+                    "Review, edit, execute, or save the work according to the available actions."
+                ],
+                controls: () => [
+                    "Refresh: reloads the current data.",
+                    "Save: stores edited settings or definitions when the screen supports saving.",
+                    "Delete: removes the selected saved item only after the required selection and confirmation."
+                ],
+                aiGuidance: () => [
+                    "Answer using the current screen state first when a screenshot or DOM context is attached.",
+                    "Do not expose physical table names, credentials, API keys, or other sensitive implementation details."
+                ],
+                sqlPurposes: ["Supports the menu-specific searches, saves, executions, or result lookups used by this screen."],
+                logicalDataDomains: ["Menu state and user context", "Target DB context", "Business data or result data used by this screen"],
+                publicModels: ["Model and AI details are described only at a public conceptual level."],
+                privacyNote: "Help pages do not expose physical table names, internal procedure names, DB connection details, API keys, or passwords."
+            }
+        },
+        ko: {
+            meta: {
+                menuCode: "메뉴 코드",
+                status: "상태",
+                group: "그룹"
+            },
+            sections: {
+                summary: "요약",
+                purpose: "목적",
+                layout: "화면 구성",
+                workflow: "기본 업무 흐름",
+                controls: "주요 버튼/동작",
+                implementation: "구현 연동",
+                sqlPurpose: "SQL 역할",
+                logicalData: "논리 데이터 도메인",
+                publicModels: "모델/AI 리소스 안내 범위",
+                aiGuidance: "질문 답변 참고 기준",
+                privacy: "비공개 원칙"
+            },
+            optionalSections: {
+                deepDive: "상세 이해 가이드",
+                interpretationGuide: "결과 해석 기준",
+                troubleshooting: "자주 확인할 문제",
+                implementationNotes: "구현 보충 설명"
+            },
+            implementation: {
+                frontendHtml: "화면 HTML",
+                frontendJs: "화면 JS",
+                backendRouter: "API 라우터",
+                commonService: "공통 서비스",
+                sqlTemplate: "SQL 템플릿",
+                noRouter: "등록된 API 라우터 없음 또는 구현 예정",
+                noService: "없음 또는 화면 전용 라우터에서 직접 처리"
+            },
+            defaults: {
+                group: "메뉴",
+                status: "enabled",
+                summary: "현재 메뉴의 주요 업무를 확인하고 필요한 작업을 수행하는 화면입니다.",
+                purpose: () => ["현재 화면의 목적과 상태를 확인합니다."],
+                layout: () => [{ name: "주요 영역", description: "현재 메뉴의 목록, 상세, 결과 또는 설정 영역을 표시합니다." }],
+                workflow: () => ["메뉴를 열고 필요한 업무 맥락을 선택합니다.", "화면에서 제공하는 동작을 실행합니다."],
+                controls: () => ["Refresh: 현재 데이터 새로고침", "Save: 변경 내용 저장"],
+                aiGuidance: () => ["화면 캡처나 DOM 스냅샷이 있으면 현재 렌더링 상태를 우선합니다."],
+                sqlPurposes: ["현재 화면 전용 SQL 파일이 없거나 구현 예정입니다."],
+                logicalDataDomains: ["구현 예정 논리 데이터 도메인"],
+                publicModels: ["이 메뉴에서 안내할 모델/AI 리소스 정보는 별도 공개 범위가 확인될 때만 제공합니다."],
+                privacyNote: "도움말은 실제 물리 테이블명, 내부 프로시저명, DB 접속 정보, API Key, 비밀번호를 공개하지 않고 논리 도메인명과 파일/템플릿 연결만 설명합니다."
+            }
+        }
+    };
+
+    function getMarkdownText(languageCode) {
+        return HELP_MARKDOWN_TEXT[normalizeLanguageCode(languageCode)] || HELP_MARKDOWN_TEXT.en;
+    }
+
+    function getPageTitle(page) {
+        return page?.title || page?.label || page?.pageCode || "Menu";
+    }
+
+    function listOrDefault(value, fallback) {
+        const list = Array.isArray(value) ? value.filter(Boolean) : [];
+        return list.length ? list : fallback;
+    }
+
+    function prepareHelpPage(page = {}, languageCode = "en") {
+        const normalized = normalizeLanguageCode(languageCode);
+        const text = getMarkdownText(normalized);
+        const title = getPageTitle(page);
+        return {
+            ...page,
+            title,
+            label: page.label || title,
+            group: page.group || text.defaults.group,
+            status: page.status || text.defaults.status,
+            summary: page.summary || text.defaults.summary,
+            purpose: listOrDefault(page.purpose, text.defaults.purpose(title)),
+            layout: listOrDefault(page.layout, text.defaults.layout(title)),
+            workflow: listOrDefault(page.workflow, text.defaults.workflow(title)),
+            controls: listOrDefault(page.controls, text.defaults.controls(title)),
+            aiGuidance: listOrDefault(page.aiGuidance, text.defaults.aiGuidance(title))
+        };
+    }
+
+    function getImplementationItems(page, implementation, key, languageCode) {
+        const pageItems = Array.isArray(page?.[key]) ? page[key].filter(Boolean) : [];
+        if (pageItems.length) return pageItems;
+        const normalized = normalizeLanguageCode(languageCode);
+        if (normalized === "en") return getMarkdownText(normalized).defaults[key] || [];
+        return Array.isArray(implementation?.[key]) ? implementation[key].filter(Boolean) : getMarkdownText(normalized).defaults[key] || [];
+    }
+
     function buildImplementation(pageCode) {
         const normalized = normalizePageCode(pageCode);
         return {
@@ -121,70 +285,79 @@
         return (items || []).filter(Boolean).map((item) => `- ${item}`).join("\n");
     }
 
-    function buildHelpMarkdown(page, implementation) {
-        const layout = (page.layout || []).map((item) => `- ${item.name}: ${item.description}`).join("\n");
-        const serviceFiles = implementation.serviceFiles.length ? implementation.serviceFiles : ["없음 또는 화면 전용 라우터에서 직접 처리"];
-        const publicModels = implementation.publicModelDetails.length
-            ? toList(implementation.publicModelDetails)
-            : "- 이 메뉴에서 안내할 모델/AI 리소스 정보는 별도 공개 범위가 확인될 때만 제공합니다.";
+    function buildHelpMarkdown(page, implementation, options = {}) {
+        const languageCode = normalizeLanguageCode(options.languageCode || options.language || "en");
+        const text = getMarkdownText(languageCode);
+        const preparedPage = prepareHelpPage(page, languageCode);
+        const layout = (preparedPage.layout || []).map((item) => `- ${item.name}: ${item.description}`).join("\n");
+        const serviceFiles = implementation.serviceFiles.length ? implementation.serviceFiles : [text.implementation.noService];
+        const publicModelDetails = getImplementationItems(preparedPage, implementation, "publicModelDetails", languageCode);
+        const publicModels = publicModelDetails.length
+            ? toList(publicModelDetails)
+            : `- ${text.defaults.publicModels[0]}`;
         const optionalSections = [
-            ["상세 이해 가이드", page.deepDive],
-            ["결과 해석 기준", page.interpretationGuide],
-            ["자주 확인할 문제", page.troubleshooting],
-            ["구현 보충 설명", page.implementationNotes]
+            [text.optionalSections.deepDive, preparedPage.deepDive],
+            [text.optionalSections.interpretationGuide, preparedPage.interpretationGuide],
+            [text.optionalSections.troubleshooting, preparedPage.troubleshooting],
+            [text.optionalSections.implementationNotes, preparedPage.implementationNotes]
         ]
             .filter(([, items]) => Array.isArray(items) && items.length)
             .flatMap(([title, items]) => ["", `## ${title}`, toList(items)]);
+        const sqlPurposes = getImplementationItems(preparedPage, implementation, "sqlPurposes", languageCode);
+        const logicalDataDomains = getImplementationItems(preparedPage, implementation, "logicalDataDomains", languageCode);
+        const privacyNote = preparedPage.privacyNote || (languageCode === "en" ? text.defaults.privacyNote : implementation.privacyNote);
 
         return [
-            `# ${page.title || page.label || page.pageCode}`,
+            `# ${preparedPage.title || preparedPage.label || preparedPage.pageCode}`,
             "",
-            `메뉴 코드: ${page.pageCode}`,
-            `상태: ${page.status || "enabled"}`,
-            `그룹: ${page.group || ""}`,
+            `${text.meta.menuCode}: ${preparedPage.pageCode}`,
+            `${text.meta.status}: ${preparedPage.status || "enabled"}`,
+            `${text.meta.group}: ${preparedPage.group || ""}`,
             "",
-            "## 요약",
-            page.summary || "",
+            `## ${text.sections.summary}`,
+            preparedPage.summary || "",
             "",
-            "## 목적",
-            toList(page.purpose),
+            `## ${text.sections.purpose}`,
+            toList(preparedPage.purpose),
             "",
-            "## 화면 구성",
+            `## ${text.sections.layout}`,
             layout,
             "",
-            "## 기본 업무 흐름",
-            toList(page.workflow),
+            `## ${text.sections.workflow}`,
+            toList(preparedPage.workflow),
             "",
-            "## 주요 버튼/동작",
-            toList(page.controls),
+            `## ${text.sections.controls}`,
+            toList(preparedPage.controls),
             "",
-            "## 구현 연동",
-            `- 화면 HTML: ${implementation.frontendHtml}`,
-            `- 화면 JS: ${implementation.frontendJs}`,
-            `- API 라우터: ${implementation.backendRouter || "등록된 API 라우터 없음 또는 구현 예정"}`,
-            `- 공통 서비스: ${serviceFiles.join(", ")}`,
-            `- SQL 템플릿: ${implementation.sqlFiles.join(", ")}`,
+            `## ${text.sections.implementation}`,
+            `- ${text.implementation.frontendHtml}: ${implementation.frontendHtml}`,
+            `- ${text.implementation.frontendJs}: ${implementation.frontendJs}`,
+            `- ${text.implementation.backendRouter}: ${implementation.backendRouter || text.implementation.noRouter}`,
+            `- ${text.implementation.commonService}: ${serviceFiles.join(", ")}`,
+            `- ${text.implementation.sqlTemplate}: ${implementation.sqlFiles.join(", ")}`,
             "",
-            "## SQL 역할",
-            toList(implementation.sqlPurposes),
+            `## ${text.sections.sqlPurpose}`,
+            toList(sqlPurposes),
             "",
-            "## 논리 데이터 도메인",
-            toList(implementation.logicalDataDomains),
+            `## ${text.sections.logicalData}`,
+            toList(logicalDataDomains),
             "",
-            "## 모델/AI 리소스 안내 범위",
+            `## ${text.sections.publicModels}`,
             publicModels,
             "",
-            "## 질문 답변 참고 기준",
-            toList(page.aiGuidance),
+            `## ${text.sections.aiGuidance}`,
+            toList(preparedPage.aiGuidance),
             "",
-            "## 비공개 원칙",
-            `- ${implementation.privacyNote}`
+            `## ${text.sections.privacy}`,
+            `- ${privacyNote}`
         ].concat(optionalSections).join("\n");
     }
 
     window.HelpContentUtils = {
         buildImplementation,
         buildHelpMarkdown,
+        normalizeLanguageCode,
+        prepareHelpPage,
         normalizePageCode
     };
 })();

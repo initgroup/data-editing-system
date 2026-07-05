@@ -1,0 +1,24 @@
+{
+  "language": "ko",
+  "pageCode": "M07002",
+  "description": "Korean labels for Final DB Apply.",
+  "labels": {},
+  "selectors": {
+    "text": {
+      "#final-apply-title-M07002": "DB 최종 반영",
+      ".table-desc": "검증 완료된 정제 결과를 대상 데이터베이스에 최종 반영합니다.",
+      ".table-actions .table-btn:nth-child(1) span": "검증",
+      ".table-actions .table-btn:nth-child(2) span": "반영",
+      ".query-filter-toolbar label:nth-child(1) span": "반영 배치",
+      ".query-filter-toolbar label:nth-child(2) span": "대상 Owner",
+      ".query-filter-toolbar label:nth-child(3) span": "반영 방식",
+      ".query-filter-toolbar label:nth-child(4) span": "행",
+      ".data-param-card:nth-child(1) h3": "반영 대기열",
+      ".data-param-card:nth-child(2) h3": "생성 SQL"
+    },
+    "ariaLabel": {
+      ".data-script-editor": "최종 반영 미리보기 SQL"
+    }
+  },
+  "messages": {}
+}

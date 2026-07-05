@@ -1,0 +1,26 @@
+{
+  "language": "ko",
+  "pageCode": "M05002",
+  "description": "Korean labels for User Rule Registration.",
+  "labels": {},
+  "selectors": {
+    "text": {
+      ".env-section-title": "사용자 규칙",
+      ".env-section-desc": "사용자 등록 규칙입니다.",
+      "#user-rule-title-M05002": "사용자 규칙 등록",
+      ".env-desc": "업무 담당자가 직접 검증 규칙과 수정 SQL을 등록합니다.",
+      ".env-header-actions .env-btn:nth-child(1)": "검증",
+      ".env-header-actions .env-save span": "저장",
+      ".env-header-actions .env-danger span": "삭제"
+    },
+    "title": {
+      ".env-object-actions .env-icon-btn:nth-child(1)": "신규",
+      ".env-object-actions .env-icon-btn:nth-child(2)": "새로고침",
+      ".data-param-card:first-child .env-icon-btn": "파라미터 추가"
+    },
+    "placeholder": {
+      ".env-object-search input": "사용자 규칙 검색"
+    }
+  },
+  "messages": {}
+}

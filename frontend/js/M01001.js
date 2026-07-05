@@ -46,7 +46,7 @@
             if (!list) return;
 
             const keyword = (getContainerEl("#projectSearch-M01001")?.value || "").trim();
-            list.innerHTML = `<div class="env-tree-loading project-empty">Loading projects...</div>`;
+            list.innerHTML = `<div class="env-tree-loading project-empty">${this.escapeHtml(this.t("loadingProjects", "Loading projects..."))}</div>`;
 
             try {
                 const params = new URLSearchParams({ keyword });
@@ -55,7 +55,7 @@
                 this.renderProjectList();
             } catch (error) {
                 console.error("[M01001] project list load failed", error);
-                list.innerHTML = `<div class="env-tree-error">${this.escapeHtml(error.message || "Project list load failed.")}</div>`;
+                list.innerHTML = `<div class="env-tree-error">${this.escapeHtml(error.message || this.t("projectListLoadFailed", "Project list load failed."))}</div>`;
             }
         },
 
@@ -65,7 +65,7 @@
 
             if (this.projects.length === 0) {
                 list.innerHTML = `
-                    <div class="project-empty">No projects found.</div>
+                    <div class="project-empty">${this.escapeHtml(this.t("noProjectsFound", "No projects found."))}</div>
                     ${this.renderListFooter(0)}
                 `;
                 return;
@@ -73,8 +73,8 @@
 
             list.innerHTML = `
                 <div class="project-list-head">
-                    <div>Project</div>
-                    <div>Type / Use</div>
+                    <div>${this.escapeHtml(this.t("project", "Project"))}</div>
+                    <div>${this.escapeHtml(this.t("typeUse", "Type / Use"))}</div>
                 </div>
                 <div class="project-list-body">
                     ${this.projects.map((project) => this.createProjectRow(project)).join("")}
@@ -90,16 +90,19 @@
             const code = project.PROJECT_CODE || "";
             const type = project.PROJECT_TYPE || "";
             const useYn = project.USE_YN || "Y";
+            const title = name || this.t("untitledProject", "(Untitled project)");
+            const codeLabel = code || this.t("noCode", "No code");
+            const useLabel = this.tl("useValue", "Use {value}", { value: useYn });
 
             return `
                 <button type="button" class="project-row ${selectedClass}" data-project-id="${this.escapeAttr(projectId)}" onclick="M01001.selectProject('${this.escapeAttr(projectId)}')">
                     <span class="project-row-main">
-                        <span class="project-row-title" title="${this.escapeHtml(name)}">${this.escapeHtml(name || "(Untitled project)")}</span>
-                        <span class="project-row-sub" title="${this.escapeHtml(code)}">${this.escapeHtml(code || "No code")}</span>
+                        <span class="project-row-title" title="${this.escapeHtml(title)}">${this.escapeHtml(title)}</span>
+                        <span class="project-row-sub" title="${this.escapeHtml(codeLabel)}">${this.escapeHtml(codeLabel)}</span>
                     </span>
                     <span class="project-row-meta">
                         <span title="${this.escapeHtml(type)}">${this.escapeHtml(type || "-")}</span>
-                        <span title="Use ${this.escapeHtml(useYn)}">Use ${this.escapeHtml(useYn)}</span>
+                        <span title="${this.escapeHtml(useLabel)}">${this.escapeHtml(useLabel)}</span>
                     </span>
                 </button>
             `;
@@ -116,7 +119,7 @@
                 this.originalProject = { ...this.selectedProject };
                 this.renderProjectDetail();
                 this.updateProjectSelection();
-                this.updateDescription(`Selected project: ${this.selectedProject.projectName || ""}`);
+                this.updateDescription(this.tl("selectedProjectDescription", "Selected project: {name}", { name: this.selectedProject.projectName || "" }));
             } catch (error) {
                 console.error("[M01001] project detail load failed", error);
                 alert("Project detail load failed.");
@@ -141,7 +144,7 @@
             if (render) {
                 this.renderProjectDetail();
                 this.updateProjectSelection();
-                this.updateDescription("Create a new project.");
+                this.updateDescription(this.t("createProjectDescription", "Create a new project."));
                 getContainerEl("#projectName-M01001")?.focus();
             }
         },
@@ -289,7 +292,7 @@
                 this.originalProject = { ...this.selectedProject };
                 this.renderProjectDetail();
                 await this.loadProjects();
-                this.updateDescription("Project was saved.");
+                this.updateDescription(this.t("projectSavedDescription", "Project was saved."));
                 alert("Project saved.");
             } catch (error) {
                 console.error("[M01001] project save failed", error);
@@ -300,7 +303,7 @@
         async deleteProject() {
             const projectId = this.selectedProject.projectId;
             if (!projectId) {
-                alert("Select a saved project before deleting.");
+                CommonMessage.warn("Select a saved project before deleting.");
                 return;
             }
 
@@ -316,15 +319,14 @@
                 this.newProject(false);
                 this.renderProjectDetail();
                 await this.loadProjects();
-                this.updateDescription("Project was deleted.");
-                alert("Project deleted.");
+                this.updateDescription(this.t("projectDeletedDescription", "Project was deleted."));
+                CommonMessage.success("Project deleted.");
             } catch (error) {
                 console.error("[M01001] project delete failed", error);
-                alert(error.message || "Project delete failed.");
+                CommonMessage.error(error.message || "Project delete failed.");
             }
         }
     };
 
     window[PAGE_CODE] = M01001;
 })();
-

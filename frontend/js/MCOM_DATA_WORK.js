@@ -4,6 +4,24 @@
             const { getContainerEl } = PageManager.createHelper(pageCode);
 
             return {
+                t(key, fallback = "") {
+                    return window.I18nManager?.tPage?.(pageCode, key, fallback) || fallback;
+                },
+
+                tc(path, fallback = "") {
+                    return window.I18nManager?.t?.(path, fallback) || fallback;
+                },
+
+                formatText(template, values = {}) {
+                    return String(template ?? "").replace(/\{([A-Za-z0-9_]+)\}/g, (match, key) => (
+                        Object.prototype.hasOwnProperty.call(values, key) ? String(values[key] ?? "") : match
+                    ));
+                },
+
+                tl(key, fallback = "", values = {}) {
+                    return this.formatText(this.t(key, fallback), values);
+                },
+
                 getLimit(selector, defaultValue = 100, min = 1, max = 1000) {
                     const value = Number(getContainerEl(selector)?.value || defaultValue);
                     return Math.min(Math.max(Number.isFinite(value) ? value : defaultValue, min), max);
@@ -184,7 +202,9 @@
                 },
 
                 renderListFooter(count) {
-                    return `<div class="list-count-footer">${Number(count || 0).toLocaleString()} items</div>`;
+                    const formattedCount = Number(count || 0).toLocaleString();
+                    const template = this.t("listCount", this.tc("commonLabels.listCount", "{count} items"));
+                    return `<div class="list-count-footer">${this.escapeHtml(this.formatText(template, { count: formattedCount }))}</div>`;
                 }
             };
         },
@@ -560,12 +580,12 @@
 
         ensureWorkContextSelected() {
             if (!this.selectedProjectId) {
-                alert("Project is required.");
+                alert(this.getDisplayMessage("Project is required."));
                 getContainerEl(`#contextProject-${PAGE_CODE}`)?.focus();
                 return false;
             }
             if (!this.selectedScenarioId) {
-                alert("Scenario is required.");
+                alert(this.getDisplayMessage("Scenario is required."));
                 getContainerEl(`#contextScenario-${PAGE_CODE}`)?.focus();
                 return false;
             }
@@ -659,7 +679,7 @@
                 this.setDataWorkRunContext(json.data || {});
                 return this.getCurrentDataWorkRunId();
             } catch (error) {
-                alert(error.message || "DATA_WORK RUN_ID is not ready. Run INIT_TARGET_ALTER.sql on the target DB.");
+                alert(this.getDisplayMessage(error.message || "DATA_WORK RUN_ID is not ready. Run INIT_TARGET_ALTER.sql on the target DB."));
                 return "";
             }
         },
@@ -668,8 +688,8 @@
             if (!this.ensureWorkContextSelected()) return;
             const current = this.getCurrentDataWorkRunId();
             const message = current
-                ? `Create a new DATA_WORK RUN_ID after ${current}?\n새 DATA_WORK RUN_ID를 생성할까요?`
-                : "Create the first DATA_WORK RUN_ID?\n첫 DATA_WORK RUN_ID를 생성할까요?";
+                ? this.getMessage("confirmCreateNextDataRunId", "Create a new DATA_WORK RUN_ID after {current}?", { current })
+                : this.getMessage("confirmCreateFirstDataRunId", "Create the first DATA_WORK RUN_ID?");
             if (!(await CommonMessage.confirm(message))) return;
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/data-run-id/new`, {
@@ -680,9 +700,12 @@
                     }
                 });
                 this.setDataWorkRunContext(json.data || {});
-                CommonMessage.success(json.message || `DATA_WORK RUN_ID ${this.getCurrentDataWorkRunId()} was created.`, { copyable: false });
+                CommonMessage.success(
+                    json.message || this.getMessage("dataRunIdCreated", "DATA_WORK RUN_ID {runId} was created.", { runId: this.getCurrentDataWorkRunId() }),
+                    { copyable: false }
+                );
             } catch (error) {
-                alert(error.message || "DATA_WORK RUN_ID create failed.");
+                alert(this.getDisplayMessage(error.message || "DATA_WORK RUN_ID create failed."));
             }
         },
 
@@ -801,7 +824,7 @@
 
         async loadExecutableObjects() {
             const select = getContainerEl(`#execObject-${PAGE_CODE}`);
-            if (select) select.innerHTML = `<option value="">Loading registered objects...</option>`;
+            if (select) select.innerHTML = `<option value="">${this.escapeHtml(this.getLabel("loadingRegisteredObjects") || "Loading registered objects...")}</option>`;
 
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/executable-objects`, { method: "GET", showLoading: false });
@@ -810,7 +833,7 @@
             } catch (error) {
                 const message = error.message || "Executable object load failed.";
                 console.error("[${PAGE_CODE}] executable object load failed", error);
-                if (select) select.innerHTML = `<option value="">Object load failed</option>`;
+                if (select) select.innerHTML = `<option value="">${this.escapeHtml(this.getLabel("objectLoadFailed") || "Object load failed")}</option>`;
                 this.renderError(`#parameterGrid-${PAGE_CODE}`, message);
                 this.renderSqlMessage("sql", message, "error");
             }
@@ -821,7 +844,7 @@
             if (!select) return;
 
             select.innerHTML = `
-                <option value="">-- Select registered object --</option>
+                <option value="">${this.escapeHtml(this.getLabel("selectRegisteredObject") || "-- Select registered object --")}</option>
                 ${this.executableObjects.map((object) => `
                     <option value="${this.escapeHtml(object.OBJECT_ID ?? "")}">
                         ${this.escapeHtml(object.OBJECT_LABEL || object.OBJECT_NAME || "(Unnamed object)")}
@@ -897,9 +920,9 @@
 
         async loadOmlResources() {
             const select = getContainerEl(`#omlResource-${PAGE_CODE}`);
-            if (select) select.innerHTML = `<option value="">Loading OML4Py resources...</option>`;
+            if (select) select.innerHTML = `<option value="">${this.escapeHtml(this.getLabel("loadingOmlResources") || "Loading OML4Py resources...")}</option>`;
             const webSelect = getContainerEl(`#webApiMethod-${PAGE_CODE}`);
-            if (webSelect) webSelect.innerHTML = `<option value="">Loading Python API resources...</option>`;
+            if (webSelect) webSelect.innerHTML = `<option value="">${this.escapeHtml(this.getLabel("loadingPythonApiResources") || "Loading Python API resources...")}</option>`;
 
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/oml-resources`, { method: "GET", showLoading: false });
@@ -920,7 +943,7 @@
             if (!select) return;
             const resources = this.omlResources.filter((resource) => this.isOmlResource(resource));
             select.innerHTML = `
-                <option value="">-- Select OML4Py resource --</option>
+                <option value="">${this.escapeHtml(this.getLabel("selectOmlResource") || "-- Select OML4Py resource --")}</option>
                 ${resources.map((resource) => `
                     <option value="${this.escapeHtml(resource.OML_RESOURCE_ID ?? "")}">
                         ${this.escapeHtml(resource.RESOURCE_LABEL || resource.RESOURCE_NAME || "(Unnamed OML resource)")}
@@ -935,7 +958,7 @@
             if (!select) return;
             const resources = this.omlResources.filter((resource) => this.isWebApiResource(resource));
             select.innerHTML = `
-                <option value="">-- Select Python API resource --</option>
+                <option value="">${this.escapeHtml(this.getLabel("selectPythonApiResource") || "-- Select Python API resource --")}</option>
                 ${resources.map((resource) => {
                     const method = resource.EXEC_METHOD || resource.RESOURCE_NAME || "";
                     const label = resource.RESOURCE_LABEL || resource.RESOURCE_NAME || method || "(Unnamed Python API)";
@@ -1101,16 +1124,16 @@
                     endpoint: "/api/mlAnalysis/lasso-feature-select",
                     resultTable: "INIT$_TB_LASSO_FEATURE",
                     params: [
-                        { itemName: "P_TARGET_OWNER", itemValue: "VARCHAR2", itemDesc: "분석 대상 테이블 계정", itemDefault: targetOwner },
-                        { itemName: "P_TARGET_TABLE", itemValue: "VARCHAR2", itemDesc: "분석 대상 테이블명", itemDefault: targetTable },
-                        { itemName: "P_TARGET_COLUMN", itemValue: "VARCHAR2", itemDesc: "종속변수 컬럼명", itemDefault: "(auto)" },
-                        { itemName: "P_MAX_FEATURES", itemValue: "NUMBER", itemDesc: "선택할 최대 독립변수 수", itemDefault: "10" },
-                        { itemName: "P_SAMPLE_ROWS", itemValue: "NUMBER", itemDesc: "분석 샘플 최대 행 수", itemDefault: "100000" },
-                        { itemName: "P_ALPHA", itemValue: "NUMBER", itemDesc: "LASSO alpha. 비우면 교차검증 자동 선택", itemDefault: "" },
-                        { itemName: "P_MAX_AUTO_TARGETS", itemValue: "NUMBER", itemDesc: "자동 target 최대 개수", itemDefault: "10" },
-                        { itemName: "P_CONTINUE_ON_ERROR", itemValue: "VARCHAR2", itemDesc: "자동 target 일부 실패 시 계속 실행 여부", itemDefault: "Y" },
-                        { itemName: "P_RUN_SOURCE_TYPE", itemValue: "VARCHAR2", itemDesc: "실행 출처 구분(DATA_WORK/FLOW_WORK)", itemDefault: runSourceType },
-                        { itemName: "P_RUN_ID", itemValue: "NUMBER", itemDesc: "시나리오 공용 DATA_WORK 실행 ID", itemDefault: runId }
+                        { itemName: "P_TARGET_OWNER", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescTargetOwner", "Target table owner"), itemDefault: targetOwner },
+                        { itemName: "P_TARGET_TABLE", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescTargetTable", "Target table name"), itemDefault: targetTable },
+                        { itemName: "P_TARGET_COLUMN", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescTargetColumn", "Dependent variable column"), itemDefault: "(auto)" },
+                        { itemName: "P_MAX_FEATURES", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMaxFeatures", "Maximum selected feature count"), itemDefault: "10" },
+                        { itemName: "P_SAMPLE_ROWS", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescSampleRows", "Maximum analysis sample rows"), itemDefault: "100000" },
+                        { itemName: "P_ALPHA", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescAlpha", "LASSO alpha. Leave blank for cross-validation."), itemDefault: "" },
+                        { itemName: "P_MAX_AUTO_TARGETS", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMaxAutoTargets", "Maximum automatic target count"), itemDefault: "10" },
+                        { itemName: "P_CONTINUE_ON_ERROR", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescContinueOnError", "Continue when some automatic targets fail"), itemDefault: "Y" },
+                        { itemName: "P_RUN_SOURCE_TYPE", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescRunSourceType", "Run source type (DATA_WORK/FLOW_WORK)"), itemDefault: runSourceType },
+                        { itemName: "P_RUN_ID", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescRunId", "Shared DATA_WORK run ID for the scenario"), itemDefault: runId }
                     ]
                 },
                 SYMBOLIC_REGRESSION_RULE: {
@@ -1119,18 +1142,18 @@
                     endpoint: "/api/mlAnalysis/symbolic-regression-rule",
                     resultTable: "INIT$_TB_SYMBOLIC_RULE",
                     params: [
-                        { itemName: "P_TARGET_OWNER", itemValue: "VARCHAR2", itemDesc: "분석 대상 테이블 계정", itemDefault: targetOwner },
-                        { itemName: "P_TARGET_TABLE", itemValue: "VARCHAR2", itemDesc: "분석 대상 테이블명", itemDefault: targetTable },
-                        { itemName: "P_TARGET_COLUMN", itemValue: "VARCHAR2", itemDesc: "종속변수 컬럼명", itemDefault: "(auto)" },
-                        { itemName: "P_MAX_FEATURES", itemValue: "NUMBER", itemDesc: "Symbolic Regression 입력 독립변수 최대 수", itemDefault: "10" },
-                        { itemName: "P_SAMPLE_ROWS", itemValue: "NUMBER", itemDesc: "분석 샘플 최대 행 수", itemDefault: "50000" },
-                        { itemName: "P_MAX_ITERATIONS", itemValue: "NUMBER", itemDesc: "Symbolic 탐색 최대 반복 수", itemDefault: "10000" },
-                        { itemName: "P_USE_PYSR", itemValue: "VARCHAR2", itemDesc: "PySR 사용 여부(Y/N). N이면 polynomial LASSO fallback 사용", itemDefault: "N" },
-                        { itemName: "P_MIN_R2_SCORE", itemValue: "NUMBER", itemDesc: "Symbolic Regression에 사용할 LASSO 최소 R2 점수", itemDefault: "0.7" },
-                        { itemName: "P_MAX_AUTO_TARGETS", itemValue: "NUMBER", itemDesc: "자동 target 최대 개수", itemDefault: "10" },
-                        { itemName: "P_CONTINUE_ON_ERROR", itemValue: "VARCHAR2", itemDesc: "자동 target 일부 실패 시 계속 실행 여부", itemDefault: "Y" },
-                        { itemName: "P_RUN_SOURCE_TYPE", itemValue: "VARCHAR2", itemDesc: "실행 출처 구분(DATA_WORK/FLOW_WORK)", itemDefault: runSourceType },
-                        { itemName: "P_RUN_ID", itemValue: "NUMBER", itemDesc: "시나리오 공용 DATA_WORK 실행 ID", itemDefault: runId }
+                        { itemName: "P_TARGET_OWNER", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescTargetOwner", "Target table owner"), itemDefault: targetOwner },
+                        { itemName: "P_TARGET_TABLE", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescTargetTable", "Target table name"), itemDefault: targetTable },
+                        { itemName: "P_TARGET_COLUMN", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescTargetColumn", "Dependent variable column"), itemDefault: "(auto)" },
+                        { itemName: "P_MAX_FEATURES", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescSymbolicMaxFeatures", "Maximum Symbolic Regression input feature count"), itemDefault: "10" },
+                        { itemName: "P_SAMPLE_ROWS", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescSampleRows", "Maximum analysis sample rows"), itemDefault: "50000" },
+                        { itemName: "P_MAX_ITERATIONS", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMaxIterations", "Maximum Symbolic search iterations"), itemDefault: "10000" },
+                        { itemName: "P_USE_PYSR", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescUsePysr", "Use PySR (Y/N). N uses polynomial LASSO fallback."), itemDefault: "N" },
+                        { itemName: "P_MIN_R2_SCORE", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMinR2Score", "Minimum LASSO R2 score for Symbolic Regression"), itemDefault: "0.7" },
+                        { itemName: "P_MAX_AUTO_TARGETS", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMaxAutoTargets", "Maximum automatic target count"), itemDefault: "10" },
+                        { itemName: "P_CONTINUE_ON_ERROR", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescContinueOnError", "Continue when some automatic targets fail"), itemDefault: "Y" },
+                        { itemName: "P_RUN_SOURCE_TYPE", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescRunSourceType", "Run source type (DATA_WORK/FLOW_WORK)"), itemDefault: runSourceType },
+                        { itemName: "P_RUN_ID", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescRunId", "Shared DATA_WORK run ID for the scenario"), itemDefault: runId }
                     ]
                 }
             };
@@ -1210,7 +1233,7 @@
         async loadParameters(objectId, options = {}) {
             const generateAfterLoad = options.generateAfterLoad !== false;
             const container = getContainerEl(`#parameterGrid-${PAGE_CODE}`);
-            if (container) container.innerHTML = `<div class="table-empty">Loading parameters...</div>`;
+            if (container) container.innerHTML = `<div class="table-empty">${this.escapeHtml(this.getLabel("loadingParameters") || "Loading parameters...")}</div>`;
 
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/executable-object/${objectId}/parameters`, { method: "GET", showLoading: false });
@@ -1231,7 +1254,7 @@
 
         async loadOmlParameters(resourceId) {
             const container = getContainerEl(`#parameterGrid-${PAGE_CODE}`);
-            if (container) container.innerHTML = `<div class="table-empty">Loading OML4Py parameters...</div>`;
+            if (container) container.innerHTML = `<div class="table-empty">${this.escapeHtml(this.getLabel("loadingOmlParameters") || "Loading OML4Py parameters...")}</div>`;
 
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/oml-resource/${resourceId}/parameters`, { method: "GET", showLoading: false });
@@ -1265,7 +1288,7 @@
 
         async loadWebApiParameters(resourceId) {
             const container = getContainerEl(`#parameterGrid-${PAGE_CODE}`);
-            if (container) container.innerHTML = `<div class="table-empty">Loading Python API parameters...</div>`;
+            if (container) container.innerHTML = `<div class="table-empty">${this.escapeHtml(this.getLabel("loadingPythonApiParameters") || "Loading Python API parameters...")}</div>`;
 
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/oml-resource/${resourceId}/parameters`, { method: "GET", showLoading: false });
@@ -1372,10 +1395,10 @@
             if (!this.parameters.length) {
                 const sourceType = String(this.currentJob?.execSourceType || "DB_OBJECT").toUpperCase();
                 const emptyMessage = sourceType === "WEB_API"
-                    ? "No registered parameters. Check M90002 Python API resource registration."
+                    ? (this.getLabel("noRegisteredPythonApiParameters") || "No registered parameters. Check M90002 Python API resource registration.")
                     : sourceType === "OML_PYTHON"
-                    ? "No registered parameters. Check M90002 OML4Py resource registration."
-                    : "No registered parameters. Check M90001 object detail registration.";
+                    ? (this.getLabel("noRegisteredOmlParameters") || "No registered parameters. Check M90002 OML4Py resource registration.")
+                    : (this.getLabel("noRegisteredObjectParameters") || "No registered parameters. Check M90001 object detail registration.");
                 container.innerHTML = `<div class="table-empty">${this.escapeHtml(emptyMessage)}</div>${this.renderListFooter(0)}`;
                 return;
             }
@@ -1561,7 +1584,7 @@
                 });
                 await this.applyJob(json.data || {});
             } catch (error) {
-                alert(error.message || "Job load failed.");
+                alert(this.getDisplayMessage(error.message || "Job load failed."));
             }
         },
 
@@ -1737,18 +1760,18 @@
             const tableField = getContainerEl(`#resultTable-${PAGE_CODE}`);
             const labels = {
                 N: {
-                    createTitle: "Result Use",
-                    tableTitle: "Result Table",
+                    createTitle: this.getLabel("resultUse") || "Result Use",
+                    tableTitle: this.getLabel("resultTable") || "Result Table",
                     placeholder: "RESULT_TABLE"
                 },
                 T: {
-                    createTitle: "Result Table Create",
-                    tableTitle: "Result Table",
+                    createTitle: this.getLabel("resultTableCreate") || "Result Table Create",
+                    tableTitle: this.getLabel("resultTable") || "Result Table",
                     placeholder: "RESULT_TABLE"
                 },
                 M: {
-                    createTitle: "Result Model Create",
-                    tableTitle: "Result Model",
+                    createTitle: this.getLabel("resultModelCreate") || "Result Model Create",
+                    tableTitle: this.getLabel("resultModel") || "Result Model",
                     placeholder: "MODEL_NAME"
                 }
             };
@@ -1879,65 +1902,72 @@
             const helpTitle = getContainerEl(`#plsqlHelpTitle-${PAGE_CODE}`);
             const helpContent = getContainerEl(`#scriptHelpContent-${PAGE_CODE}`);
 
-            if (title) title.textContent = isWebApi ? "Generated Web API spec" : (isOml ? "Generated OML SQL" : (this.getLabel("generatedScript") || "Generated PL/SQL"));
-            if (generateLabel) generateLabel.textContent = isWebApi ? "Generate API spec" : (isOml ? "Generate OML SQL" : (this.getLabel("generateScript") || "Generate PL/SQL"));
-            if (helpButton) helpButton.setAttribute("title", isWebApi ? "WAS Python API rules" : (isOml ? "OML4Py SQL API rules" : "PL/SQL bind variable rules"));
-            if (helpTitle) helpTitle.textContent = isWebApi ? "WAS Python API 실행 규칙" : (isOml ? "OML4Py SQL API 실행 규칙" : "PL/SQL 바인드 변수 규칙");
+            const scriptTitle = isWebApi
+                ? (this.getLabel("generatedWebApiSpec") || "Generated Web API spec")
+                : (isOml ? (this.getLabel("generatedOmlSql") || "Generated OML SQL") : (this.getLabel("generatedScript") || "Generated PL/SQL"));
+            const generateText = isWebApi
+                ? (this.getLabel("generateApiSpec") || "Generate API spec")
+                : (isOml ? (this.getLabel("generateOmlSql") || "Generate OML SQL") : (this.getLabel("generateScript") || "Generate PL/SQL"));
+            const helpTitleText = isWebApi
+                ? (this.getLabel("webApiRulesTitle") || "WAS Python API rules")
+                : (isOml ? (this.getLabel("omlSqlRulesTitle") || "OML4Py SQL API rules") : (this.getLabel("plsqlBindRulesTitle") || "PL/SQL bind variable rules"));
+            if (title) title.textContent = scriptTitle;
+            if (generateLabel) generateLabel.textContent = generateText;
+            if (helpButton) helpButton.setAttribute("title", helpTitleText);
+            if (helpTitle) helpTitle.textContent = helpTitleText;
             if (!helpContent) return;
 
-            helpContent.innerHTML = isWebApi
-                ? `
-                    <p>Web API 선택 시 실행은 Oracle PL/SQL이 아니라 WAS 서버의 Python 분석 API로 위임됩니다.</p>
+            const webApiHelpHtml = `
+                    <p>When Web API is selected, execution is delegated to the WAS Python analysis API instead of Oracle PL/SQL.</p>
                     <ul>
-                        <li><strong>LASSO Feature Select</strong>: 연속형 상관분석 결과를 후보로 사용하고, 종속변수에 영향이 큰 독립변수를 <code>INIT$_TB_LASSO_FEATURE</code>에 적재합니다.</li>
-                        <li><strong>Symbolic Regression Rule</strong>: LASSO에서 선택된 상위 5~10개 변수만 사용해 수식 규칙을 탐색하고 <code>INIT$_TB_SYMBOLIC_RULE</code>에 적재합니다.</li>
-                        <li><strong>Symbolic Rule Violation</strong>: 수식 규칙의 예측값 대비 허용 오차율을 벗어난 행은 <code>INIT$_TB_SYMBOLIC_RULE_VIOLATION</code>에서 확인합니다.</li>
-                        <li><strong>주의</strong>: Symbolic Regression은 계산량이 크므로 <code>P_MAX_FEATURES</code>는 10 이하로 제한됩니다.</li>
+                        <li><strong>LASSO Feature Select</strong>: Uses continuous correlation results as candidates and stores influential features in <code>INIT$_TB_LASSO_FEATURE</code>.</li>
+                        <li><strong>Symbolic Regression Rule</strong>: Searches formula rules from the top selected LASSO variables and stores them in <code>INIT$_TB_SYMBOLIC_RULE</code>.</li>
+                        <li><strong>Symbolic Rule Violation</strong>: Rows outside the allowed error rate are checked in <code>INIT$_TB_SYMBOLIC_RULE_VIOLATION</code>.</li>
+                        <li><strong>Note</strong>: Symbolic Regression is compute-heavy, so <code>P_MAX_FEATURES</code> is limited to 10 or less.</li>
                     </ul>
-                `
-                : isOml
-                ? `
-                    <p>OML Python 선택 시 생성되는 스크립트는 PL/SQL 블록이 아니라 Autonomous Database Embedded Python Execution SQL API 호출 SQL입니다.</p>
+                `;
+            const omlHelpHtml = `
+                    <p>When OML Python is selected, the generated script is an Autonomous Database Embedded Python Execution SQL API call, not a PL/SQL block.</p>
                     <ul>
-                        <li><strong>실행 함수</strong>: 등록된 OML4Py Resource의 Exec Method에 따라 <code>pyqEval</code>, <code>pyqTableEval</code>, <code>pyqRowEval</code> 같은 SQL API를 사용합니다.</li>
-                        <li><strong>입력 데이터</strong>: 테이블 입력 방식은 현재 Owner/Table을 <code>CURSOR(SELECT * FROM OWNER.TABLE)</code> 형태로 전달합니다.</li>
-                        <li><strong>Parameter List</strong>: 파라미터는 <code>par_lst =&gt; JSON_OBJECT(... RETURNING CLOB)</code>로 생성됩니다. 기본값이 있으면 값이 직접 들어가고, 기본값이 없으면 <code>:abcDef</code> 형식의 런타임 바인드 변수로 생성됩니다.</li>
-                        <li><strong>Result Table Create</strong>: T이면 생성 SQL이 <code>CREATE TABLE OWNER.TABLE AS SELECT ...</code> 형태로 바뀌고, M이면 결과명을 모델명으로 사용합니다.</li>
-                        <li><strong>Run saved work / Queue saved work</strong>: 저장된 Parameter List와 저장된 Job 설정을 실행합니다. <strong>Test current draft</strong>는 현재 화면값을 저장하지 않고 1회 실행합니다.</li>
+                        <li><strong>Execution function</strong>: Uses SQL APIs such as <code>pyqEval</code>, <code>pyqTableEval</code>, and <code>pyqRowEval</code> based on the registered OML4Py resource Exec Method.</li>
+                        <li><strong>Input data</strong>: Table input passes the current Owner/Table as <code>CURSOR(SELECT * FROM OWNER.TABLE)</code>.</li>
+                        <li><strong>Parameter List</strong>: Parameters are generated as <code>par_lst =&gt; JSON_OBJECT(... RETURNING CLOB)</code>. Defaults are inserted directly, and empty defaults become runtime bind variables such as <code>:abcDef</code>.</li>
+                        <li><strong>Result Table Create</strong>: T changes the SQL to <code>CREATE TABLE OWNER.TABLE AS SELECT ...</code>, and M uses the result name as the model name.</li>
+                        <li><strong>Run saved work / Queue saved work</strong>: Runs the saved Parameter List and saved Job settings. <strong>Test current draft</strong> runs the current screen values once without saving.</li>
                     </ul>
-                `
-                : `
-                    <p class="data-help-summary">Generate PL/SQL은 Parameter List의 Default 값을 먼저 확인한 뒤, 필요한 바인드 변수를 자동으로 만듭니다.</p>
+                `;
+            const plsqlHelpHtml = `
+                    <p class="data-help-summary">Generate PL/SQL checks Parameter List defaults first and automatically creates required bind variables.</p>
                     <div class="data-help-flow">
                         <section class="data-help-step">
-                            <strong>1. Default에 <code>:</code>가 있으면 그대로 사용</strong>
+                            <strong>1. Keep Default values that already contain <code>:</code></strong>
                             <span><code>:INIT$TargetOwner</code> -> <code>P_TARGET_OWNER =&gt; :INIT$TargetOwner</code></span>
                         </section>
                         <section class="data-help-step">
-                            <strong>2. Default에 <code>:</code>가 없으면 Parameter명을 camelCase로 변환</strong>
+                            <strong>2. Convert Parameter names to camelCase when Default has no <code>:</code></strong>
                             <span><code>P_DYNAMIC_MODEL_NAME</code> -> <code>:pDynamicModelName</code></span>
                         </section>
                         <section class="data-help-step">
-                            <strong>3. 실행 시 실제 값으로 바인딩</strong>
-                            <span>Run saved work / Queue saved work는 저장된 Work를 실행하고, Test current draft는 현재 화면값을 저장하지 않고 1회 실행합니다.</span>
+                            <strong>3. Bind runtime values during execution</strong>
+                            <span>Run saved work / Queue saved work executes saved Work, while Test current draft runs the current screen values once without saving.</span>
                         </section>
                         <section class="data-help-step">
-                            <strong>4. Result 정보는 선택된 등록 오브젝트 기준으로 동기화</strong>
-                            <span><code>T</code>는 M90001에 등록된 Result Table을 사용하고, <code>M</code>은 화면의 Result Model 입력값을 사용합니다.</span>
+                            <strong>4. Sync Result information from the selected registered object</strong>
+                            <span><code>T</code> uses the Result Table registered in M90001, and <code>M</code> uses the Result Model value on this screen.</span>
                         </section>
                     </div>
-                    <h3>자동 예약 변수</h3>
+                    <h3>Automatic reserved variables</h3>
                     <div class="data-help-token-grid">
-                        <span><code>:INIT$TargetOwner</code><small>현재 Target Owner</small></span>
-                        <span><code>:INIT$TargetTable</code><small>현재 Target Table</small></span>
-                        <span><code>:INIT$ResultOwner</code><small>현재 Result Owner</small></span>
-                        <span><code>:INIT$ResultTable</code><small>현재 Result Table 또는 Result Model 입력값</small></span>
-                        <span><code>:INIT$ResultModelName</code><small>Result Model 입력값을 기본값으로 사용</small></span>
+                        <span><code>:INIT$TargetOwner</code><small>Current Target Owner</small></span>
+                        <span><code>:INIT$TargetTable</code><small>Current Target Table</small></span>
+                        <span><code>:INIT$ResultOwner</code><small>Current Result Owner</small></span>
+                        <span><code>:INIT$ResultTable</code><small>Current Result Table or Result Model value</small></span>
+                        <span><code>:INIT$ResultModelName</code><small>Uses the Result Model value as the default</small></span>
                         <span><code>:INIT$RunSourceType</code><small>DATA_WORK/FLOW_WORK</small></span>
-                        <span><code>:INIT$RunId</code><small><code>(auto)</code>면 자동 발급, 숫자면 수동 실행 ID</small></span>
+                        <span><code>:INIT$RunId</code><small>Auto-issued when <code>(auto)</code>, manual execution ID when numeric</small></span>
                     </div>
-                    <p class="data-help-summary">Result Table Create가 <code>T</code>이면 Result Owner/Table은 등록값으로 고정됩니다. <code>M</code>이면 Result Owner와 Result Model을 사용자가 수정할 수 있고, <code>:INIT$ResultModelName</code>은 그 Result Model 값을 기본값으로 표시합니다.</p>
-                    <h3>생성 예시</h3>
+                    <p class="data-help-summary">When Result Table Create is <code>T</code>, Result Owner/Table are fixed from the registered values. When it is <code>M</code>, users can edit Result Owner and Result Model, and <code>:INIT$ResultModelName</code> uses that Result Model value by default.</p>
+                    <h3>Generated example</h3>
                     <pre class="data-help-code"><code>P_TARGET_OWNER       =&gt; :INIT$TargetOwner
 P_TARGET_TABLE       =&gt; :INIT$TargetTable
 P_MODEL_NAME         =&gt; :INIT$ResultModelName
@@ -1946,6 +1976,9 @@ P_RUN_ID             =&gt; :INIT$RunId
 P_DYNAMIC_MODEL_NAME =&gt; :pDynamicModelName
 P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                 `;
+            helpContent.innerHTML = isWebApi
+                ? this.getMessage("webApiHelpHtml", webApiHelpHtml)
+                : (isOml ? this.getMessage("omlHelpHtml", omlHelpHtml) : this.getMessage("plsqlHelpHtml", plsqlHelpHtml));
         },
 
         toggleScriptWrapMode() {
@@ -1964,7 +1997,9 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
             if (button) {
                 button.classList.toggle("is-active", enabled);
                 button.setAttribute("aria-pressed", String(enabled));
-                button.setAttribute("title", enabled ? "표시 모드: 자동 줄바꿈" : "표시 모드: 한 줄 표시");
+                button.setAttribute("title", enabled
+                    ? (this.getLabel("scriptWrapTitleOn") || "Display mode: soft wrap")
+                    : (this.getLabel("scriptWrapTitleOff") || "Display mode: single line"));
                 const icon = button.querySelector("i");
                 if (icon) icon.className = enabled ? "fas fa-align-justify" : "fas fa-align-left";
             }
@@ -1973,25 +2008,67 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
         applyUiLabels() {
             const container = document.getElementById(`container-${PAGE_CODE}`);
             if (!container) return;
+            const defaultLabels = {
+                testDraft: "Test",
+                runNow: "Run",
+                queueBatch: "Queue"
+            };
 
             container.querySelectorAll("[data-label-key]").forEach((element) => {
-                const label = this.getLabel(element.dataset.labelKey);
-                if (label) element.textContent = label;
+                const key = element.dataset.labelKey;
+                if (!this.hasLabel(key) && !Object.prototype.hasOwnProperty.call(defaultLabels, key)) return;
+                const label = this.hasLabel(key) ? this.getLabel(key) : defaultLabels[key];
+                element.textContent = label ?? "";
             });
 
             container.querySelectorAll("[data-title-key]").forEach((element) => {
+                if (!this.hasLabel(element.dataset.titleKey)) return;
                 const label = this.getLabel(element.dataset.titleKey);
-                if (label) element.setAttribute("title", label);
+                element.setAttribute("title", label ?? "");
             });
 
             container.querySelectorAll("[data-placeholder-key]").forEach((element) => {
+                if (!this.hasLabel(element.dataset.placeholderKey)) return;
                 const label = this.getLabel(element.dataset.placeholderKey);
-                if (label) element.setAttribute("placeholder", label);
+                element.setAttribute("placeholder", label ?? "");
             });
         },
 
+        hasLabel(key) {
+            return Object.prototype.hasOwnProperty.call(WORK_UI_LABELS, key);
+        },
+
         getLabel(key) {
-            return WORK_UI_LABELS[key] || "";
+            return this.hasLabel(key) ? WORK_UI_LABELS[key] : "";
+        },
+
+        getMessages() {
+            const pack = window[`${PAGE_CODE}_PAGE_I18N`] || {};
+            return pack && typeof pack.messages === "object" && !Array.isArray(pack.messages)
+                ? pack.messages
+                : {};
+        },
+
+        getMessage(key, fallback = "", values = {}) {
+            const messages = this.getMessages();
+            const template = Object.prototype.hasOwnProperty.call(messages, key)
+                ? messages[key]
+                : fallback;
+            return this.formatMessageTemplate(template, values);
+        },
+
+        getDisplayMessage(message) {
+            const text = String(message ?? "");
+            if (!text) return "";
+            return window.CommonMessage?.translateMessage?.(text)
+                || window.I18nManager?.translateMessage?.(text)
+                || text;
+        },
+
+        formatMessageTemplate(template, values = {}) {
+            return String(template ?? "").replace(/\{([A-Za-z0-9_]+)\}/g, (match, name) => (
+                Object.prototype.hasOwnProperty.call(values, name) ? String(values[name] ?? "") : match
+            ));
         },
 
         toggleWorkContext(event) {
@@ -2030,10 +2107,20 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
             const project = this.contextProjects.find((row) => String(row.PROJECT_ID) === String(this.selectedProjectId));
             const scenario = this.contextScenarios.find((row) => String(row.SCENARIO_ID) === String(this.selectedScenarioId));
             const table = this.getSelectedScenarioTable();
+            const summary = getContainerEl(`#workContextSummary-${PAGE_CODE}`);
+            if (!project && !scenario && !table) {
+                if (summary) {
+                    summary.dataset.labelKey = "contextSummaryEmpty";
+                    summary.textContent = this.getLabel("contextSummaryEmpty") || "No context selected.";
+                }
+                this.updateJobsTitle(scenario);
+                return;
+            }
+            if (summary) delete summary.dataset.labelKey;
             const parts = [
-                project ? `Project: ${CommonUtils.formatOwnerScopedName(project, project.PROJECT_NAME || project.PROJECT_CODE || "-")}` : "Project: -",
-                scenario ? `Scenario: ${CommonUtils.formatOwnerScopedName(scenario, scenario.SCENARIO_NAME || scenario.SCENARIO_CODE || "-")}` : "Scenario: -",
-                table ? `Table: ${table.OWNER_NAME || "-"}.${table.TABLE_NAME || "-"}` : "Table: -"
+                project ? `${this.getLabel("contextSummaryProject") || "Project"}: ${CommonUtils.formatOwnerScopedName(project, project.PROJECT_NAME || project.PROJECT_CODE || "-")}` : `${this.getLabel("contextSummaryProject") || "Project"}: -`,
+                scenario ? `${this.getLabel("contextSummaryScenario") || "Scenario"}: ${CommonUtils.formatOwnerScopedName(scenario, scenario.SCENARIO_NAME || scenario.SCENARIO_CODE || "-")}` : `${this.getLabel("contextSummaryScenario") || "Scenario"}: -`,
+                table ? `${this.getLabel("contextSummaryTable") || "Table"}: ${table.OWNER_NAME || "-"}.${table.TABLE_NAME || "-"}` : `${this.getLabel("contextSummaryTable") || "Table"}: -`
             ];
             this.setText(`#workContextSummary-${PAGE_CODE}`, parts.join(" | "));
             this.updateJobsTitle(scenario);
@@ -2046,7 +2133,7 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
 
         async saveJob(showAlert = true) {
             if (this.isJobExecutionActive()) {
-                alert("A job is running. Please wait until execution finishes.");
+                alert(this.getDisplayMessage("A job is running. Please wait until execution finishes."));
                 return null;
             }
             if (!this.ensureJobReady(false)) return null;
@@ -2067,30 +2154,34 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                 });
                 this.jobs = Array.isArray(json.list) ? json.list : this.jobs;
                 await this.applyJob(json.data || {});
-                if (showAlert) alert("Work saved.");
+                if (showAlert) alert(this.getDisplayMessage("Work saved."));
                 return json.data || null;
             } catch (error) {
-                alert(error.message || "Work save failed.");
+                alert(this.getDisplayMessage(error.message || "Work save failed."));
                 return null;
             }
         },
 
         async deleteJob() {
             if (this.isJobExecutionActive()) {
-                alert("A job is running. Please wait until execution finishes.");
+                alert(this.getDisplayMessage("A job is running. Please wait until execution finishes."));
                 return;
             }
             const jobId = this.currentJob?.profileJobId || this.selectedJobId;
             if (!jobId) {
-                alert("Select a saved job first.\n저장된 작업을 먼저 선택하세요.");
+                alert(this.getDisplayMessage(this.getMessage("selectSavedJobFirst", "Select a saved job first.")));
                 return;
             }
             if (!this.selectedProjectId || !this.selectedScenarioId) {
-                alert("Select project and scenario first.\n프로젝트와 시나리오를 먼저 선택하세요.");
+                alert(this.getDisplayMessage(this.getMessage("selectProjectScenarioFirst", "Select project and scenario first.")));
                 return;
             }
             const jobName = this.currentJob?.jobName || `Job #${jobId}`;
-            if (!(await CommonMessage.confirm(`Delete ${jobName}?\nRun history for this job will also be deleted.\n${jobName} 작업을 삭제할까요?\n이 작업의 실행 이력도 함께 삭제됩니다.`))) return;
+            if (!(await CommonMessage.confirm(this.getMessage(
+                "confirmDeleteJob",
+                "Delete {jobName}?\nRun history for this job will also be deleted.",
+                { jobName }
+            )))) return;
 
             try {
                 const params = new URLSearchParams({
@@ -2109,20 +2200,20 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                     this.newJob();
                 }
                 await this.loadRunHistory(false);
-                alert(json.message || "Job deleted.");
+                alert(this.getDisplayMessage(json.message || "Job deleted."));
             } catch (error) {
-                alert(error.message || "Job delete failed.");
+                alert(this.getDisplayMessage(error.message || "Job delete failed."));
             }
         },
 
         async runJob(batch = false) {
             if (this.isJobExecutionActive()) {
-                alert("A job is already running. Please wait until execution finishes.");
+                alert(this.getDisplayMessage("A job is already running. Please wait until execution finishes."));
                 return;
             }
             const savedJob = this.getSavedJobSnapshot();
             if (!savedJob?.profileJobId) {
-                alert("Save work first, then run the saved work.");
+                alert(this.getDisplayMessage("Save work first, then run the saved work."));
                 return;
             }
             const message = batch
@@ -2138,8 +2229,8 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                 systemBindJob: savedJob,
                 dataRunId,
                 dialogIntro: isWebApi
-                    ? "저장된 API Parameter List 기준으로 이번 실행에 사용할 값을 확인합니다. 변경한 값만 이번 실행에 임시 적용됩니다."
-                    : "저장된 PL/SQL과 저장된 Job 설정을 실행합니다. 아래 Runtime Bind 값만 이번 실행에 임시 적용됩니다."
+                    ? this.getMessage("runSavedWebApiIntro", "Review the saved API Parameter List values for this execution. Changed values are applied only to this run.")
+                    : this.getMessage("runSavedPlsqlIntro", "Runs saved PL/SQL and saved Job settings. Runtime Bind values below are applied only to this run.")
             });
             if (runtimeBindValues === null) return;
             const payload = {
@@ -2157,7 +2248,7 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                     showLoading: false
                 });
                 this.setJobRunState(jobId, batch ? "QUEUED" : "SUCCESS", false);
-                alert(json.message || "Job submitted.");
+                alert(this.getDisplayMessage(json.message || "Job submitted."));
                 await this.loadJobs(false);
                 await this.loadRunHistory(false);
                 if (json.profileJobId) {
@@ -2165,17 +2256,17 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                 }
             } catch (error) {
                 this.setJobRunState(jobId, "FAILED", false);
-                alert(error.message || "Job run failed.");
+                alert(this.getDisplayMessage(error.message || "Job run failed."));
             }
         },
 
         async testCurrentDraft() {
             if (this.isJobExecutionActive()) {
-                alert("A job is already running. Please wait until execution finishes.");
+                alert(this.getDisplayMessage("A job is already running. Please wait until execution finishes."));
                 return;
             }
             if (!this.currentJob?.profileJobId) {
-                alert("Save work once to create a job, then test draft changes without saving them.");
+                alert(this.getDisplayMessage("Save work once to create a job, then test draft changes without saving them."));
                 return;
             }
             if (!this.ensureJobReady(false)) return;
@@ -2191,8 +2282,8 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                 systemBindJob: null,
                 dataRunId,
                 dialogIntro: isWebApi
-                    ? "현재 화면의 API Parameter List 기준으로 1회 테스트 실행할 값을 확인합니다. 변경한 값만 이번 테스트에 적용됩니다."
-                    : "현재 화면의 Job 설정과 PL/SQL을 저장하지 않고 1회 테스트 실행합니다. Runtime Bind 값은 이번 테스트에만 적용됩니다."
+                    ? this.getMessage("testDraftWebApiIntro", "Review the current API Parameter List values for one test run. Changed values apply only to this test.")
+                    : this.getMessage("testDraftPlsqlIntro", "Runs the current Job settings and PL/SQL once without saving. Runtime Bind values apply only to this test.")
             });
             if (runtimeBindValues === null) return;
 
@@ -2211,12 +2302,12 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                     showLoading: false
                 });
                 this.setJobRunState(jobId, "DRAFT_TEST", false);
-                alert(json.message || "Draft test executed.");
+                alert(this.getDisplayMessage(json.message || "Draft test executed."));
                 await this.loadJobs(false);
                 await this.loadRunHistory(false);
             } catch (error) {
                 this.setJobRunState(jobId, "FAILED", false);
-                alert(error.message || "Draft test failed.");
+                alert(this.getDisplayMessage(error.message || "Draft test failed."));
             }
         },
 
@@ -2228,7 +2319,7 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
             if (!this.ensureWorkContextSelected()) return;
             const runnableJobs = (this.jobs || []).filter((job) => job.USE_YN !== "N" && job.PROFILE_JOB_ID);
             if (!runnableJobs.length) {
-                alert("No enabled saved jobs to execute.");
+                alert(this.getDisplayMessage("No enabled saved jobs to execute."));
                 return;
             }
             const message = batch
@@ -2280,7 +2371,7 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
             }
 
             const actionText = batch ? "queued" : "executed";
-            alert(`${summaries.length} jobs ${actionText}. ${failedCount} failed.`);
+            alert(this.getDisplayMessage(`${summaries.length} jobs ${actionText}. ${failedCount} failed.`));
             await this.loadJobs();
             await this.loadRunHistory();
             if (this.activeTab === "history") {
@@ -2537,16 +2628,16 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
         ensureJobReady(requireObject) {
             if (!this.ensureWorkContextSelected()) return false;
             if (!this.currentJob?.ownerName || !this.currentJob?.tableName) {
-                alert("Select a scenario table first.");
+                alert(this.getDisplayMessage("Select a scenario table first."));
                 return false;
             }
             if (!getContainerEl(`#workJobName-${PAGE_CODE}`)?.value.trim()) {
-                alert("Job Name is required.");
+                alert(this.getDisplayMessage("Job Name is required."));
                 getContainerEl(`#workJobName-${PAGE_CODE}`)?.focus();
                 return false;
             }
             if (!getContainerEl(`#workJobGroup-${PAGE_CODE}`)?.value.trim()) {
-                alert("Job Group is required.");
+                alert(this.getDisplayMessage("Job Group is required."));
                 getContainerEl(`#workJobGroup-${PAGE_CODE}`)?.focus();
                 return false;
             }
@@ -2562,32 +2653,32 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                     || this.currentJob?.execObjectId
                     || this.currentJob?.execObjectName
                     || this.currentJob?.execObjectLabel
-                );
+            );
             if (requireObject && !hasExecutableObject) {
-                alert(isWebApi
-                    ? "Web API method is required.\nWeb API 실행 방법은 필수입니다."
+                alert(this.getDisplayMessage(isWebApi
+                    ? this.getMessage("webApiMethodRequired", "Web API method is required.")
                     : isOml
-                    ? "OML4Py Resource is required.\nOML4Py 리소스는 필수입니다."
-                    : "Registered Model / Procedure is required.\n등록된 모델/프로시저는 필수입니다.");
+                    ? this.getMessage("omlResourceRequired", "OML4Py Resource is required.")
+                    : this.getMessage("registeredObjectRequired", "Registered Model / Procedure is required.")));
                 getContainerEl(isWebApi ? `#webApiMethod-${PAGE_CODE}` : (isOml ? `#omlResource-${PAGE_CODE}` : `#execObject-${PAGE_CODE}`))?.focus();
                 return false;
             }
             if (requireObject && !isWebApi && !getContainerEl(`#execPlsqlEditor-${PAGE_CODE}`)?.value.trim()) {
-                alert(isOml
-                    ? "Executable OML SQL is required. Generate or enter the SQL first.\n실행할 OML SQL이 필요합니다. SQL을 생성하거나 직접 입력해 주세요."
-                    : "Executable PL/SQL script is required. Generate or enter the script first.\n실행할 PL/SQL 스크립트가 필요합니다. 스크립트를 생성하거나 직접 입력해 주세요.");
+                alert(this.getDisplayMessage(isOml
+                    ? this.getMessage("executableOmlSqlRequired", "Executable OML SQL is required. Generate or enter the SQL first.")
+                    : this.getMessage("executablePlsqlRequired", "Executable PL/SQL script is required. Generate or enter the script first.")));
                 getContainerEl(`#execPlsqlEditor-${PAGE_CODE}`)?.focus();
                 return false;
             }
             const resultCreateYn = this.normalizeResultCreateMode(getContainerEl(`#resultCreateYn-${PAGE_CODE}`)?.value || "N");
             if (this.isResultObjectMode(resultCreateYn)) {
                 if (!getContainerEl(`#resultOwner-${PAGE_CODE}`)?.value.trim()) {
-                    alert("Result Owner is required when Result Table Create is T or M.");
+                    alert(this.getDisplayMessage("Result Owner is required when Result Table Create is T or M."));
                     getContainerEl(`#resultOwner-${PAGE_CODE}`)?.focus();
                     return false;
                 }
                 if (!getContainerEl(`#resultTable-${PAGE_CODE}`)?.value.trim()) {
-                    alert("Result Table is required when Result Table Create is T or M.");
+                    alert(this.getDisplayMessage("Result Table is required when Result Table Create is T or M."));
                     getContainerEl(`#resultTable-${PAGE_CODE}`)?.focus();
                     return false;
                 }
@@ -2602,9 +2693,9 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
             const isWebApi = String(execSourceType).toUpperCase() === "WEB_API";
             if (isWebApi) return true;
             if (!editor?.value.trim()) {
-                alert(isOml
-                    ? "Executable OML SQL is required. Generate or enter the SQL first.\n실행할 OML SQL이 필요합니다. SQL을 생성하거나 직접 입력해 주세요."
-                    : "Executable PL/SQL script is required. Generate or enter the script first.\n실행할 PL/SQL 스크립트가 필요합니다. 스크립트를 생성하거나 직접 입력해 주세요.");
+                alert(this.getDisplayMessage(isOml
+                    ? this.getMessage("executableOmlSqlRequired", "Executable OML SQL is required. Generate or enter the SQL first.")
+                    : this.getMessage("executablePlsqlRequired", "Executable PL/SQL script is required. Generate or enter the script first.")));
                 editor?.focus();
                 return false;
             }
@@ -3190,13 +3281,11 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
             if (!runId) return true;
             const currentRunId = this.getCurrentDataWorkRunId();
             if (!currentRunId || runId === currentRunId) return true;
-            return CommonMessage.confirm([
-                `Use DATA_WORK RUN_ID ${runId} for this execution?`,
-                `현재 시나리오 RUN_ID ${currentRunId} 대신 ${runId}로 실행합니다.`,
-                "",
-                "Result rows may be written to the entered DATA_WORK RUN_ID.",
-                "Continue?"
-            ].join("\n"));
+            return CommonMessage.confirm(this.getMessage(
+                "confirmManualRunIdOverwrite",
+                "Use DATA_WORK RUN_ID {runId} for this execution?\nThis replaces the current scenario RUN_ID {currentRunId} for this run.\n\nResult rows may be written to the entered DATA_WORK RUN_ID.\nContinue?",
+                { runId, currentRunId }
+            ));
         },
 
         maskSqlForBindScan(sqlText) {
@@ -3222,7 +3311,7 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
             const intro = getContainerEl(`#runtimeBindIntro-${PAGE_CODE}`);
             if (intro) {
                 intro.textContent = options.dialogIntro
-                    || "실행에 사용할 런타임 바인드 값을 확인하세요. 기본값과 예약 변수 값은 미리 채워지며 필요하면 수정할 수 있습니다.";
+                    || this.getMessage("runtimeBindIntroDefault", "Review the runtime bind values for execution. Defaults and reserved variables are prefilled and can be edited if needed.");
             }
             grid.innerHTML = bindPrompts.map((item) => `
                 <label class="data-bind-row ${this.isRuntimeRunIdPrompt(item.name) ? "data-run-bind-row" : ""}">
@@ -3631,7 +3720,7 @@ END;`;
                             onpaste="${PAGE_CODE}.handleEditableDataCellPaste(event)"
                         >
                             ${this.getPredictedTypeOptions().map((option) => `
-                                <option value="${this.escapeHtml(option)}"${String(value) === option ? " selected" : ""}>${this.escapeHtml(option)}</option>
+                                <option value="${this.escapeHtml(option.value)}"${String(value) === option.value ? " selected" : ""}>${this.escapeHtml(option.label)}</option>
                             `).join("")}
                         </select>
                     </td>
@@ -3661,17 +3750,17 @@ END;`;
 
         getPredictedTypeOptions() {
             return [
-                "",
-                "숫자형식별자",
-                "문자형식별자",
-                "숫자형범주형",
-                "순서형범주형",
-                "이산형연속형",
-                "문자형범주형",
-                "일반적범주형",
-                "숫자형연속형",
-                "단순형텍스트",
-                "기타데이터형"
+                { value: "", label: "" },
+                { value: "\uC22B\uC790\uD615\uC2DD\uBCC4\uC790", label: this.getLabel("predictedTypeNumericIdentifier") || "Numeric identifier" },
+                { value: "\uBB38\uC790\uD615\uC2DD\uBCC4\uC790", label: this.getLabel("predictedTypeTextIdentifier") || "Text identifier" },
+                { value: "\uC22B\uC790\uD615\uBC94\uC8FC\uD615", label: this.getLabel("predictedTypeNumericCategory") || "Numeric category" },
+                { value: "\uC21C\uC11C\uD615\uBC94\uC8FC\uD615", label: this.getLabel("predictedTypeOrdinalCategory") || "Ordinal category" },
+                { value: "\uC774\uC0B0\uD615\uC5F0\uC18D\uD615", label: this.getLabel("predictedTypeDiscreteContinuous") || "Discrete continuous" },
+                { value: "\uBB38\uC790\uD615\uBC94\uC8FC\uD615", label: this.getLabel("predictedTypeTextCategory") || "Text category" },
+                { value: "\uC77C\uBC18\uC801\uBC94\uC8FC\uD615", label: this.getLabel("predictedTypeGeneralCategory") || "General category" },
+                { value: "\uC22B\uC790\uD615\uC5F0\uC18D\uD615", label: this.getLabel("predictedTypeNumericContinuous") || "Numeric continuous" },
+                { value: "\uB2E8\uC21C\uD615\uD14D\uC2A4\uD2B8", label: this.getLabel("predictedTypeSimpleText") || "Simple text" },
+                { value: "\uAE30\uD0C0\uB370\uC774\uD130\uD615", label: this.getLabel("predictedTypeOtherData") || "Other data type" }
             ];
         },
 
@@ -4090,7 +4179,7 @@ END;`;
             const grid = this.gridData.sql || {};
             const rows = grid.rows || [];
             if (!rows.length) {
-                alert("No grid data to export.");
+                alert(this.getDisplayMessage("No grid data to export."));
                 return;
             }
 
@@ -4176,7 +4265,7 @@ END;`;
             }
             const targetTable = getContainerEl(`#resultTable-${PAGE_CODE}`)?.value.trim();
             if (!targetTable) {
-                alert("Result Table is required.");
+                alert(this.getDisplayMessage("Result Table is required."));
                 getContainerEl(`#resultTable-${PAGE_CODE}`)?.focus();
                 return;
             }
@@ -4195,7 +4284,7 @@ END;`;
                         profileJobId: this.currentJob?.profileJobId || null
                     }
                 });
-                alert(json.message || "SQL result table was created.");
+                alert(this.getDisplayMessage(json.message || "SQL result table was created."));
                 this.currentJob.resultOwner = json.resultOwner || resultOwner;
                 this.currentJob.resultTableName = json.tableName || targetTable;
                 this.currentJob.resultCreateYn = "T";
@@ -4204,7 +4293,7 @@ END;`;
                 await this.setResultTableSql();
                 await this.loadJobs();
             } catch (error) {
-                alert(error.message || "SQL result table save failed.");
+                alert(this.getDisplayMessage(error.message || "SQL result table save failed."));
             }
         },
 

@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="ko" data-ai-document="menu-help" data-context-priority="highest">
+<html lang="en" data-ai-document="menu-help" data-context-priority="highest">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>메뉴 도움말 - INIT Data Editing System</title>
+    <title>Menu Help - INIT Data Editing System</title>
     <meta name="ai-context-kind" content="menu-help">
     <meta name="ai-context-priority" content="highest">
     <script src="../js/cache-version-utils.js"></script>
@@ -186,14 +186,179 @@
 </head>
 <body>
     <header>
-        <h1 id="helpTitle">메뉴 도움말</h1>
-        <p id="helpSummary">도움말 정보를 불러오는 중입니다.</p>
+        <h1 id="helpTitle">Menu Help</h1>
+        <p id="helpSummary">Loading help content.</p>
         <div class="meta" id="helpMeta"></div>
     </header>
 
     <main id="helpMain" data-ai-section="menu-help"></main>
 
     <script>
+        const HELP_UI = {
+            en: {
+                language: "en",
+                helpWord: "Help",
+                loadingTitle: "Menu Help",
+                loadingSummary: "Loading help content.",
+                loadFailed: "Unable to load help content",
+                noList: "No description is registered.",
+                noDefinition: "No layout information is registered.",
+                sectionTitles: {
+                    summary: "Menu Summary",
+                    purpose: "Screen Purpose",
+                    workflow: "Default Workflow",
+                    layout: "Screen Layout",
+                    controls: "Main Buttons / Actions",
+                    aiGuidance: "Answering Guidelines",
+                    implementation: "Implementation Links",
+                    sqlPurpose: "SQL Roles",
+                    logicalData: "Logical Data Domains",
+                    publicModels: "Model / AI Resource Scope",
+                    privacy: "Privacy Rule",
+                    cache: "Current File Cache Versions"
+                },
+                optionalTitles: {
+                    deepDive: "Detailed Guide",
+                    interpretationGuide: "Result Interpretation",
+                    troubleshooting: "Common Checks",
+                    implementationNotes: "Implementation Notes"
+                },
+                meta: {
+                    menuCode: "Menu code",
+                    group: "Group",
+                    status: "Status"
+                },
+                implementation: {
+                    frontendHtml: "Screen HTML",
+                    frontendJs: "Screen JS",
+                    backendRouter: "API router",
+                    commonService: "Common service",
+                    sqlTemplate: "SQL template",
+                    noRouter: "No registered API router or planned implementation",
+                    noService: "None or handled by the screen router"
+                },
+                publicModelsFallback: "Model and AI details are described only at a public conceptual level.",
+                privacyFallback: "Help pages do not expose physical table names, internal procedure names, DB connection details, API keys, or passwords.",
+                cache: {
+                    intro: "The base version is {version}; file-specific overrides take precedence when configured.",
+                    columns: ["Type", "File", "Applied version", "Source"],
+                    unknown: "unknown",
+                    assets: {
+                        shellJs: "Shell JS",
+                        commonJs: "Common JS",
+                        menuConfig: "Menu config",
+                        menuRenderer: "Menu renderer",
+                        helpPopup: "Help popup",
+                        helpUtility: "Help utility",
+                        helpContent: "Help content",
+                        currentMenuHtml: "Current menu HTML",
+                        currentMenuJs: "Current menu JS",
+                        dataTemplateJs: "Data work template JS",
+                        flowTemplateJs: "Flow work template JS",
+                        analysisTemplateJs: "Analysis work template JS"
+                    }
+                }
+            },
+            ko: {
+                language: "ko",
+                helpWord: "도움말",
+                loadingTitle: "메뉴 도움말",
+                loadingSummary: "도움말 정보를 불러오는 중입니다.",
+                loadFailed: "도움말을 불러오지 못했습니다",
+                noList: "등록된 설명이 없습니다.",
+                noDefinition: "등록된 구성 정보가 없습니다.",
+                sectionTitles: {
+                    summary: "메뉴 요약",
+                    purpose: "화면 목적",
+                    workflow: "기본 업무 흐름",
+                    layout: "화면 구성",
+                    controls: "주요 버튼/동작",
+                    aiGuidance: "질문 답변 참고 기준",
+                    implementation: "구현 연동",
+                    sqlPurpose: "SQL 역할",
+                    logicalData: "논리 데이터 도메인",
+                    publicModels: "모델/AI 리소스 안내 범위",
+                    privacy: "비공개 원칙",
+                    cache: "현재 파일 캐시 버전"
+                },
+                optionalTitles: {
+                    deepDive: "상세 이해 가이드",
+                    interpretationGuide: "결과 해석 기준",
+                    troubleshooting: "자주 확인할 문제",
+                    implementationNotes: "구현 보충 설명"
+                },
+                meta: {
+                    menuCode: "메뉴 코드",
+                    group: "그룹",
+                    status: "상태"
+                },
+                implementation: {
+                    frontendHtml: "화면 HTML",
+                    frontendJs: "화면 JS",
+                    backendRouter: "API 라우터",
+                    commonService: "공통 서비스",
+                    sqlTemplate: "SQL 템플릿",
+                    noRouter: "등록된 API 라우터 없음 또는 구현 예정",
+                    noService: "없음 또는 화면 전용 라우터에서 직접 처리"
+                },
+                publicModelsFallback: "이 메뉴에서 안내할 모델/AI 리소스 정보는 별도 공개 범위가 확인될 때만 제공합니다.",
+                privacyFallback: "도움말은 실제 물리 테이블명, 내부 프로시저명, DB 접속 정보, API Key, 비밀번호를 공개하지 않고 논리 도메인명과 파일/템플릿 연결만 설명합니다.",
+                cache: {
+                    intro: "기본 버전은 {version}이며, 파일별 override가 있으면 해당 버전이 우선 적용됩니다.",
+                    columns: ["구분", "파일", "적용 버전", "출처"],
+                    unknown: "unknown",
+                    assets: {
+                        shellJs: "Shell JS",
+                        commonJs: "Common JS",
+                        menuConfig: "Menu config",
+                        menuRenderer: "Menu renderer",
+                        helpPopup: "Help popup",
+                        helpUtility: "Help utility",
+                        helpContent: "Help content",
+                        currentMenuHtml: "Current menu HTML",
+                        currentMenuJs: "Current menu JS",
+                        dataTemplateJs: "Data work template JS",
+                        flowTemplateJs: "Flow work template JS",
+                        analysisTemplateJs: "Analysis work template JS"
+                    }
+                }
+            }
+        };
+
+        let currentHelpLanguage = "en";
+        let currentHelpText = HELP_UI.en;
+        let currentHelpContentPath = "./help-content.en.json";
+
+        function normalizeHelpLanguage(value) {
+            return window.HelpContentUtils?.normalizeLanguageCode?.(value) || (String(value || "").toLowerCase().startsWith("ko") ? "ko" : "en");
+        }
+
+        function resolveHelpLanguage(params) {
+            const paramLanguage = normalizeHelpLanguage(params.get("lang") || params.get("language"));
+            if (params.get("lang") || params.get("language")) return paramLanguage;
+
+            try {
+                const openerLanguage = window.opener?.I18nManager?.getCurrentLanguage?.();
+                if (openerLanguage) return normalizeHelpLanguage(openerLanguage);
+            } catch (error) {
+                // Cross-window access can fail if the opener changed origin.
+            }
+
+            const storedLanguage = sessionStorage.getItem("initLanguageCode");
+            return storedLanguage ? normalizeHelpLanguage(storedLanguage) : "en";
+        }
+
+        function getHelpContentPath(languageCode) {
+            return normalizeHelpLanguage(languageCode) === "ko" ? "./help-content.json" : "./help-content.en.json";
+        }
+
+        async function fetchHelpContent(path) {
+            const url = window.AssetCacheVersionUtils.getAssetUrl(path);
+            const response = await fetch(url, { cache: "no-store" });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return response.json();
+        }
+
         function escapeHtml(value) {
             return String(value ?? "")
                 .replace(/&/g, "&amp;")
@@ -205,13 +370,13 @@
 
         function renderList(items) {
             const list = (items || []).filter(Boolean);
-            if (!list.length) return "<p>등록된 설명이 없습니다.</p>";
+            if (!list.length) return `<p>${escapeHtml(currentHelpText.noList)}</p>`;
             return `<ul>${list.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
         }
 
         function renderDefinitionList(items) {
             const list = (items || []).filter(Boolean);
-            if (!list.length) return "<p>등록된 구성 정보가 없습니다.</p>";
+            if (!list.length) return `<p>${escapeHtml(currentHelpText.noDefinition)}</p>`;
             return `<dl>${list.map((item) => `
                 <div>
                     <dt>${escapeHtml(item.name)}</dt>
@@ -221,13 +386,14 @@
         }
 
         function renderImplementation(implementation) {
-            const serviceFiles = implementation.serviceFiles.length ? implementation.serviceFiles : ["없음 또는 화면 전용 라우터에서 직접 처리"];
+            const ui = currentHelpText.implementation;
+            const serviceFiles = implementation.serviceFiles.length ? implementation.serviceFiles : [ui.noService];
             const rows = [
-                ["화면 HTML", implementation.frontendHtml],
-                ["화면 JS", implementation.frontendJs],
-                ["API 라우터", implementation.backendRouter || "등록된 API 라우터 없음 또는 구현 예정"],
-                ["공통 서비스", serviceFiles.join(", ")],
-                ["SQL 템플릿", implementation.sqlFiles.join(", ")]
+                [ui.frontendHtml, implementation.frontendHtml],
+                [ui.frontendJs, implementation.frontendJs],
+                [ui.backendRouter, implementation.backendRouter || ui.noRouter],
+                [ui.commonService, serviceFiles.join(", ")],
+                [ui.sqlTemplate, implementation.sqlFiles.join(", ")]
             ];
 
             return `<dl>${rows.map(([name, value]) => `
@@ -240,30 +406,31 @@
 
         function getHelpCacheAssets(pageCode, implementation) {
             const normalizedPageCode = window.HelpContentUtils.normalizePageCode(pageCode);
+            const labels = currentHelpText.cache.assets;
             const assets = [
-                { label: "Shell JS", path: "js/app.js" },
-                { label: "Common JS", path: "js/common.js" },
-                { label: "Menu config", path: "config/menu.config.js" },
-                { label: "Menu renderer", path: "js/menu-renderer.js" },
-                { label: "Help popup", path: "help/page.html" },
-                { label: "Help utility", path: "help/help-utils.js" },
-                { label: "Help content", path: "help/help-content.json" }
+                { label: labels.shellJs, path: "js/app.js" },
+                { label: labels.commonJs, path: "js/common.js" },
+                { label: labels.menuConfig, path: "config/menu.config.js" },
+                { label: labels.menuRenderer, path: "js/menu-renderer.js" },
+                { label: labels.helpPopup, path: "help/page.html" },
+                { label: labels.helpUtility, path: "help/help-utils.js" },
+                { label: labels.helpContent, path: `help/${currentHelpContentPath.replace("./", "")}` }
             ];
 
             if (implementation.frontendHtml) {
-                assets.push({ label: "Current menu HTML", path: implementation.frontendHtml });
+                assets.push({ label: labels.currentMenuHtml, path: implementation.frontendHtml });
             }
 
             if (["M03001", "M03002", "M03003", "M03004"].includes(normalizedPageCode)) {
-                assets.push({ label: "Data work template JS", path: "frontend/js/MCOM_DATA_WORK.js" });
-                assets.push({ label: "Current menu JS", path: `frontend/js/${normalizedPageCode}.js` });
+                assets.push({ label: labels.dataTemplateJs, path: "frontend/js/MCOM_DATA_WORK.js" });
+                assets.push({ label: labels.currentMenuJs, path: `frontend/js/${normalizedPageCode}.js` });
             } else if (normalizedPageCode === "M04001") {
-                assets.push({ label: "Flow work template JS", path: "frontend/js/MCOM_FLOW_WORK.js" });
-                assets.push({ label: "Current menu JS", path: "frontend/js/M04001.js" });
+                assets.push({ label: labels.flowTemplateJs, path: "frontend/js/MCOM_FLOW_WORK.js" });
+                assets.push({ label: labels.currentMenuJs, path: "frontend/js/M04001.js" });
             } else if (normalizedPageCode === "M04002") {
-                assets.push({ label: "Analysis work template JS", path: "frontend/js/MCOM_ANLY_WORK.js" });
+                assets.push({ label: labels.analysisTemplateJs, path: "frontend/js/MCOM_ANLY_WORK.js" });
             } else if (implementation.frontendJs) {
-                assets.push({ label: "Current menu JS", path: implementation.frontendJs });
+                assets.push({ label: labels.currentMenuJs, path: implementation.frontendJs });
             }
 
             return assets;
@@ -272,27 +439,28 @@
         function renderCacheVersions(pageCode, implementation) {
             const rows = window.AssetCacheVersionUtils.buildRows(getHelpCacheAssets(pageCode, implementation));
             const config = window.AssetCacheVersionUtils.getConfig();
-            const versionText = config.version || "unknown";
+            const versionText = config.version || currentHelpText.cache.unknown;
             const body = rows.map((row) => `
                 <tr>
                     <td>${escapeHtml(row.label)}</td>
                     <td><code>${escapeHtml(row.path)}</code></td>
-                    <td><code>${escapeHtml(row.version || "unknown")}</code></td>
+                    <td><code>${escapeHtml(row.version || currentHelpText.cache.unknown)}</code></td>
                     <td class="cache-version-source">${escapeHtml(row.source)}</td>
                 </tr>
             `).join("");
+            const [typeColumn, fileColumn, versionColumn, sourceColumn] = currentHelpText.cache.columns;
 
             return `
                 <section class="full" data-ai-section="cache-version">
-                    <h2>현재 파일 캐시 버전</h2>
-                    <p>기본 버전은 <code>${escapeHtml(versionText)}</code>이며, 파일별 override가 있으면 해당 버전이 우선 적용됩니다.</p>
+                    <h2>${escapeHtml(currentHelpText.sectionTitles.cache)}</h2>
+                    <p>${currentHelpText.cache.intro.replace("{version}", `<code>${escapeHtml(versionText)}</code>`)}</p>
                     <table class="cache-version-table">
                         <thead>
                             <tr>
-                                <th>구분</th>
-                                <th>파일</th>
-                                <th>적용 버전</th>
-                                <th>출처</th>
+                                <th>${escapeHtml(typeColumn)}</th>
+                                <th>${escapeHtml(fileColumn)}</th>
+                                <th>${escapeHtml(versionColumn)}</th>
+                                <th>${escapeHtml(sourceColumn)}</th>
                             </tr>
                         </thead>
                         <tbody>${body}</tbody>
@@ -311,82 +479,104 @@
             `;
         }
 
+        function getImplementationItems(page, implementation, key) {
+            const pageItems = Array.isArray(page?.[key]) ? page[key].filter(Boolean) : [];
+            if (pageItems.length) return pageItems;
+            if (currentHelpLanguage === "ko") {
+                const implementationItems = Array.isArray(implementation?.[key]) ? implementation[key].filter(Boolean) : [];
+                if (implementationItems.length) return implementationItems;
+            }
+            const defaults = {
+                sqlPurposes: ["Supports the menu-specific searches, saves, executions, or result lookups used by this screen."],
+                logicalDataDomains: ["Menu state and user context", "Target DB context", "Business data or result data used by this screen"],
+                publicModelDetails: ["Model and AI details are described only at a public conceptual level."]
+            };
+            return defaults[key] || [];
+        }
+
         function renderHelp(page) {
             const implementation = window.HelpContentUtils.buildImplementation(page.pageCode);
+            const sections = currentHelpText.sectionTitles;
+            const optionalTitles = currentHelpText.optionalTitles;
+            const sqlPurposes = getImplementationItems(page, implementation, "sqlPurposes");
+            const logicalDataDomains = getImplementationItems(page, implementation, "logicalDataDomains");
+            const publicModelDetails = getImplementationItems(page, implementation, "publicModelDetails");
+            const privacyNote = page.privacyNote || (currentHelpLanguage === "en" ? currentHelpText.privacyFallback : implementation.privacyNote);
+            const pageTitle = page.title || page.label || page.pageCode;
             document.documentElement.dataset.menuCode = page.pageCode;
-            document.title = `${page.title || page.label || page.pageCode} 도움말 - INIT Data Editing System`;
-            document.getElementById("helpTitle").textContent = `${page.title || page.label || page.pageCode} 도움말`;
+            document.title = `${pageTitle} ${currentHelpText.helpWord} - INIT Data Editing System`;
+            document.getElementById("helpTitle").textContent = `${pageTitle} ${currentHelpText.helpWord}`;
             document.getElementById("helpSummary").textContent = page.summary || "";
             document.getElementById("helpMeta").innerHTML = [
-                `메뉴 코드: ${page.pageCode}`,
-                `그룹: ${page.group || "-"}`,
-                `상태: ${page.status || "enabled"}`
+                `${currentHelpText.meta.menuCode}: ${page.pageCode}`,
+                `${currentHelpText.meta.group}: ${page.group || "-"}`,
+                `${currentHelpText.meta.status}: ${page.status || "enabled"}`
             ].map((item) => `<span>${escapeHtml(item)}</span>`).join("");
 
-            const publicModels = implementation.publicModelDetails.length
-                ? renderList(implementation.publicModelDetails)
-                : "<p>이 메뉴에서 안내할 모델/AI 리소스 정보는 별도 공개 범위가 확인될 때만 제공합니다.</p>";
+            const publicModels = publicModelDetails.length
+                ? renderList(publicModelDetails)
+                : `<p>${escapeHtml(currentHelpText.publicModelsFallback)}</p>`;
 
             document.getElementById("helpMain").innerHTML = `
                 <section class="ai-note" data-ai-section="summary">
-                    <h2>메뉴 요약</h2>
+                    <h2>${escapeHtml(sections.summary)}</h2>
                     <p>${escapeHtml(page.summary || "")}</p>
                 </section>
 
                 <div class="grid">
                     <section data-ai-section="purpose">
-                        <h2>화면 목적</h2>
+                        <h2>${escapeHtml(sections.purpose)}</h2>
                         ${renderList(page.purpose)}
                     </section>
 
                     <section data-ai-section="workflow">
-                        <h2>기본 업무 흐름</h2>
+                        <h2>${escapeHtml(sections.workflow)}</h2>
                         ${renderList(page.workflow)}
                     </section>
 
                     <section class="full" data-ai-section="layout">
-                        <h2>화면 구성</h2>
+                        <h2>${escapeHtml(sections.layout)}</h2>
                         ${renderDefinitionList(page.layout)}
                     </section>
 
                     <section data-ai-section="controls">
-                        <h2>주요 버튼/동작</h2>
+                        <h2>${escapeHtml(sections.controls)}</h2>
                         ${renderList(page.controls)}
                     </section>
 
                     <section data-ai-section="ai-guidance">
-                        <h2>질문 답변 참고 기준</h2>
+                        <h2>${escapeHtml(sections.aiGuidance)}</h2>
                         ${renderList(page.aiGuidance)}
                     </section>
 
                     <section class="full" data-ai-section="implementation">
-                        <h2>구현 연동</h2>
+                        <h2>${escapeHtml(sections.implementation)}</h2>
                         ${renderImplementation(implementation)}
                     </section>
 
                     <section data-ai-section="sql-purpose">
-                        <h2>SQL 역할</h2>
-                        ${renderList(implementation.sqlPurposes)}
+                        <h2>${escapeHtml(sections.sqlPurpose)}</h2>
+                        ${renderList(sqlPurposes)}
                     </section>
 
                     <section data-ai-section="logical-data">
-                        <h2>논리 데이터 도메인</h2>
-                        ${renderList(implementation.logicalDataDomains)}
+                        <h2>${escapeHtml(sections.logicalData)}</h2>
+                        ${renderList(logicalDataDomains)}
                     </section>
 
                     <section class="full" data-ai-section="public-models">
-                        <h2>모델/AI 리소스 안내 범위</h2>
+                        <h2>${escapeHtml(sections.publicModels)}</h2>
                         ${publicModels}
                     </section>
 
-                    ${renderOptionalSection("상세 이해 가이드", page.deepDive, "deep-dive", "ai-note")}
-                    ${renderOptionalSection("결과 해석 기준", page.interpretationGuide, "interpretation-guide")}
-                    ${renderOptionalSection("자주 확인할 문제", page.troubleshooting, "troubleshooting")}
-                    ${renderOptionalSection("구현 보충 설명", page.implementationNotes, "implementation-notes")}
+                    ${renderOptionalSection(optionalTitles.deepDive, page.deepDive, "deep-dive", "ai-note")}
+                    ${renderOptionalSection(optionalTitles.interpretationGuide, page.interpretationGuide, "interpretation-guide")}
+                    ${renderOptionalSection(optionalTitles.troubleshooting, page.troubleshooting, "troubleshooting")}
+                    ${renderOptionalSection(optionalTitles.implementationNotes, page.implementationNotes, "implementation-notes")}
 
                     <section class="warning-note full" data-ai-section="privacy">
-                        <h2>비공개 원칙</h2>
-                        <p>${escapeHtml(implementation.privacyNote)}</p>
+                        <h2>${escapeHtml(sections.privacy)}</h2>
+                        <p>${escapeHtml(privacyNote)}</p>
                     </section>
 
                     ${renderCacheVersions(page.pageCode, implementation)}
@@ -396,16 +586,21 @@
 
         async function initHelp() {
             const params = new URLSearchParams(window.location.search);
+            currentHelpLanguage = resolveHelpLanguage(params);
+            currentHelpText = HELP_UI[currentHelpLanguage] || HELP_UI.en;
+            currentHelpContentPath = getHelpContentPath(currentHelpLanguage);
+            document.documentElement.lang = currentHelpLanguage;
+            document.getElementById("helpTitle").textContent = currentHelpText.loadingTitle;
+            document.getElementById("helpSummary").textContent = currentHelpText.loadingSummary;
             const requestedPage = window.HelpContentUtils.normalizePageCode(params.get("page") || "home");
-            const helpContentUrl = window.AssetCacheVersionUtils.getAssetUrl("./help-content.json");
-            const response = await fetch(helpContentUrl, { cache: "no-store" });
-            const content = await response.json();
-            const page = content.pages[requestedPage] || content.pages.home;
+            const content = await fetchHelpContent(currentHelpContentPath);
+            const pageSource = content.pages[requestedPage] || content.pages[requestedPage.toUpperCase?.()] || content.pages.home;
+            const page = window.HelpContentUtils.prepareHelpPage(pageSource, currentHelpLanguage);
             renderHelp(page);
         }
 
         initHelp().catch((error) => {
-            document.getElementById("helpSummary").textContent = `도움말을 불러오지 못했습니다: ${error.message}`;
+            document.getElementById("helpSummary").textContent = `${currentHelpText.loadFailed}: ${error.message}`;
         });
     </script>
 </body>

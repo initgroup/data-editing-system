@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "language": "ko",
+  "pageCode": "M03001",
+  "description": "Korean labels that are specific to M03001.",
+  "labels": {
+    "saveWork": "저장",
+    "deleteWork": "삭제",
+    "testDraft": "테스트",
+    "runNow": "실행",
+    "queueBatch": "예약",
+    "predictedTypeNumericIdentifier": "숫자형식별자",
+    "predictedTypeTextIdentifier": "문자형식별자",
+    "predictedTypeNumericCategory": "숫자형범주형",
+    "predictedTypeOrdinalCategory": "순서형범주형",
+    "predictedTypeDiscreteContinuous": "이산형연속형",
+    "predictedTypeTextCategory": "문자형범주형",
+    "predictedTypeGeneralCategory": "일반적범주형",
+    "predictedTypeNumericContinuous": "숫자형연속형",
+    "predictedTypeSimpleText": "단순형텍스트",
+    "predictedTypeOtherData": "기타데이터형"
+  }
+}

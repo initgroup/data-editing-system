@@ -1,0 +1,42 @@
+{
+  "language": "ko",
+  "pageCode": "M99003",
+  "description": "Korean labels for System Management.",
+  "labels": {
+    "temporaryPasswordNotice": "임시 비밀번호는 지금만 표시됩니다. 사용자 확인 후 안전한 채널로 전달하세요."
+  },
+  "selectors": {
+    "text": {
+      ".env-object-header .env-section-title": "INIT 시스템",
+      ".env-object-header .env-section-desc": "시스템 DB의 필수 시스템 테이블입니다.",
+      "#system-title-M99003": "시스템 관리",
+      "#systemDescription-M99003": "INIT 시스템 테이블과 사용자 승인을 관리합니다.",
+      ".table-tabs [data-tab=\"columns\"] span": "컬럼",
+      ".table-tabs [data-tab=\"data\"] span": "데이터",
+      ".table-tabs [data-tab=\"sql\"] span": "SQL",
+      ".table-meta-strip > div:nth-child(1) > span": "테이블",
+      ".table-meta-strip > div:nth-child(2) > span": "상태",
+      ".table-meta-strip > div:nth-child(3) > span": "시스템 DB",
+      "[data-panel=\"data\"] .table-btn:nth-child(1) span": "데이터 조회",
+      "[data-panel=\"data\"] .table-limit-control:nth-of-type(1) span": "사용자 상태",
+      "#userStatusFilter-M99003 option[value=\"ALL\"]": "전체",
+      "#userStatusFilter-M99003 option[value=\"PENDING\"]": "신청중",
+      "#userStatusFilter-M99003 option[value=\"APPROVED\"]": "신청완료",
+      "#approveSelectedUsersBtn-M99003 span": "선택 승인",
+      "#approveAllUsersBtn-M99003 span": "조회 전체 승인",
+      "#resetSelectedPasswordsBtn-M99003 span": "비밀번호 초기화",
+      "#deactivateSelectedUsersBtn-M99003 span": "회원탈퇴",
+      "[data-panel=\"data\"] .table-limit-control:last-child span": "행",
+      "[data-panel=\"sql\"] .table-btn span": "SQL 실행(Ctrl+Enter)",
+      "[data-panel=\"sql\"] .table-limit-control span": "행"
+    },
+    "title": {
+      "#truncateInitTablesBtn-M99003": "INIT 시스템 테이블 데이터 비우기",
+      ".env-object-actions .env-icon-btn:not(#truncateInitTablesBtn-M99003)": "상태 새로고침"
+    },
+    "ariaLabel": {
+      "#systemSqlEditor-M99003": "시스템 SQL 워크시트"
+    }
+  },
+  "messages": {}
+}

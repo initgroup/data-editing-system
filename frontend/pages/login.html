@@ -1,101 +1,101 @@
 <div class="page-container env-page project-page login-page" id="container-login">
     <section class="intro-login-dialog login-main-dialog" aria-labelledby="login-title">
-        <h2 id="login-title">INIT Data Editing System Login</h2>
+        <h2 id="login-title" data-label-key="title">INIT Data Editing System Login</h2>
         <label>
-            <span>Login ID</span>
+            <span data-label-key="loginId">Login ID</span>
             <input id="loginId" class="env-field env-meta-field" type="text" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="email" onkeydown="login.handleLoginKey(event)" autofocus>
         </label>
         <label>
-            <span>Password</span>
+            <span data-label-key="password">Password</span>
             <div class="login-password-field">
                 <input id="loginPassword" class="env-field env-meta-field" type="password" autocomplete="current-password" onkeydown="login.handleLoginKey(event)">
-                <button id="loginPasswordToggle" class="login-password-toggle" type="button" title="Show password" aria-label="Show password" aria-pressed="false" onclick="login.togglePasswordVisible()">
+                <button id="loginPasswordToggle" class="login-password-toggle" type="button" title="Show password" aria-label="Show password" aria-pressed="false" data-title-key="showPassword" onclick="login.togglePasswordVisible()">
                     <i id="loginPasswordToggleIcon" class="fas fa-eye"></i>
                 </button>
             </div>
         </label>
         <div id="loginTargetDbField" class="login-target-db-field" hidden>
-            <span>Target DB</span>
+            <span data-label-key="targetDb">Target DB</span>
             <div id="loginConnectionList" class="login-target-db-list" role="radiogroup" aria-label="Target DB"></div>
         </div>
-        <div id="loginMessage" class="intro-step-msg">Enter your saved ID and password.</div>
+        <div id="loginMessage" class="intro-step-msg" data-label-key="messageEnterCredentials">Enter your saved ID and password.</div>
         <footer class="intro-login-actions">
-            <button type="button" class="env-btn" onclick="login.openPasswordHelp()">Forgot password</button>
-            <button type="button" class="env-btn" onclick="login.openSignup()">Signup</button>
-            <button id="loginSubmitButton" type="button" class="env-btn env-save" onclick="login.login()">Login</button>
+            <button type="button" class="env-btn" data-label-key="forgotPassword" onclick="login.openPasswordHelp()">Forgot password</button>
+            <button type="button" class="env-btn" data-label-key="signup" onclick="login.openSignup()">Signup</button>
+            <button id="loginSubmitButton" type="button" class="env-btn env-save" data-label-key="login" onclick="login.login()">Login</button>
         </footer>
     </section>
 
     <div id="passwordHelpLayer" class="intro-login-layer" hidden>
         <section class="intro-login-dialog login-signup-dialog" aria-labelledby="password-help-title">
-            <h2 id="password-help-title">Password Reset Request</h2>
-            <div class="intro-step-msg">
-                비밀번호는 보안상 확인할 수 없습니다. 초기화가 필요한 경우 시스템 관리자에게 문의하세요.
+            <h2 id="password-help-title" data-label-key="passwordHelpTitle">Password Reset Request</h2>
+            <div class="intro-step-msg" data-label-key="passwordHelpMessage">
+                Passwords cannot be viewed for security reasons. Contact your system administrator if a reset is required.
             </div>
             <div class="env-meta-grid project-meta-grid">
                 <label>
-                    <span>Admin Team</span>
+                    <span data-label-key="adminTeam">Admin Team</span>
                     <input id="passwordHelpAdminName" class="env-field env-meta-field" type="text" readonly>
                 </label>
                 <label>
-                    <span>Email</span>
+                    <span data-label-key="email">Email</span>
                     <input id="passwordHelpAdminEmail" class="env-field env-meta-field" type="text" readonly>
                 </label>
                 <label>
-                    <span>Phone</span>
+                    <span data-label-key="phone">Phone</span>
                     <input id="passwordHelpAdminPhone" class="env-field env-meta-field" type="text" readonly>
                 </label>
                 <label class="env-meta-wide">
-                    <span>Request Info</span>
-                    <input class="env-field env-meta-field" type="text" readonly value="Login ID, 이름, 가입 이메일을 함께 전달하세요.">
+                    <span data-label-key="requestInfo">Request Info</span>
+                    <input class="env-field env-meta-field" type="text" readonly value="Send your login ID, name, and signup email together." data-value-key="passwordHelpRequestInfo">
                 </label>
             </div>
             <footer class="intro-login-actions">
-                <button type="button" class="env-btn env-save" onclick="login.closePasswordHelp()">Close</button>
+                <button type="button" class="env-btn env-save" data-label-key="close" onclick="login.closePasswordHelp()">Close</button>
             </footer>
         </section>
     </div>
 
     <div id="signupLayer" class="intro-login-layer" hidden>
         <section class="intro-login-dialog login-signup-dialog" aria-labelledby="signup-title">
-            <h2 id="signup-title">Signup Draft</h2>
+            <h2 id="signup-title" data-label-key="signupTitle">Signup Draft</h2>
             <div class="env-meta-grid project-meta-grid">
                 <label>
-                    <span class="required-title">Login ID</span>
+                    <span class="required-title" data-label-key="loginId">Login ID</span>
                     <input id="signupLoginId" class="env-field env-meta-field" type="text" autocomplete="username">
                 </label>
                 <label>
-                    <span class="required-title">User Name</span>
+                    <span class="required-title" data-label-key="userName">User Name</span>
                     <input id="signupUserName" class="env-field env-meta-field" type="text">
                 </label>
                 <label class="env-meta-wide">
-                    <span class="required-title">Email</span>
+                    <span class="required-title" data-label-key="email">Email</span>
                     <input id="signupEmail" class="env-field env-meta-field" type="email">
                 </label>
                 <label>
-                    <span class="required-title">Login Password</span>
+                    <span class="required-title" data-label-key="loginPassword">Login Password</span>
                     <input id="signupPassword" class="env-field env-meta-field" type="password" autocomplete="new-password">
                 </label>
                 <label>
-                    <span class="required-title">Confirm Password</span>
+                    <span class="required-title" data-label-key="confirmPassword">Confirm Password</span>
                     <input id="signupPasswordConfirm" class="env-field env-meta-field" type="password" autocomplete="new-password" onkeydown="login.handleSignupKey(event)">
                 </label>
                 <label>
-                    <span class="required-title">Member Type</span>
+                    <span class="required-title" data-label-key="memberType">Member Type</span>
                     <select id="signupRole" class="env-field env-meta-field" onchange="login.handleSignupRoleChange()">
-                        <option value="USER">General member</option>
-                        <option value="ADMIN">Admin member</option>
+                        <option value="USER" data-label-key="generalMember">General member</option>
+                        <option value="ADMIN" data-label-key="adminMember">Admin member</option>
                     </select>
                 </label>
                 <label id="signupAdminKeyField" hidden>
-                    <span class="required-title">Admin Key</span>
+                    <span class="required-title" data-label-key="adminKey">Admin Key</span>
                     <input id="signupAdminKey" class="env-field env-meta-field" type="password" autocomplete="off" disabled onkeydown="login.handleSignupKey(event)">
                 </label>
             </div>
-            <div id="signupMessage" class="intro-step-msg">회원가입 정보를 입력하세요.</div>
+            <div id="signupMessage" class="intro-step-msg" data-label-key="signupMessage">Enter signup information.</div>
             <footer class="intro-login-actions">
-                <button type="button" class="env-btn" onclick="login.closeSignup()">Cancel</button>
-                <button type="button" class="env-btn env-save" onclick="login.saveSignup()">Save signup</button>
+                <button type="button" class="env-btn" data-label-key="cancel" onclick="login.closeSignup()">Cancel</button>
+                <button type="button" class="env-btn env-save" data-label-key="saveSignup" onclick="login.saveSignup()">Save signup</button>
             </footer>
         </section>
     </div>

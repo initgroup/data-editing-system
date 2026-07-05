@@ -3,14 +3,14 @@
         <aside class="env-object-panel">
             <header class="env-object-header">
                 <div>
-                    <h2 class="env-section-title">Project List</h2>
-                    <p class="env-section-desc">Search by project name, code, type, or description.</p>
+                    <h2 class="env-section-title" data-label-key="projectListTitle">Project List</h2>
+                    <p class="env-section-desc" data-label-key="projectListDescription">Search by project name, code, type, or description.</p>
                 </div>
                 <div class="env-object-actions">
-                    <button type="button" class="env-icon-btn env-refresh" title="New project" onclick="M01001.newProject()">
+                    <button type="button" class="env-icon-btn env-refresh" title="New project" data-title-key="newProjectTitle" onclick="M01001.newProject()">
                         <i class="fas fa-plus"></i>
                     </button>
-                    <button type="button" class="env-icon-btn env-refresh" title="Refresh projects" onclick="M01001.loadProjects()">
+                    <button type="button" class="env-icon-btn env-refresh" title="Refresh projects" data-title-key="refreshProjectsTitle" onclick="M01001.loadProjects()">
                         <i class="fas fa-sync-alt"></i>
                     </button>
                 </div>
@@ -22,58 +22,62 @@
                     id="projectSearch-M01001"
                     type="search"
                     placeholder="Search project"
+                    data-placeholder-key="searchProject"
                     aria-label="Search project"
+                    data-aria-label-key="searchProject"
                     oninput="M01001.handleSearchInput()"
                     onkeydown="M01001.handleSearchKey(event)"
                 >
                 <div class="env-search-actions">
-                    <button type="button" class="env-icon-btn" title="Search" onclick="M01001.loadProjects()">
+                    <button type="button" class="env-icon-btn" title="Search" data-title-key="searchTitle" onclick="M01001.loadProjects()">
                         <i class="fas fa-arrow-right"></i>
                     </button>
                 </div>
             </div>
 
-            <div id="projectList-M01001" class="env-tree-grid project-list" aria-label="Registered projects"></div>
+            <div id="projectList-M01001" class="env-tree-grid project-list" aria-label="Registered projects" data-aria-label-key="registeredProjects"></div>
         </aside>
 
         <section class="env-panel" aria-labelledby="project-title-M01001">
             <header class="env-header">
-                <h1 class="env-title" id="project-title-M01001">Project Settings</h1>
-                <p class="env-desc" id="projectDescription-M01001">
+                <h1 class="env-title" id="project-title-M01001" data-label-key="projectSettingsTitle">Project Settings</h1>
+                <p class="env-desc" id="projectDescription-M01001" data-label-key="projectSettingsDescription">
                     Select a project from the list or create a new project.
                 </p>
             </header>
 
-            <section class="env-object-meta project-detail" aria-label="Project detail">
+            <section class="env-object-meta project-detail" aria-label="Project detail" data-aria-label-key="projectDetail">
                 <div class="env-meta-grid project-meta-grid">
                     <label>
-                        <span>Project ID</span>
+                        <span data-label-key="projectId">Project ID</span>
                         <input id="projectId-M01001" class="env-field env-meta-field" type="text" readonly>
                     </label>
                     <label>
-                        <span>Use</span>
+                        <span data-label-key="use">Use</span>
                         <select id="useYn-M01001" class="env-field env-meta-field" onchange="M01001.updateField('useYn', this.value)">
                             <option value="Y">Y</option>
                             <option value="N">N</option>
                         </select>
                     </label>
                     <label>
-                        <span>Sort</span>
+                        <span data-label-key="sort">Sort</span>
                         <input id="sortOrder-M01001" class="env-field env-meta-field" type="number" value="0" oninput="M01001.updateField('sortOrder', this.value)">
                     </label>
 
                     <label class="env-meta-wide">
-                        <span class="required-title">Project Name</span>
+                        <span class="required-title" data-label-key="projectName">Project Name</span>
                         <input id="projectName-M01001" class="env-field env-meta-field" type="text" oninput="M01001.updateField('projectName', this.value)">
                     </label>
                     <label>
                         <span class="project-label-line">
-                            <span class="required-title">Project Code</span>
+                            <span class="required-title" data-label-key="projectCode">Project Code</span>
                             <button
                                 type="button"
                                 class="project-help-btn"
                                 title="Project code help"
+                                data-title-key="projectCodeHelpButtonTitle"
                                 aria-label="Project code help"
+                                data-aria-label-key="projectCodeHelpButtonTitle"
                                 aria-expanded="false"
                                 onclick="M01001.toggleProjectCodeHelp(event)"
                             >
@@ -81,23 +85,23 @@
                             </button>
                         </span>
                         <span id="projectCodeHelp-M01001" class="project-help-layer" role="tooltip" hidden>
-                            <strong>Project Code</strong>
-                            <span>프로젝트를 구분하는 고유 키입니다. 저장 후에도 바뀌지 않는 짧은 영문 코드로 관리하세요.</span>
-                            <em>예: EDITING_DEFAULT, CUSTOMER_QUALITY</em>
+                            <strong data-label-key="projectCode">Project Code</strong>
+                            <span data-label-key="projectCodeHelpDesc">A unique key that identifies the project. Use a short English code that does not change after saving.</span>
+                            <em data-label-key="projectCodeHelpExample">Example: EDITING_DEFAULT, CUSTOMER_QUALITY</em>
                         </span>
                         <input id="projectCode-M01001" class="env-field env-meta-field" type="text" oninput="M01001.updateField('projectCode', this.value)">
                     </label>
                     <label>
-                        <span>Project Type</span>
+                        <span data-label-key="projectType">Project Type</span>
                         <select id="projectType-M01001" class="env-field env-meta-field" onchange="M01001.updateField('projectType', this.value)">
-                            <option value="EDITING">Data Editing</option>
-                            <option value="QUALITY">Data Quality</option>
-                            <option value="ANALYSIS">Analysis</option>
-                            <option value="OPERATION">Operation</option>
+                            <option value="EDITING" data-label-key="projectTypeEditing">Data Editing</option>
+                            <option value="QUALITY" data-label-key="projectTypeQuality">Data Quality</option>
+                            <option value="ANALYSIS" data-label-key="projectTypeAnalysis">Analysis</option>
+                            <option value="OPERATION" data-label-key="projectTypeOperation">Operation</option>
                         </select>
                     </label>
                     <label class="env-meta-wide">
-                        <span>Description</span>
+                        <span data-label-key="description">Description</span>
                         <textarea id="projectDesc-M01001" class="env-field env-meta-textarea" rows="4" oninput="M01001.updateField('projectDesc', this.value)"></textarea>
                     </label>
                 </div>
@@ -105,16 +109,20 @@
 
             <footer class="env-footer">
                 <div class="env-footer-group">
-                    <span class="env-detail-hint">Required fields are marked. Project code is used as a unique key.</span>
+                    <span class="env-detail-hint" data-label-key="projectFooterHint">Required fields are marked. Project code is used as a unique key.</span>
                 </div>
                 <div class="env-footer-group">
                     <button type="button" class="env-btn env-save" onclick="M01001.saveProject()">
-                        <span>Save project</span>
+                        <i class="far fa-save" aria-hidden="true"></i>
+                        <span data-label-key="saveProject">Save project</span>
                     </button>
-                    <button type="button" class="env-btn env-cancel" onclick="M01001.resetProject()">Cancel</button>
+                    <button type="button" class="env-btn env-cancel" onclick="M01001.resetProject()">
+                        <i class="fas fa-undo-alt" aria-hidden="true"></i>
+                        <span data-label-key="cancel">Cancel</span>
+                    </button>
                     <button type="button" class="env-btn env-danger" onclick="M01001.deleteProject()">
-                        <i class="far fa-trash-alt"></i>
-                        <span>Delete project</span>
+                        <i class="far fa-trash-alt" aria-hidden="true"></i>
+                        <span data-label-key="deleteProjectButton">Delete project</span>
                     </button>
                 </div>
             </footer>

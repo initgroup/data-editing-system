@@ -15,6 +15,10 @@
 
         destroy() {},
 
+        t(key, fallback = "") {
+            return window.I18nManager?.tPage?.(PAGE_CODE, key, fallback) || fallback;
+        },
+
         getValue(selector) {
             return getContainerEl(selector)?.value || "";
         },
@@ -53,8 +57,11 @@
             if (input) input.type = this.passwordVisible ? "text" : "password";
             if (button) {
                 button.setAttribute("aria-pressed", this.passwordVisible ? "true" : "false");
-                button.setAttribute("aria-label", this.passwordVisible ? "Hide password" : "Show password");
-                button.title = this.passwordVisible ? "Hide password" : "Show password";
+                const title = this.passwordVisible
+                    ? this.t("hidePassword", "Hide password")
+                    : this.t("showPassword", "Show password");
+                button.setAttribute("aria-label", title);
+                button.title = title;
             }
             if (icon) {
                 icon.className = this.passwordVisible ? "fas fa-eye-slash" : "fas fa-eye";
@@ -128,7 +135,9 @@
             const button = getContainerEl("#loginSubmitButton");
             if (button) {
                 button.disabled = this.isLoggingIn;
-                button.textContent = this.isLoggingIn ? "Logging in..." : "Login";
+                button.textContent = this.isLoggingIn
+                    ? this.t("loggingIn", "Logging in...")
+                    : this.t("login", "Login");
             }
             getContainerEl("#loginMessage")?.classList.toggle("is-loading", this.isLoggingIn);
             getContainerEl("#loginId")?.toggleAttribute("disabled", this.isLoggingIn);
@@ -157,7 +166,7 @@
                 sessionStorage.removeItem("loginNotice");
                 this.setMessage(notice);
             } else {
-                this.setMessage("Enter your saved ID and password.");
+                this.setMessage(this.t("messageEnterCredentials", "Enter your saved ID and password."));
             }
             this.focusLoginId();
         },
@@ -181,10 +190,10 @@
             }
             if (!isAdmin) {
                 this.setValue("#signupAdminKey", "");
-                this.setSignupMessage("일반 회원은 관리자 승인 후 로그인할 수 있습니다.");
+                this.setSignupMessage(this.t("generalMemberApprovalMessage", "General members can log in after administrator approval."));
                 return;
             }
-            this.setSignupMessage("관리자 회원은 관리자 인증키가 일치하면 초기 설정을 진행할 수 있습니다.");
+            this.setSignupMessage(this.t("adminMemberSetupMessage", "Admin members can continue initial setup when the admin key matches."));
             setTimeout(() => input?.focus(), 0);
         },
 
@@ -206,7 +215,9 @@
                 const id = String(row.connectionId ?? "");
                 const checked = String(defaultRow?.connectionId ?? "") === id ? " checked" : "";
                 const name = row.connectionName || "(Unnamed connection)";
-                const scope = row.connectionScope === "SHARED" ? "공통" : "개인";
+                const scope = row.connectionScope === "SHARED"
+                    ? this.t("sharedConnection", "Shared")
+                    : this.t("privateConnection", "Private");
                 const meta = [scope, row.dbType, row.defaultYn === "Y" ? "Default" : ""].filter(Boolean).join(" / ");
                 return `
                     <label class="login-target-db-option">
@@ -295,7 +306,6 @@
                 }
 
                 this.setValue("#loginPassword", "");
-                if (window.MenuRenderer) MenuRenderer.render("mainNav", window.handleMenuClick);
                 if (connectionId) {
                     sessionStorage.setItem("targetConnectionId", String(connectionId));
                     sessionStorage.setItem("targetConnectionName", connectionName);
@@ -304,6 +314,12 @@
                     sessionStorage.removeItem("targetConnectionId");
                     sessionStorage.removeItem("targetConnectionName");
                 }
+                if (connectionId && !json.setupRequired) {
+                    await window.I18nManager?.loadLanguageFromUserSettings?.();
+                } else {
+                    await window.I18nManager?.applyLanguage?.("en");
+                }
+                if (window.MenuRenderer) MenuRenderer.render("mainNav", window.handleMenuClick);
                 window.updateCurrentTargetDbSelect?.();
                 if (json.setupRequired || !sessionStorage.getItem("targetConnectionId")) {
                     PageManager.load("M99001", "DB Connection Setup");
@@ -335,7 +351,7 @@
             }
             const layer = getContainerEl("#signupLayer");
             if (layer) layer.hidden = false;
-            this.setSignupMessage("회원가입 정보를 입력하세요. 관리자 회원은 관리자 인증키가 필요합니다.");
+            this.setSignupMessage(this.t("signupGuide", "Enter signup information. Admin members need an admin key."));
             setTimeout(() => getContainerEl("#signupLoginId")?.focus(), 0);
         },
 
@@ -356,11 +372,11 @@
                     showLoading: false
                 });
                 const contact = json.data || {};
-                this.setValue("#passwordHelpAdminName", contact.name || "시스템 운영자");
+                this.setValue("#passwordHelpAdminName", contact.name || this.t("systemAdministrator", "System administrator"));
                 this.setValue("#passwordHelpAdminEmail", contact.email || "admin@example.com");
                 this.setValue("#passwordHelpAdminPhone", contact.phone || "02-0000-0000");
             } catch (error) {
-                this.setValue("#passwordHelpAdminName", "시스템 운영자");
+                this.setValue("#passwordHelpAdminName", this.t("systemAdministrator", "System administrator"));
                 this.setValue("#passwordHelpAdminEmail", "admin@example.com");
                 this.setValue("#passwordHelpAdminPhone", "02-0000-0000");
             }
@@ -412,11 +428,11 @@
                 return;
             }
             if (signupRole === "ADMIN" && !payload.adminKey) {
-                this.setSignupMessage("관리자 인증키를 입력해 주세요.", "error");
+                this.setSignupMessage(this.t("adminKeyRequired", "Admin key is required."), "error");
                 getContainerEl("#signupAdminKey")?.focus();
                 return;
             }
-            this.setSignupMessage("Saving signup...");
+            this.setSignupMessage(this.t("savingSignup", "Saving signup..."));
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/M91001/signup/save`, {
                     method: "POST",
@@ -425,8 +441,9 @@
                 if (json.bootstrapRequired && json.bootstrapToken) {
                     sessionStorage.setItem("initBootstrapToken", json.bootstrapToken);
                     sessionStorage.setItem("initBootstrapAdminLoginId", json.loginId || payload.loginId);
-                    this.setSignupMessage(json.message || "관리자 인증키가 확인되었습니다. 초기 설정 화면으로 이동합니다.");
-                    this.setMessage(json.message || "관리자 인증키가 확인되었습니다. 초기 설정 화면으로 이동합니다.");
+                    const message = json.message || this.t("adminKeyVerified", "Admin key verified. Moving to initial setup.");
+                    this.setSignupMessage(message);
+                    this.setMessage(message);
                     this.setValue("#signupPassword", "");
                     this.setValue("#signupPasswordConfirm", "");
                     this.setValue("#signupAdminKey", "");
@@ -434,7 +451,7 @@
                     await PageManager.load("M99001", "Initial System Setup", true);
                     return;
                 }
-                const message = json.message || "회원가입 신청이 접수되었습니다. 관리자 승인 후 로그인할 수 있습니다.";
+                const message = json.message || this.t("signupSubmitted", "Signup request submitted. You can log in after administrator approval.");
                 this.setSignupMessage(message);
                 this.setMessage(message);
                 this.setValue("#loginId", "");

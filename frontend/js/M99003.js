@@ -293,7 +293,7 @@
                 const rows = Array.isArray(json.data) ? json.data : [];
                 const lines = [
                     json.message || "Password reset completed.",
-                    "임시 비밀번호는 지금만 표시됩니다. 사용자 확인 후 안전한 채널로 전달하세요.",
+                    this.tl("temporaryPasswordNotice", "Temporary passwords are shown only now. After user confirmation, deliver them through a secure channel."),
                     "",
                     ...rows.flatMap((row, index) => [
                         `[${index + 1}] ${row.loginId || "-"}`,

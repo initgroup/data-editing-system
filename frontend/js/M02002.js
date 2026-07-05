@@ -137,7 +137,7 @@
             const select = getContainerEl("#contextProject-M02002");
             if (!select) return;
 
-            select.innerHTML = `<option value="">Loading projects...</option>`;
+            select.innerHTML = `<option value="">${this.escapeHtml(this.t("loadingProjects", "Loading projects..."))}</option>`;
             try {
                 this.contextLoadFailed = false;
                 const params = new URLSearchParams({ keyword: "" });
@@ -147,12 +147,12 @@
                     : [];
                 this.renderContextProjects(preferredProjectId);
             } catch (error) {
-                const message = error.message || "Project load failed.";
+                const message = error.message || this.t("projectLoadFailed", "Project load failed.");
                 this.contextLoadFailed = true;
                 this.contextProjects = [];
                 this.selectedProjectId = "";
                 console.error("[M02002] project context load failed", error);
-                select.innerHTML = `<option value="">Project load failed</option>`;
+                select.innerHTML = `<option value="">${this.escapeHtml(this.t("projectLoadFailed", "Project load failed"))}</option>`;
                 this.renderError("#scenarioTablesGrid-M02002", message);
             }
         },
@@ -162,10 +162,10 @@
             if (!select) return;
 
             select.innerHTML = `
-                <option value="">-- Select project --</option>
+                <option value="">${this.escapeHtml(this.t("selectProject", "-- Select project --"))}</option>
                 ${this.contextProjects.map((project) => `
                     <option class="${this.escapeHtml(CommonUtils.getOwnerScopeClass(project))}" value="${this.escapeHtml(project.PROJECT_ID ?? "")}">
-                        ${this.escapeHtml(CommonUtils.formatOwnerScopedName(project, project.PROJECT_NAME || project.PROJECT_CODE || "(Untitled project)"))}
+                        ${this.escapeHtml(CommonUtils.formatOwnerScopedName(project, project.PROJECT_NAME || project.PROJECT_CODE || this.t("untitledProject", "(Untitled project)")))}
                     </option>
                 `).join("")}
             `;
@@ -193,7 +193,7 @@
             }
 
             const select = getContainerEl("#contextScenario-M02002");
-            if (select) select.innerHTML = `<option value="">Loading scenarios...</option>`;
+            if (select) select.innerHTML = `<option value="">${this.escapeHtml(this.t("loadingScenarios", "Loading scenarios..."))}</option>`;
 
             try {
                 this.contextLoadFailed = false;
@@ -205,12 +205,12 @@
                 this.contextScenarios = Array.isArray(json.data) ? json.data : [];
                 this.renderContextScenarios(preferredScenarioId);
             } catch (error) {
-                const message = error.message || "Scenario load failed.";
+                const message = error.message || this.t("scenarioLoadFailed", "Scenario load failed.");
                 this.contextLoadFailed = true;
                 this.contextScenarios = [];
                 this.selectedScenarioId = "";
                 console.error("[M02002] scenario context load failed", error);
-                if (select) select.innerHTML = `<option value="">Scenario load failed</option>`;
+                if (select) select.innerHTML = `<option value="">${this.escapeHtml(this.t("scenarioLoadFailed", "Scenario load failed"))}</option>`;
                 this.renderError("#scenarioTablesGrid-M02002", message);
             }
         },
@@ -220,10 +220,10 @@
             if (!select) return;
 
             select.innerHTML = `
-                <option value="">-- Select scenario --</option>
+                <option value="">${this.escapeHtml(this.t("selectScenario", "-- Select scenario --"))}</option>
                 ${this.contextScenarios.map((scenario) => `
                     <option class="${this.escapeHtml(CommonUtils.getOwnerScopeClass(scenario))}" value="${this.escapeHtml(scenario.SCENARIO_ID ?? "")}">
-                        ${this.escapeHtml(CommonUtils.formatOwnerScopedName(scenario, scenario.SCENARIO_NAME || scenario.SCENARIO_CODE || "(Untitled scenario)"))}
+                        ${this.escapeHtml(CommonUtils.formatOwnerScopedName(scenario, scenario.SCENARIO_NAME || scenario.SCENARIO_CODE || this.t("untitledScenario", "(Untitled scenario)")))}
                     </option>
                 `).join("")}
             `;
@@ -265,13 +265,13 @@
             if (!this.selectedProjectId || !this.selectedScenarioId) {
                 this.scenarioTables = [];
                 container.innerHTML = `
-                    <div class="table-empty">Select project and scenario first.</div>
+                    <div class="table-empty">${this.escapeHtml(this.t("selectProjectScenarioFirst", "Select project and scenario first."))}</div>
                     ${this.renderListFooter(0)}
                 `;
                 return;
             }
 
-            container.innerHTML = `<div class="table-empty">Loading scenario tables...</div>`;
+            container.innerHTML = `<div class="table-empty">${this.escapeHtml(this.t("loadingScenarioTables", "Loading scenario tables..."))}</div>`;
             try {
                 const params = new URLSearchParams({
                     projectId: this.selectedProjectId,
@@ -291,7 +291,7 @@
 
             if (!this.scenarioTables.length) {
                 container.innerHTML = `
-                    <div class="table-empty">No tables registered to this scenario.</div>
+                    <div class="table-empty">${this.escapeHtml(this.t("noScenarioTables", "No tables registered to this scenario."))}</div>
                     ${this.renderListFooter(0)}
                 `;
                 return;
@@ -501,7 +501,7 @@
             const offset = reset ? 0 : this.tableTreeNextOffset;
             this.tableTreeLoading = true;
             if (reset) {
-                container.innerHTML = `<div class="table-empty">Loading tables...</div>`;
+                container.innerHTML = `<div class="table-empty">${this.escapeHtml(this.t("loadingTables", "Loading tables..."))}</div>`;
                 this.tables = [];
                 this.displayedTables = [];
                 this.tableTreeHasMore = false;
@@ -515,7 +515,7 @@
                 });
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/table-tree?${params.toString()}`, { method: "GET", showLoading: false });
                 if (json.status && json.status !== "success") {
-                    throw new Error(json.message || json.detail || "Table list load failed.");
+                    throw new Error(json.message || json.detail || this.t("tableListLoadFailed", "Table list load failed."));
                 }
                 const rows = Array.isArray(json.data) ? json.data : [];
                 this.tables = reset ? rows : this.tables.concat(rows);
@@ -539,7 +539,7 @@
 
             if (rows.length === 0) {
                 container.innerHTML = `
-                    <div class="table-empty">No tables found.</div>
+                    <div class="table-empty">${this.escapeHtml(this.t("noTablesFound", "No tables found."))}</div>
                     ${this.renderListFooter(0)}
                 `;
                 return;
@@ -581,7 +581,7 @@
                     <span class="table-tree-name">
                         <span class="table-tree-physical">
                             <i class="fas fa-ellipsis-h"></i>
-                            <span>${this.tableTreeLoading ? "Loading more..." : "Load more..."}</span>
+                            <span>${this.escapeHtml(this.tableTreeLoading ? this.t("loadingMore", "Loading more...") : this.t("loadMore", "Load more..."))}</span>
                         </span>
                         <span class="table-tree-comment">Next ${TREE_PAGE_SIZE} tables</span>
                     </span>
@@ -711,7 +711,7 @@
             this.setText("#selectedComment-M02002", this.selectedTable?.COMMENTS || "-");
             const desc = this.selectedTable
                 ? `${this.selectedTable.OWNER}.${this.selectedTable.TABLE_NAME}`
-                : "Select a table from the explorer.";
+                : this.t("selectTableFromExplorer", "Select a table from the explorer.");
             this.setText("#tableDescription-M02002", desc);
         },
 
@@ -756,7 +756,7 @@
         async loadColumns() {
             if (!this.ensureSelectedTable()) return;
             const grid = getContainerEl("#columnsGrid-M02002");
-            if (grid) grid.innerHTML = `<div class="table-empty">Loading columns...</div>`;
+            if (grid) grid.innerHTML = `<div class="table-empty">${this.escapeHtml(this.t("loadingColumns", "Loading columns..."))}</div>`;
 
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/columns`, {
@@ -774,7 +774,7 @@
             if (!this.ensureSelectedTable()) return;
             const limit = this.getLimit("#dataLimit-M02002");
             const grid = getContainerEl("#dataGrid-M02002");
-            if (grid) grid.innerHTML = `<div class="table-empty">Loading data...</div>`;
+            if (grid) grid.innerHTML = `<div class="table-empty">${this.escapeHtml(this.t("loadingData", "Loading data..."))}</div>`;
 
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/data`, {
@@ -791,8 +791,8 @@
         async executeSql() {
             const executable = this.getExecutableSqlFromEditor();
             if (!executable.sql) {
-                this.renderSqlMessage("No SQL statement found at the cursor.", "error");
-                this.renderError("#sqlGrid-M02002", "No SQL statement found at the cursor.");
+                this.renderSqlMessage(this.t("noSqlAtCursor", "No SQL statement found at the cursor."), "error");
+                this.renderError("#sqlGrid-M02002", this.t("noSqlAtCursor", "No SQL statement found at the cursor."));
                 return;
             }
             const sql = executable.sql;
@@ -942,7 +942,7 @@
                     return;
                 }
                 container.innerHTML = `
-                    <div class="table-empty">No data.</div>
+                    <div class="table-empty">${this.escapeHtml(this.t("noData", "No data."))}</div>
                     ${this.renderListFooter(0)}
                 `;
                 return;
@@ -1235,7 +1235,7 @@
 
         ensureSelectedTable() {
             if (this.selectedTable) return true;
-            this.renderError(`#${this.activeTab}Grid-M02002`, "Select a table first.");
+            this.renderError(`#${this.activeTab}Grid-M02002`, this.t("selectTableFirst", "Select a table first."));
             return false;
         },
 

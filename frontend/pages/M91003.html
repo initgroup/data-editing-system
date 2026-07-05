@@ -3,8 +3,8 @@
         <aside class="env-object-panel">
             <header class="env-object-header">
                 <div>
-                    <h2 class="env-section-title">설정 카테고리</h2>
-                    <p class="env-section-desc">Target DB 설정 그룹을 선택합니다.</p>
+                    <h2 class="env-section-title" data-label-key="targetSettingCategoryTitle">Target Setting Categories</h2>
+                    <p class="env-section-desc" data-label-key="targetSettingCategoryDescription">Select a Target DB setting group.</p>
                 </div>
                 <div class="env-object-actions">
                     <button id="createDefaultSettingsBtn-M91003" type="button" class="env-icon-btn" title="Create default target settings" onclick="M91003.createDefaultSettings()">
@@ -20,8 +20,8 @@
 
         <section class="env-panel" aria-labelledby="settings-title-M91003">
             <header class="env-header">
-                <h1 class="env-title" id="settings-title-M91003">Target DB 설정</h1>
-                <p class="env-desc" id="settingsDescription-M91003">선택된 Target DB의 설정값을 관리합니다.</p>
+                <h1 class="env-title" id="settings-title-M91003" data-label-key="targetDbSettingsTitle">Target DB Settings</h1>
+                <p class="env-desc" id="settingsDescription-M91003" data-label-key="targetDbSettingsDescription">Manage setting values for the selected Target DB.</p>
             </header>
 
             <section class="scenario-list-panel" aria-label="Target settings list">
@@ -72,11 +72,17 @@
                     <span id="systemMessage-M91003" class="env-detail-hint" aria-live="polite">Settings are stored in selected Target DB table INIT$_TB_TARGET_SETTING.</span>
                 </div>
                 <div class="env-footer-group">
-                    <button type="button" class="env-btn env-save" onclick="M91003.saveSetting()">Save setting</button>
-                    <button type="button" class="env-btn env-cancel" onclick="M91003.newSetting()">Cancel</button>
+                    <button type="button" class="env-btn env-save" onclick="M91003.saveSetting()">
+                        <i class="far fa-save" aria-hidden="true"></i>
+                        <span data-label-key="save">Save</span>
+                    </button>
+                    <button type="button" class="env-btn env-cancel" onclick="M91003.newSetting()">
+                        <i class="fas fa-undo-alt" aria-hidden="true"></i>
+                        <span data-label-key="cancel">Cancel</span>
+                    </button>
                     <button type="button" class="env-btn env-danger" onclick="M91003.deleteSetting()">
-                        <i class="far fa-trash-alt"></i>
-                        <span>Delete</span>
+                        <i class="far fa-trash-alt" aria-hidden="true"></i>
+                        <span data-label-key="delete">Delete</span>
                     </button>
                 </div>
             </footer>

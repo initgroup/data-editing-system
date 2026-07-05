@@ -1,37 +1,37 @@
 ﻿<div class="page-container table-page M04002-page" id="container-__PAGE_CODE__">
     <section class="M04002-header">
         <div>
-            <p>Integrated Editing Result Analysis</p>
-            <h2>통합 에디팅 결과분석</h2>
-            <span>통합시나리오 실행 이력과 노드별 결과 테이블 / Oracle ML 모델뷰를 전체 조회합니다.</span>
+            <p data-label-key="analysisEyebrow">Integrated Editing Result Analysis</p>
+            <h2 data-label-key="analysisTitle">Integrated Editing Result Analysis</h2>
+            <span data-label-key="analysisDescription">View integrated scenario run history, node result tables, and Oracle ML model views.</span>
         </div>
         <div class="M04002-actions">
             <button type="button" class="table-btn" onclick="__PAGE_CODE__.loadRuns()">
                 <i class="fas fa-sync-alt"></i>
-                Refresh
+                <span data-label-key="refresh">Refresh</span>
             </button>
             <button type="button" class="table-btn" onclick="__PAGE_CODE__.exportCurrent()">
                 <i class="fas fa-file-export"></i>
-                Export CSV
+                <span data-label-key="exportCsv">Export CSV</span>
             </button>
         </div>
     </section>
 
     <section class="M04002-toolbar">
         <label>
-            <span>Project</span>
+            <span data-label-key="project">Project</span>
             <select id="projectId-__PAGE_CODE__" onchange="__PAGE_CODE__.handleProjectChange()">
-                <option value="">Loading projects...</option>
+                <option value="" data-label-key="loadingProjects">Loading projects...</option>
             </select>
         </label>
         <label>
-            <span>Scenario</span>
+            <span data-label-key="scenario">Scenario</span>
             <select id="scenarioId-__PAGE_CODE__" onchange="__PAGE_CODE__.handleScenarioChange()">
                 <option value="">ALL</option>
             </select>
         </label>
         <label>
-            <span>Status</span>
+            <span data-label-key="status">Status</span>
             <select id="status-__PAGE_CODE__" onchange="__PAGE_CODE__.loadRuns(1)">
                 <option value="ALL">ALL</option>
                 <option value="SUCCESS">SUCCESS</option>
@@ -41,11 +41,11 @@
             </select>
         </label>
         <label>
-            <span>Keyword</span>
-            <input id="keyword-__PAGE_CODE__" type="search" placeholder="Run ID or flow name" onkeydown="__PAGE_CODE__.handleKeywordKeydown(event)">
+            <span data-label-key="keyword">Keyword</span>
+            <input id="keyword-__PAGE_CODE__" type="search" placeholder="Run ID or flow name" data-placeholder-key="keywordPlaceholder" onkeydown="__PAGE_CODE__.handleKeywordKeydown(event)">
         </label>
         <label>
-            <span>Rows</span>
+            <span data-label-key="rows">Rows</span>
             <select id="pageSize-__PAGE_CODE__" onchange="__PAGE_CODE__.loadRuns(1)">
                 <option value="20">20</option>
                 <option value="50">50</option>
@@ -57,8 +57,8 @@
     <section class="M04002-layout">
         <aside class="M04002-run-panel">
             <header>
-                <strong>Scenario Runs</strong>
-                <span id="runCount-__PAGE_CODE__">0 rows</span>
+                <strong data-label-key="scenarioRuns">Scenario Runs</strong>
+                <span id="runCount-__PAGE_CODE__" data-label-key="zeroRows">0 rows</span>
             </header>
             <div id="runList-__PAGE_CODE__" class="M04002-run-list"></div>
             <footer class="M04002-pager">
@@ -70,13 +70,13 @@
 
         <main class="M04002-detail-panel">
             <section id="runSummary-__PAGE_CODE__" class="M04002-summary">
-                <div class="table-empty">실행 이력을 선택하세요.</div>
+                <div class="table-empty" data-label-key="selectRunHistory">Select a run history.</div>
             </section>
             <section>
                 <div id="nodeList-__PAGE_CODE__" class="M04002-node-grid"></div>
             </section>
             <section id="resultPanel-__PAGE_CODE__" class="M04002-result-panel">
-                <div class="table-empty">노드를 선택하면 결과 상세가 표시됩니다.</div>
+                <div class="table-empty" data-label-key="selectNodeForResult">Select a node to view result details.</div>
             </section>
         </main>
     </section>

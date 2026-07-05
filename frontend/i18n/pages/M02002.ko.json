@@ -1,0 +1,76 @@
+{
+  "language": "ko",
+  "pageCode": "M02002",
+  "description": "Korean labels for Target Data Selection.",
+  "labels": {
+    "loadingProjects": "프로젝트를 불러오는 중...",
+    "projectLoadFailed": "프로젝트 조회 실패",
+    "selectProject": "-- 프로젝트 선택 --",
+    "untitledProject": "(이름 없음)",
+    "loadingScenarios": "시나리오를 불러오는 중...",
+    "scenarioLoadFailed": "시나리오 조회 실패",
+    "selectScenario": "-- 시나리오 선택 --",
+    "untitledScenario": "(이름 없음)",
+    "selectProjectScenarioFirst": "프로젝트와 시나리오를 먼저 선택하세요.",
+    "loadingScenarioTables": "시나리오 테이블을 불러오는 중...",
+    "noScenarioTables": "이 시나리오에 등록된 테이블이 없습니다.",
+    "loadingTables": "테이블을 불러오는 중...",
+    "tableListLoadFailed": "테이블 목록을 불러오지 못했습니다.",
+    "noTablesFound": "조회된 테이블이 없습니다.",
+    "loadingMore": "추가 로딩 중...",
+    "loadMore": "더 보기",
+    "selectTableFromExplorer": "탐색기에서 테이블을 선택하세요.",
+    "loadingColumns": "컬럼을 불러오는 중...",
+    "loadingData": "데이터를 불러오는 중...",
+    "noSqlAtCursor": "커서 위치에서 SQL 문장을 찾지 못했습니다.",
+    "noData": "데이터가 없습니다.",
+    "selectTableFirst": "테이블을 먼저 선택하세요."
+  },
+  "selectors": {
+    "text": {
+      ".work-context-title-row > span:nth-child(1) > strong": "프로젝트 시나리오",
+      ".work-context-title-row > span:nth-child(1) > span": "이 메뉴에 필요한 프로젝트와 시나리오를 선택합니다.",
+      ".work-context-title-row > span:nth-child(2) > strong": "시나리오 테이블",
+      ".work-context-title-row > span:nth-child(2) > span": "선택 시나리오에 등록된 테이블입니다.",
+      ".scenario-table-actions .table-btn:nth-child(2) span": "저장",
+      ".scenario-table-actions .table-btn:nth-child(3) span": "삭제",
+      ".scenario-table-actions .table-btn:nth-child(4) span": "전체 삭제",
+      ".work-context-bar label:nth-child(1) .required-title": "프로젝트",
+      ".work-context-bar label:nth-child(2) .required-title": "시나리오",
+      ".table-object-header .table-section-title": "테이블 탐색",
+      ".table-object-header .table-section-desc": "데이터 분석용 사용자 테이블입니다.",
+      "#table-title-M02002": "테이블 분석",
+      "#tableDescription-M02002": "탐색기에서 테이블을 선택하세요.",
+      ".table-export-actions .table-btn span": "선택 추가",
+      ".table-tabs [data-tab=\"columns\"] span": "컬럼",
+      ".table-tabs [data-tab=\"data\"] span": "데이터",
+      ".table-tabs [data-tab=\"sql\"] span": "SQL",
+      "[data-panel=\"columns\"] .table-meta-strip > div:nth-child(1) > span": "Owner",
+      "[data-panel=\"columns\"] .table-meta-strip > div:nth-child(2) > span": "테이블 ID",
+      "[data-panel=\"columns\"] .table-meta-strip > div:nth-child(3) > span": "생성일시",
+      "[data-panel=\"columns\"] .table-meta-strip > div:nth-child(4) > span": "설명",
+      "[data-panel=\"data\"] .table-btn span": "데이터 조회",
+      "[data-panel=\"data\"] .table-limit-control span": "행",
+      "[data-panel=\"sql\"] .data-sql-freeze-control span": "고정",
+      "[data-panel=\"sql\"] .table-limit-control:last-child span": "행"
+    },
+    "title": {
+      ".scenario-table-actions .table-icon-btn": "프로젝트와 시나리오 새로고침",
+      ".table-object-actions .table-icon-btn": "테이블 새로고침",
+      ".table-export-actions .export-excel": "Excel 내보내기",
+      ".table-export-actions .table-icon-btn:nth-child(3)": "CSV 내보내기",
+      ".table-export-actions .table-icon-btn:nth-child(4)": "TSV 내보내기",
+      "[data-panel=\"sql\"] .sql-run-btn": "SQL 실행(Ctrl+Enter)",
+      "[data-panel=\"sql\"] .data-sql-freeze-control": "가로 스크롤 시 No와 지정한 데이터 컬럼 수를 고정합니다."
+    },
+    "placeholder": {
+      "#tableSearch-M02002": "테이블 검색"
+    },
+    "ariaLabel": {
+      "#tableSearch-M02002": "테이블 검색",
+      "[data-panel=\"sql\"] .sql-run-btn": "SQL 실행",
+      "#sqlEditor-M02002": "SQL 워크시트"
+    }
+  },
+  "messages": {}
+}

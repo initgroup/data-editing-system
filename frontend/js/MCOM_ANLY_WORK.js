@@ -20,6 +20,28 @@
         const pageHelper = PageManager.createHelper(PAGE_CODE);
         const resolvePageText = (value) => String(value ?? "").split("${PAGE_CODE}").join(PAGE_CODE);
         const getContainerEl = (selector) => pageHelper.getContainerEl(resolvePageText(selector));
+        const escapeHtmlText = (value) => String(value ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+        const getLabel = (key, fallback = "") => {
+            const pack = window[`${PAGE_CODE}_PAGE_I18N`] || {};
+            const labels = pack && typeof pack.labels === "object" && !Array.isArray(pack.labels) ? pack.labels : {};
+            return Object.prototype.hasOwnProperty.call(labels, key) ? String(labels[key] ?? "") : fallback;
+        };
+        const getMessage = (key, fallback = "", values = {}) => {
+            const pack = window[`${PAGE_CODE}_PAGE_I18N`] || {};
+            const messages = pack && typeof pack.messages === "object" && !Array.isArray(pack.messages) ? pack.messages : {};
+            let text = Object.prototype.hasOwnProperty.call(messages, key) ? String(messages[key] ?? "") : fallback;
+            Object.entries(values || {}).forEach(([name, value]) => {
+                text = text.replace(new RegExp(`\\{${name}\\}`, "g"), String(value ?? ""));
+            });
+            return text;
+        };
+        const getText = (fallback = "", values = {}) => getMessage(fallback, fallback, values);
+        const emptyState = (key, fallback) => `<div class="table-empty">${escapeHtmlText(getLabel(key, fallback))}</div>`;
     const GENERIC_TABLE_RESULT_LAYOUT = Object.freeze({
         kind: "TABLE",
         key: "TABLE:GENERIC",
@@ -282,7 +304,7 @@
             this.lastSymbolicViolationSummary = this.cloneCacheValue(cached.lastSymbolicViolationSummary);
             this.currentExport = this.cloneCacheValue(cached.currentExport) || { filename: "integrated-result.csv", columns: [], rows: [] };
             panel.classList.remove("is-loading");
-            panel.innerHTML = cached.html || `<div class="table-empty">노드를 선택하면 결과 상세가 표시됩니다.</div>`;
+            panel.innerHTML = cached.html || emptyState("selectNodeForResult", "Select a node to view result details.");
             return true;
         },
 
@@ -324,7 +346,7 @@
                 const nodeList = getContainerEl("#nodeList-${PAGE_CODE}");
                 if (nodeList) nodeList.innerHTML = "";
                 const panel = getContainerEl("#resultPanel-${PAGE_CODE}");
-                if (panel) panel.innerHTML = `<div class="table-empty">프로젝트를 선택하면 실행 이력이 표시됩니다.</div>`;
+                if (panel) panel.innerHTML = emptyState("selectProjectForRuns", "Select a project to view run history.");
                 return;
             }
             this.runPage = Math.max(1, Number(page || 1));
@@ -357,8 +379,8 @@
                     this.renderRunSummary();
                     const nodeList = getContainerEl("#nodeList-${PAGE_CODE}");
                     const resultPanel = getContainerEl("#resultPanel-${PAGE_CODE}");
-                    if (nodeList) nodeList.innerHTML = `<div class="table-empty">실행 이력이 없습니다.</div>`;
-                    if (resultPanel) resultPanel.innerHTML = `<div class="table-empty">실행 이력을 선택하면 결과 상세가 표시됩니다.</div>`;
+                    if (nodeList) nodeList.innerHTML = emptyState("noRunHistory", "No run history.");
+                    if (resultPanel) resultPanel.innerHTML = emptyState("selectRunForResult", "Select a run history to view result details.");
                     return;
                 }
                 this.renderRuns();
@@ -403,13 +425,13 @@
 
         async loadProjects(preferredProjectId = "") {
             const select = getContainerEl("#projectId-${PAGE_CODE}");
-            if (select) select.innerHTML = `<option value="">Loading projects...</option>`;
+            if (select) select.innerHTML = `<option value="">${escapeHtmlText(getLabel("loadingProjects", "Loading projects..."))}</option>`;
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/M01002/projects?keyword=`, { method: "GET", showLoading: false });
                 this.projects = Array.isArray(json.data) ? json.data : [];
                 if (select) {
                     select.innerHTML = `
-                        <option value="">-- Select project --</option>
+                        <option value="">${escapeHtmlText(getLabel("selectProject", "-- Select project --"))}</option>
                         ${this.projects.map((project) => `
                             <option class="${this.escapeHtml(CommonUtils.getOwnerScopeClass(project))}" value="${this.escapeHtml(project.PROJECT_ID ?? "")}">
                                 ${this.escapeHtml(CommonUtils.formatOwnerScopedName(project, project.PROJECT_NAME || project.PROJECT_CODE || `Project #${project.PROJECT_ID}`))}
@@ -430,7 +452,7 @@
             const projectId = getContainerEl("#projectId-${PAGE_CODE}")?.value || "";
             const select = getContainerEl("#scenarioId-${PAGE_CODE}");
             this.scenarios = [];
-            if (select) select.innerHTML = `<option value="">ALL</option>`;
+            if (select) select.innerHTML = `<option value="">${escapeHtmlText(getLabel("all", "ALL"))}</option>`;
             if (!projectId) return;
             const params = new URLSearchParams({ projectId, keyword: "" });
             try {
@@ -438,7 +460,7 @@
                 this.scenarios = Array.isArray(json.data) ? json.data : [];
                 if (select) {
                     select.innerHTML = `
-                        <option value="">ALL</option>
+                        <option value="">${escapeHtmlText(getLabel("all", "ALL"))}</option>
                         ${this.scenarios.map((scenario) => `
                             <option class="${this.escapeHtml(CommonUtils.getOwnerScopeClass(scenario))}" value="${this.escapeHtml(scenario.SCENARIO_ID ?? "")}">
                                 ${this.escapeHtml(CommonUtils.formatOwnerScopedName(scenario, scenario.SCENARIO_NAME || scenario.SCENARIO_CODE || `Scenario #${scenario.SCENARIO_ID}`))}
@@ -476,11 +498,11 @@
             const pageText = getContainerEl("#runPage-${PAGE_CODE}");
             const pageSize = Number(getContainerEl("#pageSize-${PAGE_CODE}")?.value || 20);
             const totalPages = Math.max(1, Math.ceil(this.runTotal / pageSize));
-            if (count) count.textContent = `${this.formatNumber(this.runTotal)} rows`;
+            if (count) count.textContent = getLabel("rowCount", "{count} rows").replace("{count}", this.formatNumber(this.runTotal));
             if (pageText) pageText.textContent = `${this.runPage} / ${totalPages}`;
             if (!list) return;
             if (!this.runs.length) {
-                list.innerHTML = `<div class="table-empty">실행 이력이 없습니다.</div>`;
+                list.innerHTML = emptyState("noRunHistory", "No run history.");
                 return;
             }
             list.innerHTML = this.runs.map((run) => `
@@ -518,7 +540,7 @@
             const nodeList = getContainerEl("#nodeList-${PAGE_CODE}");
             const resultPanel = getContainerEl("#resultPanel-${PAGE_CODE}");
             if (nodeList) nodeList.innerHTML = `<div class="table-empty">Loading nodes...</div>`;
-            if (resultPanel) resultPanel.innerHTML = `<div class="table-empty">노드를 선택하면 결과 상세가 표시됩니다.</div>`;
+            if (resultPanel) resultPanel.innerHTML = emptyState("selectNodeForResult", "Select a node to view result details.");
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${API_PAGE_CODE}/runs/${flowRunId}/nodes`, { method: "GET", showLoading: false });
                 this.nodes = Array.isArray(json.data) ? json.data : [];
@@ -535,7 +557,7 @@
             const run = this.selectedRun;
             if (!el) return;
             if (!run) {
-                el.innerHTML = `<div class="table-empty">실행 이력을 선택하세요.</div>`;
+                el.innerHTML = emptyState("selectRunHistory", "Select a run history.");
                 return;
             }
             const runMessage = String(run.MESSAGE || "").trim();
@@ -546,9 +568,9 @@
                         <strong>${this.escapeHtml(run.FLOW_NAME || "-")}</strong>
                         <small>Run #${this.escapeHtml(run.FLOW_RUN_ID)} · ${this.escapeHtml(run.STATUS || "-")} · ${this.escapeHtml(this.formatElapsedTime(run.STARTED_AT, run.FINISHED_AT, run.STATUS))}</small>
                     </div>
-                    <button type="button" class="M04002-run-delete-btn" title="선택한 Run 이력 삭제" onclick="${PAGE_CODE}.deleteSelectedRun()">
+                    <button type="button" class="M04002-run-delete-btn" title="${this.escapeHtml(getLabel("deleteSelectedRunTitle", "Delete selected run history"))}" onclick="${PAGE_CODE}.deleteSelectedRun()">
                         <i class="far fa-trash-alt"></i>
-                        <span>삭제</span>
+                        <span>${this.escapeHtml(getLabel("delete", "Delete"))}</span>
                     </button>
                 </article>
                 <article><span>Nodes</span><strong>${this.formatNumber(run.NODE_COUNT)}</strong><small>${this.formatNumber(run.SUCCESS_NODE_COUNT)} success / ${this.formatNumber(run.FAILED_NODE_COUNT)} failed</small></article>
@@ -558,7 +580,7 @@
                     <span class="M04002-summary-message">
                         <small title="${this.escapeHtml(runMessage)}">${this.escapeHtml(runMessage || "-")}</small>
                         ${runMessage ? `
-                            <button type="button" class="M04002-summary-copy" title="메시지 복사" onclick="${PAGE_CODE}.copyRunMessage(event)" hidden>
+                            <button type="button" class="M04002-summary-copy" title="${this.escapeHtml(getLabel("copyMessageTitle", "Copy message"))}" onclick="${PAGE_CODE}.copyRunMessage(event)" hidden>
                                 <i class="far fa-copy"></i>
                             </button>
                         ` : ""}
@@ -575,8 +597,8 @@
             const flowName = run.FLOW_NAME || `Run #${flowRunId}`;
             const confirmMessage = [
                 `${flowName}`,
-                `Run #${flowRunId} 실행 이력과 노드 이력, RUN ID 기준 분석 결과 이력을 삭제합니다.`,
-                "삭제 후에는 되돌릴 수 없습니다. 계속할까요?"
+                getText("Run #{runId} history, node history, and RUN ID based analysis result history will be deleted.", { runId: flowRunId }),
+                getText("This action cannot be undone. Continue?")
             ].join("\n");
             const confirmed = window.CommonMessage?.confirm
                 ? await window.CommonMessage.confirm(confirmMessage, { defaultAction: "cancel" })
@@ -590,14 +612,14 @@
                 const forceMessage = [
                     "Running or pending run history cannot be deleted.",
                     "",
-                    "관리자 권한으로 실행 중/대기 중 이력을 강제 삭제할 수 있습니다.",
-                    "그래도 삭제하시겠습니까?"
+                    getText("Administrators can force delete running or pending histories."),
+                    getText("Do you still want to delete it?")
                 ].join("\n");
                 const forceConfirmed = window.CommonMessage?.confirm
                     ? await window.CommonMessage.confirm(forceMessage, {
                         defaultAction: "cancel",
-                        okText: "강제 삭제",
-                        cancelText: "취소"
+                        okText: getText("Force delete"),
+                        cancelText: getText("Cancel")
                     })
                     : window.confirm(forceMessage);
                 if (!forceConfirmed) return;
@@ -622,9 +644,9 @@
                 this.nodeResultCache = new Map();
                 const nodeList = getContainerEl("#nodeList-${PAGE_CODE}");
                 const resultPanel = getContainerEl("#resultPanel-${PAGE_CODE}");
-                if (nodeList) nodeList.innerHTML = `<div class="table-empty">Run 이력이 삭제되었습니다.</div>`;
-                if (resultPanel) resultPanel.innerHTML = `<div class="table-empty">Run 이력이 삭제되었습니다.</div>`;
-                window.CommonMessage?.success?.(json.message || `Run #${flowRunId} 이력이 삭제되었습니다.`, { copyable: false });
+                if (nodeList) nodeList.innerHTML = `<div class="table-empty">${this.escapeHtml(getText("Run history has been deleted."))}</div>`;
+                if (resultPanel) resultPanel.innerHTML = `<div class="table-empty">${this.escapeHtml(getText("Run history has been deleted."))}</div>`;
+                window.CommonMessage?.success?.(json.message || getText("Run #{runId} history has been deleted.", { runId: flowRunId }), { copyable: false });
                 const deletedPage = this.runPage || 1;
                 await this.loadRuns(deletedPage);
                 if (!this.runs.length && deletedPage > 1) {
@@ -654,7 +676,7 @@
             const el = getContainerEl("#nodeList-${PAGE_CODE}");
             if (!el) return;
             if (!this.nodes.length) {
-                el.innerHTML = `<div class="table-empty">노드 실행 결과가 없습니다.</div>`;
+                el.innerHTML = emptyState("noNodeResults", "No node execution results.");
                 return;
             }
             const groupDefs = [
@@ -797,7 +819,7 @@
             this.closeSymbolicRulePopup();
             const resultLayout = this.getNodeResultLayout(this.selectedNode);
             if (resultLayout.kind === "NONE") {
-                panel.innerHTML = `<div class="table-empty">이 노드는 저장된 결과 테이블/모델이 없습니다.</div>`;
+                panel.innerHTML = `<div class="table-empty">${this.escapeHtml(getText("This node has no saved result table or model."))}</div>`;
                 this.snapshotNodeResultCache();
                 return;
             }
@@ -814,7 +836,7 @@
             if (!normalizedRuleId) return;
             const violationNode = this.findViolationNode();
             if (!violationNode) {
-                alert("현재 Flow에서 규칙 위반 탐지 노드를 찾을 수 없습니다.");
+                alert(getText("No rule violation detection node was found in the current flow."));
                 return;
             }
             const normalizedConditionCount = conditionCount === undefined || conditionCount === null || String(conditionCount).trim() === ""
@@ -845,7 +867,7 @@
             if (!normalizedRuleId) return;
             const violationNode = this.findSymbolicViolationNode();
             if (!violationNode) {
-                alert("현재 Flow에서 연속형 규칙 위반 탐지 노드를 찾을 수 없습니다.");
+                alert(getText("No continuous rule violation detection node was found in the current flow."));
                 return;
             }
             this.violationRuleFilters = {
@@ -872,7 +894,7 @@
             const node = this.selectedNode;
             if (!node) return;
             this.resultPage = Math.max(1, Number(page || 1));
-            this.showResultLoading("결과 테이블 조회 중...");
+            this.showResultLoading(getText("Loading result table..."));
             const ruleModelName = this.getSelectedNodeRuleModelName(node);
             const params = new URLSearchParams({
                 owner: node.RESULT_OWNER,
@@ -933,7 +955,7 @@
         async loadModelView(viewType = "VR", page = 1) {
             const node = this.selectedNode;
             if (!node) return;
-            this.showResultLoading(`${viewType} 뷰 조회 중...`, viewType);
+            this.showResultLoading(getText("Loading {viewType} view...", { viewType }), viewType);
             const params = new URLSearchParams({
                 owner: node.RESULT_OWNER,
                 modelName: node.RESULT_OBJECT_NAME,
@@ -954,7 +976,7 @@
         async loadModelDetailSummary() {
             const node = this.selectedNode;
             if (!node) return;
-            this.showResultLoading("모델 상세 분석 조회 중...");
+            this.showResultLoading(getText("Loading model detail analysis..."));
             const params = new URLSearchParams({
                 owner: node.RESULT_OWNER,
                 modelName: node.RESULT_OBJECT_NAME,
@@ -982,7 +1004,7 @@
             this.currentModelDetail.ruleSummaryLoading = true;
             this.currentModelDetail.ruleSummaryError = "";
             this.renderModelAnalysis(this.currentModelDetail, this.getActiveModelAnalysisTab());
-            this.showResultLoading("규칙 요약 조회 중...");
+            this.showResultLoading(getText("Loading rule summary..."));
             const params = new URLSearchParams({
                 owner: node.RESULT_OWNER,
                 modelName: node.RESULT_OBJECT_NAME,
@@ -1004,7 +1026,7 @@
                     method: "GET",
                     showLoading: false,
                     timeoutMs: 12000,
-                    timeoutMessage: "규칙 요약 조회 시간이 길어져 중단했습니다."
+                    timeoutMessage: getText("Rule summary lookup took too long and was stopped.")
                 });
                 if (this.selectedNode !== node || !this.currentModelDetail) return;
                 this.currentModelDetail.ruleSummary = json;
@@ -1147,7 +1169,7 @@
             const node = this.selectedNode;
             if (!node) return;
             const nextPage = Math.max(1, Number(page || 1));
-            this.showResultLoading(`${viewType} 샘플 페이지 조회 중...`);
+            this.showResultLoading(getText("Loading {viewType} sample page...", { viewType }));
             const params = new URLSearchParams({
                 owner: node.RESULT_OWNER,
                 modelName: node.RESULT_OBJECT_NAME,
@@ -1202,27 +1224,27 @@
             }
             const conditionFiltered = this.applyReadableConditionFilter(readableRules);
             const filtered = this.excludeEmptyConsequent
-                ? conditionFiltered.filter((rule) => !/값 정보 없음/.test(rule.thenText))
+                ? conditionFiltered.filter((rule) => !this.isEmptyRuleText(rule.thenText))
                 : conditionFiltered;
             const visibleRuleCount = filtered.length;
             const baseRuleCount = readableRules.length;
             return `
                 <div class="M04002-readable-rule-intro">
                     <div>
-                        <strong>사람이 읽는 규칙 요약</strong>
-                        <span>DM$VR 전체 ${this.formatNumber(vr.total || 0)}건 중 현재 ${this.getViewSampleRange(vr)} 샘플을 해석해 표시합니다. 조건 개수 칩을 선택하면 아래 규칙 목록이 바뀝니다.</span>
+                        <strong>${this.escapeHtml(getText("Readable Rule Summary"))}</strong>
+                        <span>${this.escapeHtml(getText("Interprets and displays the current {range} sample out of {total} DM$VR rows. Select a condition-count chip to update the rule list below.", { range: this.getViewSampleRange(vr), total: this.formatNumber(vr.total || 0) }))}</span>
                     </div>
                     <div class="M04002-sample-controls">
                         <label>
                             <input type="checkbox" ${this.excludeEmptyConsequent ? "checked" : ""} onchange="${PAGE_CODE}.toggleExcludeEmptyConsequent(this.checked)">
-                            <span>결과 정보 없음 제외</span>
+                            <span>${this.escapeHtml(getText("Exclude missing result"))}</span>
                         </label>
                         ${this.renderSamplePageJump("readableRulePage-${PAGE_CODE}", vr, "${PAGE_CODE}.goReadableRulesPage()", "${PAGE_CODE}.loadReadableRulesPage")}
                     </div>
                 </div>
                 ${this.renderReadableRuleStats(readableRules, visibleRuleCount, baseRuleCount)}
                 <div class="M04002-readable-rule-grid">
-                    ${filtered.length ? filtered.map((rule) => this.renderReadableRuleCard(rule)).join("") : `<div class="table-empty">표시할 규칙 행이 없습니다. Detail Views에서 원본 모델뷰를 확인하세요.</div>`}
+                    ${filtered.length ? filtered.map((rule) => this.renderReadableRuleCard(rule)).join("") : `<div class="table-empty">${this.escapeHtml(getText("No rule rows to display. Check the original model view in Detail Views."))}</div>`}
                 </div>
             `;
         },
@@ -1235,20 +1257,20 @@
                 return `
                     <div class="M04002-readable-rule-intro">
                         <div>
-                            <strong>사람이 읽는 규칙 요약</strong>
-                            <span>Job 실행 시 저장된 규칙 요약 테이블을 조회하고 있습니다.</span>
+                            <strong>${this.escapeHtml(getText("Readable Rule Summary"))}</strong>
+                            <span>${this.escapeHtml(getText("Loading the rule summary table saved during job execution."))}</span>
                         </div>
                     </div>
-                    <section class="M04002-readable-stats"><div class="table-empty">규칙 요약을 불러오는 중입니다...</div></section>
+                    <section class="M04002-readable-stats"><div class="table-empty">${this.escapeHtml(getText("Loading rule summary..."))}</div></section>
                     ${this.renderFallbackReadableRuleGrid(fallbackRules)}
                 `;
             }
             if (!summary || Number(summary.overview?.TOTAL_RULES || 0) <= 0) {
-                const message = error || "저장된 규칙 요약이 없습니다. 이 모델 Job을 다시 실행하면 요약 테이블이 생성됩니다.";
+                const message = error || getText("No saved rule summary exists. Run this model job again to create the summary table.");
                 return `
                     <div class="M04002-readable-rule-intro">
                         <div>
-                            <strong>사람이 읽는 규칙 요약</strong>
+                            <strong>${this.escapeHtml(getText("Readable Rule Summary"))}</strong>
                             <span>${this.escapeHtml(message)}</span>
                         </div>
                     </div>
@@ -1261,13 +1283,13 @@
             const conditionColumnFilter = this.ruleSummaryFilters.conditionColumn === "ALL" ? "" : this.ruleSummaryFilters.conditionColumn;
             const conditionItems = [
                 {
-                    label: "전체",
+                    label: getText("All"),
                     value: "ALL",
                     total: overview.TOTAL_RULES,
                     nonPerfect: overview.NON_PERFECT_CONF_RULES
                 },
                 ...(summary.conditionDist || []).map((bucket) => ({
-                    label: Number(bucket.CONDITION_COUNT || 0) > 0 ? `조건 ${this.formatNumber(bucket.CONDITION_COUNT)}개` : "조건 미해석",
+                    label: Number(bucket.CONDITION_COUNT || 0) > 0 ? getText("{count} conditions", { count: this.formatNumber(bucket.CONDITION_COUNT) }) : getText("Unparsed conditions"),
                     value: String(Number(bucket.CONDITION_COUNT || 0)),
                     total: bucket.RULE_COUNT,
                     nonPerfect: bucket.NON_PERFECT_CONF_RULES
@@ -1276,8 +1298,8 @@
             return `
                 <div class="M04002-readable-rule-intro">
                     <div>
-                        <strong>사람이 읽는 규칙 요약</strong>
-                        <span>${this.escapeHtml(this.describeRuleSummaryBasis(overview))} 조건 수나 결과 컬럼을 선택하면 아래 상세 규칙이 바뀝니다.</span>
+                        <strong>${this.escapeHtml(getText("Readable Rule Summary"))}</strong>
+                        <span>${this.escapeHtml(getText("{basis} Select a condition count or result column to update the detail rules below.", { basis: this.describeRuleSummaryBasis(overview) }))}</span>
                     </div>
                     <div class="M04002-sample-controls">
                         <button type="button" class="table-btn" onclick="${PAGE_CODE}.exportCurrent()">
@@ -1293,26 +1315,26 @@
                 </div>
                 <section class="M04002-readable-stats">
                     <div class="M04002-readable-stat-block">
-                        <strong>규칙 요약</strong>
+                        <strong>${this.escapeHtml(getText("Rule Summary"))}</strong>
                         <div class="M04002-readable-stat-metrics">
-                            <span><b>${this.formatNumber(overview.TOTAL_RULES)}</b><small>전체 규칙</small></span>
-                            <span><b>${this.formatNumber(overview.MAPPED_RULES)}</b><small>조건/결과 매핑</small></span>
-                            <span><b>${this.formatNumber(overview.MISSING_RESULT_RULES)}</b><small>결과 값 없음</small></span>
-                            <span><b>${this.formatNumber(summary.total)}</b><small>필터 결과</small></span>
+                            <span><b>${this.formatNumber(overview.TOTAL_RULES)}</b><small>${this.escapeHtml(getText("Total rules"))}</small></span>
+                            <span><b>${this.formatNumber(overview.MAPPED_RULES)}</b><small>${this.escapeHtml(getText("Condition/result mapping"))}</small></span>
+                            <span><b>${this.formatNumber(overview.MISSING_RESULT_RULES)}</b><small>${this.escapeHtml(getText("Missing result values"))}</small></span>
+                            <span><b>${this.formatNumber(summary.total)}</b><small>${this.escapeHtml(getText("Filter results"))}</small></span>
                         </div>
                     </div>
                     <div class="M04002-readable-condition-dist">
-                        <strong>조건 수 선택</strong>
+                        <strong>${this.escapeHtml(getText("Condition Count"))}</strong>
                         ${this.renderRuleConditionMatrix(conditionItems, this.ruleSummaryFilters.conditionCount, this.ruleSummaryFilters.confidenceScope || "ALL", "${PAGE_CODE}.selectRuleSummaryCondition")}
                     </div>
                 </section>
                 <section class="M04002-rule-facet-panel">
                     <div class="M04002-rule-facet-block">
                         <header>
-                            <strong>결과 컬럼 Top 12</strong>
+                            <strong>${this.escapeHtml(getText("Top 12 Result Columns"))}</strong>
                             <div class="M04002-rule-facet-actions">
                                 ${this.renderResultColumnPager(summary)}
-                                <button type="button" class="${this.ruleSummaryFilters.resultColumn === "ALL" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectRuleSummaryResult('ALL')">전체</button>
+                                <button type="button" class="${this.ruleSummaryFilters.resultColumn === "ALL" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectRuleSummaryResult('ALL')">${this.escapeHtml(getText("All"))}</button>
                             </div>
                         </header>
                         <div class="M04002-rule-facet-list">
@@ -1329,7 +1351,7 @@
                     </div>
                     <div class="M04002-rule-facet-block is-condition">
                         <header>
-                            <strong>조건 컬럼 ID 검색</strong>
+                            <strong>${this.escapeHtml(getText("Condition Column ID Search"))}</strong>
                             <div class="M04002-rule-facet-actions">
                                 <button type="button" onclick="${PAGE_CODE}.searchRuleSummaryConditionColumn()">Search</button>
                                 <button type="button" class="${this.ruleSummaryFilters.conditionColumn === "ALL" ? "is-active" : ""}" onclick="${PAGE_CODE}.resetRuleSummaryConditionColumn()">Reset</button>
@@ -1337,12 +1359,12 @@
                         </header>
                         <label class="M04002-rule-condition-search">
                             <span>Condition Column</span>
-                            <input id="ruleConditionColumnInput-${PAGE_CODE}" type="search" value="${this.escapeHtml(conditionColumnFilter)}" placeholder="예: COL001" onkeydown="${PAGE_CODE}.handleRuleSummaryConditionColumnKeydown(event)">
+                            <input id="ruleConditionColumnInput-${PAGE_CODE}" type="search" value="${this.escapeHtml(conditionColumnFilter)}" placeholder="${this.escapeHtml(getText("e.g. COL001"))}" onkeydown="${PAGE_CODE}.handleRuleSummaryConditionColumnKeydown(event)">
                         </label>
                     </div>
                 </section>
                 <div class="M04002-readable-rule-grid">
-                    ${rules.length ? rules.map((rule) => this.renderReadableRuleCard(rule)).join("") : `<div class="table-empty">선택한 조건에 해당하는 규칙이 없습니다.</div>`}
+                    ${rules.length ? rules.map((rule) => this.renderReadableRuleCard(rule)).join("") : `<div class="table-empty">${this.escapeHtml(getText("No rules match the selected conditions."))}</div>`}
                 </div>
                 ${this.renderRuleSummaryPager(summary.page, totalPages)}
             `;
@@ -1350,15 +1372,15 @@
 
         renderFallbackReadableRuleGrid(rules = []) {
             const filtered = this.excludeEmptyConsequent
-                ? rules.filter((rule) => !/값 정보 없음/.test(rule.thenText))
+                ? rules.filter((rule) => !this.isEmptyRuleText(rule.thenText))
                 : rules;
-            return `<div class="M04002-readable-rule-grid">${filtered.length ? filtered.map((rule) => this.renderReadableRuleCard(rule)).join("") : `<div class="table-empty">표시할 규칙 행이 없습니다.</div>`}</div>`;
+            return `<div class="M04002-readable-rule-grid">${filtered.length ? filtered.map((rule) => this.renderReadableRuleCard(rule)).join("") : `<div class="table-empty">${this.escapeHtml(getText("No rule rows to display."))}</div>`}</div>`;
         },
 
         renderReadableRuleStats(rules = [], visibleRuleCount = 0, baseRuleCount = 0) {
             const stats = this.createReadableRuleStats(rules);
             const conditionItems = [
-                { label: "전체", value: "ALL", total: baseRuleCount, nonPerfect: stats.nonPerfect },
+                { label: getText("All"), value: "ALL", total: baseRuleCount, nonPerfect: stats.nonPerfect },
                 ...stats.conditionBuckets.map((bucket) => ({
                     label: bucket.label,
                     value: String(Number(bucket.conditionCount || 0)),
@@ -1369,16 +1391,16 @@
             return `
                 <section class="M04002-readable-stats">
                     <div class="M04002-readable-stat-block">
-                        <strong>규칙 요약</strong>
+                        <strong>${this.escapeHtml(getText("Rule Summary"))}</strong>
                         <div class="M04002-readable-stat-metrics">
-                            <span><b>${this.formatNumber(stats.total)}</b><small>현재 샘플 규칙</small></span>
-                            <span><b>${this.formatNumber(stats.mapped)}</b><small>조건/결과 매핑</small></span>
-                            <span><b>${this.formatNumber(stats.missingResult)}</b><small>결과 정보 없음</small></span>
-                            <span><b>${this.formatNumber(visibleRuleCount)}</b><small>표시 중</small></span>
+                            <span><b>${this.formatNumber(stats.total)}</b><small>${this.escapeHtml(getText("Current sample rules"))}</small></span>
+                            <span><b>${this.formatNumber(stats.mapped)}</b><small>${this.escapeHtml(getText("Condition/result mapping"))}</small></span>
+                            <span><b>${this.formatNumber(stats.missingResult)}</b><small>${this.escapeHtml(getText("Missing result information"))}</small></span>
+                            <span><b>${this.formatNumber(visibleRuleCount)}</b><small>${this.escapeHtml(getText("Showing"))}</small></span>
                         </div>
                     </div>
                     <div class="M04002-readable-condition-dist">
-                        <strong>조건 수 선택</strong>
+                        <strong>${this.escapeHtml(getText("Condition Count"))}</strong>
                         ${this.renderRuleConditionMatrix(conditionItems, this.readableRuleConditionFilter, this.readableRuleConfidenceFilter, "${PAGE_CODE}.selectReadableConditionFilter")}
                     </div>
                 </section>
@@ -1401,11 +1423,11 @@
             return `
                 <div class="M04002-condition-count-matrix">
                     <div class="M04002-condition-count-row">
-                        <span>전체 규칙수</span>
+                        <span>${this.escapeHtml(getText("Total rule count"))}</span>
                         <div class="M04002-condition-count-buttons">${renderButtons("total", "ALL")}</div>
                     </div>
                     <div class="M04002-condition-count-row">
-                        <span>위반 후보 규칙수</span>
+                        <span>${this.escapeHtml(getText("Violation candidate rule count"))}</span>
                         <div class="M04002-condition-count-buttons">${renderButtons("nonPerfect", "NON_PERFECT")}</div>
                     </div>
                 </div>
@@ -1480,7 +1502,7 @@
             const start = total ? ((page - 1) * pageSize) + 1 : 0;
             const end = total ? Math.min(total, page * pageSize) : 0;
             if (totalPages <= 1) {
-                return `<span class="M04002-result-column-pager is-single"><small>전체 ${this.formatNumber(total)}개</small></span>`;
+                return `<span class="M04002-result-column-pager is-single"><small>${this.escapeHtml(getText("Total {count}", { count: this.formatNumber(total) }))}</small></span>`;
             }
             return `
                 <span class="M04002-result-column-pager">
@@ -1538,7 +1560,7 @@
             const conditionBuckets = Array.from(buckets.entries())
                 .map(([conditionCount, bucket]) => ({
                     conditionCount,
-                    label: conditionCount > 0 ? `조건 ${conditionCount}개` : "조건 미해석",
+                    label: conditionCount > 0 ? getText("{count} conditions", { count: conditionCount }) : getText("Unparsed conditions"),
                     count: bucket.count,
                     nonPerfect: bucket.nonPerfect
                 }))
@@ -1564,7 +1586,7 @@
                 const resultText = this.resolveRuleSideText(row.RESULT_TEXT || "");
                 const hasResultValue = row.RESULT_HAS_VALUE_YN === "Y";
                 const thenText = resultText
-                    || (row.RESULT_COLUMN ? `${row.RESULT_COLUMN}${hasResultValue ? "" : " (값 정보 없음)"}` : "결과 정보 없음");
+                    || (row.RESULT_COLUMN ? `${row.RESULT_COLUMN}${hasResultValue ? "" : ` (${getText("Value unavailable")})`}` : getText("No result information"));
                 const mapped = Boolean(conditionText && (resultText || row.RESULT_COLUMN));
                 const source = String(row.RULE_SOURCE || "").toUpperCase();
                 const modelType = String(row.MODEL_TYPE || "").toUpperCase();
@@ -1598,17 +1620,17 @@
                     canOpenViolation: this.isRuleViolationCandidate(row.RULE_CONFIDENCE),
                     mappingLevel: mapped ? "mapped" : "limited",
                     mappingLabel: mapped
-                        ? (isDecisionTree ? "Decision Tree 목표 규칙" : (isConditional ? "조건부 확률 규칙" : "조건/결과 매핑됨"))
-                        : "ID/지표 중심",
-                    ifText: conditionText || "조건 항목 조합을 Detail Views에서 확인해야 합니다",
+                        ? (isDecisionTree ? getText("Decision Tree target rule") : (isConditional ? getText("Conditional probability rule") : getText("Condition/result mapped")))
+                        : getText("ID/metric focused"),
+                    ifText: conditionText || getText("Review the condition item combination in Detail Views."),
                     thenText,
                     note,
                     metrics: [
                         { label: "count", value: frequencyLabel },
                         { label: "support", value: supportText },
                         { label: "confidence", value: confidenceText },
-                        { label: "예상 위반", value: expectedViolationRate },
-                        { label: "예외 수", value: this.formatNumber(exceptionCount) },
+                        { label: getText("Expected violation"), value: expectedViolationRate },
+                        { label: getText("Exception count"), value: this.formatNumber(exceptionCount) },
                         { label: "lift", value: liftText }
                     ],
                     conditionCount: Number(row.CONDITION_COUNT || 0)
@@ -1619,10 +1641,10 @@
         describeReadableRuleSentence(rule = {}) {
             const condition = String(rule.conditionText || "").trim();
             const result = String(rule.thenText || "").trim();
-            if (!condition || !result || result === "결과 정보 없음") {
+            if (!condition || !result || this.isEmptyRuleText(result)) {
                 return rule.isConditional
-                    ? "조건 또는 결과 값을 화면에서 해석하지 못한 조건부 빈도/확률 규칙입니다."
-                    : "Job 실행 시 저장된 규칙 요약 테이블에서 가져온 상세 규칙입니다.";
+                    ? getText("This is a conditional frequency/probability rule whose condition or result value could not be interpreted on screen.")
+                    : getText("This detail rule comes from the rule summary table saved during job execution.");
             }
             const supportCount = Number(rule.supportCount || 0);
             const conditionTotal = Number(rule.conditionTotal || 0);
@@ -1630,9 +1652,23 @@
             const support = rule.supportText || "-";
             const lift = rule.liftText || "-";
             if (supportCount && conditionTotal) {
-                return `${condition} 조건을 만족한 ${this.formatNumber(conditionTotal)}건 중 ${result} 결과가 ${this.formatNumber(supportCount)}건입니다. 조건 기준 확률은 ${confidence}, 전체 지지도는 ${support}, lift는 ${lift}입니다.`;
+                return getText("Among {conditionTotal} rows that satisfy {condition}, {supportCount} rows produced {result}. Conditional probability is {confidence}, overall support is {support}, and lift is {lift}.", {
+                    condition,
+                    conditionTotal: this.formatNumber(conditionTotal),
+                    result,
+                    supportCount: this.formatNumber(supportCount),
+                    confidence,
+                    support,
+                    lift
+                });
             }
-            return `${condition} 조건일 때 ${result} 결과로 이어지는 조건부 규칙입니다. 조건 기준 확률은 ${confidence}, 전체 지지도는 ${support}, lift는 ${lift}입니다.`;
+            return getText("When {condition}, this conditional rule leads to {result}. Conditional probability is {confidence}, overall support is {support}, and lift is {lift}.", {
+                condition,
+                result,
+                confidence,
+                support,
+                lift
+            });
         },
 
         buildRuleSummaryExport(node = {}, json = {}) {
@@ -1650,8 +1686,8 @@
                     COUNT: metricMap.COUNT || "",
                     SUPPORT: metricMap.SUPPORT || "",
                     CONFIDENCE: metricMap.CONFIDENCE || "",
-                    EXPECTED_VIOLATION_RATE: metricMap["예상 위반"] || "",
-                    EXCEPTION_COUNT: metricMap["예외 수"] || "",
+                    EXPECTED_VIOLATION_RATE: metricMap["EXPECTED VIOLATION"] || metricMap[String(getText("Expected violation")).toUpperCase()] || "",
+                    EXCEPTION_COUNT: metricMap["EXCEPTION COUNT"] || metricMap[String(getText("Exception count")).toUpperCase()] || "",
                     LIFT: metricMap.LIFT || "",
                     CONDITION_COUNT: card.conditionCount,
                     RULE_TYPE: card.mappingLabel
@@ -1668,15 +1704,15 @@
             const modelType = String(overview.MODEL_TYPE || "").toUpperCase();
             const source = String(overview.RULE_SOURCE || "").toUpperCase();
             if (modelType.includes("DECISION_TREE")) {
-                return "Decision Tree 분류 모델의 목표 컬럼을 기준으로 저장된 조건부 빈도/확률 규칙 현황을 보여줍니다.";
+                return getText("Shows conditional frequency/probability rules saved by target column for the Decision Tree classification model.");
             }
             if (modelType.includes("APRIORI") && source.includes("CONDITIONAL")) {
-                return "Apriori 모델 입력 데이터에서 계산한 조건부 빈도/확률 기반 규칙 현황을 보여줍니다.";
+                return getText("Shows conditional frequency/probability rules calculated from Apriori model input data.");
             }
             if (source.includes("ORACLE_DM_VR")) {
-                return "Oracle ML 규칙 뷰를 해석해 저장한 규칙 현황을 보여줍니다.";
+                return getText("Shows rules saved by interpreting the Oracle ML rule view.");
             }
-            return "저장된 요약 테이블 기준으로 전체 규칙 현황을 보여줍니다.";
+            return getText("Shows overall rule status based on the saved summary table.");
         },
 
         getModelHeaderLabel(json = {}) {
@@ -1700,14 +1736,14 @@
                         <span class="M04002-rule-title">
                             <small>Rule #</small>
                             <code title="${this.escapeHtml(plainRuleId)}">${this.escapeHtml(plainRuleId)}</code>
-                            <button type="button" class="M04002-rule-copy-btn" title="RULE ID 복사" onclick="${PAGE_CODE}.copyRuleId('${this.escapeJs(plainRuleId)}', event)">
+                            <button type="button" class="M04002-rule-copy-btn" title="${this.escapeHtml(getText("Copy RULE ID"))}" onclick="${PAGE_CODE}.copyRuleId('${this.escapeJs(plainRuleId)}', event)">
                                 <i class="far fa-copy"></i>
                             </button>
                         </span>
                         <span class="M04002-rule-card-actions">
                             <em>${this.escapeHtml(rule.mappingLabel)}</em>
                             ${rule.canOpenViolation
-                                ? `<button type="button" class="M04002-rule-open-link" title="이 RULE ID로 위반탐지 결과 검색" onclick="${PAGE_CODE}.openViolationForRule('${this.escapeJs(plainRuleId)}', '${this.escapeJs(rule.conditionCount)}')">위반 조회</button>`
+                                ? `<button type="button" class="M04002-rule-open-link" title="${this.escapeHtml(getText("Search violation detection results with this RULE ID"))}" onclick="${PAGE_CODE}.openViolationForRule('${this.escapeJs(plainRuleId)}', '${this.escapeJs(rule.conditionCount)}')">${this.escapeHtml(getText("View violations"))}</button>`
                                 : ""}
                         </span>
                     </header>
@@ -1803,10 +1839,10 @@
                         ${this.renderModelViewHeader("VI", "Itemset/detail", vi)}
                         <div class="M04002-model-view-note">
                             <strong>Extracted itemset values</strong>
-                            <span>DM$VI 원본 행의 ITEM / ATTRIBUTE / VALUE / NAME 계열 컬럼에서 추출한 값입니다.</span>
+                            <span>${this.escapeHtml(getText("Values extracted from ITEM / ATTRIBUTE / VALUE / NAME family columns in the original DM$VI rows."))}</span>
                         </div>
                         <div class="M04002-tag-cloud">
-                            ${itemTags.length ? itemTags.map((item) => `<span style="--tag-weight:${item.weight}">${this.escapeHtml(item.label)}</span>`).join("") : `<small>DM$VI itemset row가 없습니다.</small>`}
+                            ${itemTags.length ? itemTags.map((item) => `<span style="--tag-weight:${item.weight}">${this.escapeHtml(item.label)}</span>`).join("") : `<small>${this.escapeHtml(getText("No DM$VI itemset rows."))}</small>`}
                         </div>
                         ${this.renderSampleTable("DM$VI sample rows", vi.columns || [], vi.data || [], 5)}
                     </div>
@@ -1825,7 +1861,7 @@
                                     </div>
                                 `).join("")}
                             </div>
-                        ` : `<small>DM$VR rule row가 없습니다.</small>`}
+                        ` : `<small>${this.escapeHtml(getText("No DM$VR rule rows."))}</small>`}
                     </div>
                 </div>
                 <div class="M04002-model-view-card is-vg">
@@ -1847,7 +1883,7 @@
             const exists = (view.existsYn || "N") === "Y";
             const hasRows = Array.isArray(view.data) && view.data.length > 0;
             const loadButton = exists && !hasRows
-                ? `<button type="button" class="table-btn" onclick="${PAGE_CODE}.loadDetailViewPage('${this.escapeHtml(viewType)}', 1)">샘플 조회</button>`
+                ? `<button type="button" class="table-btn" onclick="${PAGE_CODE}.loadDetailViewPage('${this.escapeHtml(viewType)}', 1)">${this.escapeHtml(getText("Load sample"))}</button>`
                 : "";
             return `
                 <div class="M04002-model-view-header">
@@ -1856,12 +1892,12 @@
                         <strong>${this.escapeHtml(title)}</strong>
                         <small>${this.escapeHtml(view.description || "")}</small>
                         <code>${this.escapeHtml(view.viewName || `DM$${viewType}`)}</code>
-                        <small>${hasRows ? `샘플 ${this.escapeHtml(this.getViewSampleRange(view))} / 전체 ${this.formatNumber(view.total || 0)} rows` : "초기 로딩 속도를 위해 샘플은 아직 조회하지 않았습니다."}</small>
+                        <small>${hasRows ? this.escapeHtml(getText("Sample {range} / {total} rows", { range: this.getViewSampleRange(view), total: this.formatNumber(view.total || 0) })) : this.escapeHtml(getText("Samples have not been loaded yet to keep the initial load fast."))}</small>
                     </div>
                     <em>${hasRows ? `${this.formatNumber(view.total || 0)} rows` : (exists ? "ready" : "none")}</em>
                 </div>
                 <div class="M04002-view-sample-toolbar">
-                    <span>${hasRows ? "현재 표는 전체 데이터가 아니라 선택한 페이지의 샘플입니다." : "필요한 상세 뷰만 선택해서 조회합니다."}</span>
+                    <span>${this.escapeHtml(hasRows ? getText("The current table is a sample of the selected page, not the full dataset.") : getText("Load only the detail views you need."))}</span>
                     ${loadButton || this.renderSamplePageJump(`detailViewPage-${viewType}-${PAGE_CODE}`, view, `${PAGE_CODE}.goDetailViewPage('${viewType}')`, `${PAGE_CODE}.loadDetailViewPage('${viewType}', `)}
                 </div>
             `;
@@ -1870,10 +1906,10 @@
         renderSampleTable(title, columns, rows, limit = 6) {
             const safeColumns = (columns || []).filter((column) => column !== "RN__").slice(0, 8);
             const safeRows = (rows || []).slice(0, limit);
-            if (!safeColumns.length || !safeRows.length) return `<div class="table-empty">표시할 샘플 행이 없습니다.</div>`;
+            if (!safeColumns.length || !safeRows.length) return `<div class="table-empty">${this.escapeHtml(getText("No sample rows to display."))}</div>`;
             return `
                 <div class="M04002-sample-table-wrap">
-                    ${title ? `<strong>${this.escapeHtml(title)} · 화면 표시 ${this.formatNumber(safeRows.length)}건</strong>` : `<strong>화면 표시 ${this.formatNumber(safeRows.length)}건</strong>`}
+                    ${title ? `<strong>${this.escapeHtml(getText("{title} · {count} displayed", { title, count: this.formatNumber(safeRows.length) }))}</strong>` : `<strong>${this.escapeHtml(getText("{count} displayed", { count: this.formatNumber(safeRows.length) }))}</strong>`}
                     <table class="table-grid M04002-sample-table">
                         <thead><tr>${safeColumns.map((column) => `<th>${this.escapeHtml(column)}</th>`).join("")}</tr></thead>
                         <tbody>
@@ -1889,10 +1925,10 @@
             const pageSize = Math.max(1, Number(view.pageSize || view.data?.length || 1));
             const total = Number(view.total || 0);
             const count = Array.isArray(view.data) ? view.data.length : 0;
-            if (!total || !count) return "0건";
+            if (!total || !count) return getText("0 rows");
             const start = ((page - 1) * pageSize) + 1;
             const end = Math.min(total, start + count - 1);
-            return `${this.formatNumber(start)}-${this.formatNumber(end)}건`;
+            return getText("{start}-{end} rows", { start: this.formatNumber(start), end: this.formatNumber(end) });
         },
 
         getViewTotalPages(view = {}) {
@@ -2001,13 +2037,13 @@
             const candidateOverview = summary.candidateOverview || {};
             const candidateItems = [
                 {
-                    label: "전체",
+                    label: getText("All"),
                     value: "ALL",
                     total: candidateOverview.TOTAL_RULES,
                     nonPerfect: candidateOverview.NON_PERFECT_CONF_RULES
                 },
                 ...(summary.candidateConditionDist || []).map((bucket) => ({
-                    label: Number(bucket.CONDITION_COUNT || 0) > 0 ? `조건 ${this.formatNumber(bucket.CONDITION_COUNT)}개` : "조건 미해석",
+                    label: Number(bucket.CONDITION_COUNT || 0) > 0 ? getText("{count} conditions", { count: this.formatNumber(bucket.CONDITION_COUNT) }) : getText("Unparsed conditions"),
                     value: String(Number(bucket.CONDITION_COUNT || 0)),
                     total: bucket.RULE_COUNT,
                     nonPerfect: bucket.NON_PERFECT_CONF_RULES
@@ -2028,73 +2064,73 @@
             const violatedRuleCount = Number(overview.VIOLATED_RULE_COUNT || 0);
             const noViolationRuleCount = Math.max(0, detectionEligibleCount - violatedRuleCount);
             const noViolationAfterDetectionCount = Math.max(0, detectionEligibleCount - violatedRuleCount);
-            const activeScopeLabel = this.violationRuleFilters?.confidenceScope === "ALL" ? "전체 규칙" : "100% 아닌 규칙";
+            const activeScopeLabel = this.violationRuleFilters?.confidenceScope === "ALL" ? getText("All rules") : getText("Rules below 100%");
             const resultScope = summary.resultScope || this.violationRuleFilters?.resultScope || "HIT";
             const resultScopeMessage = resultScope === "CANDIDATE"
-                ? "선택 후보 규칙 전체를 표시합니다."
+                ? getText("Displays all selected candidate rules.")
                 : resultScope === "MAX_RULES"
-                    ? "전체 후보 기준 탐지 순위가 max rules 범위 밖인 규칙을 표시합니다."
+                    ? getText("Displays rules whose detection rank is outside the max rules range among all candidates.")
                 : resultScope === "MISS"
-                    ? "선택 후보 중 실제 위반 Row가 없는 규칙을 표시합니다."
-                    : "실제 위반 Row가 발생한 규칙을 표시합니다.";
+                    ? getText("Displays selected candidates with no actual violation rows.")
+                    : getText("Displays rules with actual violation rows.");
             return `
                 <section class="M04002-violation-summary">
                     <div class="M04002-violation-intro">
                         <div>
-                            <strong>규칙 위반 탐지 요약</strong>
-                            <span>Target ${this.escapeHtml(summary.targetOwner || "-")}.${this.escapeHtml(summary.targetTable || "-")}${summary.ruleModelName ? ` · Rule Model ${this.escapeHtml(summary.ruleModelName)}` : ""} · ${this.escapeHtml(activeScopeLabel)} 기준</span>
+                            <strong>${this.escapeHtml(getText("Rule Violation Detection Summary"))}</strong>
+                            <span>${this.escapeHtml(getText("Target {target} · {scope} basis", { target: `${summary.targetOwner || "-"}.${summary.targetTable || "-"}`, scope: activeScopeLabel }))}${summary.ruleModelName ? ` · Rule Model ${this.escapeHtml(summary.ruleModelName)}` : ""}</span>
                         </div>
                         ${this.renderViolationRulePager(summary)}
                     </div>
                     <section class="M04002-violation-condition-panel">
-                        <strong>조건 수 선택</strong>
+                        <strong>${this.escapeHtml(getText("Condition Count"))}</strong>
                         ${this.renderRuleConditionMatrix(candidateItems, this.violationRuleFilters?.conditionCount || "ALL", this.violationRuleFilters?.confidenceScope || "NON_PERFECT", "${PAGE_CODE}.selectViolationCondition")}
                         <div class="M04002-violation-inline-summary">
                             <button type="button" class="${resultScope === "CANDIDATE" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectViolationResultScope('CANDIDATE')">
-                                <small>선택 후보</small>
+                                <small>${this.escapeHtml(getText("Selected candidates"))}</small>
                                 <b>${this.formatNumber(scopedCandidateCount)}</b>
                                 <em>${this.escapeHtml(activeScopeLabel)}</em>
                             </button>
                             <button type="button" disabled>
-                                <small>탐지 대상</small>
+                                <small>${this.escapeHtml(getText("Detection targets"))}</small>
                                 <b>${this.formatNumber(detectionEligibleCount)}</b>
-                                <em>min/conf/lift/max 적용</em>
+                                <em>${this.escapeHtml(getText("min/conf/lift/max applied"))}</em>
                             </button>
                             <button type="button" class="is-hit ${resultScope === "HIT" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectViolationResultScope('HIT')">
-                                <small>위반 발생</small>
+                                <small>${this.escapeHtml(getText("Violation found"))}</small>
                                 <b>${this.formatNumber(violatedRuleCount)}</b>
-                                <em>아래 목록 표시</em>
+                                <em>${this.escapeHtml(getText("Shown below"))}</em>
                             </button>
                             <button type="button" class="is-muted ${resultScope === "MISS" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectViolationResultScope('MISS')">
-                                <small>위반 없음</small>
+                                <small>${this.escapeHtml(getText("No violation"))}</small>
                                 <b>${this.formatNumber(noViolationRuleCount)}</b>
-                                <em>위반 없음 표시</em>
+                                <em>${this.escapeHtml(getText("Show no violation"))}</em>
                             </button>
                             <button type="button" class="is-muted ${resultScope === "MAX_RULES" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectViolationResultScope('MAX_RULES')">
-                                <small>max rules 제외</small>
+                                <small>${this.escapeHtml(getText("Excluded by max rules"))}</small>
                                 <b>${this.formatNumber(maxRulesCutoffCount)}</b>
-                                <em>100위 밖 표시</em>
+                                <em>${this.escapeHtml(getText("Outside top 100"))}</em>
                             </button>
                             <button type="button" disabled>
-                                <small>위반 Row / 건수</small>
+                                <small>${this.escapeHtml(getText("Violation rows / count"))}</small>
                                 <b>${this.formatNumber(overview.VIOLATED_ROW_COUNT)} / ${this.formatNumber(overview.VIOLATION_COUNT)}</b>
-                                <em>실제 탐지 결과</em>
+                                <em>${this.escapeHtml(getText("Actual detection result"))}</em>
                             </button>
-                            ${ruleFilterDisplay ? `<b>RULE ID 검색: ${this.escapeHtml(ruleFilterDisplay)}</b>` : ""}
+                            ${ruleFilterDisplay ? `<b>${this.escapeHtml(getText("RULE ID search: {ruleId}", { ruleId: ruleFilterDisplay }))}</b>` : ""}
                         </div>
                         <div class="M04002-violation-reason-strip">
-                            <span><small>confidence 미달</small><b>${this.formatNumber(confidenceCutoffCount)}</b></span>
-                            <span><small>lift 미달</small><b>${this.formatNumber(liftCutoffCount)}</b></span>
-                            <span><small>max rules 제외</small><b>${this.formatNumber(maxRulesCutoffCount)}</b></span>
-                            <span><small>탐지 후 위반 없음</small><b>${this.formatNumber(noViolationAfterDetectionCount)}</b></span>
-                            <em>탐지 기준: confidence >= ${this.formatPercentMetric(detectionCriteria.minConfidence)}, lift >= ${this.formatDecimal(detectionCriteria.minLift)}, max rules ${this.formatNumber(detectionCriteria.maxRules)}</em>
+                            <span><small>${this.escapeHtml(getText("Below confidence"))}</small><b>${this.formatNumber(confidenceCutoffCount)}</b></span>
+                            <span><small>${this.escapeHtml(getText("Below lift"))}</small><b>${this.formatNumber(liftCutoffCount)}</b></span>
+                            <span><small>${this.escapeHtml(getText("Excluded by max rules"))}</small><b>${this.formatNumber(maxRulesCutoffCount)}</b></span>
+                            <span><small>${this.escapeHtml(getText("No violation after detection"))}</small><b>${this.formatNumber(noViolationAfterDetectionCount)}</b></span>
+                            <em>${this.escapeHtml(getText("Detection criteria: confidence >= {confidence}, lift >= {lift}, max rules {maxRules}", { confidence: this.formatPercentMetric(detectionCriteria.minConfidence), lift: this.formatDecimal(detectionCriteria.minLift), maxRules: this.formatNumber(detectionCriteria.maxRules) }))}</em>
                         </div>
                         <div class="M04002-violation-scope-note">${this.escapeHtml(resultScopeMessage)}</div>
                     </section>
                     <section class="M04002-rule-facet-panel is-violation">
                         <div class="M04002-rule-facet-block">
                             <header>
-                                <strong>위반 결과 컬럼 Top</strong>
+                                <strong>${this.escapeHtml(getText("Top Violation Result Columns"))}</strong>
                             </header>
                             <div class="M04002-rule-facet-list">
                                 ${topColumns.length ? topColumns.map((item) => `
@@ -2102,12 +2138,12 @@
                                         <span>${this.renderColumnAwareCell(item.RESULT_COLUMN, summary)}</span>
                                         <b>${this.formatNumber(item.VIOLATION_COUNT)}</b>
                                     </button>
-                                `).join("") : `<span>표시할 위반 결과 컬럼이 없습니다.</span>`}
+                                `).join("") : `<span>${this.escapeHtml(getText("No violation result columns to display."))}</span>`}
                             </div>
                         </div>
                         <div class="M04002-rule-facet-block is-condition">
                             <header>
-                                <strong>RULE ID 검색</strong>
+                                <strong>${this.escapeHtml(getText("RULE ID Search"))}</strong>
                                 <div class="M04002-rule-facet-actions">
                                     <button type="button" onclick="${PAGE_CODE}.searchViolationRule()">Search</button>
                                     <button type="button" onclick="${PAGE_CODE}.resetViolationRuleSearch()">Reset</button>
@@ -2115,7 +2151,7 @@
                             </header>
                             <label class="M04002-rule-condition-search">
                                 <span>RULE ID</span>
-                                <input id="violationRuleSearch-${PAGE_CODE}" type="search" value="${this.escapeHtml(ruleFilterDisplay)}" placeholder="예: COND_..." onkeydown="${PAGE_CODE}.handleViolationRuleSearchKeydown(event)">
+                                <input id="violationRuleSearch-${PAGE_CODE}" type="search" value="${this.escapeHtml(ruleFilterDisplay)}" placeholder="${this.escapeHtml(getText("e.g. COND_..."))}" onkeydown="${PAGE_CODE}.handleViolationRuleSearchKeydown(event)">
                             </label>
                         </div>
                     </section>
@@ -2128,7 +2164,7 @@
                                     <header>
                                         <strong>${this.escapeHtml(rule.RULE_ID)}</strong>
                                         <button type="button" class="${hasViolation ? "" : "is-muted"}" onclick="${PAGE_CODE}.openViolationSqlPopup('rule', '${this.escapeJs(rule.RULE_ID)}')">
-                                            ${hasViolation ? `${this.formatNumber(rule.VIOLATION_COUNT)}건` : (rule.DETECTION_SCANNED_YN === "N" ? "max rules 제외" : "위반 없음")}
+                                            ${hasViolation ? this.escapeHtml(getText("{count} rows", { count: this.formatNumber(rule.VIOLATION_COUNT) })) : (rule.DETECTION_SCANNED_YN === "N" ? this.escapeHtml(getText("Excluded by max rules")) : this.escapeHtml(getText("No violation")))}
                                         </button>
                                     </header>
                                     <p>
@@ -2139,10 +2175,10 @@
                                     </p>
                                     <footer>
                                         <span><small>confidence</small><b>${this.formatPercentMetric(rule.RULE_CONFIDENCE)}</b></span>
-                                        <span><small>예상 위반</small><b>${this.formatExpectedViolationRate(rule.RULE_CONFIDENCE)}</b></span>
+                                        <span><small>${this.escapeHtml(getText("Expected violation"))}</small><b>${this.formatExpectedViolationRate(rule.RULE_CONFIDENCE)}</b></span>
                                         <span><small>lift</small><b>${this.formatDecimal(rule.RULE_LIFT)}</b></span>
                                         <span><small>support</small><b>${this.formatPercentMetric(rule.RULE_SUPPORT)}</b></span>
-                                        <span><small>탐지 순위</small><b>${rule.DETECTION_RN ? this.formatNumber(rule.DETECTION_RN) : "-"}</b></span>
+                                        <span><small>${this.escapeHtml(getText("Detection rank"))}</small><b>${rule.DETECTION_RN ? this.formatNumber(rule.DETECTION_RN) : "-"}</b></span>
                                         <span><small>score</small><b>${this.formatDecimal(rule.AVG_VIOLATION_SCORE)}</b></span>
                                     </footer>
                                 </article>
@@ -2156,21 +2192,21 @@
 
         getViolationEmptyMessage(ruleFilter, resultScope, candidateCount, detectionEligibleCount, maxRulesCutoffCount) {
             if (ruleFilter && Number(candidateCount || 0) === 0) {
-                return "검색한 RULE ID에 해당하는 후보 규칙이 없습니다.";
+                return getText("No candidate rules match the searched RULE ID.");
             }
             if (Number(maxRulesCutoffCount || 0) > 0 && Number(detectionEligibleCount || 0) === 0) {
-                return "해당 후보 규칙은 이번 실행의 max rules 범위 밖이라 실제 위반 탐지 대상에서 제외되었습니다.";
+                return getText("The candidate rule is outside the max rules range for this run and was excluded from actual violation detection.");
             }
             if (resultScope === "HIT") {
-                return "실제 위반 Row가 발생한 규칙이 없습니다. 후보 전체나 max rules 제외 건수도 함께 확인하세요.";
+                return getText("No rules produced actual violation rows. Check all candidates and max rules exclusions as well.");
             }
             if (resultScope === "MAX_RULES") {
-                return "max rules 범위 밖으로 제외된 후보 규칙이 없습니다.";
+                return getText("No candidate rules were excluded outside the max rules range.");
             }
             if (resultScope === "MISS") {
-                return "실제 탐지 대상 중 위반 Row가 없는 규칙이 없습니다.";
+                return getText("No actual detection targets have zero violation rows.");
             }
-            return "표시할 규칙이 없습니다.";
+            return getText("No rules to display.");
         },
 
         getViolationCandidateCount(summary = {}) {
@@ -2319,8 +2355,8 @@
             const ruleDetail = this.getViolationRuleDetail(kind, value);
             const supportsRealtime = Boolean(this.isViolationNode(this.selectedNode) && kind === "rule" && String(value || "").trim());
             const label = kind === "column"
-                ? `결과 컬럼 ${value}`
-                : (kind === "rule" ? `Rule ${value}` : "전체 위반");
+                ? getText("Result column {value}", { value })
+                : (kind === "rule" ? `Rule ${value}` : getText("All violations"));
             this.violationSql = {
                 sql,
                 mode: "SAVED",
@@ -2336,7 +2372,7 @@
                 columnWidths: {},
                 ruleColumns,
                 ruleDetail,
-                title: `${label} 위반 Row 조회`
+                title: getText("{label} violation row query", { label })
             };
             this.renderViolationSqlPopup();
             window.setTimeout(() => this.executeViolationSql(1), 0);
@@ -2396,7 +2432,7 @@
         createViolationSql(kind = "all", value = "") {
             const node = this.selectedNode;
             if (!node) {
-                alert("선택된 노드가 없습니다.");
+                alert(getText("No node is selected."));
                 return "";
             }
             if (this.isSymbolicViolationNode(node)) {
@@ -2407,7 +2443,7 @@
             const targetOwner = this.normalizeIdentifierParam(node.TARGET_OWNER);
             const targetTable = this.normalizeIdentifierParam(node.TARGET_TABLE);
             if (!resultOwner || !resultTable || !targetOwner || !targetTable) {
-                alert("위반 결과 또는 Target Table 정보가 부족합니다.");
+                alert(getText("Violation result or Target Table information is missing."));
                 return "";
             }
             const ruleModelName = this.getSelectedNodeRuleModelName(node);
@@ -2457,7 +2493,7 @@
             const targetOwner = this.normalizeIdentifierParam(node.TARGET_OWNER);
             const targetTable = this.normalizeIdentifierParam(node.TARGET_TABLE);
             if (!resultOwner || !resultTable || !targetOwner || !targetTable) {
-                alert("연속형 위반 결과 또는 Target Table 정보가 부족합니다.");
+                alert(getText("Continuous violation result or Target Table information is missing."));
                 return "";
             }
             const filters = [
@@ -2512,7 +2548,7 @@
 
         createRealtimeViolationSqlLookup(kind = "all", value = "") {
             if (kind !== "rule" || !String(value || "").trim()) {
-                alert("실시간 조회는 RULE ID 기준 조회에서 사용할 수 있습니다.");
+                alert(getText("Realtime lookup is available only for RULE ID based queries."));
                 return "";
             }
             if (this.isSymbolicViolationNode(this.selectedNode)) {
@@ -2521,7 +2557,7 @@
             if (this.isRuleViolationNode(this.selectedNode)) {
                 return this.createCategoricalRealtimeViolationSqlLookup(value);
             }
-            alert("실시간 위반 조회를 지원하지 않는 노드입니다.");
+            alert(getText("This node does not support realtime violation lookup."));
             return "";
         },
 
@@ -2538,7 +2574,7 @@
             ], "FILE_ROW_NO")) || "FILE_ROW_NO";
             const flowRunId = Number(this.selectedRun?.FLOW_RUN_ID || 0);
             if (!resultOwner || !targetOwner || !targetTable || !ruleModelName) {
-                alert("실시간 조회에 필요한 Rule Model 또는 Target Table 정보가 부족합니다.");
+                alert(getText("Rule Model or Target Table information required for realtime lookup is missing."));
                 return "";
             }
             return [
@@ -2588,7 +2624,7 @@
             ], 8000);
             const flowRunId = Number(this.selectedRun?.FLOW_RUN_ID || 0);
             if (!ruleOwner || !targetOwner || !targetTable || !ruleTable) {
-                alert("실시간 조회에 필요한 Symbolic Rule 또는 Target Table 정보가 부족합니다.");
+                alert(getText("Symbolic Rule or Target Table information required for realtime lookup is missing."));
                 return "";
             }
             return [
@@ -2630,13 +2666,13 @@
                 return;
             }
             if (!state.supportsRealtime) {
-                alert("실시간 조회는 RULE ID 기준 조회에서 사용할 수 있습니다.");
+                alert(getText("Realtime lookup is available only for RULE ID based queries."));
                 return;
             }
             const lookupSql = this.createRealtimeViolationSqlLookup(state.kind || "all", state.value || "");
             if (!lookupSql) return;
             const message = document.getElementById(`${PAGE_ID_PREFIX}ViolationSqlMessage`);
-            if (message) message.textContent = "실시간 위반 조회 SQL 생성 중...";
+            if (message) message.textContent = getText("Generating realtime violation lookup SQL...");
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${API_PAGE_CODE}/sql`, {
                     method: "POST",
@@ -2650,7 +2686,7 @@
                 const row = (json.data || [])[0] || {};
                 const liveSql = row.LIVE_SQL || row.live_sql || "";
                 if (!String(liveSql || "").trim()) {
-                    throw new Error("실시간 조회 SQL을 생성하지 못했습니다.");
+                    throw new Error(getText("Could not generate realtime lookup SQL."));
                 }
                 this.violationSql = {
                     ...state,
@@ -2664,7 +2700,7 @@
                 this.renderViolationSqlPopup();
                 window.setTimeout(() => this.executeViolationSql(1), 0);
             } catch (error) {
-                if (message) message.textContent = error.message || "실시간 조회 SQL 생성에 실패했습니다.";
+                if (message) message.textContent = error.message || getText("Failed to generate realtime lookup SQL.");
             }
         },
 
@@ -2673,10 +2709,10 @@
             const mode = String(state.mode || "SAVED").toUpperCase();
             return `
                 <div class="M04002-sql-mode-switch">
-                    <span>쿼리 모드</span>
-                    <button type="button" class="${mode === "SAVED" ? "is-active" : ""}" onclick="${PAGE_CODE}.changeViolationSqlMode('SAVED')">샘플링</button>
-                    <button type="button" class="${mode === "LIVE" ? "is-active" : ""}" onclick="${PAGE_CODE}.changeViolationSqlMode('LIVE')">실시간</button>
-                    <em>${mode === "LIVE" ? "대상 테이블을 현재 기준으로 다시 검사합니다." : "탐지 프로시저가 저장한 위반 Row를 조회합니다."}</em>
+                    <span>${this.escapeHtml(getText("Query mode"))}</span>
+                    <button type="button" class="${mode === "SAVED" ? "is-active" : ""}" onclick="${PAGE_CODE}.changeViolationSqlMode('SAVED')">${this.escapeHtml(getText("Sampled"))}</button>
+                    <button type="button" class="${mode === "LIVE" ? "is-active" : ""}" onclick="${PAGE_CODE}.changeViolationSqlMode('LIVE')">${this.escapeHtml(getText("Realtime"))}</button>
+                    <em>${this.escapeHtml(mode === "LIVE" ? getText("Rechecks the target table using the current data.") : getText("Queries violation rows saved by the detection procedure."))}</em>
                 </div>
             `;
         },
@@ -2695,8 +2731,8 @@
                 <section>
                     <header class="M04002-sql-popup-title" onmousedown="${PAGE_CODE}.startViolationSqlPopupDrag(event)">
                         <div>
-                            <strong>${this.escapeHtml(state.title || "위반 Row SQL")}</strong>
-                            <span>Ctrl+Enter로 현재 SQL을 실행합니다.</span>
+                            <strong>${this.escapeHtml(state.title || getText("Violation Row SQL"))}</strong>
+                            <span>${this.escapeHtml(getText("Run the current SQL with Ctrl+Enter."))}</span>
                         </div>
                         <button type="button" onclick="${PAGE_CODE}.closeViolationSqlPopup()"><i class="fas fa-times"></i></button>
                     </header>
@@ -2704,7 +2740,7 @@
                         ${this.renderViolationSqlRuleContext(state.ruleDetail)}
                         ${this.renderViolationSqlModeSwitch(state)}
                         <div class="M04002-sql-editor-wrap">
-                            <button type="button" class="M04002-sql-copy-btn" title="현재 SQL 복사" onclick="${PAGE_CODE}.copyCurrentViolationSql(event)">
+                            <button type="button" class="M04002-sql-copy-btn" title="${this.escapeHtml(getText("Copy current SQL"))}" onclick="${PAGE_CODE}.copyCurrentViolationSql(event)">
                                 <i class="far fa-copy"></i>
                             </button>
                             <textarea id="${PAGE_ID_PREFIX}ViolationSqlEditor" class="M04002-sql-editor" spellcheck="false" onkeydown="${PAGE_CODE}.handleViolationSqlKeydown(event)">${this.escapeHtml(state.sql || "")}</textarea>
@@ -2728,7 +2764,7 @@
                                 <button type="button" ${Number(state.page || 1) >= totalPages ? "disabled" : ""} onclick="${PAGE_CODE}.executeViolationSql(${Number(state.page || 1) + 1})"><i class="fas fa-chevron-right"></i></button>
                             </div>
                         </div>
-                        <div id="${PAGE_ID_PREFIX}ViolationSqlMessage" class="table-empty">${state.rows?.length ? "" : "SQL을 확인한 뒤 Run 또는 Ctrl+Enter로 조회하세요."}</div>
+                        <div id="${PAGE_ID_PREFIX}ViolationSqlMessage" class="table-empty">${state.rows?.length ? "" : this.escapeHtml(getText("Review the SQL, then query with Run or Ctrl+Enter."))}</div>
                         <div class="M04002-sql-result">
                             ${state.columns?.length ? this.renderViolationSqlGrid(state.columns, state.rows, state.ruleColumns || []) : ""}
                         </div>
@@ -2747,7 +2783,7 @@
                     <section class="M04002-violation-rule-context">
                         <header>
                             <strong>${this.escapeHtml(rule.RULE_ID || "")}</strong>
-                            <span>${this.formatNumber(rule.VIOLATION_COUNT)}건 · max error ${this.formatPercentMetric(rule.MAX_ERROR_PCT)} · tolerance ${this.formatPercentMetric(rule.TOLERANCE_PCT)}</span>
+                            <span>${this.escapeHtml(getText("{count} rows", { count: this.formatNumber(rule.VIOLATION_COUNT) }))} · max error ${this.formatPercentMetric(rule.MAX_ERROR_PCT)} · tolerance ${this.formatPercentMetric(rule.TOLERANCE_PCT)}</span>
                         </header>
                         <p>
                             <b>F(X)</b>
@@ -2760,7 +2796,7 @@
                 <section class="M04002-violation-rule-context">
                     <header>
                         <strong>${this.escapeHtml(rule.RULE_ID || "")}</strong>
-                        <span>${this.formatNumber(rule.VIOLATION_COUNT)}건 · confidence ${this.formatPercentMetric(rule.RULE_CONFIDENCE)} · lift ${this.formatDecimal(rule.RULE_LIFT)}</span>
+                        <span>${this.escapeHtml(getText("{count} rows", { count: this.formatNumber(rule.VIOLATION_COUNT) }))} · confidence ${this.formatPercentMetric(rule.RULE_CONFIDENCE)} · lift ${this.formatDecimal(rule.RULE_LIFT)}</span>
                     </header>
                     <p>
                         <b>IF</b>
@@ -2793,7 +2829,7 @@
                 "V_VIOLATION_SCORE"
             ]);
             const ruleColumnSet = new Set((ruleColumns || []).map((column) => String(column).toUpperCase()));
-            if (!safeColumns.length) return `<div class="table-empty">조회 결과가 없습니다.</div>`;
+            if (!safeColumns.length) return `<div class="table-empty">${this.escapeHtml(getText("No query results."))}</div>`;
             const columnWidths = this.violationSql?.columnWidths || {};
             const freezeColumns = Math.max(0, Math.min(Number(this.violationSql?.freezeColumns ?? 2), safeColumns.length));
             const rowNoWidth = 64;
@@ -2954,7 +2990,7 @@
             if (!editor) return;
             const pageSize = Number(document.getElementById(`${PAGE_ID_PREFIX}ViolationSqlPageSize`)?.value || this.violationSql.pageSize || 50);
             const message = document.getElementById(`${PAGE_ID_PREFIX}ViolationSqlMessage`);
-            if (message) message.textContent = "조회 중...";
+            if (message) message.textContent = getText("Querying...");
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${API_PAGE_CODE}/sql`, {
                     method: "POST",
@@ -2976,7 +3012,7 @@
                 };
                 this.renderViolationSqlPopup();
             } catch (error) {
-                if (message) message.textContent = error.message || "SQL 조회에 실패했습니다.";
+                if (message) message.textContent = error.message || getText("SQL query failed.");
             }
         },
 
@@ -2990,7 +3026,7 @@
             const columns = (state.columns || []).filter((column) => column !== "RN__");
             const rows = state.rows || [];
             if (!columns.length || !rows.length) {
-                alert("Export할 위반 Row 데이터가 없습니다.");
+                alert(getText("No violation row data to export."));
                 return;
             }
             const filenameBase = String(state.title || "violation-rows")
@@ -3034,17 +3070,17 @@
                 <section class="M04002-corr-summary">
                     <header>
                         <div>
-                            <strong>${isNumeric ? "연속형 상관 분석 요약" : "범주형 상관 분석 요약"}</strong>
-                            <span>Target ${this.escapeHtml(summary.targetOwner)}.${this.escapeHtml(summary.targetTable)} · ${this.escapeHtml(metricLabel)} 기준</span>
+                            <strong>${this.escapeHtml(isNumeric ? getText("Numeric Correlation Summary") : getText("Categorical Correlation Summary"))}</strong>
+                            <span>${this.escapeHtml(getText("Target {target} · {metric} basis", { target: `${summary.targetOwner}.${summary.targetTable}`, metric: metricLabel }))}</span>
                         </div>
                         <div class="M04002-corr-metrics">
-                            <span><b>${this.formatNumber(summary.totalColumnCount)}</b><small>전체 컬럼</small></span>
-                            <span><b>${this.formatNumber(summary.associatedColumnCount)}</b><small>연관 컬럼</small></span>
-                            <span><b>${this.formatNumber(summary.associatedPairCount)}</b><small>연관 쌍</small></span>
-                            <span><b>${this.formatDecimal(summary.maxMetricValue)}</b><small>최대 지표</small></span>
+                            <span><b>${this.formatNumber(summary.totalColumnCount)}</b><small>${this.escapeHtml(getText("Total columns"))}</small></span>
+                            <span><b>${this.formatNumber(summary.associatedColumnCount)}</b><small>${this.escapeHtml(getText("Associated columns"))}</small></span>
+                            <span><b>${this.formatNumber(summary.associatedPairCount)}</b><small>${this.escapeHtml(getText("Associated pairs"))}</small></span>
+                            <span><b>${this.formatDecimal(summary.maxMetricValue)}</b><small>${this.escapeHtml(getText("Max metric"))}</small></span>
                         </div>
                     </header>
-                    <p>PASS_YN=Y로 저장된 ${isNumeric ? "연속형 상관" : "범주형 상관"} 컬럼은 ${this.formatNumber(summary.associatedColumnCount)}개이고, 통과 쌍은 전체 ${this.formatNumber(summary.totalPairCount)}개 중 ${this.formatNumber(summary.associatedPairCount)}개입니다.</p>
+                    <p>${this.escapeHtml(getText("{kind} columns saved with PASS_YN=Y total {columnCount}, and passed pairs total {pairCount} out of {totalPairCount}.", { kind: isNumeric ? getText("Numeric correlation") : getText("Categorical correlation"), columnCount: this.formatNumber(summary.associatedColumnCount), pairCount: this.formatNumber(summary.associatedPairCount), totalPairCount: this.formatNumber(summary.totalPairCount) }))}</p>
                     <div class="M04002-corr-tags">
                         ${visibleColumns.map((column) => this.renderColumnChip(column, summary)).join("")}
                         ${hiddenCount ? `<em class="M04002-column-chip">+${this.formatNumber(hiddenCount)} more</em>` : ""}
@@ -3072,8 +3108,8 @@
                 <section class="M04002-lasso-summary">
                     <header>
                         <div>
-                            <strong>LASSO 주요 피처 요약</strong>
-                            <span>Target ${this.escapeHtml(summary.targetOwner)}.${this.escapeHtml(summary.targetTable)} · 계수 절대값과 R2 기준</span>
+                            <strong>${this.escapeHtml(getText("LASSO Key Feature Summary"))}</strong>
+                            <span>${this.escapeHtml(getText("Target {target} · based on coefficient absolute value and R2", { target: `${summary.targetOwner}.${summary.targetTable}` }))}</span>
                         </div>
                         <div class="M04002-corr-metrics">
                             <span><b>${this.formatNumber(overview.TARGET_COLUMN_COUNT)}</b><small>target</small></span>
@@ -3083,13 +3119,13 @@
                         </div>
                     </header>
                     <div class="M04002-lasso-direction-grid">
-                        <span><b>${this.formatNumber(overview.POSITIVE_FEATURE_COUNT)}</b><small>양의 영향 계수</small></span>
-                        <span><b>${this.formatNumber(overview.NEGATIVE_FEATURE_COUNT)}</b><small>음의 영향 계수</small></span>
-                        <span><b>${this.formatNumber(overview.FEATURE_NAME_COUNT)}</b><small>고유 feature</small></span>
+                        <span><b>${this.formatNumber(overview.POSITIVE_FEATURE_COUNT)}</b><small>${this.escapeHtml(getText("Positive coefficients"))}</small></span>
+                        <span><b>${this.formatNumber(overview.NEGATIVE_FEATURE_COUNT)}</b><small>${this.escapeHtml(getText("Negative coefficients"))}</small></span>
+                        <span><b>${this.formatNumber(overview.FEATURE_NAME_COUNT)}</b><small>${this.escapeHtml(getText("Unique features"))}</small></span>
                     </div>
                     ${topTargets.length ? `
                         <div class="M04002-type-detail">
-                            <strong>Target별 선택 결과</strong>
+                            <strong>${this.escapeHtml(getText("Selection Result by Target"))}</strong>
                             <div class="M04002-type-case-grid">
                                 ${topTargets.map((item) => `
                                     <span>
@@ -3141,8 +3177,8 @@
                 <section class="M04002-symbolic-summary">
                     <header>
                         <div>
-                            <strong>Symbolic Rule 수식 요약</strong>
-                            <span>Target ${this.escapeHtml(summary.targetOwner)}.${this.escapeHtml(summary.targetTable)} · f(x)=y 수식 규칙</span>
+                            <strong>${this.escapeHtml(getText("Symbolic Rule Formula Summary"))}</strong>
+                            <span>${this.escapeHtml(getText("Target {target} · f(x)=y formula rules", { target: `${summary.targetOwner}.${summary.targetTable}` }))}</span>
                         </div>
                         <div class="M04002-corr-metrics">
                             <span><b>${this.formatNumber(overview.RULE_COUNT)}</b><small>rules</small></span>
@@ -3154,12 +3190,12 @@
                     <section class="M04002-rule-facet-panel is-symbolic">
                         <div class="M04002-rule-facet-block">
                             <header>
-                                <strong>Method 유형</strong>
+                                <strong>${this.escapeHtml(getText("Method Type"))}</strong>
                                 <button type="button" onclick="${PAGE_CODE}.resetSymbolicRuleFilters()">Reset</button>
                             </header>
                             <div class="M04002-rule-facet-list">
                                 <button type="button" class="${methodFilter === "ALL" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectSymbolicRuleFilter('method', 'ALL')">
-                                    <span>전체</span>
+                                    <span>${this.escapeHtml(getText("All"))}</span>
                                     <b>${this.formatNumber(overview.RULE_COUNT)} rules</b>
                                 </button>
                                 ${methodGroups.map((item) => {
@@ -3174,10 +3210,10 @@
                             </div>
                         </div>
                         <div class="M04002-rule-facet-block is-condition">
-                            <header><strong>Y 결과 컬럼</strong></header>
+                            <header><strong>${this.escapeHtml(getText("Y Result Column"))}</strong></header>
                             <div class="M04002-rule-facet-list">
                                 <button type="button" class="${targetFilter === "ALL" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectSymbolicRuleFilter('targetColumn', 'ALL')">
-                                    <span>전체</span>
+                                    <span>${this.escapeHtml(getText("All"))}</span>
                                     <b>${this.formatNumber(overview.TARGET_COLUMN_COUNT)} columns</b>
                                 </button>
                                 ${targetGroups.slice(0, 30).map((item) => {
@@ -3196,7 +3232,7 @@
                         <div class="M04002-symbolic-rule-grid">
                             ${topRules.map((rule, index) => this.renderSymbolicRuleCard(rule, index)).join("")}
                         </div>
-                    ` : `<div class="table-empty">표시할 Symbolic Rule이 없습니다.</div>`}
+                    ` : `<div class="table-empty">${this.escapeHtml(getText("No Symbolic Rules to display."))}</div>`}
                 </section>
             `;
         },
@@ -3217,26 +3253,26 @@
                                 <small class="M04002-symbolic-rule-id-label">Rule ID</small>
                                 <span class="M04002-symbolic-rule-id-row">
                                     <code>${this.escapeHtml(displayRuleId)}</code>
-                                    <button type="button" class="M04002-rule-copy-btn" title="RULE ID 복사" onclick="${PAGE_CODE}.copyRuleId('${this.escapeJs(plainRuleId)}', event)">
+                                    <button type="button" class="M04002-rule-copy-btn" title="${this.escapeHtml(getText("Copy RULE ID"))}" onclick="${PAGE_CODE}.copyRuleId('${this.escapeJs(plainRuleId)}', event)">
                                         <i class="far fa-copy"></i>
                                     </button>
                                 </span>
                             </span>
                         </span>
                         <span class="M04002-symbolic-rule-actions">
-                            <button type="button" title="수식 그래프 보기" onclick="${PAGE_CODE}.openSymbolicRulePopup('${this.escapeJs(key)}')">
+                            <button type="button" title="${this.escapeHtml(getText("View formula graph"))}" onclick="${PAGE_CODE}.openSymbolicRulePopup('${this.escapeJs(key)}')">
                                 <i class="fas fa-chart-line"></i>
                             </button>
-                            ${plainRuleId ? `<button type="button" title="이 RULE ID로 연속형 위반탐지 결과 검색" onclick="${PAGE_CODE}.openSymbolicViolationForRule('${this.escapeJs(plainRuleId)}')">위반 조회</button>` : ""}
+                            ${plainRuleId ? `<button type="button" title="${this.escapeHtml(getText("Search continuous violation detection results with this RULE ID"))}" onclick="${PAGE_CODE}.openSymbolicViolationForRule('${this.escapeJs(plainRuleId)}')">${this.escapeHtml(getText("View violations"))}</button>` : ""}
                         </span>
                     </header>
                     <div class="M04002-symbolic-y-panel">
-                        <small>Y 결과값</small>
+                        <small>${this.escapeHtml(getText("Y result value"))}</small>
                         <strong>${targetCell}</strong>
                     </div>
                     <code>f(${featureLabel}) = ${this.escapeHtml(rule.EXPRESSION || "")} = ${this.escapeHtml(targetColumn)}</code>
                     <div class="M04002-symbolic-x-panel">
-                        <small>X 인자</small>
+                        <small>${this.escapeHtml(getText("X arguments"))}</small>
                         <div class="M04002-corr-tags">
                             ${features.length ? features.slice(0, 10).map((column) => this.renderColumnChip(column, this.lastSymbolicRuleSummary || {})).join("") : `<em class="M04002-column-chip"><b>x</b></em>`}
                         </div>
@@ -3268,8 +3304,8 @@
                 <section class="M04002-symbolic-violation-summary">
                     <header>
                         <div>
-                            <strong>Symbolic Rule 오차범위 위반 요약</strong>
-                            <span>Target ${this.escapeHtml(summary.targetOwner)}.${this.escapeHtml(summary.targetTable)} · 예측값 대비 허용 오차율 기준</span>
+                            <strong>${this.escapeHtml(getText("Symbolic Rule Error Range Violation Summary"))}</strong>
+                            <span>${this.escapeHtml(getText("Target {target} · based on allowed error rate against prediction", { target: `${summary.targetOwner}.${summary.targetTable}` }))}</span>
                         </div>
                         <div class="M04002-corr-metrics">
                             <span><b>${this.formatNumber(overview.RULE_COUNT)}</b><small>rules</small></span>
@@ -3280,22 +3316,22 @@
                         </div>
                     </header>
                     <div class="M04002-violation-reason-strip">
-                        <span><small>위반 Row</small><b>${this.formatNumber(overview.VIOLATED_ROW_COUNT)}</b></span>
-                        <span><small>평균 오차율</small><b>${this.formatPercentMetric(overview.AVG_ERROR_PCT)}</b></span>
-                        <span><small>최대 오차율</small><b>${this.formatPercentMetric(overview.MAX_ERROR_PCT)}</b></span>
-                        <span><small>평균 절대오차</small><b>${this.formatDecimal(overview.AVG_ABS_ERROR)}</b></span>
-                        <span><small>최대 절대오차</small><b>${this.formatDecimal(overview.MAX_ABS_ERROR)}</b></span>
-                        ${ruleFilterDisplay ? `<b>RULE ID 검색: ${this.escapeHtml(ruleFilterDisplay)}</b>` : ""}
+                        <span><small>${this.escapeHtml(getText("Violation rows"))}</small><b>${this.formatNumber(overview.VIOLATED_ROW_COUNT)}</b></span>
+                        <span><small>${this.escapeHtml(getText("Average error rate"))}</small><b>${this.formatPercentMetric(overview.AVG_ERROR_PCT)}</b></span>
+                        <span><small>${this.escapeHtml(getText("Max error rate"))}</small><b>${this.formatPercentMetric(overview.MAX_ERROR_PCT)}</b></span>
+                        <span><small>${this.escapeHtml(getText("Average absolute error"))}</small><b>${this.formatDecimal(overview.AVG_ABS_ERROR)}</b></span>
+                        <span><small>${this.escapeHtml(getText("Max absolute error"))}</small><b>${this.formatDecimal(overview.MAX_ABS_ERROR)}</b></span>
+                        ${ruleFilterDisplay ? `<b>${this.escapeHtml(getText("RULE ID search: {ruleId}", { ruleId: ruleFilterDisplay }))}</b>` : ""}
                     </div>
                     <section class="M04002-rule-facet-panel is-symbolic">
                         <div class="M04002-rule-facet-block">
                             <header>
-                                <strong>Method 유형</strong>
+                                <strong>${this.escapeHtml(getText("Method Type"))}</strong>
                                 <button type="button" onclick="${PAGE_CODE}.resetSymbolicViolationFilters()">Reset</button>
                             </header>
                             <div class="M04002-rule-facet-list">
                                 <button type="button" class="${methodFilter === "ALL" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectSymbolicViolationFilter('method', 'ALL')">
-                                    <span>전체</span>
+                                    <span>${this.escapeHtml(getText("All"))}</span>
                                     <b>${this.formatNumber(overview.RULE_COUNT)} rules</b>
                                 </button>
                                 ${methodGroups.length ? methodGroups.map((item) => {
@@ -3306,31 +3342,31 @@
                                             <b>${this.formatNumber(item.VIOLATION_COUNT)} / ${this.formatNumber(item.RULE_COUNT)}</b>
                                         </button>
                                     `;
-                                }).join("") : `<span>표시할 Method 요약이 없습니다.</span>`}
+                                }).join("") : `<span>${this.escapeHtml(getText("No Method summary to display."))}</span>`}
                             </div>
                         </div>
                         <div class="M04002-rule-facet-block is-condition">
-                            <header><strong>위반 상태</strong></header>
+                            <header><strong>${this.escapeHtml(getText("Violation Status"))}</strong></header>
                             <div class="M04002-rule-facet-list">
                                 <button type="button" class="${resultScope === "ALL" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectSymbolicViolationFilter('resultScope', 'ALL')">
-                                    <span>전체 규칙</span>
+                                    <span>${this.escapeHtml(getText("All rules"))}</span>
                                     <b>${this.formatNumber(overview.RULE_COUNT)}</b>
                                 </button>
                                 <button type="button" class="${resultScope === "HIT" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectSymbolicViolationFilter('resultScope', 'HIT')">
-                                    <span>위반 있음</span>
+                                    <span>${this.escapeHtml(getText("Violation found"))}</span>
                                     <b>${this.formatNumber(overview.VIOLATED_RULE_COUNT)}</b>
                                 </button>
                                 <button type="button" class="${resultScope === "CLEAN" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectSymbolicViolationFilter('resultScope', 'CLEAN')">
-                                    <span>위반 없음</span>
+                                    <span>${this.escapeHtml(getText("No violation"))}</span>
                                     <b>${this.formatNumber(overview.NO_VIOLATION_RULE_COUNT)}</b>
                                 </button>
                             </div>
                         </div>
                         <div class="M04002-rule-facet-block">
-                            <header><strong>Target별 규칙/위반</strong></header>
+                            <header><strong>${this.escapeHtml(getText("Rules/Violations by Target"))}</strong></header>
                             <div class="M04002-rule-facet-list">
                                 <button type="button" class="${targetFilter === "ALL" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectSymbolicViolationFilter('targetColumn', 'ALL')">
-                                    <span>전체</span>
+                                    <span>${this.escapeHtml(getText("All"))}</span>
                                     <b>${this.formatNumber(overview.TARGET_COLUMN_COUNT)} columns</b>
                                 </button>
                                 ${topTargets.length ? topTargets.map((item) => {
@@ -3341,12 +3377,12 @@
                                         <b>${this.formatNumber(item.VIOLATION_COUNT)} / ${this.formatNumber(item.RULE_COUNT)}</b>
                                     </button>
                                     `;
-                                }).join("") : `<span>표시할 Target 규칙이 없습니다.</span>`}
+                                }).join("") : `<span>${this.escapeHtml(getText("No Target rules to display."))}</span>`}
                             </div>
                         </div>
                         <div class="M04002-rule-facet-block is-condition">
                             <header>
-                                <strong>RULE ID 검색</strong>
+                                <strong>${this.escapeHtml(getText("RULE ID Search"))}</strong>
                                 <div class="M04002-rule-facet-actions">
                                     <button type="button" onclick="${PAGE_CODE}.searchViolationRule()">Search</button>
                                     <button type="button" onclick="${PAGE_CODE}.resetViolationRuleSearch()">Reset</button>
@@ -3354,7 +3390,7 @@
                             </header>
                             <label class="M04002-rule-condition-search">
                                 <span>RULE ID</span>
-                                <input id="violationRuleSearch-${PAGE_CODE}" type="search" value="${this.escapeHtml(ruleFilterDisplay)}" placeholder="예: RULE_001" onkeydown="${PAGE_CODE}.handleViolationRuleSearchKeydown(event)">
+                                <input id="violationRuleSearch-${PAGE_CODE}" type="search" value="${this.escapeHtml(ruleFilterDisplay)}" placeholder="${this.escapeHtml(getText("e.g. RULE_001"))}" onkeydown="${PAGE_CODE}.handleViolationRuleSearchKeydown(event)">
                             </label>
                         </div>
                     </section>
@@ -3370,11 +3406,11 @@
                                     <header>
                                         <strong>${this.escapeHtml(rule.RULE_ID || "-")}</strong>
                                         <span class="M04002-violation-rule-actions">
-                                            <button type="button" title="수식 그래프 보기" onclick="${PAGE_CODE}.openSymbolicViolationRulePopup('${this.escapeJs(rule.RULE_ID)}')">
+                                            <button type="button" title="${this.escapeHtml(getText("View formula graph"))}" onclick="${PAGE_CODE}.openSymbolicViolationRulePopup('${this.escapeJs(rule.RULE_ID)}')">
                                                 <i class="fas fa-chart-line"></i>
                                             </button>
                                             <button type="button" class="${hasViolation ? "" : "is-muted"}" onclick="${PAGE_CODE}.openViolationSqlPopup('rule', '${this.escapeJs(rule.RULE_ID)}')">
-                                                ${hasViolation ? `${this.formatNumber(rule.VIOLATION_COUNT)}건` : "위반 없음"}
+                                                ${hasViolation ? this.escapeHtml(getText("{count} rows", { count: this.formatNumber(rule.VIOLATION_COUNT) })) : this.escapeHtml(getText("No violation"))}
                                             </button>
                                         </span>
                                     </header>
@@ -3383,9 +3419,9 @@
                                         f(${this.escapeHtml(featureLabel)}) = ${this.escapeHtml(rule.EXPRESSION || "")} = ${this.renderColumnAwareCell(targetColumn, summary)}
                                     </p>
                                     <footer>
-                                        <span><small>위반 Row</small><b>${this.formatNumber(rule.VIOLATED_ROW_COUNT)}</b></span>
-                                        <span><small>최대 오차율</small><b>${this.formatPercentMetric(rule.MAX_ERROR_PCT)}</b></span>
-                                        <span><small>평균 오차율</small><b>${this.formatPercentMetric(rule.AVG_ERROR_PCT)}</b></span>
+                                        <span><small>${this.escapeHtml(getText("Violation rows"))}</small><b>${this.formatNumber(rule.VIOLATED_ROW_COUNT)}</b></span>
+                                        <span><small>${this.escapeHtml(getText("Max error rate"))}</small><b>${this.formatPercentMetric(rule.MAX_ERROR_PCT)}</b></span>
+                                        <span><small>${this.escapeHtml(getText("Average error rate"))}</small><b>${this.formatPercentMetric(rule.AVG_ERROR_PCT)}</b></span>
                                         <span><small>score</small><b>${this.formatDecimal(rule.RULE_SCORE)}</b></span>
                                         <span><small>method</small><b>${this.escapeHtml(rule.RULE_METHOD || "-")}</b></span>
                                     </footer>
@@ -3393,7 +3429,7 @@
                             `;
                             }).join("")}
                         </div>
-                    ` : `<div class="table-empty">${ruleFilterDisplay ? "검색한 RULE ID에 해당하는 Symbolic Rule이 없습니다." : "표시할 Symbolic Rule 위반 요약이 없습니다."}</div>`}
+                    ` : `<div class="table-empty">${this.escapeHtml(ruleFilterDisplay ? getText("No Symbolic Rule matches the searched RULE ID.") : getText("No Symbolic Rule violation summary to display."))}</div>`}
                 </section>
             `;
         },
@@ -3464,7 +3500,7 @@
         openSymbolicRulePopup(key) {
             const rule = this.findSymbolicRuleByKey(String(key || ""));
             if (!rule) {
-                alert("선택한 Symbolic Rule 정보를 찾을 수 없습니다.");
+                alert(getText("Selected Symbolic Rule information could not be found."));
                 return;
             }
             this.closeSymbolicRulePopup();
@@ -3481,7 +3517,7 @@
             const summary = this.lastSymbolicViolationSummary || {};
             const rule = (summary.topRules || []).find((item) => String(item.RULE_ID) === normalizedRuleId);
             if (!rule) {
-                alert("선택한 Symbolic Rule 위반 요약 정보를 찾을 수 없습니다.");
+                alert(getText("Selected Symbolic Rule violation summary information could not be found."));
                 return;
             }
             this.closeSymbolicRulePopup();
@@ -3508,7 +3544,7 @@
                                 <small class="M04002-symbolic-rule-id-label">Rule ID</small>
                                 <span class="M04002-symbolic-rule-id-row">
                                     <code>${this.escapeHtml(displayRuleId)}</code>
-                                    <button type="button" class="M04002-rule-copy-btn" title="RULE ID 복사" onclick="${PAGE_CODE}.copyRuleId('${this.escapeJs(displayRuleId)}', event)">
+                                    <button type="button" class="M04002-rule-copy-btn" title="${this.escapeHtml(getText("Copy RULE ID"))}" onclick="${PAGE_CODE}.copyRuleId('${this.escapeJs(displayRuleId)}', event)">
                                         <i class="far fa-copy"></i>
                                     </button>
                                 </span>
@@ -3537,7 +3573,7 @@
                                     <b>${this.renderColumnAwareCell(range.COLUMN_NAME, sourceSummary || {})}</b>
                                     <small>min ${this.formatDecimal(range.MIN_VALUE)} · avg ${this.formatDecimal(range.AVG_VALUE)} · max ${this.formatDecimal(range.MAX_VALUE)}</small>
                                 </span>
-                            `).join("") : `<span><b>Feature range</b><small>대상 테이블의 숫자 범위를 계산하지 못했습니다. 기본 -1~1 범위로 그래프를 시도합니다.</small></span>`}
+                            `).join("") : `<span><b>Feature range</b><small>${this.escapeHtml(getText("Could not calculate numeric ranges from the target table. The graph will try the default -1 to 1 range."))}</small></span>`}
                         </div>
                     </div>
                 </section>
@@ -3579,19 +3615,19 @@
             const message = document.getElementById(`${PAGE_ID_PREFIX}SymbolicRuleChartMessage`);
             const canvas = document.getElementById(`${PAGE_ID_PREFIX}SymbolicRuleChart`);
             if (!canvas || !window.Chart) {
-                if (message) message.textContent = "Chart.js가 로드되지 않아 그래프를 표시할 수 없습니다.";
+                if (message) message.textContent = getText("Chart.js is not loaded, so the graph cannot be displayed.");
                 return;
             }
             let chartData;
             try {
                 chartData = this.buildSymbolicRuleChartData(rule);
             } catch (error) {
-                if (message) message.textContent = `그래프 데이터를 만들지 못했습니다: ${error.message}`;
+                if (message) message.textContent = getText("Could not build graph data: {message}", { message: error.message });
                 canvas.hidden = true;
                 return;
             }
             if (!chartData.ok) {
-                if (message) message.textContent = chartData.message || "이 수식은 현재 화면에서 그래프로 계산할 수 없습니다.";
+                if (message) message.textContent = chartData.message || getText("This formula cannot be calculated as a graph on the current screen.");
                 canvas.hidden = true;
                 return;
             }
@@ -3630,7 +3666,7 @@
                 });
             } catch (error) {
                 canvas.hidden = true;
-                if (message) message.textContent = `그래프를 렌더링하지 못했습니다: ${error.message}`;
+                if (message) message.textContent = getText("Could not render the graph: {message}", { message: error.message });
             }
         },
 
@@ -3640,7 +3676,7 @@
                 : this.parseFeatureList(rule.FEATURE_COLUMNS);
             const expression = String(rule.EXPRESSION || "").trim();
             if (!features.length || !expression) {
-                return { ok: false, message: "수식 또는 입력 feature 정보가 없습니다." };
+                return { ok: false, message: getText("Formula or input feature information is missing.") };
             }
             const compiled = this.compileSymbolicExpression(expression, features);
             if (!compiled.ok) return compiled;
@@ -3693,7 +3729,7 @@
                 };
             }).filter((dataset) => dataset.data.some((value) => value !== null));
             if (!datasets.length) {
-                return { ok: false, message: "계산 결과가 모두 비어 있어 그래프를 만들 수 없습니다." };
+                return { ok: false, message: getText("All calculated results are empty, so the graph cannot be created.") };
             }
             return {
                 ok: true,
@@ -3701,8 +3737,8 @@
                 datasets,
                 xLabel: primary,
                 message: second
-                    ? `${primary} 값을 움직이고, ${second}는 min/avg/max 세 기준으로 비교합니다. 나머지 feature는 평균값으로 고정합니다.${compiled.profile && compiled.profile.isCurved ? " POWER/EXP/LOG 등 함수식은 계산용으로 변환해 곡선 그래프로 표시합니다." : ""}`
-                    : `${primary} 값을 움직이며 예측 y 변화를 표시합니다.${compiled.profile && compiled.profile.isCurved ? " POWER/EXP/LOG 등 함수식은 계산용으로 변환해 곡선 그래프로 표시합니다." : ""}`
+                    ? getText("{primary} is varied, and {second} is compared at min/avg/max. Other features are fixed at their average values.{curveNote}", { primary, second, curveNote: compiled.profile && compiled.profile.isCurved ? getText(" POWER/EXP/LOG style formulas are converted for calculation and displayed as curved graphs.") : "" })
+                    : getText("{primary} is varied to display the predicted y change.{curveNote}", { primary, curveNote: compiled.profile && compiled.profile.isCurved ? getText(" POWER/EXP/LOG style formulas are converted for calculation and displayed as curved graphs.") : "" })
             };
         },
 
@@ -3710,10 +3746,10 @@
             let expr = String(expression || "").trim();
             const usedFunctions = new Set();
             if (!expr) {
-                return { ok: false, message: "수식 정보가 없습니다." };
+                return { ok: false, message: getText("Formula information is missing.") };
             }
             if (/[`"';&{}\[\]]/.test(expr)) {
-                return { ok: false, message: "수식에 그래프 계산에서 허용하지 않는 문자가 포함되어 있습니다." };
+                return { ok: false, message: getText("The formula contains characters that are not allowed for graph calculation.") };
             }
             const aliases = {
                 abs: "abs",
@@ -3794,7 +3830,7 @@
             const identifiers = expr.match(/\b[A-Za-z_$][A-Za-z0-9_$#]*\b/g) || [];
             const unknown = identifiers.find((name) => !lowerFeatureSet.has(name.toLowerCase()) && !allowedNames.has(name.toLowerCase()));
             if (unknown) {
-                return { ok: false, message: `수식의 ${unknown} 항목은 feature 목록에 없어 그래프로 계산하지 않았습니다.` };
+                return { ok: false, message: getText("{unknown} in the formula is not in the feature list, so it was not calculated as a graph.", { unknown }) };
             }
             const mappedFeatures = features.map((feature, index) => ({ feature, arg: `v${index}` }));
             mappedFeatures.forEach(({ feature, arg }) => {
@@ -3812,7 +3848,7 @@
             try {
                 fn = new Function(...argNames, `"use strict"; return (${expr});`);
             } catch (error) {
-                return { ok: false, message: `수식을 그래프 함수로 변환하지 못했습니다: ${error.message}` };
+                return { ok: false, message: getText("Could not convert the formula into a graph function: {message}", { message: error.message }) };
             }
             return {
                 ok: true,
@@ -3848,14 +3884,14 @@
                 <section class="M04002-type-summary">
                     <header>
                         <div>
-                            <strong>컬럼 유형 예측 요약</strong>
+                            <strong>${this.escapeHtml(getMessage("predictedTypeSummaryTitle", "Column Type Prediction Summary"))}</strong>
                             <span>Target ${this.escapeHtml(summary.targetOwner)}.${this.escapeHtml(summary.targetTable)}</span>
                         </div>
                         <div class="M04002-type-summary-actions">
                             <div class="M04002-corr-metrics">
-                                <span><b>${this.formatNumber(summary.totalColumnCount)}</b><small>전체 컬럼</small></span>
+                                <span><b>${this.formatNumber(summary.totalColumnCount)}</b><small>${this.escapeHtml(getMessage("totalColumns", "Total columns"))}</small></span>
                                 ${groups.map((group) => `
-                                    <span><b>${this.formatNumber(group.columnCount)}</b><small>${this.escapeHtml(group.typeGroup)}</small></span>
+                                    <span><b>${this.formatNumber(group.columnCount)}</b><small>${this.escapeHtml(this.getPredictedTypeGroupLabel(group.typeGroup))}</small></span>
                                 `).join("")}
                             </div>
                             ${this.renderSamplePageJump("predictedTypePage-${PAGE_CODE}", json, "${PAGE_CODE}.goPredictedTypePage()", "${PAGE_CODE}.loadResultTable", {
@@ -3868,17 +3904,17 @@
                     ${this.renderPredictedTypeUnifiedMode(sourceGroups, finalGroups, summary)}
                     ${matchGroups.length ? `
                         <div class="M04002-type-detail">
-                            <strong>적용 FINAL / MODEL / RULE 예측 유형 상세 그룹</strong>
+                            <strong>${this.escapeHtml(getMessage("predictionMatchGroupTitle", "Applied FINAL / MODEL / RULE Prediction Type Detail Groups"))}</strong>
                             <div class="M04002-type-case-grid">
-                                <button type="button" class="${activeCase === "ALL" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectPredictedTypeCase('ALL')" title="모든 예측 결과">
-                                    <b>전체</b>
-                                    <small>${this.formatNumber(summary.totalColumnCount)} columns</small>
+                                <button type="button" class="${activeCase === "ALL" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectPredictedTypeCase('ALL')" title="${this.escapeHtml(getMessage("allPredictionResultsTitle", "All prediction results"))}">
+                                    <b>${this.escapeHtml(getMessage("all", "All"))}</b>
+                                    <small>${this.escapeHtml(getMessage("columnsCount", "{count} columns", { count: this.formatNumber(summary.totalColumnCount) }))}</small>
                                 </button>
                                 ${matchGroups.map((group) => `
-                                    <button type="button" class="${activeCase === group.caseCode ? "is-active" : ""}" onclick="${PAGE_CODE}.selectPredictedTypeCase('${this.escapeJs(group.caseCode)}')" title="${this.escapeHtml(group.description || group.label)}">
-                                        <b>${this.escapeHtml(group.label)}</b>
-                                        <small>${this.formatNumber(group.columnCount)} columns · ${this.formatDecimal(group.rate)}%</small>
-                                        <em>${this.escapeHtml(group.description || "")}</em>
+                                    <button type="button" class="${activeCase === group.caseCode ? "is-active" : ""}" onclick="${PAGE_CODE}.selectPredictedTypeCase('${this.escapeJs(group.caseCode)}')" title="${this.escapeHtml(this.getPredictionMatchDescription(group))}">
+                                        <b>${this.escapeHtml(this.getPredictionMatchLabel(group))}</b>
+                                        <small>${this.escapeHtml(getMessage("columnsRate", "{count} columns · {rate}%", { count: this.formatNumber(group.columnCount), rate: this.formatDecimal(group.rate) }))}</small>
+                                        <em>${this.escapeHtml(this.getPredictionMatchDescription(group))}</em>
                                     </button>
                                 `).join("")}
                             </div>
@@ -3891,7 +3927,7 @@
         renderPredictedTypeUnifiedMode(sourceGroups = [], finalGroups = [], summary = null) {
             const safeGroups = this.getUnifiedPredictionSourceGroups(sourceGroups, finalGroups);
             if (!safeGroups.length) {
-                return `<div class="table-empty">표시할 RULE / MODEL / FINAL 예측 컬럼 정보가 없습니다.</div>`;
+                return `<div class="table-empty">${this.escapeHtml(getMessage("noPredictionColumns", "No RULE / MODEL / FINAL prediction column information is available."))}</div>`;
             }
             return `
                 <div class="M04002-type-source-grid">
@@ -3954,12 +3990,12 @@
                     if (code === "FINAL") {
                         return {
                             ...source,
-                            description: "최종 적용 INIT$_TB_PREDICTED_TYPE_FINAL.FINAL_PREDICTED_TYPE"
+                            description: getMessage("finalAppliedPredictionDescription", "Final applied INIT$_TB_PREDICTED_TYPE_FINAL.FINAL_PREDICTED_TYPE")
                         };
                     }
                     return {
                         ...source,
-                        description: `${methodLabel} RUN ID 기준 ${source.sourceColumn || ""}`.trim()
+                        description: getMessage("runIdBasedPredictionDescription", "{method} RUN_ID based {column}", { method: methodLabel, column: source.sourceColumn || "" }).trim()
                     };
                 }
                 if (code === "FINAL" && Array.isArray(finalGroups) && finalGroups.length) {
@@ -3967,7 +4003,7 @@
                         sourceCode: "FINAL",
                         sourceLabel: "FINAL",
                         sourceColumn: "FINAL_PREDICTED_TYPE",
-                        description: "최종 적용 INIT$_TB_PREDICTED_TYPE_FINAL.FINAL_PREDICTED_TYPE",
+                        description: getMessage("finalAppliedPredictionDescription", "Final applied INIT$_TB_PREDICTED_TYPE_FINAL.FINAL_PREDICTED_TYPE"),
                         groups: finalGroups
                     };
                 }
@@ -3981,13 +4017,18 @@
             const safeSourceGroups = this.filterPredictionSourceGroups(sourceGroups, sourceCodes);
             const methodLabel = method || "P_PREDICTION_METHOD";
             if (!safeSourceGroups.length) {
-                return this.renderPredictedTypeVersion("RUN 기준", `${methodLabel} 실행 당시 INIT$_TB_PREDICTED_TYPE 예측값`, fallbackGroups, summary);
+                return this.renderPredictedTypeVersion(
+                    getMessage("runBasedTitle", "RUN based"),
+                    getMessage("runBasedPredictionNote", "INIT$_TB_PREDICTED_TYPE prediction value at {method} execution", { method: methodLabel }),
+                    fallbackGroups,
+                    summary
+                );
             }
             return `
                 <section class="M04002-type-version">
                     <header>
-                        <strong>RUN 기준</strong>
-                        <span>${this.escapeHtml(methodLabel)} 실행 당시 INIT$_TB_PREDICTED_TYPE 예측값</span>
+                        <strong>${this.escapeHtml(getMessage("runBasedTitle", "RUN based"))}</strong>
+                        <span>${this.escapeHtml(getMessage("runBasedPredictionNote", "INIT$_TB_PREDICTED_TYPE prediction value at {method} execution", { method: methodLabel }))}</span>
                     </header>
                     <div class="M04002-type-run-source-grid">
                         ${safeSourceGroups.map((source) => this.renderPredictedTypeSourceGroup(source, summary, true)).join("")}
@@ -4005,7 +4046,7 @@
                     <header>
                         <strong>${this.escapeHtml(source.sourceLabel || source.sourceCode || "-")}</strong>
                         <span>${this.escapeHtml(source.description || source.sourceColumn || "")}</span>
-                        <small>${this.formatNumber(total)} columns</small>
+                        <small>${this.escapeHtml(getMessage("columnsCount", "{count} columns", { count: this.formatNumber(total) }))}</small>
                     </header>
                     <div class="M04002-type-source-groups">
                         ${groups.map((group) => this.renderPredictedTypeGroup(group, summary)).join("")}
@@ -4036,15 +4077,56 @@
             return `
                 <article class="M04002-type-group">
                     <header>
-                        <strong>${this.escapeHtml(group.typeGroup)}</strong>
-                        <small>${this.formatNumber(group.columnCount)} columns</small>
+                        <strong>${this.escapeHtml(this.getPredictedTypeGroupLabel(group.typeGroup))}</strong>
+                        <small>${this.escapeHtml(getMessage("columnsCount", "{count} columns", { count: this.formatNumber(group.columnCount) }))}</small>
                     </header>
                     <div class="M04002-corr-tags">
                         ${visibleColumns.map((column) => this.renderColumnChip(column, summary || group)).join("")}
-                        ${hiddenCount ? `<em class="M04002-column-chip">+${this.formatNumber(hiddenCount)} more</em>` : ""}
+                        ${hiddenCount ? `<em class="M04002-column-chip">${this.escapeHtml(getMessage("moreColumns", "+{count} more", { count: this.formatNumber(hiddenCount) }))}</em>` : ""}
                     </div>
                 </article>
             `;
+        },
+
+        getPredictedTypeGroupLabel(value) {
+            const text = String(value || "").trim();
+            const normalized = text.toUpperCase();
+            if (normalized === "\uBC94\uC8FC\uD615" || normalized === "CATEGORICAL" || normalized === "CATEGORY" || normalized === "CAT") {
+                return getMessage("predictedGroupCategorical", "Categorical");
+            }
+            if (normalized === "\uC5F0\uC18D\uD615" || normalized === "NUMERIC" || normalized === "CONTINUOUS" || normalized === "NUMBER") {
+                return getMessage("predictedGroupContinuous", "Continuous");
+            }
+            if (normalized === "\uAE30\uD0C0" || normalized === "OTHER" || normalized === "ETC") {
+                return getMessage("predictedGroupOther", "Other");
+            }
+            return text;
+        },
+
+        getPredictionMatchLabel(group = {}) {
+            const code = String(group.caseCode || "").toUpperCase();
+            const labels = {
+                ALL_MATCH: getMessage("predictionCaseAllMatch", "FINAL = MODEL = RULE"),
+                FINAL_MODEL: getMessage("predictionCaseFinalModel", "FINAL = MODEL, RULE differs"),
+                FINAL_BASE: getMessage("predictionCaseFinalRule", "FINAL = RULE, MODEL differs"),
+                MODEL_BASE: getMessage("predictionCaseModelRule", "MODEL = RULE, FINAL differs"),
+                ALL_DIFFERENT: getMessage("predictionCaseAllDifferent", "All three differ"),
+                HAS_MISSING: getMessage("predictionCaseHasMissing", "Includes missing value")
+            };
+            return labels[code] || group.label || code || "-";
+        },
+
+        getPredictionMatchDescription(group = {}) {
+            const code = String(group.caseCode || "").toUpperCase();
+            const descriptions = {
+                ALL_MATCH: getMessage("predictionCaseAllMatchDesc", "All three predictions match. Strong recommendation."),
+                FINAL_MODEL: getMessage("predictionCaseFinalModelDesc", "Final decision matches the model prediction."),
+                FINAL_BASE: getMessage("predictionCaseFinalRuleDesc", "Final decision matches the RULE prediction."),
+                MODEL_BASE: getMessage("predictionCaseModelRuleDesc", "Model and RULE predictions match."),
+                ALL_DIFFERENT: getMessage("predictionCaseAllDifferentDesc", "All three predictions differ. Review is required."),
+                HAS_MISSING: getMessage("predictionCaseHasMissingDesc", "FINAL / MODEL / RULE includes an empty value.")
+            };
+            return descriptions[code] || group.description || "";
         },
 
         async selectPredictedTypeCase(caseCode = "ALL") {
@@ -4092,13 +4174,13 @@
                 return `
                     <article class="M04002-rule-card">
                         <strong>Rule #${this.escapeHtml(rule.ruleId)}</strong>
-                        <p><b>IF</b> ${this.escapeHtml(rule.ifText || "조건 정보 없음")}</p>
-                        <p><b>THEN</b> ${this.escapeHtml(rule.thenText || "결과 정보 없음")}</p>
+                        <p><b>IF</b> ${this.escapeHtml(rule.ifText || getText("No condition information"))}</p>
+                        <p><b>THEN</b> ${this.escapeHtml(rule.thenText || getText("No result information"))}</p>
                         <small>support ${this.formatPercent(row.RULE_SUPPORT)} · confidence ${this.formatPercent(row.RULE_CONFIDENCE)} · lift ${this.escapeHtml(row.RULE_LIFT ?? "-")}</small>
                     </article>
                 `;
             }).join("");
-            return `<section class="M04002-rule-grid">${rules || `<div class="table-empty">조건에 맞는 규칙 카드가 없습니다. 원본 행은 아래 테이블에서 확인할 수 있습니다.</div>`}</section>`;
+            return `<section class="M04002-rule-grid">${rules || `<div class="table-empty">${this.escapeHtml(getText("No rule cards match the condition. You can check the original rows in the table below."))}</div>`}</section>`;
         },
 
         renderRuleFilterBar() {
@@ -4106,7 +4188,7 @@
                 <div class="M04002-rule-filter-bar">
                     <label>
                         <input type="checkbox" ${this.excludeEmptyConsequent ? "checked" : ""} onchange="${PAGE_CODE}.toggleExcludeEmptyConsequent(this.checked)">
-                        <span>결과 정보 없음 제외</span>
+                        <span>${this.escapeHtml(getText("Exclude missing result"))}</span>
                     </label>
                 </div>
             `;
@@ -4181,8 +4263,8 @@
             const resultObject = getValue("RESULT_OBJECT_NAME", "resultTableName", "tableName", "RESULT_TABLE_NAME");
             const resultMode = getValue("RESULT_CREATE_YN", "resultCreateYn");
             const resultModeLabel = String(resultMode || "").toUpperCase() === "M"
-                ? "M (모델)"
-                : (String(resultMode || "").toUpperCase() === "T" ? "T (테이블)" : resultMode);
+                ? getMessage("resultModeModel", "M (Model)")
+                : (String(resultMode || "").toUpperCase() === "T" ? getMessage("resultModeTable", "T (Table)") : resultMode);
             const metaRows = [
                 { key: "target-owner", label: "Target Owner", value: targetOwner },
                 { key: "target-table", label: "Target Table", value: targetTable },
@@ -4204,7 +4286,7 @@
                     </div>
                     ${paramEntries.length ? `
                         <details class="M04002-param-details">
-                            <summary>호출 옵션 파라미터 ${this.formatNumber(paramEntries.length)}개</summary>
+                            <summary>${this.escapeHtml(getMessage("callOptionParamsCount", "{count} call option parameter(s)", { count: this.formatNumber(paramEntries.length) }))}</summary>
                             <div>
                                 ${paramEntries.map(([key, value]) => `
                                     <span>
@@ -4429,12 +4511,12 @@
                 return [];
             }
             return [
-                { key: "P_TARGET_OWNER", comment: "분석 대상 테이블 계정", defaultValue: ":INIT$TargetOwner" },
-                { key: "P_TARGET_TABLE", comment: "분석 대상 테이블명", defaultValue: ":INIT$TargetTable" },
-                { key: "P_DYNAMIC_MODEL_NAME", comment: "분류/예측 모델명", defaultValue: "OML_DECISION_TREE_MODEL_01" },
-                { key: "P_PREDICTION_METHOD", comment: "예측 방식 선택(ONLY_RULE: BASE 컬럼만, ONLY_MODEL: MODL 컬럼만, ONLY_BOTH: BASE/MODL 컬럼, FINAL_RULE/MODEL/BOTH: FINAL 자동 반영)", defaultValue: "ONLY_BOTH" },
-                { key: "P_RUN_SOURCE_TYPE", comment: "실행 출처 구분(DATA_WORK/FLOW_WORK)", defaultValue: ":INIT$RunSourceType" },
-                { key: "P_RUN_ID", comment: "실행 이력 ID", defaultValue: ":INIT$RunId" }
+                { key: "P_TARGET_OWNER", comment: getMessage("paramDescTargetOwner", "Target table owner"), defaultValue: ":INIT$TargetOwner" },
+                { key: "P_TARGET_TABLE", comment: getMessage("paramDescTargetTable", "Target table name"), defaultValue: ":INIT$TargetTable" },
+                { key: "P_DYNAMIC_MODEL_NAME", comment: getMessage("paramDescDynamicModelName", "Classification/prediction model name"), defaultValue: "OML_DECISION_TREE_MODEL_01" },
+                { key: "P_PREDICTION_METHOD", comment: getMessage("paramDescPredictionMethod", "Prediction method (ONLY_RULE: BASE columns only, ONLY_MODEL: model columns only, ONLY_BOTH: BASE/MODEL columns, FINAL_RULE/MODEL/BOTH: apply FINAL automatically)"), defaultValue: "ONLY_BOTH" },
+                { key: "P_RUN_SOURCE_TYPE", comment: getMessage("paramDescRunSourceType", "Run source type (DATA_WORK/FLOW_WORK)"), defaultValue: ":INIT$RunSourceType" },
+                { key: "P_RUN_ID", comment: getMessage("paramDescRunId", "Execution history ID"), defaultValue: ":INIT$RunId" }
             ];
         },
 
@@ -4722,8 +4804,8 @@
                 const consequent = this.findRuleValue(row, [/CONSEQUENT/i, /\bRHS\b/i, /PREDICT/i, /OUTCOME/i, /\bTHEN\b/i]);
                 const antecedentText = this.resolveRuleSideText(antecedent, itemDictionary);
                 const consequentText = this.resolveRuleSideText(consequent, itemDictionary);
-                const thenText = consequentText && !this.ruleTextHasExplicitValue(consequentText) && !/값 정보 없음/.test(consequentText)
-                    ? `${consequentText} (값 정보 없음)`
+                const thenText = consequentText && !this.ruleTextHasExplicitValue(consequentText) && !this.isValueUnavailableText(consequentText)
+                    ? `${consequentText} (${getText("Value unavailable")})`
                     : consequentText;
                 const support = this.findMetricValue(row, [/RULE_SUPPORT/i, /^SUPPORT$/i]);
                 const confidence = this.findMetricValue(row, [/RULE_CONFIDENCE/i, /^CONFIDENCE$/i]);
@@ -4738,18 +4820,18 @@
                     confidenceValue: confidence,
                     canOpenViolation: this.isRuleViolationCandidate(confidence),
                     mappingLevel: mapped ? "mapped" : "limited",
-                    mappingLabel: mapped ? "조건/결과 매핑됨" : "ID/지표 중심",
-                    ifText: mapped ? antecedentText : "조건 항목 조합을 Detail Views에서 확인해야 합니다",
-                    thenText: mapped ? thenText : "결과 항목을 Detail Views에서 확인해야 합니다",
+                    mappingLabel: mapped ? getText("Condition/result mapped") : getText("ID/metric focused"),
+                    ifText: mapped ? antecedentText : getText("Review the condition item combination in Detail Views."),
+                    thenText: mapped ? thenText : getText("Review the result item in Detail Views."),
                     note: mapped && missingConsequentValue
-                        ? "조건은 XML itemset에서 컬럼 = 값으로 해석했습니다. 결과는 모델뷰가 컬럼명만 제공해서 값은 현재 뷰에서 확인되지 않습니다."
+                        ? getText("Conditions were interpreted as column = value from XML itemsets. The result model view provides only the column name, so the value is not visible in the current view.")
                         : (mapped
-                            ? "모델 detail view의 XML itemset과 item dictionary 후보를 사용해 사람이 읽는 문장으로 구성했습니다."
-                            : "현재 DM$VR/DM$VI/DM$VA 샘플에는 컬럼명과 값으로 복원 가능한 조건/결과 매핑이 보이지 않습니다."),
+                            ? getText("Built a readable sentence using XML itemsets and item dictionary candidates from the model detail view.")
+                            : getText("The current DM$VR/DM$VI/DM$VA sample does not show a condition/result mapping that can be restored to column names and values.")),
                     metrics: [
                         { label: "support", value: support === null ? "-" : this.formatPercentMetric(support) },
                         { label: "confidence", value: confidence === null ? "-" : this.formatPercentMetric(confidence) },
-                        { label: "예상 위반", value: this.formatExpectedViolationRate(confidence) },
+                        { label: getText("Expected violation"), value: this.formatExpectedViolationRate(confidence) },
                         { label: "lift", value: lift === null ? "-" : this.formatDecimal(lift) }
                     ],
                     conditionCount,
@@ -4760,7 +4842,7 @@
 
         countRuleConditions(text) {
             const normalized = String(text || "").trim();
-            if (!normalized || /Detail Views에서 확인/.test(normalized)) return 0;
+            if (!normalized || normalized === getText("Review the condition item combination in Detail Views.")) return 0;
             return normalized
                 .split(/\s+AND\s+/i)
                 .map((item) => item.trim())
@@ -4846,7 +4928,7 @@
             if (!name && !rawValue) return "";
             const field = rawSubname ? `${name}.${rawSubname}` : name;
             if (field && rawValue) return `${field} = ${rawValue}`;
-            if (field) return `${field} (값 정보 없음)`;
+            if (field) return `${field} (${getText("Value unavailable")})`;
             return rawValue;
         },
 
@@ -4906,12 +4988,17 @@
 
         isEmptyRuleText(value) {
             const text = String(value || "").trim();
-            return !text || text === "결과 정보 없음" || /값 정보 없음/.test(text);
+            return !text || text === getText("No result information") || text === "\uACB0\uACFC \uC815\uBCF4 \uC5C6\uC74C" || this.isValueUnavailableText(text);
+        },
+
+        isValueUnavailableText(value) {
+            const text = String(value || "");
+            return text.includes(getText("Value unavailable")) || text.includes("\uAC12 \uC815\uBCF4 \uC5C6\uC74C");
         },
 
         renderGrid(columns, rows, source = null) {
             const safeColumns = (columns || []).filter((column) => column !== "RN__");
-            if (!safeColumns.length) return `<div class="table-empty">조회 결과가 없습니다.</div>`;
+            if (!safeColumns.length) return `<div class="table-empty">${this.escapeHtml(getText("No query results."))}</div>`;
             return `
                 <div class="M04002-grid-wrap">
                     <table class="table-grid M04002-grid">
@@ -4945,7 +5032,7 @@
             const columns = this.currentExport.columns || [];
             const rows = this.currentExport.rows || [];
             if (!columns.length) {
-                alert("Export할 데이터가 없습니다.");
+                alert(getText("No data to export."));
                 return;
             }
             this.downloadCsv(this.currentExport.filename || "integrated-result.csv", columns, rows);
@@ -4982,7 +5069,7 @@
                 const itemValue = this.readXmlTagValue(body, "item_value");
                 const field = subname ? `${name}.${subname}` : name;
                 if (field && itemValue) items.push(`${field} = ${itemValue}`);
-                else if (field) items.push(`${field} (값 정보 없음)`);
+                else if (field) items.push(`${field} (${getText("Value unavailable")})`);
             }
             return items.join(" AND ");
         },

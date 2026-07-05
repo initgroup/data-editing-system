@@ -1,0 +1,28 @@
+{
+  "language": "ko",
+  "pageCode": "M06002",
+  "description": "Korean labels for Error Data Cleansing.",
+  "labels": {},
+  "selectors": {
+    "text": {
+      ".env-section-title": "위반 처리 대기열",
+      ".env-section-desc": "정제 대상 오류 데이터입니다.",
+      "#data-clean-title-M06002": "오류 데이터 정제/수정",
+      ".env-desc": "위반 데이터를 검토하고 정제 값과 처리 상태를 관리합니다.",
+      ".env-header-actions .env-btn:nth-child(1)": "제외",
+      ".env-header-actions .env-save span": "저장",
+      ".table-tabs .table-tab:nth-child(1)": "정정",
+      ".table-tabs .table-tab:nth-child(2)": "감사",
+      ".table-tabs .table-tab:nth-child(3)": "SQL 미리보기",
+      ".data-param-card:nth-child(1) h3": "변경 전 값",
+      ".data-param-card:nth-child(2) h3": "변경 후 값"
+    },
+    "title": {
+      ".env-object-actions .env-icon-btn": "새로고침"
+    },
+    "placeholder": {
+      ".env-object-search input": "행 또는 규칙 검색"
+    }
+  },
+  "messages": {}
+}

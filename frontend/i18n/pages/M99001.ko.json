@@ -1,0 +1,70 @@
+{
+  "language": "ko",
+  "pageCode": "M99001",
+  "description": "Korean labels for DB Connection Settings.",
+  "labels": {
+    "statusSummary": "전체건수 {total} / 성공건수 {success} / 실패건수 {failed}"
+  },
+  "selectors": {
+    "text": {
+      ".env-object-header .env-section-title": "DB 접속 정보",
+      ".env-object-header .env-section-desc": "시스템에서 사용할 대상 DB를 등록합니다.",
+      "#connection-title-M99001": "DB 접속 설정",
+      "#connectionDescription-M99001": "대상 DB 프로필을 만들고 연결 테스트 및 필수 테이블 초기화를 수행합니다.",
+      "[data-login-exit-only] span": "로그인으로 돌아가기",
+      ".m99001-tab[data-tab=\"connection\"]": "접속 정보",
+      ".m99001-tab[data-tab=\"deploy\"]": "Target 설치",
+      ".m99001-tab[data-tab=\"ml\"]": "머신러닝",
+      "[data-panel=\"connection\"] .env-meta-grid label:nth-child(1) span": "접속 ID",
+      "[data-panel=\"connection\"] .env-meta-grid label:nth-child(2) span": "DB 유형",
+      "[data-panel=\"connection\"] .env-meta-grid label:nth-child(3) span": "사용",
+      "[data-panel=\"connection\"] .env-meta-grid label:nth-child(4) span": "공유",
+      "[data-panel=\"connection\"] .env-meta-grid label:nth-child(5) span": "기본",
+      "[data-panel=\"connection\"] .env-meta-grid label:nth-child(6) span": "정렬",
+      "[data-panel=\"connection\"] .env-meta-grid label:nth-child(7) span": "접속 방식",
+      "[data-panel=\"connection\"] .env-meta-grid label:nth-child(8) span": "접속명",
+      "[data-panel=\"connection\"] .env-meta-grid label:nth-child(9) span": "Host",
+      "[data-panel=\"connection\"] .env-meta-grid label:nth-child(10) span": "Port",
+      "[data-panel=\"connection\"] .env-meta-grid label:nth-child(11) span": "서비스명",
+      "[data-panel=\"connection\"] .env-meta-grid label:nth-child(12) span": "SID",
+      "[data-panel=\"connection\"] .env-meta-grid label:nth-child(13) span": "사용자명",
+      "[data-panel=\"connection\"] .env-meta-grid label:nth-child(14) span": "비밀번호",
+      "[data-panel=\"connection\"] .env-meta-grid label:nth-child(15) span": "TNS Alias / JDBC URL",
+      "[data-panel=\"connection\"] .env-meta-grid label:nth-child(16) span": "Wallet 경로",
+      "[data-panel=\"connection\"] .env-meta-grid label:nth-child(17) span": "Wallet 비밀번호",
+      "[data-panel=\"connection\"] .env-meta-grid label:nth-child(18) span": "접속 옵션",
+      "[data-panel=\"connection\"] .env-detail-hint": "Target DB 프로필은 INIT$_TB_DB_CONNECTION에 저장됩니다.",
+      "[data-panel=\"connection\"] .env-footer .env-btn:nth-child(1)": "테스트",
+      "#bootstrapInitSystemBtn-M99001": "시스템 DDL 설치",
+      "[data-panel=\"connection\"] .env-footer .env-save[data-operational-only]": "저장",
+      "[data-panel=\"connection\"] .env-footer .env-danger": "삭제",
+      ".m99001-message-panel strong": "실행 메시지",
+      ".m99001-action-panel strong": "Target 설치 메시지",
+      ".m99001-schema-log-panel strong": "애플리케이션 테이블 상태",
+      ".m99001-schema-log-panel .env-save": "App 테이블 설치",
+      ".m99001-schema-log-panel .env-danger": "App 데이터 초기화",
+      ".m99001-model-status-panel strong": "모델 객체 배포 상태",
+      ".m99001-model-status-panel .env-save": "PL/SQL 객체 배포",
+      "[data-panel=\"ml\"] .m99001-action-panel strong": "머신러닝 메시지",
+      "[data-panel=\"ml\"] .m99001-model-status-panel strong": "ML 배포 상태",
+      "[data-panel=\"ml\"] .env-save:nth-of-type(1)": "ML Seed 준비",
+      "[data-panel=\"ml\"] .env-save:nth-of-type(2)": "ML 모델 학습"
+    },
+    "title": {
+      ".env-object-actions .env-icon-btn:nth-child(1)": "새 접속",
+      ".env-object-actions .env-icon-btn:nth-child(2)": "접속 목록 새로고침",
+      ".env-search-actions .env-icon-btn": "검색",
+      ".m99001-schema-log-panel .env-icon-btn": "테이블 상태 새로고침",
+      ".m99001-model-status-panel .env-icon-btn": "배포 상태 새로고침",
+      "[data-panel=\"ml\"] .m99001-model-status-panel .env-icon-btn": "ML 배포 상태 새로고침",
+      "#modelObjectGroup-M99001": "PL/SQL 객체 배포 그룹"
+    },
+    "placeholder": {
+      "#connectionSearch-M99001": "접속 정보 검색",
+      "#password-M99001": "저장된 비밀번호 유지 시 비워두세요",
+      "#walletPath-M99001": "Oracle wallet 경로(선택)",
+      "#walletPassword-M99001": "저장된 wallet 비밀번호 유지 시 비워두세요"
+    }
+  },
+  "messages": {}
+}

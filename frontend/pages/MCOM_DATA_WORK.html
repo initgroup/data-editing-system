@@ -98,23 +98,24 @@
                         </div>
                         <button type="button" id="saveJob-__PAGE_CODE__" class="table-btn" onclick="__PAGE_CODE__.saveJob()">
                             <i class="fas fa-save"></i>
-                            <span data-label-key="saveWork">Save work</span>
+                            <span data-label-key="saveWork">Save</span>
                         </button>
                         <button type="button" id="deleteJob-__PAGE_CODE__" class="table-btn" onclick="__PAGE_CODE__.deleteJob()" disabled>
                             <i class="fas fa-trash-alt"></i>
-                            <span data-label-key="deleteWork">Delete work</span>
+                            <span data-label-key="deleteWork">Delete</span>
                         </button>
+                        <span class="data-work-action-separator" aria-hidden="true"></span>
                         <button type="button" id="testDraft-__PAGE_CODE__" class="table-btn" onclick="__PAGE_CODE__.testCurrentDraft()" disabled>
                             <i class="fas fa-vial"></i>
-                            <span data-label-key="testDraft">Test current draft</span>
+                            <span data-label-key="testDraft">Test</span>
                         </button>
                         <button type="button" id="runNow-__PAGE_CODE__" class="table-btn" onclick="__PAGE_CODE__.runJob(false)" disabled>
                             <i class="fas fa-play"></i>
-                            <span data-label-key="runNow">Run saved work</span>
+                            <span data-label-key="runNow">Run</span>
                         </button>
                         <button type="button" id="queueBatch-__PAGE_CODE__" class="table-btn" onclick="__PAGE_CODE__.runJob(true)" disabled>
                             <i class="fas fa-clock"></i>
-                            <span data-label-key="queueBatch">Queue saved work</span>
+                            <span data-label-key="queueBatch">Queue</span>
                         </button>
                     </div>
                 </header>
@@ -164,35 +165,35 @@
                         <label class="data-exec-source-field">
                             <span data-label-key="executionSource">Execution Source</span>
                             <select id="execSourceType-__PAGE_CODE__" class="env-field" onchange="__PAGE_CODE__.handleExecutionSourceChange(this.value)">
-                                <option value="DB_OBJECT">DB Object</option>
-                                <option value="OML_PYTHON">OML Python</option>
-                                <option value="WEB_API">Web API</option>
+                                <option value="DB_OBJECT" data-label-key="executionSourceDbObject">DB Object</option>
+                                <option value="OML_PYTHON" data-label-key="executionSourceOmlPython">OML Python</option>
+                                <option value="WEB_API" data-label-key="executionSourceWebApi">Web API</option>
                             </select>
                         </label>
                         <label class="data-exec-object-field">
                             <span class="required-title" data-label-key="executableObject">Correlation Procedure / Model</span>
                             <select id="execObject-__PAGE_CODE__" class="env-field" onchange="__PAGE_CODE__.handleExecutableObjectChange(this.value)">
-                                <option value="">-- Select registered object --</option>
+                                <option value="" data-label-key="selectRegisteredObject">-- Select registered object --</option>
                             </select>
                         </label>
                         <label id="omlResourceWrap-__PAGE_CODE__" class="data-oml-resource-field" hidden>
                             <span class="required-title" data-label-key="omlResource">OML4Py Resource</span>
                             <select id="omlResource-__PAGE_CODE__" class="env-field" onchange="__PAGE_CODE__.handleOmlResourceChange(this.value)">
-                                <option value="">-- Select OML4Py resource --</option>
+                                <option value="" data-label-key="selectOmlResource">-- Select OML4Py resource --</option>
                             </select>
                         </label>
                         <label id="webApiWrap-__PAGE_CODE__" class="data-oml-resource-field" hidden>
-                            <span class="required-title">Python API Resource</span>
+                            <span class="required-title" data-label-key="webApiResource">Python API Resource</span>
                             <select id="webApiMethod-__PAGE_CODE__" class="env-field" onchange="__PAGE_CODE__.handleWebApiMethodChange(this.value)">
-                                <option value="">-- Select Python API resource --</option>
+                                <option value="" data-label-key="selectPythonApiResource">-- Select Python API resource --</option>
                             </select>
                         </label>
                         <label class="data-result-create-field">
                             <span id="resultCreateTitle-__PAGE_CODE__" data-label-key="resultTableCreate">Result Table Create</span>
                             <select id="resultCreateYn-__PAGE_CODE__" class="env-field" onchange="__PAGE_CODE__.handleResultCreateChange(this.value)">
-                                <option value="N">N (사용안함)</option>
-                                <option value="T">T (테이블사용)</option>
-                                <option value="M">M (모델사용)</option>
+                                <option value="N" data-label-key="resultCreateNone">N (not used)</option>
+                                <option value="T" data-label-key="resultCreateTable">T (table)</option>
+                                <option value="M" data-label-key="resultCreateModel">M (model)</option>
                             </select>
                         </label>
                         <label class="data-result-owner-field">
@@ -214,8 +215,7 @@
                         <section class="data-param-panel" aria-label="Parameter list">
                             <header class="data-param-panel-header">
                                 <span class="data-param-title-group">
-                                    <strong data-label-key="parameterList">Parameter List</strong>
-                                    <button id="refreshParametersButton-__PAGE_CODE__" type="button" class="table-icon-btn" title="Refresh parameters" onclick="__PAGE_CODE__.refreshParameters()">
+                                    <button id="refreshParametersButton-__PAGE_CODE__" type="button" class="table-icon-btn" title="Refresh parameters" data-title-key="refreshParametersTitle" onclick="__PAGE_CODE__.refreshParameters()">
                                         <i class="fas fa-sync-alt"></i>
                                     </button>
                                     <span id="selectedResourceMeta-__PAGE_CODE__" class="data-selected-resource-meta" hidden></span>
@@ -230,7 +230,7 @@
                                     <button id="scriptHelpButton-__PAGE_CODE__" type="button" class="table-icon-btn data-help-btn" title="Bind variable rules" onclick="__PAGE_CODE__.openPlsqlHelp()">
                                         <i class="fas fa-question"></i>
                                     </button>
-                                    <button id="scriptWrapToggle-__PAGE_CODE__" type="button" class="table-icon-btn data-script-wrap-toggle" title="표시 모드: 한 줄 표시" aria-pressed="false" onclick="__PAGE_CODE__.toggleScriptWrapMode()">
+                                    <button id="scriptWrapToggle-__PAGE_CODE__" type="button" class="table-icon-btn data-script-wrap-toggle" title="Display mode: single line" data-title-key="scriptWrapTitleOff" aria-pressed="false" onclick="__PAGE_CODE__.toggleScriptWrapMode()">
                                         <i class="fas fa-align-left"></i>
                                     </button>
                                 </span>
@@ -250,37 +250,37 @@
     <div id="plsqlHelpLayer-__PAGE_CODE__" class="data-help-layer" hidden>
         <section class="data-help-dialog" role="dialog" aria-modal="true" aria-labelledby="plsqlHelpTitle-__PAGE_CODE__">
             <header>
-                <h2 id="plsqlHelpTitle-__PAGE_CODE__">PL/SQL 바인드 변수 규칙</h2>
-                <button type="button" class="table-icon-btn" title="Close" onclick="__PAGE_CODE__.closePlsqlHelp()">
+                <h2 id="plsqlHelpTitle-__PAGE_CODE__">PL/SQL bind variable rules</h2>
+                <button type="button" class="table-icon-btn" title="Close" data-title-key="closeTitle" onclick="__PAGE_CODE__.closePlsqlHelp()">
                     <i class="fas fa-times"></i>
                 </button>
             </header>
             <div id="scriptHelpContent-__PAGE_CODE__" class="data-help-content">
-                <p class="data-help-summary">Generate PL/SQL은 Parameter List의 Default 값을 먼저 확인한 뒤, 필요한 바인드 변수를 자동으로 만듭니다.</p>
+                <p class="data-help-summary">Generate PL/SQL checks Parameter List defaults first, then creates required bind variables automatically.</p>
                 <div class="data-help-flow">
                     <section class="data-help-step">
-                        <strong>1. Default에 <code>:</code>가 있으면 그대로 사용</strong>
+                        <strong>1. Use defaults containing <code>:</code> as-is</strong>
                         <span><code>:INIT$TargetOwner</code> -> <code>P_TARGET_OWNER =&gt; :INIT$TargetOwner</code></span>
                     </section>
                     <section class="data-help-step">
-                        <strong>2. Default에 <code>:</code>가 없으면 Parameter명을 camelCase로 변환</strong>
+                        <strong>2. Convert the parameter name to camelCase when the default has no <code>:</code></strong>
                         <span><code>P_DYNAMIC_MODEL_NAME</code> -> <code>:pDynamicModelName</code></span>
                     </section>
                     <section class="data-help-step">
-                        <strong>3. 실행 시 실제 값으로 바인딩</strong>
-                        <span>Run saved work / Queue saved work는 저장된 Work를 실행하고, Test current draft는 현재 화면값을 저장하지 않고 1회 실행합니다.</span>
+                        <strong>3. Bind actual values at runtime</strong>
+                        <span>Run saved work / Queue saved work executes saved work, and Test current draft runs the current screen values once without saving them.</span>
                     </section>
                 </div>
-                <h3>자동 예약 변수</h3>
+                <h3>Automatic reserved variables</h3>
                 <div class="data-help-token-grid">
-                    <span><code>:INIT$TargetOwner</code><small>현재 Target Owner</small></span>
-                    <span><code>:INIT$TargetTable</code><small>현재 Target Table</small></span>
-                    <span><code>:INIT$ResultOwner</code><small>현재 Result Owner</small></span>
-                    <span><code>:INIT$ResultTable</code><small>현재 Result Table</small></span>
+                    <span><code>:INIT$TargetOwner</code><small>Current Target Owner</small></span>
+                    <span><code>:INIT$TargetTable</code><small>Current Target Table</small></span>
+                    <span><code>:INIT$ResultOwner</code><small>Current Result Owner</small></span>
+                    <span><code>:INIT$ResultTable</code><small>Current Result Table</small></span>
                     <span><code>:INIT$RunSourceType</code><small>DATA_WORK/FLOW_WORK</small></span>
-                    <span><code>:INIT$RunId</code><small>시나리오 공용 DATA_WORK 실행 ID</small></span>
+                    <span><code>:INIT$RunId</code><small>Scenario DATA_WORK run ID</small></span>
                 </div>
-                <h3>생성 예시</h3>
+                <h3>Generation example</h3>
                 <pre class="data-help-code"><code>P_TARGET_OWNER       =&gt; :INIT$TargetOwner
 P_TARGET_TABLE       =&gt; :INIT$TargetTable
 P_RUN_SOURCE_TYPE    =&gt; :INIT$RunSourceType
@@ -289,7 +289,9 @@ P_DYNAMIC_MODEL_NAME =&gt; :pDynamicModelName
 P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
             </div>
             <footer>
-                <button type="button" class="env-btn" onclick="__PAGE_CODE__.closePlsqlHelp()">Close</button>
+                <button type="button" class="env-btn" onclick="__PAGE_CODE__.closePlsqlHelp()">
+                    <span data-label-key="close">Close</span>
+                </button>
             </footer>
         </section>
     </div>
@@ -298,12 +300,12 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
         <section class="data-help-dialog data-bind-dialog" role="dialog" aria-modal="true" aria-labelledby="runtimeBindTitle-__PAGE_CODE__">
             <header>
                 <h2 id="runtimeBindTitle-__PAGE_CODE__">Runtime Bind Variables</h2>
-                <button type="button" class="table-icon-btn" title="Close" onclick="__PAGE_CODE__.cancelRuntimeBindDialog()">
+                <button type="button" class="table-icon-btn" title="Close" data-title-key="closeTitle" onclick="__PAGE_CODE__.cancelRuntimeBindDialog()">
                     <i class="fas fa-times"></i>
                 </button>
             </header>
             <div class="data-help-content">
-                <p id="runtimeBindIntro-__PAGE_CODE__">실행에 사용할 런타임 바인드 값을 확인하세요. 기본값과 예약 변수 값은 미리 채워지며 필요하면 수정할 수 있습니다.</p>
+                <p id="runtimeBindIntro-__PAGE_CODE__">Check runtime bind values before execution. Defaults and reserved variable values are prefilled and can be adjusted if needed.</p>
                 <div id="runtimeBindGrid-__PAGE_CODE__" class="data-bind-grid"></div>
             </div>
             <footer>

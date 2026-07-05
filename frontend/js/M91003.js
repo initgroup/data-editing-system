@@ -4,6 +4,20 @@
     const DEFAULT_PRESET_URL = "./config/M91003.object-detail-presets.json";
     const DEFAULT_CATEGORY_CODE = "DATA_PROFILING";
     const { getContainerEl } = PageManager.createHelper(PAGE_CODE);
+    const getLabel = (key, fallback = "") => {
+        const pack = window[`${PAGE_CODE}_PAGE_I18N`] || {};
+        const labels = pack && typeof pack.labels === "object" && !Array.isArray(pack.labels) ? pack.labels : {};
+        return Object.prototype.hasOwnProperty.call(labels, key) ? String(labels[key] ?? "") : fallback;
+    };
+    const getMessage = (key, fallback = "", values = {}) => {
+        const pack = window[`${PAGE_CODE}_PAGE_I18N`] || {};
+        const messages = pack && typeof pack.messages === "object" && !Array.isArray(pack.messages) ? pack.messages : {};
+        let text = Object.prototype.hasOwnProperty.call(messages, key) ? String(messages[key] ?? "") : fallback;
+        Object.entries(values || {}).forEach(([name, value]) => {
+            text = text.replace(new RegExp(`\\{${name}\\}`, "g"), String(value ?? ""));
+        });
+        return text;
+    };
 
     const emptySetting = () => ({
         CATEGORY_CODE: "",
@@ -91,8 +105,8 @@
             return `
                 <button type="button" class="project-row ${selectedClass}" onclick="M91003.selectCategory('${this.escapeAttr(category.CATEGORY_CODE)}')">
                     <span class="project-row-main">
-                        <span class="project-row-title">${this.escapeHtml(category.CATEGORY_NAME || category.CATEGORY_CODE)}</span>
-                        <span class="project-row-sub">${this.escapeHtml(category.CATEGORY_DESC || "")}</span>
+                        <span class="project-row-title">${this.escapeHtml(this.getCategoryDisplayName(category))}</span>
+                        <span class="project-row-sub">${this.escapeHtml(this.getCategoryDisplayDesc(category))}</span>
                     </span>
                     <span class="project-row-meta">
                         <span>${this.escapeHtml(category.SORT_ORDER ?? "")}</span>
@@ -208,7 +222,7 @@
             this.setValue("#settingCategory-M91003", row.CATEGORY_CODE || this.selectedCategoryCode);
             this.setValue("#settingKey-M91003", row.SETTING_KEY || "");
             this.setValue("#settingValue-M91003", row.SETTING_VALUE || "");
-            this.setValue("#settingDesc-M91003", row.SETTING_DESC || "");
+            this.setValue("#settingDesc-M91003", this.getSettingDisplayDesc(row));
             this.setValue("#settingSortOrder-M91003", row.SORT_ORDER ?? 0);
             this.setValue("#settingUseYn-M91003", row.USE_YN || "Y");
         },
@@ -295,10 +309,45 @@
 
         updateCategoryTitle() {
             const category = this.categories.find((item) => item.CATEGORY_CODE === this.selectedCategoryCode);
-            this.setText("#selectedSettingCategoryName-M91003", category?.CATEGORY_NAME || this.selectedCategoryCode);
+            this.setText("#selectedSettingCategoryName-M91003", this.getCategoryDisplayName(category));
             this.setValue("#settingCategory-M91003", this.selectedCategoryCode);
-            const desc = category?.CATEGORY_DESC || "Manage target key/value settings.";
-            this.setText("#settingsDescription-M91003", desc);
+            this.setText("#settingsDescription-M91003", this.getCategoryDisplayDesc(category));
+        },
+
+        getCategoryDisplayName(category = null) {
+            const code = String(category?.CATEGORY_CODE || this.selectedCategoryCode || "").toUpperCase();
+            const defaults = {
+                DATA_PROFILING: "Data Profiling"
+            };
+            const keys = {
+                DATA_PROFILING: "categoryDataProfilingName"
+            };
+            return getMessage(keys[code], defaults[code] || category?.CATEGORY_NAME || code || "Settings");
+        },
+
+        getCategoryDisplayDesc(category = null) {
+            const code = String(category?.CATEGORY_CODE || this.selectedCategoryCode || "").toUpperCase();
+            const defaults = {
+                DATA_PROFILING: "Stores classification prediction rules and data profiling thresholds in the Target DB."
+            };
+            const keys = {
+                DATA_PROFILING: "categoryDataProfilingDesc"
+            };
+            return getMessage(keys[code], defaults[code] || category?.CATEGORY_DESC || "Manage target key/value settings.");
+        },
+
+        getSettingDisplayDesc(row = {}) {
+            const key = String(row.SETTING_KEY || "").toUpperCase();
+            const defaults = {
+                NUMERIC_TYPES: "If the physical data type is in this list, it is classified as NUM before sample conversion checks. Separate values with commas or line breaks.",
+                IDENTIFIER_DIST_RATIO: "If the distinct-value ratio exceeds this value, the column is classified as identifier-like.",
+                LOW_CARDINALITY_COUNT: "If the distinct-value count is less than or equal to this value, the column is classified as a categorical candidate.",
+                TEXT_DIST_RATIO: "If a text column exceeds this distinct-value ratio and meets the entropy threshold, it is classified as simple text.",
+                HIGH_ENTROPY: "Normalized entropy threshold used for numeric ordinal and text classification.",
+                FORCE_IDENTIFIER_COLUMNS: "Column names that should always be classified as identifiers. Separate values with commas or line breaks."
+            };
+            const messageKey = `targetSettingDesc${key.split("_").map((part) => part.charAt(0) + part.slice(1).toLowerCase()).join("")}`;
+            return getMessage(messageKey, defaults[key] || row.SETTING_DESC || "");
         },
 
         getSettingsScrollTop() {

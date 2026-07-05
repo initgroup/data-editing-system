@@ -3,8 +3,8 @@
         <aside class="env-object-panel">
             <header class="env-object-header">
                 <div>
-                    <h2 class="env-section-title">설정 카테고리</h2>
-                    <p class="env-section-desc">내 시스템 설정 그룹을 선택합니다.</p>
+                    <h2 class="env-section-title" data-label-key="settingCategoryTitle">Setting Categories</h2>
+                    <p class="env-section-desc" data-label-key="settingCategoryDescription">Select a system setting group.</p>
                 </div>
                 <div class="env-object-actions">
                     <button id="createDefaultSettingsBtn-M91002" type="button" class="env-icon-btn" title="Create default settings" onclick="M91002.createDefaultSettings()">
@@ -20,8 +20,8 @@
 
         <section class="env-panel" aria-labelledby="settings-title-M91002">
             <header class="env-header">
-                <h1 class="env-title" id="settings-title-M91002">내 시스템 설정</h1>
-                <p class="env-desc" id="settingsDescription-M91002">내 개인 시스템 설정을 관리합니다.</p>
+                <h1 class="env-title" id="settings-title-M91002" data-label-key="mySystemSettingsTitle">My System Settings</h1>
+                <p class="env-desc" id="settingsDescription-M91002" data-label-key="mySystemSettingsDescription">Manage your personal system settings.</p>
             </header>
 
             <section class="scenario-list-panel" aria-label="Settings list" data-setting-panel>
@@ -54,12 +54,21 @@
                     </label>
                     <label class="env-meta-wide">
                         <span class="required-title">Key</span>
-                        <input id="settingKey-M91002" class="env-field env-meta-field" type="text" placeholder="SYSTEM_DISPLAY_NAME" oninput="M91002.syncLogoSettingHelper()">
+                        <input id="settingKey-M91002" class="env-field env-meta-field" type="text" placeholder="SYSTEM_DISPLAY_NAME" oninput="M91002.syncSettingHelpers()">
                     </label>
                     <label class="env-meta-wide">
                         <span>Value</span>
-                        <textarea id="settingValue-M91002" class="env-field env-meta-textarea" rows="5" oninput="M91002.syncLogoSettingHelper()"></textarea>
+                        <textarea id="settingValue-M91002" class="env-field env-meta-textarea" rows="5" oninput="M91002.syncSettingHelpers()"></textarea>
                     </label>
+                    <div id="languageSettingHelper-M91002" class="env-meta-wide setting-logo-helper" hidden>
+                        <div class="setting-logo-helper-row">
+                            <span>UI language is loaded when you log in. Save here, then log out and log in again.</span>
+                            <select id="settingLanguageSelect-M91002" class="env-field env-meta-field" onchange="M91002.applyLanguageSelectValue()">
+                                <option value="en" data-label-key="languageEnglish">English</option>
+                                <option value="ko" data-label-key="languageKorean">Korean</option>
+                            </select>
+                        </div>
+                    </div>
                     <div id="logoSettingHelper-M91002" class="env-meta-wide setting-logo-helper" hidden>
                         <div class="setting-logo-helper-row">
                             <span>Logo image. Recommended 160 x 40px. Large images are shown with automatic proportional scaling.</span>
@@ -193,11 +202,17 @@
                     <span id="systemMessage-M91002" class="env-detail-hint" aria-live="polite">Settings are stored per login user and selected Target DB in INIT$_TB_SYSTEM_SETTING.</span>
                 </div>
                 <div class="env-footer-group" data-setting-actions>
-                    <button type="button" class="env-btn env-save" onclick="M91002.saveSetting()">Save setting</button>
-                    <button type="button" class="env-btn env-cancel" onclick="M91002.newSetting()">Cancel</button>
+                    <button type="button" class="env-btn env-save" onclick="M91002.saveSetting()">
+                        <i class="far fa-save" aria-hidden="true"></i>
+                        <span data-label-key="save">Save</span>
+                    </button>
+                    <button type="button" class="env-btn env-cancel" onclick="M91002.newSetting()">
+                        <i class="fas fa-undo-alt" aria-hidden="true"></i>
+                        <span data-label-key="cancel">Cancel</span>
+                    </button>
                     <button type="button" class="env-btn env-danger" onclick="M91002.deleteSetting()">
-                        <i class="far fa-trash-alt"></i>
-                        <span>Delete</span>
+                        <i class="far fa-trash-alt" aria-hidden="true"></i>
+                        <span data-label-key="delete">Delete</span>
                     </button>
                 </div>
             </footer>

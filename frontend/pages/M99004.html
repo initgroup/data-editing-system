@@ -34,8 +34,8 @@
         <section class="env-panel" aria-labelledby="notice-title-M99004">
             <header class="env-header">
                 <div>
-                    <h1 class="env-title" id="notice-title-M99004">공지사항 관리</h1>
-                    <p class="env-desc" id="noticeDesc-M99004">관리자 공지사항을 등록하고 게시 기간과 팝업 표시 여부를 설정합니다.</p>
+                    <h1 class="env-title" id="notice-title-M99004">Notice Management</h1>
+                    <p class="env-desc" id="noticeDesc-M99004">Register administrator notices and set post periods and popup display.</p>
                 </div>
             </header>
 
@@ -81,7 +81,7 @@
                     </label>
                     <label class="env-meta-wide">
                         <span class="required-title">Title</span>
-                        <input id="noticeTitle-M99004" class="env-field env-meta-field" type="text" placeholder="공지사항 제목">
+                        <input id="noticeTitle-M99004" class="env-field env-meta-field" type="text" placeholder="Notice title">
                     </label>
                     <div class="env-meta-wide notice-period-field">
                         <span>Post Period</span>
@@ -99,7 +99,7 @@
                             <input id="noticePopupEndAt-M99004" class="env-field env-meta-field" type="datetime-local" title="Popup end">
                         </div>
                         <div class="notice-period-disabled-message" data-popup-disabled-message hidden>
-                            Popup Y일 때 설정 가능
+                            Available when Popup is Y.
                         </div>
                     </div>
                     <label class="env-meta-wide notice-content-field">
@@ -162,7 +162,7 @@
                                     <i class="fas fa-code"></i>
                                 </button>
                             </div>
-                            <div id="noticeContentEditor-M99004" class="notice-html-editor" contenteditable="true" data-placeholder="공지 내용을 입력하세요."></div>
+                            <div id="noticeContentEditor-M99004" class="notice-html-editor" contenteditable="true" data-placeholder="Enter notice content."></div>
                             <textarea id="noticeContent-M99004" class="notice-editor-source" spellcheck="false" hidden></textarea>
                         </div>
                     </label>
@@ -182,7 +182,7 @@
 
             <footer class="env-footer">
                 <div class="env-footer-group">
-                    <span id="noticeMessage-M99004" class="env-detail-hint" aria-live="polite">공지사항은 INIT$_TB_NOTICE에 저장됩니다.</span>
+                    <span id="noticeMessage-M99004" class="env-detail-hint" aria-live="polite">Notices are stored in INIT$_TB_NOTICE.</span>
                 </div>
                 <div class="env-footer-group">
                     <button type="button" class="env-btn" onclick="M99004.newNotice()">New</button>

@@ -4,8 +4,17 @@
     const DEFAULT_PRESET_URL = "./config/M91002.object-detail-presets.json";
     const IS_ACCOUNT_PAGE = PAGE_CODE === "M91001";
     const DEFAULT_CATEGORY_CODE = IS_ACCOUNT_PAGE ? "MY_ACCOUNT" : "";
+    const SUPPORTED_LANGUAGE_CODES = new Set(["en", "ko"]);
     const { getContainerEl } = PageManager.createHelper(PAGE_CODE);
     const COMMON = MCOMMON.createPageHelper(PAGE_CODE);
+    const getMessage = (key, fallback = "") => {
+        const pack = window[`${PAGE_CODE}_PAGE_I18N`] || {};
+        const messages = pack && typeof pack.messages === "object" && !Array.isArray(pack.messages) ? pack.messages : {};
+        const labels = pack && typeof pack.labels === "object" && !Array.isArray(pack.labels) ? pack.labels : {};
+        if (Object.prototype.hasOwnProperty.call(messages, key)) return String(messages[key] ?? "");
+        if (Object.prototype.hasOwnProperty.call(labels, key)) return String(labels[key] ?? "");
+        return fallback;
+    };
 
     const emptySetting = () => ({
         CATEGORY_CODE: "",
@@ -103,8 +112,8 @@
             return `
                 <button type="button" class="project-row ${selectedClass}" onclick="M91002.selectCategory('${this.escapeAttr(category.CATEGORY_CODE)}')">
                     <span class="project-row-main">
-                        <span class="project-row-title">${this.escapeHtml(category.CATEGORY_NAME || category.CATEGORY_CODE)}</span>
-                        <span class="project-row-sub">${this.escapeHtml(category.CATEGORY_DESC || "")}</span>
+                        <span class="project-row-title">${this.escapeHtml(this.getCategoryDisplayName(category))}</span>
+                        <span class="project-row-sub">${this.escapeHtml(this.getCategoryDisplayDesc(category))}</span>
                     </span>
                     <span class="project-row-meta">
                         <span>${this.escapeHtml(category.SORT_ORDER ?? "")}</span>
@@ -224,6 +233,11 @@
             this.setValue("#settingDesc-M91002", row.SETTING_DESC || "");
             this.setValue("#settingSortOrder-M91002", row.SORT_ORDER ?? 0);
             this.setValue("#settingUseYn-M91002", row.USE_YN || "Y");
+            this.syncSettingHelpers();
+        },
+
+        syncSettingHelpers() {
+            this.syncLanguageSettingHelper();
             this.syncLogoSettingHelper();
         },
 
@@ -231,6 +245,38 @@
             const categoryCode = (getContainerEl("#settingCategory-M91002")?.value || this.selectedCategoryCode || "").trim().toUpperCase();
             const settingKey = (getContainerEl("#settingKey-M91002")?.value || "").trim().toUpperCase();
             return categoryCode === "GENERAL" && settingKey === "SYSTEM_LOGO_IMAGE";
+        },
+
+        isLanguageSetting() {
+            const categoryCode = (getContainerEl("#settingCategory-M91002")?.value || this.selectedCategoryCode || "").trim().toUpperCase();
+            const settingKey = (getContainerEl("#settingKey-M91002")?.value || "").trim().toUpperCase();
+            return categoryCode === "GENERAL" && settingKey === "SYSTEM_LANGUAGE";
+        },
+
+        normalizeLanguageCode(value) {
+            const code = String(value || "en").trim().toLowerCase().replace("_", "-");
+            if (code === "ko" || code === "ko-kr" || code === "kr") return "ko";
+            return SUPPORTED_LANGUAGE_CODES.has(code) ? code : "en";
+        },
+
+        syncLanguageSettingHelper() {
+            const helper = getContainerEl("#languageSettingHelper-M91002");
+            if (!helper) return;
+            const isLanguageSetting = this.isLanguageSetting();
+            helper.hidden = !isLanguageSetting;
+            if (!isLanguageSetting) return;
+
+            const select = getContainerEl("#settingLanguageSelect-M91002");
+            if (select) {
+                select.value = this.normalizeLanguageCode(getContainerEl("#settingValue-M91002")?.value || "en");
+            }
+        },
+
+        applyLanguageSelectValue() {
+            const select = getContainerEl("#settingLanguageSelect-M91002");
+            const value = this.normalizeLanguageCode(select?.value || "en");
+            this.setValue("#settingValue-M91002", value);
+            this.syncLanguageSettingHelper();
         },
 
         syncLogoSettingHelper() {
@@ -280,7 +326,7 @@
                     }
                 });
                 this.setValue("#settingValue-M91002", json.url || "");
-                this.syncLogoSettingHelper();
+                this.syncSettingHelpers();
                 this.setSystemMessage(json.message || "Logo image uploaded. Click Save setting to apply it.");
             } catch (error) {
                 this.setSystemMessage(error.message || "Logo image upload failed.", "error");
@@ -317,12 +363,21 @@
                 this.setSystemMessage("Setting key is required.", "error");
                 return;
             }
+            if (String(payload.categoryCode || "").toUpperCase() === "GENERAL"
+                && String(payload.settingKey || "").toUpperCase() === "SYSTEM_LANGUAGE") {
+                payload.settingValue = this.normalizeLanguageCode(payload.settingValue);
+                this.setValue("#settingValue-M91002", payload.settingValue);
+                this.syncLanguageSettingHelper();
+            }
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${API_CODE}/setting/save`, {
                     method: "POST",
                     body: payload
                 });
-                this.setSystemMessage(json.message || "Setting saved.");
+                const isLanguageSetting = this.isLanguageSetting();
+                this.setSystemMessage(isLanguageSetting
+                    ? "Setting saved. Language changes are applied after logout and next login."
+                    : (json.message || "Setting saved."));
                 await this.loadSettings();
                 this.selectSetting(payload.settingKey);
                 if (this.isShellDisplaySetting(payload.categoryCode, payload.settingKey)) {
@@ -611,10 +666,35 @@
 
         updateCategoryTitle() {
             const category = this.categories.find((item) => item.CATEGORY_CODE === this.selectedCategoryCode);
-            this.setText("#selectedSettingCategoryName-M91002", category?.CATEGORY_NAME || this.selectedCategoryCode);
+            this.setText("#selectedSettingCategoryName-M91002", this.getCategoryDisplayName(category));
             this.setValue("#settingCategory-M91002", this.selectedCategoryCode);
-            const desc = category?.CATEGORY_DESC || "Manage category key/value settings.";
-            this.setText("#settingsDescription-M91002", desc);
+            this.setText("#settingsDescription-M91002", this.getCategoryDisplayDesc(category));
+        },
+
+        getCategoryDisplayName(category = null) {
+            const code = String(category?.CATEGORY_CODE || this.selectedCategoryCode || "").toUpperCase();
+            const defaults = {
+                MY_ACCOUNT: "My Account",
+                GENERAL: "System General"
+            };
+            const keys = {
+                MY_ACCOUNT: "categoryMyAccountName",
+                GENERAL: "categoryGeneralName"
+            };
+            return getMessage(keys[code], defaults[code] || category?.CATEGORY_NAME || code || "Settings");
+        },
+
+        getCategoryDisplayDesc(category = null) {
+            const code = String(category?.CATEGORY_CODE || this.selectedCategoryCode || "").toUpperCase();
+            const defaults = {
+                MY_ACCOUNT: "Manage your login information, email, and password.",
+                GENERAL: "Basic system display settings."
+            };
+            const keys = {
+                MY_ACCOUNT: "categoryMyAccountDesc",
+                GENERAL: "categoryGeneralDesc"
+            };
+            return getMessage(keys[code], defaults[code] || category?.CATEGORY_DESC || "Manage category key/value settings.");
         },
 
         setSystemMessage(message, type = "info") {

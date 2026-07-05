@@ -54,7 +54,7 @@
             if (!list) return;
 
             const keyword = (getContainerEl("#projectSearch-M01002")?.value || "").trim();
-            list.innerHTML = `<div class="env-tree-loading project-empty">Loading projects...</div>`;
+            list.innerHTML = `<div class="env-tree-loading project-empty">${this.escapeHtml(this.t("loadingProjects", "Loading projects..."))}</div>`;
 
             try {
                 const params = new URLSearchParams({ keyword });
@@ -63,7 +63,7 @@
                 this.renderProjectList();
             } catch (error) {
                 console.error("[M01002] project list load failed", error);
-                list.innerHTML = `<div class="env-tree-error">${this.escapeHtml(error.message || "Project list load failed.")}</div>`;
+                list.innerHTML = `<div class="env-tree-error">${this.escapeHtml(error.message || this.t("projectListLoadFailed", "Project list load failed."))}</div>`;
             }
         },
 
@@ -73,7 +73,7 @@
 
             if (this.projects.length === 0) {
                 list.innerHTML = `
-                    <div class="project-empty">No projects found.</div>
+                    <div class="project-empty">${this.escapeHtml(this.t("noProjectsFound", "No projects found."))}</div>
                     ${this.renderListFooter(0)}
                 `;
                 return;
@@ -81,8 +81,8 @@
 
             list.innerHTML = `
                 <div class="project-list-head">
-                    <div>Project</div>
-                    <div>Type / Use</div>
+                    <div>${this.escapeHtml(this.t("project", "Project"))}</div>
+                    <div>${this.escapeHtml(this.t("typeUse", "Type / Use"))}</div>
                 </div>
                 <div class="project-list-body">
                     ${this.projects.map((project) => this.createProjectRow(project)).join("")}
@@ -96,14 +96,16 @@
             const selectedClass = String(projectId) === String(this.selectedProject?.projectId) ? "is-selected" : "";
             const ownerScopeClass = CommonUtils.getOwnerScopeClass(project);
             const name = project.PROJECT_NAME || "";
-            const displayName = CommonUtils.formatOwnerScopedName(project, name || "(Untitled project)");
+            const displayName = CommonUtils.formatOwnerScopedName(project, name || this.t("untitledProject", "(Untitled project)"));
             const code = project.PROJECT_CODE || "";
             const type = project.PROJECT_TYPE || "";
             const useYn = project.USE_YN || "Y";
             const scenarioCount = Number(project.SCENARIO_COUNT || 0);
             const scenarioIcon = scenarioCount > 0
-                ? `<i class="fas fa-circle-check env-registered-icon" title="Registered scenarios: ${scenarioCount}"></i>`
+                ? `<i class="fas fa-circle-check env-registered-icon" title="${this.escapeHtml(this.tl("registeredScenariosCount", "Registered scenarios: {count}", { count: scenarioCount }))}"></i>`
                 : "";
+            const codeLabel = code || this.t("noCode", "No code");
+            const useLabel = this.tl("useValue", "Use {value}", { value: useYn });
 
             return `
                 <button type="button" class="project-row ${selectedClass} ${this.escapeAttr(ownerScopeClass)}" data-project-id="${this.escapeAttr(projectId)}" onclick="M01002.selectProject('${this.escapeAttr(projectId)}')">
@@ -112,11 +114,11 @@
                             <span class="project-row-title-text">${this.escapeHtml(displayName)}</span>
                             <span class="project-scenario-status">${scenarioIcon}</span>
                         </span>
-                        <span class="project-row-sub" title="${this.escapeHtml(code)}">${this.escapeHtml(code || "No code")}</span>
+                        <span class="project-row-sub" title="${this.escapeHtml(codeLabel)}">${this.escapeHtml(codeLabel)}</span>
                     </span>
                     <span class="project-row-meta">
                         <span title="${this.escapeHtml(type)}">${this.escapeHtml(type || "-")}</span>
-                        <span title="Use ${this.escapeHtml(useYn)}">Use ${this.escapeHtml(useYn)}</span>
+                        <span title="${this.escapeHtml(useLabel)}">${this.escapeHtml(useLabel)}</span>
                     </span>
                 </button>
             `;
@@ -131,7 +133,7 @@
             this.renderProjectSummary();
             this.updateProjectSelection();
             this.renderScenarioDetail();
-            this.updateDescription(`Selected project: ${this.selectedProject.projectName || ""}`);
+            this.updateDescription(this.tl("selectedProjectDescription", "Selected project: {name}", { name: this.selectedProject.projectName || "" }));
             await this.loadScenarios();
         },
 
@@ -168,14 +170,14 @@
             if (!this.selectedProject?.projectId) {
                 this.scenarios = [];
                 list.innerHTML = `
-                    <div class="project-empty">Select a project first.</div>
+                    <div class="project-empty">${this.escapeHtml(this.t("selectProjectFirst", "Select a project first."))}</div>
                     ${this.renderListFooter(0)}
                 `;
                 return;
             }
 
             const keyword = (getContainerEl("#scenarioSearch-M01002")?.value || "").trim();
-            list.innerHTML = `<div class="project-empty">Loading scenarios...</div>`;
+            list.innerHTML = `<div class="project-empty">${this.escapeHtml(this.t("loadingScenarios", "Loading scenarios..."))}</div>`;
 
             try {
                 const params = new URLSearchParams({
@@ -188,7 +190,7 @@
                 this.renderScenarioList();
             } catch (error) {
                 console.error("[M01002] scenario list load failed", error);
-                list.innerHTML = `<div class="env-tree-error">${this.escapeHtml(error.message || "Scenario list load failed.")}</div>`;
+                list.innerHTML = `<div class="env-tree-error">${this.escapeHtml(error.message || this.t("scenarioListLoadFailed", "Scenario list load failed."))}</div>`;
             }
         },
 
@@ -198,7 +200,7 @@
 
             if (this.scenarios.length === 0) {
                 list.innerHTML = `
-                    <div class="project-empty">No scenarios found.</div>
+                    <div class="project-empty">${this.escapeHtml(this.t("noScenariosFound", "No scenarios found."))}</div>
                     ${this.renderListFooter(0)}
                 `;
                 return;
@@ -206,8 +208,8 @@
 
             list.innerHTML = `
                 <div class="scenario-list-head">
-                    <div>Scenario</div>
-                    <div>Type / Use</div>
+                    <div>${this.escapeHtml(this.t("scenario", "Scenario"))}</div>
+                    <div>${this.escapeHtml(this.t("typeUse", "Type / Use"))}</div>
                 </div>
                 <div class="scenario-list-body">
                     ${this.scenarios.map((scenario) => this.createScenarioRow(scenario)).join("")}
@@ -233,7 +235,7 @@
             if (!status) return;
 
             status.innerHTML = normalizedCount > 0
-                ? `<i class="fas fa-circle-check env-registered-icon" title="Registered scenarios: ${normalizedCount}"></i>`
+                ? `<i class="fas fa-circle-check env-registered-icon" title="${this.escapeHtml(this.tl("registeredScenariosCount", "Registered scenarios: {count}", { count: normalizedCount }))}"></i>`
                 : "";
         },
 
@@ -242,20 +244,22 @@
             const selectedClass = String(scenarioId) === String(this.selectedScenario.scenarioId) ? "is-selected" : "";
             const ownerScopeClass = CommonUtils.getOwnerScopeClass(scenario);
             const name = scenario.SCENARIO_NAME || "";
-            const displayName = CommonUtils.formatOwnerScopedName(scenario, name || "(Untitled scenario)");
+            const displayName = CommonUtils.formatOwnerScopedName(scenario, name || this.t("untitledScenario", "(Untitled scenario)"));
             const code = scenario.SCENARIO_CODE || "";
             const type = scenario.SCENARIO_TYPE || "";
             const useYn = scenario.USE_YN || "Y";
+            const codeLabel = code || this.t("noCode", "No code");
+            const useLabel = this.tl("useValue", "Use {value}", { value: useYn });
 
             return `
                 <button type="button" class="scenario-row ${selectedClass} ${this.escapeAttr(ownerScopeClass)}" onclick="M01002.selectScenario('${this.escapeAttr(scenarioId)}')">
                     <span class="project-row-main">
                         <span class="project-row-title" title="${this.escapeHtml(displayName)}">${this.escapeHtml(displayName)}</span>
-                        <span class="project-row-sub" title="${this.escapeHtml(code)}">${this.escapeHtml(code || "No code")}</span>
+                        <span class="project-row-sub" title="${this.escapeHtml(codeLabel)}">${this.escapeHtml(codeLabel)}</span>
                     </span>
                     <span class="project-row-meta">
                         <span title="${this.escapeHtml(type)}">${this.escapeHtml(type || "-")}</span>
-                        <span title="Use ${this.escapeHtml(useYn)}">Use ${this.escapeHtml(useYn)}</span>
+                        <span title="${this.escapeHtml(useLabel)}">${this.escapeHtml(useLabel)}</span>
                     </span>
                 </button>
             `;
@@ -271,7 +275,7 @@
                 this.originalScenario = { ...this.selectedScenario };
                 this.renderScenarioDetail();
                 this.renderScenarioList();
-                this.updateDescription(`Selected scenario: ${this.selectedScenario.scenarioName || ""}`);
+                this.updateDescription(this.tl("selectedScenarioDescription", "Selected scenario: {name}", { name: this.selectedScenario.scenarioName || "" }));
             } catch (error) {
                 console.error("[M01002] scenario detail load failed", error);
                 alert(error.message || "Scenario detail load failed.");
@@ -300,7 +304,7 @@
             if (render) {
                 this.renderScenarioDetail();
                 this.renderScenarioList();
-                this.updateDescription(this.selectedProject ? "Create a new scenario." : "Select a project first.");
+                this.updateDescription(this.selectedProject ? this.t("createScenarioDescription", "Create a new scenario.") : this.t("selectProjectFirst", "Select a project first."));
                 getContainerEl("#scenarioName-M01002")?.focus();
             }
         },
@@ -436,7 +440,7 @@
                 this.originalScenario = { ...this.selectedScenario };
                 this.renderScenarioDetail();
                 await this.loadScenarios();
-                this.updateDescription("Scenario was saved.");
+                this.updateDescription(this.t("scenarioSavedDescription", "Scenario was saved."));
                 alert("Scenario saved.");
             } catch (error) {
                 console.error("[M01002] scenario save failed", error);
@@ -463,7 +467,7 @@
                 this.newScenario(false);
                 this.renderScenarioDetail();
                 await this.loadScenarios();
-                this.updateDescription("Scenario was deleted.");
+                this.updateDescription(this.t("scenarioDeletedDescription", "Scenario was deleted."));
                 alert("Scenario deleted.");
             } catch (error) {
                 console.error("[M01002] scenario delete failed", error);
@@ -498,7 +502,7 @@
                 this.renderScenarioDetail();
                 this.renderScenarioList();
                 this.updateSelectedProjectScenarioStatus(0);
-                this.updateDescription("All scenarios were deleted.");
+                this.updateDescription(this.t("allScenariosDeletedDescription", "All scenarios were deleted."));
                 alert(`${result.deletedCount ?? 0} scenarios deleted.`);
             } catch (error) {
                 console.error("[M01002] all scenario delete failed", error);

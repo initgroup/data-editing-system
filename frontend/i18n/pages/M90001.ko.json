@@ -1,0 +1,57 @@
+{
+  "language": "ko",
+  "pageCode": "M90001",
+  "description": "Korean labels for Internal Model Registration.",
+  "labels": {},
+  "selectors": {
+    "text": {
+      ".env-object-header .env-section-title": "DB 객체 스키마",
+      ".env-object-header .env-section-desc": "현재 Owner의 프로시저, 함수, 패키지, 모델입니다.",
+      ".env-registered-filter span": "등록됨",
+      ".env-category-filter label:nth-child(1) span": "전체",
+      ".env-category-filter label:nth-child(2) span": "프로시저",
+      ".env-category-filter label:nth-child(3) span": "패키지",
+      ".env-category-filter label:nth-child(4) span": "모델",
+      "#env-title-M90001": "내부 모델 등록",
+      "#envDescription-M90001": "스키마 트리에서 테이블 또는 프로시저를 선택하세요. 컬럼 또는 파라미터가 여기에 표시됩니다.",
+      ".env-header-actions .env-save span": "저장",
+      ".env-header-actions .env-cancel span": "초기화",
+      ".env-header-actions .env-danger span": "삭제",
+      ".env-meta-grid > label:nth-child(1) span": "객체 ID",
+      ".env-meta-grid > label:nth-child(2) span": "객체 유형",
+      ".env-meta-grid > label:nth-child(3) span": "객체명",
+      ".env-meta-label span": "라벨",
+      ".env-meta-inline label:nth-child(2) span": "사용",
+      ".env-meta-inline label:nth-child(3) span": "정렬",
+      ".env-meta-grid > label:nth-child(5) span": "설명",
+      ".env-meta-grid > label:nth-child(6) span": "결과 테이블 생성",
+      "#objectResultCreateYn-M90001 option[value=\"N\"]": "N (사용안함)",
+      "#objectResultCreateYn-M90001 option[value=\"T\"]": "T (테이블사용)",
+      "#objectResultCreateYn-M90001 option[value=\"M\"]": "M (모델사용)",
+      ".env-meta-grid > label:nth-child(7) span": "결과 Owner",
+      ".env-meta-grid > label:nth-child(8) span": "결과 테이블",
+      ".env-detail-source-bar label:nth-child(1) span": "상세 객체 ID",
+      ".env-detail-source-bar label:nth-child(2) span": "상세 소스",
+      ".env-detail-toolbar .env-detail-hint": "Key와 Value는 읽기 전용 DB 객체 메타데이터입니다. 설명과 기본값만 수정하세요.",
+      ".env-footer .env-detail-hint": "행은 선택한 DB 객체 기준으로 생성됩니다.",
+      ".env-source-title strong": "스크립트",
+      "#objectSourceStatus-M90001": "객체를 선택하면 소스를 불러옵니다."
+    },
+    "title": {
+      ".env-registered-filter": "등록된 객체만 불러오기",
+      ".env-object-actions .env-icon-btn:nth-of-type(1)": "모든 그룹 펼치기",
+      ".env-object-actions .env-icon-btn:nth-of-type(2)": "모든 그룹 접기",
+      ".env-object-actions .env-icon-btn:nth-of-type(3)": "객체 새로고침",
+      ".env-detail-preset-btn": "등록된 설명/기본값 프리셋 적용",
+      ".env-source-copy-btn": "스크립트 복사"
+    },
+    "placeholder": {
+      "#objectSearch-M90001": "객체 검색"
+    },
+    "ariaLabel": {
+      "#objectSearch-M90001": "DB 객체 검색",
+      "#objectSourceViewer-M90001": "선택 객체 스크립트"
+    }
+  },
+  "messages": {}
+}

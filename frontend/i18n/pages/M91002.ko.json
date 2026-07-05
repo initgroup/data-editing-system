@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "language": "ko",
+  "pageCode": "M91002",
+  "description": "Korean labels for my system settings page.",
+  "labels": {
+    "settingCategoryTitle": "설정 카테고리",
+    "settingCategoryDescription": "내 시스템 설정 그룹을 선택합니다.",
+    "mySystemSettingsTitle": "내 시스템 설정",
+    "mySystemSettingsDescription": "내 개인 시스템 설정을 관리합니다.",
+    "languageEnglish": "영어",
+    "languageKorean": "한국어",
+    "save": "저장",
+    "cancel": "취소",
+    "delete": "삭제"
+  },
+  "messages": {
+    "categoryMyAccountName": "나의 회원정보",
+    "categoryMyAccountDesc": "내 로그인 정보, 이메일, 비밀번호를 관리합니다.",
+    "categoryGeneralName": "시스템 일반",
+    "categoryGeneralDesc": "기본 시스템 표시 설정입니다."
+  }
+}

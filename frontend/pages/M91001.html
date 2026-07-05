@@ -3,8 +3,8 @@
         <aside class="env-object-panel">
             <header class="env-object-header">
                 <div>
-                    <h2 class="env-section-title">회원정보</h2>
-                    <p class="env-section-desc">내 계정 정보를 관리합니다.</p>
+                    <h2 class="env-section-title" data-label-key="accountCategoryTitle">Account</h2>
+                    <p class="env-section-desc" data-label-key="accountCategoryDescription">Manage my account information.</p>
                 </div>
                 <div class="env-object-actions">
                     <button type="button" class="env-icon-btn" title="Refresh" onclick="M91001.refreshSelectedCategory()">
@@ -17,8 +17,8 @@
 
         <section class="env-panel" aria-labelledby="settings-title-M91001">
             <header class="env-header">
-                <h1 class="env-title" id="settings-title-M91001">나의 회원정보</h1>
-                <p class="env-desc" id="settingsDescription-M91001">내 계정 정보와 Gemini API 개인 인증키를 관리합니다.</p>
+                <h1 class="env-title" id="settings-title-M91001" data-label-key="myAccountTitle">My Account</h1>
+                <p class="env-desc" id="settingsDescription-M91001" data-label-key="myAccountDescription">Manage your account information and personal Gemini API key.</p>
             </header>
 
             <section class="scenario-list-panel" aria-label="Settings list" data-setting-panel>
@@ -66,108 +66,111 @@
 
             <section class="env-object-meta scenario-detail m91002-password-panel m91002-account-panel" aria-label="My account" data-account-panel hidden>
                 <div class="scenario-list-toolbar">
-                    <strong>My Account</strong>
+                    <strong data-label-key="myAccountSection">My Account</strong>
                 </div>
                 <div class="env-meta-grid scenario-meta-grid">
                     <label>
-                        <span>Login ID</span>
+                        <span data-label-key="loginId">Login ID</span>
                         <input id="accountLoginId-M91001" class="env-field env-meta-field" type="text" readonly>
                     </label>
                     <label>
-                        <span>User Name</span>
+                        <span data-label-key="userName">User Name</span>
                         <input id="accountUserName-M91001" class="env-field env-meta-field" type="text" onkeydown="M91001.handleUserNameKey(event)">
                     </label>
                     <label>
-                        <span>Role</span>
+                        <span data-label-key="role">Role</span>
                         <input id="accountRoleCode-M91001" class="env-field env-meta-field" type="text" readonly>
                     </label>
                     <label class="env-meta-wide">
-                        <span>Email</span>
+                        <span data-label-key="email">Email</span>
                         <input id="accountEmail-M91001" class="env-field env-meta-field" type="text" readonly>
                     </label>
                 </div>
                 <div class="env-footer-group" style="justify-content: flex-end; margin-top: 12px;">
                     <button type="button" class="env-btn env-save" onclick="M91001.changeUserName()">
                         <i class="fas fa-user-pen"></i>
-                        <span>Save name</span>
+                        <span data-label-key="saveName">Save name</span>
                     </button>
                 </div>
 
                 <div class="scenario-list-toolbar">
-                    <strong>Email</strong>
+                    <strong data-label-key="emailSection">Email</strong>
                 </div>
                 <div class="env-meta-grid scenario-meta-grid">
                     <label>
-                        <span class="required-title">New Email</span>
+                        <span class="required-title" data-label-key="newEmail">New Email</span>
                         <input id="newEmail-M91001" class="env-field env-meta-field" type="email" autocomplete="email">
                     </label>
                     <label>
-                        <span class="required-title">Current Password</span>
+                        <span class="required-title" data-label-key="currentPassword">Current Password</span>
                         <input id="emailCurrentPassword-M91001" class="env-field env-meta-field" type="password" autocomplete="current-password" onkeydown="M91001.handleEmailKey(event)">
                     </label>
                     <label>
-                        <span>Action</span>
+                        <span data-label-key="action">Action</span>
                         <button type="button" class="env-btn env-save" onclick="M91001.changeEmail()">
                             <i class="fas fa-envelope"></i>
-                            <span>Change email</span>
+                            <span data-label-key="changeEmail">Change email</span>
                         </button>
                     </label>
                 </div>
 
                 <div class="scenario-list-toolbar">
-                    <strong>Password</strong>
+                    <strong data-label-key="passwordSection">Password</strong>
                 </div>
                 <div class="env-meta-grid scenario-meta-grid">
                     <label>
-                        <span class="required-title">Current Password</span>
+                        <span class="required-title" data-label-key="currentPassword">Current Password</span>
                         <input id="currentPassword-M91001" class="env-field env-meta-field" type="password" autocomplete="current-password">
                     </label>
                     <label>
-                        <span class="required-title">New Password</span>
+                        <span class="required-title" data-label-key="newPassword">New Password</span>
                         <input id="newPassword-M91001" class="env-field env-meta-field" type="password" autocomplete="new-password">
                     </label>
                     <label>
-                        <span class="required-title">Confirm New Password</span>
+                        <span class="required-title" data-label-key="confirmNewPassword">Confirm New Password</span>
                         <input id="newPasswordConfirm-M91001" class="env-field env-meta-field" type="password" autocomplete="new-password" onkeydown="M91001.handlePasswordKey(event)">
                     </label>
                     <label class="env-meta-wide">
-                        <span>Rule</span>
-                        <input class="env-field env-meta-field" type="text" readonly value="Use at least 8 characters. Temporary passwords can be changed here after login.">
+                        <span data-label-key="passwordRule">Rule</span>
+                        <input class="env-field env-meta-field" type="text" readonly value="Use at least 8 characters. Temporary passwords can be changed here after login." data-value-key="passwordRuleText">
                     </label>
                 </div>
                 <div class="env-footer-group" style="justify-content: flex-end; margin-top: 12px;">
                     <button type="button" class="env-btn env-save" onclick="M91001.changePassword()">
                         <i class="fas fa-key"></i>
-                        <span>Change password</span>
+                        <span data-label-key="changePassword">Change password</span>
                     </button>
-                    <button type="button" class="env-btn env-cancel" onclick="M91001.clearPasswordForm()">Clear</button>
+                    <button type="button" class="env-btn env-cancel" onclick="M91001.clearPasswordForm()">
+                        <i class="fas fa-eraser" aria-hidden="true"></i>
+                        <span data-label-key="clear">Clear</span>
+                    </button>
                 </div>
 
                 <div class="scenario-list-toolbar">
-                    <strong>Gemini API Personal Key</strong>
+                    <strong data-label-key="geminiApiPersonalKey">Gemini API Personal Key</strong>
                 </div>
                 <div class="env-meta-grid scenario-meta-grid">
                     <label class="env-meta-wide">
-                        <span>Status</span>
-                        <input id="geminiApiKeyStatus-M91001" class="env-field env-meta-field" type="text" readonly value="Not registered">
+                        <span data-label-key="status">Status</span>
+                        <input id="geminiApiKeyStatus-M91001" class="env-field env-meta-field" type="text" readonly value="Not registered" data-value-key="notRegistered">
                     </label>
                     <label class="env-meta-wide">
-                        <span>Gemini API Key</span>
-                        <input id="geminiApiKey-M91001" class="env-field env-meta-field" type="password" autocomplete="off" placeholder="Enter a new Gemini API key">
+                        <span data-label-key="geminiApiKey">Gemini API Key</span>
+                        <input id="geminiApiKey-M91001" class="env-field env-meta-field" type="password" autocomplete="off" placeholder="Enter a new Gemini API key" data-placeholder-key="geminiApiKeyPlaceholder">
                     </label>
                     <label class="env-meta-wide">
-                        <span>Guide</span>
-                        <input class="env-field env-meta-field" type="text" readonly value="This key is used only for your right sidebar Gemini assistant. Saved keys are not displayed again.">
+                        <span data-label-key="guide">Guide</span>
+                        <input class="env-field env-meta-field" type="text" readonly value="This key is used only for your right sidebar Gemini assistant. Saved keys are not displayed again." data-value-key="geminiGuideText">
                     </label>
                 </div>
                 <div class="env-footer-group" style="justify-content: flex-end; margin-top: 12px;">
                     <button type="button" class="env-btn env-save" onclick="M91001.saveGeminiApiKey()">
                         <i class="fas fa-robot"></i>
-                        <span>Save Gemini key</span>
+                        <span data-label-key="saveGeminiKey">Save Gemini key</span>
                     </button>
                     <button type="button" class="env-btn env-danger" onclick="M91001.deleteGeminiApiKey()">
                         <i class="far fa-trash-alt"></i>
-                        <span>Delete Gemini key</span>
+                        <span data-label-key="deleteGeminiKey">Delete Gemini key</span>
                     </button>
                 </div>
             </section>
@@ -177,11 +180,17 @@
                     <span id="systemMessage-M91001" class="env-detail-hint" aria-live="polite">Settings are stored per login user and selected Target DB in INIT$_TB_SYSTEM_SETTING.</span>
                 </div>
                 <div class="env-footer-group" data-setting-actions>
-                    <button type="button" class="env-btn env-save" onclick="M91001.saveSetting()">Save setting</button>
-                    <button type="button" class="env-btn env-cancel" onclick="M91001.newSetting()">Cancel</button>
+                    <button type="button" class="env-btn env-save" onclick="M91001.saveSetting()">
+                        <i class="far fa-save" aria-hidden="true"></i>
+                        <span data-label-key="save">Save</span>
+                    </button>
+                    <button type="button" class="env-btn env-cancel" onclick="M91001.newSetting()">
+                        <i class="fas fa-undo-alt" aria-hidden="true"></i>
+                        <span data-label-key="cancel">Cancel</span>
+                    </button>
                     <button type="button" class="env-btn env-danger" onclick="M91001.deleteSetting()">
-                        <i class="far fa-trash-alt"></i>
-                        <span>Delete</span>
+                        <i class="far fa-trash-alt" aria-hidden="true"></i>
+                        <span data-label-key="delete">Delete</span>
                     </button>
                 </div>
             </footer>

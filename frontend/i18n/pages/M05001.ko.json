@@ -1,0 +1,23 @@
+{
+  "language": "ko",
+  "pageCode": "M05001",
+  "description": "Korean labels for Discovered Rule Selection.",
+  "labels": {},
+  "selectors": {
+    "text": {
+      ".env-section-title": "규칙 후보",
+      ".env-section-desc": "발굴 규칙 후보입니다.",
+      "#rule-select-title-M05001": "발굴 규칙 선정",
+      ".env-desc": "자동 규칙 발굴 결과를 검토하고 업무 규칙으로 선정합니다.",
+      ".env-header-actions .env-btn:nth-child(1)": "신규",
+      ".env-header-actions .env-save span": "저장"
+    },
+    "title": {
+      ".env-object-actions .env-icon-btn": "새로고침"
+    },
+    "placeholder": {
+      ".env-object-search input": "후보 검색"
+    }
+  },
+  "messages": {}
+}

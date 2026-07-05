@@ -5,6 +5,18 @@
     const DEFAULT_CATEGORY_CODE = IS_ACCOUNT_PAGE ? "MY_ACCOUNT" : "";
     const { getContainerEl } = PageManager.createHelper(PAGE_CODE);
     const COMMON = MCOMMON.createPageHelper(PAGE_CODE);
+    const getMessage = (key, fallback = "", values = {}) => {
+        const pack = window[`${PAGE_CODE}_PAGE_I18N`] || {};
+        const messages = pack && typeof pack.messages === "object" && !Array.isArray(pack.messages) ? pack.messages : {};
+        const labels = pack && typeof pack.labels === "object" && !Array.isArray(pack.labels) ? pack.labels : {};
+        let text = Object.prototype.hasOwnProperty.call(messages, key)
+            ? String(messages[key] ?? "")
+            : (Object.prototype.hasOwnProperty.call(labels, key) ? String(labels[key] ?? "") : fallback);
+        Object.entries(values || {}).forEach(([name, value]) => {
+            text = text.replaceAll(`{${name}}`, String(value ?? ""));
+        });
+        return text;
+    };
 
     const emptySetting = () => ({
         CATEGORY_CODE: "",
@@ -87,8 +99,8 @@
             return `
                 <button type="button" class="project-row ${selectedClass}" onclick="M91001.selectCategory('${this.escapeAttr(category.CATEGORY_CODE)}')">
                     <span class="project-row-main">
-                        <span class="project-row-title">${this.escapeHtml(category.CATEGORY_NAME || category.CATEGORY_CODE)}</span>
-                        <span class="project-row-sub">${this.escapeHtml(category.CATEGORY_DESC || "")}</span>
+                        <span class="project-row-title">${this.escapeHtml(this.getCategoryDisplayName(category))}</span>
+                        <span class="project-row-sub">${this.escapeHtml(this.getCategoryDisplayDesc(category))}</span>
                     </span>
                     <span class="project-row-meta">
                         <span>${this.escapeHtml(category.SORT_ORDER ?? "")}</span>
@@ -324,14 +336,14 @@
         },
 
         async loadMyAccount() {
-            this.setSystemMessage("Loading my account...");
+            this.setSystemMessage(getMessage("loadingMyAccount", "Loading my account..."));
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${API_CODE}/account/me`, { method: "GET", showLoading: false });
                 this.accountInfo = json.data || {};
                 this.renderMyAccount();
-                this.setSystemMessage("My account loaded.");
+                this.setSystemMessage(getMessage("myAccountLoaded", "My account loaded."));
             } catch (error) {
-                this.setSystemMessage(error.message || "My account load failed.", "error");
+                this.setSystemMessage(error.message || getMessage("myAccountLoadFailed", "My account load failed."), "error");
             }
         },
 
@@ -351,15 +363,15 @@
                 this.geminiKeyStatus = json.data || {};
                 this.renderGeminiApiKeyStatus();
             } catch (error) {
-                this.setValue("#geminiApiKeyStatus-M91001", error.message || "Gemini key status load failed.");
+                this.setValue("#geminiApiKeyStatus-M91001", error.message || getMessage("geminiKeyStatusLoadFailed", "Gemini key status load failed."));
             }
         },
 
         renderGeminiApiKeyStatus() {
             const status = this.geminiKeyStatus || {};
             const text = status.registered
-                ? `Registered (${status.maskedKey || "masked"})`
-                : "Not registered";
+                ? getMessage("registeredMasked", "Registered ({maskedKey})", { maskedKey: status.maskedKey || getMessage("masked", "masked") })
+                : getMessage("notRegistered", "Not registered");
             this.setValue("#geminiApiKeyStatus-M91001", text);
             this.setValue("#geminiApiKey-M91001", "");
         },
@@ -367,7 +379,7 @@
         async saveGeminiApiKey() {
             const apiKey = getContainerEl("#geminiApiKey-M91001")?.value.trim() || "";
             if (!apiKey) {
-                this.setSystemMessage("Gemini API key is required.", "error");
+                this.setSystemMessage(getMessage("geminiApiKeyRequired", "Gemini API key is required."), "error");
                 getContainerEl("#geminiApiKey-M91001")?.focus();
                 return;
             }
@@ -378,23 +390,23 @@
                 });
                 this.geminiKeyStatus = json.data || {};
                 this.renderGeminiApiKeyStatus();
-                this.setSystemMessage(json.message || "Gemini API key saved.");
+                this.setSystemMessage(json.message || getMessage("geminiApiKeySaved", "Gemini API key saved."));
             } catch (error) {
-                this.setSystemMessage(error.message || "Gemini API key save failed.", "error");
+                this.setSystemMessage(error.message || getMessage("geminiApiKeySaveFailed", "Gemini API key save failed."), "error");
             }
         },
 
         async deleteGeminiApiKey() {
-            if (!(await CommonMessage.confirm("Delete your saved Gemini API key?"))) return;
+            if (!(await CommonMessage.confirm(getMessage("confirmDeleteGeminiApiKey", "Delete your saved Gemini API key?")))) return;
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${API_CODE}/account/gemini-key/delete`, {
                     method: "POST"
                 });
                 this.geminiKeyStatus = { registered: false, maskedKey: "" };
                 this.renderGeminiApiKeyStatus();
-                this.setSystemMessage(json.message || "Gemini API key deleted.");
+                this.setSystemMessage(json.message || getMessage("geminiApiKeyDeleted", "Gemini API key deleted."));
             } catch (error) {
-                this.setSystemMessage(error.message || "Gemini API key delete failed.", "error");
+                this.setSystemMessage(error.message || getMessage("geminiApiKeyDeleteFailed", "Gemini API key delete failed."), "error");
             }
         },
 
@@ -410,7 +422,7 @@
                 userName: getContainerEl("#accountUserName-M91001")?.value.trim() || ""
             };
             if (!payload.userName) {
-                this.setSystemMessage("User name is required.", "error");
+                this.setSystemMessage(getMessage("userNameRequired", "User name is required."), "error");
                 getContainerEl("#accountUserName-M91001")?.focus();
                 return;
             }
@@ -426,9 +438,9 @@
                     sessionStorage.setItem("initLoginUser", JSON.stringify(loginUser));
                     PageManager.updateSessionStatus?.();
                 }
-                this.setSystemMessage(json.message || "User name changed.");
+                this.setSystemMessage(json.message || getMessage("userNameChanged", "User name changed."));
             } catch (error) {
-                this.setSystemMessage(error.message || "User name change failed.", "error");
+                this.setSystemMessage(error.message || getMessage("userNameChangeFailed", "User name change failed."), "error");
             }
         },
 
@@ -438,16 +450,16 @@
                 currentPassword: getContainerEl("#emailCurrentPassword-M91001")?.value || ""
             };
             if (!payload.newEmail) {
-                this.setSystemMessage("New email is required.", "error");
+                this.setSystemMessage(getMessage("newEmailRequired", "New email is required."), "error");
                 getContainerEl("#newEmail-M91001")?.focus();
                 return;
             }
             if (!payload.currentPassword) {
-                this.setSystemMessage("Current password is required.", "error");
+                this.setSystemMessage(getMessage("currentPasswordRequired", "Current password is required."), "error");
                 getContainerEl("#emailCurrentPassword-M91001")?.focus();
                 return;
             }
-            if (!(await CommonMessage.confirm("Change your email?"))) return;
+            if (!(await CommonMessage.confirm(getMessage("confirmChangeEmail", "Change your email?")))) return;
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${API_CODE}/account/email/change`, {
                     method: "POST",
@@ -460,9 +472,9 @@
                     loginUser.email = json.email || payload.newEmail;
                     sessionStorage.setItem("initLoginUser", JSON.stringify(loginUser));
                 }
-                this.setSystemMessage(json.message || "Email changed.");
+                this.setSystemMessage(json.message || getMessage("emailChanged", "Email changed."));
             } catch (error) {
-                this.setSystemMessage(error.message || "Email change failed.", "error");
+                this.setSystemMessage(error.message || getMessage("emailChangeFailed", "Email change failed."), "error");
             }
         },
 
@@ -473,44 +485,57 @@
                 newPasswordConfirm: getContainerEl("#newPasswordConfirm-M91001")?.value || ""
             };
             if (!payload.currentPassword) {
-                this.setSystemMessage("Current password is required.", "error");
+                this.setSystemMessage(getMessage("currentPasswordRequired", "Current password is required."), "error");
                 getContainerEl("#currentPassword-M91001")?.focus();
                 return;
             }
             if (!payload.newPassword) {
-                this.setSystemMessage("New password is required.", "error");
+                this.setSystemMessage(getMessage("newPasswordRequired", "New password is required."), "error");
                 getContainerEl("#newPassword-M91001")?.focus();
                 return;
             }
             if (payload.newPassword.length < 8) {
-                this.setSystemMessage("New password must be at least 8 characters.", "error");
+                this.setSystemMessage(getMessage("newPasswordMinLength", "New password must be at least 8 characters."), "error");
                 getContainerEl("#newPassword-M91001")?.focus();
                 return;
             }
             if (payload.newPassword !== payload.newPasswordConfirm) {
-                this.setSystemMessage("New password confirmation does not match.", "error");
+                this.setSystemMessage(getMessage("newPasswordConfirmMismatch", "New password confirmation does not match."), "error");
                 getContainerEl("#newPasswordConfirm-M91001")?.focus();
                 return;
             }
-            if (!(await CommonMessage.confirm("Change your login password?"))) return;
+            if (!(await CommonMessage.confirm(getMessage("confirmChangePassword", "Change your login password?")))) return;
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${API_CODE}/account/password/change`, {
                     method: "POST",
                     body: payload
                 });
                 this.clearPasswordForm();
-                this.setSystemMessage(json.message || "Password changed.");
+                this.setSystemMessage(json.message || getMessage("passwordChanged", "Password changed."));
             } catch (error) {
-                this.setSystemMessage(error.message || "Password change failed.", "error");
+                this.setSystemMessage(error.message || getMessage("passwordChangeFailed", "Password change failed."), "error");
             }
         },
 
         updateCategoryTitle() {
             const category = this.categories.find((item) => item.CATEGORY_CODE === this.selectedCategoryCode);
-            this.setText("#selectedSettingCategoryName-M91001", category?.CATEGORY_NAME || this.selectedCategoryCode);
+            this.setText("#selectedSettingCategoryName-M91001", this.getCategoryDisplayName(category));
             this.setValue("#settingCategory-M91001", this.selectedCategoryCode);
-            const desc = category?.CATEGORY_DESC || "Manage category key/value settings.";
-            this.setText("#settingsDescription-M91001", desc);
+            this.setText("#settingsDescription-M91001", this.getCategoryDisplayDesc(category));
+        },
+
+        getCategoryDisplayName(category = null) {
+            const code = String(category?.CATEGORY_CODE || this.selectedCategoryCode || "").toUpperCase();
+            const defaults = { MY_ACCOUNT: "My Account" };
+            const keys = { MY_ACCOUNT: "categoryMyAccountName" };
+            return getMessage(keys[code], defaults[code] || category?.CATEGORY_NAME || code || "Settings");
+        },
+
+        getCategoryDisplayDesc(category = null) {
+            const code = String(category?.CATEGORY_CODE || this.selectedCategoryCode || "").toUpperCase();
+            const defaults = { MY_ACCOUNT: "Manage your login information, email, and password." };
+            const keys = { MY_ACCOUNT: "categoryMyAccountDesc" };
+            return getMessage(keys[code], defaults[code] || category?.CATEGORY_DESC || "Manage category key/value settings.");
         },
 
         setSystemMessage(message, type = "info") {

@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "language": "ko",
+  "pageCode": "M03004",
+  "description": "Korean labels specific to Rule Violation Detection.",
+  "labels": {
+    "menuName": "규칙 위반 탐지",
+    "workDescriptionEmpty": "시나리오 테이블과 등록된 위반 탐지 객체를 선택하세요.",
+    "executableObject": "위반 탐지 프로시저/모델",
+    "executableObjectHint": "위반 탐지 프로시저 기본값은 M90001 객체 상세에서 가져옵니다.",
+    "noExecutableObject": "선택된 위반 탐지 객체가 없습니다."
+  },
+  "messages": {}
+}

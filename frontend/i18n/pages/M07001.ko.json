@@ -1,0 +1,21 @@
+{
+  "language": "ko",
+  "pageCode": "M07001",
+  "description": "Korean labels for Editing Effect Validation.",
+  "labels": {},
+  "selectors": {
+    "text": {
+      "#effect-title-M07001": "에디팅 효과 검증",
+      ".table-desc": "정제 전/후 데이터 품질 지표를 비교합니다.",
+      ".table-actions .table-btn span": "새로고침",
+      ".query-filter-toolbar label:nth-child(1) span": "시나리오",
+      ".query-filter-toolbar label:nth-child(2) span": "Run",
+      ".query-filter-toolbar label:nth-child(3) span": "지표",
+      ".query-filter-toolbar label:nth-child(4) span": "행",
+      ".query-filter-toolbar .table-btn span": "비교",
+      ".data-param-card:nth-child(1) h3": "품질 지표",
+      ".data-param-card:nth-child(2) h3": "검증 범위"
+    }
+  },
+  "messages": {}
+}

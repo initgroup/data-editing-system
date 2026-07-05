@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "language": "ko",
+  "pageCode": "M03002",
+  "description": "Korean labels specific to Column Correlation Analysis.",
+  "labels": {
+    "menuName": "컬럼간 상관 분석",
+    "workDescriptionEmpty": "시나리오 테이블과 등록된 상관분석 객체를 선택하세요.",
+    "executableObject": "상관분석 프로시저/모델",
+    "executableObjectHint": "상관분석 프로시저 기본값은 M90001 객체 상세에서 가져옵니다.",
+    "noExecutableObject": "선택된 상관분석 객체가 없습니다."
+  },
+  "messages": {}
+}

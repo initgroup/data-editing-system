@@ -2,6 +2,34 @@
     const PAGE_CODE = "M90002";
     const PRESET_URL = "./config/M90002.python-api-presets.json";
     const { getContainerEl } = PageManager.createHelper(PAGE_CODE);
+    const PYTHON_API_BASE_GROUP_NAME = "Python API Base JSON";
+    const PYTHON_API_BASE_GROUP_ALIASES = new Set([
+        PYTHON_API_BASE_GROUP_NAME.toUpperCase(),
+        "PYTHON API \uAE30\uBCF8 JSON"
+    ]);
+
+    function getPageMessage(key, fallback = "", values = {}) {
+        const pack = window[`${PAGE_CODE}_PAGE_I18N`] || {};
+        const messages = pack.messages || {};
+        let text = typeof messages[key] === "string" ? messages[key] : fallback;
+        Object.entries(values || {}).forEach(([name, value]) => {
+            text = text.replaceAll(`{${name}}`, String(value ?? ""));
+        });
+        return text;
+    }
+
+    function getPageLabel(key, fallback = "", values = {}) {
+        const pack = window[`${PAGE_CODE}_PAGE_I18N`] || {};
+        const labels = pack.labels || {};
+        const messages = pack.messages || {};
+        let text = typeof labels[key] === "string"
+            ? labels[key]
+            : (typeof messages[key] === "string" ? messages[key] : fallback);
+        Object.entries(values || {}).forEach(([name, value]) => {
+            text = text.replaceAll(`{${name}}`, String(value ?? ""));
+        });
+        return text;
+    }
 
     const RESERVED_VARIABLES = [
         ":INIT$TargetOwner",
@@ -64,7 +92,7 @@
 
         async loadApiObjects() {
             const tree = getContainerEl("#apiObjectTree-M90002");
-            if (tree) tree.innerHTML = `<div class="table-empty">Loading API objects...</div>`;
+            if (tree) tree.innerHTML = `<div class="table-empty">${this.escapeHtml(getPageLabel("loadingApiObjects", "Loading API objects..."))}</div>`;
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/api-objects`, {
                     method: "GET",
@@ -73,7 +101,7 @@
                 this.savedObjects = Array.isArray(json.data) ? json.data.map((row) => this.normalizeApiObject(row)) : [];
                 this.renderObjectTree();
             } catch (error) {
-                if (tree) tree.innerHTML = `<div class="table-error">${this.escapeHtml(error.message || "API object load failed.")}</div>`;
+                if (tree) tree.innerHTML = `<div class="table-error">${this.escapeHtml(error.message || getPageLabel("apiObjectLoadFailed", "API object load failed."))}</div>`;
             }
         },
 
@@ -89,10 +117,10 @@
                 });
             });
             if (!defaultApis.length) {
-                alert("No default Python API objects were found.");
+                alert(getPageLabel("noDefaultPythonApis", "No default Python API objects were found."));
                 return;
             }
-            const message = `Create or update ${defaultApis.length} default Python API object(s)?`;
+            const message = getPageLabel("confirmCreateDefaultApis", "Create or update {count} default Python API object(s)?", { count: defaultApis.length });
             if (!(await CommonMessage.confirm(message, { defaultAction: "cancel" }))) return;
 
             const button = getContainerEl("#createDefaultApisBtn-M90002");
@@ -118,9 +146,9 @@
                 }
                 await this.loadApiObjects();
                 if (lastObjectId) await this.loadApiObject(lastObjectId);
-                alert(`${savedCount} default Python API object(s) saved.`);
+                alert(getPageLabel("defaultPythonApisSaved", "{count} default Python API object(s) saved.", { count: savedCount }));
             } catch (error) {
-                alert(error.message || "Default Python API setup failed.");
+                alert(error.message || getPageLabel("defaultPythonApiSetupFailed", "Default Python API setup failed."));
             } finally {
                 if (button) {
                     button.disabled = false;
@@ -134,14 +162,14 @@
             if (!tree) return;
             const rows = this.createTreeRows();
             if (!rows.length) {
-                tree.innerHTML = `<div class="table-empty">No API objects.</div>`;
+                tree.innerHTML = `<div class="table-empty">${this.escapeHtml(getPageLabel("noApiObjects", "No API objects."))}</div>`;
                 return;
             }
 
             tree.innerHTML = `
                 <div class="env-tree-head">
-                    <div>API Object</div>
-                    <div>Type</div>
+                    <div>${this.escapeHtml(getPageLabel("apiObject", "API Object"))}</div>
+                    <div>${this.escapeHtml(getPageLabel("type", "Type"))}</div>
                 </div>
                 <div class="api-tree-body">
                     ${rows.map((row) => row.kind === "GROUP"
@@ -182,7 +210,7 @@
                 });
                 if (children.length) {
                     const groupKey = this.createGroupKey(group.groupName);
-                    rows.push({ kind: "GROUP", key: groupKey, label: group.groupName, count: children.length });
+                    rows.push({ kind: "GROUP", key: groupKey, label: this.getApiGroupDisplayName(group.groupName), count: children.length });
                     if (!this.collapsedGroups.has(groupKey)) rows.push(...children);
                 }
             });
@@ -198,7 +226,7 @@
             });
             grouped.forEach((items, groupName) => {
                 const groupKey = this.createGroupKey(groupName);
-                rows.push({ kind: "GROUP", key: groupKey, label: groupName, count: items.length });
+                rows.push({ kind: "GROUP", key: groupKey, label: this.getApiGroupDisplayName(groupName), count: items.length });
                 if (this.collapsedGroups.has(groupKey)) return;
                 items
                     .sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0) || String(a.objectName).localeCompare(String(b.objectName)))
@@ -227,7 +255,7 @@
                         <span class="env-tree-label">${this.escapeHtml(row.label)}</span>
                         <span class="env-tree-count">${this.escapeHtml(row.count)}</span>
                     </span>
-                    <span class="env-tree-muted">GROUP</span>
+                    <span class="env-tree-muted">${this.escapeHtml(getPageLabel("groupType", "GROUP"))}</span>
                 </button>
             `;
         },
@@ -243,7 +271,7 @@
                     <span class="env-tree-node level-2">
                         <span class="env-tree-spacer"></span>
                         <i class="${icon}"></i>
-                        ${row.isRegistered ? `<i class="fas fa-check-circle api-registered-icon" title="Registered"></i>` : ""}
+                        ${row.isRegistered ? `<i class="fas fa-check-circle api-registered-icon" title="${this.escapeHtml(getPageLabel("registeredOnly", "Registered"))}"></i>` : ""}
                         <span class="env-tree-label" title="${this.escapeHtml(item.label || item.objectName)}">${this.escapeHtml(item.label || item.objectName)}</span>
                     </span>
                     <span class="env-tree-muted" title="${this.escapeHtml(endpoint)}">${this.escapeHtml(item.objectType || "API")}</span>
@@ -268,9 +296,9 @@
                 const data = json.data || {};
                 const apiObject = this.normalizeApiObject(data.apiObject || {});
                 const rows = this.normalizeRows(data.details || []);
-                this.applyApiState(apiObject, rows, "Saved data", `SAVED:${apiObject.objectId || objectId}`);
+                this.applyApiState(apiObject, rows, getPageLabel("savedData", "Saved data"), `SAVED:${apiObject.objectId || objectId}`);
             } catch (error) {
-                alert(error.message || "API object load failed.");
+                alert(error.message || getPageLabel("apiObjectLoadFailed", "API object load failed."));
             }
         },
 
@@ -279,7 +307,7 @@
             if (!preset) return;
             const apiObject = this.createApiObjectFromPreset(preset.resource, preset.groupName);
             const rows = this.createRowsFromPreset(preset.resource);
-            this.applyApiState(apiObject, rows, "Python API base JSON", `PRESET:${apiObject.objectName}`);
+            this.applyApiState(apiObject, rows, getPageMessage("pythonApiBaseGroupName", "Python API base JSON"), `PRESET:${apiObject.objectName}`);
         },
 
         newApiObject(renderTree = true) {
@@ -306,7 +334,7 @@
                 { key: "INPUT.query", value: "query.q VARCHAR2", desc: "External API query parameter", defaultValue: "", order: 2 },
                 { key: "OUTPUT.responseJson", value: "$", desc: "Raw JSON response stored in the generic API result table", defaultValue: "INIT$_TB_API_RESULT", order: 3 }
             ];
-            this.applyApiState(apiObject, rows, "New external API", "NEW:");
+            this.applyApiState(apiObject, rows, getPageLabel("newExternalApi", "New external API"), "NEW:");
             if (renderTree) this.renderObjectTree();
             getContainerEl("#apiObjectName-M90002")?.focus();
         },
@@ -329,7 +357,7 @@
                 useYn: "Y",
                 sortOrder: 0,
                 description: ""
-            }, [], "No API object selected", "");
+            }, [], getPageLabel("noApiObjectSelected", "No API object selected"), "");
         },
 
         applyApiState(apiObject, rows, detailSource, nodeKey) {
@@ -343,8 +371,11 @@
             this.renderRows();
             this.renderContractPreview();
             this.updateDescription(apiObject.objectName
-                ? `${apiObject.objectName} ${apiObject.objectType || "API"} definition`
-                : "Select an API object from the group tree.");
+                ? getPageLabel("apiDefinitionDescription", "{objectName} {objectType} definition", {
+                    objectName: apiObject.objectName,
+                    objectType: apiObject.objectType || "API"
+                })
+                : getPageLabel("apiRegistryDescription", "Select an API object from the group tree. Input, auth, and output rules will appear here."));
             this.updatePresetButton();
             this.renderObjectTree();
         },
@@ -376,18 +407,18 @@
             const grid = getContainerEl("#apiRows-M90002");
             if (!grid) return;
             if (!this.rows.length) {
-                grid.innerHTML = `<div class="table-empty">No API detail rows.</div>`;
+                grid.innerHTML = `<div class="table-empty">${this.escapeHtml(getPageLabel("noApiDetailRows", "No API detail rows."))}</div>`;
                 return;
             }
             grid.innerHTML = `
                 <table class="env-detail-table api-detail-table">
                     <thead>
                         <tr>
-                            <th class="env-order-head">ORDER</th>
-                            <th class="env-key-head">KEY</th>
-                            <th class="env-value-head">VALUE</th>
-                            <th class="env-desc-head">COMMENT</th>
-                            <th class="env-default-head">DEFAULT</th>
+                            <th class="env-order-head">${this.escapeHtml(getPageLabel("order", "ORDER"))}</th>
+                            <th class="env-key-head">${this.escapeHtml(getPageLabel("key", "KEY"))}</th>
+                            <th class="env-value-head">${this.escapeHtml(getPageLabel("value", "VALUE"))}</th>
+                            <th class="env-desc-head">${this.escapeHtml(getPageLabel("comment", "COMMENT"))}</th>
+                            <th class="env-default-head">${this.escapeHtml(getPageLabel("defaultValue", "DEFAULT"))}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -483,7 +514,7 @@
                 this.apiObject.resultName = "INIT$_TB_API_RESULT";
                 this.ensureExternalOutputRow();
             } else {
-                this.apiObject.apiGroup = this.apiObject.apiGroup || "Python API 기본 JSON";
+                this.apiObject.apiGroup = this.apiObject.apiGroup || PYTHON_API_BASE_GROUP_NAME;
                 this.apiObject.authType = "NONE";
             }
             this.renderApiMeta();
@@ -518,7 +549,12 @@
             const ownerDisabled = mode === "N";
             const nameDisabled = mode === "N" || isFixedResult;
             const title = getContainerEl("#apiResultNameTitle-M90002");
-            if (title) title.textContent = mode === "M" ? "Result Model" : "Result Table";
+            if (title) {
+                title.dataset.labelKey = mode === "M" ? "resultModel" : "resultTable";
+                title.textContent = mode === "M"
+                    ? getPageLabel("resultModel", "Result Model")
+                    : getPageLabel("resultTable", "Result Table");
+            }
             const createMode = getContainerEl("#apiResultCreateYn-M90002");
             if (createMode) createMode.disabled = isFixedResult;
             const ownerField = getContainerEl("#apiResultOwner-M90002");
@@ -571,7 +607,7 @@
             const currentName = this.apiObject?.objectName || "";
             const preset = this.findPresetByName(currentName);
             if (!preset) {
-                alert("No Python API base JSON is registered for this API object.");
+                alert(getPageLabel("noPythonApiBaseJson", "No Python API base JSON is registered for this API object."));
                 return;
             }
             const objectId = this.apiObject?.objectId || "";
@@ -601,12 +637,12 @@
                 }))
             };
             if (!payload.apiObject.objectName) {
-                alert("Object Name is required.");
+                alert(getPageLabel("objectNameRequired", "Object Name is required."));
                 getContainerEl("#apiObjectName-M90002")?.focus();
                 return;
             }
             if (!payload.apiObject.endpoint) {
-                alert("Endpoint URL is required.");
+                alert(getPageLabel("endpointUrlRequired", "Endpoint URL is required."));
                 getContainerEl("#apiEndpoint-M90002")?.focus();
                 return;
             }
@@ -616,11 +652,11 @@
                     method: "POST",
                     body: payload
                 });
-                alert(json.message || "API object saved.");
+                alert(json.message || getPageLabel("apiObjectSaved", "API object saved."));
                 await this.loadApiObjects();
                 if (json.objectId) await this.loadApiObject(json.objectId);
             } catch (error) {
-                alert(error.message || "API object save failed.");
+                alert(error.message || getPageLabel("apiObjectSaveFailed", "API object save failed."));
             } finally {
                 this.setSaving(false);
             }
@@ -629,21 +665,21 @@
         async deleteApiObject() {
             const objectId = this.apiObject?.objectId || "";
             if (!objectId) {
-                alert("This API object is not saved.");
+                alert(getPageLabel("apiObjectNotSaved", "This API object is not saved."));
                 return;
             }
-            const label = this.apiObject?.label || this.apiObject?.objectName || "selected API object";
-            if (!confirm(`Delete "${label}" API object registration?`)) return;
+            const label = this.apiObject?.label || this.apiObject?.objectName || getPageLabel("selectedApiObject", "selected API object");
+            if (!confirm(getPageLabel("confirmDeleteApiObject", "Delete \"{label}\" API object registration?", { label }))) return;
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/api-object/delete`, {
                     method: "POST",
                     body: { objectId: Number(objectId) }
                 });
-                alert(json.message || "API object deleted.");
+                alert(json.message || getPageLabel("apiObjectDeleted", "API object deleted."));
                 this.clearSelection();
                 await this.loadApiObjects();
             } catch (error) {
-                alert(error.message || "API object delete failed.");
+                alert(error.message || getPageLabel("apiObjectDeleteFailed", "API object delete failed."));
             }
         },
 
@@ -658,6 +694,7 @@
                 httpMethod: this.getValue("#apiHttpMethod-M90002") || "POST",
                 authType: this.getValue("#apiAuthType-M90002") || "NONE",
                 authKeyName: this.getValue("#apiAuthKeyName-M90002"),
+                apiGroup: this.normalizeApiGroupName((this.apiObject || {}).apiGroup || (this.getValue("#apiObjectType-M90002") === "EXTERNAL_API" ? "Additional APIs" : PYTHON_API_BASE_GROUP_NAME)),
                 timeoutSec: this.getValue("#apiTimeoutSec-M90002") || 300,
                 resultCreateYn: this.getValue("#apiResultCreateYn-M90002") || "N",
                 resultOwner: this.getValue("#apiResultOwner-M90002"),
@@ -683,7 +720,7 @@
             const resultKey = apiObject.resultCreateYn === "M" ? "resultModelName" : "resultTableName";
             return {
                 apiRegistryVersion: 2,
-                apiGroup: apiObject.apiGroup || (apiObject.objectType === "EXTERNAL_API" ? "Additional APIs" : "Python API 기본 JSON"),
+                apiGroup: this.normalizeApiGroupName(apiObject.apiGroup || (apiObject.objectType === "EXTERNAL_API" ? "Additional APIs" : PYTHON_API_BASE_GROUP_NAME)),
                 apiType: apiObject.objectType,
                 method: apiObject.objectName,
                 httpMethod: apiObject.httpMethod,
@@ -714,7 +751,7 @@
             try {
                 viewer.value = JSON.stringify(this.buildContract(), null, 2);
                 const status = getContainerEl("#apiContractStatus-M90002");
-                if (status) status.textContent = "Generated from current screen values.";
+                if (status) status.textContent = getPageLabel("apiContractGenerated", "Generated from current screen values.");
             } catch (error) {
                 viewer.value = "";
             }
@@ -724,7 +761,7 @@
             const viewer = getContainerEl("#apiContractViewer-M90002");
             const text = viewer?.value || "";
             if (!text.trim()) {
-                alert("No API JSON contract to copy.");
+                alert(getPageLabel("noApiJsonContractToCopy", "No API JSON contract to copy."));
                 return;
             }
             try {
@@ -735,7 +772,7 @@
                 document.execCommand("copy");
             }
             const status = getContainerEl("#apiContractStatus-M90002");
-            if (status) status.textContent = "API JSON contract copied.";
+            if (status) status.textContent = getPageLabel("apiJsonContractCopied", "API JSON contract copied.");
         },
 
         normalizePresetFile(json) {
@@ -743,7 +780,7 @@
                 return {
                     ...json,
                     groups: json.groups.map((group) => ({
-                        groupName: group.groupName || group.name || "Python API 기본 JSON",
+                        groupName: this.normalizeApiGroupName(group.groupName || group.name || PYTHON_API_BASE_GROUP_NAME),
                         resources: Array.isArray(group.resources) ? group.resources : []
                     }))
                 };
@@ -751,7 +788,7 @@
             return {
                 ...json,
                 groups: [{
-                    groupName: "Python API 기본 JSON",
+                    groupName: PYTHON_API_BASE_GROUP_NAME,
                     resources: Array.isArray(json?.resources) ? json.resources : []
                 }]
             };
@@ -771,7 +808,7 @@
             return null;
         },
 
-        createApiObjectFromPreset(preset, groupName = "Python API 기본 JSON") {
+        createApiObjectFromPreset(preset, groupName = PYTHON_API_BASE_GROUP_NAME) {
             const output = preset.output || preset.outputContract || preset.outputFormat || {};
             const resultName = output.resultModelName || output.resultTableName || output.resultTable || preset.resultTableName || preset.resultTable || "";
             return {
@@ -779,7 +816,7 @@
                 objectType: preset.objectType || preset.apiType || "INTERNAL_API",
                 objectName: preset.objectName || preset.resourceName || preset.execMethod || "",
                 label: preset.label || preset.resourceLabel || preset.resourceName || "",
-                apiGroup: preset.apiGroup || groupName,
+                apiGroup: this.normalizeApiGroupName(preset.apiGroup || groupName),
                 endpoint: preset.endpoint || preset.serviceUrl || preset.spec?.endpoint || preset.spec?.serviceUrl || "",
                 httpMethod: preset.httpMethod || "POST",
                 authType: preset.auth?.type || preset.authType || "NONE",
@@ -840,7 +877,7 @@
                 objectType: row.objectType || row.apiType || row.API_TYPE || row.RESOURCE_TYPE || "INTERNAL_API",
                 objectName: row.objectName || row.OBJECT_NAME || row.RESOURCE_NAME || "",
                 label: row.label || row.OBJECT_LABEL || row.RESOURCE_LABEL || row.RESOURCE_NAME || "",
-                apiGroup: row.apiGroup || row.API_GROUP || "",
+                apiGroup: this.normalizeApiGroupName(row.apiGroup || row.API_GROUP || ""),
                 endpoint: row.endpoint || row.ENDPOINT || row.serviceUrl || row.SERVICE_URL || "",
                 httpMethod: row.httpMethod || row.HTTP_METHOD || "POST",
                 authType: row.authType || row.AUTH_TYPE || "NONE",
@@ -967,6 +1004,22 @@
             return this.normalizeKey(groupName || "API_GROUP") || "API_GROUP";
         },
 
+        isPythonBaseGroupName(groupName) {
+            const text = String(groupName || "").trim();
+            return Boolean(text) && PYTHON_API_BASE_GROUP_ALIASES.has(text.toUpperCase());
+        },
+
+        normalizeApiGroupName(groupName) {
+            return this.isPythonBaseGroupName(groupName) ? PYTHON_API_BASE_GROUP_NAME : String(groupName || "").trim();
+        },
+
+        getApiGroupDisplayName(groupName) {
+            if (this.isPythonBaseGroupName(groupName)) {
+                return getPageMessage("pythonApiBaseGroupName", PYTHON_API_BASE_GROUP_NAME);
+            }
+            return String(groupName || "").trim();
+        },
+
         isCategoryMatch(item, filter) {
             if (filter === "ALL") return true;
             return filter.includes(String(item.objectType || "").toUpperCase());
@@ -993,7 +1046,9 @@
             if (!button) return;
             button.disabled = this.isSaving;
             const label = button.querySelector("span");
-            if (label) label.textContent = this.isSaving ? "Saving..." : "Save";
+            if (label) label.textContent = this.isSaving
+                ? getPageLabel("saving", "Saving...")
+                : getPageLabel("save", "Save");
         },
 
         updateDescription(text) {

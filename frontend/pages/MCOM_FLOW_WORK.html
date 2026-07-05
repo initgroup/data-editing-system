@@ -67,7 +67,7 @@
         </button>
         <button type="button" class="table-tab" data-tab="resultSql" onclick="__PAGE_CODE__.switchTab('resultSql')">
             <i class="fas fa-table"></i>
-            <span>Result SQL</span>
+            <span data-label-key="resultSqlTab">Result SQL</span>
         </button>
     </nav>
 
@@ -80,7 +80,7 @@
                         <h2 class="table-section-title" id="flow-assets-scenario-title-__PAGE_CODE__"></h2>
                     </div>
                     <div class="data-job-subtitle-block">
-                        <p class="table-section-desc" data-label-key="flowAssetsDescription">작업/입출력 노드를 캔버스로 끌어오세요.</p>
+                        <p class="table-section-desc" data-label-key="flowAssetsDescription">Drag jobs or I/O nodes onto the canvas.</p>
                     </div>
                     <div class="table-object-actions data-job-actions">
                         <button type="button" class="table-icon-btn" title="New flow" data-title-key="newFlowTitle" onclick="__PAGE_CODE__.newFlow()">
@@ -153,15 +153,15 @@
                         <div class="flow-main-action-buttons">
                             <button type="button" id="saveFlowButton-__PAGE_CODE__" class="table-btn" onclick="__PAGE_CODE__.saveFlow()">
                                 <i class="fas fa-save"></i>
-                                <span data-label-key="saveFlow">Save flow</span>
+                                <span data-label-key="saveFlow">Save</span>
                             </button>
                             <button type="button" id="flowVersionCopy-__PAGE_CODE__" class="table-btn flow-copy-saved-flow-button" title="Copy selected saved flow" data-title-key="copySavedFlowTitle" onclick="__PAGE_CODE__.copySelectedSavedFlow()">
                                 <i class="far fa-copy"></i>
-                                <span data-label-key="copySavedFlow">Copy saved flow</span>
+                                <span data-label-key="copySavedFlow">Copy flow</span>
                             </button>
                             <button type="button" id="deleteFlowButton-__PAGE_CODE__" class="table-btn" onclick="__PAGE_CODE__.deleteFlow()">
                                 <i class="far fa-trash-alt"></i>
-                                <span data-label-key="deleteFlow">Delete flow</span>
+                                <span data-label-key="deleteFlow">Delete</span>
                             </button>
                             <button type="button" class="table-btn" onclick="__PAGE_CODE__.validateFlow()">
                                 <i class="fas fa-circle-check"></i>
@@ -169,11 +169,11 @@
                             </button>
                             <button type="button" id="runFlowNow-__PAGE_CODE__" class="table-btn" onclick="__PAGE_CODE__.runFlow(false)">
                                 <i class="fas fa-play"></i>
-                                <span data-label-key="runNow">Run now</span>
+                                <span data-label-key="runNow">Run</span>
                             </button>
                             <button type="button" id="queueFlowBatch-__PAGE_CODE__" class="table-btn" onclick="__PAGE_CODE__.runFlow(true)">
                                 <i class="fas fa-clock"></i>
-                                <span data-label-key="queueBatch">Queue batch</span>
+                                <span data-label-key="queueBatch">Queue</span>
                             </button>
                         </div>
                     </div>
@@ -212,7 +212,7 @@
                         <strong data-label-key="flowCanvas">Flow Canvas</strong>
                         <span id="flowZoomLabel-__PAGE_CODE__" class="flow-zoom-label">100%</span>
                         <span>&nbsp;</span>
-                        <span id="selectedFlowLabel-__PAGE_CODE__" class="data-selected-object" data-label-key="sampleFlowLabel">오른쪽 출력 커넥터를 클릭한 뒤 연결할 노드의 왼쪽 입력 커넥터를 클릭하세요.<br>Shift를 누르고 연결하면 선행 노드 종료 후 실행되는 점선 연결을 만들 수 있습니다.</span>
+                        <span id="selectedFlowLabel-__PAGE_CODE__" class="data-selected-object" data-label-key="sampleFlowLabel">Click the right output connector, then click the left input connector of the node to connect.<br>Hold Shift while connecting to create a one-time dashed on-complete edge.</span>
                         <span class="flow-canvas-actions">
                             <button type="button" class="table-icon-btn" title="Reload saved canvas" data-title-key="reloadCanvasTitle" onclick="__PAGE_CODE__.reloadCurrentFlowCanvas()">
                                 <i class="fas fa-sync-alt"></i>
@@ -254,7 +254,7 @@
                         <section class="data-param-panel flow-canvas-panel" aria-label="Flow designer canvas">
                             <header class="data-param-panel-header">
                                 <strong data-label-key="graph">Graph</strong>
-                                <span class="env-detail-hint" data-label-key="graphHint">실선은 선행 노드가 SUCCESS일 때 후행 노드를 실행하고, 점선은 선행 노드가 종료되면 성공 여부와 관계없이 후행 노드를 실행합니다.</span>
+                                <span class="env-detail-hint" data-label-key="graphHint">A solid edge runs the next node when the upstream node succeeds. A dashed edge runs it after the upstream node finishes, regardless of success.</span>
                             </header>
 
                             <div id="flowCanvas-__PAGE_CODE__" class="flow-canvas-stage" tabindex="0">
@@ -276,7 +276,7 @@
                                     <hr>
                                     <button type="button" data-flow-menu-action="toggleDashedConnection"><i class="fas fa-grip-lines"></i><span>Dashed connection: OFF</span></button>
                                     <button type="button" data-flow-menu-action="treeLayout"><i class="fas fa-sitemap"></i><span>Tree layout</span></button>
-                                    <button type="button" data-flow-menu-action="autoConnectByX"><i class="fas fa-link"></i><span>자동 연결선 적용하기</span></button>
+                                    <button type="button" data-flow-menu-action="autoConnectByX"><i class="fas fa-link"></i><span>Auto connect by position</span></button>
                                     <button type="button" data-flow-menu-action="fitCanvas"><i class="fas fa-up-right-and-down-left-from-center"></i><span>Fit canvas</span></button>
                                     <button type="button" data-flow-menu-action="resetZoom"><i class="fas fa-compress"></i><span>Reset zoom</span></button>
                                 </div>
@@ -309,10 +309,10 @@
                                         <label>
                                             <span data-label-key="nodeType">Node Type</span>
                                             <select id="nodeType-__PAGE_CODE__" class="env-field" disabled>
-                                                <option value="M03001" selected>데이터 프로파일링</option>
-                                                <option value="M03002">컬럼간 상관 분석</option>
-                                                <option value="M03003">자동 규칙 발굴</option>
-                                                <option value="M03004">규칙 위반 탐지</option>
+                                                <option value="M03001" selected>Data Profiling</option>
+                                                <option value="M03002">Column Correlation</option>
+                                                <option value="M03003">Rule Discovery</option>
+                                                <option value="M03004">Rule Violation</option>
                                             </select>
                                         </label>
                                          <label>
@@ -396,43 +396,43 @@ END;</textarea>
         <div class="data-sql-workbench flow-result-sql-workbench">
             <div class="data-panel-toolbar flow-result-sql-toolbar">
                 <div class="sql-toolbar-actions">
-                    <button type="button" class="table-icon-btn sql-tool-icon-btn sql-run-btn" title="Run SQL (Ctrl+Enter)" aria-label="Run SQL" onclick="__PAGE_CODE__.executeFlowResultSql()">
+                    <button type="button" class="table-icon-btn sql-tool-icon-btn sql-run-btn" title="Run SQL (Ctrl+Enter)" data-title-key="runResultSqlTitle" aria-label="Run SQL" onclick="__PAGE_CODE__.executeFlowResultSql()">
                         <i class="fas fa-play"></i>
                     </button>
                 </div>
                 <div class="sql-toolbar-options">
-                    <span class="table-empty">Read only result SQL</span>
-                    <label class="table-limit-control flow-result-sql-freeze" title="Freeze No plus this many data columns while scrolling horizontally">
-                        <span>Freeze</span>
+                    <span class="table-empty" data-label-key="readOnlyResultSql">Read only result SQL</span>
+                    <label class="table-limit-control flow-result-sql-freeze" title="Freeze No plus this many data columns while scrolling horizontally" data-title-key="freezeColumnsTitle">
+                        <span data-label-key="freezeColumns">Freeze</span>
                         <input id="flowResultSqlFreezeColumns-__PAGE_CODE__" type="number" min="0" max="50" value="0" onchange="__PAGE_CODE__.applyFlowResultSqlFrozenColumns()" oninput="__PAGE_CODE__.applyFlowResultSqlFrozenColumns()">
                     </label>
                     <label class="table-limit-control flow-result-sql-limit">
-                        <span>Rows</span>
+                        <span data-label-key="rows">Rows</span>
                         <input id="flowResultSqlLimit-__PAGE_CODE__" type="number" min="1" max="1000" value="100">
                     </label>
                 </div>
             </div>
             <div class="data-user-sql-context flow-result-sql-context">
-                <strong id="flowResultSqlTitle-__PAGE_CODE__">Result SQL</strong>
-                <span id="flowResultSqlHint-__PAGE_CODE__">Select a node result from Run History details.</span>
+                <strong id="flowResultSqlTitle-__PAGE_CODE__" data-label-key="resultSqlTitle">Result SQL</strong>
+                <span id="flowResultSqlHint-__PAGE_CODE__" data-label-key="resultSqlSelectHint">Select a node result from Run History details.</span>
             </div>
             <textarea id="flowResultSqlEditor-__PAGE_CODE__" class="sql-editor data-script-editor flow-result-sql-editor" spellcheck="false" aria-label="Flow result SQL" onkeydown="__PAGE_CODE__.handleFlowResultSqlKeydown(event)">-- Select a node result from Run History details.</textarea>
             <div class="data-sql-result-header">
                 <div id="flowResultSqlMessage-__PAGE_CODE__" class="table-empty" aria-live="polite" hidden></div>
                 <div class="table-export-actions data-sql-export-actions" aria-label="Export Flow result SQL data">
-                    <button type="button" class="table-icon-btn export-excel" title="Export Excel" onclick="__PAGE_CODE__.exportFlowResultSqlGrid('excel')">
+                    <button type="button" class="table-icon-btn export-excel" title="Export Excel" data-title-key="exportExcelTitle" onclick="__PAGE_CODE__.exportFlowResultSqlGrid('excel')">
                         <i class="fas fa-file-excel"></i>
                     </button>
-                    <button type="button" class="table-icon-btn" title="Export CSV" onclick="__PAGE_CODE__.exportFlowResultSqlGrid('csv')">
+                    <button type="button" class="table-icon-btn" title="Export CSV" data-title-key="exportCsvTitle" onclick="__PAGE_CODE__.exportFlowResultSqlGrid('csv')">
                         <i class="fas fa-file-csv"></i>
                     </button>
-                    <button type="button" class="table-icon-btn" title="Export TSV" onclick="__PAGE_CODE__.exportFlowResultSqlGrid('tsv')">
+                    <button type="button" class="table-icon-btn" title="Export TSV" data-title-key="exportTsvTitle" onclick="__PAGE_CODE__.exportFlowResultSqlGrid('tsv')">
                         <i class="fas fa-file-lines"></i>
                     </button>
                 </div>
             </div>
             <div id="flowResultSqlGrid-__PAGE_CODE__" class="table-result-grid">
-                <div class="table-empty">No result SQL executed.</div>
+                <div class="table-empty" data-label-key="noResultSqlExecuted">No result SQL executed.</div>
             </div>
         </div>
     </section>

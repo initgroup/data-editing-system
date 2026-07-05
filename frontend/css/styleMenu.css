@@ -1334,7 +1334,54 @@ option.owner-scope-other {
     font-weight: 700;
 }
 
-.upload-file-control input {
+.upload-file-picker {
+    align-items: center;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    display: flex;
+    gap: 8px;
+    height: 34px;
+    min-width: 0;
+    padding: 0 8px;
+}
+
+.upload-file-input {
+    height: 1px;
+    opacity: 0;
+    overflow: hidden;
+    position: absolute;
+    width: 1px;
+}
+
+.upload-file-button {
+    background: #f8fafc;
+    border: 1px solid #94a3b8;
+    color: #111827;
+    cursor: pointer;
+    flex: 0 0 auto;
+    font-size: 12px;
+    font-weight: 700;
+    height: 24px;
+    padding: 0 9px;
+}
+
+.upload-file-button:hover,
+.upload-file-button:focus-visible {
+    background: #e2e8f0;
+    outline: none;
+}
+
+.upload-file-name {
+    color: #334155;
+    flex: 1 1 auto;
+    font-size: 12px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.upload-file-control input:not(.upload-file-input) {
     height: 34px;
     border: 1px solid #cbd5e1;
     background: #fff;
@@ -3935,9 +3982,64 @@ body.is-column-resizing .data-sql-grid-col-resizer::after {
 }
 
 .data-work-page:not(.flow-work-page) .data-main-panel > .table-header {
+    align-items: flex-start;
     border-bottom: 1px solid #e2e8f0;
+    gap: 12px;
     margin: -4px 0 14px;
     padding-bottom: 14px;
+}
+
+.data-work-page:not(.flow-work-page) .data-main-panel > .table-header > div:first-child {
+    flex: 1 1 300px;
+    min-width: 0;
+}
+
+.data-work-page:not(.flow-work-page) .data-main-panel > .table-header .table-export-actions {
+    flex: 1 1 560px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    min-width: 0;
+    row-gap: 6px;
+}
+
+.data-work-page:not(.flow-work-page) .data-main-panel > .table-header .data-run-context-box {
+    grid-template-columns: minmax(48px, auto) minmax(28px, auto) 28px;
+    min-width: 116px;
+    padding: 2px 3px 2px 7px;
+}
+
+.data-work-page:not(.flow-work-page) .data-main-panel > .table-header .data-run-context-box strong {
+    max-width: 68px;
+}
+
+.data-work-page:not(.flow-work-page) .data-main-panel > .table-header .data-run-context-box .table-icon-btn {
+    height: 28px;
+    width: 28px;
+}
+
+.data-work-page:not(.flow-work-page) .data-work-action-separator {
+    align-self: center;
+    border-left: 1px solid #cbd5e1;
+    flex: 0 0 auto;
+    height: 26px;
+    margin: 0 4px;
+}
+
+.data-work-page:not(.flow-work-page) .data-main-panel > .table-header .table-export-actions .table-btn {
+    flex: 0 1 auto;
+    gap: 5px;
+    height: 32px;
+    max-width: 104px;
+    min-width: 0;
+    padding: 0 7px;
+}
+
+.data-work-page:not(.flow-work-page) .data-main-panel > .table-header .table-export-actions .table-btn span {
+    font-size: 13px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .data-job-grid {
@@ -6394,11 +6496,12 @@ body.intro-mode #container-intro .env-panel {
     flex: 1 1 112px;
     min-width: 0;
     max-width: 176px;
-    white-space: normal;
+    white-space: nowrap;
 }
 
 #container-login .login-main-dialog .intro-login-actions .env-btn {
     flex-basis: 0;
+    min-width: 112px;
 }
 
 #container-login #loginSubmitButton:focus,
@@ -6659,6 +6762,53 @@ body.intro-mode #container-intro .env-panel {
     width: 16px;
     min-width: 16px;
     text-align: center;
+}
+
+#mainNav a,
+#mainNav button,
+.sidebar-flyout-portal a,
+.sidebar-flyout-portal button {
+    text-align: left;
+}
+
+#mainNav [data-page],
+.sidebar-flyout-portal [data-page] {
+    align-items: center;
+}
+
+#mainNav [data-page] > span,
+.sidebar-flyout-portal [data-page] > span {
+    flex: 1 1 auto;
+    min-width: 0;
+    text-align: left;
+}
+
+#mainNav .menu-folder > button > div,
+.sidebar-flyout-portal .menu-folder > button > div {
+    flex: 1 1 auto;
+    min-width: 0;
+    justify-content: flex-start;
+    text-align: left;
+}
+
+#mainNav .menu-folder > button > div > i,
+.sidebar-flyout-portal .menu-folder > button > div > i {
+    flex: 0 0 16px;
+    width: 16px;
+    text-align: center;
+}
+
+#mainNav .menu-folder > button > div > span,
+.sidebar-flyout-portal .menu-folder > button > div > span {
+    flex: 1 1 auto;
+    min-width: 0;
+    text-align: left;
+}
+
+#mainNav .menu-folder > button > .fa-chevron-down,
+.sidebar-flyout-portal .menu-folder > button > .fa-chevron-down {
+    flex: 0 0 auto;
+    margin-left: 8px;
 }
 
 .header-target-db {
@@ -6924,6 +7074,24 @@ body.intro-mode #container-intro .env-panel {
     justify-content: flex-end;
     flex-wrap: wrap;
     gap: 8px;
+}
+
+.header-language-badge {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 34px;
+    height: 22px;
+    padding: 0 8px;
+    border: 1px solid #cbd5e1;
+    border-radius: 999px;
+    background: #f8fafc;
+    color: #334155;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: 0;
 }
 
 .header-actions .header-session-box,

@@ -6,8 +6,8 @@
   "systemSettingCategories": [
     {
       "CATEGORY_CODE": "MY_ACCOUNT",
-      "CATEGORY_NAME": "나의 회원정보",
-      "CATEGORY_DESC": "내 로그인 정보, 이메일, 비밀번호를 관리합니다.",
+      "CATEGORY_NAME": "My Account",
+      "CATEGORY_DESC": "Manage your login information, email, and password.",
       "SORT_ORDER": 0,
       "DEFAULTS": []
     },
@@ -28,6 +28,12 @@
           "SETTING_VALUE": "./assets/init-logo.png",
           "SETTING_DESC": "System logo image URL or data URL. Recommended 160x40px. It is displayed with automatic proportional scaling.",
           "SORT_ORDER": 20
+        },
+        {
+          "SETTING_KEY": "SYSTEM_LANGUAGE",
+          "SETTING_VALUE": "en",
+          "SETTING_DESC": "UI language code. en or ko. Changes are applied after logout and next login.",
+          "SORT_ORDER": 30
         }
       ]
     },
