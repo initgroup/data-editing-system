@@ -194,7 +194,10 @@ router = APIRouter()
 - 페이지 리소스 정리는 `destroy()`에 넣습니다.
 - 화면 등록 시 `frontend/config/menu.config.js`의 `MENU_CONFIG`, `PAGE_FILE_CONFIG.htmlPages`, `PAGE_FILE_CONFIG.scriptPages`를 함께 수정합니다.
 - `M02003`, `M02004`, `M03001`처럼 데이터 작업 공통 템플릿을 쓰는 화면은 `frontend/pages/MCOM_DATA_WORK.html`, `frontend/js/MCOM_DATA_WORK.js`, `backend/services/data_work_router.py` 패턴을 먼저 확인합니다.
-- `M03100`처럼 FLOW 작업 공통 템플릿을 쓰는 화면은 `frontend/pages/MCOM_FLOW_WORK.html`, `frontend/js/MCOM_FLOW_WORK.js`, `backend/services/flow_work_router.py` 패턴을 먼저 확인합니다.
+- `M04001`처럼 FLOW 작업 공통 템플릿을 쓰는 화면은 `frontend/pages/MCOM_FLOW_WORK.html`, `frontend/js/MCOM_FLOW_WORK.js`, `backend/services/flow_work_router.py`, `frontend/js/M04001.js`, `PageManager.flowWorkTemplatePages` 패턴을 먼저 확인합니다.
+- 캔버스/노드/팝업메뉴 이벤트 버그는 선택 상태만 추측해서 고치지 않습니다. 특히 "첫 실행만 실패하고 두 번째부터 성공"하면 이벤트 순서(`pointerdown`/`mousedown`/`click`/`contextmenu`), 실제 DOM 이벤트 타깃, 공통 템플릿 페이지 객체 재사용, `PageManager` 캐시/이미 열린 페이지 상태를 먼저 확인합니다.
+- 캔버스 팝업메뉴의 삭제/복제처럼 특정 노드에 대한 액션은 화면에 보이는 활성 노드와 실제 액션 대상이 분리되지 않도록 메뉴가 열린 순간의 노드 ID뿐 아니라 실제 DOM 노드 또는 안정적인 액션 대상 스냅샷을 기준으로 처리합니다.
+- FLOW 캔버스의 `Delete node`는 화면의 현재 캔버스/draft에서 노드를 제거하는 UI 편집 동작입니다. 이 액션에서 DB 삭제 API, 저장된 Flow/Node 삭제 SQL, run history 삭제를 직접 호출하지 않습니다.
 
 ## 새 화면 추가 절차
 

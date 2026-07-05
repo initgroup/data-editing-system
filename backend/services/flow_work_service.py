@@ -1073,7 +1073,7 @@ def prepare_saved_job_script(script_text: str, job: Dict[str, Any], runtime_bind
             value = runtime_values.get(to_bind_variable_name(key))
         if value is None:
             value = param_values.get(key)
-        return "" if value is None else str(value)
+        return "" if normalize_bind_value(value) is None else str(value)
 
     prepared_text = re.sub(
         r"/\*\s*--\s*([A-Za-z][A-Za-z0-9_$#]*(?:_[A-Za-z0-9_$#]+)*)\s*--\s*\*/",
@@ -1158,7 +1158,7 @@ def normalize_bind_value(value: Any) -> Any:
     text = str(value).strip()
     if not text:
         return None
-    if re.fullmatch(r"(?i)null", text):
+    if text.lower() in {"null", "(null)", "(auto)"}:
         return None
     if re.fullmatch(r"-?\d+", text):
         try:

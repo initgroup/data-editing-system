@@ -19,6 +19,8 @@
         ];
         const CONTEXT_STORAGE_KEY = config.contextStorageKey || "DATA_EDITING_WORK_CONTEXT";
         const SCENARIO_TABLE_API = config.scenarioTableApi || "M02002";
+        const FLOW_NODE_DEFAULT_WIDTH = 170;
+        const FLOW_NODE_DEFAULT_HEIGHT = 112;
         const { getContainerEl } = PageManager.createHelper(PAGE_CODE);
         const COMMON = MCOMMON.createPageHelper(PAGE_CODE);
 
@@ -55,12 +57,21 @@
             minFlowZoom: 0.45,
             maxFlowZoom: 1.8,
             selectedNodeId: "",
+            selectedNodeIds: new Set(),
             selectedEdgeId: "",
+            flowNodeSelectionHistory: [],
+            flowNodeClickState: null,
+            suppressNextFlowNodeClick: false,
             nodeDragState: null,
             canvasPanState: null,
+            canvasSelectionState: null,
             edgeDragState: null,
             dashedConnectionMode: false,
             flowPaletteDragData: null,
+            flowPaletteDragOffset: null,
+            flowPaletteDragImage: null,
+            flowNodeClipboard: null,
+            flowNodeClipboardPasteCount: 0,
             nodeSequence: 100,
             flowContextMenuState: null,
             flowSidebarCollapsed: false,
@@ -88,6 +99,11 @@
             flowCanvasDropBound: null,
             flowCanvasContextMenuBound: null,
             flowMenuClickBound: null,
+            flowMenuPointerDownBound: null,
+            flowMenuMouseDownBound: null,
+            flowMenuContextMenuBound: null,
+            suppressNextFlowMenuClick: false,
+            flowMenuPressGuard: null,
             flowDocumentClickBound: null,
             flowDocumentKeydownBound: null,
             flowEdgeLayerClickBound: null,
@@ -106,6 +122,7 @@
             destroy() {
                 this.closeNodeRunParamsLayer();
                 this.endFlowResultSqlColumnResize();
+                this.disposePaletteDragImage();
                 this.restoreSidebarsAfterCanvasMaximize();
                 this.teardownFlowDesigner();
                 this.contextProjects = [];
@@ -133,11 +150,21 @@
                 this.contextLoadFailed = false;
                 this.flowZoom = 1;
                 this.selectedNodeId = "";
+                this.selectedNodeIds = new Set();
+                this.flowNodeSelectionHistory = [];
+                this.flowNodeClickState = null;
+                this.suppressNextFlowNodeClick = false;
+                this.suppressNextFlowMenuClick = false;
+                this.flowMenuPressGuard = null;
                 this.nodeDragState = null;
                 this.canvasPanState = null;
+                this.canvasSelectionState = null;
                 this.edgeDragState = null;
                 this.dashedConnectionMode = false;
                 this.flowPaletteDragData = null;
+                this.flowPaletteDragOffset = null;
+                this.flowNodeClipboard = null;
+                this.flowNodeClipboardPasteCount = 0;
                 this.flowSidebarCollapsed = false;
                 this.flowSidebarCollapsedBeforeMaximize = null;
                 this.appSidebarCollapsedBeforeMaximize = null;
@@ -1374,6 +1401,9 @@
                 this.flowCanvasDropBound = (event) => this.handleCanvasDrop(event);
                 this.flowCanvasContextMenuBound = (event) => this.handleCanvasContextMenu(event);
                 this.flowMenuClickBound = (event) => this.handleContextMenuClick(event);
+                this.flowMenuPointerDownBound = (event) => this.handleFlowMenuPointerDown(event);
+                this.flowMenuMouseDownBound = (event) => this.handleFlowMenuPointerDown(event);
+                this.flowMenuContextMenuBound = (event) => this.handleFlowMenuContextMenu(event);
                 this.flowEdgeLayerClickBound = (event) => this.handleEdgeLayerClick(event);
                 this.flowDocumentKeydownBound = (event) => this.handleFlowKeydown(event);
                 this.flowDocumentClickBound = (event) => {
@@ -1396,7 +1426,11 @@
                 document.addEventListener("pointerup", this.flowCanvasPointerUpBound);
                 document.addEventListener("click", this.flowDocumentClickBound);
                 document.addEventListener("keydown", this.flowDocumentKeydownBound);
-                getContainerEl(`#flowCanvasMenu-${PAGE_CODE}`)?.addEventListener("click", this.flowMenuClickBound);
+                const menu = getContainerEl(`#flowCanvasMenu-${PAGE_CODE}`);
+                menu?.addEventListener("pointerdown", this.flowMenuPointerDownBound, true);
+                menu?.addEventListener("mousedown", this.flowMenuMouseDownBound, true);
+                menu?.addEventListener("contextmenu", this.flowMenuContextMenuBound);
+                menu?.addEventListener("click", this.flowMenuClickBound);
                 viewport.querySelector(".flow-edge-layer")?.addEventListener("click", this.flowEdgeLayerClickBound);
 
                 if (!viewport.querySelector(".flow-node") && this.isSampleFlowVisible) {
@@ -1551,11 +1585,11 @@
                     return;
                 }
                 this.getFlowNodes().forEach((node) => node.remove());
+                this.getFlowViewport()?.querySelector(".flow-selection-box")?.remove();
                 this.flowEdges = [];
-                this.selectedNodeId = "";
                 this.selectedEdgeId = "";
                 this.hideSelectedEdgeDelete();
-                this.clearNodeInspector();
+                this.clearFlowNodeSelection({ store: false, syncBeforeStore: false });
                 this.setSampleFlowState(false);
                 const label = getContainerEl(`#selectedFlowLabel-${PAGE_CODE}`);
                 if (label) label.textContent = "캔버스가 비었습니다. 왼쪽 작업을 끌어오거나 캔버스 메뉴에서 노드를 추가해 Flow를 구성하세요.";
@@ -1599,7 +1633,11 @@
                 if (this.flowCanvasPointerUpBound) document.removeEventListener("pointerup", this.flowCanvasPointerUpBound);
                 if (this.flowDocumentClickBound) document.removeEventListener("click", this.flowDocumentClickBound);
                 if (this.flowDocumentKeydownBound) document.removeEventListener("keydown", this.flowDocumentKeydownBound);
-                getContainerEl(`#flowCanvasMenu-${PAGE_CODE}`)?.removeEventListener("click", this.flowMenuClickBound);
+                const menu = getContainerEl(`#flowCanvasMenu-${PAGE_CODE}`);
+                menu?.removeEventListener("pointerdown", this.flowMenuPointerDownBound, true);
+                menu?.removeEventListener("mousedown", this.flowMenuMouseDownBound, true);
+                menu?.removeEventListener("contextmenu", this.flowMenuContextMenuBound);
+                menu?.removeEventListener("click", this.flowMenuClickBound);
                 getContainerEl(`#flowCanvasViewport-${PAGE_CODE}`)?.querySelector(".flow-edge-layer")?.removeEventListener("click", this.flowEdgeLayerClickBound);
                 this.flowNodePointerMoveBound = null;
                 this.flowNodePointerUpBound = null;
@@ -1611,11 +1649,19 @@
                 this.flowCanvasDropBound = null;
                 this.flowCanvasContextMenuBound = null;
                 this.flowMenuClickBound = null;
+                this.flowMenuPointerDownBound = null;
+                this.flowMenuMouseDownBound = null;
+                this.flowMenuContextMenuBound = null;
+                this.suppressNextFlowMenuClick = false;
+                this.flowMenuPressGuard = null;
                 this.flowDocumentClickBound = null;
                 this.flowDocumentKeydownBound = null;
                 this.flowEdgeLayerClickBound = null;
                 this.flowPaletteDragData = null;
+                this.flowPaletteDragOffset = null;
+                this.disposePaletteDragImage();
                 this.flowContextMenuState = null;
+                this.canvasSelectionState = null;
                 this.flowDesignerBound = false;
             },
 
@@ -1624,17 +1670,40 @@
                 node.dataset.flowBound = "Y";
                 this.ensureNodeConnectors(node);
                 node.addEventListener("pointerdown", (event) => this.handleNodePointerDown(event, node));
-                node.addEventListener("click", (event) => {
-                    event.stopPropagation();
-                    this.selectFlowNode(node.dataset.nodeId || "");
-                });
-                node.addEventListener("dblclick", (event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    this.selectFlowNode(node.dataset.nodeId || "");
-                    this.setFlowInspectorCollapsed(false);
-                });
+                node.addEventListener("click", (event) => this.handleFlowNodeClick(event, node));
+                node.addEventListener("dblclick", (event) => this.handleFlowNodeDblClick(event, node));
                 this.bindFlowPorts(node);
+            },
+
+            handleFlowNodeClick(event, node) {
+                event.stopPropagation();
+                if (this.suppressNextFlowNodeClick) {
+                    this.suppressNextFlowNodeClick = false;
+                    return;
+                }
+                const nodeId = node?.dataset.nodeId || "";
+                if (!nodeId) return;
+                if (event.ctrlKey || event.metaKey) {
+                    this.toggleFlowNodeSelection(nodeId);
+                    this.flowNodeClickState = null;
+                    return;
+                }
+                const now = Date.now();
+                const lastClick = this.flowNodeClickState || {};
+                this.selectFlowNode(nodeId);
+                if (lastClick.nodeId === nodeId && now - Number(lastClick.at || 0) <= 420) {
+                    this.openFlowNodeInspector(nodeId);
+                    this.flowNodeClickState = null;
+                    return;
+                }
+                this.flowNodeClickState = { nodeId, at: now };
+            },
+
+            handleFlowNodeDblClick(event, node) {
+                event.preventDefault();
+                event.stopPropagation();
+                this.openFlowNodeInspector(node?.dataset.nodeId || "");
+                this.flowNodeClickState = null;
             },
 
             ensureNodeConnectors(node) {
@@ -1701,7 +1770,22 @@
                     item.addEventListener("dragstart", (event) => {
                         this.flowPaletteDragData = this.getFlowPaletteItemData(item);
                         event.dataTransfer?.setData("text/plain", JSON.stringify(this.flowPaletteDragData));
-                        if (event.dataTransfer) event.dataTransfer.effectAllowed = "copy";
+                        if (event.dataTransfer) {
+                            event.dataTransfer.effectAllowed = "copy";
+                            const dragImage = this.createPaletteDragImage(this.flowPaletteDragData);
+                            if (dragImage) {
+                                event.dataTransfer.setDragImage(dragImage.element, dragImage.offsetX, dragImage.offsetY);
+                                this.flowPaletteDragOffset = {
+                                    x: dragImage.logicalOffsetX,
+                                    y: dragImage.logicalOffsetY
+                                };
+                            }
+                        }
+                    });
+                    item.addEventListener("dragend", () => {
+                        this.disposePaletteDragImage();
+                        this.flowPaletteDragData = null;
+                        this.flowPaletteDragOffset = null;
                     });
                     item.addEventListener("dblclick", (event) => {
                         event.preventDefault();
@@ -1730,6 +1814,58 @@
                     this.getRegisteredJobAsset(item.dataset.jobId || ""),
                     fallbackData
                 );
+            },
+
+            createPaletteDragImage(data) {
+                this.disposePaletteDragImage();
+                const nodeType = data?.nodeType || "JOB";
+                const nodeTypeLabel = data?.nodeTypeLabel || this.getNodeTypeLabel(nodeType);
+                const inputHtml = this.renderNodePortSpans(this.getRenderInputPorts(nodeType, data), "in", "TABLE");
+                const outputHtml = this.renderNodePortSpans(
+                    this.getRenderOutputPorts(nodeType, data),
+                    "out",
+                    this.getNodeOutputAssetKind(data)
+                );
+                const zoom = this.flowZoom || 1;
+                const width = FLOW_NODE_DEFAULT_WIDTH;
+                const height = FLOW_NODE_DEFAULT_HEIGHT;
+                const element = document.createElement("article");
+                element.className = "data-param-card flow-node flow-node-step flow-node-drag-image";
+                element.style.left = "-10000px";
+                element.style.top = "-10000px";
+                element.style.width = `${width}px`;
+                element.style.minHeight = `${height}px`;
+                element.style.position = "fixed";
+                element.style.transform = `scale(${zoom})`;
+                element.style.transformOrigin = "0 0";
+                element.innerHTML = `
+                    <header class="data-param-panel-header">
+                        <strong title="${this.escapeHtml(nodeTypeLabel)}">${this.escapeHtml(nodeTypeLabel)}</strong>
+                        <span class="data-job-order">NEW</span>
+                    </header>
+                    <div class="flow-node-body">
+                        <strong>${this.escapeHtml(data?.title || "New node")}</strong>
+                        <small>${this.escapeHtml(data?.subtitle || data?.jobId || "Manual node")}</small>
+                    </div>
+                    <footer class="flow-node-ports">
+                        ${inputHtml}
+                        ${outputHtml}
+                    </footer>
+                `;
+                document.body.appendChild(element);
+                this.flowPaletteDragImage = element;
+                return {
+                    element,
+                    offsetX: Math.round((width * zoom) / 2),
+                    offsetY: Math.round((height * zoom) / 2),
+                    logicalOffsetX: width / 2,
+                    logicalOffsetY: height / 2
+                };
+            },
+
+            disposePaletteDragImage() {
+                this.flowPaletteDragImage?.remove();
+                this.flowPaletteDragImage = null;
             },
 
             async resolveLatestFlowNodeData(data) {
@@ -1767,12 +1903,26 @@
                 return Array.from(this.getFlowViewport()?.querySelectorAll(".flow-node") || []);
             },
 
+            getFlowNodeIdPrefix(nodeType) {
+                const prefix = String(nodeType || "JOB").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+                return prefix || "node";
+            },
+
+            createNextFlowNodeId(nodeType) {
+                const prefix = this.getFlowNodeIdPrefix(nodeType);
+                let nodeId = "";
+                do {
+                    nodeId = `${prefix}-${this.nodeSequence++}`;
+                } while (this.getFlowNode(nodeId) || document.getElementById(`flowNode-${PAGE_CODE}-${nodeId}`));
+                return nodeId;
+            },
+
             getNodePosition(node) {
                 return {
                     left: Number.parseFloat(node.style.left || "0") || 0,
                     top: Number.parseFloat(node.style.top || "0") || 0,
-                    width: node.offsetWidth || 170,
-                    height: node.offsetHeight || 112
+                    width: node.offsetWidth || FLOW_NODE_DEFAULT_WIDTH,
+                    height: node.offsetHeight || FLOW_NODE_DEFAULT_HEIGHT
                 };
             },
 
@@ -1796,13 +1946,15 @@
                 };
             },
 
-            setNodePosition(node, left, top) {
+            setNodePosition(node, left, top, options = {}) {
                 const safeLeft = Math.max(0, Math.round(left));
                 const safeTop = Math.max(0, Math.round(top));
                 node.style.left = `${safeLeft}px`;
                 node.style.top = `${safeTop}px`;
-                this.resizeFlowViewportToNodes();
-                this.updateFlowEdges();
+                if (options.update !== false) {
+                    this.resizeFlowViewportToNodes();
+                    this.updateFlowEdges();
+                }
             },
 
             handleNodePointerDown(event, node) {
@@ -1810,37 +1962,136 @@
                 event.preventDefault();
                 event.stopPropagation();
                 this.hideCanvasContextMenu();
-                this.selectFlowNode(node.dataset.nodeId || "");
 
+                const nodeId = node.dataset.nodeId || "";
                 const position = this.getNodePosition(node);
+                const copyMode = Boolean(event.ctrlKey || event.metaKey);
+                const selectedIdsBefore = this.reconcileFlowNodeSelectionState();
+                if (!copyMode) {
+                    if (this.isFlowNodeSelected(nodeId) && selectedIdsBefore.length > 1) {
+                        this.setFlowNodeSelection(selectedIdsBefore, nodeId);
+                    } else {
+                        this.selectFlowNode(nodeId);
+                    }
+                }
+                const dragIds = copyMode
+                    ? (this.isFlowNodeSelected(nodeId) ? selectedIdsBefore : [nodeId])
+                    : this.getSelectedFlowNodeIds();
                 this.nodeDragState = {
                     node,
+                    sourceNode: node,
+                    sourceIds: dragIds,
+                    nodes: dragIds
+                        .map((id) => this.getFlowNode(id))
+                        .filter(Boolean)
+                        .map((item) => ({
+                            node: item,
+                            startLeft: this.getNodePosition(item).left,
+                            startTop: this.getNodePosition(item).top
+                        })),
                     pointerId: event.pointerId,
                     startX: event.clientX,
                     startY: event.clientY,
-                    startLeft: position.left,
-                    startTop: position.top
+                    copyMode,
+                    cloneStarted: false,
+                    moved: false,
+                    lockAxis: null
                 };
                 node.classList.add("is-dragging");
-                node.setPointerCapture?.(event.pointerId);
+                try {
+                    node.setPointerCapture?.(event.pointerId);
+                } catch {
+                    node.setPointerCapture?.(event.pointerId);
+                }
+            },
+
+            startCtrlNodeCopyDrag(event) {
+                if (!this.nodeDragState || this.nodeDragState.cloneStarted) return;
+                const sourceItems = (this.nodeDragState.sourceIds || [])
+                    .map((nodeId) => this.getFlowNode(nodeId))
+                    .filter(Boolean)
+                    .map((node) => ({ node, position: this.getNodePosition(node) }));
+                if (!sourceItems.length) return;
+                const cloneItems = sourceItems
+                    .map((item) => {
+                        const clone = this.cloneFlowNode(item.node, item.position.left, item.position.top, { select: false });
+                        return clone ? { node: clone, startLeft: item.position.left, startTop: item.position.top } : null;
+                    })
+                    .filter(Boolean);
+                if (!cloneItems.length) return;
+                this.nodeDragState.nodes = cloneItems;
+                this.nodeDragState.node = cloneItems[0].node;
+                this.nodeDragState.cloneStarted = true;
+                this.setFlowNodeSelection(cloneItems.map((item) => item.node.dataset.nodeId || ""), cloneItems[0].node.dataset.nodeId || "");
+                cloneItems.forEach((item) => item.node.classList.add("is-dragging"));
+                try {
+                    this.nodeDragState.sourceNode?.releasePointerCapture?.(event.pointerId);
+                    this.nodeDragState.node.setPointerCapture?.(event.pointerId);
+                } catch {
+                    // Pointer capture may stay on the original node while dragging the clones.
+                }
             },
 
             handleNodePointerMove(event) {
                 if (!this.nodeDragState) return;
-                const deltaX = (event.clientX - this.nodeDragState.startX) / this.flowZoom;
-                const deltaY = (event.clientY - this.nodeDragState.startY) / this.flowZoom;
-                this.setNodePosition(
-                    this.nodeDragState.node,
-                    this.nodeDragState.startLeft + deltaX,
-                    this.nodeDragState.startTop + deltaY
-                );
+                let deltaX = (event.clientX - this.nodeDragState.startX) / this.flowZoom;
+                let deltaY = (event.clientY - this.nodeDragState.startY) / this.flowZoom;
+                const movedEnough = Math.abs(deltaX) > 2 || Math.abs(deltaY) > 2;
+                if (movedEnough) {
+                    this.nodeDragState.moved = true;
+                }
+                if (this.nodeDragState.copyMode && !this.nodeDragState.cloneStarted) {
+                    if (Math.abs(deltaX) <= 4 && Math.abs(deltaY) <= 4) return;
+                    this.startCtrlNodeCopyDrag(event);
+                    if (!this.nodeDragState.cloneStarted) return;
+                }
+                if (this.nodeDragState.copyMode && event.shiftKey) {
+                    if (!this.nodeDragState.lockAxis && (Math.abs(deltaX) > 4 || Math.abs(deltaY) > 4)) {
+                        this.nodeDragState.lockAxis = Math.abs(deltaX) >= Math.abs(deltaY) ? "x" : "y";
+                    }
+                    if (this.nodeDragState.lockAxis === "x") deltaY = 0;
+                    if (this.nodeDragState.lockAxis === "y") deltaX = 0;
+                }
+                (this.nodeDragState.nodes || []).forEach((item) => {
+                    this.setNodePosition(item.node, item.startLeft + deltaX, item.startTop + deltaY, { update: false });
+                });
+                this.resizeFlowViewportToNodes();
+                this.updateFlowEdges();
             },
 
             handleNodePointerUp(event) {
                 if (!this.nodeDragState) return;
-                this.nodeDragState.node.classList.remove("is-dragging");
-                this.nodeDragState.node.releasePointerCapture?.(event.pointerId);
+                const dragState = this.nodeDragState;
+                const draggedNode = dragState.node;
+                (dragState.nodes || [{ node: draggedNode }]).forEach((item) => item.node?.classList.remove("is-dragging"));
+                dragState.sourceNode?.classList.remove("is-dragging");
+                try {
+                    draggedNode.releasePointerCapture?.(event.pointerId);
+                } catch {
+                    // The cloned node may not own pointer capture in every browser.
+                }
                 this.nodeDragState = null;
+                if (dragState.moved) {
+                    this.suppressNextFlowNodeClick = true;
+                    setTimeout(() => {
+                        this.suppressNextFlowNodeClick = false;
+                    }, 0);
+                    this.resizeFlowViewportToNodes();
+                    this.updateFlowEdges();
+                }
+                if (dragState.copyMode && !dragState.cloneStarted && !dragState.moved) {
+                    this.toggleFlowNodeSelection(dragState.sourceNode?.dataset.nodeId || "");
+                    this.suppressNextFlowNodeClick = true;
+                    setTimeout(() => {
+                        this.suppressNextFlowNodeClick = false;
+                    }, 0);
+                    return;
+                }
+                if (dragState.nodes?.length > 1) {
+                    this.setFlowNodeSelection(dragState.nodes.map((item) => item.node.dataset.nodeId || ""), draggedNode.dataset.nodeId || "");
+                } else {
+                    this.selectFlowNode(draggedNode.dataset.nodeId || "");
+                }
             },
 
             handleConnectorClick(event, connector) {
@@ -1972,24 +2223,39 @@
                 return port?.dataset?.portName || port?.querySelector?.(".flow-port-name")?.textContent?.trim() || port?.textContent?.trim() || "";
             },
 
+            isFlowCanvasMenuTarget(event) {
+                return Boolean(event?.target?.closest?.(`#flowCanvasMenu-${PAGE_CODE}, .flow-context-menu`));
+            },
+
             handleCanvasPointerDown(event) {
+                if (this.isFlowCanvasMenuTarget(event)) return;
                 if (event.button !== 0 || event.target.closest?.(".flow-node")) return;
                 if (event.target.closest?.(".flow-edge-path, .flow-edge-hit-path, .flow-edge-delete")) return;
+                event.preventDefault();
                 this.clearSelectedFlowEdge();
                 const stage = this.getFlowStage();
                 if (!stage) return;
-                this.canvasPanState = {
+                const point = this.getCanvasPointFromEvent(event);
+                this.canvasSelectionState = {
+                    pointerId: event.pointerId,
                     startX: event.clientX,
                     startY: event.clientY,
-                    startScrollLeft: stage.scrollLeft,
-                    startScrollTop: stage.scrollTop
+                    startLeft: point.left,
+                    startTop: point.top,
+                    currentLeft: point.left,
+                    currentTop: point.top,
+                    moved: false
                 };
-                stage.classList.add("is-panning");
+                stage.setPointerCapture?.(event.pointerId);
             },
 
             handleCanvasPointerMove(event) {
                 if (this.edgeDragState) {
                     this.updateConnectionPreview(event);
+                    return;
+                }
+                if (this.canvasSelectionState) {
+                    this.updateCanvasSelection(event);
                     return;
                 }
                 if (!this.canvasPanState) return;
@@ -2006,12 +2272,17 @@
                     }
                     return;
                 }
+                if (this.canvasSelectionState) {
+                    this.finishCanvasSelection();
+                    return;
+                }
                 if (!this.canvasPanState) return;
                 this.canvasPanState = null;
                 this.getFlowStage()?.classList.remove("is-panning");
             },
 
             handleCanvasWheel(event) {
+                if (this.isFlowCanvasMenuTarget(event)) return;
                 if (!event.ctrlKey && !event.metaKey) return;
                 event.preventDefault();
                 this.zoomFlow(event.deltaY < 0 ? 1 : -1);
@@ -2025,9 +2296,34 @@
                 this.selectFlowEdge(path.dataset.edgeId || "");
             },
 
+            isTextEditingEventTarget(event) {
+                const active = event?.target || document.activeElement;
+                const tagName = active?.tagName?.toLowerCase();
+                return Boolean(
+                    active?.isContentEditable
+                    || ["input", "textarea", "select"].includes(tagName)
+                );
+            },
+
             handleFlowKeydown(event) {
+                const isCopyShortcut = (event.ctrlKey || event.metaKey) && !event.shiftKey && String(event.key || "").toLowerCase() === "c";
+                const isPasteShortcut = (event.ctrlKey || event.metaKey) && !event.shiftKey && String(event.key || "").toLowerCase() === "v";
+                if ((isCopyShortcut || isPasteShortcut) && !this.isTextEditingEventTarget(event)) {
+                    event.preventDefault();
+                    if (isCopyShortcut) {
+                        this.copySelectedFlowNode();
+                    } else {
+                        this.pasteCopiedFlowNode();
+                    }
+                    return;
+                }
                 if (event.key === "Escape" && document.getElementById(`flowNodeRunParamsLayer-${PAGE_CODE}`)?.hidden === false) {
                     this.closeNodeRunParamsLayer();
+                    return;
+                }
+                if (event.key === "Escape" && getContainerEl(`#flowCanvasMenu-${PAGE_CODE}`)?.hidden === false) {
+                    event.preventDefault();
+                    this.hideCanvasContextMenu();
                     return;
                 }
                 if (event.key === "Escape" && this.isFlowSwitcherOpen()) {
@@ -2038,14 +2334,15 @@
                     this.finishEdgeDrag();
                     return;
                 }
-                if ((event.key === "Delete" || event.key === "Backspace") && (this.selectedEdgeId || this.selectedNodeId)) {
-                    const activeTag = document.activeElement?.tagName?.toLowerCase();
-                    if (["input", "textarea", "select"].includes(activeTag)) return;
+                if (event.key === "Delete" || event.key === "Backspace") {
+                    if (this.isTextEditingEventTarget(event)) return;
+                    const selectedNodeIds = this.reconcileFlowNodeSelectionState();
+                    if (!this.selectedEdgeId && !selectedNodeIds.length) return;
                     event.preventDefault();
                     if (this.selectedEdgeId) {
                         this.removeSelectedEdge();
                     } else {
-                        this.removeSelectedNode(this.selectedNodeId);
+                        this.removeSelectedNode();
                     }
                 }
             },
@@ -2068,14 +2365,20 @@
                     }
                 }
                 if (!data) return;
-                const rect = stage.getBoundingClientRect();
-                const left = (event.clientX - rect.left + stage.scrollLeft) / this.flowZoom;
-                const top = (event.clientY - rect.top + stage.scrollTop) / this.flowZoom;
+                const point = this.getCanvasPointFromEvent(event);
+                const dragOffset = this.flowPaletteDragOffset || {
+                    x: FLOW_NODE_DEFAULT_WIDTH / 2,
+                    y: FLOW_NODE_DEFAULT_HEIGHT / 2
+                };
+                const left = Math.max(0, point.left - dragOffset.x);
+                const top = Math.max(0, point.top - dragOffset.y);
                 try {
                     const latestData = await this.resolveLatestFlowNodeData(data);
                     this.appendFlowNode(latestData, left, top);
                 } finally {
+                    this.disposePaletteDragImage();
                     this.flowPaletteDragData = null;
+                    this.flowPaletteDragOffset = null;
                 }
             },
 
@@ -2083,29 +2386,60 @@
                 const point = this.getCanvasVisibleCenterPoint();
                 const data = this.getFlowPaletteItemData(item);
                 const latestData = await this.resolveLatestFlowNodeData(data);
-                this.appendFlowNode(latestData, point.left, point.top);
+                this.appendFlowNode(latestData, point.left, point.top, { avoidOverlap: true });
             },
 
             getCanvasVisibleCenterPoint() {
                 const stage = this.getFlowStage();
                 if (!stage) return { left: 80, top: 80 };
-                const nodeWidth = 170;
-                const nodeHeight = 112;
                 return {
-                    left: Math.max(0, ((stage.scrollLeft + stage.clientWidth / 2) / this.flowZoom) - nodeWidth / 2),
-                    top: Math.max(0, ((stage.scrollTop + stage.clientHeight / 2) / this.flowZoom) - nodeHeight / 2)
+                    left: Math.max(0, ((stage.scrollLeft + stage.clientWidth / 2) / this.flowZoom) - FLOW_NODE_DEFAULT_WIDTH / 2),
+                    top: Math.max(0, ((stage.scrollTop + stage.clientHeight / 2) / this.flowZoom) - FLOW_NODE_DEFAULT_HEIGHT / 2)
                 };
             },
 
-            appendFlowNode(data, left, top) {
-                const node = this.createFlowNode(data, left, top);
+            rectsOverlap(a, b, margin = 12) {
+                return !(
+                    a.left + a.width + margin <= b.left
+                    || b.left + b.width + margin <= a.left
+                    || a.top + a.height + margin <= b.top
+                    || b.top + b.height + margin <= a.top
+                );
+            },
+
+            getAvailableFlowNodePosition(left, top, width = FLOW_NODE_DEFAULT_WIDTH, height = FLOW_NODE_DEFAULT_HEIGHT) {
+                const originLeft = Math.max(0, Math.round(left));
+                const originTop = Math.max(0, Math.round(top));
+                let candidateLeft = originLeft;
+                let candidateTop = originTop;
+                const existing = this.getFlowNodes().map((node) => this.getNodePosition(node));
+                for (let index = 0; index < 48; index += 1) {
+                    const candidate = { left: candidateLeft, top: candidateTop, width, height };
+                    if (!existing.some((position) => this.rectsOverlap(candidate, position))) {
+                        return { left: candidateLeft, top: candidateTop };
+                    }
+                    candidateTop = originTop + 42 * (index + 1);
+                    if ((index + 1) % 8 === 0) {
+                        candidateLeft += 34;
+                        candidateTop = originTop + 42;
+                    }
+                }
+                return { left: candidateLeft, top: candidateTop };
+            },
+
+            appendFlowNode(data, left, top, options = {}) {
+                const position = options.avoidOverlap
+                    ? this.getAvailableFlowNodePosition(left, top)
+                    : { left, top };
+                const node = this.createFlowNode(data, position.left, position.top);
                 if (node) {
                     this.markFlowEdited();
                     this.getFlowViewport()?.appendChild(node);
                     this.bindFlowNode(node);
-                    this.selectFlowNode(node.dataset.nodeId || "");
                     this.resizeFlowViewportToNodes();
                     this.updateFlowEdges();
+                    this.selectFlowNode(node.dataset.nodeId || "");
+                    requestAnimationFrame(() => this.selectFlowNode(node.dataset.nodeId || ""));
                 }
             },
 
@@ -2119,7 +2453,99 @@
                 };
             },
 
+            getFlowSelectionBoxEl() {
+                const viewport = this.getFlowViewport();
+                if (!viewport) return null;
+                let box = viewport.querySelector(".flow-selection-box");
+                if (!box) {
+                    box = document.createElement("div");
+                    box.className = "flow-selection-box";
+                    viewport.appendChild(box);
+                }
+                return box;
+            },
+
+            getSelectionRectFromState(state = this.canvasSelectionState) {
+                if (!state) return null;
+                const left = Math.min(state.startLeft, state.currentLeft);
+                const top = Math.min(state.startTop, state.currentTop);
+                const right = Math.max(state.startLeft, state.currentLeft);
+                const bottom = Math.max(state.startTop, state.currentTop);
+                return {
+                    left,
+                    top,
+                    right,
+                    bottom,
+                    width: Math.max(0, right - left),
+                    height: Math.max(0, bottom - top)
+                };
+            },
+
+            updateCanvasSelection(event) {
+                if (!this.canvasSelectionState) return;
+                const point = this.getCanvasPointFromEvent(event);
+                this.canvasSelectionState.currentLeft = point.left;
+                this.canvasSelectionState.currentTop = point.top;
+                const moved = Math.abs(event.clientX - this.canvasSelectionState.startX) > 4
+                    || Math.abs(event.clientY - this.canvasSelectionState.startY) > 4;
+                this.canvasSelectionState.moved = this.canvasSelectionState.moved || moved;
+                const box = this.getFlowSelectionBoxEl();
+                const rect = this.getSelectionRectFromState();
+                if (!box || !rect) return;
+                box.hidden = !this.canvasSelectionState.moved;
+                box.style.left = `${Math.round(rect.left)}px`;
+                box.style.top = `${Math.round(rect.top)}px`;
+                box.style.width = `${Math.round(rect.width)}px`;
+                box.style.height = `${Math.round(rect.height)}px`;
+            },
+
+            rectIntersects(a, b) {
+                return !(
+                    a.right < b.left
+                    || b.right < a.left
+                    || a.bottom < b.top
+                    || b.bottom < a.top
+                );
+            },
+
+            finishCanvasSelection() {
+                const state = this.canvasSelectionState;
+                const box = this.getFlowViewport()?.querySelector(".flow-selection-box");
+                if (box) box.hidden = true;
+                this.canvasSelectionState = null;
+
+                if (!state?.moved) {
+                    this.clearFlowNodeSelection();
+                    return;
+                }
+
+                const rect = this.getSelectionRectFromState(state);
+                const selectedIds = this.getFlowNodes()
+                    .filter((node) => {
+                        const position = this.getNodePosition(node);
+                        return this.rectIntersects(rect, {
+                            left: position.left,
+                            top: position.top,
+                            right: position.left + position.width,
+                            bottom: position.top + position.height
+                        });
+                    })
+                    .map((node) => node.dataset.nodeId || "")
+                    .filter(Boolean);
+
+                if (selectedIds.length) {
+                    this.setFlowNodeSelection(selectedIds, selectedIds[selectedIds.length - 1]);
+                } else {
+                    this.clearFlowNodeSelection();
+                }
+            },
+
             handleCanvasContextMenu(event) {
+                if (this.isFlowCanvasMenuTarget(event)) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    return;
+                }
                 event.preventDefault();
                 const stage = this.getFlowStage();
                 const menu = getContainerEl(`#flowCanvasMenu-${PAGE_CODE}`);
@@ -2127,20 +2553,41 @@
 
                 const targetNode = event.target.closest?.(".flow-node");
                 const point = this.getCanvasPointFromEvent(event);
+                let actionNodeIds = this.reconcileFlowNodeSelectionState();
+                let actionNodes = [];
+                let contextNodeId = "";
                 if (targetNode) {
-                    this.selectFlowNode(targetNode.dataset.nodeId || "");
+                    const targetNodeId = targetNode.dataset.nodeId || "";
+                    const selectedIds = actionNodeIds;
+                    if (selectedIds.includes(targetNodeId)) {
+                        this.setFlowNodeSelection(selectedIds, targetNodeId);
+                        actionNodeIds = this.getSelectedFlowNodeIds();
+                        actionNodes = this.getVisualSelectedFlowNodes();
+                    } else {
+                        this.selectFlowNode(targetNodeId);
+                        actionNodeIds = [targetNodeId];
+                        actionNodes = [targetNode];
+                    }
+                    contextNodeId = targetNodeId;
+                } else {
+                    actionNodeIds = this.reconcileFlowNodeSelectionState();
+                    actionNodes = this.getVisualSelectedFlowNodes();
                 }
                 this.flowContextMenuState = {
-                    nodeId: targetNode?.dataset.nodeId || "",
+                    nodeId: contextNodeId,
+                    nodeIds: actionNodeIds,
+                    nodeElements: actionNodes,
                     left: point.left,
                     top: point.top
                 };
+                this.storeContextMenuActionNodeIds(actionNodeIds, contextNodeId);
 
                 const stageRect = stage.getBoundingClientRect();
                 const x = event.clientX - stageRect.left + stage.scrollLeft;
                 const y = event.clientY - stageRect.top + stage.scrollTop;
                 menu.style.left = `${Math.max(8, x)}px`;
                 menu.style.top = `${Math.max(8, y)}px`;
+                this.suppressNextFlowMenuClick = false;
                 menu.hidden = false;
                 this.updateContextMenuState();
             },
@@ -2148,44 +2595,225 @@
             updateContextMenuState() {
                 const menu = getContainerEl(`#flowCanvasMenu-${PAGE_CODE}`);
                 if (!menu) return;
-                const hasNode = Boolean(this.flowContextMenuState?.nodeId || this.selectedNodeId);
+                const hasNode = this.getContextMenuActionNodes().length > 0 || this.getActionFlowNodeIds().length > 0;
                 menu.querySelectorAll('[data-flow-menu-action="runSelectedNode"], [data-flow-menu-action="runFromSelectedNode"], [data-flow-menu-action="duplicateNode"], [data-flow-menu-action="deleteNode"]').forEach((button) => {
                     button.classList.toggle("is-disabled", !hasNode);
-                    button.disabled = !hasNode;
+                    button.disabled = false;
+                    button.setAttribute("aria-disabled", hasNode ? "false" : "true");
                 });
                 this.renderDashedConnectionMode();
             },
 
+            getContextMenuAction(button) {
+                return String(button?.dataset?.flowMenuAction || button?.getAttribute?.("data-flow-menu-action") || "");
+            },
+
+            isNodeContextMenuAction(action) {
+                return ["runSelectedNode", "runFromSelectedNode", "duplicateNode", "deleteNode"].includes(action);
+            },
+
             hideCanvasContextMenu() {
                 const menu = getContainerEl(`#flowCanvasMenu-${PAGE_CODE}`);
-                if (menu) menu.hidden = true;
+                if (menu) {
+                    menu.hidden = true;
+                    delete menu.dataset.nodeIds;
+                    delete menu.dataset.nodeId;
+                }
+                this.flowContextMenuState = null;
+            },
+
+            handleFlowMenuPointerDown(event) {
+                event.stopImmediatePropagation?.();
+                event.stopPropagation();
+                const button = event.target.closest?.("[data-flow-menu-action]");
+                if (!button || event.button !== 0) return;
+                event.preventDefault();
+                const action = this.getContextMenuAction(button);
+                if (this.shouldIgnoreFlowMenuPress(action)) return;
+                this.suppressNextFlowMenuClick = true;
+                if (action === "deleteNode") {
+                    this.deleteContextMenuNodesNow(event);
+                    return;
+                }
+                void this.handleContextMenuButtonAction(event, button);
+            },
+
+            handleInlineContextMenuAction(event, action = "") {
+                const button = event?.currentTarget || event?.target?.closest?.("[data-flow-menu-action]");
+                if (!button) return;
+                if (action) button.dataset.flowMenuAction = action;
+                event.preventDefault();
+                event.stopImmediatePropagation?.();
+                event.stopPropagation();
+                const menuAction = action || this.getContextMenuAction(button);
+                if (this.shouldIgnoreFlowMenuPress(menuAction)) return;
+                this.suppressNextFlowMenuClick = true;
+                if (menuAction === "deleteNode") {
+                    this.deleteContextMenuNodesNow(event);
+                    return;
+                }
+                void this.handleContextMenuButtonAction(event, button);
+            },
+
+            shouldIgnoreFlowMenuPress(action = "") {
+                const key = String(action || "");
+                const now = Date.now();
+                const guard = this.flowMenuPressGuard || {};
+                if (guard.action === key && now - Number(guard.at || 0) < 250) {
+                    return true;
+                }
+                this.flowMenuPressGuard = { action: key, at: now };
+                return false;
+            },
+
+            // Canvas-only edit. Do not call DB delete APIs from this node action.
+            deleteContextMenuNodesNow(event = null) {
+                event?.preventDefault?.();
+                event?.stopImmediatePropagation?.();
+                event?.stopPropagation?.();
+                const nodes = this.getContextMenuActionNodes();
+                const nodeIds = nodes.length
+                    ? nodes.map((node) => node.dataset.nodeId || "").filter(Boolean)
+                    : this.getContextMenuActionNodeIds();
+                if (!nodes.length && !nodeIds.length) return;
+                this.removeSelectedNode(nodes.length ? nodes : nodeIds);
+                this.hideCanvasContextMenu();
+            },
+
+            handleFlowMenuContextMenu(event) {
+                event.preventDefault();
+                event.stopPropagation();
             },
 
             async handleContextMenuClick(event) {
                 const button = event.target.closest?.("[data-flow-menu-action]");
-                if (!button || button.disabled) return;
+                if (!button) return;
                 event.preventDefault();
+                event.stopImmediatePropagation?.();
                 event.stopPropagation();
-                const action = button.dataset.flowMenuAction;
-                await this.runContextMenuAction(action);
-                if (action !== "toggleDashedConnection") {
+                if (this.suppressNextFlowMenuClick) {
+                    this.suppressNextFlowMenuClick = false;
+                    return;
+                }
+                await this.handleContextMenuButtonAction(event, button);
+            },
+
+            async handleContextMenuButtonAction(event, button) {
+                const action = this.getContextMenuAction(button);
+                if (!button || !action) return;
+                event.preventDefault();
+                event.stopImmediatePropagation?.();
+                event.stopPropagation();
+                const actionNodeIds = this.isNodeContextMenuAction(action)
+                    ? this.getContextMenuActionNodeIds()
+                    : [];
+                const actionNodes = this.isNodeContextMenuAction(action)
+                    ? this.getContextMenuActionNodes()
+                    : [];
+                if (this.isNodeContextMenuAction(action)) {
+                    if (!actionNodeIds.length && !actionNodes.length) return;
+                    const finalNodeIds = actionNodeIds.length
+                        ? actionNodeIds
+                        : actionNodes.map((node) => node.dataset.nodeId || "").filter(Boolean);
+                    this.flowContextMenuState = {
+                        ...(this.flowContextMenuState || {}),
+                        nodeIds: finalNodeIds,
+                        nodeElements: actionNodes
+                    };
+                    this.storeContextMenuActionNodeIds(finalNodeIds, finalNodeIds[0] || this.flowContextMenuState?.nodeId || "");
+                }
+                const handled = await this.runContextMenuAction(action, {
+                    nodeIds: actionNodeIds,
+                    nodes: actionNodes
+                });
+                if (handled && action !== "toggleDashedConnection") {
                     this.hideCanvasContextMenu();
                 }
             },
 
-            async runContextMenuAction(action) {
+            async runContextMenuAction(action, context = {}) {
+                const menuNodeIds = Array.isArray(context.nodeIds) && context.nodeIds.length
+                    ? context.nodeIds
+                    : this.getContextMenuActionNodeIds();
+                const menuNodes = Array.isArray(context.nodes) && context.nodes.length
+                    ? context.nodes
+                    : this.getContextMenuActionNodes();
                 const actions = {
                     runSelectedNode: () => this.runSelectedNode(),
                     runFromSelectedNode: () => this.runSelectedNode({ downstream: true }),
-                    duplicateNode: () => this.duplicateSelectedNode(),
-                    deleteNode: () => this.removeSelectedNode(),
+                    duplicateNode: () => this.duplicateSelectedNode({ nodeIds: menuNodeIds }),
+                    deleteNode: () => this.removeSelectedNode(menuNodes.length ? menuNodes : menuNodeIds),
                     toggleDashedConnection: () => this.toggleDashedConnectionMode(),
                     autoLayout: () => this.autoLayoutFlow(),
                     treeLayout: () => this.autoLayoutFlow(),
+                    autoConnectByX: () => this.applyAutoConnectionsByX(),
                     fitCanvas: () => this.fitFlowCanvas(),
                     resetZoom: () => this.resetFlowZoom()
                 };
-                await actions[action]?.();
+                const handler = actions[action];
+                if (!handler) return false;
+                await handler();
+                return true;
+            },
+
+            getContextMenuActionNodeIds() {
+                const menu = getContainerEl(`#flowCanvasMenu-${PAGE_CODE}`);
+                const menuNodeIds = String(menu?.dataset?.nodeIds || "")
+                    .split("\u001f")
+                    .map((nodeId) => nodeId.trim())
+                    .filter((nodeId) => nodeId && this.getFlowNode(nodeId));
+                if (menuNodeIds.length) return menuNodeIds;
+                const contextNodeIds = Array.isArray(this.flowContextMenuState?.nodeIds)
+                    ? this.flowContextMenuState.nodeIds.filter((nodeId) => nodeId && this.getFlowNode(nodeId))
+                    : [];
+                if (contextNodeIds.length) return contextNodeIds;
+                const contextElementIds = Array.isArray(this.flowContextMenuState?.nodeElements)
+                    ? this.flowContextMenuState.nodeElements
+                        .filter((node) => this.isLiveFlowNodeElement(node))
+                        .map((node) => node.dataset.nodeId || "")
+                        .filter(Boolean)
+                    : [];
+                if (contextElementIds.length) return contextElementIds;
+                const contextNodeId = this.flowContextMenuState?.nodeId || "";
+                if (contextNodeId && this.getFlowNode(contextNodeId)) return [contextNodeId];
+                return this.getActionFlowNodeIds();
+            },
+
+            getContextMenuActionNodes() {
+                const contextNodes = Array.isArray(this.flowContextMenuState?.nodeElements)
+                    ? this.flowContextMenuState.nodeElements.filter((node) => this.isLiveFlowNodeElement(node))
+                    : [];
+                if (contextNodes.length) return contextNodes;
+                return this.getContextMenuActionNodeIds()
+                    .map((nodeId) => this.getFlowNode(nodeId))
+                    .filter((node) => this.isLiveFlowNodeElement(node));
+            },
+
+            storeContextMenuActionNodeIds(nodeIds = [], primaryNodeId = "") {
+                const menu = getContainerEl(`#flowCanvasMenu-${PAGE_CODE}`);
+                if (!menu) return;
+                const validIds = Array.from(new Set((nodeIds || []).filter((nodeId) => nodeId && this.getFlowNode(nodeId))));
+                menu.dataset.nodeIds = validIds.join("\u001f");
+                menu.dataset.nodeId = primaryNodeId && validIds.includes(primaryNodeId)
+                    ? primaryNodeId
+                    : (validIds[0] || "");
+            },
+
+            getActionFlowNodeIds(options = {}) {
+                const contextNodeId = this.flowContextMenuState?.nodeId || "";
+                const selectedIds = this.reconcileFlowNodeSelectionState();
+                if (selectedIds.length) return selectedIds;
+                const contextNodeIds = Array.isArray(this.flowContextMenuState?.nodeIds)
+                    ? this.flowContextMenuState.nodeIds.filter((nodeId) => nodeId && this.getFlowNode(nodeId))
+                    : [];
+                if (contextNodeIds.length) return contextNodeIds;
+                if (contextNodeId && this.isFlowNodeSelected(contextNodeId)) {
+                    return [contextNodeId];
+                }
+                if (contextNodeId && options.contextOnly) {
+                    return [contextNodeId];
+                }
+                return contextNodeId ? [contextNodeId] : [];
             },
 
             toggleDashedConnectionMode() {
@@ -2219,7 +2847,7 @@
             createFlowNode(data, left, top) {
                 const nodeType = data.nodeType || "JOB";
                 const nodeTypeLabel = data.nodeTypeLabel || this.getNodeTypeLabel(nodeType);
-                const nodeId = `${String(nodeType).toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${this.nodeSequence++}`;
+                const nodeId = this.createNextFlowNodeId(nodeType);
                 const inputHtml = this.renderNodePortSpans(this.getRenderInputPorts(nodeType, data), "in", "TABLE");
                 const outputHtml = this.renderNodePortSpans(
                     this.getRenderOutputPorts(nodeType, data),
@@ -2250,7 +2878,7 @@
                 article.style.position = "absolute";
                 article.style.left = `${Math.max(0, Math.round(left))}px`;
                 article.style.top = `${Math.max(0, Math.round(top))}px`;
-                article.style.width = "170px";
+                article.style.width = `${FLOW_NODE_DEFAULT_WIDTH}px`;
                 article.innerHTML = `
                     <header class="data-param-panel-header">
                         <strong title="${this.escapeHtml(nodeTypeLabel)}">${this.escapeHtml(nodeTypeLabel)}</strong>
@@ -2273,7 +2901,7 @@
                 const nodeType = data.nodeType || "JOB";
                 const nodeTypeLabel = data.nodeTypeLabel || this.getNodeTypeLabel(nodeType);
                 const refJob = this.getRegisteredJobAsset(data.refWorkJobId || "");
-                const nodeId = data.nodeKey || `${String(nodeType).toLowerCase()}-${this.nodeSequence++}`;
+                const nodeId = data.nodeKey || this.createNextFlowNodeId(nodeType);
                 const inputHtml = this.renderNodePortSpans(this.getRenderInputPorts(nodeType, data), "in", "TABLE");
                 const outputHtml = this.renderNodePortSpans(
                     this.getRenderOutputPorts(nodeType, data, refJob),
@@ -2462,42 +3090,178 @@
                 );
             },
 
-            duplicateSelectedNode() {
-                const source = this.getFlowNode(this.flowContextMenuState?.nodeId || this.selectedNodeId);
-                if (!source) return;
+            createFlowNodeSnapshot(source) {
+                if (!source) return null;
                 const position = this.getNodePosition(source);
-                const clone = source.cloneNode(true);
-                const sourceNodeId = source.dataset.nodeId || "node";
-                const cloneNodeId = `${sourceNodeId}-copy-${this.nodeSequence++}`;
+                return {
+                    className: source.className || "data-param-card flow-node flow-node-step",
+                    dataset: { ...source.dataset },
+                    html: source.innerHTML,
+                    position,
+                    width: source.style.width || `${position.width || FLOW_NODE_DEFAULT_WIDTH}px`
+                };
+            },
+
+            copySelectedFlowNode() {
+                const selectedIds = this.reconcileFlowNodeSelectionState();
+                const snapshots = (selectedIds.length ? selectedIds : [this.selectedNodeId])
+                    .map((nodeId) => this.createFlowNodeSnapshot(this.getFlowNode(nodeId)))
+                    .filter(Boolean);
+                if (!snapshots.length) return;
+                this.flowNodeClipboard = {
+                    items: snapshots,
+                    anchor: snapshots[0].position || { left: 80, top: 80 }
+                };
+                this.flowNodeClipboardPasteCount = 0;
+            },
+
+            createCloneNodeId(sourceNodeId = "node") {
+                return this.createNextFlowNodeId(`${sourceNodeId || "node"}-copy`);
+            },
+
+            appendFlowNodeClone(snapshot, left, top, options = {}) {
+                if (!snapshot) return null;
+                const clone = document.createElement("article");
+                const sourceNodeId = snapshot.dataset?.nodeId || "node";
+                const cloneNodeId = this.createCloneNodeId(sourceNodeId);
                 this.markFlowEdited();
                 clone.id = `flowNode-${PAGE_CODE}-${cloneNodeId}`;
+                clone.className = String(snapshot.className || "data-param-card flow-node flow-node-step")
+                    .replace(/\bis-selected\b/g, "")
+                    .replace(/\bis-dragging\b/g, "")
+                    .trim();
+                Object.entries(snapshot.dataset || {}).forEach(([key, value]) => {
+                    clone.dataset[key] = value;
+                });
                 clone.dataset.nodeId = cloneNodeId;
                 clone.dataset.flowBound = "";
+                clone.innerHTML = snapshot.html || "";
                 clone.querySelectorAll("[data-flow-connector-bound], [data-flow-port-bound]").forEach((element) => {
                     delete element.dataset.flowConnectorBound;
                     delete element.dataset.flowPortBound;
                 });
                 clone.classList.remove("is-selected", "is-dragging");
-                clone.style.left = `${position.left + 36}px`;
-                clone.style.top = `${position.top + 36}px`;
+                this.clearFlowNodeRuntimeVisualState(clone);
+                clone.style.position = "absolute";
+                clone.style.left = `${Math.max(0, Math.round(left))}px`;
+                clone.style.top = `${Math.max(0, Math.round(top))}px`;
+                clone.style.width = snapshot.width || `${FLOW_NODE_DEFAULT_WIDTH}px`;
                 this.getFlowViewport()?.appendChild(clone);
+                this.applyNodeUseState(clone);
                 this.bindFlowNode(clone);
-                this.selectFlowNode(cloneNodeId);
                 this.resizeFlowViewportToNodes();
                 this.updateFlowEdges();
+                if (options.select !== false) {
+                    this.selectFlowNode(cloneNodeId);
+                }
+                return clone;
             },
 
-            selectFlowNode(nodeId) {
-                this.storeSelectedNodeInspectorState();
-                this.selectedNodeId = nodeId || "";
-                this.selectedEdgeId = "";
-                this.hideSelectedEdgeDelete();
-                this.getFlowNodes().forEach((node) => {
-                    node.classList.toggle("is-selected", node.dataset.nodeId === this.selectedNodeId);
-                });
+            cloneFlowNode(source, left, top, options = {}) {
+                return this.appendFlowNodeClone(this.createFlowNodeSnapshot(source), left, top, options);
+            },
 
-                const node = this.getFlowNode(this.selectedNodeId);
+            duplicateSelectedNode(options = {}) {
+                const sourceIds = Array.isArray(options.nodeIds) && options.nodeIds.length
+                    ? options.nodeIds
+                    : this.getActionFlowNodeIds();
+                const clones = sourceIds
+                    .map((nodeId) => {
+                        const node = this.getFlowNode(nodeId);
+                        if (!node) return null;
+                        const position = this.getNodePosition(node);
+                        const offsetX = options.offsetX ?? 36;
+                        const offsetY = options.offsetY ?? 36;
+                        return this.cloneFlowNode(node, options.left ?? position.left + offsetX, options.top ?? position.top + offsetY, { select: false });
+                    })
+                    .filter(Boolean);
+                if (!clones.length) return null;
+                this.setFlowNodeSelection(clones.map((node) => node.dataset.nodeId || ""), clones[0].dataset.nodeId || "");
+                this.copySelectedFlowNode();
+                return clones[0];
+            },
+
+            pasteCopiedFlowNode() {
+                if (!this.flowNodeClipboard) return null;
+                this.flowNodeClipboardPasteCount = Number(this.flowNodeClipboardPasteCount || 0) + 1;
+                const offset = 36 * this.flowNodeClipboardPasteCount;
+                const items = Array.isArray(this.flowNodeClipboard.items)
+                    ? this.flowNodeClipboard.items
+                    : [this.flowNodeClipboard];
+                const clones = items
+                    .map((snapshot) => {
+                        const position = snapshot.position || { left: 80, top: 80 };
+                        return this.appendFlowNodeClone(snapshot, (position.left || 0) + offset, (position.top || 0) + offset, { select: false });
+                    })
+                    .filter(Boolean);
+                if (!clones.length) return null;
+                this.setFlowNodeSelection(clones.map((node) => node.dataset.nodeId || ""), clones[0].dataset.nodeId || "");
+                return clones[0];
+            },
+
+            isLiveFlowNodeElement(node) {
+                return Boolean(
+                    node
+                    && node.isConnected
+                    && node.classList?.contains("flow-node")
+                    && node.closest?.(`#flowCanvasViewport-${PAGE_CODE}`)
+                );
+            },
+
+            getVisualSelectedFlowNodes() {
+                return this.getFlowNodes()
+                    .filter((node) => node.classList.contains("is-selected"));
+            },
+
+            getVisualSelectedFlowNodeIds() {
+                return this.getVisualSelectedFlowNodes()
+                    .map((node) => node.dataset.nodeId || "")
+                    .filter(Boolean);
+            },
+
+            getSelectedFlowNodeIds() {
+                return this.syncFlowNodeSelectionStateFromVisual(this.selectedNodeId);
+            },
+
+            syncFlowNodeSelectionStateFromVisual(primaryNodeId = "") {
+                const visualIds = this.getVisualSelectedFlowNodeIds().filter((nodeId) => this.getFlowNode(nodeId));
+                this.selectedNodeIds = new Set(visualIds);
+                this.selectedNodeId = visualIds.includes(primaryNodeId)
+                    ? primaryNodeId
+                    : (visualIds[visualIds.length - 1] || "");
+                return visualIds;
+            },
+
+            areFlowNodeIdListsEqual(leftIds, rightIds) {
+                const left = (leftIds || []).filter(Boolean);
+                const right = (rightIds || []).filter(Boolean);
+                if (left.length !== right.length) return false;
+                return left.every((nodeId, index) => nodeId === right[index]);
+            },
+
+            reconcileFlowNodeSelectionState() {
+                return this.syncFlowNodeSelectionStateFromVisual(this.selectedNodeId);
+            },
+
+            isFlowNodeSelected(nodeId) {
+                return Boolean(nodeId && this.getSelectedFlowNodeIds().includes(nodeId));
+            },
+
+            applyFlowNodeSelectionClasses() {
+                const selectedIds = this.selectedNodeIds || new Set();
+                const primaryNodeId = this.selectedNodeId || "";
+                this.getFlowNodes().forEach((node) => {
+                    const nodeId = node.dataset.nodeId || "";
+                    const selected = selectedIds.has(nodeId);
+                    node.classList.toggle("is-selected", selected);
+                    node.style.zIndex = selected ? (nodeId === primaryNodeId ? "7" : "6") : "";
+                });
+                return this.syncFlowNodeSelectionStateFromVisual(primaryNodeId);
+            },
+
+            renderSelectedFlowNodeInspector(node) {
                 if (!node) return;
+                this.rememberFlowNodeSelection(this.selectedNodeId);
                 this.setValue(`#nodeId-${PAGE_CODE}`, node.dataset.nodeId || "");
                 this.setValue(`#nodeType-${PAGE_CODE}`, node.dataset.nodeType || "");
                 this.setValue(`#nodeName-${PAGE_CODE}`, node.querySelector(".flow-node-body strong")?.textContent?.trim() || "");
@@ -2509,6 +3273,84 @@
                 this.setValue(`#nodeDependsOn-${PAGE_CODE}`, this.getUpstreamNodeIds(this.selectedNodeId).join(", "));
                 this.setValue(`#nodeExecPlsqlEditor-${PAGE_CODE}`, node.dataset.execPlsql || "");
                 this.renderNodeBindVariables(node);
+            },
+
+            commitFlowNodeSelection(nodeIds = [], primaryNodeId = "", options = {}) {
+                if (options.syncBeforeStore !== false) this.reconcileFlowNodeSelectionState();
+                if (options.store !== false) this.storeSelectedNodeInspectorState();
+                const validIds = Array.from(new Set((nodeIds || []).filter((nodeId) => nodeId && this.getFlowNode(nodeId))));
+                this.selectedNodeIds = new Set(validIds);
+                this.selectedNodeId = this.selectedNodeIds.has(primaryNodeId)
+                    ? primaryNodeId
+                    : (validIds[validIds.length - 1] || "");
+                if (options.clearEdge !== false) {
+                    this.selectedEdgeId = "";
+                    this.hideSelectedEdgeDelete();
+                }
+                const finalIds = this.applyFlowNodeSelectionClasses();
+
+                const node = this.getFlowNode(this.selectedNodeId);
+                if (!node) {
+                    if (options.clearInspector !== false) this.clearNodeInspector();
+                    return finalIds;
+                }
+
+                if (options.updateInspector !== false) {
+                    this.renderSelectedFlowNodeInspector(node);
+                }
+                return finalIds;
+            },
+
+            clearFlowNodeSelection(options = {}) {
+                return this.commitFlowNodeSelection([], "", options);
+            },
+
+            setFlowNodeSelection(nodeIds, primaryNodeId = "", options = {}) {
+                return this.commitFlowNodeSelection(nodeIds, primaryNodeId, options);
+            },
+
+            toggleFlowNodeSelection(nodeId) {
+                const id = String(nodeId || "");
+                if (!id || !this.getFlowNode(id)) return;
+                const selected = new Set(this.getSelectedFlowNodeIds());
+                if (selected.has(id)) {
+                    selected.delete(id);
+                } else {
+                    selected.add(id);
+                }
+                const selectedIds = Array.from(selected);
+                this.setFlowNodeSelection(selectedIds, selected.has(id) ? id : selectedIds[selectedIds.length - 1] || "", { clearInspector: selected.size === 0 });
+            },
+
+            rememberFlowNodeSelection(nodeId) {
+                const id = String(nodeId || "");
+                if (!id) return;
+                this.flowNodeSelectionHistory = (this.flowNodeSelectionHistory || []).filter((item) => item !== id);
+                this.flowNodeSelectionHistory.push(id);
+                if (this.flowNodeSelectionHistory.length > 40) {
+                    this.flowNodeSelectionHistory = this.flowNodeSelectionHistory.slice(-40);
+                }
+            },
+
+            removeFlowNodeSelectionHistory(nodeId) {
+                const id = String(nodeId || "");
+                this.flowNodeSelectionHistory = (this.flowNodeSelectionHistory || []).filter((item) => item !== id);
+            },
+
+            openFlowNodeInspector(nodeId) {
+                const id = String(nodeId || "");
+                if (!id || !this.getFlowNode(id)) return;
+                this.selectFlowNode(id);
+                this.setFlowInspectorCollapsed(false);
+            },
+
+            selectFlowNode(nodeId) {
+                const id = String(nodeId || "");
+                if (!id || !this.getFlowNode(id)) {
+                    this.clearFlowNodeSelection();
+                    return;
+                }
+                this.setFlowNodeSelection([id], id);
             },
 
             getResultCreateModeLabel(value) {
@@ -3136,6 +3978,7 @@
                         sortOrder: index + 1
                     };
                 });
+                const validEdges = this.pruneInvalidFlowEdges();
 
                 return {
                     flowId: /^\d+$/.test(flowIdValue) ? Number(flowIdValue) : null,
@@ -3149,7 +3992,7 @@
                     useYn: this.getValue(`#flowUseYn-${PAGE_CODE}`) || "Y",
                     status: "DRAFT",
                     nodes,
-                    edges: this.flowEdges.map((edge, index) => ({
+                    edges: validEdges.map((edge, index) => ({
                         fromNodeKey: edge.from,
                         fromPort: this.normalizeFlowPortName(edge.fromPort, "output"),
                         toNodeKey: edge.to,
@@ -3221,7 +4064,11 @@
                 if (!viewport) return;
                 this.clearCanvasRunStatusOverlay();
                 viewport.querySelectorAll(".flow-node").forEach((node) => node.remove());
+                viewport.querySelector(".flow-selection-box")?.remove();
                 this.setSampleFlowState(false);
+                this.clearFlowNodeSelection({ store: false, clearInspector: false, clearEdge: false, syncBeforeStore: false });
+                this.flowNodeSelectionHistory = [];
+                this.flowNodeClickState = null;
                 this.flowEdges = (edges || []).map((edge) => ({
                     from: edge.fromNodeKey,
                     fromPort: this.normalizeFlowPortName(edge.fromPort, "output"),
@@ -3236,8 +4083,8 @@
                     viewport.appendChild(element);
                     this.bindFlowNode(element);
                 });
+                this.pruneInvalidFlowEdges({ render: false });
                 const firstNode = this.getFlowNodes()[0];
-                this.selectedNodeId = "";
                 if (firstNode) this.selectFlowNode(firstNode.dataset.nodeId || "");
                 if (!firstNode) {
                     this.clearNodeInspector();
@@ -3458,6 +4305,82 @@
                 return this.hasFlowCycle([...this.flowEdges, edge]);
             },
 
+            getCurrentFlowNodeIdSet() {
+                return new Set(this.getFlowNodes().map((node) => node.dataset.nodeId || "").filter(Boolean));
+            },
+
+            getValidFlowEdges(edges = this.flowEdges, nodeIdSet = this.getCurrentFlowNodeIdSet()) {
+                return (edges || []).filter((edge) =>
+                    edge?.from
+                    && edge?.to
+                    && edge.from !== edge.to
+                    && nodeIdSet.has(edge.from)
+                    && nodeIdSet.has(edge.to)
+                );
+            },
+
+            pruneInvalidFlowEdges(options = {}) {
+                const nextEdges = this.getValidFlowEdges();
+                if (nextEdges.length === this.flowEdges.length) return nextEdges;
+                this.flowEdges = nextEdges;
+                if (this.selectedEdgeId && !this.flowEdges.some((edge, index) => this.getEdgeId(edge, index) === this.selectedEdgeId)) {
+                    this.selectedEdgeId = "";
+                    this.hideSelectedEdgeDelete();
+                }
+                if (options.render !== false) {
+                    this.updateFlowEdges();
+                    this.renderFlowEdgeGrid();
+                }
+                return nextEdges;
+            },
+
+            applyAutoConnectionsByX() {
+                this.finishEdgeDrag();
+                this.selectedEdgeId = "";
+                this.hideSelectedEdgeDelete();
+                const orderedNodes = this.getFlowNodes()
+                    .map((node) => ({
+                        node,
+                        nodeId: node.dataset.nodeId || "",
+                        position: this.getNodePosition(node)
+                    }))
+                    .filter((item) => item.nodeId)
+                    .sort((a, b) =>
+                        a.position.left - b.position.left
+                        || a.position.top - b.position.top
+                        || a.nodeId.localeCompare(b.nodeId)
+                    );
+
+                if (orderedNodes.length < 2) {
+                    CommonMessage.warn("자동 연결선을 적용하려면 노드가 2개 이상 필요합니다.", { copyable: false });
+                    return;
+                }
+
+                const nextEdges = [];
+                for (let index = 0; index < orderedNodes.length - 1; index += 1) {
+                    const fromItem = orderedNodes[index];
+                    const toItem = orderedNodes[index + 1];
+                    const edge = this.buildSequentialJobEdge(fromItem.node, toItem.node);
+                    if (edge) nextEdges.push(edge);
+                }
+
+                if (!nextEdges.length) {
+                    CommonMessage.warn("자동 연결선을 만들 수 있는 IN/OUT 포트가 없습니다.", { copyable: false });
+                    return;
+                }
+
+                this.flowEdges = nextEdges;
+                this.markFlowEdited();
+                this.updateFlowEdges();
+                this.renderFlowEdgeGrid();
+                const selectedNode = this.getFlowNode(this.selectedNodeId);
+                if (selectedNode) {
+                    this.renderNodeBindVariables(selectedNode);
+                    this.setValue(`#nodeDependsOn-${PAGE_CODE}`, this.getUpstreamNodeIds(this.selectedNodeId).join(", "));
+                }
+                CommonMessage.success("x축 위치 기준 자동 연결선을 적용했습니다.", { copyable: false });
+            },
+
             autoLayoutFlow() {
                 const nodes = this.getFlowNodes();
                 if (!nodes.length) return;
@@ -3656,9 +4579,10 @@
             },
 
             selectFlowEdge(edgeId) {
+                this.reconcileFlowNodeSelectionState();
+                this.storeSelectedNodeInspectorState();
                 this.selectedEdgeId = edgeId || "";
-                this.selectedNodeId = "";
-                this.getFlowNodes().forEach((node) => node.classList.remove("is-selected"));
+                this.clearFlowNodeSelection({ store: false, clearInspector: false, clearEdge: false, syncBeforeStore: false });
                 this.updateFlowEdges();
             },
 
@@ -4892,17 +5816,74 @@
                 return Number.isNaN(parsed.getTime()) ? null : parsed;
             },
             generateNodePlsql() {},
+
+            getNextFocusNodeAfterRemoval(removedNodeId, removedPosition) {
+                const removedId = String(removedNodeId || "");
+                const recentNodeId = [...(this.flowNodeSelectionHistory || [])]
+                    .reverse()
+                    .find((nodeId) => nodeId !== removedId && this.getFlowNode(nodeId));
+                if (recentNodeId) {
+                    return this.getFlowNode(recentNodeId);
+                }
+
+                const candidates = this.getFlowNodes();
+                if (!candidates.length) return null;
+                const removedCenterX = (removedPosition?.left || 0) + (removedPosition?.width || FLOW_NODE_DEFAULT_WIDTH) / 2;
+                const removedCenterY = (removedPosition?.top || 0) + (removedPosition?.height || FLOW_NODE_DEFAULT_HEIGHT) / 2;
+                return candidates
+                    .map((node) => {
+                        const position = this.getNodePosition(node);
+                        const centerX = position.left + position.width / 2;
+                        const centerY = position.top + position.height / 2;
+                        return {
+                            node,
+                            xDistance: Math.abs(centerX - removedCenterX),
+                            distance: Math.hypot(centerX - removedCenterX, centerY - removedCenterY)
+                        };
+                    })
+                    .sort((a, b) => a.xDistance - b.xDistance || a.distance - b.distance)[0]?.node || null;
+            },
+
             removeSelectedNode(targetNodeId = "") {
-                const nodeId = targetNodeId || this.flowContextMenuState?.nodeId || this.selectedNodeId;
-                const node = this.getFlowNode(nodeId);
-                if (!node) return;
-                this.flowEdges = this.flowEdges.filter((edge) => edge.from !== nodeId && edge.to !== nodeId);
+                const targetItems = Array.isArray(targetNodeId) ? targetNodeId : [targetNodeId];
+                const explicitNodes = targetItems
+                    .filter((item) => this.isLiveFlowNodeElement(item));
+                const explicitNodeIds = Array.isArray(targetNodeId)
+                    ? targetNodeId
+                        .filter((item) => !this.isLiveFlowNodeElement(item))
+                        .filter(Boolean)
+                    : [];
+                const explicitNodeId = Array.isArray(targetNodeId) || this.isLiveFlowNodeElement(targetNodeId)
+                    ? ""
+                    : (targetNodeId || "");
+                let nodeIds = [];
+                if (explicitNodes.length) {
+                    nodeIds = explicitNodes
+                        .map((node) => node.dataset.nodeId || "")
+                        .filter(Boolean);
+                } else if (explicitNodeIds.length) {
+                    nodeIds = explicitNodeIds;
+                } else if (explicitNodeId) {
+                    nodeIds = [explicitNodeId];
+                } else {
+                    nodeIds = this.getActionFlowNodeIds();
+                }
+                const existingNodes = explicitNodes.length
+                    ? explicitNodes
+                    : nodeIds
+                        .map((nodeId) => this.getFlowNode(nodeId))
+                        .filter(Boolean);
+                if (!existingNodes.length) return;
+                const removedPosition = this.getNodePosition(existingNodes[0]);
+                const removeSet = new Set(existingNodes.map((node) => node.dataset.nodeId || "").filter(Boolean));
+                this.flowEdges = this.flowEdges.filter((edge) => !removeSet.has(edge.from) && !removeSet.has(edge.to));
                 this.markFlowEdited();
                 this.selectedEdgeId = "";
                 this.hideSelectedEdgeDelete();
-                node.remove();
-                const nextNode = this.getFlowNodes()[0] || null;
-                this.selectedNodeId = "";
+                existingNodes.forEach((node) => node.remove());
+                removeSet.forEach((nodeId) => this.removeFlowNodeSelectionHistory(nodeId));
+                const nextNode = this.getNextFocusNodeAfterRemoval(Array.from(removeSet)[0], removedPosition);
+                this.clearFlowNodeSelection({ store: false, clearInspector: false, syncBeforeStore: false });
                 if (nextNode) {
                     this.selectFlowNode(nextNode.dataset.nodeId || "");
                 } else {
@@ -5037,16 +6018,19 @@
                 this.activeCanvasRunId = "";
                 this.activeCanvasRunFlowKey = "";
                 this.activeCanvasRunPollFailures = 0;
-                this.getFlowNodes().forEach((node) => {
-                    node.classList.remove(
-                        "is-flow-run-pending",
-                        "is-flow-run-running",
-                        "is-flow-run-success",
-                        "is-flow-run-failed",
-                        "is-flow-run-skipped"
-                    );
-                    node.querySelector(".flow-node-run-badge")?.remove();
-                });
+                this.getFlowNodes().forEach((node) => this.clearFlowNodeRuntimeVisualState(node));
+            },
+
+            clearFlowNodeRuntimeVisualState(node) {
+                if (!node) return;
+                node.classList.remove(
+                    "is-flow-run-pending",
+                    "is-flow-run-running",
+                    "is-flow-run-success",
+                    "is-flow-run-failed",
+                    "is-flow-run-skipped"
+                );
+                node.querySelector(".flow-node-run-badge")?.remove();
             },
 
             setCanvasNodeRunStatus(nodeKey, status = "", message = "") {
@@ -5362,7 +6346,8 @@
                 const runDownstream = Boolean(options.downstream);
                 const flowKey = this.getCurrentFlowRunKey();
                 if (this.isFlowRunActive(flowKey)) return;
-                const nodeId = this.flowContextMenuState?.nodeId || this.selectedNodeId;
+                const actionNodeIds = this.getActionFlowNodeIds();
+                const nodeId = this.flowContextMenuState?.nodeId || actionNodeIds[0] || this.selectedNodeId || "";
                 const node = this.getFlowNode(nodeId);
                 if (!node) {
                     alert("Select a node first.\n먼저 실행할 노드를 선택해 주세요.");

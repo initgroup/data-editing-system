@@ -201,11 +201,19 @@ def get_object_tree(
             if item.strip().upper() in allowed_categories
         ]
         keyword_text = str(keyword or "").strip()
-        sql_id = "M90001_OBJECT_SEARCH" if keyword_text else "M90001_OBJECT_TREE"
+        registered_only_yn = "Y" if str(registeredOnly).upper() == "Y" else "N"
+        full_registered_tree = registered_only_yn == "Y" and not keyword_text
+        sql_id = (
+            "M90001_OBJECT_SEARCH"
+            if keyword_text
+            else "M90001_REGISTERED_OBJECT_TREE"
+            if full_registered_tree
+            else "M90001_OBJECT_TREE"
+        )
         params = {
             "offset": offset,
             "endRow": offset + limit + 1,
-            "registeredOnly": "Y" if str(registeredOnly).upper() == "Y" else "N",
+            "registeredOnly": registered_only_yn,
             "categoryFilter": ",".join(selected_categories) if selected_categories else "ALL"
         }
         if keyword_text:
@@ -216,6 +224,17 @@ def get_object_tree(
             raise HTTPException(status_code=500, detail=result.get("message") or "M90001 object tree query failed.")
 
         raw_data = result["data"]
+        if full_registered_tree:
+            return {
+                "status": "success",
+                "data": raw_data,
+                "columns": result.get("columns", []),
+                "total": len(raw_data),
+                "nextOffset": len(raw_data),
+                "hasMore": False,
+                "fullTree": True
+            }
+
         has_more = len(raw_data) > limit
         data = raw_data[:limit]
         total_count = offset + len(data) + (1 if has_more else 0)
@@ -226,7 +245,8 @@ def get_object_tree(
             "columns": result.get("columns", []),
             "total": total_count,
             "nextOffset": offset + len(data),
-            "hasMore": has_more
+            "hasMore": has_more,
+            "fullTree": False
         }
     except HTTPException:
         raise

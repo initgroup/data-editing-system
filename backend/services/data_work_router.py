@@ -71,6 +71,12 @@ class SaveSqlTableRequest(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
+class DataWorkRunContextRequest(BaseModel):
+    projectId: int
+    scenarioId: int
+    model_config = ConfigDict(extra="allow")
+
+
 def parse_manual_run_id(runtime_bind_values: Optional[Dict[str, Any]]) -> Optional[int]:
     values = runtime_bind_values or {}
     run_values = []
@@ -81,12 +87,12 @@ def parse_manual_run_id(runtime_bind_values: Optional[Dict[str, Any]]) -> Option
         if not text or text.lower() in {"(auto)", "auto"}:
             continue
         if not re.fullmatch(r"[1-9][0-9]*", text):
-            raise HTTPException(status_code=400, detail="Manual INIT$RunId/P_RUN_ID must be a positive integer or (auto).")
+            raise HTTPException(status_code=400, detail="DATA_WORK INIT$RunId/P_RUN_ID must be a positive integer or (auto).")
         run_values.append(int(text))
     if not run_values:
         return None
     if len(set(run_values)) > 1:
-        raise HTTPException(status_code=400, detail="Manual INIT$RunId/P_RUN_ID values must match.")
+        raise HTTPException(status_code=400, detail="DATA_WORK INIT$RunId/P_RUN_ID values must match.")
     return run_values[0]
 
 
@@ -424,6 +430,72 @@ def create_data_work_router(
         finally:
             if conn:
                 conn.close()
+
+
+    @router.get("/data-run-id")
+    def get_data_work_run_id(request: Request, projectId: int, scenarioId: int):
+        conn = None
+        try:
+            conn = get_target_db_connection(request)
+            return {
+                "status": "success",
+                "data": data_work.get_data_work_run_context(conn, projectId, scenarioId)
+            }
+        finally:
+            if conn:
+                conn.close()
+
+
+    @router.post("/data-run-id/ensure")
+    def ensure_data_work_run_id(req: DataWorkRunContextRequest, request: Request):
+        conn = None
+        try:
+            conn = get_target_db_connection(request)
+            context = data_work.ensure_data_work_run_id(conn, req.projectId, req.scenarioId)
+            conn.commit()
+            return {
+                "status": "success",
+                "message": f"DATA_WORK RUN_ID {context.get('DATA_WORK_RUN_ID')} is ready.",
+                "data": context
+            }
+        except HTTPException:
+            if conn:
+                conn.rollback()
+            raise
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            logger.error(f"{MENU_CODE} data work run id ensure failed: {str(e)}")
+            raise HTTPException(status_code=500, detail=str(e))
+        finally:
+            if conn:
+                conn.close()
+
+
+    @router.post("/data-run-id/new")
+    def create_next_data_work_run_id(req: DataWorkRunContextRequest, request: Request):
+        conn = None
+        try:
+            conn = get_target_db_connection(request)
+            context = data_work.create_next_data_work_run_id(conn, req.projectId, req.scenarioId)
+            conn.commit()
+            return {
+                "status": "success",
+                "message": f"DATA_WORK RUN_ID {context.get('DATA_WORK_RUN_ID')} was created.",
+                "data": context
+            }
+        except HTTPException:
+            if conn:
+                conn.rollback()
+            raise
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            logger.error(f"{MENU_CODE} data work run id create failed: {str(e)}")
+            raise HTTPException(status_code=500, detail=str(e))
+        finally:
+            if conn:
+                conn.close()
     
     
     @router.get("/job/{profile_job_id}")
@@ -493,6 +565,32 @@ def create_data_work_router(
         finally:
             if conn:
                 conn.close()
+
+
+    def resolve_data_run_id(
+        conn,
+        job: Dict[str, Any],
+        runtime_bind_values: Optional[Dict[str, Any]] = None
+    ) -> int:
+        manual_run_id = parse_manual_run_id(runtime_bind_values)
+        if manual_run_id is not None:
+            return int(manual_run_id)
+        project_id = data_work.require_int(job.get("PROJECT_ID") or job.get("projectId"), "projectId")
+        scenario_id = data_work.require_int(job.get("SCENARIO_ID") or job.get("scenarioId"), "scenarioId")
+        context = data_work.ensure_data_work_run_id(conn, project_id, scenario_id)
+        return int(context.get("DATA_WORK_RUN_ID") or context.get("dataWorkRunId") or 0)
+
+
+    def with_data_run_id(runtime_bind_values: Optional[Dict[str, Any]], data_run_id: int) -> Dict[str, Any]:
+        values = dict(runtime_bind_values or {})
+        effective_run_id = int(data_run_id)
+        values["INIT$RunSourceType"] = "DATA_WORK"
+        values["INIT$RunId"] = effective_run_id
+        values["runSourceType"] = "DATA_WORK"
+        values["runId"] = effective_run_id
+        values["P_RUN_SOURCE_TYPE"] = "DATA_WORK"
+        values["P_RUN_ID"] = effective_run_id
+        return values
     
     
     @router.post("/job/run")
@@ -503,6 +601,8 @@ def create_data_work_router(
             profile_job_id = data_work.require_int(req.profileJobId, "profileJobId")
             job = data_work.load_job(conn, MENU_CODE, profile_job_id)
             runtime_bind_values = req.runtimeBindValues or {}
+            data_run_id = resolve_data_run_id(conn, job, runtime_bind_values)
+            runtime_bind_values = with_data_run_id(runtime_bind_values, data_run_id)
             if req.batch:
                 data_work.update_job_status(
                     conn,
@@ -560,7 +660,9 @@ def create_data_work_router(
             profile_job_id = data_work.require_int(req.profileJobId, "profileJobId")
             saved_job = data_work.load_job(conn, MENU_CODE, profile_job_id)
             draft_job = data_work.build_draft_job(conn, MENU_CODE, req, saved_job, DEFAULT_JOB_GROUP)
-            result = execute_draft_profile_job(conn, profile_job_id, draft_job, req.runtimeBindValues or {})
+            runtime_bind_values = req.runtimeBindValues or {}
+            data_run_id = resolve_data_run_id(conn, draft_job, runtime_bind_values)
+            result = execute_draft_profile_job(conn, profile_job_id, draft_job, with_data_run_id(runtime_bind_values, data_run_id))
             conn.commit()
             return {
                 "status": "success",
@@ -966,8 +1068,9 @@ def create_data_work_router(
         result_owner = job.get("RESULT_OWNER") or ""
         saved_result_table_name = job.get("RESULT_TABLE_NAME") or ""
         result_table_name = saved_result_table_name
-        manual_run_id = parse_manual_run_id(runtime_bind_values)
-        run_id = data_work.create_run(
+        data_run_id = resolve_data_run_id(conn, job, runtime_bind_values)
+        runtime_bind_values = with_data_run_id(runtime_bind_values, data_run_id)
+        work_run_id = data_work.create_run(
             conn,
             profile_job_id,
             run_type,
@@ -975,9 +1078,9 @@ def create_data_work_router(
             ROUTER_MESSAGES["job_started"],
             result_table_name,
             result_owner,
-            manual_run_id
+            data_run_id
         )
-        result_table_name = get_effective_result_table_name(job, runtime_bind_values or {}, run_id)
+        result_table_name = get_effective_result_table_name(job, runtime_bind_values or {}, data_run_id)
         if result_table_name != saved_result_table_name:
             job = {**job, "RESULT_TABLE_NAME": result_table_name}
         if update_saved_job:
@@ -996,11 +1099,11 @@ def create_data_work_router(
     
         try:
             if exec_source_type == "WEB_API":
-                message = execute_web_api_job(conn, job, runtime_bind_values or {}, run_id)
+                message = execute_web_api_job(conn, job, runtime_bind_values or {}, data_run_id)
                 if not update_saved_job:
                     draft_name = job.get("JOB_NAME") or f"Job #{profile_job_id}"
                     message = f"Draft test: {draft_name}. {message}"
-                data_work.update_run(conn, run_id, "SUCCESS", message, result_table_name, result_owner)
+                data_work.update_run(conn, work_run_id, "SUCCESS", message, result_table_name, result_owner)
                 if update_saved_job:
                     data_work.update_job_status(
                         conn,
@@ -1013,12 +1116,12 @@ def create_data_work_router(
                         False,
                         True
                     )
-                return {"status": "success", "message": message}
+                return {"status": "success", "message": message, "dataRunId": data_run_id, "workRunId": work_run_id}
 
             executable_script = normalize_executable_script(job.get("EXEC_PLSQL") or "")
             if not executable_script:
                 message = "No executable script was saved."
-                data_work.update_run(conn, run_id, "SKIPPED", message, result_table_name, result_owner)
+                data_work.update_run(conn, work_run_id, "SKIPPED", message, result_table_name, result_owner)
                 if update_saved_job:
                     data_work.update_job_status(
                         conn,
@@ -1031,13 +1134,13 @@ def create_data_work_router(
                         False,
                         True
                     )
-                return {"status": "skipped", "message": message}
+                return {"status": "skipped", "message": message, "dataRunId": data_run_id, "workRunId": work_run_id}
     
-            message = execute_saved_script(conn, executable_script, job, runtime_bind_values or {}, run_id)
+            message = execute_saved_script(conn, executable_script, job, runtime_bind_values or {}, data_run_id)
             if not update_saved_job:
                 draft_name = job.get("JOB_NAME") or f"Job #{profile_job_id}"
                 message = f"Draft test: {draft_name}. {message}"
-            data_work.update_run(conn, run_id, "SUCCESS", message, result_table_name, result_owner)
+            data_work.update_run(conn, work_run_id, "SUCCESS", message, result_table_name, result_owner)
             if update_saved_job:
                 data_work.update_job_status(
                     conn,
@@ -1050,11 +1153,11 @@ def create_data_work_router(
                     False,
                     True
                 )
-            return {"status": "success", "message": message}
+            return {"status": "success", "message": message, "dataRunId": data_run_id, "workRunId": work_run_id}
         except Exception as e:
             message = str(e)
             conn.rollback()
-            data_work.update_run(conn, run_id, "FAILED", message, result_table_name, result_owner)
+            data_work.update_run(conn, work_run_id, "FAILED", message, result_table_name, result_owner)
             if update_saved_job:
                 data_work.update_job_status(
                     conn,
@@ -1077,13 +1180,16 @@ def create_data_work_router(
         runtime_bind_values: Optional[Dict[str, Any]] = None,
         run_id: Optional[int] = None
     ) -> str:
+        system_values = build_system_bind_values(job, run_id)
         runtime_values = {
-            **build_system_bind_values(job, run_id),
+            **system_values,
             **(runtime_bind_values or {})
         }
         apply_scoped_model_runtime_values(job, runtime_values, run_id)
         for run_key in ("INIT$RunSourceType", "INIT$RunId", "runSourceType", "runId"):
-            runtime_values[run_key] = build_system_bind_values(job, run_id)[run_key]
+            runtime_values[run_key] = system_values[run_key]
+        runtime_values["P_RUN_SOURCE_TYPE"] = system_values["INIT$RunSourceType"]
+        runtime_values["P_RUN_ID"] = system_values["INIT$RunId"]
         return api_call_service.execute_api_job(conn, job, runtime_values, run_id)
     
     
@@ -1130,6 +1236,8 @@ def create_data_work_router(
         apply_scoped_model_runtime_values(job, runtime_values, run_id)
         for run_key in ("INIT$RunSourceType", "INIT$RunId", "runSourceType", "runId"):
             runtime_values[run_key] = system_values[run_key]
+        runtime_values["P_RUN_SOURCE_TYPE"] = system_values["INIT$RunSourceType"]
+        runtime_values["P_RUN_ID"] = system_values["INIT$RunId"]
 
         def replace_dynamic_token(match):
             key = match.group(1).strip()
@@ -1138,7 +1246,7 @@ def create_data_work_router(
                 value = runtime_values.get(to_bind_variable_name(key))
             if value is None:
                 value = param_values.get(key)
-            return "" if value is None else str(value)
+            return "" if normalize_bind_value(value) is None else str(value)
 
         prepared_text = re.sub(
             r"/\*\s*--\s*([A-Za-z][A-Za-z0-9_$#]*(?:_[A-Za-z0-9_$#]+)*)\s*--\s*\*/",
@@ -1332,7 +1440,7 @@ def create_data_work_router(
         text = str(value).strip()
         if not text:
             return None
-        if re.fullmatch(r"(?i)null", text):
+        if text.lower() in {"null", "(null)", "(auto)"}:
             return None
         if re.fullmatch(r"-?\d+", text):
             try:
@@ -1380,7 +1488,7 @@ def create_data_work_router(
             value = runtime_values.get(key)
             if value is None:
                 value = runtime_values.get(to_bind_variable_name(key))
-            return "" if value is None else str(value)
+            return "" if normalize_bind_value(value) is None else str(value)
 
         prepared_text = re.sub(
             r"/\*\s*--\s*([A-Za-z][A-Za-z0-9_$#]*(?:_[A-Za-z0-9_$#]+)*)\s*--\s*\*/",

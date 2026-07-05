@@ -220,6 +220,9 @@
                             <button type="button" class="table-icon-btn" title="Show sample nodes" data-title-key="showSampleNodesTitle" onclick="__PAGE_CODE__.showSampleFlowCanvas()">
                                 <i class="fas fa-diagram-project"></i>
                             </button>
+                            <button type="button" class="table-icon-btn" title="Copy selected node" onclick="__PAGE_CODE__.duplicateSelectedNode()">
+                                <i class="far fa-copy"></i>
+                            </button>
                             <button type="button" class="table-icon-btn" title="Clear flow canvas" data-title-key="clearFlowCanvasTitle" onclick="__PAGE_CODE__.clearFlowCanvas()">
                                 <i class="fas fa-eraser"></i>
                             </button>
@@ -268,11 +271,12 @@
                                     <button type="button" data-flow-menu-action="runSelectedNode"><i class="fas fa-play"></i><span>Run selected node</span></button>
                                     <button type="button" data-flow-menu-action="runFromSelectedNode"><i class="fas fa-forward-step"></i><span>Run from selected node</span></button>
                                     <hr>
-                                    <button type="button" data-flow-menu-action="duplicateNode"><i class="far fa-copy"></i><span>Duplicate node</span></button>
-                                    <button type="button" data-flow-menu-action="deleteNode"><i class="far fa-trash-alt"></i><span>Delete node</span></button>
+                                    <button type="button" data-flow-menu-action="duplicateNode" onpointerdown="__PAGE_CODE__.handleInlineContextMenuAction(event, 'duplicateNode')"><i class="far fa-copy"></i><span>Duplicate node</span></button>
+                                    <button type="button" data-flow-menu-action="deleteNode" onpointerdown="__PAGE_CODE__.handleInlineContextMenuAction(event, 'deleteNode')"><i class="far fa-trash-alt"></i><span>Delete node</span></button>
                                     <hr>
                                     <button type="button" data-flow-menu-action="toggleDashedConnection"><i class="fas fa-grip-lines"></i><span>Dashed connection: OFF</span></button>
                                     <button type="button" data-flow-menu-action="treeLayout"><i class="fas fa-sitemap"></i><span>Tree layout</span></button>
+                                    <button type="button" data-flow-menu-action="autoConnectByX"><i class="fas fa-link"></i><span>자동 연결선 적용하기</span></button>
                                     <button type="button" data-flow-menu-action="fitCanvas"><i class="fas fa-up-right-and-down-left-from-center"></i><span>Fit canvas</span></button>
                                     <button type="button" data-flow-menu-action="resetZoom"><i class="fas fa-compress"></i><span>Reset zoom</span></button>
                                 </div>

@@ -6,6 +6,7 @@
         hasConnections: false,
         targetSelectionRequired: false,
         isLoggingIn: false,
+        passwordVisible: false,
 
         async init() {
             document.body.classList.add("intro-mode");
@@ -43,6 +44,27 @@
         setValue(selector, value) {
             const el = getContainerEl(selector);
             if (el) el.value = value ?? "";
+        },
+
+        syncPasswordVisibility() {
+            const input = getContainerEl("#loginPassword");
+            const button = getContainerEl("#loginPasswordToggle");
+            const icon = getContainerEl("#loginPasswordToggleIcon");
+            if (input) input.type = this.passwordVisible ? "text" : "password";
+            if (button) {
+                button.setAttribute("aria-pressed", this.passwordVisible ? "true" : "false");
+                button.setAttribute("aria-label", this.passwordVisible ? "Hide password" : "Show password");
+                button.title = this.passwordVisible ? "Hide password" : "Show password";
+            }
+            if (icon) {
+                icon.className = this.passwordVisible ? "fas fa-eye-slash" : "fas fa-eye";
+            }
+        },
+
+        togglePasswordVisible() {
+            this.passwordVisible = !this.passwordVisible;
+            this.syncPasswordVisibility();
+            getContainerEl("#loginPassword")?.focus();
         },
 
         focusLoginButton() {
@@ -108,8 +130,10 @@
                 button.disabled = this.isLoggingIn;
                 button.textContent = this.isLoggingIn ? "Logging in..." : "Login";
             }
+            getContainerEl("#loginMessage")?.classList.toggle("is-loading", this.isLoggingIn);
             getContainerEl("#loginId")?.toggleAttribute("disabled", this.isLoggingIn);
             getContainerEl("#loginPassword")?.toggleAttribute("disabled", this.isLoggingIn);
+            getContainerEl("#loginPasswordToggle")?.toggleAttribute("disabled", this.isLoggingIn);
             getContainerEl("#loginConnectionList")?.querySelectorAll("input[name='loginConnectionId']").forEach((input) => {
                 input.disabled = this.isLoggingIn;
             });
@@ -125,6 +149,8 @@
         resetLoginForm() {
             this.setValue("#loginId", "");
             this.setValue("#loginPassword", "");
+            this.passwordVisible = false;
+            this.syncPasswordVisibility();
             this.hideTargetSelection();
             const notice = sessionStorage.getItem("loginNotice") || "";
             if (notice) {
@@ -223,12 +249,43 @@
                     body: payload
                 });
 
+                const responseConnections = Array.isArray(json.connections) ? json.connections : [];
                 if (json.targetSelectionRequired) {
-                    this.showTargetSelection(json.connections || []);
-                    this.setMessage(json.message || "Select a target DB, then click Login again.");
-                    this.setLoginBusy(false);
-                    this.focusLoginButton();
-                    setTimeout(() => this.focusLoginButton(), 100);
+                    if (responseConnections.length === 1) {
+                        payload.connectionId = responseConnections[0].connectionId;
+                    } else {
+                        this.showTargetSelection(responseConnections);
+                        this.setMessage(json.message || "Select a target DB, then click Login again.");
+                        this.setLoginBusy(false);
+                        this.focusLoginButton();
+                        setTimeout(() => this.focusLoginButton(), 100);
+                        return;
+                    }
+                }
+
+                if (payload.connectionId && json.targetSelectionRequired && responseConnections.length === 1) {
+                    const retryJson = await CommonUtils.request(`${API_BASE_URL}/M91001/login`, {
+                        method: "POST",
+                        body: payload
+                    });
+                    Object.assign(json, retryJson || {});
+                    if (json.targetSelectionRequired) {
+                        this.showTargetSelection(json.connections || responseConnections);
+                        this.setMessage(json.message || "Select a target DB, then click Login again.");
+                        this.setLoginBusy(false);
+                        this.focusLoginButton();
+                        setTimeout(() => this.focusLoginButton(), 100);
+                        return;
+                    }
+                }
+
+                const connection = json.connection || null;
+                const connectionId = connection?.connectionId || payload.connectionId || selectedConnectionId;
+                const connectionName = connection?.connectionName || selectedConnectionName || "";
+
+                if (!connectionId && !json.setupRequired) {
+                    this.hideTargetSelection();
+                    this.setMessage("Target DB could not be selected automatically. Login again after selecting a Target DB.", "error");
                     return;
                 }
 
@@ -239,8 +296,6 @@
 
                 this.setValue("#loginPassword", "");
                 if (window.MenuRenderer) MenuRenderer.render("mainNav", window.handleMenuClick);
-                const connectionId = json.connection?.connectionId || payload.connectionId || selectedConnectionId;
-                const connectionName = json.connection?.connectionName || selectedConnectionName || "";
                 if (connectionId) {
                     sessionStorage.setItem("targetConnectionId", String(connectionId));
                     sessionStorage.setItem("targetConnectionName", connectionName);

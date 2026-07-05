@@ -1725,6 +1725,47 @@ option.owner-scope-other {
     gap: 6px;
 }
 
+.data-run-context-box {
+    align-items: center;
+    border: 1px solid #cbd5e1;
+    display: inline-grid;
+    gap: 2px 8px;
+    grid-template-columns: minmax(72px, auto) minmax(48px, auto) 30px;
+    min-height: 38px;
+    padding: 3px 4px 3px 10px;
+}
+
+.data-run-context-box span {
+    color: #64748b;
+    font-size: 10px;
+    font-weight: 800;
+    grid-column: 1;
+    line-height: 1;
+}
+
+.data-run-context-box strong {
+    color: #0f172a;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 15px;
+    grid-column: 1 / span 2;
+    line-height: 1.1;
+    max-width: 110px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.data-run-context-box .table-icon-btn {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+}
+
+.data-run-context-box.is-empty strong {
+    color: #94a3b8;
+    font-family: inherit;
+    font-size: 12px;
+}
+
 .table-icon-btn.export-excel {
     color: #166534;
 }
@@ -5021,6 +5062,18 @@ body.is-column-resizing .data-sql-grid-col-resizer::after {
     width: min(560px, 100%);
 }
 
+.data-run-title-badge {
+    border: 1px solid #93c5fd;
+    color: #1d4ed8;
+    display: inline-flex;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 13px;
+    font-weight: 800;
+    margin-left: 8px;
+    padding: 3px 7px;
+    vertical-align: middle;
+}
+
 .data-bind-grid {
     border: 1px solid #e2e8f0;
     display: grid;
@@ -5073,6 +5126,16 @@ body.is-column-resizing .data-sql-grid-col-resizer::after {
 
 .flow-system-bind-row {
     background: #f8fafc;
+}
+
+.data-run-bind-row {
+    background: #eff6ff;
+}
+
+.data-run-bind-row input {
+    border-color: #93c5fd;
+    color: #1e3a8a;
+    font-weight: 800;
 }
 
 .flow-system-bind-row input[readonly] {
@@ -6219,6 +6282,70 @@ body.intro-mode #container-intro .env-panel {
     width: 100%;
     max-width: 100%;
     min-width: 0;
+}
+
+#container-login .login-password-field {
+    align-items: stretch;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 34px;
+    width: 100%;
+}
+
+#container-login .login-password-field .env-field {
+    border-right: 0;
+}
+
+#container-login .login-password-toggle {
+    align-items: center;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    color: #334155;
+    cursor: pointer;
+    display: inline-flex;
+    font-size: 13px;
+    height: 100%;
+    justify-content: center;
+    min-height: 30px;
+    padding: 0;
+    width: 34px;
+}
+
+#container-login .login-password-toggle:hover,
+#container-login .login-password-toggle:focus-visible {
+    background: #f8fafc;
+    color: #0f172a;
+}
+
+#container-login .login-password-toggle:disabled {
+    background: #f3f4f6;
+    color: #94a3b8;
+    cursor: default;
+}
+
+#container-login #loginMessage.is-loading {
+    overflow: hidden;
+    position: relative;
+}
+
+#container-login #loginMessage.is-loading::after {
+    animation: loginLoadingBar 1.1s ease-in-out infinite;
+    background: #2563eb;
+    bottom: 0;
+    content: "";
+    height: 2px;
+    left: -40%;
+    position: absolute;
+    width: 40%;
+}
+
+@keyframes loginLoadingBar {
+    0% {
+        left: -40%;
+    }
+
+    100% {
+        left: 100%;
+    }
 }
 
 #container-login .intro-login-layer {
@@ -8232,6 +8359,17 @@ body.intro-mode #container-M99001 .env-workspace {
     stroke-linejoin: round;
 }
 
+.flow-selection-box {
+    background: rgba(37, 99, 235, 0.08);
+    border: 1px dashed #2563eb;
+    box-sizing: border-box;
+    left: 0;
+    pointer-events: none;
+    position: absolute;
+    top: 0;
+    z-index: 20;
+}
+
 .flow-node {
     cursor: move;
     margin: 0;
@@ -8485,6 +8623,13 @@ body.intro-mode #container-M99001 .env-workspace {
 .flow-node.is-dragging {
     opacity: 0.92;
     z-index: 5;
+}
+
+.flow-node-drag-image {
+    box-shadow: 0 16px 32px rgba(15, 23, 42, 0.22);
+    opacity: 0.86;
+    pointer-events: none;
+    z-index: 99999;
 }
 
 .flow-node-run-result-table tr.is-failed td {
@@ -9297,8 +9442,9 @@ body.is-resizing-flow-result-sql {
     box-shadow: 0 16px 32px rgba(15, 23, 42, 0.18);
     min-width: 178px;
     padding: 6px;
+    pointer-events: auto;
     position: absolute;
-    z-index: 20;
+    z-index: 60;
 }
 
 .flow-context-menu button {

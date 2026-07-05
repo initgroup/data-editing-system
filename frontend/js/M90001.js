@@ -120,10 +120,11 @@
                 } else {
                     this.refreshTreeRows();
                 }
+                const keyword = this.treeSearchMode ? (getContainerEl("#objectSearch-M90001")?.value || "").trim() : "";
                 const params = new URLSearchParams({
                     offset: String(reset ? 0 : this.treeNextOffset),
                     limit: String(this.treeFetchLimit),
-                    keyword: this.treeSearchMode ? (getContainerEl("#objectSearch-M90001")?.value || "").trim() : "",
+                    keyword,
                     registeredOnly: this.isRegisteredOnlyTree() ? "Y" : "N",
                     categoryFilter: this.getObjectCategoryFilter()
                 });
@@ -137,6 +138,10 @@
                 this.objectRows = reset ? nextRows : this.objectRows.concat(nextRows);
                 this.treeHasMore = Boolean(json.hasMore);
                 this.treeNextOffset = Number(json.nextOffset || this.objectRows.length);
+                if (json.fullTree) {
+                    this.markLoadedTreeNodes();
+                    this.collapsedNodes.clear();
+                }
                 this.renderObjectTree();
                 return nextRows.length;
             } catch (error) {
@@ -871,6 +876,40 @@
             return Boolean(getContainerEl("#registeredOnly-M90001")?.checked);
         },
 
+        handleRegisteredFilterLabelClick(event) {
+            if (event.target?.id === "registeredOnly-M90001") return;
+            event.preventDefault();
+            event.stopPropagation();
+            if (event.detail > 1) return;
+
+            const checkbox = getContainerEl("#registeredOnly-M90001");
+            if (!checkbox) return;
+            checkbox.checked = !checkbox.checked;
+            checkbox.dispatchEvent(new Event("change", { bubbles: true }));
+        },
+
+        handleRegisteredFilterLabelDoubleClick(event) {
+            event.preventDefault();
+            event.stopPropagation();
+        },
+
+        markLoadedTreeNodes() {
+            this.loadedGroupNodes = new Set(
+                this.objectRows
+                    .filter((row) => this.getObjectType(row) === "GROUP")
+                    .map((row) => this.getNodeId(row))
+                    .filter(Boolean)
+            );
+            this.loadedPackageNodes = new Set(
+                this.objectRows
+                    .filter((row) => this.getObjectType(row) === "PACKAGE")
+                    .map((row) => this.getNodeId(row))
+                    .filter(Boolean)
+            );
+            this.loadingGroupNodes = new Set();
+            this.loadingPackageNodes = new Set();
+        },
+
         isObjectSearchFilterEnabled() {
             return Boolean(getContainerEl("#objectSearchFilter-M90001")?.checked);
         },
@@ -1201,8 +1240,8 @@
             return `
                 <tr data-row-index="${index}" class="${isSelected ? "is-selected" : ""}" onclick="M90001.selectDetailRow(${index})">
                     <td class="env-order-cell">${index + 1}</td>
-                    <td><div class="env-text-cell env-readonly-cell" title="${safeKey}">${safeKey || "&nbsp;"}</div></td>
-                    <td><div class="env-text-cell env-readonly-cell" title="${safeValue}">${safeValue || "&nbsp;"}</div></td>
+                    <td><div class="env-text-cell env-readonly-cell" title="${safeKey}" onmousedown="event.stopPropagation()" onclick="event.stopPropagation()" ondblclick="event.stopPropagation()">${safeKey || "&nbsp;"}</div></td>
+                    <td><div class="env-text-cell env-readonly-cell" title="${safeValue}" onmousedown="event.stopPropagation()" onclick="event.stopPropagation()" ondblclick="event.stopPropagation()">${safeValue || "&nbsp;"}</div></td>
                     <td>
                         <input
                             class="env-field env-desc-input"
@@ -1425,8 +1464,6 @@
             if (index < 0 || index >= this.rows.length) return;
             this.selectedRowIndex = index;
             this.renderRows();
-            const input = getContainerEl("#envRows-M90001")?.querySelector(`tr[data-row-index="${index}"] .env-desc-input`);
-            if (input) input.focus();
         },
 
         moveSelectedRow(direction) {

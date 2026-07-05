@@ -73,6 +73,51 @@ def list_runs(conn, menu_code: str, project_id: int, scenario_id: int) -> Dict[s
     return normalize_lob_result(require_success(result, "Data work run history query failed."))
 
 
+def get_data_work_run_context(conn, project_id: int, scenario_id: int) -> Dict[str, Any]:
+    result = execute_query(conn, "DATA_WORK_CONTEXT_RUN_ID_GET", {
+        "projectId": require_int(project_id, "projectId"),
+        "scenarioId": require_int(scenario_id, "scenarioId")
+    })
+    rows = require_success(result, "Data work run id query failed.").get("data", [])
+    if not rows:
+        raise HTTPException(status_code=404, detail="Scenario was not found.")
+    row = dict(rows[0])
+    row["DATA_WORK_RUN_ID"] = int(row.get("DATA_WORK_RUN_ID") or 0)
+    row["dataWorkRunId"] = row["DATA_WORK_RUN_ID"]
+    row["dataWorkRunAt"] = row.get("DATA_WORK_RUN_AT")
+    return row
+
+
+def ensure_data_work_run_id(conn, project_id: int, scenario_id: int) -> Dict[str, Any]:
+    project_id = require_int(project_id, "projectId")
+    scenario_id = require_int(scenario_id, "scenarioId")
+    cursor = conn.cursor()
+    try:
+        cursor.execute(SqlLoader.get_sql("DATA_WORK_CONTEXT_RUN_ID_ENSURE"), {
+            "projectId": project_id,
+            "scenarioId": scenario_id
+        })
+    finally:
+        cursor.close()
+    return get_data_work_run_context(conn, project_id, scenario_id)
+
+
+def create_next_data_work_run_id(conn, project_id: int, scenario_id: int) -> Dict[str, Any]:
+    project_id = require_int(project_id, "projectId")
+    scenario_id = require_int(scenario_id, "scenarioId")
+    cursor = conn.cursor()
+    try:
+        cursor.execute(SqlLoader.get_sql("DATA_WORK_CONTEXT_RUN_ID_NEXT"), {
+            "projectId": project_id,
+            "scenarioId": scenario_id
+        })
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Scenario was not found.")
+    finally:
+        cursor.close()
+    return get_data_work_run_context(conn, project_id, scenario_id)
+
+
 def list_runnable_jobs(conn, menu_code: str, project_id: int, scenario_id: int) -> List[Dict[str, Any]]:
     result = execute_query(conn, "DATA_WORK_JOB_RUN_LIST", {
         "menuCode": normalize_menu_code(menu_code),
@@ -277,13 +322,19 @@ def prepare_executable_script_for_validation(script_text: str, params: List[Dict
     def replace_dynamic_token(match):
         key = match.group(1).strip()
         value = param_values.get(key)
-        return "" if value is None else str(value)
+        return "" if is_auto_null_value(value) else str(value)
 
     return re.sub(
         r"/\*\s*--\s*([A-Za-z][A-Za-z0-9_$#]*(?:_[A-Za-z0-9_$#]+)*)\s*--\s*\*/",
         replace_dynamic_token,
         script_text or "",
     )
+
+
+def is_auto_null_value(value: Any) -> bool:
+    if value is None:
+        return True
+    return str(value).strip().lower() in {"", "null", "(null)", "(auto)"}
 
 
 def validate_executable_script_syntax(conn, script_text: str) -> None:
@@ -382,31 +433,13 @@ def create_run(
     message: str,
     result_table_name: Optional[str],
     result_owner: Optional[str],
-    manual_run_id: Optional[int] = None
+    data_run_id: Optional[int] = None
 ) -> int:
     cursor = conn.cursor()
     try:
-        if manual_run_id is not None:
-            cursor.execute(SqlLoader.get_sql("DATA_WORK_RUN_EXISTS_FOR_JOB"), {
-                "profileJobId": profile_job_id,
-                "profileRunId": manual_run_id
-            })
-            row = cursor.fetchone()
-            if not row or int(row[0] or 0) <= 0:
-                raise HTTPException(status_code=400, detail="Manual run id must be an existing run id for the selected job.")
-            cursor.execute(SqlLoader.get_sql("DATA_WORK_RUN_RESTART"), {
-                "profileJobId": profile_job_id,
-                "profileRunId": manual_run_id,
-                "runType": normalize_status(run_type),
-                "status": normalize_status(status),
-                "message": normalize_text(message, "", 4000),
-                "resultOwner": normalize_optional_identifier(result_owner),
-                "resultTableName": normalize_optional_identifier(result_table_name)
-            })
-            return int(manual_run_id)
-
         cursor.execute(SqlLoader.get_sql("DATA_WORK_RUN_INSERT"), {
             "profileJobId": profile_job_id,
+            "dataRunId": require_int(data_run_id or 0, "dataRunId"),
             "runType": normalize_status(run_type),
             "status": normalize_status(status),
             "message": normalize_text(message, "", 4000),

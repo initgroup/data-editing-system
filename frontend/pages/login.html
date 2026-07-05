@@ -3,11 +3,16 @@
         <h2 id="login-title">INIT Data Editing System Login</h2>
         <label>
             <span>Login ID</span>
-            <input id="loginId" class="env-field env-meta-field" type="text" autocomplete="off" autofocus>
+            <input id="loginId" class="env-field env-meta-field" type="text" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="email" onkeydown="login.handleLoginKey(event)" autofocus>
         </label>
         <label>
             <span>Password</span>
-            <input id="loginPassword" class="env-field env-meta-field" type="password" autocomplete="off" onkeydown="login.handleLoginKey(event)">
+            <div class="login-password-field">
+                <input id="loginPassword" class="env-field env-meta-field" type="password" autocomplete="current-password" onkeydown="login.handleLoginKey(event)">
+                <button id="loginPasswordToggle" class="login-password-toggle" type="button" title="Show password" aria-label="Show password" aria-pressed="false" onclick="login.togglePasswordVisible()">
+                    <i id="loginPasswordToggleIcon" class="fas fa-eye"></i>
+                </button>
+            </div>
         </label>
         <div id="loginTargetDbField" class="login-target-db-field" hidden>
             <span>Target DB</span>

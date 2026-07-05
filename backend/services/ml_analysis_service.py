@@ -945,7 +945,7 @@ def get_error_message(exc: Exception) -> str:
 
 
 def normalize_column_list(value: Any) -> List[str]:
-    if value is None:
+    if value is None or is_auto_target(value):
         return []
     if isinstance(value, list):
         items = value
@@ -954,7 +954,7 @@ def normalize_column_list(value: Any) -> List[str]:
     result = []
     for item in items:
         text = str(item or "").strip().upper()
-        if not text:
+        if not text or text == "(AUTO)":
             continue
         result.append(require_identifier(text, "column"))
     return list(dict.fromkeys(result))

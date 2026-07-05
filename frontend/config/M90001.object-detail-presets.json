@@ -55,7 +55,7 @@
         {
           "key": "P_CANDIDATE_COLUMNS",
           "comment": "학습 후보 컬럼 목록",
-          "defaultValue": ""
+          "defaultValue": "(auto)"
         },
         {
           "key": "P_MIN_RULE_SUPPORT_COUNT",
@@ -94,7 +94,7 @@
         },
         {
           "key": "P_RUN_ID",
-          "comment": "실행 이력 ID",
+          "comment": "시나리오 공용 DATA_WORK 실행 ID",
           "defaultValue": ":INIT$RunId"
         }
       ]
@@ -132,7 +132,7 @@
         {
           "key": "P_CANDIDATE_COLUMNS",
           "comment": "학습 후보 컬럼 목록",
-          "defaultValue": ""
+          "defaultValue": "(auto)"
         },
         {
           "key": "P_MIN_SUPPORT_COUNT",
@@ -186,7 +186,7 @@
         },
         {
           "key": "P_RUN_ID",
-          "comment": "실행 이력 ID",
+          "comment": "시나리오 공용 DATA_WORK 실행 ID",
           "defaultValue": ":INIT$RunId"
         }
       ]
@@ -278,7 +278,7 @@
         },
         {
           "key": "P_RUN_ID",
-          "comment": "실행 이력 ID",
+          "comment": "시나리오 공용 DATA_WORK 실행 ID",
           "defaultValue": ":INIT$RunId"
         }
       ]
@@ -340,7 +340,7 @@
         },
         {
           "key": "P_RUN_ID",
-          "comment": "실행 이력 ID",
+          "comment": "시나리오 공용 DATA_WORK 실행 ID",
           "defaultValue": ":INIT$RunId"
         }
       ]
@@ -402,7 +402,7 @@
         },
         {
           "key": "P_RUN_ID",
-          "comment": "실행 이력 ID",
+          "comment": "시나리오 공용 DATA_WORK 실행 ID",
           "defaultValue": ":INIT$RunId"
         }
       ]
@@ -445,7 +445,7 @@
         {
           "key": "P_ALPHA",
           "comment": "LASSO alpha. 비우면 교차검증으로 자동 선택",
-          "defaultValue": ""
+          "defaultValue": "(auto)"
         },
         {
           "key": "P_MAX_AUTO_TARGETS",
@@ -464,7 +464,7 @@
         },
         {
           "key": "P_RUN_ID",
-          "comment": "실행 이력 ID",
+          "comment": "시나리오 공용 DATA_WORK 실행 ID",
           "defaultValue": ":INIT$RunId"
         }
       ]
@@ -546,7 +546,7 @@
         },
         {
           "key": "P_RUN_ID",
-          "comment": "실행 이력 ID",
+          "comment": "시나리오 공용 DATA_WORK 실행 ID",
           "defaultValue": ":INIT$RunId"
         }
       ]
@@ -574,7 +574,7 @@
         {
           "key": "P_RULE_ID",
           "comment": "특정 RULE_ID만 검사할 때 입력. 비우면 선택된 전체 규칙 검사",
-          "defaultValue": ""
+          "defaultValue": "(auto)"
         },
         {
           "key": "P_TARGET_OWNER",
@@ -609,7 +609,7 @@
         {
           "key": "P_ABS_ERROR_THRESHOLD",
           "comment": "예측값이 0에 가까울 때 사용할 절대 오차 기준. 비우면 허용 오차율 값을 절대 기준으로 사용",
-          "defaultValue": ""
+          "defaultValue": "(auto)"
         },
         {
           "key": "P_MAX_RULES",
@@ -658,7 +658,7 @@
         },
         {
           "key": "P_RUN_ID",
-          "comment": "실행 이력 ID",
+          "comment": "시나리오 공용 DATA_WORK 실행 ID",
           "defaultValue": ":INIT$RunId"
         }
       ]
@@ -700,7 +700,7 @@
         },
         {
           "key": "P_RUN_ID",
-          "comment": "실행 이력 ID",
+          "comment": "시나리오 공용 DATA_WORK 실행 ID",
           "defaultValue": ":INIT$RunId"
         }
       ]
@@ -720,7 +720,7 @@
         {
           "key": "P_RESULT",
           "comment": "모델 상세 뷰 목록 REF CURSOR",
-          "defaultValue": ""
+          "defaultValue": "(auto)"
         }
       ]
     },
@@ -744,7 +744,7 @@
         {
           "key": "P_RESULT",
           "comment": "모델 상세 데이터 REF CURSOR",
-          "defaultValue": ""
+          "defaultValue": "(auto)"
         }
       ]
     }

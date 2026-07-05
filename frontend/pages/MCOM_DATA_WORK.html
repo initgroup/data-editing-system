@@ -89,6 +89,13 @@
                         <p class="table-desc" id="workDescription-__PAGE_CODE__" data-label-key="workDescriptionEmpty">Select a scenario table and registered correlation analysis object.</p>
                     </div>
                     <div class="table-export-actions">
+                        <div id="dataWorkRunBox-__PAGE_CODE__" class="data-run-context-box is-empty">
+                            <span>DATA RUN</span>
+                            <strong id="dataWorkRunId-__PAGE_CODE__">Not set</strong>
+                            <button type="button" class="table-icon-btn" title="Create new DATA_WORK RUN_ID" onclick="__PAGE_CODE__.createNewDataWorkRunId()">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </div>
                         <button type="button" id="saveJob-__PAGE_CODE__" class="table-btn" onclick="__PAGE_CODE__.saveJob()">
                             <i class="fas fa-save"></i>
                             <span data-label-key="saveWork">Save work</span>
@@ -271,7 +278,7 @@
                     <span><code>:INIT$ResultOwner</code><small>현재 Result Owner</small></span>
                     <span><code>:INIT$ResultTable</code><small>현재 Result Table</small></span>
                     <span><code>:INIT$RunSourceType</code><small>DATA_WORK/FLOW_WORK</small></span>
-                    <span><code>:INIT$RunId</code><small>현재 실행 이력 ID</small></span>
+                    <span><code>:INIT$RunId</code><small>시나리오 공용 DATA_WORK 실행 ID</small></span>
                 </div>
                 <h3>생성 예시</h3>
                 <pre class="data-help-code"><code>P_TARGET_OWNER       =&gt; :INIT$TargetOwner

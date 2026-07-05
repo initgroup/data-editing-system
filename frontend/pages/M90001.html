@@ -7,8 +7,8 @@
                     <p class="env-section-desc">Current owner procedures, functions, packages, and models.</p>
                 </div>
                 <div class="env-object-actions">
-                    <label class="env-registered-filter" title="Load registered objects only">
-                        <input id="registeredOnly-M90001" type="checkbox" onchange="M90001.loadObjectTree()">
+                    <label class="env-registered-filter" title="Load registered objects only" onclick="M90001.handleRegisteredFilterLabelClick(event)" ondblclick="M90001.handleRegisteredFilterLabelDoubleClick(event)">
+                        <input id="registeredOnly-M90001" type="checkbox" onclick="event.stopPropagation()" onchange="M90001.loadObjectTree()">
                         <span>Registered</span>
                     </label>
                     <button type="button" class="env-icon-btn env-refresh" title="Expand all groups" onclick="M90001.expandAllGroups()">

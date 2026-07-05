@@ -42,13 +42,15 @@
                 },
 
                 getLatestDataWorkRunId() {
+                    const contextRunId = this.getCurrentDataWorkRunId?.();
+                    if (contextRunId) return contextRunId;
                     const jobId = String(this.currentJob?.profileJobId || this.currentJob?.workJobId || "").trim();
                     if (!jobId) return "";
                     const row = (this.runHistory || []).find((item) => (
                         String(item.PROFILE_JOB_ID || item.WORK_JOB_ID || "").trim() === jobId
-                        && (item.PROFILE_RUN_ID || item.WORK_RUN_ID)
+                        && (item.DATA_RUN_ID || item.RUN_ID || item.PROFILE_RUN_ID || item.WORK_RUN_ID)
                     ));
-                    return row ? String(row.PROFILE_RUN_ID || row.WORK_RUN_ID || "").trim() : "";
+                    return row ? String(row.DATA_RUN_ID || row.RUN_ID || row.PROFILE_RUN_ID || row.WORK_RUN_ID || "").trim() : "";
                 },
 
                 createTargetResultWhereClause(tableName, targetOwner = "", targetTable = "", runIdOverride = null) {
@@ -217,6 +219,8 @@
         selectedScenarioId: "",
         selectedScenarioTableKey: "",
         selectedJobId: "",
+        dataWorkRunId: "",
+        dataWorkRunAt: "",
         workContextCollapsed: false,
         activeTab: "work",
         currentJob: null,
@@ -291,6 +295,8 @@
             this.selectedScenarioId = "";
             this.selectedScenarioTableKey = "";
             this.selectedJobId = "";
+            this.dataWorkRunId = "";
+            this.dataWorkRunAt = "";
             this.workContextCollapsed = false;
             this.activeTab = "work";
             this.currentJob = null;
@@ -395,6 +401,7 @@
                 this.renderContextScenarios("");
             }
             if (this.contextLoadFailed) return;
+            await this.loadDataWorkRunId(false);
             await this.loadScenarioTables();
             await this.loadJobs();
             if (!this.currentJob?.profileJobId && this.selectedScenarioTableKey) {
@@ -413,6 +420,7 @@
                 await this.loadContextScenarios(currentScenarioId);
             }
             if (this.contextLoadFailed) return;
+            await this.loadDataWorkRunId(false);
             await this.loadScenarioTables();
             await this.loadJobs();
             if (!this.currentJob?.profileJobId && this.selectedScenarioTableKey) {
@@ -474,6 +482,7 @@
             this.parameters = [];
             this.saveStoredContext();
             await this.loadContextScenarios("");
+            await this.loadDataWorkRunId(false);
             await this.loadScenarioTables();
             await this.loadJobs();
             if (this.selectedScenarioTableKey) {
@@ -528,6 +537,7 @@
             this.selectedScenarioId = exists ? String(preferredScenarioId) : firstScenarioId;
             select.value = this.selectedScenarioId;
             CommonUtils.applyOwnerScopeToSelect(select, this.contextScenarios, this.selectedScenarioId, ["SCENARIO_ID", "scenarioId"]);
+            this.syncDataWorkRunIdFromSelectedScenario();
             this.saveStoredContext();
         },
 
@@ -538,6 +548,7 @@
             this.currentJob = this.createEmptyJob();
             this.parameters = [];
             this.saveStoredContext();
+            await this.loadDataWorkRunId(false);
             await this.loadScenarioTables();
             await this.loadJobs();
             if (this.selectedScenarioTableKey) {
@@ -559,6 +570,120 @@
                 return false;
             }
             return true;
+        },
+
+        getSelectedScenario() {
+            return (this.contextScenarios || []).find((row) => (
+                String(row.SCENARIO_ID ?? row.scenarioId ?? "") === String(this.selectedScenarioId || "")
+            )) || null;
+        },
+
+        syncDataWorkRunIdFromSelectedScenario() {
+            const scenario = this.getSelectedScenario();
+            this.dataWorkRunId = String(scenario?.DATA_WORK_RUN_ID ?? scenario?.dataWorkRunId ?? this.dataWorkRunId ?? "").trim();
+            this.dataWorkRunAt = String(scenario?.DATA_WORK_RUN_AT ?? scenario?.dataWorkRunAt ?? this.dataWorkRunAt ?? "").trim();
+            this.renderDataWorkRunId();
+        },
+
+        getCurrentDataWorkRunId() {
+            const text = String(this.dataWorkRunId ?? "").trim();
+            return /^\d+$/.test(text) && Number(text) > 0 ? text : "";
+        },
+
+        setDataWorkRunContext(context = {}) {
+            const runId = context.DATA_WORK_RUN_ID ?? context.dataWorkRunId ?? "";
+            const runAt = context.DATA_WORK_RUN_AT ?? context.dataWorkRunAt ?? "";
+            this.dataWorkRunId = String(runId ?? "").trim();
+            this.dataWorkRunAt = String(runAt ?? "").trim();
+            this.contextScenarios = (this.contextScenarios || []).map((scenario) => (
+                String(scenario.SCENARIO_ID ?? scenario.scenarioId ?? "") === String(this.selectedScenarioId || "")
+                    ? { ...scenario, DATA_WORK_RUN_ID: this.dataWorkRunId, DATA_WORK_RUN_AT: this.dataWorkRunAt }
+                    : scenario
+            ));
+            this.renderDataWorkRunId();
+        },
+
+        renderDataWorkRunId() {
+            const valueEl = getContainerEl(`#dataWorkRunId-${PAGE_CODE}`);
+            const box = getContainerEl(`#dataWorkRunBox-${PAGE_CODE}`);
+            const runId = this.getCurrentDataWorkRunId();
+            if (valueEl) valueEl.textContent = runId || "Not set";
+            if (box) {
+                box.classList.toggle("is-empty", !runId);
+                box.title = runId
+                    ? `DATA_WORK RUN_ID ${runId}`
+                    : "No DATA_WORK RUN_ID yet. It will be created before run, or use New.";
+            }
+        },
+
+        async loadDataWorkRunId(showLoading = false) {
+            if (!this.selectedProjectId || !this.selectedScenarioId) {
+                this.dataWorkRunId = "";
+                this.dataWorkRunAt = "";
+                this.renderDataWorkRunId();
+                return null;
+            }
+            try {
+                const params = new URLSearchParams({
+                    projectId: this.selectedProjectId,
+                    scenarioId: this.selectedScenarioId
+                });
+                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/data-run-id?${params.toString()}`, {
+                    method: "GET",
+                    showLoading
+                });
+                this.setDataWorkRunContext(json.data || {});
+                return json.data || null;
+            } catch (error) {
+                this.dataWorkRunId = "";
+                this.dataWorkRunAt = "";
+                this.renderDataWorkRunId();
+                console.warn(`[${PAGE_CODE}] DATA_WORK RUN_ID load failed`, error);
+                return null;
+            }
+        },
+
+        async ensureDataWorkRunId() {
+            if (!this.ensureWorkContextSelected()) return "";
+            const current = this.getCurrentDataWorkRunId();
+            if (current) return current;
+            try {
+                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/data-run-id/ensure`, {
+                    method: "POST",
+                    body: {
+                        projectId: Number(this.selectedProjectId),
+                        scenarioId: Number(this.selectedScenarioId)
+                    },
+                    showLoading: false
+                });
+                this.setDataWorkRunContext(json.data || {});
+                return this.getCurrentDataWorkRunId();
+            } catch (error) {
+                alert(error.message || "DATA_WORK RUN_ID is not ready. Run INIT_TARGET_ALTER.sql on the target DB.");
+                return "";
+            }
+        },
+
+        async createNewDataWorkRunId() {
+            if (!this.ensureWorkContextSelected()) return;
+            const current = this.getCurrentDataWorkRunId();
+            const message = current
+                ? `Create a new DATA_WORK RUN_ID after ${current}?\n새 DATA_WORK RUN_ID를 생성할까요?`
+                : "Create the first DATA_WORK RUN_ID?\n첫 DATA_WORK RUN_ID를 생성할까요?";
+            if (!(await CommonMessage.confirm(message))) return;
+            try {
+                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/data-run-id/new`, {
+                    method: "POST",
+                    body: {
+                        projectId: Number(this.selectedProjectId),
+                        scenarioId: Number(this.selectedScenarioId)
+                    }
+                });
+                this.setDataWorkRunContext(json.data || {});
+                CommonMessage.success(json.message || `DATA_WORK RUN_ID ${this.getCurrentDataWorkRunId()} was created.`, { copyable: false });
+            } catch (error) {
+                alert(error.message || "DATA_WORK RUN_ID create failed.");
+            }
         },
 
         async loadScenarioTables() {
@@ -985,7 +1110,7 @@
                         { itemName: "P_MAX_AUTO_TARGETS", itemValue: "NUMBER", itemDesc: "자동 target 최대 개수", itemDefault: "10" },
                         { itemName: "P_CONTINUE_ON_ERROR", itemValue: "VARCHAR2", itemDesc: "자동 target 일부 실패 시 계속 실행 여부", itemDefault: "Y" },
                         { itemName: "P_RUN_SOURCE_TYPE", itemValue: "VARCHAR2", itemDesc: "실행 출처 구분(DATA_WORK/FLOW_WORK)", itemDefault: runSourceType },
-                        { itemName: "P_RUN_ID", itemValue: "NUMBER", itemDesc: "실행 이력 ID", itemDefault: runId }
+                        { itemName: "P_RUN_ID", itemValue: "NUMBER", itemDesc: "시나리오 공용 DATA_WORK 실행 ID", itemDefault: runId }
                     ]
                 },
                 SYMBOLIC_REGRESSION_RULE: {
@@ -1005,7 +1130,7 @@
                         { itemName: "P_MAX_AUTO_TARGETS", itemValue: "NUMBER", itemDesc: "자동 target 최대 개수", itemDefault: "10" },
                         { itemName: "P_CONTINUE_ON_ERROR", itemValue: "VARCHAR2", itemDesc: "자동 target 일부 실패 시 계속 실행 여부", itemDefault: "Y" },
                         { itemName: "P_RUN_SOURCE_TYPE", itemValue: "VARCHAR2", itemDesc: "실행 출처 구분(DATA_WORK/FLOW_WORK)", itemDefault: runSourceType },
-                        { itemName: "P_RUN_ID", itemValue: "NUMBER", itemDesc: "실행 이력 ID", itemDefault: runId }
+                        { itemName: "P_RUN_ID", itemValue: "NUMBER", itemDesc: "시나리오 공용 DATA_WORK 실행 ID", itemDefault: runId }
                     ]
                 }
             };
@@ -2004,11 +2129,14 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                 ? "Queue the saved work for batch execution?"
                 : "Run the saved work now?";
             if (!(await CommonMessage.confirm(message))) return;
+            const dataRunId = await this.ensureDataWorkRunId();
+            if (!dataRunId) return;
             const isWebApi = String(savedJob.execSourceType || "").toUpperCase() === "WEB_API";
             const runtimeBindValues = await this.collectRuntimeBindValues(savedJob.execPlsql || "", {
                 sourceType: savedJob.execSourceType || "DB_OBJECT",
                 parameterRows: savedJob.parameters || [],
                 systemBindJob: savedJob,
+                dataRunId,
                 dialogIntro: isWebApi
                     ? "저장된 API Parameter List 기준으로 이번 실행에 사용할 값을 확인합니다. 변경한 값만 이번 실행에 임시 적용됩니다."
                     : "저장된 PL/SQL과 저장된 Job 설정을 실행합니다. 아래 Runtime Bind 값만 이번 실행에 임시 적용됩니다."
@@ -2054,11 +2182,14 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
             if (!this.ensureExecutableScriptReady()) return;
             if (!(await CommonMessage.confirm("Test the current draft without saving it?"))) return;
 
+            const dataRunId = await this.ensureDataWorkRunId();
+            if (!dataRunId) return;
             const isWebApi = String(this.currentJob?.execSourceType || "").toUpperCase() === "WEB_API";
             const runtimeBindValues = await this.collectRuntimeBindValues(null, {
                 sourceType: this.currentJob?.execSourceType || "DB_OBJECT",
                 parameterRows: this.parameters || [],
                 systemBindJob: null,
+                dataRunId,
                 dialogIntro: isWebApi
                     ? "현재 화면의 API Parameter List 기준으로 1회 테스트 실행할 값을 확인합니다. 변경한 값만 이번 테스트에 적용됩니다."
                     : "현재 화면의 Job 설정과 PL/SQL을 저장하지 않고 1회 테스트 실행합니다. Runtime Bind 값은 이번 테스트에만 적용됩니다."
@@ -2104,6 +2235,8 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                 ? "Queue all enabled jobs for batch execution?"
                 : "Execute all enabled jobs now in sort order?";
             if (!(await CommonMessage.confirm(message))) return;
+            const dataRunId = await this.ensureDataWorkRunId();
+            if (!dataRunId) return;
 
             const summaries = [];
             let failedCount = 0;
@@ -2214,6 +2347,7 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                 "ELAPSED_TIME",
                 "RUN_SOURCE_TYPE",
                 "RUN_ID",
+                "DATA_RUN_ID",
                 "RESULT_OWNER",
                 "RESULT_TABLE_NAME",
                 "CREATED_AT",
@@ -2696,7 +2830,8 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
             const bindOptions = {
                 useParameterDefaults: options.useParameterDefaults !== false,
                 useSystemBindContext: options.useSystemBindContext !== false,
-                systemBindJob: options.systemBindJob || null
+                systemBindJob: options.systemBindJob || null,
+                dataRunId: options.dataRunId || this.getCurrentDataWorkRunId()
             };
             const parameterRows = options.useParameterDefaults === false
                 ? []
@@ -2799,7 +2934,9 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                 const rawDefault = this.getParameterDefaultText(row);
                 const resolvedDefault = this.resolveRuntimeDefaultValue(rawDefault, bindOptions);
                 const savedValue = this.runtimeBindValues?.[name];
-                const value = savedValue !== undefined ? savedValue : resolvedDefault;
+                const value = !this.isRuntimeRunIdPrompt(name) && savedValue !== undefined
+                    ? savedValue
+                    : resolvedDefault;
                 this.addRuntimeBindPrompt(
                     prompts,
                     seen,
@@ -2928,6 +3065,11 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
 
         getRuntimeBindDefaultValue(name, row = null, options = {}) {
             if (this.isSystemBindName(name)) return this.getSystemBindValue(name, options);
+            if (this.isRuntimeRunIdPrompt(name)) {
+                return row
+                    ? this.resolveRuntimeDefaultValue(row.itemDefault, options)
+                    : this.getSystemBindValue("INIT$RunId", options);
+            }
             const savedValue = this.runtimeBindValues?.[name];
             if (savedValue !== undefined) return savedValue;
             return row ? this.resolveRuntimeDefaultValue(row.itemDefault, options) : "";
@@ -2952,7 +3094,7 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                     return "System bind. Select a saved Data Work job to fill this automatically.";
                 }
                 if (this.normalizeSystemBindName(name) === "INIT$RunId") {
-                    return "Use (auto) or blank for a new run id. Enter an existing run id to overwrite that run.";
+                    return "DATA_WORK shared RUN_ID for the selected project/scenario. Use New to create the next validation run.";
                 }
                 return "System bind default. You can override it for this run.";
             }
@@ -2978,7 +3120,7 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                 "INIT$PreResultOwner": "",
                 "INIT$PreResultTable": "",
                 "INIT$RunSourceType": "DATA_WORK",
-                "INIT$RunId": "(auto)"
+                "INIT$RunId": options.dataRunId || this.getCurrentDataWorkRunId() || "(auto)"
             };
             return values[canonicalName] ?? "";
         },
@@ -3015,6 +3157,10 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
             return !text || text === "(auto)" || text === "auto";
         },
 
+        isRuntimeRunIdPrompt(name) {
+            return new Set(["INIT$RunId", "runId", "P_RUN_ID"]).has(String(name || ""));
+        },
+
         readManualRunIdValue(values = {}) {
             const ids = [];
             ["INIT$RunId", "runId", "P_RUN_ID"].forEach((key) => {
@@ -3033,16 +3179,6 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
             return ids[0];
         },
 
-        hasRunHistoryIdForCurrentJob(runId) {
-            const jobId = String(this.currentJob?.profileJobId || this.currentJob?.workJobId || "").trim();
-            const targetRunId = String(runId || "").trim();
-            if (!jobId || !targetRunId) return false;
-            return (this.runHistory || []).some((item) => (
-                String(item.PROFILE_JOB_ID || item.WORK_JOB_ID || "").trim() === jobId
-                && String(item.PROFILE_RUN_ID || item.WORK_RUN_ID || item.RUN_ID || "").trim() === targetRunId
-            ));
-        },
-
         async confirmManualRunIdOverwrite(values = {}) {
             let runId = "";
             try {
@@ -3052,15 +3188,13 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                 return false;
             }
             if (!runId) return true;
-            if (!this.hasRunHistoryIdForCurrentJob(runId)) {
-                await CommonMessage.warn(`RUN_ID ${runId} is not an existing run id for the selected job.`);
-                return false;
-            }
+            const currentRunId = this.getCurrentDataWorkRunId();
+            if (!currentRunId || runId === currentRunId) return true;
             return CommonMessage.confirm([
-                `RUN_ID ${runId} will be overwritten.`,
-                `RUN_ID ${runId} 결과를 다시 생성합니다.`,
+                `Use DATA_WORK RUN_ID ${runId} for this execution?`,
+                `현재 시나리오 RUN_ID ${currentRunId} 대신 ${runId}로 실행합니다.`,
                 "",
-                "Existing result rows for this run id may be deleted and inserted again.",
+                "Result rows may be written to the entered DATA_WORK RUN_ID.",
                 "Continue?"
             ].join("\n"));
         },
@@ -3078,14 +3212,20 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
             const grid = getContainerEl(`#runtimeBindGrid-${PAGE_CODE}`);
             if (!layer || !grid) return Promise.resolve({});
             const title = getContainerEl(`#runtimeBindTitle-${PAGE_CODE}`);
-            if (title) title.textContent = options.dialogTitle || "Runtime Bind Variables";
+            const dataRunId = String(options.dataRunId || this.getCurrentDataWorkRunId() || "").trim();
+            if (title) {
+                const baseTitle = options.dialogTitle || "Runtime Bind Variables";
+                title.innerHTML = dataRunId
+                    ? `${this.escapeHtml(baseTitle)} <span class="data-run-title-badge">DATA RUN #${this.escapeHtml(dataRunId)}</span>`
+                    : this.escapeHtml(baseTitle);
+            }
             const intro = getContainerEl(`#runtimeBindIntro-${PAGE_CODE}`);
             if (intro) {
                 intro.textContent = options.dialogIntro
                     || "실행에 사용할 런타임 바인드 값을 확인하세요. 기본값과 예약 변수 값은 미리 채워지며 필요하면 수정할 수 있습니다.";
             }
             grid.innerHTML = bindPrompts.map((item) => `
-                <label class="data-bind-row">
+                <label class="data-bind-row ${this.isRuntimeRunIdPrompt(item.name) ? "data-run-bind-row" : ""}">
                     <span class="data-bind-meta">
                         <span class="flow-bind-name">${this.escapeHtml(item.label || item.name)}</span>
                         ${item.comment ? `<small class="flow-bind-comment">${this.escapeHtml(item.comment)}</small>` : ""}
