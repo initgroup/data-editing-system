@@ -1,0 +1,82 @@
+/* Split from styleMenu.css. Contains only selectors scoped to this menu code. */
+#container-M99002 .table-meta-strip {
+    grid-template-columns: minmax(110px, 150px) minmax(320px, 1.4fr) minmax(120px, 160px) minmax(170px, 220px);
+}
+
+#container-M99002 {
+    height: calc(100vh - 128px) !important;
+    max-height: calc(100vh - 128px);
+    min-height: 0;
+    overflow: hidden;
+}
+
+#container-M99002 .table-workspace {
+    align-items: stretch;
+    height: 100%;
+    max-height: 100%;
+    min-height: 0;
+    overflow: hidden;
+}
+
+#container-M99002 .table-object-panel,
+#container-M99002 .table-panel {
+    height: 100%;
+    max-height: 100%;
+    min-height: 0;
+    overflow: hidden;
+}
+
+#container-M99002 .table-panel {
+    min-width: 0;
+}
+
+#container-M99002 #objectTree-M99002 {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: auto;
+}
+
+#container-M99002 .table-tab-panel.is-active {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+#container-M99002 .table-tab-panel > .table-result-grid,
+#container-M99002 .sql-workbench > .table-result-grid {
+    flex: 1 1 0;
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    overflow: auto;
+}
+
+#container-M99002 .sql-workbench {
+    display: grid;
+    flex: 1 1 0;
+    gap: 8px;
+    grid-template-rows: auto minmax(80px, 160px) auto minmax(120px, 1fr);
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+}
+
+#container-M99002 .table-sql-editor {
+    height: 100%;
+    min-height: 0;
+    resize: none;
+}
+
+#container-M99002 .table-result-grid .table-grid th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
+#container-M99002 [data-panel="script"] .db-browser-script-viewer {
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 0;
+    margin-bottom: 0;
+    resize: none;
+}

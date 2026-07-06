@@ -1,0 +1,133 @@
+/* Split from styleMenu.css. Contains only selectors scoped to this menu code. */
+#container-M01002 .scenario-list-panel {
+    flex: 1 1 0;
+}
+
+#container-M01002 .scenario-detail {
+    flex: 0 1 auto;
+    overflow: auto;
+}
+
+#container-M01002 .scenario-list-panel {
+    flex: 0 0 clamp(220px, 30vh, 340px);
+    min-height: 220px;
+    max-height: 340px;
+}
+
+#container-M01002 .scenario-list {
+    min-height: 118px;
+}
+
+#container-M01002 .scenario-list-body {
+    min-height: 52px;
+}
+
+#container-M01002 .scenario-detail {
+    overflow: visible;
+}
+
+@media (min-width: 769px) and (max-width: 1440px) {
+    body:not(.intro-mode) #container-M01002 .scenario-list-panel {
+        flex: 0 0 clamp(210px, 28vh, 320px);
+        min-height: 210px;
+        max-height: 320px;
+    }
+
+    body:not(.intro-mode) #container-M01002 .scenario-list-toolbar {
+        flex-wrap: nowrap;
+    }
+
+    body:not(.intro-mode) #container-M01002 .scenario-search {
+        min-width: 0;
+    }
+
+    body:not(.intro-mode) #container-M01002 .scenario-new-btn {
+        min-width: 128px;
+        white-space: nowrap;
+    }}
+
+@media (min-width: 769px) and (max-width: 1180px) {
+
+    body:not(.intro-mode) #container-M01002 .scenario-list-panel {
+        flex-basis: clamp(220px, 30vh, 320px);
+        min-height: 220px;
+    }
+
+    body:not(.intro-mode) #container-M01002 .scenario-detail {
+        flex: 0 0 auto;
+        overflow: visible;
+    }
+
+    body:not(.intro-mode) #container-M01002 .scenario-detail .env-meta-wide:last-child textarea {
+        min-height: 140px;
+    }}
+
+@media (max-width: 768px) {
+
+    body:not(.intro-mode) #container-M01002 .project-list {
+        max-height: 260px;
+    }
+
+    body:not(.intro-mode) #container-M01002 .project-list-body {
+        max-height: 174px;
+    }
+
+    body:not(.intro-mode) #container-M01002 .scenario-side-summary {
+        padding: 10px;
+    }
+
+    body:not(.intro-mode) #container-M01002 .scenario-list-panel {
+        flex: 0 0 auto;
+        min-height: 196px;
+        max-height: 270px;
+        margin-bottom: 14px;
+    }
+
+    body:not(.intro-mode) #container-M01002 .scenario-list-toolbar {
+        align-items: stretch;
+        flex-wrap: wrap;
+    }
+
+    body:not(.intro-mode) #container-M01002 .scenario-search {
+        flex: 1 1 220px;
+        min-width: 0;
+    }
+
+    body:not(.intro-mode) #container-M01002 .scenario-new-btn {
+        flex: 1 1 160px;
+        min-width: 0;
+    }
+
+    body:not(.intro-mode) #container-M01002 .scenario-list {
+        min-height: 106px;
+    }
+
+    body:not(.intro-mode) #container-M01002 .scenario-list-body {
+        max-height: 126px;
+        min-height: 52px;
+        overflow-y: auto;
+    }
+
+    body:not(.intro-mode) #container-M01002 .scenario-detail {
+        flex: 0 0 auto;
+        overflow: visible;
+    }
+
+    body:not(.intro-mode) #container-M01002 .scenario-detail .env-meta-wide:last-child textarea {
+        min-height: 116px;
+    }}
+
+@media (max-width: 480px) {
+
+    body:not(.intro-mode) #container-M01002 .project-list {
+        max-height: 230px;
+    }
+
+    body:not(.intro-mode) #container-M01002 .scenario-list-panel {
+        min-height: 184px;
+        max-height: 244px;
+    }
+
+    body:not(.intro-mode) #container-M01002 .scenario-list-body {
+        max-height: 112px;
+    }}

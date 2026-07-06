@@ -1,0 +1,13 @@
+/* Split from styleMenu.css. Contains only selectors scoped to this menu code. */
+#container-M91001.account-page .env-workspace {
+    display: block;
+}
+
+#container-M91001.account-page .env-object-panel {
+    display: none;
+}
+
+#container-M91001.account-page .env-panel {
+    height: 100%;
+    max-width: none;
+}

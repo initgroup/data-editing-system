@@ -1,0 +1,429 @@
+/* Split from styleMenu.css. Contains only selectors scoped to this menu code. */
+#container-M02002 .table-meta-strip {
+    grid-template-columns: minmax(110px, 150px) minmax(320px, 1.4fr) minmax(0, 1fr) minmax(170px, 220px);
+}
+
+#container-M02002 .table-workspace {
+    height: calc(100vh - 300px);
+    max-height: calc(100vh - 300px);
+    min-height: 0;
+    overflow: hidden;
+}
+
+#container-M02002 .table-object-panel,
+#container-M02002 .table-panel {
+    min-height: 0;
+    overflow: hidden;
+}
+
+#container-M02002 .table-tab-panel.is-active {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 0;
+    min-height: 0;
+}
+
+#container-M02002 .table-tab-panel > .table-result-grid,
+#container-M02002 .sql-workbench > .table-result-grid {
+    flex: 1 1 0;
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    overflow: auto;
+}
+
+#container-M02002 .sql-workbench {
+    display: grid;
+    flex: 1 1 0;
+    gap: 6px;
+    grid-template-rows: minmax(34px, auto) minmax(72px, 112px) auto minmax(180px, 1fr);
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+}
+
+#container-M02002 [data-panel="sql"] .sql-toolbar {
+    align-items: center;
+    margin-bottom: 0;
+    min-height: 34px;
+    overflow-x: auto;
+    overflow-y: visible;
+    padding: 1px 0;
+}
+
+#container-M02002 .table-sql-editor {
+    height: 100%;
+    margin-bottom: 0;
+    min-height: 0;
+    resize: none;
+}
+
+#container-M02002 #sqlMessage-M02002 {
+    min-height: 0;
+    padding: 0;
+}
+
+#container-M02002 [data-panel="sql"] > .sql-workbench > .table-result-grid {
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    overflow: hidden;
+}
+
+#container-M02002 .table-result-grid .table-grid th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
+/* M02002 responsive selection workspace. */
+#container-M02002 .work-context-card,
+#container-M02002 .table-workspace,
+#container-M02002 .table-object-panel,
+#container-M02002 .table-panel {
+    min-width: 0;
+}
+
+#container-M02002 #scenarioTablesGrid-M02002,
+#container-M02002 #tableTree-M02002,
+#container-M02002 #columnsGrid-M02002,
+#container-M02002 #dataGrid-M02002,
+#container-M02002 #sqlGrid-M02002 {
+    box-sizing: border-box;
+    padding-top: 28px;
+    padding-bottom: 12px;
+    position: relative;
+}
+
+#container-M02002 #columnsGrid-M02002,
+#container-M02002 #dataGrid-M02002,
+#container-M02002 #sqlGrid-M02002 {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+#container-M02002 #scenarioTablesGrid-M02002 {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+#container-M02002 #scenarioTablesGrid-M02002 > .scenario-table-scroll-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+}
+
+#container-M02002 #scenarioTablesGrid-M02002 .scenario-table-head {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
+#container-M02002 #sqlGrid-M02002 {
+    padding-top: 22px;
+}
+
+#container-M02002 #scenarioTablesGrid-M02002 .list-count-footer,
+#container-M02002 #tableTree-M02002 .list-count-footer,
+#container-M02002 #columnsGrid-M02002 .list-count-footer,
+#container-M02002 #dataGrid-M02002 .list-count-footer,
+#container-M02002 #sqlGrid-M02002 .list-count-footer {
+    right: 14px;
+    top: 8px;
+}
+
+#container-M02002 #sqlGrid-M02002 .list-count-footer {
+    display: none;
+    top: 4px;
+}
+
+@media (min-width: 1025px) {
+    #pageContainerHolder .page-section.active > #container-M02002.table-page > .table-workspace {
+        flex: 1 1 auto;
+        height: max(520px, calc(100vh - 300px));
+        max-height: max(520px, calc(100vh - 300px));
+        min-height: 520px;
+        overflow: hidden;
+    }}
+
+#container-M02002 #columnsGrid-M02002 > .table-grid-scroll,
+#container-M02002 #dataGrid-M02002 > .table-grid-scroll,
+#container-M02002 #sqlGrid-M02002 > .table-grid-scroll {
+    box-sizing: border-box;
+    flex: 1 1 auto;
+    max-width: 100%;
+    min-height: 0;
+    overflow: auto;
+    padding-bottom: 32px;
+    scroll-padding-bottom: 32px;
+    scrollbar-gutter: stable;
+    touch-action: pan-x pan-y;
+    width: 100%;
+}
+
+#container-M02002 #sqlGrid-M02002 > .table-grid-scroll {
+    overflow-x: scroll !important;
+    overflow-y: scroll !important;
+}
+
+#container-M02002 .mobile-grid-scroll-actions {
+    display: none;
+}
+
+@media (max-width: 1024px) {
+    #container-M02002.table-page {
+        gap: 12px;
+        height: auto !important;
+        max-height: none;
+        min-height: calc(100vh - 128px);
+        overflow: visible;
+    }
+
+    #container-M02002 .work-context-card {
+        flex: 0 0 auto;
+        overflow: visible;
+    }
+
+    #container-M02002 .work-context-header {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    #container-M02002 .work-context-title-row {
+        display: grid;
+        gap: 8px;
+        grid-template-columns: minmax(0, 1fr);
+        width: 100%;
+    }
+
+    #container-M02002 .work-context-title-row > span {
+        display: block;
+        line-height: 1.35;
+        min-width: 0;
+        overflow-wrap: normal;
+        white-space: normal;
+        word-break: keep-all;
+    }
+
+    #container-M02002 .work-context-title-row strong {
+        display: block;
+        margin: 0 0 2px;
+    }
+
+    #container-M02002 .scenario-table-actions {
+        display: flex;
+        flex-wrap: nowrap;
+        max-width: 100%;
+        overflow-x: auto;
+        padding-bottom: 2px;
+        width: 100%;
+    }
+
+    #container-M02002 .scenario-table-actions .table-btn,
+    #container-M02002 .scenario-table-actions .table-icon-btn {
+        flex: 0 0 auto;
+        white-space: nowrap;
+    }
+
+    #container-M02002 .work-context-bar {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    #container-M02002 .work-context-card .scenario-table-grid {
+        flex: 0 0 190px;
+        height: 190px;
+        max-height: 190px;
+        min-height: 190px;
+        overflow: hidden;
+    }
+
+    #container-M02002 .scenario-table-head,
+    #container-M02002 .scenario-table-row {
+        min-width: 720px;
+    }
+
+    #container-M02002 .table-workspace {
+        display: flex;
+        flex: 0 0 auto;
+        flex-direction: column;
+        gap: 14px;
+        height: auto !important;
+        max-height: none !important;
+        min-height: 0;
+        overflow: visible;
+    }
+
+    #container-M02002 .table-object-panel {
+        flex: 0 0 auto;
+        height: auto;
+        max-height: none;
+        min-height: 300px;
+        overflow: hidden;
+    }
+
+    #container-M02002 #tableTree-M02002 {
+        flex: 0 0 230px;
+        height: 230px;
+        max-height: 230px;
+        min-height: 230px;
+        overflow: hidden;
+    }
+
+    #container-M02002 .table-panel {
+        flex: 0 0 auto;
+        height: auto;
+        max-height: none;
+        min-height: 360px;
+        overflow: visible;
+        padding: 18px 12px;
+    }
+
+    #container-M02002 .table-header {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    #container-M02002 .table-export-actions,
+    #container-M02002 .table-tabs {
+        max-width: 100%;
+        overflow-x: auto;
+        padding-bottom: 2px;
+    }
+
+    #container-M02002 .table-meta-strip {
+        grid-template-columns: minmax(90px, 0.8fr) minmax(220px, 1.6fr) minmax(160px, 1fr) minmax(140px, 1fr);
+        min-width: 600px;
+        overflow-x: auto;
+        overflow-y: hidden;
+    }
+
+    #container-M02002 .table-meta-strip > div {
+        border-bottom: 0;
+        border-right: 1px solid #e5e7eb;
+    }
+
+    #container-M02002 .table-meta-strip > div:last-child {
+        border-right: 0;
+    }
+
+    #container-M02002 .table-tab-panel.is-active {
+        flex: 0 0 auto;
+        height: auto;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    #container-M02002 .table-tab-panel[data-panel="sql"].is-active {
+        min-height: 430px;
+        overflow: visible;
+    }
+
+    #container-M02002 .table-tab-panel[data-panel="sql"] > .sql-workbench {
+        gap: 6px;
+        grid-template-rows: 34px 72px auto 280px;
+        height: auto;
+        min-height: 0;
+        overflow: visible;
+    }
+
+    #container-M02002 .table-tab-panel[data-panel="sql"] .sql-toolbar {
+        align-items: center;
+        flex-wrap: nowrap;
+        gap: 6px;
+        height: 34px;
+        min-height: 34px;
+        overflow-x: auto;
+        overflow-y: visible;
+        padding-bottom: 2px;
+    }
+
+    #container-M02002 .table-tab-panel[data-panel="sql"] .sql-toolbar .table-limit-control {
+        flex: 0 0 auto;
+    }
+
+    #container-M02002 #sqlMessage-M02002 {
+        font-size: 12px;
+        line-height: 1.25;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    #container-M02002 #columnsGrid-M02002,
+    #container-M02002 #dataGrid-M02002,
+    #container-M02002 #sqlGrid-M02002 {
+        flex: 0 0 270px;
+        height: 270px;
+        max-height: 270px;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    #container-M02002 #columnsGrid-M02002 > .table-grid-scroll,
+    #container-M02002 #dataGrid-M02002 > .table-grid-scroll,
+    #container-M02002 #sqlGrid-M02002 > .table-grid-scroll {
+        flex: 0 0 230px;
+        height: 230px;
+        max-height: 230px;
+        min-height: 0;
+        overflow-x: auto !important;
+        overflow-y: auto !important;
+    }
+
+    #container-M02002 #sqlGrid-M02002 {
+        flex-basis: 280px;
+        height: 280px;
+        max-height: 280px;
+        padding-bottom: 12px;
+        padding-right: 0;
+        position: relative;
+    }
+
+    #container-M02002 #sqlGrid-M02002 > .table-grid-scroll {
+        bottom: auto;
+        flex: 1 1 auto;
+        height: auto;
+        left: auto;
+        max-height: none;
+        overflow-x: scroll !important;
+        overflow-y: scroll !important;
+        padding-bottom: 32px;
+        position: static;
+        right: auto;
+        scroll-padding-bottom: 32px;
+        top: auto;
+        width: 100%;
+    }
+
+    #container-M02002 #sqlGrid-M02002 .mobile-grid-scroll-actions {
+        display: none;
+        bottom: 5px;
+        gap: 4px;
+        grid-template-columns: repeat(4, 30px);
+        position: absolute;
+        right: 8px;
+        z-index: 120;
+    }
+
+    #container-M02002 #sqlGrid-M02002 .mobile-grid-scroll-btn {
+        align-items: center;
+        background: #f8fafc;
+        border: 1px solid #cbd5e1;
+        color: #0f172a;
+        cursor: pointer;
+        display: inline-flex;
+        height: 30px;
+        justify-content: center;
+        padding: 0;
+        width: 30px;
+    }
+
+    #container-M02002 #sqlGrid-M02002 .mobile-grid-scroll-btn:active {
+        background: #2563eb;
+        border-color: #1d4ed8;
+        color: #ffffff;
+    }}

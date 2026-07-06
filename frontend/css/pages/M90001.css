@@ -1,0 +1,24 @@
+/* Split from styleMenu.css. Contains only selectors scoped to this menu code. */
+#container-M90001 .env-detail-preset-btn {
+    margin-left: auto;
+}
+
+#container-M90001 .env-panel {
+    overflow-y: auto;
+}
+
+#container-M90001 .env-source-panel {
+    flex-basis: 560px;
+    min-height: 480px;
+}
+
+#container-M90001 .env-detail-grid {
+    flex: 1 1 220px;
+    min-height: 0;
+}
+
+#container-M90001 .env-source-panel {
+    flex: 0 1 240px;
+    flex-basis: 240px;
+    min-height: 160px;
+}

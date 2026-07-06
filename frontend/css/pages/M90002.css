@@ -1,0 +1,181 @@
+/* Split from styleMenu.css. Contains only selectors scoped to this menu code. */
+/* ===== M90002 API object registry ===== */
+#container-M90002.env-page {
+    padding: 0;
+}
+
+#container-M90002 .api-workspace {
+    grid-template-columns: minmax(320px, 34%) minmax(0, 1fr);
+    gap: 18px;
+}
+
+#container-M90002 .api-object-panel,
+#container-M90002 .api-detail-panel {
+    border: 1px solid #d7dce3;
+}
+
+#container-M90002 .api-detail-panel {
+    gap: 12px;
+    overflow: auto;
+    padding: 28px 32px;
+}
+
+#container-M90002 .api-object-grid {
+    background: #fff;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+}
+
+#container-M90002 .api-tree-body {
+    min-height: 0;
+}
+
+#container-M90002 .api-group-row {
+    background: #f8fafc;
+    color: #334155;
+    cursor: pointer;
+    font-weight: 700;
+    min-height: 38px;
+}
+
+#container-M90002 .env-tree-row {
+    align-items: center;
+    border: 0;
+    border-bottom: 1px solid #e5e9ef;
+    display: grid;
+    gap: 10px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    min-height: 58px;
+    padding: 10px 12px;
+    width: 100%;
+}
+
+#container-M90002 .env-tree-row:hover,
+#container-M90002 .env-tree-row.is-selected {
+    background: #edf2f7;
+}
+
+#container-M90002 .api-group-row:hover {
+    background: #eef2f7;
+}
+
+#container-M90002 .api-registered-icon {
+    color: #2563eb;
+    font-size: 11px;
+}
+
+#container-M90002 .env-tree-label,
+#container-M90002 .env-tree-muted {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#container-M90002 .api-meta-grid {
+    flex: 0 0 auto;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 10px;
+}
+
+#container-M90002 .api-object-id-field {
+    grid-column: span 2;
+}
+
+#container-M90002 .api-object-type-field {
+    grid-column: span 2;
+}
+
+#container-M90002 .api-object-name-field {
+    grid-column: span 8;
+}
+
+#container-M90002 .api-http-method-field {
+    grid-column: span 2;
+}
+
+#container-M90002 .api-endpoint-field {
+    grid-column: span 10;
+}
+
+#container-M90002 .api-timeout-field,
+#container-M90002 .api-auth-type-field {
+    grid-column: span 2;
+}
+
+#container-M90002 .api-auth-key-field {
+    grid-column: span 8;
+}
+
+#container-M90002 .api-result-create-field {
+    grid-column: span 3;
+}
+
+#container-M90002 .api-result-owner-field {
+    grid-column: span 4;
+}
+
+#container-M90002 .api-result-name-field {
+    grid-column: span 5;
+}
+
+@media (max-width: 900px) {
+    #container-M90002 .api-meta-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    #container-M90002 .api-object-id-field,
+    #container-M90002 .api-object-type-field,
+    #container-M90002 .api-object-name-field,
+    #container-M90002 .api-http-method-field,
+    #container-M90002 .api-endpoint-field,
+    #container-M90002 .api-timeout-field,
+    #container-M90002 .api-auth-type-field,
+    #container-M90002 .api-auth-key-field,
+    #container-M90002 .api-result-create-field,
+    #container-M90002 .api-result-owner-field,
+    #container-M90002 .api-result-name-field {
+        grid-column: 1;
+    }}
+
+#container-M90002 .api-detail-toolbar {
+    align-items: center;
+    display: flex;
+    gap: 6px;
+}
+
+#container-M90002 .api-detail-kind {
+    flex: 0 0 96px;
+    height: 30px;
+    margin-left: auto;
+    padding: 0 8px;
+}
+
+#container-M90002 .api-detail-table {
+    min-width: 940px;
+}
+
+#container-M90002 .api-detail-table .env-field {
+    height: 32px;
+    min-width: 0;
+    padding: 0 8px;
+}
+
+#container-M90002 .api-contract-panel {
+    flex: 0 1 220px;
+    flex-basis: 220px;
+    min-height: 150px;
+}
+
+#container-M90002 .api-contract-panel .env-source-viewer {
+    min-height: 120px;
+}
+
+@media (max-width: 1100px) {
+    #container-M90002 .api-workspace {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    #container-M90002 .api-detail-panel {
+        min-height: 760px;
+    }}

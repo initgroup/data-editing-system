@@ -1,0 +1,254 @@
+/* Split from styleMenu.css. Contains only selectors scoped to this menu code. */
+body.intro-mode #page-section-M99001 {
+    width: min(1440px, 100%);
+}
+
+#container-M99001 .env-panel {
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+body.intro-mode #container-M99001.env-page {
+    width: 100%;
+}
+
+body.intro-mode #container-M99001 .env-workspace {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+#container-M99001 .project-meta-grid {
+    grid-template-columns:
+        minmax(160px, 1.1fr)
+        minmax(140px, 0.9fr)
+        minmax(140px, 0.9fr)
+        minmax(220px, 1.2fr);
+}
+
+#container-M99001 .env-meta-field,
+#container-M99001 .env-meta-textarea {
+    width: 100%;
+}
+
+#container-M99001 .m99001-tabs {
+    display: flex;
+    flex: 0 0 auto;
+    gap: 6px;
+    border-bottom: 1px solid #cfd6e4;
+    margin-bottom: 12px;
+}
+
+#container-M99001 .m99001-tab {
+    min-width: 148px;
+    height: 38px;
+    border: 1px solid #cfd6e4;
+    border-bottom: 0;
+    background: #f8fafc;
+    color: #334155;
+    font-weight: 600;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+#container-M99001 .m99001-tab.is-active {
+    background: #2563eb;
+    border-color: #1d4ed8;
+    color: #ffffff;
+    box-shadow: inset 0 -3px 0 rgba(15, 23, 42, 0.22);
+}
+
+#container-M99001 .m99001-tab.is-attention {
+    background: #fff7ed;
+    border-color: #f59e0b;
+    color: #92400e;
+    box-shadow: inset 0 3px 0 #f59e0b;
+}
+
+#container-M99001 .m99001-tab.is-active.is-attention {
+    background: #b45309;
+    border-color: #92400e;
+    color: #ffffff;
+    box-shadow: inset 0 -3px 0 rgba(120, 53, 15, 0.45);
+}
+
+#container-M99001 .m99001-tab-panel {
+    display: none;
+}
+
+#container-M99001 .m99001-tab-panel.is-active {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+#container-M99001 .m99001-message-panel,
+#container-M99001 .m99001-action-panel {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+#container-M99001 .m99001-action-panel .data-panel-toolbar {
+    align-items: center;
+    gap: 18px;
+}
+
+#container-M99001 .m99001-action-panel .env-footer-group {
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+#container-M99001 .m99001-status-summary {
+    margin-left: 8px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+#container-M99001 .m99001-inline-fields {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 8px;
+    min-width: 0;
+}
+
+#container-M99001 .m99001-inline-fields label {
+    min-width: 0;
+}
+
+@media (max-width: 1100px) {
+    #container-M99001 .project-meta-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    #container-M99001 .env-meta-wide {
+        grid-column: 1 / -1;
+    }}
+
+@media (max-width: 680px) {
+
+    #container-M99001.env-page {
+        padding: 0;
+    }
+
+    #container-M99001 .env-panel {
+        padding: 22px 18px;
+    }
+
+    #container-M99001 .project-meta-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    #container-M99001 .m99001-inline-fields {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }}
+
+#container-M99001 .m99001-status-action {
+    margin-left: auto;
+    min-height: 30px;
+    padding: 0 14px;
+    white-space: nowrap;
+}
+
+#container-M99001 .m99001-status-action + .m99001-status-action {
+    margin-left: 8px;
+}
+
+#container-M99001 select.m99001-status-action {
+    max-width: 260px;
+}
+
+#container-M99001 .m99001-status-action:disabled,
+#container-M99001 .m99001-status-action.is-disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+}
+
+#container-M99001 .m99001-message-panel {
+    height: 180px;
+    min-height: 180px;
+}
+
+#container-M99001 .m99001-action-panel {
+    height: 170px;
+    min-height: 170px;
+}
+
+#container-M99001 .m99001-schema-log-panel {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    height: 320px;
+    min-height: 320px;
+    max-height: 320px;
+    overflow: hidden;
+}
+
+#container-M99001 #schemaStatus-M99001 {
+    flex: 1 1 auto;
+    min-height: 210px;
+    max-height: none;
+    overflow: auto;
+}
+
+#container-M99001 #schemaStatus-M99001 .table-grid {
+    min-width: 720px;
+}
+
+#container-M99001 #setupLog-M99001 {
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 0;
+    max-height: none;
+    display: block;
+    overflow-y: auto !important;
+    overflow-x: auto !important;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+#container-M99001 #deployLog-M99001,
+#container-M99001 #mlLog-M99001 {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto !important;
+    overflow-x: auto !important;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+#container-M99001 .m99001-model-status-panel {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    height: 260px;
+    min-height: 260px;
+    max-height: 260px;
+    overflow: hidden;
+}
+
+#container-M99001 #modelDeployStatus-M99001 {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+}
+
+#container-M99001 #modelDeployStatus-M99001 .table-grid {
+    min-width: 1120px;
+}
+
+#container-M99001 .m99001-checksum-cell,
+#container-M99001 .m99001-error-cell {
+    max-width: 240px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#container-M99001 #modelDeployStatus-M99001 .is-ok {
+    color: #047857;
+    font-weight: 700;
+}
+
+#container-M99001 #modelDeployStatus-M99001 .is-fail {
+    color: #b91c1c;
+    font-weight: 700;
+}

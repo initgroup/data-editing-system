@@ -5,15 +5,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>INIT Data Editing System</title>
     <script>
-        window.APP_CACHE_VERSION = "1.1.125";
+        window.APP_CACHE_VERSION = "1.1.126";
         window.APP_ASSET_VERSION_OVERRIDES = {
             // 전체 캐시 갱신: APP_CACHE_VERSION만 올립니다.
             // 부분 캐시 갱신: "js/M90001.js": "1.0.1" 처럼 파일별 버전을 지정합니다.
             "js/MCOM_FLOW_WORK.js": "1.1.10",
             "pages/MCOM_FLOW_WORK.html": "1.1.2",
             "css/style.css": "1.1.9",
-            "css/styleMenu.css": "1.1.69"
+            "css/styleMenu.css": "1.1.70"
         };
+        window.APP_PAGE_CSS_FILES = [
+            "./css/pages/M01002.css",
+            "./css/pages/M02001.css",
+            "./css/pages/M02002.css",
+            "./css/pages/M04002.css",
+            "./css/pages/M90001.css",
+            "./css/pages/M90002.css",
+            "./css/pages/M91001.css",
+            "./css/pages/M99001.css",
+            "./css/pages/M99002.css",
+            "./css/pages/M99004.css"
+        ];
         window.APP_ASSET_URL = function(path) {
             const normalized = String(path || "").replace(/^\.\//, "");
             const version = window.APP_ASSET_VERSION_OVERRIDES[normalized] || window.APP_CACHE_VERSION;
@@ -32,6 +44,7 @@
             "./css/styletail.css",
             "./css/style.css",
             "./css/styleMenu.css",
+            ...window.APP_PAGE_CSS_FILES,
             "./css/flow-work.css",
             "./css/mermaid.min.css",
             "./css/grid-custom.css",
@@ -1416,6 +1429,10 @@
                 ["./css/style.css", "style.css", "Shared shell and Gemini CSS", 45],
                 ["./css/styleMenu.css", "styleMenu.css", "Shared page CSS", 46]
             ];
+            const pageCssPath = `./css/pages/${pageCode}.css`;
+            if ((window.APP_PAGE_CSS_FILES || []).includes(pageCssPath)) {
+                sourceAssets.push([pageCssPath, `${pageCode}.css`, "Page-specific CSS", 47]);
+            }
 
             for (const [path, name, role, priority] of sourceAssets) {
                 try {
@@ -1563,7 +1580,9 @@
 
             Array.from(document.styleSheets || []).forEach((sheet) => {
                 const href = sheet.href || "";
-                if (href && !preferredNames.some((name) => href.includes(name))) return;
+                const isPreferred = preferredNames.some((name) => href.includes(name));
+                const isPageCss = href.includes("/css/pages/") || href.includes("\\css\\pages\\");
+                if (href && !isPreferred && !isPageCss) return;
                 try {
                     const rules = Array.from(sheet.cssRules || []).map((rule) => rule.cssText).join("\n");
                     if (rules) cssTexts.push(rules);

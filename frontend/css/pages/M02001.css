@@ -1,0 +1,1361 @@
+/* Split from styleMenu.css. Contains only selectors scoped to this menu code. */
+#container-M02001 .upload-progress {
+    grid-column: 1 / -1;
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #d7deea;
+    background: #f8fafc;
+}
+
+#container-M02001 .upload-progress-meta {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+    color: #334155;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+#container-M02001 .upload-progress-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+}
+
+#container-M02001 .upload-progress-spinner {
+    display: none;
+    color: #2563eb;
+    font-size: 13px;
+}
+
+#container-M02001 .upload-progress.is-processing .upload-progress-spinner {
+    display: inline-block;
+    animation: upload-progress-spin 0.8s linear infinite;
+}
+
+#container-M02001 .upload-progress-track {
+    width: 100%;
+    height: 10px;
+    overflow: hidden;
+    background: #e5e7eb;
+    border: 1px solid #cbd5e1;
+}
+
+#container-M02001 .upload-progress-bar {
+    width: 0%;
+    height: 100%;
+    background: #2563eb;
+    transition: width 0.2s ease;
+}
+
+#container-M02001 .upload-progress.is-processing .upload-progress-bar {
+    background-image: linear-gradient(
+        45deg,
+        rgba(255, 255, 255, 0.35) 25%,
+        transparent 25%,
+        transparent 50%,
+        rgba(255, 255, 255, 0.35) 50%,
+        rgba(255, 255, 255, 0.35) 75%,
+        transparent 75%,
+        transparent
+    );
+    background-size: 18px 18px;
+    animation: upload-progress-stripes 0.9s linear infinite;
+}
+
+#container-M02001 .table-tab.is-disabled,
+#container-M02001 .table-tab:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+}
+
+/* M02001 upload workbench responsive layout */
+#container-M02001.upload-page,
+#container-M02001.upload-page .work-context-card,
+#container-M02001.upload-page .table-panel,
+#container-M02001.upload-page .upload-view-panel,
+#container-M02001.upload-page .upload-table-workspace,
+#container-M02001.upload-page .upload-table-tree-panel,
+#container-M02001.upload-page .upload-table-analysis-area {
+    min-width: 0;
+}
+
+#container-M02001 .upload-table-id {
+    grid-template-columns: auto minmax(0, 420px) 32px 32px;
+}
+
+#container-M02001 .upload-table-id .upload-input {
+    min-width: 0;
+}
+
+#container-M02001 .upload-view-panel[data-upload-panel="file"].is-active {
+    overflow: visible;
+}
+
+#container-M02001 .upload-preview-grid {
+    background: #ffffff;
+    border-top: 1px solid #e5e7eb;
+    flex: 0 0 auto;
+    margin-top: 10px;
+    min-height: 220px;
+    overflow: auto;
+    padding-top: 22px;
+}
+
+#container-M02001 .upload-preview-grid .table-empty,
+#container-M02001 .upload-preview-grid .table-error {
+    min-height: 120px;
+}
+
+#container-M02001 .upload-table-analysis-area {
+    min-height: 280px;
+}
+
+#container-M02001 .upload-table-analysis-area .table-tab-panel {
+    min-height: 220px;
+}
+
+#container-M02001 .upload-table-analysis-area .table-tab-panel > .table-result-grid,
+#container-M02001 .upload-table-analysis-area .sql-workbench > .table-result-grid {
+    min-height: 160px;
+}
+
+#container-M02001 .upload-table-analysis-area .sql-workbench {
+    min-height: 260px;
+}
+
+#container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"].is-active {
+    min-height: 500px;
+}
+
+#container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"] .sql-workbench {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    height: auto;
+    min-height: 460px;
+    overflow: visible;
+}
+
+#container-M02001 #sqlEditor-M02001 {
+    flex: 0 0 clamp(120px, 22vh, 180px);
+    margin-bottom: 0;
+    min-height: 120px;
+}
+
+#container-M02001 #sqlGrid-M02001 {
+    align-self: stretch;
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 260px;
+    overflow: hidden;
+    padding-bottom: 6px;
+    width: 100%;
+}
+
+#container-M02001 #sqlGrid-M02001 .table-grid-scroll {
+    background: #ffffff;
+    box-sizing: border-box;
+    flex: 1 1 auto;
+    margin-bottom: 14px;
+    max-width: 100%;
+    min-height: 0;
+    min-width: 0;
+    overflow-x: scroll !important;
+    overflow-y: auto;
+    padding-bottom: 42px;
+    scrollbar-gutter: stable;
+    scroll-padding-bottom: 42px;
+    width: 100%;
+    -webkit-overflow-scrolling: touch;
+}
+
+#container-M02001 #sqlGrid-M02001 .table-grid th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
+#container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="columns"].is-active,
+#container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="data"].is-active {
+    flex: 0 0 auto;
+    height: auto;
+    min-height: 0;
+}
+
+#container-M02001 #columnsGrid-M02001,
+#container-M02001 #dataGrid-M02001 {
+    flex: 0 0 260px;
+    height: 260px;
+    max-height: 260px;
+    min-height: 260px;
+    overflow: auto;
+}
+
+#container-M02001 #columnsGrid-M02001 .table-grid th,
+#container-M02001 #dataGrid-M02001 .table-grid th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
+@media (min-width: 1025px) and (max-width: 1680px) {
+    #container-M02001 .upload-controls {
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
+
+    #container-M02001 .upload-file-control {
+        grid-column: span 2;
+    }
+
+    #container-M02001 .upload-comment-control,
+    #container-M02001 .upload-rule-control {
+        grid-column: span 2;
+    }
+
+    #container-M02001 .upload-table-workspace {
+        grid-template-columns: minmax(320px, 440px) minmax(0, 1fr);
+    }
+
+    #container-M02001 .upload-table-id {
+        grid-template-columns: auto minmax(0, 320px) 32px 32px;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="columns"].is-active,
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="data"].is-active {
+        flex: 0 0 auto;
+        height: auto;
+        min-height: 0;
+    }
+
+    #container-M02001 #columnsGrid-M02001,
+    #container-M02001 #dataGrid-M02001 {
+        flex: 0 0 260px;
+        height: 260px;
+        max-height: 260px;
+        min-height: 260px;
+    }}
+
+@media (min-width: 1281px) and (max-width: 1680px) {
+    #container-M02001 .upload-controls {
+        grid-template-columns: minmax(220px, 1.6fr) repeat(5, minmax(92px, 1fr));
+    }
+
+    #container-M02001 .upload-file-control {
+        grid-column: span 2;
+    }
+
+    #container-M02001 .upload-comment-control {
+        grid-column: span 2;
+    }
+
+    #container-M02001 .upload-rule-control {
+        grid-column: span 3;
+    }
+
+    #container-M02001 .upload-actions {
+        justify-content: flex-end;
+        min-width: 0;
+    }
+
+    #container-M02001 .upload-actions .table-btn {
+        flex: 0 0 auto;
+    }
+
+    #container-M02001 .upload-preview-grid {
+        min-height: 240px;
+    }
+
+    #container-M02001 .upload-table-analysis-area {
+        min-height: 300px;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel {
+        min-height: 230px;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"].is-active {
+        min-height: 520px;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"] .sql-workbench {
+        min-height: 480px;
+    }
+
+    #container-M02001 #sqlGrid-M02001 {
+        min-height: 280px;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="columns"].is-active,
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="data"].is-active {
+        flex: 0 0 auto;
+        height: auto;
+        min-height: 0;
+    }
+
+    #container-M02001 #columnsGrid-M02001,
+    #container-M02001 #dataGrid-M02001 {
+        flex: 0 0 280px;
+        height: 280px;
+        max-height: 280px;
+        min-height: 280px;
+    }}
+
+@media (min-width: 769px) and (max-width: 1280px) {
+    #container-M02001 .work-context-title-row {
+        gap: 6px 12px;
+    }
+
+    #container-M02001 .upload-page .work-context-bar,
+    #container-M02001.upload-page .work-context-bar {
+        grid-template-columns: minmax(260px, 1fr) minmax(160px, 0.7fr) minmax(140px, 0.6fr);
+    }
+
+    #container-M02001 .upload-controls {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    #container-M02001 .upload-file-control,
+    #container-M02001 .upload-comment-control,
+    #container-M02001 .upload-rule-control {
+        grid-column: span 3;
+    }
+
+    #container-M02001 .upload-table-bar {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    #container-M02001 .upload-table-title {
+        max-width: none;
+    }
+
+    #container-M02001 .upload-table-id {
+        grid-template-columns: auto minmax(0, 1fr) 32px 32px;
+        width: 100%;
+    }
+
+    #container-M02001 .upload-table-workspace {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        overflow: visible;
+    }
+
+    #container-M02001 .upload-table-tree-panel {
+        flex: 0 0 auto;
+        min-height: 260px;
+        max-height: 390px;
+    }
+
+    #container-M02001 .upload-table-analysis-area {
+        flex: 0 0 auto;
+        min-height: 300px;
+        overflow: visible;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel {
+        min-height: 230px;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel > .table-result-grid,
+    #container-M02001 .upload-table-analysis-area .sql-workbench > .table-result-grid {
+        min-height: 170px;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"].is-active {
+        min-height: 480px;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"] .sql-workbench {
+        min-height: 440px;
+    }
+
+    #container-M02001 #sqlEditor-M02001 {
+        flex-basis: 132px;
+    }
+
+    #container-M02001 #sqlGrid-M02001 {
+        min-height: 240px;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="columns"].is-active,
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="data"].is-active {
+        flex: 0 0 auto;
+        height: auto;
+        min-height: 0;
+    }
+
+    #container-M02001 #columnsGrid-M02001,
+    #container-M02001 #dataGrid-M02001 {
+        flex: 0 0 240px;
+        height: 240px;
+        max-height: 240px;
+        min-height: 240px;
+    }}
+
+@media (max-width: 768px) {
+    #container-M02001.upload-page {
+        max-width: 100%;
+        overflow-x: hidden;
+    }
+
+    #container-M02001.upload-page .work-context-card {
+        overflow: hidden;
+    }
+
+    #container-M02001 .work-context-header {
+        align-items: flex-start;
+    }
+
+    #container-M02001 .work-context-title-row {
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    #container-M02001.upload-page .work-context-bar {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    #container-M02001.upload-page .table-panel {
+        padding: 18px 12px;
+    }
+
+    #container-M02001 .table-header {
+        margin-bottom: 12px;
+    }
+
+    #container-M02001 .upload-view-panel.is-active {
+        overflow: visible;
+    }
+
+    #container-M02001 .upload-preview-grid {
+        min-height: 200px;
+    }
+
+    #container-M02001 .upload-controls {
+        grid-template-columns: minmax(0, 1fr);
+        padding: 10px;
+    }
+
+    #container-M02001 .upload-file-control,
+    #container-M02001 .upload-type-control,
+    #container-M02001 .upload-delimiter-control,
+    #container-M02001 .upload-fixed-widths-control,
+    #container-M02001 .upload-header-control,
+    #container-M02001 .upload-encoding-control,
+    #container-M02001 .upload-comment-control,
+    #container-M02001 .upload-rule-control,
+    #container-M02001 .upload-actions {
+        grid-column: 1;
+    }
+
+    #container-M02001 .upload-controls label > span,
+    #container-M02001 .upload-table-id span {
+        line-height: 1.25;
+        overflow-wrap: anywhere;
+        white-space: normal;
+    }
+
+    #container-M02001 .upload-file-picker {
+        height: auto;
+        min-height: 36px;
+    }
+
+    #container-M02001 .upload-file-button {
+        min-width: 84px;
+    }
+
+    #container-M02001 .upload-actions {
+        align-items: stretch;
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: stretch;
+    }
+
+    #container-M02001 .upload-actions .table-btn {
+        flex: 1 1 120px;
+    }
+
+    #container-M02001 .upload-table-bar {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 10px;
+        padding: 10px;
+    }
+
+    #container-M02001 .upload-table-id {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 32px 32px;
+        gap: 8px;
+        width: 100%;
+    }
+
+    #container-M02001 .upload-table-id span {
+        grid-column: 1 / -1;
+    }
+
+    #container-M02001 .upload-table-id .upload-input {
+        grid-column: 1;
+    }
+
+    #container-M02001 .upload-table-workspace {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        overflow: visible;
+        padding-top: 10px;
+    }
+
+    #container-M02001 .upload-table-tree-panel {
+        flex: 0 0 auto;
+        min-height: 240px;
+        max-height: 360px;
+        overflow: hidden;
+    }
+
+    #container-M02001 .table-object-header {
+        align-items: flex-start;
+        min-height: auto;
+        padding: 14px 12px;
+    }
+
+    #container-M02001 .table-object-search {
+        display: grid;
+        grid-template-columns: 18px minmax(0, 1fr) auto;
+        gap: 6px;
+        padding: 8px 10px;
+    }
+
+    #container-M02001 .table-search-actions {
+        gap: 2px;
+    }
+
+    #container-M02001 .table-tree-head,
+    #container-M02001 .table-tree-row {
+        grid-template-columns: minmax(0, 1fr) 84px;
+    }
+
+    #container-M02001 .table-tree-head > div,
+    #container-M02001 .table-tree-row > span {
+        padding: 0 10px;
+    }
+
+    #container-M02001 .upload-table-analysis-area {
+        flex: 0 0 auto;
+        min-height: 260px;
+        overflow: visible;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tabs {
+        overflow-x: auto;
+        scrollbar-width: none;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tabs::-webkit-scrollbar {
+        display: none;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel {
+        min-height: 190px;
+        padding: 10px;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel > .table-result-grid,
+    #container-M02001 .upload-table-analysis-area .sql-workbench > .table-result-grid {
+        min-height: 140px;
+    }
+
+    #container-M02001 .upload-table-analysis-area .sql-workbench {
+        min-height: 240px;
+    }
+
+    #container-M02001 .upload-table-analysis-area .sql-editor {
+        flex-basis: 120px;
+        min-height: 100px;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"].is-active {
+        min-height: 430px;
+        overflow: visible;
+        padding-bottom: 18px;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"] .sql-workbench {
+        min-height: 390px;
+        overflow: visible;
+        padding-bottom: 18px;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"] .sql-toolbar {
+        align-items: stretch;
+        flex-wrap: wrap;
+    }
+
+    #container-M02001 #sqlEditor-M02001 {
+        flex-basis: 128px;
+        max-height: 150px;
+        min-height: 112px;
+        overflow: auto;
+    }
+
+    #container-M02001 #sqlGrid-M02001 {
+        display: flex;
+        flex-direction: column;
+        flex: 0 0 240px;
+        height: 240px;
+        margin-bottom: 18px;
+        max-height: 240px;
+        min-height: 220px;
+        overscroll-behavior: contain;
+        overflow: hidden;
+        position: relative;
+        z-index: 1;
+    }
+
+    #container-M02001 #sqlGrid-M02001 .table-grid-scroll {
+        overscroll-behavior: contain;
+        overflow-x: scroll !important;
+        overflow-y: auto;
+        padding-bottom: 42px;
+        scroll-padding-bottom: 42px;
+        touch-action: pan-y;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="columns"].is-active,
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="data"].is-active {
+        flex: 0 0 auto;
+        height: auto;
+        min-height: 0;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="data"] .table-toolbar {
+        align-items: stretch;
+        flex-wrap: wrap;
+    }
+
+    #container-M02001 #columnsGrid-M02001,
+    #container-M02001 #dataGrid-M02001 {
+        flex: 0 0 220px;
+        height: 220px;
+        max-height: 220px;
+        min-height: 220px;
+    }}
+
+@media (max-width: 480px) {
+    #container-M02001.upload-page .table-panel {
+        padding: 16px 10px;
+    }
+
+    #container-M02001 .upload-view-tabs,
+    #container-M02001 .upload-table-tabs {
+        overflow-x: auto;
+        scrollbar-width: none;
+    }
+
+    #container-M02001 .upload-view-tabs::-webkit-scrollbar,
+    #container-M02001 .upload-table-tabs::-webkit-scrollbar {
+        display: none;
+    }
+
+    #container-M02001 .upload-file-picker {
+        align-items: stretch;
+        flex-direction: column;
+        padding: 6px;
+    }
+
+    #container-M02001 .upload-file-button {
+        width: 100%;
+    }
+
+    #container-M02001 .upload-preview-grid {
+        min-height: 180px;
+    }
+
+    #container-M02001 .upload-table-analysis-area {
+        min-height: 240px;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel {
+        min-height: 176px;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel > .table-result-grid,
+    #container-M02001 .upload-table-analysis-area .sql-workbench > .table-result-grid {
+        min-height: 128px;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"].is-active {
+        min-height: 400px;
+        overflow: visible;
+        padding-bottom: 18px;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"] .sql-workbench {
+        min-height: 360px;
+        overflow: visible;
+        padding-bottom: 18px;
+    }
+
+    #container-M02001 #sqlEditor-M02001 {
+        flex-basis: 120px;
+        max-height: 140px;
+        min-height: 104px;
+        overflow: auto;
+    }
+
+    #container-M02001 #sqlGrid-M02001 {
+        flex: 0 0 220px;
+        height: 220px;
+        margin-bottom: 18px;
+        max-height: 220px;
+        min-height: 200px;
+        overflow: hidden;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="columns"].is-active,
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="data"].is-active {
+        flex: 0 0 auto;
+        height: auto;
+        min-height: 0;
+    }
+
+    #container-M02001 #columnsGrid-M02001,
+    #container-M02001 #dataGrid-M02001 {
+        flex: 0 0 200px;
+        height: 200px;
+        max-height: 200px;
+        min-height: 200px;
+    }
+
+    #container-M02001 .upload-table-id {
+        grid-template-columns: minmax(0, 1fr) 32px 32px;
+    }
+
+    #container-M02001 .table-object-search {
+        grid-template-columns: 18px minmax(0, 1fr);
+    }
+
+    #container-M02001 .table-search-actions {
+        grid-column: 2;
+        justify-content: flex-end;
+    }
+
+    #container-M02001 .table-tree-head,
+    #container-M02001 .table-tree-row {
+        grid-template-columns: minmax(0, 1fr) 72px;
+    }
+
+    #container-M02001 .table-tree-comment {
+        padding-left: 22px;
+    }}
+
+@media (max-width: 768px) {
+
+    body:not(.intro-mode) #pageContainerHolder .page-section.active,
+    body:not(.intro-mode) #pageContainerHolder .page-section.active > .page-container,
+    #container-M02001.upload-page,
+    #container-M02001.upload-page .table-panel,
+    #container-M02001 .upload-view-panel,
+    #container-M02001 .upload-table-workspace,
+    #container-M02001 .upload-table-analysis-area,
+    #container-M02001 .upload-table-analysis-area .table-tab-panel,
+    #container-M02001 .upload-table-analysis-area .sql-workbench {
+        max-width: 100%;
+        min-width: 0;
+    }
+
+    #container-M02001 .upload-table-analysis-area,
+    #container-M02001 .upload-table-analysis-area .table-tab-panel,
+    #container-M02001 .upload-table-analysis-area .sql-workbench {
+        overflow-x: hidden;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"].is-active,
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"] .sql-workbench {
+        overflow-y: visible;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-result-grid {
+        box-sizing: border-box;
+        max-width: 100%;
+        width: 100%;
+    }
+
+    #container-M02001 #sqlGrid-M02001 {
+        display: flex;
+        flex-direction: column;
+        flex: 0 0 clamp(260px, 46vh, 320px);
+        height: clamp(260px, 46vh, 320px);
+        max-height: 320px;
+        max-width: 100%;
+        min-height: 260px;
+        overflow: hidden;
+    }
+
+    #container-M02001 #sqlGrid-M02001 .table-grid-scroll {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-x: scroll !important;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        padding-bottom: 44px;
+        scroll-padding-bottom: 44px;
+        touch-action: pan-y;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    #container-M02001 #sqlGrid-M02001 .table-grid {
+        max-width: none;
+        min-width: 560px;
+        width: max-content;
+    }}
+
+@media (max-width: 480px) {
+    #container-M02001 #sqlGrid-M02001 {
+        flex-basis: clamp(250px, 44vh, 300px);
+        height: clamp(250px, 44vh, 300px);
+        max-height: 300px;
+        min-height: 250px;
+    }
+
+    #container-M02001 #sqlGrid-M02001 .table-grid {
+        min-width: 520px;
+    }}
+
+@media (max-width: 768px) {
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"].is-active {
+        min-height: 0;
+        padding-bottom: 10px;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"] .sql-workbench {
+        min-height: 0;
+        padding-bottom: 0;
+    }
+
+    #container-M02001 #sqlGrid-M02001 {
+        display: flex;
+        flex-direction: column;
+        flex: 0 0 auto;
+        height: auto;
+        margin-bottom: 0;
+        max-height: none;
+        min-height: 0;
+        overflow: visible;
+        padding-bottom: 0;
+    }
+
+    #container-M02001 #sqlGrid-M02001 .table-grid-scroll {
+        flex: 1 1 auto;
+        margin-bottom: 0;
+        max-height: 240px;
+        overflow-x: auto !important;
+        overflow-y: auto;
+        padding-bottom: 72px;
+        scroll-padding-bottom: 72px;
+        scrollbar-gutter: stable;
+    }}
+
+@media (max-width: 480px) {
+    #container-M02001 #sqlGrid-M02001 .table-grid-scroll {
+        max-height: 210px;
+    }}
+
+/* M02001 grid count labels stay above headers, while grids fill the panel body. */
+#container-M02001 .upload-preview-grid,
+#container-M02001 #columnsGrid-M02001,
+#container-M02001 #dataGrid-M02001,
+#container-M02001 #sqlGrid-M02001 {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding-top: 28px;
+    padding-bottom: 12px;
+}
+
+#container-M02001 #uploadTableTree-M02001 {
+    box-sizing: border-box;
+    padding-top: 28px;
+    padding-bottom: 12px;
+}
+
+#container-M02001 .upload-preview-grid .list-count-footer,
+#container-M02001 #uploadTableTree-M02001 .list-count-footer,
+#container-M02001 #columnsGrid-M02001 .list-count-footer,
+#container-M02001 #dataGrid-M02001 .list-count-footer,
+#container-M02001 #sqlGrid-M02001 .list-count-footer {
+    right: 14px;
+    top: 8px;
+}
+
+#container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="columns"].is-active,
+#container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="data"].is-active {
+    flex: 1 1 auto;
+    height: 100%;
+    min-height: 0;
+    padding-bottom: 12px;
+}
+
+#container-M02001 .table-meta-strip {
+    grid-template-columns: minmax(110px, 150px) minmax(320px, 1.4fr) minmax(0, 1fr) minmax(170px, 220px);
+}
+
+@media (max-width: 1180px) {
+    #container-M02001 .table-meta-strip {
+        grid-template-columns: minmax(90px, 0.8fr) minmax(240px, 1.6fr) minmax(160px, 1fr) minmax(140px, 1fr);
+        overflow-x: auto;
+        overflow-y: hidden;
+    }
+
+    #container-M02001 .table-meta-strip > div {
+        border-bottom: 0;
+    }
+
+    #container-M02001 .table-meta-strip > div:last-child {
+        border-right: 0;
+    }}
+
+@media (max-width: 760px) {
+    #container-M02001 .table-meta-strip {
+        min-width: 640px;
+    }}
+
+@media (max-width: 560px) {
+    #container-M02001 .table-meta-strip {
+        min-width: 600px;
+    }}
+
+#container-M02001 #columnsGrid-M02001,
+#container-M02001 #dataGrid-M02001 {
+    flex: 1 1 0;
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    overflow: hidden;
+}
+
+#container-M02001 #sqlGrid-M02001 {
+    overflow: hidden;
+}
+
+#container-M02001 .upload-preview-grid > .table-grid-scroll,
+#container-M02001 #columnsGrid-M02001 > .table-grid-scroll,
+#container-M02001 #dataGrid-M02001 > .table-grid-scroll,
+#container-M02001 #sqlGrid-M02001 > .table-grid-scroll {
+    box-sizing: border-box;
+    flex: 1 1 auto;
+    min-height: 0;
+    max-width: 100%;
+    overflow: auto;
+    padding-bottom: 32px;
+    scroll-padding-bottom: 32px;
+    scrollbar-gutter: stable;
+    touch-action: pan-x pan-y;
+    width: 100%;
+}
+
+#container-M02001 #sqlGrid-M02001 .table-grid-scroll {
+    margin-bottom: 0;
+}
+
+#container-M02001 #sqlGrid-M02001 > .table-grid-scroll.is-drag-scrollable {
+    overscroll-behavior: contain;
+    touch-action: none;
+}
+
+#container-M02001 #sqlGrid-M02001 > .table-grid-scroll.is-drag-scrolling {
+    cursor: grabbing;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+#container-M02001 #sqlGrid-M02001 > .table-grid-scroll.is-drag-scrolling * {
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+#container-M02001 #sqlGrid-M02001 .table-grid .grid-row-no.is-frozen-col {
+    left: 0;
+}
+
+#container-M02001 .mobile-grid-scroll-actions {
+    display: none;
+}
+
+#container-M02001 #sqlEditor-M02001 {
+    flex: 0 0 90px;
+    height: 90px;
+    max-height: 90px;
+    min-height: 90px;
+}
+
+@media (max-width: 768px) {
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="columns"].is-active,
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="data"].is-active,
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"].is-active {
+        flex: 0 0 auto;
+        height: auto;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"] .sql-workbench {
+        flex: 0 0 auto;
+        height: auto;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    #container-M02001 #sqlEditor-M02001 {
+        flex-basis: 82px;
+        height: 82px;
+        max-height: 82px;
+        min-height: 82px;
+    }
+
+    #container-M02001 #columnsGrid-M02001,
+    #container-M02001 #dataGrid-M02001,
+    #container-M02001 #sqlGrid-M02001 {
+        flex: 0 0 270px;
+        height: 270px;
+        max-height: 270px;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    #container-M02001 #columnsGrid-M02001 > .table-grid-scroll,
+    #container-M02001 #dataGrid-M02001 > .table-grid-scroll,
+    #container-M02001 #sqlGrid-M02001 > .table-grid-scroll {
+        box-sizing: border-box;
+        flex: 0 0 230px;
+        height: 230px;
+        max-height: 230px;
+        min-height: 0;
+        overflow-x: auto !important;
+        overflow-y: auto !important;
+        padding-bottom: 32px;
+        scroll-padding-bottom: 32px;
+        touch-action: pan-x pan-y;
+    }
+
+    #container-M02001 #sqlGrid-M02001 {
+        padding-bottom: 12px;
+        padding-right: 0;
+        position: relative;
+    }
+
+    #container-M02001 #sqlGrid-M02001 > .table-grid-scroll {
+        bottom: auto;
+        flex: 1 1 auto;
+        height: auto;
+        left: auto;
+        max-height: none;
+        overflow-x: scroll !important;
+        overflow-y: scroll !important;
+        padding-bottom: 32px;
+        position: static;
+        right: auto;
+        scroll-padding-bottom: 32px;
+        top: auto;
+        width: 100%;
+    }
+
+    #container-M02001 #sqlGrid-M02001 .mobile-grid-scroll-actions {
+        display: none;
+        bottom: 5px;
+        gap: 4px;
+        grid-template-columns: repeat(4, 30px);
+        position: absolute;
+        right: 8px;
+        z-index: 120;
+    }
+
+    #container-M02001 #sqlGrid-M02001 .mobile-grid-scroll-btn {
+        align-items: center;
+        background: #f8fafc;
+        border: 1px solid #cbd5e1;
+        color: #0f172a;
+        cursor: pointer;
+        display: inline-flex;
+        height: 30px;
+        justify-content: center;
+        padding: 0;
+        width: 30px;
+    }
+
+    #container-M02001 #sqlGrid-M02001 .mobile-grid-scroll-btn:active {
+        background: #2563eb;
+        border-color: #1d4ed8;
+        color: #ffffff;
+    }}
+
+/* M02001 table analysis panel layout. */
+#container-M02001 .upload-table-analysis-area {
+    border: 1px solid #dcdcdc;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    min-width: 0;
+    overflow: hidden;
+    padding: 22px 24px;
+}
+
+#container-M02001 .upload-table-analysis-area .table-header {
+    align-items: flex-start;
+    display: flex;
+    flex: 0 0 auto;
+    gap: 16px;
+    justify-content: space-between;
+    margin-bottom: 14px;
+}
+
+#container-M02001 .upload-table-analysis-area .table-export-actions,
+#container-M02001 .upload-table-analysis-area .upload-table-tabs {
+    flex: 0 0 auto;
+}
+
+#container-M02001 .upload-table-analysis-area .upload-table-tabs {
+    padding-left: 0;
+}
+
+#container-M02001 .upload-table-analysis-area .table-tab-panel {
+    display: none;
+    flex: 1 1 0;
+    height: auto;
+    min-height: 0;
+    overflow: hidden;
+    padding: 4px 0 0;
+}
+
+#container-M02001 .upload-table-analysis-area .table-tab-panel.is-active {
+    display: flex;
+    flex-direction: column;
+}
+
+#container-M02001 .upload-table-analysis-area .table-tab-panel > .table-result-grid,
+#container-M02001 .upload-table-analysis-area .sql-workbench > .table-result-grid {
+    flex: 1 1 0;
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    overflow: hidden;
+}
+
+#container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"].is-active {
+    flex: 1 1 0;
+    height: auto;
+    min-height: 0;
+    overflow: hidden;
+    padding-bottom: 0;
+}
+
+#container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"] .sql-workbench {
+    display: grid;
+    flex: 1 1 0;
+    gap: 6px;
+    grid-template-rows: minmax(34px, auto) minmax(72px, 112px) auto minmax(180px, 1fr);
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+}
+
+#container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"] .sql-toolbar {
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 6px;
+    margin-bottom: 0;
+    min-height: 34px;
+    overflow-x: auto;
+    overflow-y: visible;
+    padding: 1px 0;
+}
+
+#container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"] .sql-toolbar .table-limit-control {
+    flex: 0 0 auto;
+}
+
+#container-M02001 #sqlEditor-M02001 {
+    flex: initial;
+    height: 100%;
+    margin-bottom: 0;
+    max-height: none;
+    min-height: 0;
+    resize: none;
+}
+
+#container-M02001 #sqlMessage-M02001 {
+    min-height: 0;
+    padding: 0;
+}
+
+#container-M02001 #columnsGrid-M02001,
+#container-M02001 #dataGrid-M02001,
+#container-M02001 #sqlGrid-M02001 {
+    box-sizing: border-box;
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    overflow: hidden;
+    padding-top: 28px;
+    padding-bottom: 12px;
+    position: relative;
+}
+
+#container-M02001 #sqlGrid-M02001 {
+    padding-top: 22px;
+}
+
+#container-M02001 #columnsGrid-M02001 > .table-grid-scroll,
+#container-M02001 #dataGrid-M02001 > .table-grid-scroll,
+#container-M02001 #sqlGrid-M02001 > .table-grid-scroll {
+    box-sizing: border-box;
+    flex: 1 1 auto;
+    height: auto;
+    max-height: none;
+    max-width: 100%;
+    min-height: 0;
+    overflow-x: auto !important;
+    overflow-y: auto !important;
+    padding-bottom: 32px;
+    scroll-padding-bottom: 32px;
+    scrollbar-gutter: stable;
+    touch-action: pan-x pan-y;
+    width: 100%;
+}
+
+#container-M02001 #columnsGrid-M02001 .list-count-footer,
+#container-M02001 #dataGrid-M02001 .list-count-footer,
+#container-M02001 #sqlGrid-M02001 .list-count-footer {
+    right: 14px;
+    top: 8px;
+}
+
+#container-M02001 #sqlGrid-M02001 .list-count-footer {
+    display: none;
+    top: 4px;
+}
+
+#container-M02001 #sqlGrid-M02001 > .table-grid-scroll {
+    overflow-x: scroll !important;
+    overflow-y: scroll !important;
+}
+
+#container-M02001 #sqlGrid-M02001 .mobile-grid-scroll-actions {
+    display: none;
+}
+
+@media (max-width: 1024px) {
+    #container-M02001 .upload-table-analysis-area {
+        height: auto;
+        max-height: none;
+        min-height: 360px;
+        overflow: visible;
+        padding: 18px 12px;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-header {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-export-actions,
+    #container-M02001 .upload-table-analysis-area .upload-table-tabs {
+        max-width: 100%;
+        overflow-x: auto;
+        padding-bottom: 2px;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel.is-active {
+        flex: 0 0 auto;
+        height: auto;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"].is-active {
+        min-height: 430px;
+        overflow: visible;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"] .sql-workbench {
+        gap: 6px;
+        grid-template-rows: 34px 72px auto 280px;
+        height: auto;
+        min-height: 0;
+        overflow: visible;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"] .sql-toolbar {
+        align-items: center;
+        flex-wrap: nowrap;
+        gap: 6px;
+        height: 34px;
+        min-height: 34px;
+        overflow-x: auto;
+        overflow-y: visible;
+        padding-bottom: 2px;
+    }
+
+    #container-M02001 #sqlMessage-M02001 {
+        font-size: 12px;
+        line-height: 1.25;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    #container-M02001 #columnsGrid-M02001,
+    #container-M02001 #dataGrid-M02001,
+    #container-M02001 #sqlGrid-M02001 {
+        flex: 0 0 270px;
+        height: 270px;
+        max-height: 270px;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    #container-M02001 #columnsGrid-M02001 > .table-grid-scroll,
+    #container-M02001 #dataGrid-M02001 > .table-grid-scroll,
+    #container-M02001 #sqlGrid-M02001 > .table-grid-scroll {
+        flex: 0 0 230px;
+        height: 230px;
+        max-height: 230px;
+        min-height: 0;
+        overflow-x: auto !important;
+        overflow-y: auto !important;
+    }
+
+    #container-M02001 #sqlGrid-M02001 {
+        flex-basis: 280px;
+        height: 280px;
+        max-height: 280px;
+        padding-bottom: 12px;
+        padding-right: 0;
+        position: relative;
+    }
+
+    #container-M02001 #sqlGrid-M02001 > .table-grid-scroll {
+        bottom: auto;
+        flex: 1 1 auto;
+        height: auto;
+        left: auto;
+        max-height: none;
+        overflow-x: scroll !important;
+        overflow-y: scroll !important;
+        padding-bottom: 32px;
+        position: static;
+        right: auto;
+        scroll-padding-bottom: 32px;
+        top: auto;
+        width: 100%;
+    }}
