@@ -56,7 +56,7 @@
                         <span id="uploadFileName-M02001" class="upload-file-name" data-label-key="noFileSelected">No file selected</span>
                     </span>
                 </label>
-                <label>
+                <label class="upload-type-control">
                     <span data-label-key="type">Type</span>
                     <select id="fileType-M02001" class="work-context-select" onchange="M02001.handleFileTypeChange()">
                         <option value="csv">CSV</option>
@@ -66,30 +66,30 @@
                         <option value="excel">Excel</option>
                     </select>
                 </label>
-                <label>
+                <label class="upload-delimiter-control">
                     <span data-label-key="delimiter">Delimiter</span>
                     <input id="delimiter-M02001" class="upload-input" type="text" value="," maxlength="5">
                 </label>
-                <label>
+                <label class="upload-fixed-widths-control">
                     <span data-label-key="fixedWidths">Fixed widths</span>
                     <input id="fixedWidths-M02001" class="upload-input" type="text" placeholder="10,20,8">
                 </label>
-                <label>
+                <label class="upload-header-control">
                     <span data-label-key="header">Header</span>
                     <select id="hasHeader-M02001" class="work-context-select">
                         <option value="Y">Y</option>
                         <option value="N">N</option>
                     </select>
                 </label>
-                <label>
+                <label class="upload-encoding-control">
                     <span data-label-key="encoding">Encoding</span>
                     <input id="encoding-M02001" class="upload-input" type="text" value="utf-8-sig">
                 </label>
-                <label>
+                <label class="upload-comment-control">
                     <span data-label-key="tableComment">Table Comment</span>
                     <input id="tableComment-M02001" class="upload-input" type="text" placeholder="Uploaded table comment" data-placeholder-key="tableCommentPlaceholder">
                 </label>
-                <label>
+                <label class="upload-rule-control">
                     <span data-label-key="tableIdRule">Table ID Rule</span>
                     <input id="tableIdRule-M02001" class="upload-input" type="text" readonly value="INITUP$_{LOGIN_ID}_{PROJECT_CODE}_{TIME}">
                 </label>
@@ -177,7 +177,25 @@
                     <div id="uploadTableTree-M02001" class="table-tree-grid"></div>
                 </aside>
 
-                <section class="upload-table-analysis-area" aria-label="Uploaded table analysis">
+                <section class="upload-table-analysis-area" aria-labelledby="table-title-M02001">
+                    <header class="table-header">
+                        <div>
+                            <h1 class="table-title" id="table-title-M02001" data-label-key="tableAnalysis">Table Analysis</h1>
+                            <p class="table-desc" id="tableDescription-M02001" data-label-key="selectUploadTableFromExplorer">Select a table from the explorer.</p>
+                        </div>
+                        <div class="table-export-actions" aria-label="Export current grid">
+                            <button type="button" class="table-icon-btn export-excel" title="Export Excel" data-title-key="exportExcelTitle" onclick="M02001.exportActiveGrid('excel')">
+                                <i class="fas fa-file-excel"></i>
+                            </button>
+                            <button type="button" class="table-icon-btn" title="Export CSV" data-title-key="exportCsvTitle" onclick="M02001.exportActiveGrid('csv')">
+                                <i class="fas fa-file-csv"></i>
+                            </button>
+                            <button type="button" class="table-icon-btn" title="Export TSV" data-title-key="exportTsvTitle" onclick="M02001.exportActiveGrid('tsv')">
+                                <i class="fas fa-file-lines"></i>
+                            </button>
+                        </div>
+                    </header>
+
                     <nav class="table-tabs upload-table-tabs" aria-label="Uploaded table analysis tabs">
                         <button type="button" class="table-tab is-active" data-tab="columns" onclick="M02001.switchTab('columns')">
                             <i class="fas fa-list"></i>
@@ -194,6 +212,24 @@
                     </nav>
 
                     <section class="table-tab-panel is-active" data-panel="columns">
+                        <div class="table-meta-strip">
+                            <div>
+                                <span data-label-key="owner">Owner</span>
+                                <strong id="selectedOwner-M02001">-</strong>
+                            </div>
+                            <div>
+                                <span data-label-key="tableId">Table ID</span>
+                                <strong id="selectedTable-M02001">-</strong>
+                            </div>
+                            <div>
+                                <span data-label-key="comment">Comment</span>
+                                <strong id="selectedComment-M02001">-</strong>
+                            </div>
+                            <div>
+                                <span data-label-key="createdAt">Created At</span>
+                                <strong id="selectedCreatedAt-M02001">-</strong>
+                            </div>
+                        </div>
                         <div id="columnsGrid-M02001" class="table-result-grid"></div>
                     </section>
 
@@ -214,16 +250,20 @@
                     <section class="table-tab-panel" data-panel="sql">
                         <div class="sql-workbench">
                             <div class="sql-toolbar">
-                                <button type="button" class="table-btn" onclick="M02001.executeSql()">
+                                <button type="button" class="table-icon-btn sql-tool-icon-btn sql-run-btn" title="Run SQL (Ctrl+Enter)" aria-label="Run SQL" onclick="M02001.executeSql()">
                                     <i class="fas fa-play"></i>
-                                    <span data-label-key="runSql">Run SQL(Ctrl+Enter)</span>
                                 </button>
+                                <label class="table-limit-control data-sql-freeze-control" title="Freeze No plus this many data columns while scrolling horizontally">
+                                    <span data-label-key="freeze">Freeze</span>
+                                    <input id="sqlFreezeColumns-M02001" type="number" min="0" max="50" value="0" onchange="M02001.applyGridFrozenColumns('sql')" oninput="M02001.applyGridFrozenColumns('sql')">
+                                </label>
                                 <label class="table-limit-control">
                                     <span data-label-key="rows">Rows</span>
                                     <input id="sqlLimit-M02001" type="number" min="1" max="1000" value="100">
                                 </label>
                             </div>
-                            <textarea id="sqlEditor-M02001" class="sql-editor" spellcheck="false" aria-label="SQL worksheet"></textarea>
+                            <textarea id="sqlEditor-M02001" class="sql-editor table-sql-editor" spellcheck="false" aria-label="SQL worksheet"></textarea>
+                            <div id="sqlMessage-M02001" class="table-empty" aria-live="polite" hidden></div>
                             <div id="sqlGrid-M02001" class="table-result-grid"></div>
                         </div>
                     </section>

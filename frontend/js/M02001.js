@@ -14,9 +14,13 @@
         displayedUploadTables: [],
         focusedUploadTableKey: "",
         uploadedTableName: "",
+        uploadTableTreeLoaded: false,
+        uploadTableTreeKey: "",
         activeUploadView: "file",
         activeTab: "columns",
         gridData: { preview: [], columns: [], data: [], sql: [] },
+        gridState: { columns: "", data: "", sql: "" },
+        gridFrozenColumns: { preview: 0, columns: 0, data: 0, sql: 0 },
         sqlKeydownBound: null,
         contextLoadFailed: false,
         isUploading: false,
@@ -45,12 +49,17 @@
             this.displayedUploadTables = [];
             this.focusedUploadTableKey = "";
             this.uploadedTableName = "";
+            this.uploadTableTreeLoaded = false;
+            this.uploadTableTreeKey = "";
             this.activeUploadView = "file";
             this.activeTab = "columns";
             this.gridData = { preview: [], columns: [], data: [], sql: [] };
+            this.gridState = { columns: "", data: "", sql: "" };
+            this.gridFrozenColumns = { preview: 0, columns: 0, data: 0, sql: 0 };
             this.sqlKeydownBound = null;
             this.contextLoadFailed = false;
             this.isUploading = false;
+            this.updateSelectedMeta();
             this.isInit = false;
         },
 
@@ -132,6 +141,15 @@
             this.uploadTables = [];
             this.displayedUploadTables = [];
             this.focusedUploadTableKey = "";
+            this.uploadedTableName = "";
+            this.uploadTableTreeLoaded = false;
+            this.uploadTableTreeKey = "";
+            this.gridState = { columns: "", data: "", sql: "" };
+            this.setValue("#uploadedTableId-M02001", "");
+            this.setValue("#sqlEditor-M02001", "");
+            this.renderGrid("#columnsGrid-M02001", [], "columns");
+            this.renderGrid("#dataGrid-M02001", [], "data");
+            this.renderGrid("#sqlGrid-M02001", [], "sql");
             if (this.activeUploadView === "table") {
                 await this.loadUploadTableTree();
             }
@@ -302,14 +320,25 @@
             if (!this.ensureWorkContextSelected()) return;
             const grid = getContainerEl("#previewGrid-M02001");
             if (grid) grid.innerHTML = `<div class="table-empty">${this.escapeHtml(this.t("loadingPreview", "Loading preview..."))}</div>`;
+            this.revealPreviewGrid();
             try {
                 const formData = this.buildUploadFormData();
                 if (!formData) return;
                 const json = await this.requestForm(`${API_BASE_URL}/${PAGE_CODE}/preview`, formData);
                 this.renderGrid("#previewGrid-M02001", json.data || [], "preview", json.columns || []);
+                this.revealPreviewGrid();
             } catch (error) {
                 this.renderError("#previewGrid-M02001", error.message);
+                this.revealPreviewGrid();
             }
+        },
+
+        revealPreviewGrid() {
+            const grid = getContainerEl("#previewGrid-M02001");
+            if (!grid) return;
+            requestAnimationFrame(() => {
+                grid.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+            });
         },
 
         async uploadFile() {
@@ -328,8 +357,9 @@
                 const statsText = json.statsGathered ? this.t("statisticsGathered", " Statistics gathered.") : (json.statsMessage ? ` ${json.statsMessage}` : "");
                 this.setText("#uploadDescription-M02001", this.tl("uploadedTableLoaded", "{tableName} loaded. Rows: {count}.{suffix}", { tableName: this.uploadedTableName, count: json.rowCount ?? 0, suffix: statsText }));
                 this.showUploadProgress(this.tl("uploadCompleted", "Upload completed. Rows: {count}.{suffix}", { count: json.rowCount ?? 0, suffix: statsText }), 100);
-                this.setDefaultSql();
-                this.switchUploadView("table");
+                this.markGridStale();
+                this.setDefaultSql(true);
+                this.switchUploadView("table", { skipAutoLoad: true });
                 await this.loadUploadTableTree(this.uploadedTableName);
                 await this.selectUploadTable(this.uploadedTableName);
                 alert("File uploaded.");
@@ -422,15 +452,22 @@
         },
 
         async reloadUploadedTable() {
+            const previousTableName = this.uploadedTableName;
             this.uploadedTableName = (getContainerEl("#uploadedTableId-M02001")?.value || "").trim().toUpperCase();
             this.setValue("#uploadedTableId-M02001", this.uploadedTableName);
-            this.setDefaultSql();
+            if (previousTableName !== this.uploadedTableName) {
+                this.focusedUploadTableKey = this.uploadedTableName;
+                this.markGridStale();
+                this.setDefaultSql(true);
+            } else {
+                this.setDefaultSql();
+            }
             if (this.activeTab === "data") {
-                await this.loadTableData();
+                await this.loadTableData({ force: true });
                 return;
             }
             if (this.activeTab === "sql") return;
-            await this.loadColumns();
+            await this.loadColumns({ force: true });
         },
 
         async dropUploadedTable() {
@@ -453,6 +490,7 @@
                 this.setValue("#uploadedTableId-M02001", "");
                 this.setText("#uploadDescription-M02001", this.t("uploadTableDescription", "Upload a file to create a temporary table."));
                 this.setValue("#sqlEditor-M02001", "");
+                this.markGridStale();
                 this.renderGrid("#columnsGrid-M02001", [], "columns");
                 this.renderGrid("#dataGrid-M02001", [], "data");
                 this.renderGrid("#sqlGrid-M02001", [], "sql");
@@ -463,7 +501,7 @@
             }
         },
 
-        switchUploadView(viewName) {
+        switchUploadView(viewName, options = {}) {
             if (this.isUploading && viewName === "table") {
                 this.setText("#uploadDescription-M02001", this.t("uploadStillRunning", "Upload is still running. The Table tab will open automatically after completion."));
                 return;
@@ -475,10 +513,10 @@
             getContainerEl(".upload-workbench-panel")?.querySelectorAll(".upload-view-panel").forEach((panel) => {
                 panel.classList.toggle("is-active", panel.dataset.uploadPanel === this.activeUploadView);
             });
-            if (this.activeUploadView === "table") {
+            if (this.activeUploadView === "table" && !options.skipAutoLoad && !this.isUploadTableTreeCurrent()) {
                 this.loadUploadTableTree(this.uploadedTableName);
             }
-            if (this.activeUploadView === "table" && this.uploadedTableName && this.activeTab === "data") {
+            if (this.activeUploadView === "table" && this.uploadedTableName && this.activeTab === "data" && !this.isGridCurrent("data", this.getDataGridKey())) {
                 this.loadTableData();
             }
         },
@@ -499,6 +537,8 @@
             if (!this.selectedProjectId) {
                 this.uploadTables = [];
                 this.displayedUploadTables = [];
+                this.uploadTableTreeLoaded = false;
+                this.uploadTableTreeKey = "";
                 container.innerHTML = `
                     <div class="table-empty">${this.escapeHtml(this.t("selectProjectFirstShort", "Select project first."))}</div>
                     ${this.renderListFooter(0)}
@@ -519,10 +559,13 @@
                 }
                 this.uploadTables = Array.isArray(json.data) ? json.data : [];
                 this.displayedUploadTables = this.uploadTables;
+                this.uploadTableTreeLoaded = true;
+                this.uploadTableTreeKey = this.getUploadTableTreeKey();
                 if (preferredTableName) this.focusedUploadTableKey = String(preferredTableName).toUpperCase();
                 this.renderUploadTableTree();
                 if (this.focusedUploadTableKey) this.scrollToUploadTableRow(this.focusedUploadTableKey);
             } catch (error) {
+                this.uploadTableTreeLoaded = false;
                 container.innerHTML = `<div class="table-error">${this.escapeHtml(error.message || this.t("uploadTableListLoadFailed", "Upload table list load failed."))}</div>`;
             }
         },
@@ -546,11 +589,13 @@
             }
 
             container.innerHTML = `
-                <div class="table-tree-head">
-                    <div>${this.escapeHtml(this.t("table", "Table"))}</div>
-                    <div>${this.escapeHtml(this.t("owner", "Owner"))}</div>
+                <div class="table-tree-scroll-body">
+                    <div class="table-tree-head">
+                        <div>${this.escapeHtml(this.t("table", "Table"))}</div>
+                        <div>${this.escapeHtml(this.t("owner", "Owner"))}</div>
+                    </div>
+                    ${rows.map((row) => this.createUploadTableRow(row)).join("")}
                 </div>
-                ${rows.map((row) => this.createUploadTableRow(row)).join("")}
                 ${this.renderListFooter(rows.length)}
             `;
         },
@@ -578,6 +623,8 @@
         async selectUploadTable(tableName) {
             const name = String(tableName || "").trim().toUpperCase();
             if (!name) return;
+            const previousTableName = this.uploadedTableName;
+            const isSameTable = previousTableName === name;
             this.uploadedTableName = name;
             this.focusedUploadTableKey = name;
             this.setValue("#uploadedTableId-M02001", name);
@@ -586,11 +633,19 @@
                 ? this.tl("selectedTableDescription", "{objectName} selected.", { objectName: `${row.OWNER || ""}.${row.TABLE_NAME}` })
                 : this.tl("selectedTableDescription", "{objectName} selected.", { objectName: name });
             this.setText("#uploadDescription-M02001", desc);
-            this.setDefaultSql();
+            if (!isSameTable) {
+                this.markGridStale();
+                this.setDefaultSql(true);
+            } else {
+                this.setDefaultSql();
+            }
+            this.updateSelectedMeta(row);
             this.renderUploadTableTree();
             this.scrollToUploadTableRow(name);
-            await this.loadColumns();
-            if (this.activeTab === "data") {
+            if (!this.isGridCurrent("columns", this.getColumnsGridKey())) {
+                await this.loadColumns();
+            }
+            if (this.activeTab === "data" && !this.isGridCurrent("data", this.getDataGridKey())) {
                 await this.loadTableData();
             }
         },
@@ -653,6 +708,18 @@
             target.focus();
         },
 
+        updateSelectedMeta(row = null) {
+            const selected = row || this.uploadTables.find((item) => item.TABLE_NAME === this.uploadedTableName) || null;
+            this.setText("#selectedOwner-M02001", selected?.OWNER || "-");
+            this.setText("#selectedTable-M02001", selected?.TABLE_NAME || this.uploadedTableName || "-");
+            this.setText("#selectedCreatedAt-M02001", this.formatKstDateTime(selected?.CREATED_AT));
+            this.setText("#selectedComment-M02001", selected?.COMMENTS || "-");
+            const desc = selected
+                ? `${selected.OWNER || "-"}.${selected.TABLE_NAME || this.uploadedTableName || "-"}`
+                : this.t("selectUploadTableFromExplorer", "Select a table from the explorer.");
+            this.setText("#tableDescription-M02001", desc);
+        },
+
         switchTab(tabName) {
             this.activeTab = tabName;
             getContainerEl(".upload-table-tabs")?.querySelectorAll(".table-tab").forEach((tab) => {
@@ -662,12 +729,16 @@
                 panel.classList.toggle("is-active", panel.dataset.panel === tabName);
             });
             if (!this.uploadedTableName) return;
-            if (tabName === "data") this.loadTableData();
-            if (tabName === "sql" && !getContainerEl("#sqlEditor-M02001")?.value.trim()) this.setDefaultSql();
+            if (tabName === "data" && !this.isGridCurrent("data", this.getDataGridKey())) this.loadTableData();
+            if (tabName === "sql") {
+                if (!getContainerEl("#sqlEditor-M02001")?.value.trim()) this.setDefaultSql();
+            }
         },
 
-        async loadColumns() {
+        async loadColumns(options = {}) {
             if (!this.ensureUploadedTable()) return;
+            const gridKey = this.getColumnsGridKey();
+            if (!options.force && this.isGridCurrent("columns", gridKey)) return;
             const grid = getContainerEl("#columnsGrid-M02001");
             if (grid) grid.innerHTML = `<div class="table-empty">${this.escapeHtml(this.t("loadingColumns", "Loading columns..."))}</div>`;
             try {
@@ -677,14 +748,18 @@
                     body: { tableName: this.uploadedTableName }
                 });
                 this.renderGrid("#columnsGrid-M02001", json.data || [], "columns", json.columns || []);
+                this.gridState.columns = gridKey;
             } catch (error) {
+                this.gridState.columns = "";
                 this.renderError("#columnsGrid-M02001", error.message);
             }
         },
 
-        async loadTableData() {
+        async loadTableData(options = {}) {
             if (!this.ensureUploadedTable()) return;
             const limit = this.getLimit("#dataLimit-M02001");
+            const gridKey = this.getDataGridKey(limit);
+            if (!options.force && this.isGridCurrent("data", gridKey)) return;
             const grid = getContainerEl("#dataGrid-M02001");
             if (grid) grid.innerHTML = `<div class="table-empty">${this.escapeHtml(this.t("loadingData", "Loading data..."))}</div>`;
             try {
@@ -694,28 +769,63 @@
                     body: { tableName: this.uploadedTableName, limit }
                 });
                 this.renderGrid("#dataGrid-M02001", json.data || [], "data", json.columns || []);
+                this.gridState.data = gridKey;
             } catch (error) {
+                this.gridState.data = "";
                 this.renderError("#dataGrid-M02001", error.message);
             }
         },
 
         async executeSql() {
-            const sql = (getContainerEl("#sqlEditor-M02001")?.value || "").trim();
-            if (!sql) {
-                this.renderError("#sqlGrid-M02001", this.t("noSqlStatement", "No SQL statement found."));
+            const executable = this.getExecutableSqlFromEditor();
+            if (!executable.sql) {
+                this.renderSqlMessage(this.t("noSqlAtCursor", "No SQL statement found at the cursor."), "error");
+                this.renderError("#sqlGrid-M02001", this.t("noSqlAtCursor", "No SQL statement found at the cursor."));
                 return;
             }
+            const sql = executable.sql;
+            if (!this.validateSelectSql(sql)) {
+                this.renderSqlMessage("Only a single SELECT statement is allowed.", "error");
+                this.renderError("#sqlGrid-M02001", "Only a single SELECT statement is allowed.");
+                this.restoreSqlSelection(executable);
+                return;
+            }
+
+            this.restoreSqlSelection(executable);
             const limit = this.getLimit("#sqlLimit-M02001");
+            const gridKey = this.getSqlGridKey(sql, limit);
+            const grid = getContainerEl("#sqlGrid-M02001");
+            const startedAt = performance.now();
+            this.renderSqlMessage("Running SQL...", "info");
+            if (grid) grid.innerHTML = `<div class="table-empty">Running SQL...</div>`;
+
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/sql`, {
                     method: "POST",
                     showLoading: false,
                     body: { sql, limit }
                 });
+                const elapsedMs = Math.round(performance.now() - startedAt);
+                const rowCount = Array.isArray(json.data) ? json.data.length : 0;
+                this.renderSqlMessage(`${rowCount.toLocaleString()} rows selected. (${elapsedMs.toLocaleString()} ms)`, "success");
                 this.renderGrid("#sqlGrid-M02001", json.data || [], "sql", json.columns || []);
+                this.gridState.sql = gridKey;
             } catch (error) {
+                const elapsedMs = Math.round(performance.now() - startedAt);
+                this.gridState.sql = "";
+                this.renderSqlMessage(`${error.message || "SQL execution failed."} (${elapsedMs.toLocaleString()} ms)`, "error");
                 this.renderError("#sqlGrid-M02001", error.message);
+            } finally {
+                this.restoreSqlSelection(executable);
             }
+        },
+
+        renderSqlMessage(message, type = "info") {
+            const element = getContainerEl("#sqlMessage-M02001");
+            if (!element) return;
+            element.className = type === "error" ? "table-error" : "table-empty";
+            element.textContent = message || "";
+            element.hidden = !message;
         },
 
         handleSqlEditorKeydown(event) {
@@ -724,10 +834,145 @@
             this.executeSql();
         },
 
-        setDefaultSql() {
+        getExecutableSqlFromEditor() {
+            const editor = getContainerEl("#sqlEditor-M02001");
+            if (!editor) {
+                return { sql: "", selectionStart: 0, selectionEnd: 0 };
+            }
+
+            const value = editor.value || "";
+            const selectionStart = editor.selectionStart || 0;
+            const selectionEnd = editor.selectionEnd || 0;
+            if (selectionStart !== selectionEnd) {
+                return {
+                    sql: value.slice(selectionStart, selectionEnd).trim(),
+                    selectionStart,
+                    selectionEnd
+                };
+            }
+
+            const range = this.findSqlStatementRange(value, selectionStart);
+            return {
+                sql: value.slice(range.selectionStart, range.selectionEnd).trim(),
+                selectionStart: range.selectionStart,
+                selectionEnd: range.selectionEnd
+            };
+        },
+
+        findSqlStatementRange(value, cursorIndex) {
+            let start = value.lastIndexOf(";", Math.max(0, cursorIndex - 1)) + 1;
+            let end = value.indexOf(";", cursorIndex);
+            if (end < 0) end = value.length;
+
+            const cursorIsBetweenStatements = start > 0 && !value.slice(start, cursorIndex).trim();
+            if ((!value.slice(start, end).trim() && start > 0) || cursorIsBetweenStatements) {
+                end = start - 1;
+                start = value.lastIndexOf(";", Math.max(0, end - 1)) + 1;
+            }
+
+            while (start < end && /\s/.test(value[start])) start += 1;
+            while (end > start && /\s/.test(value[end - 1])) end -= 1;
+
+            return { selectionStart: start, selectionEnd: end };
+        },
+
+        restoreSqlSelection(selection) {
+            const editor = getContainerEl("#sqlEditor-M02001");
+            if (!editor || !selection) return;
+            editor.focus();
+            editor.setSelectionRange(selection.selectionStart, selection.selectionEnd);
+        },
+
+        setDefaultSql(force = false) {
             if (!this.uploadedTableName) return;
             const editor = getContainerEl("#sqlEditor-M02001");
-            if (editor) editor.value = `SELECT *\n  FROM "${this.uploadedTableName}"`;
+            if (editor && (force || !editor.value.trim())) {
+                const row = this.uploadTables.find((item) => item.TABLE_NAME === this.uploadedTableName) || null;
+                const tableRef = row?.OWNER
+                    ? `${this.quoteName(row.OWNER)}.${this.quoteName(this.uploadedTableName)}`
+                    : this.quoteName(this.uploadedTableName);
+                editor.value = `SELECT *\n  FROM ${tableRef};`;
+            }
+        },
+
+        validateSelectSql(sql) {
+            const text = sql.trim().replace(/;+\s*$/, "");
+            if (!/^(select|with)\b/i.test(text)) return false;
+            return !/;\s*\S/.test(sql);
+        },
+
+        quoteName(name) {
+            return `"${String(name || "").replace(/"/g, "\"\"")}"`;
+        },
+
+        formatKstDateTime(value) {
+            const date = this.parseDateTime(value);
+            if (!date) return value || "-";
+            const parts = new Intl.DateTimeFormat("ko-KR", {
+                timeZone: "Asia/Seoul",
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+                hour12: false
+            }).formatToParts(date).reduce((acc, part) => {
+                acc[part.type] = part.value;
+                return acc;
+            }, {});
+            return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second} KST`;
+        },
+
+        parseDateTime(value) {
+            if (!value) return null;
+            if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+            const text = String(value).trim();
+            const match = text.match(/^(\d{4})[-/](\d{2})[-/](\d{2})[ T](\d{2}):(\d{2}):(\d{2})(?:[.,](\d+))?/);
+            if (match) {
+                const [, year, month, day, hour, minute, second] = match;
+                if (/[zZ]|[+-]\d{2}:?\d{2}$/.test(text)) {
+                    const parsedWithZone = new Date(text);
+                    return Number.isNaN(parsedWithZone.getTime()) ? null : parsedWithZone;
+                }
+                return new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second));
+            }
+            const parsed = new Date(text);
+            return Number.isNaN(parsed.getTime()) ? null : parsed;
+        },
+
+        getUploadTableTreeKey() {
+            return [
+                this.selectedProjectId || "",
+                this.getSelectedProjectCode() || "",
+                getContainerEl("#uploadTableSearch-M02001")?.value || this.getUploadTableSearchPrefix()
+            ].join("|");
+        },
+
+        isUploadTableTreeCurrent() {
+            return this.uploadTableTreeLoaded && this.uploadTableTreeKey === this.getUploadTableTreeKey();
+        },
+
+        getColumnsGridKey() {
+            return this.uploadedTableName || "";
+        },
+
+        getDataGridKey(limit = this.getLimit("#dataLimit-M02001")) {
+            return `${this.uploadedTableName || ""}|${limit}`;
+        },
+
+        getSqlGridKey(sql = getContainerEl("#sqlEditor-M02001")?.value || "", limit = this.getLimit("#sqlLimit-M02001")) {
+            return `${String(sql || "").trim()}|${limit}`;
+        },
+
+        isGridCurrent(gridKey, stateKey) {
+            return Boolean(stateKey) && this.gridState?.[gridKey] === stateKey;
+        },
+
+        markGridStale(keys = ["columns", "data", "sql"]) {
+            keys.forEach((key) => {
+                if (this.gridState[key] !== undefined) this.gridState[key] = "";
+            });
         },
 
         ensureUploadedTable() {
@@ -744,14 +989,13 @@
             this.gridData[gridKey] = Array.isArray(rows) ? rows : [];
             const columns = explicitColumns || Object.keys(rows?.[0] || {});
             if (!columns.length) {
-                container.innerHTML = `
-                    <div class="table-empty">${this.escapeHtml(this.t("noData", "No data."))}</div>
-                    ${this.renderListFooter(0)}
-                `;
+                const emptyMarkup = `<div class="table-empty">${this.escapeHtml(this.t("noData", "No data."))}</div>`;
+                const footerMarkup = gridKey === "sql" ? "" : this.renderListFooter(0);
+                container.innerHTML = `<div class="table-grid-scroll">${emptyMarkup}</div>${footerMarkup}`;
                 return;
             }
-            container.innerHTML = `
-                <table class="table-grid">
+            const tableMarkup = `
+                <table class="table-grid" data-grid-key="${this.escapeHtml(gridKey)}">
                     <thead>
                         <tr>
                             <th class="grid-row-no" title="No">No</th>
@@ -767,8 +1011,106 @@
                         `).join("")}
                     </tbody>
                 </table>
-                ${this.renderListFooter((rows || []).length)}
             `;
+            const footerMarkup = gridKey === "sql" ? "" : this.renderListFooter((rows || []).length);
+            container.innerHTML = `<div class="table-grid-scroll">${tableMarkup}</div>${footerMarkup}`;
+            this.applyGridFrozenColumns(gridKey);
+        },
+
+        getGridFreezeCount(gridKey) {
+            const table = getContainerEl(`[data-grid-key="${gridKey}"]`);
+            const headerCells = Array.from(table?.tHead?.rows?.[0]?.children || []);
+            const maxDataColumns = Math.max(0, headerCells.length - 1);
+            const input = gridKey === "sql" ? getContainerEl("#sqlFreezeColumns-M02001") : null;
+            let dataColumnCount = Number.parseInt(input?.value ?? this.gridFrozenColumns?.[gridKey] ?? 0, 10);
+            if (!Number.isFinite(dataColumnCount)) dataColumnCount = 0;
+            dataColumnCount = Math.max(0, Math.min(maxDataColumns, dataColumnCount));
+            this.gridFrozenColumns = { ...(this.gridFrozenColumns || {}), [gridKey]: dataColumnCount };
+            if (input && input.value !== String(dataColumnCount)) input.value = String(dataColumnCount);
+            return dataColumnCount + 1;
+        },
+
+        applyGridFrozenColumns(gridKey = "sql") {
+            const table = getContainerEl(`[data-grid-key="${gridKey}"]`);
+            if (!table) return;
+            table.querySelectorAll(".is-frozen-col, .is-frozen-edge").forEach((cell) => {
+                cell.classList.remove("is-frozen-col", "is-frozen-edge");
+                cell.style.left = "";
+            });
+            table.classList.remove("has-frozen-cols");
+            const headerCells = Array.from(table.tHead?.rows?.[0]?.children || []);
+            const visibleFreezeCount = Math.min(this.getGridFreezeCount(gridKey), headerCells.length);
+            if (visibleFreezeCount <= 0) return;
+            table.classList.add("has-frozen-cols");
+            const offsets = [];
+            let left = 0;
+            for (let index = 0; index < visibleFreezeCount; index += 1) {
+                offsets[index] = left;
+                left += headerCells[index].getBoundingClientRect().width || headerCells[index].offsetWidth || 0;
+            }
+            Array.from(table.rows || []).forEach((row) => {
+                Array.from(row.children || []).forEach((cell, index) => {
+                    if (index >= visibleFreezeCount) return;
+                    cell.classList.add("is-frozen-col");
+                    if (index === visibleFreezeCount - 1) cell.classList.add("is-frozen-edge");
+                    cell.style.left = `${offsets[index]}px`;
+                });
+            });
+        },
+
+        exportActiveGrid(format) {
+            const gridKey = this.activeTab;
+            const rows = this.gridData[gridKey] || [];
+            if (!rows.length) {
+                alert(this.t("noGridDataToExport", "No grid data to export."));
+                return;
+            }
+            const baseName = this.createExportFileName(gridKey);
+            if (format === "excel") {
+                DataEditingSystem.downloadXLSX(rows, `${baseName}.xlsx`);
+                return;
+            }
+            if (format === "csv") {
+                this.downloadBlob(`${baseName}.csv`, this.createDelimitedContent(rows, ","), "text/csv;charset=utf-8");
+                return;
+            }
+            if (format === "tsv") {
+                this.downloadBlob(`${baseName}.tsv`, this.createDelimitedContent(rows, "\t"), "text/tab-separated-values;charset=utf-8");
+            }
+        },
+
+        createExportFileName(gridKey) {
+            const tableName = this.uploadedTableName || "SQL_RESULT";
+            const stamp = new Date().toISOString().slice(0, 19).replace(/[-:T]/g, "");
+            return `M02001_${tableName}_${gridKey}_${stamp}`;
+        },
+
+        createDelimitedContent(rows, delimiter) {
+            const columns = Object.keys(rows[0] || {});
+            const lines = [
+                columns.map((column) => this.escapeDelimitedValue(column, delimiter)).join(delimiter),
+                ...rows.map((row) => columns.map((column) => this.escapeDelimitedValue(row[column] ?? "", delimiter)).join(delimiter))
+            ];
+            return `\uFEFF${lines.join("\r\n")}`;
+        },
+
+        escapeDelimitedValue(value, delimiter) {
+            const text = String(value ?? "");
+            const shouldQuote = text.includes('"') || text.includes("\r") || text.includes("\n") || text.includes(delimiter);
+            const escaped = text.replace(/"/g, '""');
+            return shouldQuote ? `"${escaped}"` : escaped;
+        },
+
+        downloadBlob(fileName, content, type) {
+            const blob = new Blob([content], { type });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
         }
     };
 

@@ -640,14 +640,28 @@ const LayoutManager = {
         }
         this.overlay = overlay;
 
+        const header = document.querySelector('.content-header');
         if (!document.getElementById('mobile-menu-btn')) {
             const btn = document.createElement('button');
             btn.id = 'mobile-menu-btn';
-            btn.className = 'fixed top-4 right-4 w-12 h-12 bg-blue-600 text-white rounded-full shadow-2xl flex items-center justify-center lg:hidden z-[210] transition-transform active:scale-90';
+            btn.type = 'button';
+            btn.className = 'mobile-sidebar-toggle';
+            btn.title = 'Open menu';
+            btn.setAttribute('aria-label', 'Open menu');
+            btn.setAttribute('aria-expanded', 'false');
             btn.innerHTML = '<i class="fas fa-bars"></i>';
-            document.body.appendChild(btn);
+            (header || document.body).appendChild(btn);
         }
         this.btn = document.getElementById('mobile-menu-btn');
+        if (this.btn) {
+            this.btn.className = 'mobile-sidebar-toggle';
+            this.btn.title = 'Open menu';
+            this.btn.setAttribute('aria-label', 'Open menu');
+            this.btn.setAttribute('aria-expanded', 'false');
+            if (header && this.btn.parentElement !== header) {
+                header.appendChild(this.btn);
+            }
+        }
         this.collapseBtn = document.getElementById('btnSidebarCollapse');
 
         if (this.btn) this.btn.onclick = () => this.toggle();
@@ -669,7 +683,12 @@ const LayoutManager = {
             if (window.innerWidth > 1024) {
                 this.sidebar.classList.remove('show');
                 this.overlay.classList.remove('active');
-                if (this.btn) this.btn.innerHTML = '<i class="fas fa-bars"></i>';
+                if (this.btn) {
+                    this.btn.innerHTML = '<i class="fas fa-bars"></i>';
+                    this.btn.title = 'Open menu';
+                    this.btn.setAttribute('aria-label', 'Open menu');
+                    this.btn.setAttribute('aria-expanded', 'false');
+                }
                 this.applySidebarCollapsed(this.isSidebarCollapsed());
             } else {
                 this.applySidebarCollapsed(false, { persist: false });
@@ -757,6 +776,10 @@ const LayoutManager = {
 
     toggle() {
         if (!this.sidebar) return;
+        const willOpen = !this.sidebar.classList.contains('show');
+        if (willOpen && window.innerWidth <= 1024) {
+            window.toggleMobileGemini?.(false);
+        }
         const isShow = this.sidebar.classList.toggle('show');
 
         if (this.overlay) {
@@ -765,6 +788,9 @@ const LayoutManager = {
 
         if (this.btn) {
             this.btn.innerHTML = isShow ? '<i class="fas fa-times"></i>' : '<i class="fas fa-bars"></i>';
+            this.btn.title = isShow ? 'Close menu' : 'Open menu';
+            this.btn.setAttribute('aria-label', this.btn.title);
+            this.btn.setAttribute('aria-expanded', String(isShow));
         }
     },
 
@@ -773,6 +799,9 @@ const LayoutManager = {
         this.sidebar.classList.remove('show');
         this.overlay.classList.remove('active');
         this.btn.innerHTML = '<i class="fas fa-bars"></i>';
+        this.btn.title = 'Open menu';
+        this.btn.setAttribute('aria-label', 'Open menu');
+        this.btn.setAttribute('aria-expanded', 'false');
     }
 };
 

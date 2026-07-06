@@ -3,6 +3,8 @@
     "@fortawesome/fontawesome-free": "^7.2.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
+    "@types/node": "^26.1.0",
     "autoprefixer": "^10.5.0",
     "postcss": "^8.5.10",
     "tailwindcss": "^3.4.19"
@@ -12,7 +14,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "ui:audit": "playwright test tests/ui-audit.spec.ts --workers=1",
+    "ui:audit:headed": "playwright test tests/ui-audit.spec.ts --headed --workers=1",
+    "ui:report": "playwright show-report"
   },
   "repository": {
     "type": "git",

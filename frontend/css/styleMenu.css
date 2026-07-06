@@ -1206,6 +1206,7 @@ option.owner-scope-other {
     min-height: 0;
     overflow: auto;
     border-top: 1px solid #e5e7eb;
+    position: relative;
 }
 
 .scenario-table-head,
@@ -1418,6 +1419,7 @@ option.owner-scope-other {
     flex: 1 1 auto;
     min-height: 0;
     overflow: auto;
+    position: relative;
 }
 
 .upload-analysis-panel {
@@ -1632,6 +1634,19 @@ option.owner-scope-other {
 .table-tree-grid,
 .table-result-grid {
     flex: 1;
+    min-height: 0;
+    overflow: auto;
+    position: relative;
+}
+
+.table-tree-grid {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.table-tree-scroll-body {
+    flex: 1 1 auto;
     min-height: 0;
     overflow: auto;
 }
@@ -1917,7 +1932,7 @@ option.owner-scope-other {
 }
 
 #container-M02002 .table-meta-strip {
-    grid-template-columns: minmax(110px, 150px) minmax(320px, 1.4fr) minmax(170px, 220px) minmax(0, 1fr);
+    grid-template-columns: minmax(110px, 150px) minmax(320px, 1.4fr) minmax(0, 1fr) minmax(170px, 220px);
 }
 
 #container-M02002 .table-workspace {
@@ -1950,39 +1965,401 @@ option.owner-scope-other {
 }
 
 #container-M02002 .sql-workbench {
-    display: flex;
-    flex-direction: column;
+    display: grid;
     flex: 1 1 0;
-    gap: 8px;
-    height: auto;
+    gap: 6px;
+    grid-template-rows: minmax(34px, auto) minmax(72px, 112px) auto minmax(180px, 1fr);
+    height: 100%;
     min-height: 0;
-    overflow: visible;
+    overflow: hidden;
+}
+
+#container-M02002 [data-panel="sql"] .sql-toolbar {
+    align-items: center;
+    margin-bottom: 0;
+    min-height: 34px;
+    overflow-x: auto;
+    overflow-y: visible;
+    padding: 1px 0;
 }
 
 #container-M02002 .table-sql-editor {
-    flex: 0 0 112px;
-    height: 112px;
-    min-height: 96px;
-    resize: vertical;
+    height: 100%;
+    margin-bottom: 0;
+    min-height: 0;
+    resize: none;
 }
 
 #container-M02002 #sqlMessage-M02002 {
-    flex: 0 0 auto;
-    min-height: 20px;
-    padding: 4px 0;
+    min-height: 0;
+    padding: 0;
 }
 
 #container-M02002 [data-panel="sql"] > .sql-workbench > .table-result-grid {
-    flex: 0 1 auto;
-    max-height: 420px;
+    height: auto;
+    max-height: none;
     min-height: 0;
-    overflow: auto;
+    overflow: hidden;
 }
 
 #container-M02002 .table-result-grid .table-grid th {
     position: sticky;
     top: 0;
     z-index: 2;
+}
+
+/* M02002 responsive selection workspace mirrors the fixed M02001 grid shell. */
+#container-M02002 .work-context-card,
+#container-M02002 .table-workspace,
+#container-M02002 .table-object-panel,
+#container-M02002 .table-panel {
+    min-width: 0;
+}
+
+#container-M02002 #scenarioTablesGrid-M02002,
+#container-M02002 #tableTree-M02002,
+#container-M02002 #columnsGrid-M02002,
+#container-M02002 #dataGrid-M02002,
+#container-M02002 #sqlGrid-M02002 {
+    box-sizing: border-box;
+    padding-top: 28px;
+    padding-bottom: 12px;
+    position: relative;
+}
+
+#container-M02002 #columnsGrid-M02002,
+#container-M02002 #dataGrid-M02002,
+#container-M02002 #sqlGrid-M02002 {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+#container-M02002 #scenarioTablesGrid-M02002 {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+#container-M02002 #scenarioTablesGrid-M02002 > .scenario-table-scroll-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+}
+
+#container-M02002 #scenarioTablesGrid-M02002 .scenario-table-head {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
+#container-M02002 #sqlGrid-M02002 {
+    padding-top: 22px;
+}
+
+#container-M02002 #scenarioTablesGrid-M02002 .list-count-footer,
+#container-M02002 #tableTree-M02002 .list-count-footer,
+#container-M02002 #columnsGrid-M02002 .list-count-footer,
+#container-M02002 #dataGrid-M02002 .list-count-footer,
+#container-M02002 #sqlGrid-M02002 .list-count-footer {
+    right: 14px;
+    top: 8px;
+}
+
+#container-M02002 #sqlGrid-M02002 .list-count-footer {
+    display: none;
+    top: 4px;
+}
+
+@media (min-width: 1025px) {
+    #pageContainerHolder .page-section.active > #container-M02002.table-page > .table-workspace {
+        flex: 1 1 auto;
+        height: max(520px, calc(100vh - 300px));
+        max-height: max(520px, calc(100vh - 300px));
+        min-height: 520px;
+        overflow: hidden;
+    }
+}
+
+#container-M02002 #columnsGrid-M02002 > .table-grid-scroll,
+#container-M02002 #dataGrid-M02002 > .table-grid-scroll,
+#container-M02002 #sqlGrid-M02002 > .table-grid-scroll {
+    box-sizing: border-box;
+    flex: 1 1 auto;
+    max-width: 100%;
+    min-height: 0;
+    overflow: auto;
+    padding-bottom: 32px;
+    scroll-padding-bottom: 32px;
+    scrollbar-gutter: stable;
+    touch-action: pan-x pan-y;
+    width: 100%;
+}
+
+#container-M02002 #sqlGrid-M02002 > .table-grid-scroll {
+    overflow-x: scroll !important;
+    overflow-y: scroll !important;
+}
+
+#container-M02002 .mobile-grid-scroll-actions {
+    display: none;
+}
+
+@media (max-width: 1024px) {
+    #container-M02002.table-page {
+        gap: 12px;
+        height: auto !important;
+        max-height: none;
+        min-height: calc(100vh - 128px);
+        overflow: visible;
+    }
+
+    #container-M02002 .work-context-card {
+        flex: 0 0 auto;
+        overflow: visible;
+    }
+
+    #container-M02002 .work-context-header {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    #container-M02002 .work-context-title-row {
+        display: grid;
+        gap: 8px;
+        grid-template-columns: minmax(0, 1fr);
+        width: 100%;
+    }
+
+    #container-M02002 .work-context-title-row > span {
+        display: block;
+        line-height: 1.35;
+        min-width: 0;
+        overflow-wrap: normal;
+        white-space: normal;
+        word-break: keep-all;
+    }
+
+    #container-M02002 .work-context-title-row strong {
+        display: block;
+        margin: 0 0 2px;
+    }
+
+    #container-M02002 .scenario-table-actions {
+        display: flex;
+        flex-wrap: nowrap;
+        max-width: 100%;
+        overflow-x: auto;
+        padding-bottom: 2px;
+        width: 100%;
+    }
+
+    #container-M02002 .scenario-table-actions .table-btn,
+    #container-M02002 .scenario-table-actions .table-icon-btn {
+        flex: 0 0 auto;
+        white-space: nowrap;
+    }
+
+    #container-M02002 .work-context-bar {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    #container-M02002 .work-context-card .scenario-table-grid {
+        flex: 0 0 190px;
+        height: 190px;
+        max-height: 190px;
+        min-height: 190px;
+        overflow: hidden;
+    }
+
+    #container-M02002 .scenario-table-head,
+    #container-M02002 .scenario-table-row {
+        min-width: 720px;
+    }
+
+    #container-M02002 .table-workspace {
+        display: flex;
+        flex: 0 0 auto;
+        flex-direction: column;
+        gap: 14px;
+        height: auto !important;
+        max-height: none !important;
+        min-height: 0;
+        overflow: visible;
+    }
+
+    #container-M02002 .table-object-panel {
+        flex: 0 0 auto;
+        height: auto;
+        max-height: none;
+        min-height: 300px;
+        overflow: hidden;
+    }
+
+    #container-M02002 #tableTree-M02002 {
+        flex: 0 0 230px;
+        height: 230px;
+        max-height: 230px;
+        min-height: 230px;
+        overflow: hidden;
+    }
+
+    #container-M02002 .table-panel {
+        flex: 0 0 auto;
+        height: auto;
+        max-height: none;
+        min-height: 360px;
+        overflow: visible;
+        padding: 18px 12px;
+    }
+
+    #container-M02002 .table-header {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    #container-M02002 .table-export-actions,
+    #container-M02002 .table-tabs {
+        max-width: 100%;
+        overflow-x: auto;
+        padding-bottom: 2px;
+    }
+
+    #container-M02002 .table-meta-strip {
+        grid-template-columns: minmax(90px, 0.8fr) minmax(220px, 1.6fr) minmax(160px, 1fr) minmax(140px, 1fr);
+        min-width: 600px;
+        overflow-x: auto;
+        overflow-y: hidden;
+    }
+
+    #container-M02002 .table-meta-strip > div {
+        border-bottom: 0;
+        border-right: 1px solid #e5e7eb;
+    }
+
+    #container-M02002 .table-meta-strip > div:last-child {
+        border-right: 0;
+    }
+
+    #container-M02002 .table-tab-panel.is-active {
+        flex: 0 0 auto;
+        height: auto;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    #container-M02002 .table-tab-panel[data-panel="sql"].is-active {
+        min-height: 430px;
+        overflow: visible;
+    }
+
+    #container-M02002 .table-tab-panel[data-panel="sql"] > .sql-workbench {
+        gap: 6px;
+        grid-template-rows: 34px 72px auto 280px;
+        height: auto;
+        min-height: 0;
+        overflow: visible;
+    }
+
+    #container-M02002 .table-tab-panel[data-panel="sql"] .sql-toolbar {
+        align-items: center;
+        flex-wrap: nowrap;
+        gap: 6px;
+        height: 34px;
+        min-height: 34px;
+        overflow-x: auto;
+        overflow-y: visible;
+        padding-bottom: 2px;
+    }
+
+    #container-M02002 .table-tab-panel[data-panel="sql"] .sql-toolbar .table-limit-control {
+        flex: 0 0 auto;
+    }
+
+    #container-M02002 #sqlMessage-M02002 {
+        font-size: 12px;
+        line-height: 1.25;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    #container-M02002 #columnsGrid-M02002,
+    #container-M02002 #dataGrid-M02002,
+    #container-M02002 #sqlGrid-M02002 {
+        flex: 0 0 270px;
+        height: 270px;
+        max-height: 270px;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    #container-M02002 #columnsGrid-M02002 > .table-grid-scroll,
+    #container-M02002 #dataGrid-M02002 > .table-grid-scroll,
+    #container-M02002 #sqlGrid-M02002 > .table-grid-scroll {
+        flex: 0 0 230px;
+        height: 230px;
+        max-height: 230px;
+        min-height: 0;
+        overflow-x: auto !important;
+        overflow-y: auto !important;
+    }
+
+    #container-M02002 #sqlGrid-M02002 {
+        flex-basis: 280px;
+        height: 280px;
+        max-height: 280px;
+        padding-bottom: 12px;
+        padding-right: 0;
+        position: relative;
+    }
+
+    #container-M02002 #sqlGrid-M02002 > .table-grid-scroll {
+        bottom: auto;
+        flex: 1 1 auto;
+        height: auto;
+        left: auto;
+        max-height: none;
+        overflow-x: scroll !important;
+        overflow-y: scroll !important;
+        padding-bottom: 32px;
+        position: static;
+        right: auto;
+        scroll-padding-bottom: 32px;
+        top: auto;
+        width: 100%;
+    }
+
+    #container-M02002 #sqlGrid-M02002 .mobile-grid-scroll-actions {
+        display: none;
+        bottom: 5px;
+        gap: 4px;
+        grid-template-columns: repeat(4, 30px);
+        position: absolute;
+        right: 8px;
+        z-index: 120;
+    }
+
+    #container-M02002 #sqlGrid-M02002 .mobile-grid-scroll-btn {
+        align-items: center;
+        background: #f8fafc;
+        border: 1px solid #cbd5e1;
+        color: #0f172a;
+        cursor: pointer;
+        display: inline-flex;
+        height: 30px;
+        justify-content: center;
+        padding: 0;
+        width: 30px;
+    }
+
+    #container-M02002 #sqlGrid-M02002 .mobile-grid-scroll-btn:active {
+        background: #2563eb;
+        border-color: #1d4ed8;
+        color: #ffffff;
+    }
 }
 
 #container-M99002 {
@@ -2290,22 +2667,27 @@ body.is-column-resizing {
 
 .list-count-footer {
     align-items: center;
-    background: #f8fafc;
-    border-top: 1px solid #e5e7eb;
-    bottom: 0;
+    background: transparent;
+    border: 0;
+    bottom: auto;
     box-sizing: border-box;
     color: #64748b;
-    display: flex;
+    display: inline-flex;
     flex: 0 0 auto;
     font-size: 12px;
     font-weight: 700;
     justify-content: flex-end;
-    left: 0;
-    min-height: 32px;
-    padding: 0 12px;
-    position: sticky;
-    width: 100%;
-    z-index: 6;
+    left: auto;
+    line-height: 1.2;
+    min-height: 0;
+    padding: 0;
+    pointer-events: none;
+    position: absolute;
+    right: 12px;
+    top: 8px;
+    white-space: nowrap;
+    width: auto;
+    z-index: 95;
 }
 
 .table-error {
@@ -3343,6 +3725,7 @@ body.is-column-resizing .data-sql-grid-col-resizer::after {
 .project-list {
     display: flex;
     flex-direction: column;
+    position: relative;
 }
 
 .project-list-head {
@@ -3725,6 +4108,24 @@ body.is-column-resizing .data-sql-grid-col-resizer::after {
 #container-M01002 .scenario-detail {
     flex: 0 1 auto;
     overflow: auto;
+}
+
+#container-M01002 .scenario-list-panel {
+    flex: 0 0 clamp(220px, 30vh, 340px);
+    min-height: 220px;
+    max-height: 340px;
+}
+
+#container-M01002 .scenario-list {
+    min-height: 118px;
+}
+
+#container-M01002 .scenario-list-body {
+    min-height: 52px;
+}
+
+#container-M01002 .scenario-detail {
+    overflow: visible;
 }
 
 .required-title::after {
@@ -5486,6 +5887,7 @@ body.is-column-resizing .data-sql-grid-col-resizer::after {
 .data-param-grid,
 .data-sql-workbench .table-result-grid {
     min-height: 300px;
+    position: relative;
 }
 
 .data-table-workbench {
@@ -7485,6 +7887,12 @@ body.intro-mode #container-intro .env-panel {
     margin: 0 !important;
 }
 
+.mobile-top-toolbar-toggle,
+.mobile-gemini-toggle,
+.mobile-sidebar-toggle {
+    display: none;
+}
+
 @media (max-width: 1280px) {
     .content-header {
         padding: 6px 18px !important;
@@ -7552,6 +7960,81 @@ body.intro-mode #container-intro .env-panel {
     }
 }
 
+@media (min-width: 1025px) and (max-width: 1680px) {
+    body:not(.intro-mode) .content-header {
+        align-items: center !important;
+        flex-wrap: nowrap;
+        height: 64px !important;
+        min-height: 64px !important;
+        overflow: hidden;
+        padding: 6px 12px !important;
+    }
+
+    body:not(.intro-mode) .content-title-block {
+        align-items: center;
+        flex: 1 1 190px;
+        gap: 10px;
+        height: 52px;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    body:not(.intro-mode) .content-header #contentTitle {
+        line-height: 1.05 !important;
+        max-width: 100%;
+        min-width: 0;
+        overflow: hidden;
+        overflow-wrap: anywhere;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    body:not(.intro-mode) .content-header #contentTitle::before {
+        flex: 0 0 4px;
+        margin-top: 0;
+    }
+
+    body:not(.intro-mode) .content-header-meta {
+        display: none;
+    }
+
+    body:not(.intro-mode) .header-actions {
+        flex: 0 1 auto;
+        flex-wrap: nowrap;
+        gap: 6px;
+        justify-content: flex-end;
+        max-width: calc(100% - 220px);
+        min-width: 0;
+        overflow-x: auto;
+        overflow-y: hidden;
+        scrollbar-width: none;
+        width: auto;
+    }
+
+    body:not(.intro-mode) .header-actions::-webkit-scrollbar {
+        display: none;
+    }
+
+    body:not(.intro-mode) .header-actions .header-session-box,
+    body:not(.intro-mode) .header-actions .header-target-db,
+    body:not(.intro-mode) .header-actions .header-target-db-box {
+        flex-shrink: 0;
+        min-width: 0;
+    }
+
+    body:not(.intro-mode) .header-actions .header-target-db,
+    body:not(.intro-mode) .header-actions .header-target-db-box {
+        flex: 0 1 260px;
+        max-width: clamp(190px, 24vw, 280px);
+        width: 260px;
+    }
+
+    body:not(.intro-mode) .header-actions .btn-refresh-top,
+    body:not(.intro-mode) .header-actions button {
+        flex-shrink: 0;
+    }
+}
+
 @media (max-width: 560px) {
     .content-header {
         padding-right: 14px !important;
@@ -7582,10 +8065,170 @@ body.intro-mode #container-intro .env-panel {
 }
 
 @media (max-width: 1024px) {
-    #mobile-menu-btn {
-        top: auto !important;
-        right: 18px !important;
-        bottom: 18px !important;
+    body:not(.intro-mode) .main-content {
+        margin-left: 0 !important;
+        width: 100% !important;
+    }
+
+    #sidebar #btnSidebarCollapse {
+        display: none !important;
+    }
+
+    body:not(.intro-mode) #resizer-right,
+    body:not(.intro-mode) #pageConsoleHolder,
+    body:not(.intro-mode) #resizer-bottom {
+        display: none !important;
+    }
+
+    body:not(.intro-mode) #sideRBar.right-sidebar {
+        display: flex !important;
+        height: 100dvh !important;
+        max-width: min(92vw, 380px) !important;
+        min-width: 0 !important;
+        position: fixed !important;
+        right: 0 !important;
+        top: 0 !important;
+        transform: translateX(0);
+        transition: transform 0.24s ease, box-shadow 0.24s ease;
+        width: min(92vw, 380px) !important;
+        z-index: 230 !important;
+    }
+
+    body:not(.intro-mode) #sideRBar.right-sidebar.collapsed {
+        cursor: default;
+        max-width: min(92vw, 380px) !important;
+        min-width: 0 !important;
+        pointer-events: none;
+        transform: translateX(100%);
+        width: min(92vw, 380px) !important;
+    }
+
+    body:not(.intro-mode) #sideRBar.right-sidebar.collapsed .sideRBar-collapsed-icon-viewer {
+        display: none !important;
+    }
+
+    body:not(.intro-mode) #sideRBar.right-sidebar:not(.collapsed) .side-content-original {
+        display: flex !important;
+    }
+
+    .content-header {
+        display: grid !important;
+        grid-template-areas:
+            "title toolbar gemini menu"
+            "actions actions actions actions";
+        grid-template-columns: minmax(0, 1fr) auto auto auto;
+        height: auto !important;
+        min-height: 56px !important;
+        overflow: visible;
+        padding: 8px 10px !important;
+    }
+
+    .content-title-block {
+        grid-area: title;
+        height: auto;
+        min-height: 40px;
+        width: auto;
+    }
+
+    .content-header-meta {
+        display: none;
+    }
+
+    .content-header #contentTitle {
+        align-items: flex-start;
+        line-height: 1.25 !important;
+        max-width: 100%;
+        min-width: 0;
+        overflow: visible;
+        overflow-wrap: anywhere;
+        text-overflow: clip;
+        white-space: normal;
+    }
+
+    .content-header #contentTitle::before {
+        flex: 0 0 4px;
+        margin-top: 2px;
+    }
+
+    .mobile-top-toolbar-toggle,
+    .mobile-gemini-toggle,
+    #mobile-menu-btn.mobile-sidebar-toggle {
+        align-items: center;
+        background: #eef2f7;
+        border: 1px solid #cbd5e1;
+        color: #334155;
+        cursor: pointer;
+        display: inline-flex !important;
+        height: 38px;
+        justify-content: center;
+        margin: 0;
+        padding: 0;
+        position: static !important;
+        width: 38px;
+        z-index: 12 !important;
+    }
+
+    .mobile-top-toolbar-toggle {
+        grid-area: toolbar;
+    }
+
+    .mobile-gemini-toggle {
+        grid-area: gemini;
+    }
+
+    #mobile-menu-btn.mobile-sidebar-toggle {
+        background: #2563eb;
+        border-color: #1d4ed8;
+        box-shadow: 0 8px 18px rgba(37, 99, 235, 0.26);
+        color: #ffffff;
+        grid-area: menu;
+        height: 40px;
+        width: 40px;
+    }
+
+    .mobile-top-toolbar-toggle:hover,
+    .mobile-gemini-toggle:hover,
+    #mobile-menu-btn.mobile-sidebar-toggle:hover {
+        background: #e2e8f0;
+        border-color: #94a3b8;
+        color: #0f172a;
+    }
+
+    .mobile-gemini-toggle.is-active {
+        background: #0f766e;
+        border-color: #0d9488;
+        color: #ffffff;
+    }
+
+    #mobile-menu-btn.mobile-sidebar-toggle:hover {
+        background: #1d4ed8;
+        border-color: #1e40af;
+        color: #ffffff;
+    }
+
+    .header-actions {
+        align-items: stretch;
+        border-top: 1px solid #dbe3ef;
+        display: none !important;
+        grid-area: actions;
+        padding-top: 8px;
+        width: 100%;
+    }
+
+    .content-header.is-mobile-toolbar-open .header-actions {
+        display: flex !important;
+    }
+
+    .header-actions .header-session-box,
+    .header-actions .header-target-db-box {
+        flex: 1 1 100%;
+        max-width: none;
+        min-width: 0;
+        width: 100%;
+    }
+
+    #pageContainerHolder {
+        padding: 12px !important;
     }
 }
 
@@ -15508,6 +16151,1773 @@ body.is-resizing-flow-result-sql {
     .home-session-strip > div:last-child {
         border-bottom: 0;
     }
+}
+
+@media (max-width: 760px) {
+    #container-home .home-flow-selection-bar {
+        align-items: stretch;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    #container-home .home-flow-selection-summary {
+        max-width: none;
+        width: 100%;
+    }
+
+    #container-home .home-flow-date-selector {
+        display: flex;
+        flex: 0 0 auto;
+        overflow-x: auto;
+        padding-bottom: 4px;
+        scroll-snap-type: x proximity;
+        width: 100%;
+    }
+
+    #container-home .home-flow-date-selector button {
+        flex: 0 0 78px;
+        min-height: 54px;
+        min-width: 78px;
+        scroll-snap-align: start;
+    }
+
+    #container-home .home-flow-selection-metrics {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        width: 100%;
+    }
+
+    #container-home .home-date-run-hint {
+        margin-bottom: 6px;
+    }
+
+    #container-home .home-date-run-list {
+        display: flex;
+        gap: 8px;
+        grid-template-columns: none;
+        overflow-x: auto;
+        padding-bottom: 4px;
+        scroll-snap-type: x proximity;
+    }
+
+    #container-home .home-date-run-row {
+        flex: 0 0 min(82vw, 260px);
+        min-height: 58px;
+        scroll-snap-align: start;
+    }
+}
+
+@media (min-width: 769px) and (max-width: 1440px) {
+    body:not(.intro-mode) #container-M01002 .scenario-list-panel {
+        flex: 0 0 clamp(210px, 28vh, 320px);
+        min-height: 210px;
+        max-height: 320px;
+    }
+
+    body:not(.intro-mode) #container-M01002 .scenario-list-toolbar {
+        flex-wrap: nowrap;
+    }
+
+    body:not(.intro-mode) #container-M01002 .scenario-search {
+        min-width: 0;
+    }
+
+    body:not(.intro-mode) #container-M01002 .scenario-new-btn {
+        min-width: 128px;
+        white-space: nowrap;
+    }
+
+    body:not(.intro-mode) .env-page:not(.data-work-page) .env-footer {
+        align-items: stretch;
+        flex-wrap: wrap;
+        gap: 10px 12px;
+    }
+
+    body:not(.intro-mode) .env-page:not(.data-work-page) .env-footer-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        min-width: 0;
+    }
+
+    body:not(.intro-mode) .env-page:not(.data-work-page) .env-footer-group:first-child {
+        flex: 1 1 240px;
+    }
+
+    body:not(.intro-mode) .env-page:not(.data-work-page) .env-footer-group:last-child {
+        flex: 1 1 320px;
+        justify-content: flex-end;
+    }
+
+    body:not(.intro-mode) .env-page:not(.data-work-page) .env-footer-group:last-child .env-btn {
+        margin-left: 0;
+        min-width: 86px;
+        padding: 0 12px;
+        white-space: nowrap;
+        width: auto;
+    }
+
+    body:not(.intro-mode) .env-page:not(.data-work-page) .env-footer-group:last-child .env-save {
+        flex: 1 1 150px;
+        max-width: 220px;
+    }
+
+    body:not(.intro-mode) .env-page:not(.data-work-page) .env-footer-group:last-child .env-cancel,
+    body:not(.intro-mode) .env-page:not(.data-work-page) .env-footer-group:last-child .env-danger {
+        flex: 0 0 86px;
+    }
+
+    body:not(.intro-mode) .env-page:not(.data-work-page) .env-detail-hint {
+        line-height: 1.45;
+        margin-left: 0;
+        overflow-wrap: anywhere;
+    }
+}
+
+@media (min-width: 769px) and (max-width: 1180px) {
+    body:not(.intro-mode) #pageContainerHolder .page-section.active > .page-container.env-page:not(.data-work-page) {
+        height: auto !important;
+        max-height: none;
+        min-height: 0 !important;
+        overflow: visible;
+        padding: 0;
+    }
+
+    body:not(.intro-mode) #pageContainerHolder .page-section.active > .page-container.env-page:not(.data-work-page) > .env-workspace {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        height: auto;
+        max-height: none;
+        min-height: 0;
+        overflow: visible;
+    }
+
+    body:not(.intro-mode) .env-page:not(.data-work-page) .env-object-panel,
+    body:not(.intro-mode) .env-page:not(.data-work-page) .env-panel {
+        height: auto;
+        max-height: none;
+        min-height: 0;
+        overflow: visible;
+        width: 100%;
+    }
+
+    body:not(.intro-mode) .env-page:not(.data-work-page) .env-object-header {
+        align-items: flex-start;
+        min-height: auto;
+    }
+
+    body:not(.intro-mode) .env-page:not(.data-work-page) .env-section-title,
+    body:not(.intro-mode) .env-page:not(.data-work-page) .env-title {
+        line-height: 1.25;
+        overflow: visible;
+        text-overflow: clip;
+        white-space: normal;
+    }
+
+    body:not(.intro-mode) .env-page:not(.data-work-page) .env-tree-grid {
+        flex: 0 0 auto;
+        height: auto;
+        max-height: 340px;
+        min-height: 190px;
+    }
+
+    body:not(.intro-mode) .env-page:not(.data-work-page) .env-tree-viewport,
+    body:not(.intro-mode) .env-page:not(.data-work-page) .project-list-body {
+        flex: 0 1 auto;
+        max-height: 252px;
+        overflow-y: auto;
+    }
+
+    body:not(.intro-mode) .env-page:not(.data-work-page) .env-meta-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    body:not(.intro-mode) .env-page:not(.data-work-page) .env-meta-wide {
+        grid-column: 1 / -1;
+    }
+
+    body:not(.intro-mode) .project-page .project-list {
+        max-height: 340px;
+    }
+
+    body:not(.intro-mode) .project-page .project-detail {
+        flex: 0 0 auto;
+        min-height: 0;
+        overflow: visible;
+    }
+
+    body:not(.intro-mode) .project-page .project-detail .project-meta-grid {
+        height: auto;
+    }
+
+    body:not(.intro-mode) .project-page .project-detail .env-meta-wide:last-child textarea {
+        min-height: 160px;
+    }
+
+    body:not(.intro-mode) #container-M01002 .scenario-list-panel {
+        flex-basis: clamp(220px, 30vh, 320px);
+        min-height: 220px;
+    }
+
+    body:not(.intro-mode) #container-M01002 .scenario-detail {
+        flex: 0 0 auto;
+        overflow: visible;
+    }
+
+    body:not(.intro-mode) #container-M01002 .scenario-detail .env-meta-wide:last-child textarea {
+        min-height: 140px;
+    }
+
+    body:not(.intro-mode) .env-page:not(.data-work-page) .env-footer {
+        align-items: stretch;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 18px;
+    }
+
+    body:not(.intro-mode) .env-page:not(.data-work-page) .env-footer-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        min-width: 0;
+    }
+
+    body:not(.intro-mode) .env-page:not(.data-work-page) .env-footer-group:first-child {
+        flex: 1 1 260px;
+    }
+
+    body:not(.intro-mode) .env-page:not(.data-work-page) .env-footer-group:last-child {
+        flex: 1 1 320px;
+        justify-content: flex-end;
+    }
+
+    body:not(.intro-mode) .env-page:not(.data-work-page) .env-footer-group:last-child .env-btn {
+        flex: 1 1 128px;
+        margin-left: 0;
+        min-width: 86px;
+        max-width: 220px;
+        white-space: nowrap;
+        width: auto;
+    }
+
+    body:not(.intro-mode) .env-page:not(.data-work-page) .env-detail-hint {
+        line-height: 1.5;
+        margin-left: 0;
+        overflow-wrap: anywhere;
+    }
+}
+
+@media (max-width: 768px) {
+    body:not(.intro-mode) #pageContainerHolder .page-section.active > .page-container.env-page:not(.data-work-page) {
+        min-height: 0 !important;
+        padding: 0;
+    }
+
+    body:not(.intro-mode) #pageContainerHolder .page-section.active > .page-container.env-page:not(.data-work-page) > .env-workspace {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        min-height: 0;
+        overflow: visible;
+    }
+
+    body:not(.intro-mode) .env-page:not(.data-work-page) .env-object-panel,
+    body:not(.intro-mode) .env-page:not(.data-work-page) .env-panel {
+        height: auto;
+        max-height: none;
+        min-height: 0;
+        overflow: visible;
+    }
+
+    body:not(.intro-mode) .env-page:not(.data-work-page) .env-object-panel {
+        flex: 0 0 auto;
+    }
+
+    body:not(.intro-mode) .env-page:not(.data-work-page) .env-panel {
+        flex: 0 0 auto;
+        min-height: min(560px, calc(100dvh - 118px));
+        padding: 18px 16px 16px;
+    }
+
+    body:not(.intro-mode) .env-page:not(.data-work-page) .env-object-header {
+        align-items: flex-start;
+        min-height: auto;
+        padding: 16px 18px;
+    }
+
+    body:not(.intro-mode) .env-page:not(.data-work-page) .env-section-title,
+    body:not(.intro-mode) .env-page:not(.data-work-page) .env-title {
+        line-height: 1.25;
+        overflow: visible;
+        text-overflow: clip;
+        white-space: normal;
+    }
+
+    body:not(.intro-mode) .env-page:not(.data-work-page) .env-section-desc,
+    body:not(.intro-mode) .env-page:not(.data-work-page) .env-desc {
+        font-size: 13px;
+        line-height: 1.45;
+    }
+
+    body:not(.intro-mode) .env-page:not(.data-work-page) .env-object-search {
+        min-height: 46px;
+        padding: 8px 10px;
+    }
+
+    body:not(.intro-mode) .env-page:not(.data-work-page) .env-tree-grid {
+        flex: 0 0 auto;
+        height: auto;
+        max-height: 300px;
+        min-height: 168px;
+    }
+
+    body:not(.intro-mode) .env-page:not(.data-work-page) .env-tree-viewport,
+    body:not(.intro-mode) .env-page:not(.data-work-page) .project-list-body {
+        flex: 0 1 auto;
+        max-height: 214px;
+        overflow-y: auto;
+    }
+
+    body:not(.intro-mode) .project-page .project-list {
+        max-height: 300px;
+    }
+
+    body:not(.intro-mode) .project-page .project-list-head {
+        height: 38px;
+    }
+
+    body:not(.intro-mode) .project-page .env-header {
+        margin-bottom: 12px;
+    }
+
+    body:not(.intro-mode) .project-page .project-detail {
+        flex: 0 0 auto;
+        min-height: 0;
+        overflow: visible;
+    }
+
+    body:not(.intro-mode) .project-page .project-detail .project-meta-grid {
+        height: auto;
+    }
+
+    body:not(.intro-mode) .project-page .project-detail .env-meta-wide:last-child textarea {
+        min-height: 120px;
+    }
+
+    body:not(.intro-mode) #container-M01002 .project-list {
+        max-height: 260px;
+    }
+
+    body:not(.intro-mode) #container-M01002 .project-list-body {
+        max-height: 174px;
+    }
+
+    body:not(.intro-mode) #container-M01002 .scenario-side-summary {
+        padding: 10px;
+    }
+
+    body:not(.intro-mode) #container-M01002 .scenario-list-panel {
+        flex: 0 0 auto;
+        min-height: 196px;
+        max-height: 270px;
+        margin-bottom: 14px;
+    }
+
+    body:not(.intro-mode) #container-M01002 .scenario-list-toolbar {
+        align-items: stretch;
+        flex-wrap: wrap;
+    }
+
+    body:not(.intro-mode) #container-M01002 .scenario-search {
+        flex: 1 1 220px;
+        min-width: 0;
+    }
+
+    body:not(.intro-mode) #container-M01002 .scenario-new-btn {
+        flex: 1 1 160px;
+        min-width: 0;
+    }
+
+    body:not(.intro-mode) #container-M01002 .scenario-list {
+        min-height: 106px;
+    }
+
+    body:not(.intro-mode) #container-M01002 .scenario-list-body {
+        max-height: 126px;
+        min-height: 52px;
+        overflow-y: auto;
+    }
+
+    body:not(.intro-mode) #container-M01002 .scenario-detail {
+        flex: 0 0 auto;
+        overflow: visible;
+    }
+
+    body:not(.intro-mode) #container-M01002 .scenario-detail .env-meta-wide:last-child textarea {
+        min-height: 116px;
+    }
+
+    body:not(.intro-mode) .env-page:not(.data-work-page) .env-footer {
+        align-items: stretch;
+        gap: 10px;
+        margin-top: 14px;
+    }
+
+    body:not(.intro-mode) .env-page:not(.data-work-page) .env-footer-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        width: 100%;
+    }
+
+    body:not(.intro-mode) .env-page:not(.data-work-page) .env-footer-group:last-child {
+        justify-content: stretch;
+    }
+
+    body:not(.intro-mode) .env-page:not(.data-work-page) .env-footer-group:last-child .env-btn {
+        flex: 1 1 120px;
+        margin-left: 0;
+        min-width: 86px;
+        white-space: nowrap;
+        width: auto;
+    }
+
+    body:not(.intro-mode) .env-page:not(.data-work-page) .env-detail-hint {
+        margin-left: 0;
+    }
+}
+
+@media (max-width: 480px) {
+    body:not(.intro-mode) .env-page:not(.data-work-page) .env-tree-grid {
+        max-height: 250px;
+    }
+
+    body:not(.intro-mode) .env-page:not(.data-work-page) .env-tree-viewport,
+    body:not(.intro-mode) .env-page:not(.data-work-page) .project-list-body {
+        max-height: 164px;
+    }
+
+    body:not(.intro-mode) #container-M01002 .project-list {
+        max-height: 230px;
+    }
+
+    body:not(.intro-mode) #container-M01002 .scenario-list-panel {
+        min-height: 184px;
+        max-height: 244px;
+    }
+
+    body:not(.intro-mode) #container-M01002 .scenario-list-body {
+        max-height: 112px;
+    }
+}
+
+/* M02001 upload workbench responsive layout */
+#container-M02001.upload-page,
+#container-M02001.upload-page .work-context-card,
+#container-M02001.upload-page .table-panel,
+#container-M02001.upload-page .upload-view-panel,
+#container-M02001.upload-page .upload-table-workspace,
+#container-M02001.upload-page .upload-table-tree-panel,
+#container-M02001.upload-page .upload-table-analysis-area {
+    min-width: 0;
+}
+
+#container-M02001 .upload-table-id {
+    grid-template-columns: auto minmax(0, 420px) 32px 32px;
+}
+
+#container-M02001 .upload-table-id .upload-input {
+    min-width: 0;
+}
+
+#container-M02001 .upload-view-panel[data-upload-panel="file"].is-active {
+    overflow: visible;
+}
+
+#container-M02001 .upload-preview-grid {
+    background: #ffffff;
+    border-top: 1px solid #e5e7eb;
+    flex: 0 0 auto;
+    margin-top: 10px;
+    min-height: 220px;
+    overflow: auto;
+    padding-top: 22px;
+}
+
+#container-M02001 .upload-preview-grid .table-empty,
+#container-M02001 .upload-preview-grid .table-error {
+    min-height: 120px;
+}
+
+#container-M02001 .upload-table-analysis-area {
+    min-height: 280px;
+}
+
+#container-M02001 .upload-table-analysis-area .table-tab-panel {
+    min-height: 220px;
+}
+
+#container-M02001 .upload-table-analysis-area .table-tab-panel > .table-result-grid,
+#container-M02001 .upload-table-analysis-area .sql-workbench > .table-result-grid {
+    min-height: 160px;
+}
+
+#container-M02001 .upload-table-analysis-area .sql-workbench {
+    min-height: 260px;
+}
+
+#container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"].is-active {
+    min-height: 500px;
+}
+
+#container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"] .sql-workbench {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    height: auto;
+    min-height: 460px;
+    overflow: visible;
+}
+
+#container-M02001 #sqlEditor-M02001 {
+    flex: 0 0 clamp(120px, 22vh, 180px);
+    margin-bottom: 0;
+    min-height: 120px;
+}
+
+#container-M02001 #sqlGrid-M02001 {
+    align-self: stretch;
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 260px;
+    overflow: hidden;
+    padding-bottom: 6px;
+    width: 100%;
+}
+
+#container-M02001 #sqlGrid-M02001 .table-grid-scroll {
+    background: #ffffff;
+    box-sizing: border-box;
+    flex: 1 1 auto;
+    margin-bottom: 14px;
+    max-width: 100%;
+    min-height: 0;
+    min-width: 0;
+    overflow-x: scroll !important;
+    overflow-y: auto;
+    padding-bottom: 42px;
+    scrollbar-gutter: stable;
+    scroll-padding-bottom: 42px;
+    width: 100%;
+    -webkit-overflow-scrolling: touch;
+}
+
+#container-M02001 #sqlGrid-M02001 .table-grid th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
+#container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="columns"].is-active,
+#container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="data"].is-active {
+    flex: 0 0 auto;
+    height: auto;
+    min-height: 0;
+}
+
+#container-M02001 #columnsGrid-M02001,
+#container-M02001 #dataGrid-M02001 {
+    flex: 0 0 260px;
+    height: 260px;
+    max-height: 260px;
+    min-height: 260px;
+    overflow: auto;
+}
+
+#container-M02001 #columnsGrid-M02001 .table-grid th,
+#container-M02001 #dataGrid-M02001 .table-grid th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
+@media (min-width: 1025px) and (max-width: 1680px) {
+    #container-M02001 .upload-controls {
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
+
+    #container-M02001 .upload-file-control {
+        grid-column: span 2;
+    }
+
+    #container-M02001 .upload-comment-control,
+    #container-M02001 .upload-rule-control {
+        grid-column: span 2;
+    }
+
+    #container-M02001 .upload-table-workspace {
+        grid-template-columns: minmax(320px, 440px) minmax(0, 1fr);
+    }
+
+    #container-M02001 .upload-table-id {
+        grid-template-columns: auto minmax(0, 320px) 32px 32px;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="columns"].is-active,
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="data"].is-active {
+        flex: 0 0 auto;
+        height: auto;
+        min-height: 0;
+    }
+
+    #container-M02001 #columnsGrid-M02001,
+    #container-M02001 #dataGrid-M02001 {
+        flex: 0 0 260px;
+        height: 260px;
+        max-height: 260px;
+        min-height: 260px;
+    }
+}
+
+@media (min-width: 1281px) and (max-width: 1680px) {
+    #container-M02001 .upload-controls {
+        grid-template-columns: minmax(220px, 1.6fr) repeat(5, minmax(92px, 1fr));
+    }
+
+    #container-M02001 .upload-file-control {
+        grid-column: span 2;
+    }
+
+    #container-M02001 .upload-comment-control {
+        grid-column: span 2;
+    }
+
+    #container-M02001 .upload-rule-control {
+        grid-column: span 3;
+    }
+
+    #container-M02001 .upload-actions {
+        justify-content: flex-end;
+        min-width: 0;
+    }
+
+    #container-M02001 .upload-actions .table-btn {
+        flex: 0 0 auto;
+    }
+
+    #container-M02001 .upload-preview-grid {
+        min-height: 240px;
+    }
+
+    #container-M02001 .upload-table-analysis-area {
+        min-height: 300px;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel {
+        min-height: 230px;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"].is-active {
+        min-height: 520px;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"] .sql-workbench {
+        min-height: 480px;
+    }
+
+    #container-M02001 #sqlGrid-M02001 {
+        min-height: 280px;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="columns"].is-active,
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="data"].is-active {
+        flex: 0 0 auto;
+        height: auto;
+        min-height: 0;
+    }
+
+    #container-M02001 #columnsGrid-M02001,
+    #container-M02001 #dataGrid-M02001 {
+        flex: 0 0 280px;
+        height: 280px;
+        max-height: 280px;
+        min-height: 280px;
+    }
+}
+
+@media (min-width: 769px) and (max-width: 1280px) {
+    #container-M02001 .work-context-title-row {
+        gap: 6px 12px;
+    }
+
+    #container-M02001 .upload-page .work-context-bar,
+    #container-M02001.upload-page .work-context-bar {
+        grid-template-columns: minmax(260px, 1fr) minmax(160px, 0.7fr) minmax(140px, 0.6fr);
+    }
+
+    #container-M02001 .upload-controls {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    #container-M02001 .upload-file-control,
+    #container-M02001 .upload-comment-control,
+    #container-M02001 .upload-rule-control {
+        grid-column: span 3;
+    }
+
+    #container-M02001 .upload-table-bar {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    #container-M02001 .upload-table-title {
+        max-width: none;
+    }
+
+    #container-M02001 .upload-table-id {
+        grid-template-columns: auto minmax(0, 1fr) 32px 32px;
+        width: 100%;
+    }
+
+    #container-M02001 .upload-table-workspace {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        overflow: visible;
+    }
+
+    #container-M02001 .upload-table-tree-panel {
+        flex: 0 0 auto;
+        min-height: 260px;
+        max-height: 390px;
+    }
+
+    #container-M02001 .upload-table-analysis-area {
+        flex: 0 0 auto;
+        min-height: 300px;
+        overflow: visible;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel {
+        min-height: 230px;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel > .table-result-grid,
+    #container-M02001 .upload-table-analysis-area .sql-workbench > .table-result-grid {
+        min-height: 170px;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"].is-active {
+        min-height: 480px;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"] .sql-workbench {
+        min-height: 440px;
+    }
+
+    #container-M02001 #sqlEditor-M02001 {
+        flex-basis: 132px;
+    }
+
+    #container-M02001 #sqlGrid-M02001 {
+        min-height: 240px;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="columns"].is-active,
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="data"].is-active {
+        flex: 0 0 auto;
+        height: auto;
+        min-height: 0;
+    }
+
+    #container-M02001 #columnsGrid-M02001,
+    #container-M02001 #dataGrid-M02001 {
+        flex: 0 0 240px;
+        height: 240px;
+        max-height: 240px;
+        min-height: 240px;
+    }
+}
+
+@media (max-width: 768px) {
+    #container-M02001.upload-page {
+        max-width: 100%;
+        overflow-x: hidden;
+    }
+
+    #container-M02001.upload-page .work-context-card {
+        overflow: hidden;
+    }
+
+    #container-M02001 .work-context-header {
+        align-items: flex-start;
+    }
+
+    #container-M02001 .work-context-title-row {
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    #container-M02001.upload-page .work-context-bar {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    #container-M02001.upload-page .table-panel {
+        padding: 18px 12px;
+    }
+
+    #container-M02001 .table-header {
+        margin-bottom: 12px;
+    }
+
+    #container-M02001 .upload-view-panel.is-active {
+        overflow: visible;
+    }
+
+    #container-M02001 .upload-preview-grid {
+        min-height: 200px;
+    }
+
+    #container-M02001 .upload-controls {
+        grid-template-columns: minmax(0, 1fr);
+        padding: 10px;
+    }
+
+    #container-M02001 .upload-file-control,
+    #container-M02001 .upload-type-control,
+    #container-M02001 .upload-delimiter-control,
+    #container-M02001 .upload-fixed-widths-control,
+    #container-M02001 .upload-header-control,
+    #container-M02001 .upload-encoding-control,
+    #container-M02001 .upload-comment-control,
+    #container-M02001 .upload-rule-control,
+    #container-M02001 .upload-actions {
+        grid-column: 1;
+    }
+
+    #container-M02001 .upload-controls label > span,
+    #container-M02001 .upload-table-id span {
+        line-height: 1.25;
+        overflow-wrap: anywhere;
+        white-space: normal;
+    }
+
+    #container-M02001 .upload-file-picker {
+        height: auto;
+        min-height: 36px;
+    }
+
+    #container-M02001 .upload-file-button {
+        min-width: 84px;
+    }
+
+    #container-M02001 .upload-actions {
+        align-items: stretch;
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: stretch;
+    }
+
+    #container-M02001 .upload-actions .table-btn {
+        flex: 1 1 120px;
+    }
+
+    #container-M02001 .upload-table-bar {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 10px;
+        padding: 10px;
+    }
+
+    #container-M02001 .upload-table-id {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 32px 32px;
+        gap: 8px;
+        width: 100%;
+    }
+
+    #container-M02001 .upload-table-id span {
+        grid-column: 1 / -1;
+    }
+
+    #container-M02001 .upload-table-id .upload-input {
+        grid-column: 1;
+    }
+
+    #container-M02001 .upload-table-workspace {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        overflow: visible;
+        padding-top: 10px;
+    }
+
+    #container-M02001 .upload-table-tree-panel {
+        flex: 0 0 auto;
+        min-height: 240px;
+        max-height: 360px;
+        overflow: hidden;
+    }
+
+    #container-M02001 .table-object-header {
+        align-items: flex-start;
+        min-height: auto;
+        padding: 14px 12px;
+    }
+
+    #container-M02001 .table-object-search {
+        display: grid;
+        grid-template-columns: 18px minmax(0, 1fr) auto;
+        gap: 6px;
+        padding: 8px 10px;
+    }
+
+    #container-M02001 .table-search-actions {
+        gap: 2px;
+    }
+
+    #container-M02001 .table-tree-head,
+    #container-M02001 .table-tree-row {
+        grid-template-columns: minmax(0, 1fr) 84px;
+    }
+
+    #container-M02001 .table-tree-head > div,
+    #container-M02001 .table-tree-row > span {
+        padding: 0 10px;
+    }
+
+    #container-M02001 .upload-table-analysis-area {
+        flex: 0 0 auto;
+        min-height: 260px;
+        overflow: visible;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tabs {
+        overflow-x: auto;
+        scrollbar-width: none;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tabs::-webkit-scrollbar {
+        display: none;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel {
+        min-height: 190px;
+        padding: 10px;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel > .table-result-grid,
+    #container-M02001 .upload-table-analysis-area .sql-workbench > .table-result-grid {
+        min-height: 140px;
+    }
+
+    #container-M02001 .upload-table-analysis-area .sql-workbench {
+        min-height: 240px;
+    }
+
+    #container-M02001 .upload-table-analysis-area .sql-editor {
+        flex-basis: 120px;
+        min-height: 100px;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"].is-active {
+        min-height: 430px;
+        overflow: visible;
+        padding-bottom: 18px;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"] .sql-workbench {
+        min-height: 390px;
+        overflow: visible;
+        padding-bottom: 18px;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"] .sql-toolbar {
+        align-items: stretch;
+        flex-wrap: wrap;
+    }
+
+    #container-M02001 #sqlEditor-M02001 {
+        flex-basis: 128px;
+        max-height: 150px;
+        min-height: 112px;
+        overflow: auto;
+    }
+
+    #container-M02001 #sqlGrid-M02001 {
+        display: flex;
+        flex-direction: column;
+        flex: 0 0 240px;
+        height: 240px;
+        margin-bottom: 18px;
+        max-height: 240px;
+        min-height: 220px;
+        overscroll-behavior: contain;
+        overflow: hidden;
+        position: relative;
+        z-index: 1;
+    }
+
+    #container-M02001 #sqlGrid-M02001 .table-grid-scroll {
+        overscroll-behavior: contain;
+        overflow-x: scroll !important;
+        overflow-y: auto;
+        padding-bottom: 42px;
+        scroll-padding-bottom: 42px;
+        touch-action: pan-y;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="columns"].is-active,
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="data"].is-active {
+        flex: 0 0 auto;
+        height: auto;
+        min-height: 0;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="data"] .table-toolbar {
+        align-items: stretch;
+        flex-wrap: wrap;
+    }
+
+    #container-M02001 #columnsGrid-M02001,
+    #container-M02001 #dataGrid-M02001 {
+        flex: 0 0 220px;
+        height: 220px;
+        max-height: 220px;
+        min-height: 220px;
+    }
+}
+
+@media (max-width: 480px) {
+    #container-M02001.upload-page .table-panel {
+        padding: 16px 10px;
+    }
+
+    #container-M02001 .upload-view-tabs,
+    #container-M02001 .upload-table-tabs {
+        overflow-x: auto;
+        scrollbar-width: none;
+    }
+
+    #container-M02001 .upload-view-tabs::-webkit-scrollbar,
+    #container-M02001 .upload-table-tabs::-webkit-scrollbar {
+        display: none;
+    }
+
+    #container-M02001 .upload-file-picker {
+        align-items: stretch;
+        flex-direction: column;
+        padding: 6px;
+    }
+
+    #container-M02001 .upload-file-button {
+        width: 100%;
+    }
+
+    #container-M02001 .upload-preview-grid {
+        min-height: 180px;
+    }
+
+    #container-M02001 .upload-table-analysis-area {
+        min-height: 240px;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel {
+        min-height: 176px;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel > .table-result-grid,
+    #container-M02001 .upload-table-analysis-area .sql-workbench > .table-result-grid {
+        min-height: 128px;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"].is-active {
+        min-height: 400px;
+        overflow: visible;
+        padding-bottom: 18px;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"] .sql-workbench {
+        min-height: 360px;
+        overflow: visible;
+        padding-bottom: 18px;
+    }
+
+    #container-M02001 #sqlEditor-M02001 {
+        flex-basis: 120px;
+        max-height: 140px;
+        min-height: 104px;
+        overflow: auto;
+    }
+
+    #container-M02001 #sqlGrid-M02001 {
+        flex: 0 0 220px;
+        height: 220px;
+        margin-bottom: 18px;
+        max-height: 220px;
+        min-height: 200px;
+        overflow: hidden;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="columns"].is-active,
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="data"].is-active {
+        flex: 0 0 auto;
+        height: auto;
+        min-height: 0;
+    }
+
+    #container-M02001 #columnsGrid-M02001,
+    #container-M02001 #dataGrid-M02001 {
+        flex: 0 0 200px;
+        height: 200px;
+        max-height: 200px;
+        min-height: 200px;
+    }
+
+    #container-M02001 .upload-table-id {
+        grid-template-columns: minmax(0, 1fr) 32px 32px;
+    }
+
+    #container-M02001 .table-object-search {
+        grid-template-columns: 18px minmax(0, 1fr);
+    }
+
+    #container-M02001 .table-search-actions {
+        grid-column: 2;
+        justify-content: flex-end;
+    }
+
+    #container-M02001 .table-tree-head,
+    #container-M02001 .table-tree-row {
+        grid-template-columns: minmax(0, 1fr) 72px;
+    }
+
+    #container-M02001 .table-tree-comment {
+        padding-left: 22px;
+    }
+}
+
+@media (max-width: 768px) {
+    body:not(.intro-mode) #pageContainerHolder {
+        overflow-x: hidden !important;
+    }
+
+    body:not(.intro-mode) #pageContainerHolder .page-section.active,
+    body:not(.intro-mode) #pageContainerHolder .page-section.active > .page-container,
+    #container-M02001.upload-page,
+    #container-M02001.upload-page .table-panel,
+    #container-M02001 .upload-view-panel,
+    #container-M02001 .upload-table-workspace,
+    #container-M02001 .upload-table-analysis-area,
+    #container-M02001 .upload-table-analysis-area .table-tab-panel,
+    #container-M02001 .upload-table-analysis-area .sql-workbench {
+        max-width: 100%;
+        min-width: 0;
+    }
+
+    #container-M02001 .upload-table-analysis-area,
+    #container-M02001 .upload-table-analysis-area .table-tab-panel,
+    #container-M02001 .upload-table-analysis-area .sql-workbench {
+        overflow-x: hidden;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"].is-active,
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"] .sql-workbench {
+        overflow-y: visible;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-result-grid {
+        box-sizing: border-box;
+        max-width: 100%;
+        width: 100%;
+    }
+
+    #container-M02001 #sqlGrid-M02001 {
+        display: flex;
+        flex-direction: column;
+        flex: 0 0 clamp(260px, 46vh, 320px);
+        height: clamp(260px, 46vh, 320px);
+        max-height: 320px;
+        max-width: 100%;
+        min-height: 260px;
+        overflow: hidden;
+    }
+
+    #container-M02001 #sqlGrid-M02001 .table-grid-scroll {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-x: scroll !important;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        padding-bottom: 44px;
+        scroll-padding-bottom: 44px;
+        touch-action: pan-y;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    #container-M02001 #sqlGrid-M02001 .table-grid {
+        max-width: none;
+        min-width: 560px;
+        width: max-content;
+    }
+}
+
+@media (max-width: 480px) {
+    #container-M02001 #sqlGrid-M02001 {
+        flex-basis: clamp(250px, 44vh, 300px);
+        height: clamp(250px, 44vh, 300px);
+        max-height: 300px;
+        min-height: 250px;
+    }
+
+    #container-M02001 #sqlGrid-M02001 .table-grid {
+        min-width: 520px;
+    }
+}
+
+@media (max-width: 768px) {
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"].is-active {
+        min-height: 0;
+        padding-bottom: 10px;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"] .sql-workbench {
+        min-height: 0;
+        padding-bottom: 0;
+    }
+
+    #container-M02001 #sqlGrid-M02001 {
+        display: flex;
+        flex-direction: column;
+        flex: 0 0 auto;
+        height: auto;
+        margin-bottom: 0;
+        max-height: none;
+        min-height: 0;
+        overflow: visible;
+        padding-bottom: 0;
+    }
+
+    #container-M02001 #sqlGrid-M02001 .table-grid-scroll {
+        flex: 1 1 auto;
+        margin-bottom: 0;
+        max-height: 240px;
+        overflow-x: auto !important;
+        overflow-y: auto;
+        padding-bottom: 72px;
+        scroll-padding-bottom: 72px;
+        scrollbar-gutter: stable;
+    }
+
+}
+
+@media (max-width: 480px) {
+    #container-M02001 #sqlGrid-M02001 .table-grid-scroll {
+        max-height: 210px;
+    }
+}
+
+/* M02001 grid count labels stay above headers, while grids fill the panel body. */
+#container-M02001 .upload-preview-grid,
+#container-M02001 #columnsGrid-M02001,
+#container-M02001 #dataGrid-M02001,
+#container-M02001 #sqlGrid-M02001 {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding-top: 28px;
+    padding-bottom: 12px;
+}
+
+#container-M02001 #uploadTableTree-M02001 {
+    box-sizing: border-box;
+    padding-top: 28px;
+    padding-bottom: 12px;
+}
+
+#container-M02001 .upload-preview-grid .list-count-footer,
+#container-M02001 #uploadTableTree-M02001 .list-count-footer,
+#container-M02001 #columnsGrid-M02001 .list-count-footer,
+#container-M02001 #dataGrid-M02001 .list-count-footer,
+#container-M02001 #sqlGrid-M02001 .list-count-footer {
+    right: 14px;
+    top: 8px;
+}
+
+#container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="columns"].is-active,
+#container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="data"].is-active {
+    flex: 1 1 auto;
+    height: 100%;
+    min-height: 0;
+    padding-bottom: 12px;
+}
+
+#container-M02001 .table-meta-strip {
+    grid-template-columns: minmax(110px, 150px) minmax(320px, 1.4fr) minmax(0, 1fr) minmax(170px, 220px);
+}
+
+@media (max-width: 1180px) {
+    #container-M02001 .table-meta-strip {
+        grid-template-columns: minmax(90px, 0.8fr) minmax(240px, 1.6fr) minmax(160px, 1fr) minmax(140px, 1fr);
+        overflow-x: auto;
+        overflow-y: hidden;
+    }
+
+    #container-M02001 .table-meta-strip > div {
+        border-bottom: 0;
+    }
+
+    #container-M02001 .table-meta-strip > div:last-child {
+        border-right: 0;
+    }
+}
+
+@media (max-width: 760px) {
+    #container-M02001 .table-meta-strip {
+        min-width: 640px;
+    }
+}
+
+@media (max-width: 560px) {
+    #container-M02001 .table-meta-strip {
+        min-width: 600px;
+    }
+}
+
+#container-M02001 #columnsGrid-M02001,
+#container-M02001 #dataGrid-M02001 {
+    flex: 1 1 0;
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    overflow: hidden;
+}
+
+#container-M02001 #sqlGrid-M02001 {
+    overflow: hidden;
+}
+
+#container-M02001 .upload-preview-grid > .table-grid-scroll,
+#container-M02001 #columnsGrid-M02001 > .table-grid-scroll,
+#container-M02001 #dataGrid-M02001 > .table-grid-scroll,
+#container-M02001 #sqlGrid-M02001 > .table-grid-scroll {
+    box-sizing: border-box;
+    flex: 1 1 auto;
+    min-height: 0;
+    max-width: 100%;
+    overflow: auto;
+    padding-bottom: 32px;
+    scroll-padding-bottom: 32px;
+    scrollbar-gutter: stable;
+    touch-action: pan-x pan-y;
+    width: 100%;
+}
+
+#container-M02001 #sqlGrid-M02001 .table-grid-scroll {
+    margin-bottom: 0;
+}
+
+#container-M02001 #sqlGrid-M02001 > .table-grid-scroll.is-drag-scrollable {
+    overscroll-behavior: contain;
+    touch-action: none;
+}
+
+#container-M02001 #sqlGrid-M02001 > .table-grid-scroll.is-drag-scrolling {
+    cursor: grabbing;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+#container-M02001 #sqlGrid-M02001 > .table-grid-scroll.is-drag-scrolling * {
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+#container-M02001 #sqlGrid-M02001 .table-grid .grid-row-no.is-frozen-col {
+    left: 0;
+}
+
+#container-M02001 .mobile-grid-scroll-actions {
+    display: none;
+}
+
+#container-M02001 #sqlEditor-M02001 {
+    flex: 0 0 90px;
+    height: 90px;
+    max-height: 90px;
+    min-height: 90px;
+}
+
+@media (max-width: 768px) {
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="columns"].is-active,
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="data"].is-active,
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"].is-active {
+        flex: 0 0 auto;
+        height: auto;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"] .sql-workbench {
+        flex: 0 0 auto;
+        height: auto;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    #container-M02001 #sqlEditor-M02001 {
+        flex-basis: 82px;
+        height: 82px;
+        max-height: 82px;
+        min-height: 82px;
+    }
+
+    #container-M02001 #columnsGrid-M02001,
+    #container-M02001 #dataGrid-M02001,
+    #container-M02001 #sqlGrid-M02001 {
+        flex: 0 0 270px;
+        height: 270px;
+        max-height: 270px;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    #container-M02001 #columnsGrid-M02001 > .table-grid-scroll,
+    #container-M02001 #dataGrid-M02001 > .table-grid-scroll,
+    #container-M02001 #sqlGrid-M02001 > .table-grid-scroll {
+        box-sizing: border-box;
+        flex: 0 0 230px;
+        height: 230px;
+        max-height: 230px;
+        min-height: 0;
+        overflow-x: auto !important;
+        overflow-y: auto !important;
+        padding-bottom: 32px;
+        scroll-padding-bottom: 32px;
+        touch-action: pan-x pan-y;
+    }
+
+    #container-M02001 #sqlGrid-M02001 {
+        padding-bottom: 12px;
+        padding-right: 0;
+        position: relative;
+    }
+
+    #container-M02001 #sqlGrid-M02001 > .table-grid-scroll {
+        bottom: auto;
+        flex: 1 1 auto;
+        height: auto;
+        left: auto;
+        max-height: none;
+        overflow-x: scroll !important;
+        overflow-y: scroll !important;
+        padding-bottom: 32px;
+        position: static;
+        right: auto;
+        scroll-padding-bottom: 32px;
+        top: auto;
+        width: 100%;
+    }
+
+    #container-M02001 #sqlGrid-M02001 .mobile-grid-scroll-actions {
+        display: none;
+        bottom: 5px;
+        gap: 4px;
+        grid-template-columns: repeat(4, 30px);
+        position: absolute;
+        right: 8px;
+        z-index: 120;
+    }
+
+    #container-M02001 #sqlGrid-M02001 .mobile-grid-scroll-btn {
+        align-items: center;
+        background: #f8fafc;
+        border: 1px solid #cbd5e1;
+        color: #0f172a;
+        cursor: pointer;
+        display: inline-flex;
+        height: 30px;
+        justify-content: center;
+        padding: 0;
+        width: 30px;
+    }
+
+    #container-M02001 #sqlGrid-M02001 .mobile-grid-scroll-btn:active {
+        background: #2563eb;
+        border-color: #1d4ed8;
+        color: #ffffff;
+    }
+}
+
+/* M02001 table analysis follows the M02002 panel layout. */
+#container-M02001 .upload-table-analysis-area {
+    border: 1px solid #dcdcdc;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    min-width: 0;
+    overflow: hidden;
+    padding: 22px 24px;
+}
+
+#container-M02001 .upload-table-analysis-area .table-header {
+    align-items: flex-start;
+    display: flex;
+    flex: 0 0 auto;
+    gap: 16px;
+    justify-content: space-between;
+    margin-bottom: 14px;
+}
+
+#container-M02001 .upload-table-analysis-area .table-export-actions,
+#container-M02001 .upload-table-analysis-area .upload-table-tabs {
+    flex: 0 0 auto;
+}
+
+#container-M02001 .upload-table-analysis-area .upload-table-tabs {
+    padding-left: 0;
+}
+
+#container-M02001 .upload-table-analysis-area .table-tab-panel {
+    display: none;
+    flex: 1 1 0;
+    height: auto;
+    min-height: 0;
+    overflow: hidden;
+    padding: 4px 0 0;
+}
+
+#container-M02001 .upload-table-analysis-area .table-tab-panel.is-active {
+    display: flex;
+    flex-direction: column;
+}
+
+#container-M02001 .upload-table-analysis-area .table-tab-panel > .table-result-grid,
+#container-M02001 .upload-table-analysis-area .sql-workbench > .table-result-grid {
+    flex: 1 1 0;
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    overflow: hidden;
+}
+
+#container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"].is-active {
+    flex: 1 1 0;
+    height: auto;
+    min-height: 0;
+    overflow: hidden;
+    padding-bottom: 0;
+}
+
+#container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"] .sql-workbench {
+    display: grid;
+    flex: 1 1 0;
+    gap: 6px;
+    grid-template-rows: minmax(34px, auto) minmax(72px, 112px) auto minmax(180px, 1fr);
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+}
+
+#container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"] .sql-toolbar {
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 6px;
+    margin-bottom: 0;
+    min-height: 34px;
+    overflow-x: auto;
+    overflow-y: visible;
+    padding: 1px 0;
+}
+
+#container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"] .sql-toolbar .table-limit-control {
+    flex: 0 0 auto;
+}
+
+#container-M02001 #sqlEditor-M02001 {
+    flex: initial;
+    height: 100%;
+    margin-bottom: 0;
+    max-height: none;
+    min-height: 0;
+    resize: none;
+}
+
+#container-M02001 #sqlMessage-M02001 {
+    min-height: 0;
+    padding: 0;
+}
+
+#container-M02001 #columnsGrid-M02001,
+#container-M02001 #dataGrid-M02001,
+#container-M02001 #sqlGrid-M02001 {
+    box-sizing: border-box;
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    overflow: hidden;
+    padding-top: 28px;
+    padding-bottom: 12px;
+    position: relative;
+}
+
+#container-M02001 #sqlGrid-M02001 {
+    padding-top: 22px;
+}
+
+#container-M02001 #columnsGrid-M02001 > .table-grid-scroll,
+#container-M02001 #dataGrid-M02001 > .table-grid-scroll,
+#container-M02001 #sqlGrid-M02001 > .table-grid-scroll {
+    box-sizing: border-box;
+    flex: 1 1 auto;
+    height: auto;
+    max-height: none;
+    max-width: 100%;
+    min-height: 0;
+    overflow-x: auto !important;
+    overflow-y: auto !important;
+    padding-bottom: 32px;
+    scroll-padding-bottom: 32px;
+    scrollbar-gutter: stable;
+    touch-action: pan-x pan-y;
+    width: 100%;
+}
+
+#container-M02001 #columnsGrid-M02001 .list-count-footer,
+#container-M02001 #dataGrid-M02001 .list-count-footer,
+#container-M02001 #sqlGrid-M02001 .list-count-footer {
+    right: 14px;
+    top: 8px;
+}
+
+#container-M02001 #sqlGrid-M02001 .list-count-footer {
+    display: none;
+    top: 4px;
+}
+
+#container-M02001 #sqlGrid-M02001 > .table-grid-scroll {
+    overflow-x: scroll !important;
+    overflow-y: scroll !important;
+}
+
+#container-M02001 #sqlGrid-M02001 .mobile-grid-scroll-actions {
+    display: none;
+}
+
+@media (max-width: 1024px) {
+    #container-M02001 .upload-table-analysis-area {
+        height: auto;
+        max-height: none;
+        min-height: 360px;
+        overflow: visible;
+        padding: 18px 12px;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-header {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-export-actions,
+    #container-M02001 .upload-table-analysis-area .upload-table-tabs {
+        max-width: 100%;
+        overflow-x: auto;
+        padding-bottom: 2px;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel.is-active {
+        flex: 0 0 auto;
+        height: auto;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"].is-active {
+        min-height: 430px;
+        overflow: visible;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"] .sql-workbench {
+        gap: 6px;
+        grid-template-rows: 34px 72px auto 280px;
+        height: auto;
+        min-height: 0;
+        overflow: visible;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"] .sql-toolbar {
+        align-items: center;
+        flex-wrap: nowrap;
+        gap: 6px;
+        height: 34px;
+        min-height: 34px;
+        overflow-x: auto;
+        overflow-y: visible;
+        padding-bottom: 2px;
+    }
+
+    #container-M02001 #sqlMessage-M02001 {
+        font-size: 12px;
+        line-height: 1.25;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    #container-M02001 #columnsGrid-M02001,
+    #container-M02001 #dataGrid-M02001,
+    #container-M02001 #sqlGrid-M02001 {
+        flex: 0 0 270px;
+        height: 270px;
+        max-height: 270px;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    #container-M02001 #columnsGrid-M02001 > .table-grid-scroll,
+    #container-M02001 #dataGrid-M02001 > .table-grid-scroll,
+    #container-M02001 #sqlGrid-M02001 > .table-grid-scroll {
+        flex: 0 0 230px;
+        height: 230px;
+        max-height: 230px;
+        min-height: 0;
+        overflow-x: auto !important;
+        overflow-y: auto !important;
+    }
+
+    #container-M02001 #sqlGrid-M02001 {
+        flex-basis: 280px;
+        height: 280px;
+        max-height: 280px;
+        padding-bottom: 12px;
+        padding-right: 0;
+        position: relative;
+    }
+
+    #container-M02001 #sqlGrid-M02001 > .table-grid-scroll {
+        bottom: auto;
+        flex: 1 1 auto;
+        height: auto;
+        left: auto;
+        max-height: none;
+        overflow-x: scroll !important;
+        overflow-y: scroll !important;
+        padding-bottom: 32px;
+        position: static;
+        right: auto;
+        scroll-padding-bottom: 32px;
+        top: auto;
+        width: 100%;
+    }
+
 }
 
 /* ==========================================================================

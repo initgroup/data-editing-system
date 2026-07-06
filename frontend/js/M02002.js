@@ -298,14 +298,16 @@
             }
 
             container.innerHTML = `
-                <div class="scenario-table-head">
-                    <div>Owner</div>
-                    <div>Table</div>
-                    <div>Comment</div>
-                    <div>Status</div>
-                </div>
-                <div class="scenario-table-body">
-                    ${this.scenarioTables.map((row) => this.createScenarioTableRow(row)).join("")}
+                <div class="scenario-table-scroll-body">
+                    <div class="scenario-table-head">
+                        <div>Owner</div>
+                        <div>Table</div>
+                        <div>Comment</div>
+                        <div>Status</div>
+                    </div>
+                    <div class="scenario-table-body">
+                        ${this.scenarioTables.map((row) => this.createScenarioTableRow(row)).join("")}
+                    </div>
                 </div>
                 ${this.renderListFooter(this.scenarioTables.length)}
             `;
@@ -546,12 +548,14 @@
             }
 
             container.innerHTML = `
-                <div class="table-tree-head">
-                    <div>Table</div>
-                    <div>Owner</div>
+                <div class="table-tree-scroll-body">
+                    <div class="table-tree-head">
+                        <div>Table</div>
+                        <div>Owner</div>
+                    </div>
+                    ${rows.map((row) => this.createTableRow(row)).join("")}
+                    ${this.tableTreeHasMore ? this.createTableLoadMoreRow() : ""}
                 </div>
-                ${rows.map((row) => this.createTableRow(row)).join("")}
-                ${this.tableTreeHasMore ? this.createTableLoadMoreRow() : ""}
                 ${this.renderListFooter(rows.length)}
             `;
         },
@@ -678,12 +682,12 @@
         },
 
         getTableTreeScrollTop() {
-            return getContainerEl("#tableTree-M02002")?.scrollTop || 0;
+            return getContainerEl("#tableTree-M02002 .table-tree-scroll-body")?.scrollTop || 0;
         },
 
         restoreTableTreeScroll(scrollTop) {
             window.requestAnimationFrame(() => {
-                const container = getContainerEl("#tableTree-M02002");
+                const container = getContainerEl("#tableTree-M02002 .table-tree-scroll-body");
                 if (container) container.scrollTop = scrollTop;
             });
         },
@@ -905,6 +909,10 @@
             return !/;\s*\S/.test(sql);
         },
 
+        quoteName(name) {
+            return `"${String(name || "").replace(/"/g, "\"\"")}"`;
+        },
+
         renderGrid(selector, rows, gridKey, columnNames = []) {
             const container = getContainerEl(selector);
             if (!container) return;
@@ -917,7 +925,7 @@
             this.columnWidths[gridKey] = this.normalizeColumnWidths(gridKey, visibleColumns);
             if (!Array.isArray(rows) || rows.length === 0) {
                 if (visibleColumns.length) {
-                    container.innerHTML = `
+                    const tableMarkup = `
                         <table class="table-grid" data-grid-key="${gridKey}">
                             <colgroup>
                                 <col class="grid-row-no-col">
@@ -936,19 +944,23 @@
                             </thead>
                             <tbody></tbody>
                         </table>
-                        ${this.renderListFooter(0)}
                     `;
+                    const footerMarkup = gridKey === "sql" ? "" : this.renderListFooter(0);
+                    container.innerHTML = `<div class="table-grid-scroll">${tableMarkup}</div>${footerMarkup}`;
                     this.applyGridFrozenColumns(gridKey);
                     return;
                 }
+                const footerMarkup = gridKey === "sql" ? "" : this.renderListFooter(0);
                 container.innerHTML = `
-                    <div class="table-empty">${this.escapeHtml(this.t("noData", "No data."))}</div>
-                    ${this.renderListFooter(0)}
+                    <div class="table-grid-scroll">
+                        <div class="table-empty">${this.escapeHtml(this.t("noData", "No data."))}</div>
+                    </div>
+                    ${footerMarkup}
                 `;
                 return;
             }
 
-            container.innerHTML = `
+            const tableMarkup = `
                 <table class="table-grid" data-grid-key="${gridKey}">
                     <colgroup>
                         <col class="grid-row-no-col">
@@ -980,8 +992,9 @@
                         `).join("")}
                     </tbody>
                 </table>
-                ${this.renderListFooter(rows.length)}
             `;
+            const footerMarkup = gridKey === "sql" ? "" : this.renderListFooter(rows.length);
+            container.innerHTML = `<div class="table-grid-scroll">${tableMarkup}</div>${footerMarkup}`;
             this.applyGridFrozenColumns(gridKey);
         },
 

@@ -364,7 +364,7 @@
         },
 
         renderListFooter(count) {
-            return `<div class="project-list-footer">${this.escapeHtml(count)} item${Number(count) === 1 ? "" : "s"}</div>`;
+            return `<div class="list-count-footer">${this.escapeHtml(count)} item${Number(count) === 1 ? "" : "s"}</div>`;
         },
 
         setSystemMessage(message, tone = "") {

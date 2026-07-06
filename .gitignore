@@ -27,3 +27,13 @@ Wallet_*.zip
 *.pem
 *.key
 *.whl
+
+# Playwright
+/tests/
+/playwright.config.ts
+/.github/workflows/playwright.yml
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/
