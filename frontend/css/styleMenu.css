@@ -6451,24 +6451,30 @@ body.intro-mode #container-intro .env-panel {
 }
 
 #container-login .login-brand-panel h1 {
+    align-items: center;
     color: #ffffff;
-    font-size: 42px;
+    display: flex;
+    font-size: clamp(30px, 3vw, 34px);
     font-weight: 900;
     grid-row: 3;
+    height: 112px;
     line-height: 1.08;
     margin: 0;
-    max-width: 500px;
-    align-self: start;
+    max-width: 560px;
+    align-self: stretch;
 }
 
 #container-login .login-brand-lead {
+    align-items: start;
     color: #dbeafe;
+    display: flex;
     font-size: 15px;
     grid-row: 4;
+    height: 66px;
     line-height: 1.65;
     margin: 0;
     max-width: 520px;
-    align-self: start;
+    align-self: stretch;
 }
 
 #container-login .login-flow-visual {

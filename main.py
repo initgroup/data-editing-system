@@ -25,7 +25,7 @@ async def add_cache_headers(request, call_next):
     path = request.url.path
     no_cache_paths = (
         path in ("/", "/index.html")
-        or path.startswith(("/js/", "/css/", "/pages/", "/config/"))
+        or path.startswith(("/js/", "/css/", "/pages/", "/config/", "/i18n/"))
         or path.endswith((".html", ".js", ".css"))
     )
     if no_cache_paths:
