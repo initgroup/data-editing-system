@@ -206,19 +206,21 @@
                         </label>
                     </div>
                     <div class="data-panel-toolbar">
-                        <strong data-label-key="parameters">Parameters</strong>
-                        <span>&nbsp;</span>
                         <span id="selectedExecObjectLabel-__PAGE_CODE__" class="data-selected-object" data-label-key="noExecutableObject">No correlation object selected.</span>
                         <span class="env-detail-hint" data-label-key="executableObjectHint">Correlation procedure defaults come from M90001 object details.</span>
                     </div>
                     <div class="data-param-script-layout">
                         <section class="data-param-panel" aria-label="Parameter list">
-                            <header class="data-param-panel-header">
+                            <header class="data-param-panel-header data-param-list-header">
                                 <span class="data-param-title-group">
+                                    <strong data-label-key="parameters">Parameters</strong>
                                     <button id="refreshParametersButton-__PAGE_CODE__" type="button" class="table-icon-btn" title="Refresh parameters" data-title-key="refreshParametersTitle" onclick="__PAGE_CODE__.refreshParameters()">
                                         <i class="fas fa-sync-alt"></i>
                                     </button>
+                                </span>
+                                <span class="data-param-resource-row">
                                     <span id="selectedResourceMeta-__PAGE_CODE__" class="data-selected-resource-meta" hidden></span>
+                                    <span id="parameterCount-__PAGE_CODE__" class="data-param-count">0</span>
                                 </span>
                             </header>
                             <div id="parameterGrid-__PAGE_CODE__" class="data-param-grid"></div>
@@ -388,15 +390,18 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                     <i class="fas fa-rotate-left"></i>
                     <span data-label-key="rollbackTransaction">Rollback</span>
                 </button>
-                <span id="sqlTxStatus-__PAGE_CODE__" class="table-empty" data-label-key="transactionOff">Auto commit</span>
-                <label class="table-limit-control data-sql-freeze-control" title="Freeze No plus this many data columns while scrolling horizontally">
-                    <span>Freeze</span>
-                    <input id="sqlFreezeColumns-__PAGE_CODE__" type="number" min="0" max="50" value="0" onchange="__PAGE_CODE__.applySqlGridFrozenColumns('sql')" oninput="__PAGE_CODE__.applySqlGridFrozenColumns('sql')">
-                </label>
-                <label class="table-limit-control">
-                    <span data-label-key="rows">Rows</span>
-                    <input id="sqlLimit-__PAGE_CODE__" type="number" min="1" max="1000" value="100">
-                </label>
+                <span class="data-sql-toolbar-spacer"></span>
+                <span class="data-sql-toolbar-options">
+                    <span id="sqlTxStatus-__PAGE_CODE__" class="table-empty" data-label-key="transactionOff">No active transaction</span>
+                    <label class="table-limit-control data-sql-freeze-control" title="Freeze No plus this many data columns while scrolling horizontally">
+                        <span data-label-key="freezeColumns">Freeze</span>
+                        <input id="sqlFreezeColumns-__PAGE_CODE__" type="number" min="0" max="50" value="0" onchange="__PAGE_CODE__.applySqlGridFrozenColumns('sql')" oninput="__PAGE_CODE__.applySqlGridFrozenColumns('sql')">
+                    </label>
+                    <label class="table-limit-control">
+                        <span data-label-key="rows">Rows</span>
+                        <input id="sqlLimit-__PAGE_CODE__" type="number" min="1" max="1000" value="100">
+                    </label>
+                </span>
             </div>
             <div id="userSqlJobContext-__PAGE_CODE__" class="data-user-sql-context"></div>
             <textarea id="sqlEditor-__PAGE_CODE__" class="sql-editor data-sql-editor" spellcheck="false" aria-label="User SQL worksheet"></textarea>

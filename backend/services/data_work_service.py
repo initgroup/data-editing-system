@@ -159,7 +159,10 @@ def save_job(
         exec_plsql = normalize_text(req.execPlsql, "", 4000)
     else:
         exec_plsql = normalize_required_executable_script(req.execPlsql)
-        validation_plsql = prepare_executable_script_for_validation(exec_plsql, req.params or [])
+        validation_plsql = prepare_executable_script_for_validation(
+            normalize_executable_script_for_driver(exec_plsql),
+            req.params or []
+        )
         validate_executable_script_syntax(conn, validation_plsql)
 
     params = {
@@ -255,7 +258,10 @@ def build_draft_job(
         exec_plsql = normalize_text(req.execPlsql, "", 4000)
     else:
         exec_plsql = normalize_required_executable_script(req.execPlsql)
-        validation_plsql = prepare_executable_script_for_validation(exec_plsql, req.params or [])
+        validation_plsql = prepare_executable_script_for_validation(
+            normalize_executable_script_for_driver(exec_plsql),
+            req.params or []
+        )
         validate_executable_script_syntax(conn, validation_plsql)
 
     return {
@@ -308,8 +314,15 @@ def normalize_required_executable_script(script: Optional[str]) -> str:
     if re.search(r";\s*\S", sql):
         raise HTTPException(status_code=400, detail="Only a single executable statement is allowed.")
     if re.match(r"(?is)^(select|with|create\s+table|insert|update|delete|merge)\b", sql):
-        return sql
+        return text
     raise HTTPException(status_code=400, detail="Executable script must be PL/SQL, SELECT, CREATE TABLE, or DML.")
+
+
+def normalize_executable_script_for_driver(script: str) -> str:
+    text = (script or "").strip()
+    if re.match(r"(?is)^(declare|begin)\b", text):
+        return text
+    return re.sub(r";+\s*$", "", text).strip()
 
 
 def prepare_executable_script_for_validation(script_text: str, params: List[Dict[str, Any]]) -> str:

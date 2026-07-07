@@ -1,11 +1,11 @@
-﻿<div class="page-container table-page M04002-page" id="container-__PAGE_CODE__">
-    <section class="M04002-header">
+<div class="page-container table-page anly-work-page" id="container-__PAGE_CODE__">
+    <section class="anly-work-header">
         <div>
             <p data-label-key="analysisEyebrow">Integrated Editing Result Analysis</p>
             <h2 data-label-key="analysisTitle">Integrated Editing Result Analysis</h2>
             <span data-label-key="analysisDescription">View integrated scenario run history, node result tables, and Oracle ML model views.</span>
         </div>
-        <div class="M04002-actions">
+        <div class="anly-work-actions">
             <button type="button" class="table-btn" onclick="__PAGE_CODE__.loadRuns()">
                 <i class="fas fa-sync-alt"></i>
                 <span data-label-key="refresh">Refresh</span>
@@ -17,7 +17,7 @@
         </div>
     </section>
 
-    <section class="M04002-toolbar">
+    <section class="anly-work-toolbar">
         <label>
             <span data-label-key="project">Project</span>
             <select id="projectId-__PAGE_CODE__" onchange="__PAGE_CODE__.handleProjectChange()">
@@ -54,28 +54,28 @@
         </label>
     </section>
 
-    <section class="M04002-layout">
-        <aside class="M04002-run-panel">
+    <section class="anly-work-layout">
+        <aside class="anly-work-run-panel">
             <header>
                 <strong data-label-key="scenarioRuns">Scenario Runs</strong>
                 <span id="runCount-__PAGE_CODE__" data-label-key="zeroRows">0 rows</span>
             </header>
-            <div id="runList-__PAGE_CODE__" class="M04002-run-list"></div>
-            <footer class="M04002-pager">
+            <div id="runList-__PAGE_CODE__" class="anly-work-run-list"></div>
+            <footer class="anly-work-pager">
                 <button type="button" onclick="__PAGE_CODE__.changeRunPage(-1)"><i class="fas fa-chevron-left"></i></button>
                 <span id="runPage-__PAGE_CODE__">1 / 1</span>
                 <button type="button" onclick="__PAGE_CODE__.changeRunPage(1)"><i class="fas fa-chevron-right"></i></button>
             </footer>
         </aside>
 
-        <main class="M04002-detail-panel">
-            <section id="runSummary-__PAGE_CODE__" class="M04002-summary">
+        <main class="anly-work-detail-panel">
+            <section id="runSummary-__PAGE_CODE__" class="anly-work-summary">
                 <div class="table-empty" data-label-key="selectRunHistory">Select a run history.</div>
             </section>
             <section>
-                <div id="nodeList-__PAGE_CODE__" class="M04002-node-grid"></div>
+                <div id="nodeList-__PAGE_CODE__" class="anly-work-node-grid"></div>
             </section>
-            <section id="resultPanel-__PAGE_CODE__" class="M04002-result-panel">
+            <section id="resultPanel-__PAGE_CODE__" class="anly-work-result-panel">
                 <div class="table-empty" data-label-key="selectNodeForResult">Select a node to view result details.</div>
             </section>
         </main>

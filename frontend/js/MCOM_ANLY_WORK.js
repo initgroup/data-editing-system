@@ -506,7 +506,7 @@
                 return;
             }
             list.innerHTML = this.runs.map((run) => `
-                <button type="button" class="M04002-run-card ${this.selectedRun?.FLOW_RUN_ID === run.FLOW_RUN_ID ? "is-selected" : ""}" onclick="${PAGE_CODE}.selectRun(${Number(run.FLOW_RUN_ID)})">
+                <button type="button" class="anly-work-run-card ${this.selectedRun?.FLOW_RUN_ID === run.FLOW_RUN_ID ? "is-selected" : ""}" onclick="${PAGE_CODE}.selectRun(${Number(run.FLOW_RUN_ID)})">
                     <span>
                         <strong>Run #${this.escapeHtml(run.FLOW_RUN_ID)}</strong>
                         <small>${this.escapeHtml(run.FLOW_NAME || "-")}</small>
@@ -568,7 +568,7 @@
                         <strong>${this.escapeHtml(run.FLOW_NAME || "-")}</strong>
                         <small>Run #${this.escapeHtml(run.FLOW_RUN_ID)} · ${this.escapeHtml(run.STATUS || "-")} · ${this.escapeHtml(this.formatElapsedTime(run.STARTED_AT, run.FINISHED_AT, run.STATUS))}</small>
                     </div>
-                    <button type="button" class="M04002-run-delete-btn" title="${this.escapeHtml(getLabel("deleteSelectedRunTitle", "Delete selected run history"))}" onclick="${PAGE_CODE}.deleteSelectedRun()">
+                    <button type="button" class="anly-work-run-delete-btn" title="${this.escapeHtml(getLabel("deleteSelectedRunTitle", "Delete selected run history"))}" onclick="${PAGE_CODE}.deleteSelectedRun()">
                         <i class="far fa-trash-alt"></i>
                         <span>${this.escapeHtml(getLabel("delete", "Delete"))}</span>
                     </button>
@@ -577,10 +577,10 @@
                 <article>
                     <span>Started</span>
                     <strong>${this.escapeHtml(this.formatDateTime(run.STARTED_AT))}</strong>
-                    <span class="M04002-summary-message">
+                    <span class="anly-work-summary-message">
                         <small title="${this.escapeHtml(runMessage)}">${this.escapeHtml(runMessage || "-")}</small>
                         ${runMessage ? `
-                            <button type="button" class="M04002-summary-copy" title="${this.escapeHtml(getLabel("copyMessageTitle", "Copy message"))}" onclick="${PAGE_CODE}.copyRunMessage(event)" hidden>
+                            <button type="button" class="anly-work-summary-copy" title="${this.escapeHtml(getLabel("copyMessageTitle", "Copy message"))}" onclick="${PAGE_CODE}.copyRunMessage(event)" hidden>
                                 <i class="far fa-copy"></i>
                             </button>
                         ` : ""}
@@ -627,7 +627,7 @@
             }
 
             this.isRunDeleteInProgress = true;
-            const buttons = getContainerEl("#runSummary-${PAGE_CODE}")?.querySelectorAll(".M04002-run-delete-btn") || [];
+            const buttons = getContainerEl("#runSummary-${PAGE_CODE}")?.querySelectorAll(".anly-work-run-delete-btn") || [];
             buttons.forEach((button) => button.setAttribute("disabled", "disabled"));
             try {
                 const query = forceDelete ? "?force=true" : "";
@@ -657,17 +657,17 @@
                 if (!window.CommonMessage) alert(error.message || "Run history delete failed.");
             } finally {
                 this.isRunDeleteInProgress = false;
-                getContainerEl("#runSummary-${PAGE_CODE}")?.querySelectorAll(".M04002-run-delete-btn").forEach((button) => {
+                getContainerEl("#runSummary-${PAGE_CODE}")?.querySelectorAll(".anly-work-run-delete-btn").forEach((button) => {
                     button.removeAttribute("disabled");
                 });
             }
         },
 
         updateRunSummaryCopyVisibility() {
-            const box = getContainerEl(".M04002-summary-message");
+            const box = getContainerEl(".anly-work-summary-message");
             if (!box) return;
             const textEl = box.querySelector("small");
-            const copyBtn = box.querySelector(".M04002-summary-copy");
+            const copyBtn = box.querySelector(".anly-work-summary-copy");
             if (!textEl || !copyBtn) return;
             copyBtn.hidden = !(textEl.scrollWidth > textEl.clientWidth + 1);
         },
@@ -694,14 +694,14 @@
                 else extras.push(entry);
             });
             const renderGroup = (group, entries) => `
-                <section class="M04002-node-group">
-                    <header class="M04002-node-group-header">
+                <section class="anly-work-node-group">
+                    <header class="anly-work-node-group-header">
                         <strong>${this.escapeHtml(group.label)}</strong>
                         <small>${this.formatNumber(entries.length)} nodes</small>
                     </header>
                     ${entries.length
                         ? entries.map(({ node, index }) => this.renderNodeCard(node, index)).join("")
-                        : `<div class="M04002-node-group-empty">-</div>`}
+                        : `<div class="anly-work-node-group-empty">-</div>`}
                 </section>
             `;
             el.innerHTML = [
@@ -712,7 +712,7 @@
 
         renderNodeCard(node, index = 0) {
             return `
-                <button type="button" class="M04002-node-card ${this.getNodeTone(node)} ${this.selectedNode?.FLOW_NODE_RUN_ID === node.FLOW_NODE_RUN_ID ? "is-selected" : ""}" onclick="${PAGE_CODE}.selectNode(${Number(node.FLOW_NODE_RUN_ID)})">
+                <button type="button" class="anly-work-node-card ${this.getNodeTone(node)} ${this.selectedNode?.FLOW_NODE_RUN_ID === node.FLOW_NODE_RUN_ID ? "is-selected" : ""}" onclick="${PAGE_CODE}.selectNode(${Number(node.FLOW_NODE_RUN_ID)})">
                     <span>
                         <i class="fas ${this.getNodeIcon(node)}"></i>
                         <strong>${this.escapeHtml(node.NODE_NAME || node.NODE_KEY || "-")}</strong>
@@ -1051,14 +1051,14 @@
             if (!panel) return;
             panel.classList.add("is-loading");
             const activeType = String(activeViewType || "").toUpperCase();
-            panel.querySelectorAll(".M04002-result-header nav button").forEach((button) => {
+            panel.querySelectorAll(".anly-work-result-header nav button").forEach((button) => {
                 const type = button.textContent?.trim?.().toUpperCase() || "";
                 button.classList.toggle("is-active", Boolean(activeType) && type === activeType);
                 button.disabled = true;
             });
-            panel.querySelector(".M04002-result-loading-overlay")?.remove();
+            panel.querySelector(".anly-work-result-loading-overlay")?.remove();
             const overlay = document.createElement("div");
-            overlay.className = "M04002-result-loading-overlay";
+            overlay.className = "anly-work-result-loading-overlay";
             overlay.innerHTML = `
                 <span><i class="fas fa-spinner fa-spin"></i></span>
                 <strong>${this.escapeHtml(message)}</strong>
@@ -1074,10 +1074,10 @@
             const readable = viewType === "VR" ? this.renderReadableRules(json.data || []) : "";
             const executionTitle = this.getNodeExecutionTitle(this.selectedNode, `${json.owner}.${json.modelName}`);
             panel.innerHTML = `
-                <header class="M04002-result-header">
+                <header class="anly-work-result-header">
                     <div>
                         <span>Oracle ML Model View</span>
-                        <strong class="M04002-result-exec-object">${this.escapeHtml(executionTitle)}</strong>
+                        <strong class="anly-work-result-exec-object">${this.escapeHtml(executionTitle)}</strong>
                         <small>Result Model ${this.escapeHtml(json.owner)}.${this.escapeHtml(json.modelName)} · ${this.escapeHtml(json.viewName || "")} · ${this.formatNumber(json.total)} rows</small>
                         ${this.renderSelectedNodeJobDesc()}
                     </div>
@@ -1110,24 +1110,24 @@
             const modelName = json.modelName || this.selectedNode?.RESULT_OBJECT_NAME || "";
             const executionTitle = this.getNodeExecutionTitle(this.selectedNode, `${modelOwner}.${modelName}`);
             panel.innerHTML = `
-                <header class="M04002-result-header">
+                <header class="anly-work-result-header">
                     <div>
                         <span>${this.escapeHtml(this.selectedNode?.NODE_NAME || "Oracle ML Model View")}</span>
-                        <strong class="M04002-result-exec-object">${this.escapeHtml(executionTitle)}</strong>
+                        <strong class="anly-work-result-exec-object">${this.escapeHtml(executionTitle)}</strong>
                         <small>Result Model ${this.escapeHtml(modelOwner)}.${this.escapeHtml(modelName)}</small>
                         ${this.renderSelectedNodeJobDesc()}
                     </div>
                     <em>${this.escapeHtml(modelHeaderLabel)}</em>
                     ${this.renderSelectedNodeExecutionMeta()}
                 </header>
-                <div class="M04002-model-tabs">
+                <div class="anly-work-model-tabs">
                     <button type="button" class="${readableActive ? "is-active" : ""}" onclick="${PAGE_CODE}.switchModelAnalysisTab('readable')">Readable Rules</button>
                     <button type="button" class="${!readableActive ? "is-active" : ""}" onclick="${PAGE_CODE}.switchModelAnalysisTab('detail')">Detail Views</button>
                 </div>
-                <div class="M04002-model-tab-panel ${readableActive ? "is-active" : ""}" data-model-tab="readable">
+                <div class="anly-work-model-tab-panel ${readableActive ? "is-active" : ""}" data-model-tab="readable">
                     ${this.renderReadableRuleSummary(json)}
                 </div>
-                <div class="M04002-model-tab-panel ${!readableActive ? "is-active" : ""}" data-model-tab="detail">
+                <div class="anly-work-model-tab-panel ${!readableActive ? "is-active" : ""}" data-model-tab="detail">
                     ${this.renderModelDetailViews(json)}
                 </div>
             `;
@@ -1139,7 +1139,7 @@
         },
 
         getActiveModelAnalysisTab() {
-            const active = getContainerEl("#resultPanel-${PAGE_CODE} .M04002-model-tabs button.is-active");
+            const active = getContainerEl("#resultPanel-${PAGE_CODE} .anly-work-model-tabs button.is-active");
             return /Detail/i.test(active?.textContent || "") ? "detail" : "readable";
         },
 
@@ -1229,12 +1229,12 @@
             const visibleRuleCount = filtered.length;
             const baseRuleCount = readableRules.length;
             return `
-                <div class="M04002-readable-rule-intro">
+                <div class="anly-work-readable-rule-intro">
                     <div>
                         <strong>${this.escapeHtml(getText("Readable Rule Summary"))}</strong>
                         <span>${this.escapeHtml(getText("Interprets and displays the current {range} sample out of {total} DM$VR rows. Select a condition-count chip to update the rule list below.", { range: this.getViewSampleRange(vr), total: this.formatNumber(vr.total || 0) }))}</span>
                     </div>
-                    <div class="M04002-sample-controls">
+                    <div class="anly-work-sample-controls">
                         <label>
                             <input type="checkbox" ${this.excludeEmptyConsequent ? "checked" : ""} onchange="${PAGE_CODE}.toggleExcludeEmptyConsequent(this.checked)">
                             <span>${this.escapeHtml(getText("Exclude missing result"))}</span>
@@ -1243,7 +1243,7 @@
                     </div>
                 </div>
                 ${this.renderReadableRuleStats(readableRules, visibleRuleCount, baseRuleCount)}
-                <div class="M04002-readable-rule-grid">
+                <div class="anly-work-readable-rule-grid">
                     ${filtered.length ? filtered.map((rule) => this.renderReadableRuleCard(rule)).join("") : `<div class="table-empty">${this.escapeHtml(getText("No rule rows to display. Check the original model view in Detail Views."))}</div>`}
                 </div>
             `;
@@ -1255,20 +1255,20 @@
             const error = json?.ruleSummaryError || "";
             if (loading && !summary) {
                 return `
-                    <div class="M04002-readable-rule-intro">
+                    <div class="anly-work-readable-rule-intro">
                         <div>
                             <strong>${this.escapeHtml(getText("Readable Rule Summary"))}</strong>
                             <span>${this.escapeHtml(getText("Loading the rule summary table saved during job execution."))}</span>
                         </div>
                     </div>
-                    <section class="M04002-readable-stats"><div class="table-empty">${this.escapeHtml(getText("Loading rule summary..."))}</div></section>
+                    <section class="anly-work-readable-stats"><div class="table-empty">${this.escapeHtml(getText("Loading rule summary..."))}</div></section>
                     ${this.renderFallbackReadableRuleGrid(fallbackRules)}
                 `;
             }
             if (!summary || Number(summary.overview?.TOTAL_RULES || 0) <= 0) {
                 const message = error || getText("No saved rule summary exists. Run this model job again to create the summary table.");
                 return `
-                    <div class="M04002-readable-rule-intro">
+                    <div class="anly-work-readable-rule-intro">
                         <div>
                             <strong>${this.escapeHtml(getText("Readable Rule Summary"))}</strong>
                             <span>${this.escapeHtml(message)}</span>
@@ -1296,12 +1296,12 @@
                 }))
             ];
             return `
-                <div class="M04002-readable-rule-intro">
+                <div class="anly-work-readable-rule-intro">
                     <div>
                         <strong>${this.escapeHtml(getText("Readable Rule Summary"))}</strong>
                         <span>${this.escapeHtml(getText("{basis} Select a condition count or result column to update the detail rules below.", { basis: this.describeRuleSummaryBasis(overview) }))}</span>
                     </div>
-                    <div class="M04002-sample-controls">
+                    <div class="anly-work-sample-controls">
                         <button type="button" class="table-btn" onclick="${PAGE_CODE}.exportCurrent()">
                             <i class="fas fa-file-export"></i>
                             Export
@@ -1313,31 +1313,31 @@
                         })}
                     </div>
                 </div>
-                <section class="M04002-readable-stats">
-                    <div class="M04002-readable-stat-block">
+                <section class="anly-work-readable-stats">
+                    <div class="anly-work-readable-stat-block">
                         <strong>${this.escapeHtml(getText("Rule Summary"))}</strong>
-                        <div class="M04002-readable-stat-metrics">
+                        <div class="anly-work-readable-stat-metrics">
                             <span><b>${this.formatNumber(overview.TOTAL_RULES)}</b><small>${this.escapeHtml(getText("Total rules"))}</small></span>
                             <span><b>${this.formatNumber(overview.MAPPED_RULES)}</b><small>${this.escapeHtml(getText("Condition/result mapping"))}</small></span>
                             <span><b>${this.formatNumber(overview.MISSING_RESULT_RULES)}</b><small>${this.escapeHtml(getText("Missing result values"))}</small></span>
                             <span><b>${this.formatNumber(summary.total)}</b><small>${this.escapeHtml(getText("Filter results"))}</small></span>
                         </div>
                     </div>
-                    <div class="M04002-readable-condition-dist">
+                    <div class="anly-work-readable-condition-dist">
                         <strong>${this.escapeHtml(getText("Condition Count"))}</strong>
                         ${this.renderRuleConditionMatrix(conditionItems, this.ruleSummaryFilters.conditionCount, this.ruleSummaryFilters.confidenceScope || "ALL", "${PAGE_CODE}.selectRuleSummaryCondition")}
                     </div>
                 </section>
-                <section class="M04002-rule-facet-panel">
-                    <div class="M04002-rule-facet-block">
+                <section class="anly-work-rule-facet-panel">
+                    <div class="anly-work-rule-facet-block">
                         <header>
                             <strong>${this.escapeHtml(getText("Top 12 Result Columns"))}</strong>
-                            <div class="M04002-rule-facet-actions">
+                            <div class="anly-work-rule-facet-actions">
                                 ${this.renderResultColumnPager(summary)}
                                 <button type="button" class="${this.ruleSummaryFilters.resultColumn === "ALL" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectRuleSummaryResult('ALL')">${this.escapeHtml(getText("All"))}</button>
                             </div>
                         </header>
-                        <div class="M04002-rule-facet-list">
+                        <div class="anly-work-rule-facet-list">
                             ${(summary.resultTop || []).map((item) => {
                                 const rawColumn = item.RESULT_COLUMN === "(RESULT UNKNOWN)" ? "__NULL__" : item.RESULT_COLUMN;
                                 return `
@@ -1349,21 +1349,21 @@
                             }).join("")}
                         </div>
                     </div>
-                    <div class="M04002-rule-facet-block is-condition">
+                    <div class="anly-work-rule-facet-block is-condition">
                         <header>
                             <strong>${this.escapeHtml(getText("Condition Column ID Search"))}</strong>
-                            <div class="M04002-rule-facet-actions">
+                            <div class="anly-work-rule-facet-actions">
                                 <button type="button" onclick="${PAGE_CODE}.searchRuleSummaryConditionColumn()">Search</button>
                                 <button type="button" class="${this.ruleSummaryFilters.conditionColumn === "ALL" ? "is-active" : ""}" onclick="${PAGE_CODE}.resetRuleSummaryConditionColumn()">Reset</button>
                             </div>
                         </header>
-                        <label class="M04002-rule-condition-search">
+                        <label class="anly-work-rule-condition-search">
                             <span>Condition Column</span>
                             <input id="ruleConditionColumnInput-${PAGE_CODE}" type="search" value="${this.escapeHtml(conditionColumnFilter)}" placeholder="${this.escapeHtml(getText("e.g. COL001"))}" onkeydown="${PAGE_CODE}.handleRuleSummaryConditionColumnKeydown(event)">
                         </label>
                     </div>
                 </section>
-                <div class="M04002-readable-rule-grid">
+                <div class="anly-work-readable-rule-grid">
                     ${rules.length ? rules.map((rule) => this.renderReadableRuleCard(rule)).join("") : `<div class="table-empty">${this.escapeHtml(getText("No rules match the selected conditions."))}</div>`}
                 </div>
                 ${this.renderRuleSummaryPager(summary.page, totalPages)}
@@ -1374,7 +1374,7 @@
             const filtered = this.excludeEmptyConsequent
                 ? rules.filter((rule) => !this.isEmptyRuleText(rule.thenText))
                 : rules;
-            return `<div class="M04002-readable-rule-grid">${filtered.length ? filtered.map((rule) => this.renderReadableRuleCard(rule)).join("") : `<div class="table-empty">${this.escapeHtml(getText("No rule rows to display."))}</div>`}</div>`;
+            return `<div class="anly-work-readable-rule-grid">${filtered.length ? filtered.map((rule) => this.renderReadableRuleCard(rule)).join("") : `<div class="table-empty">${this.escapeHtml(getText("No rule rows to display."))}</div>`}</div>`;
         },
 
         renderReadableRuleStats(rules = [], visibleRuleCount = 0, baseRuleCount = 0) {
@@ -1389,17 +1389,17 @@
                 }))
             ];
             return `
-                <section class="M04002-readable-stats">
-                    <div class="M04002-readable-stat-block">
+                <section class="anly-work-readable-stats">
+                    <div class="anly-work-readable-stat-block">
                         <strong>${this.escapeHtml(getText("Rule Summary"))}</strong>
-                        <div class="M04002-readable-stat-metrics">
+                        <div class="anly-work-readable-stat-metrics">
                             <span><b>${this.formatNumber(stats.total)}</b><small>${this.escapeHtml(getText("Current sample rules"))}</small></span>
                             <span><b>${this.formatNumber(stats.mapped)}</b><small>${this.escapeHtml(getText("Condition/result mapping"))}</small></span>
                             <span><b>${this.formatNumber(stats.missingResult)}</b><small>${this.escapeHtml(getText("Missing result information"))}</small></span>
                             <span><b>${this.formatNumber(visibleRuleCount)}</b><small>${this.escapeHtml(getText("Showing"))}</small></span>
                         </div>
                     </div>
-                    <div class="M04002-readable-condition-dist">
+                    <div class="anly-work-readable-condition-dist">
                         <strong>${this.escapeHtml(getText("Condition Count"))}</strong>
                         ${this.renderRuleConditionMatrix(conditionItems, this.readableRuleConditionFilter, this.readableRuleConfidenceFilter, "${PAGE_CODE}.selectReadableConditionFilter")}
                     </div>
@@ -1421,14 +1421,14 @@
                 `;
             }).join("");
             return `
-                <div class="M04002-condition-count-matrix">
-                    <div class="M04002-condition-count-row">
+                <div class="anly-work-condition-count-matrix">
+                    <div class="anly-work-condition-count-row">
                         <span>${this.escapeHtml(getText("Total rule count"))}</span>
-                        <div class="M04002-condition-count-buttons">${renderButtons("total", "ALL")}</div>
+                        <div class="anly-work-condition-count-buttons">${renderButtons("total", "ALL")}</div>
                     </div>
-                    <div class="M04002-condition-count-row">
+                    <div class="anly-work-condition-count-row">
                         <span>${this.escapeHtml(getText("Violation candidate rule count"))}</span>
-                        <div class="M04002-condition-count-buttons">${renderButtons("nonPerfect", "NON_PERFECT")}</div>
+                        <div class="anly-work-condition-count-buttons">${renderButtons("nonPerfect", "NON_PERFECT")}</div>
                     </div>
                 </div>
             `;
@@ -1502,10 +1502,10 @@
             const start = total ? ((page - 1) * pageSize) + 1 : 0;
             const end = total ? Math.min(total, page * pageSize) : 0;
             if (totalPages <= 1) {
-                return `<span class="M04002-result-column-pager is-single"><small>${this.escapeHtml(getText("Total {count}", { count: this.formatNumber(total) }))}</small></span>`;
+                return `<span class="anly-work-result-column-pager is-single"><small>${this.escapeHtml(getText("Total {count}", { count: this.formatNumber(total) }))}</small></span>`;
             }
             return `
-                <span class="M04002-result-column-pager">
+                <span class="anly-work-result-column-pager">
                     <button type="button" ${page <= 1 ? "disabled" : ""} onclick="${PAGE_CODE}.moveRuleSummaryResultColumns(-1)"><i class="fas fa-chevron-left"></i></button>
                     <small>${this.formatNumber(start)}-${this.formatNumber(end)} / ${this.formatNumber(total)}</small>
                     <button type="button" ${page >= totalPages ? "disabled" : ""} onclick="${PAGE_CODE}.moveRuleSummaryResultColumns(1)"><i class="fas fa-chevron-right"></i></button>
@@ -1530,7 +1530,7 @@
             const prev = Math.max(1, current - 1);
             const next = Math.min(total, current + 1);
             return `
-                <footer class="M04002-pager">
+                <footer class="anly-work-pager">
                     <button type="button" ${current <= 1 ? "disabled" : ""} onclick="${PAGE_CODE}.loadModelRuleSummary(${prev})"><i class="fas fa-chevron-left"></i></button>
                     <span>${this.formatNumber(current)} / ${this.formatNumber(total)}</span>
                     <button type="button" ${current >= total ? "disabled" : ""} onclick="${PAGE_CODE}.loadModelRuleSummary(${next})"><i class="fas fa-chevron-right"></i></button>
@@ -1731,23 +1731,23 @@
             const qualityClass = rule.mappingLevel === "mapped" ? "is-mapped" : "is-limited";
             const plainRuleId = rule.rawRuleId || this.getPlainRuleId(rule.ruleId);
             return `
-                <article class="M04002-readable-rule-card ${qualityClass}">
+                <article class="anly-work-readable-rule-card ${qualityClass}">
                     <header>
-                        <span class="M04002-rule-title">
+                        <span class="anly-work-rule-title">
                             <small>Rule #</small>
                             <code title="${this.escapeHtml(plainRuleId)}">${this.escapeHtml(plainRuleId)}</code>
-                            <button type="button" class="M04002-rule-copy-btn" title="${this.escapeHtml(getText("Copy RULE ID"))}" onclick="${PAGE_CODE}.copyRuleId('${this.escapeJs(plainRuleId)}', event)">
+                            <button type="button" class="anly-work-rule-copy-btn" title="${this.escapeHtml(getText("Copy RULE ID"))}" onclick="${PAGE_CODE}.copyRuleId('${this.escapeJs(plainRuleId)}', event)">
                                 <i class="far fa-copy"></i>
                             </button>
                         </span>
-                        <span class="M04002-rule-card-actions">
+                        <span class="anly-work-rule-card-actions">
                             <em>${this.escapeHtml(rule.mappingLabel)}</em>
                             ${rule.canOpenViolation
-                                ? `<button type="button" class="M04002-rule-open-link" title="${this.escapeHtml(getText("Search violation detection results with this RULE ID"))}" onclick="${PAGE_CODE}.openViolationForRule('${this.escapeJs(plainRuleId)}', '${this.escapeJs(rule.conditionCount)}')">${this.escapeHtml(getText("View violations"))}</button>`
+                                ? `<button type="button" class="anly-work-rule-open-link" title="${this.escapeHtml(getText("Search violation detection results with this RULE ID"))}" onclick="${PAGE_CODE}.openViolationForRule('${this.escapeJs(plainRuleId)}', '${this.escapeJs(rule.conditionCount)}')">${this.escapeHtml(getText("View violations"))}</button>`
                                 : ""}
                         </span>
                     </header>
-                    <div class="M04002-readable-rule-sentence">
+                    <div class="anly-work-readable-rule-sentence">
                         <b>IF</b>
                         <strong>${this.renderColumnAwareText(rule.ifText)}</strong>
                         <b>THEN</b>
@@ -1834,24 +1834,24 @@
             const itemTags = this.extractItemsetTags(vi.data || []).slice(0, 28);
             const rules = this.extractRuleRows(vr.data || []).slice(0, 10);
             return `
-                <div class="M04002-model-visual-grid">
-                    <div class="M04002-model-view-card is-vi">
+                <div class="anly-work-model-visual-grid">
+                    <div class="anly-work-model-view-card is-vi">
                         ${this.renderModelViewHeader("VI", "Itemset/detail", vi)}
-                        <div class="M04002-model-view-note">
+                        <div class="anly-work-model-view-note">
                             <strong>Extracted itemset values</strong>
                             <span>${this.escapeHtml(getText("Values extracted from ITEM / ATTRIBUTE / VALUE / NAME family columns in the original DM$VI rows."))}</span>
                         </div>
-                        <div class="M04002-tag-cloud">
+                        <div class="anly-work-tag-cloud">
                             ${itemTags.length ? itemTags.map((item) => `<span style="--tag-weight:${item.weight}">${this.escapeHtml(item.label)}</span>`).join("") : `<small>${this.escapeHtml(getText("No DM$VI itemset rows."))}</small>`}
                         </div>
                         ${this.renderSampleTable("DM$VI sample rows", vi.columns || [], vi.data || [], 5)}
                     </div>
-                    <div class="M04002-model-view-card is-vr">
+                    <div class="anly-work-model-view-card is-vr">
                         ${this.renderModelViewHeader("VR", "Top Rules", vr)}
                         ${rules.length ? `
-                            <div class="M04002-rule-bars">
+                            <div class="anly-work-rule-bars">
                                 ${rules.map((rule) => `
-                                    <div class="M04002-rule-bar">
+                                    <div class="anly-work-rule-bar">
                                         <span title="${this.escapeHtml(rule.label)}">${this.escapeHtml(rule.label)}</span>
                                         <em><i style="width:${Math.max(4, rule.score)}%"></i></em>
                                         <small>
@@ -1864,15 +1864,15 @@
                         ` : `<small>${this.escapeHtml(getText("No DM$VR rule rows."))}</small>`}
                     </div>
                 </div>
-                <div class="M04002-model-view-card is-vg">
+                <div class="anly-work-model-view-card is-vg">
                     ${this.renderModelViewHeader("VG", "Global/detail", vg)}
                     ${this.renderSampleTable("", vg.columns || [], vg.data || [], 4)}
                 </div>
-                <div class="M04002-model-view-card is-va">
+                <div class="anly-work-model-view-card is-va">
                     ${this.renderModelViewHeader("VA", "Attribute/detail rows", va)}
                     ${this.renderSampleTable("", va.columns || [], va.data || [], 6)}
                 </div>
-                <div class="M04002-model-view-card is-vr">
+                <div class="anly-work-model-view-card is-vr">
                     ${this.renderModelViewHeader("VR", "Rule/detail rows", vr)}
                     ${this.renderSampleTable("", vr.columns || [], vr.data || [], 8)}
                 </div>
@@ -1886,8 +1886,8 @@
                 ? `<button type="button" class="table-btn" onclick="${PAGE_CODE}.loadDetailViewPage('${this.escapeHtml(viewType)}', 1)">${this.escapeHtml(getText("Load sample"))}</button>`
                 : "";
             return `
-                <div class="M04002-model-view-header">
-                    <span class="M04002-model-view-type">${this.escapeHtml(viewType)}</span>
+                <div class="anly-work-model-view-header">
+                    <span class="anly-work-model-view-type">${this.escapeHtml(viewType)}</span>
                     <div>
                         <strong>${this.escapeHtml(title)}</strong>
                         <small>${this.escapeHtml(view.description || "")}</small>
@@ -1896,7 +1896,7 @@
                     </div>
                     <em>${hasRows ? `${this.formatNumber(view.total || 0)} rows` : (exists ? "ready" : "none")}</em>
                 </div>
-                <div class="M04002-view-sample-toolbar">
+                <div class="anly-work-view-sample-toolbar">
                     <span>${this.escapeHtml(hasRows ? getText("The current table is a sample of the selected page, not the full dataset.") : getText("Load only the detail views you need."))}</span>
                     ${loadButton || this.renderSamplePageJump(`detailViewPage-${viewType}-${PAGE_CODE}`, view, `${PAGE_CODE}.goDetailViewPage('${viewType}')`, `${PAGE_CODE}.loadDetailViewPage('${viewType}', `)}
                 </div>
@@ -1908,9 +1908,9 @@
             const safeRows = (rows || []).slice(0, limit);
             if (!safeColumns.length || !safeRows.length) return `<div class="table-empty">${this.escapeHtml(getText("No sample rows to display."))}</div>`;
             return `
-                <div class="M04002-sample-table-wrap">
+                <div class="anly-work-sample-table-wrap">
                     ${title ? `<strong>${this.escapeHtml(getText("{title} · {count} displayed", { title, count: this.formatNumber(safeRows.length) }))}</strong>` : `<strong>${this.escapeHtml(getText("{count} displayed", { count: this.formatNumber(safeRows.length) }))}</strong>`}
-                    <table class="table-grid M04002-sample-table">
+                    <table class="table-grid anly-work-sample-table">
                         <thead><tr>${safeColumns.map((column) => `<th>${this.escapeHtml(column)}</th>`).join("")}</tr></thead>
                         <tbody>
                             ${safeRows.map((row) => `<tr>${safeColumns.map((column) => `<td title="${this.escapeHtml(row?.[column] ?? "")}">${this.escapeHtml(row?.[column] ?? "")}</td>`).join("")}</tr>`).join("")}
@@ -1956,7 +1956,7 @@
                 `
                 : "";
             return `
-                <div class="M04002-page-jump">
+                <div class="anly-work-page-jump">
                     <button type="button" ${page <= 1 ? "disabled" : ""} onclick="${callPage(page - 1)}"><i class="fas fa-chevron-left"></i></button>
                     <label>
                         <span>Page</span>
@@ -1988,10 +1988,10 @@
             const resultObject = `${json.owner}.${json.objectName}`;
             const executionTitle = this.getNodeExecutionTitle(this.selectedNode, resultObject);
             panel.innerHTML = `
-                <header class="M04002-result-header">
+                <header class="anly-work-result-header">
                     <div>
                         <span>${this.escapeHtml(type)}</span>
-                        <strong class="M04002-result-exec-object">${this.escapeHtml(executionTitle)}</strong>
+                        <strong class="anly-work-result-exec-object">${this.escapeHtml(executionTitle)}</strong>
                         <small>Result Table ${this.escapeHtml(resultObject)} · ${this.formatNumber(json.total)} rows</small>
                         ${json.filteredByTarget ? `<small>Target ${this.escapeHtml(json.targetOwner)}.${this.escapeHtml(json.targetTable)}</small>` : ""}
                         ${json.ruleModelName ? `<small>Rule Model ${this.escapeHtml(json.ruleModelName)}</small>` : ""}
@@ -2018,9 +2018,9 @@
             const numericProfile = this.extractNumericProfile(rows || [], columns || []).slice(0, 8);
             if (!numericProfile.length) return "";
             return `
-                <div class="M04002-table-profile-bars">
+                <div class="anly-work-table-profile-bars">
                     ${numericProfile.map((item) => `
-                        <div class="M04002-profile-bar">
+                        <div class="anly-work-profile-bar">
                             <span>${this.escapeHtml(item.column)}</span>
                             <em><i style="width:${item.width}%"></i></em>
                             <small>${this.escapeHtml(item.label)}</small>
@@ -2074,18 +2074,18 @@
                     ? getText("Displays selected candidates with no actual violation rows.")
                     : getText("Displays rules with actual violation rows.");
             return `
-                <section class="M04002-violation-summary">
-                    <div class="M04002-violation-intro">
+                <section class="anly-work-violation-summary">
+                    <div class="anly-work-violation-intro">
                         <div>
                             <strong>${this.escapeHtml(getText("Rule Violation Detection Summary"))}</strong>
                             <span>${this.escapeHtml(getText("Target {target} · {scope} basis", { target: `${summary.targetOwner || "-"}.${summary.targetTable || "-"}`, scope: activeScopeLabel }))}${summary.ruleModelName ? ` · Rule Model ${this.escapeHtml(summary.ruleModelName)}` : ""}</span>
                         </div>
                         ${this.renderViolationRulePager(summary)}
                     </div>
-                    <section class="M04002-violation-condition-panel">
+                    <section class="anly-work-violation-condition-panel">
                         <strong>${this.escapeHtml(getText("Condition Count"))}</strong>
                         ${this.renderRuleConditionMatrix(candidateItems, this.violationRuleFilters?.conditionCount || "ALL", this.violationRuleFilters?.confidenceScope || "NON_PERFECT", "${PAGE_CODE}.selectViolationCondition")}
-                        <div class="M04002-violation-inline-summary">
+                        <div class="anly-work-violation-inline-summary">
                             <button type="button" class="${resultScope === "CANDIDATE" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectViolationResultScope('CANDIDATE')">
                                 <small>${this.escapeHtml(getText("Selected candidates"))}</small>
                                 <b>${this.formatNumber(scopedCandidateCount)}</b>
@@ -2118,21 +2118,21 @@
                             </button>
                             ${ruleFilterDisplay ? `<b>${this.escapeHtml(getText("RULE ID search: {ruleId}", { ruleId: ruleFilterDisplay }))}</b>` : ""}
                         </div>
-                        <div class="M04002-violation-reason-strip">
+                        <div class="anly-work-violation-reason-strip">
                             <span><small>${this.escapeHtml(getText("Below confidence"))}</small><b>${this.formatNumber(confidenceCutoffCount)}</b></span>
                             <span><small>${this.escapeHtml(getText("Below lift"))}</small><b>${this.formatNumber(liftCutoffCount)}</b></span>
                             <span><small>${this.escapeHtml(getText("Excluded by max rules"))}</small><b>${this.formatNumber(maxRulesCutoffCount)}</b></span>
                             <span><small>${this.escapeHtml(getText("No violation after detection"))}</small><b>${this.formatNumber(noViolationAfterDetectionCount)}</b></span>
                             <em>${this.escapeHtml(getText("Detection criteria: confidence >= {confidence}, lift >= {lift}, max rules {maxRules}", { confidence: this.formatPercentMetric(detectionCriteria.minConfidence), lift: this.formatDecimal(detectionCriteria.minLift), maxRules: this.formatNumber(detectionCriteria.maxRules) }))}</em>
                         </div>
-                        <div class="M04002-violation-scope-note">${this.escapeHtml(resultScopeMessage)}</div>
+                        <div class="anly-work-violation-scope-note">${this.escapeHtml(resultScopeMessage)}</div>
                     </section>
-                    <section class="M04002-rule-facet-panel is-violation">
-                        <div class="M04002-rule-facet-block">
+                    <section class="anly-work-rule-facet-panel is-violation">
+                        <div class="anly-work-rule-facet-block">
                             <header>
                                 <strong>${this.escapeHtml(getText("Top Violation Result Columns"))}</strong>
                             </header>
-                            <div class="M04002-rule-facet-list">
+                            <div class="anly-work-rule-facet-list">
                                 ${topColumns.length ? topColumns.map((item) => `
                                     <button type="button" onclick="${PAGE_CODE}.openViolationSqlPopup('column', '${this.escapeJs(item.RESULT_COLUMN)}')">
                                         <span>${this.renderColumnAwareCell(item.RESULT_COLUMN, summary)}</span>
@@ -2141,22 +2141,22 @@
                                 `).join("") : `<span>${this.escapeHtml(getText("No violation result columns to display."))}</span>`}
                             </div>
                         </div>
-                        <div class="M04002-rule-facet-block is-condition">
+                        <div class="anly-work-rule-facet-block is-condition">
                             <header>
                                 <strong>${this.escapeHtml(getText("RULE ID Search"))}</strong>
-                                <div class="M04002-rule-facet-actions">
+                                <div class="anly-work-rule-facet-actions">
                                     <button type="button" onclick="${PAGE_CODE}.searchViolationRule()">Search</button>
                                     <button type="button" onclick="${PAGE_CODE}.resetViolationRuleSearch()">Reset</button>
                                 </div>
                             </header>
-                            <label class="M04002-rule-condition-search">
+                            <label class="anly-work-rule-condition-search">
                                 <span>RULE ID</span>
                                 <input id="violationRuleSearch-${PAGE_CODE}" type="search" value="${this.escapeHtml(ruleFilterDisplay)}" placeholder="${this.escapeHtml(getText("e.g. COND_..."))}" onkeydown="${PAGE_CODE}.handleViolationRuleSearchKeydown(event)">
                             </label>
                         </div>
                     </section>
                     ${topRules.length ? `
-                        <div class="M04002-violation-rule-grid">
+                        <div class="anly-work-violation-rule-grid">
                             ${topRules.map((rule) => {
                                 const hasViolation = Number(rule.VIOLATION_COUNT || 0) > 0;
                                 return `
@@ -2708,7 +2708,7 @@
             if (!state.supportsRealtime) return "";
             const mode = String(state.mode || "SAVED").toUpperCase();
             return `
-                <div class="M04002-sql-mode-switch">
+                <div class="anly-work-sql-mode-switch">
                     <span>${this.escapeHtml(getText("Query mode"))}</span>
                     <button type="button" class="${mode === "SAVED" ? "is-active" : ""}" onclick="${PAGE_CODE}.changeViolationSqlMode('SAVED')">${this.escapeHtml(getText("Sampled"))}</button>
                     <button type="button" class="${mode === "LIVE" ? "is-active" : ""}" onclick="${PAGE_CODE}.changeViolationSqlMode('LIVE')">${this.escapeHtml(getText("Realtime"))}</button>
@@ -2726,26 +2726,26 @@
             }
             const state = this.violationSql || {};
             const totalPages = Math.max(1, Math.ceil(Number(state.total || 0) / Number(state.pageSize || 50)));
-            popup.className = "M04002-sql-popup";
+            popup.className = "anly-work-sql-popup";
             popup.innerHTML = `
                 <section>
-                    <header class="M04002-sql-popup-title" onmousedown="${PAGE_CODE}.startViolationSqlPopupDrag(event)">
+                    <header class="anly-work-sql-popup-title" onmousedown="${PAGE_CODE}.startViolationSqlPopupDrag(event)">
                         <div>
                             <strong>${this.escapeHtml(state.title || getText("Violation Row SQL"))}</strong>
                             <span>${this.escapeHtml(getText("Run the current SQL with Ctrl+Enter."))}</span>
                         </div>
                         <button type="button" onclick="${PAGE_CODE}.closeViolationSqlPopup()"><i class="fas fa-times"></i></button>
                     </header>
-                    <div class="M04002-sql-popup-body">
+                    <div class="anly-work-sql-popup-body">
                         ${this.renderViolationSqlRuleContext(state.ruleDetail)}
                         ${this.renderViolationSqlModeSwitch(state)}
-                        <div class="M04002-sql-editor-wrap">
-                            <button type="button" class="M04002-sql-copy-btn" title="${this.escapeHtml(getText("Copy current SQL"))}" onclick="${PAGE_CODE}.copyCurrentViolationSql(event)">
+                        <div class="anly-work-sql-editor-wrap">
+                            <button type="button" class="anly-work-sql-copy-btn" title="${this.escapeHtml(getText("Copy current SQL"))}" onclick="${PAGE_CODE}.copyCurrentViolationSql(event)">
                                 <i class="far fa-copy"></i>
                             </button>
-                            <textarea id="${PAGE_ID_PREFIX}ViolationSqlEditor" class="M04002-sql-editor" spellcheck="false" onkeydown="${PAGE_CODE}.handleViolationSqlKeydown(event)">${this.escapeHtml(state.sql || "")}</textarea>
+                            <textarea id="${PAGE_ID_PREFIX}ViolationSqlEditor" class="anly-work-sql-editor" spellcheck="false" onkeydown="${PAGE_CODE}.handleViolationSqlKeydown(event)">${this.escapeHtml(state.sql || "")}</textarea>
                         </div>
-                        <div class="M04002-sql-popup-toolbar">
+                        <div class="anly-work-sql-popup-toolbar">
                             <button type="button" class="table-btn primary" onclick="${PAGE_CODE}.executeViolationSql(1)"><i class="fas fa-play"></i> Run</button>
                             <button type="button" class="table-btn" ${state.columns?.length ? "" : "disabled"} onclick="${PAGE_CODE}.exportViolationSqlRows()"><i class="fas fa-file-export"></i> Export</button>
                             <label>Rows
@@ -2757,7 +2757,7 @@
                                 <input id="${PAGE_ID_PREFIX}ViolationSqlFreezeColumns" type="number" min="0" max="50" value="${this.escapeHtml(state.freezeColumns ?? 2)}" onchange="${PAGE_CODE}.changeViolationSqlFreezeColumns(this.value)" oninput="${PAGE_CODE}.changeViolationSqlFreezeColumns(this.value)">
                             </label>
                             <span>${this.formatNumber(state.total || 0)} rows</span>
-                            <div class="M04002-page-jump">
+                            <div class="anly-work-page-jump">
                                 <button type="button" ${Number(state.page || 1) <= 1 ? "disabled" : ""} onclick="${PAGE_CODE}.executeViolationSql(${Math.max(1, Number(state.page || 1) - 1)})"><i class="fas fa-chevron-left"></i></button>
                                 <label><span>Page</span><input id="${PAGE_ID_PREFIX}ViolationSqlPage" type="number" min="1" max="${totalPages}" value="${this.escapeHtml(state.page || 1)}" onkeydown="if(event.key==='Enter'){${PAGE_CODE}.goViolationSqlPage()}"><small>/ ${this.formatNumber(totalPages)}</small></label>
                                 <button type="button" onclick="${PAGE_CODE}.goViolationSqlPage()">Go</button>
@@ -2765,7 +2765,7 @@
                             </div>
                         </div>
                         <div id="${PAGE_ID_PREFIX}ViolationSqlMessage" class="table-empty">${state.rows?.length ? "" : this.escapeHtml(getText("Review the SQL, then query with Run or Ctrl+Enter."))}</div>
-                        <div class="M04002-sql-result">
+                        <div class="anly-work-sql-result">
                             ${state.columns?.length ? this.renderViolationSqlGrid(state.columns, state.rows, state.ruleColumns || []) : ""}
                         </div>
                     </div>
@@ -2780,7 +2780,7 @@
                 const featureLabel = features.join(", ") || "x";
                 const targetColumn = String(rule.TARGET_COLUMN || "Y").trim() || "Y";
                 return `
-                    <section class="M04002-violation-rule-context">
+                    <section class="anly-work-violation-rule-context">
                         <header>
                             <strong>${this.escapeHtml(rule.RULE_ID || "")}</strong>
                             <span>${this.escapeHtml(getText("{count} rows", { count: this.formatNumber(rule.VIOLATION_COUNT) }))} · max error ${this.formatPercentMetric(rule.MAX_ERROR_PCT)} · tolerance ${this.formatPercentMetric(rule.TOLERANCE_PCT)}</span>
@@ -2793,7 +2793,7 @@
                 `;
             }
             return `
-                <section class="M04002-violation-rule-context">
+                <section class="anly-work-violation-rule-context">
                     <header>
                         <strong>${this.escapeHtml(rule.RULE_ID || "")}</strong>
                         <span>${this.escapeHtml(getText("{count} rows", { count: this.formatNumber(rule.VIOLATION_COUNT) }))} · confidence ${this.formatPercentMetric(rule.RULE_CONFIDENCE)} · lift ${this.formatDecimal(rule.RULE_LIFT)}</span>
@@ -2843,8 +2843,8 @@
             });
             const rowOffset = (Math.max(1, Number(this.violationSql?.page || 1)) - 1) * Math.max(1, Number(this.violationSql?.pageSize || 50));
             return `
-                <div class="M04002-violation-sql-grid-wrap">
-                    <table class="table-grid M04002-violation-sql-grid">
+                <div class="anly-work-violation-sql-grid-wrap">
+                    <table class="table-grid anly-work-violation-sql-grid">
                         <colgroup>
                             <col style="width: ${rowNoWidth}px;">
                             ${columnMeta.map((meta) => `<col style="width: ${meta.width}px;">`).join("")}
@@ -2934,7 +2934,7 @@
         },
 
         refreshViolationSqlGrid() {
-            const result = document.querySelector(`#${PAGE_ID_PREFIX}ViolationSqlPopup .M04002-sql-result`);
+            const result = document.querySelector(`#${PAGE_ID_PREFIX}ViolationSqlPopup .anly-work-sql-result`);
             const state = this.violationSql || {};
             if (!result) return;
             result.innerHTML = state.columns?.length
@@ -3067,13 +3067,13 @@
             const metricLabel = summary.metricLabel || (isNumeric ? "|Pearson r|" : "Cramer's V");
             const signedMetricLabel = summary.signedMetricLabel || metricLabel;
             return `
-                <section class="M04002-corr-summary">
+                <section class="anly-work-corr-summary">
                     <header>
                         <div>
                             <strong>${this.escapeHtml(isNumeric ? getText("Numeric Correlation Summary") : getText("Categorical Correlation Summary"))}</strong>
                             <span>${this.escapeHtml(getText("Target {target} · {metric} basis", { target: `${summary.targetOwner}.${summary.targetTable}`, metric: metricLabel }))}</span>
                         </div>
-                        <div class="M04002-corr-metrics">
+                        <div class="anly-work-corr-metrics">
                             <span><b>${this.formatNumber(summary.totalColumnCount)}</b><small>${this.escapeHtml(getText("Total columns"))}</small></span>
                             <span><b>${this.formatNumber(summary.associatedColumnCount)}</b><small>${this.escapeHtml(getText("Associated columns"))}</small></span>
                             <span><b>${this.formatNumber(summary.associatedPairCount)}</b><small>${this.escapeHtml(getText("Associated pairs"))}</small></span>
@@ -3081,12 +3081,12 @@
                         </div>
                     </header>
                     <p>${this.escapeHtml(getText("{kind} columns saved with PASS_YN=Y total {columnCount}, and passed pairs total {pairCount} out of {totalPairCount}.", { kind: isNumeric ? getText("Numeric correlation") : getText("Categorical correlation"), columnCount: this.formatNumber(summary.associatedColumnCount), pairCount: this.formatNumber(summary.associatedPairCount), totalPairCount: this.formatNumber(summary.totalPairCount) }))}</p>
-                    <div class="M04002-corr-tags">
+                    <div class="anly-work-corr-tags">
                         ${visibleColumns.map((column) => this.renderColumnChip(column, summary)).join("")}
-                        ${hiddenCount ? `<em class="M04002-column-chip">+${this.formatNumber(hiddenCount)} more</em>` : ""}
+                        ${hiddenCount ? `<em class="anly-work-column-chip">+${this.formatNumber(hiddenCount)} more</em>` : ""}
                     </div>
                     ${topPairs.length ? `
-                        <div class="M04002-corr-pair-strip">
+                        <div class="anly-work-corr-pair-strip">
                             ${topPairs.map((pair) => `
                                 <span>
                                     <b>${this.renderColumnAwareCell(pair.COL_A, summary)} ↔ ${this.renderColumnAwareCell(pair.COL_B, summary)}</b>
@@ -3105,28 +3105,28 @@
             const topTargets = Array.isArray(summary.topTargets) ? summary.topTargets : [];
             const topFeatures = Array.isArray(summary.topFeatures) ? summary.topFeatures : [];
             return `
-                <section class="M04002-lasso-summary">
+                <section class="anly-work-lasso-summary">
                     <header>
                         <div>
                             <strong>${this.escapeHtml(getText("LASSO Key Feature Summary"))}</strong>
                             <span>${this.escapeHtml(getText("Target {target} · based on coefficient absolute value and R2", { target: `${summary.targetOwner}.${summary.targetTable}` }))}</span>
                         </div>
-                        <div class="M04002-corr-metrics">
+                        <div class="anly-work-corr-metrics">
                             <span><b>${this.formatNumber(overview.TARGET_COLUMN_COUNT)}</b><small>target</small></span>
                             <span><b>${this.formatNumber(overview.SELECTED_FEATURE_COUNT)}</b><small>selected</small></span>
                             <span><b>${this.formatDecimal(overview.MAX_R2_SCORE)}</b><small>max R2</small></span>
                             <span><b>${this.formatDecimal(overview.MODEL_ALPHA)}</b><small>alpha</small></span>
                         </div>
                     </header>
-                    <div class="M04002-lasso-direction-grid">
+                    <div class="anly-work-lasso-direction-grid">
                         <span><b>${this.formatNumber(overview.POSITIVE_FEATURE_COUNT)}</b><small>${this.escapeHtml(getText("Positive coefficients"))}</small></span>
                         <span><b>${this.formatNumber(overview.NEGATIVE_FEATURE_COUNT)}</b><small>${this.escapeHtml(getText("Negative coefficients"))}</small></span>
                         <span><b>${this.formatNumber(overview.FEATURE_NAME_COUNT)}</b><small>${this.escapeHtml(getText("Unique features"))}</small></span>
                     </div>
                     ${topTargets.length ? `
-                        <div class="M04002-type-detail">
+                        <div class="anly-work-type-detail">
                             <strong>${this.escapeHtml(getText("Selection Result by Target"))}</strong>
-                            <div class="M04002-type-case-grid">
+                            <div class="anly-work-type-case-grid">
                                 ${topTargets.map((item) => `
                                     <span>
                                         <b>${this.renderColumnAwareCell(item.TARGET_COLUMN, summary)}</b>
@@ -3138,7 +3138,7 @@
                         </div>
                     ` : ""}
                     ${topFeatures.length ? `
-                        <div class="M04002-lasso-feature-list">
+                        <div class="anly-work-lasso-feature-list">
                             ${topFeatures.map((item) => {
                                 const width = Math.max(6, Math.min(100, Number(item.ABS_COEFFICIENT || 0) * 100));
                                 const direction = Number(item.COEFFICIENT || 0) >= 0 ? "is-positive" : "is-negative";
@@ -3174,26 +3174,26 @@
             const methodFilter = String(summary.methodFilter || filters.method || "ALL");
             const targetFilter = String(summary.targetColumnFilter || filters.targetColumn || "ALL");
             return `
-                <section class="M04002-symbolic-summary">
+                <section class="anly-work-symbolic-summary">
                     <header>
                         <div>
                             <strong>${this.escapeHtml(getText("Symbolic Rule Formula Summary"))}</strong>
                             <span>${this.escapeHtml(getText("Target {target} · f(x)=y formula rules", { target: `${summary.targetOwner}.${summary.targetTable}` }))}</span>
                         </div>
-                        <div class="M04002-corr-metrics">
+                        <div class="anly-work-corr-metrics">
                             <span><b>${this.formatNumber(overview.RULE_COUNT)}</b><small>rules</small></span>
                             <span><b>${this.formatNumber(overview.SELECTED_RULE_COUNT)}</b><small>selected</small></span>
                             <span><b>${this.formatDecimal(overview.MAX_SCORE)}</b><small>max score</small></span>
                             <span><b>${this.formatDecimal(overview.AVG_COMPLEXITY)}</b><small>avg complexity</small></span>
                         </div>
                     </header>
-                    <section class="M04002-rule-facet-panel is-symbolic">
-                        <div class="M04002-rule-facet-block">
+                    <section class="anly-work-rule-facet-panel is-symbolic">
+                        <div class="anly-work-rule-facet-block">
                             <header>
                                 <strong>${this.escapeHtml(getText("Method Type"))}</strong>
                                 <button type="button" onclick="${PAGE_CODE}.resetSymbolicRuleFilters()">Reset</button>
                             </header>
-                            <div class="M04002-rule-facet-list">
+                            <div class="anly-work-rule-facet-list">
                                 <button type="button" class="${methodFilter === "ALL" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectSymbolicRuleFilter('method', 'ALL')">
                                     <span>${this.escapeHtml(getText("All"))}</span>
                                     <b>${this.formatNumber(overview.RULE_COUNT)} rules</b>
@@ -3209,9 +3209,9 @@
                                 }).join("")}
                             </div>
                         </div>
-                        <div class="M04002-rule-facet-block is-condition">
+                        <div class="anly-work-rule-facet-block is-condition">
                             <header><strong>${this.escapeHtml(getText("Y Result Column"))}</strong></header>
-                            <div class="M04002-rule-facet-list">
+                            <div class="anly-work-rule-facet-list">
                                 <button type="button" class="${targetFilter === "ALL" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectSymbolicRuleFilter('targetColumn', 'ALL')">
                                     <span>${this.escapeHtml(getText("All"))}</span>
                                     <b>${this.formatNumber(overview.TARGET_COLUMN_COUNT)} columns</b>
@@ -3229,7 +3229,7 @@
                         </div>
                     </section>
                     ${topRules.length ? `
-                        <div class="M04002-symbolic-rule-grid">
+                        <div class="anly-work-symbolic-rule-grid">
                             ${topRules.map((rule, index) => this.renderSymbolicRuleCard(rule, index)).join("")}
                         </div>
                     ` : `<div class="table-empty">${this.escapeHtml(getText("No Symbolic Rules to display."))}</div>`}
@@ -3246,42 +3246,42 @@
             const targetColumn = String(rule.TARGET_COLUMN || "Y").trim() || "Y";
             const targetCell = this.renderColumnAwareCell(targetColumn, this.lastSymbolicRuleSummary || {});
             return `
-                <article class="M04002-symbolic-rule-card ${String(rule.SELECTED_YN || "").toUpperCase() === "Y" ? "is-selected" : ""}">
+                <article class="anly-work-symbolic-rule-card ${String(rule.SELECTED_YN || "").toUpperCase() === "Y" ? "is-selected" : ""}">
                     <header>
                         <span>
-                            <span class="M04002-symbolic-rule-id-inline">
-                                <small class="M04002-symbolic-rule-id-label">Rule ID</small>
-                                <span class="M04002-symbolic-rule-id-row">
+                            <span class="anly-work-symbolic-rule-id-inline">
+                                <small class="anly-work-symbolic-rule-id-label">Rule ID</small>
+                                <span class="anly-work-symbolic-rule-id-row">
                                     <code>${this.escapeHtml(displayRuleId)}</code>
-                                    <button type="button" class="M04002-rule-copy-btn" title="${this.escapeHtml(getText("Copy RULE ID"))}" onclick="${PAGE_CODE}.copyRuleId('${this.escapeJs(plainRuleId)}', event)">
+                                    <button type="button" class="anly-work-rule-copy-btn" title="${this.escapeHtml(getText("Copy RULE ID"))}" onclick="${PAGE_CODE}.copyRuleId('${this.escapeJs(plainRuleId)}', event)">
                                         <i class="far fa-copy"></i>
                                     </button>
                                 </span>
                             </span>
                         </span>
-                        <span class="M04002-symbolic-rule-actions">
+                        <span class="anly-work-symbolic-rule-actions">
                             <button type="button" title="${this.escapeHtml(getText("View formula graph"))}" onclick="${PAGE_CODE}.openSymbolicRulePopup('${this.escapeJs(key)}')">
                                 <i class="fas fa-chart-line"></i>
                             </button>
                             ${plainRuleId ? `<button type="button" title="${this.escapeHtml(getText("Search continuous violation detection results with this RULE ID"))}" onclick="${PAGE_CODE}.openSymbolicViolationForRule('${this.escapeJs(plainRuleId)}')">${this.escapeHtml(getText("View violations"))}</button>` : ""}
                         </span>
                     </header>
-                    <div class="M04002-symbolic-y-panel">
+                    <div class="anly-work-symbolic-y-panel">
                         <small>${this.escapeHtml(getText("Y result value"))}</small>
                         <strong>${targetCell}</strong>
                     </div>
                     <code>f(${featureLabel}) = ${this.escapeHtml(rule.EXPRESSION || "")} = ${this.escapeHtml(targetColumn)}</code>
-                    <div class="M04002-symbolic-x-panel">
+                    <div class="anly-work-symbolic-x-panel">
                         <small>${this.escapeHtml(getText("X arguments"))}</small>
-                        <div class="M04002-corr-tags">
-                            ${features.length ? features.slice(0, 10).map((column) => this.renderColumnChip(column, this.lastSymbolicRuleSummary || {})).join("") : `<em class="M04002-column-chip"><b>x</b></em>`}
+                        <div class="anly-work-corr-tags">
+                            ${features.length ? features.slice(0, 10).map((column) => this.renderColumnChip(column, this.lastSymbolicRuleSummary || {})).join("") : `<em class="anly-work-column-chip"><b>x</b></em>`}
                         </div>
                     </div>
                     <footer>
                         <span><small>score</small><b>${this.formatDecimal(rule.SCORE)}</b></span>
                         <span><small>complexity</small><b>${this.formatNumber(rule.COMPLEXITY)}</b></span>
                         <span><small>rank</small><b>${this.formatNumber(rule.RANK_NO)}</b></span>
-                        <span class="M04002-symbolic-rule-method"><small>method</small><b>${this.escapeHtml(rule.METHOD || "-")}</b></span>
+                        <span class="anly-work-symbolic-rule-method"><small>method</small><b>${this.escapeHtml(rule.METHOD || "-")}</b></span>
                     </footer>
                 </article>
             `;
@@ -3301,13 +3301,13 @@
             const targetFilter = String(summary.targetColumnFilter || filters.targetColumn || "ALL");
             const resultScope = String(summary.resultScope || filters.resultScope || "ALL").toUpperCase();
             return `
-                <section class="M04002-symbolic-violation-summary">
+                <section class="anly-work-symbolic-violation-summary">
                     <header>
                         <div>
                             <strong>${this.escapeHtml(getText("Symbolic Rule Error Range Violation Summary"))}</strong>
                             <span>${this.escapeHtml(getText("Target {target} · based on allowed error rate against prediction", { target: `${summary.targetOwner}.${summary.targetTable}` }))}</span>
                         </div>
-                        <div class="M04002-corr-metrics">
+                        <div class="anly-work-corr-metrics">
                             <span><b>${this.formatNumber(overview.RULE_COUNT)}</b><small>rules</small></span>
                             <span><b>${this.formatNumber(overview.VIOLATION_COUNT)}</b><small>violations</small></span>
                             <span><b>${this.formatNumber(overview.VIOLATED_RULE_COUNT)}</b><small>hit rules</small></span>
@@ -3315,7 +3315,7 @@
                             <span><b>${this.formatPercentMetric(overview.TOLERANCE_PCT)}</b><small>tolerance</small></span>
                         </div>
                     </header>
-                    <div class="M04002-violation-reason-strip">
+                    <div class="anly-work-violation-reason-strip">
                         <span><small>${this.escapeHtml(getText("Violation rows"))}</small><b>${this.formatNumber(overview.VIOLATED_ROW_COUNT)}</b></span>
                         <span><small>${this.escapeHtml(getText("Average error rate"))}</small><b>${this.formatPercentMetric(overview.AVG_ERROR_PCT)}</b></span>
                         <span><small>${this.escapeHtml(getText("Max error rate"))}</small><b>${this.formatPercentMetric(overview.MAX_ERROR_PCT)}</b></span>
@@ -3323,13 +3323,13 @@
                         <span><small>${this.escapeHtml(getText("Max absolute error"))}</small><b>${this.formatDecimal(overview.MAX_ABS_ERROR)}</b></span>
                         ${ruleFilterDisplay ? `<b>${this.escapeHtml(getText("RULE ID search: {ruleId}", { ruleId: ruleFilterDisplay }))}</b>` : ""}
                     </div>
-                    <section class="M04002-rule-facet-panel is-symbolic">
-                        <div class="M04002-rule-facet-block">
+                    <section class="anly-work-rule-facet-panel is-symbolic">
+                        <div class="anly-work-rule-facet-block">
                             <header>
                                 <strong>${this.escapeHtml(getText("Method Type"))}</strong>
                                 <button type="button" onclick="${PAGE_CODE}.resetSymbolicViolationFilters()">Reset</button>
                             </header>
-                            <div class="M04002-rule-facet-list">
+                            <div class="anly-work-rule-facet-list">
                                 <button type="button" class="${methodFilter === "ALL" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectSymbolicViolationFilter('method', 'ALL')">
                                     <span>${this.escapeHtml(getText("All"))}</span>
                                     <b>${this.formatNumber(overview.RULE_COUNT)} rules</b>
@@ -3345,9 +3345,9 @@
                                 }).join("") : `<span>${this.escapeHtml(getText("No Method summary to display."))}</span>`}
                             </div>
                         </div>
-                        <div class="M04002-rule-facet-block is-condition">
+                        <div class="anly-work-rule-facet-block is-condition">
                             <header><strong>${this.escapeHtml(getText("Violation Status"))}</strong></header>
-                            <div class="M04002-rule-facet-list">
+                            <div class="anly-work-rule-facet-list">
                                 <button type="button" class="${resultScope === "ALL" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectSymbolicViolationFilter('resultScope', 'ALL')">
                                     <span>${this.escapeHtml(getText("All rules"))}</span>
                                     <b>${this.formatNumber(overview.RULE_COUNT)}</b>
@@ -3362,9 +3362,9 @@
                                 </button>
                             </div>
                         </div>
-                        <div class="M04002-rule-facet-block">
+                        <div class="anly-work-rule-facet-block">
                             <header><strong>${this.escapeHtml(getText("Rules/Violations by Target"))}</strong></header>
-                            <div class="M04002-rule-facet-list">
+                            <div class="anly-work-rule-facet-list">
                                 <button type="button" class="${targetFilter === "ALL" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectSymbolicViolationFilter('targetColumn', 'ALL')">
                                     <span>${this.escapeHtml(getText("All"))}</span>
                                     <b>${this.formatNumber(overview.TARGET_COLUMN_COUNT)} columns</b>
@@ -3380,22 +3380,22 @@
                                 }).join("") : `<span>${this.escapeHtml(getText("No Target rules to display."))}</span>`}
                             </div>
                         </div>
-                        <div class="M04002-rule-facet-block is-condition">
+                        <div class="anly-work-rule-facet-block is-condition">
                             <header>
                                 <strong>${this.escapeHtml(getText("RULE ID Search"))}</strong>
-                                <div class="M04002-rule-facet-actions">
+                                <div class="anly-work-rule-facet-actions">
                                     <button type="button" onclick="${PAGE_CODE}.searchViolationRule()">Search</button>
                                     <button type="button" onclick="${PAGE_CODE}.resetViolationRuleSearch()">Reset</button>
                                 </div>
                             </header>
-                            <label class="M04002-rule-condition-search">
+                            <label class="anly-work-rule-condition-search">
                                 <span>RULE ID</span>
                                 <input id="violationRuleSearch-${PAGE_CODE}" type="search" value="${this.escapeHtml(ruleFilterDisplay)}" placeholder="${this.escapeHtml(getText("e.g. RULE_001"))}" onkeydown="${PAGE_CODE}.handleViolationRuleSearchKeydown(event)">
                             </label>
                         </div>
                     </section>
                     ${topRules.length ? `
-                        <div class="M04002-violation-rule-grid">
+                        <div class="anly-work-violation-rule-grid">
                             ${topRules.map((rule) => {
                                 const hasViolation = Number(rule.VIOLATION_COUNT || 0) > 0;
                                 const features = this.parseFeatureList(rule.FEATURE_COLUMNS);
@@ -3405,7 +3405,7 @@
                                 <article class="${hasViolation ? "" : "is-no-violation"}">
                                     <header>
                                         <strong>${this.escapeHtml(rule.RULE_ID || "-")}</strong>
-                                        <span class="M04002-violation-rule-actions">
+                                        <span class="anly-work-violation-rule-actions">
                                             <button type="button" title="${this.escapeHtml(getText("View formula graph"))}" onclick="${PAGE_CODE}.openSymbolicViolationRulePopup('${this.escapeJs(rule.RULE_ID)}')">
                                                 <i class="fas fa-chart-line"></i>
                                             </button>
@@ -3506,7 +3506,7 @@
             this.closeSymbolicRulePopup();
             const popup = document.createElement("div");
             popup.id = `${PAGE_ID_PREFIX}SymbolicRulePopup`;
-            popup.className = "M04002-symbolic-popup";
+            popup.className = "anly-work-symbolic-popup";
             popup.innerHTML = this.renderSymbolicRulePopup(rule, this.lastSymbolicRuleSummary || {});
             document.body.appendChild(popup);
             setTimeout(() => this.drawSymbolicRuleChart(rule), 0);
@@ -3523,7 +3523,7 @@
             this.closeSymbolicRulePopup();
             const popup = document.createElement("div");
             popup.id = `${PAGE_ID_PREFIX}SymbolicRulePopup`;
-            popup.className = "M04002-symbolic-popup";
+            popup.className = "anly-work-symbolic-popup";
             popup.innerHTML = this.renderSymbolicRulePopup(rule, summary);
             document.body.appendChild(popup);
             setTimeout(() => this.drawSymbolicRuleChart(rule), 0);
@@ -3538,13 +3538,13 @@
             const displayRuleId = this.getSymbolicRuleDisplayId(rule, this.findSymbolicRuleIndex(rule));
             return `
                 <section>
-                    <header class="M04002-sql-popup-title" onmousedown="${PAGE_CODE}.startSymbolicRulePopupDrag(event)">
+                    <header class="anly-work-sql-popup-title" onmousedown="${PAGE_CODE}.startSymbolicRulePopupDrag(event)">
                         <div>
-                            <span class="M04002-symbolic-rule-id-inline">
-                                <small class="M04002-symbolic-rule-id-label">Rule ID</small>
-                                <span class="M04002-symbolic-rule-id-row">
+                            <span class="anly-work-symbolic-rule-id-inline">
+                                <small class="anly-work-symbolic-rule-id-label">Rule ID</small>
+                                <span class="anly-work-symbolic-rule-id-row">
                                     <code>${this.escapeHtml(displayRuleId)}</code>
-                                    <button type="button" class="M04002-rule-copy-btn" title="${this.escapeHtml(getText("Copy RULE ID"))}" onclick="${PAGE_CODE}.copyRuleId('${this.escapeJs(displayRuleId)}', event)">
+                                    <button type="button" class="anly-work-rule-copy-btn" title="${this.escapeHtml(getText("Copy RULE ID"))}" onclick="${PAGE_CODE}.copyRuleId('${this.escapeJs(displayRuleId)}', event)">
                                         <i class="far fa-copy"></i>
                                     </button>
                                 </span>
@@ -3553,21 +3553,21 @@
                         </div>
                         <button type="button" title="Close" onclick="${PAGE_CODE}.closeSymbolicRulePopup()"><i class="fas fa-times"></i></button>
                     </header>
-                    <div class="M04002-symbolic-formula-banner">
+                    <div class="anly-work-symbolic-formula-banner">
                         <span>F(X) = Y</span>
                         <strong>f(${featureLabel}) = ${this.escapeHtml(rule.EXPRESSION || "")} = ${targetCell}</strong>
                     </div>
-                    <div class="M04002-symbolic-popup-body">
-                        <div class="M04002-symbolic-expression-box">
+                    <div class="anly-work-symbolic-popup-body">
+                        <div class="anly-work-symbolic-expression-box">
                             <strong>Expression</strong>
                             <code>${this.escapeHtml(rule.EXPRESSION || "")}</code>
                             ${rule.MESSAGE ? `<span>${this.escapeHtml(rule.MESSAGE)}</span>` : ""}
                         </div>
-                        <div class="M04002-symbolic-chart-wrap">
+                        <div class="anly-work-symbolic-chart-wrap">
                             <canvas id="${PAGE_ID_PREFIX}SymbolicRuleChart" height="260"></canvas>
                             <div id="${PAGE_ID_PREFIX}SymbolicRuleChartMessage" class="table-empty"></div>
                         </div>
-                        <div class="M04002-symbolic-range-grid">
+                        <div class="anly-work-symbolic-range-grid">
                             ${ranges.length ? ranges.map((range) => `
                                 <span>
                                     <b>${this.renderColumnAwareCell(range.COLUMN_NAME, sourceSummary || {})}</b>
@@ -3881,14 +3881,14 @@
             const matchGroups = Array.isArray(summary.predictionMatchGroups) ? summary.predictionMatchGroups : [];
             const activeCase = String(json.predictedTypeCase || this.predictedTypeFilter || "ALL").toUpperCase();
             return `
-                <section class="M04002-type-summary">
+                <section class="anly-work-type-summary">
                     <header>
                         <div>
                             <strong>${this.escapeHtml(getMessage("predictedTypeSummaryTitle", "Column Type Prediction Summary"))}</strong>
                             <span>Target ${this.escapeHtml(summary.targetOwner)}.${this.escapeHtml(summary.targetTable)}</span>
                         </div>
-                        <div class="M04002-type-summary-actions">
-                            <div class="M04002-corr-metrics">
+                        <div class="anly-work-type-summary-actions">
+                            <div class="anly-work-corr-metrics">
                                 <span><b>${this.formatNumber(summary.totalColumnCount)}</b><small>${this.escapeHtml(getMessage("totalColumns", "Total columns"))}</small></span>
                                 ${groups.map((group) => `
                                     <span><b>${this.formatNumber(group.columnCount)}</b><small>${this.escapeHtml(this.getPredictedTypeGroupLabel(group.typeGroup))}</small></span>
@@ -3903,9 +3903,9 @@
                     </header>
                     ${this.renderPredictedTypeUnifiedMode(sourceGroups, finalGroups, summary)}
                     ${matchGroups.length ? `
-                        <div class="M04002-type-detail">
+                        <div class="anly-work-type-detail">
                             <strong>${this.escapeHtml(getMessage("predictionMatchGroupTitle", "Applied FINAL / MODEL / RULE Prediction Type Detail Groups"))}</strong>
-                            <div class="M04002-type-case-grid">
+                            <div class="anly-work-type-case-grid">
                                 <button type="button" class="${activeCase === "ALL" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectPredictedTypeCase('ALL')" title="${this.escapeHtml(getMessage("allPredictionResultsTitle", "All prediction results"))}">
                                     <b>${this.escapeHtml(getMessage("all", "All"))}</b>
                                     <small>${this.escapeHtml(getMessage("columnsCount", "{count} columns", { count: this.formatNumber(summary.totalColumnCount) }))}</small>
@@ -3930,7 +3930,7 @@
                 return `<div class="table-empty">${this.escapeHtml(getMessage("noPredictionColumns", "No RULE / MODEL / FINAL prediction column information is available."))}</div>`;
             }
             return `
-                <div class="M04002-type-source-grid">
+                <div class="anly-work-type-source-grid">
                     ${safeGroups.map((source) => this.renderPredictedTypeSourceGroup(source, summary)).join("")}
                 </div>
             `;
@@ -4025,12 +4025,12 @@
                 );
             }
             return `
-                <section class="M04002-type-version">
+                <section class="anly-work-type-version">
                     <header>
                         <strong>${this.escapeHtml(getMessage("runBasedTitle", "RUN based"))}</strong>
                         <span>${this.escapeHtml(getMessage("runBasedPredictionNote", "INIT$_TB_PREDICTED_TYPE prediction value at {method} execution", { method: methodLabel }))}</span>
                     </header>
-                    <div class="M04002-type-run-source-grid">
+                    <div class="anly-work-type-run-source-grid">
                         ${safeSourceGroups.map((source) => this.renderPredictedTypeSourceGroup(source, summary, true)).join("")}
                     </div>
                 </section>
@@ -4042,13 +4042,13 @@
             const total = groups.reduce((sum, group) => sum + Number(group.columnCount || 0), 0);
             const sourceClass = `is-source-${String(source.sourceCode || "").toLowerCase().replace(/[^a-z0-9_-]/g, "")}`;
             return `
-                <section class="M04002-type-source ${sourceClass} ${compact ? "is-compact" : ""}">
+                <section class="anly-work-type-source ${sourceClass} ${compact ? "is-compact" : ""}">
                     <header>
                         <strong>${this.escapeHtml(source.sourceLabel || source.sourceCode || "-")}</strong>
                         <span>${this.escapeHtml(source.description || source.sourceColumn || "")}</span>
                         <small>${this.escapeHtml(getMessage("columnsCount", "{count} columns", { count: this.formatNumber(total) }))}</small>
                     </header>
-                    <div class="M04002-type-source-groups">
+                    <div class="anly-work-type-source-groups">
                         ${groups.map((group) => this.renderPredictedTypeGroup(group, summary)).join("")}
                     </div>
                 </section>
@@ -4058,12 +4058,12 @@
         renderPredictedTypeVersion(title, note, groups = [], summary = null) {
             const safeGroups = Array.isArray(groups) ? groups : [];
             return `
-                <section class="M04002-type-version">
+                <section class="anly-work-type-version">
                     <header>
                         <strong>${this.escapeHtml(title)}</strong>
                         <span>${this.escapeHtml(note)}</span>
                     </header>
-                    <div class="M04002-type-group-grid">
+                    <div class="anly-work-type-group-grid">
                         ${safeGroups.map((group) => this.renderPredictedTypeGroup(group, summary)).join("")}
                     </div>
                 </section>
@@ -4075,14 +4075,14 @@
             const visibleColumns = columns.slice(0, 80);
             const hiddenCount = Math.max(0, columns.length - visibleColumns.length);
             return `
-                <article class="M04002-type-group">
+                <article class="anly-work-type-group">
                     <header>
                         <strong>${this.escapeHtml(this.getPredictedTypeGroupLabel(group.typeGroup))}</strong>
                         <small>${this.escapeHtml(getMessage("columnsCount", "{count} columns", { count: this.formatNumber(group.columnCount) }))}</small>
                     </header>
-                    <div class="M04002-corr-tags">
+                    <div class="anly-work-corr-tags">
                         ${visibleColumns.map((column) => this.renderColumnChip(column, summary || group)).join("")}
-                        ${hiddenCount ? `<em class="M04002-column-chip">${this.escapeHtml(getMessage("moreColumns", "+{count} more", { count: this.formatNumber(hiddenCount) }))}</em>` : ""}
+                        ${hiddenCount ? `<em class="anly-work-column-chip">${this.escapeHtml(getMessage("moreColumns", "+{count} more", { count: this.formatNumber(hiddenCount) }))}</em>` : ""}
                     </div>
                 </article>
             `;
@@ -4172,7 +4172,7 @@
             const rules = filtered.slice(0, 12).map((rule) => {
                 const row = rule.row;
                 return `
-                    <article class="M04002-rule-card">
+                    <article class="anly-work-rule-card">
                         <strong>Rule #${this.escapeHtml(rule.ruleId)}</strong>
                         <p><b>IF</b> ${this.escapeHtml(rule.ifText || getText("No condition information"))}</p>
                         <p><b>THEN</b> ${this.escapeHtml(rule.thenText || getText("No result information"))}</p>
@@ -4180,12 +4180,12 @@
                     </article>
                 `;
             }).join("");
-            return `<section class="M04002-rule-grid">${rules || `<div class="table-empty">${this.escapeHtml(getText("No rule cards match the condition. You can check the original rows in the table below."))}</div>`}</section>`;
+            return `<section class="anly-work-rule-grid">${rules || `<div class="table-empty">${this.escapeHtml(getText("No rule cards match the condition. You can check the original rows in the table below."))}</div>`}</section>`;
         },
 
         renderRuleFilterBar() {
             return `
-                <div class="M04002-rule-filter-bar">
+                <div class="anly-work-rule-filter-bar">
                     <label>
                         <input type="checkbox" ${this.excludeEmptyConsequent ? "checked" : ""} onchange="${PAGE_CODE}.toggleExcludeEmptyConsequent(this.checked)">
                         <span>${this.escapeHtml(getText("Exclude missing result"))}</span>
@@ -4201,7 +4201,7 @@
                 this.snapshotNodeResultCache();
                 return;
             }
-            const viewButton = getContainerEl("#resultPanel-${PAGE_CODE} .M04002-result-header nav button.is-active");
+            const viewButton = getContainerEl("#resultPanel-${PAGE_CODE} .anly-work-result-header nav button.is-active");
             const viewType = viewButton?.textContent?.trim?.() || "VR";
             this.loadModelView(viewType, 1);
         },
@@ -4212,7 +4212,7 @@
 
         renderNodeJobDesc(node) {
             const desc = this.getNodeJobDesc(node);
-            return desc ? `<em class="M04002-node-desc" title="${this.escapeHtml(desc)}">Job Desc: ${this.escapeHtml(desc)}</em>` : "";
+            return desc ? `<em class="anly-work-node-desc" title="${this.escapeHtml(desc)}">Job Desc: ${this.escapeHtml(desc)}</em>` : "";
         },
 
         getNodeExecutionTitle(node = this.selectedNode, fallback = "") {
@@ -4237,12 +4237,12 @@
 
         renderNodeExecutionObject(node) {
             const title = this.getNodeExecutionTitle(node);
-            return title ? `<small class="M04002-node-exec" title="${this.escapeHtml(title)}">${this.escapeHtml(title)}</small>` : "";
+            return title ? `<small class="anly-work-node-exec" title="${this.escapeHtml(title)}">${this.escapeHtml(title)}</small>` : "";
         },
 
         renderSelectedNodeJobDesc() {
             const desc = this.getNodeJobDesc();
-            return desc ? `<p class="M04002-result-job-desc" title="${this.escapeHtml(desc)}"><b>Job Desc</b> ${this.escapeHtml(desc)}</p>` : "";
+            return desc ? `<p class="anly-work-result-job-desc" title="${this.escapeHtml(desc)}"><b>Job Desc</b> ${this.escapeHtml(desc)}</p>` : "";
         },
 
         renderSelectedNodeExecutionMeta() {
@@ -4275,8 +4275,8 @@
             const paramEntries = this.getDisplayRuntimeParamEntries(params, payload, node);
             if (!metaRows.length && !paramEntries.length) return "";
             return `
-                <section class="M04002-execution-meta ${this.getNodeTone(node)}">
-                    <div class="M04002-execution-meta-grid">
+                <section class="anly-work-execution-meta ${this.getNodeTone(node)}">
+                    <div class="anly-work-execution-meta-grid">
                         ${metaRows.map(({ key, label, value }) => `
                             <span class="is-${this.escapeHtml(key)}">
                                 <small>${this.escapeHtml(label)}</small>
@@ -4285,7 +4285,7 @@
                         `).join("")}
                     </div>
                     ${paramEntries.length ? `
-                        <details class="M04002-param-details">
+                        <details class="anly-work-param-details">
                             <summary>${this.escapeHtml(getMessage("callOptionParamsCount", "{count} call option parameter(s)", { count: this.formatNumber(paramEntries.length) }))}</summary>
                             <div>
                                 ${paramEntries.map(([key, value]) => `
@@ -4723,7 +4723,7 @@
             const comment = this.getColumnComment(column, source);
             if (!comment) return this.escapeHtml(column);
             return `
-                <span class="M04002-column-ref" title="${this.escapeHtml(`${column}: ${comment}`)}">
+                <span class="anly-work-column-ref" title="${this.escapeHtml(`${column}: ${comment}`)}">
                     <b>${this.escapeHtml(column)}</b>
                     <small>${this.escapeHtml(comment)}</small>
                 </span>
@@ -4735,7 +4735,7 @@
             if (!column) return "";
             const comment = this.getColumnComment(column, source);
             return `
-                <em class="M04002-column-chip" title="${this.escapeHtml(comment ? `${column}: ${comment}` : column)}">
+                <em class="anly-work-column-chip" title="${this.escapeHtml(comment ? `${column}: ${comment}` : column)}">
                     <b>${this.escapeHtml(column)}</b>
                     ${comment ? `<small>${this.escapeHtml(comment)}</small>` : ""}
                 </em>
@@ -5000,8 +5000,8 @@
             const safeColumns = (columns || []).filter((column) => column !== "RN__");
             if (!safeColumns.length) return `<div class="table-empty">${this.escapeHtml(getText("No query results."))}</div>`;
             return `
-                <div class="M04002-grid-wrap">
-                    <table class="table-grid M04002-grid">
+                <div class="anly-work-grid-wrap">
+                    <table class="table-grid anly-work-grid">
                         <thead><tr>${safeColumns.map((column) => `<th>${this.renderColumnAwareCell(column, source)}</th>`).join("")}</tr></thead>
                         <tbody>
                             ${(rows || []).map((row) => `<tr>${safeColumns.map((column) => {
@@ -5020,7 +5020,7 @@
             const prev = Math.max(1, Number(page || 1) - 1);
             const next = Math.min(totalPages, Number(page || 1) + 1);
             return `
-                <footer class="M04002-pager">
+                <footer class="anly-work-pager">
                     <button type="button" ${Number(page) <= 1 ? "disabled" : ""} onclick="${callPrefix}${prev})"><i class="fas fa-chevron-left"></i></button>
                     <span>${this.formatNumber(page)} / ${this.formatNumber(totalPages)}</span>
                     <button type="button" ${Number(page) >= totalPages ? "disabled" : ""} onclick="${callPrefix}${next})"><i class="fas fa-chevron-right"></i></button>

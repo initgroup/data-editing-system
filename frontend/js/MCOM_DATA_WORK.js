@@ -161,6 +161,14 @@
                     if (element) element.textContent = value ?? "";
                 },
 
+                setDynamicText(selector, value) {
+                    const element = getContainerEl(selector);
+                    if (!element) return;
+                    element.removeAttribute("data-label-key");
+                    delete element.dataset.labelKey;
+                    element.textContent = value ?? "";
+                },
+
                 setFieldValue(selector, value) {
                     const element = getContainerEl(selector);
                     if (element) element.value = value ?? "";
@@ -413,6 +421,7 @@
 
         async loadWorkContext() {
             const stored = this.getStoredContext();
+            this.setWorkContextCollapsed(Boolean(stored.projectId && stored.scenarioId));
             await this.loadContextProjects(stored.projectId || "");
             if (this.contextLoadFailed) return;
             if (this.selectedProjectId) {
@@ -859,7 +868,50 @@
 
         getSelectedExecutableObject() {
             const objectId = this.currentJob?.execObjectId || getContainerEl(`#execObject-${PAGE_CODE}`)?.value || "";
-            return this.executableObjects.find((row) => String(row.OBJECT_ID || "") === String(objectId)) || null;
+            const objectName = this.currentJob?.execObjectName || "";
+            const objectType = this.currentJob?.execObjectType || "";
+            return this.executableObjects.find((row) => String(row.OBJECT_ID || "") === String(objectId))
+                || this.executableObjects.find((row) => (
+                    objectName
+                    && String(row.OBJECT_NAME || "").toUpperCase() === String(objectName).toUpperCase()
+                    && (!objectType || String(row.OBJECT_TYPE || "").toUpperCase() === String(objectType).toUpperCase())
+                ))
+                || null;
+        },
+
+        enrichCurrentJobExecutionMetadata() {
+            if (!this.currentJob) return;
+            const sourceType = String(this.currentJob.execSourceType || "DB_OBJECT").toUpperCase();
+
+            if (sourceType === "WEB_API") {
+                const resourceId = this.currentJob.execResourceId || this.findWebApiResource(this.currentJob.execMethod)?.OML_RESOURCE_ID || "";
+                const api = this.findWebApiResource(resourceId || this.currentJob.execMethod) || {};
+                this.currentJob.execResourceId = this.currentJob.execResourceId || api.resourceId || api.OML_RESOURCE_ID || "";
+                this.currentJob.execMethod = this.currentJob.execMethod || api.method || api.EXEC_METHOD || "";
+                this.currentJob.execObjectType = this.currentJob.execObjectType || "WEB_API";
+                this.currentJob.execObjectName = this.currentJob.execObjectName || api.RESOURCE_NAME || api.method || api.EXEC_METHOD || "";
+                this.currentJob.execObjectLabel = this.currentJob.execObjectLabel || api.label || api.RESOURCE_LABEL || api.RESOURCE_NAME || api.method || "";
+                return;
+            }
+
+            if (sourceType === "OML_PYTHON") {
+                const resource = this.omlResources.find((row) => String(row.OML_RESOURCE_ID || "") === String(this.currentJob.execResourceId || "")) || {};
+                this.currentJob.execObjectType = this.currentJob.execObjectType || "OML_PYTHON";
+                this.currentJob.execObjectName = this.currentJob.execObjectName || resource.RESOURCE_NAME || resource.SCRIPT_NAME || "";
+                this.currentJob.execObjectLabel = this.currentJob.execObjectLabel || resource.RESOURCE_LABEL || resource.RESOURCE_NAME || resource.SCRIPT_NAME || "";
+                return;
+            }
+
+            const object = this.getSelectedExecutableObject() || {};
+            this.currentJob.execObjectType = this.currentJob.execObjectType || object.OBJECT_TYPE || "";
+            this.currentJob.execObjectName = this.currentJob.execObjectName || object.OBJECT_NAME || "";
+            this.currentJob.execObjectLabel = this.currentJob.execObjectLabel || object.OBJECT_LABEL || object.OBJECT_NAME || "";
+        },
+
+        getSelectedExecutionLabel() {
+            this.enrichCurrentJobExecutionMetadata();
+            const job = this.currentJob || {};
+            return job.execObjectLabel || job.execObjectName || this.getLabel("noExecutableObject");
         },
 
         getRegisteredResultInfo(object = this.getSelectedExecutableObject()) {
@@ -1389,6 +1441,10 @@
         renderParameters() {
             const container = getContainerEl(`#parameterGrid-${PAGE_CODE}`);
             if (!container) return;
+            const countEl = getContainerEl(`#parameterCount-${PAGE_CODE}`);
+            const setCount = (count) => {
+                if (countEl) countEl.innerHTML = this.renderListFooter(count);
+            };
             this.renderUserSqlJobContext();
             this.renderSelectedResourceMeta();
 
@@ -1399,10 +1455,12 @@
                     : sourceType === "OML_PYTHON"
                     ? (this.getLabel("noRegisteredOmlParameters") || "No registered parameters. Check M90002 OML4Py resource registration.")
                     : (this.getLabel("noRegisteredObjectParameters") || "No registered parameters. Check M90001 object detail registration.");
-                container.innerHTML = `<div class="table-empty">${this.escapeHtml(emptyMessage)}</div>${this.renderListFooter(0)}`;
+                setCount(0);
+                container.innerHTML = `<div class="table-empty">${this.escapeHtml(emptyMessage)}</div>`;
                 return;
             }
 
+            setCount(this.parameters.length);
             container.innerHTML = `
                 <table class="table-grid data-param-table">
                     <thead>
@@ -1426,7 +1484,6 @@
                         `).join("")}
                     </tbody>
                 </table>
-                ${this.renderListFooter(this.parameters.length)}
             `;
         },
 
@@ -1462,6 +1519,7 @@
         renderSelectedResourceMeta() {
             const container = getContainerEl(`#selectedResourceMeta-${PAGE_CODE}`);
             if (!container) return;
+            this.enrichCurrentJobExecutionMetadata();
             const meta = this.getSelectedResourceMeta();
             const objectType = String(meta.objectType || "").trim();
             const objectName = String(meta.objectName || "").trim();
@@ -1541,10 +1599,10 @@
             }
 
             container.innerHTML = `
+                ${this.renderListFooter(this.jobs.length)}
                 <div class="data-job-list">
                     ${this.jobs.map((job) => this.createJobRow(job)).join("")}
                 </div>
-                ${this.renderListFooter(this.jobs.length)}
             `;
         },
 
@@ -1625,6 +1683,7 @@
                 itemOrder: row.itemOrder || row.ITEM_ORDER || "",
                 bindName: row.bindName || row.BIND_NAME || ""
             })) : [];
+            this.enrichCurrentJobExecutionMetadata();
             this.savedJobSnapshot = {
                 ...this.currentJob,
                 parameters: this.cloneParameterRows(this.parameters)
@@ -1812,14 +1871,14 @@
             if (this.isResultObjectMode(job.resultCreateYn || "N")) {
                 this.applyDefaultResultOwner();
             }
-            this.setText(`#selectedExecObjectLabel-${PAGE_CODE}`, job.execObjectLabel || job.execObjectName || this.getLabel("noExecutableObject"));
+            this.setDynamicText(`#selectedExecObjectLabel-${PAGE_CODE}`, this.getSelectedExecutionLabel());
             this.syncExecutionSourceFields();
             this.syncResultFields();
             this.updateResultModeLabels();
             const desc = job.ownerName && job.tableName
                 ? `${job.ownerName}.${job.tableName}`
                 : this.getLabel("workDescriptionEmpty");
-            this.setText(`#workDescription-${PAGE_CODE}`, desc);
+            this.setDynamicText(`#workDescription-${PAGE_CODE}`, desc);
             this.renderDataEditTarget();
             this.renderUserSqlJobContext();
         },
@@ -2098,7 +2157,11 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                 const icon = toggle.querySelector("i");
                 const label = toggle.querySelector("span");
                 if (icon) icon.className = this.workContextCollapsed ? "fas fa-chevron-down" : "fas fa-chevron-up";
-                if (label) label.textContent = this.workContextCollapsed ? this.getLabel("changeContext") : this.getLabel("hideContext");
+                if (label) {
+                    const labelKey = this.workContextCollapsed ? "changeContext" : "hideContext";
+                    label.dataset.labelKey = labelKey;
+                    label.textContent = this.getLabel(labelKey);
+                }
             }
             this.updateWorkContextSummary();
         },
@@ -2395,11 +2458,21 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
 
             if (!this.selectedProjectId || !this.selectedScenarioId) {
                 this.runHistory = [];
-                container.innerHTML = `<div class="table-empty">Select project and scenario first.</div>${this.renderListFooter(0)}`;
+                container.innerHTML = `
+                    ${this.renderListFooter(0)}
+                    <div class="data-history-grid-scroll">
+                        <div class="table-empty">Select project and scenario first.</div>
+                    </div>
+                `;
                 return;
             }
 
-            container.innerHTML = `<div class="table-empty">Loading run history...</div>`;
+            container.innerHTML = `
+                ${this.renderListFooter(0)}
+                <div class="data-history-grid-scroll">
+                    <div class="table-empty">Loading run history...</div>
+                </div>
+            `;
             try {
                 const params = new URLSearchParams({
                     projectId: this.selectedProjectId,
@@ -2412,7 +2485,12 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                 this.runHistory = Array.isArray(json.data) ? json.data : [];
                 this.renderRunHistory();
             } catch (error) {
-                container.innerHTML = `<div class="table-error">${this.escapeHtml(error.message || "Run history load failed.")}</div>`;
+                container.innerHTML = `
+                    ${this.renderListFooter(0)}
+                    <div class="data-history-grid-scroll">
+                        <div class="table-error">${this.escapeHtml(error.message || "Run history load failed.")}</div>
+                    </div>
+                `;
             }
         },
 
@@ -2476,18 +2554,20 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
             }
 
             container.innerHTML = `
-                <table class="table-grid data-history-table">
-                    <thead>
-                        <tr>
-                            <th class="grid-row-no">No</th>
-                            ${columns.map((column) => `<th title="${this.escapeHtml(column)}">${this.escapeHtml(column)}</th>`).join("")}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${rows.map((row, rowIndex) => this.renderRunHistoryRow(row, rowIndex, columns)).join("")}
-                    </tbody>
-                </table>
                 ${this.renderListFooter(rows.length)}
+                <div class="data-history-grid-scroll">
+                    <table class="table-grid data-history-table">
+                        <thead>
+                            <tr>
+                                <th class="grid-row-no">No</th>
+                                ${columns.map((column) => `<th title="${this.escapeHtml(column)}">${this.escapeHtml(column)}</th>`).join("")}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${rows.map((row, rowIndex) => this.renderRunHistoryRow(row, rowIndex, columns)).join("")}
+                        </tbody>
+                    </table>
+                </div>
             `;
         },
 
@@ -3609,8 +3689,8 @@ END;`;
                     ? `<table class="table-grid data-edit-table"><thead><tr><th class="grid-row-no">No</th>${columns.map((column) => {
                         const editable = editableColumns.has(String(column).toUpperCase());
                         return `<th class="${editable ? "is-editable-column" : ""}" title="${this.escapeHtml(column)}">${this.escapeHtml(column)}</th>`;
-                    }).join("")}</tr></thead><tbody></tbody></table>${this.renderListFooter(0)}`
-                    : `<div class="table-empty">No data.</div>${this.renderListFooter(0)}`;
+                    }).join("")}</tr></thead><tbody></tbody></table>`
+                    : `<div class="table-empty">No data.</div>`;
                 this.syncEditableDataSaveButton();
                 this.syncEditableDataFillButton();
                 this.applyEditableDataFrozenColumns();
@@ -3637,7 +3717,6 @@ END;`;
                         `).join("")}
                     </tbody>
                 </table>
-                ${this.renderListFooter(rows.length)}
             `;
 
             if (!hasEditableColumns) {
@@ -4049,7 +4128,9 @@ END;`;
             if (commitButton) commitButton.disabled = !active;
             if (rollbackButton) rollbackButton.disabled = !active;
             if (status) {
-                status.textContent = active ? "Transaction active" : "No active transaction";
+                status.textContent = active
+                    ? (this.getLabel("transactionActive") || "Transaction active")
+                    : (this.getLabel("transactionOff") || "No active transaction");
                 status.className = active ? "table-empty is-active" : "table-empty";
             }
         },
@@ -4057,7 +4138,12 @@ END;`;
         async finishSqlTransaction(action) {
             if (!this.sqlTransactionId) return;
             const transactionId = this.sqlTransactionId;
-            this.renderSqlMessage("sql", `${action === "commit" ? "Committing" : "Rolling back"} transaction...`, "info");
+            const actionLabel = action === "commit"
+                ? (this.getLabel("commitTransaction") || "Commit")
+                : (this.getLabel("rollbackTransaction") || "Rollback");
+            const progressKey = action === "commit" ? "transactionCommitting" : "transactionRollingBack";
+            const progressFallback = action === "commit" ? "Committing transaction..." : "Rolling back transaction...";
+            this.renderSqlMessage("sql", this.getMessage(progressKey, progressFallback), "info");
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/sql/transaction/${action}`, {
                     method: "POST",
@@ -4065,9 +4151,9 @@ END;`;
                 });
                 this.sqlTransactionId = "";
                 this.renderSqlTransactionState();
-                this.renderSqlMessage("sql", json.message || `Transaction ${action} completed.`, "success");
+                this.renderSqlMessage("sql", json.message || this.getMessage("transactionCompleted", `Transaction ${action} completed.`, { action: actionLabel }), "success");
             } catch (error) {
-                this.renderSqlMessage("sql", error.message || `Transaction ${action} failed.`, "error");
+                this.renderSqlMessage("sql", error.message || this.getMessage("transactionFailed", `Transaction ${action} failed.`, { action: actionLabel }), "error");
             }
         },
 
@@ -4093,7 +4179,7 @@ END;`;
                 return;
             }
             if (!this.validateExecutableSql(sql)) {
-                this.renderSqlMessage(gridKey, "Only a single SELECT, PL/SQL block, CREATE TABLE, or DML statement is allowed.", "error");
+                this.renderSqlMessage(gridKey, this.getMessage("executableSqlTypeRequired", "Only a single SELECT, PL/SQL block, CREATE TABLE, or DML statement is allowed."), "error");
                 this.restoreSqlSelection(editorSelector, executable);
                 return;
             }
@@ -4116,7 +4202,7 @@ END;`;
                 return;
             }
             if (!this.validateExecutableSql(sql)) {
-                this.renderSqlMessage(gridKey, "Only a single SELECT, PL/SQL block, CREATE TABLE, or DML statement is allowed.", "error");
+                this.renderSqlMessage(gridKey, this.getMessage("executableSqlTypeRequired", "Only a single SELECT, PL/SQL block, CREATE TABLE, or DML statement is allowed."), "error");
                 return;
             }
             await this.runWorksheetSql(sql, gridSelector, gridKey, runtimeBindValues);
@@ -4848,9 +4934,14 @@ END;`;
                 : Object.keys(rows?.[0] || {});
             const colGroupHtml = this.renderSqlGridColGroup(gridKey, columns);
             const headerHtml = this.renderSqlGridHeader(gridKey, columns);
+            const shouldRenderFooter = gridKey === "history";
+            const footerHtml = shouldRenderFooter ? this.renderListFooter(Array.isArray(rows) ? rows.length : 0) : "";
+            const wrapGridHtml = (content) => gridKey === "history"
+                ? `${footerHtml}<div class="data-history-grid-scroll">${content}</div>`
+                : content;
             if (!Array.isArray(rows) || !rows.length) {
                 if (columns.length) {
-                    container.innerHTML = `
+                    container.innerHTML = wrapGridHtml(`
                         <table class="table-grid data-sql-result-table" data-sql-grid-key="${this.escapeHtml(gridKey)}">
                             ${colGroupHtml}
                             <thead>
@@ -4860,17 +4951,16 @@ END;`;
                             </thead>
                             <tbody></tbody>
                         </table>
-                        ${this.renderListFooter(0)}
-                    `;
+                    `);
                     this.syncSqlGridTableWidth(gridKey);
                     this.applySqlGridFrozenColumns(gridKey);
                     return;
                 }
-                container.innerHTML = `<div class="table-empty">No data.</div>${this.renderListFooter(0)}`;
+                container.innerHTML = wrapGridHtml(`<div class="table-empty">No data.</div>`);
                 return;
             }
 
-            container.innerHTML = `
+            container.innerHTML = wrapGridHtml(`
                 <table class="table-grid data-sql-result-table" data-sql-grid-key="${this.escapeHtml(gridKey)}">
                     ${colGroupHtml}
                     <thead>
@@ -4887,8 +4977,7 @@ END;`;
                         `).join("")}
                     </tbody>
                 </table>
-                ${this.renderListFooter(rows.length)}
-            `;
+            `);
             this.syncSqlGridTableWidth(gridKey);
             this.applySqlGridFrozenColumns(gridKey);
         }

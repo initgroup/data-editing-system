@@ -1,0 +1,695 @@
+/* MCOM_DATA_WORK template-specific layout and responsive behavior. */
+
+.data-work-page:not(.flow-work-page) .data-tool-panel.table-tab-panel.is-active {
+    margin-top: 8px !important;
+}
+
+.data-work-page:not(.flow-work-page) .data-main-panel > .table-header {
+    align-items: flex-start;
+    border-bottom: 1px solid #e2e8f0;
+    gap: 12px;
+    margin: -4px 0 14px;
+    padding-bottom: 14px;
+}
+
+.data-work-page:not(.flow-work-page) .data-main-panel > .table-header > div:first-child {
+    flex: 1 1 300px;
+    min-width: 0;
+}
+
+.data-work-page:not(.flow-work-page) .data-main-panel > .table-header .table-export-actions {
+    flex: 1 1 560px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    min-width: 0;
+    row-gap: 6px;
+}
+
+.data-work-page:not(.flow-work-page) .data-main-panel > .table-header .data-run-context-box {
+    grid-template-columns: minmax(48px, auto) minmax(28px, auto) 28px;
+    min-width: 116px;
+    padding: 2px 3px 2px 7px;
+}
+
+.data-work-page:not(.flow-work-page) .data-main-panel > .table-header .data-run-context-box strong {
+    max-width: 68px;
+}
+
+.data-work-page:not(.flow-work-page) .data-main-panel > .table-header .data-run-context-box .table-icon-btn {
+    height: 28px;
+    width: 28px;
+}
+
+.data-work-page:not(.flow-work-page) .data-work-action-separator {
+    align-self: center;
+    border-left: 1px solid #cbd5e1;
+    flex: 0 0 auto;
+    height: 26px;
+    margin: 0 4px;
+}
+
+.data-work-page:not(.flow-work-page) .data-main-panel > .table-header .table-export-actions .table-btn {
+    flex: 0 1 auto;
+    gap: 5px;
+    height: 32px;
+    max-width: 104px;
+    min-width: 0;
+    padding: 0 7px;
+}
+
+.data-work-page:not(.flow-work-page) .data-main-panel > .table-header .table-export-actions .table-btn span {
+    font-size: 13px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.data-work-page:not(.flow-work-page) .data-job-grid {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding-top: 24px;
+    position: relative;
+}
+
+.data-work-page:not(.flow-work-page) .data-job-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    padding-bottom: 8px;
+}
+
+.data-work-page:not(.flow-work-page) .data-job-row {
+    flex: 0 0 auto;
+}
+
+.data-work-page:not(.flow-work-page) .data-script-header {
+    min-height: 34px;
+    padding-top: 0;
+}
+
+.data-work-page:not(.flow-work-page) .data-script-header .table-btn {
+    flex: 0 0 auto;
+}
+
+.data-work-page:not(.flow-work-page) .data-work-panel.is-active,
+.data-work-page:not(.flow-work-page) .data-tool-panel.is-active {
+    flex: 0 0 auto;
+    height: clamp(540px, calc(100vh - 230px), 940px);
+    max-height: none;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+.data-work-page:not(.flow-work-page) .data-workspace {
+    flex: 1 1 auto;
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    overflow: visible;
+}
+
+.data-work-page:not(.flow-work-page) .data-job-panel {
+    min-height: 0;
+    overflow: hidden;
+}
+
+.data-work-page:not(.flow-work-page) .data-main-panel {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: visible;
+}
+
+.data-work-page:not(.flow-work-page) .data-work-form-card {
+    flex: 0 0 auto;
+    margin-top: 10px;
+    padding: 12px;
+}
+
+.data-work-page:not(.flow-work-page) .data-work-form-grid {
+    align-items: end;
+    column-gap: 10px;
+    grid-template-columns: repeat(24, minmax(0, 1fr));
+    row-gap: 10px;
+    min-width: 0;
+    width: 100%;
+}
+
+.data-work-page:not(.flow-work-page) .data-job-id-field {
+    grid-column: 1 / span 4;
+    grid-row: 1;
+}
+
+.data-work-page:not(.flow-work-page) .data-job-group-field {
+    grid-column: 5 / span 4;
+    grid-row: 1;
+}
+
+.data-work-page:not(.flow-work-page) .data-target-owner-field {
+    grid-column: 9 / span 7;
+    grid-row: 1;
+}
+
+.data-work-page:not(.flow-work-page) .data-target-table-field {
+    grid-column: 16 / -1;
+    grid-row: 1;
+}
+
+.data-work-page:not(.flow-work-page) .data-job-name-field {
+    grid-column: 1 / span 6;
+    grid-row: 2;
+}
+
+.data-work-page:not(.flow-work-page) .data-job-desc-field {
+    grid-column: 7 / span 12;
+    grid-row: 2;
+}
+
+.data-work-page:not(.flow-work-page) .data-use-field {
+    grid-column: 19 / span 2;
+    grid-row: 2;
+}
+
+.data-work-page:not(.flow-work-page) .data-sort-field {
+    grid-column: 21 / -1;
+    grid-row: 2;
+}
+
+.data-work-page:not(.flow-work-page) .data-param-card {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    min-height: 0;
+    overflow: visible;
+}
+
+.data-work-page:not(.flow-work-page) .data-param-script-layout {
+    flex: 0 0 auto;
+    min-height: 0;
+    overflow: visible;
+}
+
+.data-work-page:not(.flow-work-page) .data-work-form-grid label,
+.data-work-page:not(.flow-work-page) .data-exec-grid label,
+.data-work-page:not(.flow-work-page) .data-main-panel > *,
+.data-work-page:not(.flow-work-page) .data-param-card,
+.data-work-page:not(.flow-work-page) .data-param-panel,
+.data-work-page:not(.flow-work-page) .data-param-script-layout,
+.data-work-page:not(.flow-work-page) .data-panel-toolbar,
+.data-work-page:not(.flow-work-page) .data-script-header,
+.data-work-page:not(.flow-work-page) .data-script-title-group {
+    max-width: 100%;
+    min-width: 0;
+}
+
+.data-work-page:not(.flow-work-page) .data-work-form-grid label {
+    display: grid;
+    gap: 4px;
+}
+
+.data-work-page:not(.flow-work-page) .data-work-form-grid .env-field {
+    min-width: 0;
+    width: 100%;
+}
+
+.data-work-page:not(.flow-work-page) .env-field,
+.data-work-page:not(.flow-work-page) .table-btn,
+.data-work-page:not(.flow-work-page) .table-icon-btn,
+.data-work-page:not(.flow-work-page) .sql-editor {
+    box-sizing: border-box;
+}
+
+.data-work-page:not(.flow-work-page) .data-work-form-grid label > span,
+.data-work-page:not(.flow-work-page) .data-exec-grid label > span {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.data-work-page:not(.flow-work-page) .data-panel-toolbar,
+.data-work-page:not(.flow-work-page) .data-param-panel-header {
+    flex-wrap: wrap;
+    overflow: hidden;
+}
+
+.data-work-page:not(.flow-work-page) .data-param-title-group,
+.data-work-page:not(.flow-work-page) .data-script-title-group {
+    flex-wrap: wrap;
+}
+
+.data-work-page:not(.flow-work-page) .data-param-panel-header {
+    min-height: 62px;
+}
+
+.data-work-page:not(.flow-work-page) .data-param-list-header {
+    align-content: start;
+    display: grid;
+    gap: 6px;
+    grid-template-columns: minmax(0, 1fr);
+    overflow: visible;
+}
+
+.data-work-page:not(.flow-work-page) .data-param-list-header .data-param-title-group {
+    align-items: center;
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 6px;
+    min-height: 28px;
+}
+
+.data-work-page:not(.flow-work-page) .data-param-list-header .data-param-title-group strong {
+    color: #0f172a;
+    flex: 0 1 auto;
+    font-size: 13px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.data-work-page:not(.flow-work-page) .data-param-list-header .data-param-title-group .table-icon-btn {
+    flex: 0 0 28px;
+    margin-left: 2px;
+}
+
+.data-work-page:not(.flow-work-page) .data-param-resource-row {
+    align-items: stretch;
+    display: flex;
+    gap: 6px;
+    min-width: 0;
+    width: 100%;
+}
+
+.data-work-page:not(.flow-work-page) .data-param-resource-row .data-selected-resource-meta {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: auto;
+}
+
+.data-work-page:not(.flow-work-page) .data-param-count {
+    align-items: center;
+    background: #eef6ff;
+    border: 1px solid #b8c7dc;
+    color: #64748b;
+    display: inline-flex;
+    flex: 0 0 auto;
+    font-size: 12px;
+    font-weight: 800;
+    justify-content: center;
+    min-width: 44px;
+    padding: 0 8px;
+    white-space: nowrap;
+}
+
+.data-work-page:not(.flow-work-page) .data-param-count .list-count-footer {
+    margin: 0;
+    padding: 0;
+    position: static;
+}
+
+.data-work-page:not(.flow-work-page) .data-script-header {
+    align-content: start;
+    min-height: 62px;
+}
+
+.data-work-page:not(.flow-work-page) .data-script-editor {
+    max-width: 100%;
+    width: 100%;
+}
+
+.data-work-page:not(.flow-work-page) .data-exec-grid {
+    grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+    min-width: 0;
+    width: 100%;
+}
+
+.data-work-page:not(.flow-work-page) .data-exec-source-field,
+.data-work-page:not(.flow-work-page) .data-result-create-field,
+.data-work-page:not(.flow-work-page) .data-result-owner-field {
+    grid-column: span 2;
+}
+
+.data-work-page:not(.flow-work-page) .data-exec-object-field,
+.data-work-page:not(.flow-work-page) .data-oml-resource-field,
+.data-work-page:not(.flow-work-page) .data-result-table-field {
+    grid-column: span 4;
+}
+
+.data-work-page:not(.flow-work-page) .data-param-panel {
+    min-height: 0;
+    overflow: visible;
+    padding-bottom: 12px;
+}
+
+.data-work-page:not(.flow-work-page) .data-param-grid,
+.data-work-page:not(.flow-work-page) .data-script-editor {
+    flex: 0 0 auto;
+    height: clamp(220px, 28vh, 300px);
+    min-height: 220px;
+}
+
+.data-work-page:not(.flow-work-page) .data-sql-workbench {
+    flex: 1 1 0;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.data-work-page:not(.flow-work-page) .data-sql-editor {
+    flex: 0 0 180px;
+    min-height: 160px;
+}
+
+.data-work-page:not(.flow-work-page) .data-sql-workbench .table-result-grid,
+.data-work-page:not(.flow-work-page) .data-history-grid {
+    flex: 1 1 auto;
+    height: auto;
+    max-height: none;
+    min-height: 240px;
+}
+
+.data-work-page:not(.flow-work-page) .data-sql-workbench .table-result-grid {
+    overflow: auto;
+}
+
+.data-work-page:not(.flow-work-page) .data-tool-panel[data-panel="sql"] .sql-toolbar {
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    row-gap: 8px;
+}
+
+.data-work-page:not(.flow-work-page) .data-tool-panel[data-panel="sql"] .sql-tool-icon-btn {
+    flex: 0 0 36px;
+    height: 36px;
+    width: 36px;
+}
+
+.data-work-page:not(.flow-work-page) .data-tool-panel[data-panel="sql"] .sql-tool-icon-btn .fa-play {
+    font-size: 15px;
+}
+
+.data-work-page:not(.flow-work-page) .data-tool-panel[data-panel="sql"] .sql-run-all-btn .fa-file-lines {
+    font-size: 16px;
+}
+
+.data-work-page:not(.flow-work-page) .data-tool-panel[data-panel="sql"] .sql-run-all-btn::after {
+    bottom: 6px;
+    right: 6px;
+}
+
+.data-work-page:not(.flow-work-page) .data-tool-panel[data-panel="sql"] .data-sql-toolbar-spacer {
+    flex: 1 1 12px;
+    min-width: 0;
+}
+
+.data-work-page:not(.flow-work-page) .data-tool-panel[data-panel="sql"] .data-sql-toolbar-options {
+    align-items: center;
+    display: inline-flex;
+    flex: 0 1 auto;
+    gap: 10px;
+    justify-content: flex-end;
+    min-width: 0;
+}
+
+.data-work-page:not(.flow-work-page) .data-tool-panel[data-panel="sql"] [id^="sqlTxStatus-"] {
+    flex: 0 1 auto;
+    margin: 0 2px 0 0;
+    min-width: 0;
+    white-space: nowrap;
+}
+
+.data-work-page:not(.flow-work-page) .data-tool-panel[data-panel="sql"] .data-sql-freeze-control {
+    margin-left: 0;
+}
+
+.data-work-page:not(.flow-work-page) .data-tool-panel[data-panel="sql"] .data-sql-freeze-control + .table-limit-control {
+    margin-left: 0;
+}
+
+.data-work-page:not(.flow-work-page) .data-sql-workbench .table-result-grid .table-grid th,
+.data-work-page:not(.flow-work-page) .data-history-grid-scroll .table-grid th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
+.data-work-page:not(.flow-work-page) .data-param-grid::-webkit-scrollbar,
+.data-work-page:not(.flow-work-page) .data-script-editor::-webkit-scrollbar {
+    height: 20px !important;
+    width: 20px !important;
+}
+
+.data-work-page:not(.flow-work-page) .data-param-grid::-webkit-scrollbar-track,
+.data-work-page:not(.flow-work-page) .data-script-editor::-webkit-scrollbar-track {
+    background: #e2e8f0 !important;
+}
+
+.data-work-page:not(.flow-work-page) .data-param-grid::-webkit-scrollbar-thumb,
+.data-work-page:not(.flow-work-page) .data-script-editor::-webkit-scrollbar-thumb {
+    background: #94a3b8 !important;
+    border: 4px solid #e2e8f0 !important;
+    border-radius: 10px !important;
+    background-clip: padding-box;
+}
+
+@media (max-width: 1200px) {
+    .data-work-page:not(.flow-work-page) .data-work-form-grid {
+        grid-template-columns: repeat(12, minmax(0, 1fr));
+    }
+
+    .data-work-page:not(.flow-work-page) .data-job-id-field {
+        grid-column: 1 / span 3;
+        grid-row: 1;
+    }
+
+    .data-work-page:not(.flow-work-page) .data-job-group-field {
+        grid-column: 4 / span 4;
+        grid-row: 1;
+    }
+
+    .data-work-page:not(.flow-work-page) .data-use-field {
+        grid-column: 8 / span 2;
+        grid-row: 1;
+    }
+
+    .data-work-page:not(.flow-work-page) .data-sort-field {
+        grid-column: 10 / -1;
+        grid-row: 1;
+    }
+
+    .data-work-page:not(.flow-work-page) .data-job-name-field {
+        grid-column: 1 / span 5;
+        grid-row: 2;
+    }
+
+    .data-work-page:not(.flow-work-page) .data-job-desc-field {
+        grid-column: 6 / -1;
+        grid-row: 2;
+    }
+
+    .data-work-page:not(.flow-work-page) .data-target-owner-field {
+        grid-column: 1 / span 5;
+        grid-row: 3;
+    }
+
+    .data-work-page:not(.flow-work-page) .data-target-table-field {
+        grid-column: 6 / -1;
+        grid-row: 3;
+    }
+
+    .data-work-page:not(.flow-work-page) .data-work-panel.is-active {
+        height: auto;
+        min-height: 540px;
+        overflow: visible;
+    }
+
+    .data-work-page:not(.flow-work-page) .data-workspace,
+    .data-work-page:not(.flow-work-page) .data-main-panel,
+    .data-work-page:not(.flow-work-page) .data-param-card,
+    .data-work-page:not(.flow-work-page) .data-param-script-layout {
+        overflow: visible;
+    }
+
+    .data-work-page:not(.flow-work-page) .data-param-grid,
+    .data-work-page:not(.flow-work-page) .data-script-editor {
+        flex: 0 0 auto;
+        height: 280px;
+        min-height: 260px;
+    }
+}
+
+@media (max-width: 760px) {
+    .data-work-page:not(.flow-work-page) .data-main-panel > .table-header {
+        display: grid;
+        gap: 8px;
+        grid-template-columns: minmax(0, 1fr);
+        margin-top: 0;
+        padding-bottom: 10px;
+    }
+
+    .data-work-page:not(.flow-work-page) .data-main-panel > .table-header > div:first-child {
+        min-width: 0;
+        width: 100%;
+    }
+
+    .data-work-page:not(.flow-work-page) .data-main-panel > .table-header h1,
+    .data-work-page:not(.flow-work-page) .data-main-panel > .table-header h2,
+    .data-work-page:not(.flow-work-page) .data-main-panel > .table-header p,
+    .data-work-page:not(.flow-work-page) .data-main-panel > .table-header span {
+        max-width: 100%;
+        overflow-wrap: anywhere;
+    }
+
+    .data-work-page:not(.flow-work-page) .data-main-panel > .table-header .table-export-actions {
+        display: grid;
+        gap: 6px;
+        grid-template-columns: minmax(0, 1fr) repeat(2, minmax(46px, auto));
+        justify-content: stretch;
+        width: 100%;
+    }
+
+    .data-work-page:not(.flow-work-page) .data-main-panel > .table-header .data-run-context-box {
+        grid-column: 1 / span 1;
+        min-width: 0;
+        width: 100%;
+    }
+
+    .data-work-page:not(.flow-work-page) .data-main-panel > .table-header .table-export-actions .table-btn {
+        justify-content: center;
+        max-width: none;
+        min-width: 0;
+        width: 100%;
+    }
+
+    .data-work-page:not(.flow-work-page) .data-main-panel > .table-header .table-export-actions .table-btn span {
+        max-width: 44px;
+    }
+
+    .data-work-page:not(.flow-work-page) .data-work-action-separator {
+        display: none;
+    }
+
+    .data-work-page:not(.flow-work-page) .data-work-form-grid {
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
+
+    .data-work-page:not(.flow-work-page) .data-job-id-field,
+    .data-work-page:not(.flow-work-page) .data-job-group-field,
+    .data-work-page:not(.flow-work-page) .data-use-field,
+    .data-work-page:not(.flow-work-page) .data-sort-field {
+        grid-column: span 3;
+        grid-row: auto;
+    }
+
+    .data-work-page:not(.flow-work-page) .data-job-name-field,
+    .data-work-page:not(.flow-work-page) .data-job-desc-field,
+    .data-work-page:not(.flow-work-page) .data-target-owner-field,
+    .data-work-page:not(.flow-work-page) .data-target-table-field {
+        grid-column: 1 / -1;
+        grid-row: auto;
+    }
+
+    .data-work-page:not(.flow-work-page) .data-param-panel-header {
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .data-work-page:not(.flow-work-page) .data-param-title-group {
+        flex: 1 1 auto;
+        overflow: hidden;
+    }
+
+    .data-work-page:not(.flow-work-page) .data-param-list-header,
+    .data-work-page:not(.flow-work-page) .data-script-header {
+        min-height: 0;
+    }
+
+    .data-work-page:not(.flow-work-page) .data-param-resource-row {
+        align-items: stretch;
+    }
+
+    .data-work-page:not(.flow-work-page) .data-param-count {
+        padding: 0 6px;
+    }
+
+    .data-work-page:not(.flow-work-page) .data-tool-panel[data-panel="sql"] .sql-tool-icon-btn {
+        flex-basis: 40px;
+        height: 40px;
+        width: 40px;
+    }
+
+    .data-work-page:not(.flow-work-page) .data-tool-panel[data-panel="sql"] .data-sql-toolbar-spacer {
+        display: none;
+    }
+
+    .data-work-page:not(.flow-work-page) .data-tool-panel[data-panel="sql"] .data-sql-toolbar-options {
+        display: grid;
+        flex: 1 1 100%;
+        gap: 8px;
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        justify-content: stretch;
+        width: 100%;
+    }
+
+    .data-work-page:not(.flow-work-page) .data-tool-panel[data-panel="sql"] [id^="sqlTxStatus-"] {
+        align-self: center;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .data-work-page:not(.flow-work-page) .data-param-table th {
+        position: static;
+        top: auto;
+        z-index: auto;
+    }
+
+    .data-work-page:not(.flow-work-page) .data-param-table th:nth-child(2),
+    .data-work-page:not(.flow-work-page) .data-param-table td:nth-child(1),
+    .data-work-page:not(.flow-work-page) .data-param-table td:nth-child(2) {
+        left: auto;
+        position: static;
+        z-index: auto;
+    }
+
+    .data-work-page:not(.flow-work-page) .data-param-table td:nth-child(2) {
+        box-shadow: none;
+    }
+
+    .data-work-page:not(.flow-work-page) .data-param-grid,
+    .data-work-page:not(.flow-work-page) .data-script-editor {
+        scrollbar-color: #64748b #e2e8f0;
+        scrollbar-width: auto;
+    }
+
+    .data-work-page:not(.flow-work-page) .data-param-grid::-webkit-scrollbar,
+    .data-work-page:not(.flow-work-page) .data-script-editor::-webkit-scrollbar {
+        height: 28px !important;
+        width: 28px !important;
+    }
+
+    .data-work-page:not(.flow-work-page) .data-param-grid::-webkit-scrollbar-track,
+    .data-work-page:not(.flow-work-page) .data-script-editor::-webkit-scrollbar-track {
+        background: #e2e8f0 !important;
+        border-radius: 999px !important;
+    }
+
+    .data-work-page:not(.flow-work-page) .data-param-grid::-webkit-scrollbar-thumb,
+    .data-work-page:not(.flow-work-page) .data-script-editor::-webkit-scrollbar-thumb {
+        background: #64748b !important;
+        border: 7px solid #e2e8f0 !important;
+        border-radius: 999px !important;
+        min-height: 48px;
+        min-width: 48px;
+    }
+
+    .data-work-page:not(.flow-work-page) .data-param-grid::-webkit-scrollbar-corner,
+    .data-work-page:not(.flow-work-page) .data-script-editor::-webkit-scrollbar-corner {
+        background: #e2e8f0 !important;
+    }
+}
