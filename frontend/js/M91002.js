@@ -91,7 +91,7 @@
             const list = getContainerEl("#settingCategoryList-M91002");
             if (!list) return;
             if (!this.categories.length) {
-                list.innerHTML = `<div class="project-empty">No categories found.</div>${this.renderListFooter(0)}`;
+                list.innerHTML = `<div class="project-empty">No categories found.</div>`;
                 return;
             }
             list.innerHTML = `
@@ -102,7 +102,6 @@
                 <div class="project-list-body">
                     ${this.categories.map((category) => this.createCategoryRow(category)).join("")}
                 </div>
-                ${this.renderListFooter(this.categories.length)}
             `;
             this.updateCategoryTitle();
         },
@@ -165,7 +164,7 @@
             const grid = getContainerEl("#settingsGrid-M91002");
             if (!grid) return;
             if (!this.settings.length) {
-                grid.innerHTML = `<div class="project-empty">No settings found.</div>${this.renderListFooter(0)}`;
+                grid.innerHTML = `<div class="project-empty">No settings found.</div>`;
                 return;
             }
             grid.innerHTML = `
@@ -176,7 +175,6 @@
                 <div class="scenario-list-body">
                     ${this.settings.map((row) => this.createSettingRow(row)).join("")}
                 </div>
-                ${this.renderListFooter(this.settings.length)}
             `;
         },
 

@@ -224,10 +224,13 @@
         async executeSystemSql() {
             const sql = (getContainerEl("#systemSqlEditor-M99003")?.value || "").trim();
             if (!sql) {
+                this.renderSystemSqlMessage("SQL is required.", "error");
                 this.renderError("#systemSqlGrid-M99003", "SQL is required.");
                 return;
             }
             const grid = getContainerEl("#systemSqlGrid-M99003");
+            const startedAt = performance.now();
+            this.renderSystemSqlMessage("Running SQL...", "info");
             if (grid) grid.innerHTML = `<div class="table-empty">Running SQL...</div>`;
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/system-table/sql`, {
@@ -238,10 +241,23 @@
                         limit: this.getLimit("#systemSqlLimit-M99003")
                     }
                 });
+                const elapsedMs = Math.round(performance.now() - startedAt);
+                const rowCount = Array.isArray(json.data) ? json.data.length : 0;
+                this.renderSystemSqlMessage(`${rowCount.toLocaleString()} rows selected. (${elapsedMs.toLocaleString()} ms)`, "success");
                 this.renderGrid("#systemSqlGrid-M99003", json.data || [], json.columns || []);
             } catch (error) {
+                const elapsedMs = Math.round(performance.now() - startedAt);
+                this.renderSystemSqlMessage(`${error.message || "SQL execution failed."} (${elapsedMs.toLocaleString()} ms)`, "error");
                 this.renderError("#systemSqlGrid-M99003", error.message);
             }
+        },
+
+        renderSystemSqlMessage(message, type = "info") {
+            const element = getContainerEl("#systemSqlMessage-M99003");
+            if (!element) return;
+            element.className = type === "error" ? "table-error" : "table-empty";
+            element.textContent = message || "";
+            element.hidden = !message;
         },
 
         handleSqlEditorKeydown(event) {
@@ -339,7 +355,7 @@
             if (isUserDataGrid) this.currentUserRows = Array.isArray(rows) ? rows : [];
             if (!Array.isArray(rows) || rows.length === 0) {
                 if (!columns.length) {
-                    container.innerHTML = `<div class="table-empty">No data.</div>${this.renderListFooter(0)}`;
+                    container.innerHTML = `<div class="table-empty">No data.</div>`;
                     return;
                 }
             }
@@ -366,7 +382,6 @@
                         `).join("")}
                     </tbody>
                 </table>
-                ${this.renderListFooter((rows || []).length)}
             `;
         },
 

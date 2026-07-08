@@ -1,6 +1,6 @@
 /* Split from styleMenu.css. Contains only selectors scoped to this menu code. */
 #container-M99002 .table-meta-strip {
-    grid-template-columns: minmax(110px, 150px) minmax(320px, 1.4fr) minmax(120px, 160px) minmax(170px, 220px);
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
 }
 
 #container-M99002 {
@@ -23,6 +23,7 @@
     height: 100%;
     max-height: 100%;
     min-height: 0;
+    min-width: 0;
     overflow: hidden;
 }
 
@@ -36,27 +37,62 @@
     overflow: auto;
 }
 
+#container-M99002 .table-header,
+#container-M99002 .table-toolbar,
+#container-M99002 .sql-toolbar,
+#container-M99002 .table-object-header,
+#container-M99002 .env-category-filter {
+    flex-wrap: wrap;
+    min-width: 0;
+}
+
+#container-M99002 .table-header > div,
+#container-M99002 .table-object-header > div,
+#container-M99002 .table-meta-strip > div {
+    min-width: 0;
+}
+
+#container-M99002 .table-title,
+#container-M99002 .table-section-title,
+#container-M99002 .table-desc,
+#container-M99002 .table-section-desc {
+    overflow-wrap: anywhere;
+    white-space: normal;
+}
+
+#container-M99002 .table-tabs {
+    align-items: flex-end;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
+#container-M99002 .table-tab {
+    min-width: max-content;
+}
+
+#container-M99002 .sql-toolbar .data-sql-freeze-control,
+#container-M99002 .sql-toolbar .data-sql-freeze-control + .table-limit-control {
+    margin-left: 0;
+}
+
 #container-M99002 .table-tab-panel.is-active {
-    flex: 1 1 0;
+    flex: 1 1 auto;
     min-height: 0;
-    overflow: hidden;
 }
 
 #container-M99002 .table-tab-panel > .table-result-grid,
 #container-M99002 .sql-workbench > .table-result-grid {
-    flex: 1 1 0;
-    height: auto;
-    max-height: none;
+    flex: 1 1 auto;
     min-height: 0;
     overflow: auto;
 }
 
 #container-M99002 .sql-workbench {
     display: grid;
-    flex: 1 1 0;
+    flex: 1 1 auto;
     gap: 8px;
-    grid-template-rows: auto minmax(80px, 160px) auto minmax(120px, 1fr);
-    height: 100%;
+    grid-template-rows: auto minmax(150px, 240px) auto minmax(260px, 1fr);
     min-height: 0;
     overflow: hidden;
 }
@@ -73,10 +109,110 @@
     z-index: 2;
 }
 
+#container-M99002 #sqlGrid-M99002 {
+    overflow-x: auto;
+    overflow-y: auto;
+    scrollbar-gutter: stable both-edges;
+}
+
+#container-M99002 #sqlGrid-M99002 .table-grid {
+    min-width: max(100%, 720px);
+    width: max-content;
+}
+
 #container-M99002 [data-panel="script"] .db-browser-script-viewer {
     flex: 1 1 auto;
     height: auto;
     min-height: 0;
     margin-bottom: 0;
     resize: none;
+}
+
+#container-M99002 #sqlMessage-M99002 {
+    flex: 0 0 auto;
+    padding: 4px 0;
+}
+
+@media (max-width: 900px) {
+    #container-M99002 {
+        height: auto !important;
+        max-height: none;
+        min-height: calc(100vh - 128px);
+        overflow: visible;
+    }
+
+    #container-M99002 .table-workspace {
+        grid-template-columns: minmax(0, 1fr);
+        height: auto;
+        max-height: none;
+        overflow: visible;
+    }
+
+    #container-M99002 .table-object-panel,
+    #container-M99002 .table-panel {
+        height: auto;
+        max-height: none;
+    }
+
+    #container-M99002 .table-object-panel {
+        min-height: 260px;
+    }
+
+    #container-M99002 #objectTree-M99002 {
+        flex: 0 1 auto;
+        max-height: 340px;
+        min-height: 180px;
+    }
+
+    #container-M99002 .table-panel {
+        min-height: 560px;
+        padding: 18px;
+    }
+
+    #container-M99002 .sql-workbench {
+        min-height: 740px;
+        overflow: visible;
+    }
+
+    #container-M99002 .table-tab-panel.is-active {
+        overflow: visible;
+    }
+
+    #container-M99002 .sql-workbench > .table-result-grid {
+        min-height: 260px;
+    }
+}
+
+@media (max-width: 560px) {
+    #container-M99002 .table-object-header,
+    #container-M99002 .table-header {
+        align-items: flex-start;
+    }
+
+    #container-M99002 .table-export-actions,
+    #container-M99002 .table-object-actions {
+        flex-wrap: wrap;
+    }
+
+    #container-M99002 .table-toolbar .table-btn {
+        flex: 1 1 120px;
+    }
+
+    #container-M99002 .sql-toolbar {
+        display: grid;
+        grid-template-columns: minmax(44px, 1fr) minmax(82px, auto) minmax(82px, auto);
+        align-items: center;
+        gap: 6px;
+    }
+
+    #container-M99002 .sql-toolbar .table-icon-btn,
+    #container-M99002 .sql-toolbar .table-limit-control {
+        min-width: 0;
+        width: 100%;
+    }
+
+    #container-M99002 .table-limit-control input,
+    #container-M99002 .table-limit-control select {
+        width: 100%;
+    }
 }

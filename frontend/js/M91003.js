@@ -84,7 +84,7 @@
             const list = getContainerEl("#settingCategoryList-M91003");
             if (!list) return;
             if (!this.categories.length) {
-                list.innerHTML = `<div class="project-empty">No categories found.</div>${this.renderListFooter(0)}`;
+                list.innerHTML = `<div class="project-empty">No categories found.</div>`;
                 return;
             }
             list.innerHTML = `
@@ -95,7 +95,6 @@
                 <div class="project-list-body">
                     ${this.categories.map((category) => this.createCategoryRow(category)).join("")}
                 </div>
-                ${this.renderListFooter(this.categories.length)}
             `;
             this.updateCategoryTitle();
         },
@@ -155,7 +154,6 @@
                     <div class="scenario-list-body">
                         <div class="project-empty">No settings found.</div>
                     </div>
-                    ${this.renderListFooter(0)}
                 `;
                 return;
             }
@@ -167,7 +165,6 @@
                 <div class="scenario-list-body">
                     ${this.settings.map((row) => this.createSettingRow(row)).join("")}
                 </div>
-                ${this.renderListFooter(this.settings.length)}
             `;
         },
 
@@ -364,7 +361,7 @@
         },
 
         renderListFooter(count) {
-            return `<div class="list-count-footer">${this.escapeHtml(count)} item${Number(count) === 1 ? "" : "s"}</div>`;
+            return "";
         },
 
         setSystemMessage(message, tone = "") {

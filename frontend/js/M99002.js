@@ -102,7 +102,7 @@
             if (!container) return;
             this.visibleObjectRows = this.getVisibleObjectRows();
             if (!this.visibleObjectRows.length) {
-                container.innerHTML = `<div class="table-empty">No objects found.</div>${this.renderListFooter(0)}`;
+                container.innerHTML = `<div class="table-empty">No objects found.</div>`;
                 return;
             }
             container.innerHTML = `
@@ -115,7 +115,6 @@
                         ${this.visibleObjectRows.map((row, index) => this.createTreeRowTemplate(row, index)).join("")}
                     </div>
                 </div>
-                ${this.renderListFooter(this.visibleObjectRows.length)}
             `;
         },
 
@@ -766,7 +765,7 @@
                     this.applyGridFrozenColumns(gridKey);
                     return;
                 }
-                container.innerHTML = `<div class="table-empty">No data.</div>${this.renderListFooter(0)}`;
+                container.innerHTML = `<div class="table-empty">No data.</div>`;
                 return;
             }
             container.innerHTML = this.createGridTable(rows, columns, gridKey);
@@ -847,7 +846,6 @@
                         `).join("")}
                     </tbody>
                 </table>
-                ${this.renderListFooter(rows.length)}
             `;
         },
 

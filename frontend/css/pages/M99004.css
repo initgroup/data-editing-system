@@ -1,7 +1,48 @@
 /* Split from styleMenu.css. Contains only selectors scoped to this menu code. */
 /* ===== M99004 notice management ===== */
 #container-M99004 .notice-meta-grid {
-    grid-template-columns: minmax(100px, 130px) minmax(120px, 150px) minmax(100px, 120px) minmax(100px, 120px) minmax(100px, 120px) minmax(100px, 120px);
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 108px), 1fr));
+}
+
+#container-M99004 .notice-meta-grid > .env-meta-wide {
+    grid-column: 1 / -1;
+    width: 100%;
+}
+
+#container-M99004 .env-workspace {
+    grid-template-columns: minmax(280px, 32%) minmax(0, 1fr);
+}
+
+#container-M99004 .env-workspace,
+#container-M99004 .env-object-panel,
+#container-M99004 .env-object-meta,
+#container-M99004 .notice-editor-shell {
+    min-width: 0;
+}
+
+#container-M99004 .env-panel {
+    min-width: 0;
+    overflow-x: hidden;
+}
+
+#container-M99004 .env-header,
+#container-M99004 .env-object-header,
+#container-M99004 .env-footer {
+    flex-wrap: wrap;
+    min-width: 0;
+}
+
+#container-M99004 .env-header > div,
+#container-M99004 .env-object-header > div {
+    min-width: 0;
+}
+
+#container-M99004 .env-title,
+#container-M99004 .env-desc,
+#container-M99004 .env-section-title,
+#container-M99004 .env-section-desc {
+    overflow-wrap: anywhere;
+    white-space: normal;
 }
 
 #container-M99004 .notice-editor-shell {
@@ -9,6 +50,7 @@
     display: flex;
     flex-direction: column;
     min-height: 260px;
+    width: 100%;
 }
 
 #container-M99004 .notice-editor-toolbar {
@@ -104,6 +146,7 @@
     outline: none;
     overflow: auto;
     padding: 12px;
+    width: 100%;
 }
 
 #container-M99004 .notice-html-editor b,
@@ -138,6 +181,7 @@
 
 #container-M99004 .notice-content-field {
     min-height: 0;
+    width: 100%;
 }
 
 #container-M99004 .notice-period-field {
@@ -239,6 +283,7 @@
     flex-direction: column;
     gap: 10px;
     padding: 12px;
+    width: 100%;
 }
 
 #container-M99004 .notice-attachment-head {
@@ -269,6 +314,7 @@
 
 #container-M99004 .notice-attachment-upload input[type="file"] {
     min-width: 0;
+    width: 100%;
 }
 
 #container-M99004 .notice-attachment-list {
@@ -392,10 +438,71 @@
 }
 
 @media (max-width: 1200px) {
+    #container-M99004 .env-workspace {
+        display: flex;
+        flex-direction: column;
+        height: auto;
+        max-height: none;
+        overflow: visible;
+    }
+
+    #container-M99004 .env-object-panel,
+    #container-M99004 .env-panel {
+        height: auto;
+        max-height: none;
+        width: 100%;
+    }
+
     #container-M99004 .notice-meta-grid {
         grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 
+    #container-M99004 .notice-meta-grid > .env-meta-wide {
+        grid-column: 1 / -1;
+    }
+
     #container-M99004 .notice-attachment-upload {
         grid-template-columns: minmax(0, 1fr) 80px;
-    }}
+    }
+}
+
+@media (max-width: 720px) {
+    #container-M99004 .notice-meta-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    #container-M99004 .notice-meta-grid > .env-meta-wide {
+        grid-column: 1 / -1;
+    }
+
+    #container-M99004 .notice-period-range {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    #container-M99004 .notice-period-separator {
+        display: none;
+    }
+
+    #container-M99004 .notice-attachment-upload {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    #container-M99004 .notice-editor-shell {
+        min-height: 240px;
+    }
+
+    #container-M99004 .notice-html-editor,
+    #container-M99004 .notice-editor-source {
+        min-height: 200px;
+    }
+}
+
+@media (max-width: 460px) {
+    #container-M99004 .notice-meta-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    #container-M99004 .notice-meta-grid > .env-meta-wide {
+        grid-column: 1;
+    }
+}

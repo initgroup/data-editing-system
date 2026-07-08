@@ -637,7 +637,7 @@
                 }))
             };
             if (!payload.apiObject.objectName) {
-                alert(getPageLabel("objectNameRequired", "Object Name is required."));
+                alert(getPageLabel("objectNameRequired", "Object Code is required."));
                 getContainerEl("#apiObjectName-M90002")?.focus();
                 return;
             }

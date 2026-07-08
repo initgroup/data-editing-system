@@ -11,3 +11,73 @@
     height: 100%;
     max-width: none;
 }
+
+#container-M91001.account-page .m91002-account-panel {
+    padding-right: 0;
+}
+
+#container-M91001.account-page .m91002-account-panel .scenario-meta-grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 168px), 1fr));
+    gap: 10px;
+}
+
+#container-M91001.account-page .m91002-account-panel .env-meta-wide {
+    grid-column: 1 / -1;
+}
+
+#container-M91001.account-page .m91002-account-panel label > span {
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+    white-space: normal;
+}
+
+#container-M91001.account-page .m91002-account-panel .env-field,
+#container-M91001.account-page .m91002-account-panel .env-btn {
+    max-width: 100%;
+    min-width: 0;
+}
+
+#container-M91001.account-page .m91002-account-panel .env-footer-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-end !important;
+    min-width: 0;
+}
+
+#container-M91001.account-page .m91002-account-panel .env-footer-group .env-btn {
+    flex: 0 1 176px;
+}
+
+#container-M91001.account-page .m91001-note-field {
+    height: auto;
+    line-height: 1.45;
+    min-height: 58px;
+    overflow: hidden;
+    resize: vertical;
+    white-space: pre-wrap;
+}
+
+@media (max-width: 520px) {
+    #container-M91001.account-page .env-panel {
+        padding-left: 14px;
+        padding-right: 14px;
+    }
+
+    #container-M91001.account-page .m91002-account-panel {
+        padding-left: 12px;
+        padding-right: 12px;
+    }
+
+    #container-M91001.account-page .m91002-account-panel .scenario-meta-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    #container-M91001.account-page .m91002-account-panel .env-footer-group {
+        justify-content: stretch !important;
+    }
+
+    #container-M91001.account-page .m91002-account-panel .env-footer-group .env-btn {
+        flex: 1 1 100%;
+    }
+}

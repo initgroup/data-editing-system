@@ -554,7 +554,7 @@
             if (showLoading) {
                 const schemaContainer = getContainerEl("#schemaStatus-M99001");
                 if (schemaContainer) {
-                    schemaContainer.innerHTML = `<div class="table-empty">Loading table status...</div>${this.renderListFooter(0)}`;
+                    schemaContainer.innerHTML = `<div class="table-empty">Loading table status...</div>`;
                 }
             }
             const schema = await this.checkSchema(false);
@@ -571,7 +571,7 @@
                 return;
             }
             if (schemaContainer) {
-                schemaContainer.innerHTML = `<div class="table-empty">Refreshing application table status...</div>${this.renderListFooter(0)}`;
+                schemaContainer.innerHTML = `<div class="table-empty">Refreshing application table status...</div>`;
             }
             const result = await this.checkSchema(false);
             if (result) {
@@ -590,7 +590,7 @@
                 return;
             }
             if (container) {
-                container.innerHTML = `<div class="table-empty">Refreshing ML deploy status...</div>${this.renderListFooter(0)}`;
+                container.innerHTML = `<div class="table-empty">Refreshing ML deploy status...</div>`;
             }
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/schema/model-status`, {
@@ -766,7 +766,7 @@
             }
             const container = getContainerEl("#modelDeployStatus-M99001");
             if (showLoading && container) {
-                container.innerHTML = `<div class="table-empty">Loading model object deploy status...</div>${this.renderListFooter(0)}`;
+                container.innerHTML = `<div class="table-empty">Loading model object deploy status...</div>`;
             }
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/schema/model-status`, {
@@ -798,7 +798,7 @@
             if (!container) return;
             if (!Array.isArray(rows) || !rows.length) {
                 this.renderStatusSummary("#schemaStatusSummary-M99001", []);
-                container.innerHTML = `<div class="table-empty">No schema check result.</div>${this.renderListFooter(0)}`;
+                container.innerHTML = `<div class="table-empty">No schema check result.</div>`;
                 return;
             }
             this.renderStatusSummary("#schemaStatusSummary-M99001", rows, {
@@ -827,7 +827,6 @@
                         `).join("")}
                     </tbody>
                 </table>
-                ${this.renderListFooter(rows.length)}
             `;
         },
 
@@ -872,7 +871,7 @@
         renderDeployStatusTable(container, rows, emptyMessage, summarySelector = "") {
             if (!Array.isArray(rows) || !rows.length) {
                 if (summarySelector) this.renderStatusSummary(summarySelector, []);
-                container.innerHTML = `<div class="table-empty">${this.escapeHtml(emptyMessage)}</div>${this.renderListFooter(0)}`;
+                container.innerHTML = `<div class="table-empty">${this.escapeHtml(emptyMessage)}</div>`;
                 return;
             }
             if (summarySelector) {
@@ -916,7 +915,6 @@
                         }).join("")}
                     </tbody>
                 </table>
-                ${this.renderListFooter(rows.length)}
             `;
         },
 
