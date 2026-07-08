@@ -14,6 +14,22 @@ import re
 from backend.database_helper import execute_query, SqlLoader
 
 
+DANGEROUS_PLSQL_PATTERN = re.compile(
+    r"(?is)\b("
+    r"execute\s+immediate|dbms_sql|drop|truncate|alter|grant|revoke|"
+    r"create\s+(?:or\s+replace\s+)?(?:table|view|package|procedure|function|trigger|type|sequence|synonym|index)"
+    r")\b"
+)
+
+
+def reject_dangerous_plsql(text: str) -> None:
+    if DANGEROUS_PLSQL_PATTERN.search(text or ""):
+        raise HTTPException(
+            status_code=400,
+            detail="Executable PL/SQL cannot contain dynamic SQL or DDL commands."
+        )
+
+
 class DataWorkJobRequest(BaseModel):
     profileJobId: Optional[int] = None
     projectId: Optional[int] = None
@@ -308,6 +324,7 @@ def normalize_required_executable_script(script: Optional[str]) -> str:
     if re.match(r"(?is)^(declare|begin)\b", text):
         if not re.search(r"(?is)\bend\s*;\s*$", text):
             raise HTTPException(status_code=400, detail="Executable PL/SQL script must end with END;.")
+        reject_dangerous_plsql(text)
         return text
 
     sql = re.sub(r";+\s*$", "", text).strip()

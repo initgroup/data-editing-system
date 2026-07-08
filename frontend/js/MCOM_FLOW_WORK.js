@@ -1,4 +1,4 @@
-﻿(function() {
+(function() {
     if (!window.MCOMMON) {
         window.MCOMMON = {};
     }
@@ -65,6 +65,7 @@
             nodeDragState: null,
             canvasPanState: null,
             canvasSelectionState: null,
+            flowCanvasSelectionMode: false,
             edgeDragState: null,
             dashedConnectionMode: false,
             flowPaletteDragData: null,
@@ -112,11 +113,13 @@
             async init() {
                 if (this.isInit) return;
                 this.applyUiLabels();
+                this.removeFlowVersionCountLabel();
                 this.resetFlowResultSqlPlaceholder();
                 await this.loadWorkContext();
                 this.switchTab("designer");
                 this.setupFlowDesigner();
                 this.setFlowInspectorCollapsed(true);
+                this.setFlowCanvasSelectionMode(false);
                 this.isInit = true;
             },
 
@@ -160,6 +163,7 @@
                 this.nodeDragState = null;
                 this.canvasPanState = null;
                 this.canvasSelectionState = null;
+                this.flowCanvasSelectionMode = false;
                 this.edgeDragState = null;
                 this.dashedConnectionMode = false;
                 this.flowPaletteDragData = null;
@@ -196,6 +200,7 @@
                             return;
                         }
                         element.textContent = value;
+                        element.hidden = value === "" && element.classList.contains("env-detail-hint");
                     });
                     container.querySelectorAll(`[data-title-key="${key}"]`).forEach((element) => {
                         element.setAttribute("title", value);
@@ -204,6 +209,7 @@
                         element.setAttribute("placeholder", value);
                     });
                 });
+                this.removeFlowVersionCountLabel();
             },
 
             resetFlowResultSqlPlaceholder() {
@@ -226,6 +232,27 @@
                     text = text.replace(new RegExp(`\\{${name}\\}`, "g"), String(value ?? ""));
                 });
                 return text;
+            },
+
+            getLabel(key, fallback = "") {
+                const labels = window[`${PAGE_CODE}_FLOW_UI_LABELS`]
+                    || window[`${PAGE_CODE}_PAGE_I18N`]?.labels
+                    || FLOW_UI_LABELS
+                    || {};
+                if (Object.prototype.hasOwnProperty.call(labels, key)) {
+                    return String(labels[key] ?? "");
+                }
+                if (Object.prototype.hasOwnProperty.call(FLOW_UI_LABELS, key)) {
+                    return String(FLOW_UI_LABELS[key] ?? "");
+                }
+                return String(fallback ?? "");
+            },
+
+            removeFlowVersionCountLabel() {
+                const container = document.getElementById(`container-${PAGE_CODE}`);
+                container?.querySelectorAll?.(`#flowVersionCount-${PAGE_CODE}, .flow-version-count`).forEach((element) => {
+                    element.remove();
+                });
             },
 
             setMultilineText(element, value = "") {
@@ -489,7 +516,7 @@
                 if (!container) return;
                 if (!this.selectedProjectId || !this.selectedScenarioId) {
                     this.flowRegisteredJobs = [];
-                    container.innerHTML = `<div class="table-empty">Select project and scenario first.</div>${this.renderListFooter(0)}`;
+                    container.innerHTML = `<div class="table-empty">Select project and scenario first.</div>`;
                     return;
                 }
 
@@ -541,7 +568,7 @@
                 const container = getContainerEl(`#flowRegisteredJobGrid-${PAGE_CODE}`);
                 if (!container) return;
                 if (!this.flowRegisteredJobs.length) {
-                    container.innerHTML = `<div class="table-empty">No registered jobs for this scenario.</div>${this.renderListFooter(0)}`;
+                    container.innerHTML = `<div class="table-empty">No registered jobs for this scenario.</div>`;
                     return;
                 }
 
@@ -550,7 +577,6 @@
                     <div class="flow-job-group-list">
                         ${groups.map((group) => this.renderRegisteredJobGroup(group)).join("")}
                     </div>
-                    ${this.renderListFooter(this.flowRegisteredJobs.length)}
                 `;
                 this.bindRegisteredJobGroupControls();
                 this.bindFlowPalette();
@@ -840,8 +866,9 @@
                 if (refreshIcon) {
                     refreshIcon.classList.toggle("fa-spin", Boolean(isLoading));
                 }
+                this.removeFlowVersionCountLabel();
                 if (countLabel) {
-                    countLabel.textContent = isLoading ? "loading..." : `${this.flowList.length.toLocaleString()} items`;
+                    countLabel.remove();
                 }
                 const switcherCount = getContainerEl(`#flowSwitcherCount-${PAGE_CODE}`);
                 if (switcherCount) {
@@ -1184,10 +1211,7 @@
             },
 
             updateFlowVersionCount() {
-                const countLabel = getContainerEl(`#flowVersionCount-${PAGE_CODE}`);
-                if (countLabel) {
-                    countLabel.textContent = `${this.flowList.length.toLocaleString()} items`;
-                }
+                this.removeFlowVersionCountLabel();
             },
 
             async refreshSavedFlows() {
@@ -1251,7 +1275,9 @@
                 icon.classList.toggle("fa-chevron-left", !this.flowSidebarCollapsed);
                 icon.classList.toggle("fa-chevron-right", this.flowSidebarCollapsed);
                 if (button) {
-                    button.title = this.flowSidebarCollapsed ? "Expand Flow Assets" : "Collapse Flow Assets";
+                    button.title = this.flowSidebarCollapsed
+                        ? this.getLabel("expandFlowAssetsTitle", "Expand Scenario Name")
+                        : this.getLabel("collapseFlowAssetsTitle", "Collapse Scenario Name");
                 }
             },
 
@@ -1391,9 +1417,11 @@
                         icon.classList.toggle("fa-chevron-down", this.workContextCollapsed);
                     }
                     const label = toggle.querySelector("span");
-                    if (label) label.textContent = this.workContextCollapsed
-                        ? (FLOW_UI_LABELS.showContext || "Show")
-                        : (FLOW_UI_LABELS.hideContext || "Hide");
+                    if (label) {
+                        const labelKey = this.workContextCollapsed ? "changeContext" : "hideContext";
+                        label.dataset.labelKey = labelKey;
+                        label.textContent = this.getLabel(labelKey);
+                    }
                 }
             },
 
@@ -1404,11 +1432,7 @@
                 if (this.activeTab !== "designer" && container.classList.contains("is-flow-canvas-maximized")) {
                     container.classList.remove("is-flow-canvas-maximized");
                     this.restoreSidebarsAfterCanvasMaximize();
-                    const icon = getContainerEl(`#flowCanvasMaximize-${PAGE_CODE}`)?.querySelector("i");
-                    if (icon) {
-                        icon.classList.add("fa-expand");
-                        icon.classList.remove("fa-compress");
-                    }
+                    this.renderCanvasMaximizeToggle(false);
                 }
                 container.querySelectorAll(".table-tab").forEach((tab) => {
                     tab.classList.toggle("is-active", tab.dataset.tab === this.activeTab);
@@ -1658,7 +1682,7 @@
                     if (this.flowCanvasDragOverBound) stage.removeEventListener("dragover", this.flowCanvasDragOverBound);
                     if (this.flowCanvasDropBound) stage.removeEventListener("drop", this.flowCanvasDropBound);
                     if (this.flowCanvasContextMenuBound) stage.removeEventListener("contextmenu", this.flowCanvasContextMenuBound);
-                    stage.classList.remove("is-panning");
+                    stage.classList.remove("is-panning", "is-selection-mode");
                 }
                 if (this.flowNodePointerMoveBound) document.removeEventListener("pointermove", this.flowNodePointerMoveBound);
                 if (this.flowNodePointerUpBound) document.removeEventListener("pointerup", this.flowNodePointerUpBound);
@@ -2260,6 +2284,28 @@
                 return Boolean(event?.target?.closest?.(`#flowCanvasMenu-${PAGE_CODE}, .flow-context-menu`));
             },
 
+            toggleFlowCanvasSelectionMode() {
+                this.setFlowCanvasSelectionMode(!this.flowCanvasSelectionMode);
+            },
+
+            setFlowCanvasSelectionMode(enabled) {
+                this.flowCanvasSelectionMode = Boolean(enabled);
+                if (!this.flowCanvasSelectionMode) {
+                    const box = this.getFlowViewport()?.querySelector(".flow-selection-box");
+                    if (box) box.hidden = true;
+                    this.canvasSelectionState = null;
+                }
+                const stage = this.getFlowStage();
+                if (stage) {
+                    stage.classList.toggle("is-selection-mode", this.flowCanvasSelectionMode);
+                }
+                const button = getContainerEl(`#flowCanvasSelectionMode-${PAGE_CODE}`);
+                if (button) {
+                    button.classList.toggle("is-active", this.flowCanvasSelectionMode);
+                    button.setAttribute("aria-pressed", String(this.flowCanvasSelectionMode));
+                }
+            },
+
             handleCanvasPointerDown(event) {
                 if (this.isFlowCanvasMenuTarget(event)) return;
                 if (event.button !== 0 || event.target.closest?.(".flow-node")) return;
@@ -2268,17 +2314,29 @@
                 this.clearSelectedFlowEdge();
                 const stage = this.getFlowStage();
                 if (!stage) return;
-                const point = this.getCanvasPointFromEvent(event);
-                this.canvasSelectionState = {
-                    pointerId: event.pointerId,
-                    startX: event.clientX,
-                    startY: event.clientY,
-                    startLeft: point.left,
-                    startTop: point.top,
-                    currentLeft: point.left,
-                    currentTop: point.top,
-                    moved: false
-                };
+                if (this.flowCanvasSelectionMode) {
+                    const point = this.getCanvasPointFromEvent(event);
+                    this.canvasSelectionState = {
+                        pointerId: event.pointerId,
+                        startX: event.clientX,
+                        startY: event.clientY,
+                        startLeft: point.left,
+                        startTop: point.top,
+                        currentLeft: point.left,
+                        currentTop: point.top,
+                        moved: false
+                    };
+                } else {
+                    this.canvasPanState = {
+                        pointerId: event.pointerId,
+                        startX: event.clientX,
+                        startY: event.clientY,
+                        startScrollLeft: stage.scrollLeft,
+                        startScrollTop: stage.scrollTop,
+                        moved: false
+                    };
+                    stage.classList.add("is-panning");
+                }
                 stage.setPointerCapture?.(event.pointerId);
             },
 
@@ -2288,17 +2346,22 @@
                     return;
                 }
                 if (this.canvasSelectionState) {
+                    if (this.canvasSelectionState.pointerId !== event.pointerId) return;
                     this.updateCanvasSelection(event);
                     return;
                 }
                 if (!this.canvasPanState) return;
+                if (this.canvasPanState.pointerId !== event.pointerId) return;
                 const stage = this.getFlowStage();
                 if (!stage) return;
-                stage.scrollLeft = this.canvasPanState.startScrollLeft - (event.clientX - this.canvasPanState.startX);
-                stage.scrollTop = this.canvasPanState.startScrollTop - (event.clientY - this.canvasPanState.startY);
+                const dx = event.clientX - this.canvasPanState.startX;
+                const dy = event.clientY - this.canvasPanState.startY;
+                this.canvasPanState.moved = this.canvasPanState.moved || Math.abs(dx) > 3 || Math.abs(dy) > 3;
+                stage.scrollLeft = this.canvasPanState.startScrollLeft - dx;
+                stage.scrollTop = this.canvasPanState.startScrollTop - dy;
             },
 
-            handleCanvasPointerUp() {
+            handleCanvasPointerUp(event) {
                 if (this.edgeDragState) {
                     if (this.edgeDragState.mode !== "click") {
                         this.finishEdgeDrag();
@@ -2306,12 +2369,21 @@
                     return;
                 }
                 if (this.canvasSelectionState) {
+                    if (event && this.canvasSelectionState.pointerId !== event.pointerId) return;
                     this.finishCanvasSelection();
+                    this.getFlowStage()?.releasePointerCapture?.(event?.pointerId);
                     return;
                 }
                 if (!this.canvasPanState) return;
+                if (event && this.canvasPanState.pointerId !== event.pointerId) return;
+                const wasMoved = Boolean(this.canvasPanState.moved);
                 this.canvasPanState = null;
-                this.getFlowStage()?.classList.remove("is-panning");
+                const stage = this.getFlowStage();
+                stage?.releasePointerCapture?.(event?.pointerId);
+                stage?.classList.remove("is-panning");
+                if (!wasMoved) {
+                    this.clearFlowNodeSelection();
+                }
             },
 
             handleCanvasWheel(event) {
@@ -4233,16 +4305,43 @@
                     this.restoreSidebarsAfterCanvasMaximize();
                 }
                 this.renderFlowSidebarToggle();
-                const icon = getContainerEl(`#flowCanvasMaximize-${PAGE_CODE}`)?.querySelector("i");
-                if (icon) {
-                    icon.classList.toggle("fa-expand", !nextMaximized);
-                    icon.classList.toggle("fa-compress", nextMaximized);
-                }
+                this.renderCanvasMaximizeToggle(nextMaximized);
                 this.renderFlowInspectorToggle();
                 setTimeout(() => {
                     this.resizeFlowViewportToNodes();
                     this.updateFlowEdges();
+                    if (
+                        nextMaximized
+                        && (
+                            window.matchMedia?.("(max-width: 1100px)")?.matches
+                            || window.matchMedia?.("(max-height: 760px)")?.matches
+                        )
+                    ) {
+                        getContainerEl(".flow-designer-card")?.scrollIntoView?.({
+                            block: "start",
+                            behavior: "smooth"
+                        });
+                    }
                 }, 0);
+            },
+
+            renderCanvasMaximizeToggle(maximized = null) {
+                const button = getContainerEl(`#flowCanvasMaximize-${PAGE_CODE}`);
+                if (!button) return;
+                const isMaximized = maximized === null
+                    ? Boolean(document.getElementById(`container-${PAGE_CODE}`)?.classList.contains("is-flow-canvas-maximized"))
+                    : Boolean(maximized);
+                const titleKey = isMaximized ? "restoreCanvasTitle" : "maximizeCanvasTitle";
+                const title = this.getLabel(titleKey, isMaximized ? "Restore canvas" : "Maximize canvas");
+                button.dataset.titleKey = titleKey;
+                button.title = title;
+                button.setAttribute("aria-label", title);
+
+                const icon = button.querySelector("i");
+                if (!icon) return;
+                icon.classList.remove("fa-compress");
+                icon.classList.toggle("fa-expand", !isMaximized);
+                icon.classList.toggle("fa-down-left-and-up-right-to-center", isMaximized);
             },
 
             collapseSidebarsForCanvasMaximize() {
@@ -4310,6 +4409,12 @@
                     this.resizeFlowViewportToNodes();
                     this.updateFlowEdges();
                     this.updateSelectedEdgeDeleteButton();
+                    if (!this.flowInspectorCollapsed && window.matchMedia?.("(max-width: 1100px)")?.matches) {
+                        getContainerEl(".flow-inspector-panel")?.scrollIntoView?.({
+                            block: "nearest",
+                            behavior: "smooth"
+                        });
+                    }
                 }, 0);
             },
 
@@ -4797,12 +4902,18 @@
                     status.textContent = message;
                 }
             },
+            setFlowRunHistoryCount(count = 0) {
+                const countEl = getContainerEl(`#flowRunHistoryCount-${PAGE_CODE}`);
+                if (!countEl) return;
+                countEl.innerHTML = this.renderListFooter(count);
+            },
             async loadFlowRunHistory(options = {}) {
                 const container = getContainerEl(`#flowRunHistoryGrid-${PAGE_CODE}`);
                 if (!container) return;
                 const showFeedback = Boolean(options.showFeedback);
                 if (!this.selectedProjectId || !this.selectedScenarioId) {
-                    container.innerHTML = `<div class="table-empty">Select project and scenario first.</div>${this.renderListFooter(0)}`;
+                    this.setFlowRunHistoryCount(0);
+                    container.innerHTML = `<div class="table-empty">Select project and scenario first.</div>`;
                     if (showFeedback) this.setFlowRunHistoryLoading(false, "Project and scenario are required.");
                     return;
                 }
@@ -4819,6 +4930,7 @@
                         this.setFlowRunHistoryLoading(false, `Refreshed ${refreshedAt}`);
                     }
                 } catch (error) {
+                    this.setFlowRunHistoryCount(0);
                     this.renderError(`#flowRunHistoryGrid-${PAGE_CODE}`, error.message || "Run history load failed.");
                     if (showFeedback) this.setFlowRunHistoryLoading(false, "Refresh failed.");
                 }
@@ -4859,8 +4971,10 @@
                 const container = getContainerEl(`#flowRunHistoryGrid-${PAGE_CODE}`);
                 if (!container) return;
                 this.flowRunHistoryRows = Array.isArray(rows) ? rows : [];
-                if (!rows.length) {
-                    container.innerHTML = `<div class="table-empty">No run history.</div>${this.renderListFooter(0)}`;
+                const safeRows = this.flowRunHistoryRows;
+                this.setFlowRunHistoryCount(safeRows.length);
+                if (!safeRows.length) {
+                    container.innerHTML = `<div class="table-empty">No run history.</div>`;
                     return;
                 }
                 if (this.activeRunPlanFlowRunId && !this.flowRunHistoryRows.some((row) => String(row.FLOW_RUN_ID || "") === String(this.activeRunPlanFlowRunId))) {
@@ -4883,7 +4997,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            ${rows.map((row) => {
+                            ${safeRows.map((row) => {
                                 const flowRunId = String(row.FLOW_RUN_ID || "");
                                 const expanded = flowRunId && flowRunId === String(this.activeRunPlanFlowRunId || "");
                                 return `
@@ -4907,7 +5021,6 @@
                             }).join("")}
                         </tbody>
                     </table>
-                    ${this.renderListFooter(rows.length)}
                 `;
             },
             renderRunHistoryMessageCell(row) {
@@ -5488,7 +5601,7 @@
                 const startedAt = performance.now();
                 this.renderFlowResultSqlMessage(this.getMessage("runningSql", "Running SQL..."), "info");
                 if (grid) {
-                    grid.innerHTML = `<div class="table-empty">${this.escapeHtml(this.getMessage("executingResultSql", "Executing result SQL..."))}</div>${this.renderListFooter(0)}`;
+                    grid.innerHTML = `<div class="table-empty">${this.escapeHtml(this.getMessage("executingResultSql", "Executing result SQL..."))}</div>`;
                 }
                 try {
                     const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/result-sql`, {
@@ -5598,7 +5711,7 @@
                 const headerHtml = this.renderFlowResultSqlHeader(columns);
                 if (!dataRows.length) {
                     if (!columns.length) {
-                        container.innerHTML = `<div class="table-empty">${this.escapeHtml(this.getMessage("noData", "No data."))}</div>${this.renderListFooter(0)}`;
+                        container.innerHTML = `<div class="table-empty">${this.escapeHtml(this.getMessage("noData", "No data."))}</div>`;
                         return;
                     }
                     container.innerHTML = `
@@ -5611,7 +5724,6 @@
                             </thead>
                             <tbody></tbody>
                         </table>
-                        ${this.renderListFooter(0)}
                     `;
                     this.syncFlowResultSqlTableWidth();
                     this.applyFlowResultSqlFrozenColumns();
@@ -5634,7 +5746,6 @@
                             `).join("")}
                         </tbody>
                     </table>
-                    ${this.renderListFooter(dataRows.length)}
                 `;
                 this.syncFlowResultSqlTableWidth();
                 this.applyFlowResultSqlFrozenColumns();

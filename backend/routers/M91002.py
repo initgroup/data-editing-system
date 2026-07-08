@@ -17,6 +17,7 @@ from threading import Lock
 from backend.database import get_db_connection
 from backend.database_helper import SqlLoader
 from backend.auth_context import get_request_user_id
+from backend.security import decrypt_secret, encrypt_secret
 from backend.target_database import get_target_connection_id, get_target_db_connection
 from backend.routers.M99001 import _hash_password, _verify_password
 
@@ -392,19 +393,11 @@ def get_my_account(request: Request):
 
 
 def _encode_secret(value: Optional[str]) -> str:
-    if not value:
-        return ""
-    return "b64:" + base64.b64encode(value.encode("utf-8")).decode("ascii")
+    return encrypt_secret(value)
 
 
 def _decode_secret(value: Optional[str]) -> str:
-    text = value or ""
-    if text.startswith("b64:"):
-        try:
-            return base64.b64decode(text[4:].encode("ascii")).decode("utf-8")
-        except Exception:
-            return ""
-    return text
+    return decrypt_secret(value)
 
 
 def get_saved_gemini_api_key(conn, user_id: int, connection_id: int) -> str:

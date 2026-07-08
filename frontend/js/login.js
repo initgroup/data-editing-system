@@ -434,6 +434,7 @@
 
         async login() {
             if (this.isLoggingIn) return;
+            PageManager.clearLoginSession?.();
             const payload = {
                 loginId: this.getValue("#loginId").trim(),
                 loginPassword: this.getValue("#loginPassword")
@@ -505,7 +506,7 @@
 
                 if (json.user) {
                     sessionStorage.setItem("initLoginUser", JSON.stringify(json.user || {}));
-                    PageManager.extendSession?.();
+                    PageManager.extendSession?.(json.sessionTtlSeconds);
                 }
 
                 this.setValue("#loginPassword", "");

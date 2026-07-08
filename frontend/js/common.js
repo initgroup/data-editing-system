@@ -568,19 +568,6 @@ const CommonUtils = {
             if (targetConnectionId && !headers["X-Target-Connection-Id"]) {
                 headers["X-Target-Connection-Id"] = targetConnectionId;
             }
-            const loginUser = JSON.parse(sessionStorage.getItem("initLoginUser") || "{}");
-            if (loginUser.userId && !headers["X-Login-User-Id"]) {
-                headers["X-Login-User-Id"] = String(loginUser.userId);
-            }
-            if (loginUser.loginId && !headers["X-Login-Id"]) {
-                headers["X-Login-Id"] = String(loginUser.loginId);
-            }
-            if (loginUser.email && !headers["X-Login-Email"]) {
-                headers["X-Login-Email"] = String(loginUser.email);
-            }
-            if (loginUser.roleCode && !headers["X-Login-Role-Code"]) {
-                headers["X-Login-Role-Code"] = String(loginUser.roleCode);
-            }
             const bootstrapToken = sessionStorage.getItem("initBootstrapToken") || "";
             if (bootstrapToken && !headers["X-Bootstrap-Token"]) {
                 headers["X-Bootstrap-Token"] = bootstrapToken;
@@ -593,6 +580,7 @@ const CommonUtils = {
                 method: options.method || 'GET',
                 headers,
                 body: options.body ? JSON.stringify(options.body) : null,
+                credentials: 'include',
                 signal: options.signal || controller?.signal
             });
             
@@ -601,12 +589,15 @@ const CommonUtils = {
                 const errorMsg = this.formatErrorMessage(errorJson, { status: response.status, url });
                 window.ConsoleLogger?.requestEnd?.(requestLog, response, { message: errorMsg });
                 responseLogged = true;
+                if (response.status === 401) {
+                    this.handleUnauthorizedResponse(url);
+                }
                 throw new Error(errorMsg);
             }
             const json = await response.json();
             window.ConsoleLogger?.requestEnd?.(requestLog, response);
             responseLogged = true;
-            window.PageManager?.extendSession?.();
+            window.PageManager?.extendSessionFromResponse?.(response);
             return json;
 
         } catch (err) {
@@ -623,6 +614,27 @@ const CommonUtils = {
             if (timeoutId) clearTimeout(timeoutId);
             this.activeRequestCount = Math.max(0, this.activeRequestCount - 1);
         }
+    },
+
+    isAuthFlowUrl(url) {
+        const text = String(url || "");
+        return (
+            text.includes("/M91001/login")
+            || text.includes("/M91001/signup/save")
+            || text.includes("/M91001/admin-contact")
+            || text.includes("/M91001/logout")
+            || text.includes("/M91001/session/me")
+        );
+    },
+
+    handleUnauthorizedResponse(url) {
+        if (this.isAuthFlowUrl(url)) return;
+        if (!window.PageManager?.isAuthenticated?.()) return;
+        window.PageManager.resetWorkspaceForLogout?.();
+        window.MenuRenderer?.render?.("mainNav", window.handleMenuClick);
+        setTimeout(() => {
+            window.PageManager?.load?.("login", "Data Editing System Login", false);
+        }, 0);
     },
 
     /**

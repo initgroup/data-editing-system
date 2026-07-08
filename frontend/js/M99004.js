@@ -548,15 +548,6 @@
             const headers = {};
             const targetConnectionId = sessionStorage.getItem("targetConnectionId") || "";
             if (targetConnectionId) headers["X-Target-Connection-Id"] = targetConnectionId;
-            try {
-                const loginUser = JSON.parse(sessionStorage.getItem("initLoginUser") || "{}");
-                if (loginUser.userId) headers["X-Login-User-Id"] = String(loginUser.userId);
-                if (loginUser.loginId) headers["X-Login-Id"] = String(loginUser.loginId);
-                if (loginUser.email) headers["X-Login-Email"] = String(loginUser.email);
-                if (loginUser.roleCode) headers["X-Login-Role-Code"] = String(loginUser.roleCode);
-            } catch (error) {
-                // Backend auth will report missing context if needed.
-            }
             const bootstrapToken = sessionStorage.getItem("initBootstrapToken") || "";
             if (bootstrapToken) headers["X-Bootstrap-Token"] = bootstrapToken;
             return headers;
@@ -572,14 +563,15 @@
                 const response = await fetch(`${API_BASE_URL}/${PAGE_CODE}/notices/${encodeURIComponent(noticeId)}/files`, {
                     method: "POST",
                     headers: this.buildRequestHeaders(),
-                    body: formData
+                    body: formData,
+                    credentials: "include"
                 });
                 if (!response.ok) {
                     const errorJson = await response.json().catch(() => ({}));
                     throw new Error(`${item.file?.name || "Attachment"}: ${CommonUtils.formatErrorMessage(errorJson)}`);
                 }
                 const json = await response.json();
-                window.PageManager?.extendSession?.();
+                window.PageManager?.extendSessionFromResponse?.(response);
                 this.selectedFiles = Array.isArray(json.data) ? json.data : this.selectedFiles;
                 this.pendingFiles = this.pendingFiles.filter((pendingItem) => pendingItem.key !== item.key);
                 this.renderNoticeFiles();
@@ -601,12 +593,14 @@
             try {
                 const response = await fetch(`${API_BASE_URL}/${PAGE_CODE}/files/${encodeURIComponent(fileId)}/download`, {
                     method: "GET",
-                    headers: this.buildRequestHeaders()
+                    headers: this.buildRequestHeaders(),
+                    credentials: "include"
                 });
                 if (!response.ok) {
                     const errorJson = await response.json().catch(() => ({}));
                     throw new Error(CommonUtils.formatErrorMessage(errorJson));
                 }
+                window.PageManager?.extendSessionFromResponse?.(response);
                 const blob = await response.blob();
                 const fileName = this.getDownloadFileName(response.headers.get("Content-Disposition")) || file.FILE_NAME || "attachment";
                 if (window.DataEditingSystem?.downloadBlob) {

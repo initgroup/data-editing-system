@@ -148,7 +148,20 @@ def create_data_work_router(
                     finally:
                         conn.close()
 
-    def get_transaction_connection(transaction_id: Optional[str]):
+    def _assert_transaction_owner(session: Dict[str, Any], request: Request) -> None:
+        user_id = get_request_user_id(request)
+        if int(session.get("userId") or 0) != int(user_id):
+            raise HTTPException(status_code=403, detail="SQL transaction session owner mismatch.")
+        header_connection_id = None
+        try:
+            header_connection_id = get_target_connection_id(request)
+        except HTTPException:
+            header_connection_id = None
+        if header_connection_id is not None and int(session.get("connectionId") or 0) != int(header_connection_id):
+            raise HTTPException(status_code=403, detail="SQL transaction target connection mismatch.")
+
+
+    def get_transaction_connection(transaction_id: Optional[str], request: Request):
         if not transaction_id:
             return None
 
@@ -157,27 +170,38 @@ def create_data_work_router(
             session = active_transactions.get(transaction_id)
             if not session:
                 raise HTTPException(status_code=404, detail="SQL transaction session was not found or expired.")
+            _assert_transaction_owner(session, request)
             session["lastAccessAt"] = time.time()
             return session["conn"]
 
-    def register_transaction_connection(conn) -> str:
+    def register_transaction_connection(conn, request: Request) -> str:
         transaction_id = uuid.uuid4().hex
         now = time.time()
+        user_id = get_request_user_id(request)
+        connection_id = get_target_connection_id(request)
 
         with transaction_lock:
             active_transactions[transaction_id] = {
                 "conn": conn,
+                "userId": user_id,
+                "connectionId": connection_id,
                 "createdAt": now,
                 "lastAccessAt": now
             }
 
         return transaction_id
 
-    def finish_transaction(transaction_id: str, action: str):
+    def finish_transaction(transaction_id: str, action: str, request: Request):
         cleanup_expired_transactions()
         with transaction_lock:
-            session = active_transactions.pop(transaction_id, None)
+            session = active_transactions.get(transaction_id)
 
+        if not session:
+            raise HTTPException(status_code=404, detail="SQL transaction session was not found or expired.")
+        _assert_transaction_owner(session, request)
+
+        with transaction_lock:
+            session = active_transactions.pop(transaction_id, None)
         if not session:
             raise HTTPException(status_code=404, detail="SQL transaction session was not found or expired.")
 
@@ -881,7 +905,7 @@ def create_data_work_router(
     def start_sql_transaction(request: Request):
         cleanup_expired_transactions()
         conn = get_target_db_connection(request)
-        transaction_id = register_transaction_connection(conn)
+        transaction_id = register_transaction_connection(conn, request)
 
         return {
             "status": "success",
@@ -891,17 +915,17 @@ def create_data_work_router(
 
 
     @router.post("/sql/transaction/commit")
-    def commit_sql_transaction(req: SqlTransactionRequest):
+    def commit_sql_transaction(req: SqlTransactionRequest, request: Request):
         if not req.transactionId:
             raise HTTPException(status_code=400, detail="transactionId is required.")
-        return finish_transaction(req.transactionId, "commit")
+        return finish_transaction(req.transactionId, "commit", request)
 
 
     @router.post("/sql/transaction/rollback")
-    def rollback_sql_transaction(req: SqlTransactionRequest):
+    def rollback_sql_transaction(req: SqlTransactionRequest, request: Request):
         if not req.transactionId:
             raise HTTPException(status_code=400, detail="transactionId is required.")
-        return finish_transaction(req.transactionId, "rollback")
+        return finish_transaction(req.transactionId, "rollback", request)
 
 
     @router.post("/sql")
@@ -920,11 +944,11 @@ def create_data_work_router(
                 and executable_script is not None
                 and executable_script["type"] == "DML"
             )
-            conn = get_transaction_connection(req.transactionId) if use_transaction else get_target_db_connection(request)
+            conn = get_transaction_connection(req.transactionId, request) if use_transaction else get_target_db_connection(request)
             if executable_script and executable_script["type"] != "SELECT":
                 message = execute_worksheet_script(conn, executable_script, req.runtimeBindValues or {})
                 if auto_start_transaction:
-                    auto_transaction_id = register_transaction_connection(conn)
+                    auto_transaction_id = register_transaction_connection(conn, request)
                     message = f"{message} Transaction started. Commit or rollback is required."
                 elif not use_transaction:
                     conn.commit()
@@ -1793,6 +1817,22 @@ USING (
         return serialize_db_value(value)
      
      
+    DANGEROUS_PLSQL_PATTERN = re.compile(
+        r"(?is)\b("
+        r"execute\s+immediate|dbms_sql|drop|truncate|alter|grant|revoke|"
+        r"create\s+(?:or\s+replace\s+)?(?:table|view|package|procedure|function|trigger|type|sequence|synonym|index)"
+        r")\b"
+    )
+
+
+    def reject_dangerous_plsql(text: str) -> None:
+        if DANGEROUS_PLSQL_PATTERN.search(text or ""):
+            raise HTTPException(
+                status_code=400,
+                detail="Executable PL/SQL cannot contain dynamic SQL or DDL commands."
+            )
+
+
     def normalize_select_sql(sql: str) -> str:
         text = (sql or "").strip()
         text = re.sub(r";+\s*$", "", text)
@@ -1815,6 +1855,7 @@ USING (
             raise HTTPException(status_code=400, detail="Executable script must start with DECLARE or BEGIN.")
         if not re.search(r"(?is)\bend\s*;\s*$", text):
             raise HTTPException(status_code=400, detail="Executable PL/SQL script must end with END;.")
+        reject_dangerous_plsql(text)
         return text
     
     
@@ -1830,7 +1871,7 @@ USING (
         if re.search(r";\s*\S", sql):
             raise HTTPException(status_code=400, detail="Only a single executable statement is allowed.")
         if re.match(r"(?is)^(select|with)\b", sql):
-            return {"type": "SELECT", "text": sql}
+            return {"type": "SELECT", "text": normalize_select_sql(sql)}
         if re.match(r"(?is)^create\s+table\b", sql):
             return {"type": "DDL", "text": sql}
         if re.match(r"(?is)^(insert|update|delete|merge)\b", sql):

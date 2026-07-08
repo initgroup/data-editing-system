@@ -403,7 +403,7 @@
     max-height: none;
     min-height: 0;
     overflow: hidden;
-    padding: 14px 16px;
+    padding: 12px 14px;
 }
 
 .flow-work-page .flow-main-panel > .table-header {
@@ -416,8 +416,8 @@
 }
 
 .flow-work-page .flow-meta-card {
-    margin-top: 18px;
-    padding: 8px 10px;
+    margin-top: 10px;
+    padding: 7px 10px;
 }
 
 .flow-work-page .data-param-card {
@@ -433,7 +433,7 @@
     align-items: start;
     display: grid;
     gap: 10px;
-    grid-template-columns: minmax(340px, 430px) minmax(620px, 1fr);
+    grid-template-columns: minmax(0, 1fr) minmax(150px, 224px);
 }
 
 .flow-work-page .flow-main-title-block {
@@ -447,24 +447,28 @@
     display: flex;
     justify-content: flex-end;
     min-width: 0;
+    overflow: visible;
 }
 
 .flow-work-page .flow-main-action-buttons {
-    align-items: center;
-    display: flex;
-    flex-wrap: nowrap;
+    align-items: stretch;
+    display: grid;
     gap: 6px;
-    justify-content: flex-end;
-    min-width: max-content;
+    grid-template-columns: repeat(auto-fit, minmax(68px, 1fr));
+    justify-content: stretch;
+    min-width: 0;
+    width: min(100%, 456px);
 }
 
 .flow-work-page .flow-main-action-buttons .table-btn {
-    flex: 0 0 auto;
+    justify-content: center;
+    min-width: 0;
+    width: 100%;
     white-space: nowrap;
 }
 
 .flow-work-page .flow-copy-saved-flow-button {
-    margin-left: 10px;
+    margin-left: 0;
 }
 
 .flow-work-page .flow-switcher {
@@ -483,7 +487,7 @@
     display: grid;
     gap: 2px 10px;
     grid-template-columns: minmax(0, 1fr) auto;
-    min-height: 64px;
+    min-height: 58px;
     padding: 8px 10px;
     text-align: left;
     width: 100%;
@@ -695,13 +699,8 @@
 .flow-work-page .flow-meta-card .data-work-form-grid {
     align-items: end;
     display: grid;
-    gap: 10px;
-    grid-template-columns:
-        minmax(120px, 140px)
-        minmax(150px, 170px)
-        minmax(260px, 320px)
-        minmax(240px, 1fr)
-        minmax(70px, 84px);
+    gap: 8px;
+    grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr));
 }
 
 .flow-work-page .flow-meta-card .data-job-id-field,
@@ -719,7 +718,7 @@
 }
 
 .flow-work-page .flow-meta-card .data-sort-field {
-    max-width: 84px;
+    max-width: 120px;
 }
 
 .flow-work-page .flow-saved-card .data-panel-toolbar > span,
@@ -891,6 +890,7 @@
 }
 
 .flow-version-count {
+    display: none !important;
     align-items: center;
     background: #eef2f7;
     border: 1px solid #cbd5e1;
@@ -930,12 +930,12 @@
 .flow-canvas-toolbar {
     align-items: center;
     display: flex;
-    flex: 0 0 40px;
-    flex-wrap: nowrap;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
     gap: 6px;
     min-height: 40px;
     min-width: 0;
-    overflow: hidden;
+    overflow: visible;
 }
 
 .flow-canvas-toolbar > strong {
@@ -960,22 +960,66 @@
 }
 
 .flow-canvas-toolbar .data-selected-object {
-    display: block;
-    flex: 1 1 auto;
+    display: -webkit-box;
+    flex: 1 1 220px;
     line-height: 1.25;
-    max-height: 34px;
+    max-height: 32px;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: pre-line;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    white-space: normal;
 }
 
 .flow-canvas-actions {
     align-items: center;
     display: inline-flex;
-    flex: 0 0 auto;
+    flex: 1 1 320px;
+    flex-wrap: wrap;
     gap: 4px;
-    margin-left: auto;
+    justify-content: flex-end;
+    margin-left: 0;
+    min-width: 0;
+}
+
+.flow-canvas-selection-mode-btn.is-active,
+.flow-canvas-selection-mode-btn[aria-pressed="true"] {
+    background: #e0f2fe;
+    border-color: #38bdf8;
+    color: #075985;
+}
+
+.flow-selection-mode-icon {
+    border: 1.5px dashed currentColor;
+    border-radius: 2px;
+    box-sizing: border-box;
+    display: inline-block;
+    height: 14px;
+    position: relative;
+    width: 18px;
+}
+
+.flow-selection-mode-icon::before {
+    background: currentColor;
+    bottom: 3px;
+    content: "";
+    left: 3px;
+    opacity: 0.08;
+    position: absolute;
+    right: 3px;
+    top: 3px;
+}
+
+.flow-selection-mode-icon::after {
+    border-bottom: 2px solid currentColor;
+    border-right: 2px solid currentColor;
+    bottom: -4px;
+    content: "";
+    height: 5px;
+    position: absolute;
+    right: -4px;
+    width: 5px;
 }
 
 .flow-work-page .flow-canvas-panel {
@@ -985,11 +1029,11 @@
 
 .flow-work-page .flow-canvas-panel > .data-param-panel-header {
     align-items: center;
-    flex: 0 0 34px;
-    flex-wrap: nowrap;
-    height: 34px;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    height: auto;
     min-height: 34px;
-    overflow: hidden;
+    overflow: visible;
 }
 
 .flow-work-page .flow-canvas-panel > .data-param-panel-header > strong {
@@ -1027,6 +1071,10 @@
 
 .flow-work-page .flow-canvas-stage {
     min-height: 0;
+}
+
+.flow-canvas-stage.is-selection-mode {
+    cursor: crosshair;
 }
 
 .flow-work-page.is-sample-flow-visible .flow-canvas-stage::before {
@@ -2297,11 +2345,11 @@ body.is-resizing-flow-result-sql {
 
 @media (max-width: 1200px) {
     .flow-work-page .flow-main-header {
-        grid-template-columns: minmax(0, 1fr) minmax(280px, 380px);
+        grid-template-columns: minmax(0, 1fr) minmax(150px, 224px);
     }
 
     .flow-work-page .flow-main-header .table-export-actions {
-        grid-column: 1 / -1;
+        grid-column: auto;
         justify-content: flex-end;
     }
 
@@ -2310,7 +2358,7 @@ body.is-resizing-flow-result-sql {
     }
 
     .flow-work-page .flow-meta-card .data-work-form-grid {
-        grid-template-columns: minmax(110px, 130px) minmax(130px, 150px) minmax(220px, 280px) minmax(200px, 1fr) minmax(70px, 84px);
+        grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr));
     }
 
     .flow-work-page .flow-workspace,
@@ -2578,9 +2626,25 @@ body.is-resizing-flow-result-sql {
 }
 
 .flow-work-page .flow-history-panel > .data-panel-toolbar,
+.flow-work-page .flow-history-count-row,
 .flow-work-page .flow-result-sql-toolbar,
 .flow-work-page .data-sql-result-header {
     flex: 0 0 auto;
+}
+
+.flow-work-page .flow-history-count-row {
+    align-items: center;
+    display: flex;
+    justify-content: flex-end;
+    min-height: 20px;
+    padding: 0 4px 4px;
+}
+
+.flow-work-page .flow-history-count-row .list-count-footer {
+    position: static;
+    right: auto;
+    top: auto;
+    z-index: auto;
 }
 
 .flow-work-page .flow-history-panel > .table-result-grid {
@@ -2655,8 +2719,306 @@ body.is-resizing-flow-result-sql {
 }
 
 @media (max-width: 1100px) {
+    #page-section-M04001.page-section.active {
+        height: auto !important;
+        min-height: 100%;
+        overflow: visible;
+    }
+
+    #page-section-M04001 > .flow-work-page,
+    #container-M04001.flow-work-page {
+        height: auto !important;
+        min-height: 100%;
+        overflow: visible;
+    }
+
+    #container-M04001.flow-work-page .flow-designer-panel.is-active {
+        flex: 0 0 auto;
+        overflow: visible;
+    }
+
+    #container-M04001.flow-work-page .flow-history-panel.is-active,
+    #container-M04001.flow-work-page .flow-result-sql-panel.is-active {
+        flex: 0 0 auto;
+        height: auto !important;
+        min-height: calc(100vh - 180px);
+        overflow: visible;
+    }
+
+    #container-M04001.flow-work-page .flow-history-panel > .table-result-grid,
+    #container-M04001.flow-work-page .flow-result-sql-workbench {
+        flex: 0 0 auto;
+        min-height: 360px;
+    }
+
+    #container-M04001.flow-work-page .flow-result-sql-workbench {
+        height: auto;
+        overflow: visible;
+    }
+
+    #container-M04001.flow-work-page .flow-result-sql-workbench > .table-result-grid {
+        min-height: 220px;
+    }
+
     .flow-work-page .flow-workspace,
     .flow-work-page .flow-editor-layout {
         grid-template-columns: minmax(0, 1fr);
+    }
+
+    .flow-work-page .flow-workspace {
+        grid-template-rows: clamp(260px, 30vh, 300px) minmax(380px, 1fr);
+        height: auto;
+        overflow: visible;
+    }
+
+    .flow-work-page.is-flow-sidebar-collapsed .flow-workspace {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: 48px minmax(380px, 1fr);
+    }
+
+    .flow-work-page .flow-sidebar {
+        height: auto;
+        max-height: clamp(260px, 30vh, 300px);
+        min-height: 260px;
+    }
+
+    .flow-work-page .flow-sidebar .table-object-header {
+        padding: 8px 12px;
+    }
+
+    .flow-work-page .flow-palette-card {
+        flex: 1 1 auto;
+        min-height: 156px;
+    }
+
+    .flow-work-page .flow-palette-card .data-job-grid {
+        min-height: 110px;
+    }
+
+    .flow-work-page .flow-main-panel {
+        height: auto;
+        min-height: 380px;
+        overflow: visible;
+    }
+
+    .flow-work-page .flow-designer-card {
+        flex: 0 0 auto;
+        min-height: 340px;
+        overflow: visible;
+    }
+
+    .flow-work-page .flow-editor-layout {
+        flex: 0 0 auto;
+        height: auto;
+        overflow: visible;
+    }
+
+    .flow-work-page .flow-editor-layout,
+    .flow-work-page .flow-canvas-panel {
+        min-height: 280px;
+    }
+
+    .flow-work-page .flow-inspector-panel {
+        min-height: 260px;
+        overflow: visible;
+    }
+
+    .flow-work-page .flow-inspector-body {
+        flex: 0 0 auto;
+        max-height: none;
+        overflow: visible;
+    }
+
+    .flow-work-page.is-flow-inspector-collapsed .flow-editor-layout {
+        grid-template-columns: minmax(0, 1fr) 48px;
+        overflow: hidden;
+    }
+
+    .flow-work-page.is-flow-inspector-collapsed .flow-inspector-panel {
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    .flow-work-page .flow-canvas-stage {
+        min-height: 220px;
+    }
+
+    #container-M04001.flow-work-page.is-flow-canvas-maximized {
+        min-height: calc(100vh - 104px);
+    }
+
+    #container-M04001.flow-work-page.is-flow-canvas-maximized .work-context-card,
+    #container-M04001.flow-work-page.is-flow-canvas-maximized .flow-work-tabs,
+    #container-M04001.flow-work-page.is-flow-canvas-maximized .flow-sidebar,
+    #container-M04001.flow-work-page.is-flow-canvas-maximized .flow-main-panel > .table-header,
+    #container-M04001.flow-work-page.is-flow-canvas-maximized .flow-inspector-panel {
+        display: none !important;
+    }
+
+    #container-M04001.flow-work-page.is-flow-canvas-maximized .flow-workspace {
+        display: block;
+        grid-template-columns: minmax(0, 1fr) !important;
+        height: auto;
+        min-height: calc(100vh - 120px);
+        overflow: visible;
+    }
+
+    #container-M04001.flow-work-page.is-flow-canvas-maximized .flow-main-panel {
+        display: block;
+        height: auto;
+        min-height: calc(100vh - 120px);
+        padding: 6px;
+    }
+
+    #container-M04001.flow-work-page.is-flow-canvas-maximized .flow-designer-card {
+        min-height: calc(100vh - 132px);
+        padding: 8px;
+    }
+
+    #container-M04001.flow-work-page.is-flow-canvas-maximized .flow-editor-layout {
+        display: block;
+        min-height: calc(100vh - 220px);
+    }
+
+    #container-M04001.flow-work-page.is-flow-canvas-maximized .flow-canvas-panel {
+        min-height: calc(100vh - 220px);
+    }
+
+    #container-M04001.flow-work-page.is-flow-canvas-maximized .flow-canvas-stage {
+        min-height: clamp(360px, calc(100vh - 300px), 760px);
+    }
+
+    #container-M04001.flow-work-page.is-flow-canvas-maximized .flow-canvas-toolbar .data-selected-object,
+    #container-M04001.flow-work-page.is-flow-canvas-maximized .flow-canvas-panel > .data-param-panel-header .env-detail-hint {
+        display: none !important;
+    }
+
+    #container-M04001.flow-work-page.is-flow-canvas-maximized .flow-canvas-actions {
+        flex-basis: 100%;
+        justify-content: flex-start;
+    }
+}
+
+@media (max-height: 760px) and (min-width: 1101px) {
+    #page-section-M04001.page-section.active {
+        height: auto !important;
+        min-height: 100%;
+        overflow: visible;
+    }
+
+    #page-section-M04001 > .flow-work-page,
+    #container-M04001.flow-work-page {
+        height: auto !important;
+        min-height: 100%;
+        overflow: visible;
+    }
+
+    #container-M04001.flow-work-page .flow-designer-panel.is-active {
+        flex: 0 0 auto;
+        overflow: visible;
+    }
+
+    #container-M04001.flow-work-page .flow-history-panel.is-active,
+    #container-M04001.flow-work-page .flow-result-sql-panel.is-active {
+        flex: 0 0 auto;
+        height: auto !important;
+        min-height: calc(100vh - 172px);
+        overflow: visible;
+    }
+
+    #container-M04001.flow-work-page .flow-history-panel > .table-result-grid,
+    #container-M04001.flow-work-page .flow-result-sql-workbench {
+        flex: 0 0 auto;
+        min-height: 360px;
+    }
+
+    #container-M04001.flow-work-page .flow-result-sql-workbench {
+        height: auto;
+        overflow: visible;
+    }
+
+    #container-M04001.flow-work-page .flow-result-sql-workbench > .table-result-grid {
+        min-height: 220px;
+    }
+
+    #container-M04001.flow-work-page .flow-workspace,
+    #container-M04001.flow-work-page .flow-main-panel {
+        height: auto;
+        overflow: visible;
+    }
+
+    #container-M04001.flow-work-page .flow-designer-card {
+        flex: 0 0 auto;
+        min-height: 340px;
+        overflow: visible;
+    }
+
+    #container-M04001.flow-work-page .flow-editor-layout {
+        flex: 0 0 auto;
+        height: auto;
+        overflow: visible;
+    }
+
+    #container-M04001.flow-work-page .flow-editor-layout,
+    #container-M04001.flow-work-page .flow-canvas-panel {
+        min-height: 280px;
+    }
+
+    #container-M04001.flow-work-page .flow-inspector-panel {
+        min-height: 260px;
+        overflow: visible;
+    }
+
+    #container-M04001.flow-work-page .flow-inspector-body {
+        flex: 0 0 auto;
+        max-height: none;
+        overflow: visible;
+    }
+
+    #container-M04001.flow-work-page .flow-canvas-stage {
+        min-height: 220px;
+    }
+
+    #container-M04001.flow-work-page.is-flow-canvas-maximized .work-context-card,
+    #container-M04001.flow-work-page.is-flow-canvas-maximized .flow-work-tabs,
+    #container-M04001.flow-work-page.is-flow-canvas-maximized .flow-sidebar,
+    #container-M04001.flow-work-page.is-flow-canvas-maximized .flow-main-panel > .table-header,
+    #container-M04001.flow-work-page.is-flow-canvas-maximized .flow-inspector-panel {
+        display: none !important;
+    }
+
+    #container-M04001.flow-work-page.is-flow-canvas-maximized .flow-workspace {
+        display: block;
+        grid-template-columns: minmax(0, 1fr) !important;
+        min-height: calc(100vh - 112px);
+    }
+
+    #container-M04001.flow-work-page.is-flow-canvas-maximized .flow-main-panel {
+        display: block;
+        height: auto;
+        min-height: calc(100vh - 112px);
+        padding: 8px;
+    }
+
+    #container-M04001.flow-work-page.is-flow-canvas-maximized .flow-designer-card {
+        min-height: calc(100vh - 128px);
+    }
+
+    #container-M04001.flow-work-page.is-flow-canvas-maximized .flow-editor-layout {
+        display: block;
+        min-height: calc(100vh - 216px);
+    }
+
+    #container-M04001.flow-work-page.is-flow-canvas-maximized .flow-canvas-panel {
+        min-height: calc(100vh - 216px);
+    }
+
+    #container-M04001.flow-work-page.is-flow-canvas-maximized .flow-canvas-stage {
+        min-height: clamp(340px, calc(100vh - 292px), 760px);
+    }
+
+    #container-M04001.flow-work-page.is-flow-canvas-maximized .flow-canvas-toolbar .data-selected-object,
+    #container-M04001.flow-work-page.is-flow-canvas-maximized .flow-canvas-panel > .data-param-panel-header .env-detail-hint {
+        display: none !important;
     }
 }

@@ -37,9 +37,13 @@ def _pool_snapshot(pool) -> str:
 
 
 def get_target_connection_id(request: Request) -> int:
+    service_connection_id = ""
+    if getattr(request.state, "internal_api_authorized", False):
+        service_connection_id = os.getenv("INIT_INTERNAL_API_CONNECTION_ID", "").strip()
     raw_value = (
         request.headers.get("X-Target-Connection-Id")
         or request.headers.get("X-Connection-Id")
+        or service_connection_id
         or ""
     ).strip()
     if not raw_value:

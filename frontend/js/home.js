@@ -1393,15 +1393,6 @@
             const headers = {};
             const targetConnectionId = sessionStorage.getItem("targetConnectionId") || "";
             if (targetConnectionId) headers["X-Target-Connection-Id"] = targetConnectionId;
-            try {
-                const loginUser = JSON.parse(sessionStorage.getItem("initLoginUser") || "{}");
-                if (loginUser.userId) headers["X-Login-User-Id"] = String(loginUser.userId);
-                if (loginUser.loginId) headers["X-Login-Id"] = String(loginUser.loginId);
-                if (loginUser.email) headers["X-Login-Email"] = String(loginUser.email);
-                if (loginUser.roleCode) headers["X-Login-Role-Code"] = String(loginUser.roleCode);
-            } catch (error) {
-                // Backend auth will report missing context if needed.
-            }
             const bootstrapToken = sessionStorage.getItem("initBootstrapToken") || "";
             if (bootstrapToken) headers["X-Bootstrap-Token"] = bootstrapToken;
             return headers;
@@ -1412,12 +1403,14 @@
             try {
                 const response = await fetch(`${API_BASE_URL}/home/notice-files/${encodeURIComponent(fileId)}/download`, {
                     method: "GET",
-                    headers: this.buildRequestHeaders()
+                    headers: this.buildRequestHeaders(),
+                    credentials: "include"
                 });
                 if (!response.ok) {
                     const errorJson = await response.json().catch(() => ({}));
                     throw new Error(CommonUtils.formatErrorMessage(errorJson));
                 }
+                window.PageManager?.extendSessionFromResponse?.(response);
                 const blob = await response.blob();
                 const fileName = this.getDownloadFileName(response.headers.get("Content-Disposition")) || "attachment";
                 if (window.DataEditingSystem?.downloadBlob) {

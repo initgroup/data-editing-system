@@ -2,11 +2,25 @@ from fastapi import APIRouter, HTTPException, Body
 from typing import Dict, Any, Optional
 import logging
 import oracledb
+import re
 from backend.database import get_db_connection
 from backend.database_helper import SqlLoader
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+def normalize_read_only_sql(sql: str) -> str:
+    text = (sql or "").strip()
+    text = re.sub(r";+\s*$", "", text)
+    if not re.match(r"(?is)^(select|with)\b", text):
+        raise HTTPException(status_code=400, detail="AI generated SQL must be a read-only SELECT statement.")
+    if re.search(r";\s*\S", sql or ""):
+        raise HTTPException(status_code=400, detail="Only a single SELECT statement is allowed.")
+    blocked = r"\b(insert|update|delete|merge|drop|alter|create|truncate|grant|revoke|begin|declare|execute|exec)\b"
+    if re.search(blocked, text, re.IGNORECASE):
+        raise HTTPException(status_code=400, detail="AI generated SQL contains a blocked command.")
+    return text
 
 @router.post("/ai/ask")
 async def ask_ai(payload: Dict[str, Any] = Body(...)):
@@ -38,7 +52,7 @@ async def ask_ai(payload: Dict[str, Any] = Body(...)):
                 generated_sql = str(row[0])
         
         # SQL 끝에 세미콜론(;)이 있으면 제거 (파이썬 실행용)
-        generated_sql = generated_sql.strip().rstrip(';')
+        generated_sql = normalize_read_only_sql(generated_sql)
 
         # 2. 모드에 따른 처리
         if mode == "sql":

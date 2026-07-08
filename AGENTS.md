@@ -12,6 +12,16 @@
 - CSS를 수정할 때는 문제를 덮기 위해 새 override를 계속 추가하지 않습니다. 먼저 기존 선택자, 중복 규칙, media query, cascade 순서를 추적해 원인이 되는 원본 규칙을 수정하거나 정리합니다. 불가피하게 override가 필요하면 이유와 범위를 설명하고, 관련 중복 규칙을 함께 정리합니다.
 - 모든 최종 답변 마지막에는 `Usage 확인: VS Code Codex 입력창에서 /status` 문구를 반드시 추가합니다.
 
+## 보안 필수 기준
+
+- 인증/인가 판단은 서버 세션 쿠키와 시스템 DB 조회를 기준으로 합니다. 브라우저 `sessionStorage`, `localStorage`, GET/POST 파라미터, `X-Login-*` 헤더를 사용자 ID/관리자 권한 근거로 사용하지 않습니다.
+- 새 API는 기본적으로 로그인 세션을 요구해야 합니다. 공개 API가 필요하면 `main.py`의 공개 예외 목록에 좁게 추가하고, bootstrap/API key 등 별도 검증을 라우터에서 수행합니다.
+- 관리자 메뉴 또는 관리자 기능 API는 서버 측 `require_admin_role` 또는 전역 관리자 API 정책을 반드시 통과해야 합니다. 프론트 메뉴 숨김은 보조 UI일 뿐 보안 경계가 아닙니다.
+- DB 비밀번호, 지갑 비밀번호, 외부 API Key, 관리자 인증키는 브라우저 응답/캐시/쿠키/JS에 남기지 않습니다. 저장이 필요하면 `backend.security.encrypt_secret`/`decrypt_secret` 경로를 사용하고 운영 환경에는 `INIT_SECRET_KEY`를 설정해야 합니다.
+- `database/`, `.env`, `secreats/`, `instantclient/`, 지갑 ZIP, 백엔드 소스가 정적 URL로 노출되도록 라우팅하거나 마운트하지 않습니다.
+- 동적 SQL 실행 기능을 수정할 때는 화면에서 허용한 범위만 서버에서 다시 검증합니다. SELECT 경로는 읽기 전용이어야 하고, 일반 사용자 PL/SQL에서 `EXECUTE IMMEDIATE`, `DBMS_SQL`, `DROP`, `TRUNCATE`, `ALTER`, `GRANT`, `REVOKE` 우회를 허용하지 않습니다.
+- 내장 Python API를 HTTP로 직접 노출할 때는 `INIT_INTERNAL_API_KEY` 기반 인증과 서버 환경변수의 서비스 사용자/Target DB 연결만 사용합니다. 사용자 ID를 헤더로 받아 실행하지 않습니다.
+
 ## Windows UTF-8 / Codex 셸 주의
 
 - Windows PowerShell 5.1에서는 파일이 정상 UTF-8이어도 `$OutputEncoding` 또는 콘솔 코드페이지 때문에 Codex 출력에서 한글이 깨져 보일 수 있습니다.

@@ -290,29 +290,17 @@
             if (targetConnectionId) {
                 headers["X-Target-Connection-Id"] = targetConnectionId;
             }
-            try {
-                const loginUser = JSON.parse(sessionStorage.getItem("initLoginUser") || "{}");
-                if (loginUser.userId) {
-                    headers["X-Login-User-Id"] = String(loginUser.userId);
-                }
-                if (loginUser.loginId) {
-                    headers["X-Login-Id"] = String(loginUser.loginId);
-                }
-                if (loginUser.email) {
-                    headers["X-Login-Email"] = String(loginUser.email);
-                }
-                if (loginUser.roleCode) {
-                    headers["X-Login-Role-Code"] = String(loginUser.roleCode);
-                }
-            } catch (error) {
-                // The backend will return a clear 401 if the login context is missing.
-            }
-            const response = await fetch(url, { method: "POST", headers, body: formData });
+            const response = await fetch(url, {
+                method: "POST",
+                headers,
+                body: formData,
+                credentials: "include"
+            });
             if (!response.ok) {
                 const errorJson = await response.json().catch(() => ({}));
                 throw new Error(CommonUtils.formatErrorMessage(errorJson));
             }
-            window.PageManager?.extendSession?.();
+            window.PageManager?.extendSessionFromResponse?.(response);
             return response.json();
         },
 
@@ -376,6 +364,7 @@
             return new Promise((resolve, reject) => {
                 const xhr = new XMLHttpRequest();
                 xhr.open("POST", url, true);
+                xhr.withCredentials = true;
                 Object.entries(headers).forEach(([key, value]) => xhr.setRequestHeader(key, value));
                 xhr.upload.onprogress = (event) => {
                     if (!event.lengthComputable) {
@@ -409,15 +398,6 @@
             const targetConnectionId = sessionStorage.getItem("targetConnectionId") || "";
             if (targetConnectionId) {
                 headers["X-Target-Connection-Id"] = targetConnectionId;
-            }
-            try {
-                const loginUser = JSON.parse(sessionStorage.getItem("initLoginUser") || "{}");
-                if (loginUser.userId) headers["X-Login-User-Id"] = String(loginUser.userId);
-                if (loginUser.loginId) headers["X-Login-Id"] = String(loginUser.loginId);
-                if (loginUser.email) headers["X-Login-Email"] = String(loginUser.email);
-                if (loginUser.roleCode) headers["X-Login-Role-Code"] = String(loginUser.roleCode);
-            } catch (error) {
-                // Backend validates login context.
             }
             return headers;
         },

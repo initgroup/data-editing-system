@@ -1,10 +1,18 @@
 import hmac
 import logging
 import os
+from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Response
 
-from backend.auth_context import get_request_user_id
+from backend.auth_context import (
+    authenticate_request,
+    create_login_session,
+    get_session_ttl_seconds,
+    get_request_user_id,
+    revoke_current_session,
+    set_session_cookie,
+)
 from backend.database import get_db_connection
 from backend.database_helper import SqlLoader
 from backend.routers.M99001 import (
@@ -117,6 +125,7 @@ def save_signup(req: SignupRequest):
     except Exception as e:
         if system_conn:
             system_conn.rollback()
+        logger.exception("Login failed while creating authenticated session.")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if cursor:
@@ -125,8 +134,30 @@ def save_signup(req: SignupRequest):
             system_conn.close()
 
 
+def _public_user_payload(row) -> dict:
+    return {
+        "userId": row[0],
+        "loginId": row[1],
+        "userName": row[2],
+        "email": row[3],
+        "roleCode": row[6] or "USER",
+    }
+
+
+def _issue_login_session(
+    response: Response,
+    request: Request,
+    system_conn,
+    user_id: int,
+    connection_id: Optional[int] = None
+) -> None:
+    token = create_login_session(system_conn, user_id, connection_id)
+    system_conn.commit()
+    set_session_cookie(response, token, request)
+
+
 @router.post("/login")
-def login(req: LoginRequest):
+def login(req: LoginRequest, response: Response, request: Request):
     system_conn = None
     cursor = None
     login_id = (req.loginId or "").strip()
@@ -160,33 +191,31 @@ def login(req: LoginRequest):
             if len(default_connections) == 1:
                 connection_row = _get_connection_detail(system_conn, int(default_connections[0]["connectionId"]), user_id)
             elif len(target_connections) > 1:
+                _issue_login_session(response, request, system_conn, user_id, None)
                 return {
                     "status": "success",
                     "message": "Select a target DB.",
                     "targetSelectionRequired": True,
-                    "user": {
-                        "userId": row[0],
-                        "loginId": row[1],
-                        "userName": row[2],
-                        "email": row[3],
-                        "roleCode": row[6] or "USER",
-                    },
+                    "sessionTtlSeconds": get_session_ttl_seconds(),
+                    "user": _public_user_payload(row),
                     "connections": target_connections,
                     "connection": None,
                 }
             elif len(target_connections) == 1:
                 connection_row = _get_connection_detail(system_conn, int(target_connections[0]["connectionId"]), user_id)
+        _issue_login_session(
+            response,
+            request,
+            system_conn,
+            user_id,
+            int(connection_row.get("CONNECTION_ID")) if connection_row else None,
+        )
         return {
             "status": "success",
             "message": "Login succeeded.",
             "setupRequired": connection_row is None,
-            "user": {
-                "userId": row[0],
-                "loginId": row[1],
-                "userName": row[2],
-                "email": row[3],
-                "roleCode": row[6] or "USER",
-            },
+            "sessionTtlSeconds": get_session_ttl_seconds(),
+            "user": _public_user_payload(row),
             "connection": {
                 "connectionId": connection_row.get("CONNECTION_ID"),
                 "connectionName": connection_row.get("CONNECTION_NAME"),
@@ -195,14 +224,41 @@ def login(req: LoginRequest):
             } if connection_row else None,
         }
     except HTTPException:
+        if system_conn:
+            system_conn.rollback()
         raise
     except Exception as e:
+        if system_conn:
+            system_conn.rollback()
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if cursor:
             cursor.close()
         if system_conn:
             system_conn.close()
+
+
+@router.get("/session/me")
+def get_current_session(request: Request):
+    user = authenticate_request(request)
+    return {
+        "status": "success",
+        "sessionTtlSeconds": get_session_ttl_seconds(),
+        "user": {
+            "userId": user.get("userId"),
+            "loginId": user.get("loginId"),
+            "userName": user.get("userName"),
+            "email": user.get("email"),
+            "roleCode": user.get("roleCode") or "USER",
+        },
+        "targetConnectionId": user.get("targetConnectionId"),
+    }
+
+
+@router.post("/logout")
+def logout(request: Request, response: Response):
+    revoke_current_session(request, response)
+    return {"status": "success", "message": "Logged out."}
 
 
 @router.post("/session/cleanup")

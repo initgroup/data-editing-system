@@ -513,6 +513,7 @@
         async function handleLogout() {
             const pageCodes = Object.keys(PageManager.containers || {});
             if (!(await PageManager.confirmAndCleanupBeforeClose?.(pageCodes, "logout"))) return;
+            await PageManager.revokeLoginSession?.();
             PageManager.clearLoginSession?.();
             PageManager.resetWorkspaceForLogout?.();
             await PageManager.load('login', 'Data Editing System Login');

@@ -22,6 +22,7 @@ import oracledb
 from backend.database import get_db_connection, get_db_pool
 from backend.database_helper import execute_query, SqlLoader
 from backend.auth_context import get_request_user_id
+from backend.security import decrypt_secret, encrypt_secret
 
 
 logger = logging.getLogger(__name__)
@@ -123,19 +124,11 @@ def _normalize_yn(value, default="N"):
 
 
 def _encode_secret(value: Optional[str]) -> str:
-    if not value:
-        return ""
-    return "b64:" + base64.b64encode(value.encode("utf-8")).decode("ascii")
+    return encrypt_secret(value)
 
 
 def _decode_secret(value: Optional[str]) -> str:
-    text = value or ""
-    if text.startswith("b64:"):
-        try:
-            return base64.b64decode(text[4:].encode("ascii")).decode("utf-8")
-        except Exception:
-            return ""
-    return text
+    return decrypt_secret(value)
 
 
 def _hash_password(password: str) -> str:
@@ -1347,9 +1340,6 @@ def _record_created_object_deploy_statuses(conn, created_objects: list[dict], ob
 
 @router.get("/connections")
 def list_connections(request: Request, keyword: str = Query(""), includeShared: str = Query("N")):
-    user_id_header = request.headers.get("X-Login-User-Id")
-    if not user_id_header:
-        return {"status": "success", "data": [], "total": 0}
     user_id = get_request_user_id(request)
     conn = None
     try:

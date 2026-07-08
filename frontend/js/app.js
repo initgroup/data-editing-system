@@ -6,8 +6,9 @@ const DEFAULT_PAGE_CODE = "login";
 const DEFAULT_PAGE_TITLE = "Data Editing System Login";
 const SHELL_HIDDEN_PAGES = ["login"];
 const PUBLIC_PAGES = ["login"];
-const SESSION_TIMEOUT_MS = 60 * 60 * 1000;
+const SESSION_TIMEOUT_FALLBACK_MS = 60 * 60 * 1000;
 const SESSION_EXPIRES_AT_KEY = "initLoginExpiresAt";
+const SESSION_TTL_SECONDS_KEY = "initLoginTtlSeconds";
 const CURRENT_PAGE_KEY = "initCurrentPage";
 const CURRENT_PAGE_TITLE_KEY = "initCurrentPageTitle";
 // const API_BASE_URL = "http://127.0.0.1:8000/api";
@@ -78,10 +79,28 @@ const PageManager = {
         return roles.map((role) => String(role).toUpperCase()).includes(this.getRoleCode());
     },
 
-    extendSession() {
+    getSessionTimeoutMs() {
+        const ttlSeconds = Number(sessionStorage.getItem(SESSION_TTL_SECONDS_KEY) || "0");
+        return ttlSeconds > 0 ? ttlSeconds * 1000 : SESSION_TIMEOUT_FALLBACK_MS;
+    },
+
+    setSessionTtlSeconds(ttlSeconds) {
+        const parsed = Number(ttlSeconds);
+        if (Number.isFinite(parsed) && parsed > 0) {
+            sessionStorage.setItem(SESSION_TTL_SECONDS_KEY, String(Math.floor(parsed)));
+        }
+    },
+
+    extendSession(ttlSeconds) {
         if (!this.isAuthenticated()) return;
-        sessionStorage.setItem(SESSION_EXPIRES_AT_KEY, String(Date.now() + SESSION_TIMEOUT_MS));
+        this.setSessionTtlSeconds(ttlSeconds);
+        sessionStorage.setItem(SESSION_EXPIRES_AT_KEY, String(Date.now() + this.getSessionTimeoutMs()));
         this.updateSessionStatus();
+    },
+
+    extendSessionFromResponse(response) {
+        const ttlSeconds = response?.headers?.get?.("X-INIT-Session-TTL-Seconds");
+        this.extendSession(ttlSeconds);
     },
 
     clearLoginSession() {
@@ -91,6 +110,7 @@ const PageManager = {
         sessionStorage.removeItem("initBootstrapToken");
         sessionStorage.removeItem("initBootstrapAdminLoginId");
         sessionStorage.removeItem(SESSION_EXPIRES_AT_KEY);
+        sessionStorage.removeItem(SESSION_TTL_SECONDS_KEY);
         sessionStorage.removeItem(CURRENT_PAGE_KEY);
         sessionStorage.removeItem(CURRENT_PAGE_TITLE_KEY);
         window.I18nManager?.clearSessionLanguage?.();
@@ -168,6 +188,7 @@ const PageManager = {
             console.warn("[System] Session cleanup failed.", error);
         } finally {
             alert("Session expired. Please log in again.");
+            await this.revokeLoginSession();
             this.resetWorkspaceForLogout();
             await this.load(DEFAULT_PAGE_CODE, DEFAULT_PAGE_TITLE, false);
             this.isSessionExpiredHandling = false;
@@ -180,6 +201,31 @@ const PageManager = {
             return;
         }
         this.extendSession();
+    },
+
+    async validateServerSession() {
+        if (!this.isAuthenticated()) return false;
+        try {
+            const response = await fetch(`${API_BASE_URL}/M91001/session/me`, {
+                method: "GET",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include"
+            });
+            if (!response.ok) {
+                this.resetWorkspaceForLogout();
+                return false;
+            }
+            const json = await response.json().catch(() => ({}));
+            if (json.user) {
+                sessionStorage.setItem("initLoginUser", JSON.stringify(json.user));
+                this.extendSession(json.sessionTtlSeconds || response.headers.get("X-INIT-Session-TTL-Seconds"));
+            }
+            return true;
+        } catch (error) {
+            console.warn("[System] Session validation failed.", error);
+            this.resetWorkspaceForLogout();
+            return false;
+        }
     },
 
     rememberCurrentPage(pageCode, title) {
@@ -221,12 +267,36 @@ const PageManager = {
     async cleanupCurrentTargetConnection(reason = "") {
         const connectionId = sessionStorage.getItem("targetConnectionId") || "";
         if (!connectionId || !this.isAuthenticated()) return true;
-        const response = await CommonUtils.request(`${API_BASE_URL}/M91001/session/cleanup`, {
+        const headers = { "Content-Type": "application/json" };
+        if (connectionId) headers["X-Target-Connection-Id"] = connectionId;
+        const response = await fetch(`${API_BASE_URL}/M91001/session/cleanup`, {
             method: "POST",
-            showLoading: true,
-            body: { connectionId, reason }
+            headers,
+            credentials: "include",
+            body: JSON.stringify({ connectionId, reason })
         });
-        return response?.status === "success";
+        if (response.status === 401 || response.status === 403) {
+            console.warn("[System] Target cleanup skipped because the login session is already invalid.");
+            return true;
+        }
+        if (!response.ok) {
+            const errorJson = await response.json().catch(() => ({}));
+            throw new Error(CommonUtils.formatErrorMessage?.(errorJson, { status: response.status }) || "Target DB cleanup failed.");
+        }
+        const json = await response.json().catch(() => ({}));
+        return json?.status === "success";
+    },
+
+    async revokeLoginSession() {
+        try {
+            await fetch(`${API_BASE_URL}/M91001/logout`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include"
+            });
+        } catch (error) {
+            console.warn("[System] Logout session revoke failed.", error);
+        }
     },
 
     async confirmAndCleanupBeforeClose(pageCodes = [], actionText = "continue") {
@@ -242,7 +312,15 @@ const PageManager = {
             }
         }
 
-        await this.cleanupCurrentTargetConnection(actionText);
+        try {
+            await this.cleanupCurrentTargetConnection(actionText);
+        } catch (error) {
+            console.warn("[System] Target cleanup failed.", error);
+            if (String(actionText || "").toLowerCase() !== "logout") {
+                const proceed = await CommonMessage.confirm("Target DB cleanup failed. Continue anyway?");
+                if (!proceed) return false;
+            }
+        }
         return true;
     },
 
@@ -919,14 +997,15 @@ const ConsoleLogger = {
             if (this.settingsScopeKey === scopeKey) return;
 
             const headers = { "Content-Type": "application/json" };
-            headers["X-Login-User-Id"] = String(loginUser.userId);
-            if (loginUser.loginId) headers["X-Login-Id"] = String(loginUser.loginId);
-            if (loginUser.email) headers["X-Login-Email"] = String(loginUser.email);
-            if (loginUser.roleCode) headers["X-Login-Role-Code"] = String(loginUser.roleCode);
             headers["X-Target-Connection-Id"] = String(connectionId);
 
-            const response = await fetch(`${API_BASE_URL}/M91002/settings?categoryCode=OTHER`, { method: "GET", headers });
+            const response = await fetch(`${API_BASE_URL}/M91002/settings?categoryCode=OTHER`, {
+                method: "GET",
+                headers,
+                credentials: "include"
+            });
             if (!response.ok) return;
+            window.PageManager?.extendSessionFromResponse?.(response);
             this.settingsScopeKey = scopeKey;
             const json = await response.json();
             const rows = Array.isArray(json?.data) ? json.data : [];
@@ -1081,8 +1160,10 @@ const AIChatManager = {
             const response = await fetch(`${API_BASE_URL}/common/ai/ask`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ question, mode })
+                body: JSON.stringify({ question, mode }),
+                credentials: 'include'
             });
+            if (response.ok) window.PageManager?.extendSessionFromResponse?.(response);
 
             const result = await response.json();
 
@@ -1308,6 +1389,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     window.MenuRenderer?.render?.('mainNav', window.handleMenuClick);
     updateCurrentTargetDbSelect();
     PageManager.startSessionTimer();
+    await PageManager.validateServerSession();
     await window.reloadShellDisplaySettings?.();
     const initialPage = getInitialPageConfig();
     await PageManager.load(initialPage.pageCode, initialPage.title);

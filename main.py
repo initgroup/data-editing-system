@@ -4,8 +4,16 @@ import os
 from pathlib import Path
 import logging
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from backend.database import close_db_pool
 from backend.target_database import close_all_target_db_pools
+from backend.auth_context import (
+    authenticate_internal_api_request,
+    authenticate_request,
+    get_session_ttl_seconds,
+    refresh_session_cookie,
+    require_admin_role,
+)
 from backend.routers import common_router, googleGenai, home, M01001, M01002, M02001, M02002, M03001, M03002, M03003, M03004, M04001, M90001, M90002, M91001, M91002, M91003, M99001, M99002, M99003, M99004, metadata, ml_analysis, population_api
 from backend.services.anly_work_router import create_anly_work_router
 
@@ -16,7 +24,105 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="Data Editing System API")
 
 # CORS 설정
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+def _get_allowed_origins() -> list[str]:
+    configured = os.getenv("INIT_ALLOWED_ORIGINS", "")
+    origins = [item.strip() for item in configured.split(",") if item.strip()]
+    if origins:
+        return origins
+    return [
+        "http://127.0.0.1:8000",
+        "http://localhost:8000",
+        "http://127.0.0.1:5173",
+        "http://localhost:5173",
+    ]
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_get_allowed_origins(),
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=[
+        "Content-Type",
+        "Authorization",
+        "X-Target-Connection-Id",
+        "X-Connection-Id",
+        "X-Bootstrap-Token",
+        "X-INIT-API-Key",
+    ],
+    expose_headers=["X-INIT-Session-TTL-Seconds"],
+)
+
+
+PUBLIC_API_PATHS = {
+    "/api/health",
+    "/api/M91001/admin-contact",
+    "/api/M91001/signup/save",
+    "/api/M91001/login",
+    "/api/M91001/logout",
+    "/api/M99001/bootstrap/init-system",
+    "/api/M99001/connection/test",
+}
+
+ADMIN_API_PREFIXES = (
+    "/api/M99001",
+    "/api/M99002",
+    "/api/M99003",
+    "/api/M99004",
+)
+
+AUTHENTICATED_USER_API_PATHS = {
+    "/api/M99001/connections",
+}
+
+SENSITIVE_DIRECT_PATH_PREFIXES = (
+    "/.env",
+    "/backend",
+    "/database",
+    "/instantclient",
+    "/secreats",
+    "/secrets",
+    "/Wallet",
+)
+
+
+def _is_public_api_path(path: str) -> bool:
+    return path in PUBLIC_API_PATHS
+
+
+def _is_admin_api_path(path: str) -> bool:
+    if path in PUBLIC_API_PATHS:
+        return False
+    if path in AUTHENTICATED_USER_API_PATHS:
+        return False
+    return path.startswith(ADMIN_API_PREFIXES)
+
+
+@app.middleware("http")
+async def enforce_api_authentication(request, call_next):
+    path = request.url.path
+    if path == "/.env" or path.startswith(SENSITIVE_DIRECT_PATH_PREFIXES):
+        return JSONResponse(status_code=404, content={"detail": "Not found"})
+    browser_session_authenticated = False
+    if path.startswith("/api/") and request.method.upper() != "OPTIONS":
+        if not _is_public_api_path(path):
+            try:
+                if path.startswith("/api/mlAnalysis/") and authenticate_internal_api_request(request):
+                    pass
+                else:
+                    authenticate_request(request)
+                    browser_session_authenticated = True
+                if _is_admin_api_path(path):
+                    require_admin_role(request)
+            except Exception as exc:
+                status_code = getattr(exc, "status_code", 401)
+                detail = getattr(exc, "detail", "Login session is required.")
+                return JSONResponse(status_code=status_code, content={"detail": detail})
+    response = await call_next(request)
+    if browser_session_authenticated:
+        refresh_session_cookie(request, response)
+        response.headers["X-INIT-Session-TTL-Seconds"] = str(get_session_ttl_seconds())
+    return response
 
 
 @app.middleware("http")
