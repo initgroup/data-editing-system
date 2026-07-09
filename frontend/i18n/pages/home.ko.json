@@ -5,6 +5,9 @@
   "labels": {
     "integratedScenario": "통합 시나리오",
     "integratedScenarioDesc": "최근 7일 통합시나리오 실행 추이와 노드별 결과",
+    "homeGreetingReady": "{displayName}, 데이터 편집 준비 완료",
+    "homeContextActiveTarget": "현재 대상 DB: {targetName}. 최근 규칙 신호는 대상 DB 실행 이력에서 조회됩니다.",
+    "homeContextNoTarget": "선택된 대상 DB가 없습니다. 최근 규칙 발굴 및 위반 탐지 이력을 보려면 대상 DB를 선택하세요.",
     "selectIntegratedScenarioRun": "통합시나리오 실행을 선택하세요",
     "selectIntegratedScenarioRunDesc": "라인 그래프의 실행 지점을 선택하면 해당 날짜의 실행 목록과 노드별 결과가 표시됩니다.",
     "scenarioRunSummary": "시나리오 실행 요약",

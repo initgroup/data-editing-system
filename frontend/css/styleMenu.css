@@ -5809,10 +5809,18 @@ body.intro-mode #container-intro .env-panel {
             "title toolbar gemini menu"
             "actions actions actions actions";
         grid-template-columns: minmax(0, 1fr) auto auto auto;
+        background: #f8fafc !important;
+        box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+        flex: 0 0 auto;
         height: auto !important;
         min-height: 56px !important;
         overflow: visible;
         padding: 8px 10px !important;
+        position: sticky !important;
+        top: 0 !important;
+        -webkit-transform: translateZ(0);
+        transform: translateZ(0);
+        z-index: 240 !important;
     }
 
     .content-title-block {
@@ -5875,6 +5883,9 @@ body.intro-mode #container-intro .env-panel {
         color: #ffffff;
         grid-area: menu;
         height: 40px;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+        visibility: visible !important;
         width: 40px;
     }
 

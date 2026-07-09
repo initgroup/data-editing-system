@@ -57,10 +57,10 @@
             const connection = this.dashboardData?.system?.connection;
             const targetName = connection?.connectionName || this.getTargetName();
 
-            this.setText("homeGreeting", `${displayName}, ready for data editing`);
+            this.setText("homeGreeting", this.tFormat("homeGreetingReady", "{displayName}, ready for data editing", { displayName }));
             this.setText("homeContextSummary", targetName
-                ? `Active target database: ${targetName}. Recent rule signals are read from target execution history.`
-                : "No target database is selected. Select a target DB to view recent rule discovery and violation detection history.");
+                ? this.tFormat("homeContextActiveTarget", "Active target database: {targetName}. Recent rule signals are read from target execution history.", { targetName })
+                : this.t("homeContextNoTarget", "No target database is selected. Select a target DB to view recent rule discovery and violation detection history."));
             this.setText("homeUserName", displayName);
             this.setText("homeUserRole", String(role).toUpperCase());
             this.setText("homeTargetDb", targetName || "Not selected");
