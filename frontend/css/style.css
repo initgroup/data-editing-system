@@ -897,7 +897,7 @@ body {
 
   .common-message-footer {
     align-items: stretch;
-    flex-direction: column-reverse;
+    flex-direction: column;
   }
 
   .common-message-primary,

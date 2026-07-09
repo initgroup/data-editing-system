@@ -5589,6 +5589,7 @@ body.intro-mode #container-intro .env-panel {
 
 .mobile-top-toolbar-toggle,
 .mobile-gemini-toggle,
+.mobile-logout-toggle,
 .mobile-sidebar-toggle {
     display: none;
 }
@@ -5770,9 +5771,12 @@ body.intro-mode #container-intro .env-panel {
 
 @media (max-width: 1024px) {
     body:not(.intro-mode) .main-content {
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
         height: 100dvh !important;
         margin-left: 0 !important;
         max-height: 100dvh !important;
+        overflow: hidden !important;
         width: 100% !important;
     }
 
@@ -5820,11 +5824,12 @@ body.intro-mode #container-intro .env-panel {
     .content-header {
         display: grid !important;
         grid-template-areas:
-            "title toolbar gemini menu"
-            "actions actions actions actions";
-        grid-template-columns: minmax(0, 1fr) auto auto auto;
+            "title toolbar gemini logout menu"
+            "actions actions actions actions actions";
+        grid-template-columns: minmax(0, 1fr) auto auto auto auto;
         background: #f8fafc !important;
         box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+        column-gap: 6px;
         flex: 0 0 auto;
         height: auto !important;
         min-height: 56px !important;
@@ -5840,7 +5845,8 @@ body.intro-mode #container-intro .env-panel {
     body:not(.intro-mode) .content-header-shell {
         background: #f8fafc;
         flex: 0 0 auto;
-        position: relative;
+        position: sticky;
+        top: 0;
         -webkit-transform: none;
         transform: none;
         width: 100%;
@@ -5884,6 +5890,7 @@ body.intro-mode #container-intro .env-panel {
 
     .mobile-top-toolbar-toggle,
     .mobile-gemini-toggle,
+    .mobile-logout-toggle,
     #mobile-menu-btn.mobile-sidebar-toggle {
         align-items: center;
         background: #eef2f7;
@@ -5908,6 +5915,11 @@ body.intro-mode #container-intro .env-panel {
         grid-area: gemini;
     }
 
+    .mobile-logout-toggle {
+        color: #b91c1c;
+        grid-area: logout;
+    }
+
     #mobile-menu-btn.mobile-sidebar-toggle {
         background: #2563eb;
         border-color: #1d4ed8;
@@ -5923,10 +5935,17 @@ body.intro-mode #container-intro .env-panel {
 
     .mobile-top-toolbar-toggle:hover,
     .mobile-gemini-toggle:hover,
+    .mobile-logout-toggle:hover,
     #mobile-menu-btn.mobile-sidebar-toggle:hover {
         background: #e2e8f0;
         border-color: #94a3b8;
         color: #0f172a;
+    }
+
+    .mobile-logout-toggle:hover {
+        background: #fee2e2;
+        border-color: #fca5a5;
+        color: #991b1b;
     }
 
     .mobile-gemini-toggle.is-active {
@@ -5962,7 +5981,7 @@ body.intro-mode #container-intro .env-panel {
         width: 100%;
     }
 
-    #pageContainerHolder {
+    body:not(.intro-mode) #pageContainerHolder {
         padding: 12px !important;
     }
 }

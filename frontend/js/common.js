@@ -1274,16 +1274,20 @@ const CommonMessage = {
         popup.setAttribute("role", options.type === "confirm" || options.modal ? "dialog" : "status");
         popup.setAttribute("aria-modal", String(Boolean(options.modal)));
         popup.setAttribute("aria-describedby", bodyId);
+        const copyButtonHtml = options.copyable
+            ? `<button type="button" class="common-message-secondary" data-common-message-action="copy"><i class="fas fa-copy"></i><span>${this.escapeHtml(window.I18nManager?.t?.("commonMessage.copy", "Copy") || "Copy")}</span></button>`
+            : "";
         const confirmButtons = options.type === "confirm"
             ? `
-                <button type="button" class="common-message-secondary common-message-confirm-action${options.defaultAction === "cancel" ? " is-default-action" : ""}" data-common-message-action="cancel"${options.defaultAction === "cancel" ? " autofocus" : ""}>${this.escapeHtml(options.cancelText)}</button>
                 <button type="button" class="common-message-secondary common-message-confirm-action${options.defaultAction === "ok" ? " is-default-action" : ""}" data-common-message-action="ok"${options.defaultAction === "ok" ? " autofocus" : ""}>${this.escapeHtml(options.okText)}</button>
+                <button type="button" class="common-message-secondary common-message-confirm-action${options.defaultAction === "cancel" ? " is-default-action" : ""}" data-common-message-action="cancel"${options.defaultAction === "cancel" ? " autofocus" : ""}>${this.escapeHtml(options.cancelText)}</button>
+                ${copyButtonHtml}
             `
             : `<button type="button" class="common-message-primary" data-common-message-action="ok">${this.escapeHtml(options.okText)}</button>`;
         const footerHtml = options.toast ? "" : `
             <footer class="common-message-footer">
-                ${options.copyable ? `<button type="button" class="common-message-secondary" data-common-message-action="copy"><i class="fas fa-copy"></i><span>${this.escapeHtml(window.I18nManager?.t?.("commonMessage.copy", "Copy") || "Copy")}</span></button>` : ""}
                 ${confirmButtons}
+                ${options.type === "confirm" ? "" : copyButtonHtml}
             </footer>
         `;
         popup.innerHTML = `
@@ -1303,10 +1307,18 @@ const CommonMessage = {
         return new Promise((resolve) => {
             let closed = false;
             let autoCloseTimer = null;
+            const handleKeydown = (event) => {
+                if (event.key === "Escape") cleanup(options.type !== "confirm");
+                if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) cleanup(true);
+                if (options.modal && event.key === "Tab") {
+                    this.handleModalTabKey(event, popup);
+                }
+            };
             const cleanup = (result) => {
                 if (closed) return;
                 closed = true;
                 if (autoCloseTimer) window.clearTimeout(autoCloseTimer);
+                document.removeEventListener("keydown", handleKeydown, true);
                 popup.remove();
                 overlay?.remove();
                 resolve(result);
@@ -1324,10 +1336,8 @@ const CommonMessage = {
                     if (button.isConnected) button.innerHTML = original;
                 }, 1200);
             });
-            popup.addEventListener("keydown", (event) => {
-                if (event.key === "Escape") cleanup(options.type !== "confirm");
-                if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) cleanup(true);
-            });
+            popup.addEventListener("keydown", handleKeydown);
+            if (options.modal) document.addEventListener("keydown", handleKeydown, true);
             if (options.toast && options.autoCloseMs > 0) {
                 const startAutoClose = () => {
                     if (autoCloseTimer) window.clearTimeout(autoCloseTimer);
@@ -1340,14 +1350,57 @@ const CommonMessage = {
                 popup.addEventListener("pointerleave", startAutoClose);
                 startAutoClose();
             } else {
-                setTimeout(() => {
+                window.setTimeout(() => {
                     const focusTarget = options.type === "confirm"
                         ? popup.querySelector(`[data-common-message-action="${options.defaultAction}"]`)
                         : popup.querySelector(".common-message-primary");
-                    focusTarget?.focus();
-                }, 0);
+                    focusTarget?.focus({ preventScroll: true });
+                }, 30);
             }
         });
+    },
+    getFocusableElements(root) {
+        return Array.from(root.querySelectorAll([
+            "a[href]",
+            "button:not([disabled])",
+            "input:not([disabled])",
+            "select:not([disabled])",
+            "textarea:not([disabled])",
+            "[tabindex]:not([tabindex='-1'])"
+        ].join(","))).filter((el) => {
+            const rect = el.getBoundingClientRect();
+            const style = window.getComputedStyle(el);
+            return rect.width > 0
+                && rect.height > 0
+                && style.visibility !== "hidden"
+                && style.display !== "none";
+        });
+    },
+    handleModalTabKey(event, popup) {
+        const focusable = this.getFocusableElements(popup);
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        const active = document.activeElement;
+        if (!popup.contains(active)) {
+            event.preventDefault();
+            const entryTarget = event.shiftKey
+                ? last
+                : (popup.querySelector("[data-common-message-action='ok'], .common-message-primary") || first);
+            entryTarget.focus();
+            return;
+        }
+        if (event.shiftKey) {
+            if (active === first) {
+                event.preventDefault();
+                last.focus();
+            }
+            return;
+        }
+        if (active === last) {
+            event.preventDefault();
+            first.focus();
+        }
     },
     positionPopup(popup, isModal) {
         popup.style.left = "";
@@ -1507,9 +1560,79 @@ const CommonMessage = {
     }
 };
 
+const DialogFocusManager = {
+    focusableSelector: [
+        "a[href]",
+        "button:not([disabled])",
+        "input:not([disabled])",
+        "select:not([disabled])",
+        "textarea:not([disabled])",
+        "[tabindex]:not([tabindex='-1'])"
+    ].join(","),
+    init() {
+        if (this.initialized) return;
+        this.initialized = true;
+        document.addEventListener("keydown", (event) => {
+            if (event.key !== "Tab") return;
+            const dialog = this.getTopModalDialog();
+            if (!dialog) return;
+            this.trapTab(event, dialog);
+        }, true);
+    },
+    getTopModalDialog() {
+        const dialogs = Array.from(document.querySelectorAll('[role="dialog"][aria-modal="true"]'))
+            .filter((dialog) => {
+                if (dialog.closest(".common-message-popup")) return false;
+                if (dialog.hidden || dialog.getAttribute("aria-hidden") === "true") return false;
+                const layer = dialog.closest("[hidden]");
+                if (layer) return false;
+                const rect = dialog.getBoundingClientRect();
+                const style = window.getComputedStyle(dialog);
+                return rect.width > 0
+                    && rect.height > 0
+                    && style.display !== "none"
+                    && style.visibility !== "hidden";
+            });
+        return dialogs.length ? dialogs[dialogs.length - 1] : null;
+    },
+    getFocusableElements(dialog) {
+        return Array.from(dialog.querySelectorAll(this.focusableSelector)).filter((el) => {
+            const rect = el.getBoundingClientRect();
+            const style = window.getComputedStyle(el);
+            return rect.width > 0
+                && rect.height > 0
+                && style.display !== "none"
+                && style.visibility !== "hidden";
+        });
+    },
+    trapTab(event, dialog) {
+        const focusable = this.getFocusableElements(dialog);
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        const active = document.activeElement;
+        if (!dialog.contains(active)) {
+            event.preventDefault();
+            (event.shiftKey ? last : first).focus();
+            return;
+        }
+        if (event.shiftKey && active === first) {
+            event.preventDefault();
+            last.focus();
+            return;
+        }
+        if (!event.shiftKey && active === last) {
+            event.preventDefault();
+            first.focus();
+        }
+    }
+};
+
 window.CommonUI = CommonUI;
 window.CommonUtils = CommonUtils;
 window.CommonMessage = CommonMessage;
+window.DialogFocusManager = DialogFocusManager;
+DialogFocusManager.init();
 window.alert = (message) => {
     CommonMessage.alert(message, { type: CommonMessage.inferType(message) });
 };

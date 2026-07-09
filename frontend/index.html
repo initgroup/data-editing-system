@@ -5,14 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>INIT Data Editing System</title>
     <script>
-        window.APP_CACHE_VERSION = "1.1.145";
+        window.APP_CACHE_VERSION = "1.1.148";
         window.APP_ASSET_VERSION_OVERRIDES = {
             // 전체 캐시 갱신: APP_CACHE_VERSION만 올립니다.
             // 부분 캐시 갱신: "js/M90001.js": "1.0.1" 처럼 파일별 버전을 지정합니다.
             "js/MCOM_FLOW_WORK.js": "1.1.10",
             "pages/MCOM_FLOW_WORK.html": "1.1.2",
-            "css/style.css": "1.1.9",
-            "css/styleMenu.css": "1.1.76"
+            "css/style.css": "1.1.10",
+            "css/styleMenu.css": "1.1.78"
         };
         window.APP_PAGE_CSS_FILES = [
             "./css/pages/M01002.css",
@@ -93,6 +93,9 @@
                 </button>
                 <button id="mobileGeminiToggle" type="button" class="mobile-gemini-toggle" title="Open Gemini" aria-label="Open Gemini" aria-expanded="false" onclick="toggleMobileGemini()">
                     <i class="fas fa-robot"></i>
+                </button>
+                <button id="mobileLogoutButton" type="button" class="mobile-logout-toggle" title="Logout" aria-label="Logout" onclick="handleLogout()">
+                    <i class="fas fa-sign-out-alt"></i>
                 </button>
                 <div class="header-actions flex items-center">
                     <span id="currentLanguageBadge" class="header-language-badge" title="Language: English" data-language="en">ENG</span>
