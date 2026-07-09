@@ -281,7 +281,14 @@
             setTimeout(focus, 700);
         },
 
+        isMobileViewport() {
+            return window.matchMedia?.("(max-width: 900px), (pointer: coarse)")?.matches
+                || window.innerWidth <= 900;
+        },
+
         focusLoginId() {
+            if (this.isMobileViewport()) return;
+
             const focus = () => {
                 if (this.targetSelectionRequired) return;
                 const signupLayer = getContainerEl("#signupLayer");

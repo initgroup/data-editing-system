@@ -6074,6 +6074,50 @@ body.intro-mode #container-intro .env-panel {
     }
 }
 
+@media (max-width: 1024px) {
+    html {
+        height: auto !important;
+        min-height: 100%;
+        overflow-x: hidden;
+        overflow-y: auto !important;
+    }
+
+    body.intro-mode,
+    body:not(.intro-mode) {
+        display: block !important;
+        height: auto !important;
+        min-height: 100%;
+        overflow: visible !important;
+    }
+
+    body.intro-mode .main-content,
+    body:not(.intro-mode) .main-content {
+        display: block !important;
+        height: auto !important;
+        max-height: none !important;
+        min-height: 100vh;
+        min-height: 100svh;
+        overflow: visible !important;
+    }
+
+    body.intro-mode #contentWrapper,
+    body.intro-mode #main-container,
+    body.intro-mode #pageContainerHolder,
+    body:not(.intro-mode) #contentWrapper,
+    body:not(.intro-mode) #pageContainerHolder {
+        height: auto !important;
+        max-height: none !important;
+        min-height: 0;
+        overflow: visible !important;
+    }
+
+    body:not(.intro-mode) .content-header-shell {
+        position: sticky;
+        top: 0;
+        z-index: 260;
+    }
+}
+
 #container-M91001 > .m91002-main-panel,
 #container-M91002 > .m91002-main-panel {
     display: none;
