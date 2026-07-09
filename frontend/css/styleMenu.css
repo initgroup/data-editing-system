@@ -4960,7 +4960,7 @@ body.intro-mode #container-intro .env-panel {
 
 @media (max-width: 900px) {
     body.intro-mode #pageContainerHolder {
-        padding: 52px 20px 24px;
+        padding: 24px 20px 72px;
     }
 
     #container-login {
@@ -5006,7 +5006,7 @@ body.intro-mode #container-intro .env-panel {
 
 @media (max-width: 560px) {
     body.intro-mode #pageContainerHolder {
-        padding: 56px 14px 24px;
+        padding: 24px 14px 76px;
     }
 
     #container-login {
@@ -5999,7 +5999,7 @@ body.intro-mode #container-intro .env-panel {
 
 @media (max-width: 680px) {
     body.intro-mode #pageContainerHolder {
-        padding: 56px 14px 24px;
+        padding: 24px 14px 76px;
     }
 }
 
