@@ -5585,6 +5585,10 @@ body.intro-mode #container-intro .env-panel {
     display: none;
 }
 
+.content-header-shell {
+    flex: 0 0 auto;
+}
+
 @media (max-width: 1280px) {
     .content-header {
         padding: 6px 18px !important;
@@ -5816,11 +5820,30 @@ body.intro-mode #container-intro .env-panel {
         min-height: 56px !important;
         overflow: visible;
         padding: 8px 10px !important;
-        position: sticky !important;
-        top: 0 !important;
+        position: relative !important;
+        top: auto !important;
         -webkit-transform: translateZ(0);
         transform: translateZ(0);
-        z-index: 240 !important;
+        z-index: 1 !important;
+    }
+
+    body:not(.intro-mode) .content-header-shell {
+        background: #f8fafc;
+        left: 0;
+        position: fixed;
+        right: 0;
+        top: 0;
+        -webkit-transform: translateZ(0);
+        transform: translateZ(0);
+        z-index: 260;
+    }
+
+    body:not(.intro-mode) #contentWrapper {
+        flex: 0 0 auto;
+        height: calc(100dvh - 64px);
+        margin-top: 64px;
+        min-height: 0;
+        overflow: auto !important;
     }
 
     .content-title-block {
