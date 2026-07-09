@@ -2760,20 +2760,106 @@ body.is-resizing-flow-result-sql {
         min-height: 220px;
     }
 
+    #container-M04001.flow-work-page .flow-work-tabs {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        overflow: hidden;
+        width: 100%;
+    }
+
+    #container-M04001.flow-work-page .flow-work-tabs .table-tab {
+        flex: 1 1 0;
+        justify-content: center;
+        min-width: 0;
+        padding: 0 8px;
+    }
+
+    #container-M04001.flow-work-page .flow-work-tabs .table-tab span {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    #container-M04001.flow-work-page .flow-result-sql-toolbar {
+        align-items: stretch;
+        display: grid;
+        gap: 6px;
+        grid-template-columns: 34px minmax(0, 1fr);
+        width: 100%;
+    }
+
+    #container-M04001.flow-work-page .flow-result-sql-toolbar .sql-toolbar-actions {
+        display: flex;
+        min-width: 0;
+    }
+
+    #container-M04001.flow-work-page .flow-result-sql-toolbar .sql-toolbar-options {
+        align-items: center;
+        display: flex;
+        flex-wrap: nowrap;
+        gap: 6px;
+        justify-content: flex-start;
+        margin-left: 0;
+        min-width: 0;
+    }
+
+    #container-M04001.flow-work-page .flow-result-sql-toolbar .table-limit-control {
+        flex: 1 1 0;
+        gap: 4px;
+        min-width: 0;
+    }
+
+    #container-M04001.flow-work-page .flow-result-sql-toolbar .table-limit-control span {
+        flex: 0 0 auto;
+        white-space: nowrap;
+    }
+
+    #container-M04001.flow-work-page .flow-result-sql-toolbar .table-limit-control input {
+        flex: 1 1 56px;
+        min-width: 0;
+        width: 100%;
+    }
+
+    #container-M04001.flow-work-page .flow-result-sql-freeze + .flow-result-sql-limit {
+        margin-left: 0;
+    }
+
+    #container-M04001.flow-work-page .data-sql-result-header {
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    #container-M04001.flow-work-page .data-sql-result-header .table-empty {
+        flex: 1 1 150px;
+        min-width: 0;
+    }
+
+    #container-M04001.flow-work-page .data-sql-export-actions {
+        display: flex;
+        flex: 0 0 auto;
+        gap: 4px;
+        margin-left: auto;
+    }
+
     .flow-work-page .flow-workspace,
     .flow-work-page .flow-editor-layout {
         grid-template-columns: minmax(0, 1fr);
     }
 
     .flow-work-page .flow-workspace {
+        flex: 0 0 auto;
         grid-template-rows: clamp(260px, 30vh, 300px) minmax(380px, 1fr);
         height: auto;
+        min-height: 652px;
         overflow: visible;
     }
 
     .flow-work-page.is-flow-sidebar-collapsed .flow-workspace {
         grid-template-columns: minmax(0, 1fr);
         grid-template-rows: 48px minmax(380px, 1fr);
+        min-height: 440px;
     }
 
     .flow-work-page .flow-sidebar {

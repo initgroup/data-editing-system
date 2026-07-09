@@ -8435,7 +8435,7 @@ body.intro-mode #container-intro .env-panel {
 
 @media (max-width: 768px) {
     body:not(.intro-mode) #pageContainerHolder {
-        overflow-x: hidden !important;
+        overflow: visible !important;
     }
 }
 

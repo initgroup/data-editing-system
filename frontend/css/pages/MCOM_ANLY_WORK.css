@@ -126,6 +126,10 @@
     display: block;
     font-size: 15px;
     font-weight: 850;
+    max-width: 100%;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .anly-work-run-panel header span,
@@ -134,6 +138,10 @@
     color: #64748b;
     display: block;
     font-size: 12px;
+    max-width: 100%;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .anly-work-run-list {
@@ -587,6 +595,7 @@
     align-items: baseline;
     color: #475569;
     display: flex;
+    flex-wrap: wrap;
     font-size: 12px;
     gap: 6px;
     margin: 5px 0 0;
@@ -596,14 +605,19 @@
 
 .anly-work-result-job-desc b {
     color: #2563eb;
-    flex: 0 0 auto;
+    flex: 0 1 auto;
     font-size: 11px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .anly-work-result-job-desc {
-    overflow: hidden;
+    overflow: visible;
+    overflow-wrap: anywhere;
     text-overflow: ellipsis;
-    white-space: nowrap;
+    white-space: normal;
+    word-break: break-word;
 }
 
 .anly-work-execution-meta {
@@ -672,6 +686,7 @@
     overflow-wrap: anywhere;
     text-overflow: clip;
     white-space: normal;
+    word-break: break-word;
 }
 
 .anly-work-param-details {
@@ -3752,7 +3767,56 @@
         grid-template-columns: 1fr;
     }
 
-    .anly-work-execution-meta-grid {
+    .anly-work-result-header > div,
+    .anly-work-result-job-desc {
+        max-width: 100%;
+        width: 100%;
+    }
+
+    .anly-work-result-header strong,
+    .anly-work-result-header small,
+    .anly-work-result-job-desc,
+    .anly-work-result-job-desc b {
+        line-break: anywhere;
+        word-break: break-all;
+    }
+
+    .anly-work-execution-meta-grid,
+    .anly-work-violation-reason-strip {
         grid-template-columns: 1fr;
+    }
+
+    .anly-work-execution-meta-grid span,
+    .anly-work-param-details > div span,
+    .anly-work-violation-reason-strip > span,
+    .anly-work-violation-reason-strip > em {
+        max-width: 100%;
+        min-width: 0;
+        overflow: hidden;
+    }
+
+    .anly-work-execution-meta b,
+    .anly-work-param-details b,
+    .anly-work-violation-reason-strip b,
+    .anly-work-violation-reason-strip small,
+    .anly-work-violation-reason-strip em {
+        max-width: 100%;
+        min-width: 0;
+        overflow-wrap: anywhere;
+        white-space: normal;
+        word-break: break-word;
+    }
+
+    .anly-work-execution-meta-grid span b {
+        line-break: anywhere;
+        word-break: break-all;
+    }
+
+    .anly-work-rule-facet-panel,
+    .anly-work-rule-facet-panel .anly-work-rule-facet-block,
+    .anly-work-rule-condition-search,
+    .anly-work-rule-condition-search input {
+        max-width: 100%;
+        min-width: 0;
     }
 }
