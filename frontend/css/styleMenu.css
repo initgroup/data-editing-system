@@ -4960,12 +4960,49 @@ body.intro-mode #container-intro .env-panel {
 
 @media (max-width: 900px) {
     body.intro-mode #pageContainerHolder {
-        padding: 24px 20px 72px;
+        display: block;
+        padding: 0;
+    }
+
+    body.intro-mode #page-section-login,
+    body.intro-mode #page-section-intro {
+        box-sizing: border-box;
+        margin: 0 auto;
+        padding: 0;
+        width: min(560px, 100%);
     }
 
     #container-login {
         align-items: flex-start;
-        padding: 20px;
+        box-sizing: border-box;
+        flex-direction: column;
+        justify-content: flex-start;
+        min-height: 0 !important;
+        overflow: visible;
+        padding: 0 20px !important;
+    }
+
+    #container-login::before,
+    #container-login::after {
+        content: "";
+        display: block;
+        flex: 0 0 auto;
+        pointer-events: none;
+        width: 100%;
+    }
+
+    #container-login::before {
+        height: 24px;
+        min-height: 24px;
+    }
+
+    #container-login::after {
+        height: 72px;
+        min-height: 72px;
+    }
+
+    #container-login .login-stage {
+        align-self: center;
     }
 
     #container-login .login-stage {
@@ -5006,11 +5043,26 @@ body.intro-mode #container-intro .env-panel {
 
 @media (max-width: 560px) {
     body.intro-mode #pageContainerHolder {
-        padding: 24px 14px 76px;
+        padding: 0;
+    }
+
+    body.intro-mode #page-section-login,
+    body.intro-mode #page-section-intro {
+        padding: 0;
     }
 
     #container-login {
-        padding: 0;
+        padding: 0 14px !important;
+    }
+
+    #container-login::before {
+        height: 24px;
+        min-height: 24px;
+    }
+
+    #container-login::after {
+        height: 76px;
+        min-height: 76px;
     }
 
     #container-login .login-stage {
@@ -5999,7 +6051,26 @@ body.intro-mode #container-intro .env-panel {
 
 @media (max-width: 680px) {
     body.intro-mode #pageContainerHolder {
-        padding: 24px 14px 76px;
+        padding: 0;
+    }
+
+    body.intro-mode #page-section-login,
+    body.intro-mode #page-section-intro {
+        padding: 0;
+    }
+
+    #container-login {
+        padding: 0 14px !important;
+    }
+
+    #container-login::before {
+        height: 24px;
+        min-height: 24px;
+    }
+
+    #container-login::after {
+        height: 76px;
+        min-height: 76px;
     }
 }
 
