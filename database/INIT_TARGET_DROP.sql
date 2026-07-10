@@ -96,6 +96,10 @@ BEGIN
     drop_table_if_exists('INIT$_TB_SYMBOLIC_RULE_VIOLATION');
     drop_table_if_exists('INIT$_TB_SYMBOLIC_RULE');
     drop_table_if_exists('INIT$_TB_LASSO_FEATURE');
+    drop_table_if_exists('INIT$_TB_RELATION_NETWORK_EDGE');
+    drop_table_if_exists('INIT$_TB_RELATION_NETWORK_NODE');
+    drop_table_if_exists('INIT$_TB_RELATION_SUMMARY');
+    drop_table_if_exists('INIT$_TB_RELATION_PAIR');
     drop_table_if_exists('INIT$_TB_NUM_CORR_SUMMARY');
     drop_table_if_exists('INIT$_TB_NUM_CORR_PAIR');
     drop_table_if_exists('INIT$_TB_CAT_CORR_SUMMARY');
@@ -123,6 +127,11 @@ BEGIN
     drop_index_if_exists('IX_INIT$_TB_SYM_RULE_VIOL_01');
     drop_index_if_exists('IX_INIT$_TB_SYMBOLIC_RULE_01');
     drop_index_if_exists('IX_INIT$_TB_LASSO_FEATURE_01');
+    drop_index_if_exists('IX_INIT$_TB_REL_NET_EDGE_01');
+    drop_index_if_exists('IX_INIT$_TB_REL_NET_NODE_01');
+    drop_index_if_exists('IX_INIT$_TB_REL_SUMMARY_01');
+    drop_index_if_exists('IX_INIT$_TB_REL_PAIR_02');
+    drop_index_if_exists('IX_INIT$_TB_REL_PAIR_01');
     drop_index_if_exists('IX_INIT$_TB_NUM_CORR_SUMMARY_01');
     drop_index_if_exists('IX_INIT$_TB_NUM_CORR_PAIR_01');
     drop_index_if_exists('IX_INIT$_TB_RULE_VIOLATION_03');
@@ -138,6 +147,13 @@ BEGIN
     drop_index_if_exists('IX_INIT$_TB_OML_RESOURCE_01');
     drop_index_if_exists('IX_INIT$_TB_OBJECT_DETAIL_01');
     drop_index_if_exists('IX_INIT$_TB_OBJECT_01');
+    drop_index_if_exists('IX_INIT$_TB_FLOW_NODE_RUN_02');
+    drop_index_if_exists('IX_INIT$_TB_FLOW_NODE_RUN_01');
+    drop_index_if_exists('IX_INIT$_TB_FLOW_WORK_RUN_01');
+    drop_index_if_exists('IX_INIT$_TB_FLOW_WORK_EDGE_01');
+    drop_index_if_exists('IX_INIT$_TB_FLOW_WORK_01');
+    drop_index_if_exists('IX_INIT$_TB_DATA_WORK_RUN_02');
+    drop_index_if_exists('IX_INIT$_TB_DATA_WORK_RUN_01');
 
     DBMS_OUTPUT.PUT_LINE('=== INIT_TARGET DROP END ===');
 END;

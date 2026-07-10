@@ -77,6 +77,27 @@
             summaryKey: "correlationSummary",
             summaryRenderer: "renderCorrelationSummary"
         }),
+        "INIT$_TB_RELATION_PAIR": Object.freeze({
+            kind: "TABLE",
+            key: "TABLE:INIT$_TB_RELATION_PAIR",
+            title: "Result Table",
+            summaryKey: "relationSummary",
+            summaryRenderer: "renderRelationSummary"
+        }),
+        "INIT$_TB_RELATION_NETWORK_NODE": Object.freeze({
+            kind: "TABLE",
+            key: "TABLE:INIT$_TB_RELATION_NETWORK_NODE",
+            title: "Result Table",
+            summaryKey: "relationNetworkSummary",
+            summaryRenderer: "renderRelationNetworkSummary"
+        }),
+        "INIT$_TB_RELATION_NETWORK_EDGE": Object.freeze({
+            kind: "TABLE",
+            key: "TABLE:INIT$_TB_RELATION_NETWORK_EDGE",
+            title: "Result Table",
+            summaryKey: "relationNetworkSummary",
+            summaryRenderer: "renderRelationNetworkSummary"
+        }),
         "INIT$_TB_LASSO_FEATURE": Object.freeze({
             kind: "TABLE",
             key: "TABLE:INIT$_TB_LASSO_FEATURE",
@@ -140,6 +161,13 @@
         excludeEmptyConsequent: false,
         readableRuleConditionFilter: "ALL",
         readableRuleConfidenceFilter: "ALL",
+        correlationSummaryFilter: { kind: "ALL", colA: "", colB: "" },
+        relationSummaryFilter: "ALL",
+        relationPairFilter: { colA: "", colB: "" },
+        relationNetworkClusterFilter: "ALL",
+        relationNetworkPairFilter: { clusterId: "", colA: "", colB: "" },
+        lassoSummaryFilter: { direction: "ALL", targetColumn: "" },
+        lassoPairFilter: { targetColumn: "", featureName: "" },
         predictedTypeFilter: "ALL",
         predictedTypeViewMode: "TYPE",
         ruleSummaryFilters: { conditionCount: "ALL", confidenceScope: "ALL", resultColumn: "ALL", conditionColumn: "ALL", resultHasValueYn: "ALL", page: 1, pageSize: 20, resultColumnPage: 1 },
@@ -152,6 +180,7 @@
         lastViolationSummary: null,
         lastSymbolicRuleSummary: null,
         lastSymbolicViolationSummary: null,
+        lastRelationNetworkSummary: null,
         symbolicRuleChart: null,
         pendingRunId: "",
         isRunDeleteInProgress: false,
@@ -195,8 +224,16 @@
             this.lastViolationSummary = null;
             this.lastSymbolicRuleSummary = null;
             this.lastSymbolicViolationSummary = null;
+            this.lastRelationNetworkSummary = null;
             this.readableRuleConditionFilter = "ALL";
             this.readableRuleConfidenceFilter = "ALL";
+            this.correlationSummaryFilter = { kind: "ALL", colA: "", colB: "" };
+            this.relationSummaryFilter = "ALL";
+            this.relationPairFilter = { colA: "", colB: "" };
+            this.relationNetworkClusterFilter = "ALL";
+            this.relationNetworkPairFilter = { clusterId: "", colA: "", colB: "" };
+            this.lassoSummaryFilter = { direction: "ALL", targetColumn: "" };
+            this.lassoPairFilter = { targetColumn: "", featureName: "" };
             this.predictedTypeFilter = "ALL";
             this.predictedTypeViewMode = "TYPE";
             this.violationRuleFilters = { ruleId: "", conditionCount: "ALL", confidenceScope: "NON_PERFECT", resultScope: "HIT", page: 1, pageSize: 20 };
@@ -204,6 +241,7 @@
             this.symbolicViolationFilters = { method: "ALL", targetColumn: "ALL", resultScope: "ALL" };
             this.closeViolationSqlPopup();
             this.closeSymbolicRulePopup();
+            this.closeRelationNetworkPopup();
             this.pendingRunId = "";
             this.currentExport = { filename: "integrated-result.csv", columns: [], rows: [] };
             this.nodeResultCache = new Map();
@@ -237,6 +275,13 @@
                 excludeEmptyConsequent: this.excludeEmptyConsequent,
                 readableRuleConditionFilter: this.readableRuleConditionFilter,
                 readableRuleConfidenceFilter: this.readableRuleConfidenceFilter,
+                correlationSummaryFilter: this.cloneCacheValue(this.correlationSummaryFilter),
+                relationSummaryFilter: this.relationSummaryFilter,
+                relationPairFilter: this.cloneCacheValue(this.relationPairFilter),
+                relationNetworkClusterFilter: this.relationNetworkClusterFilter,
+                relationNetworkPairFilter: this.cloneCacheValue(this.relationNetworkPairFilter),
+                lassoSummaryFilter: this.cloneCacheValue(this.lassoSummaryFilter),
+                lassoPairFilter: this.cloneCacheValue(this.lassoPairFilter),
                 predictedTypeFilter: this.predictedTypeFilter,
                 predictedTypeViewMode: this.predictedTypeViewMode,
                 ruleSummaryFilters: this.cloneCacheValue(this.ruleSummaryFilters),
@@ -249,6 +294,7 @@
                 lastViolationSummary: this.cloneCacheValue(this.lastViolationSummary),
                 lastSymbolicRuleSummary: this.cloneCacheValue(this.lastSymbolicRuleSummary),
                 lastSymbolicViolationSummary: this.cloneCacheValue(this.lastSymbolicViolationSummary),
+                lastRelationNetworkSummary: this.cloneCacheValue(this.lastRelationNetworkSummary),
                 currentExport: this.cloneCacheValue(this.currentExport)
             });
         },
@@ -263,6 +309,13 @@
             this.excludeEmptyConsequent = Boolean(cached.excludeEmptyConsequent);
             this.readableRuleConditionFilter = cached.readableRuleConditionFilter || "ALL";
             this.readableRuleConfidenceFilter = cached.readableRuleConfidenceFilter || "ALL";
+            this.correlationSummaryFilter = cached.correlationSummaryFilter || { kind: "ALL", colA: "", colB: "" };
+            this.relationSummaryFilter = cached.relationSummaryFilter || "ALL";
+            this.relationPairFilter = cached.relationPairFilter || { colA: "", colB: "" };
+            this.relationNetworkClusterFilter = cached.relationNetworkClusterFilter || "ALL";
+            this.relationNetworkPairFilter = cached.relationNetworkPairFilter || { clusterId: "", colA: "", colB: "" };
+            this.lassoSummaryFilter = cached.lassoSummaryFilter || { direction: "ALL", targetColumn: "" };
+            this.lassoPairFilter = cached.lassoPairFilter || { targetColumn: "", featureName: "" };
             this.predictedTypeFilter = cached.predictedTypeFilter || "ALL";
             this.predictedTypeViewMode = cached.predictedTypeViewMode === "SOURCE" ? "SOURCE" : "TYPE";
             this.ruleSummaryFilters = {
@@ -302,6 +355,7 @@
             this.lastViolationSummary = this.cloneCacheValue(cached.lastViolationSummary);
             this.lastSymbolicRuleSummary = this.cloneCacheValue(cached.lastSymbolicRuleSummary);
             this.lastSymbolicViolationSummary = this.cloneCacheValue(cached.lastSymbolicViolationSummary);
+            this.lastRelationNetworkSummary = this.cloneCacheValue(cached.lastRelationNetworkSummary);
             this.currentExport = this.cloneCacheValue(cached.currentExport) || { filename: "integrated-result.csv", columns: [], rows: [] };
             panel.classList.remove("is-loading");
             panel.innerHTML = cached.html || emptyState("selectNodeForResult", "Select a node to view result details.");
@@ -805,6 +859,13 @@
             this.currentModelDetail = null;
             this.readableRuleConditionFilter = "ALL";
             this.readableRuleConfidenceFilter = "ALL";
+            this.correlationSummaryFilter = { kind: "ALL", colA: "", colB: "" };
+            this.relationSummaryFilter = "ALL";
+            this.relationPairFilter = { colA: "", colB: "" };
+            this.relationNetworkClusterFilter = "ALL";
+            this.relationNetworkPairFilter = { clusterId: "", colA: "", colB: "" };
+            this.lassoSummaryFilter = { direction: "ALL", targetColumn: "" };
+            this.lassoPairFilter = { targetColumn: "", featureName: "" };
             this.predictedTypeFilter = "ALL";
             this.predictedTypeViewMode = "TYPE";
             this.ruleSummaryFilters = { conditionCount: "ALL", confidenceScope: "ALL", resultColumn: "ALL", conditionColumn: "ALL", resultHasValueYn: "ALL", page: 1, pageSize: 20, resultColumnPage: 1 };
@@ -847,7 +908,7 @@
                 ruleId: normalizedRuleId,
                 conditionCount: normalizedConditionCount,
                 confidenceScope: "NON_PERFECT",
-                resultScope: "HIT",
+                resultScope: "CANDIDATE",
                 page: 1,
                 pageSize: 20
             };
@@ -890,11 +951,7 @@
             return (this.nodes || []).find((node) => this.isSymbolicViolationNode(node)) || null;
         },
 
-        async loadResultTable(page = 1) {
-            const node = this.selectedNode;
-            if (!node) return;
-            this.resultPage = Math.max(1, Number(page || 1));
-            this.showResultLoading(getText("Loading result table..."));
+        buildResultTableParams(node = this.selectedNode, page = 1) {
             const ruleModelName = this.getSelectedNodeRuleModelName(node);
             const params = new URLSearchParams({
                 owner: node.RESULT_OWNER,
@@ -903,12 +960,54 @@
                 targetOwner: node.TARGET_OWNER || "",
                 targetTable: node.TARGET_TABLE || "",
                 flowRunId: String(this.selectedRun?.FLOW_RUN_ID || ""),
-                page: String(this.resultPage),
+                page: String(Math.max(1, Number(page || 1))),
                 pageSize: String(this.resultPageSize)
             });
             if (ruleModelName) params.set("ruleModelName", ruleModelName);
             if (this.isPredictedTypeNode(node) && this.predictedTypeFilter !== "ALL") {
                 params.set("predictedTypeCase", this.predictedTypeFilter);
+            }
+            if (this.isCorrelationPairNode(node)) {
+                const filter = this.correlationSummaryFilter || {};
+                if (filter.kind === "PAIR" && filter.colA && filter.colB) {
+                    params.set("correlationColA", filter.colA);
+                    params.set("correlationColB", filter.colB);
+                }
+            }
+            if (this.isRelationPairNode(node)) {
+                const relationFilter = this.getActiveRelationGridFilter();
+                if (relationFilter.relationType) {
+                    params.set("relationType", relationFilter.relationType);
+                }
+                if (relationFilter.passYn) {
+                    params.set("relationPassYn", relationFilter.passYn);
+                }
+                if (relationFilter.colA && relationFilter.colB) {
+                    params.set("relationColA", relationFilter.colA);
+                    params.set("relationColB", relationFilter.colB);
+                }
+            }
+            if (this.isRelationNetworkResultNode(node)) {
+                const networkFilter = this.getActiveRelationNetworkGridFilter();
+                if (networkFilter.clusterId) {
+                    params.set("networkClusterId", networkFilter.clusterId);
+                }
+                if (networkFilter.colA && networkFilter.colB) {
+                    params.set("networkColA", networkFilter.colA);
+                    params.set("networkColB", networkFilter.colB);
+                }
+            }
+            if (this.isLassoFeatureNode(node)) {
+                const lassoFilter = this.getActiveLassoGridFilter();
+                if (lassoFilter.direction && lassoFilter.direction !== "ALL") {
+                    params.set("lassoDirection", lassoFilter.direction);
+                }
+                if (lassoFilter.targetColumn) {
+                    params.set("lassoTargetColumn", lassoFilter.targetColumn);
+                }
+                if (lassoFilter.featureName) {
+                    params.set("lassoFeatureName", lassoFilter.featureName);
+                }
             }
             if (this.isViolationNode(node)) {
                 const filters = this.violationRuleFilters || {};
@@ -940,6 +1039,15 @@
                 if (targetColumn && targetColumn !== "ALL") params.set("symbolicViolationTargetColumn", targetColumn);
                 if (["HIT", "CLEAN"].includes(resultScope)) params.set("symbolicViolationResultScope", resultScope);
             }
+            return params;
+        },
+
+        async loadResultTable(page = 1) {
+            const node = this.selectedNode;
+            if (!node) return;
+            this.resultPage = Math.max(1, Number(page || 1));
+            this.showResultLoading(getText("Loading result table..."));
+            const params = this.buildResultTableParams(node, this.resultPage);
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${API_PAGE_CODE}/result-table?${params.toString()}`, { method: "GET", showLoading: false });
                 if (this.selectedNode !== node) return;
@@ -949,6 +1057,56 @@
                 this.renderResultTable(json, resultLayout.title, resultLayout.kind);
             } catch (error) {
                 this.renderResultError(error.message || "Result table load failed.");
+            }
+        },
+
+        async refreshResultGridOnly(page = 1) {
+            const node = this.selectedNode;
+            const body = getContainerEl(`#tableResultBody-${PAGE_CODE}`);
+            if (!node || !body) {
+                await this.loadResultTable(page);
+                return;
+            }
+            this.resultPage = Math.max(1, Number(page || 1));
+            const restoreScroll = this.preserveResultScroll();
+            const previousMinHeight = body.style.minHeight;
+            const currentHeight = Math.max(120, body.offsetHeight || 0);
+            body.style.minHeight = `${currentHeight}px`;
+            body.classList.add("is-loading");
+            body.innerHTML = `<div class="table-empty">${this.escapeHtml(getText("Loading result table..."))}</div>`;
+            restoreScroll();
+            const params = this.buildResultTableParams(node, this.resultPage);
+            try {
+                const json = await CommonUtils.request(`${API_BASE_URL}/${API_PAGE_CODE}/result-table?${params.toString()}`, { method: "GET", showLoading: false });
+                if (this.selectedNode !== node) return;
+                const restoreAfterLoad = this.preserveResultScroll();
+                this.lastResultTableJson = {
+                    ...(this.lastResultTableJson || {}),
+                    ...json,
+                    correlationSummary: this.lastResultTableJson?.correlationSummary || json.correlationSummary,
+                    relationSummary: this.lastResultTableJson?.relationSummary || json.relationSummary,
+                    relationNetworkSummary: this.lastResultTableJson?.relationNetworkSummary || json.relationNetworkSummary,
+                    predictedTypeSummary: this.lastResultTableJson?.predictedTypeSummary || json.predictedTypeSummary,
+                    lassoSummary: this.lastResultTableJson?.lassoSummary || json.lassoSummary,
+                    violationSummary: this.lastResultTableJson?.violationSummary || json.violationSummary,
+                    symbolicRuleSummary: this.lastResultTableJson?.symbolicRuleSummary || json.symbolicRuleSummary,
+                    symbolicViolationSummary: this.lastResultTableJson?.symbolicViolationSummary || json.symbolicViolationSummary
+                };
+                this.currentExport = { filename: `${node.RESULT_OBJECT_NAME || "result"}.csv`, columns: json.columns || [], rows: json.data || [] };
+                this.refreshTableResultSummary({ preserveScroll: true });
+                body.classList.remove("is-loading");
+                body.innerHTML = this.renderResultTableBody(json);
+                restoreAfterLoad();
+                requestAnimationFrame(() => {
+                    body.style.minHeight = previousMinHeight;
+                    restoreAfterLoad();
+                });
+                this.snapshotNodeResultCache();
+            } catch (error) {
+                body.classList.remove("is-loading");
+                body.style.minHeight = previousMinHeight;
+                body.innerHTML = `<div class="table-error">${this.escapeHtml(error.message || "Result table load failed.")}</div>`;
+                restoreScroll();
             }
         },
 
@@ -1088,7 +1246,7 @@
                 </header>
                 ${viewType === "VR" ? this.renderRuleFilterBar() : ""}
                 ${readable}
-                ${this.renderGrid(json.columns || [], json.data || [])}
+                ${this.renderGrid(json.columns || [], json.data || [], json)}
                 ${this.renderResultPager(json.page, json.pageSize, json.total, `${PAGE_CODE}.loadModelView('${viewType}',`)}
             `;
             this.snapshotNodeResultCache();
@@ -1947,7 +2105,11 @@
             const callPage = (nextPage) => pageCall.endsWith(", ")
                 ? `${pageCall}${nextPage})`
                 : `${pageCall}(${nextPage})`;
-            const selectedPageSize = this.normalizeRuleCardPageSize(view.pageSize || options.defaultPageSize || 20);
+            const optionPageSizes = Array.isArray(options.pageSizes) ? options.pageSizes.map((size) => Number(size)) : [];
+            const rawPageSize = Number(view.pageSize || options.defaultPageSize || 20);
+            const selectedPageSize = optionPageSizes.includes(rawPageSize)
+                ? rawPageSize
+                : this.normalizeRuleCardPageSize(rawPageSize);
             const pageSizeSelect = Array.isArray(options.pageSizes) && options.pageSizes.length
                 ? `
                     <select id="${this.escapeHtml(pageSizeId)}" title="Page size" onchange="${this.escapeHtml(onPageSizeChange)}">
@@ -1968,6 +2130,26 @@
                     ${pageSizeSelect}
                 </div>
             `;
+        },
+
+        renderTableResultPageTools(inputName, json = {}) {
+            const inputId = `${inputName}-${PAGE_CODE}`;
+            return `
+                <div class="anly-work-result-page-tools">
+                    <span class="anly-work-result-total">${this.escapeHtml(getText("Grid total {count} rows", { count: this.formatNumber(json.total || 0) }))}</span>
+                    ${this.renderSamplePageJump(inputId, json, `${PAGE_CODE}.goTableResultPage('${this.escapeJs(inputId)}')`, `${PAGE_CODE}.loadResultTable`, {
+                        pageSizeId: `${inputId}-pageSize`,
+                        pageSizes: [20, 50, 100, 200, 500],
+                        onPageSizeChange: `${PAGE_CODE}.changeResultPageSize(this.value)`
+                    })}
+                </div>
+            `;
+        },
+
+        async goTableResultPage(inputId) {
+            const input = document.getElementById(String(inputId || ""));
+            const page = Math.max(1, Number(input?.value || this.resultPage || 1));
+            await this.loadResultTable(page);
         },
 
         renderTableResultSummary(json = {}) {
@@ -2000,11 +2182,100 @@
                     ${this.renderSelectedNodeExecutionMeta()}
                 </header>
                 ${this.renderTableResultSummaryShell(json)}
-                ${this.renderResultTableProfile(json.columns || [], json.data || [])}
-                ${this.renderGrid(json.columns || [], json.data || [], json)}
-                ${this.renderResultPager(json.page, json.pageSize, json.total, "${PAGE_CODE}.loadResultTable(")}
+                <div id="tableResultBody-${PAGE_CODE}" class="anly-work-result-body">
+                    ${this.renderResultTableBody(json)}
+                </div>
             `;
             this.snapshotNodeResultCache();
+        },
+
+        renderResultTableBody(json = {}) {
+            return `
+                ${this.renderResultTableProfile(json.columns || [], json.data || [])}
+                ${this.renderGrid(json.columns || [], json.data || [], json)}
+                ${this.renderResultPager(json.page, json.pageSize, json.total, "${PAGE_CODE}.refreshResultGridOnly(")}
+            `;
+        },
+
+        refreshTableResultSummary({ preserveScroll = false } = {}) {
+            const summaryPanel = getContainerEl(`#tableResultSummary-${PAGE_CODE}`);
+            if (!summaryPanel || !this.lastResultTableJson) return;
+            const restoreScroll = preserveScroll ? this.preserveResultScroll() : null;
+            summaryPanel.innerHTML = this.renderTableResultSummary(this.lastResultTableJson);
+            if (restoreScroll) {
+                restoreScroll();
+                requestAnimationFrame(restoreScroll);
+            }
+            this.snapshotNodeResultCache();
+        },
+
+        preserveResultScroll() {
+            const states = [];
+            const addState = (el) => {
+                if (!el || states.some((state) => state.el === el)) return;
+                states.push({ el, top: el.scrollTop || 0, left: el.scrollLeft || 0 });
+            };
+            addState(document.scrollingElement || document.documentElement);
+            const panel = getContainerEl(`#resultPanel-${PAGE_CODE}`);
+            let current = panel;
+            while (current && current !== document.body) {
+                if (current.scrollHeight > current.clientHeight || current.scrollWidth > current.clientWidth) {
+                    addState(current);
+                }
+                current = current.parentElement;
+            }
+            return () => {
+                states.forEach((state) => {
+                    state.el.scrollTop = state.top;
+                    state.el.scrollLeft = state.left;
+                });
+            };
+        },
+
+        updateResultFilterButtonStates() {
+            const summaryPanel = getContainerEl(`#tableResultSummary-${PAGE_CODE}`);
+            if (!summaryPanel) return;
+            summaryPanel.querySelectorAll("[data-anly-filter='correlation-pair']").forEach((button) => {
+                button.classList.toggle(
+                    "is-active",
+                    this.isColumnPairFilterActive(this.correlationSummaryFilter, button.dataset.colA || "", button.dataset.colB || "")
+                );
+            });
+            summaryPanel.querySelectorAll("[data-anly-filter='relation-pair']").forEach((button) => {
+                button.classList.toggle(
+                    "is-active",
+                    this.isColumnPairFilterActive(this.relationPairFilter, button.dataset.colA || "", button.dataset.colB || "")
+                );
+            });
+            summaryPanel.querySelectorAll("[data-anly-filter='relation-no-pair']").forEach((button) => {
+                const type = this.normalizeRelationType(button.dataset.relationType || "");
+                button.classList.toggle(
+                    "is-active",
+                    this.relationPairFilter?.relationType === type && this.relationPairFilter?.passYn === "N"
+                );
+            });
+            summaryPanel.querySelectorAll("[data-anly-filter='network-cluster']").forEach((button) => {
+                const clusterId = this.getRelationClusterId(button.dataset.clusterId || "");
+                button.classList.toggle("is-active", this.getActiveRelationNetworkClusterId() === clusterId);
+            });
+            summaryPanel.querySelectorAll("[data-anly-filter='network-pair']").forEach((button) => {
+                button.classList.toggle(
+                    "is-active",
+                    this.isRelationNetworkPairFilterActive(
+                        button.dataset.colA || "",
+                        button.dataset.colB || "",
+                        button.dataset.clusterId || ""
+                    )
+                );
+            });
+            summaryPanel.querySelectorAll("[data-anly-filter='lasso-pair']").forEach((button) => {
+                const filter = this.lassoPairFilter || {};
+                button.classList.toggle(
+                    "is-active",
+                    String(filter.targetColumn || "").trim() === String(button.dataset.targetColumn || "").trim()
+                    && String(filter.featureName || "").trim() === String(button.dataset.featureName || "").trim()
+                );
+            });
         },
 
         renderResultError(message) {
@@ -3057,13 +3328,14 @@
             document.addEventListener("mouseup", stop);
         },
 
-        renderCorrelationSummary(summary) {
+        renderCorrelationSummary(summary, json = {}) {
             if (!summary) return "";
             const columns = Array.isArray(summary.associatedColumns) ? summary.associatedColumns : [];
             const visibleColumns = columns.slice(0, 80);
             const hiddenCount = Math.max(0, columns.length - visibleColumns.length);
             const isNumeric = String(summary.correlationKind || "").toUpperCase() === "NUMERIC";
-            const topPairs = Array.isArray(summary.topPairs) ? summary.topPairs : [];
+            const topPairs = this.getRepresentativeColumnPairs(Array.isArray(summary.topPairs) ? summary.topPairs : []);
+            const pairFilter = this.correlationSummaryFilter || {};
             const metricLabel = summary.metricLabel || (isNumeric ? "|Pearson r|" : "Cramer's V");
             const signedMetricLabel = summary.signedMetricLabel || metricLabel;
             return `
@@ -3073,37 +3345,1230 @@
                             <strong>${this.escapeHtml(isNumeric ? getText("Numeric Correlation Summary") : getText("Categorical Correlation Summary"))}</strong>
                             <span>${this.escapeHtml(getText("Target {target} · {metric} basis", { target: `${summary.targetOwner}.${summary.targetTable}`, metric: metricLabel }))}</span>
                         </div>
-                        <div class="anly-work-corr-metrics">
-                            <span><b>${this.formatNumber(summary.totalColumnCount)}</b><small>${this.escapeHtml(getText("Total columns"))}</small></span>
-                            <span><b>${this.formatNumber(summary.associatedColumnCount)}</b><small>${this.escapeHtml(getText("Associated columns"))}</small></span>
-                            <span><b>${this.formatNumber(summary.associatedPairCount)}</b><small>${this.escapeHtml(getText("Associated pairs"))}</small></span>
-                            <span><b>${this.formatDecimal(summary.maxMetricValue)}</b><small>${this.escapeHtml(getText("Max metric"))}</small></span>
+                        <div class="anly-work-type-summary-actions">
+                            <div class="anly-work-corr-metrics">
+                                <span><b>${this.formatNumber(summary.totalColumnCount)}</b><small>${this.escapeHtml(getText("Total columns"))}</small></span>
+                                <span><b>${this.formatNumber(summary.associatedColumnCount)}</b><small>${this.escapeHtml(getText("Associated columns"))}</small></span>
+                                <span><b>${this.formatNumber(summary.associatedPairCount)}</b><small>${this.escapeHtml(getText("Associated pairs"))}</small></span>
+                                <span><b>${this.formatDecimal(summary.maxMetricValue)}</b><small>${this.escapeHtml(getText("Max metric"))}</small></span>
+                            </div>
+                            ${this.renderTableResultPageTools("correlationResultPage", json)}
                         </div>
                     </header>
                     <p>${this.escapeHtml(getText("{kind} columns saved with PASS_YN=Y total {columnCount}, and passed pairs total {pairCount} out of {totalPairCount}.", { kind: isNumeric ? getText("Numeric correlation") : getText("Categorical correlation"), columnCount: this.formatNumber(summary.associatedColumnCount), pairCount: this.formatNumber(summary.associatedPairCount), totalPairCount: this.formatNumber(summary.totalPairCount) }))}</p>
-                    <div class="anly-work-corr-tags">
-                        ${visibleColumns.map((column) => this.renderColumnChip(column, summary)).join("")}
-                        ${hiddenCount ? `<em class="anly-work-column-chip">+${this.formatNumber(hiddenCount)} more</em>` : ""}
-                    </div>
-                    ${topPairs.length ? `
-                        <div class="anly-work-corr-pair-strip">
-                            ${topPairs.map((pair) => `
-                                <span>
-                                    <b>${this.renderColumnAwareCell(pair.COL_A, summary)} ↔ ${this.renderColumnAwareCell(pair.COL_B, summary)}</b>
-                                    <small>${this.escapeHtml(signedMetricLabel)} ${this.formatDecimal(pair.METRIC_VALUE)} · ${this.escapeHtml(metricLabel)} ${this.formatDecimal(pair.SORT_METRIC_VALUE)} · p ${this.formatDecimal(pair.P_VALUE)}</small>
-                                </span>
-                            `).join("")}
+                    <div class="anly-work-relation-detail-panel">
+                        <header>
+                            <strong>${this.escapeHtml(pairFilter.kind === "PAIR" ? getText("Selected correlation pair") : getText("Passed correlation pairs"))}</strong>
+                            ${pairFilter.kind === "PAIR" ? `<button type="button" onclick="${PAGE_CODE}.selectCorrelationPairFilter('', '')">${this.escapeHtml(getText("Show all"))}</button>` : ""}
+                        </header>
+                        <div>
+                            <strong>${this.escapeHtml(getText("Related columns"))}</strong>
+                            <div class="anly-work-corr-tags">
+                                ${visibleColumns.map((column) => this.renderColumnChip(column, summary)).join("")}
+                                ${hiddenCount ? `<em class="anly-work-column-chip">+${this.formatNumber(hiddenCount)} more</em>` : ""}
+                                ${!visibleColumns.length ? `<em class="anly-work-column-chip">${this.escapeHtml(getText("No related columns."))}</em>` : ""}
+                            </div>
                         </div>
-                    ` : ""}
+                        <div>
+                            <strong>${this.escapeHtml(getText("Passed correlation pairs"))}</strong>
+                            ${topPairs.length ? `
+                                <div class="anly-work-relation-pair-list">
+                                    ${topPairs.map((pair) => this.renderCorrelationSummaryPairRow(pair, summary, signedMetricLabel, metricLabel)).join("")}
+                                </div>
+                            ` : `<div class="table-empty">${this.escapeHtml(getText("No passed correlation pairs to display."))}</div>`}
+                        </div>
+                    </div>
                 </section>
             `;
         },
 
-        renderLassoSummary(summary) {
+        renderCorrelationSummaryPairRow(pair, summary, signedMetricLabel, metricLabel) {
+            const colA = String(pair.COL_A || "").trim();
+            const colB = String(pair.COL_B || "").trim();
+            const active = this.isColumnPairFilterActive(this.correlationSummaryFilter, colA, colB);
+            return `
+                <button type="button" class="${active ? "is-active" : ""}" data-anly-filter="correlation-pair" data-col-a="${this.escapeHtml(colA)}" data-col-b="${this.escapeHtml(colB)}" onclick="${PAGE_CODE}.selectCorrelationPairFilter('${this.escapeJs(colA)}', '${this.escapeJs(colB)}')">
+                    <span class="anly-work-relation-pair-col is-left">${this.renderColumnAwareCell(colA, summary)}</span>
+                    <i aria-hidden="true">↔</i>
+                    <span class="anly-work-relation-pair-col is-right">${this.renderColumnAwareCell(colB, summary)}</span>
+                    <small>${this.escapeHtml(signedMetricLabel)} ${this.formatDecimal(pair.METRIC_VALUE)} · ${this.escapeHtml(metricLabel)} ${this.formatDecimal(pair.SORT_METRIC_VALUE)} · p ${this.formatDecimal(pair.P_VALUE)}</small>
+                </button>
+            `;
+        },
+
+        async selectCorrelationPairFilter(colA = "", colB = "") {
+            const nextA = String(colA || "").trim();
+            const nextB = String(colB || "").trim();
+            if (!nextA || !nextB || this.isColumnPairFilterActive(this.correlationSummaryFilter, nextA, nextB)) {
+                this.correlationSummaryFilter = { kind: "ALL", colA: "", colB: "" };
+            } else {
+                this.correlationSummaryFilter = { kind: "PAIR", colA: nextA, colB: nextB };
+            }
+            this.updateResultFilterButtonStates();
+            await this.refreshResultGridOnly(1);
+        },
+
+        renderRelationSummary(summary, json = {}) {
+            if (!summary) return "";
+            const relationTypes = this.sortRelationTypes(Array.isArray(summary.relationTypes) ? summary.relationTypes : []);
+            const validTypeSet = new Set(relationTypes.map((item) => this.normalizeRelationType(item.RELATION_TYPE)).filter(Boolean));
+            const selectedType = validTypeSet.has(this.relationSummaryFilter) ? this.relationSummaryFilter : "ALL";
+            const selectedTypeInfo = relationTypes.find((item) => this.normalizeRelationType(item.RELATION_TYPE) === selectedType) || null;
+            const topPairs = this.getRepresentativeColumnPairs(this.sortRelationPairs(Array.isArray(summary.topPairs) ? summary.topPairs : []));
+            const filteredPairs = selectedType === "ALL"
+                ? topPairs
+                : topPairs.filter((pair) => this.normalizeRelationType(pair.RELATION_TYPE) === selectedType);
+            const showNoRelationCard = selectedType !== "ALL"
+                && selectedTypeInfo
+                && Number(selectedTypeInfo.PAIR_COUNT || 0) <= 0
+                && Number(selectedTypeInfo.TOTAL_PAIR_COUNT || 0) > 0;
+            const columns = this.getRelationDetailColumns(summary, selectedType, filteredPairs);
+            const visibleColumns = columns.slice(0, 80);
+            const hiddenCount = Math.max(0, columns.length - visibleColumns.length);
+            return `
+                <section class="anly-work-corr-summary anly-work-relation-summary">
+                    <header>
+                        <div>
+                            <strong>${this.escapeHtml(getText("Relation Matrix Summary"))}</strong>
+                            <span>${this.escapeHtml(getText("Target {target} · mixed relation metric basis", { target: `${summary.targetOwner}.${summary.targetTable}` }))}</span>
+                        </div>
+                        <div class="anly-work-type-summary-actions">
+                            <div class="anly-work-corr-metrics">
+                                <span><b>${this.formatNumber(summary.totalColumnCount)}</b><small>${this.escapeHtml(getText("Total columns"))}</small></span>
+                                <span><b>${this.formatNumber(summary.associatedColumnCount)}</b><small>${this.escapeHtml(getText("Associated columns"))}</small></span>
+                                <span><b>${this.formatNumber(summary.associatedPairCount)}</b><small>${this.escapeHtml(getText("Associated pairs"))}</small></span>
+                                <span><b>${this.formatDecimal(summary.maxMetricValue)}</b><small>${this.escapeHtml(getText("Max metric"))}</small></span>
+                            </div>
+                            ${this.renderTableResultPageTools("relationResultPage", json)}
+                        </div>
+                    </header>
+                    <p>${this.escapeHtml(getText("Passed relation pairs total {pairCount} out of {totalPairCount}.", { pairCount: this.formatNumber(summary.associatedPairCount), totalPairCount: this.formatNumber(summary.totalPairCount) }))}</p>
+                    ${relationTypes.length ? `
+                        <div class="anly-work-relation-type-grid">
+                            ${relationTypes.slice(0, 8).map((item) => {
+                                const normalizedType = this.normalizeRelationType(item.RELATION_TYPE);
+                                const totalPairCount = item.TOTAL_PAIR_COUNT ?? item.PAIR_COUNT;
+                                const maxMetricValue = item.MAX_METRIC_VALUE ?? item.MAX_ANY_METRIC_VALUE;
+                                return `
+                                    <button type="button" class="${selectedType === normalizedType ? "is-active" : ""}" onclick="${PAGE_CODE}.selectRelationSummaryType('${this.escapeJs(normalizedType)}')">
+                                        <b>${this.formatNumber(item.PAIR_COUNT)} / ${this.formatNumber(totalPairCount)}</b>
+                                        <small>${this.escapeHtml(this.getRelationTypeLabel(item.RELATION_TYPE))}</small>
+                                        <em>${this.escapeHtml(getText("passed / total"))} · ${this.escapeHtml(getText("max"))} ${this.formatDecimal(maxMetricValue)}</em>
+                                    </button>
+                                `;
+                            }).join("")}
+                        </div>
+                    ` : ""}
+                    <div class="anly-work-relation-detail-panel">
+                        <header>
+                            <strong>${selectedType === "ALL" ? this.escapeHtml(getText("All relation types")) : this.escapeHtml(this.getRelationTypeLabel(selectedType))}</strong>
+                            ${selectedType !== "ALL" ? `<button type="button" onclick="${PAGE_CODE}.selectRelationSummaryType('ALL')">${this.escapeHtml(getText("Show all"))}</button>` : ""}
+                        </header>
+                        <div>
+                            <strong>${this.escapeHtml(getText("Related columns"))}</strong>
+                            <div class="anly-work-corr-tags">
+                                ${visibleColumns.map((column) => this.renderColumnChip(column, summary)).join("")}
+                                ${hiddenCount ? `<em class="anly-work-column-chip">+${this.formatNumber(hiddenCount)} more</em>` : ""}
+                                ${!visibleColumns.length ? `<em class="anly-work-column-chip">${this.escapeHtml(getText("No related columns."))}</em>` : ""}
+                            </div>
+                        </div>
+                        <div>
+                            <strong>${this.escapeHtml(getText("Passed relation pairs"))}</strong>
+                            ${filteredPairs.length || showNoRelationCard ? `
+                                <div class="anly-work-relation-pair-list">
+                                    ${filteredPairs.map((pair) => this.renderRelationSummaryPairRow(pair, summary)).join("")}
+                                    ${showNoRelationCard ? this.renderRelationNoPairRow(selectedType, selectedTypeInfo) : ""}
+                                </div>
+                            ` : `<div class="table-empty">${this.escapeHtml(getText("No passed relation pairs for the selected type."))}</div>`}
+                        </div>
+                    </div>
+                </section>
+            `;
+        },
+
+        async selectRelationSummaryType(type) {
+            const nextType = this.normalizeRelationType(type);
+            this.relationSummaryFilter = this.relationSummaryFilter === nextType ? "ALL" : nextType;
+            this.relationPairFilter = { colA: "", colB: "" };
+            this.refreshTableResultSummary({ preserveScroll: true });
+            await this.refreshResultGridOnly(1);
+        },
+
+        normalizeRelationType(value) {
+            const text = String(value || "").trim().toUpperCase();
+            if (text === "NUMERIC_CATEGORICAL") return "CATEGORICAL_NUMERIC";
+            return text || "ALL";
+        },
+
+        getRelationTypeOrder(value) {
+            const orderMap = {
+                CATEGORICAL_CATEGORICAL: 1,
+                NUMERIC_NUMERIC: 2,
+                CATEGORICAL_NUMERIC: 3
+            };
+            return orderMap[this.normalizeRelationType(value)] || 99;
+        },
+
+        sortRelationTypes(items = []) {
+            return [...items].sort((a, b) =>
+                this.getRelationTypeOrder(a.RELATION_TYPE) - this.getRelationTypeOrder(b.RELATION_TYPE)
+                || String(a.RELATION_TYPE || "").localeCompare(String(b.RELATION_TYPE || ""), "ko-KR")
+            );
+        },
+
+        sortRelationPairs(items = []) {
+            return [...items].sort((a, b) =>
+                this.getRelationTypeOrder(a.RELATION_TYPE) - this.getRelationTypeOrder(b.RELATION_TYPE)
+                || Number((b.ABS_METRIC_VALUE ?? b.SORT_METRIC_VALUE) || 0) - Number((a.ABS_METRIC_VALUE ?? a.SORT_METRIC_VALUE) || 0)
+                || String(a.COL_A || "").localeCompare(String(b.COL_A || ""), "ko-KR", { numeric: true })
+                || String(a.COL_B || "").localeCompare(String(b.COL_B || ""), "ko-KR", { numeric: true })
+            );
+        },
+
+        getRepresentativeColumnPairs(items = []) {
+            const representativeMap = new Map();
+            this.sortRelationPairs(items).forEach((pair) => {
+                const colA = String(pair.COL_A || "").trim();
+                const colB = String(pair.COL_B || "").trim();
+                if (!colA || !colB) return;
+                const ordered = [colA.toUpperCase(), colB.toUpperCase()].sort();
+                const key = `${this.normalizeRelationType(pair.RELATION_TYPE)}|${ordered[0]}|${ordered[1]}`;
+                if (!representativeMap.has(key)) representativeMap.set(key, pair);
+            });
+            return [...representativeMap.values()];
+        },
+
+        isColumnPairFilterActive(filter = {}, colA = "", colB = "") {
+            const leftA = String(filter?.colA || "").trim().toUpperCase();
+            const leftB = String(filter?.colB || "").trim().toUpperCase();
+            const rightA = String(colA || "").trim().toUpperCase();
+            const rightB = String(colB || "").trim().toUpperCase();
+            if (!leftA || !leftB || !rightA || !rightB) return false;
+            return (leftA === rightA && leftB === rightB) || (leftA === rightB && leftB === rightA);
+        },
+
+        hasActiveRelationGridFilter() {
+            const filter = this.getActiveRelationGridFilter();
+            return Boolean(
+                filter.relationType
+                || filter.passYn
+                || (filter.colA && filter.colB)
+            );
+        },
+
+        getActiveRelationGridFilter() {
+            const filter = this.relationPairFilter || {};
+            const summaryType = this.normalizeRelationType(this.relationSummaryFilter || "ALL");
+            const activeFilter = {};
+            if (summaryType && summaryType !== "ALL") {
+                activeFilter.relationType = summaryType;
+            }
+            if (filter.relationType) {
+                activeFilter.relationType = this.normalizeRelationType(filter.relationType);
+            }
+            if (filter.passYn) {
+                activeFilter.passYn = String(filter.passYn).trim().toUpperCase();
+            }
+            if (filter.colA && filter.colB) {
+                activeFilter.colA = filter.colA;
+                activeFilter.colB = filter.colB;
+            }
+            return activeFilter;
+        },
+
+        getRelationDetailColumns(summary = {}, selectedType = "ALL", pairs = []) {
+            const relationTypeColumns = Array.isArray(summary.relationTypeColumns) ? summary.relationTypeColumns : [];
+            const selectedColumns = [];
+            relationTypeColumns.forEach((item) => {
+                const type = this.normalizeRelationType(item.RELATION_TYPE);
+                const column = String(item.COLUMN_NAME || "").trim();
+                if (!column || (selectedType !== "ALL" && type !== selectedType)) return;
+                if (!selectedColumns.includes(column)) selectedColumns.push(column);
+            });
+            if (selectedColumns.length) {
+                return selectedColumns.sort((a, b) => a.localeCompare(b, "ko-KR", { numeric: true }));
+            }
+            const fallback = [];
+            pairs.forEach((pair) => {
+                [pair.COL_A, pair.COL_B].forEach((column) => {
+                    const text = String(column || "").trim();
+                    if (text && !fallback.includes(text)) fallback.push(text);
+                });
+            });
+            if (fallback.length) {
+                return fallback.sort((a, b) => a.localeCompare(b, "ko-KR", { numeric: true }));
+            }
+            return Array.isArray(summary.associatedColumns) ? summary.associatedColumns : [];
+        },
+
+        renderRelationSummaryPairRow(pair, summary) {
+            const colA = String(pair.COL_A || "").trim();
+            const colB = String(pair.COL_B || "").trim();
+            const active = this.isColumnPairFilterActive(this.relationPairFilter, colA, colB);
+            return `
+                <button type="button" class="${active ? "is-active" : ""}" data-anly-filter="relation-pair" data-col-a="${this.escapeHtml(colA)}" data-col-b="${this.escapeHtml(colB)}" onclick="${PAGE_CODE}.selectRelationPairFilter('${this.escapeJs(colA)}', '${this.escapeJs(colB)}', '${this.escapeJs(this.normalizeRelationType(pair.RELATION_TYPE))}')">
+                    <span class="anly-work-relation-pair-col is-left">${this.renderColumnAwareCell(colA, summary)}</span>
+                    <i aria-hidden="true">↔</i>
+                    <span class="anly-work-relation-pair-col is-right">${this.renderColumnAwareCell(colB, summary)}</span>
+                    <small>${this.escapeHtml(this.getRelationTypeLabel(pair.RELATION_TYPE))} · ${this.escapeHtml(pair.METRIC_NAME || "")} ${this.formatDecimal(pair.METRIC_VALUE)} · |metric| ${this.formatDecimal(pair.ABS_METRIC_VALUE)}</small>
+                </button>
+            `;
+        },
+
+        renderRelationNoPairRow(relationType, typeInfo = {}) {
+            const normalizedType = this.normalizeRelationType(relationType);
+            const active = this.relationPairFilter?.relationType === normalizedType
+                && this.relationPairFilter?.passYn === "N";
+            return `
+                <button type="button" class="${active ? "is-active" : ""} is-no-relation" data-anly-filter="relation-no-pair" data-relation-type="${this.escapeHtml(normalizedType)}" onclick="${PAGE_CODE}.selectRelationNoPairFilter('${this.escapeJs(normalizedType)}')">
+                    <span class="anly-work-relation-pair-col is-left">
+                        <span class="anly-work-column-ref"><b>${this.escapeHtml(this.getRelationTypeLabel(normalizedType))}</b><small>${this.escapeHtml(getText("No relation"))}</small></span>
+                    </span>
+                    <i aria-hidden="true">∅</i>
+                    <span class="anly-work-relation-pair-col is-right">
+                        <span class="anly-work-column-ref"><b>${this.formatNumber(typeInfo.TOTAL_PAIR_COUNT || 0)}</b><small>${this.escapeHtml(getText("candidate pairs"))}</small></span>
+                    </span>
+                    <small>${this.escapeHtml(getText("Click to show non-passed rows in the grid."))}</small>
+                </button>
+            `;
+        },
+
+        async selectRelationPairFilter(colA = "", colB = "", relationType = "ALL") {
+            const nextA = String(colA || "").trim();
+            const nextB = String(colB || "").trim();
+            if (!nextA || !nextB || this.isColumnPairFilterActive(this.relationPairFilter, nextA, nextB)) {
+                this.relationPairFilter = { colA: "", colB: "" };
+            } else {
+                this.relationPairFilter = { colA: nextA, colB: nextB };
+            }
+            this.updateResultFilterButtonStates();
+            await this.refreshResultGridOnly(1);
+        },
+
+        async selectRelationNoPairFilter(relationType = "ALL") {
+            const normalizedType = this.normalizeRelationType(relationType);
+            const active = this.relationPairFilter?.relationType === normalizedType
+                && this.relationPairFilter?.passYn === "N";
+            this.relationPairFilter = active
+                ? { colA: "", colB: "" }
+                : { colA: "", colB: "", relationType: normalizedType, passYn: "N", noRelation: true };
+            this.updateResultFilterButtonStates();
+            await this.refreshResultGridOnly(1);
+        },
+
+        renderRelationNetworkSummary(summary, json = {}) {
+            if (!summary) return "";
+            this.lastRelationNetworkSummary = summary;
+            const clusters = this.buildRelationNetworkClusters(summary);
+            const validClusterIds = new Set(clusters.map((cluster) => cluster.id));
+            const selectedClusterId = validClusterIds.has(this.getActiveRelationNetworkClusterId())
+                ? this.getActiveRelationNetworkClusterId()
+                : "ALL";
+            const topEdges = this.getRepresentativeColumnPairs(this.sortRelationPairs([
+                ...(Array.isArray(summary.edges) ? summary.edges : []),
+                ...(Array.isArray(summary.topEdges) ? summary.topEdges : [])
+            ]));
+            const visibleEdges = selectedClusterId === "ALL"
+                ? topEdges
+                : topEdges.filter((edge) => this.getRelationClusterId(edge.CLUSTER_ID) === selectedClusterId);
+            const detailColumns = this.getRelationNetworkDetailColumns(summary, selectedClusterId, visibleEdges, clusters);
+            const visibleColumns = detailColumns.slice(0, 80);
+            const hiddenCount = Math.max(0, detailColumns.length - visibleColumns.length);
+            return `
+                <section class="anly-work-corr-summary anly-work-network-summary">
+                    <header>
+                        <div>
+                            <strong>${this.escapeHtml(getText("Relation Network Summary"))}</strong>
+                            <span>${this.escapeHtml(getText("Target {target} · graph cluster basis", { target: `${summary.targetOwner}.${summary.targetTable}` }))}</span>
+                        </div>
+                        <div class="anly-work-type-summary-actions">
+                            <div class="anly-work-corr-metrics">
+                                <span><b>${this.formatNumber(summary.nodeCount)}</b><small>${this.escapeHtml(getText("Nodes"))}</small></span>
+                                <span><b>${this.formatNumber(summary.edgeCount)}</b><small>${this.escapeHtml(getText("Edges"))}</small></span>
+                                <span><b>${this.formatNumber(summary.clusterCount)}</b><small>${this.escapeHtml(getText("Clusters"))}</small></span>
+                                <span><b>${this.formatDecimal(summary.maxMetricValue)}</b><small>${this.escapeHtml(getText("Max metric"))}</small></span>
+                            </div>
+                            ${this.renderTableResultPageTools("networkResultPage", json)}
+                        </div>
+                    </header>
+                    <div class="anly-work-network-action-row">
+                        <p>${this.escapeHtml(getText("Network clusters are grouped by strongly connected relation edges. Use the graph view to inspect the full connection shape."))}</p>
+                        <button type="button" class="anly-work-network-graph-button" onclick="${PAGE_CODE}.openRelationNetworkPopup()" title="${this.escapeHtml(getText("View network graph"))}">
+                            <i class="fas fa-project-diagram"></i>
+                            <span>${this.escapeHtml(getText("Network Graph"))}</span>
+                        </button>
+                    </div>
+                    ${clusters.length ? `
+                        <div class="anly-work-network-cluster-grid">
+                            ${clusters.map((cluster) => {
+                                const active = selectedClusterId === cluster.id;
+                                return `
+                                <button type="button" class="${active ? "is-active" : ""}" data-anly-filter="network-cluster" data-cluster-id="${this.escapeHtml(cluster.id)}" onclick="${PAGE_CODE}.selectRelationNetworkClusterFilter('${this.escapeJs(cluster.id)}')">
+                                    <header>
+                                        <strong>${this.escapeHtml(getText("Cluster {cluster}", { cluster: cluster.id }))}</strong>
+                                        <span>${this.formatNumber(cluster.nodeCount)} ${this.escapeHtml(getText("nodes"))} · ${this.formatNumber(cluster.edgeCount)} ${this.escapeHtml(getText("edges"))}</span>
+                                    </header>
+                                    <div class="anly-work-corr-tags">
+                                        ${cluster.nodes.slice(0, 8).map((node) => this.renderColumnChip(node.COLUMN_NAME, summary)).join("")}
+                                        ${cluster.nodes.length > 8 ? `<em class="anly-work-column-chip">+${this.formatNumber(cluster.nodes.length - 8)} more</em>` : ""}
+                                    </div>
+                                    <footer>
+                                        <span>${this.escapeHtml(getText("degree"))} ${this.formatNumber(cluster.degreeCount)}</span>
+                                        <span>${this.escapeHtml(getText("centrality"))} ${this.formatDecimal(cluster.maxCentralityScore)}</span>
+                                    </footer>
+                                </button>
+                                `;
+                            }).join("")}
+                        </div>
+                    ` : ""}
+                    <div class="anly-work-relation-detail-panel">
+                        <header>
+                            <strong>${this.escapeHtml(selectedClusterId === "ALL" ? getText("All clusters") : getText("Cluster {cluster}", { cluster: selectedClusterId }))}</strong>
+                            ${selectedClusterId !== "ALL" ? `<button type="button" onclick="${PAGE_CODE}.selectRelationNetworkClusterFilter('ALL')">${this.escapeHtml(getText("Show all"))}</button>` : ""}
+                        </header>
+                        <div>
+                            <strong>${this.escapeHtml(getText("Related columns"))}</strong>
+                            <div class="anly-work-corr-tags">
+                                ${visibleColumns.map((column) => this.renderColumnChip(column, summary)).join("")}
+                                ${hiddenCount ? `<em class="anly-work-column-chip">+${this.formatNumber(hiddenCount)} more</em>` : ""}
+                                ${!visibleColumns.length ? `<em class="anly-work-column-chip">${this.escapeHtml(getText("No related columns."))}</em>` : ""}
+                            </div>
+                        </div>
+                        <div>
+                            <strong>${this.escapeHtml(getText("Network relation pairs"))}</strong>
+                            ${visibleEdges.length ? `
+                                <div class="anly-work-relation-pair-list">
+                                    ${visibleEdges.map((edge) => this.renderRelationNetworkPairRow(edge, summary)).join("")}
+                                </div>
+                            ` : `<div class="table-empty">${this.escapeHtml(getText("No network edges to display."))}</div>`}
+                        </div>
+                    </div>
+                </section>
+            `;
+        },
+
+        getActiveRelationNetworkClusterId() {
+            const clusterId = this.getRelationClusterId(this.relationNetworkClusterFilter);
+            return clusterId && clusterId !== "-" ? clusterId : "ALL";
+        },
+
+        getActiveRelationNetworkGridFilter() {
+            const filter = {};
+            const clusterId = this.getActiveRelationNetworkClusterId();
+            const pairFilter = this.relationNetworkPairFilter || {};
+            if (clusterId && clusterId !== "ALL") {
+                filter.clusterId = clusterId;
+            }
+            if (pairFilter.colA && pairFilter.colB) {
+                filter.colA = pairFilter.colA;
+                filter.colB = pairFilter.colB;
+                if (pairFilter.clusterId && !filter.clusterId) {
+                    filter.clusterId = this.getRelationClusterId(pairFilter.clusterId);
+                }
+            }
+            return filter;
+        },
+
+        getRelationNetworkDetailColumns(summary = {}, selectedClusterId = "ALL", edges = [], clusters = []) {
+            const columns = [];
+            const addColumn = (value) => {
+                const column = String(value || "").trim();
+                if (column && !columns.includes(column)) columns.push(column);
+            };
+            clusters.forEach((cluster) => {
+                if (selectedClusterId !== "ALL" && cluster.id !== selectedClusterId) return;
+                (cluster.nodes || []).forEach((node) => addColumn(node.COLUMN_NAME));
+            });
+            edges.forEach((edge) => {
+                addColumn(edge.COL_A);
+                addColumn(edge.COL_B);
+            });
+            if (!columns.length && Array.isArray(summary.nodes)) {
+                summary.nodes.forEach((node) => {
+                    if (selectedClusterId !== "ALL" && this.getRelationClusterId(node.CLUSTER_ID) !== selectedClusterId) return;
+                    addColumn(node.COLUMN_NAME);
+                });
+            }
+            return columns.sort((a, b) => a.localeCompare(b, "ko-KR", { numeric: true }));
+        },
+
+        renderRelationNetworkPairRow(edge, summary) {
+            const colA = String(edge.COL_A || "").trim();
+            const colB = String(edge.COL_B || "").trim();
+            const clusterId = this.getRelationClusterId(edge.CLUSTER_ID);
+            const active = this.isRelationNetworkPairFilterActive(colA, colB, clusterId);
+            return `
+                <button type="button" class="${active ? "is-active" : ""}" data-anly-filter="network-pair" data-col-a="${this.escapeHtml(colA)}" data-col-b="${this.escapeHtml(colB)}" data-cluster-id="${this.escapeHtml(clusterId)}" onclick="${PAGE_CODE}.selectRelationNetworkPairFilter('${this.escapeJs(colA)}', '${this.escapeJs(colB)}', '${this.escapeJs(clusterId)}')">
+                    <span class="anly-work-relation-pair-col is-left">${this.renderColumnAwareCell(colA, summary)}</span>
+                    <i aria-hidden="true">↔</i>
+                    <span class="anly-work-relation-pair-col is-right">${this.renderColumnAwareCell(colB, summary)}</span>
+                    <small>${this.escapeHtml(this.getRelationTypeLabel(edge.RELATION_TYPE))} · ${this.escapeHtml(edge.METRIC_NAME || "")} ${this.formatDecimal(edge.METRIC_VALUE)} · |metric| ${this.formatDecimal(edge.ABS_METRIC_VALUE)} · ${this.escapeHtml(getText("Cluster {cluster}", { cluster: clusterId }))}</small>
+                </button>
+            `;
+        },
+
+        isRelationNetworkPairFilterActive(colA = "", colB = "", clusterId = "") {
+            const filter = this.relationNetworkPairFilter || {};
+            const filterCluster = this.getRelationClusterId(filter.clusterId);
+            const targetCluster = this.getRelationClusterId(clusterId);
+            return this.isColumnPairFilterActive(filter, colA, colB)
+                && (!filterCluster || filterCluster === "-" || !targetCluster || targetCluster === "-" || filterCluster === targetCluster);
+        },
+
+        async selectRelationNetworkClusterFilter(clusterId = "ALL") {
+            const nextClusterId = this.getRelationClusterId(clusterId);
+            this.relationNetworkClusterFilter = this.getActiveRelationNetworkClusterId() === nextClusterId ? "ALL" : nextClusterId;
+            this.relationNetworkPairFilter = { clusterId: "", colA: "", colB: "" };
+            this.refreshTableResultSummary({ preserveScroll: true });
+            await this.refreshResultGridOnly(1);
+        },
+
+        async selectRelationNetworkPairFilter(colA = "", colB = "", clusterId = "") {
+            const nextA = String(colA || "").trim();
+            const nextB = String(colB || "").trim();
+            const nextClusterId = this.getRelationClusterId(clusterId);
+            if (!nextA || !nextB || this.isRelationNetworkPairFilterActive(nextA, nextB, nextClusterId)) {
+                this.relationNetworkPairFilter = { clusterId: "", colA: "", colB: "" };
+            } else {
+                this.relationNetworkPairFilter = { clusterId: nextClusterId, colA: nextA, colB: nextB };
+            }
+            this.updateResultFilterButtonStates();
+            await this.refreshResultGridOnly(1);
+        },
+
+        getRelationTypeLabel(value) {
+            const text = this.normalizeRelationType(value);
+            const labels = {
+                NUMERIC_NUMERIC: "Numeric-Numeric",
+                CATEGORICAL_CATEGORICAL: "Categorical-Categorical",
+                CATEGORICAL_NUMERIC: "Categorical-Numeric"
+            };
+            return getText(labels[text] || text || "-");
+        },
+
+        getRelationClusterId(value) {
+            const text = String(value ?? "").trim();
+            return text || "-";
+        },
+
+        buildRelationNetworkClusters(summary = {}) {
+            const nodes = Array.isArray(summary.nodes) ? summary.nodes : [];
+            const edges = Array.isArray(summary.edges) ? summary.edges : [];
+            const topClusters = Array.isArray(summary.topClusters) ? summary.topClusters : [];
+            const clusterMap = new Map();
+            const ensureCluster = (clusterId) => {
+                const id = this.getRelationClusterId(clusterId);
+                if (!clusterMap.has(id)) {
+                    clusterMap.set(id, {
+                        id,
+                        nodeCount: 0,
+                        edgeCount: 0,
+                        degreeCount: 0,
+                        maxCentralityScore: 0,
+                        nodes: []
+                    });
+                }
+                return clusterMap.get(id);
+            };
+            topClusters.forEach((item) => {
+                const cluster = ensureCluster(item.CLUSTER_ID);
+                cluster.nodeCount = Math.max(cluster.nodeCount, Number(item.NODE_COUNT || 0));
+                cluster.degreeCount = Math.max(cluster.degreeCount, Number(item.DEGREE_COUNT || 0));
+                cluster.maxCentralityScore = Math.max(cluster.maxCentralityScore, Number(item.MAX_CENTRALITY_SCORE || 0));
+            });
+            nodes.forEach((node) => {
+                const cluster = ensureCluster(node.CLUSTER_ID);
+                cluster.nodes.push(node);
+                cluster.nodeCount = Math.max(cluster.nodeCount, cluster.nodes.length, Number(node.NODE_COUNT || 0));
+                cluster.degreeCount += Number(node.DEGREE_COUNT || 0);
+                cluster.maxCentralityScore = Math.max(cluster.maxCentralityScore, Number(node.CENTRALITY_SCORE || 0));
+            });
+            edges.forEach((edge) => {
+                ensureCluster(edge.CLUSTER_ID).edgeCount += 1;
+            });
+            clusterMap.forEach((cluster) => {
+                if (cluster.nodes.length) {
+                    cluster.nodeCount = Math.max(cluster.nodeCount, cluster.nodes.length);
+                    cluster.degreeCount = cluster.nodes.reduce((sum, node) => sum + Number(node.DEGREE_COUNT || 0), 0);
+                    cluster.maxCentralityScore = cluster.nodes.reduce((max, node) => Math.max(max, Number(node.CENTRALITY_SCORE || 0)), 0);
+                }
+            });
+            return [...clusterMap.values()]
+                .sort((a, b) => (b.nodeCount - a.nodeCount) || String(a.id).localeCompare(String(b.id), "ko-KR", { numeric: true }))
+                .slice(0, 12);
+        },
+
+        buildRelationNetworkGraphData(summary = {}) {
+            const rawNodes = Array.isArray(summary.nodes) ? summary.nodes : [];
+            const rawEdges = Array.isArray(summary.edges) ? summary.edges : [];
+            const nodeMap = new Map();
+            const addNode = (name, clusterId = "-", source = {}) => {
+                const nodeName = String(name || "").trim();
+                if (!nodeName) return;
+                const existing = nodeMap.get(nodeName) || {
+                    name: nodeName,
+                    clusterId: this.getRelationClusterId(clusterId),
+                    columnType: "",
+                    comment: this.getColumnComment(nodeName, summary),
+                    degree: 0,
+                    centrality: 0
+                };
+                existing.clusterId = this.getRelationClusterId(clusterId ?? existing.clusterId);
+                existing.columnType = String(source.COLUMN_TYPE || existing.columnType || "");
+                existing.comment = String(source.COLUMN_COMMENT || existing.comment || this.getColumnComment(nodeName, summary) || "").trim();
+                existing.degree = Math.max(existing.degree, Number(source.DEGREE_COUNT || 0));
+                existing.centrality = Math.max(existing.centrality, Number(source.CENTRALITY_SCORE || 0));
+                nodeMap.set(nodeName, existing);
+            };
+            rawNodes.forEach((node) => addNode(node.COLUMN_NAME, node.CLUSTER_ID, node));
+            rawEdges.forEach((edge) => {
+                addNode(edge.COL_A, edge.CLUSTER_ID);
+                addNode(edge.COL_B, edge.CLUSTER_ID);
+            });
+            const nodes = [...nodeMap.values()]
+                .sort((a, b) => String(a.clusterId).localeCompare(String(b.clusterId), "ko-KR", { numeric: true }) || (b.centrality - a.centrality) || (b.degree - a.degree) || a.name.localeCompare(b.name))
+                .slice(0, 120);
+            const nodeNames = new Set(nodes.map((node) => node.name));
+            const edges = rawEdges
+                .map((edge) => ({
+                    source: String(edge.COL_A || "").trim(),
+                    target: String(edge.COL_B || "").trim(),
+                    clusterId: this.getRelationClusterId(edge.CLUSTER_ID),
+                    relationType: String(edge.RELATION_TYPE || ""),
+                    metricName: String(edge.METRIC_NAME || ""),
+                    metricValue: Number(edge.METRIC_VALUE || 0),
+                    weight: Number(edge.ABS_METRIC_VALUE || 0)
+                }))
+                .filter((edge) => edge.source && edge.target && nodeNames.has(edge.source) && nodeNames.has(edge.target))
+                .slice(0, 240);
+            const clusterIds = [...new Set(nodes.map((node) => node.clusterId))]
+                .sort((a, b) => String(a).localeCompare(String(b), "ko-KR", { numeric: true }));
+            return {
+                nodes,
+                edges,
+                clusterIds,
+                maxMetric: Math.max(0.0001, ...edges.map((edge) => edge.weight || 0))
+            };
+        },
+
+        calculateRelationNetworkGraphPositions(graph = {}, summary = {}, width = 920, height = 560, clusterCenters = new Map(), clusterNodeMap = new Map()) {
+            const palette = ["#2563eb", "#059669", "#d97706", "#7c3aed", "#dc2626", "#0891b2", "#be123c", "#4f46e5", "#65a30d", "#9333ea", "#0f766e", "#ea580c"];
+            const margin = 64;
+            const graphNodes = Array.isArray(graph.nodes) ? graph.nodes : [];
+            const layoutNodes = graphNodes.map((node, index) => {
+                const clusterId = this.getRelationClusterId(node.clusterId);
+                const clusterNodes = clusterNodeMap.get(clusterId) || [];
+                const clusterIndex = Math.max(0, clusterNodes.findIndex((item) => String(item.name) === String(node.name)));
+                const center = clusterCenters.get(clusterId) || { x: width / 2, y: height / 2, color: palette[index % palette.length] };
+                const comment = String(node.comment || this.getColumnComment(node.name, summary) || "").trim();
+                const labelChars = Math.max(String(node.name || "").length, comment.length);
+                const ringRadius = clusterNodes.length <= 1
+                    ? 18
+                    : Math.min(176, Math.max(86, 52 + (clusterNodes.length * 15) + Math.min(46, labelChars * 1.2)));
+                const angle = clusterNodes.length <= 1
+                    ? ((index * 2.399963229728653) - Math.PI / 2)
+                    : (((Math.PI * 2 * clusterIndex) / Math.max(1, clusterNodes.length)) - Math.PI / 2);
+                return {
+                    node,
+                    name: String(node.name || ""),
+                    clusterId,
+                    color: center.color,
+                    x: center.x + Math.cos(angle) * ringRadius,
+                    y: center.y + Math.sin(angle) * ringRadius,
+                    vx: 0,
+                    vy: 0,
+                    labelSize: Math.min(170, Math.max(92, (Math.min(24, labelChars) * 7) + 28))
+                };
+            });
+            const nodeByName = new Map(layoutNodes.map((item) => [item.name, item]));
+            const layoutEdges = (Array.isArray(graph.edges) ? graph.edges : [])
+                .map((edge) => ({
+                    edge,
+                    source: nodeByName.get(String(edge.source || "")),
+                    target: nodeByName.get(String(edge.target || "")),
+                    weight: Math.max(0.05, Number(edge.weight || 0) / Math.max(0.0001, Number(graph.maxMetric || 1)))
+                }))
+                .filter((item) => item.source && item.target && item.source !== item.target);
+            const iterations = Math.min(220, Math.max(100, layoutNodes.length * 12));
+            for (let step = 0; step < iterations; step += 1) {
+                const alpha = 1 - (step / iterations);
+                for (let i = 0; i < layoutNodes.length; i += 1) {
+                    for (let j = i + 1; j < layoutNodes.length; j += 1) {
+                        const a = layoutNodes[i];
+                        const b = layoutNodes[j];
+                        let dx = b.x - a.x;
+                        let dy = b.y - a.y;
+                        let distance = Math.hypot(dx, dy);
+                        if (distance < 0.01) {
+                            dx = ((i + 1) * 0.37) - ((j + 1) * 0.19);
+                            dy = ((j + 1) * 0.29) - ((i + 1) * 0.11);
+                            distance = Math.hypot(dx, dy) || 1;
+                        }
+                        const sameCluster = a.clusterId === b.clusterId;
+                        const minDistance = sameCluster
+                            ? Math.max(96, (a.labelSize + b.labelSize) * 0.42)
+                            : Math.max(122, (a.labelSize + b.labelSize) * 0.48);
+                        const repel = (sameCluster ? 8200 : 11800) * alpha / Math.max(distance * distance, 1);
+                        const collision = distance < minDistance ? ((minDistance - distance) * 0.035 * alpha) : 0;
+                        const force = repel + collision;
+                        const fx = (dx / distance) * force;
+                        const fy = (dy / distance) * force;
+                        a.vx -= fx;
+                        a.vy -= fy;
+                        b.vx += fx;
+                        b.vy += fy;
+                    }
+                }
+                layoutEdges.forEach(({ source, target, weight }) => {
+                    const dx = target.x - source.x;
+                    const dy = target.y - source.y;
+                    const distance = Math.hypot(dx, dy) || 1;
+                    const desired = source.clusterId === target.clusterId ? 142 : 188;
+                    const force = ((distance - desired) * (0.006 + (weight * 0.006))) * alpha;
+                    const fx = (dx / distance) * force;
+                    const fy = (dy / distance) * force;
+                    source.vx += fx;
+                    source.vy += fy;
+                    target.vx -= fx;
+                    target.vy -= fy;
+                });
+                layoutNodes.forEach((item) => {
+                    const center = clusterCenters.get(item.clusterId) || { x: width / 2, y: height / 2 };
+                    item.vx += (center.x - item.x) * 0.010 * alpha;
+                    item.vy += (center.y - item.y) * 0.010 * alpha;
+                    item.vx *= 0.74;
+                    item.vy *= 0.74;
+                    item.x = Math.min(width - margin, Math.max(margin, item.x + item.vx));
+                    item.y = Math.min(height - margin, Math.max(margin, item.y + item.vy));
+                });
+            }
+            const positions = new Map();
+            layoutNodes.forEach((item) => {
+                const center = clusterCenters.get(item.clusterId) || { x: width / 2, y: height / 2 };
+                positions.set(item.name, {
+                    x: item.x,
+                    y: item.y,
+                    angle: Math.atan2(item.y - center.y, item.x - center.x),
+                    color: item.color
+                });
+            });
+            return positions;
+        },
+
+        renderRelationNetworkGraphSvg(summary = {}) {
+            const graph = this.buildRelationNetworkGraphData(summary);
+            if (!graph.nodes.length) {
+                return `<div class="table-empty">${this.escapeHtml(getText("No network nodes to display."))}</div>`;
+            }
+            const width = 920;
+            const height = 560;
+            const centerX = width / 2;
+            const centerY = height / 2;
+            const palette = ["#2563eb", "#059669", "#d97706", "#7c3aed", "#dc2626", "#0891b2", "#be123c", "#4f46e5", "#65a30d", "#9333ea", "#0f766e", "#ea580c"];
+            const clusterCenters = new Map();
+            const outerRadiusX = Math.max(160, width * 0.33);
+            const outerRadiusY = Math.max(110, height * 0.27);
+            graph.clusterIds.forEach((clusterId, index) => {
+                const angle = graph.clusterIds.length === 1 ? -Math.PI / 2 : ((Math.PI * 2 * index) / graph.clusterIds.length) - Math.PI / 2;
+                clusterCenters.set(clusterId, {
+                    x: graph.clusterIds.length === 1 ? centerX : centerX + Math.cos(angle) * outerRadiusX,
+                    y: graph.clusterIds.length === 1 ? centerY : centerY + Math.sin(angle) * outerRadiusY,
+                    color: palette[index % palette.length]
+                });
+            });
+            const clusterNodeMap = new Map();
+            graph.nodes.forEach((node) => {
+                if (!clusterNodeMap.has(node.clusterId)) clusterNodeMap.set(node.clusterId, []);
+                clusterNodeMap.get(node.clusterId).push(node);
+            });
+            const positions = this.calculateRelationNetworkGraphPositions(graph, summary, width, height, clusterCenters, clusterNodeMap);
+            const edgeLines = graph.edges.map((edge) => {
+                const from = positions.get(edge.source);
+                const to = positions.get(edge.target);
+                if (!from || !to) return "";
+                const widthValue = 1 + Math.min(4, ((edge.weight || 0) / graph.maxMetric) * 4);
+                const metricText = `${edge.metricName} ${this.formatDecimal(edge.metricValue)} · |metric| ${this.formatDecimal(edge.weight)}`;
+                const title = `${edge.source} ↔ ${edge.target} · ${this.getRelationTypeLabel(edge.relationType)} · ${metricText}`;
+                const dx = to.x - from.x;
+                const dy = to.y - from.y;
+                const distance = Math.max(1, Math.hypot(dx, dy));
+                const labelText = `${edge.metricName} ${this.formatDecimal(edge.weight)}`;
+                const labelWidth = Math.min(150, Math.max(64, (labelText.length * 5.8) + 16));
+                const labelHeight = 18;
+                const labelX = ((from.x + to.x) / 2) + ((-dy / distance) * 16);
+                const labelY = ((from.y + to.y) / 2) + ((dx / distance) * 16);
+                const showEdgeLabel = graph.edges.length <= 10 && distance >= 150;
+                return `
+                    <g class="edge-group">
+                    <line x1="${from.x.toFixed(1)}" y1="${from.y.toFixed(1)}" x2="${to.x.toFixed(1)}" y2="${to.y.toFixed(1)}" stroke="#64748b" stroke-width="${widthValue.toFixed(2)}" stroke-opacity="0.42">
+                        <title>${this.escapeHtml(title)}</title>
+                    </line>
+                    ${showEdgeLabel ? `
+                        <g class="edge-label-pill">
+                            <rect x="${(labelX - (labelWidth / 2)).toFixed(1)}" y="${(labelY - (labelHeight / 2)).toFixed(1)}" width="${labelWidth.toFixed(1)}" height="${labelHeight}" rx="9"></rect>
+                            <text class="edge-label" x="${labelX.toFixed(1)}" y="${(labelY + 3.5).toFixed(1)}">${this.escapeHtml(labelText)}</text>
+                        </g>
+                    ` : ""}
+                    </g>
+                `;
+            }).join("");
+            const clusterBubbles = graph.clusterIds.map((clusterId) => {
+                const center = clusterCenters.get(clusterId);
+                const nodes = clusterNodeMap.get(clusterId) || [];
+                const radius = Math.min(240, Math.max(96, nodes.reduce((max, node) => {
+                    const pos = positions.get(node.name);
+                    if (!pos) return max;
+                    return Math.max(max, Math.hypot(pos.x - center.x, pos.y - center.y) + 58);
+                }, 96)));
+                return `
+                    <circle cx="${center.x.toFixed(1)}" cy="${center.y.toFixed(1)}" r="${radius}" fill="${center.color}" fill-opacity="0.055" stroke="${center.color}" stroke-opacity="0.2" stroke-width="1.5"></circle>
+                    <text x="${center.x.toFixed(1)}" y="${(center.y - radius - 10).toFixed(1)}" class="cluster-label" text-anchor="middle" fill="${center.color}">${this.escapeHtml(getText("Cluster {cluster}", { cluster: clusterId }))}</text>
+                `;
+            }).join("");
+            const nodeLabels = graph.nodes.map((node, index) => {
+                const pos = positions.get(node.name);
+                if (!pos) return "";
+                const radius = Math.max(5, Math.min(13, 5 + Math.sqrt(Number(node.degree || 0))));
+                const label = node.name.length > 18 ? `${node.name.slice(0, 17)}...` : node.name;
+                const comment = String(node.comment || this.getColumnComment(node.name, summary) || "").trim();
+                const commentLabel = comment.length > 18 ? `${comment.slice(0, 17)}...` : comment;
+                const showLabel = graph.nodes.length <= 60 || index < 36;
+                const angle = Number.isFinite(pos.angle) ? pos.angle : 0;
+                const horizontal = Math.cos(angle);
+                const vertical = Math.sin(angle);
+                const labelWidth = Math.min(142, Math.max(68, (Math.max(label.length, commentLabel.length) * 7) + 18));
+                const labelHeight = commentLabel ? 34 : 21;
+                let textAnchor = "start";
+                let labelX = pos.x + radius + 9;
+                let labelY = pos.y + 4;
+                let rectX = labelX - 7;
+                if (Math.abs(horizontal) < 0.32) {
+                    textAnchor = "middle";
+                    labelX = pos.x;
+                    labelY = pos.y + (vertical >= 0 ? radius + 24 : -radius - 15);
+                    rectX = labelX - (labelWidth / 2);
+                } else if (horizontal < 0) {
+                    textAnchor = "end";
+                    labelX = pos.x - radius - 9;
+                    labelY = pos.y + 4;
+                    rectX = labelX - labelWidth + 7;
+                }
+                const rectY = labelY - 15;
+                const title = [
+                    node.name,
+                    comment,
+                    `${getText("Cluster {cluster}", { cluster: node.clusterId })}`,
+                    `${getText("degree")} ${this.formatNumber(node.degree)}`,
+                    `${getText("centrality")} ${this.formatDecimal(node.centrality)}`
+                ].filter(Boolean).join(" · ");
+                return `
+                    <g>
+                        <circle cx="${pos.x.toFixed(1)}" cy="${pos.y.toFixed(1)}" r="${radius.toFixed(1)}" fill="${pos.color}" stroke="#ffffff" stroke-width="2">
+                            <title>${this.escapeHtml(title)}</title>
+                        </circle>
+                        ${showLabel ? `
+                            <g class="node-label">
+                                <rect x="${rectX.toFixed(1)}" y="${rectY.toFixed(1)}" width="${labelWidth.toFixed(1)}" height="${labelHeight}" rx="4"></rect>
+                                <text x="${labelX.toFixed(1)}" y="${labelY.toFixed(1)}" text-anchor="${textAnchor}">
+                                    <tspan>${this.escapeHtml(label)}</tspan>
+                                    ${commentLabel ? `<tspan class="node-comment" x="${labelX.toFixed(1)}" dy="13">${this.escapeHtml(commentLabel)}</tspan>` : ""}
+                                </text>
+                            </g>
+                        ` : ""}
+                    </g>
+                `;
+            }).join("");
+            return `
+                <div class="anly-work-network-graph-shell">
+                    <div class="anly-work-network-graph-tools">
+                        <button type="button" onclick="${PAGE_CODE}.zoomRelationNetworkGraph(1.16)" title="${this.escapeHtml(getText("Zoom in"))}"><i class="fas fa-search-plus"></i></button>
+                        <button type="button" onclick="${PAGE_CODE}.zoomRelationNetworkGraph(0.86)" title="${this.escapeHtml(getText("Zoom out"))}"><i class="fas fa-search-minus"></i></button>
+                        <button type="button" onclick="${PAGE_CODE}.resetRelationNetworkGraphView()" title="${this.escapeHtml(getText("Reset view"))}"><i class="fas fa-compress-arrows-alt"></i></button>
+                        <button type="button" data-anly-network-maximize-btn onclick="${PAGE_CODE}.toggleRelationNetworkGraphMaximize()" title="${this.escapeHtml(getText("Maximize graph"))}" aria-pressed="false"><i class="fas fa-expand"></i></button>
+                        <span data-anly-network-zoom-label>100%</span>
+                    </div>
+                    <svg class="anly-work-network-svg" data-anly-network-svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${this.escapeHtml(getText("Relation network graph"))}">
+                        <rect x="1" y="1" width="${width - 2}" height="${height - 2}" fill="#f8fafc" stroke="#dbe3ef"></rect>
+                        <g data-anly-network-viewport>
+                            ${clusterBubbles}
+                            ${edgeLines}
+                            ${nodeLabels}
+                        </g>
+                    </svg>
+                </div>
+            `;
+        },
+
+        renderRelationNetworkPopupOverview(summary = {}, graph = {}) {
+            return `
+                <div class="anly-work-network-insight-grid" aria-label="${this.escapeHtml(getText("Network overview"))}">
+                    <span><b>${this.formatNumber(summary.nodeCount ?? graph.nodes?.length ?? 0)}</b><small>${this.escapeHtml(getText("Nodes"))}</small></span>
+                    <span><b>${this.formatNumber(summary.edgeCount ?? graph.edges?.length ?? 0)}</b><small>${this.escapeHtml(getText("Edges"))}</small></span>
+                    <span><b>${this.formatNumber(summary.clusterCount ?? graph.clusterIds?.length ?? 0)}</b><small>${this.escapeHtml(getText("Clusters"))}</small></span>
+                    <span><b>${this.formatDecimal(summary.maxMetricValue)}</b><small>${this.escapeHtml(getText("Max metric"))}</small></span>
+                    <span><b>${this.formatDecimal(summary.averageMetricValue)}</b><small>${this.escapeHtml(getText("Metric average"))}</small></span>
+                </div>
+            `;
+        },
+
+        renderRelationNetworkPopupClusterList(clusters = [], summary = {}) {
+            if (!clusters.length) return `<em>${this.escapeHtml(getText("No cluster information."))}</em>`;
+            return clusters.map((cluster) => {
+                const columns = (cluster.nodes || [])
+                    .map((node) => String(node.COLUMN_NAME || "").trim())
+                    .filter(Boolean)
+                    .slice(0, 6);
+                return `
+                    <span>
+                        <b>${this.escapeHtml(getText("Cluster {cluster}", { cluster: cluster.id }))}</b>
+                        <small>${this.formatNumber(cluster.nodeCount)} ${this.escapeHtml(getText("nodes"))} · ${this.formatNumber(cluster.edgeCount)} ${this.escapeHtml(getText("edges"))} · ${this.escapeHtml(getText("centrality"))} ${this.formatDecimal(cluster.maxCentralityScore)}</small>
+                        ${columns.length ? `<i>${columns.map((column) => this.renderColumnChip(column, summary)).join("")}</i>` : ""}
+                    </span>
+                `;
+            }).join("");
+        },
+
+        renderRelationNetworkPopupNodeCards(summary = {}, graph = {}) {
+            const nodes = Array.isArray(graph.nodes) ? graph.nodes : [];
+            if (!nodes.length) return `<div class="table-empty">${this.escapeHtml(getText("No network nodes to display."))}</div>`;
+            return `
+                <div class="anly-work-network-node-list">
+                    ${nodes.slice(0, 48).map((node) => `
+                        <span class="anly-work-network-node-card">
+                            ${this.renderColumnAwareCell(node.name, summary)}
+                            <small>${this.escapeHtml(this.getRelationTypeLabel(node.columnType || "-"))} · ${this.escapeHtml(getText("Cluster {cluster}", { cluster: node.clusterId }))}</small>
+                            <em>${this.escapeHtml(getText("degree"))} ${this.formatNumber(node.degree)} · ${this.escapeHtml(getText("centrality"))} ${this.formatDecimal(node.centrality)}</em>
+                        </span>
+                    `).join("")}
+                </div>
+            `;
+        },
+
+        renderRelationNetworkPopupEdgeTable(summary = {}, graph = {}) {
+            const edges = Array.isArray(graph.edges) ? graph.edges : [];
+            if (!edges.length) return `<div class="table-empty">${this.escapeHtml(getText("No network edges to display."))}</div>`;
+            return `
+                <div class="anly-work-network-edge-table-wrap">
+                    <table class="anly-work-network-edge-table">
+                        <thead>
+                            <tr>
+                                <th>No</th>
+                                <th>${this.escapeHtml(getText("Cluster"))}</th>
+                                <th>${this.escapeHtml(getText("Column A"))}</th>
+                                <th>${this.escapeHtml(getText("Column B"))}</th>
+                                <th>${this.escapeHtml(getText("Relation type"))}</th>
+                                <th>${this.escapeHtml(getText("Metric"))}</th>
+                                <th>${this.escapeHtml(getText("Metric value"))}</th>
+                                <th>${this.escapeHtml(getText("Abs metric"))}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${edges.slice(0, 120).map((edge, index) => `
+                                <tr>
+                                    <td>${this.formatNumber(index + 1)}</td>
+                                    <td>${this.escapeHtml(edge.clusterId)}</td>
+                                    <td>${this.renderColumnAwareCell(edge.source, summary)}</td>
+                                    <td>${this.renderColumnAwareCell(edge.target, summary)}</td>
+                                    <td>${this.escapeHtml(this.getRelationTypeLabel(edge.relationType))}</td>
+                                    <td>${this.escapeHtml(edge.metricName || "")}</td>
+                                    <td>${this.formatDecimal(edge.metricValue)}</td>
+                                    <td>${this.formatDecimal(edge.weight)}</td>
+                                </tr>
+                            `).join("")}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        },
+
+        openRelationNetworkPopup() {
+            const summary = this.lastRelationNetworkSummary || this.lastResultTableJson?.relationNetworkSummary;
+            if (!summary) {
+                alert(getText("Network summary information could not be found."));
+                return;
+            }
+            this.closeRelationNetworkPopup();
+            const popup = document.createElement("div");
+            popup.id = `${PAGE_ID_PREFIX}RelationNetworkPopup`;
+            popup.className = "anly-work-symbolic-popup anly-work-relation-network-popup";
+            popup.innerHTML = this.renderRelationNetworkPopup(summary);
+            document.body.appendChild(popup);
+            this.initRelationNetworkGraphInteraction();
+        },
+
+        closeRelationNetworkPopup() {
+            if (typeof this.relationNetworkGraphCleanup === "function") {
+                this.relationNetworkGraphCleanup();
+                this.relationNetworkGraphCleanup = null;
+            }
+            const popup = document.getElementById(`${PAGE_ID_PREFIX}RelationNetworkPopup`);
+            if (popup) popup.remove();
+        },
+
+        getRelationNetworkGraphElements() {
+            const popup = document.getElementById(`${PAGE_ID_PREFIX}RelationNetworkPopup`);
+            const svg = popup?.querySelector("[data-anly-network-svg]");
+            const viewport = popup?.querySelector("[data-anly-network-viewport]");
+            const zoomLabel = popup?.querySelector("[data-anly-network-zoom-label]");
+            return { popup, svg, viewport, zoomLabel };
+        },
+
+        getRelationNetworkGraphPoint(event, svg) {
+            const rect = svg.getBoundingClientRect();
+            const viewBox = svg.viewBox.baseVal;
+            const scaleX = viewBox.width / Math.max(1, rect.width);
+            const scaleY = viewBox.height / Math.max(1, rect.height);
+            return {
+                x: viewBox.x + ((event.clientX - rect.left) * scaleX),
+                y: viewBox.y + ((event.clientY - rect.top) * scaleY),
+                scaleX,
+                scaleY
+            };
+        },
+
+        clampRelationNetworkGraphView(view = {}, svg = null) {
+            const viewBox = svg?.viewBox?.baseVal;
+            const width = Number(viewBox?.width || 920);
+            const height = Number(viewBox?.height || 560);
+            const scale = Math.min(4, Math.max(0.45, Number(view.scale || 1)));
+            const maxX = width * Math.max(1, scale);
+            const maxY = height * Math.max(1, scale);
+            return {
+                scale,
+                x: Math.min(maxX, Math.max(-maxX, Number(view.x || 0))),
+                y: Math.min(maxY, Math.max(-maxY, Number(view.y || 0)))
+            };
+        },
+
+        applyRelationNetworkGraphTransform() {
+            const { svg, viewport, zoomLabel } = this.getRelationNetworkGraphElements();
+            if (!svg || !viewport) return;
+            this.relationNetworkGraphView = this.clampRelationNetworkGraphView(this.relationNetworkGraphView || {}, svg);
+            const view = this.relationNetworkGraphView;
+            viewport.setAttribute("transform", `translate(${view.x.toFixed(2)} ${view.y.toFixed(2)}) scale(${view.scale.toFixed(4)})`);
+            if (zoomLabel) zoomLabel.textContent = `${Math.round(view.scale * 100)}%`;
+        },
+
+        fitRelationNetworkGraphToStage() {
+            const { svg, viewport } = this.getRelationNetworkGraphElements();
+            if (!svg || !viewport) return;
+            const viewBox = svg.viewBox.baseVal;
+            let bbox = null;
+            try {
+                bbox = viewport.getBBox();
+            } catch (error) {
+                bbox = null;
+            }
+            if (!bbox || bbox.width <= 0 || bbox.height <= 0) {
+                this.relationNetworkGraphView = { scale: 1, x: 0, y: 0 };
+                this.applyRelationNetworkGraphTransform();
+                return;
+            }
+            const padding = 54;
+            const availableWidth = Math.max(1, viewBox.width - (padding * 2));
+            const availableHeight = Math.max(1, viewBox.height - (padding * 2));
+            const scale = Math.min(
+                1,
+                Math.max(0.45, Math.min(availableWidth / bbox.width, availableHeight / bbox.height))
+            );
+            this.relationNetworkGraphView = {
+                scale,
+                x: (viewBox.x + (viewBox.width / 2)) - ((bbox.x + (bbox.width / 2)) * scale),
+                y: (viewBox.y + (viewBox.height / 2)) - ((bbox.y + (bbox.height / 2)) * scale)
+            };
+            this.applyRelationNetworkGraphTransform();
+        },
+
+        zoomRelationNetworkGraph(factor = 1, anchor = null) {
+            const { svg } = this.getRelationNetworkGraphElements();
+            if (!svg) return;
+            const view = this.relationNetworkGraphView || { scale: 1, x: 0, y: 0 };
+            const oldScale = Number(view.scale || 1);
+            const nextScale = Math.min(4, Math.max(0.45, oldScale * Number(factor || 1)));
+            const viewBox = svg.viewBox.baseVal;
+            const point = anchor || {
+                x: viewBox.x + (viewBox.width / 2),
+                y: viewBox.y + (viewBox.height / 2)
+            };
+            this.relationNetworkGraphView = {
+                scale: nextScale,
+                x: point.x - (((point.x - Number(view.x || 0)) / oldScale) * nextScale),
+                y: point.y - (((point.y - Number(view.y || 0)) / oldScale) * nextScale)
+            };
+            this.applyRelationNetworkGraphTransform();
+        },
+
+        resetRelationNetworkGraphView() {
+            this.fitRelationNetworkGraphToStage();
+        },
+
+        toggleRelationNetworkGraphMaximize(force = null) {
+            const { popup } = this.getRelationNetworkGraphElements();
+            if (!popup) return;
+            const nextMaximized = typeof force === "boolean"
+                ? force
+                : !popup.classList.contains("is-network-graph-maximized");
+            popup.classList.toggle("is-network-graph-maximized", nextMaximized);
+            const button = popup.querySelector("[data-anly-network-maximize-btn]");
+            if (button) {
+                button.setAttribute("aria-pressed", nextMaximized ? "true" : "false");
+                button.title = getText(nextMaximized ? "Restore graph" : "Maximize graph");
+                const icon = button.querySelector("i");
+                if (icon) {
+                    icon.className = nextMaximized ? "fas fa-compress" : "fas fa-expand";
+                }
+            }
+            requestAnimationFrame(() => this.fitRelationNetworkGraphToStage());
+        },
+
+        initRelationNetworkGraphInteraction() {
+            if (typeof this.relationNetworkGraphCleanup === "function") {
+                this.relationNetworkGraphCleanup();
+                this.relationNetworkGraphCleanup = null;
+            }
+            const { svg } = this.getRelationNetworkGraphElements();
+            if (!svg) return;
+            this.relationNetworkGraphView = { scale: 1, x: 0, y: 0 };
+            let dragState = null;
+            const onWheel = (event) => {
+                event.preventDefault();
+                const point = this.getRelationNetworkGraphPoint(event, svg);
+                this.zoomRelationNetworkGraph(event.deltaY < 0 ? 1.12 : 0.89, point);
+            };
+            const onPointerDown = (event) => {
+                if (event.button !== 0) return;
+                event.preventDefault();
+                const point = this.getRelationNetworkGraphPoint(event, svg);
+                const view = this.relationNetworkGraphView || { scale: 1, x: 0, y: 0 };
+                dragState = {
+                    pointerId: event.pointerId,
+                    startClientX: event.clientX,
+                    startClientY: event.clientY,
+                    scaleX: point.scaleX,
+                    scaleY: point.scaleY,
+                    startX: Number(view.x || 0),
+                    startY: Number(view.y || 0)
+                };
+                svg.classList.add("is-dragging");
+                svg.setPointerCapture?.(event.pointerId);
+            };
+            const onPointerMove = (event) => {
+                if (!dragState) return;
+                event.preventDefault();
+                this.relationNetworkGraphView = {
+                    ...(this.relationNetworkGraphView || { scale: 1 }),
+                    x: dragState.startX + ((event.clientX - dragState.startClientX) * dragState.scaleX),
+                    y: dragState.startY + ((event.clientY - dragState.startClientY) * dragState.scaleY)
+                };
+                this.applyRelationNetworkGraphTransform();
+            };
+            const stopDrag = (event) => {
+                if (!dragState) return;
+                const pointerId = dragState.pointerId;
+                dragState = null;
+                svg.classList.remove("is-dragging");
+                try {
+                    svg.releasePointerCapture?.(pointerId);
+                } catch (error) {
+                    // Pointer capture may already be released by the browser.
+                }
+                event?.preventDefault?.();
+            };
+            svg.addEventListener("wheel", onWheel, { passive: false });
+            svg.addEventListener("pointerdown", onPointerDown);
+            svg.addEventListener("pointermove", onPointerMove);
+            svg.addEventListener("pointerup", stopDrag);
+            svg.addEventListener("pointercancel", stopDrag);
+            svg.addEventListener("lostpointercapture", stopDrag);
+            this.relationNetworkGraphCleanup = () => {
+                svg.removeEventListener("wheel", onWheel);
+                svg.removeEventListener("pointerdown", onPointerDown);
+                svg.removeEventListener("pointermove", onPointerMove);
+                svg.removeEventListener("pointerup", stopDrag);
+                svg.removeEventListener("pointercancel", stopDrag);
+                svg.removeEventListener("lostpointercapture", stopDrag);
+            };
+            requestAnimationFrame(() => this.fitRelationNetworkGraphToStage());
+        },
+
+        renderRelationNetworkPopup(summary = {}) {
+            const clusters = this.buildRelationNetworkClusters(summary);
+            const graph = this.buildRelationNetworkGraphData(summary);
+            return `
+                <section>
+                    <header class="anly-work-sql-popup-title" onmousedown="${PAGE_CODE}.startRelationNetworkPopupDrag(event)">
+                        <div>
+                            <span>${this.escapeHtml(getText("Network Graph"))}</span>
+                            <span>${this.escapeHtml(`${summary.targetOwner || ""}.${summary.targetTable || ""}`)}</span>
+                        </div>
+                        <button type="button" title="Close" onclick="${PAGE_CODE}.closeRelationNetworkPopup()"><i class="fas fa-times"></i></button>
+                    </header>
+                    <div class="anly-work-relation-network-popup-body">
+                        <aside>
+                            <strong>${this.escapeHtml(getText("Clusters"))}</strong>
+                            ${this.renderRelationNetworkPopupClusterList(clusters, summary)}
+                        </aside>
+                        <div class="anly-work-relation-network-main">
+                            ${this.renderRelationNetworkPopupOverview(summary, graph)}
+                            <div class="anly-work-relation-network-graph-stage">
+                                ${this.renderRelationNetworkGraphSvg(summary)}
+                            </div>
+                            <div class="anly-work-network-detail-panels">
+                                <section>
+                                    <strong>${this.escapeHtml(getText("Column details"))}</strong>
+                                    ${this.renderRelationNetworkPopupNodeCards(summary, graph)}
+                                </section>
+                                <section>
+                                    <strong>${this.escapeHtml(getText("Edge raw data"))}</strong>
+                                    ${this.renderRelationNetworkPopupEdgeTable(summary, graph)}
+                                </section>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            `;
+        },
+
+        startRelationNetworkPopupDrag(event) {
+            const popup = document.getElementById(`${PAGE_ID_PREFIX}RelationNetworkPopup`);
+            if (!popup || event.target.closest("button")) return;
+            event.preventDefault();
+            const rect = popup.getBoundingClientRect();
+            const startX = event.clientX;
+            const startY = event.clientY;
+            const startLeft = rect.left;
+            const startTop = rect.top;
+            const move = (moveEvent) => {
+                popup.style.left = `${Math.max(8, startLeft + moveEvent.clientX - startX)}px`;
+                popup.style.top = `${Math.max(8, startTop + moveEvent.clientY - startY)}px`;
+                popup.style.transform = "none";
+            };
+            const stop = () => {
+                document.removeEventListener("mousemove", move);
+                document.removeEventListener("mouseup", stop);
+            };
+            document.addEventListener("mousemove", move);
+            document.addEventListener("mouseup", stop);
+        },
+
+        renderLassoSummary(summary, json = {}) {
             if (!summary) return "";
             const overview = summary.overview || {};
             const topTargets = Array.isArray(summary.topTargets) ? summary.topTargets : [];
             const topFeatures = Array.isArray(summary.topFeatures) ? summary.topFeatures : [];
+            const filter = this.lassoSummaryFilter || {};
+            const pairFilter = this.lassoPairFilter || {};
+            const direction = String(filter.direction || "ALL").toUpperCase();
+            const selectedTarget = String(filter.targetColumn || "").trim();
+            const selectedFeature = String(pairFilter.featureName || "").trim();
+            const visibleFeatures = topFeatures.filter((item) => {
+                const targetColumn = String(item.TARGET_COLUMN || "").trim();
+                const coefficient = Number(item.COEFFICIENT || 0);
+                if (selectedTarget && targetColumn !== selectedTarget) return false;
+                if (direction === "POSITIVE" && coefficient <= 0) return false;
+                if (direction === "NEGATIVE" && coefficient >= 0) return false;
+                return true;
+            });
             return `
                 <section class="anly-work-lasso-summary">
                     <header>
@@ -3111,56 +4576,162 @@
                             <strong>${this.escapeHtml(getText("LASSO Key Feature Summary"))}</strong>
                             <span>${this.escapeHtml(getText("Target {target} · based on coefficient absolute value and R2", { target: `${summary.targetOwner}.${summary.targetTable}` }))}</span>
                         </div>
-                        <div class="anly-work-corr-metrics">
-                            <span><b>${this.formatNumber(overview.TARGET_COLUMN_COUNT)}</b><small>target</small></span>
-                            <span><b>${this.formatNumber(overview.SELECTED_FEATURE_COUNT)}</b><small>selected</small></span>
-                            <span><b>${this.formatDecimal(overview.MAX_R2_SCORE)}</b><small>max R2</small></span>
-                            <span><b>${this.formatDecimal(overview.MODEL_ALPHA)}</b><small>alpha</small></span>
+                        <div class="anly-work-type-summary-actions">
+                            <div class="anly-work-corr-metrics">
+                                <span><b>${this.formatNumber(overview.TARGET_COLUMN_COUNT)}</b><small>target</small></span>
+                                <span><b>${this.formatNumber(overview.SELECTED_FEATURE_COUNT)}</b><small>selected</small></span>
+                                <span><b>${this.formatDecimal(overview.MAX_R2_SCORE)}</b><small>max R2</small></span>
+                                <span><b>${this.formatDecimal(overview.MODEL_ALPHA)}</b><small>alpha</small></span>
+                            </div>
+                            ${this.renderTableResultPageTools("lassoResultPage", json)}
                         </div>
                     </header>
                     <div class="anly-work-lasso-direction-grid">
-                        <span><b>${this.formatNumber(overview.POSITIVE_FEATURE_COUNT)}</b><small>${this.escapeHtml(getText("Positive coefficients"))}</small></span>
-                        <span><b>${this.formatNumber(overview.NEGATIVE_FEATURE_COUNT)}</b><small>${this.escapeHtml(getText("Negative coefficients"))}</small></span>
-                        <span><b>${this.formatNumber(overview.FEATURE_NAME_COUNT)}</b><small>${this.escapeHtml(getText("Unique features"))}</small></span>
+                        <button type="button" class="${direction === "ALL" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectLassoDirectionFilter('ALL')">
+                            <b>${this.formatNumber(overview.FEATURE_ROW_COUNT)}</b>
+                            <small>${this.escapeHtml(getText("All feature rows"))}</small>
+                        </button>
+                        <button type="button" class="${direction === "SELECTED" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectLassoDirectionFilter('SELECTED')">
+                            <b>${this.formatNumber(overview.SELECTED_FEATURE_COUNT)}</b>
+                            <small>${this.escapeHtml(getText("Selected features"))}</small>
+                        </button>
+                        <button type="button" class="${direction === "POSITIVE" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectLassoDirectionFilter('POSITIVE')">
+                            <b>${this.formatNumber(overview.POSITIVE_FEATURE_COUNT)}</b>
+                            <small>${this.escapeHtml(getText("Positive coefficients"))}</small>
+                        </button>
+                        <button type="button" class="${direction === "NEGATIVE" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectLassoDirectionFilter('NEGATIVE')">
+                            <b>${this.formatNumber(overview.NEGATIVE_FEATURE_COUNT)}</b>
+                            <small>${this.escapeHtml(getText("Negative coefficients"))}</small>
+                        </button>
+                        <button type="button" disabled>
+                            <b>${this.formatNumber(overview.FEATURE_NAME_COUNT)}</b>
+                            <small>${this.escapeHtml(getText("Unique features"))}</small>
+                        </button>
                     </div>
-                    ${topTargets.length ? `
-                        <div class="anly-work-type-detail">
-                            <strong>${this.escapeHtml(getText("Selection Result by Target"))}</strong>
-                            <div class="anly-work-type-case-grid">
-                                ${topTargets.map((item) => `
-                                    <span>
-                                        <b>${this.renderColumnAwareCell(item.TARGET_COLUMN, summary)}</b>
-                                        <small>${this.formatNumber(item.SELECTED_FEATURE_COUNT)} selected · R2 ${this.formatDecimal(item.R2_SCORE)}</small>
-                                        <em>max coef ${this.formatDecimal(item.MAX_ABS_COEFFICIENT)}</em>
-                                    </span>
-                                `).join("")}
+                    <div class="anly-work-relation-detail-panel">
+                        <header>
+                            <strong>${this.escapeHtml(selectedFeature ? getText("Selected LASSO relation") : getText("LASSO feature relations"))}</strong>
+                            ${selectedTarget || selectedFeature || direction !== "ALL" ? `<button type="button" onclick="${PAGE_CODE}.resetLassoSummaryFilters()">${this.escapeHtml(getText("Show all"))}</button>` : ""}
+                        </header>
+                        ${topTargets.length ? `
+                            <div>
+                                <strong>${this.escapeHtml(getText("Selection Result by Target"))}</strong>
+                                <div class="anly-work-type-case-grid">
+                                    ${topTargets.map((item) => {
+                                        const targetColumn = String(item.TARGET_COLUMN || "").trim();
+                                        return `
+                                            <button type="button" class="${selectedTarget === targetColumn ? "is-active" : ""}" onclick="${PAGE_CODE}.selectLassoTargetFilter('${this.escapeJs(targetColumn)}')">
+                                                <b>${this.renderColumnAwareCell(targetColumn, summary)}</b>
+                                                <small>${this.formatNumber(item.SELECTED_FEATURE_COUNT)} selected · R2 ${this.formatDecimal(item.R2_SCORE)}</small>
+                                                <em>max coef ${this.formatDecimal(item.MAX_ABS_COEFFICIENT)}</em>
+                                            </button>
+                                        `;
+                                    }).join("")}
+                                </div>
                             </div>
+                        ` : ""}
+                        <div>
+                            <strong>${this.escapeHtml(getText("Selected feature pairs"))}</strong>
+                            ${visibleFeatures.length ? `
+                                <div class="anly-work-relation-pair-list">
+                                    ${visibleFeatures.map((item) => this.renderLassoFeaturePairRow(item, summary)).join("")}
+                                </div>
+                            ` : `<div class="table-empty">${this.escapeHtml(getText("No LASSO feature rows to display."))}</div>`}
                         </div>
-                    ` : ""}
-                    ${topFeatures.length ? `
-                        <div class="anly-work-lasso-feature-list">
-                            ${topFeatures.map((item) => {
-                                const width = Math.max(6, Math.min(100, Number(item.ABS_COEFFICIENT || 0) * 100));
-                                const direction = Number(item.COEFFICIENT || 0) >= 0 ? "is-positive" : "is-negative";
-                                return `
-                                    <article class="${direction}">
-                                        <header>
-                                            <strong>${this.renderColumnAwareCell(item.FEATURE_NAME, summary)}</strong>
-                                            <small>${this.renderColumnAwareCell(item.TARGET_COLUMN, summary)}</small>
-                                        </header>
-                                        <em><i style="width:${width}%"></i></em>
-                                        <footer>
-                                            <span>coef ${this.formatDecimal(item.COEFFICIENT)}</span>
-                                            <span>rank ${this.formatNumber(item.RANK_NO)}</span>
-                                            <span>R2 ${this.formatDecimal(item.R2_SCORE)}</span>
-                                        </footer>
-                                    </article>
-                                `;
-                            }).join("")}
-                        </div>
-                    ` : ""}
+                    </div>
                 </section>
             `;
+        },
+
+        renderLassoFeaturePairRow(item, summary) {
+            const targetColumn = String(item.TARGET_COLUMN || "").trim();
+            const featureName = String(item.FEATURE_NAME || "").trim();
+            const filter = this.lassoPairFilter || {};
+            const active = String(filter.targetColumn || "").trim() === targetColumn
+                && String(filter.featureName || "").trim() === featureName;
+            const directionClass = Number(item.COEFFICIENT || 0) >= 0 ? "is-positive" : "is-negative";
+            return `
+                <button type="button" class="${active ? "is-active" : ""} ${directionClass}" data-anly-filter="lasso-pair" data-target-column="${this.escapeHtml(targetColumn)}" data-feature-name="${this.escapeHtml(featureName)}" onclick="${PAGE_CODE}.selectLassoFeatureFilter('${this.escapeJs(targetColumn)}', '${this.escapeJs(featureName)}')">
+                    <span class="anly-work-relation-pair-col is-left">${this.renderColumnAwareCell(targetColumn, summary)}</span>
+                    <i aria-hidden="true">↔</i>
+                    <span class="anly-work-relation-pair-col is-right">${this.renderColumnAwareCell(featureName, summary)}</span>
+                    <small>coef ${this.formatDecimal(item.COEFFICIENT)} · |coef| ${this.formatDecimal(item.ABS_COEFFICIENT)} · rank ${this.formatNumber(item.RANK_NO)} · R2 ${this.formatDecimal(item.R2_SCORE)}</small>
+                </button>
+            `;
+        },
+
+        async selectLassoDirectionFilter(direction = "ALL") {
+            const normalized = ["ALL", "SELECTED", "POSITIVE", "NEGATIVE"].includes(String(direction || "").toUpperCase())
+                ? String(direction || "").toUpperCase()
+                : "ALL";
+            this.lassoSummaryFilter = {
+                ...(this.lassoSummaryFilter || {}),
+                direction: this.lassoSummaryFilter?.direction === normalized ? "ALL" : normalized,
+                targetColumn: ""
+            };
+            this.lassoPairFilter = { targetColumn: "", featureName: "" };
+            this.refreshTableResultSummary({ preserveScroll: true });
+            await this.refreshResultGridOnly(1);
+        },
+
+        async selectLassoTargetFilter(targetColumn = "") {
+            const nextTarget = String(targetColumn || "").trim();
+            const currentTarget = String(this.lassoSummaryFilter?.targetColumn || "").trim();
+            this.lassoSummaryFilter = {
+                ...(this.lassoSummaryFilter || {}),
+                targetColumn: currentTarget === nextTarget ? "" : nextTarget
+            };
+            this.lassoPairFilter = { targetColumn: "", featureName: "" };
+            this.refreshTableResultSummary({ preserveScroll: true });
+            await this.refreshResultGridOnly(1);
+        },
+
+        async selectLassoFeatureFilter(targetColumn = "", featureName = "") {
+            const nextTarget = String(targetColumn || "").trim();
+            const nextFeature = String(featureName || "").trim();
+            const filter = this.lassoPairFilter || {};
+            const active = String(filter.targetColumn || "").trim() === nextTarget
+                && String(filter.featureName || "").trim() === nextFeature;
+            this.lassoPairFilter = {
+                targetColumn: active ? "" : nextTarget,
+                featureName: active ? "" : nextFeature
+            };
+            this.updateResultFilterButtonStates();
+            await this.refreshResultGridOnly(1);
+        },
+
+        async resetLassoSummaryFilters() {
+            this.lassoSummaryFilter = { direction: "ALL", targetColumn: "" };
+            this.lassoPairFilter = { targetColumn: "", featureName: "" };
+            this.refreshTableResultSummary({ preserveScroll: true });
+            await this.refreshResultGridOnly(1);
+        },
+
+        hasActiveLassoGridFilter() {
+            const filter = this.getActiveLassoGridFilter();
+            return Boolean(
+                (filter.direction && filter.direction !== "ALL")
+                || filter.targetColumn
+                || filter.featureName
+            );
+        },
+
+        getActiveLassoGridFilter() {
+            const summaryFilter = this.lassoSummaryFilter || {};
+            const pairFilter = this.lassoPairFilter || {};
+            const direction = String(summaryFilter.direction || "ALL").trim().toUpperCase();
+            const activeFilter = {
+                direction: ["SELECTED", "POSITIVE", "NEGATIVE"].includes(direction) ? direction : "ALL",
+                targetColumn: String(summaryFilter.targetColumn || "").trim(),
+                featureName: ""
+            };
+            if (pairFilter.targetColumn) {
+                activeFilter.targetColumn = String(pairFilter.targetColumn || "").trim();
+            }
+            if (pairFilter.featureName) {
+                activeFilter.featureName = String(pairFilter.featureName || "").trim();
+            }
+            return activeFilter;
         },
 
         renderSymbolicRuleSummary(summary) {
@@ -3894,11 +5465,7 @@
                                     <span><b>${this.formatNumber(group.columnCount)}</b><small>${this.escapeHtml(this.getPredictedTypeGroupLabel(group.typeGroup))}</small></span>
                                 `).join("")}
                             </div>
-                            ${this.renderSamplePageJump("predictedTypePage-${PAGE_CODE}", json, "${PAGE_CODE}.goPredictedTypePage()", "${PAGE_CODE}.loadResultTable", {
-                                pageSizeId: "predictedTypePageSize-${PAGE_CODE}",
-                                pageSizes: [20, 50, 100, 200, 500],
-                                onPageSizeChange: "${PAGE_CODE}.changeResultPageSize(this.value)"
-                            })}
+                            ${this.renderTableResultPageTools("predictedTypePage", json)}
                         </div>
                     </header>
                     ${this.renderPredictedTypeUnifiedMode(sourceGroups, finalGroups, summary)}
@@ -4999,15 +6566,28 @@
         renderGrid(columns, rows, source = null) {
             const safeColumns = (columns || []).filter((column) => column !== "RN__");
             if (!safeColumns.length) return `<div class="table-empty">${this.escapeHtml(getText("No query results."))}</div>`;
+            const page = Math.max(1, Number(source?.page || 1));
+            const pageSize = Math.max(1, Number(source?.pageSize || rows?.length || 1));
+            const rowOffset = (page - 1) * pageSize;
             return `
                 <div class="anly-work-grid-wrap">
                     <table class="table-grid anly-work-grid">
-                        <thead><tr>${safeColumns.map((column) => `<th>${this.renderColumnAwareCell(column, source)}</th>`).join("")}</tr></thead>
+                        <thead>
+                            <tr>
+                                <th class="anly-work-grid-no-col">${this.escapeHtml(getText("No"))}</th>
+                                ${safeColumns.map((column) => `<th>${this.renderColumnAwareCell(column, source)}</th>`).join("")}
+                            </tr>
+                        </thead>
                         <tbody>
-                            ${(rows || []).map((row) => `<tr>${safeColumns.map((column) => {
-                                const value = row?.[column] ?? "";
-                                return `<td title="${this.escapeHtml(value)}">${this.renderColumnAwareCell(value, source)}</td>`;
-                            }).join("")}</tr>`).join("")}
+                            ${(rows || []).map((row, rowIndex) => `
+                                <tr>
+                                    <td class="anly-work-grid-no-col">${this.formatNumber(rowOffset + rowIndex + 1)}</td>
+                                    ${safeColumns.map((column) => {
+                                        const value = row?.[column] ?? "";
+                                        return `<td title="${this.escapeHtml(value)}">${this.renderColumnAwareCell(value, source)}</td>`;
+                                    }).join("")}
+                                </tr>
+                            `).join("")}
                         </tbody>
                     </table>
                 </div>
@@ -5017,13 +6597,30 @@
         renderResultPager(page, pageSize, total, callPrefix) {
             callPrefix = resolvePageText(callPrefix);
             const totalPages = Math.max(1, Math.ceil(Number(total || 0) / Number(pageSize || 1)));
-            const prev = Math.max(1, Number(page || 1) - 1);
-            const next = Math.min(totalPages, Number(page || 1) + 1);
+            const normalizedPage = Math.max(1, Number(page || 1));
+            const prev = Math.max(1, normalizedPage - 1);
+            const next = Math.min(totalPages, normalizedPage + 1);
+            if (!String(callPrefix || "").includes("refreshResultGridOnly")) {
+                return `
+                    <footer class="anly-work-pager">
+                        <span class="anly-work-pager-total">${this.escapeHtml(getText("Grid total {count} rows", { count: this.formatNumber(total || 0) }))}</span>
+                        <button type="button" ${normalizedPage <= 1 ? "disabled" : ""} onclick="${callPrefix}${prev})"><i class="fas fa-chevron-left"></i></button>
+                        <span class="anly-work-pager-page">${this.formatNumber(normalizedPage)} / ${this.formatNumber(totalPages)}</span>
+                        <button type="button" ${normalizedPage >= totalPages ? "disabled" : ""} onclick="${callPrefix}${next})"><i class="fas fa-chevron-right"></i></button>
+                    </footer>
+                `;
+            }
+            const pageCall = String(callPrefix || "").replace(/\($/, "");
+            const inputId = `resultBottomPage-${PAGE_CODE}`;
+            const goOnclick = `${PAGE_CODE}.goTableResultPage('${inputId}')`;
             return `
                 <footer class="anly-work-pager">
-                    <button type="button" ${Number(page) <= 1 ? "disabled" : ""} onclick="${callPrefix}${prev})"><i class="fas fa-chevron-left"></i></button>
-                    <span>${this.formatNumber(page)} / ${this.formatNumber(totalPages)}</span>
-                    <button type="button" ${Number(page) >= totalPages ? "disabled" : ""} onclick="${callPrefix}${next})"><i class="fas fa-chevron-right"></i></button>
+                    <span class="anly-work-pager-total">${this.escapeHtml(getText("Grid total {count} rows", { count: this.formatNumber(total || 0) }))}</span>
+                    ${this.renderSamplePageJump(inputId, { page, pageSize, total }, goOnclick, pageCall, {
+                        pageSizeId: `${inputId}-pageSize`,
+                        pageSizes: [20, 50, 100, 200, 500],
+                        onPageSizeChange: `${PAGE_CODE}.changeResultPageSize(this.value)`
+                    })}
                 </footer>
             `;
         },
@@ -5216,6 +6813,26 @@
             return ["INIT$_TB_PREDICTED_TYPE", "INIT$_TB_PREDICTED_TYPE_FINAL"].includes(
                 String(node?.RESULT_OBJECT_NAME || "").trim().toUpperCase()
             );
+        },
+
+        isCorrelationPairNode(node) {
+            return ["INIT$_TB_CAT_CORR_PAIR", "INIT$_TB_NUM_CORR_PAIR"].includes(
+                String(node?.RESULT_OBJECT_NAME || "").trim().toUpperCase()
+            );
+        },
+
+        isRelationPairNode(node) {
+            return String(node?.RESULT_OBJECT_NAME || "").trim().toUpperCase() === "INIT$_TB_RELATION_PAIR";
+        },
+
+        isRelationNetworkResultNode(node) {
+            return ["INIT$_TB_RELATION_NETWORK_NODE", "INIT$_TB_RELATION_NETWORK_EDGE"].includes(
+                String(node?.RESULT_OBJECT_NAME || "").trim().toUpperCase()
+            );
+        },
+
+        isLassoFeatureNode(node) {
+            return String(node?.RESULT_OBJECT_NAME || "").trim().toUpperCase() === "INIT$_TB_LASSO_FEATURE";
         },
 
         matchesNodeWork(node, menuCode, procedureName) {

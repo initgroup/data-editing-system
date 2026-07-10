@@ -27,10 +27,18 @@ except Exception:  # pragma: no cover - dependency availability is runtime-speci
     StandardScaler = None
     r2_score = None
 
+try:
+    import networkx as nx
+except Exception:  # pragma: no cover - dependency availability is runtime-specific.
+    nx = None
+
 
 WEB_API_METHODS = {
     "LASSO_FEATURE_SELECT",
+    "RELATION_NETWORK_CLUSTER",
     "SYMBOLIC_REGRESSION_RULE",
+    "INTEGRATED_RULE_DISCOVER",
+    "INTEGRATED_RULE_VIOLATION_DETECT",
 }
 
 
@@ -71,6 +79,26 @@ def execute_web_api_job(
             f"Symbolic regression rule discovery completed. "
             f"{result['featureCount']} feature(s), method={result['method']}."
         )
+    if method == "RELATION_NETWORK_CLUSTER":
+        result = run_relation_network_cluster(conn, payload)
+        return (
+            f"Relation network clustering completed. "
+            f"{result.get('nodeCount', 0)} node(s), "
+            f"{result.get('edgeCount', 0)} edge(s), "
+            f"{result.get('clusterCount', 0)} cluster(s)."
+        )
+    if method == "INTEGRATED_RULE_DISCOVER":
+        result = run_integrated_rule_discover(conn, payload)
+        return (
+            f"Integrated rule discovery completed. "
+            f"{result.get('successCount', 0)}/{result.get('taskCount', 0)} task(s) succeeded."
+        )
+    if method == "INTEGRATED_RULE_VIOLATION_DETECT":
+        result = run_integrated_rule_violation_detect(conn, payload)
+        return (
+            f"Integrated rule violation detection completed. "
+            f"{result.get('successCount', 0)}/{result.get('taskCount', 0)} task(s) succeeded."
+        )
     raise HTTPException(status_code=400, detail=f"Unsupported WEB_API method: {method}")
 
 
@@ -89,6 +117,12 @@ def get_method_from_spec(value: Any) -> str:
         return "LASSO_FEATURE_SELECT"
     if endpoint.endswith("/symbolic-regression-rule"):
         return "SYMBOLIC_REGRESSION_RULE"
+    if endpoint.endswith("/relation-network-cluster"):
+        return "RELATION_NETWORK_CLUSTER"
+    if endpoint.endswith("/integrated-rule-discover"):
+        return "INTEGRATED_RULE_DISCOVER"
+    if endpoint.endswith("/integrated-rule-violation-detect"):
+        return "INTEGRATED_RULE_VIOLATION_DETECT"
     return ""
 
 
@@ -372,6 +406,393 @@ def run_symbolic_regression_rule(conn, payload: Dict[str, Any]) -> Dict[str, Any
         "score": score,
         "ruleId": rule_id,
     }
+
+
+def run_relation_network_cluster(conn, payload: Dict[str, Any]) -> Dict[str, Any]:
+    owner = require_identifier(get_value(payload, "P_TARGET_OWNER", "targetOwner", "owner"), "targetOwner")
+    table = require_identifier(get_value(payload, "P_TARGET_TABLE", "targetTable", "tableName"), "targetTable")
+    run_source_type = normalize_run_source_type(get_value(payload, "P_RUN_SOURCE_TYPE", "runSourceType"))
+    run_id = parse_int(get_value(payload, "P_RUN_ID", "runId"), 0)
+    min_metric = clamp_float(parse_optional_float(get_value(payload, "P_MIN_METRIC", "minMetric")), 0.65, 0.0, 1.0)
+    max_edges = clamp(parse_int(get_value(payload, "P_MAX_EDGES", "maxEdges"), 500), 1, 10000)
+    relation_types = normalize_token_list(get_value(payload, "P_RELATION_TYPES", "relationTypes"))
+    metric_names = normalize_token_list(get_value(payload, "P_METRIC_NAMES", "metricNames"))
+
+    cursor = conn.cursor()
+    try:
+        clear_relation_network_rows(cursor, owner, table, run_source_type, run_id)
+        rows = load_relation_pairs_for_network(
+            cursor,
+            owner,
+            table,
+            run_source_type,
+            run_id,
+            min_metric,
+            max_edges,
+            relation_types,
+            metric_names,
+        )
+        if not rows:
+            return {
+                "status": "success",
+                "nodeCount": 0,
+                "edgeCount": 0,
+                "clusterCount": 0,
+                "algorithm": "NONE",
+                "resultTable": "INIT$_TB_RELATION_NETWORK_EDGE",
+                "message": "No passed relation pairs were found for network clustering.",
+            }
+
+        edge_rows = choose_strongest_edges(rows, max_edges)
+        cluster_map, node_metrics, algorithm = build_relation_network(edge_rows)
+        insert_relation_network_rows(cursor, owner, table, run_source_type, run_id, edge_rows, cluster_map, node_metrics)
+        update_relation_pair_clusters(cursor, owner, table, run_source_type, run_id, cluster_map)
+        cluster_count = len({cluster_id for cluster_id in cluster_map.values() if cluster_id is not None})
+        return {
+            "status": "success",
+            "nodeCount": len(node_metrics),
+            "edgeCount": len(edge_rows),
+            "clusterCount": cluster_count,
+            "algorithm": algorithm,
+            "minMetric": min_metric,
+            "resultTable": "INIT$_TB_RELATION_NETWORK_EDGE",
+        }
+    finally:
+        cursor.close()
+
+
+def run_integrated_rule_discover(conn, payload: Dict[str, Any]) -> Dict[str, Any]:
+    owner = require_identifier(get_value(payload, "P_TARGET_OWNER", "targetOwner", "owner"), "targetOwner")
+    table = require_identifier(get_value(payload, "P_TARGET_TABLE", "targetTable", "tableName"), "targetTable")
+    run_source_type = normalize_run_source_type(get_value(payload, "P_RUN_SOURCE_TYPE", "runSourceType"))
+    run_id = parse_int(get_value(payload, "P_RUN_ID", "runId"), 0)
+    parts = normalize_integrated_parts(get_value(payload, "P_RULE_PARTS", "ruleParts"))
+    continue_on_error = parse_yes_no(get_value(payload, "P_CONTINUE_ON_ERROR", "continueOnError"), "Y") == "Y"
+
+    results: List[Dict[str, Any]] = []
+    failures: List[Dict[str, Any]] = []
+
+    if "CATEGORICAL" in parts:
+        try:
+            results.append(run_integrated_apriori_assoc_model(conn, payload, owner, table, run_source_type, run_id))
+        except Exception as exc:
+            failures.append({"task": "CATEGORICAL_APRIORI", "message": get_error_message(exc)})
+            if not continue_on_error:
+                raise
+
+    if "CONTINUOUS" in parts:
+        lasso_result = None
+        try:
+            lasso_payload = dict(payload)
+            lasso_payload.setdefault("P_TARGET_COLUMN", "(auto)")
+            lasso_payload.setdefault("targetColumn", lasso_payload["P_TARGET_COLUMN"])
+            lasso_result = run_lasso_feature_select(conn, lasso_payload)
+            results.append({"task": "CONTINUOUS_LASSO", "resultTable": "INIT$_TB_LASSO_FEATURE", **lasso_result})
+        except Exception as exc:
+            failures.append({"task": "CONTINUOUS_LASSO", "message": get_error_message(exc)})
+            if not continue_on_error:
+                raise
+
+        if lasso_result is not None:
+            try:
+                symbolic_payload = dict(payload)
+                symbolic_payload.setdefault("P_TARGET_COLUMN", "(auto)")
+                symbolic_payload.setdefault("targetColumn", symbolic_payload["P_TARGET_COLUMN"])
+                symbolic_result = run_symbolic_regression_rule(conn, symbolic_payload)
+                results.append({"task": "CONTINUOUS_SYMBOLIC", "resultTable": "INIT$_TB_SYMBOLIC_RULE", **symbolic_result})
+            except Exception as exc:
+                failures.append({"task": "CONTINUOUS_SYMBOLIC", "message": get_error_message(exc)})
+                if not continue_on_error:
+                    raise
+
+    if not results:
+        detail = "; ".join(f"{item['task']}: {item['message']}" for item in failures) or "No integrated rule discovery task succeeded."
+        raise HTTPException(status_code=400, detail=detail)
+
+    return {
+        "status": "partial_success" if failures else "success",
+        "taskCount": len(results) + len(failures),
+        "successCount": len(results),
+        "failedCount": len(failures),
+        "failedTasks": failures,
+        "parts": sorted(parts),
+        "resultTables": ["INIT$_TB_ASSOC_RULE_SUMMARY", "INIT$_TB_LASSO_FEATURE", "INIT$_TB_SYMBOLIC_RULE"],
+        "results": results,
+    }
+
+
+def run_integrated_rule_violation_detect(conn, payload: Dict[str, Any]) -> Dict[str, Any]:
+    owner = require_identifier(get_value(payload, "P_TARGET_OWNER", "targetOwner", "owner"), "targetOwner")
+    table = require_identifier(get_value(payload, "P_TARGET_TABLE", "targetTable", "tableName"), "targetTable")
+    run_source_type = normalize_run_source_type(get_value(payload, "P_RUN_SOURCE_TYPE", "runSourceType"))
+    run_id = parse_int(get_value(payload, "P_RUN_ID", "runId"), 0)
+    parts = normalize_integrated_parts(get_value(payload, "P_RULE_PARTS", "ruleParts"))
+    continue_on_error = parse_yes_no(get_value(payload, "P_CONTINUE_ON_ERROR", "continueOnError"), "Y") == "Y"
+
+    results: List[Dict[str, Any]] = []
+    failures: List[Dict[str, Any]] = []
+
+    if "CATEGORICAL" in parts:
+        try:
+            results.append(run_integrated_assoc_rule_violation(conn, payload, owner, table, run_source_type, run_id))
+        except Exception as exc:
+            failures.append({"task": "CATEGORICAL_RULE_VIOLATION", "message": get_error_message(exc)})
+            if not continue_on_error:
+                raise
+
+    if "CONTINUOUS" in parts:
+        try:
+            results.append(run_integrated_symbolic_rule_violation(conn, payload, owner, table, run_source_type, run_id))
+        except Exception as exc:
+            failures.append({"task": "CONTINUOUS_SYMBOLIC_VIOLATION", "message": get_error_message(exc)})
+            if not continue_on_error:
+                raise
+
+    if not results:
+        detail = "; ".join(f"{item['task']}: {item['message']}" for item in failures) or "No integrated violation detection task succeeded."
+        raise HTTPException(status_code=400, detail=detail)
+
+    return {
+        "status": "partial_success" if failures else "success",
+        "taskCount": len(results) + len(failures),
+        "successCount": len(results),
+        "failedCount": len(failures),
+        "failedTasks": failures,
+        "parts": sorted(parts),
+        "resultTables": ["INIT$_TB_RULE_VIOLATION_RESULT", "INIT$_TB_SYMBOLIC_RULE_VIOLATION"],
+        "results": results,
+    }
+
+
+def run_integrated_apriori_assoc_model(
+    conn,
+    payload: Dict[str, Any],
+    owner: str,
+    table: str,
+    run_source_type: str,
+    run_id: int,
+) -> Dict[str, Any]:
+    model_name = require_identifier(
+        default_if_runtime_reference(
+            get_value(payload, "P_ASSOC_MODEL_NAME", "P_MODEL_NAME", "modelName"),
+            "OML_ASSOCIATION_MODEL_01",
+        ),
+        "associationModelName",
+    )
+    data_query = clean_select_query(get_value(payload, "P_DATA_QUERY", "dataQuery"))
+    if not data_query:
+        data_query = f"SELECT * FROM {quote_identifier(owner)}.{quote_identifier(table)}"
+
+    case_id_column = require_identifier(
+        get_value(payload, "P_CASE_ID_COLUMN_NAME", "caseIdColumnName") or "FILE_ROW_NO",
+        "caseIdColumnName",
+    )
+    cursor = conn.cursor()
+    try:
+        cursor.callproc(
+            "INIT$_SP_APRIORI_ASSOC_MODEL",
+            [
+                model_name,
+                data_query,
+                case_id_column,
+                clamp_float(parse_optional_float(get_value(payload, "P_MIN_SUPPORT", "minSupport")), 0.2, 0.0, 1.0),
+                clamp_float(parse_optional_float(get_value(payload, "P_MIN_CONFIDENCE", "minConfidence")), 0.7, 0.0, 1.0),
+                clamp(parse_int(get_value(payload, "P_MAX_RULE_LENGTH", "maxRuleLength"), 3), 1, 10),
+                parse_yes_no(get_value(payload, "P_DROP_EXISTING_YN", "dropExistingYn"), "Y"),
+                parse_optional_positive_int(get_value(payload, "P_MAX_INPUT_ROWS", "maxInputRows"), 100000) or 0,
+                clean_optional_text(get_value(payload, "P_CATEGORICAL_COLUMNS", "P_CANDIDATE_COLUMNS", "candidateColumns")),
+                parse_int(get_value(payload, "P_MIN_RULE_SUPPORT_COUNT", "minRuleSupportCount"), 30),
+                clamp_float(parse_optional_float(get_value(payload, "P_MIN_RULE_LIFT", "minRuleLift")), 1.0, 0.0, 999999.0),
+                clamp(parse_int(get_value(payload, "P_MAX_RULE_SUMMARY_COLUMNS", "maxRuleSummaryColumns"), 50), 1, 500),
+                clamp(parse_int(get_value(payload, "P_MAX_RULE_SUMMARY_PER_PAIR", "maxRuleSummaryPerPair"), 50), 1, 1000),
+                owner,
+                table,
+                run_source_type,
+                run_id,
+            ],
+        )
+        summary_count = count_result_rows(
+            cursor,
+            "INIT$_TB_ASSOC_RULE_SUMMARY",
+            {
+                "RUN_SOURCE_TYPE": run_source_type,
+                "RUN_ID": run_id,
+                "TARGET_OWNER": owner,
+                "TARGET_TABLE": table,
+                "MODEL_NAME": model_name,
+            },
+        )
+        return {
+            "task": "CATEGORICAL_APRIORI",
+            "status": "success",
+            "modelName": model_name,
+            "resultTable": "INIT$_TB_ASSOC_RULE_SUMMARY",
+            "summaryCount": summary_count,
+        }
+    finally:
+        cursor.close()
+
+
+def run_integrated_assoc_rule_violation(
+    conn,
+    payload: Dict[str, Any],
+    owner: str,
+    table: str,
+    run_source_type: str,
+    run_id: int,
+) -> Dict[str, Any]:
+    rule_owner = require_identifier(
+        default_if_runtime_reference(get_value(payload, "P_RULE_OWNER_NAME", "ruleOwnerName"), owner),
+        "ruleOwnerName",
+    )
+    rule_model = require_identifier(
+        default_if_runtime_reference(
+            get_value(payload, "P_RULE_MODEL_NAME", "P_ASSOC_MODEL_NAME", "P_MODEL_NAME", "ruleModelName"),
+            "OML_ASSOCIATION_MODEL_01",
+        ),
+        "ruleModelName",
+    )
+    result_owner = require_identifier(
+        default_if_runtime_reference(get_value(payload, "P_CAT_RESULT_OWNER", "P_RESULT_OWNER", "resultOwner"), owner),
+        "resultOwner",
+    )
+    result_table = require_identifier(
+        default_if_runtime_reference(
+            get_value(payload, "P_CAT_RESULT_TABLE", "P_RESULT_TABLE", "resultTable"),
+            "INIT$_TB_RULE_VIOLATION_RESULT",
+        ),
+        "resultTable",
+    )
+    case_id_column = require_identifier(
+        get_value(payload, "P_CASE_ID_COLUMN_NAME", "caseIdColumnName") or "FILE_ROW_NO",
+        "caseIdColumnName",
+    )
+    cursor = conn.cursor()
+    try:
+        cursor.callproc(
+            "INIT$_SP_RULE_VIOLATION_DETECT",
+            [
+                rule_owner,
+                rule_model,
+                owner,
+                table,
+                case_id_column,
+                result_owner,
+                result_table,
+                clamp_float(parse_optional_float(get_value(payload, "P_MIN_CONFIDENCE", "minConfidence")), 0.8, 0.0, 1.0),
+                clamp_float(parse_optional_float(get_value(payload, "P_MIN_LIFT", "minLift")), 1.0, 0.0, 999999.0),
+                clamp(parse_int(get_value(payload, "P_MAX_RULES", "maxRules"), 100), 1, 10000),
+                clamp(parse_int(get_value(payload, "P_MAX_VIOLATIONS_PER_RULE", "maxViolationsPerRule"), 500), 1, 100000),
+                parse_yes_no(get_value(payload, "P_CLEAR_EXISTING_YN", "clearExistingYn"), "Y"),
+                parse_yes_no(get_value(payload, "P_COMMIT_YN", "commitYn"), "N"),
+                run_source_type,
+                run_id,
+                parse_int(get_value(payload, "P_COMMIT_INTERVAL", "commitInterval"), 5000),
+            ],
+        )
+        violation_count = count_result_rows(
+            cursor,
+            result_table,
+            {
+                "RUN_SOURCE_TYPE": run_source_type,
+                "RUN_ID": run_id,
+                "TARGET_OWNER": owner,
+                "TARGET_TABLE": table,
+                "MODEL_NAME": rule_model,
+            },
+        )
+        return {
+            "task": "CATEGORICAL_RULE_VIOLATION",
+            "status": "success",
+            "resultTable": result_table,
+            "violationCount": violation_count,
+        }
+    finally:
+        cursor.close()
+
+
+def run_integrated_symbolic_rule_violation(
+    conn,
+    payload: Dict[str, Any],
+    owner: str,
+    table: str,
+    run_source_type: str,
+    run_id: int,
+) -> Dict[str, Any]:
+    rule_owner = require_identifier(
+        default_if_runtime_reference(get_value(payload, "P_SYMBOLIC_RULE_OWNER_NAME", "P_RULE_OWNER_NAME", "ruleOwnerName"), owner),
+        "ruleOwnerName",
+    )
+    rule_table = require_identifier(
+        default_if_runtime_reference(
+            get_value(payload, "P_SYMBOLIC_RULE_TABLE_NAME", "P_RULE_TABLE_NAME", "ruleTableName"),
+            "INIT$_TB_SYMBOLIC_RULE",
+        ),
+        "ruleTableName",
+    )
+    rule_id = clean_optional_text(get_value(payload, "P_RULE_ID", "ruleId"))
+    if rule_id:
+        rule_id = require_identifier(rule_id, "ruleId")
+    result_owner = require_identifier(
+        default_if_runtime_reference(get_value(payload, "P_SYMBOLIC_RESULT_OWNER", "P_RESULT_OWNER", "resultOwner"), owner),
+        "resultOwner",
+    )
+    result_table = require_identifier(
+        default_if_runtime_reference(
+            get_value(payload, "P_SYMBOLIC_RESULT_TABLE", "resultTable"),
+            "INIT$_TB_SYMBOLIC_RULE_VIOLATION",
+        ),
+        "resultTable",
+    )
+    case_id_column = require_identifier(
+        get_value(payload, "P_CASE_ID_COLUMN_NAME", "caseIdColumnName") or "FILE_ROW_NO",
+        "caseIdColumnName",
+    )
+    cursor = conn.cursor()
+    try:
+        cursor.callproc(
+            "INIT$_SP_SYMBOLIC_RULE_VIOLATION_DETECT",
+            [
+                rule_owner,
+                rule_table,
+                rule_id,
+                owner,
+                table,
+                case_id_column,
+                result_owner,
+                result_table,
+                clamp_float(parse_optional_float(get_value(payload, "P_ERROR_PCT_THRESHOLD", "errorPctThreshold")), 0.05, 0.0, 999999.0),
+                parse_optional_float(get_value(payload, "P_ABS_ERROR_THRESHOLD", "absErrorThreshold")),
+                clamp(parse_int(get_value(payload, "P_SYMBOLIC_MAX_RULES", "P_MAX_SYMBOLIC_RULES", "P_MAX_RULES", "maxRules"), 20), 1, 10000),
+                clamp(parse_int(get_value(payload, "P_SYMBOLIC_MAX_VIOLATIONS_PER_RULE", "P_MAX_VIOLATIONS_PER_RULE", "maxViolationsPerRule"), 200), 1, 100000),
+                parse_yes_no(get_value(payload, "P_CLEAR_EXISTING_YN", "clearExistingYn"), "Y"),
+                parse_int(get_value(payload, "P_COMMIT_INTERVAL", "commitInterval"), 1000),
+                parse_yes_no(get_value(payload, "P_COMMIT_YN", "commitYn"), "N"),
+                run_source_type,
+                run_id,
+                parse_int(get_value(payload, "P_MAX_SCAN_ROWS", "maxScanRows"), 50000),
+                parse_int(get_value(payload, "P_MAX_ELAPSED_SECONDS", "maxElapsedSeconds"), 1800),
+                parse_int(get_value(payload, "P_MAX_EXPRESSION_LENGTH", "maxExpressionLength"), 8000),
+            ],
+        )
+        violation_count = count_result_rows(
+            cursor,
+            result_table,
+            {
+                "RUN_SOURCE_TYPE": run_source_type,
+                "RUN_ID": run_id,
+                "TARGET_OWNER": owner,
+                "TARGET_TABLE": table,
+            },
+        )
+        return {
+            "task": "CONTINUOUS_SYMBOLIC_VIOLATION",
+            "status": "success",
+            "resultTable": result_table,
+            "violationCount": violation_count,
+        }
+    finally:
+        cursor.close()
 
 
 def run_lasso_auto_targets(
@@ -887,6 +1308,347 @@ def fetch_numeric_matrix(
         cursor.close()
 
 
+def clear_relation_network_rows(cursor, owner: str, table: str, run_source_type: str, run_id: int) -> None:
+    params = {
+        "runSourceType": run_source_type,
+        "runId": run_id,
+        "owner": owner,
+        "tableName": table,
+    }
+    cursor.execute(
+        """
+        DELETE FROM "INIT$_TB_RELATION_NETWORK_EDGE"
+         WHERE "RUN_SOURCE_TYPE" = :runSourceType
+           AND "RUN_ID" = :runId
+           AND "OWNER" = :owner
+           AND "TABLE_NAME" = :tableName
+        """,
+        params,
+    )
+    cursor.execute(
+        """
+        DELETE FROM "INIT$_TB_RELATION_NETWORK_NODE"
+         WHERE "RUN_SOURCE_TYPE" = :runSourceType
+           AND "RUN_ID" = :runId
+           AND "OWNER" = :owner
+           AND "TABLE_NAME" = :tableName
+        """,
+        params,
+    )
+
+
+def load_relation_pairs_for_network(
+    cursor,
+    owner: str,
+    table: str,
+    run_source_type: str,
+    run_id: int,
+    min_metric: float,
+    max_edges: int,
+    relation_types: Sequence[str],
+    metric_names: Sequence[str],
+) -> List[Dict[str, Any]]:
+    where_sql = [
+        '"RUN_SOURCE_TYPE" = :runSourceType',
+        '"RUN_ID" = :runId',
+        '"OWNER" = :owner',
+        '"TABLE_NAME" = :tableName',
+        '"PASS_YN" = \'Y\'',
+        'NVL("ABS_METRIC_VALUE", 0) >= :minMetric',
+    ]
+    params: Dict[str, Any] = {
+        "runSourceType": run_source_type,
+        "runId": run_id,
+        "owner": owner,
+        "tableName": table,
+        "minMetric": min_metric,
+    }
+    if relation_types:
+        names = []
+        for index, value in enumerate(relation_types[:20]):
+            bind_name = f"relationType{index}"
+            names.append(f":{bind_name}")
+            params[bind_name] = value
+        where_sql.append(f'"RELATION_TYPE" IN ({", ".join(names)})')
+    if metric_names:
+        names = []
+        for index, value in enumerate(metric_names[:20]):
+            bind_name = f"metricName{index}"
+            names.append(f":{bind_name}")
+            params[bind_name] = value
+        where_sql.append(f'"METRIC_NAME" IN ({", ".join(names)})')
+
+    sql = f"""
+        SELECT "COL_A"
+             , "COL_B"
+             , "COL_A_TYPE"
+             , "COL_B_TYPE"
+             , "RELATION_TYPE"
+             , "METRIC_NAME"
+             , "METRIC_VALUE"
+             , "ABS_METRIC_VALUE"
+          FROM "INIT$_TB_RELATION_PAIR"
+         WHERE {" AND ".join(where_sql)}
+         ORDER BY "ABS_METRIC_VALUE" DESC NULLS LAST
+                , "COL_A"
+                , "COL_B"
+                , "METRIC_NAME"
+    """
+    cursor.execute(sql, params)
+    columns = [desc[0] for desc in cursor.description]
+    return [
+        {columns[index]: row[index] for index in range(len(columns))}
+        for row in cursor.fetchmany(max_edges * 3)
+    ]
+
+
+def choose_strongest_edges(rows: Sequence[Dict[str, Any]], max_edges: int) -> List[Dict[str, Any]]:
+    best_by_pair: Dict[Tuple[str, str], Dict[str, Any]] = {}
+    for row in rows:
+        col_a = str(row.get("COL_A") or "").upper()
+        col_b = str(row.get("COL_B") or "").upper()
+        if not col_a or not col_b or col_a == col_b:
+            continue
+        pair_key = tuple(sorted([col_a, col_b]))
+        current = best_by_pair.get(pair_key)
+        weight = float(row.get("ABS_METRIC_VALUE") or 0)
+        if current is None or weight > float(current.get("ABS_METRIC_VALUE") or 0):
+            best_by_pair[pair_key] = {**row, "COL_A": pair_key[0], "COL_B": pair_key[1]}
+    return sorted(
+        best_by_pair.values(),
+        key=lambda item: (-float(item.get("ABS_METRIC_VALUE") or 0), str(item.get("COL_A")), str(item.get("COL_B"))),
+    )[:max_edges]
+
+
+def build_relation_network(edge_rows: Sequence[Dict[str, Any]]) -> Tuple[Dict[str, int], Dict[str, Dict[str, Any]], str]:
+    node_types: Dict[str, str] = {}
+    adjacency: Dict[str, Set[str]] = {}
+    weighted_degree: Dict[str, float] = {}
+    for row in edge_rows:
+        col_a = str(row.get("COL_A") or "").upper()
+        col_b = str(row.get("COL_B") or "").upper()
+        weight = float(row.get("ABS_METRIC_VALUE") or 0)
+        if not col_a or not col_b:
+            continue
+        node_types.setdefault(col_a, str(row.get("COL_A_TYPE") or ""))
+        node_types.setdefault(col_b, str(row.get("COL_B_TYPE") or ""))
+        adjacency.setdefault(col_a, set()).add(col_b)
+        adjacency.setdefault(col_b, set()).add(col_a)
+        weighted_degree[col_a] = weighted_degree.get(col_a, 0.0) + weight
+        weighted_degree[col_b] = weighted_degree.get(col_b, 0.0) + weight
+
+    if nx is not None:
+        graph = nx.Graph()
+        for node, column_type in node_types.items():
+            graph.add_node(node, columnType=column_type)
+        for row in edge_rows:
+            graph.add_edge(
+                str(row.get("COL_A") or "").upper(),
+                str(row.get("COL_B") or "").upper(),
+                weight=float(row.get("ABS_METRIC_VALUE") or 0),
+            )
+        try:
+            communities = list(nx.community.louvain_communities(graph, weight="weight", seed=42))
+            algorithm = "LOUVAIN"
+        except Exception:
+            communities = [set(component) for component in nx.connected_components(graph)]
+            algorithm = "CONNECTED_COMPONENT"
+        centrality = nx.degree_centrality(graph) if graph.number_of_nodes() else {}
+        degree_count = dict(graph.degree())
+        weighted_degree = dict(graph.degree(weight="weight"))
+    else:
+        communities = fallback_connected_components(adjacency)
+        algorithm = "CONNECTED_COMPONENT_FALLBACK"
+        node_total = max(1, len(node_types) - 1)
+        degree_count = {node: len(adjacency.get(node, set())) for node in node_types}
+        centrality = {node: degree_count.get(node, 0) / node_total for node in node_types}
+
+    sorted_communities = sorted(
+        [set(item) for item in communities],
+        key=lambda item: (-len(item), sorted(item)[0] if item else ""),
+    )
+    cluster_map: Dict[str, int] = {}
+    for cluster_index, community in enumerate(sorted_communities, start=1):
+        for node in community:
+            cluster_map[str(node).upper()] = cluster_index
+
+    node_metrics = {
+        node: {
+            "columnType": node_types.get(node),
+            "clusterId": cluster_map.get(node),
+            "degreeCount": int(degree_count.get(node, 0)),
+            "weightedDegree": float(weighted_degree.get(node, 0) or 0),
+            "centralityScore": float(centrality.get(node, 0) or 0),
+        }
+        for node in sorted(node_types)
+    }
+    return cluster_map, node_metrics, algorithm
+
+
+def fallback_connected_components(adjacency: Dict[str, Set[str]]) -> List[Set[str]]:
+    seen: Set[str] = set()
+    result: List[Set[str]] = []
+    for start in sorted(adjacency):
+        if start in seen:
+            continue
+        stack = [start]
+        component: Set[str] = set()
+        seen.add(start)
+        while stack:
+            node = stack.pop()
+            component.add(node)
+            for next_node in adjacency.get(node, set()):
+                if next_node in seen:
+                    continue
+                seen.add(next_node)
+                stack.append(next_node)
+        result.append(component)
+    return result
+
+
+def insert_relation_network_rows(
+    cursor,
+    owner: str,
+    table: str,
+    run_source_type: str,
+    run_id: int,
+    edge_rows: Sequence[Dict[str, Any]],
+    cluster_map: Dict[str, int],
+    node_metrics: Dict[str, Dict[str, Any]],
+) -> None:
+    node_sql = """
+        INSERT INTO "INIT$_TB_RELATION_NETWORK_NODE" (
+            "RUN_SOURCE_TYPE"
+          , "RUN_ID"
+          , "OWNER"
+          , "TABLE_NAME"
+          , "COLUMN_NAME"
+          , "COLUMN_TYPE"
+          , "CLUSTER_ID"
+          , "DEGREE_COUNT"
+          , "WEIGHTED_DEGREE"
+          , "CENTRALITY_SCORE"
+          , "SELECTED_YN"
+          , "CREATE_DT"
+        ) VALUES (
+            :runSourceType
+          , :runId
+          , :owner
+          , :tableName
+          , :columnName
+          , :columnType
+          , :clusterId
+          , :degreeCount
+          , :weightedDegree
+          , :centralityScore
+          , 'Y'
+          , SYSDATE
+        )
+    """
+    for column_name, metrics in node_metrics.items():
+        cursor.execute(node_sql, {
+            "runSourceType": run_source_type,
+            "runId": run_id,
+            "owner": owner,
+            "tableName": table,
+            "columnName": column_name,
+            "columnType": metrics.get("columnType"),
+            "clusterId": metrics.get("clusterId"),
+            "degreeCount": metrics.get("degreeCount"),
+            "weightedDegree": metrics.get("weightedDegree"),
+            "centralityScore": metrics.get("centralityScore"),
+        })
+
+    edge_sql = """
+        INSERT INTO "INIT$_TB_RELATION_NETWORK_EDGE" (
+            "RUN_SOURCE_TYPE"
+          , "RUN_ID"
+          , "OWNER"
+          , "TABLE_NAME"
+          , "COL_A"
+          , "COL_B"
+          , "RELATION_TYPE"
+          , "METRIC_NAME"
+          , "METRIC_VALUE"
+          , "ABS_METRIC_VALUE"
+          , "CLUSTER_ID"
+          , "PASS_YN"
+          , "CREATE_DT"
+        ) VALUES (
+            :runSourceType
+          , :runId
+          , :owner
+          , :tableName
+          , :colA
+          , :colB
+          , :relationType
+          , :metricName
+          , :metricValue
+          , :absMetricValue
+          , :clusterId
+          , 'Y'
+          , SYSDATE
+        )
+    """
+    for row in edge_rows:
+        col_a = str(row.get("COL_A") or "").upper()
+        col_b = str(row.get("COL_B") or "").upper()
+        cluster_id = cluster_map.get(col_a) if cluster_map.get(col_a) == cluster_map.get(col_b) else None
+        cursor.execute(edge_sql, {
+            "runSourceType": run_source_type,
+            "runId": run_id,
+            "owner": owner,
+            "tableName": table,
+            "colA": col_a,
+            "colB": col_b,
+            "relationType": row.get("RELATION_TYPE"),
+            "metricName": row.get("METRIC_NAME"),
+            "metricValue": row.get("METRIC_VALUE"),
+            "absMetricValue": row.get("ABS_METRIC_VALUE"),
+            "clusterId": cluster_id,
+        })
+
+
+def update_relation_pair_clusters(
+    cursor,
+    owner: str,
+    table: str,
+    run_source_type: str,
+    run_id: int,
+    cluster_map: Dict[str, int],
+) -> None:
+    update_sql = """
+        UPDATE "INIT$_TB_RELATION_PAIR"
+           SET "CLUSTER_ID" = :clusterId
+         WHERE "RUN_SOURCE_TYPE" = :runSourceType
+           AND "RUN_ID" = :runId
+           AND "OWNER" = :owner
+           AND "TABLE_NAME" = :tableName
+           AND (
+                   ("COL_A" = :colA AND "COL_B" = :colB)
+                OR ("COL_A" = :colB AND "COL_B" = :colA)
+               )
+    """
+    handled_pairs: Set[Tuple[str, str, int]] = set()
+    for col_a, cluster_a in cluster_map.items():
+        for col_b, cluster_b in cluster_map.items():
+            if col_a >= col_b or cluster_a != cluster_b:
+                continue
+            key = (col_a, col_b, cluster_a)
+            if key in handled_pairs:
+                continue
+            handled_pairs.add(key)
+            cursor.execute(update_sql, {
+                "clusterId": cluster_a,
+                "runSourceType": run_source_type,
+                "runId": run_id,
+                "owner": owner,
+                "tableName": table,
+                "colA": col_a,
+                "colB": col_b,
+            })
+
+
 def require_sklearn() -> None:
     if np is None or LassoCV is None or LinearRegression is None or StandardScaler is None:
         raise HTTPException(
@@ -958,6 +1720,81 @@ def normalize_column_list(value: Any) -> List[str]:
             continue
         result.append(require_identifier(text, "column"))
     return list(dict.fromkeys(result))
+
+
+def normalize_token_list(value: Any) -> List[str]:
+    if value is None or is_auto_target(value):
+        return []
+    if isinstance(value, list):
+        items = value
+    else:
+        items = re.split(r"[,;\s]+", str(value or ""))
+    result = []
+    for item in items:
+        text = str(item or "").strip().upper()
+        if not text or text == "(AUTO)":
+            continue
+        if not re.fullmatch(r"[A-Z0-9_$#]+", text):
+            raise HTTPException(status_code=400, detail="Invalid filter token.")
+        result.append(text)
+    return list(dict.fromkeys(result))
+
+
+def normalize_integrated_parts(value: Any) -> Set[str]:
+    tokens = normalize_token_list(value)
+    if not tokens or any(token in {"ALL", "BOTH", "AUTO"} for token in tokens):
+        return {"CATEGORICAL", "CONTINUOUS"}
+
+    result: Set[str] = set()
+    for token in tokens:
+        if token in {"CAT", "CATEGORY", "CATEGORICAL", "ASSOC", "ASSOCIATION", "APRIORI"}:
+            result.add("CATEGORICAL")
+        elif token in {"NUM", "NUMERIC", "CONT", "CONTINUOUS", "LASSO", "SYMBOLIC", "REGRESSION"}:
+            result.add("CONTINUOUS")
+        else:
+            raise HTTPException(status_code=400, detail=f"Unsupported integrated rule part: {token}")
+    return result or {"CATEGORICAL", "CONTINUOUS"}
+
+
+def clean_optional_text(value: Any) -> Optional[str]:
+    if value is None or is_auto_target(value):
+        return None
+    text = str(value).strip()
+    if not text or text.upper() in {"NULL", "NONE", "-"}:
+        return None
+    return text
+
+
+def default_if_runtime_reference(value: Any, default: Any) -> Any:
+    if isinstance(value, str) and value.strip().startswith(":"):
+        return default
+    return default if value in (None, "") else value
+
+
+def clean_select_query(value: Any) -> Optional[str]:
+    text = clean_optional_text(value)
+    if not text:
+        return None
+    if ";" in text or not re.match(r"(?is)^\s*SELECT\b", text):
+        raise HTTPException(status_code=400, detail="Custom data query must be a single SELECT statement.")
+    return text
+
+
+def count_result_rows(cursor, table_name: str, filters: Dict[str, Any]) -> int:
+    table = require_identifier(table_name, "resultTable")
+    conditions = []
+    binds: Dict[str, Any] = {}
+    for index, (column, value) in enumerate(filters.items()):
+        if value is None:
+            continue
+        column_name = require_identifier(column, "filterColumn")
+        bind_name = f"p{index}"
+        conditions.append(f"{quote_identifier(column_name)} = :{bind_name}")
+        binds[bind_name] = value
+    where_sql = " WHERE " + " AND ".join(conditions) if conditions else ""
+    cursor.execute(f"SELECT COUNT(*) FROM {quote_identifier(table)}{where_sql}", binds)
+    row = cursor.fetchone()
+    return int(row[0] or 0) if row else 0
 
 
 def require_identifier(value: Any, field_name: str) -> str:

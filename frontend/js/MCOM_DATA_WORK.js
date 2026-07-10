@@ -1067,17 +1067,32 @@
             const builtin = this.getBuiltinWebApiDefinition(method);
             const endpoint = spec.serviceUrl || spec.endpoint || builtin?.endpoint || "";
             const output = spec.output && typeof spec.output === "object" ? spec.output : {};
+            const resultCreateYn = this.normalizeResultCreateMode(
+                output.resultCreateYn
+                || spec.resultCreateYn
+                || builtin?.resultCreateYn
+                || (output.resultTableName || output.resultTable || spec.resultTableName || spec.resultTable || builtin?.resultTable ? "T" : "N")
+            );
+            const resultOwner = output.resultOwner || spec.resultOwner || builtin?.resultOwner || "";
             const resultTable = output.resultTableName || output.resultTable || spec.resultTableName || spec.resultTable || builtin?.resultTable || "";
             return {
                 resourceId: resource.OML_RESOURCE_ID || "",
                 method,
                 label: resource.RESOURCE_LABEL || resource.RESOURCE_NAME || builtin?.label || method,
                 endpoint,
+                resultCreateYn,
+                resultOwner,
                 resultTable,
                 specJson: resource.SPEC_JSON || "",
                 outputFormat: resource.OUTPUT_FORMAT || builtin?.outputFormat || "",
                 params: builtin?.params || []
             };
+        },
+
+        resolveWebApiResultOwner(value) {
+            const text = String(value || "").trim();
+            if (!text || text.startsWith(":")) return this.getDefaultResultOwner();
+            return text;
         },
 
         handleExecutionSourceChange(value) {
@@ -1145,8 +1160,8 @@
                 execObjectType: "WEB_API",
                 execObjectName: api.method,
                 execObjectLabel: api.label,
-                resultCreateYn: "T",
-                resultOwner: this.currentJob?.resultOwner || this.getDefaultResultOwner(),
+                resultCreateYn: this.normalizeResultCreateMode(api.resultCreateYn || "N"),
+                resultOwner: this.currentJob?.resultOwner || this.resolveWebApiResultOwner(api.resultOwner),
                 resultTableName: api.resultTable || this.currentJob?.resultTableName || ""
             };
             this.parameters = api.params.map((row, index) => ({ ...row, itemOrder: index + 1 }));
@@ -1203,6 +1218,60 @@
                         { itemName: "P_USE_PYSR", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescUsePysr", "Use PySR (Y/N). N uses polynomial LASSO fallback."), itemDefault: "N" },
                         { itemName: "P_MIN_R2_SCORE", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMinR2Score", "Minimum LASSO R2 score for Symbolic Regression"), itemDefault: "0.7" },
                         { itemName: "P_MAX_AUTO_TARGETS", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMaxAutoTargets", "Maximum automatic target count"), itemDefault: "10" },
+                        { itemName: "P_CONTINUE_ON_ERROR", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescContinueOnError", "Continue when some automatic targets fail"), itemDefault: "Y" },
+                        { itemName: "P_RUN_SOURCE_TYPE", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescRunSourceType", "Run source type (DATA_WORK/FLOW_WORK)"), itemDefault: runSourceType },
+                        { itemName: "P_RUN_ID", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescRunId", "Shared DATA_WORK run ID for the scenario"), itemDefault: runId }
+                    ]
+                },
+                INTEGRATED_RULE_DISCOVER: {
+                    method: "INTEGRATED_RULE_DISCOVER",
+                    label: "Integrated Rule Discover",
+                    endpoint: "/api/mlAnalysis/integrated-rule-discover",
+                    resultCreateYn: "M",
+                    resultOwner: targetOwner,
+                    resultTable: "OML_ASSOCIATION_MODEL_01",
+                    params: [
+                        { itemName: "P_TARGET_OWNER", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescTargetOwner", "Target table owner"), itemDefault: targetOwner },
+                        { itemName: "P_TARGET_TABLE", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescTargetTable", "Target table name"), itemDefault: targetTable },
+                        { itemName: "P_RULE_PARTS", itemValue: "VARCHAR2", itemDesc: "ALL, CATEGORICAL, or CONTINUOUS", itemDefault: "ALL" },
+                        { itemName: "P_ASSOC_MODEL_NAME", itemValue: "VARCHAR2", itemDesc: "Association model name for categorical rule discovery", itemDefault: ":INIT$ResultModelName" },
+                        { itemName: "P_CASE_ID_COLUMN_NAME", itemValue: "VARCHAR2", itemDesc: "Case ID column", itemDefault: "FILE_ROW_NO" },
+                        { itemName: "P_MIN_SUPPORT", itemValue: "NUMBER", itemDesc: "Apriori minimum support", itemDefault: "0.2" },
+                        { itemName: "P_MIN_CONFIDENCE", itemValue: "NUMBER", itemDesc: "Apriori minimum confidence", itemDefault: "0.7" },
+                        { itemName: "P_MIN_RULE_LIFT", itemValue: "NUMBER", itemDesc: "Minimum rule lift for association summary", itemDefault: "1" },
+                        { itemName: "P_TARGET_COLUMN", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescTargetColumn", "Dependent variable column"), itemDefault: "(auto)" },
+                        { itemName: "P_MAX_FEATURES", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMaxFeatures", "Maximum selected feature count"), itemDefault: "10" },
+                        { itemName: "P_SAMPLE_ROWS", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescSampleRows", "Maximum analysis sample rows"), itemDefault: "50000" },
+                        { itemName: "P_MIN_R2_SCORE", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMinR2Score", "Minimum LASSO R2 score for Symbolic Regression"), itemDefault: "0.7" },
+                        { itemName: "P_MAX_AUTO_TARGETS", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMaxAutoTargets", "Maximum automatic target count"), itemDefault: "10" },
+                        { itemName: "P_CONTINUE_ON_ERROR", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescContinueOnError", "Continue when some automatic targets fail"), itemDefault: "Y" },
+                        { itemName: "P_RUN_SOURCE_TYPE", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescRunSourceType", "Run source type (DATA_WORK/FLOW_WORK)"), itemDefault: runSourceType },
+                        { itemName: "P_RUN_ID", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescRunId", "Shared DATA_WORK run ID for the scenario"), itemDefault: runId }
+                    ]
+                },
+                INTEGRATED_RULE_VIOLATION_DETECT: {
+                    method: "INTEGRATED_RULE_VIOLATION_DETECT",
+                    label: "Integrated Rule Violation Detect",
+                    endpoint: "/api/mlAnalysis/integrated-rule-violation-detect",
+                    resultCreateYn: "T",
+                    resultOwner: targetOwner,
+                    resultTable: "INIT$_TB_RULE_VIOLATION_RESULT",
+                    params: [
+                        { itemName: "P_RULE_PARTS", itemValue: "VARCHAR2", itemDesc: "ALL, CATEGORICAL, or CONTINUOUS", itemDefault: "ALL" },
+                        { itemName: "P_RULE_OWNER_NAME", itemValue: "VARCHAR2", itemDesc: "Association rule model owner", itemDefault: targetOwner },
+                        { itemName: "P_RULE_MODEL_NAME", itemValue: "VARCHAR2", itemDesc: "Association rule model name", itemDefault: ":INIT$PreResultTable" },
+                        { itemName: "P_TARGET_OWNER", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescTargetOwner", "Target table owner"), itemDefault: targetOwner },
+                        { itemName: "P_TARGET_TABLE", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescTargetTable", "Target table name"), itemDefault: targetTable },
+                        { itemName: "P_CASE_ID_COLUMN_NAME", itemValue: "VARCHAR2", itemDesc: "Case ID column", itemDefault: "FILE_ROW_NO" },
+                        { itemName: "P_MIN_CONFIDENCE", itemValue: "NUMBER", itemDesc: "Categorical violation minimum confidence", itemDefault: "0.8" },
+                        { itemName: "P_MIN_LIFT", itemValue: "NUMBER", itemDesc: "Categorical violation minimum lift", itemDefault: "1" },
+                        { itemName: "P_MAX_RULES", itemValue: "NUMBER", itemDesc: "Maximum categorical rule count", itemDefault: "100" },
+                        { itemName: "P_SYMBOLIC_MAX_RULES", itemValue: "NUMBER", itemDesc: "Maximum symbolic rule count", itemDefault: "20" },
+                        { itemName: "P_MAX_VIOLATIONS_PER_RULE", itemValue: "NUMBER", itemDesc: "Maximum violation rows per rule", itemDefault: "500" },
+                        { itemName: "P_ERROR_PCT_THRESHOLD", itemValue: "NUMBER", itemDesc: "Symbolic allowed relative error threshold", itemDefault: "0.05" },
+                        { itemName: "P_MAX_SCAN_ROWS", itemValue: "NUMBER", itemDesc: "Maximum scan rows per symbolic rule", itemDefault: "50000" },
+                        { itemName: "P_CLEAR_EXISTING_YN", itemValue: "VARCHAR2", itemDesc: "Clear existing violation rows", itemDefault: "Y" },
+                        { itemName: "P_COMMIT_YN", itemValue: "VARCHAR2", itemDesc: "Internal procedure commit Y/N", itemDefault: "N" },
                         { itemName: "P_CONTINUE_ON_ERROR", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescContinueOnError", "Continue when some automatic targets fail"), itemDefault: "Y" },
                         { itemName: "P_RUN_SOURCE_TYPE", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescRunSourceType", "Run source type (DATA_WORK/FLOW_WORK)"), itemDefault: runSourceType },
                         { itemName: "P_RUN_ID", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescRunId", "Shared DATA_WORK run ID for the scenario"), itemDefault: runId }
@@ -1360,8 +1429,8 @@
                         execObjectType: "WEB_API",
                         execObjectName: resource.RESOURCE_NAME || api.method || this.currentJob?.execObjectName || "",
                         execObjectLabel: api.label || resource.RESOURCE_NAME || this.currentJob?.execObjectLabel || "",
-                        resultCreateYn: "T",
-                        resultOwner: this.currentJob?.resultOwner || this.getDefaultResultOwner(),
+                        resultCreateYn: this.normalizeResultCreateMode(api.resultCreateYn || "N"),
+                        resultOwner: this.currentJob?.resultOwner || this.resolveWebApiResultOwner(api.resultOwner),
                         resultTableName: api.resultTable || this.currentJob?.resultTableName || ""
                     };
                 }
@@ -2853,12 +2922,12 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                         execObjectType: "WEB_API",
                         execObjectName: this.currentJob?.execObjectName || api.method || "",
                         execObjectLabel: this.currentJob?.execObjectLabel || api.label || api.method || "",
-                        resultCreateYn: "T",
-                        resultOwner: this.currentJob?.resultOwner || this.getDefaultResultOwner(),
+                        resultCreateYn: this.normalizeResultCreateMode(api.resultCreateYn || "N"),
+                        resultOwner: this.currentJob?.resultOwner || this.resolveWebApiResultOwner(api.resultOwner),
                         resultTableName: this.currentJob?.resultTableName || api.resultTable || ""
                     };
                     if (!getContainerEl(`#resultTable-${PAGE_CODE}`)?.value && api.resultTable) {
-                        this.setFieldValue(`#resultCreateYn-${PAGE_CODE}`, "T");
+                        this.setFieldValue(`#resultCreateYn-${PAGE_CODE}`, this.currentJob.resultCreateYn);
                         this.setFieldValue(`#resultOwner-${PAGE_CODE}`, this.currentJob.resultOwner || this.getDefaultResultOwner());
                         this.setFieldValue(`#resultTable-${PAGE_CODE}`, api.resultTable);
                         this.setFieldValue(`#resultQueryTable-${PAGE_CODE}`, api.resultTable);

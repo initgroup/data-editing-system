@@ -16,6 +16,10 @@ class MlAnalysisRequest(BaseModel):
     candidateColumns: Optional[Any] = None
     featureColumns: Optional[Any] = None
     maxFeatures: Optional[int] = None
+    maxEdges: Optional[int] = None
+    minMetric: Optional[float] = None
+    relationTypes: Optional[Any] = None
+    metricNames: Optional[Any] = None
     sampleRows: Optional[int] = None
     maxIterations: Optional[int] = None
     alpha: Optional[float] = None
@@ -54,6 +58,57 @@ def symbolic_regression_rule(req: MlAnalysisRequest, request: Request):
     try:
         conn = get_target_db_connection(request)
         result = ml_analysis_service.run_symbolic_regression_rule(conn, request_payload(req))
+        conn.commit()
+        return result
+    except Exception:
+        if conn:
+            conn.rollback()
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
+@router.post("/relation-network-cluster")
+def relation_network_cluster(req: MlAnalysisRequest, request: Request):
+    conn = None
+    try:
+        conn = get_target_db_connection(request)
+        result = ml_analysis_service.run_relation_network_cluster(conn, request_payload(req))
+        conn.commit()
+        return result
+    except Exception:
+        if conn:
+            conn.rollback()
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
+@router.post("/integrated-rule-discover")
+def integrated_rule_discover(req: MlAnalysisRequest, request: Request):
+    conn = None
+    try:
+        conn = get_target_db_connection(request)
+        result = ml_analysis_service.run_integrated_rule_discover(conn, request_payload(req))
+        conn.commit()
+        return result
+    except Exception:
+        if conn:
+            conn.rollback()
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
+@router.post("/integrated-rule-violation-detect")
+def integrated_rule_violation_detect(req: MlAnalysisRequest, request: Request):
+    conn = None
+    try:
+        conn = get_target_db_connection(request)
+        result = ml_analysis_service.run_integrated_rule_violation_detect(conn, request_payload(req))
         conn.commit()
         return result
     except Exception:

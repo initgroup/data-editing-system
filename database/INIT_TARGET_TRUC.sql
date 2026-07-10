@@ -36,6 +36,10 @@ BEGIN
     truncate_table_if_exists('INIT$_TB_SYMBOLIC_RULE_VIOLATION');
     truncate_table_if_exists('INIT$_TB_SYMBOLIC_RULE');
     truncate_table_if_exists('INIT$_TB_LASSO_FEATURE');
+    truncate_table_if_exists('INIT$_TB_RELATION_NETWORK_EDGE');
+    truncate_table_if_exists('INIT$_TB_RELATION_NETWORK_NODE');
+    truncate_table_if_exists('INIT$_TB_RELATION_SUMMARY');
+    truncate_table_if_exists('INIT$_TB_RELATION_PAIR');
     truncate_table_if_exists('INIT$_TB_NUM_CORR_SUMMARY');
     truncate_table_if_exists('INIT$_TB_NUM_CORR_PAIR');
     truncate_table_if_exists('INIT$_TB_API_RESULT');

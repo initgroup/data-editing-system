@@ -20,7 +20,10 @@ from backend.services import ml_analysis_service
 
 INTERNAL_METHODS = {
     "LASSO_FEATURE_SELECT",
+    "RELATION_NETWORK_CLUSTER",
     "SYMBOLIC_REGRESSION_RULE",
+    "INTEGRATED_RULE_DISCOVER",
+    "INTEGRATED_RULE_VIOLATION_DETECT",
 }
 
 
@@ -56,8 +59,14 @@ def execute_api_job(
 def execute_internal_python_api(conn, method: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     if method == "LASSO_FEATURE_SELECT":
         return ml_analysis_service.run_lasso_feature_select(conn, payload)
+    if method == "RELATION_NETWORK_CLUSTER":
+        return ml_analysis_service.run_relation_network_cluster(conn, payload)
     if method == "SYMBOLIC_REGRESSION_RULE":
         return ml_analysis_service.run_symbolic_regression_rule(conn, payload)
+    if method == "INTEGRATED_RULE_DISCOVER":
+        return ml_analysis_service.run_integrated_rule_discover(conn, payload)
+    if method == "INTEGRATED_RULE_VIOLATION_DETECT":
+        return ml_analysis_service.run_integrated_rule_violation_detect(conn, payload)
     raise HTTPException(status_code=400, detail=f"Unsupported internal API method: {method}")
 
 
@@ -71,6 +80,23 @@ def create_internal_success_message(method: str, result: Dict[str, Any]) -> str:
         return (
             "Symbolic regression rule discovery completed. "
             f"{result.get('featureCount', 0)} feature(s), method={result.get('method', '')}."
+        )
+    if method == "RELATION_NETWORK_CLUSTER":
+        return (
+            "Relation network clustering completed. "
+            f"{result.get('nodeCount', 0)} node(s), "
+            f"{result.get('edgeCount', 0)} edge(s), "
+            f"{result.get('clusterCount', 0)} cluster(s)."
+        )
+    if method == "INTEGRATED_RULE_DISCOVER":
+        return (
+            "Integrated rule discovery completed. "
+            f"{result.get('successCount', 0)}/{result.get('taskCount', 0)} task(s) succeeded."
+        )
+    if method == "INTEGRATED_RULE_VIOLATION_DETECT":
+        return (
+            "Integrated rule violation detection completed. "
+            f"{result.get('successCount', 0)}/{result.get('taskCount', 0)} task(s) succeeded."
         )
     return f"{method or 'API'} completed."
 

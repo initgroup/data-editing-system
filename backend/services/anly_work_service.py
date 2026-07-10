@@ -54,6 +54,21 @@ TABLE_RESULT_LAYOUTS = {
         "key": "TABLE:INIT$_TB_NUM_CORR_PAIR",
         "summary": "correlationSummary",
     },
+    "INIT$_TB_RELATION_PAIR": {
+        "kind": "TABLE",
+        "key": "TABLE:INIT$_TB_RELATION_PAIR",
+        "summary": "relationSummary",
+    },
+    "INIT$_TB_RELATION_NETWORK_NODE": {
+        "kind": "TABLE",
+        "key": "TABLE:INIT$_TB_RELATION_NETWORK_NODE",
+        "summary": "relationNetworkSummary",
+    },
+    "INIT$_TB_RELATION_NETWORK_EDGE": {
+        "kind": "TABLE",
+        "key": "TABLE:INIT$_TB_RELATION_NETWORK_EDGE",
+        "summary": "relationNetworkSummary",
+    },
     "INIT$_TB_LASSO_FEATURE": {
         "kind": "TABLE",
         "key": "TABLE:INIT$_TB_LASSO_FEATURE",
@@ -218,6 +233,38 @@ def _sql_literal(value: Any) -> str:
 def _normalize_predicted_type_case(value: str | None) -> str:
     normalized = str(value or "ALL").strip().upper()
     return normalized if normalized in PREDICTED_TYPE_CASE_LABELS else "ALL"
+
+
+def _normalize_optional_identifier(value: str | None, label: str) -> str:
+    text = str(value or "").strip()
+    return _validate_identifier(text, label) if text else ""
+
+
+def _normalize_relation_type(value: str | None) -> str:
+    normalized = str(value or "ALL").strip().upper()
+    if normalized == "NUMERIC_CATEGORICAL":
+        normalized = "CATEGORICAL_NUMERIC"
+    return normalized if normalized in {"ALL", "CATEGORICAL_CATEGORICAL", "NUMERIC_NUMERIC", "CATEGORICAL_NUMERIC"} else "ALL"
+
+
+def _normalize_lasso_direction(value: str | None) -> str:
+    normalized = str(value or "ALL").strip().upper()
+    return normalized if normalized in {"ALL", "SELECTED", "POSITIVE", "NEGATIVE"} else "ALL"
+
+
+def _normalize_yn_filter(value: str | None) -> str:
+    normalized = str(value or "ALL").strip().upper()
+    return normalized if normalized in {"ALL", "Y", "N"} else "ALL"
+
+
+def _normalize_optional_int(value: str | int | None, label: str) -> int | None:
+    text = "" if value is None else str(value).strip()
+    if not text:
+        return None
+    try:
+        return int(text)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail=f"Invalid {label}.")
 
 
 def _is_predicted_type_result_table(object_name: str) -> bool:
@@ -566,6 +613,251 @@ def _fetch_cat_corr_summary(
         "averageMetricValue": pair_metrics.get("AVG_METRIC_VALUE"),
         "maxMetricValue": pair_metrics.get("MAX_METRIC_VALUE"),
         "topPairs": top_pairs,
+    }
+
+
+def _fetch_relation_summary(
+    cursor,
+    owner_name: str,
+    object_name: str,
+    target_owner: str,
+    target_table: str,
+    run_source_type: str = "",
+    run_id: int | None = None,
+) -> dict[str, Any] | None:
+    if object_name != "INIT$_TB_RELATION_PAIR" or not target_owner or not target_table:
+        return None
+    cursor.execute(SqlLoader.get_sql("MCOMMON_ANLY_WORK_TARGET_TABLE_COLUMN_COUNT"), {
+        "owner": target_owner,
+        "tableName": target_table,
+    })
+    row = cursor.fetchone()
+    total_columns = int(row[0] or 0) if row else 0
+    result_object = f"{_quote_identifier(owner_name)}.{_quote_identifier(object_name)}"
+    run_filter_sql = ""
+    run_params: dict[str, Any] = {}
+    if run_source_type and run_id is not None:
+        run_filter_sql = " AND RUN_SOURCE_TYPE = :runSourceType AND RUN_ID = :runId "
+        run_params = {"runSourceType": run_source_type, "runId": run_id}
+    cursor.execute(
+        "SELECT DISTINCT COL1 "
+        "  FROM ("
+        f"        SELECT COL_A AS COL1 FROM {result_object} "
+        f"         WHERE OWNER = :targetOwner AND TABLE_NAME = :targetTable {run_filter_sql}AND PASS_YN = 'Y' "
+        "         UNION ALL "
+        f"        SELECT COL_B AS COL1 FROM {result_object} "
+        f"         WHERE OWNER = :targetOwner AND TABLE_NAME = :targetTable {run_filter_sql}AND PASS_YN = 'Y' "
+        "       ) "
+        " WHERE COL1 IS NOT NULL "
+        " ORDER BY COL1",
+        {"targetOwner": target_owner, "targetTable": target_table, **run_params},
+    )
+    associated_columns = [str(item[0]) for item in cursor.fetchall() if item and item[0]]
+    pair_key_expr = "LEAST(COL_A, COL_B) || CHR(31) || GREATEST(COL_A, COL_B)"
+    cursor.execute(
+        f"SELECT COUNT(DISTINCT {pair_key_expr}) AS TOTAL_PAIR_COUNT, "
+        f"       COUNT(DISTINCT CASE WHEN PASS_YN = 'Y' THEN {pair_key_expr} END) AS PASS_PAIR_COUNT, "
+        "       COUNT(DISTINCT RELATION_TYPE) AS RELATION_TYPE_COUNT, "
+        "       AVG(CASE WHEN PASS_YN = 'Y' THEN ABS_METRIC_VALUE END) AS AVG_METRIC_VALUE, "
+        "       MAX(CASE WHEN PASS_YN = 'Y' THEN ABS_METRIC_VALUE END) AS MAX_METRIC_VALUE "
+        f"  FROM {result_object} "
+        f" WHERE OWNER = :targetOwner AND TABLE_NAME = :targetTable {run_filter_sql}",
+        {"targetOwner": target_owner, "targetTable": target_table, **run_params},
+    )
+    metric_row = cursor.fetchone()
+    metric_columns = [desc[0] for desc in cursor.description] if cursor.description else []
+    metrics = _row_to_dict(metric_columns, metric_row) if metric_row else {}
+    cursor.execute(
+        f"SELECT RELATION_TYPE, "
+        f"       COUNT(DISTINCT {pair_key_expr}) AS TOTAL_PAIR_COUNT, "
+        f"       COUNT(DISTINCT CASE WHEN PASS_YN = 'Y' THEN {pair_key_expr} END) AS PAIR_COUNT, "
+        "       MAX(CASE WHEN PASS_YN = 'Y' THEN ABS_METRIC_VALUE END) AS MAX_METRIC_VALUE, "
+        "       MAX(ABS_METRIC_VALUE) AS MAX_ANY_METRIC_VALUE "
+        f"  FROM {result_object} "
+        f" WHERE OWNER = :targetOwner AND TABLE_NAME = :targetTable {run_filter_sql}"
+        " GROUP BY RELATION_TYPE "
+        " ORDER BY PAIR_COUNT DESC, TOTAL_PAIR_COUNT DESC, RELATION_TYPE",
+        {"targetOwner": target_owner, "targetTable": target_table, **run_params},
+    )
+    relation_type_columns = [desc[0] for desc in cursor.description] if cursor.description else []
+    relationTypes = [_row_to_dict(relation_type_columns, item) for item in cursor.fetchall()]
+    cursor.execute(
+        "SELECT RELATION_TYPE, COL1 AS COLUMN_NAME "
+        "  FROM ("
+        "        SELECT RELATION_TYPE, COL_A AS COL1 "
+        f"          FROM {result_object} "
+        f"         WHERE OWNER = :targetOwner AND TABLE_NAME = :targetTable {run_filter_sql}"
+        "           AND PASS_YN = 'Y' "
+        "         UNION "
+        "        SELECT RELATION_TYPE, COL_B AS COL1 "
+        f"          FROM {result_object} "
+        f"         WHERE OWNER = :targetOwner AND TABLE_NAME = :targetTable {run_filter_sql}"
+        "           AND PASS_YN = 'Y' "
+        "       ) "
+        " WHERE COL1 IS NOT NULL "
+        " ORDER BY RELATION_TYPE, COL1",
+        {"targetOwner": target_owner, "targetTable": target_table, **run_params},
+    )
+    relation_type_column_names = [desc[0] for desc in cursor.description] if cursor.description else []
+    relation_type_columns = [_row_to_dict(relation_type_column_names, item) for item in cursor.fetchall()]
+    cursor.execute(
+        "SELECT * "
+        "  FROM ("
+        "        SELECT COL_A, COL_B, COL_A_TYPE, COL_B_TYPE, RELATION_TYPE, METRIC_NAME, "
+        "               METRIC_VALUE, ABS_METRIC_VALUE, P_VALUE, ROW_COUNT, PASS_YN, CLUSTER_ID "
+        "          FROM ("
+        "                SELECT COL_A, COL_B, COL_A_TYPE, COL_B_TYPE, RELATION_TYPE, METRIC_NAME, "
+        "                       METRIC_VALUE, ABS_METRIC_VALUE, P_VALUE, ROW_COUNT, PASS_YN, CLUSTER_ID, "
+        "                       ROW_NUMBER() OVER ("
+        "                           PARTITION BY RELATION_TYPE, LEAST(COL_A, COL_B), GREATEST(COL_A, COL_B) "
+        "                           ORDER BY ABS_METRIC_VALUE DESC NULLS LAST, P_VALUE ASC NULLS LAST, "
+        "                                    CASE METRIC_NAME WHEN 'PEARSON_R' THEN 1 WHEN 'CRAMERS_V' THEN 1 WHEN 'ETA_SQUARED' THEN 1 ELSE 2 END, "
+        "                                    COL_A, COL_B, METRIC_NAME"
+        "                       ) AS RN "
+        f"                  FROM {result_object} "
+        f"                 WHERE OWNER = :targetOwner AND TABLE_NAME = :targetTable {run_filter_sql}"
+        "                   AND PASS_YN = 'Y' "
+        "               ) "
+        "         WHERE RN = 1 "
+        "         ORDER BY ABS_METRIC_VALUE DESC NULLS LAST, P_VALUE ASC NULLS LAST, COL_A, COL_B, METRIC_NAME "
+        "       ) "
+        " WHERE ROWNUM <= 80",
+        {"targetOwner": target_owner, "targetTable": target_table, **run_params},
+    )
+    top_pair_columns = [desc[0] for desc in cursor.description] if cursor.description else []
+    top_pairs = [_row_to_dict(top_pair_columns, row) for row in cursor.fetchall()]
+    column_comments = _fetch_column_comment_map(cursor, target_owner, target_table)
+    return {
+        "targetOwner": target_owner,
+        "targetTable": target_table,
+        "totalColumnCount": total_columns,
+        "associatedColumnCount": len(associated_columns),
+        "associatedColumns": associated_columns,
+        "columnComments": column_comments,
+        "associatedPairCount": int(metrics.get("PASS_PAIR_COUNT") or 0),
+        "totalPairCount": int(metrics.get("TOTAL_PAIR_COUNT") or 0),
+        "relationTypeCount": int(metrics.get("RELATION_TYPE_COUNT") or 0),
+        "averageMetricValue": metrics.get("AVG_METRIC_VALUE"),
+        "maxMetricValue": metrics.get("MAX_METRIC_VALUE"),
+        "relationTypes": relationTypes,
+        "relationTypeColumns": relation_type_columns,
+        "topPairs": top_pairs,
+    }
+
+
+def _fetch_relation_network_summary(
+    cursor,
+    owner_name: str,
+    object_name: str,
+    target_owner: str,
+    target_table: str,
+    run_source_type: str = "",
+    run_id: int | None = None,
+) -> dict[str, Any] | None:
+    if object_name not in {"INIT$_TB_RELATION_NETWORK_NODE", "INIT$_TB_RELATION_NETWORK_EDGE"} or not target_owner or not target_table:
+        return None
+    node_object = f"{_quote_identifier(owner_name)}.{_quote_identifier('INIT$_TB_RELATION_NETWORK_NODE')}"
+    edge_object = f"{_quote_identifier(owner_name)}.{_quote_identifier('INIT$_TB_RELATION_NETWORK_EDGE')}"
+    run_filter_sql = ""
+    run_params: dict[str, Any] = {}
+    if run_source_type and run_id is not None:
+        run_filter_sql = " AND RUN_SOURCE_TYPE = :runSourceType AND RUN_ID = :runId "
+        run_params = {"runSourceType": run_source_type, "runId": run_id}
+    params = {"targetOwner": target_owner, "targetTable": target_table, **run_params}
+    cursor.execute(
+        "SELECT COUNT(*) AS NODE_COUNT, "
+        "       COUNT(DISTINCT CLUSTER_ID) AS CLUSTER_COUNT, "
+        "       MAX(DEGREE_COUNT) AS MAX_DEGREE_COUNT, "
+        "       MAX(CENTRALITY_SCORE) AS MAX_CENTRALITY_SCORE "
+        f"  FROM {node_object} "
+        f" WHERE OWNER = :targetOwner AND TABLE_NAME = :targetTable {run_filter_sql}",
+        params,
+    )
+    node_row = cursor.fetchone()
+    node_columns = [desc[0] for desc in cursor.description] if cursor.description else []
+    node_metrics = _row_to_dict(node_columns, node_row) if node_row else {}
+    cursor.execute(
+        "SELECT COUNT(*) AS EDGE_COUNT, "
+        "       MAX(ABS_METRIC_VALUE) AS MAX_METRIC_VALUE, "
+        "       AVG(ABS_METRIC_VALUE) AS AVG_METRIC_VALUE "
+        f"  FROM {edge_object} "
+        f" WHERE OWNER = :targetOwner AND TABLE_NAME = :targetTable {run_filter_sql}",
+        params,
+    )
+    edge_row = cursor.fetchone()
+    edge_columns = [desc[0] for desc in cursor.description] if cursor.description else []
+    edge_metrics = _row_to_dict(edge_columns, edge_row) if edge_row else {}
+    cursor.execute(
+        "SELECT * "
+        "  FROM ("
+        "        SELECT CLUSTER_ID, COUNT(*) AS NODE_COUNT, "
+        "               SUM(DEGREE_COUNT) AS DEGREE_COUNT, "
+        "               MAX(CENTRALITY_SCORE) AS MAX_CENTRALITY_SCORE "
+        f"          FROM {node_object} "
+        f"         WHERE OWNER = :targetOwner AND TABLE_NAME = :targetTable {run_filter_sql}"
+        "         GROUP BY CLUSTER_ID "
+        "         ORDER BY NODE_COUNT DESC, CLUSTER_ID"
+        "       ) "
+        " WHERE ROWNUM <= 12",
+        params,
+    )
+    cluster_columns = [desc[0] for desc in cursor.description] if cursor.description else []
+    top_clusters = [_row_to_dict(cluster_columns, row) for row in cursor.fetchall()]
+    cursor.execute(
+        "SELECT * "
+        "  FROM ("
+        "        SELECT COL_A, COL_B, RELATION_TYPE, METRIC_NAME, METRIC_VALUE, ABS_METRIC_VALUE, CLUSTER_ID "
+        f"          FROM {edge_object} "
+        f"         WHERE OWNER = :targetOwner AND TABLE_NAME = :targetTable {run_filter_sql}"
+        "         ORDER BY ABS_METRIC_VALUE DESC NULLS LAST, COL_A, COL_B"
+        "       ) "
+        " WHERE ROWNUM <= 16",
+        params,
+    )
+    top_edge_columns = [desc[0] for desc in cursor.description] if cursor.description else []
+    top_edges = [_row_to_dict(top_edge_columns, row) for row in cursor.fetchall()]
+    cursor.execute(
+        "SELECT * "
+        "  FROM ("
+        "        SELECT COLUMN_NAME, COLUMN_TYPE, CLUSTER_ID, DEGREE_COUNT, WEIGHTED_DEGREE, CENTRALITY_SCORE, SELECTED_YN "
+        f"          FROM {node_object} "
+        f"         WHERE OWNER = :targetOwner AND TABLE_NAME = :targetTable {run_filter_sql}"
+        "         ORDER BY CLUSTER_ID NULLS LAST, CENTRALITY_SCORE DESC NULLS LAST, DEGREE_COUNT DESC NULLS LAST, COLUMN_NAME"
+        "       ) "
+        " WHERE ROWNUM <= 120",
+        params,
+    )
+    node_sample_columns = [desc[0] for desc in cursor.description] if cursor.description else []
+    node_samples = [_row_to_dict(node_sample_columns, row) for row in cursor.fetchall()]
+    cursor.execute(
+        "SELECT * "
+        "  FROM ("
+        "        SELECT COL_A, COL_B, RELATION_TYPE, METRIC_NAME, METRIC_VALUE, ABS_METRIC_VALUE, CLUSTER_ID "
+        f"          FROM {edge_object} "
+        f"         WHERE OWNER = :targetOwner AND TABLE_NAME = :targetTable {run_filter_sql}"
+        "         ORDER BY ABS_METRIC_VALUE DESC NULLS LAST, COL_A, COL_B"
+        "       ) "
+        " WHERE ROWNUM <= 240",
+        params,
+    )
+    edge_sample_columns = [desc[0] for desc in cursor.description] if cursor.description else []
+    edge_samples = [_row_to_dict(edge_sample_columns, row) for row in cursor.fetchall()]
+    column_comments = _fetch_column_comment_map(cursor, target_owner, target_table)
+    return {
+        "targetOwner": target_owner,
+        "targetTable": target_table,
+        "columnComments": column_comments,
+        "nodeCount": int(node_metrics.get("NODE_COUNT") or 0),
+        "edgeCount": int(edge_metrics.get("EDGE_COUNT") or 0),
+        "clusterCount": int(node_metrics.get("CLUSTER_COUNT") or 0),
+        "maxDegreeCount": node_metrics.get("MAX_DEGREE_COUNT"),
+        "maxCentralityScore": node_metrics.get("MAX_CENTRALITY_SCORE"),
+        "maxMetricValue": edge_metrics.get("MAX_METRIC_VALUE"),
+        "averageMetricValue": edge_metrics.get("AVG_METRIC_VALUE"),
+        "topClusters": top_clusters,
+        "topEdges": top_edges,
+        "nodes": node_samples,
+        "edges": edge_samples,
     }
 
 
@@ -1811,6 +2103,18 @@ def get_result_table(
     symbolicViolationTargetColumn: str | None = None,
     symbolicViolationResultScope: str | None = None,
     predictedTypeCase: str | None = None,
+    correlationColA: str | None = None,
+    correlationColB: str | None = None,
+    relationType: str | None = None,
+    relationPassYn: str | None = None,
+    relationColA: str | None = None,
+    relationColB: str | None = None,
+    networkClusterId: str | None = None,
+    networkColA: str | None = None,
+    networkColB: str | None = None,
+    lassoTargetColumn: str | None = None,
+    lassoFeatureName: str | None = None,
+    lassoDirection: str | None = None,
     runSourceType: str | None = None,
     runId: int | None = None,
     flowRunId: int | None = None,
@@ -1841,6 +2145,18 @@ def get_result_table(
     if normalized_symbolic_violation_result_scope not in {"ALL", "HIT", "CLEAN"}:
         normalized_symbolic_violation_result_scope = "ALL"
     normalized_predicted_type_case = _normalize_predicted_type_case(predictedTypeCase)
+    normalized_correlation_col_a = _normalize_optional_identifier(correlationColA, "correlation column A")
+    normalized_correlation_col_b = _normalize_optional_identifier(correlationColB, "correlation column B")
+    normalized_relation_type = _normalize_relation_type(relationType)
+    normalized_relation_pass_yn = _normalize_yn_filter(relationPassYn)
+    normalized_relation_col_a = _normalize_optional_identifier(relationColA, "relation column A")
+    normalized_relation_col_b = _normalize_optional_identifier(relationColB, "relation column B")
+    normalized_network_cluster_id = _normalize_optional_int(networkClusterId, "network cluster ID")
+    normalized_network_col_a = _normalize_optional_identifier(networkColA, "network column A")
+    normalized_network_col_b = _normalize_optional_identifier(networkColB, "network column B")
+    normalized_lasso_target_column = _normalize_optional_identifier(lassoTargetColumn, "LASSO target column")
+    normalized_lasso_feature_name = _normalize_optional_identifier(lassoFeatureName, "LASSO feature column")
+    normalized_lasso_direction = _normalize_lasso_direction(lassoDirection)
     run_source_type, normalized_run_id = _normalize_run_context(runSourceType, runId, flowRunId)
     result_layout = _get_table_result_layout(object_name)
     page = _normalize_page(page)
@@ -1883,6 +2199,8 @@ def get_result_table(
                 "runId": normalized_run_id,
                 "filteredByTarget": bool(target_owner or target_table or bind_params),
                 "correlationSummary": None,
+                "relationSummary": None,
+                "relationNetworkSummary": None,
                 "predictedTypeSummary": predicted_type_summary,
                 "violationSummary": None,
                 "lassoSummary": None,
@@ -1904,6 +2222,12 @@ def get_result_table(
             order_sql = " ORDER BY PASS_YN DESC, ABS_PEARSON_R DESC NULLS LAST, P_VALUE ASC NULLS LAST, COL_A, COL_B"
         if object_name == "INIT$_TB_LASSO_FEATURE":
             order_sql = " ORDER BY TARGET_COLUMN, SELECTED_YN DESC, RANK_NO NULLS LAST, ABS_COEFFICIENT DESC NULLS LAST, FEATURE_NAME"
+        if object_name == "INIT$_TB_RELATION_PAIR":
+            order_sql = " ORDER BY PASS_YN DESC, RELATION_TYPE, ABS_METRIC_VALUE DESC NULLS LAST, P_VALUE ASC NULLS LAST, COL_A, COL_B, METRIC_NAME"
+        if object_name == "INIT$_TB_RELATION_NETWORK_EDGE":
+            order_sql = " ORDER BY CLUSTER_ID NULLS LAST, ABS_METRIC_VALUE DESC NULLS LAST, COL_A, COL_B, METRIC_NAME"
+        if object_name == "INIT$_TB_RELATION_NETWORK_NODE":
+            order_sql = " ORDER BY CLUSTER_ID NULLS LAST, CENTRALITY_SCORE DESC NULLS LAST, DEGREE_COUNT DESC NULLS LAST, COLUMN_NAME"
         if object_name == "INIT$_TB_SYMBOLIC_RULE":
             order_sql = " ORDER BY TARGET_COLUMN, SELECTED_YN DESC, RANK_NO NULLS LAST, SCORE DESC NULLS LAST, RULE_ID"
         if _is_predicted_type_result_table(object_name) and "COLUMN_ID" in columns:
@@ -1927,6 +2251,74 @@ def get_result_table(
         if object_name == "INIT$_TB_RULE_VIOLATION_RESULT" and rule_model_name and "MODEL_NAME" in columns:
             where_clauses.append("MODEL_NAME = :ruleModelName")
             bind_params["ruleModelName"] = rule_model_name
+        if object_name in {"INIT$_TB_CAT_CORR_PAIR", "INIT$_TB_NUM_CORR_PAIR"} and {"COL_A", "COL_B"}.issubset(columns):
+            if normalized_correlation_col_a and normalized_correlation_col_b:
+                where_clauses.append(
+                    "((COL_A = :correlationColA AND COL_B = :correlationColB) "
+                    "OR (COL_A = :correlationColB AND COL_B = :correlationColA))"
+                )
+                bind_params["correlationColA"] = normalized_correlation_col_a
+                bind_params["correlationColB"] = normalized_correlation_col_b
+            elif normalized_correlation_col_a:
+                where_clauses.append("(COL_A = :correlationColA OR COL_B = :correlationColA)")
+                bind_params["correlationColA"] = normalized_correlation_col_a
+        if object_name == "INIT$_TB_RELATION_PAIR":
+            if normalized_relation_type != "ALL" and "RELATION_TYPE" in columns:
+                if normalized_relation_type == "CATEGORICAL_NUMERIC":
+                    where_clauses.append("RELATION_TYPE IN ('CATEGORICAL_NUMERIC', 'NUMERIC_CATEGORICAL')")
+                else:
+                    where_clauses.append("RELATION_TYPE = :relationType")
+                    bind_params["relationType"] = normalized_relation_type
+            if normalized_relation_pass_yn != "ALL" and "PASS_YN" in columns:
+                where_clauses.append("PASS_YN = :relationPassYn")
+                bind_params["relationPassYn"] = normalized_relation_pass_yn
+            if {"COL_A", "COL_B"}.issubset(columns):
+                if normalized_relation_col_a and normalized_relation_col_b:
+                    where_clauses.append(
+                        "((COL_A = :relationColA AND COL_B = :relationColB) "
+                        "OR (COL_A = :relationColB AND COL_B = :relationColA))"
+                    )
+                    bind_params["relationColA"] = normalized_relation_col_a
+                    bind_params["relationColB"] = normalized_relation_col_b
+                elif normalized_relation_col_a:
+                    where_clauses.append("(COL_A = :relationColA OR COL_B = :relationColA)")
+                    bind_params["relationColA"] = normalized_relation_col_a
+        if object_name in {"INIT$_TB_RELATION_NETWORK_NODE", "INIT$_TB_RELATION_NETWORK_EDGE"}:
+            if normalized_network_cluster_id is not None and "CLUSTER_ID" in columns:
+                where_clauses.append("CLUSTER_ID = :networkClusterId")
+                bind_params["networkClusterId"] = normalized_network_cluster_id
+            if object_name == "INIT$_TB_RELATION_NETWORK_EDGE" and {"COL_A", "COL_B"}.issubset(columns):
+                if normalized_network_col_a and normalized_network_col_b:
+                    where_clauses.append(
+                        "((COL_A = :networkColA AND COL_B = :networkColB) "
+                        "OR (COL_A = :networkColB AND COL_B = :networkColA))"
+                    )
+                    bind_params["networkColA"] = normalized_network_col_a
+                    bind_params["networkColB"] = normalized_network_col_b
+                elif normalized_network_col_a:
+                    where_clauses.append("(COL_A = :networkColA OR COL_B = :networkColA)")
+                    bind_params["networkColA"] = normalized_network_col_a
+            elif object_name == "INIT$_TB_RELATION_NETWORK_NODE" and normalized_network_col_a and "COLUMN_NAME" in columns:
+                if normalized_network_col_b:
+                    where_clauses.append("COLUMN_NAME IN (:networkColA, :networkColB)")
+                    bind_params["networkColA"] = normalized_network_col_a
+                    bind_params["networkColB"] = normalized_network_col_b
+                else:
+                    where_clauses.append("COLUMN_NAME = :networkColA")
+                    bind_params["networkColA"] = normalized_network_col_a
+        if object_name == "INIT$_TB_LASSO_FEATURE":
+            if normalized_lasso_target_column and "TARGET_COLUMN" in columns:
+                where_clauses.append("TARGET_COLUMN = :lassoTargetColumn")
+                bind_params["lassoTargetColumn"] = normalized_lasso_target_column
+            if normalized_lasso_feature_name and "FEATURE_NAME" in columns:
+                where_clauses.append("FEATURE_NAME = :lassoFeatureName")
+                bind_params["lassoFeatureName"] = normalized_lasso_feature_name
+            if normalized_lasso_direction == "SELECTED" and "SELECTED_YN" in columns:
+                where_clauses.append("SELECTED_YN = 'Y'")
+            elif normalized_lasso_direction == "POSITIVE" and "COEFFICIENT" in columns:
+                where_clauses.append("NVL(COEFFICIENT, 0) > 0")
+            elif normalized_lasso_direction == "NEGATIVE" and "COEFFICIENT" in columns:
+                where_clauses.append("NVL(COEFFICIENT, 0) < 0")
         if object_name == "INIT$_TB_RULE_VIOLATION_RESULT" and violationConditionCount is not None and "CONDITION_COUNT" in columns:
             where_clauses.append("CONDITION_COUNT = :violationConditionCount")
             bind_params["violationConditionCount"] = violationConditionCount
@@ -1963,6 +2355,8 @@ def get_result_table(
         base_sql = f"SELECT * FROM {_quote_identifier(owner_name)}.{_quote_identifier(object_name)}{where_sql}{order_sql}"
         result = _fetch_dynamic_page(cursor, base_sql, page, page_size, bind_params)
         cat_corr_summary = None
+        relation_summary = None
+        relation_network_summary = None
         predicted_type_summary = None
         violation_summary = None
         lasso_summary = None
@@ -1970,6 +2364,10 @@ def get_result_table(
         symbolic_violation_summary = None
         if result_layout.get("summary") == "correlationSummary":
             cat_corr_summary = _fetch_cat_corr_summary(cursor, owner_name, object_name, target_owner, target_table, run_source_type, normalized_run_id)
+        elif result_layout.get("summary") == "relationSummary":
+            relation_summary = _fetch_relation_summary(cursor, owner_name, object_name, target_owner, target_table, run_source_type, normalized_run_id)
+        elif result_layout.get("summary") == "relationNetworkSummary":
+            relation_network_summary = _fetch_relation_network_summary(cursor, owner_name, object_name, target_owner, target_table, run_source_type, normalized_run_id)
         elif result_layout.get("summary") == "predictedTypeSummary":
             predicted_type_summary = _fetch_predicted_type_summary(cursor, owner_name, object_name, target_owner, target_table, run_source_type, normalized_run_id)
         elif result_layout.get("summary") == "violationSummary":
@@ -2033,6 +2431,8 @@ def get_result_table(
             "runId": normalized_run_id,
             "filteredByTarget": bool(bind_params),
             "correlationSummary": cat_corr_summary,
+            "relationSummary": relation_summary,
+            "relationNetworkSummary": relation_network_summary,
             "predictedTypeSummary": predicted_type_summary,
             "violationSummary": violation_summary,
             "lassoSummary": lasso_summary,

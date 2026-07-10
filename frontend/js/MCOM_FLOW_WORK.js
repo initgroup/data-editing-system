@@ -54,6 +54,7 @@
             contextLoadFailed: false,
             flowType: config.flowType || PAGE_CODE,
             flowZoom: 1,
+            flowLayoutGrid: null,
             minFlowZoom: 0.45,
             maxFlowZoom: 1.8,
             selectedNodeId: "",
@@ -4160,6 +4161,7 @@
 
             applyFlowData(flow, options = {}) {
                 this.setValue(`#flowId-${PAGE_CODE}`, flow.FLOW_ID || "NEW");
+                this.flowLayoutGrid = null;
                 this.setValue(`#flowGroup-${PAGE_CODE}`, flow.FLOW_GROUP || config.defaultFlowGroup || PAGE_CODE);
                 this.setValue(`#flowName-${PAGE_CODE}`, flow.FLOW_NAME || "");
                 this.setValue(`#flowDesc-${PAGE_CODE}`, flow.FLOW_DESC || "");
@@ -4539,125 +4541,142 @@
                 const nodes = this.getFlowNodes();
                 if (!nodes.length) return;
 
-                const nodeIds = nodes.map((node) => node.dataset.nodeId || "").filter(Boolean);
+                const nodeItems = nodes
+                    .map((node) => ({
+                        node,
+                        nodeId: node.dataset.nodeId || "",
+                        position: this.getNodePosition(node)
+                    }))
+                    .filter((item) => item.nodeId);
+                if (!nodeItems.length) return;
+
                 if (this.hasFlowCycle()) {
                     CommonMessage.warn(this.getMessage("treeLayoutCycleBlocked", "Tree layout cannot be applied because the flow has a cycle. Remove the loop and try again."), { copyable: false });
                     return;
                 }
-                const nodeSet = new Set(nodeIds);
-                const outgoing = new Map(nodeIds.map((nodeId) => [nodeId, []]));
-                const incomingCount = new Map(nodeIds.map((nodeId) => [nodeId, 0]));
-                const layoutEdges = [];
 
-                this.flowEdges.forEach((edge) => {
-                    if (!nodeSet.has(edge.from) || !nodeSet.has(edge.to) || edge.from === edge.to) return;
-                    outgoing.get(edge.from)?.push(edge.to);
-                    incomingCount.set(edge.to, (incomingCount.get(edge.to) || 0) + 1);
-                    layoutEdges.push({ from: edge.from, to: edge.to });
-                });
-
-                const queue = nodeIds
-                    .filter((nodeId) => (incomingCount.get(nodeId) || 0) === 0)
-                    .sort();
-                const levels = new Map(queue.map((nodeId) => [nodeId, 0]));
-                const visited = new Set();
-
-                while (queue.length) {
-                    const current = queue.shift();
-                    visited.add(current);
-                    const currentLevel = levels.get(current) || 0;
-                    (outgoing.get(current) || []).forEach((next) => {
-                        levels.set(next, Math.max(levels.get(next) || 0, currentLevel + 1));
-                        incomingCount.set(next, (incomingCount.get(next) || 0) - 1);
-                        if ((incomingCount.get(next) || 0) <= 0 && !visited.has(next) && !queue.includes(next)) {
-                            queue.push(next);
-                        }
-                    });
-                    queue.sort();
-                }
-
-                const fallbackLevel = Math.max(0, ...Array.from(levels.values()), 0) + 1;
-                nodeIds.forEach((nodeId) => {
-                    if (!levels.has(nodeId)) levels.set(nodeId, fallbackLevel);
-                });
-
-                const canReach = (source, target) => {
-                    if (source === target) return true;
-                    const stack = [...(outgoing.get(source) || [])];
-                    const seen = new Set();
-                    while (stack.length) {
-                        const current = stack.pop();
-                        if (current === target) return true;
-                        if (seen.has(current)) continue;
-                        seen.add(current);
-                        stack.push(...(outgoing.get(current) || []));
-                    }
-                    return false;
+                const median = (values) => {
+                    if (!values.length) return null;
+                    const sorted = [...values].sort((a, b) => a - b);
+                    const middle = Math.floor(sorted.length / 2);
+                    return sorted.length % 2 === 0
+                        ? (sorted[middle - 1] + sorted[middle]) / 2
+                        : sorted[middle];
                 };
-                const laneByNode = new Map(nodeIds.map((nodeId) => [nodeId, 0]));
-                layoutEdges
-                    .filter((edge) => (levels.get(edge.to) || 0) - (levels.get(edge.from) || 0) > 1)
-                    .sort((a, b) => {
-                        const aSpan = (levels.get(a.to) || 0) - (levels.get(a.from) || 0);
-                        const bSpan = (levels.get(b.to) || 0) - (levels.get(b.from) || 0);
-                        return bSpan - aSpan || a.from.localeCompare(b.from) || a.to.localeCompare(b.to);
-                    })
-                    .forEach((edge, edgeIndex) => {
-                        const fromLevel = levels.get(edge.from) || 0;
-                        const toLevel = levels.get(edge.to) || 0;
-                        const lane = edgeIndex % 2 === 0 ? -1 : 1;
-                        nodeIds.forEach((candidate) => {
-                            const level = levels.get(candidate) || 0;
-                            if (candidate === edge.from || candidate === edge.to || level <= fromLevel || level >= toLevel) return;
-                            if (!canReach(edge.from, candidate) || !canReach(candidate, edge.to)) return;
-                            if ((laneByNode.get(candidate) || 0) === 0) laneByNode.set(candidate, lane);
-                        });
-                    });
-
-                const levelGroups = new Map();
-                nodeIds.forEach((nodeId) => {
-                    const level = levels.get(nodeId) || 0;
-                    if (!levelGroups.has(level)) levelGroups.set(level, []);
-                    levelGroups.get(level).push(nodeId);
-                });
-
-                const columnWidth = 280;
-                const rowHeight = 170;
-                const startX = 80;
-                const startY = 90;
-                const rowByNode = new Map();
-                Array.from(levelGroups.keys()).sort((a, b) => a - b).forEach((level) => {
-                    const usedRows = new Set();
-                    const group = levelGroups.get(level).sort((a, b) => {
-                        const laneDiff = (laneByNode.get(a) || 0) - (laneByNode.get(b) || 0);
-                        if (laneDiff) return laneDiff;
-                        const aOut = (outgoing.get(a) || []).length;
-                        const bOut = (outgoing.get(b) || []).length;
-                        return bOut - aOut || a.localeCompare(b);
-                    });
-                    group.forEach((nodeId) => {
-                        const preferredLane = laneByNode.get(nodeId) || 0;
-                        let row = preferredLane;
-                        let spread = 0;
-                        while (usedRows.has(row)) {
-                            spread += 1;
-                            row = preferredLane <= 0 ? preferredLane - spread : preferredLane + spread;
-                            if (usedRows.has(row)) row = preferredLane + spread;
+                const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+                const clusterAxisValues = (values, tolerance) => {
+                    const clusters = [];
+                    [...values].sort((a, b) => a - b).forEach((value) => {
+                        const last = clusters[clusters.length - 1];
+                        if (!last || Math.abs(value - last.avg) > tolerance) {
+                            clusters.push({ avg: value, sum: value, count: 1 });
+                            return;
                         }
-                        usedRows.add(row);
-                        rowByNode.set(nodeId, row);
+                        last.sum += value;
+                        last.count += 1;
+                        last.avg = last.sum / last.count;
                     });
+                    return clusters.map((cluster) => cluster.avg);
+                };
+                const getGridStep = (values, tolerance, fallback, min, max) => {
+                    const clusters = clusterAxisValues(values, tolerance);
+                    const diffs = clusters
+                        .slice(1)
+                        .map((value, index) => value - clusters[index])
+                        .filter((diff) => diff >= min * 0.65);
+                    const measured = median(diffs);
+                    if (!measured) return fallback;
+                    return clamp(Math.round(measured / 10) * 10, min, max);
+                };
+                const maxNodeWidth = Math.max(...nodeItems.map((item) => item.position.width || 0), 150);
+                const maxNodeHeight = Math.max(...nodeItems.map((item) => item.position.height || 0), 90);
+                const flowKey = this.getCurrentFlowRunKey();
+                const cachedGrid = this.flowLayoutGrid?.flowKey === flowKey ? this.flowLayoutGrid : null;
+                const columnWidth = cachedGrid?.columnWidth || getGridStep(
+                    nodeItems.map((item) => item.position.left),
+                    Math.min(80, Math.max(40, maxNodeWidth * 0.45)),
+                    Math.max(240, maxNodeWidth + 90),
+                    Math.max(220, maxNodeWidth + 60),
+                    360
+                );
+                const rowHeight = cachedGrid?.rowHeight || getGridStep(
+                    nodeItems.map((item) => item.position.top),
+                    Math.min(70, Math.max(35, maxNodeHeight * 0.5)),
+                    Math.max(160, maxNodeHeight + 70),
+                    Math.max(130, maxNodeHeight + 40),
+                    260
+                );
+                const minLeft = Math.min(...nodeItems.map((item) => item.position.left));
+                const minTop = Math.min(...nodeItems.map((item) => item.position.top));
+                const baseX = Math.max(20, Math.round(minLeft / 20) * 20);
+                const baseY = Math.max(20, Math.round(minTop / 20) * 20);
+                const occupiedCells = new Set();
+                const cellByNode = new Map();
+                const cellKey = (col, row) => `${col}:${row}`;
+                const getPreferredCell = (item) => ({
+                    col: Math.max(0, Math.round((item.position.left - baseX) / columnWidth)),
+                    row: Math.max(0, Math.round((item.position.top - baseY) / rowHeight))
                 });
-                const minRow = Math.min(0, ...Array.from(rowByNode.values()), 0);
-                const baseY = startY + Math.abs(minRow) * rowHeight;
-                Array.from(levelGroups.keys()).sort((a, b) => a - b).forEach((level) => {
-                    levelGroups.get(level).forEach((nodeId) => {
-                        const node = this.getFlowNode(nodeId);
-                        if (!node) return;
-                        this.setNodePosition(node, startX + level * columnWidth, baseY + (rowByNode.get(nodeId) || 0) * rowHeight);
+                const findNearestFreeCell = (preferredCol, preferredRow) => {
+                    const maxRadius = Math.max(8, nodeItems.length + 8);
+                    for (let radius = 0; radius <= maxRadius; radius += 1) {
+                        let bestCell = null;
+                        let bestScore = Number.POSITIVE_INFINITY;
+                        for (let dc = -radius; dc <= radius; dc += 1) {
+                            for (let dr = -radius; dr <= radius; dr += 1) {
+                                if (Math.max(Math.abs(dc), Math.abs(dr)) !== radius) continue;
+                                const col = preferredCol + dc;
+                                const row = preferredRow + dr;
+                                if (col < 0 || row < 0) continue;
+                                if (occupiedCells.has(cellKey(col, row))) continue;
+                                const score = (Math.abs(dc) * 2.5) + Math.abs(dr);
+                                if (
+                                    score < bestScore
+                                    || (
+                                        score === bestScore
+                                        && (!bestCell || row < bestCell.row || (row === bestCell.row && col < bestCell.col))
+                                    )
+                                ) {
+                                    bestScore = score;
+                                    bestCell = { col, row };
+                                }
+                            }
+                        }
+                        if (bestCell) return bestCell;
+                    }
+
+                    let row = preferredRow;
+                    while (occupiedCells.has(cellKey(preferredCol, row))) {
+                        row += 1;
+                    }
+                    return { col: preferredCol, row };
+                };
+
+                [...nodeItems]
+                    .sort((a, b) => {
+                        const aCell = getPreferredCell(a);
+                        const bCell = getPreferredCell(b);
+                        return aCell.col - bCell.col
+                            || aCell.row - bCell.row
+                            || a.position.left - b.position.left
+                            || a.position.top - b.position.top
+                            || a.nodeId.localeCompare(b.nodeId);
+                    })
+                    .forEach((item) => {
+                        const preferredCell = getPreferredCell(item);
+                        const cell = findNearestFreeCell(preferredCell.col, preferredCell.row);
+                        occupiedCells.add(cellKey(cell.col, cell.row));
+                        cellByNode.set(item.nodeId, cell);
                     });
+
+                nodeItems.forEach((item) => {
+                    const cell = cellByNode.get(item.nodeId);
+                    if (!cell) return;
+                    this.setNodePosition(item.node, baseX + cell.col * columnWidth, baseY + cell.row * rowHeight);
                 });
 
+                this.flowLayoutGrid = { flowKey, columnWidth, rowHeight };
+                this.markFlowEdited();
                 this.resizeFlowViewportToNodes();
                 this.updateFlowEdges();
                 this.renderFlowEdgeGrid();
@@ -6081,6 +6100,7 @@
 
             newFlow(clearCanvas = true) {
                 this.setValue(`#flowId-${PAGE_CODE}`, "NEW");
+                this.flowLayoutGrid = null;
                 this.setValue(`#flowGroup-${PAGE_CODE}`, config.defaultFlowGroup || PAGE_CODE);
                 this.setValue(`#flowName-${PAGE_CODE}`, "");
                 this.setValue(`#flowDesc-${PAGE_CODE}`, "");

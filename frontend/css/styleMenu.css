@@ -6671,8 +6671,29 @@ body.intro-mode #container-intro .env-panel {
     text-align: center;
 }
 
+.home-flow-date-selector button.has-runs {
+    background: #f7fbff;
+    border-color: #c7d9f4;
+}
+
+.home-flow-date-selector button.has-runs small {
+    color: #2563eb;
+    font-weight: 750;
+}
+
+.home-flow-date-selector button.no-runs {
+    background: #fafbfc;
+    border-color: #e5eaf2;
+}
+
+.home-flow-date-selector button.no-runs strong,
+.home-flow-date-selector button.no-runs small {
+    color: #64748b;
+}
+
 .home-flow-date-selector button:hover,
 .home-flow-date-selector button.is-selected {
+    background: #eef6ff;
     border-color: #2563eb;
     box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.16);
 }

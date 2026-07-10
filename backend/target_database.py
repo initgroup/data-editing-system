@@ -20,6 +20,7 @@ from backend.routers.M99001 import (
     _connection_row_to_params,
     _get_connection_detail,
 )
+from backend.oracle_session import disable_parallel_execution
 
 
 _target_pools = {}
@@ -130,6 +131,17 @@ def get_target_db_connection_by_id(connection_id: int, user_id: int):
             _pool_snapshot(pool),
         )
         connection = pool.acquire()
+        try:
+            if os.getenv("TARGET_DB_DISABLE_PARALLEL", "Y").strip().upper() == "Y":
+                with connection.cursor() as cursor:
+                    disable_parallel_execution(
+                        cursor,
+                        include_query=False,
+                        context=f"target_connection_id={connection_id}, user_id={user_id}",
+                    )
+        except Exception:
+            connection.close()
+            raise
         elapsed = time.monotonic() - started_at
         warn_seconds = float(os.getenv("TARGET_DB_POOL_ACQUIRE_WARN_SECONDS", "3"))
         log_method = logger.warning if elapsed >= warn_seconds else logger.info

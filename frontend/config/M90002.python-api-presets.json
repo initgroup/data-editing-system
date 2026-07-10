@@ -5,6 +5,7 @@
     ":INIT$TargetTable",
     ":INIT$RunSourceType",
     ":INIT$RunId",
+    ":INIT$PreResultTable",
     ":INIT$ResultModelName"
   ],
   "groups": [
@@ -132,6 +133,111 @@
         },
         {
           "objectType": "INTERNAL_API",
+          "objectName": "RELATION_NETWORK_CLUSTER",
+          "label": "Relation Network Cluster",
+          "apiGroup": "Python API Base JSON",
+          "endpoint": "/api/mlAnalysis/relation-network-cluster",
+          "httpMethod": "POST",
+          "auth": { "type": "API_KEY", "keyName": "INIT_INTERNAL_API_KEY", "headerName": "X-INIT-API-Key" },
+          "timeoutSec": 300,
+          "sortOrder": 15,
+          "useYn": "Y",
+          "description": "Run the project internal Python relation network clustering API and create network node/edge result rows.",
+          "output": {
+            "resultCreateYn": "T",
+            "resultOwner": ":INIT$TargetOwner",
+            "resultTableName": "INIT$_TB_RELATION_NETWORK_EDGE",
+            "persistMode": "SERVICE_MANAGED",
+            "rules": [
+              {
+                "key": "OUTPUT.status",
+                "value": "$.status",
+                "comment": "API success status",
+                "defaultValue": ""
+              },
+              {
+                "key": "OUTPUT.resultTable",
+                "value": "$.resultTable -> INIT$_TB_RELATION_NETWORK_EDGE",
+                "comment": "Result table managed by the internal Python service",
+                "defaultValue": "INIT$_TB_RELATION_NETWORK_EDGE"
+              }
+            ]
+          },
+          "details": [
+            {
+              "key": "INPUT.P_TARGET_OWNER",
+              "value": "IN VARCHAR2",
+              "comment": "Target table owner",
+              "defaultValue": ":INIT$TargetOwner",
+              "order": 1
+            },
+            {
+              "key": "INPUT.P_TARGET_TABLE",
+              "value": "IN VARCHAR2",
+              "comment": "Target table name",
+              "defaultValue": ":INIT$TargetTable",
+              "order": 2
+            },
+            {
+              "key": "INPUT.P_MIN_METRIC",
+              "value": "IN NUMBER",
+              "comment": "Minimum relation strength used as a graph edge",
+              "defaultValue": "0.3",
+              "order": 3
+            },
+            {
+              "key": "INPUT.P_MAX_EDGES",
+              "value": "IN NUMBER",
+              "comment": "Maximum graph edge count",
+              "defaultValue": "500",
+              "order": 4
+            },
+            {
+              "key": "INPUT.P_RELATION_TYPES",
+              "value": "IN VARCHAR2",
+              "comment": "Optional relation type filter. Blank or (auto) means all.",
+              "defaultValue": "(auto)",
+              "order": 5
+            },
+            {
+              "key": "INPUT.P_METRIC_NAMES",
+              "value": "IN VARCHAR2",
+              "comment": "Optional metric name filter. Blank or (auto) means all.",
+              "defaultValue": "(auto)",
+              "order": 6
+            },
+            {
+              "key": "INPUT.P_RUN_SOURCE_TYPE",
+              "value": "IN VARCHAR2",
+              "comment": "DATA_WORK or FLOW_WORK",
+              "defaultValue": ":INIT$RunSourceType",
+              "order": 7
+            },
+            {
+              "key": "INPUT.P_RUN_ID",
+              "value": "IN NUMBER",
+              "comment": "Run history ID",
+              "defaultValue": ":INIT$RunId",
+              "order": 8
+            },
+            {
+              "key": "OUTPUT.status",
+              "value": "$.status",
+              "comment": "API success status",
+              "defaultValue": "",
+              "order": 9
+            },
+            {
+              "key": "OUTPUT.resultTable",
+              "value": "$.resultTable -> INIT$_TB_RELATION_NETWORK_EDGE",
+              "comment": "Result table managed by the internal Python service",
+              "defaultValue": "INIT$_TB_RELATION_NETWORK_EDGE",
+              "order": 10
+            }
+          ]
+        },
+        {
+          "objectType": "INTERNAL_API",
           "objectName": "SYMBOLIC_REGRESSION_RULE",
           "label": "Symbolic Regression Rule",
           "apiGroup": "Python API Base JSON",
@@ -253,6 +359,342 @@
               "comment": "Result table managed by the internal Python service",
               "defaultValue": "INIT$_TB_SYMBOLIC_RULE",
               "order": 13
+            }
+          ]
+        },
+        {
+          "objectType": "INTERNAL_API",
+          "objectName": "INTEGRATED_RULE_DISCOVER",
+          "label": "Integrated Rule Discover",
+          "apiGroup": "Python API Base JSON",
+          "endpoint": "/api/mlAnalysis/integrated-rule-discover",
+          "httpMethod": "POST",
+          "auth": { "type": "API_KEY", "keyName": "INIT_INTERNAL_API_KEY", "headerName": "X-INIT-API-Key" },
+          "timeoutSec": 900,
+          "sortOrder": 30,
+          "useYn": "Y",
+          "description": "Run categorical Apriori rule discovery and continuous LASSO/Symbolic rule discovery together using existing project engines.",
+          "output": {
+            "resultCreateYn": "M",
+            "resultOwner": ":INIT$TargetOwner",
+            "resultTableName": "OML_ASSOCIATION_MODEL_01",
+            "persistMode": "SERVICE_MANAGED",
+            "rules": [
+              {
+                "key": "OUTPUT.status",
+                "value": "$.status",
+                "comment": "API success status",
+                "defaultValue": ""
+              },
+              {
+                "key": "OUTPUT.resultTables",
+                "value": "$.resultTables",
+                "comment": "Service-managed tables: association summary, LASSO feature, symbolic rule",
+                "defaultValue": "INIT$_TB_ASSOC_RULE_SUMMARY,INIT$_TB_LASSO_FEATURE,INIT$_TB_SYMBOLIC_RULE"
+              }
+            ]
+          },
+          "details": [
+            {
+              "key": "INPUT.P_TARGET_OWNER",
+              "value": "IN VARCHAR2",
+              "comment": "Target table owner",
+              "defaultValue": ":INIT$TargetOwner",
+              "order": 1
+            },
+            {
+              "key": "INPUT.P_TARGET_TABLE",
+              "value": "IN VARCHAR2",
+              "comment": "Target table name",
+              "defaultValue": ":INIT$TargetTable",
+              "order": 2
+            },
+            {
+              "key": "INPUT.P_RULE_PARTS",
+              "value": "IN VARCHAR2",
+              "comment": "ALL, CATEGORICAL, or CONTINUOUS",
+              "defaultValue": "ALL",
+              "order": 3
+            },
+            {
+              "key": "INPUT.P_ASSOC_MODEL_NAME",
+              "value": "IN VARCHAR2",
+              "comment": "Association model name for categorical rule discovery",
+              "defaultValue": ":INIT$ResultModelName",
+              "order": 4
+            },
+            {
+              "key": "INPUT.P_CASE_ID_COLUMN_NAME",
+              "value": "IN VARCHAR2",
+              "comment": "Case ID column",
+              "defaultValue": "FILE_ROW_NO",
+              "order": 5
+            },
+            {
+              "key": "INPUT.P_MIN_SUPPORT",
+              "value": "IN NUMBER",
+              "comment": "Apriori minimum support",
+              "defaultValue": "0.2",
+              "order": 6
+            },
+            {
+              "key": "INPUT.P_MIN_CONFIDENCE",
+              "value": "IN NUMBER",
+              "comment": "Apriori minimum confidence",
+              "defaultValue": "0.7",
+              "order": 7
+            },
+            {
+              "key": "INPUT.P_MIN_RULE_LIFT",
+              "value": "IN NUMBER",
+              "comment": "Minimum rule lift for association summary",
+              "defaultValue": "1",
+              "order": 8
+            },
+            {
+              "key": "INPUT.P_TARGET_COLUMN",
+              "value": "IN VARCHAR2",
+              "comment": "Continuous target column. (auto) runs all eligible continuous targets.",
+              "defaultValue": "(auto)",
+              "order": 9
+            },
+            {
+              "key": "INPUT.P_MAX_FEATURES",
+              "value": "IN NUMBER",
+              "comment": "Maximum LASSO/Symbolic feature count",
+              "defaultValue": "10",
+              "order": 10
+            },
+            {
+              "key": "INPUT.P_SAMPLE_ROWS",
+              "value": "IN NUMBER",
+              "comment": "Maximum sampled rows",
+              "defaultValue": "50000",
+              "order": 11
+            },
+            {
+              "key": "INPUT.P_MIN_R2_SCORE",
+              "value": "IN NUMBER",
+              "comment": "Minimum LASSO R2 score for symbolic regression",
+              "defaultValue": "0.7",
+              "order": 12
+            },
+            {
+              "key": "INPUT.P_MAX_AUTO_TARGETS",
+              "value": "IN NUMBER",
+              "comment": "Maximum auto continuous target count",
+              "defaultValue": "10",
+              "order": 13
+            },
+            {
+              "key": "INPUT.P_CONTINUE_ON_ERROR",
+              "value": "IN VARCHAR2",
+              "comment": "Continue remaining integrated tasks when one task fails",
+              "defaultValue": "Y",
+              "order": 14
+            },
+            {
+              "key": "INPUT.P_RUN_SOURCE_TYPE",
+              "value": "IN VARCHAR2",
+              "comment": "DATA_WORK or FLOW_WORK",
+              "defaultValue": ":INIT$RunSourceType",
+              "order": 15
+            },
+            {
+              "key": "INPUT.P_RUN_ID",
+              "value": "IN NUMBER",
+              "comment": "Run history ID",
+              "defaultValue": ":INIT$RunId",
+              "order": 16
+            },
+            {
+              "key": "OUTPUT.status",
+              "value": "$.status",
+              "comment": "API success status",
+              "defaultValue": "",
+              "order": 17
+            },
+            {
+              "key": "OUTPUT.resultTables",
+              "value": "$.resultTables",
+              "comment": "Service-managed result tables",
+              "defaultValue": "INIT$_TB_ASSOC_RULE_SUMMARY,INIT$_TB_LASSO_FEATURE,INIT$_TB_SYMBOLIC_RULE",
+              "order": 18
+            }
+          ]
+        },
+        {
+          "objectType": "INTERNAL_API",
+          "objectName": "INTEGRATED_RULE_VIOLATION_DETECT",
+          "label": "Integrated Rule Violation Detect",
+          "apiGroup": "Python API Base JSON",
+          "endpoint": "/api/mlAnalysis/integrated-rule-violation-detect",
+          "httpMethod": "POST",
+          "auth": { "type": "API_KEY", "keyName": "INIT_INTERNAL_API_KEY", "headerName": "X-INIT-API-Key" },
+          "timeoutSec": 900,
+          "sortOrder": 35,
+          "useYn": "Y",
+          "description": "Run categorical association rule violation detection and continuous symbolic rule violation detection together.",
+          "output": {
+            "resultCreateYn": "T",
+            "resultOwner": ":INIT$TargetOwner",
+            "resultTableName": "INIT$_TB_RULE_VIOLATION_RESULT",
+            "persistMode": "SERVICE_MANAGED",
+            "rules": [
+              {
+                "key": "OUTPUT.status",
+                "value": "$.status",
+                "comment": "API success status",
+                "defaultValue": ""
+              },
+              {
+                "key": "OUTPUT.resultTables",
+                "value": "$.resultTables",
+                "comment": "Service-managed tables: categorical violation and symbolic violation",
+                "defaultValue": "INIT$_TB_RULE_VIOLATION_RESULT,INIT$_TB_SYMBOLIC_RULE_VIOLATION"
+              }
+            ]
+          },
+          "details": [
+            {
+              "key": "INPUT.P_RULE_PARTS",
+              "value": "IN VARCHAR2",
+              "comment": "ALL, CATEGORICAL, or CONTINUOUS",
+              "defaultValue": "ALL",
+              "order": 1
+            },
+            {
+              "key": "INPUT.P_RULE_OWNER_NAME",
+              "value": "IN VARCHAR2",
+              "comment": "Association rule model owner",
+              "defaultValue": ":INIT$TargetOwner",
+              "order": 2
+            },
+            {
+              "key": "INPUT.P_RULE_MODEL_NAME",
+              "value": "IN VARCHAR2",
+              "comment": "Association rule model name",
+              "defaultValue": ":INIT$PreResultTable",
+              "order": 3
+            },
+            {
+              "key": "INPUT.P_TARGET_OWNER",
+              "value": "IN VARCHAR2",
+              "comment": "Target table owner",
+              "defaultValue": ":INIT$TargetOwner",
+              "order": 4
+            },
+            {
+              "key": "INPUT.P_TARGET_TABLE",
+              "value": "IN VARCHAR2",
+              "comment": "Target table name",
+              "defaultValue": ":INIT$TargetTable",
+              "order": 5
+            },
+            {
+              "key": "INPUT.P_CASE_ID_COLUMN_NAME",
+              "value": "IN VARCHAR2",
+              "comment": "Case ID column",
+              "defaultValue": "FILE_ROW_NO",
+              "order": 6
+            },
+            {
+              "key": "INPUT.P_MIN_CONFIDENCE",
+              "value": "IN NUMBER",
+              "comment": "Categorical violation minimum confidence",
+              "defaultValue": "0.8",
+              "order": 7
+            },
+            {
+              "key": "INPUT.P_MIN_LIFT",
+              "value": "IN NUMBER",
+              "comment": "Categorical violation minimum lift",
+              "defaultValue": "1",
+              "order": 8
+            },
+            {
+              "key": "INPUT.P_MAX_RULES",
+              "value": "IN NUMBER",
+              "comment": "Maximum categorical rule count",
+              "defaultValue": "100",
+              "order": 9
+            },
+            {
+              "key": "INPUT.P_SYMBOLIC_MAX_RULES",
+              "value": "IN NUMBER",
+              "comment": "Maximum symbolic rule count",
+              "defaultValue": "20",
+              "order": 10
+            },
+            {
+              "key": "INPUT.P_MAX_VIOLATIONS_PER_RULE",
+              "value": "IN NUMBER",
+              "comment": "Maximum violation rows per rule",
+              "defaultValue": "500",
+              "order": 11
+            },
+            {
+              "key": "INPUT.P_ERROR_PCT_THRESHOLD",
+              "value": "IN NUMBER",
+              "comment": "Symbolic allowed relative error threshold",
+              "defaultValue": "0.05",
+              "order": 12
+            },
+            {
+              "key": "INPUT.P_MAX_SCAN_ROWS",
+              "value": "IN NUMBER",
+              "comment": "Maximum scan rows per symbolic rule",
+              "defaultValue": "50000",
+              "order": 13
+            },
+            {
+              "key": "INPUT.P_CLEAR_EXISTING_YN",
+              "value": "IN VARCHAR2",
+              "comment": "Clear existing violation rows",
+              "defaultValue": "Y",
+              "order": 14
+            },
+            {
+              "key": "INPUT.P_COMMIT_YN",
+              "value": "IN VARCHAR2",
+              "comment": "Internal procedure commit Y/N. N lets the integrated API commit once.",
+              "defaultValue": "N",
+              "order": 15
+            },
+            {
+              "key": "INPUT.P_CONTINUE_ON_ERROR",
+              "value": "IN VARCHAR2",
+              "comment": "Continue remaining integrated tasks when one task fails",
+              "defaultValue": "Y",
+              "order": 16
+            },
+            {
+              "key": "INPUT.P_RUN_SOURCE_TYPE",
+              "value": "IN VARCHAR2",
+              "comment": "DATA_WORK or FLOW_WORK",
+              "defaultValue": ":INIT$RunSourceType",
+              "order": 17
+            },
+            {
+              "key": "INPUT.P_RUN_ID",
+              "value": "IN NUMBER",
+              "comment": "Run history ID",
+              "defaultValue": ":INIT$RunId",
+              "order": 18
+            },
+            {
+              "key": "OUTPUT.status",
+              "value": "$.status",
+              "comment": "API success status",
+              "defaultValue": "",
+              "order": 19
+            },
+            {
+              "key": "OUTPUT.resultTables",
+              "value": "$.resultTables",
+              "comment": "Service-managed result tables",
+              "defaultValue": "INIT$_TB_RULE_VIOLATION_RESULT,INIT$_TB_SYMBOLIC_RULE_VIOLATION",
+              "order": 20
             }
           ]
         }

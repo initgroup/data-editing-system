@@ -599,6 +599,296 @@ DECLARE
         DBMS_OUTPUT.PUT_LINE('[OK] INIT$_TB_CAT_CORR_SUMMARY column display order refreshed.');
     END;
 
+    PROCEDURE reorder_relation_pair_columns IS
+        TYPE t_col_list IS TABLE OF VARCHAR2(128);
+        v_cols t_col_list := t_col_list(
+            'RUN_SOURCE_TYPE',
+            'RUN_ID',
+            'OWNER',
+            'TABLE_NAME',
+            'COL_A',
+            'COL_B',
+            'COL_A_TYPE',
+            'COL_B_TYPE',
+            'RELATION_TYPE',
+            'METRIC_NAME',
+            'METRIC_VALUE',
+            'ABS_METRIC_VALUE',
+            'P_VALUE',
+            'ROW_COUNT',
+            'DF',
+            'EXTRA_JSON',
+            'PASS_YN',
+            'CLUSTER_ID',
+            'CREATE_DT'
+        );
+        v_current_order VARCHAR2(32767);
+        v_expected_order VARCHAR2(32767);
+    BEGIN
+        IF NOT table_exists('INIT$_TB_RELATION_PAIR') THEN
+            DBMS_OUTPUT.PUT_LINE('[SKIP] TABLE INIT$_TB_RELATION_PAIR does not exist.');
+            RETURN;
+        END IF;
+
+        FOR i IN 1 .. v_cols.COUNT LOOP
+            IF NOT column_exists('INIT$_TB_RELATION_PAIR', v_cols(i)) THEN
+                DBMS_OUTPUT.PUT_LINE('[SKIP] INIT$_TB_RELATION_PAIR column order refresh skipped. Missing column: ' || v_cols(i));
+                RETURN;
+            END IF;
+            v_expected_order := v_expected_order || CASE WHEN i > 1 THEN ',' END || v_cols(i);
+        END LOOP;
+
+        SELECT LISTAGG(COLUMN_NAME, ',') WITHIN GROUP (ORDER BY COLUMN_ID)
+          INTO v_current_order
+          FROM USER_TAB_COLS
+         WHERE TABLE_NAME = 'INIT$_TB_RELATION_PAIR'
+           AND HIDDEN_COLUMN = 'NO'
+           AND COLUMN_NAME IN (
+               'RUN_SOURCE_TYPE',
+               'RUN_ID',
+               'OWNER',
+               'TABLE_NAME',
+               'COL_A',
+               'COL_B',
+               'COL_A_TYPE',
+               'COL_B_TYPE',
+               'RELATION_TYPE',
+               'METRIC_NAME',
+               'METRIC_VALUE',
+               'ABS_METRIC_VALUE',
+               'P_VALUE',
+               'ROW_COUNT',
+               'DF',
+               'EXTRA_JSON',
+               'PASS_YN',
+               'CLUSTER_ID',
+               'CREATE_DT'
+           );
+
+        IF v_current_order = v_expected_order THEN
+            DBMS_OUTPUT.PUT_LINE('[SKIP] INIT$_TB_RELATION_PAIR column display order already matches.');
+            RETURN;
+        END IF;
+
+        FOR i IN 2 .. v_cols.COUNT LOOP
+            set_column_visibility('INIT$_TB_RELATION_PAIR', v_cols(i), 'INVISIBLE');
+        END LOOP;
+
+        FOR i IN 2 .. v_cols.COUNT LOOP
+            set_column_visibility('INIT$_TB_RELATION_PAIR', v_cols(i), 'VISIBLE');
+        END LOOP;
+
+        DBMS_OUTPUT.PUT_LINE('[OK] INIT$_TB_RELATION_PAIR column display order refreshed.');
+    END;
+
+    PROCEDURE reorder_relation_summary_columns IS
+        TYPE t_col_list IS TABLE OF VARCHAR2(128);
+        v_cols t_col_list := t_col_list(
+            'RUN_SOURCE_TYPE',
+            'RUN_ID',
+            'OWNER',
+            'TABLE_NAME',
+            'COLUMN_NAME',
+            'COLUMN_TYPE',
+            'PAIR_COUNT',
+            'PASS_PAIR_COUNT',
+            'AVG_ABS_METRIC_VALUE',
+            'MAX_ABS_METRIC_VALUE',
+            'RANK_NO',
+            'SELECTED_YN',
+            'CREATE_DT'
+        );
+        v_current_order VARCHAR2(32767);
+        v_expected_order VARCHAR2(32767);
+    BEGIN
+        IF NOT table_exists('INIT$_TB_RELATION_SUMMARY') THEN
+            DBMS_OUTPUT.PUT_LINE('[SKIP] TABLE INIT$_TB_RELATION_SUMMARY does not exist.');
+            RETURN;
+        END IF;
+
+        FOR i IN 1 .. v_cols.COUNT LOOP
+            IF NOT column_exists('INIT$_TB_RELATION_SUMMARY', v_cols(i)) THEN
+                DBMS_OUTPUT.PUT_LINE('[SKIP] INIT$_TB_RELATION_SUMMARY column order refresh skipped. Missing column: ' || v_cols(i));
+                RETURN;
+            END IF;
+            v_expected_order := v_expected_order || CASE WHEN i > 1 THEN ',' END || v_cols(i);
+        END LOOP;
+
+        SELECT LISTAGG(COLUMN_NAME, ',') WITHIN GROUP (ORDER BY COLUMN_ID)
+          INTO v_current_order
+          FROM USER_TAB_COLS
+         WHERE TABLE_NAME = 'INIT$_TB_RELATION_SUMMARY'
+           AND HIDDEN_COLUMN = 'NO'
+           AND COLUMN_NAME IN (
+               'RUN_SOURCE_TYPE',
+               'RUN_ID',
+               'OWNER',
+               'TABLE_NAME',
+               'COLUMN_NAME',
+               'COLUMN_TYPE',
+               'PAIR_COUNT',
+               'PASS_PAIR_COUNT',
+               'AVG_ABS_METRIC_VALUE',
+               'MAX_ABS_METRIC_VALUE',
+               'RANK_NO',
+               'SELECTED_YN',
+               'CREATE_DT'
+           );
+
+        IF v_current_order = v_expected_order THEN
+            DBMS_OUTPUT.PUT_LINE('[SKIP] INIT$_TB_RELATION_SUMMARY column display order already matches.');
+            RETURN;
+        END IF;
+
+        FOR i IN 2 .. v_cols.COUNT LOOP
+            set_column_visibility('INIT$_TB_RELATION_SUMMARY', v_cols(i), 'INVISIBLE');
+        END LOOP;
+
+        FOR i IN 2 .. v_cols.COUNT LOOP
+            set_column_visibility('INIT$_TB_RELATION_SUMMARY', v_cols(i), 'VISIBLE');
+        END LOOP;
+
+        DBMS_OUTPUT.PUT_LINE('[OK] INIT$_TB_RELATION_SUMMARY column display order refreshed.');
+    END;
+
+    PROCEDURE reorder_relation_network_node_columns IS
+        TYPE t_col_list IS TABLE OF VARCHAR2(128);
+        v_cols t_col_list := t_col_list(
+            'RUN_SOURCE_TYPE',
+            'RUN_ID',
+            'OWNER',
+            'TABLE_NAME',
+            'COLUMN_NAME',
+            'COLUMN_TYPE',
+            'CLUSTER_ID',
+            'DEGREE_COUNT',
+            'WEIGHTED_DEGREE',
+            'CENTRALITY_SCORE',
+            'SELECTED_YN',
+            'CREATE_DT'
+        );
+        v_current_order VARCHAR2(32767);
+        v_expected_order VARCHAR2(32767);
+    BEGIN
+        IF NOT table_exists('INIT$_TB_RELATION_NETWORK_NODE') THEN
+            DBMS_OUTPUT.PUT_LINE('[SKIP] TABLE INIT$_TB_RELATION_NETWORK_NODE does not exist.');
+            RETURN;
+        END IF;
+
+        FOR i IN 1 .. v_cols.COUNT LOOP
+            IF NOT column_exists('INIT$_TB_RELATION_NETWORK_NODE', v_cols(i)) THEN
+                DBMS_OUTPUT.PUT_LINE('[SKIP] INIT$_TB_RELATION_NETWORK_NODE column order refresh skipped. Missing column: ' || v_cols(i));
+                RETURN;
+            END IF;
+            v_expected_order := v_expected_order || CASE WHEN i > 1 THEN ',' END || v_cols(i);
+        END LOOP;
+
+        SELECT LISTAGG(COLUMN_NAME, ',') WITHIN GROUP (ORDER BY COLUMN_ID)
+          INTO v_current_order
+          FROM USER_TAB_COLS
+         WHERE TABLE_NAME = 'INIT$_TB_RELATION_NETWORK_NODE'
+           AND HIDDEN_COLUMN = 'NO'
+           AND COLUMN_NAME IN (
+               'RUN_SOURCE_TYPE',
+               'RUN_ID',
+               'OWNER',
+               'TABLE_NAME',
+               'COLUMN_NAME',
+               'COLUMN_TYPE',
+               'CLUSTER_ID',
+               'DEGREE_COUNT',
+               'WEIGHTED_DEGREE',
+               'CENTRALITY_SCORE',
+               'SELECTED_YN',
+               'CREATE_DT'
+           );
+
+        IF v_current_order = v_expected_order THEN
+            DBMS_OUTPUT.PUT_LINE('[SKIP] INIT$_TB_RELATION_NETWORK_NODE column display order already matches.');
+            RETURN;
+        END IF;
+
+        FOR i IN 2 .. v_cols.COUNT LOOP
+            set_column_visibility('INIT$_TB_RELATION_NETWORK_NODE', v_cols(i), 'INVISIBLE');
+        END LOOP;
+
+        FOR i IN 2 .. v_cols.COUNT LOOP
+            set_column_visibility('INIT$_TB_RELATION_NETWORK_NODE', v_cols(i), 'VISIBLE');
+        END LOOP;
+
+        DBMS_OUTPUT.PUT_LINE('[OK] INIT$_TB_RELATION_NETWORK_NODE column display order refreshed.');
+    END;
+
+    PROCEDURE reorder_relation_network_edge_columns IS
+        TYPE t_col_list IS TABLE OF VARCHAR2(128);
+        v_cols t_col_list := t_col_list(
+            'RUN_SOURCE_TYPE',
+            'RUN_ID',
+            'OWNER',
+            'TABLE_NAME',
+            'COL_A',
+            'COL_B',
+            'RELATION_TYPE',
+            'METRIC_NAME',
+            'METRIC_VALUE',
+            'ABS_METRIC_VALUE',
+            'CLUSTER_ID',
+            'PASS_YN',
+            'CREATE_DT'
+        );
+        v_current_order VARCHAR2(32767);
+        v_expected_order VARCHAR2(32767);
+    BEGIN
+        IF NOT table_exists('INIT$_TB_RELATION_NETWORK_EDGE') THEN
+            DBMS_OUTPUT.PUT_LINE('[SKIP] TABLE INIT$_TB_RELATION_NETWORK_EDGE does not exist.');
+            RETURN;
+        END IF;
+
+        FOR i IN 1 .. v_cols.COUNT LOOP
+            IF NOT column_exists('INIT$_TB_RELATION_NETWORK_EDGE', v_cols(i)) THEN
+                DBMS_OUTPUT.PUT_LINE('[SKIP] INIT$_TB_RELATION_NETWORK_EDGE column order refresh skipped. Missing column: ' || v_cols(i));
+                RETURN;
+            END IF;
+            v_expected_order := v_expected_order || CASE WHEN i > 1 THEN ',' END || v_cols(i);
+        END LOOP;
+
+        SELECT LISTAGG(COLUMN_NAME, ',') WITHIN GROUP (ORDER BY COLUMN_ID)
+          INTO v_current_order
+          FROM USER_TAB_COLS
+         WHERE TABLE_NAME = 'INIT$_TB_RELATION_NETWORK_EDGE'
+           AND HIDDEN_COLUMN = 'NO'
+           AND COLUMN_NAME IN (
+               'RUN_SOURCE_TYPE',
+               'RUN_ID',
+               'OWNER',
+               'TABLE_NAME',
+               'COL_A',
+               'COL_B',
+               'RELATION_TYPE',
+               'METRIC_NAME',
+               'METRIC_VALUE',
+               'ABS_METRIC_VALUE',
+               'CLUSTER_ID',
+               'PASS_YN',
+               'CREATE_DT'
+           );
+
+        IF v_current_order = v_expected_order THEN
+            DBMS_OUTPUT.PUT_LINE('[SKIP] INIT$_TB_RELATION_NETWORK_EDGE column display order already matches.');
+            RETURN;
+        END IF;
+
+        FOR i IN 2 .. v_cols.COUNT LOOP
+            set_column_visibility('INIT$_TB_RELATION_NETWORK_EDGE', v_cols(i), 'INVISIBLE');
+        END LOOP;
+
+        FOR i IN 2 .. v_cols.COUNT LOOP
+            set_column_visibility('INIT$_TB_RELATION_NETWORK_EDGE', v_cols(i), 'VISIBLE');
+        END LOOP;
+
+        DBMS_OUTPUT.PUT_LINE('[OK] INIT$_TB_RELATION_NETWORK_EDGE column display order refreshed.');
+    END;
+
     PROCEDURE reorder_rule_violation_result_columns IS
         TYPE t_col_list IS TABLE OF VARCHAR2(128);
         v_cols t_col_list := t_col_list(
@@ -1072,6 +1362,113 @@ CREATE TABLE "INIT$_TB_NUM_CORR_SUMMARY" (
     CONSTRAINT "PK_INIT$_TB_NUM_CORR_SUMMARY" PRIMARY KEY ("RUN_SOURCE_TYPE", "RUN_ID", "OWNER", "TABLE_NAME", "COLUMN_NAME")
 )]');
 
+    create_table_if_missing('INIT$_TB_RELATION_PAIR', q'[
+CREATE TABLE "INIT$_TB_RELATION_PAIR" (
+    "RUN_SOURCE_TYPE" VARCHAR2(30 BYTE) DEFAULT 'DATA_WORK' NOT NULL ENABLE,
+    "RUN_ID" NUMBER DEFAULT 0 NOT NULL ENABLE,
+    "OWNER" VARCHAR2(128 BYTE) NOT NULL ENABLE,
+    "TABLE_NAME" VARCHAR2(128 BYTE) NOT NULL ENABLE,
+    "COL_A" VARCHAR2(128 BYTE) NOT NULL ENABLE,
+    "COL_B" VARCHAR2(128 BYTE) NOT NULL ENABLE,
+    "COL_A_TYPE" VARCHAR2(30 BYTE),
+    "COL_B_TYPE" VARCHAR2(30 BYTE),
+    "RELATION_TYPE" VARCHAR2(50 BYTE) NOT NULL ENABLE,
+    "METRIC_NAME" VARCHAR2(50 BYTE) NOT NULL ENABLE,
+    "METRIC_VALUE" NUMBER,
+    "ABS_METRIC_VALUE" NUMBER,
+    "P_VALUE" NUMBER,
+    "ROW_COUNT" NUMBER,
+    "DF" NUMBER,
+    "EXTRA_JSON" CLOB,
+    "PASS_YN" CHAR(1 BYTE) DEFAULT 'N' NOT NULL ENABLE,
+    "CLUSTER_ID" NUMBER,
+    "CREATE_DT" DATE DEFAULT SYSDATE NOT NULL ENABLE,
+    CONSTRAINT "CK_INIT$_TB_REL_PAIR_RUN" CHECK ("RUN_SOURCE_TYPE" IN ('DATA_WORK', 'FLOW_WORK')) ENABLE,
+    CONSTRAINT "CK_INIT$_TB_REL_PAIR_PASS" CHECK ("PASS_YN" IN ('Y', 'N')) ENABLE,
+    CONSTRAINT "PK_INIT$_TB_RELATION_PAIR" PRIMARY KEY ("RUN_SOURCE_TYPE", "RUN_ID", "OWNER", "TABLE_NAME", "COL_A", "COL_B", "METRIC_NAME")
+)]');
+
+    IF table_exists('INIT$_TB_RELATION_PAIR') THEN
+        run_ddl('COMMENT INIT$_TB_RELATION_PAIR', q'[COMMENT ON TABLE "INIT$_TB_RELATION_PAIR" IS 'Unified variable relation matrix result']');
+        run_ddl('COMMENT INIT$_TB_RELATION_PAIR.RELATION_TYPE', q'[COMMENT ON COLUMN "INIT$_TB_RELATION_PAIR"."RELATION_TYPE" IS 'NUMERIC_NUMERIC, CATEGORICAL_CATEGORICAL, or CATEGORICAL_NUMERIC']');
+        run_ddl('COMMENT INIT$_TB_RELATION_PAIR.METRIC_NAME', q'[COMMENT ON COLUMN "INIT$_TB_RELATION_PAIR"."METRIC_NAME" IS 'Relation metric such as PEARSON_R, SPEARMAN_R, CRAMERS_V, or ETA_SQUARED']');
+        run_ddl('COMMENT INIT$_TB_RELATION_PAIR.ABS_METRIC_VALUE', q'[COMMENT ON COLUMN "INIT$_TB_RELATION_PAIR"."ABS_METRIC_VALUE" IS 'Absolute relation strength used for ranking and network edges']');
+        run_ddl('COMMENT INIT$_TB_RELATION_PAIR.EXTRA_JSON', q'[COMMENT ON COLUMN "INIT$_TB_RELATION_PAIR"."EXTRA_JSON" IS 'Optional metric-specific JSON metadata']');
+    END IF;
+
+    create_table_if_missing('INIT$_TB_RELATION_SUMMARY', q'[
+CREATE TABLE "INIT$_TB_RELATION_SUMMARY" (
+    "RUN_SOURCE_TYPE" VARCHAR2(30 BYTE) DEFAULT 'DATA_WORK' NOT NULL ENABLE,
+    "RUN_ID" NUMBER DEFAULT 0 NOT NULL ENABLE,
+    "OWNER" VARCHAR2(128 BYTE) NOT NULL ENABLE,
+    "TABLE_NAME" VARCHAR2(128 BYTE) NOT NULL ENABLE,
+    "COLUMN_NAME" VARCHAR2(128 BYTE) NOT NULL ENABLE,
+    "COLUMN_TYPE" VARCHAR2(30 BYTE),
+    "PAIR_COUNT" NUMBER,
+    "PASS_PAIR_COUNT" NUMBER,
+    "AVG_ABS_METRIC_VALUE" NUMBER,
+    "MAX_ABS_METRIC_VALUE" NUMBER,
+    "RANK_NO" NUMBER,
+    "SELECTED_YN" CHAR(1 BYTE) DEFAULT 'N' NOT NULL ENABLE,
+    "CREATE_DT" DATE DEFAULT SYSDATE NOT NULL ENABLE,
+    CONSTRAINT "CK_INIT$_TB_REL_SUM_RUN" CHECK ("RUN_SOURCE_TYPE" IN ('DATA_WORK', 'FLOW_WORK')) ENABLE,
+    CONSTRAINT "CK_INIT$_TB_REL_SUM_SEL" CHECK ("SELECTED_YN" IN ('Y', 'N')) ENABLE,
+    CONSTRAINT "PK_INIT$_TB_RELATION_SUMMARY" PRIMARY KEY ("RUN_SOURCE_TYPE", "RUN_ID", "OWNER", "TABLE_NAME", "COLUMN_NAME")
+)]');
+
+    IF table_exists('INIT$_TB_RELATION_SUMMARY') THEN
+        run_ddl('COMMENT INIT$_TB_RELATION_SUMMARY', q'[COMMENT ON TABLE "INIT$_TB_RELATION_SUMMARY" IS 'Unified relation summary by variable']');
+        run_ddl('COMMENT INIT$_TB_RELATION_SUMMARY.COLUMN_TYPE', q'[COMMENT ON COLUMN "INIT$_TB_RELATION_SUMMARY"."COLUMN_TYPE" IS 'Final logical type used by relation analysis']');
+        run_ddl('COMMENT INIT$_TB_RELATION_SUMMARY.SELECTED_YN', q'[COMMENT ON COLUMN "INIT$_TB_RELATION_SUMMARY"."SELECTED_YN" IS 'Relation strength threshold pass Y/N']');
+    END IF;
+
+    create_table_if_missing('INIT$_TB_RELATION_NETWORK_NODE', q'[
+CREATE TABLE "INIT$_TB_RELATION_NETWORK_NODE" (
+    "RUN_SOURCE_TYPE" VARCHAR2(30 BYTE) DEFAULT 'DATA_WORK' NOT NULL ENABLE,
+    "RUN_ID" NUMBER DEFAULT 0 NOT NULL ENABLE,
+    "OWNER" VARCHAR2(128 BYTE) NOT NULL ENABLE,
+    "TABLE_NAME" VARCHAR2(128 BYTE) NOT NULL ENABLE,
+    "COLUMN_NAME" VARCHAR2(128 BYTE) NOT NULL ENABLE,
+    "COLUMN_TYPE" VARCHAR2(30 BYTE),
+    "CLUSTER_ID" NUMBER,
+    "DEGREE_COUNT" NUMBER,
+    "WEIGHTED_DEGREE" NUMBER,
+    "CENTRALITY_SCORE" NUMBER,
+    "SELECTED_YN" CHAR(1 BYTE) DEFAULT 'Y' NOT NULL ENABLE,
+    "CREATE_DT" DATE DEFAULT SYSDATE NOT NULL ENABLE,
+    CONSTRAINT "CK_INIT$_TB_REL_NODE_RUN" CHECK ("RUN_SOURCE_TYPE" IN ('DATA_WORK', 'FLOW_WORK')) ENABLE,
+    CONSTRAINT "CK_INIT$_TB_REL_NODE_SEL" CHECK ("SELECTED_YN" IN ('Y', 'N')) ENABLE,
+    CONSTRAINT "PK_INIT$_TB_REL_NET_NODE" PRIMARY KEY ("RUN_SOURCE_TYPE", "RUN_ID", "OWNER", "TABLE_NAME", "COLUMN_NAME")
+)]');
+
+    IF table_exists('INIT$_TB_RELATION_NETWORK_NODE') THEN
+        run_ddl('COMMENT INIT$_TB_RELATION_NETWORK_NODE', q'[COMMENT ON TABLE "INIT$_TB_RELATION_NETWORK_NODE" IS 'Variable relation network node and community result']');
+    END IF;
+
+    create_table_if_missing('INIT$_TB_RELATION_NETWORK_EDGE', q'[
+CREATE TABLE "INIT$_TB_RELATION_NETWORK_EDGE" (
+    "RUN_SOURCE_TYPE" VARCHAR2(30 BYTE) DEFAULT 'DATA_WORK' NOT NULL ENABLE,
+    "RUN_ID" NUMBER DEFAULT 0 NOT NULL ENABLE,
+    "OWNER" VARCHAR2(128 BYTE) NOT NULL ENABLE,
+    "TABLE_NAME" VARCHAR2(128 BYTE) NOT NULL ENABLE,
+    "COL_A" VARCHAR2(128 BYTE) NOT NULL ENABLE,
+    "COL_B" VARCHAR2(128 BYTE) NOT NULL ENABLE,
+    "RELATION_TYPE" VARCHAR2(50 BYTE) NOT NULL ENABLE,
+    "METRIC_NAME" VARCHAR2(50 BYTE) NOT NULL ENABLE,
+    "METRIC_VALUE" NUMBER,
+    "ABS_METRIC_VALUE" NUMBER,
+    "CLUSTER_ID" NUMBER,
+    "PASS_YN" CHAR(1 BYTE) DEFAULT 'Y' NOT NULL ENABLE,
+    "CREATE_DT" DATE DEFAULT SYSDATE NOT NULL ENABLE,
+    CONSTRAINT "CK_INIT$_TB_REL_EDGE_RUN" CHECK ("RUN_SOURCE_TYPE" IN ('DATA_WORK', 'FLOW_WORK')) ENABLE,
+    CONSTRAINT "CK_INIT$_TB_REL_EDGE_PASS" CHECK ("PASS_YN" IN ('Y', 'N')) ENABLE,
+    CONSTRAINT "PK_INIT$_TB_REL_NET_EDGE" PRIMARY KEY ("RUN_SOURCE_TYPE", "RUN_ID", "OWNER", "TABLE_NAME", "COL_A", "COL_B", "METRIC_NAME")
+)]');
+
+    IF table_exists('INIT$_TB_RELATION_NETWORK_EDGE') THEN
+        run_ddl('COMMENT INIT$_TB_RELATION_NETWORK_EDGE', q'[COMMENT ON TABLE "INIT$_TB_RELATION_NETWORK_EDGE" IS 'Variable relation network edge result for visualization']');
+    END IF;
+
     create_table_if_missing('INIT$_TB_LASSO_FEATURE', q'[
 CREATE TABLE "INIT$_TB_LASSO_FEATURE" (
     "RUN_SOURCE_TYPE" VARCHAR2(30 BYTE) DEFAULT 'DATA_WORK' NOT NULL ENABLE,
@@ -1142,6 +1539,31 @@ CREATE INDEX "IX_INIT$_TB_NUM_CORR_PAIR_01"
     create_index_if_missing('IX_INIT$_TB_NUM_CORR_SUMMARY_01', 'INIT$_TB_NUM_CORR_SUMMARY', q'[
 CREATE INDEX "IX_INIT$_TB_NUM_CORR_SUMMARY_01"
     ON "INIT$_TB_NUM_CORR_SUMMARY" ("RUN_SOURCE_TYPE", "RUN_ID", "OWNER", "TABLE_NAME", "SELECTED_YN", "RANK_NO")
+]');
+
+    create_index_if_missing('IX_INIT$_TB_REL_PAIR_01', 'INIT$_TB_RELATION_PAIR', q'[
+CREATE INDEX "IX_INIT$_TB_REL_PAIR_01"
+    ON "INIT$_TB_RELATION_PAIR" ("RUN_SOURCE_TYPE", "RUN_ID", "OWNER", "TABLE_NAME", "PASS_YN", "ABS_METRIC_VALUE")
+]');
+
+    create_index_if_missing('IX_INIT$_TB_REL_PAIR_02', 'INIT$_TB_RELATION_PAIR', q'[
+CREATE INDEX "IX_INIT$_TB_REL_PAIR_02"
+    ON "INIT$_TB_RELATION_PAIR" ("RUN_SOURCE_TYPE", "RUN_ID", "OWNER", "TABLE_NAME", "RELATION_TYPE", "METRIC_NAME")
+]');
+
+    create_index_if_missing('IX_INIT$_TB_REL_SUMMARY_01', 'INIT$_TB_RELATION_SUMMARY', q'[
+CREATE INDEX "IX_INIT$_TB_REL_SUMMARY_01"
+    ON "INIT$_TB_RELATION_SUMMARY" ("RUN_SOURCE_TYPE", "RUN_ID", "OWNER", "TABLE_NAME", "SELECTED_YN", "RANK_NO")
+]');
+
+    create_index_if_missing('IX_INIT$_TB_REL_NET_NODE_01', 'INIT$_TB_RELATION_NETWORK_NODE', q'[
+CREATE INDEX "IX_INIT$_TB_REL_NET_NODE_01"
+    ON "INIT$_TB_RELATION_NETWORK_NODE" ("RUN_SOURCE_TYPE", "RUN_ID", "OWNER", "TABLE_NAME", "CLUSTER_ID", "CENTRALITY_SCORE")
+]');
+
+    create_index_if_missing('IX_INIT$_TB_REL_NET_EDGE_01', 'INIT$_TB_RELATION_NETWORK_EDGE', q'[
+CREATE INDEX "IX_INIT$_TB_REL_NET_EDGE_01"
+    ON "INIT$_TB_RELATION_NETWORK_EDGE" ("RUN_SOURCE_TYPE", "RUN_ID", "OWNER", "TABLE_NAME", "CLUSTER_ID", "ABS_METRIC_VALUE")
 ]');
 
     create_index_if_missing('IX_INIT$_TB_LASSO_FEATURE_01', 'INIT$_TB_LASSO_FEATURE', q'[
@@ -1280,6 +1702,10 @@ CREATE INDEX "IX_INIT$_TB_RULE_VIOLATION_03"
     reorder_predicted_type_final_columns;
     reorder_cat_corr_pair_columns;
     reorder_cat_corr_summary_columns;
+    reorder_relation_pair_columns;
+    reorder_relation_summary_columns;
+    reorder_relation_network_node_columns;
+    reorder_relation_network_edge_columns;
     reorder_rule_violation_result_columns;
 
     DBMS_OUTPUT.PUT_LINE('=== INIT_TARGET ALTER END ===');

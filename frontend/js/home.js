@@ -300,8 +300,9 @@
                     ${trend.labels.map((label, index) => {
                         const total = Number(trend.success[index] || 0) + Number(trend.failed[index] || 0);
                         const selected = String(label) === String(this.selectedFlowRunLabel || "");
+                        const runStateClass = total > 0 ? "has-runs" : "no-runs";
                         return `
-                            <button type="button" class="${selected ? "is-selected" : ""}" data-home-flow-label="${this.escapeHtml(label)}">
+                            <button type="button" class="${runStateClass} ${selected ? "is-selected" : ""}" data-home-flow-label="${this.escapeHtml(label)}">
                                 <strong>${this.escapeHtml(label)}</strong>
                                 <small>${this.formatNumber(total)} runs</small>
                             </button>

@@ -342,6 +342,11 @@
           "key": "P_RUN_ID",
           "comment": "시나리오 공용 DATA_WORK 실행 ID",
           "defaultValue": ":INIT$RunId"
+        },
+        {
+          "key": "P_MANAGE_PARALLEL_STATE",
+          "comment": "세션 병렬 DML/QUERY 비활성화 관리 여부",
+          "defaultValue": "Y"
         }
       ]
     },
@@ -404,6 +409,98 @@
           "key": "P_RUN_ID",
           "comment": "시나리오 공용 DATA_WORK 실행 ID",
           "defaultValue": ":INIT$RunId"
+        },
+        {
+          "key": "P_MANAGE_PARALLEL_STATE",
+          "comment": "세션 병렬 DML/QUERY 비활성화 관리 여부",
+          "defaultValue": "Y"
+        }
+      ]
+    },
+    {
+      "owner": "*",
+      "objectType": "PROCEDURE",
+      "objectName": "INIT$_SP_RELATION_MATRIX_ANALYZE",
+      "label": "M02_통합변수관계매트릭스분석",
+      "description": "범주형/연속형/혼합형 변수 관계를 Cramer V, Pearson, Spearman, Eta Squared 기준으로 통합 계산하고 네트워크 분석용 관계 쌍 결과를 생성하는 프로시저입니다.",
+      "resultCreateYn": "T",
+      "resultOwner": "__CURRENT_OWNER__",
+      "resultTableName": "INIT$_TB_RELATION_PAIR",
+      "items": [
+        {
+          "key": "P_TARGET_OWNER",
+          "comment": "분석 대상 테이블 계정",
+          "defaultValue": ":INIT$TargetOwner"
+        },
+        {
+          "key": "P_TARGET_TABLE",
+          "comment": "분석 대상 테이블명",
+          "defaultValue": ":INIT$TargetTable"
+        },
+        {
+          "key": "P_MIN_METRIC",
+          "comment": "혼합형 관계 및 개별 기준 미입력 시 사용할 기본 관계 강도 기준",
+          "defaultValue": "0.65"
+        },
+        {
+          "key": "P_MIN_CRAMER",
+          "comment": "범주형-범주형 통과 판정 최소 Cramer V 기준",
+          "defaultValue": "0.3"
+        },
+        {
+          "key": "P_MIN_ABS_CORR",
+          "comment": "연속형-연속형 통과 판정 최소 절대 상관계수 기준",
+          "defaultValue": "0.6"
+        },
+        {
+          "key": "P_MIN_ETA",
+          "comment": "범주형-연속형 통과 판정 최소 Eta Squared 기준",
+          "defaultValue": "0.65"
+        },
+        {
+          "key": "P_MIN_PVALUE",
+          "comment": "상관 후보 최소 p-value 기준",
+          "defaultValue": "0.05"
+        },
+        {
+          "key": "P_SAMPLE_ROWS",
+          "comment": "분석 샘플 최대 행 수",
+          "defaultValue": "100000"
+        },
+        {
+          "key": "P_MAX_DISTINCT",
+          "comment": "범주형 분석 대상 컬럼 최대 distinct 수",
+          "defaultValue": "100"
+        },
+        {
+          "key": "P_MAX_COLUMNS",
+          "comment": "분석 대상 최대 컬럼 수",
+          "defaultValue": "100"
+        },
+        {
+          "key": "P_MIN_ROWS",
+          "comment": "관계 지표 계산 최소 유효 행 수",
+          "defaultValue": "30"
+        },
+        {
+          "key": "P_INCLUDE_SPEARMAN",
+          "comment": "연속형 컬럼 간 Spearman 순위상관 계산 여부",
+          "defaultValue": "Y"
+        },
+        {
+          "key": "P_RUN_SOURCE_TYPE",
+          "comment": "실행 출처 구분(DATA_WORK/FLOW_WORK)",
+          "defaultValue": ":INIT$RunSourceType"
+        },
+        {
+          "key": "P_RUN_ID",
+          "comment": "시나리오 공용 DATA_WORK 실행 ID",
+          "defaultValue": ":INIT$RunId"
+        },
+        {
+          "key": "P_MANAGE_PARALLEL_STATE",
+          "comment": "세션 병렬 DML/QUERY 비활성화 관리 여부",
+          "defaultValue": "Y"
         }
       ]
     },
@@ -456,6 +553,58 @@
           "key": "P_CONTINUE_ON_ERROR",
           "comment": "자동 target 중 일부 실패 시 나머지 계속 실행 여부",
           "defaultValue": "Y"
+        },
+        {
+          "key": "P_RUN_SOURCE_TYPE",
+          "comment": "실행 출처 구분(DATA_WORK/FLOW_WORK)",
+          "defaultValue": ":INIT$RunSourceType"
+        },
+        {
+          "key": "P_RUN_ID",
+          "comment": "시나리오 공용 DATA_WORK 실행 ID",
+          "defaultValue": ":INIT$RunId"
+        }
+      ]
+    },
+    {
+      "owner": "*",
+      "objectType": "WEB_API",
+      "objectName": "RELATION_NETWORK_CLUSTER",
+      "label": "M02_네트워크군집분석",
+      "description": "통합 변수 관계 매트릭스 결과를 기반으로 변수 네트워크의 핵심 연결과 군집을 계산하고 INIT$_TB_RELATION_NETWORK_NODE/EDGE에 적재합니다.",
+      "resultCreateYn": "T",
+      "resultOwner": "__CURRENT_OWNER__",
+      "resultTableName": "INIT$_TB_RELATION_NETWORK_EDGE",
+      "items": [
+        {
+          "key": "P_TARGET_OWNER",
+          "comment": "분석 대상 테이블 계정",
+          "defaultValue": ":INIT$TargetOwner"
+        },
+        {
+          "key": "P_TARGET_TABLE",
+          "comment": "분석 대상 테이블명",
+          "defaultValue": ":INIT$TargetTable"
+        },
+        {
+          "key": "P_MIN_METRIC",
+          "comment": "네트워크 edge로 사용할 최소 관계 강도",
+          "defaultValue": "0.3"
+        },
+        {
+          "key": "P_MAX_EDGES",
+          "comment": "네트워크에 반영할 최대 edge 수",
+          "defaultValue": "500"
+        },
+        {
+          "key": "P_RELATION_TYPES",
+          "comment": "포함할 관계 유형 목록. 비우거나 (auto)이면 전체 사용",
+          "defaultValue": "(auto)"
+        },
+        {
+          "key": "P_METRIC_NAMES",
+          "comment": "포함할 지표명 목록. 비우거나 (auto)이면 전체 사용",
+          "defaultValue": "(auto)"
         },
         {
           "key": "P_RUN_SOURCE_TYPE",
@@ -537,6 +686,310 @@
         {
           "key": "P_CONTINUE_ON_ERROR",
           "comment": "자동 target 중 일부 실패 시 나머지 계속 실행 여부",
+          "defaultValue": "Y"
+        },
+        {
+          "key": "P_RUN_SOURCE_TYPE",
+          "comment": "실행 출처 구분(DATA_WORK/FLOW_WORK)",
+          "defaultValue": ":INIT$RunSourceType"
+        },
+        {
+          "key": "P_RUN_ID",
+          "comment": "시나리오 공용 DATA_WORK 실행 ID",
+          "defaultValue": ":INIT$RunId"
+        }
+      ]
+    },
+    {
+      "owner": "*",
+      "objectType": "WEB_API",
+      "objectName": "INTEGRATED_RULE_DISCOVER",
+      "label": "M03_통합형_자동규칙발굴",
+      "description": "기존 Apriori 연관규칙 모델 생성, LASSO 중요변수 선택, Symbolic Regression 수식 규칙 발굴을 한 번에 실행해 범주형/연속형 규칙 결과를 함께 생성하는 내부 API입니다.",
+      "resultCreateYn": "M",
+      "resultOwner": "__CURRENT_OWNER__",
+      "resultTableName": "OML_ASSOCIATION_MODEL_01",
+      "items": [
+        {
+          "key": "P_TARGET_OWNER",
+          "comment": "분석 대상 테이블 계정",
+          "defaultValue": ":INIT$TargetOwner"
+        },
+        {
+          "key": "P_TARGET_TABLE",
+          "comment": "분석 대상 테이블명",
+          "defaultValue": ":INIT$TargetTable"
+        },
+        {
+          "key": "P_RULE_PARTS",
+          "comment": "실행할 규칙 유형. ALL, CATEGORICAL, CONTINUOUS 중 선택",
+          "defaultValue": "ALL"
+        },
+        {
+          "key": "P_ASSOC_MODEL_NAME",
+          "comment": "범주형 Apriori 연관규칙 모델명",
+          "defaultValue": ":INIT$ResultModelName"
+        },
+        {
+          "key": "P_CASE_ID_COLUMN_NAME",
+          "comment": "테이블 고유 행 식별 컬럼",
+          "defaultValue": "FILE_ROW_NO"
+        },
+        {
+          "key": "P_MIN_SUPPORT",
+          "comment": "Apriori 규칙 생성을 위한 최소 지지도",
+          "defaultValue": "0.2"
+        },
+        {
+          "key": "P_MIN_CONFIDENCE",
+          "comment": "Apriori 규칙 생성을 위한 최소 신뢰도",
+          "defaultValue": "0.7"
+        },
+        {
+          "key": "P_MAX_RULE_LENGTH",
+          "comment": "Apriori 규칙당 최대 아이템 수",
+          "defaultValue": "3"
+        },
+        {
+          "key": "P_DROP_EXISTING_YN",
+          "comment": "기존 동일 Apriori 모델 삭제 여부",
+          "defaultValue": "Y"
+        },
+        {
+          "key": "P_MAX_INPUT_ROWS",
+          "comment": "Apriori 학습 입력 최대 행 수",
+          "defaultValue": "100000"
+        },
+        {
+          "key": "P_CATEGORICAL_COLUMNS",
+          "comment": "Apriori 후보 범주형 컬럼 목록. 비우거나 (auto)이면 상관관계/분류 결과 기준 자동 선택",
+          "defaultValue": "(auto)"
+        },
+        {
+          "key": "P_MIN_RULE_SUPPORT_COUNT",
+          "comment": "Apriori 규칙 요약 최소 건수",
+          "defaultValue": "30"
+        },
+        {
+          "key": "P_MIN_RULE_LIFT",
+          "comment": "Apriori 규칙 요약 최소 향상도",
+          "defaultValue": "1"
+        },
+        {
+          "key": "P_MAX_RULE_SUMMARY_COLUMNS",
+          "comment": "Apriori 규칙 요약 최대 컬럼 수",
+          "defaultValue": "50"
+        },
+        {
+          "key": "P_MAX_RULE_SUMMARY_PER_PAIR",
+          "comment": "Apriori 컬럼 쌍별 최대 요약 개수",
+          "defaultValue": "50"
+        },
+        {
+          "key": "P_TARGET_COLUMN",
+          "comment": "연속형 수식 규칙 종속변수. (auto)이면 연속형 컬럼 자동 반복",
+          "defaultValue": "(auto)"
+        },
+        {
+          "key": "P_MAX_FEATURES",
+          "comment": "LASSO/Symbolic Regression 입력 독립변수 최대 수",
+          "defaultValue": "10"
+        },
+        {
+          "key": "P_SAMPLE_ROWS",
+          "comment": "LASSO/Symbolic Regression 분석 샘플 최대 행 수",
+          "defaultValue": "50000"
+        },
+        {
+          "key": "P_ALPHA",
+          "comment": "LASSO alpha. 비우면 교차검증으로 자동 선택",
+          "defaultValue": "(auto)"
+        },
+        {
+          "key": "P_MAX_ITERATIONS",
+          "comment": "Symbolic 탐색 최대 반복 수",
+          "defaultValue": "10000"
+        },
+        {
+          "key": "P_USE_PYSR",
+          "comment": "PySR 사용 여부(Y/N). N이면 polynomial LASSO fallback 사용",
+          "defaultValue": "N"
+        },
+        {
+          "key": "P_LINEAR_FIRST_YN",
+          "comment": "단순 선형 회귀식을 먼저 확인할지 여부",
+          "defaultValue": "Y"
+        },
+        {
+          "key": "P_LINEAR_R2_THRESHOLD",
+          "comment": "선형식을 바로 채택할 최소 R2 점수",
+          "defaultValue": "0.995"
+        },
+        {
+          "key": "P_MIN_R2_SCORE",
+          "comment": "Symbolic Regression에 사용할 LASSO 최소 R2 점수",
+          "defaultValue": "0.7"
+        },
+        {
+          "key": "P_MAX_AUTO_TARGETS",
+          "comment": "P_TARGET_COLUMN이 (auto)일 때 자동 target 최대 개수",
+          "defaultValue": "10"
+        },
+        {
+          "key": "P_CONTINUE_ON_ERROR",
+          "comment": "일부 통합 하위 작업 실패 시 나머지 계속 실행 여부",
+          "defaultValue": "Y"
+        },
+        {
+          "key": "P_RUN_SOURCE_TYPE",
+          "comment": "실행 출처 구분(DATA_WORK/FLOW_WORK)",
+          "defaultValue": ":INIT$RunSourceType"
+        },
+        {
+          "key": "P_RUN_ID",
+          "comment": "시나리오 공용 DATA_WORK 실행 ID",
+          "defaultValue": ":INIT$RunId"
+        }
+      ]
+    },
+    {
+      "owner": "*",
+      "objectType": "WEB_API",
+      "objectName": "INTEGRATED_RULE_VIOLATION_DETECT",
+      "label": "M04_통합형_규칙위반탐지",
+      "description": "기존 범주형 연관규칙 위반탐지와 연속형 Symbolic Rule 오차범위 위반탐지를 한 번에 실행해 두 결과 테이블을 함께 생성하는 내부 API입니다.",
+      "resultCreateYn": "T",
+      "resultOwner": "__CURRENT_OWNER__",
+      "resultTableName": "INIT$_TB_RULE_VIOLATION_RESULT",
+      "items": [
+        {
+          "key": "P_RULE_PARTS",
+          "comment": "실행할 위반탐지 유형. ALL, CATEGORICAL, CONTINUOUS 중 선택",
+          "defaultValue": "ALL"
+        },
+        {
+          "key": "P_RULE_OWNER_NAME",
+          "comment": "범주형 규칙 모델 계정",
+          "defaultValue": ":INIT$TargetOwner"
+        },
+        {
+          "key": "P_RULE_MODEL_NAME",
+          "comment": "범주형 위반 탐지에 사용할 Apriori 규칙 모델명",
+          "defaultValue": ":INIT$PreResultTable"
+        },
+        {
+          "key": "P_SYMBOLIC_RULE_TABLE_NAME",
+          "comment": "연속형 Symbolic Rule 결과 테이블명",
+          "defaultValue": "INIT$_TB_SYMBOLIC_RULE"
+        },
+        {
+          "key": "P_RULE_ID",
+          "comment": "특정 Symbolic RULE_ID만 검사할 때 입력. 비우면 선택된 전체 규칙 검사",
+          "defaultValue": "(auto)"
+        },
+        {
+          "key": "P_TARGET_OWNER",
+          "comment": "검사 대상 테이블 계정",
+          "defaultValue": ":INIT$TargetOwner"
+        },
+        {
+          "key": "P_TARGET_TABLE",
+          "comment": "검사 대상 테이블명",
+          "defaultValue": ":INIT$TargetTable"
+        },
+        {
+          "key": "P_CASE_ID_COLUMN_NAME",
+          "comment": "행 식별 컬럼명",
+          "defaultValue": "FILE_ROW_NO"
+        },
+        {
+          "key": "P_CAT_RESULT_OWNER",
+          "comment": "범주형 위반 결과 테이블 계정",
+          "defaultValue": ":INIT$TargetOwner"
+        },
+        {
+          "key": "P_CAT_RESULT_TABLE",
+          "comment": "범주형 위반 결과 테이블명",
+          "defaultValue": "INIT$_TB_RULE_VIOLATION_RESULT"
+        },
+        {
+          "key": "P_SYMBOLIC_RESULT_OWNER",
+          "comment": "연속형 Symbolic 위반 결과 테이블 계정",
+          "defaultValue": ":INIT$TargetOwner"
+        },
+        {
+          "key": "P_SYMBOLIC_RESULT_TABLE",
+          "comment": "연속형 Symbolic 위반 결과 테이블명",
+          "defaultValue": "INIT$_TB_SYMBOLIC_RULE_VIOLATION"
+        },
+        {
+          "key": "P_MIN_CONFIDENCE",
+          "comment": "범주형 위반 판단 최소 신뢰도",
+          "defaultValue": "0.8"
+        },
+        {
+          "key": "P_MIN_LIFT",
+          "comment": "범주형 위반 판단 최소 향상도",
+          "defaultValue": "1"
+        },
+        {
+          "key": "P_MAX_RULES",
+          "comment": "적용할 최대 규칙 수",
+          "defaultValue": "100"
+        },
+        {
+          "key": "P_SYMBOLIC_MAX_RULES",
+          "comment": "적용할 최대 Symbolic Rule 수",
+          "defaultValue": "20"
+        },
+        {
+          "key": "P_MAX_VIOLATIONS_PER_RULE",
+          "comment": "규칙별 최대 위반 행 수",
+          "defaultValue": "500"
+        },
+        {
+          "key": "P_ERROR_PCT_THRESHOLD",
+          "comment": "수식 예측값 기준 허용 오차율. 0.05는 ±5%",
+          "defaultValue": "0.05"
+        },
+        {
+          "key": "P_ABS_ERROR_THRESHOLD",
+          "comment": "예측값이 0에 가까울 때 사용할 절대 오차 기준",
+          "defaultValue": "(auto)"
+        },
+        {
+          "key": "P_MAX_SCAN_ROWS",
+          "comment": "Symbolic Rule별로 검사할 최대 대상 행 수. 0이면 전체 행 검사",
+          "defaultValue": "50000"
+        },
+        {
+          "key": "P_MAX_ELAPSED_SECONDS",
+          "comment": "전체 Symbolic Rule 위반 탐지 최대 수행 초",
+          "defaultValue": "1800"
+        },
+        {
+          "key": "P_MAX_EXPRESSION_LENGTH",
+          "comment": "처리할 최대 수식 길이",
+          "defaultValue": "8000"
+        },
+        {
+          "key": "P_CLEAR_EXISTING_YN",
+          "comment": "기존 위반 결과 삭제 여부",
+          "defaultValue": "Y"
+        },
+        {
+          "key": "P_COMMIT_YN",
+          "comment": "하위 프로시저 내부 커밋 여부. 통합 API에서는 마지막에 한 번 커밋하도록 기본 N 사용",
+          "defaultValue": "N"
+        },
+        {
+          "key": "P_COMMIT_INTERVAL",
+          "comment": "대용량 결과 적재 시 중간 커밋할 DML 건수",
+          "defaultValue": "5000"
+        },
+        {
+          "key": "P_CONTINUE_ON_ERROR",
+          "comment": "일부 통합 하위 작업 실패 시 나머지 계속 실행 여부",
           "defaultValue": "Y"
         },
         {
