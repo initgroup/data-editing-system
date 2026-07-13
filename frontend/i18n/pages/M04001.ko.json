@@ -5,13 +5,17 @@
   "description": "Korean labels for integrated editing scenario flow page.",
   "labels": {
     "menuName": "통합 에디팅 시나리오",
-    "nodeTypeM03001": "데이터 프로파일링",
-    "nodeTypeM03002": "컬럼간 상관 분석",
+    "nodeTypeM03001": "컬럼 유형 분석",
+    "nodeTypeM03002": "컬럼 상관 분석",
     "nodeTypeM03003": "자동 규칙 발굴",
     "nodeTypeM03004": "규칙 위반 탐지",
     "paramDescTargetOwner": "분석 대상 테이블 계정",
     "paramDescTargetTable": "분석 대상 테이블명",
     "paramDescDynamicModelName": "분류/예측 모델명",
     "paramDescPredictionMethod": "예측 방식 선택(ONLY_RULE: BASE 컬럼만, ONLY_MODEL: MODL 컬럼만, ONLY_BOTH: BASE/MODL 컬럼, FINAL_RULE/MODEL/BOTH: FINAL 자동 반영)"
+  },
+  "messages": {
+    "flowEdgeStageBlocked": "단계 {fromStage} 노드는 단계 {toStage} 노드보다 앞에 연결할 수 없습니다.",
+    "flowEdgeArtifactBlocked": "{sourceArtifact} 출력은 {targetArtifact} 입력에 연결할 수 없습니다."
   }
 }

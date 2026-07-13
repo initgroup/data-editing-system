@@ -111,6 +111,10 @@ BEGIN
     delete_run_result_table('INIT$_TB_RULE_VIOLATION_RESULT');
     delete_run_result_table('INIT$_TB_SYMBOLIC_RULE');
     delete_run_result_table('INIT$_TB_LASSO_FEATURE');
+    delete_run_result_table('INIT$_TB_RELATION_NETWORK_EDGE');
+    delete_run_result_table('INIT$_TB_RELATION_NETWORK_NODE');
+    delete_run_result_table('INIT$_TB_RELATION_SUMMARY');
+    delete_run_result_table('INIT$_TB_RELATION_PAIR');
     delete_run_result_table('INIT$_TB_NUM_CORR_SUMMARY');
     delete_run_result_table('INIT$_TB_NUM_CORR_PAIR');
     delete_run_result_table('INIT$_TB_CAT_CORR_SUMMARY');
@@ -149,6 +153,92 @@ SELECT C.COLUMN_NAME
  WHERE C.OWNER = :owner
    AND C.TABLE_NAME = :tableName
  ORDER BY C.COLUMN_ID;
+
+-- [MCOMMON_ANLY_WORK_CONTINUOUS_TARGET_COLUMNS]
+SELECT COLUMN_NAME
+     , COLUMN_ID
+  FROM "INIT$_TB_PREDICTED_TYPE_FINAL"
+ WHERE OWNER = :targetOwner
+   AND TABLE_NAME = :targetTable
+   AND TRIM(FINAL_PREDICTED_TYPE) LIKE '%연속형'
+ ORDER BY COLUMN_ID NULLS LAST
+        , COLUMN_NAME;
+
+-- [ML_ANALYSIS_RELATION_CLUSTER_NODES]
+SELECT COLUMN_NAME
+     , COLUMN_TYPE
+     , CLUSTER_ID
+     , DEGREE_COUNT
+     , WEIGHTED_DEGREE
+     , CENTRALITY_SCORE
+     , SELECTED_YN
+  FROM "INIT$_TB_RELATION_NETWORK_NODE"
+ WHERE RUN_SOURCE_TYPE = :runSourceType
+   AND RUN_ID = :runId
+   AND OWNER = :owner
+   AND TABLE_NAME = :tableName
+ ORDER BY CLUSTER_ID NULLS LAST
+        , CENTRALITY_SCORE DESC NULLS LAST
+        , WEIGHTED_DEGREE DESC NULLS LAST
+        , COLUMN_NAME;
+
+-- [ML_ANALYSIS_INTEGRATED_TASK_SAVEPOINT]
+SAVEPOINT INIT_INTEGRATED_TASK;
+
+-- [ML_ANALYSIS_INTEGRATED_TASK_ROLLBACK]
+ROLLBACK TO SAVEPOINT INIT_INTEGRATED_TASK;
+
+-- [MCOMMON_ANLY_WORK_RELATION_REJECTED_PAIRS]
+SELECT *
+  FROM (
+        SELECT COL_A
+             , COL_B
+             , COL_A_TYPE
+             , COL_B_TYPE
+             , RELATION_TYPE
+             , METRIC_NAME
+             , METRIC_VALUE
+             , ABS_METRIC_VALUE
+             , P_VALUE
+             , ROW_COUNT
+             , PASS_YN
+             , CLUSTER_ID
+          FROM (
+                SELECT COL_A
+                     , COL_B
+                     , COL_A_TYPE
+                     , COL_B_TYPE
+                     , RELATION_TYPE
+                     , METRIC_NAME
+                     , METRIC_VALUE
+                     , ABS_METRIC_VALUE
+                     , P_VALUE
+                     , ROW_COUNT
+                     , PASS_YN
+                     , CLUSTER_ID
+                     , ROW_NUMBER() OVER (
+                           PARTITION BY RELATION_TYPE, LEAST(COL_A, COL_B), GREATEST(COL_A, COL_B)
+                           ORDER BY CASE WHEN PASS_YN = 'Y' THEN 0 ELSE 1 END
+                                  , ABS_METRIC_VALUE DESC NULLS LAST
+                                  , P_VALUE ASC NULLS LAST
+                                  , COL_A
+                                  , COL_B
+                                  , METRIC_NAME
+                       ) AS RN
+                  FROM "INIT$_TB_RELATION_PAIR"
+                 WHERE OWNER = :targetOwner
+                   AND TABLE_NAME = :targetTable
+                   AND (:runSourceType IS NULL OR (RUN_SOURCE_TYPE = :runSourceType AND RUN_ID = :runId))
+               )
+         WHERE RN = 1
+           AND PASS_YN = 'N'
+         ORDER BY ABS_METRIC_VALUE DESC NULLS LAST
+                , P_VALUE ASC NULLS LAST
+                , COL_A
+                , COL_B
+                , METRIC_NAME
+       )
+ WHERE ROWNUM <= :maxRows;
 
 -- [MCOMMON_ANLY_WORK_MODEL_METADATA]
 SELECT OWNER

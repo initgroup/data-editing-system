@@ -5,7 +5,7 @@
         title: "INIT Data Editing System Login",
         loginLanguage: "Login language",
         introEyebrow: "INIT Data Editing Platform",
-        introHeadline: "Improve data quality with intelligent rule discovery.",
+        introHeadline: "Improve data quality with data rule discovery.",
         introLead: "Profile source data, discover editing rules, and run governed workflows from one workspace.",
         introVisualSource: "Source",
         introVisualRules: "Rules",

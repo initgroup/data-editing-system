@@ -21,6 +21,7 @@ from backend.services import ml_analysis_service
 INTERNAL_METHODS = {
     "LASSO_FEATURE_SELECT",
     "RELATION_NETWORK_CLUSTER",
+    "INTEGRATED_RELATION_CLUSTER",
     "SYMBOLIC_REGRESSION_RULE",
     "INTEGRATED_RULE_DISCOVER",
     "INTEGRATED_RULE_VIOLATION_DETECT",
@@ -32,7 +33,8 @@ def execute_api_job(
     job: Dict[str, Any],
     runtime_values: Optional[Dict[str, Any]] = None,
     run_id: Optional[int] = None,
-) -> str:
+    include_result: bool = False,
+) -> Any:
     runtime_values = runtime_values or {}
     spec = parse_json_object(job.get("EXEC_SPEC_JSON") or job.get("execSpecJson"))
     method = normalize_method(
@@ -49,11 +51,13 @@ def execute_api_job(
         result = execute_internal_python_api(conn, method, payload)
         persist_message = apply_output_contract(conn, result, spec, job, runtime_values, run_id, payload)
         base_message = create_internal_success_message(method, result)
-        return f"{base_message}{persist_message}"
+        message = f"{base_message}{persist_message}"
+        return {"message": message, "result": result} if include_result else message
 
     result = call_http_json_api(spec, payload, runtime_values)
     persist_message = apply_output_contract(conn, result, spec, job, runtime_values, run_id, payload)
-    return f"External API {method or endpoint} completed.{persist_message}"
+    message = f"External API {method or endpoint} completed.{persist_message}"
+    return {"message": message, "result": result} if include_result else message
 
 
 def execute_internal_python_api(conn, method: str, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -61,6 +65,8 @@ def execute_internal_python_api(conn, method: str, payload: Dict[str, Any]) -> D
         return ml_analysis_service.run_lasso_feature_select(conn, payload)
     if method == "RELATION_NETWORK_CLUSTER":
         return ml_analysis_service.run_relation_network_cluster(conn, payload)
+    if method == "INTEGRATED_RELATION_CLUSTER":
+        return ml_analysis_service.run_integrated_relation_cluster(conn, payload)
     if method == "SYMBOLIC_REGRESSION_RULE":
         return ml_analysis_service.run_symbolic_regression_rule(conn, payload)
     if method == "INTEGRATED_RULE_DISCOVER":
@@ -88,17 +94,47 @@ def create_internal_success_message(method: str, result: Dict[str, Any]) -> str:
             f"{result.get('edgeCount', 0)} edge(s), "
             f"{result.get('clusterCount', 0)} cluster(s)."
         )
-    if method == "INTEGRATED_RULE_DISCOVER":
+    if method == "INTEGRATED_RELATION_CLUSTER":
+        network = result.get("network") if isinstance(result.get("network"), dict) else {}
         return (
-            "Integrated rule discovery completed. "
+            "Integrated relation matrix and network clustering completed. "
+            f"{result.get('relationCount', 0)} relation row(s), "
+            f"{network.get('clusterCount', 0)} cluster(s)."
+        )
+    if method == "INTEGRATED_RULE_DISCOVER":
+        partial = str(result.get("status") or "").lower() == "partial_success"
+        failure_summary = create_partial_failure_summary(result)
+        return (
+            f"Integrated rule discovery {'partially completed' if partial else 'completed'}. "
             f"{result.get('successCount', 0)}/{result.get('taskCount', 0)} task(s) succeeded."
+            f"{failure_summary}"
         )
     if method == "INTEGRATED_RULE_VIOLATION_DETECT":
+        partial = str(result.get("status") or "").lower() == "partial_success"
+        failure_summary = create_partial_failure_summary(result)
         return (
-            "Integrated rule violation detection completed. "
+            f"Integrated rule violation detection {'partially completed' if partial else 'completed'}. "
             f"{result.get('successCount', 0)}/{result.get('taskCount', 0)} task(s) succeeded."
+            f"{failure_summary}"
         )
     return f"{method or 'API'} completed."
+
+
+def create_partial_failure_summary(result: Dict[str, Any]) -> str:
+    failures = result.get("failedTasks") or []
+    messages = []
+    for item in failures:
+        if not isinstance(item, dict):
+            continue
+        task = item.get("task") or "TASK"
+        message = item.get("message") or "failed"
+        messages.append(f"{task}: {message}")
+    if not messages:
+        return ""
+    summary = "; ".join(messages[:5])
+    if len(messages) > 5:
+        summary += f"; and {len(messages) - 5} more"
+    return f" Failed task(s): {summary}"
 
 
 def call_http_json_api(spec: Dict[str, Any], payload: Dict[str, Any], runtime_values: Dict[str, Any]) -> Dict[str, Any]:

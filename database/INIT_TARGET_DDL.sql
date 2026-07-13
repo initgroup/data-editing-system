@@ -13,6 +13,18 @@ DECLARE
         RETURN v_count > 0;
     END;
 
+    FUNCTION column_exists(p_table_name IN VARCHAR2, p_column_name IN VARCHAR2) RETURN BOOLEAN IS
+        v_count NUMBER;
+    BEGIN
+        SELECT COUNT(*)
+          INTO v_count
+          FROM USER_TAB_COLS
+         WHERE TABLE_NAME = UPPER(p_table_name)
+           AND COLUMN_NAME = UPPER(p_column_name);
+
+        RETURN v_count > 0;
+    END;
+
     PROCEDURE run_ddl(p_name IN VARCHAR2, p_sql IN CLOB) IS
     BEGIN
         EXECUTE IMMEDIATE p_sql;
@@ -1182,6 +1194,7 @@ CREATE TABLE "INIT$_TB_FLOW_WORK_NODE_RUN" (
     "MESSAGE" VARCHAR2(4000 BYTE),
     "RUNTIME_PARAM_JSON" CLOB,
     "NODE_PAYLOAD_JSON" CLOB,
+    "RUN_OUTPUT_JSON" CLOB,
     "STARTED_AT" TIMESTAMP (6),
     "FINISHED_AT" TIMESTAMP (6),
     "CREATED_AT" TIMESTAMP (6) DEFAULT SYSTIMESTAMP NOT NULL ENABLE,
@@ -1191,6 +1204,11 @@ CREATE TABLE "INIT$_TB_FLOW_WORK_NODE_RUN" (
 
     IF object_exists('INIT$_TB_FLOW_WORK_NODE_RUN', 'TABLE') THEN
         run_ddl('COMMENT INIT$_TB_FLOW_WORK_NODE_RUN', q'[COMMENT ON TABLE "INIT$_TB_FLOW_WORK_NODE_RUN" IS 'Node-level execution status for flow DAG runs']');
+        IF column_exists('INIT$_TB_FLOW_WORK_NODE_RUN', 'RUN_OUTPUT_JSON') THEN
+            run_ddl('COMMENT INIT$_TB_FLOW_WORK_NODE_RUN.RUN_OUTPUT_JSON', q'[COMMENT ON COLUMN "INIT$_TB_FLOW_WORK_NODE_RUN"."RUN_OUTPUT_JSON" IS 'Resolved model/table output lineage captured after node execution']');
+        ELSE
+            DBMS_OUTPUT.PUT_LINE('[INFO] INIT$_TB_FLOW_WORK_NODE_RUN.RUN_OUTPUT_JSON is missing. Run INIT_TARGET_ALTER.sql for an existing target schema.');
+        END IF;
         run_ddl('ALTER INIT$_TB_FLOW_WORK_NODE_RUN NOPARALLEL', q'[ALTER TABLE "INIT$_TB_FLOW_WORK_NODE_RUN" NOPARALLEL]');
     END IF;
 

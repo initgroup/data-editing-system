@@ -3,7 +3,7 @@
         pageCode: "M03001",
         defaultJobGroup: "M03001",
         labels: {
-            menuName: "Data Profiling",
+            menuName: "Column Type Analysis",
             contextHeader: "Project Scenario",
             contextHeaderDesc: "Select the required project and scenario for this menu.",
             tableHeader: "Scenario Tables",

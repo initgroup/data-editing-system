@@ -19,8 +19,8 @@
         ];
         const CONTEXT_STORAGE_KEY = config.contextStorageKey || "DATA_EDITING_WORK_CONTEXT";
         const SCENARIO_TABLE_API = config.scenarioTableApi || "M02002";
-        const FLOW_NODE_DEFAULT_WIDTH = 170;
-        const FLOW_NODE_DEFAULT_HEIGHT = 112;
+        const FLOW_NODE_DEFAULT_WIDTH = 210;
+        const FLOW_NODE_DEFAULT_HEIGHT = 164;
         const { getContainerEl } = PageManager.createHelper(PAGE_CODE);
         const COMMON = MCOMMON.createPageHelper(PAGE_CODE);
 
@@ -506,10 +506,109 @@
             async loadFlowAssets() {
                 await this.loadFlowNodeTypes();
                 await Promise.all([
+                    this.loadFlowModelContracts(),
                     this.loadRegisteredJobs(),
                     this.loadDefaultVariables()
                 ]);
                 this.bindFlowPalette();
+            },
+
+            async loadFlowModelContracts() {
+                try {
+                    const response = await fetch(PageManager.getAssetUrl("./config/flow-model-contracts.json"), {
+                        cache: "no-store",
+                        credentials: "include"
+                    });
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    this.flowContractCatalog = await response.json();
+                } catch (error) {
+                    console.warn("[FLOW] Model contract load failed.", error);
+                    this.flowContractCatalog = { artifacts: {}, models: {} };
+                }
+            },
+
+            getFlowModelName(data = {}, refJob = null) {
+                return String(
+                    data.execObjectName
+                    || data.EXEC_OBJECT_NAME
+                    || data.execMethod
+                    || data.EXEC_METHOD
+                    || refJob?.EXEC_OBJECT_NAME
+                    || refJob?.EXEC_METHOD
+                    || ""
+                ).trim().toUpperCase();
+            },
+
+            getFlowModelContract(data = {}, refJob = null) {
+                const modelName = this.getFlowModelName(data, refJob);
+                return this.flowContractCatalog?.models?.[modelName] || null;
+            },
+
+            getFlowArtifactDefinition(artifact) {
+                return this.flowContractCatalog?.artifacts?.[String(artifact || "").toUpperCase()] || {};
+            },
+
+            getFlowContractParamValue(data = {}, refJob = null, name = "", fallback = "") {
+                const targetKey = this.normalizeBindParamKey(name);
+                const dataParams = Array.isArray(data.params) ? data.params : [];
+                const refParams = this.parseNodeJson(refJob?.PARAM_JSON, []);
+                const item = [...dataParams, ...(Array.isArray(refParams) ? refParams : [])].find((candidate) =>
+                    this.getNodeParamMatchKeys(candidate).includes(targetKey)
+                );
+                if (!item) return fallback;
+                const value = item.value ?? item.VALUE ?? item.itemDefault ?? item.ITEM_DEFAULT ?? item.defaultValue;
+                return value === undefined || value === null || String(value).trim() === "" ? fallback : value;
+            },
+
+            isFlowContractPortRequired(item = {}, data = {}, refJob = null) {
+                if (item.required !== true) return false;
+                const requiredWhen = item.requiredWhen;
+                if (!requiredWhen?.param) return true;
+                const actual = String(this.getFlowContractParamValue(
+                    data,
+                    refJob,
+                    requiredWhen.param,
+                    requiredWhen.default || ""
+                ) || "").trim().toUpperCase();
+                const included = new Set((requiredWhen.in || []).map((value) => String(value || "").trim().toUpperCase()));
+                const excluded = new Set((requiredWhen.notIn || []).map((value) => String(value || "").trim().toUpperCase()));
+                if (included.size && !included.has(actual)) return false;
+                return !excluded.has(actual);
+            },
+
+            isFlowContractPortActive(item = {}, data = {}, refJob = null) {
+                const requiredParts = new Set((item.requiredForParts || []).map((value) => String(value || "").trim().toUpperCase()));
+                if (!requiredParts.size) return true;
+                const rawParts = String(this.getFlowContractParamValue(data, refJob, "P_RULE_PARTS", "ALL") || "ALL").trim().toUpperCase();
+                if (!rawParts || ["ALL", "BOTH", "AUTO", "(AUTO)"].includes(rawParts)) return true;
+                const activeParts = new Set(rawParts.split(/[,;\s]+/).map((value) => {
+                    if (["CAT", "CATEGORY", "ASSOC", "ASSOCIATION", "APRIORI"].includes(value)) return "CATEGORICAL";
+                    if (["NUM", "NUMERIC", "CONT", "LASSO", "SYMBOLIC", "REGRESSION"].includes(value)) return "CONTINUOUS";
+                    return value;
+                }).filter(Boolean));
+                return [...requiredParts].some((value) => activeParts.has(value));
+            },
+
+            getFlowContractPorts(data = {}, direction = "in", refJob = null) {
+                const contract = this.getFlowModelContract(data, refJob);
+                const key = direction === "in" ? "inputs" : "outputs";
+                return (contract?.[key] || []).filter((item) => (
+                    direction !== "in" || this.isFlowContractPortActive(item, data, refJob)
+                )).map((item) => {
+                    const artifact = String(item.artifact || "").toUpperCase();
+                    const definition = this.getFlowArtifactDefinition(artifact);
+                    return {
+                        ...item,
+                        port: item.port || artifact.toLowerCase(),
+                        artifact,
+                        label: item.label || definition.label || artifact,
+                        kind: item.kind || definition.kind || "TABLE",
+                        shape: item.shape || definition.shape || "square",
+                        required: direction === "in"
+                            ? this.isFlowContractPortRequired(item, data, refJob)
+                            : item.required === true
+                    };
+                });
             },
 
             async loadRegisteredJobs() {
@@ -687,8 +786,8 @@
                 const type = String(nodeType || "").toUpperCase();
                 const match = this.flowNodeTypes.find((item) => String(item.NODE_TYPE || "").toUpperCase() === type);
                 const knownLabels = {
-                    M03001: this.getMessage("nodeTypeM03001", "Data Profiling"),
-                    M03002: this.getMessage("nodeTypeM03002", "Column Correlation"),
+                    M03001: this.getMessage("nodeTypeM03001", "Column Type Analysis"),
+                    M03002: this.getMessage("nodeTypeM03002", "Column Correlation Analysis"),
                     M03003: this.getMessage("nodeTypeM03003", "Rule Discovery"),
                     M03004: this.getMessage("nodeTypeM03004", "Rule Violation")
                 };
@@ -725,6 +824,7 @@
                     execSourceType: source.EXEC_SOURCE_TYPE || fallback.execSourceType || "DB_OBJECT",
                     execResourceId: source.EXEC_RESOURCE_ID || fallback.execResourceId || "",
                     execMethod: source.EXEC_METHOD || fallback.execMethod || "",
+                    execObjectName: source.EXEC_OBJECT_NAME || fallback.execObjectName || "",
                     execSpecJson: source.EXEC_SPEC_JSON || fallback.execSpecJson || "",
                     ownerName: source.OWNER_NAME || fallback.ownerName || "",
                     tableName: source.TABLE_NAME || fallback.tableName || "",
@@ -1566,7 +1666,7 @@
                 sampleJobs.forEach((job, index) => {
                     const node = this.createFlowNode(
                         this.buildFlowNodeDataFromJob(job),
-                        start.left + index * 250,
+                        start.left + index * (FLOW_NODE_DEFAULT_WIDTH + 120),
                         start.top
                     );
                     if (!node) return;
@@ -1574,6 +1674,14 @@
                     viewport.appendChild(node);
                     this.bindFlowNode(node);
                     createdNodes.push(node);
+                });
+
+                let nextLeft = start.left;
+                createdNodes.forEach((node) => {
+                    const nodeWidth = this.getNodePosition(node).width || FLOW_NODE_DEFAULT_WIDTH;
+                    const connectorGap = Math.max(120, Math.round(nodeWidth * 0.65));
+                    this.setNodePosition(node, nextLeft, start.top, { update: false });
+                    nextLeft += nodeWidth + connectorGap;
                 });
 
                 for (let index = 0; index < createdNodes.length - 1; index += 1) {
@@ -1603,8 +1711,19 @@
             },
 
             getFirstRegisteredJobsByGroup() {
+                const preferredModels = {
+                    M03001: "INIT$_SP_PREDICTED_TYPE",
+                    M03002: "INTEGRATED_RELATION_CLUSTER",
+                    M03003: "INTEGRATED_RULE_DISCOVER",
+                    M03004: "INTEGRATED_RULE_VIOLATION_DETECT"
+                };
                 return this.groupRegisteredJobs()
-                    .map((group) => group.jobs[0])
+                    .map((group) => {
+                        const preferred = preferredModels[String(group.key || "").toUpperCase()];
+                        return group.jobs.find((job) => (
+                            String(job.EXEC_OBJECT_NAME || job.EXEC_METHOD || "").toUpperCase() === preferred
+                        )) || group.jobs[0];
+                    })
                     .filter(Boolean);
             },
 
@@ -1624,8 +1743,9 @@
 
             buildSequentialJobEdge(fromNode, toNode) {
                 if (!fromNode || !toNode) return null;
-                const fromPort = fromNode.querySelector(".flow-port-out")?.textContent?.trim() || this.getDefaultOutputPort(fromNode.dataset.nodeType || "");
-                const toPort = toNode.querySelector(".flow-port-in")?.textContent?.trim() || this.getDefaultInputPort(toNode.dataset.nodeType || "");
+                const pair = this.findCompatibleFlowPortPair(fromNode, toNode);
+                const fromPort = pair.fromPort || this.getDefaultOutputPort(fromNode.dataset.nodeType || "");
+                const toPort = pair.toPort || this.getDefaultInputPort(toNode.dataset.nodeType || "");
                 if (!fromPort || !toPort) return null;
                 return {
                     from: fromNode.dataset.nodeId || "",
@@ -1634,7 +1754,7 @@
                     toPort: this.normalizeFlowPortName(toPort, "input"),
                     dashed: false,
                     mode: "SERIAL",
-                    params: this.buildDefaultEdgeParams(fromNode, toNode, toPort, false)
+                    params: this.buildDefaultEdgeParams(fromNode, toNode, toPort, false, fromPort)
                 };
             },
 
@@ -1783,8 +1903,23 @@
                     output.setAttribute("aria-label", "Output connector");
                     node.appendChild(output);
                 }
-                node.querySelector(".flow-connector-in")?.classList.remove("is-hidden");
-                node.querySelector(".flow-connector-out")?.classList.remove("is-hidden");
+                const contract = this.getFlowModelContract({
+                    execObjectName: node.dataset.execObjectName,
+                    execMethod: node.dataset.execMethod
+                });
+                const stage = Number(contract?.stage || 0);
+                const inputShape = this.getDominantNodePortShape(node, "in");
+                const outputShape = this.getDominantNodePortShape(node, "out") || inputShape;
+                const inputConnector = node.querySelector(".flow-connector-in");
+                const outputConnector = node.querySelector(".flow-connector-out");
+                if (inputConnector) {
+                    inputConnector.dataset.portShape = inputShape;
+                    inputConnector.classList.toggle("is-hidden", stage === 1);
+                }
+                if (outputConnector) {
+                    outputConnector.dataset.portShape = outputShape;
+                    outputConnector.classList.toggle("is-hidden", stage === 4);
+                }
                 node.querySelectorAll(".flow-connector").forEach((connector) => {
                     if (connector.dataset.flowConnectorBound === "Y") return;
                     connector.dataset.flowConnectorBound = "Y";
@@ -1905,9 +2040,9 @@
                         <strong>${this.escapeHtml(data?.title || "New node")}</strong>
                         <small>${this.escapeHtml(data?.subtitle || data?.jobId || "Manual node")}</small>
                     </div>
+                    ${this.renderNodeOperationalInfo(data, "NEW")}
                     <footer class="flow-node-ports">
-                        ${inputHtml}
-                        ${outputHtml}
+                        ${this.renderNodePortGroups(inputHtml, outputHtml)}
                     </footer>
                 `;
                 document.body.appendChild(element);
@@ -1987,7 +2122,7 @@
             getNodeConnectorPoint(node, connectorType) {
                 const connector = node?.querySelector(connectorType === "in" ? ".flow-connector-in" : ".flow-connector-out");
                 const viewport = this.getFlowViewport();
-                if (connector && viewport) {
+                if (connector && !connector.classList.contains("is-hidden") && viewport) {
                     const connectorRect = connector.getBoundingClientRect();
                     const viewportRect = viewport.getBoundingClientRect();
                     const zoom = this.flowZoom || 1;
@@ -2165,21 +2300,23 @@
                         this.finishEdgeDrag();
                         return;
                     }
-                    this.startEdgeConnection(nodeId, this.getDefaultOutputPort(node.dataset.nodeType || ""), connector, "click", event.shiftKey);
+                    this.startEdgeConnection(nodeId, "output", connector, "click", event.shiftKey);
                     this.updateConnectionPreviewFromPoint(this.getNodeConnectorPoint(node, "out"));
                     return;
                 }
 
                 if (connectorType === "in" && this.edgeDragState) {
                     if (nodeId && nodeId !== this.edgeDragState.fromNodeId) {
+                        const fromNode = this.getFlowNode(this.edgeDragState.fromNodeId);
+                        const pair = this.findCompatibleFlowPortPair(fromNode, node, this.edgeDragState.fromPort);
                         this.addFlowEdge({
                             from: this.edgeDragState.fromNodeId,
-                            fromPort: this.edgeDragState.fromPort,
+                            fromPort: pair.fromPort,
                             to: nodeId,
-                            toPort: this.getDefaultInputPort(node.dataset.nodeType || "") || "input",
+                            toPort: pair.toPort,
                             dashed: this.edgeDragState.dashed,
                             mode: this.edgeDragState.dashed ? "ON_COMPLETE" : "SERIAL",
-                            params: this.buildDefaultEdgeParams(this.getFlowNode(this.edgeDragState.fromNodeId), node, this.getDefaultInputPort(node.dataset.nodeType || "") || "input", this.edgeDragState.dashed)
+                            params: this.buildDefaultEdgeParams(fromNode, node, pair.toPort, this.edgeDragState.dashed, pair.fromPort)
                         });
                         this.selectFlowNode(nodeId);
                     }
@@ -2220,16 +2357,17 @@
                 const targetNode = port.closest(".flow-node");
                 if (!targetNode) return;
                 const toNodeId = targetNode.dataset.nodeId || "";
-                const toPort = this.getFlowPortName(port);
                 if (toNodeId && toNodeId !== this.edgeDragState.fromNodeId) {
+                    const fromNode = this.getFlowNode(this.edgeDragState.fromNodeId);
+                    const pair = this.findCompatibleFlowPortPair(fromNode, targetNode, this.edgeDragState.fromPort);
                     this.addFlowEdge({
                         from: this.edgeDragState.fromNodeId,
-                        fromPort: this.edgeDragState.fromPort,
+                        fromPort: pair.fromPort,
                         to: toNodeId,
-                        toPort,
+                        toPort: pair.toPort,
                         dashed: this.edgeDragState.dashed,
                         mode: this.edgeDragState.dashed ? "ON_COMPLETE" : "SERIAL",
-                        params: this.buildDefaultEdgeParams(this.getFlowNode(this.edgeDragState.fromNodeId), targetNode, toPort, this.edgeDragState.dashed)
+                        params: this.buildDefaultEdgeParams(fromNode, targetNode, pair.toPort, this.edgeDragState.dashed, pair.fromPort)
                     });
                     this.selectFlowNode(toNodeId);
                 }
@@ -2279,6 +2417,37 @@
 
             getFlowPortName(port) {
                 return port?.dataset?.portName || port?.querySelector?.(".flow-port-name")?.textContent?.trim() || port?.textContent?.trim() || "";
+            },
+
+            getNodeDefaultPortName(node, direction) {
+                const selector = direction === "in" ? ".flow-port-in" : ".flow-port-out";
+                return this.getFlowPortName(node?.querySelector(selector)) || (direction === "in" ? "input" : "output");
+            },
+
+            getDominantNodePortShape(node, direction) {
+                const selector = direction === "in" ? ".flow-port-in" : ".flow-port-out";
+                const priority = { square: 1, triangle: 2, circle: 3, diamond: 4 };
+                return Array.from(node?.querySelectorAll(selector) || [])
+                    .map((port) => String(port.dataset.portShape || "square").toLowerCase())
+                    .sort((left, right) => (priority[right] || 0) - (priority[left] || 0))[0] || "square";
+            },
+
+            findCompatibleFlowPortPair(fromNode, toNode, preferredFromPort = "") {
+                const outputs = Array.from(fromNode?.querySelectorAll(".flow-port-out") || []);
+                const inputs = Array.from(toNode?.querySelectorAll(".flow-port-in") || []);
+                const preferred = outputs.find((port) => this.getFlowPortName(port) === String(preferredFromPort || ""));
+                const orderedOutputs = preferred ? [preferred, ...outputs.filter((port) => port !== preferred)] : outputs;
+                for (const output of orderedOutputs) {
+                    const artifact = output.dataset.artifact || "";
+                    const input = inputs.find((candidate) => artifact && candidate.dataset.artifact === artifact);
+                    if (input) {
+                        return { fromPort: this.getFlowPortName(output), toPort: this.getFlowPortName(input) };
+                    }
+                }
+                return {
+                    fromPort: this.getFlowPortName(preferred || outputs[0]) || "output",
+                    toPort: this.getFlowPortName(inputs[0]) || "input"
+                };
             },
 
             isFlowCanvasMenuTarget(event) {
@@ -2977,6 +3146,7 @@
                 article.dataset.execSourceType = data.execSourceType || "DB_OBJECT";
                 article.dataset.execResourceId = data.execResourceId || "";
                 article.dataset.execMethod = data.execMethod || "";
+                article.dataset.execObjectName = data.execObjectName || "";
                 article.dataset.execSpecJson = data.execSpecJson || "";
                 article.dataset.execPlsql = data.execPlsql || "";
                 article.dataset.nodeParams = this.stringifyNodeJson(data.params || []);
@@ -2994,9 +3164,9 @@
                         <strong>${this.escapeHtml(data.title || "New node")}</strong>
                         <small>${this.escapeHtml(data.subtitle || data.jobId || "Manual node")}</small>
                     </div>
+                    ${this.renderNodeOperationalInfo(data, nodeId)}
                     <footer class="flow-node-ports">
-                        ${inputHtml}
-                        ${outputHtml}
+                        ${this.renderNodePortGroups(inputHtml, outputHtml)}
                     </footer>
                 `;
                 this.applyNodeUseState(article);
@@ -3008,7 +3178,7 @@
                 const nodeTypeLabel = this.getNodeTypeLabel(nodeType, data.nodeTypeLabel || "");
                 const refJob = this.getRegisteredJobAsset(data.refWorkJobId || "");
                 const nodeId = data.nodeKey || this.createNextFlowNodeId(nodeType);
-                const inputHtml = this.renderNodePortSpans(this.getRenderInputPorts(nodeType, data), "in", "TABLE");
+                const inputHtml = this.renderNodePortSpans(this.getRenderInputPorts(nodeType, data, refJob), "in", "TABLE");
                 const outputHtml = this.renderNodePortSpans(
                     this.getRenderOutputPorts(nodeType, data, refJob),
                     "out",
@@ -3025,6 +3195,7 @@
                 article.dataset.execSourceType = data.execSourceType || refJob?.EXEC_SOURCE_TYPE || "DB_OBJECT";
                 article.dataset.execResourceId = data.execResourceId || refJob?.EXEC_RESOURCE_ID || "";
                 article.dataset.execMethod = data.execMethod || refJob?.EXEC_METHOD || "";
+                article.dataset.execObjectName = data.execObjectName || refJob?.EXEC_OBJECT_NAME || "";
                 article.dataset.execSpecJson = data.execSpecJson || refJob?.EXEC_SPEC_JSON || "";
                 article.dataset.ownerName = data.ownerName || "";
                 article.dataset.tableName = data.tableName || "";
@@ -3038,7 +3209,7 @@
                 article.style.position = "absolute";
                 article.style.left = `${Math.max(0, Math.round(Number(data.positionLeft) || 0))}px`;
                 article.style.top = `${Math.max(0, Math.round(Number(data.positionTop) || 0))}px`;
-                article.style.width = `${Math.max(150, Math.round(Number(data.nodeWidth) || 170))}px`;
+                article.style.width = `${Math.max(FLOW_NODE_DEFAULT_WIDTH, Math.round(Number(data.nodeWidth) || FLOW_NODE_DEFAULT_WIDTH))}px`;
                 article.innerHTML = `
                     <header class="data-param-panel-header">
                         <strong title="${this.escapeHtml(nodeTypeLabel)}">${this.escapeHtml(nodeTypeLabel)}</strong>
@@ -3048,9 +3219,9 @@
                         <strong>${this.escapeHtml(data.nodeName || nodeId)}</strong>
                         <small>${this.escapeHtml(data.nodeDesc || data.refMenuCode || "Saved node")}</small>
                     </div>
+                    ${this.renderNodeOperationalInfo(data, nodeId, refJob)}
                     <footer class="flow-node-ports">
-                        ${inputHtml}
-                        ${outputHtml}
+                        ${this.renderNodePortGroups(inputHtml, outputHtml)}
                     </footer>
                 `;
                 this.applyNodeUseState(article);
@@ -3064,6 +3235,38 @@
                 node.setAttribute("data-node-use-yn", disabled ? "N" : "Y");
             },
 
+            renderNodeOperationalInfo(data = {}, nodeId = "", refJob = null) {
+                const execSourceType = String(data.execSourceType || refJob?.EXEC_SOURCE_TYPE || "DB_OBJECT").toUpperCase();
+                const execName = data.execObjectName || refJob?.EXEC_OBJECT_NAME || data.jobId || data.refWorkJobId || "-";
+                const resultMode = this.normalizeResultCreateMode(data.resultCreateYn || refJob?.RESULT_CREATE_YN || "N");
+                const resultName = data.resultTableName || refJob?.RESULT_TABLE_NAME || "-";
+                const resultType = resultMode === "M" ? "M" : resultMode === "T" ? "T" : "-";
+                return `
+                    <div class="flow-node-operational" aria-label="Node information">
+                        <span class="flow-node-operational-line" title="Node ID: ${this.escapeHtml(nodeId || "-")}">
+                            <b>ID</b><span>${this.escapeHtml(nodeId || "-")}</span><em>${this.escapeHtml(execSourceType)}</em>
+                        </span>
+                        <span class="flow-node-operational-line" title="Execution object: ${this.escapeHtml(execName)}">
+                            <b>EXEC</b><span>${this.escapeHtml(execName)}</span>
+                        </span>
+                        <span class="flow-node-operational-line" title="Result: ${this.escapeHtml(resultName)}">
+                            <b>RESULT ${resultType}</b><span>${this.escapeHtml(resultName)}</span>
+                        </span>
+                    </div>
+                `;
+            },
+
+            renderNodePortGroups(inputHtml = "", outputHtml = "") {
+                return `
+                    <section class="flow-node-port-group is-input" aria-label="Input ports">
+                        <div class="flow-node-port-list">${inputHtml || '<span class="flow-port-empty">-</span>'}</div>
+                    </section>
+                    <section class="flow-node-port-group is-output" aria-label="Output ports">
+                        <div class="flow-node-port-list">${outputHtml || '<span class="flow-port-empty">-</span>'}</div>
+                    </section>
+                `;
+            },
+
             renderNodePortSpans(ports, direction, assetKind = "TABLE") {
                 const className = direction === "in" ? "flow-port-in" : "flow-port-out";
                 const normalizedKind = this.normalizeFlowAssetKind(assetKind);
@@ -3071,19 +3274,30 @@
                     return this.renderFlowPortInfo("out", "NONE", false);
                 }
                 return (ports || [])
-                    .filter((port) => String(port || "").trim())
+                    .filter((port) => String(port?.port || port?.name || port || "").trim())
                     .map((port) => {
-                        const label = this.escapeHtml(port);
+                        const definition = typeof port === "object" ? port : { port };
+                        const portName = String(definition.port || definition.name || port || "").trim();
+                        const label = this.escapeHtml(portName);
                         const directionLabel = direction === "in" ? "Input" : "Output";
-                        return this.renderFlowPortInfo(direction, normalizedKind, true, className, label, directionLabel);
+                        return this.renderFlowPortInfo(
+                            direction,
+                            definition.kind || normalizedKind,
+                            true,
+                            className,
+                            label,
+                            directionLabel,
+                            definition
+                        );
                     })
                     .join("");
             },
 
-            renderFlowPortInfo(direction, assetKind, connectable = true, className = "", portLabel = "", directionLabel = "") {
+            renderFlowPortInfo(direction, assetKind, connectable = true, className = "", portLabel = "", directionLabel = "", metadata = {}) {
                 const kind = this.normalizeFlowAssetKind(assetKind);
                 const directionText = direction === "in" ? "IN" : "OUT";
                 const kindText = kind === "MODEL" ? "model" : kind === "NONE" ? "none" : "table";
+                const kindCode = kind === "MODEL" ? "M" : kind === "NONE" ? "-" : "T";
                 const iconClass = kind === "MODEL" ? "fas fa-brain" : kind === "NONE" ? "fas fa-minus" : "fas fa-table";
                 const title = `${directionLabel || directionText}: ${kindText}${portLabel ? ` (${portLabel})` : ""}`;
                 const classes = [
@@ -3092,9 +3306,17 @@
                     `is-${kindText}`
                 ].filter(Boolean).join(" ");
                 const dataPortName = connectable ? ` data-port-name="${this.escapeHtml(portLabel)}"` : "";
+                const artifact = String(metadata.artifact || "").toUpperCase();
+                const shape = String(metadata.shape || "square").toLowerCase();
+                const required = metadata.required === true;
+                const runScope = String(metadata.runScope || "").toUpperCase();
                 return `
-                    <span class="${classes}"${dataPortName} title="${this.escapeHtml(title)}" aria-label="${this.escapeHtml(title)}">
-                        <em>${directionText}</em>
+                    <span class="${classes}${required ? " is-required" : " is-optional"}"${dataPortName}
+                        data-artifact="${this.escapeHtml(artifact)}" data-port-shape="${this.escapeHtml(shape)}"
+                        data-required="${required ? "Y" : "N"}" data-run-scope="${this.escapeHtml(runScope)}"
+                        title="${this.escapeHtml(`${title}${artifact ? ` · ${artifact}` : ""}${runScope ? ` · ${runScope}` : ""}`)}"
+                        aria-label="${this.escapeHtml(title)}">
+                        <em>${directionText} ${kindCode}</em>
                         <i class="${iconClass}" aria-hidden="true"></i>
                         ${connectable ? `<span class="flow-port-name">${portLabel}</span>` : ""}
                     </span>
@@ -3115,19 +3337,23 @@
                 return "TABLE";
             },
 
-            getRenderInputPorts(nodeType, data = {}) {
-                const explicitPorts = this.normalizePortNames(data.inputs, "input");
+            getRenderInputPorts(nodeType, data = {}, refJob = null) {
+                const explicitPorts = this.normalizePortDefinitions(data.inputs, "input");
+                const contractPorts = this.getFlowContractPorts(data, "in", refJob);
+                if (contractPorts.length) return contractPorts;
                 if (explicitPorts.length) return explicitPorts;
                 const defaultPort = this.getDefaultInputPort(nodeType);
                 return defaultPort ? [defaultPort] : [];
             },
 
             getRenderOutputPorts(nodeType, data = {}, refJob = null) {
-                const explicitPorts = this.normalizePortNames(data.outputs, "output");
+                const explicitPorts = this.normalizePortDefinitions(data.outputs, "output");
+                const contractPorts = this.getFlowContractPorts(data, "out", refJob);
                 const resultCreateMode = this.normalizeResultCreateMode(data.resultCreateYn || refJob?.RESULT_CREATE_YN || "N");
                 if (resultCreateMode === "N") {
                     return [];
                 }
+                if (contractPorts.length) return contractPorts;
                 return explicitPorts.length ? explicitPorts : [this.getDefaultOutputPort(nodeType)];
             },
 
@@ -3145,12 +3371,25 @@
                 return Array.from(new Set(names));
             },
 
+            normalizePortDefinitions(ports, fallback = "") {
+                if (!Array.isArray(ports)) return [];
+                return ports.map((port) => {
+                    if (port && typeof port === "object") {
+                        const name = this.normalizeFlowPortName(port.port || port.name || "", fallback);
+                        return name ? { ...port, port: name } : null;
+                    }
+                    const name = this.normalizeFlowPortName(port || "", fallback);
+                    return name ? { port: name } : null;
+                }).filter(Boolean);
+            },
+
             normalizeFlowPortName(portName, fallback = "input") {
                 const value = String(portName || "").trim();
                 const normalized = value.toLowerCase();
                 if (normalized === "input" || normalized.endsWith("input")) return "input";
                 if (normalized === "output" || normalized.endsWith("output")) return "output";
                 if (!value) return fallback;
+                if (/^[A-Za-z][A-Za-z0-9_-]{0,99}$/.test(value)) return value;
                 return fallback === "input" ? "input" : "output";
             },
 
@@ -3166,12 +3405,27 @@
                 return "output";
             },
 
-            buildDefaultEdgeParams(fromNode, toNode, toPort = "input", dashed = false) {
+            buildDefaultEdgeParams(fromNode, toNode, toPort = "input", dashed = false, fromPort = "") {
                 if (!fromNode || !toNode || dashed) return {};
+                const sourcePort = Array.from(fromNode.querySelectorAll(".flow-port-out"))
+                    .find((port) => this.getFlowPortName(port) === String(fromPort || ""))
+                    || fromNode.querySelector(".flow-port-out");
+                const targetPort = Array.from(toNode.querySelectorAll(".flow-port-in"))
+                    .find((port) => this.getFlowPortName(port) === String(toPort || ""))
+                    || toNode.querySelector(".flow-port-in");
+                const artifact = sourcePort?.dataset.artifact || "";
+                const targetArtifact = targetPort?.dataset.artifact || "";
                 const hasResultTable = this.normalizeResultCreateMode(fromNode.dataset.resultCreateYn || "") === "T"
                     && Boolean(fromNode.dataset.resultOwner && fromNode.dataset.resultTableName);
-                if (!hasResultTable) return {};
+                const baseParams = {
+                    dependencyType: artifact ? "DATA_REQUIRED" : "ORDER_REQUIRED",
+                    artifact,
+                    runScope: targetPort?.dataset.runScope || sourcePort?.dataset.runScope || ""
+                };
+                if (targetArtifact && targetArtifact !== "TARGET_TABLE") return baseParams;
+                if (!hasResultTable) return baseParams;
                 return {
+                    ...baseParams,
                     inputSource: "UPSTREAM_RESULT",
                     fromNodeKey: fromNode.dataset.nodeId || "",
                     toNodeKey: toNode.dataset.nodeId || "",
@@ -3192,7 +3446,8 @@
                     this.getFlowNode(edge?.from || ""),
                     this.getFlowNode(edge?.to || ""),
                     edge?.toPort || "input",
-                    Boolean(edge?.dashed)
+                    Boolean(edge?.dashed),
+                    edge?.fromPort || "output"
                 );
             },
 
@@ -3897,6 +4152,37 @@
                     params.push({ name, label: `:${name}`, value: value || "", source: "RUNTIME" });
                 }
                 node.dataset.nodeParams = this.stringifyNodeJson(params);
+                if (["P_CLUSTER_USAGE_MODE", "P_RULE_PARTS"].some((paramName) => (
+                    this.normalizeBindParamKey(name) === this.normalizeBindParamKey(paramName)
+                ))) {
+                    this.refreshFlowNodeContractPorts(node);
+                }
+            },
+
+            refreshFlowNodeContractPorts(node) {
+                if (!node) return;
+                const refJob = this.getRegisteredJobAsset(node.dataset.refWorkJobId || "");
+                const data = {
+                    nodeType: node.dataset.nodeType || "JOB",
+                    execObjectName: node.dataset.execObjectName || "",
+                    execMethod: node.dataset.execMethod || "",
+                    resultCreateYn: node.dataset.resultCreateYn || "N",
+                    params: this.getNodeParams(node)
+                };
+                const inputHtml = this.renderNodePortSpans(
+                    this.getRenderInputPorts(data.nodeType, data, refJob),
+                    "in",
+                    "TABLE"
+                );
+                const outputHtml = this.renderNodePortSpans(
+                    this.getRenderOutputPorts(data.nodeType, data, refJob),
+                    "out",
+                    this.getNodeOutputAssetKind(data, refJob)
+                );
+                const footer = node.querySelector(".flow-node-ports");
+                if (footer) footer.innerHTML = this.renderNodePortGroups(inputHtml, outputHtml);
+                this.ensureNodeConnectors(node);
+                this.updateFlowEdges();
             },
 
             renderNodeBindVariables(node) {
@@ -3941,13 +4227,19 @@
                     const saved = paramMap.get(this.normalizeBindParamKey(name));
                     const comment = this.getNodeRuntimeBindComment(saved);
                     const value = this.getNodeRuntimeBindValue(saved, node);
+                    const isClusterUsageMode = this.normalizeBindParamKey(name) === this.normalizeBindParamKey("P_CLUSTER_USAGE_MODE");
+                    const inputControl = isClusterUsageMode
+                        ? `<select class="env-field flow-node-bind-input" data-bind-name="${this.escapeHtml(name)}" onchange="${PAGE_CODE}.updateNodeBindValue(this.dataset.bindName, this.value)">
+                            ${["PREFER_SAME_CLUSTER", "NONE", "WITHIN_CLUSTER_ONLY"].map((option) => `<option value="${option}" ${String(value || "").toUpperCase() === option ? "selected" : ""}>${option}</option>`).join("")}
+                        </select>`
+                        : `<input class="env-field flow-node-bind-input" data-bind-name="${this.escapeHtml(name)}" type="text" value="${this.escapeHtml(value)}" oninput="${PAGE_CODE}.updateNodeBindValue(this.dataset.bindName, this.value)">`;
                     return `
                         <label class="data-bind-row">
                             <span class="data-bind-meta">
                                 <span class="flow-bind-name">${this.escapeHtml(label)}</span>
                                 ${comment ? `<small class="flow-bind-comment">${this.escapeHtml(comment)}</small>` : ""}
                             </span>
-                            <input class="env-field flow-node-bind-input" data-bind-name="${this.escapeHtml(name)}" type="text" value="${this.escapeHtml(value)}" oninput="${PAGE_CODE}.updateNodeBindValue(this.dataset.bindName, this.value)">
+                            ${inputControl}
                         </label>
                     `;
                 }).join("");
@@ -3961,7 +4253,11 @@
                     : "TABLE";
                 return Array.from(node.querySelectorAll(selector)).map((port) => ({
                     port: this.getFlowPortName(port),
-                    type: portType,
+                    type: port.dataset.artifact ? (port.classList.contains("is-model") ? "MODEL" : "TABLE") : portType,
+                    artifact: port.dataset.artifact || "",
+                    shape: port.dataset.portShape || "square",
+                    required: port.dataset.required === "Y",
+                    runScope: port.dataset.runScope || "",
                     ownerName: node.dataset.ownerName || "",
                     tableName: node.dataset.tableName || "",
                     sourceNodeKey: direction === "in" ? this.findPortSource(nodeId, this.getFlowPortName(port))?.from || "" : "",
@@ -4083,6 +4379,7 @@
                         execSourceType: node.dataset.execSourceType || "DB_OBJECT",
                         execResourceId: node.dataset.execResourceId || "",
                         execMethod: node.dataset.execMethod || "",
+                        execObjectName: node.dataset.execObjectName || "",
                         execSpecJson: node.dataset.execSpecJson || "",
                         ownerName: node.dataset.ownerName || "",
                         tableName: node.dataset.tableName || "",
@@ -4590,21 +4887,29 @@
                 };
                 const maxNodeWidth = Math.max(...nodeItems.map((item) => item.position.width || 0), 150);
                 const maxNodeHeight = Math.max(...nodeItems.map((item) => item.position.height || 0), 90);
+                const connectorGap = Math.max(120, Math.round(maxNodeWidth * 0.65));
+                const rowGap = Math.max(80, Math.round(maxNodeHeight * 0.55));
+                const minColumnWidth = Math.round(maxNodeWidth + connectorGap);
+                const minRowHeight = Math.round(maxNodeHeight + rowGap);
                 const flowKey = this.getCurrentFlowRunKey();
                 const cachedGrid = this.flowLayoutGrid?.flowKey === flowKey ? this.flowLayoutGrid : null;
-                const columnWidth = cachedGrid?.columnWidth || getGridStep(
+                const columnWidth = Number(cachedGrid?.columnWidth) >= minColumnWidth
+                    ? Number(cachedGrid.columnWidth)
+                    : getGridStep(
                     nodeItems.map((item) => item.position.left),
                     Math.min(80, Math.max(40, maxNodeWidth * 0.45)),
-                    Math.max(240, maxNodeWidth + 90),
-                    Math.max(220, maxNodeWidth + 60),
-                    360
+                    minColumnWidth,
+                    minColumnWidth,
+                    Math.max(minColumnWidth + 180, Math.round(minColumnWidth * 1.45))
                 );
-                const rowHeight = cachedGrid?.rowHeight || getGridStep(
+                const rowHeight = Number(cachedGrid?.rowHeight) >= minRowHeight
+                    ? Number(cachedGrid.rowHeight)
+                    : getGridStep(
                     nodeItems.map((item) => item.position.top),
                     Math.min(70, Math.max(35, maxNodeHeight * 0.5)),
-                    Math.max(160, maxNodeHeight + 70),
-                    Math.max(130, maxNodeHeight + 40),
-                    260
+                    minRowHeight,
+                    minRowHeight,
+                    Math.max(minRowHeight + 140, Math.round(minRowHeight * 1.45))
                 );
                 const minLeft = Math.min(...nodeItems.map((item) => item.position.left));
                 const minTop = Math.min(...nodeItems.map((item) => item.position.top));
@@ -4737,10 +5042,12 @@
                     const curve = Math.max(70, Math.abs(endX - startX) / 2);
                     const d = `M ${startX} ${startY} C ${startX + curve} ${startY}, ${endX - curve} ${endY}, ${endX} ${endY}`;
                     const dash = edge.dashed ? ` stroke-dasharray="6 5"` : "";
+                    const dependencyType = String(this.getEdgeParams(edge)?.dependencyType || "ORDER_REQUIRED").toUpperCase();
+                    const stroke = edge.dashed ? "#94a3b8" : (dependencyType === "DATA_REQUIRED" ? "#2563eb" : "#64748b");
                     const selected = edgeId === this.selectedEdgeId ? " is-selected" : "";
                     return `
                         <path class="flow-edge-hit-path" data-edge-id="${this.escapeHtml(edgeId)}" d="${d}" fill="none" stroke="transparent" stroke-width="18"></path>
-                        <path class="flow-edge-path${selected}" data-edge-id="${this.escapeHtml(edgeId)}" d="${d}" fill="none" stroke="${edge.dashed ? "#94a3b8" : "#64748b"}" stroke-width="2"${dash} marker-end="${markerUrl}"></path>
+                        <path class="flow-edge-path${selected}" data-edge-id="${this.escapeHtml(edgeId)}" data-dependency-type="${this.escapeHtml(dependencyType)}" d="${d}" fill="none" stroke="${stroke}" stroke-width="2"${dash} marker-end="${markerUrl}"></path>
                     `;
                 }).join("");
                 edgeLayer.innerHTML = `${defs}${paths}`;
@@ -4812,6 +5119,43 @@
             },
 
             addNodePort() {},
+            validateFlowEdgeContract(edge) {
+                const fromNode = this.getFlowNode(edge?.from || "");
+                const toNode = this.getFlowNode(edge?.to || "");
+                if (!fromNode || !toNode) return "";
+                const fromContract = this.getFlowModelContract({
+                    execObjectName: fromNode.dataset.execObjectName,
+                    execMethod: fromNode.dataset.execMethod
+                });
+                const toContract = this.getFlowModelContract({
+                    execObjectName: toNode.dataset.execObjectName,
+                    execMethod: toNode.dataset.execMethod
+                });
+                const fromStage = Number(fromContract?.stage || 0);
+                const toStage = Number(toContract?.stage || 0);
+                if (fromStage && toStage && fromStage > toStage) {
+                    return this.getMessage(
+                        "flowEdgeStageBlocked",
+                        "Stage {fromStage} cannot precede stage {toStage}.",
+                        { fromStage, toStage }
+                    );
+                }
+                const sourcePort = Array.from(fromNode.querySelectorAll(".flow-port-out"))
+                    .find((port) => this.getFlowPortName(port) === String(edge.fromPort || ""));
+                const targetPort = Array.from(toNode.querySelectorAll(".flow-port-in"))
+                    .find((port) => this.getFlowPortName(port) === String(edge.toPort || ""));
+                const sourceArtifact = sourcePort?.dataset.artifact || "";
+                const targetArtifact = targetPort?.dataset.artifact || "";
+                if (sourceArtifact && targetArtifact && sourceArtifact !== targetArtifact) {
+                    return this.getMessage(
+                        "flowEdgeArtifactBlocked",
+                        "{sourceArtifact} output cannot connect to {targetArtifact} input.",
+                        { sourceArtifact, targetArtifact }
+                    );
+                }
+                return "";
+            },
+
             addFlowEdge(edge = null) {
                 if (!edge) {
                     alert("Drag from an output port to an input port to connect nodes.");
@@ -4827,6 +5171,11 @@
                     params: edge.params || {}
                 };
                 if (!nextEdge.from || !nextEdge.to) return;
+                const contractError = this.validateFlowEdgeContract(nextEdge);
+                if (contractError) {
+                    CommonMessage.warn(contractError, { copyable: false });
+                    return;
+                }
                 if (this.wouldCreateFlowCycle(nextEdge)) {
                     CommonMessage.warn(this.getMessage("cyclicEdgeBlocked", "This connection would create a cycle. A flow must remain a DAG without looping back to an earlier node."), { copyable: false });
                     return;
@@ -4871,6 +5220,7 @@
                                 <th>To Node</th>
                                 <th>Input</th>
                                 <th>Source</th>
+                                <th>Dependency</th>
                                 <th>Mode</th>
                             </tr>
                         </thead>
@@ -4882,6 +5232,7 @@
                                     <td>${this.escapeHtml(edge.to || "")}</td>
                                     <td>${this.escapeHtml(edge.toPort || "input")}</td>
                                     <td>${this.escapeHtml(this.getEdgeParams(edge)?.inputSource === "UPSTREAM_RESULT" ? "Upstream result table" : "-")}</td>
+                                    <td>${this.escapeHtml(this.getEdgeParams(edge)?.dependencyType || "ORDER_REQUIRED")}</td>
                                     <td>${this.escapeHtml(edge.mode || (edge.dashed ? "ON_COMPLETE" : "SERIAL"))}</td>
                                 </tr>
                             `).join("")}

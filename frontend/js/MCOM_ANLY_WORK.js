@@ -175,6 +175,7 @@
         symbolicRuleFilters: { method: "ALL", targetColumn: "ALL" },
         symbolicViolationFilters: { method: "ALL", targetColumn: "ALL", resultScope: "ALL" },
         violationSql: { sql: "", page: 1, pageSize: 50, freezeColumns: 2, total: 0, columns: [], rows: [], title: "", columnWidths: {} },
+        violationSqlRequestId: 0,
         currentModelDetail: null,
         lastResultTableJson: null,
         lastViolationSummary: null,
@@ -186,9 +187,11 @@
         isRunDeleteInProgress: false,
         currentExport: { filename: "integrated-result.csv", columns: [], rows: [] },
         nodeResultCache: new Map(),
+        selectedResultObjectNames: new Map(),
         runtimeParamPresetMap: new Map(),
 
         async init() {
+            this.loadSelectedResultObjectNames();
             const pendingRunId = sessionStorage.getItem(`${PAGE_CODE}:selectedRunId`) || "";
             const pendingProjectId = sessionStorage.getItem(`${PAGE_CODE}:selectedProjectId`) || "";
             const pendingScenarioId = sessionStorage.getItem(`${PAGE_CODE}:selectedScenarioId`) || "";
@@ -261,6 +264,100 @@
         getNodeCacheKey(nodeRunId = this.selectedNode?.FLOW_NODE_RUN_ID) {
             if (nodeRunId === undefined || nodeRunId === null || nodeRunId === "") return "";
             return String(nodeRunId);
+        },
+
+        loadSelectedResultObjectNames() {
+            try {
+                const saved = JSON.parse(sessionStorage.getItem(`${PAGE_CODE}:selectedResultObjects`) || "{}");
+                this.selectedResultObjectNames = new Map(Object.entries(saved || {}));
+            } catch (error) {
+                this.selectedResultObjectNames = new Map();
+            }
+        },
+
+        persistSelectedResultObjectNames() {
+            try {
+                const entries = Array.from(this.selectedResultObjectNames?.entries?.() || []).slice(-200);
+                this.selectedResultObjectNames = new Map(entries);
+                sessionStorage.setItem(`${PAGE_CODE}:selectedResultObjects`, JSON.stringify(Object.fromEntries(entries)));
+            } catch (error) {
+                console.warn(`[${PAGE_CODE}] selected result output save failed`, error);
+            }
+        },
+
+        rememberSelectedNodeResult(node = this.selectedNode) {
+            const key = this.getNodeCacheKey(node?.FLOW_NODE_RUN_ID);
+            const objectName = String(node?.RESULT_OBJECT_NAME || "").trim().toUpperCase();
+            if (!key || !objectName) return;
+            if (!this.selectedResultObjectNames) this.selectedResultObjectNames = new Map();
+            this.selectedResultObjectNames.set(key, objectName);
+            this.persistSelectedResultObjectNames();
+        },
+
+        applyRememberedNodeResult(node) {
+            const key = this.getNodeCacheKey(node?.FLOW_NODE_RUN_ID);
+            const objectName = String(this.selectedResultObjectNames?.get(key) || "").trim().toUpperCase();
+            const results = Array.isArray(node?.RESULT_OBJECTS) ? node.RESULT_OBJECTS : [];
+            let selected = results.find((item) => String(item?.objectName || "").trim().toUpperCase() === objectName);
+            if (!selected) return false;
+            if (this.isIntegratedRuleDiscoveryNode(node)
+                && this.getIntegratedRuleDiscoveryGroup(selected) === "CATEGORICAL") {
+                selected = this.getPreferredIntegratedRuleResult(
+                    "CATEGORICAL",
+                    results.filter((item) => this.getIntegratedRuleDiscoveryGroup(item) === "CATEGORICAL")
+                ) || selected;
+            }
+            node.RESULT_KIND = String(selected.kind || "TABLE").toUpperCase();
+            node.RESULT_OWNER = String(selected.owner || node.RESULT_OWNER || "").toUpperCase();
+            node.RESULT_OBJECT_NAME = String(selected.objectName || "").toUpperCase();
+            if (node.RESULT_OBJECT_NAME !== objectName) this.rememberSelectedNodeResult(node);
+            return true;
+        },
+
+        applyDefaultNodeResult(node) {
+            const results = Array.isArray(node?.RESULT_OBJECTS) ? node.RESULT_OBJECTS : [];
+            const runProfile = results.find((item) => (
+                String(item?.artifact || "").trim().toUpperCase() === "PREDICTED_TYPE_RUN"
+                || String(item?.objectName || "").trim().toUpperCase() === "INIT$_TB_PREDICTED_TYPE"
+            ));
+            const hasFinalProfile = results.some((item) => (
+                String(item?.artifact || "").trim().toUpperCase() === "PREDICTED_TYPE_FINAL"
+                || String(item?.objectName || "").trim().toUpperCase() === "INIT$_TB_PREDICTED_TYPE_FINAL"
+            ));
+            const relationMatrix = results.find((item) => (
+                String(item?.artifact || "").trim().toUpperCase() === "RELATION_PAIR"
+                || String(item?.objectName || "").trim().toUpperCase() === "INIT$_TB_RELATION_PAIR"
+            ));
+            const integratedRelationArtifacts = new Set(results.map((item) => String(item?.artifact || "").trim().toUpperCase()));
+            const integratedRelationObjects = new Set(results.map((item) => String(item?.objectName || "").trim().toUpperCase()));
+            const hasIntegratedRelationResults = (
+                (integratedRelationArtifacts.has("RELATION_PAIR") || integratedRelationObjects.has("INIT$_TB_RELATION_PAIR"))
+                && (integratedRelationArtifacts.has("CAT_CORR_PAIR") || integratedRelationObjects.has("INIT$_TB_CAT_CORR_PAIR"))
+                && (integratedRelationArtifacts.has("NUM_CORR_PAIR") || integratedRelationObjects.has("INIT$_TB_NUM_CORR_PAIR"))
+            );
+            const integratedCategoricalRule = this.isIntegratedRuleDiscoveryNode(node)
+                ? this.getPreferredIntegratedRuleResult(
+                    "CATEGORICAL",
+                    results.filter((item) => this.getIntegratedRuleDiscoveryGroup(item) === "CATEGORICAL")
+                )
+                : null;
+            const selected = runProfile && hasFinalProfile
+                ? runProfile
+                : (relationMatrix && hasIntegratedRelationResults ? relationMatrix : integratedCategoricalRule);
+            if (!selected) return false;
+            node.RESULT_KIND = String(selected.kind || "TABLE").toUpperCase();
+            node.RESULT_OWNER = String(selected.owner || node.RESULT_OWNER || "").toUpperCase();
+            node.RESULT_OBJECT_NAME = String(selected.objectName || "").toUpperCase();
+            return true;
+        },
+
+        clearSelectedNodeResults(nodes = []) {
+            if (!this.selectedResultObjectNames?.size) return;
+            (nodes || []).forEach((node) => {
+                const key = this.getNodeCacheKey(node?.FLOW_NODE_RUN_ID);
+                if (key) this.selectedResultObjectNames.delete(key);
+            });
+            this.persistSelectedResultObjectNames();
         },
 
         snapshotNodeResultCache() {
@@ -359,6 +456,8 @@
             this.currentExport = this.cloneCacheValue(cached.currentExport) || { filename: "integrated-result.csv", columns: [], rows: [] };
             panel.classList.remove("is-loading");
             panel.innerHTML = cached.html || emptyState("selectNodeForResult", "Select a node to view result details.");
+            this.prependNodeResultSwitcher();
+            this.renderNodes();
             return true;
         },
 
@@ -586,9 +685,14 @@
             this.selectedRun = this.runs.find((run) => Number(run.FLOW_RUN_ID) === Number(flowRunId)) || null;
             this.selectedNode = null;
             this.currentModelDetail = null;
+            this.lastResultTableJson = null;
             this.lastViolationSummary = null;
+            this.lastSymbolicRuleSummary = null;
+            this.lastSymbolicViolationSummary = null;
+            this.lastRelationNetworkSummary = null;
             this.currentExport = { filename: "integrated-result.csv", columns: [], rows: [] };
             this.nodeResultCache = new Map();
+            this.nodes = [];
             this.renderRuns();
             this.renderRunSummary();
             const nodeList = getContainerEl("#nodeList-${PAGE_CODE}");
@@ -598,6 +702,7 @@
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${API_PAGE_CODE}/runs/${flowRunId}/nodes`, { method: "GET", showLoading: false });
                 this.nodes = Array.isArray(json.data) ? json.data : [];
+                this.clearSelectedNodeResults(this.nodes);
                 this.renderNodes();
                 const firstResultNode = this.nodes.find((node) => node.RESULT_KIND !== "NONE") || this.nodes[0];
                 if (firstResultNode) await this.selectNode(firstResultNode.FLOW_NODE_RUN_ID);
@@ -851,6 +956,8 @@
 
         async selectNode(nodeRunId, page = 1, options = {}) {
             this.selectedNode = this.nodes.find((node) => Number(node.FLOW_NODE_RUN_ID) === Number(nodeRunId)) || null;
+            const restoredResult = this.applyRememberedNodeResult(this.selectedNode);
+            if (!restoredResult) this.applyDefaultNodeResult(this.selectedNode);
             this.resultPage = Math.max(1, Number(page || 1));
             this.renderNodes();
             const panel = getContainerEl("#resultPanel-${PAGE_CODE}");
@@ -890,6 +997,292 @@
             } else {
                 await this.loadResultTable(this.resultPage);
             }
+            this.prependNodeResultSwitcher();
+            this.snapshotNodeResultCache();
+        },
+
+        getSelectedNodeResultObjects() {
+            return Array.isArray(this.selectedNode?.RESULT_OBJECTS) ? this.selectedNode.RESULT_OBJECTS : [];
+        },
+
+        getNodeResultObject(node, objectName = "") {
+            const normalizedObjectName = String(objectName || "").trim().toUpperCase();
+            if (!normalizedObjectName) return null;
+            return (Array.isArray(node?.RESULT_OBJECTS) ? node.RESULT_OBJECTS : []).find(
+                (item) => String(item?.objectName || "").trim().toUpperCase() === normalizedObjectName
+            ) || null;
+        },
+
+        async activateNodeResultObject(node, objectName, options = {}) {
+            const selected = this.getNodeResultObject(node, objectName);
+            if (!selected) return false;
+            const selectedNodeRunId = Number(this.selectedNode?.FLOW_NODE_RUN_ID || 0);
+            const targetNodeRunId = Number(node?.FLOW_NODE_RUN_ID || 0);
+            const normalizedObjectName = String(selected.objectName || "").trim().toUpperCase();
+            if (selectedNodeRunId !== targetNodeRunId) {
+                const key = this.getNodeCacheKey(targetNodeRunId);
+                if (key) {
+                    if (!this.selectedResultObjectNames) this.selectedResultObjectNames = new Map();
+                    this.selectedResultObjectNames.set(key, normalizedObjectName);
+                    this.persistSelectedResultObjectNames();
+                }
+                await this.selectNode(targetNodeRunId, 1, options);
+                return true;
+            }
+            if (String(this.selectedNode?.RESULT_OBJECT_NAME || "").trim().toUpperCase() === normalizedObjectName) return false;
+            await this.selectNodeResultObject(selected);
+            return true;
+        },
+
+        isRelationNetworkResultObject(item = {}) {
+            return ["INIT$_TB_RELATION_NETWORK_EDGE", "INIT$_TB_RELATION_NETWORK_NODE"].includes(
+                String(item?.objectName || "").trim().toUpperCase()
+            );
+        },
+
+        getRelationNetworkResultObjects() {
+            return this.getSelectedNodeResultObjects().filter((item) => this.isRelationNetworkResultObject(item));
+        },
+
+        getIntegratedRuleDiscoveryGroup(item = {}) {
+            const artifact = String(item?.artifact || "").trim().toUpperCase();
+            const objectName = String(item?.objectName || "").trim().toUpperCase();
+            if (["ASSOCIATION_MODEL", "ASSOC_RULE_SUMMARY"].includes(artifact)
+                || objectName === "INIT$_TB_ASSOC_RULE_SUMMARY") {
+                return "CATEGORICAL";
+            }
+            if (["LASSO_FEATURE", "SYMBOLIC_RULE"].includes(artifact)
+                || ["INIT$_TB_LASSO_FEATURE", "INIT$_TB_SYMBOLIC_RULE"].includes(objectName)) {
+                return "CONTINUOUS";
+            }
+            return "";
+        },
+
+        isIntegratedRuleDiscoveryNode(node = this.selectedNode) {
+            if (this.nodeWorkContains(node, "INTEGRATED_RULE_DISCOVER")) return true;
+            const groups = new Set((Array.isArray(node?.RESULT_OBJECTS) ? node.RESULT_OBJECTS : [])
+                .map((item) => this.getIntegratedRuleDiscoveryGroup(item))
+                .filter(Boolean));
+            return groups.has("CATEGORICAL") && groups.has("CONTINUOUS");
+        },
+
+        getIntegratedRuleDiscoveryResults(group = "") {
+            const normalizedGroup = String(group || "").trim().toUpperCase();
+            if (!normalizedGroup || !this.isIntegratedRuleDiscoveryNode()) return [];
+            return this.getSelectedNodeResultObjects().filter(
+                (item) => this.getIntegratedRuleDiscoveryGroup(item) === normalizedGroup
+            );
+        },
+
+        getPreferredIntegratedRuleResult(group = "", results = []) {
+            const normalizedGroup = String(group || "").trim().toUpperCase();
+            const preferredArtifact = normalizedGroup === "CATEGORICAL" ? "ASSOCIATION_MODEL" : "SYMBOLIC_RULE";
+            return results.find((item) => String(item?.artifact || "").trim().toUpperCase() === preferredArtifact)
+                || (normalizedGroup === "CATEGORICAL"
+                    ? results.find((item) => String(item?.kind || "").trim().toUpperCase() === "MODEL")
+                    : null)
+                || results[results.length - 1]
+                || null;
+        },
+
+        getNodeResultSwitcherItems() {
+            const results = this.getSelectedNodeResultObjects();
+            if (this.isIntegratedRuleDiscoveryNode()) {
+                const activeName = String(this.selectedNode?.RESULT_OBJECT_NAME || "").trim().toUpperCase();
+                const activeResult = results.find((item) => String(item?.objectName || "").trim().toUpperCase() === activeName);
+                const activeGroup = this.getIntegratedRuleDiscoveryGroup(activeResult);
+                const insertedGroups = new Set();
+                return results.reduce((items, item) => {
+                    const group = this.getIntegratedRuleDiscoveryGroup(item);
+                    if (!group) {
+                        items.push(item);
+                        return items;
+                    }
+                    if (insertedGroups.has(group)) return items;
+                    const groupResults = results.filter((candidate) => this.getIntegratedRuleDiscoveryGroup(candidate) === group);
+                    const representative = group === "CATEGORICAL"
+                        ? this.getPreferredIntegratedRuleResult(group, groupResults)
+                        : (activeGroup === group
+                            ? activeResult
+                            : this.getPreferredIntegratedRuleResult(group, groupResults));
+                    items.push({ ...(representative || item), integratedRuleGroup: group });
+                    insertedGroups.add(group);
+                    return items;
+                }, []);
+            }
+            const networkResults = this.getRelationNetworkResultObjects();
+            if (networkResults.length < 2) return results;
+
+            const activeName = String(this.selectedNode?.RESULT_OBJECT_NAME || "").trim().toUpperCase();
+            const activeNetworkResult = networkResults.find((item) => String(item?.objectName || "").trim().toUpperCase() === activeName);
+            const integratedNetworkResult = {
+                ...(activeNetworkResult || networkResults.find((item) =>
+                    String(item?.objectName || "").trim().toUpperCase() === "INIT$_TB_RELATION_NETWORK_NODE"
+                ) || networkResults[0]),
+                integratedNetwork: true
+            };
+            let inserted = false;
+            return results.reduce((items, item) => {
+                if (!this.isRelationNetworkResultObject(item)) {
+                    items.push(item);
+                } else if (!inserted) {
+                    items.push(integratedNetworkResult);
+                    inserted = true;
+                }
+                return items;
+            }, []);
+        },
+
+        getNodeResultLabel(item = {}) {
+            if (item.integratedNetwork) return getText("Relation network");
+            if (item.integratedRuleGroup === "CATEGORICAL") return getText("Categorical automatic rules");
+            if (item.integratedRuleGroup === "CONTINUOUS") return getText("Continuous automatic rules");
+            const objectName = String(item.objectName || "").trim().toUpperCase();
+            const objectLabels = {
+                "INIT$_TB_RELATION_NETWORK_EDGE": "Relation network edges",
+                "INIT$_TB_RELATION_NETWORK_NODE": "Relation network nodes"
+            };
+            return getText(objectLabels[objectName] || item.label || item.artifact || objectName);
+        },
+
+        restoreResultScrollAfterRender(restoreScroll) {
+            if (typeof restoreScroll !== "function") return;
+            restoreScroll();
+            requestAnimationFrame(() => {
+                restoreScroll();
+                requestAnimationFrame(restoreScroll);
+            });
+        },
+
+        prependNodeResultSwitcher() {
+            const panel = getContainerEl(`#resultPanel-${PAGE_CODE}`);
+            const results = this.getNodeResultSwitcherItems();
+            if (!panel) return;
+            const activeName = String(this.selectedNode?.RESULT_OBJECT_NAME || "").toUpperCase();
+            if (results.length > 1 && !panel.querySelector(".anly-work-result-switcher")) {
+                const activeResult = this.getSelectedNodeResultObjects().find(
+                    (item) => String(item?.objectName || "").trim().toUpperCase() === activeName
+                );
+                const activeRuleGroup = this.getIntegratedRuleDiscoveryGroup(activeResult);
+                panel.insertAdjacentHTML("afterbegin", `
+                    <nav class="anly-work-result-switcher" aria-label="${this.escapeHtml(getText("Integrated result outputs"))}">
+                        <strong>${this.escapeHtml(getText("Integrated Results"))}</strong>
+                        <div>
+                            ${results.map((item, index) => {
+                                const name = String(item.objectName || "").toUpperCase();
+                                const label = this.getNodeResultLabel(item);
+                                const active = item.integratedNetwork
+                                    ? this.isRelationNetworkResultObject({ objectName: activeName })
+                                    : (item.integratedRuleGroup
+                                        ? item.integratedRuleGroup === activeRuleGroup
+                                        : name === activeName);
+                                const icon = item.integratedRuleGroup === "CATEGORICAL"
+                                    ? "fa-tags"
+                                    : (item.integratedRuleGroup === "CONTINUOUS"
+                                        ? "fa-wave-square"
+                                        : (String(item.kind).toUpperCase() === "MODEL" ? "fa-brain" : "fa-table"));
+                                return `<button type="button" class="${active ? "is-active" : ""}" onclick="${PAGE_CODE}.selectNodeResult(${index})">
+                                    <i class="fas ${icon}"></i>
+                                    <span>${this.escapeHtml(label)}</span>
+                                </button>`;
+                            }).join("")}
+                        </div>
+                    </nav>
+                `);
+            }
+            this.prependIntegratedRuleDetailSwitcher(panel);
+        },
+
+        prependIntegratedRuleDetailSwitcher(panel = getContainerEl(`#resultPanel-${PAGE_CODE}`)) {
+            if (!panel || panel.querySelector(".anly-work-result-detail-switcher") || !this.isIntegratedRuleDiscoveryNode()) return;
+            const activeName = String(this.selectedNode?.RESULT_OBJECT_NAME || "").trim().toUpperCase();
+            const activeResult = this.getSelectedNodeResultObjects().find(
+                (item) => String(item?.objectName || "").trim().toUpperCase() === activeName
+            );
+            const activeGroup = this.getIntegratedRuleDiscoveryGroup(activeResult);
+            const groupResults = this.getIntegratedRuleDiscoveryResults(activeGroup);
+            if (activeGroup === "CATEGORICAL") return;
+            if (!activeGroup || groupResults.length <= 1) return;
+            const html = `
+                <nav class="anly-work-result-detail-switcher" aria-label="${this.escapeHtml(getText("Automatic rule details"))}">
+                    <strong>${this.escapeHtml(getText("Automatic rule details"))}</strong>
+                    <div>
+                        ${groupResults.map((item) => {
+                            const objectName = String(item?.objectName || "").trim().toUpperCase();
+                            return `<button type="button" class="${objectName === activeName ? "is-active" : ""}" onclick="${PAGE_CODE}.selectIntegratedRuleDetail('${this.escapeJs(objectName)}')">
+                                <i class="fas ${String(item.kind).toUpperCase() === "MODEL" ? "fa-brain" : "fa-table"}"></i>
+                                <span>${this.escapeHtml(this.getNodeResultLabel(item))}</span>
+                            </button>`;
+                        }).join("")}
+                    </div>
+                </nav>
+            `;
+            const resultSwitcher = panel.querySelector(".anly-work-result-switcher");
+            if (resultSwitcher) resultSwitcher.insertAdjacentHTML("afterend", html);
+            else panel.insertAdjacentHTML("afterbegin", html);
+        },
+
+        async selectNodeResult(index) {
+            const results = this.getNodeResultSwitcherItems();
+            const selected = results[Number(index)];
+            if (!selected || !this.selectedNode) return;
+            const activeName = String(this.selectedNode.RESULT_OBJECT_NAME || "").trim().toUpperCase();
+            let resolved = selected;
+            if (selected.integratedNetwork) {
+                resolved = this.getRelationNetworkResultObjects().find((item) => String(item?.objectName || "").trim().toUpperCase() === activeName)
+                    || this.getRelationNetworkResultObjects().find((item) => String(item?.objectName || "").trim().toUpperCase() === "INIT$_TB_RELATION_NETWORK_NODE")
+                    || selected;
+            } else if (selected.integratedRuleGroup) {
+                const groupResults = this.getIntegratedRuleDiscoveryResults(selected.integratedRuleGroup);
+                resolved = selected.integratedRuleGroup === "CATEGORICAL"
+                    ? (this.getPreferredIntegratedRuleResult(selected.integratedRuleGroup, groupResults) || selected)
+                    : (groupResults.find((item) => String(item?.objectName || "").trim().toUpperCase() === activeName)
+                        || this.getPreferredIntegratedRuleResult(selected.integratedRuleGroup, groupResults)
+                        || selected);
+            }
+            await this.selectNodeResultObject(resolved);
+        },
+
+        async selectNodeResultObject(selected) {
+            if (!selected || !this.selectedNode) return;
+            this.selectedNode.RESULT_KIND = String(selected.kind || "TABLE").toUpperCase();
+            this.selectedNode.RESULT_OWNER = String(selected.owner || this.selectedNode.RESULT_OWNER || "").toUpperCase();
+            this.selectedNode.RESULT_OBJECT_NAME = String(selected.objectName || "").toUpperCase();
+            this.rememberSelectedNodeResult();
+            this.resultPage = 1;
+            this.currentModelDetail = null;
+            this.lastResultTableJson = null;
+            const restoreScroll = this.preserveResultScroll();
+            try {
+                if (this.selectedNode.RESULT_KIND === "MODEL") {
+                    await this.loadModelDetailSummary();
+                } else {
+                    await this.loadResultTable(1);
+                }
+                this.prependNodeResultSwitcher();
+                this.snapshotNodeResultCache();
+                this.renderNodes();
+            } finally {
+                this.restoreResultScrollAfterRender(restoreScroll);
+            }
+        },
+
+        async selectRelationNetworkDetail(objectName = "") {
+            const normalizedObjectName = String(objectName || "").trim().toUpperCase();
+            const selected = this.getRelationNetworkResultObjects().find(
+                (item) => String(item?.objectName || "").trim().toUpperCase() === normalizedObjectName
+            );
+            if (!selected) return;
+            if (String(this.selectedNode?.RESULT_OBJECT_NAME || "").trim().toUpperCase() === normalizedObjectName) return;
+            await this.selectNodeResultObject(selected);
+        },
+
+        async selectIntegratedRuleDetail(objectName = "") {
+            const selected = this.getNodeResultObject(this.selectedNode, objectName);
+            if (!selected || !this.getIntegratedRuleDiscoveryGroup(selected)) return;
+            if (String(this.selectedNode?.RESULT_OBJECT_NAME || "").trim().toUpperCase()
+                === String(selected.objectName || "").trim().toUpperCase()) return;
+            await this.selectNodeResultObject(selected);
         },
 
         async openViolationForRule(ruleId, conditionCount = "ALL") {
@@ -912,15 +1305,19 @@
                 page: 1,
                 pageSize: 20
             };
-            if (!this.selectedNode || Number(this.selectedNode.FLOW_NODE_RUN_ID) !== Number(violationNode.FLOW_NODE_RUN_ID)) {
-                await this.selectNode(violationNode.FLOW_NODE_RUN_ID, 1, { preserveViolationRuleFilter: true, forceRefresh: true });
-                return;
-            }
+            const activated = await this.activateNodeResultObject(
+                violationNode,
+                "INIT$_TB_RULE_VIOLATION_RESULT",
+                { preserveViolationRuleFilter: true, forceRefresh: true }
+            );
+            if (activated) return;
             await this.loadResultTable(1);
         },
 
         findViolationNode() {
-            return (this.nodes || []).find((node) => this.isRuleViolationNode(node)) || null;
+            return (this.nodes || []).find((node) =>
+                this.isRuleViolationNode(node) || this.getNodeResultObject(node, "INIT$_TB_RULE_VIOLATION_RESULT")
+            ) || null;
         },
 
         async openSymbolicViolationForRule(ruleId) {
@@ -940,15 +1337,19 @@
                 page: 1,
                 pageSize: 20
             };
-            if (!this.selectedNode || Number(this.selectedNode.FLOW_NODE_RUN_ID) !== Number(violationNode.FLOW_NODE_RUN_ID)) {
-                await this.selectNode(violationNode.FLOW_NODE_RUN_ID, 1, { preserveViolationRuleFilter: true, forceRefresh: true });
-                return;
-            }
+            const activated = await this.activateNodeResultObject(
+                violationNode,
+                "INIT$_TB_SYMBOLIC_RULE_VIOLATION",
+                { preserveViolationRuleFilter: true, forceRefresh: true }
+            );
+            if (activated) return;
             await this.loadResultTable(1);
         },
 
         findSymbolicViolationNode() {
-            return (this.nodes || []).find((node) => this.isSymbolicViolationNode(node)) || null;
+            return (this.nodes || []).find((node) =>
+                this.isSymbolicViolationNode(node) || this.getNodeResultObject(node, "INIT$_TB_SYMBOLIC_RULE_VIOLATION")
+            ) || null;
         },
 
         buildResultTableParams(node = this.selectedNode, page = 1) {
@@ -999,6 +1400,10 @@
             }
             if (this.isLassoFeatureNode(node)) {
                 const lassoFilter = this.getActiveLassoGridFilter();
+                const minR2Score = Number(this.getNodeActualAnalysisParamValue("P_MIN_R2_SCORE", 0.7, node));
+                const maxAutoTargets = Number(this.getNodeActualAnalysisParamValue("P_MAX_AUTO_TARGETS", 10, node));
+                const effectiveTargetDefault = this.isIntegratedRuleDiscoveryNode(node) ? "(auto)" : "";
+                const targetColumn = String(this.getNodeActualAnalysisParamValue("P_TARGET_COLUMN", effectiveTargetDefault, node) || "").trim().toLowerCase();
                 if (lassoFilter.direction && lassoFilter.direction !== "ALL") {
                     params.set("lassoDirection", lassoFilter.direction);
                 }
@@ -1008,6 +1413,9 @@
                 if (lassoFilter.featureName) {
                     params.set("lassoFeatureName", lassoFilter.featureName);
                 }
+                params.set("lassoMinR2Score", String(Number.isFinite(minR2Score) ? minR2Score : 0.7));
+                params.set("lassoMaxAutoTargets", String(Number.isFinite(maxAutoTargets) ? Math.max(1, Math.trunc(maxAutoTargets)) : 10));
+                params.set("lassoAutoTargetYn", targetColumn === "(auto)" ? "Y" : "N");
             }
             if (this.isViolationNode(node)) {
                 const filters = this.violationRuleFilters || {};
@@ -1249,6 +1657,7 @@
                 ${this.renderGrid(json.columns || [], json.data || [], json)}
                 ${this.renderResultPager(json.page, json.pageSize, json.total, `${PAGE_CODE}.loadModelView('${viewType}',`)}
             `;
+            this.prependNodeResultSwitcher();
             this.snapshotNodeResultCache();
         },
 
@@ -1256,6 +1665,7 @@
             const resultLayout = this.getModelResultLayout(this.selectedNode, json);
             const renderer = typeof this[resultLayout.renderer] === "function" ? resultLayout.renderer : "renderAssociationModelAnalysis";
             this[renderer](json, activeTab, resultLayout);
+            this.prependNodeResultSwitcher();
         },
 
         renderAssociationModelAnalysis(json = this.currentModelDetail, activeTab = "readable", resultLayout = this.getModelResultLayout(this.selectedNode, json)) {
@@ -1436,7 +1846,7 @@
                 `;
             }
             const overview = summary.overview || {};
-            const rules = this.buildSummaryRuleCards(summary.rules || []);
+            const rules = this.buildSummaryRuleCards(summary.rules || [], summary);
             const totalPages = Math.max(1, Math.ceil(Number(summary.total || 0) / Number(summary.pageSize || 12)));
             const conditionColumnFilter = this.ruleSummaryFilters.conditionColumn === "ALL" ? "" : this.ruleSummaryFilters.conditionColumn;
             const conditionItems = [
@@ -1738,7 +2148,7 @@
             };
         },
 
-        buildSummaryRuleCards(rows = []) {
+        buildSummaryRuleCards(rows = [], summary = {}) {
             return (rows || []).map((row, index) => {
                 const conditionText = this.resolveRuleSideText(row.CONDITION_TEXT || "");
                 const resultText = this.resolveRuleSideText(row.RESULT_TEXT || "");
@@ -1761,6 +2171,8 @@
                 const expectedViolationRate = this.formatExpectedViolationRate(row.RULE_CONFIDENCE);
                 const exceptionCount = Math.max(0, conditionTotal - supportCount);
                 const rawRuleId = String(row.RULE_ID || index + 1);
+                const conditionClusters = Array.isArray(row.CONDITION_CLUSTERS) ? row.CONDITION_CLUSTERS : [];
+                const resultClusters = Array.isArray(row.RESULT_CLUSTERS) ? row.RESULT_CLUSTERS : [];
                 const note = this.describeReadableRuleSentence({
                     conditionText,
                     thenText,
@@ -1791,7 +2203,11 @@
                         { label: getText("Exception count"), value: this.formatNumber(exceptionCount) },
                         { label: "lift", value: liftText }
                     ],
-                    conditionCount: Number(row.CONDITION_COUNT || 0)
+                    conditionCount: Number(row.CONDITION_COUNT || 0),
+                    clusterScope: String(row.CLUSTER_SCOPE || "UNCLUSTERED").toUpperCase(),
+                    conditionClusters,
+                    resultClusters,
+                    clusterContext: summary.clusterContext || {}
                 };
             });
         },
@@ -1830,7 +2246,7 @@
         },
 
         buildRuleSummaryExport(node = {}, json = {}) {
-            const cards = this.buildSummaryRuleCards(json.rules || []);
+            const cards = this.buildSummaryRuleCards(json.rules || [], json);
             const rows = cards.map((card) => {
                 const metricMap = {};
                 (card.metrics || []).forEach((metric) => {
@@ -1885,6 +2301,21 @@
             return modelType || "Oracle ML Model View";
         },
 
+        renderAprioriClusterReference(rule = {}) {
+            const clusterItems = [
+                ...(Array.isArray(rule.conditionClusters) ? rule.conditionClusters : []),
+                ...(Array.isArray(rule.resultClusters) ? rule.resultClusters : [])
+            ];
+            if (!clusterItems.length) return "";
+            const clusterIds = [...new Set(clusterItems.map((item) => item?.CLUSTER_ID)
+                .filter((clusterId) => clusterId !== undefined && clusterId !== null && clusterId !== ""))];
+            return this.renderColumnClusterBadge(
+                clusterIds.length ? clusterIds.join(", ") : null,
+                rule.clusterScope,
+                getText("Apriori generation was not hard-filtered by cluster; this is reference lineage.")
+            );
+        },
+
         renderReadableRuleCard(rule) {
             const qualityClass = rule.mappingLevel === "mapped" ? "is-mapped" : "is-limited";
             const plainRuleId = rule.rawRuleId || this.getPlainRuleId(rule.ruleId);
@@ -1900,6 +2331,7 @@
                         </span>
                         <span class="anly-work-rule-card-actions">
                             <em>${this.escapeHtml(rule.mappingLabel)}</em>
+                            ${this.renderAprioriClusterReference(rule)}
                             ${rule.canOpenViolation
                                 ? `<button type="button" class="anly-work-rule-open-link" title="${this.escapeHtml(getText("Search violation detection results with this RULE ID"))}" onclick="${PAGE_CODE}.openViolationForRule('${this.escapeJs(plainRuleId)}', '${this.escapeJs(rule.conditionCount)}')">${this.escapeHtml(getText("View violations"))}</button>`
                                 : ""}
@@ -2186,6 +2618,7 @@
                     ${this.renderResultTableBody(json)}
                 </div>
             `;
+            this.prependNodeResultSwitcher();
             this.snapshotNodeResultCache();
         },
 
@@ -2283,6 +2716,7 @@
             if (!panel) return;
             panel.classList.remove("is-loading");
             panel.innerHTML = `<div class="table-error">${this.escapeHtml(message)}</div>`;
+            this.prependNodeResultSwitcher();
         },
 
         renderResultTableProfile(columns, rows) {
@@ -2646,7 +3080,8 @@
                 title: getText("{label} violation row query", { label })
             };
             this.renderViolationSqlPopup();
-            window.setTimeout(() => this.executeViolationSql(1), 0);
+            const requestId = ++this.violationSqlRequestId;
+            window.setTimeout(() => this.executeViolationSql(1, requestId), 0);
         },
 
         getViolationRuleDetail(kind = "all", value = "") {
@@ -2875,8 +3310,7 @@
             const ruleTable = this.normalizeIdentifierParam(this.getNodeParamValue(node, [
                 "P_RULE_TABLE_NAME",
                 "pRuleTableName",
-                "ruleTableName",
-                "INIT$PreResultTable"
+                "ruleTableName"
             ], "INIT$_TB_SYMBOLIC_RULE")) || "INIT$_TB_SYMBOLIC_RULE";
             const caseIdColumn = this.normalizeIdentifierParam(this.getNodeParamValue(node, [
                 "P_CASE_ID_COLUMN_NAME",
@@ -2920,6 +3354,7 @@
             const nextMode = String(mode || "").toUpperCase() === "LIVE" ? "LIVE" : "SAVED";
             const state = this.violationSql || {};
             if (!state.sql || state.mode === nextMode) return;
+            const requestId = ++this.violationSqlRequestId;
             if (nextMode === "SAVED") {
                 const sql = this.createViolationSql(state.kind || "all", state.value || "");
                 if (!sql) return;
@@ -2933,7 +3368,7 @@
                     rows: []
                 };
                 this.renderViolationSqlPopup();
-                window.setTimeout(() => this.executeViolationSql(1), 0);
+                window.setTimeout(() => this.executeViolationSql(1, requestId), 0);
                 return;
             }
             if (!state.supportsRealtime) {
@@ -2942,6 +3377,15 @@
             }
             const lookupSql = this.createRealtimeViolationSqlLookup(state.kind || "all", state.value || "");
             if (!lookupSql) return;
+            this.violationSql = {
+                ...state,
+                mode: "LIVE",
+                page: 1,
+                total: 0,
+                columns: [],
+                rows: []
+            };
+            this.renderViolationSqlPopup();
             const message = document.getElementById(`${PAGE_ID_PREFIX}ViolationSqlMessage`);
             if (message) message.textContent = getText("Generating realtime violation lookup SQL...");
             try {
@@ -2954,6 +3398,7 @@
                     },
                     showLoading: false
                 });
+                if (requestId !== this.violationSqlRequestId) return;
                 const row = (json.data || [])[0] || {};
                 const liveSql = row.LIVE_SQL || row.live_sql || "";
                 if (!String(liveSql || "").trim()) {
@@ -2969,8 +3414,9 @@
                     rows: []
                 };
                 this.renderViolationSqlPopup();
-                window.setTimeout(() => this.executeViolationSql(1), 0);
+                window.setTimeout(() => this.executeViolationSql(1, requestId), 0);
             } catch (error) {
+                if (requestId !== this.violationSqlRequestId) return;
                 if (message) message.textContent = error.message || getText("Failed to generate realtime lookup SQL.");
             }
         },
@@ -3245,6 +3691,7 @@
         },
 
         closeViolationSqlPopup() {
+            this.violationSqlRequestId += 1;
             const popup = document.getElementById(`${PAGE_ID_PREFIX}ViolationSqlPopup`);
             if (popup) popup.remove();
         },
@@ -3256,9 +3703,11 @@
             }
         },
 
-        async executeViolationSql(page = 1) {
+        async executeViolationSql(page = 1, requestId = null) {
             const editor = document.getElementById(`${PAGE_ID_PREFIX}ViolationSqlEditor`);
             if (!editor) return;
+            const activeRequestId = requestId === null ? ++this.violationSqlRequestId : requestId;
+            if (activeRequestId !== this.violationSqlRequestId) return;
             const pageSize = Number(document.getElementById(`${PAGE_ID_PREFIX}ViolationSqlPageSize`)?.value || this.violationSql.pageSize || 50);
             const message = document.getElementById(`${PAGE_ID_PREFIX}ViolationSqlMessage`);
             if (message) message.textContent = getText("Querying...");
@@ -3272,6 +3721,7 @@
                     },
                     showLoading: false
                 });
+                if (activeRequestId !== this.violationSqlRequestId) return;
                 this.violationSql = {
                     ...(this.violationSql || {}),
                     sql: editor.value || "",
@@ -3283,6 +3733,7 @@
                 };
                 this.renderViolationSqlPopup();
             } catch (error) {
+                if (activeRequestId !== this.violationSqlRequestId) return;
                 if (message) message.textContent = error.message || getText("SQL query failed.");
             }
         },
@@ -3413,16 +3864,19 @@
             const relationTypes = this.sortRelationTypes(Array.isArray(summary.relationTypes) ? summary.relationTypes : []);
             const validTypeSet = new Set(relationTypes.map((item) => this.normalizeRelationType(item.RELATION_TYPE)).filter(Boolean));
             const selectedType = validTypeSet.has(this.relationSummaryFilter) ? this.relationSummaryFilter : "ALL";
-            const selectedTypeInfo = relationTypes.find((item) => this.normalizeRelationType(item.RELATION_TYPE) === selectedType) || null;
-            const topPairs = this.getRepresentativeColumnPairs(this.sortRelationPairs(Array.isArray(summary.topPairs) ? summary.topPairs : []));
-            const filteredPairs = selectedType === "ALL"
-                ? topPairs
-                : topPairs.filter((pair) => this.normalizeRelationType(pair.RELATION_TYPE) === selectedType);
-            const showNoRelationCard = selectedType !== "ALL"
-                && selectedTypeInfo
-                && Number(selectedTypeInfo.PAIR_COUNT || 0) <= 0
-                && Number(selectedTypeInfo.TOTAL_PAIR_COUNT || 0) > 0;
-            const columns = this.getRelationDetailColumns(summary, selectedType, filteredPairs);
+            const selectedPassYn = ["Y", "N"].includes(String(this.relationPairFilter?.passYn || "").toUpperCase())
+                ? String(this.relationPairFilter.passYn).toUpperCase()
+                : "ALL";
+            const topPairs = this.getRepresentativeColumnPairs(this.sortRelationPairs([
+                ...(Array.isArray(summary.topPairs) ? summary.topPairs : []),
+                ...(Array.isArray(summary.rejectedPairs) ? summary.rejectedPairs : [])
+            ]));
+            const filteredPairs = topPairs.filter((pair) =>
+                (selectedType === "ALL" || this.normalizeRelationType(pair.RELATION_TYPE) === selectedType)
+                && (selectedPassYn === "ALL" || String(pair.PASS_YN || "N").toUpperCase() === selectedPassYn)
+            );
+            const passCriteria = this.getActualRelationPassCriteria();
+            const columns = this.getRelationDetailColumns(summary, selectedType, filteredPairs, selectedPassYn);
             const visibleColumns = columns.slice(0, 80);
             const hiddenCount = Math.max(0, columns.length - visibleColumns.length);
             return `
@@ -3443,17 +3897,50 @@
                         </div>
                     </header>
                     <p>${this.escapeHtml(getText("Passed relation pairs total {pairCount} out of {totalPairCount}.", { pairCount: this.formatNumber(summary.associatedPairCount), totalPairCount: this.formatNumber(summary.totalPairCount) }))}</p>
+                    <div class="anly-work-relation-pass-filter" role="group" aria-label="${this.escapeHtml(getText("PASS_YN filter"))}">
+                        <button type="button" class="${selectedPassYn === "ALL" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectRelationPassFilter('ALL')">
+                            <b>${this.formatNumber(summary.totalPairCount)}</b><small>${this.escapeHtml(getText("All pairs"))}</small>
+                        </button>
+                        <button type="button" class="${selectedPassYn === "Y" ? "is-active is-pass" : "is-pass"}" onclick="${PAGE_CODE}.selectRelationPassFilter('Y')">
+                            <b>${this.formatNumber(summary.associatedPairCount)}</b><small>${this.escapeHtml(getText("Passed pairs (Y)"))}</small>
+                        </button>
+                        <button type="button" class="${selectedPassYn === "N" ? "is-active is-rejected" : "is-rejected"}" onclick="${PAGE_CODE}.selectRelationPassFilter('N')">
+                            <b>${this.formatNumber(summary.rejectedPairCount)}</b><small>${this.escapeHtml(getText("Below criteria (N)"))}</small>
+                        </button>
+                    </div>
+                    <div class="anly-work-relation-criteria-note">
+                        <strong>${this.escapeHtml(getText("Actual run pass criteria"))}</strong>
+                        <span>CRAMER &gt; ${this.formatDecimal(passCriteria.minCramer)}</span>
+                        <span>PEARSON ≥ ${this.formatDecimal(passCriteria.minAbsCorr)}</span>
+                        <span>SPEARMAN ≥ ${this.formatDecimal(passCriteria.minMetric)}</span>
+                        <span>ETA ≥ ${this.formatDecimal(passCriteria.minEta)}</span>
+                        <span>p &lt; ${this.formatDecimal(passCriteria.minPvalue)}</span>
+                        <span>n ≥ ${this.formatNumber(passCriteria.minRows)}</span>
+                    </div>
                     ${relationTypes.length ? `
                         <div class="anly-work-relation-type-grid">
                             ${relationTypes.slice(0, 8).map((item) => {
                                 const normalizedType = this.normalizeRelationType(item.RELATION_TYPE);
-                                const totalPairCount = item.TOTAL_PAIR_COUNT ?? item.PAIR_COUNT;
-                                const maxMetricValue = item.MAX_METRIC_VALUE ?? item.MAX_ANY_METRIC_VALUE;
+                                const passedPairCount = Number(item.PAIR_COUNT || 0);
+                                const totalPairCount = Number(item.TOTAL_PAIR_COUNT ?? item.PAIR_COUNT ?? 0);
+                                const rejectedPairCount = Math.max(0, totalPairCount - passedPairCount);
+                                const filteredPairCount = selectedPassYn === "Y"
+                                    ? passedPairCount
+                                    : (selectedPassYn === "N" ? rejectedPairCount : totalPairCount);
+                                const filteredCountLabel = selectedPassYn === "Y"
+                                    ? getText("Passed pairs (Y)")
+                                    : (selectedPassYn === "N" ? getText("Below criteria (N)") : getText("All pairs"));
+                                const maxMetricValue = selectedPassYn === "Y"
+                                    ? item.MAX_METRIC_VALUE
+                                    : item.MAX_ANY_METRIC_VALUE;
+                                const maxMetricText = selectedPassYn === "N"
+                                    ? ""
+                                    : ` · ${this.escapeHtml(getText("max"))} ${this.formatDecimal(maxMetricValue)}`;
                                 return `
                                     <button type="button" class="${selectedType === normalizedType ? "is-active" : ""}" onclick="${PAGE_CODE}.selectRelationSummaryType('${this.escapeJs(normalizedType)}')">
-                                        <b>${this.formatNumber(item.PAIR_COUNT)} / ${this.formatNumber(totalPairCount)}</b>
+                                        <b>${this.formatNumber(filteredPairCount)}</b>
                                         <small>${this.escapeHtml(this.getRelationTypeLabel(item.RELATION_TYPE))}</small>
-                                        <em>${this.escapeHtml(getText("passed / total"))} · ${this.escapeHtml(getText("max"))} ${this.formatDecimal(maxMetricValue)}</em>
+                                        <em>${this.escapeHtml(filteredCountLabel)}${maxMetricText}</em>
                                     </button>
                                 `;
                             }).join("")}
@@ -3473,13 +3960,12 @@
                             </div>
                         </div>
                         <div>
-                            <strong>${this.escapeHtml(getText("Passed relation pairs"))}</strong>
-                            ${filteredPairs.length || showNoRelationCard ? `
+                            <strong>${this.escapeHtml(selectedPassYn === "Y" ? getText("Passed relation pairs") : (selectedPassYn === "N" ? getText("Pairs below the pass criteria") : getText("All relation pairs")))}</strong>
+                            ${filteredPairs.length ? `
                                 <div class="anly-work-relation-pair-list">
-                                    ${filteredPairs.map((pair) => this.renderRelationSummaryPairRow(pair, summary)).join("")}
-                                    ${showNoRelationCard ? this.renderRelationNoPairRow(selectedType, selectedTypeInfo) : ""}
+                                    ${filteredPairs.map((pair) => this.renderRelationSummaryPairRow(pair, summary, passCriteria)).join("")}
                                 </div>
-                            ` : `<div class="table-empty">${this.escapeHtml(getText("No passed relation pairs for the selected type."))}</div>`}
+                            ` : `<div class="table-empty">${this.escapeHtml(getText("No relation pairs for the selected filter."))}</div>`}
                         </div>
                     </div>
                 </section>
@@ -3489,7 +3975,20 @@
         async selectRelationSummaryType(type) {
             const nextType = this.normalizeRelationType(type);
             this.relationSummaryFilter = this.relationSummaryFilter === nextType ? "ALL" : nextType;
-            this.relationPairFilter = { colA: "", colB: "" };
+            this.relationPairFilter = { passYn: this.relationPairFilter?.passYn || "" };
+            this.refreshTableResultSummary({ preserveScroll: true });
+            await this.refreshResultGridOnly(1);
+        },
+
+        async selectRelationPassFilter(passYn = "ALL") {
+            const normalized = ["Y", "N"].includes(String(passYn || "").toUpperCase())
+                ? String(passYn).toUpperCase()
+                : "ALL";
+            this.relationPairFilter = {
+                colA: "",
+                colB: "",
+                passYn: normalized === "ALL" ? "" : normalized
+            };
             this.refreshTableResultSummary({ preserveScroll: true });
             await this.refreshResultGridOnly(1);
         },
@@ -3576,7 +4075,17 @@
             return activeFilter;
         },
 
-        getRelationDetailColumns(summary = {}, selectedType = "ALL", pairs = []) {
+        getRelationDetailColumns(summary = {}, selectedType = "ALL", pairs = [], selectedPassYn = "Y") {
+            if (selectedPassYn !== "Y") {
+                const pairColumns = [];
+                pairs.forEach((pair) => {
+                    [pair.COL_A, pair.COL_B].forEach((column) => {
+                        const text = String(column || "").trim();
+                        if (text && !pairColumns.includes(text)) pairColumns.push(text);
+                    });
+                });
+                if (pairColumns.length) return pairColumns.sort((a, b) => a.localeCompare(b, "ko-KR", { numeric: true }));
+            }
             const relationTypeColumns = Array.isArray(summary.relationTypeColumns) ? summary.relationTypeColumns : [];
             const selectedColumns = [];
             relationTypeColumns.forEach((item) => {
@@ -3601,18 +4110,74 @@
             return Array.isArray(summary.associatedColumns) ? summary.associatedColumns : [];
         },
 
-        renderRelationSummaryPairRow(pair, summary) {
+        renderRelationSummaryPairRow(pair, summary, criteria = {}) {
             const colA = String(pair.COL_A || "").trim();
             const colB = String(pair.COL_B || "").trim();
             const active = this.isColumnPairFilterActive(this.relationPairFilter, colA, colB);
+            const passYn = String(pair.PASS_YN || "N").toUpperCase() === "Y" ? "Y" : "N";
+            const failureReasons = passYn === "N" ? this.getRelationFailureReasons(pair, criteria) : [];
             return `
-                <button type="button" class="${active ? "is-active" : ""}" data-anly-filter="relation-pair" data-col-a="${this.escapeHtml(colA)}" data-col-b="${this.escapeHtml(colB)}" onclick="${PAGE_CODE}.selectRelationPairFilter('${this.escapeJs(colA)}', '${this.escapeJs(colB)}', '${this.escapeJs(this.normalizeRelationType(pair.RELATION_TYPE))}')">
+                <button type="button" class="${active ? "is-active" : ""} ${passYn === "N" ? "is-no-relation" : "is-passed-relation"}" data-anly-filter="relation-pair" data-col-a="${this.escapeHtml(colA)}" data-col-b="${this.escapeHtml(colB)}" onclick="${PAGE_CODE}.selectRelationPairFilter('${this.escapeJs(colA)}', '${this.escapeJs(colB)}', '${this.escapeJs(this.normalizeRelationType(pair.RELATION_TYPE))}', '${passYn}')">
                     <span class="anly-work-relation-pair-col is-left">${this.renderColumnAwareCell(colA, summary)}</span>
                     <i aria-hidden="true">↔</i>
                     <span class="anly-work-relation-pair-col is-right">${this.renderColumnAwareCell(colB, summary)}</span>
-                    <small>${this.escapeHtml(this.getRelationTypeLabel(pair.RELATION_TYPE))} · ${this.escapeHtml(pair.METRIC_NAME || "")} ${this.formatDecimal(pair.METRIC_VALUE)} · |metric| ${this.formatDecimal(pair.ABS_METRIC_VALUE)}</small>
+                    <small><b>PASS_YN=${passYn}</b> · ${this.escapeHtml(this.getRelationTypeLabel(pair.RELATION_TYPE))} · ${this.escapeHtml(pair.METRIC_NAME || "")} ${this.formatDecimal(pair.METRIC_VALUE)} · |metric| ${this.formatDecimal(pair.ABS_METRIC_VALUE)} · p ${pair.P_VALUE === null || pair.P_VALUE === undefined ? "-" : this.formatDecimal(pair.P_VALUE)} · n ${this.formatNumber(pair.ROW_COUNT)}${failureReasons.length ? `<em>${this.escapeHtml(failureReasons.join(" · "))}</em>` : ""}</small>
                 </button>
             `;
+        },
+
+        getActualRelationPassCriteria(node = this.selectedNode) {
+            const readNumber = (name, fallback) => {
+                const value = Number(this.getNodeActualAnalysisParamValue(name, fallback, node));
+                return Number.isFinite(value) ? value : fallback;
+            };
+            return {
+                minMetric: readNumber("P_MIN_METRIC", 0.65),
+                minCramer: readNumber("P_MIN_CRAMER", 0.3),
+                minAbsCorr: readNumber("P_MIN_ABS_CORR", 0.6),
+                minEta: readNumber("P_MIN_ETA", 0.65),
+                minPvalue: readNumber("P_MIN_PVALUE", 0.05),
+                minRows: Math.max(4, Math.trunc(readNumber("P_MIN_ROWS", 30)))
+            };
+        },
+
+        getRelationFailureReasons(pair = {}, criteria = {}) {
+            const reasons = [];
+            const relationType = this.normalizeRelationType(pair.RELATION_TYPE);
+            const metricName = String(pair.METRIC_NAME || "").trim().toUpperCase();
+            const metricValue = Number(pair.ABS_METRIC_VALUE);
+            const pValue = pair.P_VALUE === null || pair.P_VALUE === undefined ? null : Number(pair.P_VALUE);
+            const rowCount = Number(pair.ROW_COUNT || 0);
+            let metricThreshold = Number(criteria.minMetric ?? 0.65);
+            let strictMetric = false;
+            if (relationType === "CATEGORICAL_CATEGORICAL") {
+                metricThreshold = Number(criteria.minCramer ?? 0.3);
+                strictMetric = true;
+            } else if (relationType === "NUMERIC_NUMERIC" && metricName === "PEARSON_R") {
+                metricThreshold = Number(criteria.minAbsCorr ?? 0.6);
+            } else if (relationType === "CATEGORICAL_NUMERIC") {
+                metricThreshold = Number(criteria.minEta ?? 0.65);
+            }
+            if (!Number.isFinite(metricValue) || (strictMetric ? metricValue <= metricThreshold : metricValue < metricThreshold)) {
+                reasons.push(getText("Metric below threshold: {value} {operator} {threshold}", {
+                    value: Number.isFinite(metricValue) ? this.formatDecimal(metricValue) : "-",
+                    operator: strictMetric ? "≤" : "<",
+                    threshold: this.formatDecimal(metricThreshold)
+                }));
+            }
+            if (relationType !== "CATEGORICAL_NUMERIC" && (pValue === null || !Number.isFinite(pValue) || pValue >= Number(criteria.minPvalue ?? 0.05))) {
+                reasons.push(getText("P-value threshold not met: {value} >= {threshold}", {
+                    value: pValue === null || !Number.isFinite(pValue) ? "-" : this.formatDecimal(pValue),
+                    threshold: this.formatDecimal(criteria.minPvalue ?? 0.05)
+                }));
+            }
+            if (relationType !== "CATEGORICAL_CATEGORICAL" && (!Number.isFinite(rowCount) || rowCount < Number(criteria.minRows ?? 30))) {
+                reasons.push(getText("Insufficient valid rows: {value} < {threshold}", {
+                    value: Number.isFinite(rowCount) ? this.formatNumber(rowCount) : "-",
+                    threshold: this.formatNumber(criteria.minRows ?? 30)
+                }));
+            }
+            return reasons.length ? reasons : [getText("Stored as PASS_YN=N by the analysis procedure.")];
         },
 
         renderRelationNoPairRow(relationType, typeInfo = {}) {
@@ -3633,15 +4198,16 @@
             `;
         },
 
-        async selectRelationPairFilter(colA = "", colB = "", relationType = "ALL") {
+        async selectRelationPairFilter(colA = "", colB = "", relationType = "ALL", passYn = "") {
             const nextA = String(colA || "").trim();
             const nextB = String(colB || "").trim();
             if (!nextA || !nextB || this.isColumnPairFilterActive(this.relationPairFilter, nextA, nextB)) {
-                this.relationPairFilter = { colA: "", colB: "" };
+                this.relationPairFilter = { passYn: this.relationPairFilter?.passYn || "" };
             } else {
-                this.relationPairFilter = { colA: nextA, colB: nextB };
+                this.relationPairFilter = { colA: nextA, colB: nextB, passYn: ["Y", "N"].includes(passYn) ? passYn : "" };
             }
             this.updateResultFilterButtonStates();
+            this.refreshTableResultSummary({ preserveScroll: true });
             await this.refreshResultGridOnly(1);
         },
 
@@ -3653,6 +4219,7 @@
                 ? { colA: "", colB: "" }
                 : { colA: "", colB: "", relationType: normalizedType, passYn: "N", noRelation: true };
             this.updateResultFilterButtonStates();
+            this.refreshTableResultSummary({ preserveScroll: true });
             await this.refreshResultGridOnly(1);
         },
 
@@ -3698,6 +4265,7 @@
                             <span>${this.escapeHtml(getText("Network Graph"))}</span>
                         </button>
                     </div>
+                    ${this.renderRelationNetworkDetailSwitcher()}
                     ${clusters.length ? `
                         <div class="anly-work-network-cluster-grid">
                             ${clusters.map((cluster) => {
@@ -3744,6 +4312,27 @@
                         </div>
                     </div>
                 </section>
+            `;
+        },
+
+        renderRelationNetworkDetailSwitcher() {
+            const results = this.getRelationNetworkResultObjects();
+            if (results.length < 2) return "";
+            const activeName = String(this.selectedNode?.RESULT_OBJECT_NAME || "").trim().toUpperCase();
+            return `
+                <nav class="anly-work-network-detail-switcher" aria-label="${this.escapeHtml(getText("Network detail data"))}">
+                    <strong>${this.escapeHtml(getText("Network detail data"))}</strong>
+                    <div>
+                        ${results.map((item) => {
+                            const objectName = String(item?.objectName || "").trim().toUpperCase();
+                            const active = objectName === activeName;
+                            return `<button type="button" class="${active ? "is-active" : ""}" onclick="${PAGE_CODE}.selectRelationNetworkDetail('${this.escapeJs(objectName)}')">
+                                <i class="fas fa-${objectName.endsWith("_NODE") ? "circle" : "link"}"></i>
+                                <span>${this.escapeHtml(this.getNodeResultLabel(item))}</span>
+                            </button>`;
+                        }).join("")}
+                    </div>
+                </nav>
             `;
         },
 
@@ -4551,11 +5140,67 @@
             document.addEventListener("mouseup", stop);
         },
 
+        getActualClusterUsage(node = this.selectedNode) {
+            const runOutput = this.normalizeObject(node?.RUN_OUTPUT || node?.runOutput);
+            const apiResult = this.normalizeObject(runOutput?.apiResult || runOutput?.API_RESULT);
+            const direct = this.normalizeObject(apiResult?.clusterUsage);
+            if (Object.keys(direct).length) return direct;
+            const results = Array.isArray(apiResult?.results) ? apiResult.results : [];
+            const nested = results
+                .map((item) => this.normalizeObject(item?.clusterUsage))
+                .find((item) => Object.keys(item).length);
+            return nested || {};
+        },
+
+        getClusterNode(summary = {}, columnName = "") {
+            const normalized = String(columnName || "").trim().toUpperCase();
+            return this.normalizeObject(summary?.clusterContext?.nodes?.[normalized]);
+        },
+
+        getClusterScopeLabel(scope = "") {
+            const labels = {
+                SAME_CLUSTER: getText("Same cluster"),
+                CROSS_CLUSTER: getText("Cross cluster"),
+                PARTIAL_CLUSTER: getText("Partially clustered"),
+                UNCLUSTERED: getText("No cluster")
+            };
+            return labels[String(scope || "").trim().toUpperCase()] || getText("No cluster");
+        },
+
+        renderClusterUsageBadge() {
+            const usage = this.getActualClusterUsage();
+            if (String(usage.appliedYn || "N").toUpperCase() !== "Y") return "";
+            const mode = String(usage.effectiveMode || usage.requestedMode || "").trim().toUpperCase();
+            return `<span class="anly-work-cluster-usage-badge"><i class="fas fa-project-diagram"></i>${this.escapeHtml(getText("Cluster-aware rule discovery"))} · ${this.escapeHtml(mode)}</span>`;
+        },
+
+        renderColumnClusterBadge(clusterId, scope = "", title = "") {
+            const normalizedScope = String(scope || "").trim().toUpperCase();
+            const scopeLabel = normalizedScope ? this.getClusterScopeLabel(normalizedScope) : "";
+            const clusterLabel = clusterId === undefined || clusterId === null || clusterId === ""
+                ? getText("No cluster")
+                : getText("Cluster {cluster}", { cluster: clusterId });
+            const titleAttribute = title ? ` title="${this.escapeHtml(title)}"` : "";
+            return `<span class="anly-work-column-cluster-badge is-${this.escapeHtml(normalizedScope.toLowerCase() || "unclustered")}"${titleAttribute}>${this.escapeHtml(clusterLabel)}${scopeLabel ? ` · ${this.escapeHtml(scopeLabel)}` : ""}</span>`;
+        },
+
         renderLassoSummary(summary, json = {}) {
             if (!summary) return "";
             const overview = summary.overview || {};
             const topTargets = Array.isArray(summary.topTargets) ? summary.topTargets : [];
             const topFeatures = Array.isArray(summary.topFeatures) ? summary.topFeatures : [];
+            const targetEligibility = Array.isArray(summary.targetEligibility) && summary.targetEligibility.length
+                ? summary.targetEligibility
+                : topTargets.map((item) => ({ ...item, ELIGIBILITY_STATUS: "ELIGIBLE" }));
+            const symbolicCriteria = summary.symbolicCriteria || {};
+            const minR2Score = Number(symbolicCriteria.minR2Score ?? 0.7);
+            const maxAutoTargets = Number(symbolicCriteria.maxAutoTargets ?? 10);
+            const autoTargetYn = String(symbolicCriteria.autoTargetYn || "N").toUpperCase() === "Y";
+            const eligibilityCounts = targetEligibility.reduce((counts, item) => {
+                const status = String(item.ELIGIBILITY_STATUS || "LASSO_UNAVAILABLE").toUpperCase();
+                counts[status] = (counts[status] || 0) + 1;
+                return counts;
+            }, {});
             const filter = this.lassoSummaryFilter || {};
             const pairFilter = this.lassoPairFilter || {};
             const direction = String(filter.direction || "ALL").toUpperCase();
@@ -4575,6 +5220,7 @@
                         <div>
                             <strong>${this.escapeHtml(getText("LASSO Key Feature Summary"))}</strong>
                             <span>${this.escapeHtml(getText("Target {target} · based on coefficient absolute value and R2", { target: `${summary.targetOwner}.${summary.targetTable}` }))}</span>
+                            ${this.renderClusterUsageBadge()}
                         </div>
                         <div class="anly-work-type-summary-actions">
                             <div class="anly-work-corr-metrics">
@@ -4608,22 +5254,44 @@
                             <small>${this.escapeHtml(getText("Unique features"))}</small>
                         </button>
                     </div>
+                    <div class="anly-work-lasso-criteria">
+                        <div>
+                            <strong>${this.escapeHtml(getText("Symbolic formula eligibility"))}</strong>
+                            <span>${this.escapeHtml(autoTargetYn
+                                ? getText("Actual run parameters: P_MIN_R2_SCORE={minR2} · P_MAX_AUTO_TARGETS={maxTargets}", {
+                                    minR2: this.formatDecimal(minR2Score),
+                                    maxTargets: this.formatNumber(maxAutoTargets)
+                                })
+                                : getText("Actual run parameter: P_MIN_R2_SCORE={minR2}", {
+                                    minR2: this.formatDecimal(minR2Score)
+                                }))}</span>
+                        </div>
+                        <div class="anly-work-lasso-criteria-counts">
+                            <span class="is-eligible">${this.escapeHtml(getText("Formula target"))} <b>${this.formatNumber(eligibilityCounts.ELIGIBLE || 0)}</b></span>
+                            <span class="is-r2-below">${this.escapeHtml(getText("Below R2"))} <b>${this.formatNumber(eligibilityCounts.R2_BELOW_THRESHOLD || 0)}</b></span>
+                            ${autoTargetYn ? `<span class="is-auto-limit">${this.escapeHtml(getText("Outside automatic target range"))} <b>${this.formatNumber(eligibilityCounts.AUTO_TARGET_LIMIT || 0)}</b></span>` : ""}
+                        </div>
+                    </div>
                     <div class="anly-work-relation-detail-panel">
                         <header>
                             <strong>${this.escapeHtml(selectedFeature ? getText("Selected LASSO relation") : getText("LASSO feature relations"))}</strong>
                             ${selectedTarget || selectedFeature || direction !== "ALL" ? `<button type="button" onclick="${PAGE_CODE}.resetLassoSummaryFilters()">${this.escapeHtml(getText("Show all"))}</button>` : ""}
                         </header>
-                        ${topTargets.length ? `
+                        ${targetEligibility.length ? `
                             <div>
                                 <strong>${this.escapeHtml(getText("Selection Result by Target"))}</strong>
                                 <div class="anly-work-type-case-grid">
-                                    ${topTargets.map((item) => {
+                                    ${targetEligibility.map((item) => {
                                         const targetColumn = String(item.TARGET_COLUMN || "").trim();
+                                        const eligibility = this.getLassoTargetEligibility(item, minR2Score, maxAutoTargets);
+                                        const disabled = ["AUTO_TARGET_LIMIT", "LASSO_UNAVAILABLE"].includes(eligibility.status);
                                         return `
-                                            <button type="button" class="${selectedTarget === targetColumn ? "is-active" : ""}" onclick="${PAGE_CODE}.selectLassoTargetFilter('${this.escapeJs(targetColumn)}')">
+                                            <button type="button" class="${selectedTarget === targetColumn ? "is-active" : ""} ${eligibility.className}" ${disabled ? "disabled" : ""} title="${this.escapeHtml(eligibility.description)}" onclick="${PAGE_CODE}.selectLassoTargetFilter('${this.escapeJs(targetColumn)}')">
                                                 <b>${this.renderColumnAwareCell(targetColumn, summary)}</b>
-                                                <small>${this.formatNumber(item.SELECTED_FEATURE_COUNT)} selected · R2 ${this.formatDecimal(item.R2_SCORE)}</small>
-                                                <em>max coef ${this.formatDecimal(item.MAX_ABS_COEFFICIENT)}</em>
+                                                ${this.renderColumnClusterBadge(item.TARGET_CLUSTER_ID)}
+                                                <span class="anly-work-lasso-eligibility">${this.escapeHtml(eligibility.label)}</span>
+                                                <small>${this.formatNumber(item.SELECTED_FEATURE_COUNT || 0)} selected · R2 ${item.R2_SCORE === undefined || item.R2_SCORE === null ? "-" : this.formatDecimal(item.R2_SCORE)}</small>
+                                                <em>${eligibility.description}</em>
                                             </button>
                                         `;
                                     }).join("")}
@@ -4643,6 +5311,46 @@
             `;
         },
 
+        getLassoTargetEligibility(item = {}, minR2Score = 0.7, maxAutoTargets = 10) {
+            const status = String(item.ELIGIBILITY_STATUS || "LASSO_UNAVAILABLE").toUpperCase();
+            const r2Score = item.R2_SCORE === undefined || item.R2_SCORE === null ? null : Number(item.R2_SCORE);
+            const autoOrder = Number(item.AUTO_ORDER || 0);
+            const definitions = {
+                ELIGIBLE: {
+                    label: getText("Formula generation target"),
+                    className: "is-formula-eligible",
+                    description: getText("Selected features and R2 satisfy the symbolic formula criteria.")
+                },
+                R2_BELOW_THRESHOLD: {
+                    label: getText("Below R2 threshold"),
+                    className: "is-formula-r2-below",
+                    description: getText("LASSO R2 {r2} is below the formula threshold {minR2}.", {
+                        r2: r2Score === null || !Number.isFinite(r2Score) ? "-" : this.formatDecimal(r2Score),
+                        minR2: this.formatDecimal(minR2Score)
+                    })
+                },
+                AUTO_TARGET_LIMIT: {
+                    label: getText("Excluded by automatic target range"),
+                    className: "is-formula-auto-limit",
+                    description: getText("Automatic target order {order} exceeds the maximum {maxTargets}.", {
+                        order: this.formatNumber(autoOrder),
+                        maxTargets: this.formatNumber(maxAutoTargets)
+                    })
+                },
+                NO_SELECTED_FEATURES: {
+                    label: getText("No selected key features"),
+                    className: "is-formula-no-feature",
+                    description: getText("No non-zero LASSO feature was selected for this target.")
+                },
+                LASSO_UNAVAILABLE: {
+                    label: getText("No LASSO result"),
+                    className: "is-formula-unavailable",
+                    description: getText("No LASSO target result was generated within the eligible automatic range.")
+                }
+            };
+            return { status, ...(definitions[status] || definitions.LASSO_UNAVAILABLE) };
+        },
+
         renderLassoFeaturePairRow(item, summary) {
             const targetColumn = String(item.TARGET_COLUMN || "").trim();
             const featureName = String(item.FEATURE_NAME || "").trim();
@@ -4655,6 +5363,10 @@
                     <span class="anly-work-relation-pair-col is-left">${this.renderColumnAwareCell(targetColumn, summary)}</span>
                     <i aria-hidden="true">↔</i>
                     <span class="anly-work-relation-pair-col is-right">${this.renderColumnAwareCell(featureName, summary)}</span>
+                    <span class="anly-work-cluster-pair-info">
+                        ${this.renderColumnClusterBadge(item.TARGET_CLUSTER_ID)}
+                        ${this.renderColumnClusterBadge(item.FEATURE_CLUSTER_ID, item.CLUSTER_SCOPE)}
+                    </span>
                     <small>coef ${this.formatDecimal(item.COEFFICIENT)} · |coef| ${this.formatDecimal(item.ABS_COEFFICIENT)} · rank ${this.formatNumber(item.RANK_NO)} · R2 ${this.formatDecimal(item.R2_SCORE)}</small>
                 </button>
             `;
@@ -4750,6 +5462,7 @@
                         <div>
                             <strong>${this.escapeHtml(getText("Symbolic Rule Formula Summary"))}</strong>
                             <span>${this.escapeHtml(getText("Target {target} · f(x)=y formula rules", { target: `${summary.targetOwner}.${summary.targetTable}` }))}</span>
+                            ${this.renderClusterUsageBadge()}
                         </div>
                         <div class="anly-work-corr-metrics">
                             <span><b>${this.formatNumber(overview.RULE_COUNT)}</b><small>rules</small></span>
@@ -4792,6 +5505,7 @@
                                     return `
                                         <button type="button" class="${targetFilter === targetColumn ? "is-active" : ""}" title="${this.escapeHtml(`${targetColumn}: ${this.formatNumber(item.SELECTED_RULE_COUNT)} selected`)}" onclick="${PAGE_CODE}.selectSymbolicRuleFilter('targetColumn', '${this.escapeJs(targetColumn)}')">
                                             <span>${this.renderColumnAwareCell(targetColumn, summary)}</span>
+                                            ${this.renderColumnClusterBadge(item.TARGET_CLUSTER_ID)}
                                             <b>${this.formatNumber(item.SELECTED_RULE_COUNT)} rules</b>
                                         </button>
                                     `;
@@ -4816,6 +5530,10 @@
             const featureLabel = features.map((item) => this.escapeHtml(item)).join(", ") || "x";
             const targetColumn = String(rule.TARGET_COLUMN || "Y").trim() || "Y";
             const targetCell = this.renderColumnAwareCell(targetColumn, this.lastSymbolicRuleSummary || {});
+            const featureClusters = new Map((Array.isArray(rule.FEATURE_CLUSTERS) ? rule.FEATURE_CLUSTERS : []).map((item) => [
+                String(item?.COLUMN_NAME || "").trim().toUpperCase(),
+                item?.CLUSTER_ID
+            ]));
             return `
                 <article class="anly-work-symbolic-rule-card ${String(rule.SELECTED_YN || "").toUpperCase() === "Y" ? "is-selected" : ""}">
                     <header>
@@ -4840,12 +5558,18 @@
                     <div class="anly-work-symbolic-y-panel">
                         <small>${this.escapeHtml(getText("Y result value"))}</small>
                         <strong>${targetCell}</strong>
+                        ${this.renderColumnClusterBadge(rule.TARGET_CLUSTER_ID, rule.CLUSTER_SCOPE)}
                     </div>
                     <code>f(${featureLabel}) = ${this.escapeHtml(rule.EXPRESSION || "")} = ${this.escapeHtml(targetColumn)}</code>
                     <div class="anly-work-symbolic-x-panel">
                         <small>${this.escapeHtml(getText("X arguments"))}</small>
                         <div class="anly-work-corr-tags">
-                            ${features.length ? features.slice(0, 10).map((column) => this.renderColumnChip(column, this.lastSymbolicRuleSummary || {})).join("") : `<em class="anly-work-column-chip"><b>x</b></em>`}
+                            ${features.length ? features.slice(0, 10).map((column) => `
+                                <span class="anly-work-symbolic-cluster-argument">
+                                    ${this.renderColumnChip(column, this.lastSymbolicRuleSummary || {})}
+                                    ${this.renderColumnClusterBadge(featureClusters.get(String(column).trim().toUpperCase()))}
+                                </span>
+                            `).join("") : `<em class="anly-work-column-chip"><b>x</b></em>`}
                         </div>
                     </div>
                     <footer>
@@ -6224,6 +6948,60 @@
         getRuntimeParamValueByName(name, runtimeParamMap, fallback = "") {
             const key = this.normalizeRuntimeParamKey(name);
             return runtimeParamMap.has(key) ? runtimeParamMap.get(key) : fallback;
+        },
+
+        getNodeActualAnalysisParamValue(name, fallback = "", node = this.selectedNode) {
+            const payload = this.normalizeObject(node?.PAYLOAD);
+            const runtimeParamMap = this.buildRuntimeParamValueMap(this.normalizeObject(node?.RUNTIME_PARAMS), node, payload);
+            const normalizedName = this.normalizeRuntimeParamKey(name);
+            const matchesAnalysisParam = (candidate) => {
+                const normalizedCandidate = this.normalizeRuntimeParamKey(candidate);
+                return normalizedCandidate === normalizedName || normalizedCandidate === `input${normalizedName}`;
+            };
+            const apiResult = this.normalizeObject(node?.RUN_OUTPUT)?.apiResult
+                || this.normalizeObject(node?.runOutput)?.apiResult
+                || {};
+            const executedCriteria = {
+                ...this.normalizeObject(apiResult?.continuousCriteria),
+                ...this.normalizeObject(apiResult?.relationCriteria)
+            };
+            const criteriaKeys = {
+                pminr2score: "minR2Score",
+                pmaxautotargets: "maxAutoTargets",
+                pmaxfeatures: "maxFeatures",
+                pclusterusagemode: "clusterUsageMode",
+                ptargetcolumn: "targetColumn",
+                pminmetric: "minMetric",
+                pmincramer: "minCramer",
+                pminabscorr: "minAbsCorr",
+                pmineta: "minEta",
+                pminpvalue: "minPvalue",
+                pminrows: "minRows"
+            };
+            const executedKey = criteriaKeys[normalizedName];
+            if (executedKey && executedCriteria[executedKey] !== undefined && executedCriteria[executedKey] !== null) {
+                return executedCriteria[executedKey];
+            }
+
+            const runtimeEntry = [...runtimeParamMap.entries()].find(([key]) => matchesAnalysisParam(key));
+            if (runtimeEntry) {
+                const runtimeValue = this.resolveRuntimeParamDisplayValue(runtimeEntry[1], runtimeParamMap);
+                if (runtimeValue !== undefined && runtimeValue !== null && String(runtimeValue).trim() !== "") return runtimeValue;
+            }
+
+            const definitionSources = [
+                this.normalizeRuntimeParamDefinitionList(node?.JOB_PARAM_JSON || node?.jobParamJson),
+                this.normalizeRuntimeParamDefinitionList(payload?.params || payload?.PARAMS)
+            ];
+            for (const definitions of definitionSources) {
+                const definition = definitions.find((item, index) =>
+                    matchesAnalysisParam(this.getRuntimeParamDefinitionName(item, index))
+                );
+                if (!definition) continue;
+                const actualValue = this.resolveRuntimeParamDisplayValue(this.getRuntimeParamDefinitionDefault(definition), runtimeParamMap);
+                if (actualValue !== undefined && actualValue !== null && String(actualValue).trim() !== "") return actualValue;
+            }
+            return fallback;
         },
 
         resolveRuntimeParamDisplayValue(value, runtimeParamMap) {

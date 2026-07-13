@@ -4,8 +4,8 @@
   "targetSettingCategories": [
     {
       "CATEGORY_CODE": "DATA_PROFILING",
-      "CATEGORY_NAME": "Data Profiling",
-      "CATEGORY_DESC": "Stores classification prediction rules and data profiling thresholds in the Target DB.",
+      "CATEGORY_NAME": "Column Type Analysis",
+      "CATEGORY_DESC": "Stores classification prediction rules and column type analysis thresholds in the Target DB.",
       "SORT_ORDER": 10,
       "DEFAULTS": [
         {

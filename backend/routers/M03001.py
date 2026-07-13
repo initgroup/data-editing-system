@@ -1,6 +1,6 @@
 """
 @file           M03001.py
-@description    Data profiling workbench API
+@description    Column type analysis workbench API
 """
 
 from backend.services.data_work_router import create_data_work_router

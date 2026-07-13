@@ -1,8 +1,8 @@
 -- [M04001_FLOW_NODE_TYPE_LIST]
 SELECT JOB_GROUP AS NODE_TYPE
      , CASE
-           WHEN JOB_GROUP = 'M03001' THEN '데이터 프로파일링'
-           WHEN JOB_GROUP = 'M03002' THEN '컬럼간 상관 분석'
+           WHEN JOB_GROUP = 'M03001' THEN '컬럼 유형 분석'
+           WHEN JOB_GROUP = 'M03002' THEN '컬럼 상관 분석'
            WHEN JOB_GROUP = 'M03003' THEN '자동 규칙 발굴'
            WHEN JOB_GROUP = 'M03004' THEN '규칙 위반 탐지'
            ELSE JOB_GROUP

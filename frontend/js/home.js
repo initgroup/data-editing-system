@@ -351,8 +351,8 @@
 
         getModuleMeta(menuCode) {
             const map = {
-                M03001: { title: this.t("moduleProfiling", "Data Profiling"), icon: "fa-table-columns", tone: "is-profile", description: this.t("moduleProfilingDesc", "Column quality and distribution") },
-                M03002: { title: this.t("moduleCorrelation", "Column Correlation"), icon: "fa-grip", tone: "is-correlation", description: this.t("moduleCorrelationDesc", "Correlation pairs and strength") },
+                M03001: { title: this.t("moduleProfiling", "Column Type Analysis"), icon: "fa-table-columns", tone: "is-profile", description: this.t("moduleProfilingDesc", "Column quality and distribution") },
+                M03002: { title: this.t("moduleCorrelation", "Column Correlation Analysis"), icon: "fa-grip", tone: "is-correlation", description: this.t("moduleCorrelationDesc", "Correlation pairs and strength") },
                 M03003: { title: this.t("moduleRuleDiscovery", "Rule Discovery"), icon: "fa-wand-magic-sparkles", tone: "is-discovery", description: this.t("moduleRuleDiscoveryDesc", "Itemsets and association rules") },
                 M03004: { title: this.t("moduleRuleViolation", "Rule Violation"), icon: "fa-shield-halved", tone: "is-violation", description: this.t("moduleRuleViolationDesc", "Violation types and samples") }
             };

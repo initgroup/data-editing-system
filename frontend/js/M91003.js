@@ -314,7 +314,7 @@
         getCategoryDisplayName(category = null) {
             const code = String(category?.CATEGORY_CODE || this.selectedCategoryCode || "").toUpperCase();
             const defaults = {
-                DATA_PROFILING: "Data Profiling"
+                DATA_PROFILING: "Column Type Analysis"
             };
             const keys = {
                 DATA_PROFILING: "categoryDataProfilingName"
@@ -325,7 +325,7 @@
         getCategoryDisplayDesc(category = null) {
             const code = String(category?.CATEGORY_CODE || this.selectedCategoryCode || "").toUpperCase();
             const defaults = {
-                DATA_PROFILING: "Stores classification prediction rules and data profiling thresholds in the Target DB."
+                DATA_PROFILING: "Stores classification prediction rules and column type analysis thresholds in the Target DB."
             };
             const keys = {
                 DATA_PROFILING: "categoryDataProfilingDesc"

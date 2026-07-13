@@ -238,6 +238,47 @@
         },
         {
           "objectType": "INTERNAL_API",
+          "objectName": "INTEGRATED_RELATION_CLUSTER",
+          "label": "Integrated Relation Matrix & Network Cluster",
+          "apiGroup": "Python API Base JSON",
+          "endpoint": "/api/mlAnalysis/integrated-relation-cluster",
+          "httpMethod": "POST",
+          "auth": { "type": "API_KEY", "keyName": "INIT_INTERNAL_API_KEY", "headerName": "X-INIT-API-Key" },
+          "timeoutSec": 900,
+          "sortOrder": 17,
+          "useYn": "Y",
+          "description": "Run the integrated relation matrix procedure and network clustering in one same-run operation.",
+          "output": {
+            "resultCreateYn": "T",
+            "resultOwner": ":INIT$TargetOwner",
+            "resultTableName": "INIT$_TB_RELATION_NETWORK_EDGE",
+            "persistMode": "SERVICE_MANAGED",
+            "rules": []
+          },
+          "details": [
+            { "key": "INPUT.P_TARGET_OWNER", "value": "IN VARCHAR2", "comment": "Target table owner", "defaultValue": ":INIT$TargetOwner", "order": 1 },
+            { "key": "INPUT.P_TARGET_TABLE", "value": "IN VARCHAR2", "comment": "Target table name", "defaultValue": ":INIT$TargetTable", "order": 2 },
+            { "key": "INPUT.P_MIN_METRIC", "value": "IN NUMBER", "comment": "Minimum integrated relation strength", "defaultValue": "0.65", "order": 3 },
+            { "key": "INPUT.P_MIN_CRAMER", "value": "IN NUMBER", "comment": "Minimum Cramer's V", "defaultValue": "0.3", "order": 4 },
+            { "key": "INPUT.P_MIN_ABS_CORR", "value": "IN NUMBER", "comment": "Minimum absolute numeric correlation", "defaultValue": "0.6", "order": 5 },
+            { "key": "INPUT.P_MIN_ETA", "value": "IN NUMBER", "comment": "Minimum categorical-numeric eta squared", "defaultValue": "0.65", "order": 6 },
+            { "key": "INPUT.P_MIN_PVALUE", "value": "IN NUMBER", "comment": "Maximum p-value", "defaultValue": "0.05", "order": 7 },
+            { "key": "INPUT.P_SAMPLE_ROWS", "value": "IN NUMBER", "comment": "Maximum sample rows", "defaultValue": "100000", "order": 8 },
+            { "key": "INPUT.P_MAX_DISTINCT", "value": "IN NUMBER", "comment": "Maximum categorical distinct count", "defaultValue": "100", "order": 9 },
+            { "key": "INPUT.P_MAX_COLUMNS", "value": "IN NUMBER", "comment": "Maximum analyzed columns", "defaultValue": "100", "order": 10 },
+            { "key": "INPUT.P_MIN_ROWS", "value": "IN NUMBER", "comment": "Minimum complete rows", "defaultValue": "30", "order": 11 },
+            { "key": "INPUT.P_INCLUDE_SPEARMAN", "value": "IN VARCHAR2", "comment": "Include Spearman metric Y/N", "defaultValue": "Y", "order": 12 },
+            { "key": "INPUT.P_NETWORK_MIN_METRIC", "value": "IN NUMBER", "comment": "Minimum relation strength used as a network edge", "defaultValue": "0.3", "order": 13 },
+            { "key": "INPUT.P_MAX_EDGES", "value": "IN NUMBER", "comment": "Maximum network edges", "defaultValue": "500", "order": 14 },
+            { "key": "INPUT.P_RELATION_TYPES", "value": "IN VARCHAR2", "comment": "Optional relation type filter", "defaultValue": "(auto)", "order": 15 },
+            { "key": "INPUT.P_METRIC_NAMES", "value": "IN VARCHAR2", "comment": "Optional metric filter", "defaultValue": "(auto)", "order": 16 },
+            { "key": "INPUT.P_RUN_SOURCE_TYPE", "value": "IN VARCHAR2", "comment": "DATA_WORK or FLOW_WORK", "defaultValue": ":INIT$RunSourceType", "order": 17 },
+            { "key": "INPUT.P_RUN_ID", "value": "IN NUMBER", "comment": "Run history ID", "defaultValue": ":INIT$RunId", "order": 18 },
+            { "key": "OUTPUT.resultTables", "value": "$.resultTables", "comment": "Service-managed relation and network result tables", "defaultValue": "INIT$_TB_RELATION_PAIR,INIT$_TB_RELATION_NETWORK_NODE,INIT$_TB_RELATION_NETWORK_EDGE", "order": 19 }
+          ]
+        },
+        {
+          "objectType": "INTERNAL_API",
           "objectName": "SYMBOLIC_REGRESSION_RULE",
           "label": "Symbolic Regression Rule",
           "apiGroup": "Python API Base JSON",
@@ -445,81 +486,172 @@
               "order": 7
             },
             {
+              "key": "INPUT.P_MAX_RULE_LENGTH",
+              "value": "IN NUMBER",
+              "comment": "Maximum Apriori rule length",
+              "defaultValue": "3",
+              "order": 8
+            },
+            {
+              "key": "INPUT.P_DROP_EXISTING_YN",
+              "value": "IN VARCHAR2",
+              "comment": "Drop an existing association model before rebuilding",
+              "defaultValue": "Y",
+              "order": 9
+            },
+            {
+              "key": "INPUT.P_MAX_INPUT_ROWS",
+              "value": "IN NUMBER",
+              "comment": "Maximum input rows for categorical rule discovery",
+              "defaultValue": "100000",
+              "order": 10
+            },
+            {
+              "key": "INPUT.P_CATEGORICAL_COLUMNS",
+              "value": "IN VARCHAR2",
+              "comment": "Comma-separated categorical columns. (auto) uses profiled columns.",
+              "defaultValue": "(auto)",
+              "order": 11
+            },
+            {
+              "key": "INPUT.P_MIN_RULE_SUPPORT_COUNT",
+              "value": "IN NUMBER",
+              "comment": "Minimum association rule support row count",
+              "defaultValue": "30",
+              "order": 12
+            },
+            {
               "key": "INPUT.P_MIN_RULE_LIFT",
               "value": "IN NUMBER",
               "comment": "Minimum rule lift for association summary",
               "defaultValue": "1",
-              "order": 8
+              "order": 13
+            },
+            {
+              "key": "INPUT.P_MAX_RULE_SUMMARY_COLUMNS",
+              "value": "IN NUMBER",
+              "comment": "Maximum columns included in association rule summary",
+              "defaultValue": "50",
+              "order": 14
+            },
+            {
+              "key": "INPUT.P_MAX_RULE_SUMMARY_PER_PAIR",
+              "value": "IN NUMBER",
+              "comment": "Maximum summarized rules per column pair",
+              "defaultValue": "50",
+              "order": 15
             },
             {
               "key": "INPUT.P_TARGET_COLUMN",
               "value": "IN VARCHAR2",
               "comment": "Continuous target column. (auto) runs all eligible continuous targets.",
               "defaultValue": "(auto)",
-              "order": 9
+              "order": 16
             },
             {
               "key": "INPUT.P_MAX_FEATURES",
               "value": "IN NUMBER",
               "comment": "Maximum LASSO/Symbolic feature count",
               "defaultValue": "10",
-              "order": 10
+              "order": 17
+            },
+            {
+              "key": "INPUT.P_CLUSTER_USAGE_MODE",
+              "value": "IN VARCHAR2",
+              "comment": "Cluster usage: NONE, PREFER_SAME_CLUSTER, or WITHIN_CLUSTER_ONLY",
+              "defaultValue": "PREFER_SAME_CLUSTER",
+              "order": 18
             },
             {
               "key": "INPUT.P_SAMPLE_ROWS",
               "value": "IN NUMBER",
               "comment": "Maximum sampled rows",
               "defaultValue": "50000",
-              "order": 11
+              "order": 19
+            },
+            {
+              "key": "INPUT.P_ALPHA",
+              "value": "IN NUMBER",
+              "comment": "LASSO alpha. (auto) lets the service select it.",
+              "defaultValue": "(auto)",
+              "order": 20
+            },
+            {
+              "key": "INPUT.P_MAX_ITERATIONS",
+              "value": "IN NUMBER",
+              "comment": "Maximum LASSO iterations",
+              "defaultValue": "10000",
+              "order": 21
+            },
+            {
+              "key": "INPUT.P_USE_PYSR",
+              "value": "IN VARCHAR2",
+              "comment": "Use PySR symbolic regression Y/N",
+              "defaultValue": "N",
+              "order": 22
+            },
+            {
+              "key": "INPUT.P_LINEAR_FIRST_YN",
+              "value": "IN VARCHAR2",
+              "comment": "Try a linear symbolic rule before nonlinear search",
+              "defaultValue": "Y",
+              "order": 23
+            },
+            {
+              "key": "INPUT.P_LINEAR_R2_THRESHOLD",
+              "value": "IN NUMBER",
+              "comment": "R2 threshold for accepting the linear symbolic rule",
+              "defaultValue": "0.995",
+              "order": 24
             },
             {
               "key": "INPUT.P_MIN_R2_SCORE",
               "value": "IN NUMBER",
               "comment": "Minimum LASSO R2 score for symbolic regression",
               "defaultValue": "0.7",
-              "order": 12
+              "order": 25
             },
             {
               "key": "INPUT.P_MAX_AUTO_TARGETS",
               "value": "IN NUMBER",
               "comment": "Maximum auto continuous target count",
               "defaultValue": "10",
-              "order": 13
+              "order": 26
             },
             {
               "key": "INPUT.P_CONTINUE_ON_ERROR",
               "value": "IN VARCHAR2",
               "comment": "Continue remaining integrated tasks when one task fails",
               "defaultValue": "Y",
-              "order": 14
+              "order": 27
             },
             {
               "key": "INPUT.P_RUN_SOURCE_TYPE",
               "value": "IN VARCHAR2",
               "comment": "DATA_WORK or FLOW_WORK",
               "defaultValue": ":INIT$RunSourceType",
-              "order": 15
+              "order": 28
             },
             {
               "key": "INPUT.P_RUN_ID",
               "value": "IN NUMBER",
               "comment": "Run history ID",
               "defaultValue": ":INIT$RunId",
-              "order": 16
+              "order": 29
             },
             {
               "key": "OUTPUT.status",
               "value": "$.status",
               "comment": "API success status",
               "defaultValue": "",
-              "order": 17
+              "order": 30
             },
             {
               "key": "OUTPUT.resultTables",
               "value": "$.resultTables",
               "comment": "Service-managed result tables",
               "defaultValue": "INIT$_TB_ASSOC_RULE_SUMMARY,INIT$_TB_LASSO_FEATURE,INIT$_TB_SYMBOLIC_RULE",
-              "order": 18
+              "order": 31
             }
           ]
         },
@@ -578,123 +710,193 @@
               "order": 3
             },
             {
+              "key": "INPUT.P_SYMBOLIC_RULE_TABLE_NAME",
+              "value": "IN VARCHAR2",
+              "comment": "Symbolic rule source table. Must remain INIT$_TB_SYMBOLIC_RULE; never use :INIT$PreResultTable or an OML_ASSOC model name.",
+              "defaultValue": "INIT$_TB_SYMBOLIC_RULE",
+              "order": 4
+            },
+            {
+              "key": "INPUT.P_RULE_ID",
+              "value": "IN NUMBER",
+              "comment": "Optional symbolic rule ID. (auto) evaluates eligible rules.",
+              "defaultValue": "(auto)",
+              "order": 5
+            },
+            {
               "key": "INPUT.P_TARGET_OWNER",
               "value": "IN VARCHAR2",
               "comment": "Target table owner",
               "defaultValue": ":INIT$TargetOwner",
-              "order": 4
+              "order": 6
             },
             {
               "key": "INPUT.P_TARGET_TABLE",
               "value": "IN VARCHAR2",
               "comment": "Target table name",
               "defaultValue": ":INIT$TargetTable",
-              "order": 5
+              "order": 7
             },
             {
               "key": "INPUT.P_CASE_ID_COLUMN_NAME",
               "value": "IN VARCHAR2",
               "comment": "Case ID column",
               "defaultValue": "FILE_ROW_NO",
-              "order": 6
+              "order": 8
+            },
+            {
+              "key": "INPUT.P_CAT_RESULT_OWNER",
+              "value": "IN VARCHAR2",
+              "comment": "Categorical violation result owner",
+              "defaultValue": ":INIT$TargetOwner",
+              "order": 9
+            },
+            {
+              "key": "INPUT.P_CAT_RESULT_TABLE",
+              "value": "IN VARCHAR2",
+              "comment": "Categorical violation result table",
+              "defaultValue": "INIT$_TB_RULE_VIOLATION_RESULT",
+              "order": 10
+            },
+            {
+              "key": "INPUT.P_SYMBOLIC_RESULT_OWNER",
+              "value": "IN VARCHAR2",
+              "comment": "Symbolic violation result owner",
+              "defaultValue": ":INIT$TargetOwner",
+              "order": 11
+            },
+            {
+              "key": "INPUT.P_SYMBOLIC_RESULT_TABLE",
+              "value": "IN VARCHAR2",
+              "comment": "Symbolic violation result table",
+              "defaultValue": "INIT$_TB_SYMBOLIC_RULE_VIOLATION",
+              "order": 12
             },
             {
               "key": "INPUT.P_MIN_CONFIDENCE",
               "value": "IN NUMBER",
               "comment": "Categorical violation minimum confidence",
               "defaultValue": "0.8",
-              "order": 7
+              "order": 13
             },
             {
               "key": "INPUT.P_MIN_LIFT",
               "value": "IN NUMBER",
               "comment": "Categorical violation minimum lift",
               "defaultValue": "1",
-              "order": 8
+              "order": 14
             },
             {
               "key": "INPUT.P_MAX_RULES",
               "value": "IN NUMBER",
               "comment": "Maximum categorical rule count",
               "defaultValue": "100",
-              "order": 9
+              "order": 15
             },
             {
               "key": "INPUT.P_SYMBOLIC_MAX_RULES",
               "value": "IN NUMBER",
               "comment": "Maximum symbolic rule count",
               "defaultValue": "20",
-              "order": 10
+              "order": 16
             },
             {
               "key": "INPUT.P_MAX_VIOLATIONS_PER_RULE",
               "value": "IN NUMBER",
               "comment": "Maximum violation rows per rule",
               "defaultValue": "500",
-              "order": 11
+              "order": 17
             },
             {
               "key": "INPUT.P_ERROR_PCT_THRESHOLD",
               "value": "IN NUMBER",
               "comment": "Symbolic allowed relative error threshold",
               "defaultValue": "0.05",
-              "order": 12
+              "order": 18
+            },
+            {
+              "key": "INPUT.P_ABS_ERROR_THRESHOLD",
+              "value": "IN NUMBER",
+              "comment": "Optional absolute error threshold for symbolic violations",
+              "defaultValue": "(auto)",
+              "order": 19
             },
             {
               "key": "INPUT.P_MAX_SCAN_ROWS",
               "value": "IN NUMBER",
               "comment": "Maximum scan rows per symbolic rule",
               "defaultValue": "50000",
-              "order": 13
+              "order": 20
+            },
+            {
+              "key": "INPUT.P_MAX_ELAPSED_SECONDS",
+              "value": "IN NUMBER",
+              "comment": "Maximum symbolic violation scan time in seconds",
+              "defaultValue": "1800",
+              "order": 21
+            },
+            {
+              "key": "INPUT.P_MAX_EXPRESSION_LENGTH",
+              "value": "IN NUMBER",
+              "comment": "Maximum symbolic expression length",
+              "defaultValue": "8000",
+              "order": 22
             },
             {
               "key": "INPUT.P_CLEAR_EXISTING_YN",
               "value": "IN VARCHAR2",
               "comment": "Clear existing violation rows",
               "defaultValue": "Y",
-              "order": 14
+              "order": 23
             },
             {
               "key": "INPUT.P_COMMIT_YN",
               "value": "IN VARCHAR2",
               "comment": "Internal procedure commit Y/N. N lets the integrated API commit once.",
               "defaultValue": "N",
-              "order": 15
+              "order": 24
+            },
+            {
+              "key": "INPUT.P_COMMIT_INTERVAL",
+              "value": "IN NUMBER",
+              "comment": "Commit interval used by violation procedures",
+              "defaultValue": "5000",
+              "order": 25
             },
             {
               "key": "INPUT.P_CONTINUE_ON_ERROR",
               "value": "IN VARCHAR2",
               "comment": "Continue remaining integrated tasks when one task fails",
               "defaultValue": "Y",
-              "order": 16
+              "order": 26
             },
             {
               "key": "INPUT.P_RUN_SOURCE_TYPE",
               "value": "IN VARCHAR2",
               "comment": "DATA_WORK or FLOW_WORK",
               "defaultValue": ":INIT$RunSourceType",
-              "order": 17
+              "order": 27
             },
             {
               "key": "INPUT.P_RUN_ID",
               "value": "IN NUMBER",
               "comment": "Run history ID",
               "defaultValue": ":INIT$RunId",
-              "order": 18
+              "order": 28
             },
             {
               "key": "OUTPUT.status",
               "value": "$.status",
               "comment": "API success status",
               "defaultValue": "",
-              "order": 19
+              "order": 29
             },
             {
               "key": "OUTPUT.resultTables",
               "value": "$.resultTables",
               "comment": "Service-managed result tables",
               "defaultValue": "INIT$_TB_RULE_VIOLATION_RESULT,INIT$_TB_SYMBOLIC_RULE_VIOLATION",
-              "order": 20
+              "order": 30
             }
           ]
         }

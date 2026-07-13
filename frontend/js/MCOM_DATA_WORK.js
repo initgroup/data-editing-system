@@ -1241,6 +1241,7 @@
                         { itemName: "P_MIN_RULE_LIFT", itemValue: "NUMBER", itemDesc: "Minimum rule lift for association summary", itemDefault: "1" },
                         { itemName: "P_TARGET_COLUMN", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescTargetColumn", "Dependent variable column"), itemDefault: "(auto)" },
                         { itemName: "P_MAX_FEATURES", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMaxFeatures", "Maximum selected feature count"), itemDefault: "10" },
+                        { itemName: "P_CLUSTER_USAGE_MODE", itemValue: "VARCHAR2", itemDesc: "NONE, PREFER_SAME_CLUSTER, or WITHIN_CLUSTER_ONLY", itemDefault: "PREFER_SAME_CLUSTER" },
                         { itemName: "P_SAMPLE_ROWS", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescSampleRows", "Maximum analysis sample rows"), itemDefault: "50000" },
                         { itemName: "P_MIN_R2_SCORE", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMinR2Score", "Minimum LASSO R2 score for Symbolic Regression"), itemDefault: "0.7" },
                         { itemName: "P_MAX_AUTO_TARGETS", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMaxAutoTargets", "Maximum automatic target count"), itemDefault: "10" },
@@ -3445,6 +3446,23 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                 .replace(/--[^\r\n]*/gm, (match) => " ".repeat(match.length));
         },
 
+        renderRuntimeBindControl(item) {
+            const name = String(item?.name || "").trim();
+            const value = String(item?.value ?? "");
+            const defaultValue = String(item?.defaultValue ?? item?.value ?? "");
+            const attributes = `class="env-field data-runtime-bind-input" data-bind-name="${this.escapeAttr(name)}" data-default-value="${this.escapeAttr(defaultValue)}"`;
+            if (name.toUpperCase() === "P_CLUSTER_USAGE_MODE") {
+                const modes = ["PREFER_SAME_CLUSTER", "NONE", "WITHIN_CLUSTER_ONLY"];
+                const selectedMode = modes.includes(value.toUpperCase()) ? value.toUpperCase() : "PREFER_SAME_CLUSTER";
+                return `
+                    <select ${attributes} aria-label="${this.escapeAttr(name)}">
+                        ${modes.map((mode) => `<option value="${mode}" ${mode === selectedMode ? "selected" : ""}>${mode}</option>`).join("")}
+                    </select>
+                `;
+            }
+            return `<input ${attributes} type="text" value="${this.escapeAttr(value)}">`;
+        },
+
         openRuntimeBindDialog(bindPrompts, options = {}) {
             const layer = getContainerEl(`#runtimeBindLayer-${PAGE_CODE}`);
             const grid = getContainerEl(`#runtimeBindGrid-${PAGE_CODE}`);
@@ -3468,12 +3486,12 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                         <span class="flow-bind-name">${this.escapeHtml(item.label || item.name)}</span>
                         ${item.comment ? `<small class="flow-bind-comment">${this.escapeHtml(item.comment)}</small>` : ""}
                     </span>
-                    <input class="env-field data-runtime-bind-input" data-bind-name="${this.escapeHtml(item.name)}" data-default-value="${this.escapeAttr(item.defaultValue ?? item.value ?? "")}" type="text" value="${this.escapeAttr(item.value ?? "")}">
+                    ${this.renderRuntimeBindControl(item)}
                 </label>
             `).join("");
             layer.hidden = false;
             this.enableHelpLayerDrag(layer);
-            setTimeout(() => grid.querySelector("input")?.focus(), 0);
+            setTimeout(() => grid.querySelector("input, select")?.focus(), 0);
             return new Promise((resolve) => {
                 this.runtimeBindDialog = {
                     resolve,

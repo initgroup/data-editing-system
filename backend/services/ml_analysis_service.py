@@ -13,6 +13,9 @@ import json
 import math
 import re
 
+from backend.database_helper import SqlLoader
+from backend.oracle_session import disable_parallel_execution
+
 try:
     import numpy as np
     from sklearn.linear_model import Lasso, LassoCV, LinearRegression
@@ -36,6 +39,7 @@ except Exception:  # pragma: no cover - dependency availability is runtime-speci
 WEB_API_METHODS = {
     "LASSO_FEATURE_SELECT",
     "RELATION_NETWORK_CLUSTER",
+    "INTEGRATED_RELATION_CLUSTER",
     "SYMBOLIC_REGRESSION_RULE",
     "INTEGRATED_RULE_DISCOVER",
     "INTEGRATED_RULE_VIOLATION_DETECT",
@@ -87,14 +91,24 @@ def execute_web_api_job(
             f"{result.get('edgeCount', 0)} edge(s), "
             f"{result.get('clusterCount', 0)} cluster(s)."
         )
+    if method == "INTEGRATED_RELATION_CLUSTER":
+        result = run_integrated_relation_cluster(conn, payload)
+        network = result.get("network") if isinstance(result.get("network"), dict) else {}
+        return (
+            "Integrated relation matrix and network clustering completed. "
+            f"{result.get('relationCount', 0)} relation row(s), "
+            f"{network.get('clusterCount', 0)} cluster(s)."
+        )
     if method == "INTEGRATED_RULE_DISCOVER":
         result = run_integrated_rule_discover(conn, payload)
+        raise_for_partial_result(result, "Integrated rule discovery")
         return (
             f"Integrated rule discovery completed. "
             f"{result.get('successCount', 0)}/{result.get('taskCount', 0)} task(s) succeeded."
         )
     if method == "INTEGRATED_RULE_VIOLATION_DETECT":
         result = run_integrated_rule_violation_detect(conn, payload)
+        raise_for_partial_result(result, "Integrated rule violation detection")
         return (
             f"Integrated rule violation detection completed. "
             f"{result.get('successCount', 0)}/{result.get('taskCount', 0)} task(s) succeeded."
@@ -119,11 +133,188 @@ def get_method_from_spec(value: Any) -> str:
         return "SYMBOLIC_REGRESSION_RULE"
     if endpoint.endswith("/relation-network-cluster"):
         return "RELATION_NETWORK_CLUSTER"
+    if endpoint.endswith("/integrated-relation-cluster"):
+        return "INTEGRATED_RELATION_CLUSTER"
     if endpoint.endswith("/integrated-rule-discover"):
         return "INTEGRATED_RULE_DISCOVER"
     if endpoint.endswith("/integrated-rule-violation-detect"):
         return "INTEGRATED_RULE_VIOLATION_DETECT"
     return ""
+
+
+CLUSTER_USAGE_MODES = {"NONE", "PREFER_SAME_CLUSTER", "WITHIN_CLUSTER_ONLY"}
+
+
+def normalize_cluster_usage_mode(value: Any, default: str = "NONE") -> str:
+    normalized = str(value or default).strip().upper()
+    if normalized not in CLUSTER_USAGE_MODES:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Unsupported cluster usage mode: {normalized}. "
+                "Use NONE, PREFER_SAME_CLUSTER, or WITHIN_CLUSTER_ONLY."
+            ),
+        )
+    return normalized
+
+
+def load_relation_cluster_nodes(
+    conn,
+    owner: str,
+    table: str,
+    run_source_type: str,
+    run_id: int,
+) -> Dict[str, Dict[str, Any]]:
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            SqlLoader.get_sql("ML_ANALYSIS_RELATION_CLUSTER_NODES"),
+            {
+                "runSourceType": run_source_type,
+                "runId": run_id,
+                "owner": owner,
+                "tableName": table,
+            },
+        )
+        columns = [str(desc[0]).upper() for desc in cursor.description or []]
+        return {
+            str(row[0] or "").strip().upper(): {
+                columns[index]: row[index]
+                for index in range(len(columns))
+            }
+            for row in cursor.fetchall()
+            if row and row[0]
+        }
+    finally:
+        cursor.close()
+
+
+def apply_cluster_candidate_strategy(
+    candidates: Sequence[str],
+    target_column: str,
+    cluster_nodes: Dict[str, Dict[str, Any]],
+    requested_mode: str,
+    max_features: int,
+) -> Tuple[List[str], Dict[str, Any]]:
+    normalized_candidates = list(dict.fromkeys(str(item).strip().upper() for item in candidates if str(item).strip()))
+    usage = {
+        "requestedMode": requested_mode,
+        "effectiveMode": "NONE",
+        "appliedYn": "N",
+        "fallbackYn": "N",
+        "reason": "Cluster usage is disabled.",
+        "targetColumn": target_column,
+        "targetClusterId": None,
+        "networkNodeCount": len(cluster_nodes),
+        "sourceCandidateCount": len(normalized_candidates),
+        "candidateCount": len(normalized_candidates),
+        "sameClusterCandidateCount": 0,
+        "crossClusterCandidateCount": 0,
+        "unclusteredCandidateCount": 0,
+    }
+    if requested_mode == "NONE":
+        return normalized_candidates, usage
+
+    target_node = cluster_nodes.get(target_column) or {}
+    target_cluster_id = target_node.get("CLUSTER_ID")
+    usage["targetClusterId"] = target_cluster_id
+    if not cluster_nodes or target_cluster_id is None:
+        reason = "No same-run relation cluster exists for the target column."
+        if requested_mode == "WITHIN_CLUSTER_ONLY":
+            raise HTTPException(status_code=400, detail=f"{reason} targetColumn={target_column}")
+        usage.update({"fallbackYn": "Y", "reason": f"{reason} Existing candidate selection was used."})
+        return normalized_candidates, usage
+
+    def centrality(column: str) -> Tuple[float, float, str]:
+        node = cluster_nodes.get(column) or {}
+        return (
+            -float(node.get("CENTRALITY_SCORE") or 0),
+            -float(node.get("WEIGHTED_DEGREE") or 0),
+            column,
+        )
+
+    same_cluster = sorted(
+        [column for column in normalized_candidates if (cluster_nodes.get(column) or {}).get("CLUSTER_ID") == target_cluster_id],
+        key=centrality,
+    )
+    other_clusters: Dict[Any, List[str]] = {}
+    unclustered: List[str] = []
+    for column in normalized_candidates:
+        cluster_id = (cluster_nodes.get(column) or {}).get("CLUSTER_ID")
+        if cluster_id == target_cluster_id:
+            continue
+        if cluster_id is None:
+            unclustered.append(column)
+            continue
+        other_clusters.setdefault(cluster_id, []).append(column)
+    for cluster_id in other_clusters:
+        other_clusters[cluster_id] = sorted(other_clusters[cluster_id], key=centrality)
+
+    usage["sameClusterCandidateCount"] = len(same_cluster)
+    usage["crossClusterCandidateCount"] = sum(len(items) for items in other_clusters.values())
+    usage["unclusteredCandidateCount"] = len(unclustered)
+    if requested_mode == "WITHIN_CLUSTER_ONLY":
+        if not same_cluster:
+            raise HTTPException(
+                status_code=400,
+                detail=f"No same-cluster candidate feature exists for targetColumn={target_column}, clusterId={target_cluster_id}.",
+            )
+        usage.update({
+            "effectiveMode": requested_mode,
+            "appliedYn": "Y",
+            "reason": "Only candidate features from the target column cluster were used.",
+            "candidateCount": len(same_cluster),
+        })
+        return same_cluster, usage
+
+    supplemental_centers: List[str] = []
+    other_remaining: List[str] = []
+    for cluster_id in sorted(other_clusters, key=lambda value: (str(type(value)), str(value))):
+        cluster_candidates = other_clusters[cluster_id]
+        supplemental_centers.extend(cluster_candidates[:2])
+        other_remaining.extend(cluster_candidates[2:])
+    preferred = list(dict.fromkeys([*same_cluster, *supplemental_centers, *unclustered, *other_remaining]))
+    candidate_limit = max(20, max_features * 4)
+    selected_candidates = preferred[:candidate_limit]
+    usage.update({
+        "effectiveMode": requested_mode,
+        "appliedYn": "Y",
+        "reason": "Same-cluster candidates were prioritized and central candidates from other clusters were retained as supplements.",
+        "candidateCount": len(selected_candidates),
+        "candidateLimit": candidate_limit,
+        "supplementalCenterCount": len(supplemental_centers),
+    })
+    return selected_candidates, usage
+
+
+def build_feature_cluster_usage(
+    target_column: str,
+    feature_columns: Sequence[str],
+    cluster_nodes: Dict[str, Dict[str, Any]],
+    requested_mode: str,
+) -> Dict[str, Any]:
+    target_cluster_id = (cluster_nodes.get(target_column) or {}).get("CLUSTER_ID")
+    feature_clusters = [
+        {
+            "columnName": str(column).upper(),
+            "clusterId": (cluster_nodes.get(str(column).upper()) or {}).get("CLUSTER_ID"),
+        }
+        for column in feature_columns
+    ]
+    applied = requested_mode != "NONE" and target_cluster_id is not None
+    return {
+        "requestedMode": requested_mode,
+        "effectiveMode": requested_mode if applied else "NONE",
+        "appliedYn": "Y" if applied else "N",
+        "fallbackYn": "Y" if requested_mode != "NONE" and not applied else "N",
+        "targetColumn": target_column,
+        "targetClusterId": target_cluster_id,
+        "networkNodeCount": len(cluster_nodes),
+        "featureClusters": feature_clusters,
+        "sameClusterFeatureCount": sum(1 for item in feature_clusters if item["clusterId"] == target_cluster_id and target_cluster_id is not None),
+        "crossClusterFeatureCount": sum(1 for item in feature_clusters if item["clusterId"] is not None and item["clusterId"] != target_cluster_id),
+        "unclusteredFeatureCount": sum(1 for item in feature_clusters if item["clusterId"] is None),
+    }
 
 
 def run_lasso_feature_select(conn, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -136,6 +327,10 @@ def run_lasso_feature_select(conn, payload: Dict[str, Any]) -> Dict[str, Any]:
     max_features = clamp(parse_int(get_value(payload, "P_MAX_FEATURES", "maxFeatures"), 10), 1, 50)
     sample_rows = parse_optional_positive_int(get_value(payload, "P_SAMPLE_ROWS", "sampleRows"), 100000)
     alpha = parse_optional_float(get_value(payload, "P_ALPHA", "alpha"))
+    cluster_usage_mode = normalize_cluster_usage_mode(
+        get_value(payload, "P_CLUSTER_USAGE_MODE", "clusterUsageMode"),
+        "NONE",
+    )
 
     if is_auto_target(target_column_value):
         max_auto_targets = clamp(parse_int(get_value(payload, "P_MAX_AUTO_TARGETS", "maxAutoTargets"), 10), 1, 100)
@@ -156,6 +351,17 @@ def run_lasso_feature_select(conn, payload: Dict[str, Any]) -> Dict[str, Any]:
     candidates = [column for column in candidates if column != target_column]
     if not candidates:
         raise HTTPException(status_code=400, detail="No numeric candidate features were found for LASSO.")
+
+    cluster_nodes = load_relation_cluster_nodes(conn, owner, table, run_source_type, run_id) if cluster_usage_mode != "NONE" else {}
+    candidates, cluster_usage = apply_cluster_candidate_strategy(
+        candidates,
+        target_column,
+        cluster_nodes,
+        cluster_usage_mode,
+        max_features,
+    )
+    if not candidates:
+        raise HTTPException(status_code=400, detail="No numeric candidate features remained after applying cluster usage mode.")
 
     x_values, y_values, used_features = fetch_numeric_matrix(conn, owner, table, target_column, candidates, sample_rows)
     if len(y_values) < 10:
@@ -191,7 +397,12 @@ def run_lasso_feature_select(conn, payload: Dict[str, Any]) -> Dict[str, Any]:
     selected = [row for row in scored if row["absCoefficient"] > 0][:max_features]
     selected_names = {row["feature"] for row in selected}
     score = float(model.score(x_scaled, y_scaled))
-    message = f"rows={len(y_scaled)}, alpha={model_alpha}, selected={len(selected_names)}"
+    message = (
+        f"rows={len(y_scaled)}, alpha={model_alpha}, selected={len(selected_names)}, "
+        f"clusterMode={cluster_usage.get('effectiveMode')}, "
+        f"targetCluster={cluster_usage.get('targetClusterId')}, "
+        f"clusterCandidates={cluster_usage.get('candidateCount')}"
+    )
 
     cursor = conn.cursor()
     try:
@@ -270,6 +481,7 @@ def run_lasso_feature_select(conn, payload: Dict[str, Any]) -> Dict[str, Any]:
         "selectedCount": len(selected_names),
         "r2Score": score,
         "alpha": model_alpha,
+        "clusterUsage": cluster_usage,
     }
 
 
@@ -291,6 +503,10 @@ def run_symbolic_regression_rule(conn, payload: Dict[str, Any]) -> Dict[str, Any
         0.995,
         0.0,
         1.0,
+    )
+    cluster_usage_mode = normalize_cluster_usage_mode(
+        get_value(payload, "P_CLUSTER_USAGE_MODE", "clusterUsageMode"),
+        "NONE",
     )
 
     if is_auto_target(target_column_value):
@@ -314,6 +530,9 @@ def run_symbolic_regression_rule(conn, payload: Dict[str, Any]) -> Dict[str, Any
     if len(y_values) < 10:
         raise HTTPException(status_code=400, detail="Symbolic regression requires at least 10 complete numeric rows.")
 
+    cluster_nodes = load_relation_cluster_nodes(conn, owner, table, run_source_type, run_id) if cluster_usage_mode != "NONE" else {}
+    cluster_usage = build_feature_cluster_usage(target_column, used_features, cluster_nodes, cluster_usage_mode)
+
     expression, score, complexity, method, message = fit_symbolic_expression(
         x_values,
         y_values,
@@ -322,6 +541,12 @@ def run_symbolic_regression_rule(conn, payload: Dict[str, Any]) -> Dict[str, Any
         use_pysr,
         linear_first,
         linear_r2_threshold,
+    )
+    message = (
+        f"{message} clusterMode={cluster_usage.get('effectiveMode')}, "
+        f"targetCluster={cluster_usage.get('targetClusterId')}, "
+        f"sameClusterFeatures={cluster_usage.get('sameClusterFeatureCount')}, "
+        f"crossClusterFeatures={cluster_usage.get('crossClusterFeatureCount')}."
     )
     expression = normalize_oracle_symbolic_expression(expression, used_features)
     rule_id = build_symbolic_rule_id(run_source_type, run_id, owner, table, target_column, expression, used_features)
@@ -405,6 +630,7 @@ def run_symbolic_regression_rule(conn, payload: Dict[str, Any]) -> Dict[str, Any
         "method": method,
         "score": score,
         "ruleId": rule_id,
+        "clusterUsage": cluster_usage,
     }
 
 
@@ -461,20 +687,142 @@ def run_relation_network_cluster(conn, payload: Dict[str, Any]) -> Dict[str, Any
         cursor.close()
 
 
+def run_integrated_relation_cluster(conn, payload: Dict[str, Any]) -> Dict[str, Any]:
+    owner = require_identifier(get_value(payload, "P_TARGET_OWNER", "targetOwner", "owner"), "targetOwner")
+    table = require_identifier(get_value(payload, "P_TARGET_TABLE", "targetTable", "tableName"), "targetTable")
+    run_source_type = normalize_run_source_type(get_value(payload, "P_RUN_SOURCE_TYPE", "runSourceType"))
+    run_id = parse_int(get_value(payload, "P_RUN_ID", "runId"), 0)
+    min_metric = clamp_float(parse_optional_float(get_value(payload, "P_MIN_METRIC", "minMetric")), 0.65, 0.0, 1.0)
+    min_pvalue = clamp_float(parse_optional_float(get_value(payload, "P_MIN_PVALUE", "minPvalue")), 0.05, 0.0, 1.0)
+    sample_rows = parse_optional_positive_int(get_value(payload, "P_SAMPLE_ROWS", "sampleRows"), 100000)
+    max_distinct = clamp(parse_int(get_value(payload, "P_MAX_DISTINCT", "maxDistinct"), 100), 2, 100000)
+    max_columns = clamp(parse_int(get_value(payload, "P_MAX_COLUMNS", "maxColumns"), 100), 2, 200)
+    min_rows = clamp(parse_int(get_value(payload, "P_MIN_ROWS", "minRows"), 30), 4, 1000000)
+    include_spearman = parse_yes_no(get_value(payload, "P_INCLUDE_SPEARMAN", "includeSpearman"), "Y")
+    min_cramer = clamp_float(parse_optional_float(get_value(payload, "P_MIN_CRAMER", "minCramer")), 0.3, 0.0, 1.0)
+    min_abs_corr = clamp_float(parse_optional_float(get_value(payload, "P_MIN_ABS_CORR", "minAbsCorr")), 0.6, 0.0, 1.0)
+    min_eta = clamp_float(parse_optional_float(get_value(payload, "P_MIN_ETA", "minEta")), 0.65, 0.0, 1.0)
+    relation_criteria = {
+        "minMetric": min_metric,
+        "minCramer": min_cramer,
+        "minAbsCorr": min_abs_corr,
+        "minEta": min_eta,
+        "minPvalue": min_pvalue,
+        "minRows": min_rows,
+    }
+
+    cursor = conn.cursor()
+    try:
+        cursor.callproc(
+            "INIT$_SP_RELATION_MATRIX_ANALYZE",
+            [
+                owner,
+                table,
+                min_metric,
+                min_pvalue,
+                sample_rows,
+                max_distinct,
+                max_columns,
+                min_rows,
+                include_spearman,
+                run_source_type,
+                run_id,
+                "Y",
+                min_cramer,
+                min_abs_corr,
+                min_eta,
+            ],
+        )
+        relation_count = count_result_rows(
+            cursor,
+            "INIT$_TB_RELATION_PAIR",
+            {
+                "RUN_SOURCE_TYPE": run_source_type,
+                "RUN_ID": run_id,
+                "OWNER": owner,
+                "TABLE_NAME": table,
+            },
+        )
+    finally:
+        cursor.close()
+
+    network_payload = dict(payload)
+    network_payload["P_TARGET_OWNER"] = owner
+    network_payload["P_TARGET_TABLE"] = table
+    network_payload["P_RUN_SOURCE_TYPE"] = run_source_type
+    network_payload["P_RUN_ID"] = run_id
+    network_payload["P_MIN_METRIC"] = clamp_float(
+        parse_optional_float(get_value(payload, "P_NETWORK_MIN_METRIC", "networkMinMetric")),
+        0.3,
+        0.0,
+        1.0,
+    )
+    network_result = run_relation_network_cluster(conn, network_payload)
+    return {
+        "status": "success",
+        "taskCount": 2,
+        "successCount": 2,
+        "parts": ["RELATION_MATRIX", "RELATION_NETWORK"],
+        "relationCount": relation_count,
+        "resultTables": [
+            "INIT$_TB_CAT_CORR_PAIR",
+            "INIT$_TB_NUM_CORR_PAIR",
+            "INIT$_TB_RELATION_PAIR",
+            "INIT$_TB_RELATION_SUMMARY",
+            "INIT$_TB_RELATION_NETWORK_NODE",
+            "INIT$_TB_RELATION_NETWORK_EDGE",
+        ],
+        "relationCriteria": relation_criteria,
+        "network": network_result,
+    }
+
+
 def run_integrated_rule_discover(conn, payload: Dict[str, Any]) -> Dict[str, Any]:
+    payload = dict(payload)
     owner = require_identifier(get_value(payload, "P_TARGET_OWNER", "targetOwner", "owner"), "targetOwner")
     table = require_identifier(get_value(payload, "P_TARGET_TABLE", "targetTable", "tableName"), "targetTable")
     run_source_type = normalize_run_source_type(get_value(payload, "P_RUN_SOURCE_TYPE", "runSourceType"))
     run_id = parse_int(get_value(payload, "P_RUN_ID", "runId"), 0)
     parts = normalize_integrated_parts(get_value(payload, "P_RULE_PARTS", "ruleParts"))
+    cluster_usage_mode = normalize_cluster_usage_mode(
+        get_value(payload, "P_CLUSTER_USAGE_MODE", "clusterUsageMode"),
+        "PREFER_SAME_CLUSTER",
+    )
+    payload["P_CLUSTER_USAGE_MODE"] = cluster_usage_mode
+    payload["clusterUsageMode"] = cluster_usage_mode
     continue_on_error = parse_yes_no(get_value(payload, "P_CONTINUE_ON_ERROR", "continueOnError"), "Y") == "Y"
+    continuous_criteria = {
+        "targetColumn": str(get_value(payload, "P_TARGET_COLUMN", "targetColumn") or "(auto)"),
+        "minR2Score": clamp_float(
+            parse_optional_float(get_value(payload, "P_MIN_R2_SCORE", "minR2Score")),
+            0.7,
+            0.0,
+            1.0,
+        ),
+        "maxAutoTargets": clamp(parse_int(get_value(payload, "P_MAX_AUTO_TARGETS", "maxAutoTargets"), 10), 1, 100),
+        "maxFeatures": clamp(parse_int(get_value(payload, "P_MAX_FEATURES", "maxFeatures"), 10), 1, 10),
+        "clusterUsageMode": cluster_usage_mode,
+    }
 
     results: List[Dict[str, Any]] = []
     failures: List[Dict[str, Any]] = []
+    result_tables: List[str] = []
+    result_models: List[str] = []
+    cluster_usage: Dict[str, Any] = {
+        "requestedMode": cluster_usage_mode,
+        "effectiveMode": "NONE",
+        "appliedYn": "N",
+        "fallbackYn": "N",
+        "reason": "Continuous rule discovery was not executed.",
+    }
 
     if "CATEGORICAL" in parts:
         try:
-            results.append(run_integrated_apriori_assoc_model(conn, payload, owner, table, run_source_type, run_id))
+            categorical_result = run_integrated_apriori_assoc_model(conn, payload, owner, table, run_source_type, run_id)
+            results.append(categorical_result)
+            result_tables.append(str(categorical_result.get("resultTable") or "INIT$_TB_ASSOC_RULE_SUMMARY"))
+            if categorical_result.get("modelName"):
+                result_models.append(str(categorical_result["modelName"]))
         except Exception as exc:
             failures.append({"task": "CATEGORICAL_APRIORI", "message": get_error_message(exc)})
             if not continue_on_error:
@@ -487,7 +835,16 @@ def run_integrated_rule_discover(conn, payload: Dict[str, Any]) -> Dict[str, Any
             lasso_payload.setdefault("P_TARGET_COLUMN", "(auto)")
             lasso_payload.setdefault("targetColumn", lasso_payload["P_TARGET_COLUMN"])
             lasso_result = run_lasso_feature_select(conn, lasso_payload)
+            if isinstance(lasso_result.get("clusterUsage"), dict):
+                cluster_usage = dict(lasso_result["clusterUsage"])
             results.append({"task": "CONTINUOUS_LASSO", "resultTable": "INIT$_TB_LASSO_FEATURE", **lasso_result})
+            result_tables.append("INIT$_TB_LASSO_FEATURE")
+            if str(lasso_result.get("status") or "").lower() == "partial_success":
+                failures.append({
+                    "task": "CONTINUOUS_LASSO",
+                    "message": summarize_partial_failures(lasso_result, "LASSO target"),
+                    "details": lasso_result.get("failedTargets") or [],
+                })
         except Exception as exc:
             failures.append({"task": "CONTINUOUS_LASSO", "message": get_error_message(exc)})
             if not continue_on_error:
@@ -500,6 +857,13 @@ def run_integrated_rule_discover(conn, payload: Dict[str, Any]) -> Dict[str, Any
                 symbolic_payload.setdefault("targetColumn", symbolic_payload["P_TARGET_COLUMN"])
                 symbolic_result = run_symbolic_regression_rule(conn, symbolic_payload)
                 results.append({"task": "CONTINUOUS_SYMBOLIC", "resultTable": "INIT$_TB_SYMBOLIC_RULE", **symbolic_result})
+                result_tables.append("INIT$_TB_SYMBOLIC_RULE")
+                if str(symbolic_result.get("status") or "").lower() == "partial_success":
+                    failures.append({
+                        "task": "CONTINUOUS_SYMBOLIC",
+                        "message": summarize_partial_failures(symbolic_result, "Symbolic target"),
+                        "details": symbolic_result.get("failedTargets") or [],
+                    })
             except Exception as exc:
                 failures.append({"task": "CONTINUOUS_SYMBOLIC", "message": get_error_message(exc)})
                 if not continue_on_error:
@@ -509,14 +873,18 @@ def run_integrated_rule_discover(conn, payload: Dict[str, Any]) -> Dict[str, Any
         detail = "; ".join(f"{item['task']}: {item['message']}" for item in failures) or "No integrated rule discovery task succeeded."
         raise HTTPException(status_code=400, detail=detail)
 
+    task_count, success_count, failed_count = calculate_integrated_task_counts(results, failures)
     return {
         "status": "partial_success" if failures else "success",
-        "taskCount": len(results) + len(failures),
-        "successCount": len(results),
-        "failedCount": len(failures),
+        "taskCount": task_count,
+        "successCount": success_count,
+        "failedCount": failed_count,
         "failedTasks": failures,
         "parts": sorted(parts),
-        "resultTables": ["INIT$_TB_ASSOC_RULE_SUMMARY", "INIT$_TB_LASSO_FEATURE", "INIT$_TB_SYMBOLIC_RULE"],
+        "resultTables": list(dict.fromkeys(result_tables)),
+        "resultModels": list(dict.fromkeys(result_models)),
+        "continuousCriteria": continuous_criteria,
+        "clusterUsage": cluster_usage,
         "results": results,
     }
 
@@ -531,19 +899,38 @@ def run_integrated_rule_violation_detect(conn, payload: Dict[str, Any]) -> Dict[
 
     results: List[Dict[str, Any]] = []
     failures: List[Dict[str, Any]] = []
+    result_tables: List[str] = []
+
+    cursor = conn.cursor()
+    try:
+        disable_parallel_execution(
+            cursor,
+            include_query=True,
+            context="integrated-rule-violation-detect",
+        )
+    finally:
+        cursor.close()
 
     if "CATEGORICAL" in parts:
+        set_integrated_task_savepoint(conn)
         try:
-            results.append(run_integrated_assoc_rule_violation(conn, payload, owner, table, run_source_type, run_id))
+            categorical_result = run_integrated_assoc_rule_violation(conn, payload, owner, table, run_source_type, run_id)
+            results.append(categorical_result)
+            result_tables.append(str(categorical_result.get("resultTable") or "INIT$_TB_RULE_VIOLATION_RESULT"))
         except Exception as exc:
+            rollback_integrated_task(conn)
             failures.append({"task": "CATEGORICAL_RULE_VIOLATION", "message": get_error_message(exc)})
             if not continue_on_error:
                 raise
 
     if "CONTINUOUS" in parts:
+        set_integrated_task_savepoint(conn)
         try:
-            results.append(run_integrated_symbolic_rule_violation(conn, payload, owner, table, run_source_type, run_id))
+            continuous_result = run_integrated_symbolic_rule_violation(conn, payload, owner, table, run_source_type, run_id)
+            results.append(continuous_result)
+            result_tables.append(str(continuous_result.get("resultTable") or "INIT$_TB_SYMBOLIC_RULE_VIOLATION"))
         except Exception as exc:
+            rollback_integrated_task(conn)
             failures.append({"task": "CONTINUOUS_SYMBOLIC_VIOLATION", "message": get_error_message(exc)})
             if not continue_on_error:
                 raise
@@ -552,16 +939,73 @@ def run_integrated_rule_violation_detect(conn, payload: Dict[str, Any]) -> Dict[
         detail = "; ".join(f"{item['task']}: {item['message']}" for item in failures) or "No integrated violation detection task succeeded."
         raise HTTPException(status_code=400, detail=detail)
 
+    task_count, success_count, failed_count = calculate_integrated_task_counts(results, failures)
     return {
         "status": "partial_success" if failures else "success",
-        "taskCount": len(results) + len(failures),
-        "successCount": len(results),
-        "failedCount": len(failures),
+        "taskCount": task_count,
+        "successCount": success_count,
+        "failedCount": failed_count,
         "failedTasks": failures,
         "parts": sorted(parts),
-        "resultTables": ["INIT$_TB_RULE_VIOLATION_RESULT", "INIT$_TB_SYMBOLIC_RULE_VIOLATION"],
+        "resultTables": list(dict.fromkeys(result_tables)),
         "results": results,
     }
+
+
+def set_integrated_task_savepoint(conn) -> None:
+    cursor = conn.cursor()
+    try:
+        cursor.execute(SqlLoader.get_sql("ML_ANALYSIS_INTEGRATED_TASK_SAVEPOINT"))
+    finally:
+        cursor.close()
+
+
+def rollback_integrated_task(conn) -> None:
+    cursor = conn.cursor()
+    try:
+        cursor.execute(SqlLoader.get_sql("ML_ANALYSIS_INTEGRATED_TASK_ROLLBACK"))
+    finally:
+        cursor.close()
+
+
+def summarize_partial_failures(result: Dict[str, Any], label: str) -> str:
+    failures = result.get("failedTargets") or result.get("failedTasks") or []
+    messages = []
+    for item in failures:
+        if not isinstance(item, dict):
+            continue
+        target = item.get("targetColumn") or item.get("task") or label
+        message = item.get("message") or "failed"
+        messages.append(f"{target}: {message}")
+    detail = "; ".join(messages[:10])
+    if len(messages) > 10:
+        detail += f"; and {len(messages) - 10} more"
+    return detail or f"One or more {label} operations failed."
+
+
+def calculate_integrated_task_counts(
+    results: Sequence[Dict[str, Any]],
+    failures: Sequence[Dict[str, Any]],
+) -> Tuple[int, int, int]:
+    result_tasks = {
+        str(item.get("task") or "").strip()
+        for item in results
+        if isinstance(item, dict) and item.get("task")
+    }
+    failed_tasks = {
+        str(item.get("task") or "").strip()
+        for item in failures
+        if isinstance(item, dict) and item.get("task")
+    }
+    task_count = len(result_tasks | failed_tasks)
+    return task_count, len(result_tasks - failed_tasks), len(failed_tasks)
+
+
+def raise_for_partial_result(result: Dict[str, Any], label: str) -> None:
+    if str(result.get("status") or "").strip().lower() != "partial_success":
+        return
+    detail = summarize_partial_failures(result, "integrated task")
+    raise HTTPException(status_code=409, detail=f"{label} partially completed. {detail}")
 
 
 def run_integrated_apriori_assoc_model(
@@ -824,6 +1268,14 @@ def run_lasso_auto_targets(
         detail = "; ".join(f"{item['targetColumn']}: {item['message']}" for item in failures) or "No auto target succeeded."
         raise HTTPException(status_code=400, detail=detail)
 
+    cluster_usages = [
+        item.get("clusterUsage")
+        for item in results
+        if isinstance(item.get("clusterUsage"), dict)
+    ]
+    applied_cluster_usages = [item for item in cluster_usages if str(item.get("appliedYn") or "N").upper() == "Y"]
+    fallback_cluster_usages = [item for item in cluster_usages if str(item.get("fallbackYn") or "N").upper() == "Y"]
+
     return {
         "status": "partial_success" if failures else "success",
         "targetCount": len(target_columns),
@@ -832,6 +1284,19 @@ def run_lasso_auto_targets(
         "failedTargets": failures,
         "candidateCount": sum(int(item.get("candidateCount") or 0) for item in results),
         "selectedCount": sum(int(item.get("selectedCount") or 0) for item in results),
+        "clusterUsage": {
+            "requestedMode": normalize_cluster_usage_mode(
+                get_value(payload, "P_CLUSTER_USAGE_MODE", "clusterUsageMode"),
+                "NONE",
+            ),
+            "effectiveMode": applied_cluster_usages[0].get("effectiveMode") if applied_cluster_usages else "NONE",
+            "appliedYn": "Y" if applied_cluster_usages else "N",
+            "fallbackYn": "Y" if fallback_cluster_usages else "N",
+            "appliedTargetCount": len(applied_cluster_usages),
+            "fallbackTargetCount": len(fallback_cluster_usages),
+            "targetCount": len(cluster_usages),
+            "targets": cluster_usages,
+        },
         "targets": results,
     }
 
@@ -855,6 +1320,13 @@ def run_symbolic_auto_targets(conn, payload: Dict[str, Any], target_columns: Seq
         detail = "; ".join(f"{item['targetColumn']}: {item['message']}" for item in failures) or "No auto target succeeded."
         raise HTTPException(status_code=400, detail=detail)
 
+    cluster_usages = [
+        item.get("clusterUsage")
+        for item in results
+        if isinstance(item.get("clusterUsage"), dict)
+    ]
+    applied_cluster_usages = [item for item in cluster_usages if str(item.get("appliedYn") or "N").upper() == "Y"]
+
     return {
         "status": "partial_success" if failures else "success",
         "targetCount": len(target_columns),
@@ -863,6 +1335,17 @@ def run_symbolic_auto_targets(conn, payload: Dict[str, Any], target_columns: Seq
         "failedTargets": failures,
         "featureCount": sum(int(item.get("featureCount") or 0) for item in results),
         "method": "AUTO",
+        "clusterUsage": {
+            "requestedMode": normalize_cluster_usage_mode(
+                get_value(payload, "P_CLUSTER_USAGE_MODE", "clusterUsageMode"),
+                "NONE",
+            ),
+            "effectiveMode": applied_cluster_usages[0].get("effectiveMode") if applied_cluster_usages else "NONE",
+            "appliedYn": "Y" if applied_cluster_usages else "N",
+            "appliedTargetCount": len(applied_cluster_usages),
+            "targetCount": len(cluster_usages),
+            "targets": cluster_usages,
+        },
         "targets": results,
     }
 

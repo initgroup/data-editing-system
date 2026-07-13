@@ -983,6 +983,85 @@ DECLARE
 
         DBMS_OUTPUT.PUT_LINE('[OK] INIT$_TB_RULE_VIOLATION_RESULT column display order refreshed.');
     END;
+
+    PROCEDURE reorder_flow_work_node_run_columns IS
+        TYPE t_col_list IS TABLE OF VARCHAR2(128);
+        v_cols t_col_list := t_col_list(
+            'FLOW_NODE_RUN_ID',
+            'FLOW_RUN_ID',
+            'FLOW_ID',
+            'NODE_KEY',
+            'NODE_NAME',
+            'NODE_TYPE',
+            'RUN_LEVEL',
+            'SORT_ORDER',
+            'STATUS',
+            'MESSAGE',
+            'RUNTIME_PARAM_JSON',
+            'NODE_PAYLOAD_JSON',
+            'RUN_OUTPUT_JSON',
+            'STARTED_AT',
+            'FINISHED_AT',
+            'CREATED_AT',
+            'UPDATED_AT'
+        );
+        v_current_order VARCHAR2(32767);
+        v_expected_order VARCHAR2(32767);
+    BEGIN
+        IF NOT table_exists('INIT$_TB_FLOW_WORK_NODE_RUN') THEN
+            DBMS_OUTPUT.PUT_LINE('[SKIP] TABLE INIT$_TB_FLOW_WORK_NODE_RUN does not exist.');
+            RETURN;
+        END IF;
+
+        FOR i IN 1 .. v_cols.COUNT LOOP
+            IF NOT column_exists('INIT$_TB_FLOW_WORK_NODE_RUN', v_cols(i)) THEN
+                DBMS_OUTPUT.PUT_LINE('[SKIP] INIT$_TB_FLOW_WORK_NODE_RUN column order refresh skipped. Missing column: ' || v_cols(i));
+                RETURN;
+            END IF;
+            v_expected_order := v_expected_order || CASE WHEN i > 1 THEN ',' END || v_cols(i);
+        END LOOP;
+
+        SELECT LISTAGG(COLUMN_NAME, ',') WITHIN GROUP (ORDER BY COLUMN_ID)
+          INTO v_current_order
+          FROM USER_TAB_COLS
+         WHERE TABLE_NAME = 'INIT$_TB_FLOW_WORK_NODE_RUN'
+           AND HIDDEN_COLUMN = 'NO'
+           AND COLUMN_NAME IN (
+               'FLOW_NODE_RUN_ID',
+               'FLOW_RUN_ID',
+               'FLOW_ID',
+               'NODE_KEY',
+               'NODE_NAME',
+               'NODE_TYPE',
+               'RUN_LEVEL',
+               'SORT_ORDER',
+               'STATUS',
+               'MESSAGE',
+               'RUNTIME_PARAM_JSON',
+               'NODE_PAYLOAD_JSON',
+               'RUN_OUTPUT_JSON',
+               'STARTED_AT',
+               'FINISHED_AT',
+               'CREATED_AT',
+               'UPDATED_AT'
+           );
+
+        IF v_current_order = v_expected_order THEN
+            DBMS_OUTPUT.PUT_LINE('[SKIP] INIT$_TB_FLOW_WORK_NODE_RUN column display order already matches.');
+            RETURN;
+        END IF;
+
+        -- Keep FLOW_NODE_RUN_ID visible so the table never has zero visible columns.
+        FOR i IN 2 .. v_cols.COUNT LOOP
+            set_column_visibility('INIT$_TB_FLOW_WORK_NODE_RUN', v_cols(i), 'INVISIBLE');
+        END LOOP;
+
+        FOR i IN 2 .. v_cols.COUNT LOOP
+            set_column_visibility('INIT$_TB_FLOW_WORK_NODE_RUN', v_cols(i), 'VISIBLE');
+        END LOOP;
+
+        DBMS_OUTPUT.PUT_LINE('[OK] INIT$_TB_FLOW_WORK_NODE_RUN column display order refreshed.');
+    END;
 BEGIN
     DBMS_OUTPUT.PUT_LINE('=== INIT_TARGET ALTER START ===');
 
@@ -1079,6 +1158,7 @@ BEGIN
     add_column_if_missing('INIT$_TB_RULE_VIOLATION_RESULT', 'RUN_SOURCE_TYPE', '"RUN_SOURCE_TYPE" VARCHAR2(30 BYTE) DEFAULT ''DATA_WORK'' NOT NULL ENABLE');
     add_column_if_missing('INIT$_TB_RULE_VIOLATION_RESULT', 'RUN_ID', '"RUN_ID" NUMBER DEFAULT 0 NOT NULL ENABLE');
     add_column_if_missing('INIT$_TB_FLOW_WORK_NODE', 'USE_YN', '"USE_YN" CHAR(1 BYTE) DEFAULT ''Y'' NOT NULL ENABLE');
+    add_column_if_missing('INIT$_TB_FLOW_WORK_NODE_RUN', 'RUN_OUTPUT_JSON', '"RUN_OUTPUT_JSON" CLOB');
 
     FOR table_rec IN (
         SELECT 'INIT$_TB_PREDICTED_TYPE' AS TABLE_NAME, 'CK_INIT$_TB_PREDICTED_RUN_SRC' AS CONSTRAINT_NAME FROM DUAL UNION ALL
@@ -1697,6 +1777,11 @@ CREATE INDEX "IX_INIT$_TB_RULE_VIOLATION_03"
         run_ddl('COMMENT INIT$_TB_FLOW_WORK_NODE.USE_YN', q'[COMMENT ON COLUMN "INIT$_TB_FLOW_WORK_NODE"."USE_YN" IS 'Node execution use Y/N. N keeps graph links but skips the node during execution']');
     END IF;
 
+    IF table_exists('INIT$_TB_FLOW_WORK_NODE_RUN')
+       AND column_exists('INIT$_TB_FLOW_WORK_NODE_RUN', 'RUN_OUTPUT_JSON') THEN
+        run_ddl('COMMENT INIT$_TB_FLOW_WORK_NODE_RUN.RUN_OUTPUT_JSON', q'[COMMENT ON COLUMN "INIT$_TB_FLOW_WORK_NODE_RUN"."RUN_OUTPUT_JSON" IS 'Resolved model/table output lineage captured after node execution']');
+    END IF;
+
     reorder_assoc_rule_summary_columns;
     reorder_predicted_type_columns;
     reorder_predicted_type_final_columns;
@@ -1707,6 +1792,7 @@ CREATE INDEX "IX_INIT$_TB_RULE_VIOLATION_03"
     reorder_relation_network_node_columns;
     reorder_relation_network_edge_columns;
     reorder_rule_violation_result_columns;
+    reorder_flow_work_node_run_columns;
 
     DBMS_OUTPUT.PUT_LINE('=== INIT_TARGET ALTER END ===');
 END;

@@ -86,6 +86,23 @@ def relation_network_cluster(req: MlAnalysisRequest, request: Request):
             conn.close()
 
 
+@router.post("/integrated-relation-cluster")
+def integrated_relation_cluster(req: MlAnalysisRequest, request: Request):
+    conn = None
+    try:
+        conn = get_target_db_connection(request)
+        result = ml_analysis_service.run_integrated_relation_cluster(conn, request_payload(req))
+        conn.commit()
+        return result
+    except Exception:
+        if conn:
+            conn.rollback()
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
 @router.post("/integrated-rule-discover")
 def integrated_rule_discover(req: MlAnalysisRequest, request: Request):
     conn = None

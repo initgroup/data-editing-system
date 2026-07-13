@@ -16,6 +16,7 @@ import time
 from backend.database_helper import execute_query, SqlLoader
 from backend.services import data_work_service as data_work
 from backend.services import api_call_service
+from backend.services import flow_contract_service as flow_contracts
 
 
 class FlowWorkDmlError(Exception):
@@ -44,6 +45,8 @@ class FlowNodeRequest(BaseModel):
     resultCreateYn: Optional[str] = "N"
     resultOwner: Optional[str] = None
     resultTableName: Optional[str] = None
+    execObjectName: Optional[str] = None
+    execMethod: Optional[str] = None
     positionLeft: Optional[float] = 0
     positionTop: Optional[float] = 0
     nodeWidth: Optional[float] = 170
@@ -316,6 +319,7 @@ def list_node_runs(conn, flow_run_id: int) -> Dict[str, Any]:
         row["JOB_PARAM_JSON"] = data_work.read_lob(row.get("JOB_PARAM_JSON"))
         row["RUNTIME_PARAM_JSON"] = data_work.read_lob(row.get("RUNTIME_PARAM_JSON"))
         row["NODE_PAYLOAD_JSON"] = data_work.read_lob(row.get("NODE_PAYLOAD_JSON"))
+        row["RUN_OUTPUT_JSON"] = data_work.read_lob(row.get("RUN_OUTPUT_JSON"))
     return response
 
 
@@ -469,6 +473,18 @@ def update_node_run_runtime_params(conn, flow_run_id: int, node_key: str, runtim
             "flowRunId": flow_run_id,
             "nodeKey": node_key,
             "runtimeParamJson": json.dumps(runtime_values or {}, ensure_ascii=False)
+        })
+    finally:
+        cursor.close()
+
+
+def update_node_run_output(conn, flow_run_id: int, node_key: str, output: Dict[str, Any]):
+    cursor = conn.cursor()
+    try:
+        execute_flow_dml(cursor, f"FLOW_WORK_NODE_RUN_UPDATE_OUTPUT[{node_key}]", "FLOW_WORK_NODE_RUN_UPDATE_OUTPUT", {
+            "flowRunId": flow_run_id,
+            "nodeKey": node_key,
+            "runOutputJson": json.dumps(output or {}, ensure_ascii=False),
         })
     finally:
         cursor.close()
@@ -732,7 +748,19 @@ def execute_flow_plan(conn, flow_run_id: int, plan: List[Dict[str, Any]]) -> Dic
         try:
             node_result = execute_flow_node(conn, step, runtime_values)
             message = node_result.get("message") or "Node executed."
+            execution_status = str(node_result.get("status") or "SUCCESS").strip().upper()
             update_node_run_runtime_params(conn, flow_run_id, node_key, runtime_values)
+            update_node_run_output(conn, flow_run_id, node_key, node_result.get("output") or {})
+            if execution_status in {"PARTIAL", "PARTIAL_SUCCESS", "FAILED", "ERROR"}:
+                failed_message = f"Node partially completed and requires review. {message}" if execution_status in {"PARTIAL", "PARTIAL_SUCCESS"} else message
+                update_node_run_by_key(conn, flow_run_id, node_key, "FAILED", failed_message, False, True)
+                conn.commit()
+                node_outputs[node_key] = node_result.get("output") or {}
+                step_result.update({"status": "FAILED", "message": failed_message, "output": node_outputs[node_key]})
+                node_status[node_key] = "FAILED"
+                failed += 1
+                enriched_plan.append(step_result)
+                continue
             update_node_run_by_key(conn, flow_run_id, node_key, "SUCCESS", message, False, True)
             conn.commit()
             node_outputs[node_key] = node_result.get("output") or {}
@@ -786,23 +814,33 @@ def execute_flow_node(conn, step: Dict[str, Any], runtime_values: Optional[Dict[
         job = data_work.load_job(conn, ref_menu_code, int(ref_work_job_id))
         if str(job.get("EXEC_SOURCE_TYPE") or "").upper() == "WEB_API":
             values = runtime_values if runtime_values is not None else create_runtime_values(step)
-            message = api_call_service.execute_api_job(conn, job, values, values.get("INIT$RunId") or values.get("runId"))
+            apply_scoped_model_runtime_values(step, job, values)
+            execution = api_call_service.execute_api_job(
+                conn,
+                job,
+                values,
+                values.get("INIT$RunId") or values.get("runId"),
+                include_result=True,
+            )
+            api_result = execution.get("result") or {}
+            api_status = str(api_result.get("status") or "success").strip().lower()
             return {
-                "message": message,
-                "output": build_node_output(step, job, values)
+                "status": "PARTIAL" if api_status == "partial_success" else ("FAILED" if api_status in {"failed", "error"} else "SUCCESS"),
+                "message": execution.get("message") or "API node executed.",
+                "output": build_contract_node_output(step, job, values, api_result),
             }
         executable_script = normalize_executable_script(job.get("EXEC_PLSQL") or "")
         if not executable_script:
             return {
                 "message": "No executable script was saved. Node skipped.",
-                "output": build_node_output(step, job, runtime_values or {})
+                "output": build_contract_node_output(step, job, runtime_values or {})
             }
         values = runtime_values if runtime_values is not None else create_runtime_values(step)
         apply_scoped_model_runtime_values(step, job, values)
         message = execute_saved_job_script(conn, executable_script, job, values)
         return {
             "message": message,
-            "output": build_node_output(step, job, values)
+            "output": build_contract_node_output(step, job, values)
         }
     if node_type in {"JOB", "DATA_PROFILE", "COLUMN_CORR", "AUTO_RULE", "RULE_VIOLATION"}:
         raise HTTPException(status_code=400, detail="Job node does not reference a saved work job.")
@@ -965,12 +1003,17 @@ def resolve_upstream_expression(expression: Any, source: Dict[str, Any]) -> Any:
     return source.get(expression[6:])
 
 
-LEGACY_ASSOCIATION_MODEL_NAMES = {"OML_ASSOCIATION_MODEL_01"}
+LEGACY_ASSOCIATION_MODEL_NAMES = {"OML_ASSOCIATION_MODEL_01", "OML_DECISION_TREE_MODEL_01"}
 
 
 def is_apriori_association_job(job: Dict[str, Any]) -> bool:
     object_name = str(job.get("EXEC_OBJECT_NAME") or job.get("execObjectName") or "").strip().upper()
-    return object_name == "INIT$_SP_APRIORI_ASSOC_MODEL"
+    method_name = str(job.get("EXEC_METHOD") or job.get("execMethod") or "").strip().upper()
+    return object_name in {
+        "INIT$_SP_APRIORI_ASSOC_MODEL",
+        "INIT$_SP_DECISION_TREE_RULE_MODEL",
+        "INTEGRATED_RULE_DISCOVER",
+    } or method_name == "INTEGRATED_RULE_DISCOVER"
 
 
 def create_scoped_model_name(prefix: str, seed: str, run_id: Optional[int] = None) -> str:
@@ -1003,7 +1046,9 @@ def resolve_scoped_apriori_model_name(step: Dict[str, Any], job: Dict[str, Any],
         or normalized_base
     )
     run_id = runtime_values.get("INIT$RunId") or runtime_values.get("runId") or runtime_values.get("flowRunId")
-    return create_scoped_model_name("OML_ASSOC", str(target_table or normalized_base), int(run_id or 0))
+    object_name = str(job.get("EXEC_OBJECT_NAME") or job.get("execObjectName") or "").strip().upper()
+    prefix = "OML_DT_RULE" if object_name == "INIT$_SP_DECISION_TREE_RULE_MODEL" else "OML_ASSOC"
+    return create_scoped_model_name(prefix, str(target_table or normalized_base), int(run_id or 0))
 
 
 def apply_scoped_model_runtime_values(step: Dict[str, Any], job: Dict[str, Any], runtime_values: Dict[str, Any]):
@@ -1014,7 +1059,7 @@ def apply_scoped_model_runtime_values(step: Dict[str, Any], job: Dict[str, Any],
         return
     runtime_values["INIT$ResultModelName"] = model_name
     runtime_values["INIT$ResultTable"] = model_name
-    for key in ("P_MODEL_NAME", "pModelName", "modelName"):
+    for key in ("P_MODEL_NAME", "P_ASSOC_MODEL_NAME", "pModelName", "modelName"):
         value = str(runtime_values.get(key) or "").strip()
         if not value or value.upper() in LEGACY_ASSOCIATION_MODEL_NAMES or value in {":INIT$ResultModelName", ":INIT$ResultTable"}:
             runtime_values[key] = model_name
@@ -1046,6 +1091,78 @@ def build_node_output(step: Dict[str, Any], job: Dict[str, Any], runtime_values:
         "qualifiedTable": f"{result_owner}.{result_table}" if result_owner and result_table else "",
         "quotedTable": quote_qualified_table(result_owner, result_table) if result_owner and result_table else ""
     }
+    return output
+
+
+def build_contract_node_output(
+    step: Dict[str, Any],
+    job: Dict[str, Any],
+    runtime_values: Optional[Dict[str, Any]] = None,
+    execution_result: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    runtime_values = runtime_values or {}
+    execution_result = execution_result or {}
+    output = build_node_output(step, job, runtime_values)
+    node_payload = dict(step.get("nodePayload") or {})
+    if not node_payload.get("execObjectName"):
+        node_payload["execObjectName"] = job.get("EXEC_OBJECT_NAME") or job.get("execObjectName")
+    if not node_payload.get("execMethod"):
+        node_payload["execMethod"] = job.get("EXEC_METHOD") or job.get("execMethod")
+    contract_ports = flow_contracts.get_contract_ports(node_payload, "out")
+    if not contract_ports:
+        output["resultObjects"] = [{
+            "artifact": "",
+            "kind": "MODEL" if output.get("resultCreateYn") == "M" else "TABLE",
+            "owner": output.get("resultOwner"),
+            "objectName": output.get("resultTableName"),
+            "runScope": "SAME_RUN",
+        }] if output.get("resultTableName") else []
+        return output
+
+    reported_tables = {
+        str(value or "").strip().upper()
+        for value in execution_result.get("resultTables") or []
+        if value
+    }
+    reported_table = str(execution_result.get("resultTable") or "").strip().upper()
+    if reported_table:
+        reported_tables.add(reported_table)
+    reported_models = {
+        str(value or "").strip().upper()
+        for value in execution_result.get("resultModels") or []
+        if value
+    }
+    has_explicit_outputs = "resultTables" in execution_result or "resultModels" in execution_result
+
+    result_objects = []
+    for port in contract_ports:
+        object_name = str(port.get("objectName") or "").strip()
+        if object_name.startswith(":INIT$"):
+            object_name = str(
+                runtime_values.get(object_name[1:])
+                or output.get("resultTableName")
+                or ""
+            )
+        object_name = object_name.strip().upper()
+        if not object_name:
+            continue
+        kind = str(port.get("kind") or "TABLE").strip().upper()
+        if has_explicit_outputs:
+            if kind == "MODEL" and object_name not in reported_models:
+                continue
+            if kind != "MODEL" and object_name not in reported_tables:
+                continue
+        result_objects.append({
+            "port": port.get("port"),
+            "artifact": port.get("artifact"),
+            "label": port.get("label") or port.get("artifact"),
+            "kind": kind,
+            "owner": output.get("resultOwner"),
+            "objectName": object_name,
+            "runScope": port.get("runScope") or "SAME_RUN",
+        })
+    output["resultObjects"] = result_objects
+    output["apiResult"] = execution_result
     return output
 
 
@@ -1253,6 +1370,15 @@ def validate_graph(nodes: List[Dict[str, Any]], edges: List[Dict[str, Any]]) -> 
     if len(plan) != len(nodes):
         return {"status": "error", "message": "The flow has a cycle. Remove circular dependencies.", "plan": plan}
 
+    contract_errors = flow_contracts.validate_flow_contracts(nodes, edges)
+    if contract_errors:
+        return {
+            "status": "error",
+            "message": "Flow model contract validation failed. " + " ".join(contract_errors),
+            "errors": contract_errors,
+            "plan": plan,
+        }
+
     return {"status": "success", "message": "Flow validation succeeded.", "plan": plan}
 
 
@@ -1283,6 +1409,8 @@ def normalize_node(node: FlowNodeRequest, sort_order: int) -> Dict[str, Any]:
         "resultCreateYn": data_work.normalize_result_create_mode(getattr(node, "resultCreateYn", None)),
         "resultOwner": normalize_optional_identifier(getattr(node, "resultOwner", None)),
         "resultTableName": normalize_optional_identifier(getattr(node, "resultTableName", None)),
+        "execObjectName": normalize_optional_identifier(getattr(node, "execObjectName", None)),
+        "execMethod": normalize_optional_token(getattr(node, "execMethod", None), 128),
         "positionLeft": round_number(node.positionLeft),
         "positionTop": round_number(node.positionTop),
         "nodeWidth": round_number(node.nodeWidth),

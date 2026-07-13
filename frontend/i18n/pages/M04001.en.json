@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "language": "en",
+  "pageCode": "M04001",
+  "description": "English messages for integrated editing scenario flow page.",
+  "messages": {
+    "flowEdgeStageBlocked": "Stage {fromStage} cannot precede stage {toStage}.",
+    "flowEdgeArtifactBlocked": "{sourceArtifact} output cannot connect to {targetArtifact} input."
+  }
+}

@@ -13,8 +13,8 @@
     "delete": "삭제"
   },
   "messages": {
-    "categoryDataProfilingName": "데이터 프로파일링",
-    "categoryDataProfilingDesc": "분류예측 RULE과 데이터 프로파일링 기준값을 Target DB에 저장합니다.",
+    "categoryDataProfilingName": "컬럼 유형 분석",
+    "categoryDataProfilingDesc": "분류예측 RULE과 컬럼 유형 분석 기준값을 Target DB에 저장합니다.",
     "targetSettingDescNumericTypes": "물리 데이터 타입이 이 목록에 있으면 샘플 변환 검사보다 먼저 NUM으로 판단합니다. 콤마 또는 줄바꿈으로 구분합니다.",
     "targetSettingDescIdentifierDistRatio": "고유값 비율이 이 값을 초과하면 식별자 성격으로 판단합니다.",
     "targetSettingDescLowCardinalityCount": "고유값 건수가 이 값 이하이면 범주형 후보로 판단합니다.",

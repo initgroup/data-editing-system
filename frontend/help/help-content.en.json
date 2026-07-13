@@ -76,17 +76,17 @@
     },
     "M03001": {
       "pageCode": "M03001",
-      "title": "Data Profiling",
-      "label": "Data Profiling",
-      "group": "Intelligent Rule Discovery",
+      "title": "Column Type Analysis",
+      "label": "Column Type Analysis",
+      "group": "Data Rule Discovery",
       "status": "enabled",
-      "summary": "Defines and runs profiling jobs for target-table statistics, missing values, duplicates, distributions, and column quality."
+      "summary": "Classifies column types and analyzes target-table statistics, missing values, duplicates, distributions, and column quality."
     },
     "M03002": {
       "pageCode": "M03002",
       "title": "Column Correlation Analysis",
       "label": "Column Correlation Analysis",
-      "group": "Intelligent Rule Discovery",
+      "group": "Data Rule Discovery",
       "status": "enabled",
       "summary": "Analyzes relationships, correlations, and dependencies between columns in the selected target data."
     },
@@ -94,15 +94,15 @@
       "pageCode": "M03003",
       "title": "Automatic Rule Discovery",
       "label": "Automatic Rule Discovery",
-      "group": "Intelligent Rule Discovery",
+      "group": "Data Rule Discovery",
       "status": "enabled",
-      "summary": "Discovers candidate data-quality rules from profiling and analysis results."
+      "summary": "Discovers candidate data-quality rules from column type analysis and column correlation analysis results."
     },
     "M03004": {
       "pageCode": "M03004",
       "title": "Rule Violation Detection",
       "label": "Rule Violation Detection",
-      "group": "Intelligent Rule Discovery",
+      "group": "Data Rule Discovery",
       "status": "enabled",
       "summary": "Runs rules or models to detect records that violate expected data-quality conditions."
     },
@@ -216,7 +216,7 @@
       "label": "Editing Defaults",
       "group": "My Environment Settings",
       "status": "enabled",
-      "summary": "Manages Target DB-level default values used by profiling, analysis, and editing workflows."
+      "summary": "Manages Target DB-level default values used by column type analysis, correlation analysis, and editing workflows."
     },
     "M99001": {
       "pageCode": "M99001",

@@ -1695,6 +1695,71 @@
     opacity: 0.78;
 }
 
+.anly-work-lasso-criteria {
+    align-items: center;
+    background: #f8fafc;
+    border: 1px solid #cbd5e1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    justify-content: space-between;
+    margin-top: 10px;
+    padding: 8px 10px;
+}
+
+.anly-work-lasso-criteria > div:first-child strong,
+.anly-work-lasso-criteria > div:first-child span {
+    display: block;
+}
+
+.anly-work-lasso-criteria > div:first-child strong {
+    color: #0f172a;
+    font-size: 12px;
+    font-weight: 850;
+}
+
+.anly-work-lasso-criteria > div:first-child span {
+    color: #475569;
+    font-size: 11px;
+    margin-top: 2px;
+}
+
+.anly-work-lasso-criteria-counts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.anly-work-lasso-criteria-counts span,
+.anly-work-lasso-eligibility {
+    border: 1px solid currentColor;
+    display: inline-flex;
+    font-size: 10px;
+    font-weight: 850;
+    gap: 4px;
+    padding: 3px 6px;
+}
+
+.anly-work-lasso-criteria-counts .is-eligible,
+.anly-work-type-case-grid button.is-formula-eligible .anly-work-lasso-eligibility {
+    background: #ecfdf5;
+    color: #047857;
+}
+
+.anly-work-lasso-criteria-counts .is-r2-below,
+.anly-work-type-case-grid button.is-formula-r2-below .anly-work-lasso-eligibility,
+.anly-work-type-case-grid button.is-formula-no-feature .anly-work-lasso-eligibility {
+    background: #fffbeb;
+    color: #b45309;
+}
+
+.anly-work-lasso-criteria-counts .is-auto-limit,
+.anly-work-type-case-grid button.is-formula-auto-limit .anly-work-lasso-eligibility,
+.anly-work-type-case-grid button.is-formula-unavailable .anly-work-lasso-eligibility {
+    background: #f1f5f9;
+    color: #64748b;
+}
+
 .anly-work-relation-type-grid em {
     color: #2563eb;
     display: block;
@@ -1702,6 +1767,87 @@
     font-style: normal;
     font-weight: 750;
     margin-top: 3px;
+}
+
+.anly-work-relation-pass-filter {
+    display: grid;
+    gap: 7px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin-top: 10px;
+}
+
+.anly-work-relation-pass-filter button {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    color: #334155;
+    cursor: pointer;
+    padding: 7px 9px;
+    text-align: left;
+}
+
+.anly-work-relation-pass-filter button b,
+.anly-work-relation-pass-filter button small {
+    display: block;
+}
+
+.anly-work-relation-pass-filter button b {
+    color: #0f172a;
+    font-size: 14px;
+}
+
+.anly-work-relation-pass-filter button small {
+    font-size: 10px;
+    margin-top: 2px;
+}
+
+.anly-work-relation-pass-filter button.is-pass {
+    border-color: #86efac;
+}
+
+.anly-work-relation-pass-filter button.is-rejected {
+    border-color: #fdba74;
+}
+
+.anly-work-relation-pass-filter button.is-active {
+    background: #eff6ff;
+    border-color: #2563eb;
+    box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.16);
+}
+
+.anly-work-relation-pass-filter button.is-active.is-pass {
+    background: #ecfdf5;
+    border-color: #16a34a;
+}
+
+.anly-work-relation-pass-filter button.is-active.is-rejected {
+    background: #fff7ed;
+    border-color: #f97316;
+}
+
+.anly-work-relation-criteria-note {
+    align-items: center;
+    background: #f8fafc;
+    border: 1px solid #cbd5e1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px 8px;
+    margin-top: 8px;
+    padding: 7px 9px;
+}
+
+.anly-work-relation-criteria-note strong {
+    color: #0f172a;
+    font-size: 11px;
+    margin-right: 2px;
+}
+
+.anly-work-relation-criteria-note span {
+    background: #ffffff;
+    border: 1px solid #dbe3ef;
+    color: #475569;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 10px;
+    padding: 2px 5px;
 }
 
 .anly-work-relation-detail-panel {
@@ -1793,6 +1939,24 @@
     white-space: nowrap;
 }
 
+.anly-work-relation-pair-list > button > small > b {
+    color: #15803d;
+}
+
+.anly-work-relation-pair-list > button.is-no-relation > small > b,
+.anly-work-relation-pair-list > button.is-no-relation > small > em {
+    color: #c2410c;
+}
+
+.anly-work-relation-pair-list > button > small > em {
+    display: block;
+    font-style: normal;
+    font-weight: 750;
+    margin-top: 3px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .anly-work-relation-pair-col {
     background: #f8fafc;
     border: 1px solid #dbe3ef;
@@ -1863,6 +2027,45 @@
 
 .anly-work-network-action-row p {
     margin: 0;
+}
+
+.anly-work-network-detail-switcher,
+.anly-work-result-detail-switcher {
+    align-items: center;
+    background: #f8fafc;
+    border: 1px solid #dbe4ee;
+    display: flex;
+    gap: 10px;
+    justify-content: space-between;
+    margin: 0 0 10px;
+    padding: 8px 10px;
+}
+
+.anly-work-network-detail-switcher > div,
+.anly-work-result-detail-switcher > div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.anly-work-network-detail-switcher button,
+.anly-work-result-detail-switcher button {
+    align-items: center;
+    background: #fff;
+    border: 1px solid #cbd5e1;
+    color: #475569;
+    cursor: pointer;
+    display: inline-flex;
+    gap: 6px;
+    min-height: 30px;
+    padding: 5px 9px;
+}
+
+.anly-work-network-detail-switcher button.is-active,
+.anly-work-result-detail-switcher button.is-active {
+    background: #e0f2fe;
+    border-color: #0284c7;
+    color: #075985;
 }
 
 .anly-work-network-graph-button {
@@ -1995,6 +2198,61 @@
     font-size: 12px;
     margin-top: 2px;
     overflow-wrap: anywhere;
+}
+
+.anly-work-cluster-usage-badge {
+    align-items: center;
+    background: #ede9fe;
+    border: 1px solid #c4b5fd;
+    color: #6d28d9 !important;
+    display: inline-flex !important;
+    font-size: 11px !important;
+    font-weight: 850;
+    gap: 5px;
+    margin-top: 6px !important;
+    padding: 3px 7px;
+    width: fit-content;
+}
+
+.anly-work-column-cluster-badge {
+    align-items: center;
+    background: #eef2ff;
+    border: 1px solid #c7d2fe;
+    color: #4338ca;
+    display: inline-flex;
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1.2;
+    padding: 2px 5px;
+    width: fit-content;
+}
+
+.anly-work-column-cluster-badge.is-cross_cluster {
+    background: #fff7ed;
+    border-color: #fed7aa;
+    color: #c2410c;
+}
+
+.anly-work-column-cluster-badge.is-unclustered,
+.anly-work-column-cluster-badge.is-partial_cluster {
+    background: #f8fafc;
+    border-color: #cbd5e1;
+    color: #64748b;
+}
+
+.anly-work-cluster-pair-info {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    grid-column: 1 / -1;
+}
+
+.anly-work-symbolic-cluster-argument {
+    align-items: flex-start;
+    display: inline-flex;
+    flex-direction: column;
+    gap: 3px;
 }
 
 .anly-work-lasso-feature-list {
@@ -3176,7 +3434,12 @@
     text-align: left;
 }
 
-.anly-work-type-case-grid button:hover,
+.anly-work-type-case-grid button:disabled {
+    cursor: not-allowed;
+    opacity: 0.78;
+}
+
+.anly-work-type-case-grid button:hover:not(:disabled),
 .anly-work-type-case-grid button.is-active {
     background: #eef2ff;
     border-color: #2563eb;
@@ -3208,6 +3471,14 @@
     font-size: 10px;
     font-style: normal;
     margin-top: 4px;
+}
+
+.anly-work-type-case-grid .anly-work-lasso-eligibility {
+    margin-top: 6px;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .anly-work-model-tabs {
@@ -3412,7 +3683,9 @@
 }
 
 .anly-work-rule-facet-panel .anly-work-rule-facet-block {
-    display: block;
+    align-content: start;
+    display: grid;
+    grid-template-rows: minmax(30px, auto) auto;
     min-width: 0;
 }
 
@@ -3431,14 +3704,18 @@
     flex-wrap: wrap;
     gap: 8px;
     justify-content: space-between;
-    margin-bottom: 8px;
+    margin: 0 0 8px;
+    min-height: 30px;
     min-width: 0;
 }
 
 .anly-work-rule-facet-panel strong {
     color: #0f172a;
+    display: inline-flex;
+    align-items: center;
     font-size: 12px;
     font-weight: 850;
+    min-height: 30px;
 }
 
 .anly-work-rule-facet-actions,
@@ -3487,11 +3764,14 @@
     color: #334155;
     cursor: pointer;
     font-size: 11px;
+    min-height: 30px;
     min-width: 0;
     padding: 6px 8px;
 }
 
 .anly-work-rule-facet-panel .anly-work-rule-facet-list {
+    align-content: start;
+    align-items: start;
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
@@ -3688,7 +3968,7 @@
     min-width: 0;
 }
 
-.anly-work-readable-rule-card header span,
+.anly-work-readable-rule-card header span:not(.anly-work-column-cluster-badge),
 .anly-work-readable-rule-card header code {
     color: #0f172a;
     font-size: 13px;
@@ -4593,4 +4873,40 @@
     .anly-work-relation-network-popup.is-network-graph-maximized .anly-work-relation-network-graph-stage {
         min-height: 0;
     }
+}
+.anly-work-result-switcher {
+    align-items: center;
+    background: #f8fafc;
+    border: 1px solid #dbe4ee;
+    border-radius: 10px;
+    display: flex;
+    gap: 12px;
+    justify-content: space-between;
+    margin: 0 0 12px;
+    padding: 10px 12px;
+}
+
+.anly-work-result-switcher > div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: flex-end;
+}
+
+.anly-work-result-switcher button {
+    align-items: center;
+    background: #fff;
+    border: 1px solid #cbd5e1;
+    border-radius: 999px;
+    color: #475569;
+    cursor: pointer;
+    display: inline-flex;
+    gap: 6px;
+    padding: 6px 10px;
+}
+
+.anly-work-result-switcher button.is-active {
+    background: #e0f2fe;
+    border-color: #0284c7;
+    color: #075985;
 }

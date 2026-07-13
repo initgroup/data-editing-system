@@ -1206,9 +1206,14 @@ const CommonMessage = {
         if (typeof options === "string") options = { type: options };
         const type = options.type || "info";
         const modal = Boolean(options.modal);
+        const normalizedMessage = String(message ?? "");
+        const isSimpleNotice = !modal
+            && ["info", "success"].includes(type)
+            && normalizedMessage.length <= 180
+            && !/[\r\n]/.test(normalizedMessage);
         const autoCloseMs = Number.isFinite(Number(options.autoCloseMs))
             ? Math.max(0, Number(options.autoCloseMs))
-            : (type === "success" && !modal ? 2800 : 0);
+            : (isSimpleNotice ? 1600 : (type === "success" && !modal ? 2800 : 0));
         const toast = Boolean(options.toast ?? (autoCloseMs > 0 && !modal && type !== "confirm"));
         return {
             type,
@@ -1220,7 +1225,7 @@ const CommonMessage = {
             okText: options.okText || window.I18nManager?.t?.("commonMessage.ok", "OK") || "OK",
             cancelText: options.cancelText || window.I18nManager?.t?.("commonMessage.cancel", "Cancel") || "Cancel",
             defaultAction: options.defaultAction === "cancel" ? "cancel" : "ok",
-            message: String(message ?? "")
+            message: normalizedMessage
         };
     },
     defaultTitle(type) {

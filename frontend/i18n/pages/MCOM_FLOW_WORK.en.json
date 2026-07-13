@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "language": "en",
+  "pageCode": "MCOM_FLOW_WORK",
+  "description": "Common English messages for flow work template pages.",
+  "messages": {
+    "flowEdgeStageBlocked": "Stage {fromStage} cannot precede stage {toStage}.",
+    "flowEdgeArtifactBlocked": "{sourceArtifact} output cannot connect to {targetArtifact} input."
+  }
+}

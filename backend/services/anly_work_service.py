@@ -17,6 +17,7 @@ from pydantic import BaseModel
 from backend.auth_context import get_request_role_code, get_request_user_id
 from backend.database_helper import SqlLoader, execute_query
 from backend.target_database import get_target_db_connection
+from backend.services import flow_contract_service as flow_contracts
 
 
 logger = logging.getLogger(__name__)
@@ -461,6 +462,7 @@ def _normalize_run_context(
 def _normalize_node_result(row: dict[str, Any]) -> dict[str, Any]:
     payload = _json_object(_parse_json(row.get("NODE_PAYLOAD_JSON"), {}) or {})
     runtime_params = _json_object(_parse_json(row.get("RUNTIME_PARAM_JSON"), {}) or {})
+    run_output = _json_object(_parse_json(row.get("RUN_OUTPUT_JSON"), {}) or {})
     job_params = _parse_json(row.get("JOB_PARAM_JSON"), []) or []
     payload_params = payload.get("params") if isinstance(payload.get("params"), list) else payload.get("PARAMS")
     if isinstance(job_params, list) and len(job_params) > len(payload_params or []):
@@ -490,6 +492,7 @@ def _normalize_node_result(row: dict[str, Any]) -> dict[str, Any]:
     )
     row["PAYLOAD"] = payload
     row["RUNTIME_PARAMS"] = runtime_params
+    row["RUN_OUTPUT"] = run_output
     row["REF_MENU_CODE"] = str(menu_code or "").strip().upper()
     row["RESULT_CREATE_YN"] = mode
     row["RESULT_OWNER"] = str(owner or "").strip().upper()
@@ -507,6 +510,57 @@ def _normalize_node_result(row: dict[str, Any]) -> dict[str, Any]:
     row["TARGET_OWNER"] = str(target_owner or "").strip().upper()
     row["TARGET_TABLE"] = str(target_table or "").strip().upper()
     row["RESULT_KIND"] = "MODEL" if mode == "M" else ("TABLE" if mode == "T" else "NONE")
+    result_objects = []
+    for item in run_output.get("resultObjects") or []:
+        if not isinstance(item, dict):
+            continue
+        result_name = str(item.get("objectName") or "").strip().upper()
+        result_owner = str(item.get("owner") or owner or "").strip().upper()
+        result_kind = str(item.get("kind") or "TABLE").strip().upper()
+        if result_name and result_kind in {"TABLE", "MODEL"}:
+            result_objects.append({
+                **item,
+                "objectName": result_name,
+                "owner": result_owner,
+                "kind": result_kind,
+            })
+    if not result_objects:
+        contract_node = {
+            "execObjectName": row.get("EXEC_OBJECT_NAME") or payload.get("execObjectName"),
+            "execMethod": payload.get("execMethod"),
+            "params": payload.get("params") or job_params,
+        }
+        for item in flow_contracts.get_contract_ports(contract_node, "out"):
+            result_name = str(item.get("objectName") or "").strip()
+            if result_name.startswith(":INIT$"):
+                result_name = str(runtime_params.get(result_name[1:]) or object_name or "")
+            result_name = result_name.strip().upper()
+            if not result_name:
+                continue
+            result_objects.append({
+                **item,
+                "objectName": result_name,
+                "owner": str(owner or "").strip().upper(),
+                "kind": str(item.get("kind") or "TABLE").strip().upper(),
+            })
+    if not result_objects and row["RESULT_OBJECT_NAME"]:
+        result_objects.append({
+            "artifact": "",
+            "label": row["RESULT_OBJECT_NAME"],
+            "objectName": row["RESULT_OBJECT_NAME"],
+            "owner": row["RESULT_OWNER"],
+            "kind": row["RESULT_KIND"],
+            "runScope": "SAME_RUN",
+        })
+    if result_objects and not any(
+        item.get("objectName") == row["RESULT_OBJECT_NAME"] and item.get("kind") == row["RESULT_KIND"]
+        for item in result_objects
+    ):
+        primary_result = result_objects[0]
+        row["RESULT_OWNER"] = primary_result.get("owner") or row["RESULT_OWNER"]
+        row["RESULT_OBJECT_NAME"] = primary_result.get("objectName") or row["RESULT_OBJECT_NAME"]
+        row["RESULT_KIND"] = primary_result.get("kind") or row["RESULT_KIND"]
+    row["RESULT_OBJECTS"] = result_objects
     return row
 
 
@@ -726,6 +780,18 @@ def _fetch_relation_summary(
     )
     top_pair_columns = [desc[0] for desc in cursor.description] if cursor.description else []
     top_pairs = [_row_to_dict(top_pair_columns, row) for row in cursor.fetchall()]
+    rejected_result = execute_query(
+        cursor.connection,
+        "MCOMMON_ANLY_WORK_RELATION_REJECTED_PAIRS",
+        {
+            "targetOwner": target_owner,
+            "targetTable": target_table,
+            "runSourceType": run_source_type or None,
+            "runId": run_id,
+            "maxRows": 80,
+        },
+    )
+    rejected_pairs = rejected_result.get("data") or []
     column_comments = _fetch_column_comment_map(cursor, target_owner, target_table)
     return {
         "targetOwner": target_owner,
@@ -742,6 +808,8 @@ def _fetch_relation_summary(
         "relationTypes": relationTypes,
         "relationTypeColumns": relation_type_columns,
         "topPairs": top_pairs,
+        "rejectedPairs": rejected_pairs,
+        "rejectedPairCount": max(0, int(metrics.get("TOTAL_PAIR_COUNT") or 0) - int(metrics.get("PASS_PAIR_COUNT") or 0)),
     }
 
 
@@ -914,6 +982,117 @@ def _fetch_numeric_feature_ranges(
         return {}
 
 
+def _fetch_relation_cluster_context(
+    cursor,
+    target_owner: str,
+    target_table: str,
+    run_source_type: str,
+    run_id: int | None,
+) -> dict[str, Any]:
+    empty = {"availableYn": "N", "clusterCount": 0, "nodeCount": 0, "nodes": {}}
+    if not cursor or not target_owner or not target_table or not run_source_type or run_id is None:
+        return empty
+    try:
+        cursor.execute(
+            SqlLoader.get_sql("ML_ANALYSIS_RELATION_CLUSTER_NODES"),
+            {
+                "runSourceType": run_source_type,
+                "runId": run_id,
+                "owner": target_owner,
+                "tableName": target_table,
+            },
+        )
+        columns = [str(desc[0]).upper() for desc in cursor.description or []]
+        nodes = {}
+        for row in cursor.fetchall():
+            item = _row_to_dict(columns, row)
+            column_name = str(item.get("COLUMN_NAME") or "").strip().upper()
+            if not column_name:
+                continue
+            nodes[column_name] = {
+                "columnName": column_name,
+                "columnType": _serialize_db_value(item.get("COLUMN_TYPE")),
+                "clusterId": _serialize_db_value(item.get("CLUSTER_ID")),
+                "degreeCount": _serialize_db_value(item.get("DEGREE_COUNT")),
+                "weightedDegree": _serialize_db_value(item.get("WEIGHTED_DEGREE")),
+                "centralityScore": _serialize_db_value(item.get("CENTRALITY_SCORE")),
+                "selectedYn": _serialize_db_value(item.get("SELECTED_YN")),
+            }
+        cluster_ids = {
+            item.get("clusterId")
+            for item in nodes.values()
+            if item.get("clusterId") is not None
+        }
+        return {
+            "availableYn": "Y" if nodes else "N",
+            "clusterCount": len(cluster_ids),
+            "nodeCount": len(nodes),
+            "nodes": nodes,
+        }
+    except Exception as error:
+        logger.info("MCOMMON_ANLY_WORK relation cluster context query skipped: %s", error)
+        return empty
+
+
+def _get_cluster_id(cluster_context: dict[str, Any], column_name: Any) -> Any:
+    normalized = str(column_name or "").strip().upper()
+    return ((cluster_context.get("nodes") or {}).get(normalized) or {}).get("clusterId")
+
+
+def _get_cluster_scope(cluster_ids: list[Any], has_unclustered: bool = False) -> str:
+    normalized_ids = {str(item) for item in cluster_ids if item is not None and str(item).strip()}
+    if len(normalized_ids) > 1:
+        return "CROSS_CLUSTER"
+    if len(normalized_ids) == 1 and has_unclustered:
+        return "PARTIAL_CLUSTER"
+    if len(normalized_ids) == 1:
+        return "SAME_CLUSTER"
+    return "UNCLUSTERED"
+
+
+def _find_cluster_columns(text: Any, cluster_context: dict[str, Any]) -> list[str]:
+    source = str(text or "").upper()
+    if not source:
+        return []
+    return [
+        column_name
+        for column_name in (cluster_context.get("nodes") or {})
+        if re.search(rf"(?<![A-Z0-9_$#]){re.escape(column_name)}(?![A-Z0-9_$#])", source)
+    ]
+
+
+def _enrich_assoc_rule_cluster_info(row: dict[str, Any], cluster_context: dict[str, Any]) -> None:
+    condition_columns = []
+    direct_condition = str(row.get("CONDITION_COLUMN") or "").strip().upper()
+    if direct_condition:
+        condition_columns.append(direct_condition)
+    condition_columns.extend(_find_cluster_columns(row.get("CONDITION_TEXT"), cluster_context))
+    condition_columns = list(dict.fromkeys(condition_columns))
+
+    result_columns = []
+    direct_result = str(row.get("RESULT_COLUMN") or "").strip().upper()
+    if direct_result:
+        result_columns.append(direct_result)
+    result_columns.extend(_find_cluster_columns(row.get("RESULT_TEXT"), cluster_context))
+    result_columns = list(dict.fromkeys(result_columns))
+
+    condition_clusters = [
+        {"COLUMN_NAME": column, "CLUSTER_ID": _get_cluster_id(cluster_context, column)}
+        for column in condition_columns
+    ]
+    result_clusters = [
+        {"COLUMN_NAME": column, "CLUSTER_ID": _get_cluster_id(cluster_context, column)}
+        for column in result_columns
+    ]
+    all_clusters = [*condition_clusters, *result_clusters]
+    row["CONDITION_CLUSTERS"] = condition_clusters
+    row["RESULT_CLUSTERS"] = result_clusters
+    row["CLUSTER_SCOPE"] = _get_cluster_scope(
+        [item.get("CLUSTER_ID") for item in all_clusters],
+        not all_clusters or any(item.get("CLUSTER_ID") is None for item in all_clusters),
+    )
+
+
 def _fetch_lasso_summary(
     cursor,
     owner_name: str,
@@ -922,6 +1101,9 @@ def _fetch_lasso_summary(
     target_table: str,
     run_source_type: str = "",
     run_id: int | None = None,
+    min_r2_score: float = 0.7,
+    max_auto_targets: int = 10,
+    auto_target_yn: str = "N",
 ) -> dict[str, Any] | None:
     if object_name != "INIT$_TB_LASSO_FEATURE" or not target_owner or not target_table:
         return None
@@ -932,6 +1114,13 @@ def _fetch_lasso_summary(
         run_filter_sql = " AND RUN_SOURCE_TYPE = :runSourceType AND RUN_ID = :runId "
         run_params = {"runSourceType": run_source_type, "runId": run_id}
     params = {"targetOwner": target_owner, "targetTable": target_table, **run_params}
+    cluster_context = _fetch_relation_cluster_context(
+        cursor,
+        target_owner,
+        target_table,
+        run_source_type,
+        run_id,
+    )
 
     def fetch_one(sql: str) -> dict[str, Any]:
         cursor.execute(sql, params)
@@ -971,7 +1160,7 @@ def _fetch_lasso_summary(
         "         GROUP BY TARGET_COLUMN "
         "         ORDER BY R2_SCORE DESC NULLS LAST, SELECTED_FEATURE_COUNT DESC, TARGET_COLUMN"
         "       ) "
-        " WHERE ROWNUM <= 12"
+        " WHERE ROWNUM <= 100"
     )
     top_features = fetch_many(
         "SELECT * "
@@ -985,12 +1174,79 @@ def _fetch_lasso_summary(
         "       ) "
         " WHERE ROWNUM <= 16"
     )
+    for item in top_targets:
+        item["TARGET_CLUSTER_ID"] = _get_cluster_id(cluster_context, item.get("TARGET_COLUMN"))
+    for item in top_features:
+        target_cluster_id = _get_cluster_id(cluster_context, item.get("TARGET_COLUMN"))
+        feature_cluster_id = _get_cluster_id(cluster_context, item.get("FEATURE_NAME"))
+        item["TARGET_CLUSTER_ID"] = target_cluster_id
+        item["FEATURE_CLUSTER_ID"] = feature_cluster_id
+        item["CLUSTER_SCOPE"] = _get_cluster_scope(
+            [target_cluster_id, feature_cluster_id],
+            target_cluster_id is None or feature_cluster_id is None,
+        )
+    target_stats = {
+        str(item.get("TARGET_COLUMN") or "").strip().upper(): item
+        for item in top_targets
+        if item.get("TARGET_COLUMN")
+    }
+    target_eligibility = []
+    continuous_targets = []
+    if auto_target_yn == "Y":
+        try:
+            cursor.execute(
+                SqlLoader.get_sql("MCOMMON_ANLY_WORK_CONTINUOUS_TARGET_COLUMNS"),
+                {"targetOwner": target_owner, "targetTable": target_table},
+            )
+            continuous_targets = [
+                {"TARGET_COLUMN": str(row[0] or "").strip().upper(), "COLUMN_ID": row[1]}
+                for row in cursor.fetchall()
+                if row and row[0]
+            ]
+        except Exception as error:
+            logger.info("MCOMMON_ANLY_WORK continuous target eligibility query skipped: %s", error)
+
+    eligibility_sources = continuous_targets or [
+        {"TARGET_COLUMN": name, "COLUMN_ID": None}
+        for name in target_stats
+    ]
+    for auto_order, source in enumerate(eligibility_sources, start=1):
+        target_column = source["TARGET_COLUMN"]
+        stat = target_stats.get(target_column, {})
+        selected_count = int(stat.get("SELECTED_FEATURE_COUNT") or 0)
+        r2_score = stat.get("R2_SCORE")
+        if auto_target_yn == "Y" and auto_order > max_auto_targets:
+            eligibility_status = "AUTO_TARGET_LIMIT"
+        elif not stat:
+            eligibility_status = "LASSO_UNAVAILABLE"
+        elif selected_count <= 0:
+            eligibility_status = "NO_SELECTED_FEATURES"
+        elif r2_score is None or float(r2_score) < min_r2_score:
+            eligibility_status = "R2_BELOW_THRESHOLD"
+        else:
+            eligibility_status = "ELIGIBLE"
+        target_eligibility.append({
+            **stat,
+            "TARGET_COLUMN": target_column,
+            "TARGET_CLUSTER_ID": _get_cluster_id(cluster_context, target_column),
+            "COLUMN_ID": source.get("COLUMN_ID"),
+            "AUTO_ORDER": auto_order if auto_target_yn == "Y" else None,
+            "ELIGIBILITY_STATUS": eligibility_status,
+        })
+
     return {
         "targetOwner": target_owner,
         "targetTable": target_table,
         "overview": overview,
         "topTargets": top_targets,
         "topFeatures": top_features,
+        "targetEligibility": target_eligibility,
+        "clusterContext": cluster_context,
+        "symbolicCriteria": {
+            "minR2Score": min_r2_score,
+            "maxAutoTargets": max_auto_targets,
+            "autoTargetYn": auto_target_yn,
+        },
         "columnComments": _fetch_column_comment_map(cursor, target_owner, target_table),
         "runSourceType": run_source_type,
         "runId": run_id,
@@ -1017,6 +1273,13 @@ def _fetch_symbolic_rule_summary(
         run_filter_sql = " AND RUN_SOURCE_TYPE = :runSourceType AND RUN_ID = :runId "
         run_params = {"runSourceType": run_source_type, "runId": run_id}
     params = {"targetOwner": target_owner, "targetTable": target_table, **run_params}
+    cluster_context = _fetch_relation_cluster_context(
+        cursor,
+        target_owner,
+        target_table,
+        run_source_type,
+        run_id,
+    )
     list_params = dict(params)
     list_filter_sql = ""
     if method_filter:
@@ -1069,6 +1332,8 @@ def _fetch_symbolic_rule_summary(
         " GROUP BY TARGET_COLUMN "
         " ORDER BY SELECTED_RULE_COUNT DESC, MAX_SCORE DESC NULLS LAST, TARGET_COLUMN"
     )
+    for item in target_groups:
+        item["TARGET_CLUSTER_ID"] = _get_cluster_id(cluster_context, item.get("TARGET_COLUMN"))
     top_rules = fetch_many(
         "SELECT * "
         "  FROM ("
@@ -1088,8 +1353,22 @@ def _fetch_symbolic_rule_summary(
     range_map = _fetch_numeric_feature_ranges(cursor, target_owner, target_table, range_columns)
     for rule in top_rules:
         features = _split_column_list(rule.get("FEATURE_COLUMNS"), 20)
+        target_cluster_id = _get_cluster_id(cluster_context, rule.get("TARGET_COLUMN"))
+        feature_clusters = [
+            {
+                "COLUMN_NAME": column,
+                "CLUSTER_ID": _get_cluster_id(cluster_context, column),
+            }
+            for column in features
+        ]
         rule["FEATURE_LIST"] = features
         rule["FEATURE_RANGES"] = [range_map[column] for column in features if column in range_map]
+        rule["TARGET_CLUSTER_ID"] = target_cluster_id
+        rule["FEATURE_CLUSTERS"] = feature_clusters
+        rule["CLUSTER_SCOPE"] = _get_cluster_scope(
+            [target_cluster_id, *[item.get("CLUSTER_ID") for item in feature_clusters]],
+            target_cluster_id is None or any(item.get("CLUSTER_ID") is None for item in feature_clusters),
+        )
     return {
         "targetOwner": target_owner,
         "targetTable": target_table,
@@ -1097,6 +1376,7 @@ def _fetch_symbolic_rule_summary(
         "methodGroups": method_groups,
         "targetGroups": target_groups,
         "topRules": top_rules,
+        "clusterContext": cluster_context,
         "columnComments": _fetch_column_comment_map(cursor, target_owner, target_table),
         "runSourceType": run_source_type,
         "runId": run_id,
@@ -2115,6 +2395,9 @@ def get_result_table(
     lassoTargetColumn: str | None = None,
     lassoFeatureName: str | None = None,
     lassoDirection: str | None = None,
+    lassoMinR2Score: float = 0.7,
+    lassoMaxAutoTargets: int = 10,
+    lassoAutoTargetYn: str | None = "N",
     runSourceType: str | None = None,
     runId: int | None = None,
     flowRunId: int | None = None,
@@ -2157,6 +2440,9 @@ def get_result_table(
     normalized_lasso_target_column = _normalize_optional_identifier(lassoTargetColumn, "LASSO target column")
     normalized_lasso_feature_name = _normalize_optional_identifier(lassoFeatureName, "LASSO feature column")
     normalized_lasso_direction = _normalize_lasso_direction(lassoDirection)
+    normalized_lasso_min_r2_score = max(0.0, min(1.0, float(lassoMinR2Score)))
+    normalized_lasso_max_auto_targets = max(1, min(100, int(lassoMaxAutoTargets)))
+    normalized_lasso_auto_target_yn = "Y" if str(lassoAutoTargetYn or "N").strip().upper() == "Y" else "N"
     run_source_type, normalized_run_id = _normalize_run_context(runSourceType, runId, flowRunId)
     result_layout = _get_table_result_layout(object_name)
     page = _normalize_page(page)
@@ -2391,7 +2677,18 @@ def get_result_table(
                 normalized_run_id,
             )
         elif result_layout.get("summary") == "lassoSummary":
-            lasso_summary = _fetch_lasso_summary(cursor, owner_name, object_name, target_owner, target_table, run_source_type, normalized_run_id)
+            lasso_summary = _fetch_lasso_summary(
+                cursor,
+                owner_name,
+                object_name,
+                target_owner,
+                target_table,
+                run_source_type,
+                normalized_run_id,
+                normalized_lasso_min_r2_score,
+                normalized_lasso_max_auto_targets,
+                normalized_lasso_auto_target_yn,
+            )
         elif result_layout.get("summary") == "symbolicRuleSummary":
             symbolic_rule_summary = _fetch_symbolic_rule_summary(
                 cursor,
@@ -2679,6 +2976,13 @@ def get_model_rule_summary(
         conn = get_target_db_connection(request)
         cursor = conn.cursor() if target_owner and target_table else None
         column_comments = _fetch_column_comment_map(cursor, target_owner, target_table) if cursor else {}
+        cluster_context = _fetch_relation_cluster_context(
+            cursor,
+            target_owner,
+            target_table,
+            run_source_type,
+            normalized_run_id,
+        ) if cursor else {"availableYn": "N", "clusterCount": 0, "nodeCount": 0, "nodes": {}}
         overview = execute_query(conn, "MCOMMON_ANLY_WORK_ASSOC_RULE_OVERVIEW", {
             "owner": owner_name,
             "targetOwner": target_owner,
@@ -2727,6 +3031,7 @@ def get_model_rule_summary(
             row.pop("TOTAL_COUNT", None)
             for key, value in list(row.items()):
                 row[key] = _serialize_db_value(value)
+            _enrich_assoc_rule_cluster_info(row, cluster_context)
         overview_row = (overview.get("data") or [{}])[0] if overview.get("status") == "success" else {}
         overview_row = {key: _serialize_db_value(value) for key, value in overview_row.items()}
         condition_rows = condition_dist.get("data", []) if condition_dist.get("status") == "success" else []
@@ -2752,6 +3057,7 @@ def get_model_rule_summary(
             "runSourceType": run_source_type,
             "runId": normalized_run_id,
             "columnComments": column_comments,
+            "clusterContext": cluster_context,
             "overview": overview_row,
             "conditionDist": condition_rows,
             "resultTop": result_rows,

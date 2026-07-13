@@ -1013,6 +1013,27 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_RULE_VIOLATION_DETECT" (
             v_pending_dml_count := 0;
         END IF;
     END;
+
+    PROCEDURE disable_parallel_execution IS
+    BEGIN
+        BEGIN
+            EXECUTE IMMEDIATE 'ALTER SESSION DISABLE PARALLEL DML';
+        EXCEPTION
+            WHEN OTHERS THEN
+                IF SQLCODE <> -12841 THEN
+                    RAISE;
+                END IF;
+        END;
+
+        BEGIN
+            EXECUTE IMMEDIATE 'ALTER SESSION DISABLE PARALLEL QUERY';
+        EXCEPTION
+            WHEN OTHERS THEN
+                IF SQLCODE <> -12841 THEN
+                    RAISE;
+                END IF;
+        END;
+    END;
 BEGIN
     v_rule_owner := CASE
         WHEN is_null_token(p_rule_owner_name) THEN SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')
@@ -1059,8 +1080,7 @@ BEGIN
         v_case_id_expr := 'NULL';
     END IF;
 
-    EXECUTE IMMEDIATE 'ALTER SESSION DISABLE PARALLEL DML';
-    EXECUTE IMMEDIATE 'ALTER SESSION DISABLE PARALLEL QUERY';
+    disable_parallel_execution;
 
     IF v_clear_existing = 'Y' THEN
         EXECUTE IMMEDIATE
@@ -1187,7 +1207,9 @@ EXCEPTION
         IF v_committed_chunks > 0 THEN
             DBMS_OUTPUT.PUT_LINE('[WARN] Rule violation detection failed after committed chunks. Only uncommitted work will be rolled back.');
         END IF;
-        ROLLBACK;
+        IF v_commit = 'Y' THEN
+            ROLLBACK;
+        END IF;
         RAISE;
 END;
 /
@@ -2784,6 +2806,27 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_SYMBOLIC_RULE_VIOLATION_DETECT" (
             NULL;
     END;
 
+    PROCEDURE disable_parallel_execution IS
+    BEGIN
+        BEGIN
+            EXECUTE IMMEDIATE 'ALTER SESSION DISABLE PARALLEL DML';
+        EXCEPTION
+            WHEN OTHERS THEN
+                IF SQLCODE <> -12841 THEN
+                    RAISE;
+                END IF;
+        END;
+
+        BEGIN
+            EXECUTE IMMEDIATE 'ALTER SESSION DISABLE PARALLEL QUERY';
+        EXCEPTION
+            WHEN OTHERS THEN
+                IF SQLCODE <> -12841 THEN
+                    RAISE;
+                END IF;
+        END;
+    END;
+
     PROCEDURE check_elapsed(p_phase IN VARCHAR2) IS
         v_elapsed_seconds NUMBER;
     BEGIN
@@ -2898,8 +2941,7 @@ BEGIN
         v_case_id_expr := 'NULL';
     END IF;
 
-    EXECUTE IMMEDIATE 'ALTER SESSION DISABLE PARALLEL DML';
-    EXECUTE IMMEDIATE 'ALTER SESSION DISABLE PARALLEL QUERY';
+    disable_parallel_execution;
     set_runtime_progress(
         'READY',
         'run=' || v_run_id || ' maxRules=' || v_max_rules || ' maxViol=' || v_max_violations_per_rule || ' scan=' || NVL(TO_CHAR(v_max_scan_rows), 'ALL') || ' limit=' || NVL(TO_CHAR(v_max_elapsed_seconds), 'NONE') || ' expr=' || NVL(TO_CHAR(v_max_expression_length), 'ALL')
@@ -3178,7 +3220,9 @@ EXCEPTION
         IF v_committed_chunks > 0 THEN
             DBMS_OUTPUT.PUT_LINE('[WARN] Symbolic rule violation detection failed after committed chunks. Only uncommitted work will be rolled back.');
         END IF;
-        ROLLBACK;
+        IF v_commit = 'Y' THEN
+            ROLLBACK;
+        END IF;
         RAISE;
 END;
 /

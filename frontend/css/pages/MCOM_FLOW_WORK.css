@@ -1145,9 +1145,13 @@
 }
 
 .flow-node {
+    box-sizing: border-box;
     cursor: move;
+    display: flex;
+    flex-direction: column;
     margin: 0;
-    min-height: 112px;
+    min-height: 164px;
+    min-width: 210px;
     padding: 10px;
     position: absolute;
     --flow-node-bg: #fffaf0;
@@ -1157,20 +1161,20 @@
 .flow-connector {
     --flow-connector-color: #5b9dde;
     align-items: center;
-    background: #fff;
-    border: 2px solid #94a3b8;
-    border-radius: 999px;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
     box-sizing: border-box;
-    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.14);
+    box-shadow: none;
     cursor: crosshair;
     display: inline-flex;
-    height: 18px;
+    height: 32px;
     justify-content: center;
     padding: 0;
     position: absolute;
     top: 50%;
     transform: translateY(-50%);
-    width: 18px;
+    width: 22px;
     z-index: 8;
 }
 
@@ -1178,37 +1182,69 @@
     background: var(--flow-connector-color);
     content: "";
     display: block;
-    height: 12px;
+    height: 14px;
     position: absolute;
-    width: 11px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 14px;
+    z-index: 2;
 }
 
 .flow-connector::after {
+    background: var(--flow-connector-color);
     content: "";
-    display: none;
+    display: block;
     position: absolute;
+    top: 0;
+    z-index: 1;
 }
 
 .flow-connector-in {
-    left: -9px;
+    left: -22px;
 }
 
 .flow-connector-in::before {
-    clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, 0 66%, 52% 66%, 52% 34%, 0 34%);
+    background: var(--flow-node-bg);
+    left: 0;
+}
+
+.flow-connector-in::after {
+    height: 32px;
+    right: 0;
+    width: 22px;
 }
 
 .flow-connector-out {
-    right: -9px;
+    right: -22px;
 }
 
 .flow-connector-out::before {
-    clip-path: polygon(0 0, 58% 0, 58% 34%, 100% 34%, 100% 66%, 58% 66%, 58% 100%, 0 100%);
+    left: 8px;
+}
+
+.flow-connector-out::after {
+    height: 32px;
+    left: 0;
+    width: 9px;
+}
+
+.flow-connector[data-port-shape="triangle"]::before {
+    clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+
+.flow-connector[data-port-shape="circle"]::before {
+    border-radius: 999px;
+    clip-path: none;
+}
+
+.flow-connector[data-port-shape="diamond"]::before {
+    clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
 }
 
 .flow-connector.is-connecting,
 .flow-connector.is-connect-target {
     --flow-connector-color: #2563eb;
-    box-shadow: 0 0 0 5px rgba(37, 99, 235, 0.16);
+    filter: drop-shadow(0 0 5px rgba(37, 99, 235, 0.5));
 }
 
 .flow-connector.is-connect-target {
@@ -1296,14 +1332,18 @@
 
 .flow-node.is-node-disabled .flow-connector {
     --flow-connector-color: #94a3b8;
-    background: #fff;
-    border-color: #94a3b8;
+    background: transparent;
+    border: 0;
     box-shadow: none;
     color: #94a3b8;
 }
 
 .flow-node.is-node-disabled .flow-connector::before {
     background: #94a3b8;
+}
+
+.flow-node.is-node-disabled .flow-connector-in::before {
+    background: var(--flow-node-bg);
 }
 
 .flow-node-run-badge {
@@ -1978,7 +2018,7 @@ body.is-resizing-flow-result-sql {
 .flow-node-body {
     max-height: 42px;
     overflow: hidden;
-    padding-bottom: 0;
+    padding-bottom: 6px;
 }
 
 .flow-node-body strong,
@@ -2000,19 +2040,101 @@ body.is-resizing-flow-result-sql {
     display: none;
 }
 
-.flow-node-ports {
+.flow-node-operational {
+    border-top: 1px solid rgba(203, 213, 225, 0.75);
+    display: grid;
+    gap: 2px;
+    margin-top: 2px;
+    padding-top: 5px;
+}
+
+.flow-node-operational-line {
     align-items: center;
-    bottom: 8px;
-    display: flex;
-    flex-wrap: wrap;
+    color: #64748b;
+    display: grid;
+    font-size: 8px;
     gap: 4px;
-    justify-content: space-between;
-    left: 10px;
-    margin: 0;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    line-height: 1.2;
+    min-width: 0;
+}
+
+.flow-node-operational-line b {
+    color: #334155;
+    font-size: 8px;
+    font-weight: 900;
+}
+
+.flow-node-operational-line span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.flow-node-operational-line em {
+    background: #f1f5f9;
+    border-radius: 2px;
+    color: #475569;
+    font-size: 7px;
+    font-style: normal;
+    font-weight: 800;
+    max-width: 64px;
+    overflow: hidden;
+    padding: 1px 3px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.flow-node-ports {
+    align-items: end;
+    border-top: 1px dashed #cbd5e1;
+    display: grid;
+    gap: 8px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    margin: auto 0 0;
     overflow: visible;
+    padding-top: 8px;
+    pointer-events: none;
+    position: static;
+}
+
+.flow-node-port-group {
+    min-width: 0;
+}
+
+.flow-node-port-list {
+    align-items: flex-start;
+    display: flex;
+    min-width: 0;
+}
+
+.flow-node-port-group.is-output .flow-node-port-list {
+    justify-content: flex-end;
+}
+
+.flow-node-port-list > .flow-port:not(:first-child),
+.flow-node-port-list > .flow-port-info:not(:first-child) {
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    height: 1px;
+    overflow: hidden;
     pointer-events: none;
     position: absolute;
-    right: 10px;
+    white-space: nowrap;
+    width: 1px;
+}
+
+.flow-port-empty {
+    align-items: center;
+    color: #cbd5e1;
+    display: flex;
+    font-size: 10px;
+    height: 24px;
+}
+
+.flow-node-port-group.is-output .flow-port-empty {
+    justify-content: flex-end;
 }
 
 .flow-port,
@@ -2022,16 +2144,17 @@ body.is-resizing-flow-result-sql {
     align-items: center;
     background: var(--flow-port-bg);
     border: 1px solid rgba(203, 213, 225, 0.72);
+    box-sizing: border-box;
     color: #64748b;
     cursor: crosshair;
     display: inline-flex;
-    gap: 3px;
-    height: 20px;
-    justify-content: center;
+    gap: 4px;
+    height: 24px;
+    justify-content: flex-start;
     line-height: 1;
     min-width: 0;
     overflow: visible;
-    padding: 0 5px;
+    padding: 0 6px;
     pointer-events: auto;
     position: relative;
     white-space: nowrap;
@@ -2039,7 +2162,7 @@ body.is-resizing-flow-result-sql {
 
 .flow-port em,
 .flow-port-info em {
-    color: #94a3b8;
+    color: currentColor;
     font-size: 8px;
     font-style: normal;
     font-weight: 900;
@@ -2054,25 +2177,24 @@ body.is-resizing-flow-result-sql {
 }
 
 .flow-port-name {
-    clip: rect(0 0 0 0);
-    clip-path: inset(50%);
-    height: 1px;
-    overflow: hidden;
-    position: absolute;
-    white-space: nowrap;
-    width: 1px;
+    display: none;
 }
 
 .flow-port-in {
     --flow-port-color: #0f766e;
     --flow-port-bg: rgba(240, 253, 250, 0.58);
-    margin-right: auto;
+    margin: 0;
+    min-width: 56px;
+    width: auto;
 }
 
 .flow-port-out {
     --flow-port-color: #2563eb;
     --flow-port-bg: rgba(239, 246, 255, 0.58);
-    margin-left: auto;
+    flex-direction: row-reverse;
+    margin: 0;
+    min-width: 56px;
+    width: auto;
 }
 
 .flow-port-out.is-model {
@@ -2082,7 +2204,13 @@ body.is-resizing-flow-result-sql {
 
 .flow-port-info {
     cursor: default;
+    min-width: 56px;
     pointer-events: none;
+    width: auto;
+}
+
+.flow-node-port-group.is-output .flow-port-info {
+    flex-direction: row-reverse;
 }
 
 .flow-port-info.is-none {
@@ -2090,6 +2218,21 @@ body.is-resizing-flow-result-sql {
     --flow-port-bg: #f8fafc;
     color: #64748b;
     margin-left: auto;
+}
+
+.flow-port[data-artifact] i {
+    align-items: center;
+    display: inline-flex;
+    justify-content: center;
+}
+
+.flow-port-in.is-required {
+    border-style: solid;
+    border-width: 2px;
+}
+
+.flow-port-in.is-optional {
+    border-style: dashed;
 }
 
 .flow-port.is-connecting {
@@ -2275,6 +2418,16 @@ body.is-resizing-flow-result-sql {
     display: none !important;
 }
 
+.flow-work-page.is-flow-canvas-maximized .flow-work-tabs,
+.flow-work-page.is-flow-canvas-maximized .flow-main-panel > .flow-main-header {
+    display: none !important;
+}
+
+.flow-work-page.is-flow-canvas-maximized .flow-designer-panel.is-active {
+    margin-top: 0;
+    padding-top: 0;
+}
+
 .flow-work-page.is-flow-canvas-maximized .flow-workspace {
     grid-template-columns: minmax(260px, 300px) minmax(0, 1fr) !important;
 }
@@ -2294,10 +2447,11 @@ body.is-resizing-flow-result-sql {
 .flow-work-page.is-flow-canvas-maximized .flow-main-panel {
     height: 100%;
     min-height: 0;
-    padding: 12px;
+    padding: 8px 12px 12px;
 }
 
 .flow-work-page.is-flow-canvas-maximized .flow-designer-card {
+    margin-top: 0;
     padding-right: 0;
 }
 

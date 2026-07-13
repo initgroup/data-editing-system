@@ -104,7 +104,7 @@
       "objectType": "PROCEDURE",
       "objectName": "INIT$_SP_DECISION_TREE_RULE_MODEL",
       "label": "M04_DECISION_TREE_RULE_모델생성",
-      "description": "데이터 프로파일링 결과와 최종 분류값을 학습 데이터로 사용하여 의사결정트리 기반 규칙 모델을 생성하고, 컬럼 분류 규칙 요약을 만들기 위한 프로시저입니다.",
+      "description": "컬럼 유형 분석 결과와 최종 분류값을 학습 데이터로 사용하여 의사결정트리 기반 규칙 모델을 생성하고, 컬럼 분류 규칙 요약을 만들기 위한 프로시저입니다.",
       "resultCreateYn": "M",
       "resultOwner": "__CURRENT_OWNER__",
       "resultTableName": "OML_DECISION_TREE_MODEL_01",
@@ -621,6 +621,36 @@
     {
       "owner": "*",
       "objectType": "WEB_API",
+      "objectName": "INTEGRATED_RELATION_CLUSTER",
+      "label": "M02_통합형_관계매트릭스_네트워크군집",
+      "description": "통합 관계 매트릭스를 생성한 뒤 같은 RUN_ID의 결과로 네트워크 군집을 연속 실행하는 2단계 기본 통합 모델입니다.",
+      "resultCreateYn": "T",
+      "resultOwner": "__CURRENT_OWNER__",
+      "resultTableName": "INIT$_TB_RELATION_NETWORK_EDGE",
+      "items": [
+        { "key": "P_TARGET_OWNER", "comment": "분석 대상 테이블 계정", "defaultValue": ":INIT$TargetOwner" },
+        { "key": "P_TARGET_TABLE", "comment": "분석 대상 테이블명", "defaultValue": ":INIT$TargetTable" },
+        { "key": "P_MIN_METRIC", "comment": "통합 관계 최소 강도", "defaultValue": "0.65" },
+        { "key": "P_MIN_CRAMER", "comment": "범주형 Cramer's V 최소값", "defaultValue": "0.3" },
+        { "key": "P_MIN_ABS_CORR", "comment": "연속형 절대 상관계수 최소값", "defaultValue": "0.6" },
+        { "key": "P_MIN_ETA", "comment": "범주형-연속형 Eta Squared 최소값", "defaultValue": "0.65" },
+        { "key": "P_MIN_PVALUE", "comment": "유의확률 임계값", "defaultValue": "0.05" },
+        { "key": "P_SAMPLE_ROWS", "comment": "분석 샘플 최대 행 수", "defaultValue": "100000" },
+        { "key": "P_MAX_DISTINCT", "comment": "범주형 최대 distinct 수", "defaultValue": "100" },
+        { "key": "P_MAX_COLUMNS", "comment": "분석 최대 컬럼 수", "defaultValue": "100" },
+        { "key": "P_MIN_ROWS", "comment": "연속형 관계 최소 유효 행 수", "defaultValue": "30" },
+        { "key": "P_INCLUDE_SPEARMAN", "comment": "Spearman 상관계수 포함 여부", "defaultValue": "Y" },
+        { "key": "P_NETWORK_MIN_METRIC", "comment": "네트워크 edge로 사용할 최소 관계 강도", "defaultValue": "0.3" },
+        { "key": "P_MAX_EDGES", "comment": "네트워크 최대 edge 수", "defaultValue": "500" },
+        { "key": "P_RELATION_TYPES", "comment": "네트워크 관계 유형 필터", "defaultValue": "(auto)" },
+        { "key": "P_METRIC_NAMES", "comment": "네트워크 지표명 필터", "defaultValue": "(auto)" },
+        { "key": "P_RUN_SOURCE_TYPE", "comment": "실행 출처 구분(DATA_WORK/FLOW_WORK)", "defaultValue": ":INIT$RunSourceType" },
+        { "key": "P_RUN_ID", "comment": "시나리오 공용 실행 ID", "defaultValue": ":INIT$RunId" }
+      ]
+    },
+    {
+      "owner": "*",
+      "objectType": "WEB_API",
       "objectName": "SYMBOLIC_REGRESSION_RULE",
       "label": "M02_SymbolicRegression_공식규칙발굴",
       "description": "WAS Python API에서 LASSO로 선택된 상위 변수로 먼저 단순 선형식을 확인하고, 필요 시 Symbolic Regression 또는 polynomial fallback을 실행해 INIT$_TB_SYMBOLIC_RULE에 적재합니다.",
@@ -796,6 +826,11 @@
           "defaultValue": "10"
         },
         {
+          "key": "P_CLUSTER_USAGE_MODE",
+          "comment": "군집 활용 방식(NONE, PREFER_SAME_CLUSTER, WITHIN_CLUSTER_ONLY). 기본은 동일 군집 우선이며 군집이 없으면 기존 방식으로 안전 복귀",
+          "defaultValue": "PREFER_SAME_CLUSTER"
+        },
+        {
           "key": "P_SAMPLE_ROWS",
           "comment": "LASSO/Symbolic Regression 분석 샘플 최대 행 수",
           "defaultValue": "50000"
@@ -879,7 +914,7 @@
         },
         {
           "key": "P_SYMBOLIC_RULE_TABLE_NAME",
-          "comment": "연속형 Symbolic Rule 결과 테이블명",
+          "comment": "연속형 Symbolic Rule 결과 테이블명. :INIT$PreResultTable이나 OML_ASSOC 모델명을 사용하지 않습니다.",
           "defaultValue": "INIT$_TB_SYMBOLIC_RULE"
         },
         {
@@ -1021,7 +1056,7 @@
         },
         {
           "key": "P_RULE_TABLE_NAME",
-          "comment": "Symbolic Rule 결과 테이블명",
+          "comment": "Symbolic Rule 결과 테이블명. :INIT$PreResultTable이나 OML_ASSOC 모델명을 사용하지 않습니다.",
           "defaultValue": "INIT$_TB_SYMBOLIC_RULE"
         },
         {

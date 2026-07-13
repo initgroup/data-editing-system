@@ -57,14 +57,14 @@ window.MENU_CONFIG = [
     {
         type: 'folder',
         key: 'rule-discovery',
-        label: 'Intelligent Rule Discovery',
+        label: 'Data Rule Discovery',
         iconClass: 'fas fa-lightbulb text-amber-400',
         enabled: true,
         children: [
             {
                 page: 'M03001',
-                title: 'Data Profiling',
-                label: 'Data Profiling',
+                title: 'Column Type Analysis',
+                label: 'Column Type Analysis',
                 iconClass: 'fas fa-chart-column text-amber-300',
                 enabled: true
             },
