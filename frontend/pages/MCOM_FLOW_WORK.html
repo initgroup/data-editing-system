@@ -448,14 +448,14 @@ END;</textarea>
                 </button>
             </header>
             <div class="data-help-content">
-                <p data-label-key="portHelpIntro">Each node exposes named inputs and outputs. A port can carry a table, scalar value, array, JSON object, or model result.</p>
+                <p data-label-key="portHelpIntro">Each node shows one representative IN and OUT port when a connection is available. The displayed shape and T/M marker summarize the node's full artifact contract.</p>
                 <ul>
-                    <li><strong data-label-key="portHelpTableTitle">TABLE</strong>: <span data-label-key="portHelpTableDesc">Usually an owner/table name, temporary table, or result table produced by a prior node.</span></li>
-                    <li><strong data-label-key="portHelpValueTitle">VALUE</strong>: <span data-label-key="portHelpValueDesc">A scalar runtime value such as threshold, owner, date, or option code.</span></li>
-                    <li><strong data-label-key="portHelpArrayTitle">ARRAY</strong>: <span data-label-key="portHelpArrayDesc">A list such as selected columns, discovered rules, or validation messages.</span></li>
+                    <li><strong data-label-key="portHelpTableTitle">T / M</strong>: <span data-label-key="portHelpTableDesc">T means a table artifact and M means a model artifact. The node inspector shows the actual result and runtime binds.</span></li>
+                    <li><strong data-label-key="portHelpValueTitle">STAGE SHAPES</strong>: <span data-label-key="portHelpValueDesc">Square, triangle, circle, and diamond represent stages 1 through 4: column type, relationship, rule, and violation.</span></li>
+                    <li><strong data-label-key="portHelpArrayTitle">ARTIFACT CONTRACT</strong>: <span data-label-key="portHelpArrayDesc">A connection is allowed only when the output and input artifacts, stage direction, and required policy are compatible.</span></li>
                     <li><strong data-label-key="portHelpSolidEdgeTitle">SOLID EDGE</strong>: <span data-label-key="portHelpSolidEdgeDesc">Runs the downstream node only when the connected upstream node finishes with SUCCESS.</span></li>
                     <li><strong data-label-key="portHelpDashedEdgeTitle">DASHED EDGE</strong>: <span data-label-key="portHelpDashedEdgeDesc">Runs the downstream node after the connected upstream node finishes, regardless of SUCCESS or FAILED status.</span></li>
-                    <li><strong data-label-key="portHelpJoinTitle">JOIN</strong>: <span data-label-key="portHelpJoinDesc">A node can wait for multiple upstream edges; each solid edge must be SUCCESS, while dashed edges only need to be finished.</span></li>
+                    <li><strong data-label-key="portHelpJoinTitle">REQUIRED / SAME_RUN</strong>: <span data-label-key="portHelpJoinDesc">A required same-run input must come from a compatible upstream result in the current Flow Run. Cluster-aware rule discovery requires the same run's relationship network.</span></li>
                 </ul>
             </div>
             <footer>

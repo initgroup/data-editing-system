@@ -3971,6 +3971,20 @@
                 if (canonicalName.includes("$Pre") && !this.getPreviousNodeForSystemBind(node)) {
                     return this.getMessage("paramDescNoUpstreamNode", "No upstream node is connected.");
                 }
+                const commentKeys = {
+                    "INIT$TargetOwner": ["paramDescSystemTargetOwner", "Current node target Owner."],
+                    "INIT$TargetTable": ["paramDescSystemTargetTable", "Current node target Table."],
+                    "INIT$ResultOwner": ["paramDescSystemResultOwner", "Current node result Owner."],
+                    "INIT$ResultTable": ["paramDescSystemResultTable", "Current node result Table or Model."],
+                    "INIT$ResultModelName": ["paramDescSystemResultModel", "Current node result Model name."],
+                    "INIT$PreTargetOwner": ["paramDescSystemPreTargetOwner", "Connected upstream node's target Owner."],
+                    "INIT$PreTargetTable": ["paramDescSystemPreTargetTable", "Connected upstream node's target Table."],
+                    "INIT$PreResultOwner": ["paramDescSystemPreResultOwner", "Connected upstream result Owner."],
+                    "INIT$PreResultTable": ["paramDescSystemPreResultTable", "Connected upstream result Table or Model; REQUIRED SAME_RUN inputs use the current Flow Run result."],
+                    "INIT$RunSourceType": ["paramDescSystemRunSourceType", "Execution source type. Flow nodes use FLOW_WORK."]
+                };
+                const mapped = commentKeys[canonicalName];
+                if (mapped) return this.getMessage(mapped[0], mapped[1]);
                 return this.getMessage("paramDescSystemBind", "System bind value. It is supplied automatically at run time.");
             },
 
@@ -4026,13 +4040,71 @@
                     ptargetowner: "paramDescTargetOwner",
                     ptargettable: "paramDescTargetTable",
                     pdynamicmodelname: "paramDescDynamicModelName",
-                    ppredictionmethod: "paramDescPredictionMethod"
+                    ppredictionmethod: "paramDescPredictionMethod",
+                    ptargetcolumn: "paramDescTargetColumn",
+                    pruleparts: "paramDescRuleParts",
+                    passocmodelname: "paramDescAssocModelName",
+                    pruleownername: "paramDescRuleOwnerName",
+                    prulemodelname: "paramDescRuleModelName",
+                    psymbolicruletablename: "paramDescSymbolicRuleTableName",
+                    pruleid: "paramDescRuleId",
+                    pclusterusagemode: "paramDescClusterUsageMode",
+                    pcaseidcolumnname: "paramDescCaseIdColumn",
+                    pminsupport: "paramDescMinSupport",
+                    pminconfidence: "paramDescMinConfidence",
+                    pminrulelift: "paramDescMinRuleLift",
+                    pminlift: "paramDescMinLift",
+                    pmaxfeatures: "paramDescMaxFeatures",
+                    psamplerows: "paramDescSampleRows",
+                    pminr2score: "paramDescMinR2Score",
+                    pmaxautotargets: "paramDescMaxAutoTargets",
+                    pcontinueonerror: "paramDescContinueOnError",
+                    prunsourcetype: "paramDescRunSourceType",
+                    prunid: "paramDescRunId",
+                    pmaxrules: "paramDescMaxRules",
+                    psymbolicmaxrules: "paramDescSymbolicMaxRules",
+                    pmaxviolationsperrule: "paramDescMaxViolationsPerRule",
+                    perrorpctthreshold: "paramDescErrorPctThreshold",
+                    pabserrorthreshold: "paramDescAbsErrorThreshold",
+                    pmaxscanrows: "paramDescMaxScanRows",
+                    pclearexistingyn: "paramDescClearExistingYn",
+                    pcommityn: "paramDescCommitYn",
+                    pcommitinterval: "paramDescCommitInterval"
                 };
                 const fallbackComments = {
                     ptargetowner: "Target table owner",
                     ptargettable: "Target table name",
                     pdynamicmodelname: "Classification/prediction model name",
-                    ppredictionmethod: "Prediction method (ONLY_RULE: BASE columns only, ONLY_MODEL: model columns only, ONLY_BOTH: BASE/MODEL columns, FINAL_RULE/MODEL/BOTH: apply FINAL automatically)"
+                    ppredictionmethod: "Prediction method (ONLY_RULE: BASE columns only, ONLY_MODEL: model columns only, ONLY_BOTH: BASE/MODEL columns, FINAL_RULE/MODEL/BOTH: apply FINAL automatically)",
+                    ptargetcolumn: "Dependent variable column; (auto) evaluates eligible targets.",
+                    pruleparts: "Execution scope: ALL, CATEGORICAL, or CONTINUOUS.",
+                    passocmodelname: "Association model name for categorical rule discovery.",
+                    pruleownername: "Owner of the upstream association rule model.",
+                    prulemodelname: "Association rule model name produced by the upstream rule-discovery run.",
+                    psymbolicruletablename: "Symbolic rule storage table; use INIT$_TB_SYMBOLIC_RULE, not an OML association model name.",
+                    pruleid: "Optional symbolic rule ID; (auto) evaluates all eligible rules.",
+                    pclusterusagemode: "Cluster usage: NONE, PREFER_SAME_CLUSTER, or WITHIN_CLUSTER_ONLY; non-NONE requires the same run's relationship network.",
+                    pcaseidcolumnname: "Case ID column used to identify source rows.",
+                    pminsupport: "Apriori minimum support.",
+                    pminconfidence: "Minimum confidence for rule discovery or detection.",
+                    pminrulelift: "Minimum lift for stored association-rule summaries.",
+                    pminlift: "Minimum lift for categorical violation rules.",
+                    pmaxfeatures: "Maximum selected feature count.",
+                    psamplerows: "Maximum analysis sample rows.",
+                    pminr2score: "Minimum LASSO R-squared score for symbolic rule generation.",
+                    pmaxautotargets: "Maximum automatic target count.",
+                    pcontinueonerror: "Continue remaining subtasks after one subtask fails; review partial-completion details.",
+                    prunsourcetype: "Execution source type (DATA_WORK/FLOW_WORK).",
+                    prunid: "Run ID that links results from the same Data Work or Flow execution.",
+                    pmaxrules: "Maximum categorical rule count to evaluate.",
+                    psymbolicmaxrules: "Maximum symbolic rule count to evaluate.",
+                    pmaxviolationsperrule: "Maximum violation rows stored per rule.",
+                    perrorpctthreshold: "Allowed relative error for symbolic rules; 0.05 means 5%.",
+                    pabserrorthreshold: "Allowed absolute error for symbolic rules; blank disables this additional threshold.",
+                    pmaxscanrows: "Maximum source rows scanned per symbolic rule.",
+                    pclearexistingyn: "Clear existing violation rows for the same run before detection (Y/N).",
+                    pcommityn: "Commit inside the subprocedure (Y/N); keep N when the integrated API coordinates the transaction.",
+                    pcommitinterval: "Commit interval for large violation inserts; 0 uses one final commit."
                 };
                 const normalizedName = this.normalizeBindParamKey(name);
                 const key = commentKeys[normalizedName];

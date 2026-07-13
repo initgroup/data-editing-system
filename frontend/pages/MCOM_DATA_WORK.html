@@ -272,6 +272,10 @@
                         <strong>3. Bind actual values at runtime</strong>
                         <span>Run saved work / Queue saved work executes saved work, and Test current draft runs the current screen values once without saving them.</span>
                     </section>
+                    <section class="data-help-step">
+                        <strong>4. Use the saved job and selected run as the source of truth</strong>
+                        <span>Preset JSON initializes a job. Result screens explain the actual saved parameters and runtime bind values used by that run.</span>
+                    </section>
                 </div>
                 <h3>Automatic reserved variables</h3>
                 <div class="data-help-token-grid">
@@ -279,8 +283,13 @@
                     <span><code>:INIT$TargetTable</code><small>Current Target Table</small></span>
                     <span><code>:INIT$ResultOwner</code><small>Current Result Owner</small></span>
                     <span><code>:INIT$ResultTable</code><small>Current Result Table</small></span>
+                    <span><code>:INIT$ResultModelName</code><small>Current Result Model value</small></span>
+                    <span><code>:INIT$PreTargetOwner</code><small>Connected upstream target Owner</small></span>
+                    <span><code>:INIT$PreTargetTable</code><small>Connected upstream target Table</small></span>
+                    <span><code>:INIT$PreResultOwner</code><small>Connected upstream result Owner</small></span>
+                    <span><code>:INIT$PreResultTable</code><small>Connected upstream result Table or Model</small></span>
                     <span><code>:INIT$RunSourceType</code><small>DATA_WORK/FLOW_WORK</small></span>
-                    <span><code>:INIT$RunId</code><small>Scenario DATA_WORK run ID</small></span>
+                    <span><code>:INIT$RunId</code><small>Data Work or Flow Run ID; (auto) creates a new run</small></span>
                 </div>
                 <h3>Generation example</h3>
                 <pre class="data-help-code"><code>P_TARGET_OWNER       =&gt; :INIT$TargetOwner

@@ -1233,15 +1233,15 @@
                     params: [
                         { itemName: "P_TARGET_OWNER", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescTargetOwner", "Target table owner"), itemDefault: targetOwner },
                         { itemName: "P_TARGET_TABLE", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescTargetTable", "Target table name"), itemDefault: targetTable },
-                        { itemName: "P_RULE_PARTS", itemValue: "VARCHAR2", itemDesc: "ALL, CATEGORICAL, or CONTINUOUS", itemDefault: "ALL" },
-                        { itemName: "P_ASSOC_MODEL_NAME", itemValue: "VARCHAR2", itemDesc: "Association model name for categorical rule discovery", itemDefault: ":INIT$ResultModelName" },
-                        { itemName: "P_CASE_ID_COLUMN_NAME", itemValue: "VARCHAR2", itemDesc: "Case ID column", itemDefault: "FILE_ROW_NO" },
-                        { itemName: "P_MIN_SUPPORT", itemValue: "NUMBER", itemDesc: "Apriori minimum support", itemDefault: "0.2" },
-                        { itemName: "P_MIN_CONFIDENCE", itemValue: "NUMBER", itemDesc: "Apriori minimum confidence", itemDefault: "0.7" },
-                        { itemName: "P_MIN_RULE_LIFT", itemValue: "NUMBER", itemDesc: "Minimum rule lift for association summary", itemDefault: "1" },
+                        { itemName: "P_RULE_PARTS", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescRuleParts", "Execution scope: ALL, CATEGORICAL, or CONTINUOUS"), itemDefault: "ALL" },
+                        { itemName: "P_ASSOC_MODEL_NAME", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescAssocModelName", "Association model name for categorical rule discovery"), itemDefault: ":INIT$ResultModelName" },
+                        { itemName: "P_CASE_ID_COLUMN_NAME", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescCaseIdColumn", "Case ID column used to identify source rows"), itemDefault: "FILE_ROW_NO" },
+                        { itemName: "P_MIN_SUPPORT", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMinSupport", "Apriori minimum support"), itemDefault: "0.2" },
+                        { itemName: "P_MIN_CONFIDENCE", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMinConfidence", "Apriori minimum confidence"), itemDefault: "0.7" },
+                        { itemName: "P_MIN_RULE_LIFT", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMinRuleLift", "Minimum lift for stored association-rule summaries"), itemDefault: "1" },
                         { itemName: "P_TARGET_COLUMN", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescTargetColumn", "Dependent variable column"), itemDefault: "(auto)" },
                         { itemName: "P_MAX_FEATURES", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMaxFeatures", "Maximum selected feature count"), itemDefault: "10" },
-                        { itemName: "P_CLUSTER_USAGE_MODE", itemValue: "VARCHAR2", itemDesc: "NONE, PREFER_SAME_CLUSTER, or WITHIN_CLUSTER_ONLY", itemDefault: "PREFER_SAME_CLUSTER" },
+                        { itemName: "P_CLUSTER_USAGE_MODE", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescClusterUsageMode", "Cluster usage: NONE, PREFER_SAME_CLUSTER, or WITHIN_CLUSTER_ONLY; non-NONE requires the same run's relationship network"), itemDefault: "PREFER_SAME_CLUSTER" },
                         { itemName: "P_SAMPLE_ROWS", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescSampleRows", "Maximum analysis sample rows"), itemDefault: "50000" },
                         { itemName: "P_MIN_R2_SCORE", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMinR2Score", "Minimum LASSO R2 score for Symbolic Regression"), itemDefault: "0.7" },
                         { itemName: "P_MAX_AUTO_TARGETS", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMaxAutoTargets", "Maximum automatic target count"), itemDefault: "10" },
@@ -1258,21 +1258,21 @@
                     resultOwner: targetOwner,
                     resultTable: "INIT$_TB_RULE_VIOLATION_RESULT",
                     params: [
-                        { itemName: "P_RULE_PARTS", itemValue: "VARCHAR2", itemDesc: "ALL, CATEGORICAL, or CONTINUOUS", itemDefault: "ALL" },
-                        { itemName: "P_RULE_OWNER_NAME", itemValue: "VARCHAR2", itemDesc: "Association rule model owner", itemDefault: targetOwner },
-                        { itemName: "P_RULE_MODEL_NAME", itemValue: "VARCHAR2", itemDesc: "Association rule model name", itemDefault: ":INIT$PreResultTable" },
+                        { itemName: "P_RULE_PARTS", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescRuleParts", "Execution scope: ALL, CATEGORICAL, or CONTINUOUS"), itemDefault: "ALL" },
+                        { itemName: "P_RULE_OWNER_NAME", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescRuleOwnerName", "Owner of the association rule model from the upstream rule-discovery run"), itemDefault: targetOwner },
+                        { itemName: "P_RULE_MODEL_NAME", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescRuleModelName", "Association rule model name from the upstream rule-discovery run"), itemDefault: ":INIT$PreResultTable" },
                         { itemName: "P_TARGET_OWNER", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescTargetOwner", "Target table owner"), itemDefault: targetOwner },
                         { itemName: "P_TARGET_TABLE", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescTargetTable", "Target table name"), itemDefault: targetTable },
-                        { itemName: "P_CASE_ID_COLUMN_NAME", itemValue: "VARCHAR2", itemDesc: "Case ID column", itemDefault: "FILE_ROW_NO" },
-                        { itemName: "P_MIN_CONFIDENCE", itemValue: "NUMBER", itemDesc: "Categorical violation minimum confidence", itemDefault: "0.8" },
-                        { itemName: "P_MIN_LIFT", itemValue: "NUMBER", itemDesc: "Categorical violation minimum lift", itemDefault: "1" },
-                        { itemName: "P_MAX_RULES", itemValue: "NUMBER", itemDesc: "Maximum categorical rule count", itemDefault: "100" },
-                        { itemName: "P_SYMBOLIC_MAX_RULES", itemValue: "NUMBER", itemDesc: "Maximum symbolic rule count", itemDefault: "20" },
-                        { itemName: "P_MAX_VIOLATIONS_PER_RULE", itemValue: "NUMBER", itemDesc: "Maximum violation rows per rule", itemDefault: "500" },
-                        { itemName: "P_ERROR_PCT_THRESHOLD", itemValue: "NUMBER", itemDesc: "Symbolic allowed relative error threshold", itemDefault: "0.05" },
-                        { itemName: "P_MAX_SCAN_ROWS", itemValue: "NUMBER", itemDesc: "Maximum scan rows per symbolic rule", itemDefault: "50000" },
-                        { itemName: "P_CLEAR_EXISTING_YN", itemValue: "VARCHAR2", itemDesc: "Clear existing violation rows", itemDefault: "Y" },
-                        { itemName: "P_COMMIT_YN", itemValue: "VARCHAR2", itemDesc: "Internal procedure commit Y/N", itemDefault: "N" },
+                        { itemName: "P_CASE_ID_COLUMN_NAME", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescCaseIdColumn", "Case ID column used to identify source rows"), itemDefault: "FILE_ROW_NO" },
+                        { itemName: "P_MIN_CONFIDENCE", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescViolationMinConfidence", "Minimum confidence for categorical violation rules"), itemDefault: "0.8" },
+                        { itemName: "P_MIN_LIFT", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescViolationMinLift", "Minimum lift for categorical violation rules"), itemDefault: "1" },
+                        { itemName: "P_MAX_RULES", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMaxRules", "Maximum categorical rule count to evaluate"), itemDefault: "100" },
+                        { itemName: "P_SYMBOLIC_MAX_RULES", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescSymbolicMaxRules", "Maximum symbolic rule count to evaluate"), itemDefault: "20" },
+                        { itemName: "P_MAX_VIOLATIONS_PER_RULE", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMaxViolationsPerRule", "Maximum violation rows stored per rule"), itemDefault: "500" },
+                        { itemName: "P_ERROR_PCT_THRESHOLD", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescErrorPctThreshold", "Allowed relative error for symbolic rules; 0.05 means 5%"), itemDefault: "0.05" },
+                        { itemName: "P_MAX_SCAN_ROWS", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMaxScanRows", "Maximum source rows scanned per symbolic rule"), itemDefault: "50000" },
+                        { itemName: "P_CLEAR_EXISTING_YN", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescClearExistingYn", "Clear existing violation rows for the same run before detection (Y/N)"), itemDefault: "Y" },
+                        { itemName: "P_COMMIT_YN", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescCommitYn", "Commit inside the subprocedure (Y/N); keep N when the integrated API coordinates the transaction"), itemDefault: "N" },
                         { itemName: "P_CONTINUE_ON_ERROR", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescContinueOnError", "Continue when some automatic targets fail"), itemDefault: "Y" },
                         { itemName: "P_RUN_SOURCE_TYPE", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescRunSourceType", "Run source type (DATA_WORK/FLOW_WORK)"), itemDefault: runSourceType },
                         { itemName: "P_RUN_ID", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescRunId", "Shared DATA_WORK run ID for the scenario"), itemDefault: runId }
@@ -2049,10 +2049,11 @@
             const webApiHelpHtml = `
                     <p>When Web API is selected, execution is delegated to the WAS Python analysis API instead of Oracle PL/SQL.</p>
                     <ul>
-                        <li><strong>LASSO Feature Select</strong>: Uses continuous correlation results as candidates and stores influential features in <code>INIT$_TB_LASSO_FEATURE</code>.</li>
-                        <li><strong>Symbolic Regression Rule</strong>: Searches formula rules from the top selected LASSO variables and stores them in <code>INIT$_TB_SYMBOLIC_RULE</code>.</li>
-                        <li><strong>Symbolic Rule Violation</strong>: Rows outside the allowed error rate are checked in <code>INIT$_TB_SYMBOLIC_RULE_VIOLATION</code>.</li>
-                        <li><strong>Note</strong>: Symbolic Regression is compute-heavy, so <code>P_MAX_FEATURES</code> is limited to 10 or less.</li>
+                        <li><strong>Integrated Relation Matrix &amp; Network Cluster</strong>: Produces categorical, continuous, and mixed relationship pairs, keeps passed/below-threshold status, and derives network edges, nodes, and clusters.</li>
+                        <li><strong>Integrated Rule Discover</strong>: Runs categorical Apriori and continuous LASSO/Symbolic work according to <code>P_RULE_PARTS</code>. Cluster usage is controlled by <code>P_CLUSTER_USAGE_MODE</code>.</li>
+                        <li><strong>Integrated Rule Violation Detect</strong>: Runs categorical and continuous violation tasks. With <code>P_CONTINUE_ON_ERROR=Y</code>, review the partial-completion message for failed subtasks.</li>
+                        <li><strong>Individual APIs</strong>: LASSO Feature Select, Relation Network Cluster, and Symbolic Regression Rule remain available when a focused job is required.</li>
+                        <li><strong>Runtime values</strong>: Preset JSON initializes a job; results are explained from the saved job parameters and actual run values.</li>
                     </ul>
                 `;
             const omlHelpHtml = `
@@ -2084,6 +2085,10 @@
                             <strong>4. Sync Result information from the selected registered object</strong>
                             <span><code>T</code> uses the Result Table registered in M90001, and <code>M</code> uses the Result Model value on this screen.</span>
                         </section>
+                        <section class="data-help-step">
+                            <strong>5. Use the saved job and selected run as the source of truth</strong>
+                            <span>Preset defaults initialize the job. Result screens explain the actual parameters and runtime binds used by that run.</span>
+                        </section>
                     </div>
                     <h3>Automatic reserved variables</h3>
                     <div class="data-help-token-grid">
@@ -2092,6 +2097,10 @@
                         <span><code>:INIT$ResultOwner</code><small>Current Result Owner</small></span>
                         <span><code>:INIT$ResultTable</code><small>Current Result Table or Result Model value</small></span>
                         <span><code>:INIT$ResultModelName</code><small>Uses the Result Model value as the default</small></span>
+                        <span><code>:INIT$PreTargetOwner</code><small>Connected upstream target Owner</small></span>
+                        <span><code>:INIT$PreTargetTable</code><small>Connected upstream target Table</small></span>
+                        <span><code>:INIT$PreResultOwner</code><small>Connected upstream result Owner</small></span>
+                        <span><code>:INIT$PreResultTable</code><small>Connected upstream result Table or Model</small></span>
                         <span><code>:INIT$RunSourceType</code><small>DATA_WORK/FLOW_WORK</small></span>
                         <span><code>:INIT$RunId</code><small>Auto-issued when <code>(auto)</code>, manual execution ID when numeric</small></span>
                     </div>

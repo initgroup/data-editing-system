@@ -111,7 +111,7 @@
             {
               "key": "INPUT.P_RUN_ID",
               "value": "IN NUMBER",
-              "comment": "Run history ID",
+              "comment": "Run ID linking results from the same DATA_WORK or FLOW_WORK execution",
               "defaultValue": ":INIT$RunId",
               "order": 10
             },
@@ -216,7 +216,7 @@
             {
               "key": "INPUT.P_RUN_ID",
               "value": "IN NUMBER",
-              "comment": "Run history ID",
+              "comment": "Run ID linking results from the same DATA_WORK or FLOW_WORK execution",
               "defaultValue": ":INIT$RunId",
               "order": 8
             },
@@ -247,7 +247,7 @@
           "timeoutSec": 900,
           "sortOrder": 17,
           "useYn": "Y",
-          "description": "Run the integrated relation matrix procedure and network clustering in one same-run operation.",
+          "description": "Build categorical-categorical, continuous-continuous, and categorical-continuous relation pairs with passed/below-threshold status, then derive network edges, nodes, and clusters from passed pairs in the same run.",
           "output": {
             "resultCreateYn": "T",
             "resultOwner": ":INIT$TargetOwner",
@@ -273,7 +273,7 @@
             { "key": "INPUT.P_RELATION_TYPES", "value": "IN VARCHAR2", "comment": "Optional relation type filter", "defaultValue": "(auto)", "order": 15 },
             { "key": "INPUT.P_METRIC_NAMES", "value": "IN VARCHAR2", "comment": "Optional metric filter", "defaultValue": "(auto)", "order": 16 },
             { "key": "INPUT.P_RUN_SOURCE_TYPE", "value": "IN VARCHAR2", "comment": "DATA_WORK or FLOW_WORK", "defaultValue": ":INIT$RunSourceType", "order": 17 },
-            { "key": "INPUT.P_RUN_ID", "value": "IN NUMBER", "comment": "Run history ID", "defaultValue": ":INIT$RunId", "order": 18 },
+            { "key": "INPUT.P_RUN_ID", "value": "IN NUMBER", "comment": "Run ID linking relation pairs and network results from the same DATA_WORK or FLOW_WORK execution", "defaultValue": ":INIT$RunId", "order": 18 },
             { "key": "OUTPUT.resultTables", "value": "$.resultTables", "comment": "Service-managed relation and network result tables", "defaultValue": "INIT$_TB_RELATION_PAIR,INIT$_TB_RELATION_NETWORK_NODE,INIT$_TB_RELATION_NETWORK_EDGE", "order": 19 }
           ]
         },
@@ -383,7 +383,7 @@
             {
               "key": "INPUT.P_RUN_ID",
               "value": "IN NUMBER",
-              "comment": "Run history ID",
+              "comment": "Run ID linking results from the same DATA_WORK or FLOW_WORK execution",
               "defaultValue": ":INIT$RunId",
               "order": 11
             },
@@ -414,7 +414,7 @@
           "timeoutSec": 900,
           "sortOrder": 30,
           "useYn": "Y",
-          "description": "Run categorical Apriori rule discovery and continuous LASSO/Symbolic rule discovery together using existing project engines.",
+          "description": "Run categorical Apriori and continuous LASSO/Symbolic discovery together. P_RULE_PARTS selects the scope and P_CLUSTER_USAGE_MODE optionally uses the same run's relationship-network clusters.",
           "output": {
             "resultCreateYn": "M",
             "resultOwner": ":INIT$TargetOwner",
@@ -453,7 +453,7 @@
             {
               "key": "INPUT.P_RULE_PARTS",
               "value": "IN VARCHAR2",
-              "comment": "ALL, CATEGORICAL, or CONTINUOUS",
+              "comment": "Execution scope: ALL runs categorical Apriori and continuous LASSO/Symbolic work; CATEGORICAL or CONTINUOUS runs only that part",
               "defaultValue": "ALL",
               "order": 3
             },
@@ -558,7 +558,7 @@
             {
               "key": "INPUT.P_CLUSTER_USAGE_MODE",
               "value": "IN VARCHAR2",
-              "comment": "Cluster usage: NONE, PREFER_SAME_CLUSTER, or WITHIN_CLUSTER_ONLY",
+              "comment": "Cluster usage: NONE disables clusters; PREFER_SAME_CLUSTER prefers same-cluster features but allows cross-cluster features; WITHIN_CLUSTER_ONLY restricts to the same cluster. Non-NONE requires the same run's RELATION_NETWORK result.",
               "defaultValue": "PREFER_SAME_CLUSTER",
               "order": 18
             },
@@ -621,7 +621,7 @@
             {
               "key": "INPUT.P_CONTINUE_ON_ERROR",
               "value": "IN VARCHAR2",
-              "comment": "Continue remaining integrated tasks when one task fails",
+              "comment": "Continue remaining subtasks when one fails. Y can return partial completion, so review failed-task details.",
               "defaultValue": "Y",
               "order": 27
             },
@@ -635,7 +635,7 @@
             {
               "key": "INPUT.P_RUN_ID",
               "value": "IN NUMBER",
-              "comment": "Run history ID",
+              "comment": "Run ID linking profiling, relationship-network, and rule results from the same DATA_WORK or FLOW_WORK execution",
               "defaultValue": ":INIT$RunId",
               "order": 29
             },
@@ -666,7 +666,7 @@
           "timeoutSec": 900,
           "sortOrder": 35,
           "useYn": "Y",
-          "description": "Run categorical association rule violation detection and continuous symbolic rule violation detection together.",
+          "description": "Run categorical association-rule and continuous symbolic-formula violation detection together. The response can be partially completed when one subtask fails and continuation is enabled.",
           "output": {
             "resultCreateYn": "T",
             "resultOwner": ":INIT$TargetOwner",
@@ -691,35 +691,35 @@
             {
               "key": "INPUT.P_RULE_PARTS",
               "value": "IN VARCHAR2",
-              "comment": "ALL, CATEGORICAL, or CONTINUOUS",
+              "comment": "Detection scope: ALL runs categorical and continuous checks; CATEGORICAL or CONTINUOUS runs only that part",
               "defaultValue": "ALL",
               "order": 1
             },
             {
               "key": "INPUT.P_RULE_OWNER_NAME",
               "value": "IN VARCHAR2",
-              "comment": "Association rule model owner",
+              "comment": "Owner of the association rule model produced by the upstream rule-discovery task in the same run",
               "defaultValue": ":INIT$TargetOwner",
               "order": 2
             },
             {
               "key": "INPUT.P_RULE_MODEL_NAME",
               "value": "IN VARCHAR2",
-              "comment": "Association rule model name",
+              "comment": "Association rule model produced by the upstream rule-discovery task in the same run",
               "defaultValue": ":INIT$PreResultTable",
               "order": 3
             },
             {
               "key": "INPUT.P_SYMBOLIC_RULE_TABLE_NAME",
               "value": "IN VARCHAR2",
-              "comment": "Symbolic rule source table. Must remain INIT$_TB_SYMBOLIC_RULE; never use :INIT$PreResultTable or an OML_ASSOC model name.",
+              "comment": "Symbolic rule storage table. Use INIT$_TB_SYMBOLIC_RULE; do not use :INIT$PreResultTable or an OML_ASSOC model name.",
               "defaultValue": "INIT$_TB_SYMBOLIC_RULE",
               "order": 4
             },
             {
               "key": "INPUT.P_RULE_ID",
               "value": "IN NUMBER",
-              "comment": "Optional symbolic rule ID. (auto) evaluates eligible rules.",
+              "comment": "Optional symbolic RULE_ID. (auto) evaluates all rules eligible for the current execution.",
               "defaultValue": "(auto)",
               "order": 5
             },
@@ -845,14 +845,14 @@
             {
               "key": "INPUT.P_CLEAR_EXISTING_YN",
               "value": "IN VARCHAR2",
-              "comment": "Clear existing violation rows",
+              "comment": "Clear existing violation rows for the same run before detection (Y/N)",
               "defaultValue": "Y",
               "order": 23
             },
             {
               "key": "INPUT.P_COMMIT_YN",
               "value": "IN VARCHAR2",
-              "comment": "Internal procedure commit Y/N. N lets the integrated API commit once.",
+              "comment": "Commit inside the subprocedure (Y/N). Keep N so the integrated API coordinates the transaction and commits once.",
               "defaultValue": "N",
               "order": 24
             },
@@ -866,7 +866,7 @@
             {
               "key": "INPUT.P_CONTINUE_ON_ERROR",
               "value": "IN VARCHAR2",
-              "comment": "Continue remaining integrated tasks when one task fails",
+              "comment": "Continue remaining detection subtasks when one fails. Y can return partial completion, so review failed-task details.",
               "defaultValue": "Y",
               "order": 26
             },
@@ -880,7 +880,7 @@
             {
               "key": "INPUT.P_RUN_ID",
               "value": "IN NUMBER",
-              "comment": "Run history ID",
+              "comment": "Run ID linking upstream rules and violation results from the same DATA_WORK or FLOW_WORK execution",
               "defaultValue": ":INIT$RunId",
               "order": 28
             },

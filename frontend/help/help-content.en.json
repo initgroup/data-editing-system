@@ -80,7 +80,25 @@
       "label": "Column Type Analysis",
       "group": "Data Rule Discovery",
       "status": "enabled",
-      "summary": "Classifies column types and analyzes target-table statistics, missing values, duplicates, distributions, and column quality."
+      "summary": "Classifies columns as categorical or continuous and compares the run-time classification with the finalized column type used by downstream analysis.",
+      "purpose": [
+        "Create the shared column-type contract for correlation, rule discovery, and violation detection.",
+        "Review statistics, missing values, distinct counts, and the reason for each classification."
+      ],
+      "layout": [
+        { "name": "Run-based Column Type", "description": "The default tab. Shows the classification produced by the selected run." },
+        { "name": "Final Column Type", "description": "Shows the finalized type that downstream jobs may reuse." },
+        { "name": "Job Parameters", "description": "Shows the actual saved parameters and result contract for the job." }
+      ],
+      "workflow": [
+        "Select the scenario and target table.",
+        "Choose the integrated profiling procedure or an individual model.",
+        "Save and run the job, then review the run-based type before the final type."
+      ],
+      "aiGuidance": [
+        "Explain results from the selected run and its actual parameters, not only from preset JSON defaults.",
+        "Do not treat a categorical/continuous prediction as a business-approved final type without review."
+      ]
     },
     "M03002": {
       "pageCode": "M03002",
@@ -88,7 +106,22 @@
       "label": "Column Correlation Analysis",
       "group": "Data Rule Discovery",
       "status": "enabled",
-      "summary": "Analyzes relationships, correlations, and dependencies between columns in the selected target data."
+      "summary": "Builds one integrated relationship matrix for categorical-categorical, continuous-continuous, and categorical-continuous pairs, then derives a relationship network and clusters.",
+      "purpose": [
+        "Compare all pair types with the metric appropriate to each data-type combination.",
+        "Separate passed and below-threshold pairs while retaining both in the integrated matrix.",
+        "Summarize strong relationships as network edges, nodes, and clusters."
+      ],
+      "layout": [
+        { "name": "Integrated Relationship Matrix", "description": "The default tab. Filters all, passed, or below-threshold pairs and updates pair-type counts together." },
+        { "name": "Categorical Correlation", "description": "Shows passed categorical-categorical pairs." },
+        { "name": "Continuous Correlation", "description": "Shows passed continuous-continuous pairs." },
+        { "name": "Relationship Network", "description": "Combines edge details with node and cluster summaries in one view." }
+      ],
+      "deepDive": [
+        "PASS_YN distinguishes pairs that passed the actual run thresholds from pairs retained for review.",
+        "Clusters are optional guidance for rule discovery and are applied only when P_CLUSTER_USAGE_MODE enables them."
+      ]
     },
     "M03003": {
       "pageCode": "M03003",
@@ -96,7 +129,25 @@
       "label": "Automatic Rule Discovery",
       "group": "Data Rule Discovery",
       "status": "enabled",
-      "summary": "Discovers candidate data-quality rules from column type analysis and column correlation analysis results."
+      "summary": "Runs categorical Apriori discovery and continuous LASSO plus symbolic formula discovery as one integrated job, while keeping individual models available when needed.",
+      "purpose": [
+        "Discover categorical IF/THEN association rules.",
+        "Select important continuous features and generate f(x)=y symbolic rules.",
+        "Optionally prefer or restrict candidates by relationship-network cluster."
+      ],
+      "layout": [
+        { "name": "Categorical Automatic Rules", "description": "Combines the association model and stored rule summary into one readable rule view." },
+        { "name": "Continuous Automatic Rules", "description": "Compares LASSO feature importance with generated symbolic formulas and target status." }
+      ],
+      "deepDive": [
+        "P_RULE_PARTS selects ALL, CATEGORICAL, or CONTINUOUS work.",
+        "P_CLUSTER_USAGE_MODE supports NONE, PREFER_SAME_CLUSTER, and WITHIN_CLUSTER_ONLY. PREFER_SAME_CLUSTER is the safer default because cross-cluster predictors can remain eligible.",
+        "When cluster usage is enabled, a RELATION_NETWORK result from the same run is required.",
+        "An important LASSO feature may be absent from symbolic formulas because of R-squared, auto-target range, or feature-selection limits."
+      ],
+      "troubleshooting": [
+        "If only categorical results appear, check P_RULE_PARTS, continuous target eligibility, minimum R-squared, auto-target limits, and partial-completion messages."
+      ]
     },
     "M03004": {
       "pageCode": "M03004",
@@ -104,7 +155,24 @@
       "label": "Rule Violation Detection",
       "group": "Data Rule Discovery",
       "status": "enabled",
-      "summary": "Runs rules or models to detect records that violate expected data-quality conditions."
+      "summary": "Runs categorical association-rule checks and continuous symbolic-formula checks as one integrated job and opens the violating source rows by rule.",
+      "purpose": [
+        "Detect records that contradict categorical condition/result rules.",
+        "Detect continuous values outside the configured absolute or percentage error tolerance."
+      ],
+      "layout": [
+        { "name": "Categorical Rule Violations", "description": "Shows candidate, exception, and violating-row counts for association rules." },
+        { "name": "Continuous Rule Violations", "description": "Shows predicted/actual values, error measures, and violating rows for symbolic rules." }
+      ],
+      "deepDive": [
+        "P_RULE_PARTS selects ALL, CATEGORICAL, or CONTINUOUS detection.",
+        "P_SYMBOLIC_RULE_TABLE_NAME refers to the symbolic rule storage table, not an association-model name or arbitrary previous result table.",
+        "P_RULE_ID=(auto) evaluates all eligible symbolic rules; a specific ID evaluates only that rule.",
+        "With P_CONTINUE_ON_ERROR=Y, one subtask may succeed while another fails, so review partial-completion details."
+      ],
+      "troubleshooting": [
+        "A successful result with zero rows can mean no violation exceeded the current thresholds; distinguish it from missing rule inputs or a failed subtask."
+      ]
     },
     "M04001": {
       "pageCode": "M04001",
@@ -112,7 +180,25 @@
       "label": "Editing Scenario Design",
       "group": "Editing Scenario",
       "status": "enabled",
-      "summary": "Designs, validates, and runs reusable integrated editing DAGs by connecting data jobs and model executions as nodes and edges."
+      "summary": "Designs, validates, and runs a reusable four-stage DAG from saved data jobs, with artifact compatibility and same-run dependencies enforced at connection time.",
+      "purpose": [
+        "Connect column typing, relationship analysis, rule discovery, and violation detection as one flow.",
+        "Use four integrated jobs for the standard path while retaining individual categorical, continuous, LASSO, Apriori, symbolic, and other jobs when needed."
+      ],
+      "layout": [
+        { "name": "Flow Designer", "description": "Shows representative IN/OUT ports, T for table artifacts, M for model artifacts, and stage-specific connector shapes." },
+        { "name": "Node Inspector", "description": "Shows the selected node's actual runtime binds, upstream dependency, and result contract." },
+        { "name": "Input and Output Contracts", "description": "Explains artifact compatibility, REQUIRED/OPTIONAL inputs, SAME_RUN, and solid/dashed execution conditions." }
+      ],
+      "deepDive": [
+        "Square, triangle, circle, and diamond ports represent stages 1 through 4 respectively.",
+        "REQUIRED plus SAME_RUN means the downstream node must receive the compatible result produced earlier in the same flow run.",
+        "If P_CLUSTER_USAGE_MODE is not NONE, integrated rule discovery requires the same run's RELATION_NETWORK result.",
+        "Port shape compatibility and solid/dashed execution conditions are separate checks and both must pass validation."
+      ],
+      "troubleshooting": [
+        "For a rejected connection, compare the output and input artifact names, stage shapes, REQUIRED/OPTIONAL setting, and SAME_RUN policy."
+      ]
     },
     "M04002": {
       "pageCode": "M04002",
@@ -120,7 +206,21 @@
       "label": "Editing Scenario Analysis",
       "group": "Editing Scenario",
       "status": "enabled",
-      "summary": "Interprets integrated flow run history, node results, result tables, Oracle ML model details, correlation, LASSO, symbolic rules, and violation summaries."
+      "summary": "Analyzes a selected flow run through stage-specific integrated result tabs for column types, relationships and clusters, automatic rules, and rule violations.",
+      "layout": [
+        { "name": "Scenario Runs", "description": "Selecting a run resets prior node/tab state and builds results for that run." },
+        { "name": "Integrated Results", "description": "Loads a tab on first use, reuses it within the same run, and preserves vertical scroll while switching tabs." },
+        { "name": "Stage Results", "description": "Shows integrated matrix/network, categorical/continuous automatic rules, and categorical/continuous violations." }
+      ],
+      "deepDive": [
+        "The integrated relationship matrix includes PASS_YN=Y and N and supports All, Passed, and Below threshold filters.",
+        "The relationship network combines edge and node/cluster information in one screen.",
+        "LASSO features are candidates; symbolic formulas are generated rules. The target status is derived from the selected run's actual parameters.",
+        "A successful violation task with zero rows is not automatically an error. Check rule counts, thresholds, and partial-completion messages."
+      ],
+      "troubleshooting": [
+        "If one categorical or continuous section is missing, check P_RULE_PARTS, upstream same-run inputs, and failed-subtask details."
+      ]
     },
     "M05001": {
       "pageCode": "M05001",
@@ -184,7 +284,21 @@
       "label": "Internal Model Registration",
       "group": "Model Resources",
       "status": "enabled",
-      "summary": "Browses Target DB procedures, packages, and model objects and registers them as executable internal model resources."
+      "summary": "Browses Target DB procedures, packages, and model objects and registers them as executable internal resources without changing object IDs or parameter names.",
+      "purpose": [
+        "Standardize descriptions, result contracts, and defaults for column typing, relationship, rule, and violation procedures.",
+        "Expose accurate parameter comments in Data Work and the Flow node inspector."
+      ],
+      "workflow": [
+        "Select a Target DB procedure or model object.",
+        "Verify that its actual parameter names and types match the preset metadata.",
+        "Review the result table/model contract and defaults, then register the resource."
+      ],
+      "aiGuidance": [
+        "P_RUN_ID and RUN_SOURCE_TYPE link results from the same Data Work or Flow run.",
+        "P_SYMBOLIC_RULE_TABLE_NAME identifies symbolic rule storage, not an association model.",
+        "For integrated detection, explain P_RULE_PARTS, P_CONTINUE_ON_ERROR, and P_COMMIT_YN together."
+      ]
     },
     "M90002": {
       "pageCode": "M90002",
@@ -192,7 +306,26 @@
       "label": "External Model Registration",
       "group": "Model Resources",
       "status": "enabled",
-      "summary": "Registers and manages external models, OML4Py resources, script repository resources, and API contracts."
+      "summary": "Registers built-in Python APIs, external APIs, OML4Py resources, script-repository resources, and their call contracts and default JSON.",
+      "purpose": [
+        "Manage integrated relationship, rule-discovery, and violation-detection APIs together with individual LASSO and symbolic APIs.",
+        "Keep method, endpoint, parameter names, types, defaults, descriptions, and result contracts consistent."
+      ],
+      "layout": [
+        { "name": "API Object Groups", "description": "Lists built-in Python API JSON groups and internal/external API resources." },
+        { "name": "API Object Detail", "description": "Shows resource type, method, endpoint, description, and invocation metadata." },
+        { "name": "Parameters", "description": "Shows immutable parameter names with their types, actual defaults, and help comments." }
+      ],
+      "workflow": [
+        "Select a built-in Python API or an external/OML resource.",
+        "Review method, endpoint, output mode, parameters, and default JSON.",
+        "Register it, then select the resource in M03001-M03004 Data Work and use the saved job in a Flow."
+      ],
+      "aiGuidance": [
+        "Preset JSON initializes a new job; explain an executed result from that job's saved parameters and selected run.",
+        "When P_CLUSTER_USAGE_MODE is not NONE, the same run's relationship-network input is required.",
+        "P_CONTINUE_ON_ERROR=Y may produce a partial integrated result, so report successful and failed subtasks separately."
+      ]
     },
     "M91001": {
       "pageCode": "M91001",
@@ -208,7 +341,23 @@
       "label": "My System Settings",
       "group": "My Environment Settings",
       "status": "enabled",
-      "summary": "Manages user-level system settings and personal account or Gemini key related settings."
+      "summary": "Manages user-level UI language and display settings, the system logo, account details, email/password changes, and a personal Gemini API key.",
+      "layout": [
+        { "name": "Setting Categories", "description": "Lists personal setting groups and values." },
+        { "name": "Setting Detail", "description": "Edits key, value, description, enabled status, and order. SYSTEM_LANGUAGE provides a language selector." },
+        { "name": "Logo Helper", "description": "Uploads and previews SYSTEM_LOGO_IMAGE before saving the setting." },
+        { "name": "My Account", "description": "Manages name, email, password, and personal Gemini key status." }
+      ],
+      "workflow": [
+        "Select a category and edit or create a setting.",
+        "Save a language change, then log out and log in again to apply it.",
+        "For a logo, upload the image and then save the setting.",
+        "Use the account security checks when changing email or password."
+      ],
+      "aiGuidance": [
+        "Passwords and Gemini keys are secrets and must not be repeated in help text, responses, or logs.",
+        "A saved language setting may take effect on the next login."
+      ]
     },
     "M91003": {
       "pageCode": "M91003",
@@ -216,7 +365,15 @@
       "label": "Editing Defaults",
       "group": "My Environment Settings",
       "status": "enabled",
-      "summary": "Manages Target DB-level default values used by column type analysis, correlation analysis, and editing workflows."
+      "summary": "Manages Target DB-level defaults used specifically by column type analysis and classification.",
+      "purpose": [
+        "Standardize numeric types, identifier ratios, low-cardinality limits, text ratios, entropy, and forced identifier columns.",
+        "Store these defaults in the selected Target DB rather than as personal UI preferences."
+      ],
+      "aiGuidance": [
+        "The current preset category is DATA_PROFILING; correlation and rule API preset JSON is managed separately.",
+        "Verify the selected Target DB before creating, saving, or deleting a default."
+      ]
     },
     "M99001": {
       "pageCode": "M99001",
@@ -224,7 +381,12 @@
       "label": "DB Connection Settings",
       "group": "Admin Settings",
       "status": "enabled",
-      "summary": "Lets administrators register, test, initialize, and manage Target DB connection settings."
+      "summary": "Lets administrators register and test Target DB connections, inspect or initialize schemas, and deploy model-object groups.",
+      "aiGuidance": [
+        "DB and wallet passwords are secrets managed through server-side encryption and must not be exposed in browser responses or help output.",
+        "Administrative authorization is based on the server session and role check, not on whether a menu is visible.",
+        "Schema initialization, truncation, and deployment actions require explicit impact review."
+      ]
     },
     "M99002": {
       "pageCode": "M99002",
@@ -232,7 +394,11 @@
       "label": "Database Management",
       "group": "Admin Settings",
       "status": "enabled",
-      "summary": "Lets administrators browse Target DB objects and inspect table data, columns, source, and SQL results."
+      "summary": "Lets administrators browse Target DB objects and inspect table data, columns, source, and SQL results.",
+      "aiGuidance": [
+        "The regular worksheet path is read-only and the server revalidates the allowed SQL scope.",
+        "Do not run data-changing SQL or DDL unless the user explicitly requests an authorized operation."
+      ]
     },
     "M99003": {
       "pageCode": "M99003",
@@ -240,7 +406,11 @@
       "label": "System Management",
       "group": "Admin Settings",
       "status": "enabled",
-      "summary": "Supports system initialization checks, system table review, user approval, password reset, and administrator operations."
+      "summary": "Supports system initialization checks, system table review, user approval, password reset, and administrator operations.",
+      "aiGuidance": [
+        "Every administrator action requires server-session role validation; hiding or showing the front-end menu is not an authorization boundary.",
+        "Treat temporary passwords as secrets and require explicit confirmation for initialization, truncation, or password-reset actions."
+      ]
     },
     "M99004": {
       "pageCode": "M99004",

@@ -94,7 +94,7 @@
         },
         {
           "key": "P_RUN_ID",
-          "comment": "시나리오 공용 DATA_WORK 실행 ID",
+          "comment": "같은 DATA_WORK/FLOW_WORK 실행 결과를 연결하는 Run ID",
           "defaultValue": ":INIT$RunId"
         }
       ]
@@ -186,7 +186,7 @@
         },
         {
           "key": "P_RUN_ID",
-          "comment": "시나리오 공용 DATA_WORK 실행 ID",
+          "comment": "같은 DATA_WORK/FLOW_WORK 실행 결과를 연결하는 Run ID",
           "defaultValue": ":INIT$RunId"
         }
       ]
@@ -278,7 +278,7 @@
         },
         {
           "key": "P_RUN_ID",
-          "comment": "시나리오 공용 DATA_WORK 실행 ID",
+          "comment": "같은 DATA_WORK/FLOW_WORK 실행 결과를 연결하는 Run ID",
           "defaultValue": ":INIT$RunId"
         }
       ]
@@ -340,7 +340,7 @@
         },
         {
           "key": "P_RUN_ID",
-          "comment": "시나리오 공용 DATA_WORK 실행 ID",
+          "comment": "같은 DATA_WORK/FLOW_WORK 실행 결과를 연결하는 Run ID",
           "defaultValue": ":INIT$RunId"
         },
         {
@@ -407,7 +407,7 @@
         },
         {
           "key": "P_RUN_ID",
-          "comment": "시나리오 공용 DATA_WORK 실행 ID",
+          "comment": "같은 DATA_WORK/FLOW_WORK 실행 결과를 연결하는 Run ID",
           "defaultValue": ":INIT$RunId"
         },
         {
@@ -494,7 +494,7 @@
         },
         {
           "key": "P_RUN_ID",
-          "comment": "시나리오 공용 DATA_WORK 실행 ID",
+          "comment": "같은 DATA_WORK/FLOW_WORK 실행 결과를 연결하는 Run ID",
           "defaultValue": ":INIT$RunId"
         },
         {
@@ -561,7 +561,7 @@
         },
         {
           "key": "P_RUN_ID",
-          "comment": "시나리오 공용 DATA_WORK 실행 ID",
+          "comment": "같은 DATA_WORK/FLOW_WORK 실행 결과를 연결하는 Run ID",
           "defaultValue": ":INIT$RunId"
         }
       ]
@@ -613,7 +613,7 @@
         },
         {
           "key": "P_RUN_ID",
-          "comment": "시나리오 공용 DATA_WORK 실행 ID",
+          "comment": "같은 DATA_WORK/FLOW_WORK 실행 결과를 연결하는 Run ID",
           "defaultValue": ":INIT$RunId"
         }
       ]
@@ -623,7 +623,7 @@
       "objectType": "WEB_API",
       "objectName": "INTEGRATED_RELATION_CLUSTER",
       "label": "M02_통합형_관계매트릭스_네트워크군집",
-      "description": "통합 관계 매트릭스를 생성한 뒤 같은 RUN_ID의 결과로 네트워크 군집을 연속 실행하는 2단계 기본 통합 모델입니다.",
+      "description": "범주형-범주형, 연속형-연속형, 범주형-연속형 전체 관계 매트릭스를 생성하고 PASS_YN으로 통과/기준 미달을 구분한 뒤, 같은 RUN_ID의 통과 관계로 네트워크 연결·노드·군집을 생성하는 2단계 통합 모델입니다.",
       "resultCreateYn": "T",
       "resultOwner": "__CURRENT_OWNER__",
       "resultTableName": "INIT$_TB_RELATION_NETWORK_EDGE",
@@ -645,7 +645,7 @@
         { "key": "P_RELATION_TYPES", "comment": "네트워크 관계 유형 필터", "defaultValue": "(auto)" },
         { "key": "P_METRIC_NAMES", "comment": "네트워크 지표명 필터", "defaultValue": "(auto)" },
         { "key": "P_RUN_SOURCE_TYPE", "comment": "실행 출처 구분(DATA_WORK/FLOW_WORK)", "defaultValue": ":INIT$RunSourceType" },
-        { "key": "P_RUN_ID", "comment": "시나리오 공용 실행 ID", "defaultValue": ":INIT$RunId" }
+        { "key": "P_RUN_ID", "comment": "관계 쌍과 네트워크 결과를 같은 DATA_WORK/FLOW_WORK 실행으로 연결하는 Run ID", "defaultValue": ":INIT$RunId" }
       ]
     },
     {
@@ -725,7 +725,7 @@
         },
         {
           "key": "P_RUN_ID",
-          "comment": "시나리오 공용 DATA_WORK 실행 ID",
+          "comment": "같은 DATA_WORK/FLOW_WORK 실행 결과를 연결하는 Run ID",
           "defaultValue": ":INIT$RunId"
         }
       ]
@@ -735,7 +735,7 @@
       "objectType": "WEB_API",
       "objectName": "INTEGRATED_RULE_DISCOVER",
       "label": "M03_통합형_자동규칙발굴",
-      "description": "기존 Apriori 연관규칙 모델 생성, LASSO 중요변수 선택, Symbolic Regression 수식 규칙 발굴을 한 번에 실행해 범주형/연속형 규칙 결과를 함께 생성하는 내부 API입니다.",
+      "description": "Apriori 연관규칙과 LASSO 중요변수·Symbolic 수식 규칙을 한 번에 실행합니다. P_RULE_PARTS로 범주형/연속형 범위를 선택하고 P_CLUSTER_USAGE_MODE로 같은 Run의 관계 네트워크 군집을 선택적으로 활용합니다.",
       "resultCreateYn": "M",
       "resultOwner": "__CURRENT_OWNER__",
       "resultTableName": "OML_ASSOCIATION_MODEL_01",
@@ -752,7 +752,7 @@
         },
         {
           "key": "P_RULE_PARTS",
-          "comment": "실행할 규칙 유형. ALL, CATEGORICAL, CONTINUOUS 중 선택",
+          "comment": "실행 범위. ALL은 범주형 Apriori와 연속형 LASSO/Symbolic을 모두 실행하며 CATEGORICAL 또는 CONTINUOUS만 선택할 수 있습니다.",
           "defaultValue": "ALL"
         },
         {
@@ -827,7 +827,7 @@
         },
         {
           "key": "P_CLUSTER_USAGE_MODE",
-          "comment": "군집 활용 방식(NONE, PREFER_SAME_CLUSTER, WITHIN_CLUSTER_ONLY). 기본은 동일 군집 우선이며 군집이 없으면 기존 방식으로 안전 복귀",
+          "comment": "군집 활용 방식. NONE은 미사용, PREFER_SAME_CLUSTER는 동일 군집 우선·교차 군집 허용, WITHIN_CLUSTER_ONLY는 동일 군집만 사용합니다. NONE이 아니면 같은 Run의 RELATION_NETWORK 입력이 필요합니다.",
           "defaultValue": "PREFER_SAME_CLUSTER"
         },
         {
@@ -872,7 +872,7 @@
         },
         {
           "key": "P_CONTINUE_ON_ERROR",
-          "comment": "일부 통합 하위 작업 실패 시 나머지 계속 실행 여부",
+          "comment": "일부 하위 작업 실패 시 나머지 계속 실행 여부. Y이면 결과가 부분 완료될 수 있으므로 실패 작업 메시지를 확인합니다.",
           "defaultValue": "Y"
         },
         {
@@ -882,7 +882,7 @@
         },
         {
           "key": "P_RUN_ID",
-          "comment": "시나리오 공용 DATA_WORK 실행 ID",
+          "comment": "프로파일링·관계 네트워크·규칙 결과를 같은 DATA_WORK/FLOW_WORK 실행으로 연결하는 Run ID",
           "defaultValue": ":INIT$RunId"
         }
       ]
@@ -892,34 +892,34 @@
       "objectType": "WEB_API",
       "objectName": "INTEGRATED_RULE_VIOLATION_DETECT",
       "label": "M04_통합형_규칙위반탐지",
-      "description": "기존 범주형 연관규칙 위반탐지와 연속형 Symbolic Rule 오차범위 위반탐지를 한 번에 실행해 두 결과 테이블을 함께 생성하는 내부 API입니다.",
+      "description": "범주형 연관규칙 위반과 연속형 Symbolic 수식 오차 위반을 한 번에 탐지합니다. P_RULE_PARTS로 범위를 선택하며 일부 하위 작업 실패 시 부분 완료 상태와 실패 작업을 함께 반환할 수 있습니다.",
       "resultCreateYn": "T",
       "resultOwner": "__CURRENT_OWNER__",
       "resultTableName": "INIT$_TB_RULE_VIOLATION_RESULT",
       "items": [
         {
           "key": "P_RULE_PARTS",
-          "comment": "실행할 위반탐지 유형. ALL, CATEGORICAL, CONTINUOUS 중 선택",
+          "comment": "탐지 범위. ALL은 범주형과 연속형 위반을 모두 탐지하며 CATEGORICAL 또는 CONTINUOUS만 선택할 수 있습니다.",
           "defaultValue": "ALL"
         },
         {
           "key": "P_RULE_OWNER_NAME",
-          "comment": "범주형 규칙 모델 계정",
+          "comment": "같은 Run의 선행 규칙 발굴에서 생성한 범주형 연관 규칙 모델 Owner",
           "defaultValue": ":INIT$TargetOwner"
         },
         {
           "key": "P_RULE_MODEL_NAME",
-          "comment": "범주형 위반 탐지에 사용할 Apriori 규칙 모델명",
+          "comment": "같은 Run의 선행 규칙 발굴에서 생성한 Apriori 연관 규칙 모델명",
           "defaultValue": ":INIT$PreResultTable"
         },
         {
           "key": "P_SYMBOLIC_RULE_TABLE_NAME",
-          "comment": "연속형 Symbolic Rule 결과 테이블명. :INIT$PreResultTable이나 OML_ASSOC 모델명을 사용하지 않습니다.",
+          "comment": "연속형 Symbolic 규칙 저장 테이블명. INIT$_TB_SYMBOLIC_RULE을 사용하며 :INIT$PreResultTable이나 OML_ASSOC 모델명을 사용하지 않습니다.",
           "defaultValue": "INIT$_TB_SYMBOLIC_RULE"
         },
         {
           "key": "P_RULE_ID",
-          "comment": "특정 Symbolic RULE_ID만 검사할 때 입력. 비우면 선택된 전체 규칙 검사",
+          "comment": "특정 Symbolic RULE_ID만 검사할 때 입력합니다. (auto)는 실행 조건에 맞는 전체 규칙을 검사합니다.",
           "defaultValue": "(auto)"
         },
         {
@@ -1009,12 +1009,12 @@
         },
         {
           "key": "P_CLEAR_EXISTING_YN",
-          "comment": "기존 위반 결과 삭제 여부",
+          "comment": "탐지 전 같은 Run의 기존 위반 결과 삭제 여부",
           "defaultValue": "Y"
         },
         {
           "key": "P_COMMIT_YN",
-          "comment": "하위 프로시저 내부 커밋 여부. 통합 API에서는 마지막에 한 번 커밋하도록 기본 N 사용",
+          "comment": "하위 프로시저 내부 커밋 여부. 통합 API가 전체 트랜잭션을 조정하고 마지막에 한 번 커밋하도록 N을 사용합니다.",
           "defaultValue": "N"
         },
         {
@@ -1024,7 +1024,7 @@
         },
         {
           "key": "P_CONTINUE_ON_ERROR",
-          "comment": "일부 통합 하위 작업 실패 시 나머지 계속 실행 여부",
+          "comment": "일부 하위 탐지 실패 시 나머지 계속 실행 여부. Y이면 결과가 부분 완료될 수 있으므로 실패 작업 메시지를 확인합니다.",
           "defaultValue": "Y"
         },
         {
@@ -1034,7 +1034,7 @@
         },
         {
           "key": "P_RUN_ID",
-          "comment": "시나리오 공용 DATA_WORK 실행 ID",
+          "comment": "선행 규칙과 위반 결과를 같은 DATA_WORK/FLOW_WORK 실행으로 연결하는 Run ID",
           "defaultValue": ":INIT$RunId"
         }
       ]
@@ -1146,7 +1146,7 @@
         },
         {
           "key": "P_RUN_ID",
-          "comment": "시나리오 공용 DATA_WORK 실행 ID",
+          "comment": "같은 DATA_WORK/FLOW_WORK 실행 결과를 연결하는 Run ID",
           "defaultValue": ":INIT$RunId"
         }
       ]
@@ -1188,7 +1188,7 @@
         },
         {
           "key": "P_RUN_ID",
-          "comment": "시나리오 공용 DATA_WORK 실행 ID",
+          "comment": "같은 DATA_WORK/FLOW_WORK 실행 결과를 연결하는 Run ID",
           "defaultValue": ":INIT$RunId"
         }
       ]
