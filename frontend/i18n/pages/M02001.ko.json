@@ -61,6 +61,7 @@
     "loadingPreview": "미리보기를 불러오는 중...",
     "preparingUpload": "업로드 준비 중...",
     "uploadingFile": "파일 업로드 중...",
+    "uploadingFileProgress": "파일 업로드 중... {loaded} / {total}",
     "fileTransferCompleted": "파일 전송 완료. 서버에서 행을 적재 중입니다...",
     "uploadCompleted": "업로드 완료. 행: {count}.{suffix}",
     "uploadedTableLoaded": "{tableName} 적재 완료. 행: {count}.{suffix}",
@@ -85,6 +86,10 @@
     "noSqlStatement": "SQL 문장이 없습니다.",
     "uploadTableRequired": "파일을 업로드하거나 테이블 ID를 입력하세요.",
     "noGridDataToExport": "내보낼 그리드 데이터가 없습니다.",
+    "uploadTooLarge": "서버 또는 프록시의 허용 크기를 초과하여 업로드가 거부되었습니다.",
+    "uploadHttpError": "업로드 요청 실패 ({status})",
+    "uploadSessionFailed": "대용량 업로드 세션을 생성하지 못했습니다.",
+    "detectedEncodingTitle": "자동 감지 인코딩: {encoding}",
     "noData": "데이터가 없습니다."
   },
   "messages": {}

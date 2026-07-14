@@ -1,6 +1,9 @@
 ﻿(function() {
     const PAGE_CODE = "M02001";
     const CONTEXT_STORAGE_KEY = "DATA_EDITING_WORK_CONTEXT";
+    const LARGE_UPLOAD_THRESHOLD = 8 * 1024 * 1024;
+    const DEFAULT_UPLOAD_CHUNK_SIZE = 4 * 1024 * 1024;
+    const LARGE_TEXT_PREVIEW_SIZE = 4 * 1024 * 1024;
     const { getContainerEl } = PageManager.createHelper(PAGE_CODE);
     const COMMON = MCOMMON.createPageHelper(PAGE_CODE);
 
@@ -24,6 +27,7 @@
         sqlKeydownBound: null,
         contextLoadFailed: false,
         isUploading: false,
+        stagedUpload: null,
 
         async init() {
             if (this.isInit) return;
@@ -59,6 +63,7 @@
             this.sqlKeydownBound = null;
             this.contextLoadFailed = false;
             this.isUploading = false;
+            this.stagedUpload = null;
             this.updateSelectedMeta();
             this.isInit = false;
         },
@@ -221,6 +226,9 @@
         handleFileChange() {
             const file = getContainerEl("#uploadFile-M02001")?.files?.[0];
             this.updateSelectedFileDisplay(file?.name || "");
+            this.applyDetectedEncoding(null);
+            this.stagedUpload = null;
+            this.resetUploadProgress();
             const commentInput = getContainerEl("#tableComment-M02001");
             if (file && commentInput) {
                 commentInput.value = this.getFileBaseName(file.name);
@@ -264,24 +272,109 @@
             if (type === "csv" && delimiter) delimiter.value = ",";
         },
 
-        buildUploadFormData() {
+        buildUploadFormData(options = {}) {
             const file = getContainerEl("#uploadFile-M02001")?.files?.[0];
             if (!file) {
                 alert("Select a file first.");
                 return null;
             }
             const formData = new FormData();
-            formData.append("file", file);
+            if (options.includeFile !== false) formData.append("file", file);
             formData.append("fileType", getContainerEl("#fileType-M02001")?.value || "csv");
             const delimiter = getContainerEl("#delimiter-M02001")?.value || ",";
             formData.append("delimiter", delimiter === "\\t" ? "\t" : delimiter);
             formData.append("fixedWidths", getContainerEl("#fixedWidths-M02001")?.value || "");
             formData.append("hasHeader", getContainerEl("#hasHeader-M02001")?.value || "Y");
-            formData.append("encoding", getContainerEl("#encoding-M02001")?.value || "utf-8-sig");
+            formData.append("encoding", getContainerEl("#encoding-M02001")?.value || "auto");
             formData.append("projectCode", this.getSelectedProject()?.PROJECT_CODE || "");
             formData.append("tableComment", getContainerEl("#tableComment-M02001")?.value || "");
             formData.append("tableNameRule", getContainerEl("#tableIdRule-M02001")?.value || "INITUP$_{LOGIN_ID}_{PROJECT_CODE}_{TIME}");
             return formData;
+        },
+
+        getSelectedUploadFile() {
+            return getContainerEl("#uploadFile-M02001")?.files?.[0] || null;
+        },
+
+        isLargeUpload(file) {
+            return Number(file?.size || 0) > LARGE_UPLOAD_THRESHOLD;
+        },
+
+        getSelectedFileType() {
+            return getContainerEl("#fileType-M02001")?.value || "csv";
+        },
+
+        getUploadFileKey(file) {
+            return [file?.name || "", file?.size || 0, file?.lastModified || 0].join(":");
+        },
+
+        async ensureStagedUpload(file) {
+            const fileKey = this.getUploadFileKey(file);
+            if (this.stagedUpload?.fileKey === fileKey && this.stagedUpload?.uploadId) {
+                return this.stagedUpload.uploadId;
+            }
+
+            this.stagedUpload = null;
+            this.showUploadProgress(this.t("preparingUpload", "Preparing upload..."), 1);
+            const session = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/upload-session`, {
+                method: "POST",
+                body: { fileName: file.name, fileSize: file.size },
+                showLoading: false
+            });
+            const uploadId = session.uploadId;
+            const chunkSize = Math.max(256 * 1024, Number(session.chunkSize) || DEFAULT_UPLOAD_CHUNK_SIZE);
+            if (!uploadId) throw new Error(this.t("uploadSessionFailed", "Could not create an upload session."));
+
+            try {
+                if (file.size === 0) {
+                    this.showUploadProgress(this.t("fileTransferCompleted", "File transfer completed. Server is inserting rows in batches..."), 95);
+                }
+                for (let offset = 0; offset < file.size; offset += chunkSize) {
+                    const chunk = file.slice(offset, Math.min(offset + chunkSize, file.size));
+                    await this.sendUploadChunk(uploadId, chunk, offset, file.size);
+                }
+            } catch (error) {
+                this.stagedUpload = null;
+                throw error;
+            }
+
+            this.stagedUpload = { uploadId, fileKey };
+            return uploadId;
+        },
+
+        sendUploadChunk(uploadId, chunk, offset, totalSize) {
+            const headers = this.buildUploadHeaders();
+            const formData = new FormData();
+            formData.append("uploadId", uploadId);
+            formData.append("offset", String(offset));
+            formData.append("chunk", chunk, "upload.chunk");
+            return new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                xhr.open("POST", `${API_BASE_URL}/${PAGE_CODE}/upload-chunk`, true);
+                xhr.withCredentials = true;
+                Object.entries(headers).forEach(([key, value]) => xhr.setRequestHeader(key, value));
+                xhr.upload.onprogress = (event) => {
+                    const chunkLoaded = event.lengthComputable ? event.loaded : 0;
+                    const transferred = Math.min(totalSize, offset + chunkLoaded);
+                    const percent = totalSize > 0 ? Math.max(1, Math.min(95, Math.round((transferred / totalSize) * 95))) : 95;
+                    this.showUploadProgress(this.tl(
+                        "uploadingFileProgress",
+                        "Uploading file... {loaded} / {total}",
+                        { loaded: this.formatUploadSize(transferred), total: this.formatUploadSize(totalSize) }
+                    ), percent);
+                };
+                xhr.onload = () => {
+                    const json = this.parseXhrJson(xhr);
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        resolve(json);
+                        return;
+                    }
+                    reject(new Error(this.formatUploadRequestError(json, xhr.status, xhr.statusText)));
+                };
+                xhr.onerror = () => reject(new Error(this.t("uploadRequestFailed", "Upload request failed.")));
+                xhr.onabort = () => reject(new Error(this.t("uploadRequestAborted", "Upload request was aborted.")));
+                xhr.send(formData);
+            });
         },
 
         async requestForm(url, formData) {
@@ -296,12 +389,11 @@
                 body: formData,
                 credentials: "include"
             });
-            if (!response.ok) {
-                const errorJson = await response.json().catch(() => ({}));
-                throw new Error(CommonUtils.formatErrorMessage(errorJson));
-            }
+            const responseText = await response.text();
+            const responseData = this.parseResponseJson(responseText);
+            if (!response.ok) throw new Error(this.formatUploadRequestError(responseData, response.status, response.statusText));
             window.PageManager?.extendSessionFromResponse?.(response);
-            return response.json();
+            return responseData;
         },
 
         async previewFile() {
@@ -310,9 +402,25 @@
             if (grid) grid.innerHTML = `<div class="table-empty">${this.escapeHtml(this.t("loadingPreview", "Loading preview..."))}</div>`;
             this.revealPreviewGrid();
             try {
-                const formData = this.buildUploadFormData();
+                const file = this.getSelectedUploadFile();
+                if (!file) {
+                    this.buildUploadFormData();
+                    return;
+                }
+                const isLargeFile = this.isLargeUpload(file);
+                const useStagedUpload = isLargeFile && this.getSelectedFileType() === "excel";
+                const formData = this.buildUploadFormData({ includeFile: !isLargeFile });
                 if (!formData) return;
-                const json = await this.requestForm(`${API_BASE_URL}/${PAGE_CODE}/preview`, formData);
+                let previewUrl = `${API_BASE_URL}/${PAGE_CODE}/preview`;
+                if (useStagedUpload) {
+                    const uploadId = await this.ensureStagedUpload(file);
+                    formData.append("uploadId", uploadId);
+                    previewUrl = `${API_BASE_URL}/${PAGE_CODE}/preview-staged`;
+                } else if (isLargeFile) {
+                    formData.append("file", file.slice(0, LARGE_TEXT_PREVIEW_SIZE), file.name);
+                }
+                const json = await this.requestForm(previewUrl, formData);
+                this.applyDetectedEncoding(json?.detectedEncoding);
                 this.renderGrid("#previewGrid-M02001", json.data || [], "preview", json.columns || []);
                 this.revealPreviewGrid();
             } catch (error) {
@@ -334,12 +442,27 @@
             this.setUploading(true);
             this.showUploadProgress(this.t("preparingUpload", "Preparing upload..."), 0);
             try {
-                const formData = this.buildUploadFormData();
+                const file = this.getSelectedUploadFile();
+                if (!file) {
+                    this.buildUploadFormData();
+                    this.setUploading(false);
+                    return;
+                }
+                const useStagedUpload = this.isLargeUpload(file);
+                const formData = this.buildUploadFormData({ includeFile: !useStagedUpload });
                 if (!formData) {
                     this.setUploading(false);
                     return;
                 }
-                const json = await this.requestFormWithProgress(`${API_BASE_URL}/${PAGE_CODE}/upload`, formData);
+                let uploadUrl = `${API_BASE_URL}/${PAGE_CODE}/upload`;
+                if (useStagedUpload) {
+                    const uploadId = await this.ensureStagedUpload(file);
+                    formData.append("uploadId", uploadId);
+                    uploadUrl = `${API_BASE_URL}/${PAGE_CODE}/upload-staged`;
+                }
+                const json = await this.requestFormWithProgress(uploadUrl, formData);
+                this.applyDetectedEncoding(json?.detectedEncoding);
+                if (useStagedUpload) this.stagedUpload = null;
                 this.uploadedTableName = json.tableName || "";
                 this.setValue("#uploadedTableId-M02001", this.uploadedTableName);
                 const statsText = json.statsGathered ? this.t("statisticsGathered", " Statistics gathered.") : (json.statsMessage ? ` ${json.statsMessage}` : "");
@@ -384,7 +507,7 @@
                         resolve(json);
                         return;
                     }
-                    reject(new Error(CommonUtils.formatErrorMessage(json)));
+                    reject(new Error(this.formatUploadRequestError(json, xhr.status, xhr.statusText)));
                 };
                 xhr.onerror = () => reject(new Error(this.t("uploadRequestFailed", "Upload request failed.")));
                 xhr.onabort = () => reject(new Error(this.t("uploadRequestAborted", "Upload request was aborted.")));
@@ -403,11 +526,62 @@
         },
 
         parseXhrJson(xhr) {
+            return this.parseResponseJson(xhr.responseText || "");
+        },
+
+        parseResponseJson(responseText) {
             try {
-                return JSON.parse(xhr.responseText || "{}");
+                return JSON.parse(responseText || "{}");
             } catch (error) {
-                return {};
+                return { rawMessage: String(responseText || "").trim() };
             }
+        },
+
+        formatUploadRequestError(responseData, status, statusText) {
+            if (Number(status) === 413) {
+                return this.t("uploadTooLarge", "The upload was rejected because it exceeds the server or proxy size limit.");
+            }
+            const formatted = CommonUtils.formatErrorMessage(responseData || {}, { status });
+            if (formatted && formatted !== "Request failed.") return formatted;
+            const rawMessage = String(responseData?.rawMessage || "").trim();
+            if (rawMessage && !/^\s*</.test(rawMessage)) return rawMessage.slice(0, 500);
+            const statusLabel = [status, statusText].filter(Boolean).join(" ");
+            return statusLabel
+                ? this.tl("uploadHttpError", "Upload request failed ({status}).", { status: statusLabel })
+                : this.t("uploadRequestFailed", "Upload request failed.");
+        },
+
+        applyDetectedEncoding(detectedEncoding) {
+            const input = getContainerEl("#encoding-M02001");
+            if (!input) return;
+            const detected = String(detectedEncoding || "").trim();
+            input.dataset.detectedEncoding = detected;
+            input.title = detected
+                ? this.tl("detectedEncodingTitle", "Detected encoding: {encoding}", { encoding: detected })
+                : "";
+        },
+
+        formatUploadSize(bytes) {
+            const value = Math.max(0, Number(bytes) || 0);
+            if (value >= 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+            if (value >= 1024) return `${(value / 1024).toFixed(1)} KB`;
+            return `${value} B`;
+        },
+
+        resetUploadProgress() {
+            const box = getContainerEl("#uploadProgress-M02001");
+            const labelEl = getContainerEl("#uploadProgressLabel-M02001");
+            const percentEl = getContainerEl("#uploadProgressPercent-M02001");
+            const bar = getContainerEl("#uploadProgressBar-M02001");
+            if (box) {
+                box.hidden = true;
+                box.classList.remove("is-processing");
+                box.setAttribute("aria-valuenow", "0");
+                box.setAttribute("aria-busy", "false");
+            }
+            if (labelEl) labelEl.textContent = this.t("ready", "Ready");
+            if (percentEl) percentEl.textContent = "0%";
+            if (bar) bar.style.width = "0%";
         },
 
         showUploadProgress(label, percent, options = {}) {
@@ -417,8 +591,14 @@
             const bar = getContainerEl("#uploadProgressBar-M02001");
             const value = Math.max(0, Math.min(100, Number(percent) || 0));
             if (box) {
+                const wasHidden = box.hidden;
                 box.hidden = false;
                 box.classList.toggle("is-processing", Boolean(options.processing));
+                box.setAttribute("aria-valuenow", String(value));
+                box.setAttribute("aria-busy", value < 100 ? "true" : "false");
+                if (wasHidden) {
+                    requestAnimationFrame(() => box.scrollIntoView({ behavior: "smooth", block: "nearest" }));
+                }
             }
             if (labelEl) labelEl.textContent = label || "";
             if (percentEl) percentEl.textContent = `${value}%`;

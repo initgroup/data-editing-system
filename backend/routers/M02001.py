@@ -5,12 +5,18 @@
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel, ConfigDict
-from typing import Optional
+from typing import BinaryIO, Iterator, Optional
+import codecs
 import csv
 import io
+import json
 import logging
+import os
 import re
+import tempfile
 import time
+import uuid
+from pathlib import Path
 
 from backend.database_helper import execute_query
 from backend.auth_context import get_request_login_id, get_request_user_id
@@ -20,6 +26,15 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 UPLOAD_ROW_NO_COLUMN = "FILE_ROW_NO"
 UPLOAD_INSERT_BATCH_SIZE = 1000
+UPLOAD_INSERT_BATCH_CELL_LIMIT = 25_000
+ORACLE_COMMENT_SAFE_BYTE_LIMIT = 3_900
+UPLOAD_ENCODING_SAMPLE_SIZE = 128 * 1024
+UPLOAD_PREVIEW_ROW_LIMIT = 50
+UPLOAD_HTTP_CHUNK_SIZE = 4 * 1024 * 1024
+UPLOAD_HTTP_CHUNK_LIMIT = 8 * 1024 * 1024
+UPLOAD_STAGING_MAX_AGE_SECONDS = 6 * 60 * 60
+UPLOAD_STAGING_DIRECTORY = Path(tempfile.gettempdir()) / "init-data-editing-uploads"
+AUTO_ENCODING_NAMES = {"", "auto", "detect", "auto-detect", "automatic"}
 
 
 class UploadTableRequest(BaseModel):
@@ -39,6 +54,131 @@ class DropTableRequest(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
+class UploadSessionRequest(BaseModel):
+    fileName: Optional[str] = None
+    fileSize: int
+    model_config = ConfigDict(extra="forbid")
+
+
+@router.post("/upload-session")
+def create_upload_session(req: UploadSessionRequest, request: Request):
+    user_id = str(get_request_user_id(request))
+    expected_size = max(0, int(req.fileSize or 0))
+    cleanup_stale_uploads()
+    UPLOAD_STAGING_DIRECTORY.mkdir(parents=True, exist_ok=True)
+    upload_id = uuid.uuid4().hex
+    data_path, _ = get_staging_paths(upload_id)
+    data_path.touch(exist_ok=False)
+    write_staged_upload_metadata(upload_id, {
+        "uploadId": upload_id,
+        "userId": user_id,
+        "fileName": re.split(r"[\\/]", req.fileName or "uploaded-file")[-1][:255],
+        "expectedSize": expected_size,
+        "receivedSize": 0,
+        "createdAt": time.time(),
+    })
+    return {
+        "status": "success",
+        "uploadId": upload_id,
+        "chunkSize": UPLOAD_HTTP_CHUNK_SIZE,
+        "receivedSize": 0,
+    }
+
+
+@router.post("/upload-chunk")
+async def upload_file_chunk(
+    request: Request,
+    chunk: UploadFile = File(...),
+    uploadId: str = Form(...),
+    offset: int = Form(...),
+):
+    metadata, data_path = require_staged_upload(request, uploadId)
+    expected_size = int(metadata.get("expectedSize") or 0)
+    requested_offset = max(0, int(offset or 0))
+    current_size = data_path.stat().st_size
+    if requested_offset != current_size:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Upload offset mismatch. Expected {current_size}, received {requested_offset}.",
+        )
+
+    received = 0
+    with data_path.open("r+b") as output:
+        output.seek(requested_offset)
+        try:
+            while True:
+                block = await chunk.read(256 * 1024)
+                if not block:
+                    break
+                received += len(block)
+                if received > UPLOAD_HTTP_CHUNK_LIMIT:
+                    raise HTTPException(status_code=413, detail="Upload chunk is too large.")
+                if requested_offset + received > expected_size:
+                    raise HTTPException(status_code=400, detail="Upload exceeds the declared file size.")
+                output.write(block)
+        except Exception:
+            output.truncate(requested_offset)
+            raise
+
+    metadata["receivedSize"] = requested_offset + received
+    metadata["updatedAt"] = time.time()
+    write_staged_upload_metadata(uploadId, metadata)
+    return {
+        "status": "success",
+        "uploadId": uploadId,
+        "receivedSize": metadata["receivedSize"],
+        "expectedSize": expected_size,
+    }
+
+
+@router.post("/preview-staged")
+async def preview_staged_upload(
+    request: Request,
+    uploadId: str = Form(...),
+    fileType: str = Form("csv"),
+    delimiter: str = Form(","),
+    fixedWidths: str = Form(""),
+    hasHeader: str = Form("Y"),
+    encoding: str = Form("auto"),
+):
+    metadata, data_path = require_completed_staged_upload(request, uploadId)
+    with data_path.open("rb") as staged_file:
+        staged_upload = UploadFile(file=staged_file, filename=metadata.get("fileName") or "uploaded-file")
+        return await preview_upload(staged_upload, fileType, delimiter, fixedWidths, hasHeader, encoding)
+
+
+@router.post("/upload-staged")
+async def upload_staged_file_to_table(
+    request: Request,
+    uploadId: str = Form(...),
+    fileType: str = Form("csv"),
+    delimiter: str = Form(","),
+    fixedWidths: str = Form(""),
+    hasHeader: str = Form("Y"),
+    encoding: str = Form("auto"),
+    projectCode: str = Form(""),
+    tableComment: str = Form(""),
+    tableNameRule: str = Form("INITUP$_{LOGIN_ID}_{PROJECT_CODE}_{TIME}"),
+):
+    metadata, data_path = require_completed_staged_upload(request, uploadId)
+    with data_path.open("rb") as staged_file:
+        staged_upload = UploadFile(file=staged_file, filename=metadata.get("fileName") or "uploaded-file")
+        result = await upload_file_to_table(
+            request,
+            staged_upload,
+            fileType,
+            delimiter,
+            fixedWidths,
+            hasHeader,
+            encoding,
+            projectCode,
+            tableComment,
+            tableNameRule,
+        )
+    discard_staged_upload(uploadId)
+    return result
+
+
 @router.post("/preview")
 async def preview_upload(
     file: UploadFile = File(...),
@@ -46,16 +186,25 @@ async def preview_upload(
     delimiter: str = Form(","),
     fixedWidths: str = Form(""),
     hasHeader: str = Form("Y"),
-    encoding: str = Form("utf-8")
+    encoding: str = Form("auto")
 ):
-    content = await file.read()
-    columns, rows = parse_upload_content(content, file.filename or "", fileType, delimiter, fixedWidths, hasHeader, encoding, 50)
+    columns, rows, resolved_encoding = read_upload_preview(
+        file.file,
+        file.filename or "",
+        fileType,
+        delimiter,
+        fixedWidths,
+        hasHeader,
+        encoding,
+        UPLOAD_PREVIEW_ROW_LIMIT,
+    )
     preview_columns, preview_rows = add_row_numbers_to_preview(columns, rows)
     return {
         "status": "success",
         "columns": preview_columns,
         "data": preview_rows,
-        "total": len(rows)
+        "total": len(rows),
+        "detectedEncoding": resolved_encoding,
     }
 
 
@@ -67,15 +216,25 @@ async def upload_file_to_table(
     delimiter: str = Form(","),
     fixedWidths: str = Form(""),
     hasHeader: str = Form("Y"),
-    encoding: str = Form("utf-8"),
+    encoding: str = Form("auto"),
     projectCode: str = Form(""),
     tableComment: str = Form(""),
     tableNameRule: str = Form("INITUP$_{LOGIN_ID}_{PROJECT_CODE}_{TIME}")
 ):
     user_id = get_request_user_id(request)
     login_id = get_request_login_id(request) or str(user_id)
-    content = await file.read()
-    columns, rows = parse_upload_content(content, file.filename or "", fileType, delimiter, fixedWidths, hasHeader, encoding, None)
+    stream = file.file
+    filename = file.filename or ""
+    resolved_encoding = resolve_upload_encoding(stream, fileType, encoding)
+    columns, row_width = inspect_upload_stream(
+        stream,
+        filename,
+        fileType,
+        delimiter,
+        fixedWidths,
+        hasHeader,
+        resolved_encoding,
+    )
     if not columns:
         raise HTTPException(status_code=400, detail="No columns were detected.")
 
@@ -97,36 +256,47 @@ async def upload_file_to_table(
         for safe_column, original_column in zip(safe_columns, columns):
             comment = str(original_column or "").strip()
             if comment and comment.upper() != safe_column:
+                safe_comment = escape_and_truncate_oracle_comment(comment)
                 cursor.execute(
-                    f'COMMENT ON COLUMN "{table_name}"."{safe_column}" IS \'{escape_sql_literal(comment)[:3900]}\''
+                    f'COMMENT ON COLUMN "{table_name}"."{safe_column}" IS \'{safe_comment}\''
                 )
         if (tableComment or "").strip():
-            cursor.execute(f'COMMENT ON TABLE "{table_name}" IS \'{escape_sql_literal(tableComment.strip())}\'')
+            safe_table_comment = escape_and_truncate_oracle_comment(tableComment.strip())
+            cursor.execute(f'COMMENT ON TABLE "{table_name}" IS \'{safe_table_comment}\'')
 
         inserted_count = 0
-        if rows:
-            bind_names = [f"c{index}" for index in range(len(upload_columns))]
-            column_sql = ", ".join(f'"{column}"' for column in upload_columns)
-            bind_sql = ", ".join(f":{name}" for name in bind_names)
-            insert_sql = f'INSERT INTO "{table_name}" ({column_sql}) VALUES ({bind_sql})'
-            batch_rows = []
+        column_sql = ", ".join(f'"{column}"' for column in upload_columns)
+        bind_sql = ", ".join(f":{index + 1}" for index in range(len(upload_columns)))
+        insert_sql = f'INSERT INTO "{table_name}" ({column_sql}) VALUES ({bind_sql})'
+        insert_batch_size = max(
+            1,
+            min(UPLOAD_INSERT_BATCH_SIZE, UPLOAD_INSERT_BATCH_CELL_LIMIT // max(len(upload_columns), 1)),
+        )
+        batch_rows = []
+        rows = iter_upload_data_rows(
+            stream,
+            filename,
+            fileType,
+            delimiter,
+            fixedWidths,
+            hasHeader,
+            resolved_encoding,
+            row_width,
+        )
+        try:
             for row_number, row in enumerate(rows, start=1):
-                batch_rows.append({
-                    bind_names[0]: row_number,
-                    **{
-                        bind_names[index + 1]: stringify_cell(row[index] if index < len(row) else "")
-                        for index in range(len(safe_columns))
-                    }
-                })
-                if len(batch_rows) >= UPLOAD_INSERT_BATCH_SIZE:
+                batch_rows.append((row_number, *row))
+                if len(batch_rows) >= insert_batch_size:
                     cursor.executemany(insert_sql, batch_rows)
                     conn.commit()
                     inserted_count += len(batch_rows)
-                    batch_rows = []
+                    batch_rows.clear()
             if batch_rows:
                 cursor.executemany(insert_sql, batch_rows)
                 conn.commit()
                 inserted_count += len(batch_rows)
+        finally:
+            close_row_iterator(rows)
 
         conn.commit()
         stats_gathered = False
@@ -145,6 +315,7 @@ async def upload_file_to_table(
             "tableName": table_name,
             "columns": upload_columns,
             "rowCount": inserted_count,
+            "detectedEncoding": resolved_encoding,
             "statsGathered": stats_gathered,
             "statsMessage": stats_message
         }
@@ -279,89 +450,361 @@ def execute_sql(req: SqlRequest, request: Request):
             conn.close()
 
 
-def parse_upload_content(content, filename, file_type, delimiter, fixed_widths, has_header, encoding, preview_limit):
-    normalized_type = (file_type or "csv").lower()
+def get_staging_paths(upload_id: str):
+    normalized_id = str(upload_id or "").strip().lower()
+    if not re.fullmatch(r"[0-9a-f]{32}", normalized_id):
+        raise HTTPException(status_code=400, detail="Invalid upload session ID.")
+    return (
+        UPLOAD_STAGING_DIRECTORY / f"{normalized_id}.upload",
+        UPLOAD_STAGING_DIRECTORY / f"{normalized_id}.json",
+    )
+
+
+def write_staged_upload_metadata(upload_id: str, metadata: dict):
+    UPLOAD_STAGING_DIRECTORY.mkdir(parents=True, exist_ok=True)
+    _, metadata_path = get_staging_paths(upload_id)
+    temporary_path = metadata_path.with_suffix(".json.tmp")
+    with temporary_path.open("w", encoding="utf-8") as metadata_file:
+        json.dump(metadata, metadata_file, ensure_ascii=False)
+    os.replace(temporary_path, metadata_path)
+
+
+def require_staged_upload(request: Request, upload_id: str):
+    data_path, metadata_path = get_staging_paths(upload_id)
+    try:
+        with metadata_path.open("r", encoding="utf-8") as metadata_file:
+            metadata = json.load(metadata_file)
+    except (FileNotFoundError, json.JSONDecodeError) as error:
+        raise HTTPException(status_code=404, detail="Upload session was not found or has expired.") from error
+    if float(metadata.get("createdAt") or 0) < time.time() - UPLOAD_STAGING_MAX_AGE_SECONDS:
+        discard_staged_upload(upload_id)
+        raise HTTPException(status_code=404, detail="Upload session was not found or has expired.")
+    if str(metadata.get("userId") or "") != str(get_request_user_id(request)):
+        raise HTTPException(status_code=404, detail="Upload session was not found or has expired.")
+    if not data_path.is_file():
+        raise HTTPException(status_code=404, detail="Upload session data was not found.")
+    return metadata, data_path
+
+
+def require_completed_staged_upload(request: Request, upload_id: str):
+    metadata, data_path = require_staged_upload(request, upload_id)
+    expected_size = int(metadata.get("expectedSize") or 0)
+    received_size = data_path.stat().st_size
+    if received_size != expected_size:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Upload is incomplete. Expected {expected_size} bytes, received {received_size} bytes.",
+        )
+    return metadata, data_path
+
+
+def discard_staged_upload(upload_id: str):
+    data_path, metadata_path = get_staging_paths(upload_id)
+    for path in (data_path, metadata_path, metadata_path.with_suffix(".json.tmp")):
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:
+            logger.warning("M02001 staged upload cleanup failed for %s", path.name)
+
+
+def cleanup_stale_uploads():
+    if not UPLOAD_STAGING_DIRECTORY.is_dir():
+        return
+    expiration_time = time.time() - UPLOAD_STAGING_MAX_AGE_SECONDS
+    for path in UPLOAD_STAGING_DIRECTORY.iterdir():
+        try:
+            if path.is_file() and path.stat().st_mtime < expiration_time:
+                path.unlink(missing_ok=True)
+        except OSError:
+            logger.warning("M02001 stale upload cleanup failed for %s", path.name)
+
+
+def resolve_upload_encoding(stream: BinaryIO, file_type: str, requested_encoding: str) -> Optional[str]:
+    if (file_type or "").strip().lower() == "excel":
+        return None
+
+    requested = (requested_encoding or "").strip()
+    if requested.lower() not in AUTO_ENCODING_NAMES:
+        try:
+            return codecs.lookup(requested).name
+        except LookupError as error:
+            raise HTTPException(status_code=400, detail=f"Unsupported encoding: {requested}") from error
+
+    stream.seek(0)
+    sample = stream.read(UPLOAD_ENCODING_SAMPLE_SIZE)
+    stream.seek(0)
+    if not sample:
+        return "utf-8-sig"
+
+    bom_encodings = (
+        (codecs.BOM_UTF32_LE, "utf-32"),
+        (codecs.BOM_UTF32_BE, "utf-32"),
+        (codecs.BOM_UTF8, "utf-8-sig"),
+        (codecs.BOM_UTF16_LE, "utf-16"),
+        (codecs.BOM_UTF16_BE, "utf-16"),
+    )
+    for bom, encoding_name in bom_encodings:
+        if sample.startswith(bom):
+            return encoding_name
+
+    utf16_encoding = detect_utf16_without_bom(sample)
+    if utf16_encoding:
+        return utf16_encoding
+
+    for encoding_name in ("utf-8", "cp949", "shift_jis", "big5", "windows-1252"):
+        if can_decode_sample(sample, encoding_name):
+            return encoding_name
+    return "latin-1"
+
+
+def detect_utf16_without_bom(sample: bytes) -> Optional[str]:
+    if len(sample) < 4:
+        return None
+    even_bytes = sample[0::2]
+    odd_bytes = sample[1::2]
+    even_null_ratio = even_bytes.count(0) / max(len(even_bytes), 1)
+    odd_null_ratio = odd_bytes.count(0) / max(len(odd_bytes), 1)
+    if odd_null_ratio >= 0.3 and even_null_ratio <= 0.05:
+        return "utf-16-le"
+    if even_null_ratio >= 0.3 and odd_null_ratio <= 0.05:
+        return "utf-16-be"
+    return None
+
+
+def can_decode_sample(sample: bytes, encoding: str) -> bool:
+    try:
+        decoder = codecs.getincrementaldecoder(encoding)(errors="strict")
+        decoder.decode(sample, final=False)
+        return True
+    except UnicodeDecodeError:
+        return False
+
+
+def read_upload_preview(
+    stream: BinaryIO,
+    filename: str,
+    file_type: str,
+    delimiter: str,
+    fixed_widths: str,
+    has_header: str,
+    encoding: str,
+    preview_limit: int,
+):
+    resolved_encoding = resolve_upload_encoding(stream, file_type, encoding)
     use_header = str(has_header or "Y").upper() == "Y"
+    columns = []
+    rows = []
+    width = 0
+    raw_rows = iter_upload_raw_rows(
+        stream,
+        filename,
+        file_type,
+        delimiter,
+        fixed_widths,
+        resolved_encoding,
+    )
+    try:
+        for raw_row in raw_rows:
+            if not is_non_empty_row(raw_row):
+                continue
+            width = max(width, len(raw_row))
+            if use_header and not columns:
+                columns = build_header_columns(raw_row)
+                continue
+            rows.append(raw_row)
+            if len(rows) >= preview_limit:
+                break
+    finally:
+        close_row_iterator(raw_rows)
 
+    if not columns and not rows:
+        return [], [], resolved_encoding
+    if not use_header:
+        columns = build_default_columns(width)
+    width = max(width, len(columns))
+    columns = extend_columns(columns, width)
+    normalized_rows = [normalize_upload_row(row, width) for row in rows]
+    return columns, normalized_rows, resolved_encoding
+
+
+def inspect_upload_stream(
+    stream: BinaryIO,
+    filename: str,
+    file_type: str,
+    delimiter: str,
+    fixed_widths: str,
+    has_header: str,
+    resolved_encoding: Optional[str],
+):
+    use_header = str(has_header or "Y").upper() == "Y"
+    columns = []
+    width = 0
+    has_data = False
+    raw_rows = iter_upload_raw_rows(
+        stream,
+        filename,
+        file_type,
+        delimiter,
+        fixed_widths,
+        resolved_encoding,
+    )
+    try:
+        for raw_row in raw_rows:
+            if not is_non_empty_row(raw_row):
+                continue
+            width = max(width, len(raw_row))
+            if use_header and not columns:
+                columns = build_header_columns(raw_row)
+                continue
+            has_data = True
+    finally:
+        close_row_iterator(raw_rows)
+
+    if not columns and not has_data:
+        return [], 0
+    if not use_header:
+        columns = build_default_columns(width)
+    width = max(width, len(columns))
+    return extend_columns(columns, width), width
+
+
+def iter_upload_data_rows(
+    stream: BinaryIO,
+    filename: str,
+    file_type: str,
+    delimiter: str,
+    fixed_widths: str,
+    has_header: str,
+    resolved_encoding: Optional[str],
+    width: int,
+) -> Iterator[list[str]]:
+    use_header = str(has_header or "Y").upper() == "Y"
+    header_skipped = False
+    raw_rows = iter_upload_raw_rows(
+        stream,
+        filename,
+        file_type,
+        delimiter,
+        fixed_widths,
+        resolved_encoding,
+    )
+    try:
+        for raw_row in raw_rows:
+            if not is_non_empty_row(raw_row):
+                continue
+            if use_header and not header_skipped:
+                header_skipped = True
+                continue
+            yield normalize_upload_row(raw_row, width)
+    finally:
+        close_row_iterator(raw_rows)
+
+
+def iter_upload_raw_rows(
+    stream: BinaryIO,
+    filename: str,
+    file_type: str,
+    delimiter: str,
+    fixed_widths: str,
+    resolved_encoding: Optional[str],
+) -> Iterator[list]:
+    normalized_type = (file_type or "csv").strip().lower()
     if normalized_type == "excel":
-        raw_rows = parse_excel(content, preview_limit)
-    elif normalized_type == "fixed":
-        raw_rows = parse_fixed(content, fixed_widths, encoding, preview_limit)
-    else:
-        actual_delimiter = "\t" if normalized_type == "tsv" else (delimiter or ",")
-        raw_rows = parse_delimited(content, actual_delimiter, encoding, preview_limit)
-
-    raw_rows = [row for row in raw_rows if any(str(cell or "").strip() for cell in row)]
-    if not raw_rows:
-        return [], []
-
-    if use_header:
-        columns = [str(cell or "").strip() or f"COL{index + 1:03d}" for index, cell in enumerate(raw_rows[0])]
-        rows = raw_rows[1:]
-    else:
-        max_len = max(len(row) for row in raw_rows)
-        columns = [f"COL{index + 1:03d}" for index in range(max_len)]
-        rows = raw_rows
-
-    width = max(len(columns), max((len(row) for row in rows), default=0))
-    columns = columns + [f"COL{index + 1:03d}" for index in range(len(columns), width)]
-    normalized_rows = [
-        [stringify_cell(row[index] if index < len(row) else "") for index in range(width)]
-        for row in rows
-    ]
-    return columns[:width], normalized_rows
+        yield from iter_excel_rows(stream, filename)
+        return
+    if normalized_type == "fixed":
+        yield from iter_fixed_rows(stream, fixed_widths, resolved_encoding or "utf-8-sig")
+        return
+    actual_delimiter = "\t" if normalized_type == "tsv" else (delimiter or ",")
+    yield from iter_delimited_rows(stream, actual_delimiter, resolved_encoding or "utf-8-sig")
 
 
-def parse_delimited(content, delimiter, encoding, preview_limit):
-    text = content.decode(encoding or "utf-8-sig", errors="replace")
-    rows = []
-    if len(delimiter) == 1:
-        reader = csv.reader(io.StringIO(text), delimiter=delimiter)
-        for row in reader:
-            rows.append(row)
-            if preview_limit and len(rows) > preview_limit:
-                break
-    else:
-        for line in text.splitlines():
-            rows.append(line.split(delimiter))
-            if preview_limit and len(rows) > preview_limit:
-                break
-    return rows
+def iter_delimited_rows(stream: BinaryIO, delimiter: str, encoding: str) -> Iterator[list[str]]:
+    stream.seek(0)
+    text_stream = io.TextIOWrapper(stream, encoding=encoding, errors="replace", newline="")
+    try:
+        if len(delimiter) == 1:
+            yield from csv.reader(text_stream, delimiter=delimiter)
+            return
+        for line in text_stream:
+            yield line.rstrip("\r\n").split(delimiter)
+    finally:
+        detach_text_stream(text_stream)
 
 
-def parse_fixed(content, fixed_widths, encoding, preview_limit):
-    widths = [int(value.strip()) for value in (fixed_widths or "").split(",") if value.strip()]
-    if not widths:
-        raise HTTPException(status_code=400, detail="Fixed widths are required.")
-    text = content.decode(encoding or "utf-8-sig", errors="replace")
-    rows = []
-    for line in text.splitlines():
-        start = 0
-        row = []
-        for width in widths:
-            row.append(line[start:start + width].strip())
-            start += width
-        rows.append(row)
-        if preview_limit and len(rows) > preview_limit:
-            break
-    return rows
+def iter_fixed_rows(stream: BinaryIO, fixed_widths: str, encoding: str) -> Iterator[list[str]]:
+    try:
+        widths = [int(value.strip()) for value in (fixed_widths or "").split(",") if value.strip()]
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail="Fixed widths must be comma-separated integers.") from error
+    if not widths or any(width <= 0 for width in widths):
+        raise HTTPException(status_code=400, detail="Fixed widths are required and must be positive integers.")
+
+    stream.seek(0)
+    text_stream = io.TextIOWrapper(stream, encoding=encoding, errors="replace", newline="")
+    try:
+        for line in text_stream:
+            line = line.rstrip("\r\n")
+            start = 0
+            row = []
+            for width in widths:
+                row.append(line[start:start + width].strip())
+                start += width
+            yield row
+    finally:
+        detach_text_stream(text_stream)
 
 
-def parse_excel(content, preview_limit):
+def iter_excel_rows(stream: BinaryIO, filename: str) -> Iterator[list[str]]:
     try:
         from openpyxl import load_workbook
-    except Exception:
-        raise HTTPException(status_code=500, detail="Excel upload requires openpyxl.")
+    except Exception as error:
+        raise HTTPException(status_code=500, detail="Excel upload requires openpyxl.") from error
 
-    workbook = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
-    sheet = workbook.active
-    rows = []
-    for row in sheet.iter_rows(values_only=True):
-        rows.append([stringify_cell(cell) for cell in row])
-        if preview_limit and len(rows) > preview_limit:
-            break
-    workbook.close()
-    return rows
+    stream.seek(0)
+    try:
+        workbook = load_workbook(stream, read_only=True, data_only=True)
+    except Exception as error:
+        raise HTTPException(status_code=400, detail=f"Excel file could not be read: {filename or 'uploaded file'}") from error
+    try:
+        for row in workbook.active.iter_rows(values_only=True):
+            yield [stringify_cell(cell) for cell in row]
+    finally:
+        workbook.close()
+        stream.seek(0)
+
+
+def detach_text_stream(text_stream: io.TextIOWrapper):
+    try:
+        text_stream.detach()
+    except (ValueError, OSError):
+        pass
+
+
+def close_row_iterator(rows):
+    close = getattr(rows, "close", None)
+    if callable(close):
+        close()
+
+
+def is_non_empty_row(row) -> bool:
+    return any(stringify_cell(cell).strip() for cell in row)
+
+
+def build_header_columns(row):
+    return [stringify_cell(cell).strip() or f"COL{index + 1:03d}" for index, cell in enumerate(row)]
+
+
+def build_default_columns(width):
+    return [f"COL{index + 1:03d}" for index in range(width)]
+
+
+def extend_columns(columns, width):
+    return [*columns, *build_default_columns(width)[len(columns):width]]
+
+
+def normalize_upload_row(row, width):
+    return [stringify_cell(row[index] if index < len(row) else "") for index in range(width)]
 
 
 def add_row_numbers_to_preview(columns, rows):
@@ -486,8 +929,17 @@ def require_read_table(table_name):
     return name
 
 
-def escape_sql_literal(value):
-    return str(value or "").replace("'", "''")
+def escape_and_truncate_oracle_comment(value, max_bytes=ORACLE_COMMENT_SAFE_BYTE_LIMIT):
+    result = []
+    used_bytes = 0
+    for character in str(value or ""):
+        escaped_character = "''" if character == "'" else character
+        character_bytes = len(escaped_character.encode("utf-8"))
+        if used_bytes + character_bytes > max_bytes:
+            break
+        result.append(escaped_character)
+        used_bytes += character_bytes
+    return "".join(result)
 
 
 def normalize_limit(value):

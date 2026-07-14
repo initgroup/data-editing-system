@@ -83,7 +83,7 @@
                 </label>
                 <label class="upload-encoding-control">
                     <span data-label-key="encoding">Encoding</span>
-                    <input id="encoding-M02001" class="upload-input" type="text" value="utf-8-sig">
+                    <input id="encoding-M02001" class="upload-input" type="text" value="auto" placeholder="auto">
                 </label>
                 <label class="upload-comment-control">
                     <span data-label-key="tableComment">Table Comment</span>
@@ -103,7 +103,7 @@
                         <span data-label-key="upload">Upload</span>
                     </button>
                 </div>
-                <div id="uploadProgress-M02001" class="upload-progress" hidden>
+                <div id="uploadProgress-M02001" class="upload-progress" role="progressbar" aria-label="File upload progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-busy="false" hidden>
                     <div class="upload-progress-meta">
                         <span class="upload-progress-status">
                             <i class="fas fa-spinner upload-progress-spinner" aria-hidden="true"></i>
