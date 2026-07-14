@@ -523,7 +523,7 @@
             const activePageCode = activeSection.id.replace('page-section-', '');
             const pageCodes = PageManager.getOtherOpenPageCodes?.(activePageCode) || [];
             if (pageCodes.length === 0) {
-                alert("There are no other open pages.");
+                alert(window.I18nManager?.t?.("messages.noOtherOpenPages", "There are no other open pages.") || "There are no other open pages.");
                 return;
             }
             if (await PageManager.confirmAndCleanupBeforeClose?.(pageCodes, "close other pages", { cleanupTargetConnection: false })) {

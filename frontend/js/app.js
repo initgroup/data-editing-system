@@ -251,19 +251,32 @@ const PageManager = {
     buildTransitionWarning(actionText, options = {}) {
         const cleanupTargetConnection = options.cleanupTargetConnection !== false;
         const activeRequests = CommonUtils.getActiveRequestCount?.() || 0;
+        const actionKeys = {
+            logout: "actions.logout",
+            "change Target DB": "actions.changeTargetDb",
+            "change target DB": "actions.changeTargetDb",
+            "close current page": "actions.closeThisPage",
+            "close other pages": "actions.closeOtherPages",
+            "close all pages": "actions.closeAllPages"
+        };
+        const action = window.I18nManager?.t?.(actionKeys[actionText], actionText) || actionText;
         const requestWarning = activeRequests > 0
-            ? `\n\nThere are ${activeRequests} request(s) still running. The app will wait briefly before cleanup.`
+            ? (window.I18nManager?.t?.(
+                "messagePatterns.pendingRequests",
+                "There are {count} request(s) still running. The app will wait briefly before cleanup."
+            ) || "There are {count} request(s) still running. The app will wait briefly before cleanup.")
+                .replace("{count}", String(activeRequests))
             : "";
-        const warningLines = [
-            `You are about to ${actionText}.`,
-            "",
-            "Selected pages will be closed and unsaved work may be lost."
-        ];
-        if (cleanupTargetConnection) {
-            warningLines.push("Any open target DB session will be rolled back and closed before continuing.");
-        }
-        warningLines.push(requestWarning, "", "Continue?");
-        return warningLines.join("\n");
+        const templateKey = cleanupTargetConnection
+            ? "messagePatterns.transitionWarning"
+            : "messagePatterns.transitionWarningWithoutTarget";
+        const fallback = cleanupTargetConnection
+            ? "You are about to {action}.\n\nSelected pages will be closed and unsaved work may be lost.\nAny open target DB session will be rolled back and closed before continuing.{requestWarningBlock}\n\nContinue?"
+            : "You are about to {action}.\n\nSelected pages will be closed and unsaved work may be lost.{requestWarningBlock}\n\nContinue?";
+        const template = window.I18nManager?.t?.(templateKey, fallback) || fallback;
+        return template
+            .replace("{action}", action)
+            .replace("{requestWarningBlock}", requestWarning ? `\n\n${requestWarning}` : "");
     },
 
     async cleanupCurrentTargetConnection(reason = "") {
