@@ -120,6 +120,9 @@
                     <button onclick="handlePageClose()" class="btn-refresh-top ml-2 text-red-500 hover:text-red-700" title="Close current page">
                         <i class="fas fa-times"></i>
                     </button>
+                    <button onclick="handleOtherPageClose()" class="btn-refresh-top text-amber-600 hover:text-amber-800" title="Close other pages" aria-label="Close other pages">
+                        <i class="fas fa-window-restore"></i><i class="fas fa-times text-xs ml-[-4px]"></i>
+                    </button>
                     <button onclick="handleAllPageClose()" class="btn-refresh-top mr-2 text-orange-500 hover:text-orange-700" title="Close all pages">
                         <i class="fas fa-layer-group"></i><i class="fas fa-times text-xs ml-[-4px]"></i>
                     </button>
@@ -511,6 +514,20 @@
             const pageCodes = Object.keys(PageManager.containers || {});
             if (await PageManager.confirmAndCleanupBeforeClose?.(pageCodes, "close all pages")) {
                 PageManager.closeAll();
+            }
+        }
+
+        async function handleOtherPageClose() {
+            const activeSection = document.querySelector('.page-section.active');
+            if (!activeSection) return;
+            const activePageCode = activeSection.id.replace('page-section-', '');
+            const pageCodes = PageManager.getOtherOpenPageCodes?.(activePageCode) || [];
+            if (pageCodes.length === 0) {
+                alert("There are no other open pages.");
+                return;
+            }
+            if (await PageManager.confirmAndCleanupBeforeClose?.(pageCodes, "close other pages", { cleanupTargetConnection: false })) {
+                PageManager.closeOthers(activePageCode);
             }
         }
 

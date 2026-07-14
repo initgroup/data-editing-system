@@ -248,20 +248,22 @@ const PageManager = {
         return true;
     },
 
-    buildTransitionWarning(actionText) {
+    buildTransitionWarning(actionText, options = {}) {
+        const cleanupTargetConnection = options.cleanupTargetConnection !== false;
         const activeRequests = CommonUtils.getActiveRequestCount?.() || 0;
         const requestWarning = activeRequests > 0
             ? `\n\nThere are ${activeRequests} request(s) still running. The app will wait briefly before cleanup.`
             : "";
-        return [
+        const warningLines = [
             `You are about to ${actionText}.`,
             "",
-            "All open pages will be closed and unsaved work may be lost.",
-            "Any open target DB session will be rolled back and closed before continuing.",
-            requestWarning,
-            "",
-            "Continue?"
-        ].join("\n");
+            "Selected pages will be closed and unsaved work may be lost."
+        ];
+        if (cleanupTargetConnection) {
+            warningLines.push("Any open target DB session will be rolled back and closed before continuing.");
+        }
+        warningLines.push(requestWarning, "", "Continue?");
+        return warningLines.join("\n");
     },
 
     async cleanupCurrentTargetConnection(reason = "") {
@@ -299,8 +301,9 @@ const PageManager = {
         }
     },
 
-    async confirmAndCleanupBeforeClose(pageCodes = [], actionText = "continue") {
-        if (!(await CommonMessage.confirm(this.buildTransitionWarning(actionText)))) return false;
+    async confirmAndCleanupBeforeClose(pageCodes = [], actionText = "continue", options = {}) {
+        const cleanupTargetConnection = options.cleanupTargetConnection !== false;
+        if (!(await CommonMessage.confirm(this.buildTransitionWarning(actionText, { cleanupTargetConnection })))) return false;
 
         const canClose = await this.runPageBeforeCloseHooks(pageCodes);
         if (!canClose) return false;
@@ -312,13 +315,15 @@ const PageManager = {
             }
         }
 
-        try {
-            await this.cleanupCurrentTargetConnection(actionText);
-        } catch (error) {
-            console.warn("[System] Target cleanup failed.", error);
-            if (String(actionText || "").toLowerCase() !== "logout") {
-                const proceed = await CommonMessage.confirm("Target DB cleanup failed. Continue anyway?");
-                if (!proceed) return false;
+        if (cleanupTargetConnection) {
+            try {
+                await this.cleanupCurrentTargetConnection(actionText);
+            } catch (error) {
+                console.warn("[System] Target cleanup failed.", error);
+                if (String(actionText || "").toLowerCase() !== "logout") {
+                    const proceed = await CommonMessage.confirm("Target DB cleanup failed. Continue anyway?");
+                    if (!proceed) return false;
+                }
             }
         }
         return true;
@@ -382,6 +387,19 @@ const PageManager = {
         });
         MenuRenderer?.collapseAll?.();
         LayoutManager?.collapseAllMenus?.();
+    },
+
+    getOtherOpenPageCodes(currentPageCode) {
+        return Object.keys(this.containers).filter((pageCode) => (
+            pageCode !== DEFAULT_PAGE_CODE && pageCode !== currentPageCode
+        ));
+    },
+
+    closeOthers(currentPageCode) {
+        const openPages = this.getOtherOpenPageCodes(currentPageCode);
+        openPages.forEach((pageCode) => {
+            this.close(pageCode, false);
+        });
     },
 
     resetWorkspaceForLogout(keepLoginSession = false) {
