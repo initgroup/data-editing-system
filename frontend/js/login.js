@@ -102,13 +102,13 @@
         targetSelectionRequired: false,
         isLoggingIn: false,
         passwordVisible: false,
-        loginLanguage: "en",
+        loginLanguage: "ko",
         messageKey: "messageEnterCredentials",
         signupMessageKey: "signupMessage",
 
         async init() {
             document.body.classList.add("intro-mode");
-            await this.applyLoginLanguage("en", { resetMessage: true });
+            await this.applyLoginLanguage("ko", { resetMessage: true });
             this.resetLoginForm();
         },
 
@@ -124,7 +124,7 @@
         },
 
         normalizeLoginLanguage(languageCode) {
-            const code = String(languageCode || "en").trim().toLowerCase().replace("_", "-");
+            const code = String(languageCode || "ko").trim().toLowerCase().replace("_", "-");
             return code === "ko" || code === "ko-kr" || code === "kr" ? "ko" : "en";
         },
 

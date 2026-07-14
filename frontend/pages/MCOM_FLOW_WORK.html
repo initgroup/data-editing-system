@@ -148,6 +148,12 @@
                             </section>
                         </div>
                     </div>
+                    <div class="flow-import-action">
+                        <button type="button" id="importFlow-__PAGE_CODE__" class="table-btn" onclick="__PAGE_CODE__.openFlowImportDialog()">
+                            <i class="fas fa-file-import"></i>
+                            <span data-label-key="importFlow">Import</span>
+                        </button>
+                    </div>
                     <div class="table-export-actions flow-main-actions">
                         <div class="flow-main-action-buttons">
                             <button type="button" id="saveFlowButton-__PAGE_CODE__" class="table-btn" onclick="__PAGE_CODE__.saveFlow()">
@@ -210,7 +216,6 @@
                     <div class="data-panel-toolbar flow-canvas-toolbar">
                         <strong data-label-key="flowCanvas">Flow Canvas</strong>
                         <span id="flowZoomLabel-__PAGE_CODE__" class="flow-zoom-label">100%</span>
-                        <span>&nbsp;</span>
                         <span id="selectedFlowLabel-__PAGE_CODE__" class="data-selected-object" data-label-key="sampleFlowLabel">Click the right output connector, then click the left input connector of the node to connect.<br>Hold Shift while connecting to create a one-time dashed on-complete edge.</span>
                         <span class="flow-canvas-actions">
                             <button type="button" class="table-icon-btn" title="Reload saved canvas" data-title-key="reloadCanvasTitle" onclick="__PAGE_CODE__.reloadCurrentFlowCanvas()">
@@ -462,6 +467,38 @@ END;</textarea>
                 <button type="button" class="env-btn" onclick="__PAGE_CODE__.closePortHelp()">
                     <span data-label-key="close">Close</span>
                 </button>
+            </footer>
+        </section>
+    </div>
+
+    <div id="flowImportLayer-__PAGE_CODE__" class="data-help-layer" hidden>
+        <section class="data-help-dialog flow-import-dialog" role="dialog" aria-modal="true" aria-labelledby="flowImportTitle-__PAGE_CODE__">
+            <header>
+                <h2 id="flowImportTitle-__PAGE_CODE__" data-label-key="importFlow">Import</h2>
+                <button type="button" class="table-icon-btn" title="Close" data-title-key="closeTitle" onclick="__PAGE_CODE__.closeFlowImportDialog()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </header>
+            <div class="data-help-content flow-import-content">
+                <p data-label-key="importFlowHint">Select a saved flow to load its graph into the current draft.</p>
+                <div class="flow-import-filters">
+                    <label>
+                        <span data-label-key="project">Project</span>
+                        <select id="importFlowProject-__PAGE_CODE__" class="env-field" onchange="__PAGE_CODE__.handleImportFlowProjectChange(this.value)"></select>
+                    </label>
+                    <label>
+                        <span data-label-key="scenario">Scenario</span>
+                        <select id="importFlowScenario-__PAGE_CODE__" class="env-field" onchange="__PAGE_CODE__.handleImportFlowScenarioChange(this.value)"></select>
+                    </label>
+                    <label class="flow-import-source-field">
+                        <span data-label-key="importFlowList">Saved flow</span>
+                        <select id="importFlowSource-__PAGE_CODE__" class="env-field"></select>
+                    </label>
+                </div>
+            </div>
+            <footer>
+                <button type="button" class="env-btn" onclick="__PAGE_CODE__.closeFlowImportDialog()"><span data-label-key="close">Close</span></button>
+                <button type="button" id="confirmFlowImport-__PAGE_CODE__" class="env-btn env-save" onclick="__PAGE_CODE__.importSelectedFlow()"><span data-label-key="importFlow">Import</span></button>
             </footer>
         </section>
     </div>

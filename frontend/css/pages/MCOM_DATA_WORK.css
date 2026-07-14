@@ -693,3 +693,58 @@
         background: #e2e8f0 !important;
     }
 }
+
+.data-work-page .data-job-import-dialog {
+    max-height: min(560px, calc(100vh - 32px));
+    width: min(640px, 100%);
+}
+
+.data-work-page .data-job-import-content {
+    display: grid;
+    gap: 16px;
+    overflow: auto;
+}
+
+.data-work-page .data-job-import-content > p {
+    color: #475569;
+    font-size: 13px;
+    line-height: 1.5;
+    margin: 0;
+}
+
+.data-work-page .data-job-import-filters {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.data-work-page .data-job-import-filters label {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+}
+
+.data-work-page .data-job-import-filters label > span {
+    color: #334155;
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.data-work-page .data-job-import-job-field {
+    grid-column: 1 / -1;
+}
+
+@media (max-width: 760px) {
+    .data-work-page .data-job-import-dialog {
+        max-height: calc(100dvh - 16px);
+        width: calc(100vw - 16px);
+    }
+
+    .data-work-page .data-job-import-filters {
+        grid-template-columns: 1fr;
+    }
+
+    .data-work-page .data-job-import-job-field {
+        grid-column: auto;
+    }
+}

@@ -241,6 +241,9 @@
         executableObjects: [],
         omlResources: [],
         jobs: [],
+        importProjects: [],
+        importScenarios: [],
+        importJobs: [],
         runHistory: [],
         parameters: [],
         selectedProjectId: "",
@@ -279,6 +282,7 @@
         runtimeBindValues: {},
         savedJobSnapshot: null,
         scriptWrapMode: false,
+        executionConfigLoadCount: 0,
 
         async init() {
             if (this.isInit) return;
@@ -305,6 +309,11 @@
             this.isInit = true;
         },
 
+        async onShow() {
+            if (!this.isInit) return;
+            this.renderCurrentJob();
+        },
+
         destroy() {
             this.endSqlGridColumnResize?.();
             getContainerEl(`#sqlEditor-${PAGE_CODE}`)?.removeEventListener("keydown", this.sqlKeydownBound);
@@ -317,6 +326,9 @@
             this.executableObjects = [];
             this.omlResources = [];
             this.jobs = [];
+            this.importProjects = [];
+            this.importScenarios = [];
+            this.importJobs = [];
             this.runHistory = [];
             this.parameters = [];
             this.selectedProjectId = "";
@@ -352,6 +364,7 @@
             this.runtimeBindValues = {};
             this.savedJobSnapshot = null;
             this.scriptWrapMode = false;
+            this.executionConfigLoadCount = 0;
             this.isInit = false;
         },
 
@@ -1355,6 +1368,8 @@
         async loadParameters(objectId, options = {}) {
             const generateAfterLoad = options.generateAfterLoad !== false;
             const container = getContainerEl(`#parameterGrid-${PAGE_CODE}`);
+            let loaded = false;
+            this.beginExecutionConfigLoad();
             if (container) container.innerHTML = `<div class="table-empty">${this.escapeHtml(this.getLabel("loadingParameters") || "Loading parameters...")}</div>`;
 
             try {
@@ -1367,15 +1382,19 @@
                     itemOrder: row.ITEM_ORDER ?? ""
                 }));
                 this.renderParameters();
-                if (generateAfterLoad) this.generateExecutablePlsql(true);
+                loaded = true;
             } catch (error) {
                 this.parameters = [];
                 if (container) container.innerHTML = `<div class="table-error">${this.escapeHtml(error.message || "Parameter load failed.")}</div>`;
+            } finally {
+                this.endExecutionConfigLoad();
             }
+            if (loaded && generateAfterLoad) this.generateExecutablePlsql(true);
         },
 
         async loadOmlParameters(resourceId) {
             const container = getContainerEl(`#parameterGrid-${PAGE_CODE}`);
+            this.beginExecutionConfigLoad();
             if (container) container.innerHTML = `<div class="table-empty">${this.escapeHtml(this.getLabel("loadingOmlParameters") || "Loading OML4Py parameters...")}</div>`;
 
             try {
@@ -1405,11 +1424,14 @@
             } catch (error) {
                 this.parameters = [];
                 if (container) container.innerHTML = `<div class="table-error">${this.escapeHtml(error.message || "OML4Py parameter load failed.")}</div>`;
+            } finally {
+                this.endExecutionConfigLoad();
             }
         },
 
         async loadWebApiParameters(resourceId) {
             const container = getContainerEl(`#parameterGrid-${PAGE_CODE}`);
+            this.beginExecutionConfigLoad();
             if (container) container.innerHTML = `<div class="table-empty">${this.escapeHtml(this.getLabel("loadingPythonApiParameters") || "Loading Python API parameters...")}</div>`;
 
             try {
@@ -1448,7 +1470,24 @@
             } catch (error) {
                 this.parameters = [];
                 if (container) container.innerHTML = `<div class="table-error">${this.escapeHtml(error.message || "Python API parameter load failed.")}</div>`;
+            } finally {
+                this.endExecutionConfigLoad();
             }
+        },
+
+        beginExecutionConfigLoad() {
+            this.executionConfigLoadCount += 1;
+            this.syncExecutionConfigLoading();
+        },
+
+        endExecutionConfigLoad() {
+            this.executionConfigLoadCount = Math.max(0, this.executionConfigLoadCount - 1);
+            this.syncExecutionConfigLoading();
+        },
+
+        syncExecutionConfigLoading() {
+            const button = getContainerEl(`#generateExecutable-${PAGE_CODE}`);
+            if (button) button.disabled = this.executionConfigLoadCount > 0;
         },
 
         async refreshParameters() {
@@ -1645,6 +1684,254 @@
                 await this.selectFirstJobAfterLoad();
             } catch (error) {
                 container.innerHTML = `<div class="table-error">${this.escapeHtml(error.message || "Job load failed.")}</div>`;
+            }
+        },
+
+        async openJobImportDialog() {
+            if (!this.ensureWorkContextSelected()) return;
+            const layer = getContainerEl(`#jobImportLayer-${PAGE_CODE}`);
+            if (!layer) return;
+            this.importProjects = (this.contextProjects || []).filter((project) => project.USE_YN === "Y");
+            layer.hidden = false;
+            this.renderImportProjects(this.selectedProjectId);
+            await this.loadImportScenarios(this.selectedProjectId, this.selectedScenarioId);
+        },
+
+        closeJobImportDialog() {
+            const layer = getContainerEl(`#jobImportLayer-${PAGE_CODE}`);
+            if (layer) layer.hidden = true;
+        },
+
+        renderImportProjects(preferredProjectId = "") {
+            const select = getContainerEl(`#importProject-${PAGE_CODE}`);
+            if (!select) return;
+            select.innerHTML = `
+                <option value="">${this.escapeHtml(this.getLabel("selectProject") || "-- Select project --")}</option>
+                ${(this.importProjects || []).map((project) => `
+                    <option value="${this.escapeHtml(project.PROJECT_ID ?? "")}">
+                        ${this.escapeHtml(CommonUtils.formatOwnerScopedName(project, project.PROJECT_NAME || project.PROJECT_CODE || "(Untitled project)"))}
+                    </option>
+                `).join("")}
+            `;
+            select.value = (this.importProjects || []).some((project) => String(project.PROJECT_ID) === String(preferredProjectId))
+                ? String(preferredProjectId)
+                : "";
+        },
+
+        async handleImportProjectChange(projectId) {
+            await this.loadImportScenarios(projectId || "", "");
+        },
+
+        async loadImportScenarios(projectId, preferredScenarioId = "") {
+            const select = getContainerEl(`#importScenario-${PAGE_CODE}`);
+            this.importScenarios = [];
+            this.importJobs = [];
+            this.renderImportJobs();
+            if (!projectId) {
+                if (select) select.innerHTML = `<option value="">${this.escapeHtml(this.getLabel("selectScenario") || "-- Select scenario --")}</option>`;
+                return;
+            }
+            if (select) select.innerHTML = `<option value="">${this.escapeHtml(this.getLabel("loadingScenarios") || "Loading scenarios...")}</option>`;
+            try {
+                const params = new URLSearchParams({ projectId: String(projectId), keyword: "" });
+                const json = await CommonUtils.request(`${API_BASE_URL}/M01002/scenarios?${params.toString()}`, { method: "GET", showLoading: false });
+                this.importScenarios = Array.isArray(json.data) ? json.data : [];
+                const hasPreferred = this.importScenarios.some((scenario) => String(scenario.SCENARIO_ID) === String(preferredScenarioId));
+                const selectedScenarioId = hasPreferred ? String(preferredScenarioId) : String(this.importScenarios[0]?.SCENARIO_ID || "");
+                if (select) {
+                    select.innerHTML = `
+                        <option value="">${this.escapeHtml(this.getLabel("selectScenario") || "-- Select scenario --")}</option>
+                        ${this.importScenarios.map((scenario) => `
+                            <option value="${this.escapeHtml(scenario.SCENARIO_ID ?? "")}">
+                                ${this.escapeHtml(CommonUtils.formatOwnerScopedName(scenario, scenario.SCENARIO_NAME || scenario.SCENARIO_CODE || "(Untitled scenario)"))}
+                            </option>
+                        `).join("")}
+                    `;
+                    select.value = selectedScenarioId;
+                }
+                await this.loadImportJobs(projectId, selectedScenarioId);
+            } catch (error) {
+                if (select) select.innerHTML = `<option value="">${this.escapeHtml(error.message || "Scenario load failed.")}</option>`;
+            }
+        },
+
+        async handleImportScenarioChange(scenarioId) {
+            const projectId = getContainerEl(`#importProject-${PAGE_CODE}`)?.value || "";
+            await this.loadImportJobs(projectId, scenarioId || "");
+        },
+
+        async loadImportJobs(projectId, scenarioId) {
+            const select = getContainerEl(`#importJobSource-${PAGE_CODE}`);
+            this.importJobs = [];
+            if (!projectId || !scenarioId) {
+                this.renderImportJobs();
+                return;
+            }
+            if (select) select.innerHTML = `<option value="">${this.escapeHtml(this.getLabel("loadingJobs") || "Loading saved work...")}</option>`;
+            try {
+                const params = new URLSearchParams({ projectId: String(projectId), scenarioId: String(scenarioId) });
+                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/import-jobs?${params.toString()}`, { method: "GET", showLoading: false });
+                this.importJobs = Array.isArray(json.data) ? json.data : [];
+                this.renderImportJobs();
+            } catch (error) {
+                if (select) select.innerHTML = `<option value="">${this.escapeHtml(error.message || "Saved work load failed.")}</option>`;
+            }
+        },
+
+        renderImportJobs() {
+            const select = getContainerEl(`#importJobSource-${PAGE_CODE}`);
+            const confirmButton = getContainerEl(`#confirmJobImport-${PAGE_CODE}`);
+            if (!select) return;
+            select.innerHTML = `
+                <option value="">${this.escapeHtml(this.getLabel("selectImportJob") || "-- Select saved work --")}</option>
+                ${(this.importJobs || []).map((job) => {
+                    const detail = [job.JOB_DESC, job.EXEC_OBJECT_LABEL || job.EXEC_OBJECT_NAME].filter(Boolean).join(" · ");
+                    return `<option value="${this.escapeHtml(job.PROFILE_JOB_ID ?? "")}">${this.escapeHtml(job.JOB_NAME || "(Untitled job)")}${detail ? ` — ${this.escapeHtml(detail)}` : ""}</option>`;
+                }).join("")}
+            `;
+            if (confirmButton) confirmButton.disabled = !(this.importJobs || []).length;
+        },
+
+        getImportedExecutionSettings(source = {}) {
+            const sourceType = String(source.EXEC_SOURCE_TYPE || "DB_OBJECT").toUpperCase();
+            if (sourceType === "OML_PYTHON") {
+                const resource = (this.omlResources || []).find((row) => (
+                    String(row.RESOURCE_NAME || "").toUpperCase() === String(source.EXEC_OBJECT_NAME || "").toUpperCase()
+                    || String(row.SCRIPT_NAME || "").toUpperCase() === String(source.EXEC_OBJECT_NAME || "").toUpperCase()
+                    || String(row.EXEC_METHOD || "").toUpperCase() === String(source.EXEC_METHOD || "").toUpperCase()
+                )) || {};
+                return {
+                    execSourceType: "OML_PYTHON",
+                    execResourceId: resource.OML_RESOURCE_ID || "",
+                    execMethod: resource.EXEC_METHOD || source.EXEC_METHOD || "",
+                    execSpecJson: resource.SPEC_JSON || "",
+                    execObjectId: "",
+                    execOwner: resource.SCRIPT_OWNER || source.EXEC_OWNER || "",
+                    execObjectType: "OML_PYTHON",
+                    execObjectName: resource.RESOURCE_NAME || resource.SCRIPT_NAME || source.EXEC_OBJECT_NAME || "",
+                    execObjectLabel: resource.RESOURCE_LABEL || resource.RESOURCE_NAME || resource.SCRIPT_NAME || source.EXEC_OBJECT_LABEL || ""
+                };
+            }
+            if (sourceType === "WEB_API") {
+                const resource = this.findWebApiResource(source.EXEC_METHOD || source.EXEC_OBJECT_NAME) || {};
+                const api = this.getWebApiDefinition(resource.OML_RESOURCE_ID || source.EXEC_METHOD) || {};
+                return {
+                    execSourceType: "WEB_API",
+                    execResourceId: resource.OML_RESOURCE_ID || api.resourceId || "",
+                    execMethod: api.method || resource.EXEC_METHOD || source.EXEC_METHOD || "",
+                    execSpecJson: api.specJson || resource.SPEC_JSON || "",
+                    execObjectId: "",
+                    execOwner: "",
+                    execObjectType: "WEB_API",
+                    execObjectName: resource.RESOURCE_NAME || api.method || source.EXEC_OBJECT_NAME || "",
+                    execObjectLabel: api.label || resource.RESOURCE_LABEL || resource.RESOURCE_NAME || source.EXEC_OBJECT_LABEL || ""
+                };
+            }
+            const object = (this.executableObjects || []).find((row) => (
+                String(row.OBJECT_NAME || "").toUpperCase() === String(source.EXEC_OBJECT_NAME || "").toUpperCase()
+                && String(row.OBJECT_TYPE || "").toUpperCase() === String(source.EXEC_OBJECT_TYPE || "").toUpperCase()
+                && (!source.EXEC_OWNER || String(row.OWNER || "").toUpperCase() === String(source.EXEC_OWNER).toUpperCase())
+            )) || {};
+            return {
+                execSourceType: "DB_OBJECT",
+                execResourceId: "",
+                execMethod: "",
+                execSpecJson: "",
+                execObjectId: object.OBJECT_ID || "",
+                execOwner: object.OWNER || source.EXEC_OWNER || "",
+                execObjectType: object.OBJECT_TYPE || source.EXEC_OBJECT_TYPE || "",
+                execObjectName: object.OBJECT_NAME || source.EXEC_OBJECT_NAME || "",
+                execObjectLabel: object.OBJECT_LABEL || object.OBJECT_NAME || source.EXEC_OBJECT_LABEL || ""
+            };
+        },
+
+        mergeImportedParameterDefaults(importedRows = [], registeredRows = []) {
+            const importedByKey = new Map();
+            (importedRows || []).forEach((row) => {
+                const key = String(row.itemName || row.ITEM_NAME || row.bindName || row.BIND_NAME || "").trim().toUpperCase();
+                if (key) importedByKey.set(key, row);
+            });
+            const mergedRows = (registeredRows || []).map((row) => {
+                const key = String(row.itemName || row.ITEM_NAME || row.bindName || row.BIND_NAME || "").trim().toUpperCase();
+                const imported = importedByKey.get(key);
+                if (!imported) return row;
+                importedByKey.delete(key);
+                return {
+                    ...row,
+                    itemDefault: imported.itemDefault ?? imported.ITEM_DEFAULT ?? row.itemDefault ?? row.ITEM_DEFAULT ?? ""
+                };
+            });
+            return [...mergedRows, ...importedByKey.values()].map((row, index) => ({
+                itemName: row.itemName || row.ITEM_NAME || "",
+                itemValue: row.itemValue || row.ITEM_VALUE || "",
+                itemDesc: row.itemDesc || row.ITEM_DESC || "",
+                itemDefault: row.itemDefault ?? row.ITEM_DEFAULT ?? "",
+                itemOrder: row.itemOrder ?? row.ITEM_ORDER ?? index + 1,
+                bindName: row.bindName || row.BIND_NAME || ""
+            }));
+        },
+
+        async syncImportedExecutionConfiguration(importedParameters = []) {
+            const sourceType = String(this.currentJob?.execSourceType || "DB_OBJECT").toUpperCase();
+            const registeredParameters = this.cloneParameterRows(this.parameters);
+            if (sourceType === "WEB_API" && this.currentJob?.execResourceId) {
+                await this.loadWebApiParameters(this.currentJob.execResourceId);
+            } else if (sourceType === "OML_PYTHON" && this.currentJob?.execResourceId) {
+                await this.loadOmlParameters(this.currentJob.execResourceId);
+            } else if (sourceType === "DB_OBJECT" && this.currentJob?.execObjectId) {
+                await this.loadParameters(this.currentJob.execObjectId, { generateAfterLoad: false });
+            }
+            this.parameters = this.mergeImportedParameterDefaults(importedParameters, this.parameters.length ? this.parameters : registeredParameters);
+            this.renderParameters();
+            this.renderCurrentJob();
+        },
+
+        async importSelectedJob() {
+            const projectId = getContainerEl(`#importProject-${PAGE_CODE}`)?.value || "";
+            const scenarioId = getContainerEl(`#importScenario-${PAGE_CODE}`)?.value || "";
+            const profileJobId = getContainerEl(`#importJobSource-${PAGE_CODE}`)?.value || "";
+            if (!projectId || !scenarioId || !profileJobId) {
+                CommonMessage.warning?.(this.getLabel("selectImportJob") || "Select saved work to import.");
+                return;
+            }
+            const confirmButton = getContainerEl(`#confirmJobImport-${PAGE_CODE}`);
+            if (confirmButton) confirmButton.disabled = true;
+            try {
+                const params = new URLSearchParams({ projectId: String(projectId), scenarioId: String(scenarioId) });
+                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/import-jobs/${encodeURIComponent(profileJobId)}?${params.toString()}`, { method: "GET" });
+                const source = json.data || {};
+                this.newJob();
+                this.currentJob = {
+                    ...this.currentJob,
+                    jobName: source.JOB_NAME || "",
+                    jobDesc: source.JOB_DESC || "",
+                    ...this.getImportedExecutionSettings(source),
+                    execPlsql: source.EXEC_PLSQL || "",
+                    resultCreateYn: this.normalizeResultCreateMode(source.RESULT_CREATE_YN || "N"),
+                    resultOwner: source.RESULT_OWNER || "",
+                    resultTableName: source.RESULT_TABLE_NAME || ""
+                };
+                const importedParameters = (Array.isArray(source.PARAMS) ? source.PARAMS : []).map((row) => ({
+                    itemName: row.itemName || row.ITEM_NAME || "",
+                    itemValue: row.itemValue || row.ITEM_VALUE || "",
+                    itemDesc: row.itemDesc || row.ITEM_DESC || "",
+                    itemDefault: row.itemDefault || row.ITEM_DEFAULT || "",
+                    itemOrder: row.itemOrder ?? row.ITEM_ORDER ?? "",
+                    bindName: row.bindName || row.BIND_NAME || ""
+                }));
+                this.parameters = importedParameters;
+                this.savedJobSnapshot = null;
+                await this.syncImportedExecutionConfiguration(importedParameters);
+                this.generateExecutablePlsql(true);
+                this.setFieldValue(`#resultQueryTable-${PAGE_CODE}`, this.currentJob.resultTableName);
+                await this.setResultTableSql(this.currentJob.resultTableName, this.currentJob.resultOwner, this.currentJob.resultCreateYn);
+                await this.setDefaultUserSql(false);
+                this.closeJobImportDialog();
+                CommonMessage.success?.(this.getLabel("importWorkDone") || "Saved work has been loaded into the current new job.", { copyable: false });
+            } catch (error) {
+                CommonMessage.error?.(error.message || "Saved work import failed.");
+            } finally {
+                if (confirmButton) confirmButton.disabled = false;
             }
         },
 
@@ -2910,6 +3197,7 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
         },
 
         generateExecutablePlsql(force = false) {
+            if (this.executionConfigLoadCount > 0) return;
             const editor = getContainerEl(`#execPlsqlEditor-${PAGE_CODE}`);
             if (!editor) return;
             if (!force && editor.value.trim()) return;

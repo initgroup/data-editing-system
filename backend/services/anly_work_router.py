@@ -169,6 +169,25 @@ def create_anly_work_router(
     ):
         return anly_work.get_model_view(request, owner, modelName, viewType, page, pageSize)
 
+    @router.get("/symbolic-rule-sample")
+    def get_symbolic_rule_sample(
+        request: Request,
+        owner: str,
+        ruleId: str,
+        runSourceType: str,
+        runId: int,
+        sampleLimit: int = 300,
+    ):
+        return anly_work.get_symbolic_rule_sample(
+            request=request,
+            owner=owner,
+            ruleId=ruleId,
+            runSourceType=runSourceType,
+            runId=runId,
+            sampleLimit=sampleLimit,
+            flow_menu_code=FLOW_MENU_CODE,
+        )
+
     @router.get("/model-detail-summary")
     def get_model_detail_summary(
         request: Request,

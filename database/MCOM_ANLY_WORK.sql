@@ -154,6 +154,63 @@ SELECT C.COLUMN_NAME
    AND C.TABLE_NAME = :tableName
  ORDER BY C.COLUMN_ID;
 
+-- [MCOMMON_ANLY_WORK_SYMBOLIC_SAMPLE_CONTEXT]
+SELECT *
+  FROM (
+        SELECT R.RUN_SOURCE_TYPE
+             , R.RUN_ID
+             , R.OWNER
+             , R.TABLE_NAME
+             , R.TARGET_COLUMN
+             , R.RULE_ID
+             , R.EXPRESSION
+             , R.SCORE
+             , R.COMPLEXITY
+             , R.RANK_NO
+             , R.SELECTED_YN
+             , R.FEATURE_COLUMNS
+             , R.METHOD
+             , R.MESSAGE
+          FROM {ruleObject} R
+         WHERE R.RUN_SOURCE_TYPE = :runSourceType
+           AND R.RUN_ID = :runId
+           AND R.RULE_ID = :ruleId
+           AND R.RUN_SOURCE_TYPE = 'FLOW_WORK'
+           AND EXISTS (
+                SELECT 1
+                  FROM INIT$_TB_FLOW_WORK_RUN FR
+                  JOIN INIT$_TB_FLOW_WORK F
+                    ON F.FLOW_ID = FR.FLOW_ID
+                  JOIN INIT$_TB_PROJECT P
+                    ON P.PROJECT_ID = F.PROJECT_ID
+                 WHERE FR.FLOW_RUN_ID = R.RUN_ID
+                   AND F.MENU_CODE = :flowMenuCode
+                   AND (:includeAllUsers = 'Y' OR P.USER_ID = :userId)
+           )
+         ORDER BY CASE WHEN R.SELECTED_YN = 'Y' THEN 0 ELSE 1 END
+                , R.RANK_NO NULLS LAST
+                , R.SCORE DESC NULLS LAST
+       )
+ WHERE ROWNUM = 1;
+
+-- [MCOMMON_ANLY_WORK_SYMBOLIC_SAMPLE_COLUMN_TYPES]
+SELECT COLUMN_NAME
+     , DATA_TYPE
+  FROM ALL_TAB_COLUMNS
+ WHERE OWNER = :owner
+   AND TABLE_NAME = :tableName
+ ORDER BY COLUMN_ID;
+
+-- [MCOMMON_ANLY_WORK_SYMBOLIC_SAMPLE_ROWS]
+SELECT *
+  FROM (
+        SELECT /*+ NO_PARALLEL(T) */ {selectList}
+          FROM {targetObject} T
+         WHERE 1=1
+{notNullFilter}
+       )
+ WHERE ROWNUM <= :sampleLimit;
+
 -- [MCOMMON_ANLY_WORK_CONTINUOUS_TARGET_COLUMNS]
 SELECT COLUMN_NAME
      , COLUMN_ID

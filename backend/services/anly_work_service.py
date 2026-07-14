@@ -7,6 +7,7 @@ from datetime import date, datetime
 from decimal import Decimal
 import json
 import logging
+import math
 import re
 import time
 from typing import Any
@@ -23,6 +24,7 @@ from backend.services import flow_contract_service as flow_contracts
 logger = logging.getLogger(__name__)
 
 IDENTIFIER_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_$#]{0,127}$")
+SYMBOLIC_SAMPLE_MAX_ROWS = 500
 MODEL_DETAIL_VIEW_TYPES = {
     "VA": "Attribute/detail view",
     "VG": "Global/detail view",
@@ -1361,6 +1363,7 @@ def _fetch_symbolic_rule_summary(
             }
             for column in features
         ]
+        rule["RULE_OWNER"] = owner_name
         rule["FEATURE_LIST"] = features
         rule["FEATURE_RANGES"] = [range_map[column] for column in features if column in range_map]
         rule["TARGET_CLUSTER_ID"] = target_cluster_id
@@ -1564,6 +1567,7 @@ def _fetch_symbolic_violation_summary(
     range_map = _fetch_numeric_feature_ranges(cursor, target_owner, target_table, range_columns)
     for rule in top_rules:
         features = _split_column_list(rule.get("FEATURE_COLUMNS"), 20)
+        rule["RULE_OWNER"] = owner_name
         rule["FEATURE_LIST"] = features
         rule["FEATURE_RANGES"] = [range_map[column] for column in features if column in range_map]
     return {
@@ -2744,6 +2748,155 @@ def get_result_table(
     except Exception as error:
         logger.warning("MCOMMON_ANLY_WORK result table query failed: %s", error)
         raise HTTPException(status_code=500, detail=str(error))
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+def get_symbolic_rule_sample(
+    request: Request,
+    owner: str,
+    ruleId: str,
+    runSourceType: str,
+    runId: int,
+    sampleLimit: int = 300,
+    flow_menu_code: str = "M04001",
+):
+    owner_name = _validate_identifier(owner, "owner")
+    rule_id = str(ruleId or "").strip()
+    if not rule_id or len(rule_id) > 128:
+        raise HTTPException(status_code=400, detail="Invalid symbolic rule ID.")
+    run_source_type, normalized_run_id = _normalize_run_context(runSourceType, runId)
+    if run_source_type != "FLOW_WORK" or normalized_run_id is None or normalized_run_id <= 0:
+        raise HTTPException(status_code=400, detail="Invalid run context.")
+    normalized_flow_menu_code = _validate_identifier(flow_menu_code, "flow menu code")
+    try:
+        sample_limit = max(1, min(int(sampleLimit or 300), SYMBOLIC_SAMPLE_MAX_ROWS))
+    except (TypeError, ValueError):
+        sample_limit = 300
+
+    conn = None
+    cursor = None
+    try:
+        conn = get_target_db_connection(request)
+        cursor = conn.cursor()
+        rule_object = f'{_quote_identifier(owner_name)}."INIT$_TB_SYMBOLIC_RULE"'
+        context_sql = SqlLoader.get_sql("MCOMMON_ANLY_WORK_SYMBOLIC_SAMPLE_CONTEXT").replace(
+            "{ruleObject}",
+            rule_object,
+        )
+        cursor.execute(
+            context_sql,
+            {
+                "runSourceType": run_source_type,
+                "runId": normalized_run_id,
+                "ruleId": rule_id,
+                "flowMenuCode": normalized_flow_menu_code,
+                "includeAllUsers": "Y" if get_request_role_code(request) == "ADMIN" else "N",
+                "userId": get_request_user_id(request),
+            },
+        )
+        context_columns = [str(desc[0]).upper() for desc in cursor.description or []]
+        context_row = cursor.fetchone()
+        if not context_row:
+            raise HTTPException(status_code=404, detail="Symbolic rule was not found for this run.")
+        rule = _row_to_dict(context_columns, context_row)
+
+        target_owner = _validate_identifier(rule.get("OWNER"), "target owner")
+        target_table = _validate_identifier(rule.get("TABLE_NAME"), "target table")
+        target_column = _validate_identifier(rule.get("TARGET_COLUMN"), "target column")
+        feature_columns = [
+            column
+            for column in _split_column_list(rule.get("FEATURE_COLUMNS"), 20)
+            if column != target_column
+        ]
+        requested_columns = [target_column, *feature_columns]
+
+        cursor.execute(
+            SqlLoader.get_sql("MCOMMON_ANLY_WORK_SYMBOLIC_SAMPLE_COLUMN_TYPES"),
+            {"owner": target_owner, "tableName": target_table},
+        )
+        column_types = {
+            str(row[0]).upper(): str(row[1] or "").upper()
+            for row in cursor.fetchall()
+            if row and row[0]
+        }
+        missing_columns = [column for column in requested_columns if column not in column_types]
+        if missing_columns:
+            logger.info(
+                "MCOMMON_ANLY_WORK symbolic sample skipped stale columns: %s.%s %s",
+                target_owner,
+                target_table,
+                ",".join(missing_columns),
+            )
+            raise HTTPException(status_code=409, detail="The rule columns no longer match the target table.")
+
+        select_list = "\n             , ".join(
+            f'T.{_quote_identifier(column)} AS {_quote_identifier(column)}'
+            for column in requested_columns
+        )
+        not_null_filter = "\n".join(
+            f'           AND T.{_quote_identifier(column)} IS NOT NULL'
+            for column in requested_columns
+        )
+        target_object = f"{_quote_identifier(target_owner)}.{_quote_identifier(target_table)}"
+        sample_sql = (
+            SqlLoader.get_sql("MCOMMON_ANLY_WORK_SYMBOLIC_SAMPLE_ROWS")
+            .replace("{selectList}", select_list)
+            .replace("{targetObject}", target_object)
+            .replace("{notNullFilter}", not_null_filter)
+        )
+        sample_scan_limit = min(
+            (sample_limit * 4) + 1,
+            (SYMBOLIC_SAMPLE_MAX_ROWS * 4) + 1,
+        )
+        cursor.execute(sample_sql, {"sampleLimit": sample_scan_limit})
+        sample_columns = [str(desc[0]).upper() for desc in cursor.description or []]
+        sample_rows = cursor.fetchall()
+        valid_rows = []
+        for row in sample_rows:
+            item = _row_to_dict(sample_columns, row)
+            try:
+                finite_row = all(
+                    value is not None and math.isfinite(float(value))
+                    for value in (item.get(column) for column in requested_columns)
+                )
+            except (TypeError, ValueError, OverflowError):
+                finite_row = False
+            if finite_row:
+                valid_rows.append(item)
+        has_more = len(valid_rows) > sample_limit or len(sample_rows) >= sample_scan_limit
+        if len(valid_rows) <= sample_limit:
+            rows = valid_rows
+        elif sample_limit == 1:
+            rows = [valid_rows[len(valid_rows) // 2]]
+        else:
+            last_index = len(valid_rows) - 1
+            rows = [
+                valid_rows[round((last_index * index) / (sample_limit - 1))]
+                for index in range(sample_limit)
+            ]
+
+        rule["RULE_OWNER"] = owner_name
+        rule["FEATURE_LIST"] = feature_columns
+        rule["COLUMN_TYPES"] = {column: column_types[column] for column in requested_columns}
+        data = {
+            "rule": rule,
+            "columns": requested_columns,
+            "rows": rows,
+            "sampleCount": len(rows),
+            "sampleLimit": sample_limit,
+            "isCapped": has_more,
+            "hasMore": has_more,
+        }
+        return {"status": "success", "data": data, "total": len(rows)}
+    except HTTPException:
+        raise
+    except Exception as error:
+        logger.warning("MCOMMON_ANLY_WORK symbolic sample query failed: %s", error)
+        raise HTTPException(status_code=500, detail="Unable to load the symbolic rule sample.")
     finally:
         if cursor:
             cursor.close()

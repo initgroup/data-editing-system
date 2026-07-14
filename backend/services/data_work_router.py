@@ -15,7 +15,7 @@ import time
 import uuid
 
 from backend.target_database import get_target_connection_id, get_target_db_connection, get_target_db_connection_by_id
-from backend.auth_context import get_request_user_id
+from backend.auth_context import get_request_role_code, get_request_user_id
 from backend.database_helper import execute_query, SqlLoader
 from backend.services.background_jobs import submit_background_job
 from backend.services import data_work_service as data_work
@@ -440,6 +440,51 @@ def create_data_work_router(
         try:
             conn = get_target_db_connection(request)
             return data_work.list_jobs(conn, MENU_CODE, projectId, scenarioId)
+        finally:
+            if conn:
+                conn.close()
+
+
+    @router.get("/import-jobs")
+    def get_importable_profile_jobs(request: Request, projectId: int, scenarioId: int):
+        conn = None
+        try:
+            conn = get_target_db_connection(request)
+            return data_work.list_importable_jobs(
+                conn,
+                MENU_CODE,
+                DEFAULT_JOB_GROUP,
+                projectId,
+                scenarioId,
+                get_request_user_id(request),
+                get_request_role_code(request) == "ADMIN",
+            )
+        finally:
+            if conn:
+                conn.close()
+
+
+    @router.get("/import-jobs/{profile_job_id}")
+    def get_importable_profile_job(
+        profile_job_id: int,
+        request: Request,
+        projectId: int,
+        scenarioId: int,
+    ):
+        conn = None
+        try:
+            conn = get_target_db_connection(request)
+            job = data_work.load_importable_job(
+                conn,
+                MENU_CODE,
+                DEFAULT_JOB_GROUP,
+                profile_job_id,
+                projectId,
+                scenarioId,
+                get_request_user_id(request),
+                get_request_role_code(request) == "ADMIN",
+            )
+            return {"status": "success", "data": job}
         finally:
             if conn:
                 conn.close()

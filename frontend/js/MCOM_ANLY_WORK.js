@@ -146,6 +146,12 @@
         key: "NONE",
         title: "No Result"
     });
+    const SYMBOLIC_CHART_MODES = Object.freeze({
+        ACTUAL_PREDICTED: "ACTUAL_PREDICTED",
+        RESIDUAL: "RESIDUAL",
+        FEATURE_RESPONSE: "FEATURE_RESPONSE",
+        SENSITIVITY: "SENSITIVITY"
+    });
 
     const page = {
         runs: [],
@@ -183,6 +189,8 @@
         lastSymbolicViolationSummary: null,
         lastRelationNetworkSummary: null,
         symbolicRuleChart: null,
+        symbolicRuleChartState: null,
+        symbolicRuleSampleRequestId: 0,
         pendingRunId: "",
         isRunDeleteInProgress: false,
         currentExport: { filename: "integrated-result.csv", columns: [], rows: [] },
@@ -518,7 +526,9 @@
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${API_PAGE_CODE}/runs?${params.toString()}`, { method: "GET", showLoading: false });
                 this.runs = Array.isArray(json.data) ? json.data : [];
-                this.runTotal = Number(json.total || 0);
+                const responseTotal = Number(json.total || 0);
+                const rowTotal = Number(this.runs[0]?.TOTAL_COUNT || 0);
+                this.runTotal = Math.max(responseTotal, rowTotal);
                 if (!this.runs.length) {
                     this.selectedRun = null;
                     this.selectedNode = null;
@@ -1905,7 +1915,7 @@
                                 <button type="button" class="${this.ruleSummaryFilters.resultColumn === "ALL" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectRuleSummaryResult('ALL')">${this.escapeHtml(getText("All"))}</button>
                             </div>
                         </header>
-                        <div class="anly-work-rule-facet-list">
+                        <div class="anly-work-rule-facet-list is-result-column-grid">
                             ${(summary.resultTop || []).map((item) => {
                                 const rawColumn = item.RESULT_COLUMN === "(RESULT UNKNOWN)" ? "__NULL__" : item.RESULT_COLUMN;
                                 return `
@@ -2365,6 +2375,20 @@
             event?.stopPropagation?.();
             const text = String(ruleId || "").trim();
             await this.copyTextValue(text, "RULE ID copied.");
+        },
+
+        getSymbolicFormulaText(rule = {}, features = [], targetColumn = "") {
+            const safeFeatures = Array.isArray(features) && features.length
+                ? features.map((feature) => String(feature || "").trim()).filter(Boolean)
+                : this.parseFeatureList(rule.FEATURE_COLUMNS);
+            const target = String(targetColumn || rule.TARGET_COLUMN || "Y").trim() || "Y";
+            return `f(${safeFeatures.join(", ") || "x"}) = ${String(rule.EXPRESSION || "").trim()} = ${target}`;
+        },
+
+        async copySymbolicFormula(formula, event) {
+            event?.preventDefault?.();
+            event?.stopPropagation?.();
+            await this.copyTextValue(formula, "Formula copied.");
         },
 
         async copyRunMessage(event) {
@@ -2837,7 +2861,7 @@
                             <header>
                                 <strong>${this.escapeHtml(getText("Top Violation Result Columns"))}</strong>
                             </header>
-                            <div class="anly-work-rule-facet-list">
+                            <div class="anly-work-rule-facet-list is-result-column-grid">
                                 ${topColumns.length ? topColumns.map((item) => `
                                     <button type="button" onclick="${PAGE_CODE}.openViolationSqlPopup('column', '${this.escapeJs(item.RESULT_COLUMN)}')">
                                         <span>${this.renderColumnAwareCell(item.RESULT_COLUMN, summary)}</span>
@@ -3059,6 +3083,7 @@
             const ruleColumns = this.getViolationRuleColumns(kind, value);
             const ruleDetail = this.getViolationRuleDetail(kind, value);
             const supportsRealtime = Boolean(this.isViolationNode(this.selectedNode) && kind === "rule" && String(value || "").trim());
+            const defaultFreezeColumns = window.matchMedia("(max-width: 760px)").matches ? 0 : 2;
             const label = kind === "column"
                 ? getText("Result column {value}", { value })
                 : (kind === "rule" ? `Rule ${value}` : getText("All violations"));
@@ -3070,7 +3095,7 @@
                 supportsRealtime,
                 page: 1,
                 pageSize: 50,
-                freezeColumns: 2,
+                freezeColumns: defaultFreezeColumns,
                 total: 0,
                 columns: [],
                 rows: [],
@@ -3549,7 +3574,7 @@
             if (!safeColumns.length) return `<div class="table-empty">${this.escapeHtml(getText("No query results."))}</div>`;
             const columnWidths = this.violationSql?.columnWidths || {};
             const freezeColumns = Math.max(0, Math.min(Number(this.violationSql?.freezeColumns ?? 2), safeColumns.length));
-            const rowNoWidth = 64;
+            const rowNoWidth = 48;
             let left = rowNoWidth;
             const columnMeta = safeColumns.map((column, index) => {
                 const width = this.getViolationSqlColumnWidth(column, columnWidths);
@@ -5504,7 +5529,7 @@
                                     const targetColumn = String(item.TARGET_COLUMN || "");
                                     return `
                                         <button type="button" class="${targetFilter === targetColumn ? "is-active" : ""}" title="${this.escapeHtml(`${targetColumn}: ${this.formatNumber(item.SELECTED_RULE_COUNT)} selected`)}" onclick="${PAGE_CODE}.selectSymbolicRuleFilter('targetColumn', '${this.escapeJs(targetColumn)}')">
-                                            <span>${this.renderColumnAwareCell(targetColumn, summary)}</span>
+                                            <span class="anly-work-symbolic-target-column">${this.renderColumnAwareCell(targetColumn, summary)}</span>
                                             ${this.renderColumnClusterBadge(item.TARGET_CLUSTER_ID)}
                                             <b>${this.formatNumber(item.SELECTED_RULE_COUNT)} rules</b>
                                         </button>
@@ -5529,6 +5554,7 @@
             const plainRuleId = String(rule.RULE_ID || displayRuleId || "").trim();
             const featureLabel = features.map((item) => this.escapeHtml(item)).join(", ") || "x";
             const targetColumn = String(rule.TARGET_COLUMN || "Y").trim() || "Y";
+            const formulaText = this.getSymbolicFormulaText(rule, features, targetColumn);
             const targetCell = this.renderColumnAwareCell(targetColumn, this.lastSymbolicRuleSummary || {});
             const featureClusters = new Map((Array.isArray(rule.FEATURE_CLUSTERS) ? rule.FEATURE_CLUSTERS : []).map((item) => [
                 String(item?.COLUMN_NAME || "").trim().toUpperCase(),
@@ -5560,7 +5586,10 @@
                         <strong>${targetCell}</strong>
                         ${this.renderColumnClusterBadge(rule.TARGET_CLUSTER_ID, rule.CLUSTER_SCOPE)}
                     </div>
-                    <code>f(${featureLabel}) = ${this.escapeHtml(rule.EXPRESSION || "")} = ${this.escapeHtml(targetColumn)}</code>
+                    <div class="anly-work-symbolic-formula-row">
+                        <code>${this.escapeHtml(formulaText)}</code>
+                        <button type="button" class="anly-work-rule-copy-btn" title="${this.escapeHtml(getText("Copy formula"))}" onclick="${PAGE_CODE}.copySymbolicFormula('${this.escapeJs(formulaText)}', event)"><i class="far fa-copy"></i></button>
+                    </div>
                     <div class="anly-work-symbolic-x-panel">
                         <small>${this.escapeHtml(getText("X arguments"))}</small>
                         <div class="anly-work-corr-tags">
@@ -5799,12 +5828,14 @@
                 return;
             }
             this.closeSymbolicRulePopup();
+            const summary = this.lastSymbolicRuleSummary || {};
+            this.symbolicRuleChartState = this.createSymbolicRuleChartState(rule, summary);
             const popup = document.createElement("div");
             popup.id = `${PAGE_ID_PREFIX}SymbolicRulePopup`;
-            popup.className = "anly-work-symbolic-popup";
-            popup.innerHTML = this.renderSymbolicRulePopup(rule, this.lastSymbolicRuleSummary || {});
+            popup.className = "anly-work-symbolic-popup anly-work-symbolic-visual-popup";
+            popup.innerHTML = this.renderSymbolicRulePopup(rule, summary);
             document.body.appendChild(popup);
-            setTimeout(() => this.drawSymbolicRuleChart(rule), 0);
+            setTimeout(() => this.initializeSymbolicRuleVisualization(), 0);
         },
 
         openSymbolicViolationRulePopup(ruleId) {
@@ -5816,12 +5847,13 @@
                 return;
             }
             this.closeSymbolicRulePopup();
+            this.symbolicRuleChartState = this.createSymbolicRuleChartState(rule, summary);
             const popup = document.createElement("div");
             popup.id = `${PAGE_ID_PREFIX}SymbolicRulePopup`;
-            popup.className = "anly-work-symbolic-popup";
+            popup.className = "anly-work-symbolic-popup anly-work-symbolic-visual-popup";
             popup.innerHTML = this.renderSymbolicRulePopup(rule, summary);
             document.body.appendChild(popup);
-            setTimeout(() => this.drawSymbolicRuleChart(rule), 0);
+            setTimeout(() => this.initializeSymbolicRuleVisualization(), 0);
         },
 
         renderSymbolicRulePopup(rule, sourceSummary = this.lastSymbolicRuleSummary || {}) {
@@ -5830,7 +5862,16 @@
             const featureLabel = features.length ? features.map((item) => this.escapeHtml(item)).join(", ") : "x";
             const targetColumn = String(rule.TARGET_COLUMN || "Y").trim() || "Y";
             const targetCell = this.renderColumnAwareCell(targetColumn, sourceSummary || {});
+            const formulaText = this.getSymbolicFormulaText(rule, features, targetColumn);
+            const featureClusters = new Map((Array.isArray(rule.FEATURE_CLUSTERS) ? rule.FEATURE_CLUSTERS : []).map((item) => [
+                String(item?.COLUMN_NAME || "").trim().toUpperCase(),
+                item?.CLUSTER_ID
+            ]));
+            const featureRanges = new Map(ranges.map((item) => [String(item?.COLUMN_NAME || "").trim().toUpperCase(), item]));
             const displayRuleId = this.getSymbolicRuleDisplayId(rule, this.findSymbolicRuleIndex(rule));
+            const method = String(rule.METHOD || rule.RULE_METHOD || "-").trim() || "-";
+            const score = rule.SCORE ?? rule.RULE_SCORE;
+            const complexity = rule.COMPLEXITY ?? rule.RULE_COMPLEXITY;
             return `
                 <section>
                     <header class="anly-work-sql-popup-title" onmousedown="${PAGE_CODE}.startSymbolicRulePopupDrag(event)">
@@ -5850,43 +5891,102 @@
                     </header>
                     <div class="anly-work-symbolic-formula-banner">
                         <span>F(X) = Y</span>
-                        <strong>f(${featureLabel}) = ${this.escapeHtml(rule.EXPRESSION || "")} = ${targetCell}</strong>
+                        <div class="anly-work-symbolic-formula-text"><strong>f(${featureLabel}) = ${this.escapeHtml(rule.EXPRESSION || "")} = ${targetCell}</strong></div>
+                        <button type="button" class="anly-work-symbolic-formula-copy" title="${this.escapeHtml(getText("Copy formula"))}" onclick="${PAGE_CODE}.copySymbolicFormula('${this.escapeJs(formulaText)}', event)"><i class="far fa-copy"></i></button>
                     </div>
                     <div class="anly-work-symbolic-popup-body">
+                        <div class="anly-work-symbolic-diagnostic-metrics">
+                            <span><small>method</small><b>${this.escapeHtml(method)}</b></span>
+                            <span><small>${this.escapeHtml(getText("Model R²"))}</small><b>${this.formatSymbolicDiagnosticNumber(score)}</b></span>
+                            <span><small>${this.escapeHtml(getText("Sample R²"))}</small><b id="${PAGE_ID_PREFIX}SymbolicSampleR2">-</b></span>
+                            <span><small>MAE</small><b id="${PAGE_ID_PREFIX}SymbolicSampleMae">-</b></span>
+                            <span><small>RMSE</small><b id="${PAGE_ID_PREFIX}SymbolicSampleRmse">-</b></span>
+                            <span><small>complexity</small><b>${this.formatNumber(complexity)}</b></span>
+                            <span><small>${this.escapeHtml(getText("Sample rows"))}</small><b id="${PAGE_ID_PREFIX}SymbolicSampleCount">${this.escapeHtml(getText("Loading..."))}</b></span>
+                        </div>
                         <div class="anly-work-symbolic-expression-box">
-                            <strong>Expression</strong>
-                            <code>${this.escapeHtml(rule.EXPRESSION || "")}</code>
-                            ${rule.MESSAGE ? `<span>${this.escapeHtml(rule.MESSAGE)}</span>` : ""}
+                            <strong>${this.escapeHtml(getText("Column details"))}</strong>
+                            <div class="anly-work-symbolic-column-details">
+                                <section class="is-target">
+                                    <small>${this.escapeHtml(getText("Y result value"))}</small>
+                                    <b>${targetCell}</b>
+                                    ${this.renderColumnClusterBadge(rule.TARGET_CLUSTER_ID, rule.CLUSTER_SCOPE)}
+                                </section>
+                                <section class="is-features">
+                                    <small>${this.escapeHtml(getText("X arguments"))}</small>
+                                    <div>
+                                        ${features.length ? features.map((feature) => {
+                                            const range = featureRanges.get(String(feature).trim().toUpperCase());
+                                            return `
+                                                <span>
+                                                    ${this.renderColumnChip(feature, sourceSummary || {})}
+                                                    ${this.renderColumnClusterBadge(featureClusters.get(String(feature).trim().toUpperCase()))}
+                                                    <small>${range ? `min ${this.formatDecimal(range.MIN_VALUE)} · avg ${this.formatDecimal(range.AVG_VALUE)} · max ${this.formatDecimal(range.MAX_VALUE)}` : this.escapeHtml(getText("Feature range unavailable"))}</small>
+                                                </span>
+                                            `;
+                                        }).join("") : `<span>${this.escapeHtml(getText("No X arguments are available."))}</span>`}
+                                    </div>
+                                </section>
+                            </div>
+                            ${rule.MESSAGE ? `<span class="anly-work-symbolic-expression-note">${this.escapeHtml(rule.MESSAGE)}</span>` : ""}
+                            <span class="anly-work-symbolic-expression-note">${this.escapeHtml(getText("{method} formulas may include polynomial fallback and inverse transformation from standardized values. Calculation retains up to 12 significant digits; rounding is applied only to labels and tooltips.", { method }))}</span>
                         </div>
-                        <div class="anly-work-symbolic-chart-wrap">
-                            <canvas id="${PAGE_ID_PREFIX}SymbolicRuleChart" height="260"></canvas>
-                            <div id="${PAGE_ID_PREFIX}SymbolicRuleChartMessage" class="table-empty"></div>
+                        <div class="anly-work-symbolic-visual-shell">
+                            <div class="anly-work-symbolic-chart-toolbar">
+                                <label>
+                                    <span>${this.escapeHtml(getText("Graph type"))}</span>
+                                    <select id="${PAGE_ID_PREFIX}SymbolicChartMode" onchange="${PAGE_CODE}.changeSymbolicRuleChartMode(this.value)">
+                                        <option value="${SYMBOLIC_CHART_MODES.ACTUAL_PREDICTED}">${this.escapeHtml(getText("Actual vs predicted"))}</option>
+                                        <option value="${SYMBOLIC_CHART_MODES.RESIDUAL}">${this.escapeHtml(getText("Residual vs predicted"))}</option>
+                                        <option value="${SYMBOLIC_CHART_MODES.FEATURE_RESPONSE}">${this.escapeHtml(getText("Observed points and formula curve"))}</option>
+                                        <option value="${SYMBOLIC_CHART_MODES.SENSITIVITY}">${this.escapeHtml(getText("Formula sensitivity"))}</option>
+                                    </select>
+                                </label>
+                                <label>
+                                    <span>${this.escapeHtml(getText("X feature"))}</span>
+                                    <select id="${PAGE_ID_PREFIX}SymbolicPrimaryFeature" onchange="${PAGE_CODE}.changeSymbolicRulePrimaryFeature(this.value)">
+                                        ${features.map((feature) => `<option value="${this.escapeHtml(feature)}">${this.escapeHtml(this.getSymbolicFeatureOptionLabel(feature, sourceSummary))}</option>`).join("")}
+                                    </select>
+                                </label>
+                                <div class="anly-work-symbolic-chart-tools">
+                                    <button type="button" onclick="${PAGE_CODE}.zoomSymbolicRuleChart(1.25)" title="${this.escapeHtml(getText("Zoom in"))}"><i class="fas fa-search-plus"></i></button>
+                                    <button type="button" onclick="${PAGE_CODE}.zoomSymbolicRuleChart(0.8)" title="${this.escapeHtml(getText("Zoom out"))}"><i class="fas fa-search-minus"></i></button>
+                                    <button type="button" onclick="${PAGE_CODE}.resetSymbolicRuleChartZoom()" title="${this.escapeHtml(getText("Reset view"))}"><i class="fas fa-compress-arrows-alt"></i></button>
+                                    <button type="button" data-anly-symbolic-maximize-btn onclick="${PAGE_CODE}.toggleSymbolicRuleChartMaximize()" title="${this.escapeHtml(getText("Maximize graph"))}" aria-pressed="false"><i class="fas fa-expand"></i></button>
+                                    <em id="${PAGE_ID_PREFIX}SymbolicZoomLabel">100%</em>
+                                </div>
+                            </div>
+                            <div class="anly-work-symbolic-chart-wrap">
+                                <canvas id="${PAGE_ID_PREFIX}SymbolicRuleChart" height="300" tabindex="0"></canvas>
+                                <div id="${PAGE_ID_PREFIX}SymbolicRuleChartMessage" class="table-empty">${this.escapeHtml(getText("Loading sample rows..."))}</div>
+                            </div>
                         </div>
-                        <div class="anly-work-symbolic-range-grid">
-                            ${ranges.length ? ranges.map((range) => `
-                                <span>
-                                    <b>${this.renderColumnAwareCell(range.COLUMN_NAME, sourceSummary || {})}</b>
-                                    <small>min ${this.formatDecimal(range.MIN_VALUE)} · avg ${this.formatDecimal(range.AVG_VALUE)} · max ${this.formatDecimal(range.MAX_VALUE)}</small>
-                                </span>
-                            `).join("") : `<span><b>Feature range</b><small>${this.escapeHtml(getText("Could not calculate numeric ranges from the target table. The graph will try the default -1 to 1 range."))}</small></span>`}
-                        </div>
+                        <section id="${PAGE_ID_PREFIX}SymbolicRawDataPanel" class="anly-work-symbolic-raw-panel">
+                            <header>
+                                <strong>${this.escapeHtml(getText("Sample raw data"))}</strong>
+                                <small id="${PAGE_ID_PREFIX}SymbolicRawDataSummary"></small>
+                            </header>
+                            <div id="${PAGE_ID_PREFIX}SymbolicRawDataTable" class="anly-work-symbolic-raw-table-wrap"><div class="table-empty">${this.escapeHtml(getText("Loading sample rows..."))}</div></div>
+                        </section>
                     </div>
                 </section>
             `;
         },
 
         closeSymbolicRulePopup() {
+            this.symbolicRuleSampleRequestId += 1;
             if (this.symbolicRuleChart && typeof this.symbolicRuleChart.destroy === "function") {
                 this.symbolicRuleChart.destroy();
             }
             this.symbolicRuleChart = null;
+            this.symbolicRuleChartState = null;
             const popup = document.getElementById(`${PAGE_ID_PREFIX}SymbolicRulePopup`);
             if (popup) popup.remove();
         },
 
         startSymbolicRulePopupDrag(event) {
             const popup = document.getElementById(`${PAGE_ID_PREFIX}SymbolicRulePopup`);
-            if (!popup || event.target.closest("button")) return;
+            if (!popup || popup.classList.contains("is-symbolic-chart-maximized") || event.target.closest("button")) return;
             event.preventDefault();
             const rect = popup.getBoundingClientRect();
             const startX = event.clientX;
@@ -5906,20 +6006,450 @@
             document.addEventListener("mouseup", stop);
         },
 
-        drawSymbolicRuleChart(rule) {
+        createSymbolicRuleChartState(rule = {}, summary = {}) {
+            const features = Array.isArray(rule.FEATURE_LIST) && rule.FEATURE_LIST.length
+                ? rule.FEATURE_LIST.map((feature) => String(feature || "").trim()).filter(Boolean)
+                : this.parseFeatureList(rule.FEATURE_COLUMNS);
+            return {
+                rule: { ...rule, FEATURE_LIST: features },
+                summary,
+                rows: [],
+                evaluatedRows: [],
+                sampleMetrics: { r2: null, mae: null, rmse: null },
+                sampleCount: 0,
+                hasMore: false,
+                sampleLimit: 300,
+                mode: SYMBOLIC_CHART_MODES.ACTUAL_PREDICTED,
+                primaryFeature: features[0] || "",
+                maximized: false,
+                selectedRowIndex: null,
+                chartPan: null,
+                chartPanEndAt: 0,
+                popupInlinePosition: null,
+                zoomPercent: 100,
+                loading: true,
+                error: ""
+            };
+        },
+
+        async initializeSymbolicRuleVisualization() {
+            const state = this.symbolicRuleChartState;
+            if (!state) return;
+            this.updateSymbolicRuleVisualizationControls();
+            const ruleId = String(state.rule?.RULE_ID || "").trim();
+            const owner = String(
+                state.rule?.RULE_OWNER
+                || this.selectedNode?.RESULT_OWNER
+                || state.summary?.ruleOwner
+                || state.rule?.OWNER
+                || state.summary?.targetOwner
+                || ""
+            ).trim();
+            const runSourceType = String(state.summary?.runSourceType || state.rule?.RUN_SOURCE_TYPE || "FLOW_WORK").trim();
+            const runId = state.summary?.runId ?? state.rule?.RUN_ID ?? this.selectedRun?.FLOW_RUN_ID;
+            if (!ruleId || !owner || runId === undefined || runId === null || runId === "") {
+                state.loading = false;
+                state.mode = SYMBOLIC_CHART_MODES.SENSITIVITY;
+                state.error = getText("Sample query context is missing, so the formula sensitivity graph is displayed.");
+                this.updateSymbolicRuleVisualizationControls();
+                this.drawSymbolicRuleChart();
+                return;
+            }
+            const requestId = ++this.symbolicRuleSampleRequestId;
+            const params = new URLSearchParams({ owner, ruleId, sampleLimit: "300" });
+            params.set("runSourceType", runSourceType);
+            params.set("runId", String(runId));
+            try {
+                const json = await CommonUtils.request(`${API_BASE_URL}/${API_PAGE_CODE}/symbolic-rule-sample?${params.toString()}`, {
+                    method: "GET",
+                    showLoading: false
+                });
+                if (requestId !== this.symbolicRuleSampleRequestId || state !== this.symbolicRuleChartState) return;
+                const payload = json?.data && typeof json.data === "object" ? json.data : (json || {});
+                const sampleRule = payload.rule && typeof payload.rule === "object" ? payload.rule : {};
+                const mergedRule = { ...state.rule, ...sampleRule };
+                const features = Array.isArray(mergedRule.FEATURE_LIST) && mergedRule.FEATURE_LIST.length
+                    ? mergedRule.FEATURE_LIST.map((feature) => String(feature || "").trim()).filter(Boolean)
+                    : this.parseFeatureList(mergedRule.FEATURE_COLUMNS);
+                state.rule = { ...mergedRule, FEATURE_LIST: features };
+                state.rows = Array.isArray(payload.rows) ? payload.rows : [];
+                state.sampleCount = Number(payload.sampleCount ?? state.rows.length) || state.rows.length;
+                state.sampleLimit = Number(payload.sampleLimit ?? 300) || 300;
+                state.hasMore = payload.hasMore === true
+                    || payload.isCapped === true
+                    || ["Y", "YES", "TRUE", "1"].includes(String(payload.hasMore ?? payload.isCapped ?? "").toUpperCase());
+                state.evaluatedRows = this.evaluateSymbolicSampleRows(state.rule, state.rows);
+                state.sampleMetrics = this.calculateSymbolicSampleMetrics(state.evaluatedRows);
+                state.primaryFeature = features.includes(state.primaryFeature) ? state.primaryFeature : (features[0] || "");
+                state.loading = false;
+                if (state.evaluatedRows.length) {
+                    state.mode = SYMBOLIC_CHART_MODES.ACTUAL_PREDICTED;
+                    state.error = "";
+                } else {
+                    state.mode = SYMBOLIC_CHART_MODES.SENSITIVITY;
+                    state.error = state.rows.length
+                        ? getText("The sample rows do not contain enough numeric values to compare actual and predicted values. The formula sensitivity graph is displayed instead.")
+                        : getText("No sample rows were returned. The formula sensitivity graph is displayed instead.");
+                }
+            } catch (error) {
+                if (requestId !== this.symbolicRuleSampleRequestId || state !== this.symbolicRuleChartState) return;
+                state.loading = false;
+                state.mode = SYMBOLIC_CHART_MODES.SENSITIVITY;
+                state.error = getText("Could not load sample rows: {message}. The formula sensitivity graph is displayed instead.", {
+                    message: error?.message || getText("Unknown error")
+                });
+            }
+            this.updateSymbolicRuleFeatureOptions();
+            this.updateSymbolicRuleVisualizationControls();
+            this.renderSymbolicRuleRawDataTable();
+            this.drawSymbolicRuleChart();
+        },
+
+        updateSymbolicRuleFeatureOptions() {
+            const state = this.symbolicRuleChartState;
+            const select = document.getElementById(`${PAGE_ID_PREFIX}SymbolicPrimaryFeature`);
+            if (!state || !select) return;
+            const features = Array.isArray(state.rule?.FEATURE_LIST) ? state.rule.FEATURE_LIST : [];
+            select.innerHTML = features.map((feature) => `
+                <option value="${this.escapeHtml(feature)}">${this.escapeHtml(this.getSymbolicFeatureOptionLabel(feature, state.summary))}</option>
+            `).join("");
+            select.value = state.primaryFeature;
+        },
+
+        getSymbolicFeatureOptionLabel(feature, source = null) {
+            const column = String(feature || "").trim();
+            const comment = this.getColumnComment(column, source);
+            return comment ? `${column} · ${comment}` : column;
+        },
+
+        getSymbolicAxisColumnLabel(columnName, source = null, prefix = "") {
+            const column = String(columnName || "").trim();
+            const comment = this.getColumnComment(column, source);
+            const firstLine = prefix ? `${prefix} · ${column}` : column;
+            return comment ? [firstLine, comment] : firstLine;
+        },
+
+        updateSymbolicRuleVisualizationControls() {
+            const state = this.symbolicRuleChartState;
+            if (!state) return;
+            const hasSamples = state.evaluatedRows.length > 0;
+            const modeSelect = document.getElementById(`${PAGE_ID_PREFIX}SymbolicChartMode`);
+            const featureSelect = document.getElementById(`${PAGE_ID_PREFIX}SymbolicPrimaryFeature`);
+            const sampleCount = document.getElementById(`${PAGE_ID_PREFIX}SymbolicSampleCount`);
+            const sampleR2 = document.getElementById(`${PAGE_ID_PREFIX}SymbolicSampleR2`);
+            const sampleMae = document.getElementById(`${PAGE_ID_PREFIX}SymbolicSampleMae`);
+            const sampleRmse = document.getElementById(`${PAGE_ID_PREFIX}SymbolicSampleRmse`);
+            if (modeSelect) {
+                [
+                    SYMBOLIC_CHART_MODES.ACTUAL_PREDICTED,
+                    SYMBOLIC_CHART_MODES.RESIDUAL,
+                    SYMBOLIC_CHART_MODES.FEATURE_RESPONSE
+                ].forEach((mode) => {
+                    const option = Array.from(modeSelect.options).find((item) => item.value === mode);
+                    if (option) option.disabled = !hasSamples;
+                });
+                modeSelect.value = state.mode;
+                modeSelect.disabled = state.loading;
+            }
+            if (featureSelect) {
+                featureSelect.value = state.primaryFeature;
+                featureSelect.disabled = state.loading || !hasSamples || state.mode !== SYMBOLIC_CHART_MODES.FEATURE_RESPONSE;
+            }
+            if (sampleCount) {
+                sampleCount.textContent = state.loading
+                    ? getText("Loading...")
+                    : (state.hasMore
+                        ? getText("{sample} sampled rows (more rows available)", { sample: this.formatNumber(state.sampleCount) })
+                        : getText("{sample} sampled rows", { sample: this.formatNumber(state.sampleCount) }));
+            }
+            if (sampleR2) sampleR2.textContent = Number.isFinite(state.sampleMetrics?.r2) ? this.formatSymbolicDiagnosticNumber(state.sampleMetrics.r2) : "-";
+            if (sampleMae) sampleMae.textContent = Number.isFinite(state.sampleMetrics?.mae) ? this.formatSymbolicDiagnosticNumber(state.sampleMetrics.mae) : "-";
+            if (sampleRmse) sampleRmse.textContent = Number.isFinite(state.sampleMetrics?.rmse) ? this.formatSymbolicDiagnosticNumber(state.sampleMetrics.rmse) : "-";
+        },
+
+        getSymbolicSampleValue(row = {}, columnName = "") {
+            const normalized = String(columnName || "").trim().toUpperCase();
+            if (!normalized || !row || typeof row !== "object") return undefined;
+            const exactKey = Object.keys(row).find((key) => String(key || "").trim().toUpperCase() === normalized);
+            return exactKey === undefined ? undefined : row[exactKey];
+        },
+
+        toSymbolicFiniteNumber(value) {
+            if (value === undefined || value === null || String(value).trim() === "") return null;
+            const numeric = Number(value);
+            return Number.isFinite(numeric) ? numeric : null;
+        },
+
+        formatSymbolicDiagnosticNumber(value) {
+            const numeric = Number(value);
+            if (!Number.isFinite(numeric)) return "-";
+            const absolute = Math.abs(numeric);
+            if (absolute > 0 && (absolute < 0.000001 || absolute >= 1000000000)) return numeric.toExponential(6);
+            return numeric.toLocaleString("ko-KR", { maximumFractionDigits: 6 });
+        },
+
+        evaluateSymbolicSampleRows(rule = {}, rows = []) {
+            const features = Array.isArray(rule.FEATURE_LIST) && rule.FEATURE_LIST.length
+                ? rule.FEATURE_LIST
+                : this.parseFeatureList(rule.FEATURE_COLUMNS);
+            const targetColumn = String(rule.TARGET_COLUMN || "").trim();
+            const compiled = this.compileSymbolicExpression(String(rule.EXPRESSION || ""), features);
+            if (!compiled.ok || !features.length || !targetColumn) return [];
+            return (rows || []).map((row, index) => {
+                const values = {};
+                features.forEach((feature) => {
+                    values[feature] = this.toSymbolicFiniteNumber(this.getSymbolicSampleValue(row, feature));
+                });
+                const actual = this.toSymbolicFiniteNumber(this.getSymbolicSampleValue(row, targetColumn));
+                if (features.some((feature) => !Number.isFinite(values[feature]))) return null;
+                const predicted = compiled.evaluate(values);
+                if (!Number.isFinite(actual) || !Number.isFinite(predicted)) return null;
+                return {
+                    row,
+                    rowIndex: index,
+                    sampleNo: this.getSymbolicSampleValue(row, "SAMPLE_NO") ?? index + 1,
+                    values,
+                    actual,
+                    predicted,
+                    residual: actual - predicted
+                };
+            }).filter(Boolean);
+        },
+
+        calculateSymbolicSampleMetrics(evaluatedRows = []) {
+            if (!evaluatedRows.length) return { r2: null, mae: null, rmse: null };
+            const actualAverage = evaluatedRows.reduce((sum, item) => sum + item.actual, 0) / evaluatedRows.length;
+            const absoluteErrorSum = evaluatedRows.reduce((sum, item) => sum + Math.abs(item.residual), 0);
+            const squaredErrorSum = evaluatedRows.reduce((sum, item) => sum + (item.residual ** 2), 0);
+            const totalSquaredSum = evaluatedRows.reduce((sum, item) => sum + ((item.actual - actualAverage) ** 2), 0);
+            const actualMagnitude = evaluatedRows.reduce((sum, item) => sum + (item.actual ** 2), 0);
+            const varianceTolerance = Number.EPSILON * Math.max(1, actualMagnitude);
+            return {
+                r2: totalSquaredSum > varianceTolerance ? 1 - (squaredErrorSum / totalSquaredSum) : null,
+                mae: absoluteErrorSum / evaluatedRows.length,
+                rmse: Math.sqrt(squaredErrorSum / evaluatedRows.length)
+            };
+        },
+
+        changeSymbolicRuleChartMode(mode) {
+            const state = this.symbolicRuleChartState;
+            if (!state) return;
+            const allowed = new Set(Object.values(SYMBOLIC_CHART_MODES));
+            const requestedMode = allowed.has(mode) ? mode : SYMBOLIC_CHART_MODES.SENSITIVITY;
+            state.mode = requestedMode !== SYMBOLIC_CHART_MODES.SENSITIVITY && !state.evaluatedRows.length
+                ? SYMBOLIC_CHART_MODES.SENSITIVITY
+                : requestedMode;
+            state.zoomPercent = 100;
+            this.updateSymbolicRuleVisualizationControls();
+            this.drawSymbolicRuleChart();
+        },
+
+        changeSymbolicRulePrimaryFeature(feature) {
+            const state = this.symbolicRuleChartState;
+            if (!state) return;
+            const features = Array.isArray(state.rule?.FEATURE_LIST) ? state.rule.FEATURE_LIST : [];
+            const selected = features.find((item) => String(item).toUpperCase() === String(feature || "").toUpperCase());
+            if (!selected) return;
+            state.primaryFeature = selected;
+            state.zoomPercent = 100;
+            if (state.mode === SYMBOLIC_CHART_MODES.FEATURE_RESPONSE) this.drawSymbolicRuleChart();
+        },
+
+        renderSymbolicRuleRawDataTable() {
+            const state = this.symbolicRuleChartState;
+            const container = document.getElementById(`${PAGE_ID_PREFIX}SymbolicRawDataTable`);
+            const summary = document.getElementById(`${PAGE_ID_PREFIX}SymbolicRawDataSummary`);
+            if (!state || !container) return;
+            const features = Array.isArray(state.rule?.FEATURE_LIST) ? state.rule.FEATURE_LIST : [];
+            const targetColumn = String(state.rule?.TARGET_COLUMN || "Y").trim() || "Y";
+            const columns = [...new Set(["SAMPLE_NO", ...features, targetColumn])];
+            const evaluatedByRow = new Map(state.evaluatedRows.map((item) => [item.row, item]));
+            if (summary) {
+                summary.textContent = state.hasMore
+                    ? getText("Showing {sample} sampled rows; additional rows are available.", { sample: this.formatNumber(state.sampleCount) })
+                    : getText("Showing {sample} sampled rows.", { sample: this.formatNumber(state.sampleCount) });
+            }
+            if (!state.rows.length) {
+                container.innerHTML = `<div class="table-empty">${this.escapeHtml(getText("No sample rows to display."))}</div>`;
+                return;
+            }
+            const formatCell = (value) => {
+                if (value === undefined || value === null || value === "") return "-";
+                const numeric = Number(value);
+                return Number.isFinite(numeric) ? this.formatSymbolicDiagnosticNumber(numeric) : this.escapeHtml(value);
+            };
+            container.innerHTML = `
+                <table class="anly-work-symbolic-raw-table">
+                    <thead>
+                        <tr>
+                            ${columns.map((column) => `<th>${this.escapeHtml(column)}</th>`).join("")}
+                            <th>${this.escapeHtml(getText("Predicted"))}</th>
+                            <th>${this.escapeHtml(getText("Residual"))}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${state.rows.map((row, index) => {
+                            const evaluated = evaluatedByRow.get(row);
+                            return `
+                                <tr data-symbolic-sample-index="${index}" tabindex="-1" class="${Number.isInteger(state.selectedRowIndex) && state.selectedRowIndex === index ? "is-selected" : ""}" aria-selected="${Number.isInteger(state.selectedRowIndex) && state.selectedRowIndex === index ? "true" : "false"}" onclick="${PAGE_CODE}.selectSymbolicSampleRow(${index})">
+                                    ${columns.map((column) => `<td>${column === "SAMPLE_NO" ? formatCell(this.getSymbolicSampleValue(row, column) ?? index + 1) : formatCell(this.getSymbolicSampleValue(row, column))}</td>`).join("")}
+                                    <td>${evaluated ? formatCell(evaluated.predicted) : "-"}</td>
+                                    <td>${evaluated ? formatCell(evaluated.residual) : "-"}</td>
+                                </tr>
+                            `;
+                        }).join("")}
+                    </tbody>
+                </table>
+            `;
+        },
+
+        selectSymbolicSampleRow(rowIndex, focusChart = true) {
+            const state = this.symbolicRuleChartState;
+            const normalizedIndex = Number(rowIndex);
+            if (!state || !Number.isInteger(normalizedIndex) || normalizedIndex < 0 || normalizedIndex >= state.rows.length) return;
+            state.selectedRowIndex = normalizedIndex;
+            const rows = document.querySelectorAll(`#${PAGE_ID_PREFIX}SymbolicRawDataTable tr[data-symbolic-sample-index]`);
+            rows.forEach((row) => {
+                const selected = Number(row.dataset.symbolicSampleIndex) === normalizedIndex;
+                row.classList.toggle("is-selected", selected);
+                row.setAttribute("aria-selected", selected ? "true" : "false");
+                if (selected) {
+                    this.focusSymbolicRawDataRow(row);
+                    if (!focusChart) row.focus({ preventScroll: true });
+                }
+            });
+            if (focusChart) this.focusSymbolicRuleChartSample(normalizedIndex);
+            else if (this.symbolicRuleChart) this.symbolicRuleChart.update("none");
+        },
+
+        focusSymbolicRawDataRow(row) {
+            const grid = document.getElementById(`${PAGE_ID_PREFIX}SymbolicRawDataTable`);
+            const panel = row?.closest(`.anly-work-symbolic-raw-panel`);
+            if (!row || !grid) return;
+            panel?.scrollIntoView({ block: "nearest", inline: "nearest" });
+            requestAnimationFrame(() => {
+                const rowRect = row.getBoundingClientRect();
+                const gridRect = grid.getBoundingClientRect();
+                const nextTop = grid.scrollTop
+                    + (rowRect.top - gridRect.top)
+                    - Math.max(0, (grid.clientHeight - row.offsetHeight) / 2);
+                const nextLeft = grid.scrollLeft
+                    + (rowRect.left - gridRect.left)
+                    - Math.max(0, (grid.clientWidth - row.offsetWidth) / 2);
+                grid.scrollTo({
+                    top: Math.max(0, nextTop),
+                    left: Math.max(0, nextLeft),
+                    behavior: "auto"
+                });
+            });
+        },
+
+        focusSymbolicRuleChartSample(rowIndex) {
+            const chart = this.symbolicRuleChart;
+            if (!chart) return;
+            const point = chart.data.datasets
+                .flatMap((dataset) => dataset.data || [])
+                .find((item) => Number(item?.sampleIndex) === rowIndex);
+            if (!point || !Number.isFinite(Number(point.x)) || !Number.isFinite(Number(point.y))) {
+                chart.update("none");
+                return;
+            }
+            [["x", Number(point.x)], ["y", Number(point.y)]].forEach(([axis, value]) => {
+                const scale = chart.scales?.[axis];
+                if (!scale || !Number.isFinite(scale.min) || !Number.isFinite(scale.max)) return;
+                const span = Math.max(Number.EPSILON, scale.max - scale.min);
+                chart.options.scales[axis].min = value - (span / 2);
+                chart.options.scales[axis].max = value + (span / 2);
+            });
+            chart.update("none");
+            chart.canvas.focus({ preventScroll: true });
+        },
+
+        getSymbolicSamplePointRadius(context, radius = 3) {
+            const selectedRowIndex = this.symbolicRuleChartState?.selectedRowIndex;
+            return Number.isInteger(selectedRowIndex) && Number(context?.raw?.sampleIndex) === selectedRowIndex
+                ? radius + 3
+                : radius;
+        },
+
+        getSymbolicSamplePointColor(context, color) {
+            const selectedRowIndex = this.symbolicRuleChartState?.selectedRowIndex;
+            return Number.isInteger(selectedRowIndex) && Number(context?.raw?.sampleIndex) === selectedRowIndex
+                ? "#f59e0b"
+                : color;
+        },
+
+        toggleSymbolicRuleChartMaximize(force = null) {
+            const state = this.symbolicRuleChartState;
+            const popup = document.getElementById(`${PAGE_ID_PREFIX}SymbolicRulePopup`);
+            if (!state || !popup) return;
+            const nextMaximized = typeof force === "boolean" ? force : !state.maximized;
+            if (nextMaximized && !state.maximized) {
+                state.popupInlinePosition = {
+                    left: popup.style.left,
+                    top: popup.style.top,
+                    transform: popup.style.transform
+                };
+                popup.style.removeProperty("left");
+                popup.style.removeProperty("top");
+                popup.style.removeProperty("transform");
+            }
+            state.maximized = nextMaximized;
+            popup.classList.toggle("is-symbolic-chart-maximized", state.maximized);
+            if (!state.maximized && state.popupInlinePosition) {
+                const { left, top, transform } = state.popupInlinePosition;
+                if (left) popup.style.left = left;
+                else popup.style.removeProperty("left");
+                if (top) popup.style.top = top;
+                else popup.style.removeProperty("top");
+                if (transform) popup.style.transform = transform;
+                else popup.style.removeProperty("transform");
+                state.popupInlinePosition = null;
+            }
+            const button = popup.querySelector("[data-anly-symbolic-maximize-btn]");
+            if (button) {
+                button.setAttribute("aria-pressed", state.maximized ? "true" : "false");
+                button.title = getText(state.maximized ? "Restore graph" : "Maximize graph");
+                const icon = button.querySelector("i");
+                if (icon) icon.className = state.maximized ? "fas fa-compress" : "fas fa-expand";
+            }
+            requestAnimationFrame(() => this.symbolicRuleChart?.resize?.());
+        },
+
+        drawSymbolicRuleChart(rule = this.symbolicRuleChartState?.rule || {}) {
+            const state = this.symbolicRuleChartState;
             const message = document.getElementById(`${PAGE_ID_PREFIX}SymbolicRuleChartMessage`);
             const canvas = document.getElementById(`${PAGE_ID_PREFIX}SymbolicRuleChart`);
             if (!canvas || !window.Chart) {
                 if (message) message.textContent = getText("Chart.js is not loaded, so the graph cannot be displayed.");
                 return;
             }
+            if (state?.loading) {
+                canvas.hidden = true;
+                if (message) message.textContent = getText("Loading sample rows...");
+                return;
+            }
             let chartData;
             try {
-                chartData = this.buildSymbolicRuleChartData(rule);
+                if (state?.mode === SYMBOLIC_CHART_MODES.ACTUAL_PREDICTED) {
+                    chartData = this.buildSymbolicActualPredictedChartData(state);
+                } else if (state?.mode === SYMBOLIC_CHART_MODES.RESIDUAL) {
+                    chartData = this.buildSymbolicResidualChartData(state);
+                } else if (state?.mode === SYMBOLIC_CHART_MODES.FEATURE_RESPONSE) {
+                    chartData = this.buildSymbolicFeatureResponseChartData(state);
+                } else {
+                    chartData = this.buildSymbolicRuleChartData(rule);
+                }
             } catch (error) {
                 if (message) message.textContent = getText("Could not build graph data: {message}", { message: error.message });
                 canvas.hidden = true;
                 return;
+            }
+            if (!chartData.ok && state && state.mode !== SYMBOLIC_CHART_MODES.SENSITIVITY) {
+                state.mode = SYMBOLIC_CHART_MODES.SENSITIVITY;
+                state.error = chartData.message || state.error;
+                this.updateSymbolicRuleVisualizationControls();
+                chartData = this.buildSymbolicRuleChartData(rule);
             }
             if (!chartData.ok) {
                 if (message) message.textContent = chartData.message || getText("This formula cannot be calculated as a graph on the current screen.");
@@ -5929,31 +6459,47 @@
             canvas.hidden = false;
             canvas.removeAttribute("hidden");
             canvas.style.display = "block";
-            if (message) message.textContent = chartData.message || "";
+            if (message) {
+                message.textContent = [state?.error, chartData.message].filter(Boolean).join(" ");
+            }
             if (this.symbolicRuleChart && typeof this.symbolicRuleChart.destroy === "function") {
                 this.symbolicRuleChart.destroy();
             }
             try {
                 this.symbolicRuleChart = new Chart(canvas.getContext("2d"), {
-                    type: "line",
+                    type: chartData.type || "scatter",
                     data: {
-                        labels: chartData.labels,
                         datasets: chartData.datasets
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
-                        interaction: { mode: "index", intersect: false },
+                        animation: false,
+                        interaction: { mode: "nearest", intersect: false },
+                        onClick: (event, elements, chart) => this.handleSymbolicRuleChartClick(event, elements, chart),
                         plugins: {
                             legend: { position: "bottom" },
-                            tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${this.formatDecimal(ctx.parsed.y)}` } }
+                            tooltip: {
+                                callbacks: {
+                                    label: (ctx) => `${ctx.dataset.label}: (${this.formatSymbolicDiagnosticNumber(ctx.parsed.x)}, ${this.formatSymbolicDiagnosticNumber(ctx.parsed.y)})`
+                                }
+                            }
                         },
                         scales: {
-                            x: { title: { display: true, text: chartData.xLabel } },
-                            y: { title: { display: true, text: rule.TARGET_COLUMN || "Predicted y" } }
+                            x: {
+                                type: "linear",
+                                title: { display: true, text: chartData.xLabel }
+                            },
+                            y: {
+                                type: "linear",
+                                title: { display: true, text: chartData.yLabel || rule.TARGET_COLUMN || "Predicted y" }
+                            }
                         }
                     }
                 });
+                if (state) state.zoomPercent = 100;
+                this.updateSymbolicRuleZoomLabel();
+                this.bindSymbolicRuleChartInteractions(canvas);
                 requestAnimationFrame(() => {
                     if (this.symbolicRuleChart && typeof this.symbolicRuleChart.resize === "function") {
                         this.symbolicRuleChart.resize();
@@ -5963,6 +6509,307 @@
                 canvas.hidden = true;
                 if (message) message.textContent = getText("Could not render the graph: {message}", { message: error.message });
             }
+        },
+
+        handleSymbolicRuleChartClick(event, elements, chart) {
+            const state = this.symbolicRuleChartState;
+            if (!state || Date.now() - Number(state.chartPanEndAt || 0) < 180) return;
+            const target = (elements || []).find((item) => Number.isInteger(Number(chart?.data?.datasets?.[item.datasetIndex]?.data?.[item.index]?.sampleIndex)));
+            if (!target) return;
+            const sampleIndex = chart.data.datasets[target.datasetIndex].data[target.index].sampleIndex;
+            this.selectSymbolicSampleRow(sampleIndex, false);
+        },
+
+        bindSymbolicRuleChartInteractions(canvas) {
+            if (!canvas) return;
+            canvas.onwheel = (event) => this.handleSymbolicRuleChartWheel(event);
+            canvas.onpointerdown = (event) => this.startSymbolicRuleChartPan(event);
+            canvas.onpointermove = (event) => this.moveSymbolicRuleChartPan(event);
+            canvas.onpointerup = (event) => this.stopSymbolicRuleChartPan(event);
+            canvas.onpointercancel = (event) => this.stopSymbolicRuleChartPan(event);
+            canvas.onlostpointercapture = () => this.stopSymbolicRuleChartPan();
+        },
+
+        handleSymbolicRuleChartWheel(event) {
+            const chart = this.symbolicRuleChart;
+            const state = this.symbolicRuleChartState;
+            if (!chart || !state || !Number.isFinite(event.deltaY)) return;
+            event.preventDefault();
+            const factor = event.deltaY < 0 ? 0.82 : 1.22;
+            const rect = chart.canvas.getBoundingClientRect();
+            const pixelX = event.clientX - rect.left;
+            const pixelY = event.clientY - rect.top;
+            ["x", "y"].forEach((axis) => {
+                const scale = chart.scales?.[axis];
+                if (!scale || !Number.isFinite(scale.min) || !Number.isFinite(scale.max)) return;
+                const center = scale.getValueForPixel(axis === "x" ? pixelX : pixelY);
+                if (!Number.isFinite(center)) return;
+                chart.options.scales[axis].min = center + ((scale.min - center) * factor);
+                chart.options.scales[axis].max = center + ((scale.max - center) * factor);
+            });
+            state.zoomPercent = Math.min(800, Math.max(50, Number(state.zoomPercent || 100) / factor));
+            chart.update("none");
+            this.updateSymbolicRuleZoomLabel();
+        },
+
+        startSymbolicRuleChartPan(event) {
+            const chart = this.symbolicRuleChart;
+            const state = this.symbolicRuleChartState;
+            if (!chart || !state || event.button !== 0 || !chart.chartArea) return;
+            const { x, y, width, height } = chart.chartArea;
+            if (event.offsetX < x || event.offsetX > x + width || event.offsetY < y || event.offsetY > y + height) return;
+            const xScale = chart.scales?.x;
+            const yScale = chart.scales?.y;
+            if (!xScale || !yScale || !Number.isFinite(xScale.min) || !Number.isFinite(xScale.max) || !Number.isFinite(yScale.min) || !Number.isFinite(yScale.max)) return;
+            state.chartPan = {
+                pointerId: event.pointerId,
+                startX: event.clientX,
+                startY: event.clientY,
+                moved: false,
+                xMin: xScale.min,
+                xMax: xScale.max,
+                yMin: yScale.min,
+                yMax: yScale.max
+            };
+            chart.canvas.setPointerCapture?.(event.pointerId);
+            chart.canvas.classList.add("is-panning");
+        },
+
+        moveSymbolicRuleChartPan(event) {
+            const chart = this.symbolicRuleChart;
+            const state = this.symbolicRuleChartState;
+            const pan = state?.chartPan;
+            if (!chart || !pan || pan.pointerId !== event.pointerId || !chart.chartArea) return;
+            event.preventDefault();
+            if (Math.abs(event.clientX - pan.startX) > 2 || Math.abs(event.clientY - pan.startY) > 2) pan.moved = true;
+            const { width, height } = chart.chartArea;
+            const xOffset = ((event.clientX - pan.startX) / Math.max(1, width)) * (pan.xMax - pan.xMin);
+            const yOffset = ((event.clientY - pan.startY) / Math.max(1, height)) * (pan.yMax - pan.yMin);
+            chart.options.scales.x.min = pan.xMin - xOffset;
+            chart.options.scales.x.max = pan.xMax - xOffset;
+            chart.options.scales.y.min = pan.yMin + yOffset;
+            chart.options.scales.y.max = pan.yMax + yOffset;
+            chart.update("none");
+        },
+
+        stopSymbolicRuleChartPan(event = null) {
+            const state = this.symbolicRuleChartState;
+            const chart = this.symbolicRuleChart;
+            const pan = state?.chartPan;
+            if (!state || !pan || (event && pan.pointerId !== event.pointerId)) return;
+            chart?.canvas?.releasePointerCapture?.(pan.pointerId);
+            chart?.canvas?.classList.remove("is-panning");
+            state.chartPan = null;
+            state.chartPanEndAt = pan.moved ? Date.now() : 0;
+        },
+
+        buildSymbolicActualPredictedChartData(state = this.symbolicRuleChartState) {
+            const points = (state?.evaluatedRows || []).map((item) => ({ x: item.actual, y: item.predicted, sampleIndex: item.rowIndex }));
+            if (!points.length) {
+                return { ok: false, message: getText("No numeric actual/predicted sample pairs are available.") };
+            }
+            const values = points.flatMap((point) => [point.x, point.y]).filter(Number.isFinite);
+            let minValue = Math.min(...values);
+            let maxValue = Math.max(...values);
+            if (minValue === maxValue) {
+                const padding = Math.max(1, Math.abs(minValue) * 0.05);
+                minValue -= padding;
+                maxValue += padding;
+            }
+            return {
+                ok: true,
+                type: "scatter",
+                xLabel: this.getSymbolicAxisColumnLabel(state?.rule?.TARGET_COLUMN, state?.summary, getText("Actual value")),
+                yLabel: this.getSymbolicAxisColumnLabel(state?.rule?.TARGET_COLUMN, state?.summary, getText("Predicted value")),
+                datasets: [
+                    {
+                        label: getText("Sample observations"),
+                        data: points,
+                        backgroundColor: (context) => this.getSymbolicSamplePointColor(context, "rgba(37, 99, 235, 0.58)"),
+                        borderColor: (context) => this.getSymbolicSamplePointColor(context, "#2563eb"),
+                        pointRadius: (context) => this.getSymbolicSamplePointRadius(context, 3),
+                        pointHoverRadius: 5
+                    },
+                    {
+                        type: "line",
+                        label: "y = x",
+                        data: [{ x: minValue, y: minValue }, { x: maxValue, y: maxValue }],
+                        borderColor: "#dc2626",
+                        borderDash: [6, 5],
+                        borderWidth: 1.5,
+                        pointRadius: 0,
+                        showLine: true
+                    }
+                ],
+                message: getText("Points close to the y=x line have smaller prediction errors. Large vertical gaps indicate rows that need review.")
+            };
+        },
+
+        buildSymbolicResidualChartData(state = this.symbolicRuleChartState) {
+            const points = (state?.evaluatedRows || []).map((item) => ({ x: item.predicted, y: item.residual, sampleIndex: item.rowIndex }));
+            if (!points.length) {
+                return { ok: false, message: getText("No numeric residual sample pairs are available.") };
+            }
+            const xValues = points.map((point) => point.x).filter(Number.isFinite);
+            let minX = Math.min(...xValues);
+            let maxX = Math.max(...xValues);
+            if (minX === maxX) {
+                const padding = Math.max(1, Math.abs(minX) * 0.05);
+                minX -= padding;
+                maxX += padding;
+            }
+            return {
+                ok: true,
+                type: "scatter",
+                xLabel: this.getSymbolicAxisColumnLabel(state?.rule?.TARGET_COLUMN, state?.summary, getText("Predicted value")),
+                yLabel: this.getSymbolicAxisColumnLabel(state?.rule?.TARGET_COLUMN, state?.summary, getText("Residual (actual - predicted)")),
+                datasets: [
+                    {
+                        label: getText("Residual samples"),
+                        data: points,
+                        backgroundColor: (context) => this.getSymbolicSamplePointColor(context, "rgba(124, 58, 237, 0.56)"),
+                        borderColor: (context) => this.getSymbolicSamplePointColor(context, "#7c3aed"),
+                        pointRadius: (context) => this.getSymbolicSamplePointRadius(context, 3),
+                        pointHoverRadius: 5
+                    },
+                    {
+                        type: "line",
+                        label: "y = 0",
+                        data: [{ x: minX, y: 0 }, { x: maxX, y: 0 }],
+                        borderColor: "#dc2626",
+                        borderDash: [6, 5],
+                        borderWidth: 1.5,
+                        pointRadius: 0,
+                        showLine: true
+                    }
+                ],
+                message: getText("Residuals should be distributed around zero without a clear pattern. Curves or widening bands can indicate model bias or changing variance.")
+            };
+        },
+
+        buildSymbolicFeatureResponseChartData(state = this.symbolicRuleChartState) {
+            const rule = state?.rule || {};
+            const features = Array.isArray(rule.FEATURE_LIST) && rule.FEATURE_LIST.length
+                ? rule.FEATURE_LIST
+                : this.parseFeatureList(rule.FEATURE_COLUMNS);
+            const primary = features.includes(state?.primaryFeature) ? state.primaryFeature : features[0];
+            if (!primary || !state?.evaluatedRows?.length) {
+                return { ok: false, message: getText("No numeric feature samples are available for the response graph.") };
+            }
+            const observed = state.evaluatedRows
+                .map((item) => ({ x: Number(item.values[primary]), y: item.actual, sampleIndex: item.rowIndex }))
+                .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y));
+            if (!observed.length) {
+                return { ok: false, message: getText("The selected feature does not contain numeric sample values.") };
+            }
+            const compiled = this.compileSymbolicExpression(String(rule.EXPRESSION || ""), features);
+            if (!compiled.ok) return compiled;
+            const averages = {};
+            features.forEach((feature) => {
+                const values = state.evaluatedRows.map((item) => Number(item.values[feature])).filter(Number.isFinite);
+                averages[feature] = values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
+            });
+            const xValues = observed.map((point) => point.x).sort((left, right) => left - right);
+            const quantile = (ratio) => {
+                if (xValues.length === 1) return xValues[0];
+                const position = (xValues.length - 1) * ratio;
+                const lower = Math.floor(position);
+                const upper = Math.ceil(position);
+                const weight = position - lower;
+                return xValues[lower] + ((xValues[upper] - xValues[lower]) * weight);
+            };
+            let minX = quantile(0.05);
+            let maxX = quantile(0.95);
+            if (!Number.isFinite(minX) || !Number.isFinite(maxX) || minX === maxX) {
+                const range = (rule.FEATURE_RANGES || []).find((item) => String(item?.COLUMN_NAME || "").toUpperCase() === String(primary).toUpperCase()) || {};
+                minX = Number(range.MIN_VALUE);
+                maxX = Number(range.MAX_VALUE);
+            }
+            if (!Number.isFinite(minX) || !Number.isFinite(maxX)) {
+                minX = Math.min(...xValues);
+                maxX = Math.max(...xValues);
+            }
+            if (minX === maxX) {
+                const padding = Math.max(1, Math.abs(minX) * 0.05);
+                minX -= padding;
+                maxX += padding;
+            }
+            const curvePoints = Array.from({ length: 80 }, (_, index) => {
+                const x = minX + ((maxX - minX) * index) / 79;
+                const values = { ...averages, [primary]: x };
+                return { x, y: compiled.evaluate(values) };
+            }).filter((point) => Number.isFinite(point.y));
+            const visibleObserved = observed;
+            if (!curvePoints.length) {
+                return { ok: false, message: getText("The formula response could not be calculated for the selected feature range.") };
+            }
+            return {
+                ok: true,
+                type: "scatter",
+                xLabel: this.getSymbolicAxisColumnLabel(primary, state?.summary),
+                yLabel: this.getSymbolicAxisColumnLabel(rule.TARGET_COLUMN || "Y", state?.summary),
+                datasets: [
+                    {
+                        label: getText("Observed target values"),
+                        data: visibleObserved,
+                        backgroundColor: (context) => this.getSymbolicSamplePointColor(context, "rgba(100, 116, 139, 0.42)"),
+                        borderColor: (context) => this.getSymbolicSamplePointColor(context, "#64748b"),
+                        pointRadius: (context) => this.getSymbolicSamplePointRadius(context, 3),
+                        pointHoverRadius: 5
+                    },
+                    {
+                        type: "line",
+                        label: getText("Formula response curve"),
+                        data: curvePoints,
+                        borderColor: "#2563eb",
+                        backgroundColor: "#2563eb",
+                        borderWidth: 2.2,
+                        pointRadius: 0,
+                        showLine: true,
+                        tension: compiled.profile?.isCurved ? 0.12 : 0
+                    }
+                ],
+                message: getText("Observed target points are compared with the formula response over the sampled P05-P95 range while all other features are fixed at their sampled averages.")
+            };
+        },
+
+        zoomSymbolicRuleChart(factor = 1) {
+            const chart = this.symbolicRuleChart;
+            const state = this.symbolicRuleChartState;
+            if (!chart || !state) return;
+            const currentPercent = Number(state.zoomPercent || 100);
+            const nextPercent = Math.min(800, Math.max(50, currentPercent * Number(factor || 1)));
+            const scaleFactor = currentPercent / nextPercent;
+            ["x", "y"].forEach((axis) => {
+                const scale = chart.scales?.[axis];
+                if (!scale || !Number.isFinite(scale.min) || !Number.isFinite(scale.max)) return;
+                const center = (scale.min + scale.max) / 2;
+                const halfSpan = Math.max(Number.EPSILON, ((scale.max - scale.min) * scaleFactor) / 2);
+                chart.options.scales[axis].min = center - halfSpan;
+                chart.options.scales[axis].max = center + halfSpan;
+            });
+            state.zoomPercent = nextPercent;
+            chart.update("none");
+            this.updateSymbolicRuleZoomLabel();
+        },
+
+        resetSymbolicRuleChartZoom() {
+            const chart = this.symbolicRuleChart;
+            const state = this.symbolicRuleChartState;
+            if (!chart || !state) return;
+            ["x", "y"].forEach((axis) => {
+                if (!chart.options.scales?.[axis]) return;
+                delete chart.options.scales[axis].min;
+                delete chart.options.scales[axis].max;
+            });
+            state.zoomPercent = 100;
+            chart.update("none");
+            this.updateSymbolicRuleZoomLabel();
+        },
+
+        updateSymbolicRuleZoomLabel() {
+            const label = document.getElementById(`${PAGE_ID_PREFIX}SymbolicZoomLabel`);
+            if (label) label.textContent = `${Math.round(this.symbolicRuleChartState?.zoomPercent || 100)}%`;
         },
 
         buildSymbolicRuleChartData(rule) {
@@ -6001,7 +6848,6 @@
                 : [{ label: "predicted", value: null, color: "#2563eb" }];
             const points = compiled.profile && compiled.profile.isCurved ? 80 : 25;
             const xs = Array.from({ length: points }, (_, index) => primaryRange.min + ((primaryRange.max - primaryRange.min) * index) / Math.max(1, points - 1));
-            const labels = xs.map((value) => this.formatDecimal(value));
             const datasets = variants.map((variant) => {
                 const data = xs.map((xValue) => {
                     const values = {};
@@ -6011,26 +6857,29 @@
                         else values[feature] = getRange(feature).avg;
                     });
                     const yValue = compiled.evaluate(values);
-                    return Number.isFinite(yValue) ? yValue : null;
-                });
+                    return Number.isFinite(yValue) ? { x: xValue, y: yValue } : null;
+                }).filter(Boolean);
                 return {
+                    type: "line",
                     label: variant.label,
                     data,
                     borderColor: variant.color,
                     backgroundColor: variant.color,
                     tension: compiled.profile && compiled.profile.isCurved ? 0.18 : 0.25,
                     pointRadius: compiled.profile && compiled.profile.isCurved ? 1 : 2,
+                    showLine: true,
                     spanGaps: true
                 };
-            }).filter((dataset) => dataset.data.some((value) => value !== null));
+            }).filter((dataset) => dataset.data.length);
             if (!datasets.length) {
                 return { ok: false, message: getText("All calculated results are empty, so the graph cannot be created.") };
             }
             return {
                 ok: true,
-                labels,
+                type: "scatter",
                 datasets,
-                xLabel: primary,
+                xLabel: this.getSymbolicAxisColumnLabel(primary, this.symbolicRuleChartState?.summary),
+                yLabel: this.getSymbolicAxisColumnLabel(rule.TARGET_COLUMN || "Predicted y", this.symbolicRuleChartState?.summary),
                 message: second
                     ? getText("{primary} is varied, and {second} is compared at min/avg/max. Other features are fixed at their average values.{curveNote}", { primary, second, curveNote: compiled.profile && compiled.profile.isCurved ? getText(" POWER/EXP/LOG style formulas are converted for calculation and displayed as curved graphs.") : "" })
                     : getText("{primary} is varied to display the predicted y change.{curveNote}", { primary, curveNote: compiled.profile && compiled.profile.isCurved ? getText(" POWER/EXP/LOG style formulas are converted for calculation and displayed as curved graphs.") : "" })

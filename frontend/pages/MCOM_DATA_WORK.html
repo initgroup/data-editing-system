@@ -67,12 +67,6 @@
                         <button type="button" class="table-icon-btn" title="New work" data-title-key="newWorkTitle" onclick="__PAGE_CODE__.newJob()">
                             <i class="fas fa-plus"></i>
                         </button>
-                        <button type="button" class="table-icon-btn" title="All Execute" data-title-key="runAllTitle" onclick="__PAGE_CODE__.runAllJobs()">
-                            <i class="fas fa-forward"></i>
-                        </button>
-                        <button type="button" class="table-icon-btn" title="All Queue batch" data-title-key="runAllQueueTitle" onclick="__PAGE_CODE__.runAllQueueJobs()">
-                            <i class="fas fa-clock"></i>
-                        </button>
                         <button type="button" class="table-icon-btn" title="Refresh jobs" data-title-key="refreshJobsTitle" onclick="__PAGE_CODE__.loadJobs()">
                             <i class="fas fa-sync-alt"></i>
                         </button>
@@ -96,6 +90,10 @@
                                 <i class="fas fa-plus"></i>
                             </button>
                         </div>
+                        <button type="button" id="importJob-__PAGE_CODE__" class="table-btn" onclick="__PAGE_CODE__.openJobImportDialog()">
+                            <i class="fas fa-file-import"></i>
+                            <span data-label-key="importWork">Import</span>
+                        </button>
                         <button type="button" id="saveJob-__PAGE_CODE__" class="table-btn" onclick="__PAGE_CODE__.saveJob()">
                             <i class="fas fa-save"></i>
                             <span data-label-key="saveWork">Save</span>
@@ -236,7 +234,7 @@
                                         <i class="fas fa-align-left"></i>
                                     </button>
                                 </span>
-                                <button type="button" class="table-btn" onclick="__PAGE_CODE__.generateExecutablePlsql(true)">
+                                <button type="button" id="generateExecutable-__PAGE_CODE__" class="table-btn" onclick="__PAGE_CODE__.generateExecutablePlsql(true)">
                                     <i class="fas fa-arrow-right"></i>
                                     <span id="generateScriptLabel-__PAGE_CODE__" data-label-key="generateScript">Generate PL/SQL</span>
                                 </button>
@@ -322,6 +320,38 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
             <footer>
                 <button type="button" class="env-btn" onclick="__PAGE_CODE__.cancelRuntimeBindDialog()">Cancel</button>
                 <button type="button" class="env-btn env-save" onclick="__PAGE_CODE__.confirmRuntimeBindDialog()">Run</button>
+            </footer>
+        </section>
+    </div>
+
+    <div id="jobImportLayer-__PAGE_CODE__" class="data-help-layer" hidden>
+        <section class="data-help-dialog data-job-import-dialog" role="dialog" aria-modal="true" aria-labelledby="jobImportTitle-__PAGE_CODE__">
+            <header>
+                <h2 id="jobImportTitle-__PAGE_CODE__" data-label-key="importWork">Import</h2>
+                <button type="button" class="table-icon-btn" title="Close" data-title-key="closeTitle" onclick="__PAGE_CODE__.closeJobImportDialog()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </header>
+            <div class="data-help-content data-job-import-content">
+                <p data-label-key="importWorkHint">Select a saved work item to load its execution settings into the current new job.</p>
+                <div class="data-job-import-filters">
+                    <label>
+                        <span data-label-key="project">Project</span>
+                        <select id="importProject-__PAGE_CODE__" class="env-field" onchange="__PAGE_CODE__.handleImportProjectChange(this.value)"></select>
+                    </label>
+                    <label>
+                        <span data-label-key="scenario">Scenario</span>
+                        <select id="importScenario-__PAGE_CODE__" class="env-field" onchange="__PAGE_CODE__.handleImportScenarioChange(this.value)"></select>
+                    </label>
+                    <label class="data-job-import-job-field">
+                        <span data-label-key="importJobList">Saved work</span>
+                        <select id="importJobSource-__PAGE_CODE__" class="env-field"></select>
+                    </label>
+                </div>
+            </div>
+            <footer>
+                <button type="button" class="env-btn" onclick="__PAGE_CODE__.closeJobImportDialog()"><span data-label-key="close">Close</span></button>
+                <button type="button" id="confirmJobImport-__PAGE_CODE__" class="env-btn env-save" onclick="__PAGE_CODE__.importSelectedJob()"><span data-label-key="importWork">Import</span></button>
             </footer>
         </section>
     </div>

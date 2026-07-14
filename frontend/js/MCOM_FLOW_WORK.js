@@ -31,6 +31,10 @@
             contextScenarios: [],
             scenarioTables: [],
             flowList: [],
+            flowDisplayName: "",
+            importProjects: [],
+            importScenarios: [],
+            importFlows: [],
             flowSwitcherSearch: "",
             flowNodeTypes: [],
             flowRegisteredJobs: [],
@@ -134,6 +138,10 @@
                 this.contextScenarios = [];
                 this.scenarioTables = [];
                 this.flowList = [];
+                this.flowDisplayName = "";
+                this.importProjects = [];
+                this.importScenarios = [];
+                this.importFlows = [];
                 this.flowSwitcherSearch = "";
                 this.flowNodeTypes = [];
                 this.flowRegisteredJobs = [];
@@ -1158,7 +1166,7 @@
                 const currentId = this.getValue(`#flowId-${PAGE_CODE}`);
                 const saved = flow || this.getCurrentFlowRecord() || {};
                 const flowId = saved.FLOW_ID || currentId || "NEW";
-                const flowName = this.getValue(`#flowName-${PAGE_CODE}`).trim() || saved.FLOW_NAME || (/^\d+$/.test(String(flowId)) ? `Flow #${flowId}` : "Draft Flow");
+                const flowName = this.flowDisplayName || saved.FLOW_NAME || (/^\d+$/.test(String(flowId)) ? `Flow #${flowId}` : "Draft Flow");
                 const flowGroup = this.getValue(`#flowGroup-${PAGE_CODE}`).trim() || saved.FLOW_GROUP || config.defaultFlowGroup || PAGE_CODE;
                 const useYn = this.getValue(`#flowUseYn-${PAGE_CODE}`).trim() || saved.USE_YN || "Y";
                 const mode = saved.EXECUTION_MODE || "DAG";
@@ -1319,6 +1327,189 @@
                 await this.loadFlowVersions(false);
             },
 
+            async openFlowImportDialog() {
+                if (!this.selectedProjectId || !this.selectedScenarioId) {
+                    alert(this.getMessage("selectProjectScenarioFirst", "Select project and scenario first."));
+                    return;
+                }
+                const layer = getContainerEl(`#flowImportLayer-${PAGE_CODE}`);
+                if (!layer) return;
+                this.importProjects = (this.contextProjects || []).filter((project) => project.USE_YN === "Y");
+                layer.hidden = false;
+                this.renderImportProjects(this.selectedProjectId);
+                await this.loadImportScenarios(this.selectedProjectId, this.selectedScenarioId);
+            },
+
+            closeFlowImportDialog() {
+                const layer = getContainerEl(`#flowImportLayer-${PAGE_CODE}`);
+                if (layer) layer.hidden = true;
+            },
+
+            renderImportProjects(preferredProjectId = "") {
+                const select = getContainerEl(`#importFlowProject-${PAGE_CODE}`);
+                if (!select) return;
+                select.innerHTML = `
+                    <option value="">${this.escapeHtml(this.getLabel("selectProject", "-- Select project --"))}</option>
+                    ${(this.importProjects || []).map((project) => `
+                        <option value="${this.escapeHtml(project.PROJECT_ID ?? "")}">
+                            ${this.escapeHtml(CommonUtils.formatOwnerScopedName(project, project.PROJECT_NAME || project.PROJECT_CODE || "(Untitled project)"))}
+                        </option>
+                    `).join("")}
+                `;
+                select.value = (this.importProjects || []).some((project) => String(project.PROJECT_ID) === String(preferredProjectId))
+                    ? String(preferredProjectId)
+                    : "";
+            },
+
+            async handleImportFlowProjectChange(projectId) {
+                await this.loadImportScenarios(projectId || "", "");
+            },
+
+            async loadImportScenarios(projectId, preferredScenarioId = "") {
+                const select = getContainerEl(`#importFlowScenario-${PAGE_CODE}`);
+                this.importScenarios = [];
+                this.importFlows = [];
+                this.renderImportFlows();
+                if (!projectId) {
+                    if (select) select.innerHTML = `<option value="">${this.escapeHtml(this.getLabel("selectScenario", "-- Select scenario --"))}</option>`;
+                    return;
+                }
+                if (select) select.innerHTML = `<option value="">${this.escapeHtml(this.getLabel("loadingScenarios", "Loading scenarios..."))}</option>`;
+                try {
+                    const params = new URLSearchParams({ projectId: String(projectId), keyword: "" });
+                    const json = await CommonUtils.request(`${API_BASE_URL}/M01002/scenarios?${params.toString()}`, { method: "GET", showLoading: false });
+                    this.importScenarios = Array.isArray(json.data) ? json.data : [];
+                    const hasPreferred = this.importScenarios.some((scenario) => String(scenario.SCENARIO_ID) === String(preferredScenarioId));
+                    const selectedScenarioId = hasPreferred ? String(preferredScenarioId) : String(this.importScenarios[0]?.SCENARIO_ID || "");
+                    if (select) {
+                        select.innerHTML = `
+                            <option value="">${this.escapeHtml(this.getLabel("selectScenario", "-- Select scenario --"))}</option>
+                            ${this.importScenarios.map((scenario) => `
+                                <option value="${this.escapeHtml(scenario.SCENARIO_ID ?? "")}">
+                                    ${this.escapeHtml(CommonUtils.formatOwnerScopedName(scenario, scenario.SCENARIO_NAME || scenario.SCENARIO_CODE || "(Untitled scenario)"))}
+                                </option>
+                            `).join("")}
+                        `;
+                        select.value = selectedScenarioId;
+                    }
+                    await this.loadImportFlows(projectId, selectedScenarioId);
+                } catch (error) {
+                    if (select) select.innerHTML = `<option value="">${this.escapeHtml(error.message || "Scenario load failed.")}</option>`;
+                }
+            },
+
+            async handleImportFlowScenarioChange(scenarioId) {
+                const projectId = getContainerEl(`#importFlowProject-${PAGE_CODE}`)?.value || "";
+                await this.loadImportFlows(projectId, scenarioId || "");
+            },
+
+            async loadImportFlows(projectId, scenarioId) {
+                const select = getContainerEl(`#importFlowSource-${PAGE_CODE}`);
+                this.importFlows = [];
+                if (!projectId || !scenarioId) {
+                    this.renderImportFlows();
+                    return;
+                }
+                if (select) select.innerHTML = `<option value="">${this.escapeHtml(this.getLabel("loadingFlows", "Loading saved flows..."))}</option>`;
+                try {
+                    const params = new URLSearchParams({ projectId: String(projectId), scenarioId: String(scenarioId) });
+                    const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/import-flows?${params.toString()}`, { method: "GET", showLoading: false });
+                    this.importFlows = Array.isArray(json.data) ? json.data : [];
+                    this.renderImportFlows();
+                } catch (error) {
+                    if (select) select.innerHTML = `<option value="">${this.escapeHtml(error.message || "Saved flow load failed.")}</option>`;
+                }
+            },
+
+            renderImportFlows() {
+                const select = getContainerEl(`#importFlowSource-${PAGE_CODE}`);
+                const confirmButton = getContainerEl(`#confirmFlowImport-${PAGE_CODE}`);
+                if (!select) return;
+                select.innerHTML = `
+                    <option value="">${this.escapeHtml(this.getLabel("selectImportFlow", "-- Select saved flow --"))}</option>
+                    ${(this.importFlows || []).map((flow) => {
+                        const detail = [flow.FLOW_GROUP, flow.FLOW_DESC].filter(Boolean).join(" · ");
+                        return `<option value="${this.escapeHtml(flow.FLOW_ID ?? "")}">${this.escapeHtml(flow.FLOW_NAME || "(Untitled flow)")}${detail ? ` — ${this.escapeHtml(detail)}` : ""}</option>`;
+                    }).join("")}
+                `;
+                if (confirmButton) confirmButton.disabled = !(this.importFlows || []).length;
+            },
+
+            findCurrentJobForImportedNode(node = {}) {
+                const sourceMenuCode = String(node.refMenuCode || "").trim().toUpperCase();
+                const sourceName = String(node.nodeName || "").trim().toUpperCase();
+                return (this.flowRegisteredJobs || []).find((job) => (
+                    String(job.MENU_CODE || "").trim().toUpperCase() === sourceMenuCode
+                    && String(job.JOB_NAME || "").trim().toUpperCase() === sourceName
+                )) || null;
+            },
+
+            createImportedFlowDraft(source = {}) {
+                const nodeKeyMap = new Map();
+                const nodes = (Array.isArray(source.NODES) ? source.NODES : []).map((node, index) => {
+                    const nextKey = this.createNextFlowNodeId(node.nodeType || node.refMenuCode || "node");
+                    nodeKeyMap.set(String(node.nodeKey || ""), nextKey);
+                    const currentJob = this.findCurrentJobForImportedNode(node);
+                    const currentData = currentJob ? this.buildFlowNodeDataFromJob(currentJob, node) : {};
+                    return {
+                        ...node,
+                        ...currentData,
+                        nodeKey: nextKey,
+                        nodeName: node.nodeName || currentData.title || `Node ${index + 1}`,
+                        nodeDesc: node.nodeDesc || "",
+                        refWorkJobId: currentData.jobId || "",
+                        refObjectId: currentData.refObjectId || "",
+                        params: Array.isArray(node.params) ? node.params : [],
+                        positionLeft: node.positionLeft,
+                        positionTop: node.positionTop,
+                        nodeWidth: node.nodeWidth,
+                        nodeHeight: node.nodeHeight,
+                    };
+                });
+                const edges = (Array.isArray(source.EDGES) ? source.EDGES : [])
+                    .map((edge) => ({
+                        ...edge,
+                        fromNodeKey: nodeKeyMap.get(String(edge.fromNodeKey || "")) || "",
+                        toNodeKey: nodeKeyMap.get(String(edge.toNodeKey || "")) || "",
+                    }))
+                    .filter((edge) => edge.fromNodeKey && edge.toNodeKey);
+                return { nodes, edges };
+            },
+
+            async importSelectedFlow() {
+                const projectId = getContainerEl(`#importFlowProject-${PAGE_CODE}`)?.value || "";
+                const scenarioId = getContainerEl(`#importFlowScenario-${PAGE_CODE}`)?.value || "";
+                const flowId = getContainerEl(`#importFlowSource-${PAGE_CODE}`)?.value || "";
+                if (!projectId || !scenarioId || !flowId) {
+                    alert(this.getLabel("selectImportFlow", "Select a saved flow to import."));
+                    return;
+                }
+                const confirmButton = getContainerEl(`#confirmFlowImport-${PAGE_CODE}`);
+                if (confirmButton) confirmButton.disabled = true;
+                try {
+                    const params = new URLSearchParams({ projectId: String(projectId), scenarioId: String(scenarioId) });
+                    const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/import-flows/${encodeURIComponent(flowId)}?${params.toString()}`, { method: "GET" });
+                    const source = json.data || {};
+                    const graph = this.createImportedFlowDraft(source);
+                    this.newFlow(false);
+                    const importedName = this.getUniqueFlowName(`Copy of ${source.FLOW_NAME || "Flow"}`);
+                    this.setValue(`#flowName-${PAGE_CODE}`, importedName);
+                    this.flowDisplayName = importedName;
+                    this.setValue(`#flowDesc-${PAGE_CODE}`, source.FLOW_DESC || "");
+                    this.setValue(`#flowUseYn-${PAGE_CODE}`, source.USE_YN || "Y");
+                    this.renderFlowCanvasFromData(graph.nodes, graph.edges);
+                    this.flowLayoutRestoredFromDb = false;
+                    this.scheduleFitFlowCanvas();
+                    this.updateWorkContextSummary();
+                    this.closeFlowImportDialog();
+                    alert(this.getLabel("importFlowDone", "Saved flow has been loaded into the current draft."));
+                } catch (error) {
+                    alert(error.message || "Saved flow import failed.");
+                } finally {
+                    if (confirmButton) confirmButton.disabled = false;
+                }
+            },
+
             copySelectedSavedFlow() {
                 const flowId = this.getValue(`#flowId-${PAGE_CODE}`);
                 if (!/^\d+$/.test(flowId)) {
@@ -1339,7 +1530,9 @@
             copyFlowAsDraft() {
                 const originalName = this.getValue(`#flowName-${PAGE_CODE}`).trim() || "Untitled Flow";
                 this.setValue(`#flowId-${PAGE_CODE}`, "NEW");
-                this.setValue(`#flowName-${PAGE_CODE}`, `Copy of ${originalName}`);
+                const copiedName = `Copy of ${originalName}`;
+                this.setValue(`#flowName-${PAGE_CODE}`, copiedName);
+                this.flowDisplayName = copiedName;
                 const selector = getContainerEl(`#flowVersion-${PAGE_CODE}`);
                 if (selector) selector.value = "";
                 this.isSampleFlowVisible = false;
@@ -1464,10 +1657,9 @@
 
             updateFlowPanelTitles(scenario = null) {
                 const scenarioName = scenario ? CommonUtils.formatOwnerScopedName(scenario, scenario.SCENARIO_NAME || scenario.SCENARIO_CODE || "") : "";
-                const flowName = this.getValue(`#flowName-${PAGE_CODE}`).trim();
                 const flowId = this.getValue(`#flowId-${PAGE_CODE}`);
                 const saved = this.flowList.find((flow) => String(flow.FLOW_ID) === String(flowId)) || {};
-                const displayFlowName = flowName || saved.FLOW_NAME || (flowId && flowId !== "NEW" ? `Flow #${flowId}` : "Draft Flow");
+                const displayFlowName = this.flowDisplayName || saved.FLOW_NAME || (flowId && flowId !== "NEW" ? `Flow #${flowId}` : "Draft Flow");
                 this.setText(`#flow-assets-scenario-title-${PAGE_CODE}`, scenarioName || "");
                 this.setText(`#flow-main-flow-title-${PAGE_CODE}`, displayFlowName);
                 this.updateFlowSwitcherSummary();
@@ -1475,17 +1667,16 @@
 
             getCurrentFlowSummary() {
                 const flowId = this.getValue(`#flowId-${PAGE_CODE}`);
-                const flowName = this.getValue(`#flowName-${PAGE_CODE}`).trim();
                 const flowGroup = this.getValue(`#flowGroup-${PAGE_CODE}`).trim() || config.defaultFlowGroup || PAGE_CODE;
                 const flowUseYn = this.getValue(`#flowUseYn-${PAGE_CODE}`).trim() || "Y";
                 if (/^\d+$/.test(flowId)) {
                     const saved = this.flowList.find((flow) => String(flow.FLOW_ID) === String(flowId)) || {};
-                    const name = flowName || saved.FLOW_NAME || `Flow #${flowId}`;
+                    const name = this.flowDisplayName || saved.FLOW_NAME || `Flow #${flowId}`;
                     const group = flowGroup || saved.FLOW_GROUP || PAGE_CODE;
                     const mode = saved.EXECUTION_MODE || "DAG";
                     return `Flow: ${name} (#${flowId} / ${group} / ${flowUseYn} / ${mode})`;
                 }
-                return `Flow: ${flowName || "Draft"} (${flowGroup} / ${flowUseYn})`;
+                return `Flow: ${this.flowDisplayName || "Draft"} (${flowGroup} / ${flowUseYn})`;
             },
 
             toggleWorkContext(event) {
@@ -3778,8 +3969,10 @@
                 if (element) element.value = value ?? "";
             },
 
-            updateFlowField() {
-                this.updateWorkContextSummary();
+            updateFlowField(fieldName) {
+                if (fieldName !== "flowName") {
+                    this.updateWorkContextSummary();
+                }
             },
             handleNodeJobChange() {},
 
@@ -4533,6 +4726,7 @@
                 this.flowLayoutGrid = null;
                 this.setValue(`#flowGroup-${PAGE_CODE}`, flow.FLOW_GROUP || config.defaultFlowGroup || PAGE_CODE);
                 this.setValue(`#flowName-${PAGE_CODE}`, flow.FLOW_NAME || "");
+                this.flowDisplayName = flow.FLOW_NAME || "";
                 this.setValue(`#flowDesc-${PAGE_CODE}`, flow.FLOW_DESC || "");
                 this.setValue(`#flowUseYn-${PAGE_CODE}`, flow.USE_YN || "Y");
                 const selector = getContainerEl(`#flowVersion-${PAGE_CODE}`);
@@ -6526,6 +6720,7 @@
                 this.flowLayoutGrid = null;
                 this.setValue(`#flowGroup-${PAGE_CODE}`, config.defaultFlowGroup || PAGE_CODE);
                 this.setValue(`#flowName-${PAGE_CODE}`, "");
+                this.flowDisplayName = "";
                 this.setValue(`#flowDesc-${PAGE_CODE}`, "");
                 this.setValue(`#flowUseYn-${PAGE_CODE}`, "Y");
                 const selector = getContainerEl(`#flowVersion-${PAGE_CODE}`);

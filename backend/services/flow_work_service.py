@@ -26,6 +26,11 @@ class FlowWorkDmlError(Exception):
         super().__init__(f"{step}: {original}")
 
 
+IMPORT_CONTEXT_PARAMETER_PATTERN = re.compile(
+    r"(?:^|_)(?:PROJECT|SCENARIO|FLOW|FLOW_NODE|FLOW_EDGE|WORK_JOB|PROFILE_JOB|OBJECT)_(?:ID|KEY)$"
+)
+
+
 def is_oracle_lock_error(error: Exception) -> bool:
     text = str(error)
     return any(code in text for code in ("ORA-00054", "ORA-00060", "ORA-12860"))
@@ -107,6 +112,92 @@ def list_flows(conn, menu_code: str, project_id: int, scenario_id: int) -> Dict[
         "scenarioId": scenario_id
     })
     return data_work.require_success(result, "Flow query failed.")
+
+
+def list_importable_flows(
+    conn,
+    menu_code: str,
+    project_id: int,
+    scenario_id: int,
+    user_id: int,
+    include_all_users: bool,
+) -> Dict[str, Any]:
+    result = execute_query(conn, "FLOW_WORK_IMPORT_FLOW_LIST", {
+        "menuCode": normalize_menu_code(menu_code),
+        "projectId": data_work.require_int(project_id, "projectId"),
+        "scenarioId": data_work.require_int(scenario_id, "scenarioId"),
+        "userId": data_work.require_int(user_id, "userId"),
+        "includeAllUsers": "Y" if include_all_users else "N",
+    })
+    return data_work.require_success(result, "Importable flow query failed.")
+
+
+def load_importable_flow(
+    conn,
+    menu_code: str,
+    flow_id: int,
+    project_id: int,
+    scenario_id: int,
+    user_id: int,
+    include_all_users: bool,
+) -> Dict[str, Any]:
+    result = execute_query(conn, "FLOW_WORK_IMPORT_FLOW_DETAIL", {
+        "menuCode": normalize_menu_code(menu_code),
+        "flowId": data_work.require_int(flow_id, "flowId"),
+        "projectId": data_work.require_int(project_id, "projectId"),
+        "scenarioId": data_work.require_int(scenario_id, "scenarioId"),
+        "userId": data_work.require_int(user_id, "userId"),
+        "includeAllUsers": "Y" if include_all_users else "N",
+    })
+    rows = data_work.require_success(result, "Importable flow query failed.").get("data", [])
+    if not rows:
+        raise HTTPException(status_code=404, detail="Importable flow was not found.")
+
+    source = load_flow(conn, menu_code, flow_id)
+    return {
+        "FLOW_NAME": source.get("FLOW_NAME") or "",
+        "FLOW_DESC": source.get("FLOW_DESC") or "",
+        "USE_YN": source.get("USE_YN") or "Y",
+        "NODES": [sanitize_import_node(node) for node in source.get("NODES") or []],
+        "EDGES": [
+            {
+                **edge,
+                "flowEdgeId": None,
+            }
+            for edge in source.get("EDGES") or []
+        ],
+    }
+
+
+def sanitize_import_node(node: Dict[str, Any]) -> Dict[str, Any]:
+    safe_node = {
+        **node,
+        "flowNodeId": None,
+        "refWorkJobId": None,
+        "refObjectId": None,
+    }
+    params = safe_node.get("params")
+    if not isinstance(params, list):
+        safe_node["params"] = []
+        return safe_node
+    safe_node["params"] = [
+        param for param in params
+        if not is_import_context_parameter(param)
+    ]
+    return safe_node
+
+
+def is_import_context_parameter(param: Any) -> bool:
+    if not isinstance(param, dict):
+        return False
+    name = str(
+        param.get("itemName")
+        or param.get("ITEM_NAME")
+        or param.get("bindName")
+        or param.get("BIND_NAME")
+        or ""
+    ).strip().upper()
+    return bool(IMPORT_CONTEXT_PARAMETER_PATTERN.search(name))
 
 
 def load_flow(conn, menu_code: str, flow_id: int) -> Dict[str, Any]:

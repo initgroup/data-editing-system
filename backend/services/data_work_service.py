@@ -80,6 +80,70 @@ def list_jobs(conn, menu_code: str, project_id: int, scenario_id: int) -> Dict[s
     return normalize_lob_result(require_success(result, "Data work job query failed."))
 
 
+def list_importable_jobs(
+    conn,
+    menu_code: str,
+    job_group: str,
+    project_id: int,
+    scenario_id: int,
+    user_id: int,
+    include_all_users: bool,
+) -> Dict[str, Any]:
+    result = execute_query(conn, "DATA_WORK_IMPORT_JOB_LIST", {
+        "menuCode": normalize_menu_code(menu_code),
+        "jobGroup": normalize_text(job_group, normalize_menu_code(menu_code), 100),
+        "projectId": require_int(project_id, "projectId"),
+        "scenarioId": require_int(scenario_id, "scenarioId"),
+        "userId": require_int(user_id, "userId"),
+        "includeAllUsers": "Y" if include_all_users else "N",
+    })
+    return normalize_lob_result(require_success(result, "Importable data work job query failed."))
+
+
+def load_importable_job(
+    conn,
+    menu_code: str,
+    job_group: str,
+    profile_job_id: int,
+    project_id: int,
+    scenario_id: int,
+    user_id: int,
+    include_all_users: bool,
+) -> Dict[str, Any]:
+    result = execute_query(conn, "DATA_WORK_IMPORT_JOB_DETAIL", {
+        "menuCode": normalize_menu_code(menu_code),
+        "jobGroup": normalize_text(job_group, normalize_menu_code(menu_code), 100),
+        "profileJobId": require_int(profile_job_id, "profileJobId"),
+        "projectId": require_int(project_id, "projectId"),
+        "scenarioId": require_int(scenario_id, "scenarioId"),
+        "userId": require_int(user_id, "userId"),
+        "includeAllUsers": "Y" if include_all_users else "N",
+    })
+    rows = normalize_lob_rows(require_success(result, "Importable data work job query failed.").get("data", []))
+    if not rows:
+        raise HTTPException(status_code=404, detail="Importable data work job was not found.")
+    job = rows[0]
+    try:
+        params = json.loads(job.pop("PARAM_JSON", "") or "[]")
+    except Exception:
+        params = []
+    return {
+        "JOB_NAME": job.get("JOB_NAME") or "",
+        "JOB_DESC": job.get("JOB_DESC") or "",
+        "EXEC_SOURCE_TYPE": job.get("EXEC_SOURCE_TYPE") or "DB_OBJECT",
+        "EXEC_METHOD": job.get("EXEC_METHOD") or "",
+        "EXEC_OWNER": job.get("EXEC_OWNER") or "",
+        "EXEC_OBJECT_TYPE": job.get("EXEC_OBJECT_TYPE") or "",
+        "EXEC_OBJECT_NAME": job.get("EXEC_OBJECT_NAME") or "",
+        "EXEC_OBJECT_LABEL": job.get("EXEC_OBJECT_LABEL") or "",
+        "EXEC_PLSQL": job.get("EXEC_PLSQL") or "",
+        "RESULT_CREATE_YN": job.get("RESULT_CREATE_YN") or "N",
+        "RESULT_OWNER": job.get("RESULT_OWNER") or "",
+        "RESULT_TABLE_NAME": job.get("RESULT_TABLE_NAME") or "",
+        "PARAMS": params if isinstance(params, list) else [],
+    }
+
+
 def list_runs(conn, menu_code: str, project_id: int, scenario_id: int) -> Dict[str, Any]:
     result = execute_query(conn, "DATA_WORK_RUN_LIST", {
         "menuCode": normalize_menu_code(menu_code),
