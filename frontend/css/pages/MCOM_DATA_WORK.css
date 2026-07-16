@@ -410,7 +410,7 @@
 }
 
 .data-work-page:not(.flow-work-page) .data-history-grid .data-history-table {
-    min-width: max-content;
+    min-width: 0;
 }
 
 .data-work-page:not(.flow-work-page) .data-history-grid .data-history-table th {

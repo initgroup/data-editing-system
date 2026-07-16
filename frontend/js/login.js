@@ -84,20 +84,36 @@
         privateConnection: "Private"
     };
     const LOGIN_SERVER_MESSAGE_KEYS = {
-        "invalid login id or password.": "invalidLogin",
-        "login id and password are required.": "loginRequired",
-        "selected target db connection is disabled.": "targetDbDisabled",
-        "system tables are not installed. sign up as the first administrator to start initial setup.": "systemTablesNotInstalledSignup",
-        "admin signup key is not configured.": "adminSignupKeyNotConfigured",
-        "login id is required.": "loginIdRequired",
-        "user name is required.": "userNameRequired",
-        "email is required.": "emailRequired",
-        "login password is required.": "loginPasswordRequired",
-        "invalid signup role.": "invalidSignupRole",
-        "이미 등록된 로그인 id입니다.": "duplicateLoginId",
-        "이미 승인 대기 중인 로그인 id입니다.": "pendingLoginId",
-        "회원가입 신청이 승인 대기 중입니다. 관리자 승인 후 로그인할 수 있습니다.": "signupPendingApproval",
-        "관리자 인증키가 일치하지 않습니다.": "adminKeyMismatch"
+        "invalid login id or password": "invalidLogin",
+        "login id and password are required": "loginRequired",
+        "selected target db connection is disabled": "targetDbDisabled",
+        "system tables are not installed. sign up as the first administrator to start initial setup": "systemTablesNotInstalledSignup",
+        "admin signup key is not configured": "adminSignupKeyNotConfigured",
+        "login id is required": "loginIdRequired",
+        "user name is required": "userNameRequired",
+        "email is required": "emailRequired",
+        "login password is required": "loginPasswordRequired",
+        "invalid signup role": "invalidSignupRole",
+        "이미 등록된 로그인 id입니다": "duplicateLoginId",
+        "이미 승인 대기 중인 로그인 id입니다": "pendingLoginId",
+        "회원가입 신청이 승인 대기 중입니다. 관리자 승인 후 로그인할 수 있습니다": "signupPendingApproval",
+        "관리자 인증키가 일치하지 않습니다": "adminKeyMismatch"
+    };
+    const LOGIN_KOREAN_SERVER_MESSAGE_FALLBACKS = {
+        invalidLogin: "로그인 ID 또는 비밀번호가 올바르지 않습니다.",
+        loginRequired: "로그인 ID와 비밀번호는 필수입니다.",
+        targetDbDisabled: "선택한 대상 DB 연결은 사용할 수 없습니다.",
+        systemTablesNotInstalledSignup: "시스템 테이블이 설치되어 있지 않습니다. 첫 관리자 회원으로 가입해 초기 설정을 시작하세요.",
+        adminSignupKeyNotConfigured: "관리자 회원가입 인증키가 설정되어 있지 않습니다.",
+        loginIdRequired: "로그인 ID는 필수입니다.",
+        userNameRequired: "사용자명은 필수입니다.",
+        emailRequired: "이메일은 필수입니다.",
+        loginPasswordRequired: "로그인 비밀번호는 필수입니다.",
+        invalidSignupRole: "올바른 회원 유형을 선택하세요.",
+        duplicateLoginId: "이미 등록된 로그인 ID입니다.",
+        pendingLoginId: "이미 승인 대기 중인 로그인 ID입니다.",
+        signupPendingApproval: "회원가입 신청이 승인 대기 중입니다. 관리자 승인 후 로그인할 수 있습니다.",
+        adminKeyMismatch: "관리자 인증키가 일치하지 않습니다."
     };
 
     const login = {
@@ -132,7 +148,12 @@
         },
 
         normalizeServerMessage(message) {
-            return String(message || "").replace(/\s+/g, " ").trim().toLowerCase();
+            return String(message || "")
+                .replace(/\s+/g, " ")
+                .trim()
+                .replace(/^(?:error|detail)\s*:\s*/i, "")
+                .replace(/[.!]+$/, "")
+                .toLowerCase();
         },
 
         getServerMessageKey(message) {
@@ -143,9 +164,12 @@
             const messageText = String(message || "").trim();
             const key = this.getServerMessageKey(messageText);
             if (key) {
+                const fallback = this.loginLanguage === "ko"
+                    ? (LOGIN_KOREAN_SERVER_MESSAGE_FALLBACKS[key] || LOGIN_LABEL_FALLBACKS[key] || "")
+                    : (LOGIN_LABEL_FALLBACKS[key] || "");
                 return {
                     key,
-                    text: this.t(key)
+                    text: this.t(key, fallback)
                 };
             }
             return {

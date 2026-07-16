@@ -245,6 +245,7 @@
         importScenarios: [],
         importJobs: [],
         runHistory: [],
+        runHistoryStateKey: "",
         parameters: [],
         selectedProjectId: "",
         selectedScenarioId: "",
@@ -379,6 +380,7 @@
             this.importScenarios = [];
             this.importJobs = [];
             this.runHistory = [];
+            this.runHistoryStateKey = "";
             this.parameters = [];
             this.selectedProjectId = "";
             this.selectedScenarioId = "";
@@ -2899,18 +2901,27 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
             this.syncRunButtons();
         },
 
-        async loadRunHistory(showLoading = false) {
+        async loadRunHistory(options = {}) {
+            const normalizedOptions = typeof options === "boolean"
+                ? { showLoading: options }
+                : (options || {});
+            const showLoading = Boolean(normalizedOptions.showLoading);
+            const useCache = Boolean(normalizedOptions.useCache);
             const container = getContainerEl(`#runHistoryGrid-${PAGE_CODE}`);
             if (!container) return;
 
             if (!this.selectedProjectId || !this.selectedScenarioId) {
                 this.runHistory = [];
+                this.runHistoryStateKey = "";
                 this.setRunHistoryCount(0);
                 container.innerHTML = `
                     <div class="table-empty">Select project and scenario first.</div>
                 `;
                 return;
             }
+
+            const historyStateKey = this.getRunHistoryStateKey();
+            if (useCache && this.runHistoryStateKey === historyStateKey) return;
 
             container.innerHTML = `
                 <div class="table-empty">Loading run history...</div>
@@ -2925,8 +2936,10 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                     showLoading
                 });
                 this.runHistory = Array.isArray(json.data) ? json.data : [];
+                this.runHistoryStateKey = historyStateKey;
                 this.renderRunHistory();
             } catch (error) {
+                this.runHistoryStateKey = "";
                 this.setRunHistoryCount(0);
                 container.innerHTML = `
                     <div class="table-error">${this.escapeHtml(error.message || "Run history load failed.")}</div>
@@ -2939,6 +2952,10 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
             if (!countEl) return;
             const template = this.getMessage("historyTotal", "Total {count}");
             countEl.textContent = template.replace(/\{count\}/g, Number(count || 0).toLocaleString());
+        },
+
+        getRunHistoryStateKey() {
+            return `${this.selectedProjectId || ""}|${this.selectedScenarioId || ""}`;
         },
 
         renderRunHistory() {
@@ -3001,13 +3018,13 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                 return;
             }
 
+            const gridKey = "history";
             container.innerHTML = `
-                <table class="table-grid data-history-table">
+                <table class="table-grid data-history-table data-sql-result-table" data-sql-grid-key="${gridKey}">
+                    ${this.renderRunHistoryGridColGroup(columns)}
                     <thead>
                         <tr>
-                            <th class="grid-row-no">${this.escapeHtml(this.getLabel("gridNo", "No"))}</th>
-                            <th class="data-history-detail-column">${this.escapeHtml(this.getLabel("historyDetail", "Detail"))}</th>
-                            ${columns.map((column) => `<th title="${this.escapeHtml(this.getRunHistoryColumnLabel(column))}">${this.escapeHtml(this.getRunHistoryColumnLabel(column))}</th>`).join("")}
+                            ${this.renderRunHistoryGridHeader(columns)}
                         </tr>
                     </thead>
                     <tbody>
@@ -3015,6 +3032,44 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                     </tbody>
                 </table>
             `;
+            this.syncSqlGridTableWidth(gridKey);
+            this.applySqlGridFrozenColumns(gridKey);
+        },
+
+        renderRunHistoryGridColGroup(columns = []) {
+            const gridKey = "history";
+            return `
+                <colgroup>
+                    <col data-sql-grid-col-index="0" style="width: ${this.getSqlGridColumnWidth(gridKey, "__ROW_NO__", 0)}px;">
+                    <col data-sql-grid-col-index="1" style="width: ${this.getSqlGridColumnWidth(gridKey, "__DETAIL__", 1)}px;">
+                    ${columns.map((column, index) => {
+                        const colIndex = index + 2;
+                        return `<col data-sql-grid-col-index="${colIndex}" style="width: ${this.getSqlGridColumnWidth(gridKey, column, colIndex)}px;">`;
+                    }).join("")}
+                </colgroup>
+            `;
+        },
+
+        renderRunHistoryGridHeader(columns = []) {
+            const gridKey = "history";
+            const renderHeader = (column, index, label, className = "") => {
+                const width = this.getSqlGridColumnWidth(gridKey, column, index);
+                return `
+                    <th class="${className} data-sql-grid-resizable" title="${this.escapeHtml(label)}" style="width: ${width}px;">
+                        <span class="table-th-content">${this.escapeHtml(label)}</span>
+                        <span class="data-sql-grid-col-resizer" title="Resize column" onpointerdown="${PAGE_CODE}.beginSqlGridColumnResize(event, '${gridKey}', ${index}, '${this.escapeJs(column)}')"></span>
+                    </th>
+                `;
+            };
+            return [
+                renderHeader("__ROW_NO__", 0, this.getLabel("gridNo", "No"), "grid-row-no"),
+                renderHeader("__DETAIL__", 1, this.getLabel("historyDetail", "Detail"), "data-history-detail-column"),
+                ...columns.map((column, index) => renderHeader(
+                    column,
+                    index + 2,
+                    this.getRunHistoryColumnLabel(column)
+                ))
+            ].join("");
         },
 
         getRunHistoryColumnLabel(column) {
@@ -4058,7 +4113,7 @@ END;`;
                 panel.classList.toggle("is-active", panel.dataset.panel === tabName);
             });
             if (tabName === "history") {
-                this.loadRunHistory();
+                this.loadRunHistory({ useCache: true });
             }
         },
 
@@ -5811,6 +5866,7 @@ END;`;
             if (savedWidth > 0) return savedWidth;
             const columnName = String(column || "").toUpperCase();
             if (columnName === "__ROW_NO__") return 58;
+            if (columnName === "__DETAIL__") return 64;
             if (/(MESSAGE|EXPRESSION|SQL|ERROR|FEATURE|REASON)/.test(columnName)) return 360;
             if (/(CREATE|UPDATE|DATE|TIME|DT)$/.test(columnName)) return 170;
             if (/(OWNER|TABLE|COLUMN|RULE|MODEL|RESULT)/.test(columnName)) return 190;
@@ -5893,7 +5949,9 @@ END;`;
                 left += headerCells[index].getBoundingClientRect().width || headerCells[index].offsetWidth || 0;
             }
             Array.from(table.rows || []).forEach((row) => {
-                Array.from(row.children || []).forEach((cell, index) => {
+                const cells = Array.from(row.children || []);
+                if (cells.length !== headerCells.length) return;
+                cells.forEach((cell, index) => {
                     if (index >= visibleFreezeCount) return;
                     cell.classList.add("is-frozen-col");
                     if (index === visibleFreezeCount - 1) cell.classList.add("is-frozen-edge");

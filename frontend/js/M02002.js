@@ -39,6 +39,7 @@
         gridPageSizes: { data: 100, sql: 100 },
         gridTotals: { data: 0, sql: 0 },
         gridTotalPages: { data: 1, sql: 1 },
+        dataGridStateKey: "",
         sqlGridText: "",
         selectedCell: null,
         resizing: null,
@@ -84,6 +85,7 @@
             this.gridPageSizes = { data: 100, sql: 100 };
             this.gridTotals = { data: 0, sql: 0 };
             this.gridTotalPages = { data: 1, sql: 1 };
+            this.dataGridStateKey = "";
             this.sqlGridText = "";
             this.selectedCell = null;
             this.resizing = null;
@@ -703,8 +705,10 @@
         },
 
         async selectTable(owner, tableName) {
+            const previousTableKey = this.getSelectedTableKey();
             const table = this.tables.find((row) => row.OWNER === owner && row.TABLE_NAME === tableName);
             this.selectedTable = table || { OWNER: owner, TABLE_NAME: tableName, COMMENTS: "" };
+            if (previousTableKey !== this.getSelectedTableKey()) this.dataGridStateKey = "";
             this.focusedTableKey = `${owner}.${tableName}`;
             this.renderTableTree();
             this.updateSelectedMeta();
@@ -714,7 +718,7 @@
                 this.loadColumns()
             ]);
             if (this.activeTab === "data") {
-                await this.loadTableData();
+                await this.loadTableData(1, { force: true });
             }
         },
 
@@ -739,7 +743,7 @@
             });
 
             if (!this.selectedTable) return;
-            if (tabName === "data") {
+            if (tabName === "data" && !this.isDataGridCurrent()) {
                 this.loadTableData();
             }
             if (tabName === "sql" && !getContainerEl("#sqlEditor-M02002")?.value.trim()) {
@@ -785,9 +789,11 @@
             }
         },
 
-        async loadTableData(page = 1) {
+        async loadTableData(page = 1, options = {}) {
             if (!this.ensureSelectedTable()) return;
             const limit = this.gridPageSizes.data || 100;
+            const gridStateKey = this.getDataGridStateKey(limit);
+            if (!options.force && this.dataGridStateKey === gridStateKey) return;
             const grid = getContainerEl("#dataGrid-M02002");
             if (grid) grid.innerHTML = `<div class="table-empty">${this.escapeHtml(this.t("loadingData", "Loading data..."))}</div>`;
 
@@ -804,7 +810,9 @@
                 this.renderGrid("#dataGrid-M02002", json.data || [], "data", json.columns || []);
                 this.renderGridPager("data");
                 this.renderDataGridMessage(`${(json.data || []).length.toLocaleString()} rows selected.`);
+                this.dataGridStateKey = gridStateKey;
             } catch (error) {
+                this.dataGridStateKey = "";
                 this.renderError("#dataGrid-M02002", error.message);
             }
         },
@@ -896,7 +904,7 @@
 
         loadGridPage(gridKey, page) {
             const next = Math.max(1, Math.min(Number(this.gridTotalPages[gridKey] || 1), Number(page || 1)));
-            if (gridKey === "data") return this.loadTableData(next);
+            if (gridKey === "data") return this.loadTableData(next, { force: true });
             return this.executeSql(next, this.sqlGridText);
         },
 
@@ -1349,6 +1357,19 @@
                 owner: this.selectedTable?.OWNER || "",
                 tableName: this.selectedTable?.TABLE_NAME || ""
             };
+        },
+
+        getSelectedTableKey() {
+            return `${this.selectedTable?.OWNER || ""}.${this.selectedTable?.TABLE_NAME || ""}`;
+        },
+
+        getDataGridStateKey(limit = this.gridPageSizes.data || 100) {
+            return `${this.getSelectedTableKey()}|${Number(limit || 100)}`;
+        },
+
+        isDataGridCurrent() {
+            return Boolean(this.dataGridStateKey)
+                && this.dataGridStateKey === this.getDataGridStateKey();
         }
     };
 
