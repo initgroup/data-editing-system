@@ -3574,8 +3574,7 @@
             if (!safeColumns.length) return `<div class="table-empty">${this.escapeHtml(getText("No query results."))}</div>`;
             const columnWidths = this.violationSql?.columnWidths || {};
             const freezeColumns = Math.max(0, Math.min(Number(this.violationSql?.freezeColumns ?? 2), safeColumns.length));
-            const rowNoWidth = 48;
-            let left = rowNoWidth;
+            let left = 48;
             const columnMeta = safeColumns.map((column, index) => {
                 const width = this.getViolationSqlColumnWidth(column, columnWidths);
                 const frozen = index < freezeColumns;
@@ -3586,13 +3585,11 @@
             const rowOffset = (Math.max(1, Number(this.violationSql?.page || 1)) - 1) * Math.max(1, Number(this.violationSql?.pageSize || 50));
             return `
                 <div class="anly-work-violation-sql-grid-wrap">
-                    <table class="table-grid anly-work-violation-sql-grid">
-                        <colgroup>
-                            <col style="width: ${rowNoWidth}px;">
+                    <table class="table-grid anly-work-violation-sql-grid" data-grid-row-offset="${rowOffset}" data-standard-grid-freeze-columns="${freezeColumns}">
+                        <colgroup data-grid-widths-ready="Y">
                             ${columnMeta.map((meta) => `<col style="width: ${meta.width}px;">`).join("")}
                         </colgroup>
                         <thead><tr>
-                            <th class="is-frozen-col is-row-no" style="position: sticky; left: 0;">No</th>
                             ${columnMeta.map((meta) => `
                             <th class="is-resizable ${meta.frozen ? "is-frozen-col" : ""} ${this.getViolationSqlColumnClass(meta.column, keyColumns, ruleColumnSet)}" data-col-index="${meta.index}" style="${meta.stickyStyle}">
                                 <span class="table-th-content">${this.renderColumnAwareCell(meta.column, awareSummary)}</span>
@@ -3600,9 +3597,8 @@
                             </th>
                         `).join("")}</tr></thead>
                         <tbody>
-                            ${(rows || []).map((row, rowIndex) => `
+                            ${(rows || []).map((row) => `
                                 <tr>
-                                    <td class="is-frozen-col is-row-no" style="position: sticky; left: 0;">${this.formatNumber(rowOffset + rowIndex + 1)}</td>
                                     ${columnMeta.map((meta) => {
                                     const value = row?.[meta.column] ?? "";
                                     return `<td class="${meta.frozen ? "is-frozen-col" : ""} ${this.getViolationSqlColumnClass(meta.column, keyColumns, ruleColumnSet)}" data-col-index="${meta.index}" style="${meta.stickyStyle}" title="${this.escapeHtml(value)}">${this.renderColumnAwareCell(value, awareSummary)}</td>`;
@@ -3688,7 +3684,7 @@
             event.preventDefault();
             event.stopPropagation();
             const table = event.currentTarget?.closest?.("table");
-            const col = table?.querySelectorAll("col")?.[columnIndex];
+            const col = table?.querySelectorAll("col")?.[columnIndex + 1];
             const columns = this.orderViolationSqlColumns(this.violationSql?.columns || [], this.violationSql?.ruleColumns || []);
             const column = columns[columnIndex];
             if (!table || !col || !column) return;
@@ -4863,10 +4859,9 @@
             if (!edges.length) return `<div class="table-empty">${this.escapeHtml(getText("No network edges to display."))}</div>`;
             return `
                 <div class="anly-work-network-edge-table-wrap">
-                    <table class="anly-work-network-edge-table">
+                    <table class="table-grid anly-work-network-edge-table">
                         <thead>
                             <tr>
-                                <th>No</th>
                                 <th>${this.escapeHtml(getText("Cluster"))}</th>
                                 <th>${this.escapeHtml(getText("Column A"))}</th>
                                 <th>${this.escapeHtml(getText("Column B"))}</th>
@@ -4877,9 +4872,8 @@
                             </tr>
                         </thead>
                         <tbody>
-                            ${edges.slice(0, 120).map((edge, index) => `
+                            ${edges.slice(0, 120).map((edge) => `
                                 <tr>
-                                    <td>${this.formatNumber(index + 1)}</td>
                                     <td>${this.escapeHtml(edge.clusterId)}</td>
                                     <td>${this.renderColumnAwareCell(edge.source, summary)}</td>
                                     <td>${this.renderColumnAwareCell(edge.target, summary)}</td>
@@ -5666,7 +5660,7 @@
                                             <b>${this.formatNumber(item.VIOLATION_COUNT)} / ${this.formatNumber(item.RULE_COUNT)}</b>
                                         </button>
                                     `;
-                                }).join("") : `<span>${this.escapeHtml(getText("No Method summary to display."))}</span>`}
+                                }).join("") : `<div class="anly-work-rule-facet-empty">${this.escapeHtml(getText("No Method summary to display."))}</div>`}
                             </div>
                         </div>
                         <div class="anly-work-rule-facet-block is-condition">
@@ -5701,7 +5695,7 @@
                                         <b>${this.formatNumber(item.VIOLATION_COUNT)} / ${this.formatNumber(item.RULE_COUNT)}</b>
                                     </button>
                                     `;
-                                }).join("") : `<span>${this.escapeHtml(getText("No Target rules to display."))}</span>`}
+                                }).join("") : `<div class="anly-work-rule-facet-empty">${this.escapeHtml(getText("No Target rules to display."))}</div>`}
                             </div>
                         </div>
                         <div class="anly-work-rule-facet-block is-condition">
@@ -5753,7 +5747,7 @@
                             `;
                             }).join("")}
                         </div>
-                    ` : `<div class="table-empty">${this.escapeHtml(ruleFilterDisplay ? getText("No Symbolic Rule matches the searched RULE ID.") : getText("No Symbolic Rule violation summary to display."))}</div>`}
+                    ` : `<div class="table-empty anly-work-symbolic-violation-empty">${this.escapeHtml(ruleFilterDisplay ? getText("No Symbolic Rule matches the searched RULE ID.") : getText("No Symbolic Rule violation summary to display."))}</div>`}
                 </section>
             `;
         },
@@ -6279,7 +6273,7 @@
                 return Number.isFinite(numeric) ? this.formatSymbolicDiagnosticNumber(numeric) : this.escapeHtml(value);
             };
             container.innerHTML = `
-                <table class="anly-work-symbolic-raw-table">
+                <table class="table-grid anly-work-symbolic-raw-table">
                     <thead>
                         <tr>
                             ${columns.map((column) => `<th>${this.escapeHtml(column)}</th>`).join("")}
@@ -8198,17 +8192,15 @@
             const rowOffset = (page - 1) * pageSize;
             return `
                 <div class="anly-work-grid-wrap">
-                    <table class="table-grid anly-work-grid">
+                    <table class="table-grid anly-work-grid" data-grid-row-offset="${rowOffset}">
                         <thead>
                             <tr>
-                                <th class="anly-work-grid-no-col">${this.escapeHtml(getText("No"))}</th>
                                 ${safeColumns.map((column) => `<th>${this.renderColumnAwareCell(column, source)}</th>`).join("")}
                             </tr>
                         </thead>
                         <tbody>
-                            ${(rows || []).map((row, rowIndex) => `
+                            ${(rows || []).map((row) => `
                                 <tr>
-                                    <td class="anly-work-grid-no-col">${this.formatNumber(rowOffset + rowIndex + 1)}</td>
                                     ${safeColumns.map((column) => {
                                         const value = row?.[column] ?? "";
                                         return `<td title="${this.escapeHtml(value)}">${this.renderColumnAwareCell(value, source)}</td>`;

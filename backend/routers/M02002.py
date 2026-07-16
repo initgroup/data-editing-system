@@ -21,6 +21,7 @@ from backend.database_helper import execute_query, SqlLoader
 from backend.database import get_db_connection
 from backend.target_database import get_target_connection_id, get_target_db_connection
 from backend.auth_context import get_request_user_id
+from backend.paging import create_page_window, normalize_page_number, normalize_page_size
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -30,12 +31,14 @@ class TableRequest(BaseModel):
     owner: Optional[str] = None
     tableName: Optional[str] = None
     limit: Optional[int] = 100
+    page: Optional[int] = 1
     model_config = ConfigDict(extra="allow")
 
 
 class SqlRequest(BaseModel):
     sql: str
     limit: Optional[int] = 100
+    page: Optional[int] = 1
     model_config = ConfigDict(extra="allow")
 
 
@@ -155,27 +158,43 @@ def get_columns(req: TableRequest, request: Request):
 @router.post("/data")
 def get_table_data(req: TableRequest, request: Request):
     owner, table_name = require_table(req)
-    limit = normalize_limit(req.limit)
+    limit = normalize_page_size(req.limit)
+    page = normalize_page_number(req.page)
     qualified_table = quote_identifier(owner) + "." + quote_identifier(table_name)
     conn = None
     try:
         conn = get_target_db_connection(request)
+        count_result = execute_query(
+            conn,
+            "M02002_TABLE_DATA_COUNT",
+            {
+                "dynamicTable": qualified_table
+            }
+        )
+        if count_result.get("status") != "success":
+            raise HTTPException(status_code=500, detail=count_result.get("detail") or count_result.get("message") or "Data count query failed.")
+        total_rows = count_result.get("data", [])
+        total = int(total_rows[0].get("TOTAL_COUNT") or 0) if total_rows else 0
+        page_window = create_page_window(page, limit, total)
         result = execute_query(
             conn,
-            "M02002_TABLE_DATA",
+            "M02002_TABLE_DATA_PAGE",
             {
                 "dynamicTable": qualified_table,
-                "limit": limit
+                "offset": page_window.offset,
+                "limit": page_window.page_size
             }
         )
         if result.get("status") != "success":
             raise HTTPException(status_code=500, detail=result.get("detail") or result.get("message") or "Data query failed.")
-        return {
+        response = {
             "status": "success",
             "data": result.get("data", []),
             "columns": result.get("columns", []),
-            "total": result.get("total", 0)
+            "total": total
         }
+        response.update(page_window.response_metadata())
+        return response
     finally:
         if conn:
             conn.close()
@@ -184,26 +203,42 @@ def get_table_data(req: TableRequest, request: Request):
 @router.post("/sql")
 def execute_sql(req: SqlRequest, request: Request):
     sql = normalize_select_sql(req.sql)
-    limit = normalize_limit(req.limit)
+    limit = normalize_page_size(req.limit)
+    page = normalize_page_number(req.page)
     conn = None
     try:
         conn = get_target_db_connection(request)
+        count_result = execute_query(
+            conn,
+            "M02002_SQL_WORKSHEET_COUNT",
+            {
+                "dynamicSql": sql
+            }
+        )
+        if count_result.get("status") != "success":
+            raise HTTPException(status_code=500, detail=count_result.get("detail") or count_result.get("message") or "SQL count query failed.")
+        total_rows = count_result.get("data", [])
+        total = int(total_rows[0].get("TOTAL_COUNT") or 0) if total_rows else 0
+        page_window = create_page_window(page, limit, total)
         result = execute_query(
             conn,
-            "M02002_SQL_WORKSHEET",
+            "M02002_SQL_WORKSHEET_PAGE",
             {
                 "dynamicSql": sql,
-                "limit": limit
+                "offset": page_window.offset,
+                "limit": page_window.page_size
             }
         )
         if result.get("status") != "success":
             raise HTTPException(status_code=500, detail=result.get("detail") or result.get("message") or "SQL execution failed.")
-        return {
+        response = {
             "status": "success",
             "data": result.get("data", []),
             "columns": result.get("columns", []),
-            "total": result.get("total", 0)
+            "total": total
         }
+        response.update(page_window.response_metadata())
+        return response
     finally:
         if conn:
             conn.close()

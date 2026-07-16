@@ -25,6 +25,12 @@
     "noSqlAtCursor": "커서 위치에서 SQL 문장을 찾지 못했습니다.",
     "noData": "데이터가 없습니다.",
     "selectTableFirst": "테이블을 먼저 선택하세요."
+    , "gridTotal": "전체 {count}건"
+    , "freezeColumns": "틀 고정"
+    , "freezeColumnsTitle": "가로 스크롤 시 No 컬럼과 지정한 수만큼의 데이터 컬럼을 고정합니다."
+    , "exportExcelTitle": "현재 그리드 페이지를 Excel로 내보냅니다."
+    , "exportCsvTitle": "현재 그리드 페이지를 CSV로 내보냅니다."
+    , "exportJsonTitle": "현재 그리드 페이지를 JSON으로 내보냅니다."
   },
   "selectors": {
     "text": {

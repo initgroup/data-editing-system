@@ -3,7 +3,6 @@
         <header class="work-context-header" onclick="__PAGE_CODE__.toggleWorkContextFromHeader(event)" role="button" tabindex="0" onkeydown="__PAGE_CODE__.handleWorkContextHeaderKeydown(event)">
             <div class="work-context-title-row">
                 <span><strong data-label-key="contextHeader">Project Scenario</strong> <span data-label-key="contextHeaderDesc">Select the required project and scenario for this menu.</span></span>
-                <span><strong data-label-key="tableHeader">Scenario Tables</strong> <span data-label-key="tableHeaderDesc">Tables registered to the selected scenario.</span></span>
                 <span id="workContextSummary-__PAGE_CODE__" class="work-context-summary" data-label-key="contextSummaryEmpty">No context selected.</span>
             </div>
             <div class="scenario-table-actions">
@@ -30,7 +29,6 @@
                 </select>
             </label>
         </div>
-        <div id="scenarioTablesGrid-__PAGE_CODE__" class="scenario-table-grid"></div>
     </section>
 
     <nav class="table-tabs data-work-tabs" aria-label="Data work workspace tabs">
@@ -137,12 +135,17 @@
                             <input id="workJobDesc-__PAGE_CODE__" class="env-field" type="text" oninput="__PAGE_CODE__.updateCurrentJobField('jobDesc', this.value)">
                         </label>
                         <label class="data-target-owner-field">
-                            <span data-label-key="targetOwner">Target Owner</span>
+                            <span class="required-title" data-label-key="targetOwner">Target Owner</span>
                             <input id="targetOwner-__PAGE_CODE__" class="env-field" type="text" readonly>
                         </label>
                         <label class="data-target-table-field">
-                            <span data-label-key="targetTable">Target Table</span>
-                            <input id="targetTable-__PAGE_CODE__" class="env-field" type="text" readonly>
+                            <span class="required-title" data-label-key="targetTable">Target Table</span>
+                            <span class="data-target-picker-control">
+                                <input id="targetTable-__PAGE_CODE__" class="env-field" type="text" readonly>
+                                <button type="button" id="selectTargetTable-__PAGE_CODE__" class="table-icon-btn" title="Select a scenario table" data-title-key="selectTargetTableTitle" onclick="__PAGE_CODE__.openTargetTablePicker()">
+                                    <i class="fas fa-ellipsis-h"></i>
+                                </button>
+                            </span>
                         </label>
                         <label class="data-use-field">
                             <span data-label-key="use">Use</span>
@@ -356,16 +359,42 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
         </section>
     </div>
 
+    <div id="targetTablePickerLayer-__PAGE_CODE__" class="data-help-layer" hidden>
+        <section class="data-help-dialog data-target-table-picker-dialog" role="dialog" aria-modal="true" aria-labelledby="targetTablePickerTitle-__PAGE_CODE__">
+            <header>
+                <h2 id="targetTablePickerTitle-__PAGE_CODE__" data-label-key="selectTargetTable">Select Target Table</h2>
+                <button type="button" class="table-icon-btn" title="Close" data-title-key="closeTitle" onclick="__PAGE_CODE__.closeTargetTablePicker()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </header>
+            <div class="data-help-content data-target-table-picker-content">
+                <p data-label-key="selectTargetTableHint">Select a table registered to the current scenario. The target Owner and Table will be changed together.</p>
+                <div class="data-target-table-picker-grid">
+                    <div class="data-target-table-picker-head" aria-hidden="true">
+                        <span data-label-key="owner">Owner</span>
+                        <span data-label-key="table">Table</span>
+                        <span data-label-key="comment">Comment</span>
+                        <span data-label-key="status">Status</span>
+                    </div>
+                    <div id="targetTablePickerList-__PAGE_CODE__" class="data-target-table-picker-list"></div>
+                </div>
+            </div>
+        </section>
+    </div>
+
     <section class="table-tab-panel data-tool-panel" data-panel="data">
         <div class="data-table-workbench">
             <div id="dataEditTarget-__PAGE_CODE__" class="data-edit-target-bar" aria-label="Editable data target">
                 <span class="data-edit-target-item">
-                    <span class="data-edit-target-label">Owner</span>
-                    <strong id="dataEditOwner-__PAGE_CODE__">-</strong>
+                    <span class="data-edit-target-label">SELECT</span>
+                    <span class="data-select-columns-control">
+                        <input id="dataSelectColumns-__PAGE_CODE__" class="env-field data-select-columns-input" type="text" value="*" placeholder="* or COL001, COL002" aria-label="SELECT columns">
+                        <button type="button" class="table-btn data-select-columns-picker-btn" title="Select columns" data-title-key="selectColumnsTitle" onclick="__PAGE_CODE__.openDataSelectColumnsDialog()">...</button>
+                    </span>
                 </span>
                 <span class="data-edit-target-item">
-                    <span class="data-edit-target-label">Table</span>
-                    <strong id="dataEditTable-__PAGE_CODE__">-</strong>
+                    <span class="data-edit-target-label">FROM</span>
+                    <strong id="dataEditTargetObject-__PAGE_CODE__">-</strong>
                 </span>
             </div>
             <div class="table-toolbar query-filter-toolbar data-edit-toolbar">
@@ -380,93 +409,137 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                     </label>
                 </div>
                 <div class="data-query-actions">
-                    <div class="data-query-options">
-                        <label class="table-limit-control data-freeze-control" title="Freeze No plus this many data columns while scrolling horizontally">
-                            <span>Freeze</span>
-                            <input id="dataFreezeColumns-__PAGE_CODE__" type="number" min="0" max="50" value="0" onchange="__PAGE_CODE__.applyEditableDataFrozenColumns()" oninput="__PAGE_CODE__.applyEditableDataFrozenColumns()">
-                        </label>
-                        <label class="table-limit-control">
-                            <span data-label-key="rows">Rows</span>
-                            <input id="dataLimit-__PAGE_CODE__" type="number" min="1" max="1000" value="100">
-                        </label>
-                    </div>
-                    <button type="button" class="table-btn data-query-button" onclick="__PAGE_CODE__.loadEditableTableData()">
+                    <button type="button" class="table-btn data-query-button" onclick="__PAGE_CODE__.loadEditableTableData(1)">
                         <i class="fas fa-play"></i>
                         <span data-label-key="queryData">Query Data</span>
                     </button>
                 </div>
             </div>
-            <div class="data-grid-topbar">
-                <div id="dataEditMessage-__PAGE_CODE__" class="table-empty data-grid-message" aria-live="polite" hidden></div>
-                <div class="data-grid-actions">
-                    <button type="button" id="dataSaveUpdates-__PAGE_CODE__" class="table-btn" onclick="__PAGE_CODE__.saveEditableTableData()" disabled>
-                        <i class="fas fa-save"></i>
-                        <span data-label-key="saveUpdates">Save Updates</span>
-                    </button>
-                    <button type="button" id="dataFillColumn-__PAGE_CODE__" class="table-icon-btn data-fill-column-btn" title="Paste the focused cell value downward in the current grid order" onclick="__PAGE_CODE__.applyActiveEditableValueToAllRows()" disabled>
-                        <i class="fas fa-fill-drip"></i>
-                    </button>
+            <div class="grid-command-area">
+                <div id="dataGridExtraToolbar-__PAGE_CODE__" class="grid-command-extra grid-command-extra-actions">
+                    <div class="data-grid-actions">
+                        <button type="button" id="dataSaveUpdates-__PAGE_CODE__" class="table-btn" onclick="__PAGE_CODE__.saveEditableTableData()" disabled>
+                            <i class="fas fa-save"></i>
+                            <span data-label-key="saveUpdates">Save Updates</span>
+                        </button>
+                        <button type="button" id="dataCopyBaseToFinal-__PAGE_CODE__" class="table-btn data-copy-prediction-btn" title="Copy BASE_PREDICTED_TYPE values to FINAL_PREDICTED_TYPE on this grid page" data-title-key="copyBaseToFinalTitle" onclick="__PAGE_CODE__.copyPredictedTypeColumnToFinal('BASE_PREDICTED_TYPE')" disabled>
+                            <span data-label-key="copyBaseToFinal">BASE → FINAL</span>
+                        </button>
+                        <button type="button" id="dataCopyModelToFinal-__PAGE_CODE__" class="table-btn data-copy-prediction-btn" title="Copy MODL_PREDICTED_TYPE values to FINAL_PREDICTED_TYPE on this grid page" data-title-key="copyModelToFinalTitle" onclick="__PAGE_CODE__.copyPredictedTypeColumnToFinal('MODL_PREDICTED_TYPE')" disabled>
+                            <span data-label-key="copyModelToFinal">MODL → FINAL</span>
+                        </button>
+                        <button type="button" id="dataFillColumn-__PAGE_CODE__" class="table-icon-btn data-fill-column-btn" title="Paste the focused cell value downward in the current grid order" data-title-key="pasteFocusedValueDownTitle" onclick="__PAGE_CODE__.applyActiveEditableValueToAllRows()" disabled>
+                            <i class="fas fa-fill-drip"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="grid-command-toolbar">
+                    <div class="data-grid-topbar">
+                        <div class="data-grid-status">
+                            <div id="dataEditPager-__PAGE_CODE__" class="grid-pager-host" hidden></div>
+                            <div id="dataEditMessage-__PAGE_CODE__" class="table-empty data-grid-message" aria-live="polite" hidden></div>
+                        </div>
+                        <span class="grid-export-actions" aria-label="Grid export">
+                            <button type="button" class="table-icon-btn" title="Export current page as Excel" data-title-key="exportExcelTitle" onclick="__PAGE_CODE__.exportEditableDataGrid('excel')">
+                                <i class="fas fa-file-excel"></i>
+                            </button>
+                            <button type="button" class="table-icon-btn" title="Export current page as CSV" data-title-key="exportCsvTitle" onclick="__PAGE_CODE__.exportEditableDataGrid('csv')">
+                                <i class="fas fa-file-csv"></i>
+                            </button>
+                            <button type="button" class="table-icon-btn" title="Export current page as JSON" data-title-key="exportJsonTitle" onclick="__PAGE_CODE__.exportEditableDataGrid('json')">
+                                <i class="fas fa-file-code"></i>
+                            </button>
+                        </span>
+                    </div>
                 </div>
             </div>
             <div id="dataEditGrid-__PAGE_CODE__" class="table-result-grid data-edit-grid"></div>
         </div>
     </section>
 
+    <div id="dataSelectColumnsLayer-__PAGE_CODE__" class="data-help-layer" hidden>
+        <section class="data-help-dialog data-select-columns-dialog" role="dialog" aria-modal="true" aria-labelledby="dataSelectColumnsTitle-__PAGE_CODE__">
+            <header>
+                <h2 id="dataSelectColumnsTitle-__PAGE_CODE__" data-label-key="selectColumns">Select columns</h2>
+                <button type="button" class="table-icon-btn" title="Close" data-title-key="closeTitle" onclick="__PAGE_CODE__.closeDataSelectColumnsDialog()">
+                    <i class="fas fa-xmark"></i>
+                </button>
+            </header>
+            <div class="data-select-columns-dialog-body">
+                <p id="dataSelectColumnsTarget-__PAGE_CODE__" class="data-select-columns-target"></p>
+                <div id="dataSelectColumnsList-__PAGE_CODE__" class="data-select-columns-list"></div>
+            </div>
+            <footer>
+                <button type="button" class="env-btn" onclick="__PAGE_CODE__.closeDataSelectColumnsDialog()"><span data-label-key="close">Close</span></button>
+            </footer>
+        </section>
+    </div>
+
     <section class="table-tab-panel data-tool-panel" data-panel="sql">
         <div class="sql-workbench data-sql-workbench">
-            <div class="sql-toolbar">
-                <button type="button" class="table-icon-btn sql-tool-icon-btn sql-run-btn" title="Run SQL (Ctrl+Enter)" aria-label="Run SQL" onclick="__PAGE_CODE__.executeSql('#sqlEditor-__PAGE_CODE__', '#sqlGrid-__PAGE_CODE__', 'sql')">
-                    <i class="fas fa-play"></i>
-                </button>
-                <button type="button" class="table-icon-btn sql-tool-icon-btn sql-run-all-btn" title="Run All SQL (F5)" aria-label="Run All SQL" onclick="__PAGE_CODE__.executeFullSql('#sqlEditor-__PAGE_CODE__', '#sqlGrid-__PAGE_CODE__', 'sql')">
-                    <i class="fas fa-file-lines"></i>
-                </button>
-                <button type="button" id="sqlTxCommit-__PAGE_CODE__" class="table-btn" onclick="__PAGE_CODE__.commitSqlTransaction()" disabled>
-                    <i class="fas fa-check"></i>
-                    <span data-label-key="commitTransaction">Commit</span>
-                </button>
-                <button type="button" id="sqlTxRollback-__PAGE_CODE__" class="table-btn" onclick="__PAGE_CODE__.rollbackSqlTransaction()" disabled>
-                    <i class="fas fa-rotate-left"></i>
-                    <span data-label-key="rollbackTransaction">Rollback</span>
-                </button>
-                <span class="data-sql-toolbar-spacer"></span>
-                <span class="data-sql-toolbar-options">
-                    <span id="sqlTxStatus-__PAGE_CODE__" class="table-empty" data-label-key="transactionOff">No active transaction</span>
-                    <label class="table-limit-control data-sql-freeze-control" title="Freeze No plus this many data columns while scrolling horizontally">
-                        <span data-label-key="freezeColumns">Freeze</span>
-                        <input id="sqlFreezeColumns-__PAGE_CODE__" type="number" min="0" max="50" value="0" onchange="__PAGE_CODE__.applySqlGridFrozenColumns('sql')" oninput="__PAGE_CODE__.applySqlGridFrozenColumns('sql')">
-                    </label>
-                    <label class="table-limit-control">
-                        <span data-label-key="rows">Rows</span>
-                        <input id="sqlLimit-__PAGE_CODE__" type="number" min="1" max="1000" value="100">
-                    </label>
-                </span>
-            </div>
             <div id="userSqlJobContext-__PAGE_CODE__" class="data-user-sql-context"></div>
-            <textarea id="sqlEditor-__PAGE_CODE__" class="sql-editor data-sql-editor" spellcheck="false" aria-label="User SQL worksheet"></textarea>
-            <div class="data-sql-result-header">
-                <div id="sqlMessage-__PAGE_CODE__" class="table-empty" aria-live="polite" hidden></div>
-                <div class="table-export-actions data-sql-export-actions" aria-label="Export User SQL result">
-                    <button type="button" class="table-icon-btn export-excel" title="Export Excel" onclick="__PAGE_CODE__.exportSqlGrid('excel')">
-                        <i class="fas fa-file-excel"></i>
-                    </button>
-                    <button type="button" class="table-icon-btn" title="Export CSV" onclick="__PAGE_CODE__.exportSqlGrid('csv')">
-                        <i class="fas fa-file-csv"></i>
-                    </button>
-                    <button type="button" class="table-icon-btn" title="Export TSV" onclick="__PAGE_CODE__.exportSqlGrid('tsv')">
-                        <i class="fas fa-file-lines"></i>
-                    </button>
+            <div class="grid-command-area data-sql-editor-command-area">
+                <div class="grid-command-toolbar sql-toolbar data-sql-editor-toolbar">
+                    <span class="sql-toolbar-actions">
+                        <button type="button" class="table-icon-btn sql-tool-icon-btn sql-run-btn" title="Run SQL (Ctrl+Enter)" aria-label="Run SQL" onclick="__PAGE_CODE__.executeSql('#sqlEditor-__PAGE_CODE__', '#sqlGrid-__PAGE_CODE__', 'sql')">
+                            <i class="fas fa-play"></i>
+                        </button>
+                        <button type="button" class="table-icon-btn sql-tool-icon-btn sql-run-all-btn" title="Run All SQL (F5)" aria-label="Run All SQL" onclick="__PAGE_CODE__.executeFullSql('#sqlEditor-__PAGE_CODE__', '#sqlGrid-__PAGE_CODE__', 'sql')">
+                            <i class="fas fa-file-lines"></i>
+                        </button>
+                        <button type="button" id="sqlTxCommit-__PAGE_CODE__" class="table-btn" onclick="__PAGE_CODE__.commitSqlTransaction()" disabled>
+                            <i class="fas fa-check"></i>
+                            <span data-label-key="commitTransaction">Commit</span>
+                        </button>
+                        <button type="button" id="sqlTxRollback-__PAGE_CODE__" class="table-btn" onclick="__PAGE_CODE__.rollbackSqlTransaction()" disabled>
+                            <i class="fas fa-rotate-left"></i>
+                            <span data-label-key="rollbackTransaction">Rollback</span>
+                        </button>
+                    </span>
+                    <span class="data-sql-toolbar-spacer"></span>
+                    <span class="data-sql-toolbar-options">
+                        <span id="sqlTxStatus-__PAGE_CODE__" class="table-empty" data-label-key="transactionOff">No active transaction</span>
+                    </span>
                 </div>
             </div>
-            <div id="sqlGrid-__PAGE_CODE__" class="table-result-grid"></div>
+            <textarea id="sqlEditor-__PAGE_CODE__" class="sql-editor data-sql-editor" spellcheck="false" aria-label="User SQL worksheet"></textarea>
+            <div class="grid-command-area data-sql-grid-command-area">
+                <div class="grid-command-toolbar">
+                    <div class="data-grid-topbar">
+                        <div class="data-grid-status">
+                            <div id="sqlGridPager-__PAGE_CODE__" class="grid-pager-host" hidden></div>
+                            <div id="sqlMessage-__PAGE_CODE__" class="table-empty data-grid-message" aria-live="polite" hidden></div>
+                        </div>
+                        <span class="grid-export-actions" aria-label="Export User SQL result">
+                            <button type="button" class="table-icon-btn export-excel" title="Export current page as Excel" data-title-key="exportExcelTitle" onclick="__PAGE_CODE__.exportSqlGrid('excel')">
+                                <i class="fas fa-file-excel"></i>
+                            </button>
+                            <button type="button" class="table-icon-btn" title="Export current page as CSV" data-title-key="exportCsvTitle" onclick="__PAGE_CODE__.exportSqlGrid('csv')">
+                                <i class="fas fa-file-csv"></i>
+                            </button>
+                            <button type="button" class="table-icon-btn" title="Export current page as JSON" data-title-key="exportJsonTitle" onclick="__PAGE_CODE__.exportSqlGrid('json')">
+                                <i class="fas fa-file-code"></i>
+                            </button>
+                        </span>
+                    </div>
+                </div>
+            </div>
+            <div id="sqlGrid-__PAGE_CODE__" class="table-result-grid data-edit-grid data-sql-grid"></div>
         </div>
     </section>
 
     <section class="table-tab-panel data-tool-panel" data-panel="history">
-        <div class="data-panel-toolbar">
-            <button type="button" class="table-icon-btn" title="Refresh history" aria-label="Refresh history" onclick="__PAGE_CODE__.loadRunHistory()">
-                <i class="fas fa-sync-alt"></i>
-            </button>
+        <div class="grid-command-area data-history-command-area">
+            <div class="grid-command-toolbar">
+                <div class="data-grid-topbar">
+                    <div class="data-grid-status">
+                        <div id="runHistoryCount-__PAGE_CODE__" class="table-empty data-grid-message" aria-live="polite"></div>
+                    </div>
+                    <button type="button" class="table-icon-btn" title="Refresh history" data-title-key="refreshHistory" aria-label="Refresh history" onclick="__PAGE_CODE__.loadRunHistory()">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+            </div>
         </div>
         <div id="runHistoryGrid-__PAGE_CODE__" class="table-result-grid data-history-grid"></div>
     </section>

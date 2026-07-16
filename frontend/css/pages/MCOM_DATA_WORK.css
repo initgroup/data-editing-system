@@ -96,7 +96,7 @@
 .data-work-page:not(.flow-work-page) .data-work-panel.is-active,
 .data-work-page:not(.flow-work-page) .data-tool-panel.is-active {
     flex: 0 0 auto;
-    height: clamp(540px, calc(100vh - 230px), 940px);
+    height: clamp(540px, calc(100vh - 110px), 1060px);
     max-height: none;
     min-height: 0;
     overflow-x: hidden;
@@ -156,6 +156,19 @@
 .data-work-page:not(.flow-work-page) .data-target-table-field {
     grid-column: 16 / -1;
     grid-row: 1;
+}
+
+.data-work-page:not(.flow-work-page) .data-target-picker-control {
+    align-items: stretch;
+    display: grid;
+    gap: 6px;
+    grid-template-columns: minmax(0, 1fr) 34px;
+    min-width: 0;
+}
+
+.data-work-page:not(.flow-work-page) .data-target-picker-control .table-icon-btn {
+    height: 34px;
+    width: 34px;
 }
 
 .data-work-page:not(.flow-work-page) .data-job-name-field {
@@ -370,6 +383,125 @@
     height: auto;
     max-height: none;
     min-height: 240px;
+}
+
+/* Keep the run-history toolbar and horizontal scrollbar in the visible tab area. */
+.data-work-page:not(.flow-work-page) .data-tool-panel[data-panel="history"].is-active {
+    display: flex;
+    flex-direction: column;
+    height: clamp(280px, calc(100vh - 300px), 640px);
+    max-height: calc(100vh - 240px);
+    min-height: 280px;
+    overflow: hidden;
+}
+
+.data-work-page:not(.flow-work-page) .data-tool-panel[data-panel="history"] > .data-history-command-area {
+    flex: 0 0 auto;
+}
+
+.data-work-page:not(.flow-work-page) .data-tool-panel[data-panel="history"] > .data-history-grid {
+    border: 1px solid #d1d5db;
+    box-sizing: border-box;
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 232px;
+    overflow: auto;
+    scrollbar-gutter: stable;
+}
+
+.data-work-page:not(.flow-work-page) .data-history-grid .data-history-table {
+    min-width: max-content;
+}
+
+.data-work-page:not(.flow-work-page) .data-history-grid .data-history-table th {
+    background: #f8fafc;
+    position: sticky;
+    top: 0;
+    z-index: 4;
+}
+
+.data-work-page:not(.flow-work-page) .data-history-grid .data-history-table th.grid-row-no {
+    min-width: 48px;
+    width: 48px;
+}
+
+.data-work-page:not(.flow-work-page) .data-history-detail-column {
+    min-width: 64px;
+    text-align: center;
+    width: 64px;
+}
+
+.data-work-page:not(.flow-work-page) .data-run-inline-detail-row > td {
+    background: #fff;
+    padding: 0;
+}
+
+.data-work-page:not(.flow-work-page) .data-run-inline-detail {
+    box-sizing: border-box;
+    display: grid;
+    gap: 10px;
+    min-width: 100%;
+    padding: 12px 14px 14px;
+    width: 100%;
+}
+
+.data-work-page:not(.flow-work-page) .data-run-inline-detail > header,
+.data-work-page:not(.flow-work-page) .data-run-history-message {
+    align-items: center;
+    display: flex;
+    gap: 8px;
+    justify-content: space-between;
+    min-width: 0;
+}
+
+.data-work-page:not(.flow-work-page) .data-run-history-detail-actions {
+    display: inline-flex;
+    flex: 0 0 auto;
+    gap: 6px;
+}
+
+.data-work-page:not(.flow-work-page) .data-run-history-message {
+    align-items: flex-start;
+    background: #f8fafc;
+    border: 1px solid #dbe3ee;
+    padding: 10px;
+}
+
+.data-work-page:not(.flow-work-page) .data-run-history-message strong {
+    flex: 0 0 auto;
+}
+
+.data-work-page:not(.flow-work-page) .data-run-history-message pre {
+    flex: 1 1 auto;
+    margin: 0;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+}
+
+.data-work-page:not(.flow-work-page) .data-run-history-detail-grid {
+    display: grid;
+    gap: 8px;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.data-work-page:not(.flow-work-page) .data-run-history-detail-grid > div {
+    border: 1px solid #dbe3ee;
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+    padding: 8px 10px;
+}
+
+.data-work-page:not(.flow-work-page) .data-run-history-detail-grid strong {
+    color: #64748b;
+    font-size: 11px;
+}
+
+.data-work-page:not(.flow-work-page) .data-run-history-detail-grid span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .data-work-page:not(.flow-work-page) .data-sql-workbench .table-result-grid {
@@ -734,6 +866,102 @@
     grid-column: 1 / -1;
 }
 
+.data-work-page .data-target-table-picker-dialog {
+    max-height: min(620px, calc(100vh - 32px));
+    width: min(980px, calc(100vw - 32px));
+}
+
+.data-work-page .data-target-table-picker-content {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.data-work-page .data-target-table-picker-content > p {
+    color: #475569;
+    flex: 0 0 auto;
+    font-size: 13px;
+    line-height: 1.5;
+    margin: 0;
+}
+
+.data-work-page .data-target-table-picker-grid {
+    border: 1px solid #cbd5e1;
+    min-height: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
+.data-work-page .data-target-table-picker-head,
+.data-work-page .data-target-table-picker-row {
+    display: grid;
+    grid-template-columns: minmax(130px, 0.9fr) minmax(240px, 1.5fr) minmax(280px, 2fr) 72px;
+    min-width: 780px;
+}
+
+.data-work-page .data-target-table-picker-head {
+    background: #f1f5f9;
+    border-bottom: 1px solid #cbd5e1;
+    color: #334155;
+    font-size: 12px;
+    font-weight: 800;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
+.data-work-page .data-target-table-picker-head > span,
+.data-work-page .data-target-table-picker-row > span {
+    align-items: center;
+    display: flex;
+    min-width: 0;
+    overflow: hidden;
+    padding: 8px 10px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.data-work-page .data-target-table-picker-list {
+    max-height: min(420px, calc(100dvh - 230px));
+    min-height: 52px;
+    min-width: 780px;
+    overflow-y: auto;
+}
+
+.data-work-page .data-target-table-picker-row {
+    background: #fff;
+    border: 0;
+    border-bottom: 1px solid #e2e8f0;
+    color: #0f172a;
+    cursor: pointer;
+    font: inherit;
+    padding: 0;
+    text-align: left;
+    width: 100%;
+}
+
+.data-work-page .data-target-table-picker-row:hover,
+.data-work-page .data-target-table-picker-row:focus-visible {
+    background: #eff6ff;
+    outline: none;
+}
+
+.data-work-page .data-target-table-picker-row.is-selected {
+    background: #dbeafe;
+    box-shadow: inset 3px 0 0 #2563eb;
+}
+
+.data-work-page .data-target-table-picker-list .table-empty,
+.data-work-page .data-target-table-picker-list .table-error {
+    align-items: center;
+    display: flex;
+    justify-content: center;
+    min-height: 52px;
+    padding: 12px;
+}
+
 @media (max-width: 760px) {
     .data-work-page .data-job-import-dialog {
         max-height: calc(100dvh - 16px);
@@ -746,5 +974,10 @@
 
     .data-work-page .data-job-import-job-field {
         grid-column: auto;
+    }
+
+    .data-work-page .data-target-table-picker-dialog {
+        max-height: calc(100dvh - 16px);
+        width: calc(100vw - 16px);
     }
 }

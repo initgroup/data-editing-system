@@ -41,13 +41,18 @@
             flowJobGroupCollapsed: new Set(),
             flowVariables: [],
             flowRunHistoryRows: [],
+            flowRunHistoryColumnWidths: {},
             flowNodeRunResultRows: [],
+            expandedRunPlanFlowRunIds: new Set(),
+            flowNodeRunResultsByFlowRunId: new Map(),
             flowResultSqlGridData: { rows: [], columns: [] },
             flowResultSqlColumnWidths: {},
             flowResultSqlFrozenColumns: 0,
-            flowResultSqlResizeState: null,
-            flowResultSqlResizeMoveBound: null,
-            flowResultSqlResizeUpBound: null,
+            flowResultSqlPage: 1,
+            flowResultSqlPageSize: 100,
+            flowResultSqlTotal: 0,
+            flowResultSqlTotalPages: 1,
+            flowResultSqlQuery: "",
             activeRunPlanFlowRunId: "",
             activeRunPlanLoadedId: "",
             selectedProjectId: "",
@@ -125,12 +130,12 @@
                 this.setupFlowDesigner();
                 this.setFlowInspectorCollapsed(true);
                 this.setFlowCanvasSelectionMode(false);
+                this.renderDashedConnectionMode();
                 this.isInit = true;
             },
 
             destroy() {
                 this.closeNodeRunParamsLayer();
-                this.endFlowResultSqlColumnResize();
                 this.disposePaletteDragImage();
                 this.restoreSidebarsAfterCanvasMaximize();
                 this.teardownFlowDesigner();
@@ -148,11 +153,18 @@
                 this.flowJobGroupCollapsed = new Set();
                 this.flowVariables = [];
                 this.flowRunHistoryRows = [];
+                this.flowRunHistoryColumnWidths = {};
                 this.flowNodeRunResultRows = [];
+                this.expandedRunPlanFlowRunIds = new Set();
+                this.flowNodeRunResultsByFlowRunId = new Map();
                 this.flowResultSqlGridData = { rows: [], columns: [] };
                 this.flowResultSqlColumnWidths = {};
                 this.flowResultSqlFrozenColumns = 0;
-                this.flowResultSqlResizeState = null;
+                this.flowResultSqlPage = 1;
+                this.flowResultSqlPageSize = 100;
+                this.flowResultSqlTotal = 0;
+                this.flowResultSqlTotalPages = 1;
+                this.flowResultSqlQuery = "";
                 this.activeRunPlanFlowRunId = "";
                 this.activeRunPlanLoadedId = "";
                 this.selectedProjectId = "";
@@ -3067,7 +3079,6 @@
                     button.disabled = false;
                     button.setAttribute("aria-disabled", hasNode ? "false" : "true");
                 });
-                this.renderDashedConnectionMode();
             },
 
             getContextMenuAction(button) {
@@ -3192,7 +3203,7 @@
                     nodeIds: actionNodeIds,
                     nodes: actionNodes
                 });
-                if (handled && action !== "toggleDashedConnection") {
+                if (handled) {
                     this.hideCanvasContextMenu();
                 }
             },
@@ -3209,7 +3220,6 @@
                     runFromSelectedNode: () => this.runSelectedNode({ downstream: true }),
                     duplicateNode: () => this.duplicateSelectedNode({ nodeIds: menuNodeIds }),
                     deleteNode: () => this.removeSelectedNode(menuNodes.length ? menuNodes : menuNodeIds),
-                    toggleDashedConnection: () => this.toggleDashedConnectionMode(),
                     autoLayout: () => this.autoLayoutFlow(),
                     treeLayout: () => this.autoLayoutFlow(),
                     autoConnectByX: () => this.applyAutoConnectionsByX(),
@@ -3289,13 +3299,17 @@
             },
 
             renderDashedConnectionMode() {
-                const button = getContainerEl(`#flowCanvasMenu-${PAGE_CODE}`)?.querySelector('[data-flow-menu-action="toggleDashedConnection"]');
+                const button = getContainerEl(`#flowDashedConnectionMode-${PAGE_CODE}`);
                 if (!button) return;
                 button.classList.toggle("is-active", this.dashedConnectionMode);
-                const label = button.querySelector("span");
-                if (label) {
-                    label.textContent = `Dashed on-complete: ${this.dashedConnectionMode ? "ON" : "OFF"}`;
-                }
+                button.setAttribute("aria-pressed", String(this.dashedConnectionMode));
+                button.dataset.titleKey = this.dashedConnectionMode
+                    ? "dashedConnectionModeTitle"
+                    : "solidConnectionModeTitle";
+                button.querySelector(".flow-connection-mode-icon")?.classList.toggle("is-dashed", this.dashedConnectionMode);
+                button.setAttribute("title", this.dashedConnectionMode
+                    ? this.getLabel("dashedConnectionModeTitle", "Dashed on-complete connection mode")
+                    : this.getLabel("solidConnectionModeTitle", "Solid connection mode"));
             },
 
             createContextNode(nodeType, title, subtitle) {
@@ -5541,7 +5555,9 @@
             setFlowRunHistoryCount(count = 0) {
                 const countEl = getContainerEl(`#flowRunHistoryCount-${PAGE_CODE}`);
                 if (!countEl) return;
-                countEl.innerHTML = this.renderListFooter(count);
+                const formattedCount = Number(count || 0).toLocaleString();
+                const template = this.getMessage("historyTotal", "Total {count}");
+                countEl.textContent = this.formatText(template, { count: formattedCount });
             },
             async loadFlowRunHistory(options = {}) {
                 const container = getContainerEl(`#flowRunHistoryGrid-${PAGE_CODE}`);
@@ -5613,37 +5629,58 @@
                     container.innerHTML = `<div class="table-empty">No run history.</div>`;
                     return;
                 }
-                if (this.activeRunPlanFlowRunId && !this.flowRunHistoryRows.some((row) => String(row.FLOW_RUN_ID || "") === String(this.activeRunPlanFlowRunId))) {
+                const availableRunIds = new Set(this.flowRunHistoryRows.map((row) => String(row.FLOW_RUN_ID || "")));
+                this.expandedRunPlanFlowRunIds = new Set(
+                    Array.from(this.expandedRunPlanFlowRunIds || []).filter((flowRunId) => availableRunIds.has(String(flowRunId)))
+                );
+                Array.from(this.flowNodeRunResultsByFlowRunId?.keys?.() || []).forEach((flowRunId) => {
+                    if (!availableRunIds.has(String(flowRunId))) this.flowNodeRunResultsByFlowRunId.delete(flowRunId);
+                });
+                if (this.activeRunPlanFlowRunId && !availableRunIds.has(String(this.activeRunPlanFlowRunId))) {
                     this.activeRunPlanFlowRunId = "";
                     this.flowNodeRunResultRows = [];
                 }
                 container.innerHTML = `
-                    <table class="table-grid">
+                    <table class="table-grid flow-run-history-grid">
+                        <colgroup>
+                            <col style="width: ${this.getFlowHistoryColumnWidth("__ROW_NO__", 48)}px;">
+                            <col style="width: ${this.getFlowHistoryColumnWidth("DETAIL", 64)}px;">
+                            <col style="width: ${this.getFlowHistoryColumnWidth("RUN_ID", 92)}px;">
+                            <col style="width: ${this.getFlowHistoryColumnWidth("FLOW", 200)}px;">
+                            <col style="width: ${this.getFlowHistoryColumnWidth("TYPE", 128)}px;">
+                            <col style="width: ${this.getFlowHistoryColumnWidth("STATUS", 108)}px;">
+                            <col style="width: ${this.getFlowHistoryColumnWidth("MESSAGE", 320)}px;">
+                            <col style="width: ${this.getFlowHistoryColumnWidth("STARTED", 172)}px;">
+                            <col style="width: ${this.getFlowHistoryColumnWidth("FINISHED", 172)}px;">
+                            <col style="width: ${this.getFlowHistoryColumnWidth("ELAPSED", 116)}px;">
+                        </colgroup>
                         <thead>
                             <tr>
-                                <th>Detail</th>
-                                <th>Run ID</th>
-                                <th>Flow</th>
-                                <th>Type</th>
-                                <th>Status</th>
-                                <th>Message</th>
-                                <th>Started</th>
-                                <th>Finished</th>
-                                <th>Elapsed</th>
+                                <th class="grid-row-no" data-flow-history-column-key="__ROW_NO__">${this.escapeHtml(this.getLabel("gridNo", "No"))}</th>
+                                <th data-flow-history-column-key="DETAIL">${this.escapeHtml(this.getLabel("historyDetail", "Detail"))}</th>
+                                <th data-flow-history-column-key="RUN_ID">${this.escapeHtml(this.getLabel("historyRunId", "Run ID"))}</th>
+                                <th data-flow-history-column-key="FLOW">${this.escapeHtml(this.getLabel("historyFlow", "Flow"))}</th>
+                                <th data-flow-history-column-key="TYPE">${this.escapeHtml(this.getLabel("historyRunType", "Type"))}</th>
+                                <th data-flow-history-column-key="STATUS">${this.escapeHtml(this.getLabel("historyStatus", "Status"))}</th>
+                                <th data-flow-history-column-key="MESSAGE">${this.escapeHtml(this.getLabel("historyMessage", "Message"))}</th>
+                                <th data-flow-history-column-key="STARTED">${this.escapeHtml(this.getLabel("historyStarted", "Started"))}</th>
+                                <th data-flow-history-column-key="FINISHED">${this.escapeHtml(this.getLabel("historyFinished", "Finished"))}</th>
+                                <th data-flow-history-column-key="ELAPSED">${this.escapeHtml(this.getLabel("historyElapsed", "Elapsed"))}</th>
                             </tr>
                         </thead>
                         <tbody>
-                            ${safeRows.map((row) => {
+                            ${safeRows.map((row, rowIndex) => {
                                 const flowRunId = String(row.FLOW_RUN_ID || "");
-                                const expanded = flowRunId && flowRunId === String(this.activeRunPlanFlowRunId || "");
+                                const expanded = flowRunId && this.expandedRunPlanFlowRunIds.has(flowRunId);
                                 return `
-                                <tr class="${expanded ? "is-expanded" : ""}" ondblclick="${PAGE_CODE}.openRunPlanLayer('${this.escapeJs(flowRunId)}')">
+                                <tr class="${expanded ? "is-expanded" : ""}">
+                                    <td class="grid-row-no">${rowIndex + 1}</td>
                                     <td>
                                         <button type="button" class="table-icon-btn" title="${expanded ? "Close execution details" : "View execution details"}" onclick="event.stopPropagation(); ${PAGE_CODE}.openRunPlanLayer('${this.escapeJs(flowRunId)}')">
                                             <i class="fas ${expanded ? "fa-chevron-up" : "fa-ellipsis"}"></i>
                                         </button>
                                     </td>
-                                    <td><button type="button" class="flow-run-id-link" onclick="${PAGE_CODE}.openRunPlanLayer('${this.escapeJs(flowRunId)}')">${this.escapeHtml(flowRunId)}</button></td>
+                                    <td>${this.escapeHtml(flowRunId)}</td>
                                     <td>${this.escapeHtml(row.FLOW_NAME || "")}</td>
                                     <td>${this.escapeHtml(row.RUN_TYPE || "")}</td>
                                     <td>${this.escapeHtml(row.STATUS || "")}</td>
@@ -5658,6 +5695,46 @@
                         </tbody>
                     </table>
                 `;
+                this.enableFlowHistoryGridResize();
+                requestAnimationFrame(() => this.enableFlowHistoryGridResize());
+            },
+            getFlowHistoryColumnWidth(key, fallback) {
+                const saved = Number(this.flowRunHistoryColumnWidths?.[key] || 0);
+                return saved > 0 ? saved : fallback;
+            },
+            enableFlowHistoryGridResize() {
+                const table = getContainerEl(`#flowRunHistoryGrid-${PAGE_CODE} table.flow-run-history-grid`);
+                if (!table) return;
+                const colgroup = Array.from(table.children).find((child) => child.tagName === "COLGROUP");
+                this.syncFlowHistoryGridWidth(table);
+                // The history colgroup already carries the intended default widths.
+                // Mark it ready before the common resizer reads hidden/inactive headers.
+                if (colgroup) colgroup.dataset.gridWidthsReady = "Y";
+                CommonUtils.enableGridColumnResize(table, (width, header) => {
+                    const key = header?.dataset?.flowHistoryColumnKey || "";
+                    if (key) this.flowRunHistoryColumnWidths[key] = width;
+                    this.syncFlowHistoryGridWidth(table);
+                    this.applyFlowHistoryGridFreeze(table);
+                });
+                table.dataset.standardGridReady = "Y";
+                this.syncFlowHistoryGridWidth(table);
+                this.applyFlowHistoryGridFreeze(table);
+            },
+            syncFlowHistoryGridWidth(table) {
+                const colgroup = Array.from(table?.children || []).find((child) => child.tagName === "COLGROUP");
+                const columnsWidth = Array.from(colgroup?.children || [])
+                    .reduce((sum, column) => sum + Math.max(48, Number.parseFloat(column.style.width || "0") || 0), 0);
+                const tableWidth = Math.max(Math.ceil(columnsWidth), 48);
+                table.style.tableLayout = "fixed";
+                table.style.minWidth = `${tableWidth}px`;
+                table.style.width = `max(100%, ${tableWidth}px)`;
+            },
+            applyFlowHistoryGridFreeze(table) {
+                CommonUtils.applyStandardGridFreeze(table, 0);
+                table?.querySelectorAll(":scope > tbody > .flow-run-inline-detail-row > td").forEach((cell) => {
+                    cell.classList.remove("is-frozen-col", "is-frozen-edge");
+                    cell.style.left = "";
+                });
             },
             renderRunHistoryMessageCell(row) {
                 const flowRunId = row?.FLOW_RUN_ID || "";
@@ -5691,13 +5768,15 @@
             async openRunPlanLayer(flowRunId, options = {}) {
                 const nextFlowRunId = String(flowRunId || "");
                 if (!nextFlowRunId) return;
-                if (!options.refreshing && this.activeRunPlanFlowRunId === nextFlowRunId) {
-                    this.closeRunPlanLayer();
+                if (!options.refreshing && this.expandedRunPlanFlowRunIds.has(nextFlowRunId)) {
+                    this.closeRunPlanLayer(nextFlowRunId);
                     return;
                 }
+                this.expandedRunPlanFlowRunIds.add(nextFlowRunId);
                 this.activeRunPlanFlowRunId = nextFlowRunId;
                 this.flowNodeRunResultRows = [];
                 this.activeRunPlanLoadedId = "";
+                this.flowNodeRunResultsByFlowRunId.delete(nextFlowRunId);
                 this.renderFlowRunHistory(this.flowRunHistoryRows);
                 await this.loadInlineRunPlan(nextFlowRunId);
             },
@@ -5709,13 +5788,15 @@
                         method: "GET",
                         showLoading: false
                     });
-                    if (String(this.activeRunPlanFlowRunId || "") !== String(flowRunId || "")) return;
+                    if (!this.expandedRunPlanFlowRunIds.has(String(flowRunId || ""))) return;
                     const nodeRuns = Array.isArray(json.data) ? json.data : [];
+                    this.flowNodeRunResultsByFlowRunId.set(String(flowRunId || ""), nodeRuns);
                     this.flowNodeRunResultRows = nodeRuns;
                     this.activeRunPlanLoadedId = String(flowRunId || "");
                     this.renderFlowRunHistory(this.flowRunHistoryRows);
                 } catch (error) {
-                    if (String(this.activeRunPlanFlowRunId || "") !== String(flowRunId || "")) return;
+                    if (!this.expandedRunPlanFlowRunIds.has(String(flowRunId || ""))) return;
+                    this.flowNodeRunResultsByFlowRunId.set(String(flowRunId || ""), []);
                     this.flowNodeRunResultRows = [];
                     this.activeRunPlanLoadedId = String(flowRunId || "");
                     this.renderFlowRunHistory(this.flowRunHistoryRows);
@@ -5725,38 +5806,56 @@
                     }
                 }
             },
-            async refreshRunPlanLayer() {
-                const flowRunId = this.activeRunPlanFlowRunId;
-                if (!flowRunId) return;
-                this.flowNodeRunResultRows = [];
-                this.activeRunPlanLoadedId = "";
+            async refreshRunPlanLayer(flowRunId = "") {
+                const targetFlowRunId = String(flowRunId || this.activeRunPlanFlowRunId || "");
+                if (!targetFlowRunId) return;
+                if (!this.expandedRunPlanFlowRunIds.has(targetFlowRunId)) return;
+                this.flowNodeRunResultsByFlowRunId.delete(targetFlowRunId);
+                if (this.activeRunPlanFlowRunId === targetFlowRunId) {
+                    this.flowNodeRunResultRows = [];
+                    this.activeRunPlanLoadedId = "";
+                }
                 this.renderFlowRunHistory(this.flowRunHistoryRows);
                 await this.loadFlowRunHistory({ silent: true });
-                if (this.activeRunPlanFlowRunId) {
-                    await this.loadInlineRunPlan(this.activeRunPlanFlowRunId);
+                if (this.expandedRunPlanFlowRunIds.has(targetFlowRunId)) {
+                    await this.loadInlineRunPlan(targetFlowRunId);
                 }
             },
-            closeRunPlanLayer() {
-                this.activeRunPlanFlowRunId = "";
-                this.flowNodeRunResultRows = [];
-                this.activeRunPlanLoadedId = "";
+            closeRunPlanLayer(flowRunId = "") {
+                const targetFlowRunId = String(flowRunId || "");
+                if (targetFlowRunId) {
+                    this.expandedRunPlanFlowRunIds.delete(targetFlowRunId);
+                    this.flowNodeRunResultsByFlowRunId.delete(targetFlowRunId);
+                    if (this.activeRunPlanFlowRunId === targetFlowRunId) {
+                        this.activeRunPlanFlowRunId = "";
+                        this.flowNodeRunResultRows = [];
+                        this.activeRunPlanLoadedId = "";
+                    }
+                } else {
+                    this.expandedRunPlanFlowRunIds.clear();
+                    this.flowNodeRunResultsByFlowRunId.clear();
+                    this.activeRunPlanFlowRunId = "";
+                    this.flowNodeRunResultRows = [];
+                    this.activeRunPlanLoadedId = "";
+                }
                 this.renderFlowRunHistory(this.flowRunHistoryRows);
             },
             renderRunHistoryDetailRow(row) {
                 const flowRunId = String(row?.FLOW_RUN_ID || "");
-                const hasLoaded = String(this.activeRunPlanLoadedId || "") === flowRunId;
+                const nodeRuns = this.flowNodeRunResultsByFlowRunId.get(flowRunId);
+                const hasLoaded = Array.isArray(nodeRuns);
                 const message = String(row?.MESSAGE || "").trim();
                 return `
                     <tr class="flow-run-inline-detail-row">
-                        <td colspan="9">
+                        <td colspan="10">
                             <section id="flowRunInlineDetail-${PAGE_CODE}-${this.escapeHtml(flowRunId)}" class="flow-run-inline-detail">
                                 <header>
                                     <strong>Run #${this.escapeHtml(flowRunId)} details</strong>
                                     <span class="flow-run-plan-tools">
-                                        <button type="button" class="table-icon-btn" title="Refresh run details" onclick="${PAGE_CODE}.refreshRunPlanLayer()">
+                                        <button type="button" class="table-icon-btn" title="Refresh run details" onclick="${PAGE_CODE}.refreshRunPlanLayer('${this.escapeJs(flowRunId)}')">
                                             <i class="fas fa-sync-alt"></i>
                                         </button>
-                                        <button type="button" class="table-icon-btn" title="Close" onclick="${PAGE_CODE}.closeRunPlanLayer()">
+                                        <button type="button" class="table-icon-btn" title="Close" onclick="${PAGE_CODE}.closeRunPlanLayer('${this.escapeJs(flowRunId)}')">
                                             <i class="fas fa-times"></i>
                                         </button>
                                     </span>
@@ -5768,7 +5867,7 @@
                                     </div>
                                 ` : ""}
                                 ${hasLoaded
-                                    ? this.renderNodeRunResultContent(this.flowNodeRunResultRows)
+                                    ? this.renderNodeRunResultContent(nodeRuns)
                                     : `<div class="table-empty">Loading node execution results...</div>`}
                             </section>
                         </td>
@@ -5780,37 +5879,53 @@
                     return `<div class="table-empty">No node execution results.</div>`;
                 }
                 return `
-                    <table class="table-grid flow-node-run-result-table">
-                        <thead>
-                            <tr>
-                                <th>Level</th>
-                                <th>Node</th>
-                                <th>Result</th>
-                                <th>Job Group</th>
-                                <th>Status</th>
-                                <th>Timing</th>
-                                <th>Message / Error</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${rows.map((row) => {
-                                const resultInfo = this.getNodeResultInfo(row);
-                                const canOpenResult = resultInfo.mode !== "N" && resultInfo.owner && resultInfo.objectName && resultInfo.status === "SUCCESS";
-                                return `
-                                <tr class="${this.getRunStatusClass(row.STATUS)}">
-                                    <td>${this.escapeHtml(row.RUN_LEVEL ?? "")}</td>
-                                    <td>${this.renderNodeRunNodeCell(row)}</td>
-                                    <td>${this.renderNodeRunResultCell(resultInfo)}</td>
-                                    <td>${this.escapeHtml(row.NODE_TYPE || "")}</td>
-                                    <td><span class="flow-run-status-pill">${this.escapeHtml(row.STATUS || "")}</span></td>
-                                    <td>${this.renderNodeRunTimingCell(row)}</td>
-                                    <td class="flow-run-message-cell">${this.renderNodeRunMessageCell(row)}</td>
+                    <div class="flow-node-run-result-toolbar">
+                        <span>${this.escapeHtml(this.getMessage("nodeRunResultCount", "Node results: {count}", { count: rows.length.toLocaleString() }))}</span>
+                    </div>
+                    <div class="flow-node-run-result-scroll">
+                        <table class="table-grid flow-node-run-result-table">
+                            <colgroup data-grid-widths-ready="Y">
+                                <col style="width: 48px;">
+                                <col style="width: 52px;">
+                                <col style="width: 210px;">
+                                <col style="width: 210px;">
+                                <col style="width: 88px;">
+                                <col style="width: 92px;">
+                                <col style="width: 185px;">
+                                <col>
+                            </colgroup>
+                            <thead>
+                                <tr>
+                                    <th class="grid-row-no">No</th>
+                                    <th>Level</th>
+                                    <th>Node</th>
+                                    <th>Result</th>
+                                    <th>Job Group</th>
+                                    <th>Status</th>
+                                    <th>Timing</th>
+                                    <th>Message / Error</th>
                                 </tr>
-                            `;
-                            }).join("")}
-                        </tbody>
-                    </table>
-                    ${this.renderListFooter(rows.length)}
+                            </thead>
+                            <tbody>
+                                ${rows.map((row, rowIndex) => {
+                                    const resultInfo = this.getNodeResultInfo(row);
+                                    const canOpenResult = resultInfo.mode !== "N" && resultInfo.owner && resultInfo.objectName && resultInfo.status === "SUCCESS";
+                                    return `
+                                    <tr class="${this.getRunStatusClass(row.STATUS)}">
+                                        <td class="grid-row-no">${rowIndex + 1}</td>
+                                        <td>${this.escapeHtml(row.RUN_LEVEL ?? "")}</td>
+                                        <td>${this.renderNodeRunNodeCell(row)}</td>
+                                        <td>${this.renderNodeRunResultCell(resultInfo)}</td>
+                                        <td>${this.escapeHtml(row.NODE_TYPE || "")}</td>
+                                        <td><span class="flow-run-status-pill">${this.escapeHtml(row.STATUS || "")}</span></td>
+                                        <td>${this.renderNodeRunTimingCell(row)}</td>
+                                        <td class="flow-run-message-cell">${this.renderNodeRunMessageCell(row)}</td>
+                                    </tr>
+                                `;
+                                }).join("")}
+                            </tbody>
+                        </table>
+                    </div>
                 `;
             },
             renderNodeRunResultCell(info = {}) {
@@ -5977,10 +6092,18 @@
                 }
                 return String(value);
             },
+            getNodeRunResultRow(flowNodeRunId) {
+                const targetId = String(flowNodeRunId || "");
+                for (const rows of this.flowNodeRunResultsByFlowRunId?.values?.() || []) {
+                    const row = rows.find((item) => String(item.FLOW_NODE_RUN_ID || "") === targetId);
+                    if (row) return row;
+                }
+                return this.flowNodeRunResultRows?.find((item) => String(item.FLOW_NODE_RUN_ID || "") === targetId) || null;
+            },
             openNodeRunParamsLayer(flowNodeRunId, event = null) {
                 event?.preventDefault?.();
                 event?.stopPropagation?.();
-                const row = this.flowNodeRunResultRows?.find((item) => String(item.FLOW_NODE_RUN_ID || "") === String(flowNodeRunId || ""));
+                const row = this.getNodeRunResultRow(flowNodeRunId);
                 if (!row) return;
                 const entries = this.getNodeRunRuntimeParamEntries(row);
                 const nodeName = row.NODE_NAME || row.NODE_KEY || "Flow node";
@@ -6107,7 +6230,7 @@
                 };
             },
             async openFlowNodeResultSql(flowNodeRunId) {
-                const row = this.flowNodeRunResultRows.find((item) => String(item.FLOW_NODE_RUN_ID || "") === String(flowNodeRunId || ""));
+                const row = this.getNodeRunResultRow(flowNodeRunId);
                 const info = this.getNodeResultInfo(row || {});
                 if (!info.owner || !info.objectName || info.mode === "N") return;
                 await this.loadFlowResultSql(info);
@@ -6143,10 +6266,15 @@
                 this.flowResultSqlGridData = { rows: [], columns: [] };
                 this.flowResultSqlColumnWidths = {};
                 this.flowResultSqlFrozenColumns = 0;
-                this.setValue(`#flowResultSqlFreezeColumns-${PAGE_CODE}`, "0");
+                this.flowResultSqlPage = 1;
+                this.flowResultSqlPageSize = 100;
+                this.flowResultSqlTotal = 0;
+                this.flowResultSqlTotalPages = 1;
+                this.flowResultSqlQuery = "";
+                this.clearFlowResultSqlPager();
                 this.renderFlowResultSqlMessage("", "info");
                 const grid = getContainerEl(`#flowResultSqlGrid-${PAGE_CODE}`);
-                if (grid) grid.innerHTML = `<div class="table-empty">${this.escapeHtml(this.getMessage("runSqlPreviewHint", "Run SQL to preview result data."))}</div>${this.renderListFooter(0)}`;
+                if (grid) grid.innerHTML = `<div class="table-empty">${this.escapeHtml(this.getMessage("runSqlPreviewHint", "Run SQL to preview result data."))}</div>`;
             },
             handleFlowResultSqlKeydown(event) {
                 if (event.key === "F5") {
@@ -6224,15 +6352,18 @@
                 editor.focus();
                 editor.setSelectionRange(selection.selectionStart, selection.selectionEnd);
             },
-            async executeFlowResultSql(fullSql = false) {
-                const selection = this.getFlowResultSqlFromEditor(fullSql);
-                const sql = selection.sql || "";
+            async executeFlowResultSql(fullSql = false, requestedPage = null) {
+                const isPaging = requestedPage !== null
+                    && requestedPage !== undefined
+                    && Number.isFinite(Number(requestedPage));
+                const selection = isPaging ? null : this.getFlowResultSqlFromEditor(fullSql);
+                const sql = isPaging ? this.flowResultSqlQuery : (selection?.sql || "");
                 if (!/^(select|with)\b/i.test(sql.replace(/;+\s*$/, ""))) {
                     CommonMessage.warning(this.getMessage("resultSqlSelectOnly", "Result SQL must be a SELECT statement."));
                     return;
                 }
-                const limitValue = Number(this.getValue(`#flowResultSqlLimit-${PAGE_CODE}`) || 100);
-                const limit = Math.max(1, Math.min(Number.isFinite(limitValue) ? limitValue : 100, 1000));
+                const limit = Math.max(1, Math.min(Number(this.flowResultSqlPageSize || 100), 1000));
+                const page = Math.max(1, Number(isPaging ? requestedPage : 1));
                 const grid = getContainerEl(`#flowResultSqlGrid-${PAGE_CODE}`);
                 const startedAt = performance.now();
                 this.renderFlowResultSqlMessage(this.getMessage("runningSql", "Running SQL..."), "info");
@@ -6242,27 +6373,85 @@
                 try {
                     const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/result-sql`, {
                         method: "POST",
-                        body: { sql, limit },
+                        body: { sql, limit, page },
                         showLoading: false
                     });
                     const rows = json.data || [];
                     const columns = json.columns || [];
                     const elapsedMs = Math.round(performance.now() - startedAt);
+                    this.flowResultSqlQuery = sql;
                     this.flowResultSqlGridData = { rows, columns };
-                    this.renderFlowResultSqlMessage(this.getMessage("resultSqlRowsSelected", "{count} rows selected. ({elapsed} ms)", {
+                    this.flowResultSqlPage = Number(json.page || page);
+                    this.flowResultSqlPageSize = Number(json.pageSize || limit);
+                    this.flowResultSqlTotal = Number(json.total || 0);
+                    this.flowResultSqlTotalPages = Number(json.totalPages || 1);
+                    this.renderFlowResultSqlPager();
+                    this.renderFlowResultSqlMessage(this.getMessage("resultSqlPageRowsSelected", "Page {page}: {count} rows selected. ({elapsed} ms)", {
+                        page: this.flowResultSqlPage.toLocaleString(),
                         count: rows.length.toLocaleString(),
                         elapsed: elapsedMs.toLocaleString()
                     }), "success");
                     this.renderFlowResultSqlGrid(rows, columns);
-                    this.restoreFlowResultSqlSelection(selection);
+                    if (selection) this.restoreFlowResultSqlSelection(selection);
                 } catch (error) {
                     const elapsedMs = Math.round(performance.now() - startedAt);
                     this.flowResultSqlGridData = { rows: [], columns: [] };
                     const message = error.message || this.getMessage("resultSqlExecutionFailed", "Result SQL execution failed.");
                     this.renderFlowResultSqlMessage(`${message} (${elapsedMs.toLocaleString()} ms)`, "error");
                     this.renderError(`#flowResultSqlGrid-${PAGE_CODE}`, message);
-                    this.restoreFlowResultSqlSelection(selection);
+                    if (selection) this.restoreFlowResultSqlSelection(selection);
                 }
+            },
+            clearFlowResultSqlPager() {
+                const host = getContainerEl(`#flowResultSqlPager-${PAGE_CODE}`);
+                if (!host) return;
+                host.hidden = true;
+                host.innerHTML = "";
+            },
+            renderFlowResultSqlPager() {
+                const host = getContainerEl(`#flowResultSqlPager-${PAGE_CODE}`);
+                if (!host) return;
+                CommonUtils.renderServerPager(host, {
+                    visible: true,
+                    page: this.flowResultSqlPage,
+                    pageSize: this.flowResultSqlPageSize,
+                    totalPages: this.flowResultSqlTotalPages,
+                    totalLabel: this.getMessage("resultSqlTotal", "Total {count}", { count: this.flowResultSqlTotal.toLocaleString() }),
+                    labels: {
+                        ariaLabel: this.getLabel("resultSqlPagerLabel", "Result SQL pagination"),
+                        page: this.getLabel("page", "Page"),
+                        go: this.getLabel("go", "Go"),
+                        previousPage: this.getLabel("previousPage", "Previous page"),
+                        nextPage: this.getLabel("nextPage", "Next page"),
+                        rowsPerPage: this.getLabel("rowsPerPage", "Rows per page")
+                    },
+                    onMove: (delta) => this.loadFlowResultSqlPage(this.flowResultSqlPage + delta),
+                    onGo: (nextPage) => this.loadFlowResultSqlPage(nextPage),
+                    onPageSize: (nextSize) => {
+                        this.flowResultSqlPageSize = Math.max(1, Math.min(Number(nextSize || 100), 1000));
+                        this.executeFlowResultSql(false, 1);
+                    },
+                    trailingNumberControl: {
+                        label: this.getLabel("freezeColumns", "Freeze"),
+                        title: this.getLabel("freezeColumnsTitle", "Freeze No and selected data columns while scrolling horizontally."),
+                        value: this.flowResultSqlFrozenColumns,
+                        min: 0,
+                        max: 50,
+                        onInput: (value) => this.setFlowResultSqlFrozenColumns(value)
+                    }
+                });
+            },
+            loadFlowResultSqlPage(nextPage) {
+                if (!this.flowResultSqlQuery) return;
+                const page = Math.max(1, Math.min(Number(nextPage || 1), this.flowResultSqlTotalPages || 1));
+                if (page === this.flowResultSqlPage) return;
+                this.executeFlowResultSql(false, page);
+            },
+            setFlowResultSqlFrozenColumns(value) {
+                const maxColumns = Math.max(0, (this.flowResultSqlGridData?.columns || []).length);
+                const numericValue = Number.parseInt(value, 10);
+                this.flowResultSqlFrozenColumns = Math.max(0, Math.min(maxColumns, Number.isFinite(numericValue) ? numericValue : 0));
+                this.applyFlowResultSqlFrozenColumns();
             },
             renderFlowResultSqlMessage(message, type = "info") {
                 const element = getContainerEl(`#flowResultSqlMessage-${PAGE_CODE}`);
@@ -6298,8 +6487,8 @@
                     this.downloadFlowResultSqlBlob(`${baseName}.csv`, this.createFlowResultDelimitedContent(rows, grid.columns, ","), "text/csv;charset=utf-8");
                     return;
                 }
-                if (format === "tsv") {
-                    this.downloadFlowResultSqlBlob(`${baseName}.tsv`, this.createFlowResultDelimitedContent(rows, grid.columns, "\t"), "text/tab-separated-values;charset=utf-8");
+                if (format === "json") {
+                    this.downloadFlowResultSqlBlob(`${baseName}.json`, JSON.stringify(rows, null, 2), "application/json;charset=utf-8");
                 }
             },
             createFlowResultSqlExportFileName() {
@@ -6362,6 +6551,7 @@
                         </table>
                     `;
                     this.syncFlowResultSqlTableWidth();
+                    this.enableFlowResultSqlGridResize();
                     this.applyFlowResultSqlFrozenColumns();
                     return;
                 }
@@ -6376,7 +6566,7 @@
                         <tbody>
                             ${dataRows.map((row, rowIndex) => `
                                 <tr>
-                                    <td class="grid-row-no">${rowIndex + 1}</td>
+                                    <td class="grid-row-no">${((this.flowResultSqlPage - 1) * this.flowResultSqlPageSize) + rowIndex + 1}</td>
                                     ${columns.map((column) => `<td title="${this.escapeHtml(this.formatFlowResultCell(row[column]))}">${this.escapeHtml(this.formatFlowResultCell(row[column]))}</td>`).join("")}
                                 </tr>
                             `).join("")}
@@ -6384,6 +6574,7 @@
                     </table>
                 `;
                 this.syncFlowResultSqlTableWidth();
+                this.enableFlowResultSqlGridResize();
                 this.applyFlowResultSqlFrozenColumns();
             },
             renderFlowResultSqlColGroup(columns = []) {
@@ -6402,17 +6593,15 @@
             renderFlowResultSqlHeader(columns = []) {
                 const rowNoWidth = this.getFlowResultSqlColumnWidth("__ROW_NO__", 0);
                 return `
-                    <th class="grid-row-no flow-result-sql-resizable" title="No" style="width: ${rowNoWidth}px;">
+                    <th class="grid-row-no" data-flow-result-column-key="${this.getFlowResultSqlColumnKey("__ROW_NO__", 0)}" title="No" style="width: ${rowNoWidth}px;">
                         No
-                        <span class="flow-result-sql-col-resizer" title="Resize column" onmousedown="${PAGE_CODE}.beginFlowResultSqlColumnResize(event, 0, '__ROW_NO__')"></span>
                     </th>
                     ${columns.map((column, index) => {
                         const colIndex = index + 1;
                         const width = this.getFlowResultSqlColumnWidth(column, colIndex);
                         return `
-                            <th class="flow-result-sql-resizable" title="${this.escapeHtml(column)}" style="width: ${width}px;">
+                            <th data-flow-result-column-key="${this.escapeHtml(this.getFlowResultSqlColumnKey(column, colIndex))}" title="${this.escapeHtml(column)}" style="width: ${width}px;">
                                 <span class="flow-result-sql-th-label">${this.escapeHtml(column)}</span>
-                                <span class="flow-result-sql-col-resizer" title="Resize column" onmousedown="${PAGE_CODE}.beginFlowResultSqlColumnResize(event, ${colIndex}, '${this.escapeJs(column)}')"></span>
                             </th>
                         `;
                     }).join("")}
@@ -6441,14 +6630,21 @@
                 table.style.width = `${tableWidth}px`;
                 table.style.minWidth = `${tableWidth}px`;
             },
+            enableFlowResultSqlGridResize() {
+                const table = getContainerEl(`#flowResultSqlGrid-${PAGE_CODE} table.flow-result-sql-grid`);
+                if (!table) return;
+                CommonUtils.enableGridColumnResize(table, (width, header) => {
+                    const key = header?.dataset?.flowResultColumnKey || "";
+                    if (key) this.flowResultSqlColumnWidths[key] = width;
+                    this.applyFlowResultSqlFrozenColumns();
+                });
+            },
             getFlowResultSqlFreezeCount() {
-                const input = getContainerEl(`#flowResultSqlFreezeColumns-${PAGE_CODE}`);
                 const maxDataColumns = Math.max(0, (this.flowResultSqlGridData?.columns || []).length);
-                let dataColumnCount = Number.parseInt(input?.value ?? this.flowResultSqlFrozenColumns ?? 0, 10);
+                let dataColumnCount = Number.parseInt(this.flowResultSqlFrozenColumns ?? 0, 10);
                 if (!Number.isFinite(dataColumnCount)) dataColumnCount = 0;
                 dataColumnCount = Math.max(0, Math.min(maxDataColumns, dataColumnCount));
                 this.flowResultSqlFrozenColumns = dataColumnCount;
-                if (input && input.value !== String(dataColumnCount)) input.value = String(dataColumnCount);
                 return dataColumnCount + 1;
             },
             applyFlowResultSqlFrozenColumns() {
@@ -6480,48 +6676,6 @@
                     });
                 });
             },
-            beginFlowResultSqlColumnResize(event, columnIndex, columnName) {
-                event.preventDefault();
-                event.stopPropagation();
-                const header = event.currentTarget?.closest?.("th");
-                if (!header) return;
-                const key = this.getFlowResultSqlColumnKey(columnName, columnIndex);
-                const startWidth = header.getBoundingClientRect().width || this.getFlowResultSqlColumnWidth(columnName, columnIndex);
-                this.flowResultSqlResizeState = {
-                    columnIndex,
-                    key,
-                    startX: event.clientX,
-                    startWidth
-                };
-                this.flowResultSqlResizeMoveBound = this.flowResultSqlResizeMoveBound || this.handleFlowResultSqlColumnResizeMove.bind(this);
-                this.flowResultSqlResizeUpBound = this.flowResultSqlResizeUpBound || this.endFlowResultSqlColumnResize.bind(this);
-                document.addEventListener("mousemove", this.flowResultSqlResizeMoveBound);
-                document.addEventListener("mouseup", this.flowResultSqlResizeUpBound, { once: true });
-                document.body.classList.add("is-resizing-flow-result-sql");
-            },
-            handleFlowResultSqlColumnResizeMove(event) {
-                const state = this.flowResultSqlResizeState;
-                if (!state) return;
-                const width = Math.max(58, Math.min(900, Math.round(state.startWidth + event.clientX - state.startX)));
-                this.flowResultSqlColumnWidths[state.key] = width;
-                const table = getContainerEl(`#flowResultSqlGrid-${PAGE_CODE} table.flow-result-sql-grid`);
-                const col = table?.querySelector?.(`col[data-flow-result-col-index="${state.columnIndex}"]`);
-                if (col) col.style.width = `${width}px`;
-                const header = table?.querySelector?.(`thead th:nth-child(${state.columnIndex + 1})`);
-                if (header) header.style.width = `${width}px`;
-                this.syncFlowResultSqlTableWidth();
-                this.applyFlowResultSqlFrozenColumns();
-            },
-            endFlowResultSqlColumnResize() {
-                if (this.flowResultSqlResizeMoveBound) {
-                    document.removeEventListener("mousemove", this.flowResultSqlResizeMoveBound);
-                }
-                if (this.flowResultSqlResizeUpBound) {
-                    document.removeEventListener("mouseup", this.flowResultSqlResizeUpBound);
-                }
-                document.body.classList.remove("is-resizing-flow-result-sql");
-                this.flowResultSqlResizeState = null;
-            },
             formatFlowResultCell(value) {
                 if (value === null || value === undefined) return "";
                 if (typeof value === "object") {
@@ -6548,7 +6702,7 @@
             },
             async copyNodeRunMessage(flowNodeRunId, event) {
                 event?.stopPropagation?.();
-                const row = this.flowNodeRunResultRows?.find((item) => String(item.FLOW_NODE_RUN_ID || "") === String(flowNodeRunId || ""));
+                const row = this.getNodeRunResultRow(flowNodeRunId);
                 const message = row?.MESSAGE || "";
                 if (!message) return;
                 try {
@@ -6717,6 +6871,8 @@
 
             newFlow(clearCanvas = true) {
                 this.setValue(`#flowId-${PAGE_CODE}`, "NEW");
+                this.dashedConnectionMode = false;
+                this.renderDashedConnectionMode();
                 this.flowLayoutGrid = null;
                 this.setValue(`#flowGroup-${PAGE_CODE}`, config.defaultFlowGroup || PAGE_CODE);
                 this.setValue(`#flowName-${PAGE_CODE}`, "");

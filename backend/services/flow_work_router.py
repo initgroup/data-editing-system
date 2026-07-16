@@ -19,13 +19,15 @@ from backend.services import data_work_service as data_work
 from backend.services import flow_work_service as flow_work
 from backend.services.background_jobs import submit_background_job
 from backend.services.flow_work_service import FlowNodeRunRequest, FlowRunRequest, FlowWorkRequest
+from backend.paging import create_page_window, normalize_page_number, normalize_page_size
 
 logger = logging.getLogger(__name__)
 
 
 class FlowResultSqlRequest(BaseModel):
     sql: str
-    limit: Optional[int] = 200
+    limit: Optional[int] = 100
+    page: Optional[int] = 1
 
 
 MODEL_DETAIL_VIEW_TYPES = [
@@ -70,14 +72,6 @@ def normalize_select_sql(sql: str) -> str:
     if re.search(blocked, text, re.IGNORECASE):
         raise HTTPException(status_code=400, detail="Only read-only SELECT statements are allowed.")
     return text
-
-
-def normalize_limit(value: Optional[int]) -> int:
-    try:
-        limit = int(value or 200)
-    except (TypeError, ValueError):
-        limit = 200
-    return max(1, min(limit, 1000))
 
 
 def build_table_result_sql(
@@ -836,15 +830,28 @@ def create_flow_work_router(
 
     @router.post("/result-sql")
     def execute_result_sql(req: FlowResultSqlRequest, request: Request):
+        page = normalize_page_number(req.page)
+        limit = normalize_page_size(req.limit)
         conn = None
         try:
             sql = normalize_select_sql(req.sql)
             conn = get_target_db_connection(request)
-            result = execute_query(conn, "FLOW_WORK_RESULT_SQL_SELECT", {
-                "dynamicSql": sql,
-                "limit": normalize_limit(req.limit)
+            count_result = execute_query(conn, "FLOW_WORK_RESULT_SQL_COUNT", {
+                "dynamicSql": sql
             })
-            return normalize_sql_result(data_work.require_success(result, "Result SQL execution failed."))
+            count_result = data_work.require_success(count_result, "Result SQL count query failed.")
+            count_rows = count_result.get("data") or []
+            total = int(count_rows[0].get("TOTAL_COUNT") or 0) if count_rows else 0
+            page_window = create_page_window(page, limit, total)
+            result = execute_query(conn, "FLOW_WORK_RESULT_SQL_PAGE", {
+                "dynamicSql": sql,
+                "offset": page_window.offset,
+                "limit": page_window.page_size
+            })
+            response = normalize_sql_result(data_work.require_success(result, "Result SQL execution failed."))
+            response["total"] = total
+            response.update(page_window.response_metadata())
+            return response
         finally:
             if conn:
                 conn.close()

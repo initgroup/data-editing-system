@@ -709,7 +709,310 @@ const CommonUtils = {
     },
 
     /**
-     * 공통 페이징 HTML 생성기 (디자인 통일)
+     * Server-side grid pager renderer.
+     * Pages pass only state, localized labels, and callbacks so the HTML/CSS
+     * contract stays identical across menus.
+     */
+    renderServerPager(container, options = {}) {
+        if (!container) return null;
+
+        const visible = Boolean(options.visible);
+        container.hidden = !visible;
+        if (!visible) {
+            container.innerHTML = "";
+            return null;
+        }
+
+        const page = Math.max(1, Number(options.page || 1));
+        const totalPages = Math.max(1, Number(options.totalPages || 1));
+        const pageSize = Math.max(1, Number(options.pageSize || 100));
+        const loading = Boolean(options.loading);
+        const labels = options.labels || {};
+        const escape = (value) => String(value ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+        const previousLabel = labels.previousPage || "Previous page";
+        const nextLabel = labels.nextPage || "Next page";
+        const trailing = options.trailingNumberControl || null;
+        const pageSizes = Array.from(new Set((options.pageSizes || [50, 100, 200, 500]).map((value) => Number(value)).filter((value) => value > 0)));
+
+        container.innerHTML = `
+            <div class="grid-pager" role="navigation" aria-label="${escape(labels.ariaLabel || "Grid pagination")}">
+                <span class="grid-pager-total">${escape(options.totalLabel || "")}</span>
+                <span class="grid-pager-navigation">
+                    <button type="button" class="table-icon-btn grid-pager-prev" title="${escape(previousLabel)}" aria-label="${escape(previousLabel)}" ${loading || page <= 1 ? "disabled" : ""}>
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    <label class="grid-pager-page-field">
+                        <span>${escape(labels.page || "Page")}</span>
+                        <input class="grid-pager-page-input" type="number" min="1" max="${totalPages}" value="${page}" ${loading ? "disabled" : ""}>
+                        <small>/ <span class="grid-pager-total-pages">${totalPages.toLocaleString()}</span></small>
+                    </label>
+                    <button type="button" class="table-btn grid-pager-go" ${loading ? "disabled" : ""}>${escape(labels.go || "Go")}</button>
+                    <button type="button" class="table-icon-btn grid-pager-next" title="${escape(nextLabel)}" aria-label="${escape(nextLabel)}" ${loading || page >= totalPages ? "disabled" : ""}>
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                </span>
+                <span class="grid-pager-settings">
+                    <select class="grid-pager-page-size" title="${escape(labels.rowsPerPage || "Rows per page")}" aria-label="${escape(labels.rowsPerPage || "Rows per page")}" ${loading ? "disabled" : ""}>
+                        ${pageSizes.map((value) => `<option value="${value}"${value === pageSize ? " selected" : ""}>${value}</option>`).join("")}
+                    </select>
+                    ${trailing ? `
+                        <label class="table-limit-control grid-pager-number-control" title="${escape(trailing.title || "")}">
+                            <span>${escape(trailing.label || "")}</span>
+                            <input class="grid-pager-number-input" type="number" min="${Number(trailing.min ?? 0)}" max="${Number(trailing.max ?? 999)}" value="${escape(trailing.value ?? 0)}" ${loading ? "disabled" : ""}>
+                        </label>
+                    ` : ""}
+                </span>
+            </div>
+        `;
+
+        const pageInput = container.querySelector(".grid-pager-page-input");
+        container.querySelector(".grid-pager-prev")?.addEventListener("click", () => options.onMove?.(-1));
+        container.querySelector(".grid-pager-next")?.addEventListener("click", () => options.onMove?.(1));
+        container.querySelector(".grid-pager-go")?.addEventListener("click", () => options.onGo?.(pageInput?.value));
+        pageInput?.addEventListener("keydown", (event) => {
+            if (event.key !== "Enter") return;
+            event.preventDefault();
+            options.onGo?.(pageInput.value);
+        });
+        container.querySelector(".grid-pager-page-size")?.addEventListener("change", (event) => options.onPageSize?.(event.target.value));
+        const trailingInput = container.querySelector(".grid-pager-number-input");
+        if (trailingInput && trailing?.onInput) {
+            ["input", "change"].forEach((eventName) => trailingInput.addEventListener(eventName, () => trailing.onInput(trailingInput.value)));
+        }
+        return container.querySelector(".grid-pager");
+    },
+
+    /**
+     * Adds the shared column-width drag handle to a rendered table grid.
+     * Dragging moves only a grid-scoped guide; the selected col width is
+     * committed on pointer release so adjacent columns never get redistributed.
+     */
+    enableGridColumnResize(table, onResize) {
+        const headerRow = table?.tHead?.rows?.[0];
+        const headers = Array.from(headerRow?.cells || []);
+        if (!headers.length) return;
+        const columnModel = this.ensureGridColumnWidths(table, headers);
+
+        headers.forEach((header, columnIndex) => {
+            if (header.querySelector(".grid-column-resizer, .data-sql-grid-col-resizer, .column-resizer")) return;
+            header.classList.add("grid-resizable-column");
+            const handle = document.createElement("span");
+            handle.className = "grid-column-resizer";
+            handle.title = window.I18nManager?.t?.("commonUi.grid.resizeColumn", "Resize column") || "Resize column";
+            handle.addEventListener("pointerdown", (event) => {
+                if (event.button !== undefined && event.button !== 0) return;
+                event.preventDefault();
+                event.stopPropagation();
+                const startX = event.clientX;
+                const startWidth = columnModel.widths[columnIndex]
+                    || header.getBoundingClientRect().width
+                    || header.offsetWidth
+                    || 80;
+                const pointerId = event.pointerId;
+                let pendingWidth = startWidth;
+                let previewFrameId = null;
+                const headerRect = header.getBoundingClientRect();
+                const viewport = table.closest(".data-edit-grid, .table-result-grid, .grid-scroll-container, .table-scroll-container")
+                    || table.parentElement;
+                const tableRect = table.getBoundingClientRect();
+                const viewportRect = viewport?.getBoundingClientRect?.() || tableRect;
+                const guideTop = Math.max(0, headerRect.top, viewportRect.top);
+                const guideBottom = Math.min(window.innerHeight, viewportRect.bottom, tableRect.bottom);
+                const guide = document.createElement("div");
+                guide.className = "grid-column-resize-guide";
+                guide.style.left = `${headerRect.right}px`;
+                guide.style.top = `${guideTop}px`;
+                guide.style.height = `${Math.max(0, guideBottom - guideTop)}px`;
+                document.body.appendChild(guide);
+                const applyPreview = () => {
+                    previewFrameId = null;
+                    guide.style.transform = `translate3d(${pendingWidth - startWidth}px, 0, 0)`;
+                };
+                const schedulePreview = () => {
+                    if (previewFrameId !== null) return;
+                    previewFrameId = window.requestAnimationFrame
+                        ? window.requestAnimationFrame(applyPreview)
+                        : window.setTimeout(applyPreview, 0);
+                };
+                const updateGuide = (clientX) => {
+                    pendingWidth = Math.max(48, Math.min(900, Math.round(startWidth + clientX - startX)));
+                    schedulePreview();
+                };
+                updateGuide(event.clientX);
+                const move = (moveEvent) => {
+                    if (moveEvent.pointerId !== pointerId) return;
+                    updateGuide(moveEvent.clientX);
+                };
+                const end = (endEvent) => {
+                    if (endEvent.pointerId !== pointerId) return;
+                    handle.removeEventListener("pointermove", move);
+                    handle.removeEventListener("pointerup", end);
+                    handle.removeEventListener("pointercancel", end);
+                    if (handle.hasPointerCapture?.(pointerId)) handle.releasePointerCapture(pointerId);
+                    if (endEvent.type !== "pointercancel" && Number.isFinite(endEvent?.clientX)) updateGuide(endEvent.clientX);
+                    if (previewFrameId !== null) {
+                        if (window.cancelAnimationFrame && window.requestAnimationFrame) {
+                            window.cancelAnimationFrame(previewFrameId);
+                        } else {
+                            window.clearTimeout(previewFrameId);
+                        }
+                        previewFrameId = null;
+                    }
+                    applyPreview();
+                    if (endEvent.type !== "pointercancel") {
+                        this.setGridColumnWidth(table, columnModel, columnIndex, pendingWidth);
+                        onResize?.(pendingWidth, header);
+                    }
+                    guide.remove();
+                    document.body.classList.remove("is-column-resizing");
+                };
+                handle.setPointerCapture?.(pointerId);
+                handle.addEventListener("pointermove", move);
+                handle.addEventListener("pointerup", end);
+                handle.addEventListener("pointercancel", end);
+                document.body.classList.add("is-column-resizing");
+            });
+            header.appendChild(handle);
+        });
+    },
+
+    ensureGridColumnWidths(table, headers = Array.from(table?.tHead?.rows?.[0]?.cells || [])) {
+        let colgroup = Array.from(table?.children || []).find((child) => child.tagName === "COLGROUP");
+        if (!colgroup) {
+            colgroup = document.createElement("colgroup");
+            table.insertBefore(colgroup, table.firstChild);
+        }
+
+        while (colgroup.children.length < headers.length) {
+            colgroup.appendChild(document.createElement("col"));
+        }
+        while (colgroup.children.length > headers.length) {
+            colgroup.lastElementChild.remove();
+        }
+
+        const columns = Array.from(colgroup.children);
+        let widths;
+        if (colgroup.dataset.gridWidthsReady === "Y") {
+            widths = columns.map((column, index) => {
+                const savedWidth = Number.parseFloat(column.style.width || "");
+                return Math.max(48, Number.isFinite(savedWidth)
+                    ? savedWidth
+                    : (headers[index]?.getBoundingClientRect?.().width || 48));
+            });
+        } else {
+            widths = headers.map((header) => Math.max(48, Math.round(
+                header.getBoundingClientRect().width || header.offsetWidth || 48
+            )));
+            columns.forEach((column, index) => {
+                column.style.width = `${widths[index]}px`;
+            });
+            colgroup.dataset.gridWidthsReady = "Y";
+        }
+
+        table.style.tableLayout = "fixed";
+        table.style.minWidth = "0";
+        table.style.width = `${Math.ceil(widths.reduce((sum, width) => sum + width, 0))}px`;
+        return { colgroup, columns, widths };
+    },
+
+    setGridColumnWidth(table, columnModel, columnIndex, width) {
+        const nextWidth = Math.max(48, Math.min(900, Math.round(Number(width) || 48)));
+        columnModel.widths[columnIndex] = nextWidth;
+        columnModel.columns[columnIndex].style.width = `${nextWidth}px`;
+        table.style.width = `${Math.ceil(columnModel.widths.reduce((sum, value) => sum + value, 0))}px`;
+    },
+
+    syncGridTableWidth(table) {
+        const headers = Array.from(table?.tHead?.rows?.[0]?.cells || []);
+        if (!headers.length) return;
+        this.ensureGridColumnWidths(table, headers);
+    },
+
+    /**
+     * Shared default for table-grid renderers: a fixed No column at freeze 0
+     * and user-resizable headers. Existing grids that already render No keep
+     * their own row numbers and only receive the shared behavior.
+     */
+    applyStandardGridDefaults(table) {
+        if (!table?.classList?.contains("table-grid")) return;
+        if (table.classList.contains("data-edit-table") || table.classList.contains("data-sql-result-table")) return;
+        const headerRow = table.tHead?.rows?.[0];
+        if (!headerRow || table.dataset.standardGridReady === "Y") return;
+
+        const originalColumnCount = headerRow.children.length;
+        const hasRowNumber = headerRow.children[0]?.classList?.contains("grid-row-no");
+        if (!hasRowNumber) {
+            const rowOffset = Math.max(0, Number.parseInt(table.dataset.gridRowOffset || "0", 10) || 0);
+            const header = document.createElement("th");
+            header.className = "grid-row-no";
+            header.title = "No";
+            header.textContent = "No";
+            headerRow.insertBefore(header, headerRow.firstChild);
+            const colgroup = Array.from(table.children || []).find((child) => child.tagName === "COLGROUP");
+            if (colgroup && colgroup.children.length === originalColumnCount) {
+                const rowNumberColumn = document.createElement("col");
+                rowNumberColumn.style.width = "48px";
+                colgroup.insertBefore(rowNumberColumn, colgroup.firstChild);
+            }
+            Array.from(table.tBodies?.[0]?.rows || []).forEach((row, index) => {
+                if (row.children.length !== originalColumnCount) return;
+                const cell = document.createElement("td");
+                cell.className = "grid-row-no";
+                cell.textContent = String(rowOffset + index + 1);
+                row.insertBefore(cell, row.firstChild);
+            });
+        }
+
+        const freezeColumns = Math.max(0, Number.parseInt(table.dataset.standardGridFreezeColumns || "0", 10) || 0);
+        this.enableGridColumnResize(table, () => this.applyStandardGridFreeze(table, freezeColumns));
+        this.applyStandardGridFreeze(table, freezeColumns);
+        table.dataset.standardGridReady = "Y";
+    },
+
+    applyStandardGridFreeze(table, dataColumnCount = 0) {
+        const headerCells = Array.from(table?.tHead?.rows?.[0]?.children || []);
+        if (!headerCells.length) return;
+        const visibleFreezeCount = Math.min(headerCells.length, Math.max(0, Number(dataColumnCount) || 0) + 1);
+        const offsets = [];
+        let left = 0;
+        for (let index = 0; index < visibleFreezeCount; index += 1) {
+            offsets[index] = left;
+            left += headerCells[index].getBoundingClientRect().width || headerCells[index].offsetWidth || 0;
+        }
+        Array.from(table.rows || []).forEach((row) => {
+            Array.from(row.children || []).forEach((cell, index) => {
+                cell.classList.remove("is-frozen-col", "is-frozen-edge");
+                cell.style.left = "";
+                if (index >= visibleFreezeCount) return;
+                cell.classList.add("is-frozen-col");
+                if (index === visibleFreezeCount - 1) cell.classList.add("is-frozen-edge");
+                cell.style.left = `${offsets[index]}px`;
+            });
+        });
+    },
+
+    observeStandardGrids() {
+        if (this._standardGridObserver || typeof MutationObserver === "undefined") return;
+        const apply = (root) => {
+            if (root?.matches?.("table.table-grid")) this.applyStandardGridDefaults(root);
+            root?.querySelectorAll?.("table.table-grid").forEach((table) => this.applyStandardGridDefaults(table));
+        };
+        apply(document);
+        this._standardGridObserver = new MutationObserver((records) => {
+            records.forEach((record) => record.addedNodes.forEach((node) => {
+                if (node.nodeType === 1) apply(node);
+            }));
+        });
+        this._standardGridObserver.observe(document.body, { childList: true, subtree: true });
+    },
+
+    /**
+     * Legacy page-number button renderer.
      * @param {*} pageArea  - 렌더링할 tbody 요소(pageArea.innerHTML = html;)
      * @param {*} totalPages 
      * @param {*} currentPage 
@@ -1635,6 +1938,12 @@ const DialogFocusManager = {
 
 window.CommonUI = CommonUI;
 window.CommonUtils = CommonUtils;
+
+if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => CommonUtils.observeStandardGrids(), { once: true });
+} else {
+    CommonUtils.observeStandardGrids();
+}
 window.CommonMessage = CommonMessage;
 window.DialogFocusManager = DialogFocusManager;
 DialogFocusManager.init();

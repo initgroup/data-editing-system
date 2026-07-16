@@ -30,30 +30,11 @@
                 </select>
             </label>
         </div>
-        <section class="data-param-card flow-saved-card flow-context-saved-card" aria-label="Saved flow list">
-            <div class="data-panel-toolbar">
-                <span>
-                    <strong data-label-key="flowVersion">Saved Flows</strong>
-                </span>
-                <button type="button" id="flowVersionRefresh-__PAGE_CODE__" class="table-icon-btn" title="Refresh saved flows" data-title-key="refreshSavedFlowsTitle" onclick="__PAGE_CODE__.refreshSavedFlows()">
-                    <i class="fas fa-sync-alt"></i>
-                </button>
-                <button type="button" class="table-btn flow-switch-open-btn" onclick="__PAGE_CODE__.openFlowSwitcher(event)">
-                    <i class="fas fa-layer-group"></i>
-                    <span>Open</span>
-                </button>
-            </div>
-            <select id="flowVersion-__PAGE_CODE__" class="flow-version-hidden-select" onchange="__PAGE_CODE__.loadFlowVersion(this.value)" aria-hidden="true" tabindex="-1">
-                <option value="">Draft</option>
-            </select>
-            <div class="flow-saved-compact">
-                <button type="button" class="flow-saved-compact-main" onclick="__PAGE_CODE__.openFlowSwitcher(event)">
-                    <strong id="flowSavedCompactName-__PAGE_CODE__">Draft Flow</strong>
-                    <small id="flowSavedCompactMeta-__PAGE_CODE__">Select or create a saved flow.</small>
-                </button>
-            </div>
-        </section>
     </section>
+
+    <select id="flowVersion-__PAGE_CODE__" class="flow-version-hidden-select" onchange="__PAGE_CODE__.loadFlowVersion(this.value)" aria-hidden="true" tabindex="-1">
+        <option value="">Draft</option>
+    </select>
 
     <nav class="table-tabs data-work-tabs flow-work-tabs" aria-label="Flow work workspace tabs">
         <button type="button" class="table-tab is-active" data-tab="designer" onclick="__PAGE_CODE__.switchTab('designer')">
@@ -224,17 +205,26 @@
                             <button type="button" class="table-icon-btn" title="Show sample nodes" data-title-key="showSampleNodesTitle" onclick="__PAGE_CODE__.showSampleFlowCanvas()">
                                 <i class="fas fa-diagram-project"></i>
                             </button>
-                            <button type="button" class="table-icon-btn" title="Copy selected node" onclick="__PAGE_CODE__.duplicateSelectedNode()">
-                                <i class="far fa-copy"></i>
-                            </button>
                             <button type="button" class="table-icon-btn" title="Clear flow canvas" data-title-key="clearFlowCanvasTitle" onclick="__PAGE_CODE__.clearFlowCanvas()">
                                 <i class="fas fa-eraser"></i>
+                            </button>
+                            <button type="button" class="table-icon-btn" title="Copy selected node" data-title-key="copySelectedNodeTitle" onclick="__PAGE_CODE__.duplicateSelectedNode()">
+                                <i class="far fa-copy"></i>
                             </button>
                             <button type="button" class="table-icon-btn" title="Remove selected node" data-title-key="removeNode" onclick="__PAGE_CODE__.removeSelectedNode()">
                                 <i class="far fa-trash-alt"></i>
                             </button>
+                            <button type="button" class="table-icon-btn" title="Tree layout" data-title-key="treeLayoutTitle" onclick="__PAGE_CODE__.autoLayoutFlow()">
+                                <i class="fas fa-table-cells-large"></i>
+                            </button>
                             <button type="button" id="flowCanvasSelectionMode-__PAGE_CODE__" class="table-icon-btn flow-canvas-selection-mode-btn" title="Select nodes by drag" data-title-key="selectionModeTitle" aria-pressed="false" onclick="__PAGE_CODE__.toggleFlowCanvasSelectionMode()">
                                 <span class="flow-selection-mode-icon" aria-hidden="true"></span>
+                            </button>
+                            <button type="button" id="flowDashedConnectionMode-__PAGE_CODE__" class="table-icon-btn flow-dashed-connection-mode-btn" title="Solid connection mode" data-title-key="solidConnectionModeTitle" aria-pressed="false" onclick="__PAGE_CODE__.toggleDashedConnectionMode()">
+                                <span class="flow-connection-mode-icon" aria-hidden="true"></span>
+                            </button>
+                            <button type="button" class="table-icon-btn" title="Auto connect by position" data-title-key="autoConnectByPositionTitle" onclick="__PAGE_CODE__.applyAutoConnectionsByX()">
+                                <i class="fas fa-link"></i>
                             </button>
                             <button type="button" class="table-icon-btn" title="Zoom in" data-title-key="zoomInTitle" onclick="__PAGE_CODE__.zoomFlow(1)">
                                 <i class="fas fa-magnifying-glass-plus"></i>
@@ -247,9 +237,6 @@
                             </button>
                             <button type="button" class="table-icon-btn" title="Fit canvas" data-title-key="fitCanvasTitle" onclick="__PAGE_CODE__.fitFlowCanvas()">
                                 <i class="fas fa-up-right-and-down-left-from-center"></i>
-                            </button>
-                            <button type="button" class="table-icon-btn" title="Tree layout" data-title-key="autoLayoutTitle" onclick="__PAGE_CODE__.autoLayoutFlow()">
-                                <i class="fas fa-table-cells-large"></i>
                             </button>
                             <button type="button" id="flowCanvasMaximize-__PAGE_CODE__" class="table-icon-btn" title="Maximize canvas" data-title-key="maximizeCanvasTitle" onclick="__PAGE_CODE__.toggleCanvasMaximize()">
                                 <i class="fas fa-expand"></i>
@@ -275,17 +262,16 @@
                                     </svg>
                                 </div>
                                 <div id="flowCanvasMenu-__PAGE_CODE__" class="flow-context-menu" hidden>
-                                    <button type="button" data-flow-menu-action="runSelectedNode"><i class="fas fa-play"></i><span>Run selected node</span></button>
-                                    <button type="button" data-flow-menu-action="runFromSelectedNode"><i class="fas fa-forward-step"></i><span>Run from selected node</span></button>
+                                    <button type="button" data-flow-menu-action="runSelectedNode"><i class="fas fa-play"></i><span data-label-key="contextRunSelectedNode">Run selected node</span></button>
+                                    <button type="button" data-flow-menu-action="runFromSelectedNode"><i class="fas fa-forward-step"></i><span data-label-key="contextRunFromSelectedNode">Run from selected node</span></button>
                                     <hr>
-                                    <button type="button" data-flow-menu-action="duplicateNode" onpointerdown="__PAGE_CODE__.handleInlineContextMenuAction(event, 'duplicateNode')"><i class="far fa-copy"></i><span>Duplicate node</span></button>
-                                    <button type="button" data-flow-menu-action="deleteNode" onpointerdown="__PAGE_CODE__.handleInlineContextMenuAction(event, 'deleteNode')"><i class="far fa-trash-alt"></i><span>Delete node</span></button>
+                                    <button type="button" data-flow-menu-action="duplicateNode" onpointerdown="__PAGE_CODE__.handleInlineContextMenuAction(event, 'duplicateNode')"><i class="far fa-copy"></i><span data-label-key="contextDuplicateNode">Duplicate node</span></button>
+                                    <button type="button" data-flow-menu-action="deleteNode" onpointerdown="__PAGE_CODE__.handleInlineContextMenuAction(event, 'deleteNode')"><i class="far fa-trash-alt"></i><span data-label-key="contextDeleteNode">Delete node</span></button>
                                     <hr>
-                                    <button type="button" data-flow-menu-action="toggleDashedConnection"><i class="fas fa-grip-lines"></i><span>Dashed connection: OFF</span></button>
-                                    <button type="button" data-flow-menu-action="treeLayout"><i class="fas fa-sitemap"></i><span>Tree layout</span></button>
-                                    <button type="button" data-flow-menu-action="autoConnectByX"><i class="fas fa-link"></i><span>Auto connect by position</span></button>
-                                    <button type="button" data-flow-menu-action="fitCanvas"><i class="fas fa-up-right-and-down-left-from-center"></i><span>Fit canvas</span></button>
-                                    <button type="button" data-flow-menu-action="resetZoom"><i class="fas fa-compress"></i><span>Reset zoom</span></button>
+                                    <button type="button" data-flow-menu-action="treeLayout"><i class="fas fa-table-cells-large"></i><span data-label-key="treeLayoutTitle">Tree layout</span></button>
+                                    <button type="button" data-flow-menu-action="autoConnectByX"><i class="fas fa-link"></i><span data-label-key="autoConnectByPositionTitle">Auto connect by position</span></button>
+                                    <button type="button" data-flow-menu-action="fitCanvas"><i class="fas fa-up-right-and-down-left-from-center"></i><span data-label-key="fitCanvasTitle">Fit canvas</span></button>
+                                    <button type="button" data-flow-menu-action="resetZoom"><i class="fas fa-compress"></i><span data-label-key="resetZoomTitle">Reset zoom</span></button>
                                 </div>
                                 <button type="button" id="flowEdgeDelete-__PAGE_CODE__" class="flow-edge-delete" title="Delete selected edge" onclick="__PAGE_CODE__.removeSelectedEdge()" hidden>
                                     <i class="fas fa-times"></i>
@@ -390,55 +376,58 @@ END;</textarea>
     </section>
 
     <section class="table-tab-panel data-tool-panel flow-history-panel" data-panel="history">
-        <div class="data-panel-toolbar">
-            <button type="button" id="flowRunHistoryRefresh-__PAGE_CODE__" class="table-icon-btn" title="Refresh history" aria-label="Refresh history" onclick="__PAGE_CODE__.refreshFlowRunHistory()">
-                <i class="fas fa-sync-alt"></i>
-            </button>
-            <span id="flowRunHistoryRefreshStatus-__PAGE_CODE__" class="flow-history-refresh-status"></span>
+        <div class="grid-command-area">
+            <div class="grid-command-toolbar">
+                <div class="data-grid-topbar">
+                    <div class="data-grid-status">
+                        <div id="flowRunHistoryCount-__PAGE_CODE__" class="table-empty data-grid-message" aria-live="polite"></div>
+                        <span id="flowRunHistoryRefreshStatus-__PAGE_CODE__" class="flow-history-refresh-status"></span>
+                    </div>
+                    <button type="button" id="flowRunHistoryRefresh-__PAGE_CODE__" class="table-icon-btn" title="Refresh history" data-title-key="refreshHistoryTitle" aria-label="Refresh history" onclick="__PAGE_CODE__.refreshFlowRunHistory()">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+            </div>
         </div>
-        <div id="flowRunHistoryCount-__PAGE_CODE__" class="flow-history-count-row" aria-live="polite"></div>
-        <div id="flowRunHistoryGrid-__PAGE_CODE__" class="table-result-grid"></div>
+        <div id="flowRunHistoryGrid-__PAGE_CODE__" class="table-result-grid flow-history-grid"></div>
     </section>
 
     <section class="table-tab-panel data-tool-panel flow-result-sql-panel" data-panel="resultSql">
         <div class="data-sql-workbench flow-result-sql-workbench">
-            <div class="data-panel-toolbar flow-result-sql-toolbar">
-                <div class="sql-toolbar-actions">
-                    <button type="button" class="table-icon-btn sql-tool-icon-btn sql-run-btn" title="Run SQL (Ctrl+Enter)" data-title-key="runResultSqlTitle" aria-label="Run SQL" onclick="__PAGE_CODE__.executeFlowResultSql()">
-                        <i class="fas fa-play"></i>
-                    </button>
-                </div>
-                <div class="sql-toolbar-options">
-                    <label class="table-limit-control flow-result-sql-freeze" title="Freeze No plus this many data columns while scrolling horizontally" data-title-key="freezeColumnsTitle">
-                        <span data-label-key="freezeColumns">Freeze</span>
-                        <input id="flowResultSqlFreezeColumns-__PAGE_CODE__" type="number" min="0" max="50" value="0" onchange="__PAGE_CODE__.applyFlowResultSqlFrozenColumns()" oninput="__PAGE_CODE__.applyFlowResultSqlFrozenColumns()">
-                    </label>
-                    <label class="table-limit-control flow-result-sql-limit">
-                        <span data-label-key="rows">Rows</span>
-                        <input id="flowResultSqlLimit-__PAGE_CODE__" type="number" min="1" max="1000" value="100">
-                    </label>
-                </div>
-            </div>
             <div class="data-user-sql-context flow-result-sql-context">
                 <strong id="flowResultSqlTitle-__PAGE_CODE__" data-label-key="resultSqlTitle">Result SQL</strong>
                 <span id="flowResultSqlHint-__PAGE_CODE__" data-label-key="resultSqlSelectHint">Select a node result from Run History details.</span>
             </div>
-            <textarea id="flowResultSqlEditor-__PAGE_CODE__" class="sql-editor data-script-editor flow-result-sql-editor" spellcheck="false" aria-label="Flow result SQL" onkeydown="__PAGE_CODE__.handleFlowResultSqlKeydown(event)">-- Select a node result from Run History details.</textarea>
-            <div class="data-sql-result-header">
-                <div id="flowResultSqlMessage-__PAGE_CODE__" class="table-empty" aria-live="polite" hidden></div>
-                <div class="table-export-actions data-sql-export-actions" aria-label="Export Flow result SQL data">
-                    <button type="button" class="table-icon-btn export-excel" title="Export Excel" data-title-key="exportExcelTitle" onclick="__PAGE_CODE__.exportFlowResultSqlGrid('excel')">
-                        <i class="fas fa-file-excel"></i>
-                    </button>
-                    <button type="button" class="table-icon-btn" title="Export CSV" data-title-key="exportCsvTitle" onclick="__PAGE_CODE__.exportFlowResultSqlGrid('csv')">
-                        <i class="fas fa-file-csv"></i>
-                    </button>
-                    <button type="button" class="table-icon-btn" title="Export TSV" data-title-key="exportTsvTitle" onclick="__PAGE_CODE__.exportFlowResultSqlGrid('tsv')">
-                        <i class="fas fa-file-lines"></i>
+            <div class="grid-command-area data-sql-editor-command-area">
+                <div class="grid-command-toolbar flow-result-sql-toolbar data-sql-editor-toolbar">
+                    <button type="button" class="table-icon-btn sql-tool-icon-btn sql-run-btn" title="Run SQL (Ctrl+Enter)" data-title-key="runResultSqlTitle" aria-label="Run SQL" onclick="__PAGE_CODE__.executeFlowResultSql()">
+                        <i class="fas fa-play"></i>
                     </button>
                 </div>
             </div>
-            <div id="flowResultSqlGrid-__PAGE_CODE__" class="table-result-grid">
+            <textarea id="flowResultSqlEditor-__PAGE_CODE__" class="sql-editor data-script-editor flow-result-sql-editor" spellcheck="false" aria-label="Flow result SQL" onkeydown="__PAGE_CODE__.handleFlowResultSqlKeydown(event)">-- Select a node result from Run History details.</textarea>
+            <div class="grid-command-area">
+                <div class="grid-command-toolbar">
+                    <div class="data-grid-topbar">
+                        <div class="data-grid-status">
+                            <div id="flowResultSqlPager-__PAGE_CODE__" class="grid-pager-host" hidden></div>
+                            <div id="flowResultSqlMessage-__PAGE_CODE__" class="table-empty data-grid-message" aria-live="polite"></div>
+                        </div>
+                        <span class="grid-export-actions" aria-label="Export Flow result SQL data">
+                            <button type="button" class="table-icon-btn export-excel" title="Export Excel" data-title-key="exportExcelTitle" onclick="__PAGE_CODE__.exportFlowResultSqlGrid('excel')">
+                                <i class="fas fa-file-excel"></i>
+                            </button>
+                            <button type="button" class="table-icon-btn" title="Export CSV" data-title-key="exportCsvTitle" onclick="__PAGE_CODE__.exportFlowResultSqlGrid('csv')">
+                                <i class="fas fa-file-csv"></i>
+                            </button>
+                            <button type="button" class="table-icon-btn" title="Export JSON" data-title-key="exportJsonTitle" onclick="__PAGE_CODE__.exportFlowResultSqlGrid('json')">
+                                <i class="fas fa-file-code"></i>
+                            </button>
+                        </span>
+                    </div>
+                </div>
+            </div>
+            <div id="flowResultSqlGrid-__PAGE_CODE__" class="table-result-grid flow-result-sql-grid-wrap">
                 <div class="table-empty" data-label-key="noResultSqlExecuted">No result SQL executed.</div>
             </div>
         </div>

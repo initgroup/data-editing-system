@@ -236,6 +236,17 @@
     gap: 6px;
 }
 
+.flow-node-run-result-toolbar {
+    align-items: center;
+    color: #64748b;
+    display: flex;
+    font-size: 12px;
+    font-weight: 700;
+    justify-content: flex-end;
+    min-height: 24px;
+    padding: 0 2px;
+}
+
 .flow-run-plan-summary {
     background: #f8fafc;
     border: 1px solid #e2e8f0;
@@ -935,7 +946,7 @@
 .flow-work-page .flow-designer-card {
     display: flex;
     flex-direction: column;
-    flex: 1 1 auto;
+    flex: 1 1 0;
     min-height: 0;
     overflow: hidden;
     position: relative;
@@ -998,7 +1009,9 @@
 }
 
 .flow-canvas-selection-mode-btn.is-active,
-.flow-canvas-selection-mode-btn[aria-pressed="true"] {
+.flow-canvas-selection-mode-btn[aria-pressed="true"],
+.flow-dashed-connection-mode-btn.is-active,
+.flow-dashed-connection-mode-btn[aria-pressed="true"] {
     background: #e0f2fe;
     border-color: #38bdf8;
     color: #075985;
@@ -1034,6 +1047,38 @@
     position: absolute;
     right: -4px;
     width: 5px;
+}
+
+.flow-connection-mode-icon {
+    display: inline-block;
+    height: 14px;
+    position: relative;
+    width: 18px;
+}
+
+.flow-connection-mode-icon::before {
+    border-top: 2px solid currentColor;
+    content: "";
+    left: 3px;
+    position: absolute;
+    right: 3px;
+    top: 6px;
+}
+
+.flow-connection-mode-icon::after {
+    background: currentColor;
+    border-radius: 50%;
+    box-shadow: 12px 0 0 currentColor;
+    content: "";
+    height: 4px;
+    left: 1px;
+    position: absolute;
+    top: 5px;
+    width: 4px;
+}
+
+.flow-connection-mode-icon.is-dashed::before {
+    border-top-style: dashed;
 }
 
 .flow-work-page .flow-canvas-panel {
@@ -1075,7 +1120,7 @@
     background-size: 24px 24px;
     border: 1px solid #d7dce3;
     cursor: grab;
-    flex: 1 1 auto;
+    flex: 1 1 0;
     height: auto;
     min-height: 0;
     overflow: auto;
@@ -1508,7 +1553,6 @@
 }
 
 .flow-run-message-cell {
-    min-width: 560px;
     white-space: normal;
 }
 
@@ -1518,8 +1562,8 @@
     gap: 6px;
     grid-template-columns: minmax(0, 1fr) auto;
     box-sizing: border-box;
-    min-width: 560px;
-    padding-right: 10px;
+    min-width: 0;
+    padding-right: 0;
 }
 
 .flow-node-run-message textarea {
@@ -1540,8 +1584,13 @@
 }
 
 .flow-node-run-message .table-icon-btn {
+    align-self: start;
+    flex: 0 0 28px;
     height: 28px;
     min-height: 28px;
+    overflow: visible;
+    position: relative;
+    z-index: 1;
     width: 28px;
 }
 
@@ -1947,47 +1996,12 @@
     table-layout: fixed;
 }
 
-.flow-result-sql-grid th.flow-result-sql-resizable {
-    overflow: visible;
-    padding-right: 14px;
-}
-
 .flow-result-sql-grid .flow-result-sql-th-label {
     display: block;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-}
-
-.flow-result-sql-col-resizer {
-    bottom: 0;
-    cursor: col-resize;
-    position: absolute;
-    right: -4px;
-    top: 0;
-    width: 8px;
-    z-index: 4;
-}
-
-.flow-result-sql-col-resizer::after {
-    background: transparent;
-    bottom: 7px;
-    content: "";
-    position: absolute;
-    right: 3px;
-    top: 7px;
-    width: 1px;
-}
-
-.flow-result-sql-col-resizer:hover::after,
-body.is-resizing-flow-result-sql .flow-result-sql-col-resizer::after {
-    background: #2563eb;
-}
-
-body.is-resizing-flow-result-sql {
-    cursor: col-resize;
-    user-select: none;
 }
 
 .flow-work-page .data-tool-panel[data-panel="history"].is-active {
@@ -2798,45 +2812,36 @@ body.is-resizing-flow-result-sql {
     padding: 0;
 }
 
-.flow-work-page .flow-history-panel > .data-panel-toolbar,
-.flow-work-page .flow-history-count-row,
-.flow-work-page .flow-result-sql-toolbar,
-.flow-work-page .data-sql-result-header {
+.flow-work-page .flow-history-panel > .grid-command-area,
+.flow-work-page .flow-result-sql-workbench > .grid-command-area {
     flex: 0 0 auto;
 }
 
-.flow-work-page .flow-history-count-row {
-    align-items: center;
-    display: flex;
-    justify-content: flex-end;
-    min-height: 20px;
-    padding: 0 4px 4px;
-}
-
-.flow-work-page .flow-history-count-row .list-count-footer {
-    position: static;
-    right: auto;
-    top: auto;
-    z-index: auto;
-}
-
-.flow-work-page .flow-history-panel > .table-result-grid {
-    border: 1px solid #d1d5db;
-    flex: 1 1 0;
-    height: auto;
-    max-height: none;
+.flow-work-page .flow-history-panel.is-active,
+.flow-work-page .flow-result-sql-panel.is-active {
     min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+.flow-work-page .flow-history-panel > .flow-history-grid {
+    border: 1px solid #d1d5db;
+    box-sizing: border-box;
+    flex: 1 0 232px;
+    height: 232px;
+    max-height: none;
+    min-height: 232px;
     overflow: auto;
 }
 
 .flow-work-page .flow-result-sql-workbench {
     display: flex;
-    flex: 1 1 0;
+    flex: 1 0 auto;
     flex-direction: column;
     gap: 8px;
-    height: 100%;
+    height: auto;
     min-height: 0;
-    overflow: hidden;
+    overflow: visible;
 }
 
 .flow-work-page .flow-result-sql-editor {
@@ -2845,20 +2850,32 @@ body.is-resizing-flow-result-sql {
     width: 100%;
 }
 
-.flow-work-page .flow-result-sql-workbench > .table-result-grid {
+.flow-work-page .flow-result-sql-workbench > .flow-result-sql-grid-wrap {
     border: 1px solid #d1d5db;
-    flex: 1 1 0;
-    height: auto;
+    box-sizing: border-box;
+    flex: 1 0 232px;
+    height: 232px;
     max-height: none;
-    min-height: 0;
+    min-height: 232px;
     overflow: auto;
 }
 
-.flow-work-page .flow-history-panel > .table-result-grid .table-grid th,
-.flow-work-page .flow-result-sql-workbench > .table-result-grid .table-grid th {
+.flow-work-page .flow-history-panel > .flow-history-grid .table-grid th,
+.flow-work-page .flow-result-sql-workbench > .flow-result-sql-grid-wrap .table-grid th {
+    background: #f8fafc;
     position: sticky;
     top: 0;
-    z-index: 2;
+    z-index: 4;
+}
+
+.flow-work-page .flow-history-panel > .flow-history-grid .table-grid th.is-frozen-col,
+.flow-work-page .flow-result-sql-workbench > .flow-result-sql-grid-wrap .table-grid th.is-frozen-col {
+    z-index: 6;
+}
+
+.flow-work-page .flow-history-panel > .flow-history-grid .table-grid th.grid-row-no.is-frozen-col,
+.flow-work-page .flow-result-sql-workbench > .flow-result-sql-grid-wrap .table-grid th.grid-row-no.is-frozen-col {
+    z-index: 7;
 }
 
 #container-M04001.flow-work-page.is-flow-canvas-maximized .flow-designer-panel.is-active {
@@ -2914,14 +2931,15 @@ body.is-resizing-flow-result-sql {
     #container-M04001.flow-work-page .flow-result-sql-panel.is-active {
         flex: 0 0 auto;
         height: auto !important;
-        min-height: calc(100vh - 180px);
-        overflow: visible;
+        min-height: 0;
+        overflow-x: hidden;
+        overflow-y: auto;
     }
 
     #container-M04001.flow-work-page .flow-history-panel > .table-result-grid,
     #container-M04001.flow-work-page .flow-result-sql-workbench {
         flex: 0 0 auto;
-        min-height: 360px;
+        min-height: 232px;
     }
 
     #container-M04001.flow-work-page .flow-result-sql-workbench {
@@ -2930,7 +2948,7 @@ body.is-resizing-flow-result-sql {
     }
 
     #container-M04001.flow-work-page .flow-result-sql-workbench > .table-result-grid {
-        min-height: 220px;
+        min-height: 232px;
     }
 
     #container-M04001.flow-work-page .flow-work-tabs {
@@ -3181,14 +3199,15 @@ body.is-resizing-flow-result-sql {
     #container-M04001.flow-work-page .flow-result-sql-panel.is-active {
         flex: 0 0 auto;
         height: auto !important;
-        min-height: calc(100vh - 172px);
-        overflow: visible;
+        min-height: 0;
+        overflow-x: hidden;
+        overflow-y: auto;
     }
 
     #container-M04001.flow-work-page .flow-history-panel > .table-result-grid,
     #container-M04001.flow-work-page .flow-result-sql-workbench {
         flex: 0 0 auto;
-        min-height: 360px;
+        min-height: 232px;
     }
 
     #container-M04001.flow-work-page .flow-result-sql-workbench {
@@ -3197,7 +3216,7 @@ body.is-resizing-flow-result-sql {
     }
 
     #container-M04001.flow-work-page .flow-result-sql-workbench > .table-result-grid {
-        min-height: 220px;
+        min-height: 232px;
     }
 
     #container-M04001.flow-work-page .flow-workspace,
@@ -3334,4 +3353,68 @@ body.is-resizing-flow-result-sql {
     .flow-work-page .flow-import-source-field {
         grid-column: auto;
     }
+}
+
+/* Final common grid-workbench rules, after responsive legacy declarations. */
+.flow-work-page .flow-result-sql-workbench {
+    gap: 0;
+}
+
+.flow-work-page .flow-result-sql-context,
+.flow-work-page .flow-result-sql-workbench > .data-sql-editor-command-area,
+.flow-work-page .flow-result-sql-editor,
+.flow-work-page .flow-result-sql-workbench > .flow-result-sql-grid-wrap {
+    margin-bottom: 0;
+    margin-top: 0;
+}
+
+.flow-work-page .flow-result-sql-editor {
+    min-height: 0;
+}
+
+.flow-work-page .flow-history-grid .flow-run-history-grid {
+    min-width: 100%;
+}
+
+/* Keep the history viewport width stable when an inline detail adds a vertical scrollbar. */
+.flow-work-page .flow-history-panel > .flow-history-grid {
+    overflow-x: auto;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+}
+
+.flow-work-page .flow-run-inline-detail-row > td {
+    min-width: 100%;
+}
+
+.flow-work-page .flow-run-inline-detail {
+    box-sizing: border-box;
+    min-width: 100%;
+    width: 100%;
+}
+
+.flow-work-page .flow-run-inline-detail > header {
+    min-width: 0;
+}
+
+.flow-work-page .flow-run-plan-tools {
+    flex: 0 0 auto;
+}
+
+/* The detail result table fills the same usable width as its parent history grid. */
+.flow-work-page .flow-run-inline-detail .flow-node-run-result-table {
+    min-width: 920px;
+    table-layout: fixed;
+    width: 100% !important;
+}
+
+.flow-work-page .flow-run-inline-detail .flow-node-run-result-table col:last-child {
+    width: auto !important;
+}
+
+.flow-work-page .flow-node-run-result-scroll {
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: visible;
 }

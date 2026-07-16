@@ -21,6 +21,7 @@ from pathlib import Path
 from backend.database_helper import execute_query
 from backend.auth_context import get_request_login_id, get_request_user_id
 from backend.target_database import get_target_db_connection
+from backend.paging import create_page_window, normalize_page_number, normalize_page_size
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -40,12 +41,14 @@ AUTO_ENCODING_NAMES = {"", "auto", "detect", "auto-detect", "automatic"}
 class UploadTableRequest(BaseModel):
     tableName: Optional[str] = None
     limit: Optional[int] = 100
+    page: Optional[int] = 1
     model_config = ConfigDict(extra="allow")
 
 
 class SqlRequest(BaseModel):
     sql: str
     limit: Optional[int] = 100
+    page: Optional[int] = 1
     model_config = ConfigDict(extra="allow")
 
 
@@ -405,22 +408,27 @@ def get_upload_columns(req: UploadTableRequest, request: Request):
 @router.post("/data")
 def get_upload_data(req: UploadTableRequest, request: Request):
     table_name = require_read_table(req.tableName)
-    limit = normalize_limit(req.limit)
+    limit = normalize_page_size(req.limit)
+    page = normalize_page_number(req.page)
     conn = None
     try:
         conn = get_target_db_connection(request)
-        result = execute_query(conn, "M02001_UPLOAD_TABLE_DATA", {
-            "dynamicTable": f'"{table_name}"',
-            "limit": limit
-        })
+        table_object = f'"{table_name}"'
+        count_result = execute_query(conn, "M02001_UPLOAD_TABLE_DATA_COUNT", {"dynamicTable": table_object})
+        total_rows = count_result.get("data", [])
+        total = int(total_rows[0].get("TOTAL_COUNT") or 0) if total_rows else 0
+        page_window = create_page_window(page, limit, total)
+        result = execute_query(conn, "M02001_UPLOAD_TABLE_DATA_PAGE", {"dynamicTable": table_object, "offset": page_window.offset, "limit": page_window.page_size})
         if result.get("status") != "success":
             raise HTTPException(status_code=500, detail=result.get("detail") or result.get("message") or "Data query failed.")
-        return {
+        response = {
             "status": "success",
             "data": result.get("data", []),
             "columns": result.get("columns", []),
-            "total": result.get("total", 0)
+            "total": total
         }
+        response.update(page_window.response_metadata())
+        return response
     finally:
         if conn:
             conn.close()
@@ -429,22 +437,26 @@ def get_upload_data(req: UploadTableRequest, request: Request):
 @router.post("/sql")
 def execute_sql(req: SqlRequest, request: Request):
     sql = normalize_select_sql(req.sql)
-    limit = normalize_limit(req.limit)
+    limit = normalize_page_size(req.limit)
+    page = normalize_page_number(req.page)
     conn = None
     try:
         conn = get_target_db_connection(request)
-        result = execute_query(conn, "M02001_SQL_WORKSHEET", {
-            "dynamicSql": sql,
-            "limit": limit
-        })
+        count_result = execute_query(conn, "M02001_SQL_WORKSHEET_COUNT", {"dynamicSql": sql})
+        total_rows = count_result.get("data", [])
+        total = int(total_rows[0].get("TOTAL_COUNT") or 0) if total_rows else 0
+        page_window = create_page_window(page, limit, total)
+        result = execute_query(conn, "M02001_SQL_WORKSHEET_PAGE", {"dynamicSql": sql, "offset": page_window.offset, "limit": page_window.page_size})
         if result.get("status") != "success":
             raise HTTPException(status_code=500, detail=result.get("detail") or result.get("message") or "SQL execution failed.")
-        return {
+        response = {
             "status": "success",
             "data": result.get("data", []),
             "columns": result.get("columns", []),
-            "total": result.get("total", 0)
+            "total": total
         }
+        response.update(page_window.response_metadata())
+        return response
     finally:
         if conn:
             conn.close()

@@ -17,6 +17,7 @@ import uuid
 from backend.target_database import get_target_connection_id, get_target_db_connection, get_target_db_connection_by_id
 from backend.auth_context import get_request_role_code, get_request_user_id
 from backend.database_helper import execute_query, SqlLoader
+from backend.paging import create_page_window, normalize_page_number, normalize_page_size
 from backend.services.background_jobs import submit_background_job
 from backend.services import data_work_service as data_work
 from backend.services import api_call_service
@@ -32,7 +33,9 @@ logger = logging.getLogger(__name__)
 class TableRequest(BaseModel):
     owner: Optional[str] = None
     tableName: Optional[str] = None
+    selectClause: Optional[str] = "*"
     limit: Optional[int] = 100
+    page: Optional[int] = 1
     whereClause: Optional[str] = None
     orderByClause: Optional[str] = None
     model_config = ConfigDict(extra="allow")
@@ -53,6 +56,7 @@ class DataUpdateRequest(TableRequest):
 class SqlRequest(BaseModel):
     sql: str
     limit: Optional[int] = 100
+    page: Optional[int] = 1
     transactionId: Optional[str] = None
     runtimeBindValues: Optional[Dict[str, Any]] = None
     model_config = ConfigDict(extra="allow")
@@ -827,7 +831,7 @@ def create_data_work_router(
     @router.post("/data")
     def get_table_data(req: TableRequest, request: Request):
         owner, table_name = require_table(req)
-        limit = normalize_limit(req.limit)
+        limit = normalize_page_size(req.limit)
         conn = None
         try:
             conn = get_target_db_connection(request)
@@ -844,14 +848,17 @@ def create_data_work_router(
     @router.post("/data/editable")
     def get_editable_table_data(req: TableRequest, request: Request):
         owner, table_name = require_table(req)
-        limit = normalize_limit(req.limit)
+        limit = normalize_page_size(req.limit)
+        page = normalize_page_number(req.page)
         where_clause = normalize_where_clause(req.whereClause)
         conn = None
         try:
             conn = get_target_db_connection(request)
-            column_names = get_table_column_names(conn, owner, table_name)
+            column_list = get_table_column_list(conn, owner, table_name)
+            column_names = set(column_list)
+            select_clause = normalize_select_clause(req.selectClause, column_list)
             order_by_clause = normalize_order_by_clause(req.orderByClause, column_names)
-            return fetch_editable_table_data(conn, owner, table_name, limit, where_clause, order_by_clause)
+            return fetch_editable_table_data(conn, owner, table_name, page, limit, select_clause, where_clause, order_by_clause)
         except HTTPException:
             raise
         except Exception as e:
@@ -976,7 +983,8 @@ def create_data_work_router(
     @router.post("/sql")
     def execute_sql(req: SqlRequest, request: Request):
         sql_text = (req.sql or "").strip()
-        limit = normalize_limit(req.limit)
+        limit = normalize_page_size(req.limit)
+        page = normalize_page_number(req.page)
         conn = None
         use_transaction = bool(req.transactionId)
         auto_start_transaction = False
@@ -1010,13 +1018,21 @@ def create_data_work_router(
     
             sql = executable_script["text"] if executable_script else normalize_select_sql(sql_text)
             sql, bind_values = prepare_runtime_script(sql, req.runtimeBindValues or {})
+            count_result = data_work.require_success(execute_query(conn, f"{SQL_PREFIX}_SQL_WORKSHEET_COUNT", {
+                "dynamicSql": sql,
+                **bind_values
+            }), "SQL total count failed.")
+            count_row = (count_result.get("data") or [{}])[0]
+            page_window = create_page_window(page, limit, count_row.get("TOTAL_COUNT"))
             result = execute_query(conn, f"{SQL_PREFIX}_SQL_WORKSHEET", {
                 "dynamicSql": sql,
-                "limit": limit,
+                "offset": page_window.offset,
+                "limit": page_window.page_size,
                 **bind_values
             })
             response = normalize_sql_result(data_work.require_success(result, "SQL execution failed."))
-            response["message"] = f"{response.get('total', 0)} rows selected."
+            response.update(page_window.response_metadata())
+            response["message"] = f"{len(response.get('data', []))} rows selected."
             response["elapsedMs"] = int((time.perf_counter() - started_at) * 1000)
             response["transactionId"] = req.transactionId
             return response
@@ -1594,14 +1610,6 @@ def create_data_work_router(
         return '"' + str(value).replace('"', '""') + '"'
     
     
-    def normalize_limit(value: Optional[int]) -> int:
-        try:
-            limit = int(value or 100)
-        except (TypeError, ValueError):
-            limit = 100
-        return max(1, min(limit, 1000))
-
-
     def normalize_where_clause(value: Optional[str]) -> str:
         text = (value or "").strip()
         if not text:
@@ -1657,6 +1665,34 @@ def create_data_work_router(
         return ", ".join(order_items)
 
 
+    def normalize_select_clause(value: Optional[str], column_names: List[str]) -> str:
+        text = "*" if value is None else str(value).strip()
+        if text == "*":
+            return "T.*"
+        if not text:
+            raise HTTPException(status_code=400, detail="Select at least one column or use *.")
+        if len(text) > 2000:
+            raise HTTPException(status_code=400, detail="SELECT column list is too long.")
+        if re.search(r"(;|--|/\*|\*/)", text):
+            raise HTTPException(status_code=400, detail="Only a column list is allowed in SELECT.")
+
+        column_lookup = {column.upper(): column for column in column_names}
+        selected_columns = []
+        for raw_item in [item.strip() for item in text.split(",") if item.strip()]:
+            match = re.fullmatch(r'"?([A-Za-z][A-Za-z0-9_$#]*)"?', raw_item)
+            if not match:
+                raise HTTPException(status_code=400, detail=f"Invalid SELECT column: {raw_item}")
+            column_name = match.group(1).upper()
+            if column_name not in column_lookup:
+                raise HTTPException(status_code=400, detail=f"SELECT column was not found: {column_name}")
+            if column_name not in selected_columns:
+                selected_columns.append(column_name)
+
+        if not selected_columns:
+            raise HTTPException(status_code=400, detail="Select at least one column or use *.")
+        return ", ".join(f'T.{quote_identifier(column_lookup[column])}' for column in selected_columns)
+
+
     def get_table_column_names(conn, owner: str, table_name: str) -> set[str]:
         return set(get_table_column_list(conn, owner, table_name))
 
@@ -1673,33 +1709,42 @@ def create_data_work_router(
         return set()
 
 
-    def fetch_editable_table_data(conn, owner: str, table_name: str, limit: int, where_clause: str, order_by_clause: str) -> Dict[str, Any]:
+    def fetch_editable_table_data(
+        conn,
+        owner: str,
+        table_name: str,
+        page: int,
+        limit: int,
+        select_clause: str,
+        where_clause: str,
+        order_by_clause: str
+    ) -> Dict[str, Any]:
         target_object = quote_identifier(owner) + "." + quote_identifier(table_name)
         where_sql = f" WHERE {where_clause}" if where_clause else ""
-        order_sql = f" ORDER BY {order_by_clause}" if order_by_clause else ""
-        sql = (
-            f"SELECT * FROM ("
-            f"SELECT ROWIDTOCHAR(T.ROWID) AS \"INIT$ROWID\", T.* "
-            f"FROM {target_object} T{where_sql}{order_sql}"
-            f") WHERE ROWNUM <= :limit"
+        order_sql = f" ORDER BY {order_by_clause}" if order_by_clause else " ORDER BY T.ROWID"
+        count_result = data_work.require_success(
+            execute_query(conn, "DATA_WORK_EDITABLE_DATA_COUNT", {
+                "dynamicTable": target_object,
+                "dynamicSql": where_sql
+            }),
+            "Editable data count query failed."
         )
-        cursor = conn.cursor()
-        try:
-            cursor.execute(sql, {"limit": limit})
-            columns = [desc[0] for desc in cursor.description] if cursor.description else []
-            rows = cursor.fetchall()
-            data = [
-                {column: serialize_db_value(value) for column, value in zip(columns, row)}
-                for row in rows
-            ]
-            return {
-                "status": "success",
-                "data": data,
-                "columns": columns,
-                "total": len(data)
-            }
-        finally:
-            cursor.close()
+        count_rows = count_result.get("data", [])
+        total = int(count_rows[0].get("TOTAL_COUNT") or 0) if count_rows else 0
+        page_window = create_page_window(page, limit, total)
+
+        page_result = normalize_sql_result(data_work.require_success(
+            execute_query(conn, "DATA_WORK_EDITABLE_DATA_PAGE", {
+                "dynamicTable": target_object,
+                "dynamicColumns": select_clause,
+                "dynamicSql": where_sql + order_sql,
+                "offset": page_window.offset,
+                "limit": page_window.page_size
+            }),
+            "Editable data page query failed."
+        ))
+        page_result.update(page_window.response_metadata())
+        return page_result
 
 
     def is_predicted_type_table(table_name: str) -> bool:

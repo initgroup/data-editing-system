@@ -34,7 +34,12 @@
             data: [],
             sql: []
         },
-        gridFrozenColumns: { sql: 0 },
+        gridFrozenColumns: { columns: 0, data: 0, sql: 0 },
+        gridPages: { data: 1, sql: 1 },
+        gridPageSizes: { data: 100, sql: 100 },
+        gridTotals: { data: 0, sql: 0 },
+        gridTotalPages: { data: 1, sql: 1 },
+        sqlGridText: "",
         selectedCell: null,
         resizing: null,
         handleResizeMoveBound: null,
@@ -74,7 +79,12 @@
             this.activeTab = "columns";
             this.gridData = { columns: [], data: [], sql: [] };
             this.columnWidths = { columns: [], data: [], sql: [] };
-            this.gridFrozenColumns = { sql: 0 };
+            this.gridFrozenColumns = { columns: 0, data: 0, sql: 0 };
+            this.gridPages = { data: 1, sql: 1 };
+            this.gridPageSizes = { data: 100, sql: 100 };
+            this.gridTotals = { data: 0, sql: 0 };
+            this.gridTotalPages = { data: 1, sql: 1 };
+            this.sqlGridText = "";
             this.selectedCell = null;
             this.resizing = null;
             this.contextLoadFailed = false;
@@ -769,14 +779,15 @@
                     body: this.getSelectedPayload()
                 });
                 this.renderGrid("#columnsGrid-M02002", json.data || [], "columns", json.columns || []);
+                this.renderColumnsGridToolbar(json.total || (json.data || []).length);
             } catch (error) {
                 this.renderError("#columnsGrid-M02002", error.message);
             }
         },
 
-        async loadTableData() {
+        async loadTableData(page = 1) {
             if (!this.ensureSelectedTable()) return;
-            const limit = this.getLimit("#dataLimit-M02002");
+            const limit = this.gridPageSizes.data || 100;
             const grid = getContainerEl("#dataGrid-M02002");
             if (grid) grid.innerHTML = `<div class="table-empty">${this.escapeHtml(this.t("loadingData", "Loading data..."))}</div>`;
 
@@ -784,22 +795,28 @@
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/data`, {
                     method: "POST",
                     showLoading: false,
-                    body: { ...this.getSelectedPayload(), limit }
+                body: { ...this.getSelectedPayload(), limit, page }
                 });
+                this.gridPages.data = Number(json.page || page);
+                this.gridPageSizes.data = Number(json.pageSize || limit);
+                this.gridTotals.data = Number(json.total || 0);
+                this.gridTotalPages.data = Number(json.totalPages || 1);
                 this.renderGrid("#dataGrid-M02002", json.data || [], "data", json.columns || []);
+                this.renderGridPager("data");
+                this.renderDataGridMessage(`${(json.data || []).length.toLocaleString()} rows selected.`);
             } catch (error) {
                 this.renderError("#dataGrid-M02002", error.message);
             }
         },
 
-        async executeSql() {
+        async executeSql(page = 1, sqlOverride = "") {
             const executable = this.getExecutableSqlFromEditor();
             if (!executable.sql) {
                 this.renderSqlMessage(this.t("noSqlAtCursor", "No SQL statement found at the cursor."), "error");
                 this.renderError("#sqlGrid-M02002", this.t("noSqlAtCursor", "No SQL statement found at the cursor."));
                 return;
             }
-            const sql = executable.sql;
+            const sql = sqlOverride || executable.sql;
             if (!this.validateSelectSql(sql)) {
                 this.renderSqlMessage("Only a single SELECT statement is allowed.", "error");
                 this.renderError("#sqlGrid-M02002", "Only a single SELECT statement is allowed.");
@@ -808,7 +825,7 @@
             }
 
             this.restoreSqlSelection(executable);
-            const limit = this.getLimit("#sqlLimit-M02002");
+            const limit = this.gridPageSizes.sql || 100;
             const grid = getContainerEl("#sqlGrid-M02002");
             const startedAt = performance.now();
             this.renderSqlMessage("Running SQL...", "info");
@@ -818,12 +835,18 @@
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/sql`, {
                     method: "POST",
                     showLoading: false,
-                    body: { sql, limit }
+                body: { sql, limit, page }
                 });
                 const elapsedMs = Math.round(performance.now() - startedAt);
                 const rowCount = Array.isArray(json.data) ? json.data.length : 0;
                 this.renderSqlMessage(`${rowCount.toLocaleString()} rows selected. (${elapsedMs.toLocaleString()} ms)`, "success");
+                this.sqlGridText = sql;
+                this.gridPages.sql = Number(json.page || page);
+                this.gridPageSizes.sql = Number(json.pageSize || limit);
+                this.gridTotals.sql = Number(json.total || 0);
+                this.gridTotalPages.sql = Number(json.totalPages || 1);
                 this.renderGrid("#sqlGrid-M02002", json.data || [], "sql", json.columns || []);
+                this.renderGridPager("sql");
             } catch (error) {
                 const elapsedMs = Math.round(performance.now() - startedAt);
                 this.renderSqlMessage(`${error.message || "SQL execution failed."} (${elapsedMs.toLocaleString()} ms)`, "error");
@@ -839,6 +862,47 @@
             element.className = type === "error" ? "table-error" : "table-empty";
             element.textContent = message || "";
             element.hidden = !message;
+        },
+
+        renderDataGridMessage(message) {
+            const element = getContainerEl("#dataGridMessage-M02002");
+            if (element) element.textContent = message || "";
+        },
+
+        renderColumnsGridToolbar(total) {
+            const message = getContainerEl("#columnsGridMessage-M02002");
+            if (message) message.textContent = this.formatGridTotal(total);
+            const controls = getContainerEl("#columnsGridControls-M02002");
+            if (controls) controls.innerHTML = `<label class="table-limit-control grid-pager-number-control" title="${this.escapeHtml(this.t("freezeColumnsTitle", "Freeze No and selected data columns while scrolling horizontally."))}"><span>${this.escapeHtml(this.t("freezeColumns", "Freeze"))}</span><input type="number" min="0" max="50" value="${this.gridFrozenColumns.columns || 0}" oninput="M02002.setGridFreeze('columns', this.value)"></label>`;
+        },
+
+        renderGridPager(gridKey) {
+            const host = getContainerEl(`#${gridKey}GridPager-M02002`);
+            if (!host) return;
+            CommonUtils.renderServerPager(host, {
+                visible: true, page: this.gridPages[gridKey], pageSize: this.gridPageSizes[gridKey], totalPages: this.gridTotalPages[gridKey],
+                totalLabel: this.formatGridTotal(this.gridTotals[gridKey]),
+                labels: { page: "Page", go: "Go", previousPage: "Previous page", nextPage: "Next page", rowsPerPage: "Rows per page" },
+                onMove: (delta) => this.loadGridPage(gridKey, this.gridPages[gridKey] + delta),
+                onGo: (value) => this.loadGridPage(gridKey, value),
+                onPageSize: (value) => { this.gridPageSizes[gridKey] = Number(value || 100); this.loadGridPage(gridKey, 1); },
+                trailingNumberControl: { label: this.t("freezeColumns", "Freeze"), title: this.t("freezeColumnsTitle", "Freeze No and selected data columns while scrolling horizontally."), value: this.gridFrozenColumns[gridKey] || 0, min: 0, max: 50, onInput: (value) => this.setGridFreeze(gridKey, value) }
+            });
+        },
+
+        formatGridTotal(total) {
+            return this.t("gridTotal", "Total {count}").replace("{count}", Number(total || 0).toLocaleString());
+        },
+
+        loadGridPage(gridKey, page) {
+            const next = Math.max(1, Math.min(Number(this.gridTotalPages[gridKey] || 1), Number(page || 1)));
+            if (gridKey === "data") return this.loadTableData(next);
+            return this.executeSql(next, this.sqlGridText);
+        },
+
+        setGridFreeze(gridKey, value) {
+            this.gridFrozenColumns[gridKey] = Math.max(0, Number.parseInt(value || 0, 10) || 0);
+            this.applyGridFrozenColumns(gridKey);
         },
 
         handleSqlEditorKeydown(event) {
@@ -937,7 +1001,6 @@
                                     ${visibleColumns.map((column, index) => `
                                         <th class="is-resizable" title="${this.escapeHtml(column)}">
                                             <span class="table-th-content">${this.escapeHtml(column)}</span>
-                                            <span class="column-resizer" onmousedown="M02002.startColumnResize(event, '${gridKey}', ${index})"></span>
                                         </th>
                                     `).join("")}
                                 </tr>
@@ -945,12 +1008,13 @@
                             <tbody></tbody>
                         </table>
                     `;
-                    const footerMarkup = gridKey === "sql" ? "" : this.renderListFooter(0);
+                    const footerMarkup = "";
                     container.innerHTML = `<div class="table-grid-scroll">${tableMarkup}</div>${footerMarkup}`;
+                    this.enableSharedGridResize(gridKey);
                     this.applyGridFrozenColumns(gridKey);
                     return;
                 }
-                const footerMarkup = gridKey === "sql" ? "" : this.renderListFooter(0);
+                const footerMarkup = "";
                 container.innerHTML = `
                     <div class="table-grid-scroll">
                         <div class="table-empty">${this.escapeHtml(this.t("noData", "No data."))}</div>
@@ -972,7 +1036,6 @@
                             ${visibleColumns.map((column, index) => `
                                 <th class="is-resizable" title="${this.escapeHtml(column)}">
                                     <span class="table-th-content">${this.escapeHtml(column)}</span>
-                                    <span class="column-resizer" onmousedown="M02002.startColumnResize(event, '${gridKey}', ${index})"></span>
                                 </th>
                             `).join("")}
                         </tr>
@@ -980,7 +1043,7 @@
                     <tbody>
                         ${rows.map((row, rowIndex) => `
                             <tr>
-                                <td class="grid-row-no">${rowIndex + 1}</td>
+                                <td class="grid-row-no">${this.getGridRowNumber(gridKey, rowIndex)}</td>
                                 ${visibleColumns.map((column, columnIndex) => `
                                     <td
                                         class="${this.getGridCellClass(gridKey, column)}"
@@ -993,17 +1056,33 @@
                     </tbody>
                 </table>
             `;
-            const footerMarkup = gridKey === "sql" ? "" : this.renderListFooter(rows.length);
+            const footerMarkup = "";
             container.innerHTML = `<div class="table-grid-scroll">${tableMarkup}</div>${footerMarkup}`;
+            this.enableSharedGridResize(gridKey);
             this.applyGridFrozenColumns(gridKey);
+        },
+
+        getGridRowNumber(gridKey, rowIndex) {
+            return (gridKey === "data" || gridKey === "sql")
+                ? ((Number(this.gridPages[gridKey] || 1) - 1) * Number(this.gridPageSizes[gridKey] || 100)) + rowIndex + 1
+                : rowIndex + 1;
+        },
+
+        enableSharedGridResize(gridKey) {
+            const table = getContainerEl(`[data-grid-key="${gridKey}"]`);
+            CommonUtils.enableGridColumnResize(table, (width, header) => {
+                const index = Array.from(header.parentElement?.children || []).indexOf(header) - 1;
+                if (index >= 0) this.columnWidths[gridKey][index] = width;
+                this.applyGridFrozenColumns(gridKey);
+            });
         },
 
         getGridFreezeCount(gridKey) {
             const table = getContainerEl(`[data-grid-key="${gridKey}"]`);
             const headerCells = Array.from(table?.tHead?.rows?.[0]?.children || []);
             const maxDataColumns = Math.max(0, headerCells.length - 1);
-            const input = gridKey === "sql" ? getContainerEl("#sqlFreezeColumns-M02002") : null;
-            let dataColumnCount = Number.parseInt(input?.value ?? this.gridFrozenColumns?.[gridKey] ?? 0, 10);
+            const input = null;
+            let dataColumnCount = Number.parseInt(this.gridFrozenColumns?.[gridKey] ?? 0, 10);
             if (!Number.isFinite(dataColumnCount)) dataColumnCount = 0;
             dataColumnCount = Math.max(0, Math.min(maxDataColumns, dataColumnCount));
             this.gridFrozenColumns = { ...(this.gridFrozenColumns || {}), [gridKey]: dataColumnCount };
@@ -1049,7 +1128,7 @@
             const current = this.columnWidths[gridKey] || [];
             return columns.map((column, index) => {
                 const existing = Number(current[index]);
-                if (Number.isFinite(existing) && existing >= 80) return existing;
+                if (Number.isFinite(existing) && existing >= 48) return existing;
                 if (gridKey === "columns" && column === "TABLE_ID") return 360;
                 return Math.min(Math.max(String(column).length * 9 + 38, 120), 260);
             });
@@ -1191,6 +1270,19 @@
             if (format === "tsv") {
                 this.downloadBlob(`${baseName}.tsv`, this.createDelimitedContent(rows, "\t"), "text/tab-separated-values;charset=utf-8");
             }
+        },
+
+        exportGrid(gridKey, format) {
+            const previousTab = this.activeTab;
+            this.activeTab = gridKey;
+            const normalized = format === "json" ? "tsv" : format;
+            if (format === "json") {
+                const rows = this.gridData[gridKey] || [];
+                if (rows.length) this.downloadBlob(`${this.createExportFileName(gridKey)}.json`, JSON.stringify(rows, null, 2), "application/json;charset=utf-8");
+            } else {
+                this.exportActiveGrid(normalized);
+            }
+            this.activeTab = previousTab;
         },
 
         createExportFileName(gridKey) {

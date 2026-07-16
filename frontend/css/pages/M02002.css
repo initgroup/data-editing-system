@@ -427,3 +427,42 @@
         border-color: #1d4ed8;
         color: #ffffff;
     }}
+
+/* Keep the common toolbar directly attached to its grid. */
+#container-M02002 .table-tab-panel[data-panel="sql"] > .sql-workbench {
+    gap: 0;
+    grid-template-rows: minmax(34px, auto) minmax(52px, 72px) auto minmax(250px, 1fr);
+}
+
+#container-M02002 .table-tab-panel[data-panel="sql"] > .sql-workbench > .grid-command-area:first-child,
+#container-M02002 #sqlEditor-M02002 {
+    margin-bottom: 6px;
+}
+
+#container-M02002 #sqlGrid-M02002 {
+    flex: 1 0 250px;
+    height: 250px;
+    min-height: 250px;
+    padding-bottom: 0;
+    padding-top: 0;
+}
+
+#container-M02002 #columnsGrid-M02002,
+#container-M02002 #dataGrid-M02002 {
+    padding-top: 0;
+}
+
+@media (max-width: 1024px) {
+    #container-M02002 .table-panel {
+        height: min(620px, calc(100dvh - 120px));
+        max-height: calc(100dvh - 120px);
+        min-height: 0;
+        overflow-x: hidden;
+        overflow-y: auto;
+    }
+
+    #container-M02002 .table-tab-panel[data-panel="sql"].is-active,
+    #container-M02002 .table-tab-panel[data-panel="sql"] > .sql-workbench {
+        min-height: 0;
+    }
+}

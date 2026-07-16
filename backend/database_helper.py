@@ -94,6 +94,10 @@ def execute_query(conn, sql_id: str, params: dict = None, is_dml: bool = False, 
         # [요구사항 12] 파일에서 ID로 SQL 추출
         sql = SqlLoader.get_sql(sql_id)
         if not sql:
+            # SQL 파일이 hot reload된 뒤에도 현재 프로세스가 새 SQL ID를 찾을 수 있게 한 번 재로드합니다.
+            SqlLoader.reload_queries()
+            sql = SqlLoader.get_sql(sql_id)
+        if not sql:
             # SQL을 못 찾으면 에러 메시지 반환
             return {"data": [], "total": 0, "status": "error", "detail": f"SQL ID '{sql_id}'를 찾을 수 없습니다. (경로: {SqlLoader._sql_dir})"}
         
@@ -106,6 +110,8 @@ def execute_query(conn, sql_id: str, params: dict = None, is_dml: bool = False, 
                 sql = sql.replace("/* --DYNAMIC_TABLE-- */", params['dynamicTable'])
             if 'dynamicSql' in params:
                 sql = sql.replace("/* --DYNAMIC_SQL-- */", params['dynamicSql'])
+            if 'dynamicColumns' in params:
+                sql = sql.replace("/* --DYNAMIC_COLUMNS-- */", params['dynamicColumns'])
 
             # [DPY-4008 방지] 실제 SQL에 존재하는 바인드 변수만 필터링
             used_bind_vars = re.findall(r":([a-zA-Z0-9_]+)", sql)

@@ -258,11 +258,17 @@
         sqlKeydownBound: null,
         resultSqlKeydownBound: null,
         userSqlInputBound: null,
+        dataSelectColumnsInputBound: null,
         dataWhereInputBound: null,
+        dataOrderByInputBound: null,
         userSqlDirty: false,
         systemUserSqlValue: "",
+        dataSelectColumnsDirty: false,
+        systemDataSelectColumnsValue: "*",
         dataWhereDirty: false,
         systemDataWhereValue: "",
+        dataOrderByDirty: false,
+        systemDataOrderByValue: "",
         expandedRunHistoryKey: "",
         sqlTransactionId: "",
         gridData: {},
@@ -271,12 +277,26 @@
         gridResizeMoveBound: null,
         gridResizeUpBound: null,
         sqlGridFrozenColumns: { sql: 0 },
+        sqlGridPage: 1,
+        sqlGridPageSize: 100,
+        sqlGridTotal: 0,
+        sqlGridTotalPages: 1,
+        sqlGridSql: "",
+        sqlGridRuntimeBindValues: {},
+        sqlGridLoading: false,
+        sqlGridLoaded: false,
         dataGridRows: [],
         dataGridColumns: [],
         dataGridDirtyCells: new Map(),
         dataGridTargetKey: "",
         dataGridActiveCell: null,
         dataGridFrozenColumns: 0,
+        dataGridPage: 1,
+        dataGridPageSize: 100,
+        dataGridTotal: 0,
+        dataGridTotalPages: 1,
+        dataGridLoaded: false,
+        dataGridLoading: false,
         contextLoadFailed: false,
         runtimeBindDialog: null,
         runtimeBindValues: {},
@@ -294,10 +314,14 @@
             this.sqlKeydownBound = (event) => this.handleSqlEditorKeydown(event, `#sqlEditor-${PAGE_CODE}`, `#sqlGrid-${PAGE_CODE}`, "sql");
             this.resultSqlKeydownBound = (event) => this.handleSqlEditorKeydown(event, `#resultSqlEditor-${PAGE_CODE}`, `#resultGrid-${PAGE_CODE}`, "result");
             this.userSqlInputBound = () => this.handleUserSqlInput();
+            this.dataSelectColumnsInputBound = () => this.handleDataSelectColumnsInput();
             this.dataWhereInputBound = () => this.handleDataWhereInput();
+            this.dataOrderByInputBound = () => this.handleDataOrderByInput();
             getContainerEl(`#sqlEditor-${PAGE_CODE}`)?.addEventListener("keydown", this.sqlKeydownBound);
             getContainerEl(`#sqlEditor-${PAGE_CODE}`)?.addEventListener("input", this.userSqlInputBound);
+            getContainerEl(`#dataSelectColumns-${PAGE_CODE}`)?.addEventListener("input", this.dataSelectColumnsInputBound);
             getContainerEl(`#dataWhere-${PAGE_CODE}`)?.addEventListener("input", this.dataWhereInputBound);
+            getContainerEl(`#dataOrderBy-${PAGE_CODE}`)?.addEventListener("input", this.dataOrderByInputBound);
             getContainerEl(`#resultSqlEditor-${PAGE_CODE}`)?.addEventListener("keydown", this.resultSqlKeydownBound);
             await Promise.all([
                 this.loadExecutableObjects(),
@@ -318,7 +342,9 @@
             this.endSqlGridColumnResize?.();
             getContainerEl(`#sqlEditor-${PAGE_CODE}`)?.removeEventListener("keydown", this.sqlKeydownBound);
             getContainerEl(`#sqlEditor-${PAGE_CODE}`)?.removeEventListener("input", this.userSqlInputBound);
+            getContainerEl(`#dataSelectColumns-${PAGE_CODE}`)?.removeEventListener("input", this.dataSelectColumnsInputBound);
             getContainerEl(`#dataWhere-${PAGE_CODE}`)?.removeEventListener("input", this.dataWhereInputBound);
+            getContainerEl(`#dataOrderBy-${PAGE_CODE}`)?.removeEventListener("input", this.dataOrderByInputBound);
             getContainerEl(`#resultSqlEditor-${PAGE_CODE}`)?.removeEventListener("keydown", this.resultSqlKeydownBound);
             this.contextProjects = [];
             this.contextScenarios = [];
@@ -343,22 +369,42 @@
             this.sqlKeydownBound = null;
             this.resultSqlKeydownBound = null;
             this.userSqlInputBound = null;
+            this.dataSelectColumnsInputBound = null;
             this.dataWhereInputBound = null;
+            this.dataOrderByInputBound = null;
             this.userSqlDirty = false;
             this.systemUserSqlValue = "";
+            this.dataSelectColumnsDirty = false;
+            this.systemDataSelectColumnsValue = "*";
             this.dataWhereDirty = false;
             this.systemDataWhereValue = "";
+            this.dataOrderByDirty = false;
+            this.systemDataOrderByValue = "";
             this.sqlTransactionId = "";
             this.gridData = {};
             this.gridColumnWidths = {};
             this.gridResizeState = null;
             this.sqlGridFrozenColumns = { sql: 0 };
+            this.sqlGridPage = 1;
+            this.sqlGridPageSize = 100;
+            this.sqlGridTotal = 0;
+            this.sqlGridTotalPages = 1;
+            this.sqlGridSql = "";
+            this.sqlGridRuntimeBindValues = {};
+            this.sqlGridLoading = false;
+            this.sqlGridLoaded = false;
             this.dataGridRows = [];
             this.dataGridColumns = [];
             this.dataGridDirtyCells = new Map();
             this.dataGridTargetKey = "";
             this.dataGridActiveCell = null;
             this.dataGridFrozenColumns = 0;
+            this.dataGridPage = 1;
+            this.dataGridPageSize = 100;
+            this.dataGridTotal = 0;
+            this.dataGridTotalPages = 1;
+            this.dataGridLoaded = false;
+            this.dataGridLoading = false;
             this.contextLoadFailed = false;
             this.runtimeBindDialog = null;
             this.runtimeBindValues = {};
@@ -450,7 +496,7 @@
                 this.newJob();
             }
             await this.loadRunHistory();
-            this.setWorkContextCollapsed(Boolean(this.selectedProjectId && this.selectedScenarioId && this.selectedScenarioTableKey));
+            this.setWorkContextCollapsed(Boolean(this.selectedProjectId && this.selectedScenarioId));
         },
 
         async refreshWorkContext() {
@@ -469,7 +515,7 @@
                 this.newJob();
             }
             await this.loadRunHistory();
-            this.setWorkContextCollapsed(Boolean(this.selectedProjectId && this.selectedScenarioId && this.selectedScenarioTableKey));
+            this.setWorkContextCollapsed(Boolean(this.selectedProjectId && this.selectedScenarioId));
         },
 
         async loadContextProjects(preferredProjectId = "") {
@@ -491,7 +537,7 @@
                 this.selectedProjectId = "";
                 console.error("[${PAGE_CODE}] project context load failed", error);
                 select.innerHTML = `<option value="">Project load failed</option>`;
-                this.renderError(`#scenarioTablesGrid-${PAGE_CODE}`, message);
+                this.renderTargetTablePickerError(message);
                 this.renderError(`#workJobGrid-${PAGE_CODE}`, message);
             }
         },
@@ -531,7 +577,7 @@
                 this.newJob();
             }
             await this.loadRunHistory();
-            this.setWorkContextCollapsed(Boolean(this.selectedProjectId && this.selectedScenarioId && this.selectedScenarioTableKey));
+            this.setWorkContextCollapsed(Boolean(this.selectedProjectId && this.selectedScenarioId));
         },
 
         async loadContextScenarios(preferredScenarioId = "") {
@@ -556,7 +602,7 @@
                 this.selectedScenarioId = "";
                 console.error("[${PAGE_CODE}] scenario context load failed", error);
                 if (select) select.innerHTML = `<option value="">Scenario load failed</option>`;
-                this.renderError(`#scenarioTablesGrid-${PAGE_CODE}`, message);
+                this.renderTargetTablePickerError(message);
                 this.renderError(`#workJobGrid-${PAGE_CODE}`, message);
             }
         },
@@ -597,7 +643,7 @@
                 this.newJob();
             }
             await this.loadRunHistory();
-            this.setWorkContextCollapsed(Boolean(this.selectedProjectId && this.selectedScenarioId && this.selectedScenarioTableKey));
+            this.setWorkContextCollapsed(Boolean(this.selectedProjectId && this.selectedScenarioId));
         },
 
         ensureWorkContextSelected() {
@@ -732,19 +778,15 @@
         },
 
         async loadScenarioTables() {
-            const container = getContainerEl(`#scenarioTablesGrid-${PAGE_CODE}`);
-            if (!container) return;
-
             const preferredTableKey = this.selectedScenarioTableKey || "";
             this.selectedScenarioTableKey = "";
             if (!this.selectedProjectId || !this.selectedScenarioId) {
                 this.scenarioTables = [];
-                container.innerHTML = `<div class="table-empty">Select project and scenario first.</div>${this.renderListFooter(0)}`;
+                this.renderTargetTablePickerList();
                 this.updateWorkContextSummary();
                 return;
             }
 
-            container.innerHTML = `<div class="table-empty">Loading scenario tables...</div>`;
             try {
                 const params = new URLSearchParams({
                     projectId: this.selectedProjectId,
@@ -755,8 +797,10 @@
                 const preferredExists = this.scenarioTables.some((row) => this.getScenarioTableKey(row) === preferredTableKey);
                 this.selectedScenarioTableKey = preferredExists
                     ? preferredTableKey
-                    : (this.scenarioTables[0] ? this.getScenarioTableKey(this.scenarioTables[0]) : "");
-                this.renderScenarioTables();
+                    : (this.scenarioTables.length === 1 && !this.currentJob?.profileJobId
+                        ? this.getScenarioTableKey(this.scenarioTables[0])
+                        : "");
+                this.renderTargetTablePickerList();
                 if (this.selectedScenarioTableKey && !this.currentJob?.profileJobId) {
                     this.applySelectedScenarioTableToCurrentJob();
                     await this.setDefaultUserSql(false);
@@ -764,44 +808,42 @@
                 }
                 this.updateWorkContextSummary();
             } catch (error) {
-                container.innerHTML = `<div class="table-error">${this.escapeHtml(error.message || "Scenario table load failed.")}</div>`;
+                this.scenarioTables = [];
+                this.selectedScenarioTableKey = "";
+                this.renderTargetTablePickerError(error.message || "Scenario table load failed.");
             }
         },
 
-        renderScenarioTables() {
-            const container = getContainerEl(`#scenarioTablesGrid-${PAGE_CODE}`);
+        renderTargetTablePickerList() {
+            const container = getContainerEl(`#targetTablePickerList-${PAGE_CODE}`);
             if (!container) return;
 
             if (!this.scenarioTables.length) {
-                container.innerHTML = `<div class="table-empty">No tables registered to this scenario.</div>${this.renderListFooter(0)}`;
-                this.updateWorkContextSummary();
+                const message = this.selectedProjectId && this.selectedScenarioId
+                    ? (this.getLabel("noScenarioTables") || "No tables are registered to this scenario.")
+                    : (this.getLabel("selectProjectScenarioFirst") || "Select project and scenario first.");
+                container.innerHTML = `<div class="table-empty">${this.escapeHtml(message)}</div>`;
                 return;
             }
 
-            container.innerHTML = `
-                <div class="scenario-table-head">
-                    <div>Owner</div>
-                    <div>Table</div>
-                    <div>Comment</div>
-                    <div>Status</div>
-                </div>
-                <div class="scenario-table-body">
-                    ${this.scenarioTables.map((row) => this.createScenarioTableRow(row)).join("")}
-                </div>
-                ${this.renderListFooter(this.scenarioTables.length)}
-            `;
+            container.innerHTML = this.scenarioTables.map((row) => this.createTargetTablePickerRow(row)).join("");
         },
 
-        createScenarioTableRow(row) {
+        renderTargetTablePickerError(message) {
+            const container = getContainerEl(`#targetTablePickerList-${PAGE_CODE}`);
+            if (container) container.innerHTML = `<div class="table-error">${this.escapeHtml(message || "Scenario table load failed.")}</div>`;
+        },
+
+        createTargetTablePickerRow(row) {
             const key = this.getScenarioTableKey(row);
             const selectedClass = key === this.selectedScenarioTableKey ? "is-selected" : "";
             return `
-                <div role="button" tabindex="0" class="scenario-table-row ${selectedClass}" data-scenario-table-key="${this.escapeHtml(key)}" onclick="${PAGE_CODE}.selectScenarioTable('${this.escapeJs(key)}')">
+                <button type="button" class="data-target-table-picker-row ${selectedClass}" data-scenario-table-key="${this.escapeHtml(key)}" onclick="${PAGE_CODE}.selectTargetTable('${this.escapeJs(key)}')">
                     <span title="${this.escapeHtml(row.OWNER_NAME || "")}">${this.escapeHtml(row.OWNER_NAME || "-")}</span>
                     <span title="${this.escapeHtml(row.TABLE_NAME || "")}">${this.escapeHtml(row.TABLE_NAME || "-")}</span>
                     <span title="${this.escapeHtml(row.TABLE_COMMENT || "")}">${this.escapeHtml(row.TABLE_COMMENT || "-")}</span>
                     <span>${this.escapeHtml(row.USE_YN || "Y")}</span>
-                </div>
+                </button>
             `;
         },
 
@@ -809,17 +851,30 @@
             return row?.SCENARIO_TABLE_ID ? `ID:${row.SCENARIO_TABLE_ID}` : `${row?.OWNER_NAME || ""}.${row?.TABLE_NAME || ""}`;
         },
 
-        selectScenarioTable(key) {
-            this.selectedScenarioTableKey = key || "";
-            getContainerEl(`#scenarioTablesGrid-${PAGE_CODE}`)?.querySelectorAll(".scenario-table-row").forEach((row) => {
-                row.classList.toggle("is-selected", row.dataset.scenarioTableKey === this.selectedScenarioTableKey);
-            });
+        async openTargetTablePicker() {
+            if (!this.ensureWorkContextSelected()) return;
+            if (!this.scenarioTables.length) await this.loadScenarioTables();
+            this.renderTargetTablePickerList();
+            const layer = getContainerEl(`#targetTablePickerLayer-${PAGE_CODE}`);
+            if (layer) {
+                layer.hidden = false;
+                this.enableHelpLayerDrag(layer);
+            }
+        },
 
+        closeTargetTablePicker() {
+            const layer = getContainerEl(`#targetTablePickerLayer-${PAGE_CODE}`);
+            if (layer) layer.hidden = true;
+        },
+
+        async selectTargetTable(key) {
+            this.selectedScenarioTableKey = key || "";
             this.applySelectedScenarioTableToCurrentJob();
             this.resetEditableDataGrid();
-            this.setDefaultUserSql(false);
+            await this.setDefaultUserSql(false);
             this.renderCurrentJob();
             this.updateWorkContextSummary();
+            this.closeTargetTablePicker();
         },
 
         applySelectedScenarioTableToCurrentJob() {
@@ -2046,7 +2101,7 @@
                 parameters: this.cloneParameterRows(this.parameters)
             };
             this.selectedScenarioTableKey = job.SCENARIO_TABLE_ID ? `ID:${job.SCENARIO_TABLE_ID}` : "";
-            this.renderScenarioTables();
+            this.renderTargetTablePickerList();
             this.renderJobs();
             this.renderCurrentJob();
             this.updateWorkContextSummary();
@@ -2060,7 +2115,8 @@
 
         newJob() {
             this.selectedJobId = "";
-            const selectedTable = this.getSelectedScenarioTable();
+            const selectedTable = this.scenarioTables.length === 1 ? this.scenarioTables[0] : null;
+            this.selectedScenarioTableKey = selectedTable ? this.getScenarioTableKey(selectedTable) : "";
             this.currentJob = this.createEmptyJob();
             this.savedJobSnapshot = null;
             this.parameters = [];
@@ -2210,6 +2266,10 @@
             this.setFieldValue(`#workJobDesc-${PAGE_CODE}`, job.jobDesc || "");
             this.setFieldValue(`#targetOwner-${PAGE_CODE}`, job.ownerName || "");
             this.setFieldValue(`#targetTable-${PAGE_CODE}`, job.tableName || "");
+            const targetTableButton = getContainerEl(`#selectTargetTable-${PAGE_CODE}`);
+            if (targetTableButton) {
+                targetTableButton.disabled = !this.selectedProjectId || !this.selectedScenarioId || this.isJobExecutionActive();
+            }
             this.setFieldValue(`#jobUseYn-${PAGE_CODE}`, job.useYn || "Y");
             this.setFieldValue(`#jobSortOrder-${PAGE_CODE}`, job.sortOrder ?? "");
             this.setFieldValue(`#execSourceType-${PAGE_CODE}`, job.execSourceType || "DB_OBJECT");
@@ -2535,9 +2595,8 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
         updateWorkContextSummary() {
             const project = this.contextProjects.find((row) => String(row.PROJECT_ID) === String(this.selectedProjectId));
             const scenario = this.contextScenarios.find((row) => String(row.SCENARIO_ID) === String(this.selectedScenarioId));
-            const table = this.getSelectedScenarioTable();
             const summary = getContainerEl(`#workContextSummary-${PAGE_CODE}`);
-            if (!project && !scenario && !table) {
+            if (!project && !scenario) {
                 if (summary) {
                     summary.dataset.labelKey = "contextSummaryEmpty";
                     summary.textContent = this.getLabel("contextSummaryEmpty") || "No context selected.";
@@ -2548,8 +2607,7 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
             if (summary) delete summary.dataset.labelKey;
             const parts = [
                 project ? `${this.getLabel("contextSummaryProject") || "Project"}: ${CommonUtils.formatOwnerScopedName(project, project.PROJECT_NAME || project.PROJECT_CODE || "-")}` : `${this.getLabel("contextSummaryProject") || "Project"}: -`,
-                scenario ? `${this.getLabel("contextSummaryScenario") || "Scenario"}: ${CommonUtils.formatOwnerScopedName(scenario, scenario.SCENARIO_NAME || scenario.SCENARIO_CODE || "-")}` : `${this.getLabel("contextSummaryScenario") || "Scenario"}: -`,
-                table ? `${this.getLabel("contextSummaryTable") || "Table"}: ${table.OWNER_NAME || "-"}.${table.TABLE_NAME || "-"}` : `${this.getLabel("contextSummaryTable") || "Table"}: -`
+                scenario ? `${this.getLabel("contextSummaryScenario") || "Scenario"}: ${CommonUtils.formatOwnerScopedName(scenario, scenario.SCENARIO_NAME || scenario.SCENARIO_CODE || "-")}` : `${this.getLabel("contextSummaryScenario") || "Scenario"}: -`
             ];
             this.setText(`#workContextSummary-${PAGE_CODE}`, parts.join(" | "));
             this.updateJobsTitle(scenario);
@@ -2824,20 +2882,15 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
 
             if (!this.selectedProjectId || !this.selectedScenarioId) {
                 this.runHistory = [];
+                this.setRunHistoryCount(0);
                 container.innerHTML = `
-                    ${this.renderListFooter(0)}
-                    <div class="data-history-grid-scroll">
-                        <div class="table-empty">Select project and scenario first.</div>
-                    </div>
+                    <div class="table-empty">Select project and scenario first.</div>
                 `;
                 return;
             }
 
             container.innerHTML = `
-                ${this.renderListFooter(0)}
-                <div class="data-history-grid-scroll">
-                    <div class="table-empty">Loading run history...</div>
-                </div>
+                <div class="table-empty">Loading run history...</div>
             `;
             try {
                 const params = new URLSearchParams({
@@ -2851,13 +2904,18 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                 this.runHistory = Array.isArray(json.data) ? json.data : [];
                 this.renderRunHistory();
             } catch (error) {
+                this.setRunHistoryCount(0);
                 container.innerHTML = `
-                    ${this.renderListFooter(0)}
-                    <div class="data-history-grid-scroll">
-                        <div class="table-error">${this.escapeHtml(error.message || "Run history load failed.")}</div>
-                    </div>
+                    <div class="table-error">${this.escapeHtml(error.message || "Run history load failed.")}</div>
                 `;
             }
+        },
+
+        setRunHistoryCount(count = 0) {
+            const countEl = getContainerEl(`#runHistoryCount-${PAGE_CODE}`);
+            if (!countEl) return;
+            const template = this.getMessage("historyTotal", "Total {count}");
+            countEl.textContent = template.replace(/\{count\}/g, Number(count || 0).toLocaleString());
         },
 
         renderRunHistory() {
@@ -2914,27 +2972,53 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
         renderRunHistoryGrid(rows, columns) {
             const container = getContainerEl(`#runHistoryGrid-${PAGE_CODE}`);
             if (!container) return;
+            this.setRunHistoryCount(rows?.length || 0);
             if (!Array.isArray(rows) || !rows.length || !columns.length) {
-                this.renderGrid(`#runHistoryGrid-${PAGE_CODE}`, rows, columns);
+                container.innerHTML = `<div class="table-empty">${this.escapeHtml(this.getMessage("noRunHistory", "No run history."))}</div>`;
                 return;
             }
 
             container.innerHTML = `
-                ${this.renderListFooter(rows.length)}
-                <div class="data-history-grid-scroll">
-                    <table class="table-grid data-history-table">
-                        <thead>
-                            <tr>
-                                <th class="grid-row-no">No</th>
-                                ${columns.map((column) => `<th title="${this.escapeHtml(column)}">${this.escapeHtml(column)}</th>`).join("")}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${rows.map((row, rowIndex) => this.renderRunHistoryRow(row, rowIndex, columns)).join("")}
-                        </tbody>
-                    </table>
-                </div>
+                <table class="table-grid data-history-table">
+                    <thead>
+                        <tr>
+                            <th class="grid-row-no">${this.escapeHtml(this.getLabel("gridNo", "No"))}</th>
+                            <th class="data-history-detail-column">${this.escapeHtml(this.getLabel("historyDetail", "Detail"))}</th>
+                            ${columns.map((column) => `<th title="${this.escapeHtml(this.getRunHistoryColumnLabel(column))}">${this.escapeHtml(this.getRunHistoryColumnLabel(column))}</th>`).join("")}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rows.map((row, rowIndex) => this.renderRunHistoryRow(row, rowIndex, columns)).join("")}
+                    </tbody>
+                </table>
             `;
+        },
+
+        getRunHistoryColumnLabel(column) {
+            const labels = {
+                STATUS: "status",
+                MESSAGE: "historyMessage",
+                JOB_NAME: "jobName",
+                RUN_TYPE: "historyRunType",
+                STARTED_AT: "historyStartedAt",
+                FINISHED_AT: "historyFinishedAt",
+                ELAPSED_TIME: "historyElapsed",
+                RUN_SOURCE_TYPE: "historyRunSource",
+                RUN_ID: "historyRunId",
+                DATA_RUN_ID: "historyDataRunId",
+                RESULT_OWNER: "resultOwner",
+                RESULT_TABLE_NAME: "resultTable",
+                CREATED_AT: "historyCreatedAt",
+                PROFILE_RUN_ID: "historyProfileRunId",
+                WORK_RUN_ID: "historyWorkRunId",
+                PROFILE_JOB_ID: "historyProfileJobId",
+                WORK_JOB_ID: "historyWorkJobId",
+                SORT_ORDER: "sort",
+                MENU_CODE: "historyMenuCode",
+                JOB_GROUP: "jobGroup"
+            };
+            const label = this.getLabel(labels[column] || "");
+            return label || column;
         },
 
         renderRunHistoryRow(row, rowIndex, columns) {
@@ -2942,27 +3026,49 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
             const message = String(row.MESSAGE ?? "");
             const isExpanded = rowKey === this.expandedRunHistoryKey;
             const detailRow = isExpanded ? `
-                <tr class="data-history-message-row">
-                    <td class="grid-row-no"></td>
-                    <td colspan="${columns.length}">
-                        <div class="data-history-message-detail">
-                            <div class="data-history-message-toolbar">
-                                <strong>MESSAGE</strong>
-                                <button type="button" class="table-icon-btn data-history-copy-btn" title="Copy message" onclick="${PAGE_CODE}.copyRunHistoryMessage(${rowIndex})">
-                                    <i class="fas fa-copy"></i>
-                                </button>
-                            </div>
-                            <pre>${this.escapeHtml(message || "(empty)")}</pre>
-                        </div>
+                <tr class="data-run-inline-detail-row">
+                    <td colspan="${columns.length + 2}">
+                        ${this.renderRunHistoryDetailRow(row, rowIndex, columns)}
                     </td>
                 </tr>
             ` : "";
             return `
                 <tr class="${isExpanded ? "is-expanded" : ""}">
                     <td class="grid-row-no">${rowIndex + 1}</td>
+                    <td class="data-history-detail-column">
+                        <button type="button" class="table-icon-btn" title="${this.escapeHtml(this.getLabel(isExpanded ? "closeHistoryDetailTitle" : "openHistoryDetailTitle", isExpanded ? "Close run details" : "View run details"))}" onclick="${PAGE_CODE}.toggleRunHistoryMessage(${rowIndex})">
+                            <i class="fas ${isExpanded ? "fa-chevron-up" : "fa-ellipsis-h"}"></i>
+                        </button>
+                    </td>
                     ${columns.map((column) => this.renderRunHistoryCell(row, rowIndex, column, isExpanded)).join("")}
                 </tr>
                 ${detailRow}
+            `;
+        },
+
+        renderRunHistoryDetailRow(row, rowIndex, columns) {
+            const runId = row.RUN_ID || row.DATA_RUN_ID || row.PROFILE_RUN_ID || row.WORK_RUN_ID || rowIndex + 1;
+            const message = String(row.MESSAGE ?? "");
+            const detailColumns = columns.filter((column) => !["MESSAGE", "STATUS"].includes(column));
+            return `
+                <section class="data-run-inline-detail">
+                    <header>
+                        <strong>${this.escapeHtml(this.getMessage("historyDetailTitle", "Run #{runId} details", { runId }))}</strong>
+                        <span class="data-run-history-detail-actions">
+                            <button type="button" class="table-icon-btn" title="${this.escapeHtml(this.getLabel("refreshHistory", "Refresh history"))}" onclick="${PAGE_CODE}.loadRunHistory()"><i class="fas fa-sync-alt"></i></button>
+                            <button type="button" class="table-icon-btn" title="${this.escapeHtml(this.getLabel("closeTitle", "Close"))}" onclick="${PAGE_CODE}.toggleRunHistoryMessage(${rowIndex})"><i class="fas fa-times"></i></button>
+                        </span>
+                    </header>
+                    <div class="data-run-history-message">
+                        <strong>${this.escapeHtml(this.getLabel("historyMessage", "Message"))}</strong>
+                        <pre>${this.escapeHtml(message || "-")}</pre>
+                        ${message ? `<button type="button" class="table-icon-btn" title="${this.escapeHtml(this.getLabel("copyMessageTitle", "Copy message"))}" onclick="${PAGE_CODE}.copyRunHistoryMessage(${rowIndex})"><i class="far fa-copy"></i></button>` : ""}
+                    </div>
+                    <div class="data-run-history-detail-grid">
+                        <div><strong>${this.escapeHtml(this.getLabel("status", "Status"))}</strong><span>${this.escapeHtml(row.STATUS ?? "-")}</span></div>
+                        ${detailColumns.map((column) => `<div><strong>${this.escapeHtml(this.getRunHistoryColumnLabel(column))}</strong><span title="${this.escapeHtml(row[column] ?? "")}">${this.escapeHtml(/_AT$/i.test(column) ? this.formatKstDateTime(row[column]) : (row[column] ?? "-"))}</span></div>`).join("")}
+                    </div>
+                </section>
             `;
         },
 
@@ -2979,9 +3085,7 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
             return `
                 <td class="data-history-message-cell" title="${this.escapeHtml(message)}">
                     <span>${this.escapeHtml(message)}</span>
-                    <button type="button" class="table-icon-btn data-history-message-btn" title="${isExpanded ? "Hide full message" : "Show full message"}" onclick="${PAGE_CODE}.toggleRunHistoryMessage(${rowIndex})">
-                        <i class="fas ${isExpanded ? "fa-chevron-up" : "fa-ellipsis-h"}"></i>
-                    </button>
+                    <button type="button" class="table-icon-btn data-history-copy-btn" title="${this.escapeHtml(this.getLabel("copyMessageTitle", "Copy message"))}" onclick="${PAGE_CODE}.copyRunHistoryMessage(${rowIndex})"><i class="far fa-copy"></i></button>
                 </td>
             `;
         },
@@ -3075,6 +3179,7 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
             if (!this.ensureWorkContextSelected()) return false;
             if (!this.currentJob?.ownerName || !this.currentJob?.tableName) {
                 alert(this.getDisplayMessage("Select a scenario table first."));
+                getContainerEl(`#selectTargetTable-${PAGE_CODE}`)?.focus();
                 return false;
             }
             if (!getContainerEl(`#workJobName-${PAGE_CODE}`)?.value.trim()) {
@@ -3965,9 +4070,17 @@ END;`;
             this.dataGridDirtyCells = new Map();
             this.dataGridTargetKey = "";
             this.dataGridActiveCell = null;
+            this.dataGridPage = 1;
+            this.dataGridPageSize = this.getEditableDataPageSize();
+            this.dataGridTotal = 0;
+            this.dataGridTotalPages = 1;
+            this.dataGridLoaded = false;
+            this.dataGridLoading = false;
             this.renderDataEditTarget();
+            this.renderEditableDataPager();
             this.syncEditableDataSaveButton();
             this.syncEditableDataFillButton();
+            this.syncEditableDataBulkCopyButtons();
             this.applyEditableDataFrozenColumns();
             const grid = getContainerEl(`#dataEditGrid-${PAGE_CODE}`);
             if (grid) grid.innerHTML = "";
@@ -3992,8 +4105,9 @@ END;`;
         renderDataEditTarget(target = this.getDataEditTarget()) {
             const owner = target?.owner || "-";
             const tableName = target?.tableName || "-";
-            this.setText(`#dataEditOwner-${PAGE_CODE}`, owner);
-            this.setText(`#dataEditTable-${PAGE_CODE}`, tableName);
+            this.setText(`#dataEditTargetObject-${PAGE_CODE}`, owner !== "-" && tableName !== "-" ? `${owner}.${tableName}` : "-");
+            this.setDefaultDataSelectColumns(false);
+            this.setDefaultDataOrderBy(false, target);
             const container = getContainerEl(`#dataEditTarget-${PAGE_CODE}`);
             if (container) {
                 container.title = owner !== "-" && tableName !== "-" ? `${owner}.${tableName}` : "No target table selected.";
@@ -4004,8 +4118,231 @@ END;`;
             return getContainerEl(`#dataWhere-${PAGE_CODE}`)?.value.trim() || "";
         },
 
+        getDataEditSelectColumns() {
+            const field = getContainerEl(`#dataSelectColumns-${PAGE_CODE}`);
+            return field ? field.value.trim() : "*";
+        },
+
+        async openDataSelectColumnsDialog() {
+            const target = this.getDataEditTarget();
+            if (!target.owner || !target.tableName) {
+                this.renderDataEditMessage("No target table selected.", "error");
+                return;
+            }
+            const layer = getContainerEl(`#dataSelectColumnsLayer-${PAGE_CODE}`);
+            const list = getContainerEl(`#dataSelectColumnsList-${PAGE_CODE}`);
+            if (!layer || !list) return;
+
+            layer.hidden = false;
+            this.enableHelpLayerDrag(layer);
+            this.setText(`#dataSelectColumnsTarget-${PAGE_CODE}`, `FROM ${target.owner}.${target.tableName}`);
+            list.innerHTML = `<div class="table-empty">Loading columns...</div>`;
+            try {
+                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/columns`, {
+                    method: "POST",
+                    body: { owner: target.owner, tableName: target.tableName }
+                });
+                this.renderDataSelectColumnsDialog(json.data || []);
+            } catch (error) {
+                list.innerHTML = `<div class="table-error">${this.escapeHtml(error.message || "Column query failed.")}</div>`;
+            }
+        },
+
+        closeDataSelectColumnsDialog() {
+            const layer = getContainerEl(`#dataSelectColumnsLayer-${PAGE_CODE}`);
+            if (layer) layer.hidden = true;
+        },
+
+        renderDataSelectColumnsDialog(rows) {
+            const list = getContainerEl(`#dataSelectColumnsList-${PAGE_CODE}`);
+            if (!list) return;
+            const currentValue = this.getDataEditSelectColumns();
+            const selectsAll = currentValue === "*";
+            const selectedColumns = new Set(
+                currentValue.split(",")
+                    .map((value) => value.trim().replace(/^"|"$/g, "").toUpperCase())
+                    .filter(Boolean)
+            );
+            const columns = (Array.isArray(rows) ? rows : [])
+                .filter((row) => row?.COLUMN_NAME)
+                .sort((left, right) => Number(left.COLUMN_ID || 0) - Number(right.COLUMN_ID || 0));
+            if (!columns.length) {
+                list.innerHTML = `<div class="table-empty">No columns found.</div>`;
+                return;
+            }
+            list.innerHTML = `
+                <div class="data-select-columns-list-header">
+                    <span class="data-select-columns-list-actions">
+                        <button type="button" class="table-icon-btn" title="${this.escapeHtml(this.getLabel("selectAllColumnsTitle") || "Select all columns")}" onclick="${PAGE_CODE}.setAllDataSelectColumns(true)"><i class="fas fa-check-double"></i></button>
+                        <button type="button" class="table-icon-btn" title="${this.escapeHtml(this.getLabel("clearAllColumnsTitle") || "Clear all columns")}" onclick="${PAGE_CODE}.setAllDataSelectColumns(false)"><i class="fas fa-square"></i></button>
+                    </span>
+                    <span class="data-select-columns-header-id">Column ID</span>
+                    <span class="data-select-columns-header-comment">Comment</span>
+                </div>
+            ` + columns.map((row) => {
+                const columnName = String(row.COLUMN_NAME || "").trim().toUpperCase();
+                const comment = String(row.COLUMN_COMMENT || "").trim() || "-";
+                const checked = selectsAll || selectedColumns.has(columnName) ? " checked" : "";
+                return `
+                    <label class="data-select-column-option" title="${this.escapeHtml(`${columnName} ${comment}`)}">
+                        <input type="checkbox" data-column-name="${this.escapeHtml(columnName)}"${checked} onchange="${PAGE_CODE}.toggleDataSelectColumn(this)">
+                        <span class="data-select-column-id">${this.escapeHtml(columnName)}</span>
+                        <span class="data-select-column-comment">${this.escapeHtml(comment)}</span>
+                    </label>
+                `;
+            }).join("");
+        },
+
+        toggleDataSelectColumn() {
+            const list = getContainerEl(`#dataSelectColumnsList-${PAGE_CODE}`);
+            const field = getContainerEl(`#dataSelectColumns-${PAGE_CODE}`);
+            if (!list || !field) return;
+            const choices = [...list.querySelectorAll("input[data-column-name]")];
+            const selectedColumns = choices
+                .filter((input) => input.checked)
+                .map((input) => String(input.dataset.columnName || "").trim())
+                .filter(Boolean);
+            field.value = selectedColumns.length === choices.length ? "*" : selectedColumns.join(", ");
+            this.handleDataSelectColumnsInput();
+        },
+
+        setAllDataSelectColumns(checked) {
+            const list = getContainerEl(`#dataSelectColumnsList-${PAGE_CODE}`);
+            if (!list) return;
+            list.querySelectorAll("input[data-column-name]").forEach((input) => {
+                input.checked = Boolean(checked);
+            });
+            this.toggleDataSelectColumn();
+        },
+
         getDataEditOrderByClause() {
             return getContainerEl(`#dataOrderBy-${PAGE_CODE}`)?.value.trim() || "";
+        },
+
+        getEditableDataPageSize() {
+            const value = Number.parseInt(
+                getContainerEl(`#dataEditPager-${PAGE_CODE}`)?.querySelector(".grid-pager-page-size")?.value
+                    || this.dataGridPageSize
+                    || 100,
+                10
+            );
+            return Math.max(1, Math.min(Number.isFinite(value) ? value : 100, 1000));
+        },
+
+        renderEditableDataPager() {
+            const pager = getContainerEl(`#dataEditPager-${PAGE_CODE}`);
+            if (!pager) return;
+            const page = Math.max(1, Number(this.dataGridPage || 1));
+            const totalPages = Math.max(1, Number(this.dataGridTotalPages || 1));
+            const total = Math.max(0, Number(this.dataGridTotal || 0));
+            const loading = Boolean(this.dataGridLoading);
+            const pagerOptions = {
+                visible: this.dataGridLoaded,
+                totalLabel: this.formatMessageTemplate(
+                    this.getLabel("gridTotal") || "Total {count} rows",
+                    { count: total.toLocaleString() }
+                ),
+                page,
+                totalPages,
+                pageSize: this.dataGridPageSize || 100,
+                pageSizes: [50, 100, 200, 500],
+                loading,
+                labels: {
+                    page: this.getLabel("page") || "Page",
+                    go: this.getLabel("go") || "Go",
+                    previousPage: this.getLabel("previousPage") || "Previous page",
+                    nextPage: this.getLabel("nextPage") || "Next page",
+                    rowsPerPage: this.getLabel("rowsPerPage") || "Rows per page"
+                },
+                onMove: (delta) => this.moveEditableDataPage(delta),
+                onGo: (requestedPage) => this.goEditableDataPage(requestedPage),
+                onPageSize: (pageSize) => this.changeEditableDataPageSize(pageSize),
+                trailingNumberControl: {
+                    label: this.getLabel("freezeColumns") || "Freeze",
+                    title: this.getLabel("freezeColumnsTitle") || "Freeze No plus this many data columns while scrolling horizontally",
+                    value: this.dataGridFrozenColumns || 0,
+                    min: 0,
+                    max: Math.max(0, (this.dataGridColumns || []).length),
+                    onInput: (freezeCount) => {
+                        this.dataGridFrozenColumns = Math.max(0, Number.parseInt(freezeCount || 0, 10) || 0);
+                        this.applyEditableDataFrozenColumns();
+                    }
+                }
+            };
+            if (typeof CommonUtils.renderServerPager === "function") {
+                try {
+                    CommonUtils.renderServerPager(pager, pagerOptions);
+                    return;
+                } catch (error) {
+                    console.warn(`[${PAGE_CODE}] shared pager render failed; using page fallback.`, error);
+                }
+            }
+            this.renderEditableDataPagerFallback(pager, pagerOptions);
+        },
+
+        renderEditableDataPagerFallback(pager, options) {
+            const labels = options.labels || {};
+            pager.hidden = !options.visible;
+            if (!options.visible) {
+                pager.innerHTML = "";
+                return;
+            }
+
+            const escape = this.escapeHtml;
+            const trailing = options.trailingNumberControl || {};
+            pager.innerHTML = `
+                <div class="grid-pager" role="navigation">
+                    <span class="grid-pager-total">${escape(options.totalLabel || "")}</span>
+                    <span class="grid-pager-navigation"><button type="button" class="table-icon-btn grid-pager-prev" title="${escape(labels.previousPage || "Previous page")}" ${options.loading || options.page <= 1 ? "disabled" : ""}><i class="fas fa-chevron-left"></i></button><label class="grid-pager-page-field"><span>${escape(labels.page || "Page")}</span><input class="grid-pager-page-input" type="number" min="1" max="${options.totalPages}" value="${options.page}" ${options.loading ? "disabled" : ""}><small>/ ${options.totalPages}</small></label><button type="button" class="table-btn grid-pager-go" ${options.loading ? "disabled" : ""}>${escape(labels.go || "Go")}</button><button type="button" class="table-icon-btn grid-pager-next" title="${escape(labels.nextPage || "Next page")}" ${options.loading || options.page >= options.totalPages ? "disabled" : ""}><i class="fas fa-chevron-right"></i></button></span>
+                    <span class="grid-pager-settings"><select class="grid-pager-page-size" title="${escape(labels.rowsPerPage || "Rows per page")}" ${options.loading ? "disabled" : ""}>${(options.pageSizes || []).map((value) => `<option value="${value}"${Number(value) === Number(options.pageSize) ? " selected" : ""}>${value}</option>`).join("")}</select><label class="table-limit-control grid-pager-number-control" title="${escape(trailing.title || "")}"><span>${escape(trailing.label || "")}</span><input class="grid-pager-number-input" type="number" min="${trailing.min ?? 0}" max="${trailing.max ?? 999}" value="${trailing.value ?? 0}" ${options.loading ? "disabled" : ""}></label></span>
+                </div>
+            `;
+            const pageInput = pager.querySelector(".grid-pager-page-input");
+            pager.querySelector(".grid-pager-prev")?.addEventListener("click", () => options.onMove?.(-1));
+            pager.querySelector(".grid-pager-next")?.addEventListener("click", () => options.onMove?.(1));
+            pager.querySelector(".grid-pager-go")?.addEventListener("click", () => options.onGo?.(pageInput?.value));
+            pageInput?.addEventListener("keydown", (event) => {
+                if (event.key !== "Enter") return;
+                event.preventDefault();
+                options.onGo?.(pageInput.value);
+            });
+            pager.querySelector(".grid-pager-page-size")?.addEventListener("change", (event) => options.onPageSize?.(event.target.value));
+            const freezeInput = pager.querySelector(".grid-pager-number-input");
+            ["input", "change"].forEach((eventName) => freezeInput?.addEventListener(eventName, () => trailing.onInput?.(freezeInput.value)));
+        },
+
+        async moveEditableDataPage(delta) {
+            const nextPage = Math.max(1, Math.min(
+                Number(this.dataGridTotalPages || 1),
+                Number(this.dataGridPage || 1) + Number(delta || 0)
+            ));
+            if (nextPage === Number(this.dataGridPage || 1)) return;
+            await this.loadEditableTableData(nextPage);
+        },
+
+        async goEditableDataPage(requestedPage) {
+            const pageInput = requestedPage ?? getContainerEl(`#dataEditPager-${PAGE_CODE}`)?.querySelector(".grid-pager-page-input")?.value;
+            const parsedPage = Number.parseInt(pageInput || "1", 10);
+            const nextPage = Math.max(1, Math.min(
+                Number(this.dataGridTotalPages || 1),
+                Number.isFinite(parsedPage) ? parsedPage : 1
+            ));
+            await this.loadEditableTableData(nextPage);
+        },
+
+        async changeEditableDataPageSize(pageSize) {
+            this.dataGridPageSize = Math.max(1, Math.min(Number.parseInt(pageSize || 100, 10) || 100, 1000));
+            await this.loadEditableTableData(1);
+        },
+
+        async confirmDiscardEditableDataChanges() {
+            if (!this.dataGridDirtyCells?.size) return true;
+            const message = this.getLabel("confirmDiscardPageEdits")
+                || "Unsaved grid changes will be discarded. Continue?";
+            if (window.CommonMessage?.confirm) {
+                return Boolean(await window.CommonMessage.confirm(message));
+            }
+            return window.confirm(message);
         },
 
         getEditableDataColumns(target = this.getDataEditTarget()) {
@@ -4021,8 +4358,12 @@ END;`;
             return new Set();
         },
 
-        async loadEditableTableData() {
+        async loadEditableTableData(page = 1) {
             if (!this.isDataEditTabEnabled()) return;
+            if (!(await this.confirmDiscardEditableDataChanges())) {
+                this.renderEditableDataPager();
+                return;
+            }
             const target = this.getDataEditTarget();
             this.renderDataEditTarget(target);
             if (!target.owner || !target.tableName) {
@@ -4035,14 +4376,20 @@ END;`;
             this.dataGridDirtyCells = new Map();
             this.syncEditableDataSaveButton();
             this.renderDataEditMessage("Loading data...", "info");
+            this.dataGridLoading = true;
+            this.renderEditableDataPager();
 
             try {
+                const pageSize = this.getEditableDataPageSize();
+                const requestedPage = Math.max(1, Number.parseInt(page || 1, 10) || 1);
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/data/editable`, {
                     method: "POST",
                     body: {
                         owner: target.owner,
                         tableName: target.tableName,
-                        limit: this.getLimit(`#dataLimit-${PAGE_CODE}`),
+                        page: requestedPage,
+                        limit: pageSize,
+                        selectClause: this.getDataEditSelectColumns(),
                         whereClause: this.getDataEditWhereClause(),
                         orderByClause: this.getDataEditOrderByClause()
                     }
@@ -4053,14 +4400,35 @@ END;`;
                 this.dataGridColumns = columns;
                 this.dataGridTargetKey = `${target.owner}.${target.tableName}`;
                 this.dataGridActiveCell = null;
+                this.dataGridPage = Math.max(1, Number(json.page || requestedPage));
+                this.dataGridPageSize = Math.max(1, Number(json.pageSize || pageSize));
+                this.dataGridTotal = Math.max(0, Number(json.total || 0));
+                this.dataGridTotalPages = Math.max(1, Number(json.totalPages || Math.ceil(this.dataGridTotal / this.dataGridPageSize) || 1));
+                this.dataGridLoaded = true;
                 this.renderEditableDataGrid(rows, columns, target);
-                this.renderDataEditMessage(`${rows.length.toLocaleString()} rows selected.`, "success");
+                this.renderDataEditMessage(this.formatMessageTemplate(
+                    this.getLabel("pageRowsLoaded") || "Page {page}: {count} rows loaded.",
+                    { page: this.dataGridPage.toLocaleString(), count: rows.length.toLocaleString() }
+                ), "success");
             } catch (error) {
                 this.dataGridRows = [];
                 this.dataGridColumns = [];
+                this.dataGridTotal = 0;
+                this.dataGridTotalPages = 1;
+                this.dataGridLoaded = false;
                 if (grid) grid.innerHTML = "";
                 this.renderDataEditMessage(error.message || "Data query failed.", "error");
+            } finally {
+                this.dataGridLoading = false;
+                this.renderEditableDataPager();
             }
+        },
+
+        getEditableDataRowNumber(rowIndex) {
+            return (Math.max(1, Number(this.dataGridPage || 1)) - 1)
+                * Math.max(1, Number(this.dataGridPageSize || 100))
+                + Number(rowIndex || 0)
+                + 1;
         },
 
         renderEditableDataGrid(rows, columns, target) {
@@ -4077,6 +4445,7 @@ END;`;
                     : `<div class="table-empty">No data.</div>`;
                 this.syncEditableDataSaveButton();
                 this.syncEditableDataFillButton();
+                this.syncEditableDataBulkCopyButtons();
                 this.applyEditableDataFrozenColumns();
                 return;
             }
@@ -4095,7 +4464,7 @@ END;`;
                     <tbody>
                         ${rows.map((row, rowIndex) => `
                             <tr>
-                                <td class="grid-row-no">${rowIndex + 1}</td>
+                                <td class="grid-row-no">${this.getEditableDataRowNumber(rowIndex)}</td>
                                 ${columns.map((column) => this.renderEditableDataCell(row, rowIndex, column, editableColumns)).join("")}
                             </tr>
                         `).join("")}
@@ -4108,11 +4477,12 @@ END;`;
             }
             this.syncEditableDataSaveButton();
             this.syncEditableDataFillButton();
+            this.syncEditableDataBulkCopyButtons();
             this.applyEditableDataFrozenColumns();
         },
 
         getEditableDataFreezeCount() {
-            const input = getContainerEl(`#dataFreezeColumns-${PAGE_CODE}`);
+            const input = getContainerEl(`#dataEditPager-${PAGE_CODE}`)?.querySelector(".grid-pager-number-input");
             const maxDataColumns = Math.max(0, (this.dataGridColumns || []).length);
             let dataColumnCount = Number.parseInt(input?.value ?? this.dataGridFrozenColumns ?? 0, 10);
             if (!Number.isFinite(dataColumnCount)) dataColumnCount = 0;
@@ -4126,6 +4496,7 @@ END;`;
             const grid = getContainerEl(`#dataEditGrid-${PAGE_CODE}`);
             const table = grid?.querySelector?.(".data-edit-table");
             if (!table) return;
+            CommonUtils.enableGridColumnResize(table, () => this.applyEditableDataFrozenColumns());
 
             table.querySelectorAll(".is-frozen-col, .is-frozen-edge").forEach((cell) => {
                 cell.classList.remove("is-frozen-col", "is-frozen-edge");
@@ -4447,6 +4818,37 @@ END;`;
             this.renderDataEditMessage(`${this.escapeHtml(active.columnName)} value pasted downward to ${changed.toLocaleString()} row(s).`, "success");
         },
 
+        copyPredictedTypeColumnToFinal(sourceColumn) {
+            const source = String(sourceColumn || "").trim().toUpperCase();
+            const target = "FINAL_PREDICTED_TYPE";
+            const availableColumns = new Set((this.dataGridColumns || []).map((column) => String(column || "").toUpperCase()));
+            const isSupportedSource = source === "BASE_PREDICTED_TYPE" || source === "MODL_PREDICTED_TYPE";
+
+            if (!isSupportedSource || !availableColumns.has(source) || !availableColumns.has(target)) {
+                this.renderDataEditMessage(
+                    this.getLabel("copyPredictionColumnsUnavailable") || "BASE/MODL and FINAL predicted-type columns are required for this action.",
+                    "error"
+                );
+                return;
+            }
+
+            let copied = 0;
+            (this.dataGridRows || []).forEach((row, rowIndex) => {
+                if (!row?.INIT$ROWID) return;
+                const value = row[source] ?? "";
+                const cell = this.getEditableDataCellElement(rowIndex, target);
+                this.setEditableDataCellDomValue(cell, value);
+                this.markEditableDataCellValue(rowIndex, target, value, cell);
+                copied += 1;
+            });
+
+            this.syncEditableDataBulkCopyButtons();
+            this.renderDataEditMessage(this.formatMessageTemplate(
+                this.getLabel("copyPredictionValueDone") || "Copied {count} {source} value(s) to FINAL_PREDICTED_TYPE on this grid page.",
+                { source, count: copied.toLocaleString() }
+            ), "success");
+        },
+
         syncEditableDataFillButton() {
             const button = getContainerEl(`#dataFillColumn-${PAGE_CODE}`);
             if (button) {
@@ -4454,9 +4856,49 @@ END;`;
             }
         },
 
+        syncEditableDataBulkCopyButtons() {
+            const availableColumns = new Set((this.dataGridColumns || []).map((column) => String(column || "").toUpperCase()));
+            const hasRows = (this.dataGridRows || []).some((row) => row?.INIT$ROWID);
+            const hasFinalColumn = availableColumns.has("FINAL_PREDICTED_TYPE");
+            const buttonConfigs = [
+                ["dataCopyBaseToFinal", "BASE_PREDICTED_TYPE"],
+                ["dataCopyModelToFinal", "MODL_PREDICTED_TYPE"]
+            ];
+
+            buttonConfigs.forEach(([idPrefix, sourceColumn]) => {
+                const button = getContainerEl(`#${idPrefix}-${PAGE_CODE}`);
+                if (button) {
+                    button.disabled = !hasRows || !hasFinalColumn || !availableColumns.has(sourceColumn);
+                }
+            });
+        },
+
         syncEditableDataSaveButton() {
             const button = getContainerEl(`#dataSaveUpdates-${PAGE_CODE}`);
             if (button) button.disabled = !this.dataGridDirtyCells?.size;
+        },
+
+        exportEditableDataGrid(format) {
+            const rows = this.dataGridRows || [];
+            const columns = this.dataGridColumns || [];
+            if (!rows.length || !columns.length) {
+                this.renderDataEditMessage("No grid data to export.", "info");
+                return;
+            }
+
+            const baseName = `${PAGE_CODE}_GRID_PAGE_${this.dataGridPage || 1}_${new Date().toISOString().slice(0, 19).replace(/[-:T]/g, "")}`;
+            const exportRows = rows.map((row) => Object.fromEntries(columns.map((column) => [column, row[column] ?? ""])));
+            if (format === "excel") {
+                DataEditingSystem.downloadXLSX(exportRows, `${baseName}.xlsx`, columns);
+                return;
+            }
+            if (format === "csv") {
+                this.downloadBlob(`${baseName}.csv`, this.createDelimitedContent(exportRows, columns, ","), "text/csv;charset=utf-8");
+                return;
+            }
+            if (format === "json") {
+                this.downloadBlob(`${baseName}.json`, JSON.stringify(exportRows, null, 2), "application/json;charset=utf-8");
+            }
         },
 
         async saveEditableTableData() {
@@ -4489,7 +4931,7 @@ END;`;
                 this.dataGridDirtyCells = new Map();
                 this.syncEditableDataSaveButton();
                 this.renderDataEditMessage(json.message || "Changes saved.", "success");
-                await this.loadEditableTableData();
+                await this.loadEditableTableData(this.dataGridPage);
             } catch (error) {
                 this.renderDataEditMessage(error.message || "Update failed.", "error");
             }
@@ -4498,7 +4940,7 @@ END;`;
         renderDataEditMessage(message, type = "info") {
             const element = getContainerEl(`#dataEditMessage-${PAGE_CODE}`);
             if (!element) return;
-            element.className = type === "error" ? "table-error" : "table-empty";
+            element.className = `${type === "error" ? "table-error" : "table-empty"} data-grid-message`;
             element.textContent = message || "";
             element.hidden = !message;
         },
@@ -4606,15 +5048,25 @@ END;`;
             };
         },
 
-        async runWorksheetSql(sql, gridSelector, gridKey, runtimeBindValues = null) {
-            const limit = this.getLimit(gridKey === "result" ? `#resultLimit-${PAGE_CODE}` : `#sqlLimit-${PAGE_CODE}`);
+        async runWorksheetSql(sql, gridSelector, gridKey, runtimeBindValues = null, requestedPage = 1) {
+            const isSqlGrid = gridKey === "sql";
+            const limit = isSqlGrid
+                ? Math.max(1, Math.min(Number.parseInt(this.sqlGridPageSize || 100, 10) || 100, 1000))
+                : this.getLimit(`#resultLimit-${PAGE_CODE}`);
+            const page = isSqlGrid ? Math.max(1, Number.parseInt(requestedPage || 1, 10) || 1) : 1;
             const grid = getContainerEl(gridSelector);
             const startedAt = performance.now();
+            if (isSqlGrid) {
+                this.sqlGridSql = sql;
+                this.sqlGridRuntimeBindValues = { ...(runtimeBindValues || {}) };
+                this.sqlGridLoading = true;
+                this.renderSqlGridPager();
+            }
             this.renderSqlMessage(gridKey, "Running SQL...", "info");
 
             try {
                 const bindValues = runtimeBindValues ?? {};
-                const body = { sql, limit };
+                const body = { sql, limit, page };
                 if (Object.keys(bindValues).length) {
                     body.runtimeBindValues = bindValues;
                 }
@@ -4635,14 +5087,121 @@ END;`;
                 this.renderSqlMessage(gridKey, `${json.message || "SQL executed."} (${elapsedMs.toLocaleString()} ms)`, "success");
                 const rows = json.data || [];
                 const columns = json.columns || [];
-                this.gridData[gridKey] = { rows, columns };
+                this.gridData[gridKey] = {
+                    rows,
+                    columns,
+                    total: Number(json.total || 0),
+                    page: Number(json.page || page),
+                    pageSize: Number(json.pageSize || limit),
+                    totalPages: Number(json.totalPages || 1)
+                };
+                if (isSqlGrid) {
+                    this.sqlGridPage = Number(json.page || page);
+                    this.sqlGridPageSize = Number(json.pageSize || limit);
+                    this.sqlGridTotal = Number(json.total || 0);
+                    this.sqlGridTotalPages = Number(json.totalPages || 1);
+                    this.sqlGridLoaded = columns.length > 0;
+                }
                 this.renderGrid(gridSelector, rows, columns);
             } catch (error) {
                 const elapsedMs = Math.round(performance.now() - startedAt);
                 this.renderSqlMessage(gridKey, `${error.message || "SQL execution failed."} (${elapsedMs.toLocaleString()} ms)`, "error");
                 this.gridData[gridKey] = { rows: [], columns: [] };
+                if (isSqlGrid) {
+                    this.sqlGridTotal = 0;
+                    this.sqlGridTotalPages = 1;
+                    this.sqlGridLoaded = false;
+                }
                 if (grid) grid.innerHTML = "";
+            } finally {
+                if (isSqlGrid) {
+                    this.sqlGridLoading = false;
+                    this.renderSqlGridPager();
+                }
             }
+        },
+
+        renderSqlGridPager() {
+            const pager = getContainerEl(`#sqlGridPager-${PAGE_CODE}`);
+            if (!pager) return;
+            const pagerOptions = {
+                visible: this.sqlGridLoaded,
+                totalLabel: this.formatMessageTemplate(
+                    this.getLabel("gridTotal") || "Total {count} rows",
+                    { count: Math.max(0, Number(this.sqlGridTotal || 0)).toLocaleString() }
+                ),
+                page: Math.max(1, Number(this.sqlGridPage || 1)),
+                totalPages: Math.max(1, Number(this.sqlGridTotalPages || 1)),
+                pageSize: Math.max(1, Number(this.sqlGridPageSize || 100)),
+                pageSizes: [50, 100, 200, 500],
+                loading: Boolean(this.sqlGridLoading),
+                labels: {
+                    page: this.getLabel("page") || "Page",
+                    go: this.getLabel("go") || "Go",
+                    previousPage: this.getLabel("previousPage") || "Previous page",
+                    nextPage: this.getLabel("nextPage") || "Next page",
+                    rowsPerPage: this.getLabel("rowsPerPage") || "Rows per page"
+                },
+                onMove: (delta) => this.moveSqlGridPage(delta),
+                onGo: (nextPage) => this.goSqlGridPage(nextPage),
+                onPageSize: (pageSize) => this.changeSqlGridPageSize(pageSize),
+                trailingNumberControl: {
+                    label: this.getLabel("freezeColumns") || "Freeze",
+                    title: this.getLabel("freezeColumnsTitle") || "Freeze No plus this many data columns while scrolling horizontally",
+                    value: this.sqlGridFrozenColumns?.sql || 0,
+                    min: 0,
+                    max: Math.max(0, (this.gridData?.sql?.columns || []).length),
+                    onInput: (freezeCount) => {
+                        this.sqlGridFrozenColumns = {
+                            ...(this.sqlGridFrozenColumns || {}),
+                            sql: Math.max(0, Number.parseInt(freezeCount || 0, 10) || 0)
+                        };
+                        this.applySqlGridFrozenColumns("sql");
+                    }
+                }
+            };
+            if (typeof CommonUtils.renderServerPager === "function") {
+                try {
+                    CommonUtils.renderServerPager(pager, pagerOptions);
+                    return;
+                } catch (error) {
+                    console.warn(`[${PAGE_CODE}] shared SQL pager render failed; using page fallback.`, error);
+                }
+            }
+            this.renderEditableDataPagerFallback(pager, pagerOptions);
+        },
+
+        async moveSqlGridPage(delta) {
+            const nextPage = Math.max(1, Math.min(
+                Number(this.sqlGridTotalPages || 1),
+                Number(this.sqlGridPage || 1) + Number(delta || 0)
+            ));
+            if (nextPage !== Number(this.sqlGridPage || 1)) await this.loadSqlGridPage(nextPage);
+        },
+
+        async goSqlGridPage(value) {
+            const parsedPage = Number.parseInt(value || "1", 10);
+            const nextPage = Math.max(1, Math.min(
+                Number(this.sqlGridTotalPages || 1),
+                Number.isFinite(parsedPage) ? parsedPage : 1
+            ));
+            await this.loadSqlGridPage(nextPage);
+        },
+
+        async changeSqlGridPageSize(value) {
+            this.sqlGridPageSize = Math.max(1, Math.min(Number.parseInt(value || 100, 10) || 100, 1000));
+            await this.loadSqlGridPage(1);
+        },
+
+        async loadSqlGridPage(page) {
+            if (!this.sqlGridSql || this.sqlGridLoading) return;
+            await this.runWorksheetSql(
+                this.sqlGridSql,
+                `#sqlGrid-${PAGE_CODE}`,
+                "sql",
+                this.sqlGridRuntimeBindValues,
+                page
+            );
         },
 
         exportSqlGrid(format) {
@@ -4662,8 +5221,8 @@ END;`;
                 this.downloadBlob(`${baseName}.csv`, this.createDelimitedContent(rows, grid.columns, ","), "text/csv;charset=utf-8");
                 return;
             }
-            if (format === "tsv") {
-                this.downloadBlob(`${baseName}.tsv`, this.createDelimitedContent(rows, grid.columns, "\t"), "text/tab-separated-values;charset=utf-8");
+            if (format === "json") {
+                this.downloadBlob(`${baseName}.json`, JSON.stringify(rows, null, 2), "application/json;charset=utf-8");
             }
         },
 
@@ -4768,7 +5327,9 @@ END;`;
         },
 
         async setDefaultUserSql(force = false) {
+            this.setDefaultDataSelectColumns(force);
             this.setDefaultDataWhere(force);
+            this.setDefaultDataOrderBy(force);
             const editor = getContainerEl(`#sqlEditor-${PAGE_CODE}`);
             if (!editor) return;
             const currentValue = editor.value || "";
@@ -4801,6 +5362,21 @@ END;`;
             this.dataWhereDirty = false;
         },
 
+        setDefaultDataSelectColumns(force = false) {
+            const field = getContainerEl(`#dataSelectColumns-${PAGE_CODE}`);
+            if (!field) return;
+            const currentValue = field.value || "";
+            const canReplace = !currentValue.trim()
+                || currentValue === this.systemDataSelectColumnsValue
+                || !this.dataSelectColumnsDirty
+                || (force && !this.dataSelectColumnsDirty);
+            if (!canReplace) return;
+
+            field.value = "*";
+            this.systemDataSelectColumnsValue = "*";
+            this.dataSelectColumnsDirty = false;
+        },
+
         createDefaultDataWhereClause() {
             const job = this.currentJob || {};
             const useResultObject = this.isResultObjectMode(job.resultCreateYn)
@@ -4811,10 +5387,45 @@ END;`;
             return this.createTargetResultWhereClause(job.resultTableName, job.ownerName, job.tableName);
         },
 
+        setDefaultDataOrderBy(force = false, target = this.getDataEditTarget()) {
+            const field = getContainerEl(`#dataOrderBy-${PAGE_CODE}`);
+            if (!field) return;
+            const currentValue = field.value || "";
+            const canReplace = !currentValue.trim()
+                || currentValue === this.systemDataOrderByValue
+                || !this.dataOrderByDirty
+                || (force && !this.dataOrderByDirty);
+            if (!canReplace) return;
+
+            const orderByClause = this.createDefaultDataOrderByClause(target);
+            field.value = orderByClause;
+            this.systemDataOrderByValue = orderByClause;
+            this.dataOrderByDirty = false;
+        },
+
+        createDefaultDataOrderByClause(target = this.getDataEditTarget()) {
+            const { tableName } = target || {};
+            return String(tableName || "").trim().toUpperCase() === "INIT$_TB_PREDICTED_TYPE_FINAL"
+                ? "COLUMN_ID"
+                : "";
+        },
+
         handleDataWhereInput() {
             const field = getContainerEl(`#dataWhere-${PAGE_CODE}`);
             const value = field?.value || "";
             this.dataWhereDirty = Boolean(value.trim()) && value !== this.systemDataWhereValue;
+        },
+
+        handleDataSelectColumnsInput() {
+            const field = getContainerEl(`#dataSelectColumns-${PAGE_CODE}`);
+            const value = field?.value || "";
+            this.dataSelectColumnsDirty = Boolean(value.trim()) && value !== this.systemDataSelectColumnsValue;
+        },
+
+        handleDataOrderByInput() {
+            const field = getContainerEl(`#dataOrderBy-${PAGE_CODE}`);
+            const value = field?.value || "";
+            this.dataOrderByDirty = Boolean(value.trim()) && value !== this.systemDataOrderByValue;
         },
 
         handleUserSqlInput() {
@@ -5200,7 +5811,7 @@ END;`;
             return `
                 <th class="grid-row-no data-sql-grid-resizable" title="No" style="width: ${rowNoWidth}px;">
                     No
-                    <span class="data-sql-grid-col-resizer" title="Resize column" onmousedown="${PAGE_CODE}.beginSqlGridColumnResize(event, '${this.escapeJs(gridKey)}', 0, '__ROW_NO__')"></span>
+                    <span class="data-sql-grid-col-resizer" title="Resize column" onpointerdown="${PAGE_CODE}.beginSqlGridColumnResize(event, '${this.escapeJs(gridKey)}', 0, '__ROW_NO__')"></span>
                 </th>
                 ${columns.map((column, index) => {
                     const colIndex = index + 1;
@@ -5208,7 +5819,7 @@ END;`;
                     return `
                         <th class="data-sql-grid-resizable" title="${this.escapeHtml(column)}" style="width: ${width}px;">
                             <span class="table-th-content">${this.escapeHtml(column)}</span>
-                            <span class="data-sql-grid-col-resizer" title="Resize column" onmousedown="${PAGE_CODE}.beginSqlGridColumnResize(event, '${this.escapeJs(gridKey)}', ${colIndex}, '${this.escapeJs(column)}')"></span>
+                            <span class="data-sql-grid-col-resizer" title="Resize column" onpointerdown="${PAGE_CODE}.beginSqlGridColumnResize(event, '${this.escapeJs(gridKey)}', ${colIndex}, '${this.escapeJs(column)}')"></span>
                         </th>
                     `;
                 }).join("")}
@@ -5220,13 +5831,14 @@ END;`;
             if (!table) return;
             const columns = Array.from(table.querySelectorAll("col"));
             const width = columns.reduce((sum, column) => sum + Math.max(48, parseInt(column.style.width || "0", 10) || 0), 0);
-            const tableWidth = Math.max(width, table.parentElement?.clientWidth || 0);
-            table.style.width = `${tableWidth}px`;
-            table.style.minWidth = `${tableWidth}px`;
+            table.style.width = `${width}px`;
+            table.style.minWidth = "0";
         },
 
         getSqlGridFreezeCount(gridKey = "sql") {
-            const input = gridKey === "sql" ? getContainerEl(`#sqlFreezeColumns-${PAGE_CODE}`) : null;
+            const input = gridKey === "sql"
+                ? getContainerEl(`#sqlGridPager-${PAGE_CODE}`)?.querySelector(".grid-pager-number-input")
+                : null;
             const columns = this.gridData?.[gridKey]?.columns || [];
             const maxDataColumns = Math.max(0, columns.length);
             let dataColumnCount = Number.parseInt(input?.value ?? this.sqlGridFrozenColumns?.[gridKey] ?? 0, 10);
@@ -5268,43 +5880,90 @@ END;`;
         },
 
         beginSqlGridColumnResize(event, gridKey, columnIndex, columnName) {
+            if (event.button !== undefined && event.button !== 0) return;
             event.preventDefault();
             event.stopPropagation();
             const header = event.currentTarget?.closest?.("th");
-            if (!header) return;
+            const handle = event.currentTarget;
+            const table = header?.closest?.("table");
+            if (!header || !handle || !table) return;
             const key = this.getSqlGridColumnKey(gridKey, columnName, columnIndex);
             const startWidth = header.getBoundingClientRect().width || this.getSqlGridColumnWidth(gridKey, columnName, columnIndex);
+            const headerRect = header.getBoundingClientRect();
+            const viewport = table.closest(".data-edit-grid, .table-result-grid, .grid-scroll-container, .table-scroll-container")
+                || table.parentElement;
+            const tableRect = table.getBoundingClientRect();
+            const viewportRect = viewport?.getBoundingClientRect?.() || tableRect;
+            const guideTop = Math.max(0, headerRect.top, viewportRect.top);
+            const guideBottom = Math.min(window.innerHeight, viewportRect.bottom, tableRect.bottom);
+            const guide = document.createElement("div");
+            guide.className = "grid-column-resize-guide";
+            guide.style.left = `${headerRect.right}px`;
+            guide.style.top = `${guideTop}px`;
+            guide.style.height = `${Math.max(0, guideBottom - guideTop)}px`;
+            document.body.appendChild(guide);
             this.gridResizeState = {
                 gridKey,
                 columnIndex,
                 key,
+                handle,
+                pointerId: event.pointerId,
                 startX: event.clientX,
-                startWidth
+                startWidth,
+                pendingWidth: startWidth,
+                previewFrameId: null,
+                guide
             };
             this.gridResizeMoveBound = this.gridResizeMoveBound || this.handleSqlGridColumnResizeMove.bind(this);
             this.gridResizeUpBound = this.gridResizeUpBound || this.endSqlGridColumnResize.bind(this);
-            document.addEventListener("mousemove", this.gridResizeMoveBound);
-            document.addEventListener("mouseup", this.gridResizeUpBound, { once: true });
+            handle.setPointerCapture?.(event.pointerId);
+            handle.addEventListener("pointermove", this.gridResizeMoveBound);
+            handle.addEventListener("pointerup", this.gridResizeUpBound);
+            handle.addEventListener("pointercancel", this.gridResizeUpBound);
             document.body.classList.add("is-column-resizing");
         },
 
         handleSqlGridColumnResizeMove(event) {
             const state = this.gridResizeState;
-            if (!state) return;
-            const width = Math.max(58, Math.min(900, Math.round(state.startWidth + event.clientX - state.startX)));
-            this.gridColumnWidths[state.key] = width;
-            const table = getContainerEl(`[data-sql-grid-key="${this.escapeCssIdentifier(state.gridKey)}"]`);
-            const col = table?.querySelector?.(`col[data-sql-grid-col-index="${state.columnIndex}"]`);
-            if (col) col.style.width = `${width}px`;
-            const header = table?.querySelector?.(`thead th:nth-child(${state.columnIndex + 1})`);
-            if (header) header.style.width = `${width}px`;
-            this.syncSqlGridTableWidth(state.gridKey);
-            this.applySqlGridFrozenColumns(state.gridKey);
+            if (!state || event.pointerId !== state.pointerId) return;
+            state.pendingWidth = Math.max(48, Math.min(900, Math.round(state.startWidth + event.clientX - state.startX)));
+            if (state.previewFrameId !== null) return;
+            const applyPreview = () => {
+                if (!this.gridResizeState) return;
+                state.previewFrameId = null;
+                state.guide.style.transform = `translate3d(${state.pendingWidth - state.startWidth}px, 0, 0)`;
+            };
+            state.previewFrameId = window.requestAnimationFrame
+                ? window.requestAnimationFrame(applyPreview)
+                : window.setTimeout(applyPreview, 0);
         },
 
-        endSqlGridColumnResize() {
-            if (this.gridResizeMoveBound) document.removeEventListener("mousemove", this.gridResizeMoveBound);
-            if (this.gridResizeUpBound) document.removeEventListener("mouseup", this.gridResizeUpBound);
+        endSqlGridColumnResize(event) {
+            const state = this.gridResizeState;
+            if (!state || event.pointerId !== state.pointerId) return;
+            state.handle.removeEventListener("pointermove", this.gridResizeMoveBound);
+            state.handle.removeEventListener("pointerup", this.gridResizeUpBound);
+            state.handle.removeEventListener("pointercancel", this.gridResizeUpBound);
+            if (state.handle.hasPointerCapture?.(state.pointerId)) state.handle.releasePointerCapture(state.pointerId);
+            if (state.previewFrameId !== null) {
+                if (window.cancelAnimationFrame && window.requestAnimationFrame) {
+                    window.cancelAnimationFrame(state.previewFrameId);
+                } else {
+                    window.clearTimeout(state.previewFrameId);
+                }
+            }
+            if (event.type !== "pointercancel") {
+                state.pendingWidth = Math.max(48, Math.min(900, Math.round(state.startWidth + event.clientX - state.startX)));
+                this.gridColumnWidths[state.key] = state.pendingWidth;
+                const table = getContainerEl(`[data-sql-grid-key="${this.escapeCssIdentifier(state.gridKey)}"]`);
+                const col = table?.querySelector?.(`col[data-sql-grid-col-index="${state.columnIndex}"]`);
+                if (col) col.style.width = `${state.pendingWidth}px`;
+                const header = table?.querySelector?.(`thead th:nth-child(${state.columnIndex + 1})`);
+                if (header) header.style.width = `${state.pendingWidth}px`;
+                this.syncSqlGridTableWidth(state.gridKey);
+                this.applySqlGridFrozenColumns(state.gridKey);
+            }
+            state.guide.remove();
             document.body.classList.remove("is-column-resizing");
             this.gridResizeState = null;
         },
@@ -5355,7 +6014,9 @@ END;`;
                     <tbody>
                         ${rows.map((row, rowIndex) => `
                             <tr>
-                                <td class="grid-row-no">${rowIndex + 1}</td>
+                                <td class="grid-row-no">${gridKey === "sql"
+                                    ? ((Math.max(1, Number(this.sqlGridPage || 1)) - 1) * Math.max(1, Number(this.sqlGridPageSize || 100)) + rowIndex + 1)
+                                    : rowIndex + 1}</td>
                                 ${columns.map((column) => `<td title="${this.escapeHtml(row[column] ?? "")}">${this.escapeHtml(row[column] ?? "")}</td>`).join("")}
                             </tr>
                         `).join("")}

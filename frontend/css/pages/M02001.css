@@ -97,13 +97,41 @@
 #container-M02001 .upload-preview-grid {
     background: #ffffff;
     border-top: 1px solid #e5e7eb;
-    flex: 0 0 auto;
-    height: 390px;
-    margin-top: 10px;
-    max-height: 390px;
-    min-height: 390px;
+    display: flex;
+    flex: 1 1 232px;
+    flex-direction: column;
+    height: auto;
+    margin-top: 0;
+    max-height: none;
+    min-height: 232px;
     overflow: hidden;
-    padding-top: 22px;
+    padding-top: 0;
+}
+
+#container-M02001 .upload-preview-command-area {
+    flex: 0 0 auto;
+    margin-top: 10px;
+}
+
+#container-M02001 .upload-preview-grid .table-grid-scroll {
+    box-sizing: border-box;
+    height: 100%;
+    overflow: auto;
+}
+
+#container-M02001 .upload-preview-grid .table-grid thead th {
+    background: #f8fafc;
+    position: sticky;
+    top: 0;
+    z-index: 40;
+}
+
+#container-M02001 .upload-preview-grid .table-grid thead th.is-frozen-col {
+    z-index: 80 !important;
+}
+
+#container-M02001 .upload-preview-grid .table-grid thead th.grid-row-no.is-frozen-col {
+    z-index: 90 !important;
 }
 
 #container-M02001 .upload-preview-grid .table-empty,
@@ -268,9 +296,10 @@
     }
 
     #container-M02001 .upload-preview-grid {
-        height: 390px;
-        max-height: 390px;
-        min-height: 390px;
+        flex: 1 1 232px;
+        height: auto;
+        max-height: none;
+        min-height: 232px;
     }
 
     #container-M02001 .upload-table-analysis-area {
@@ -438,9 +467,10 @@
     }
 
     #container-M02001 .upload-preview-grid {
-        height: 320px;
-        max-height: 320px;
-        min-height: 320px;
+        flex: 1 1 232px;
+        height: auto;
+        max-height: none;
+        min-height: 232px;
     }
 
     #container-M02001 .upload-controls {
@@ -679,9 +709,10 @@
     }
 
     #container-M02001 .upload-preview-grid {
-        height: 260px;
-        max-height: 260px;
-        min-height: 260px;
+        flex: 1 1 232px;
+        height: auto;
+        max-height: none;
+        min-height: 232px;
     }
 
     #container-M02001 .upload-table-analysis-area {
@@ -875,7 +906,6 @@
     }}
 
 /* M02001 grid count labels stay above headers, while grids fill the panel body. */
-#container-M02001 .upload-preview-grid,
 #container-M02001 #columnsGrid-M02001,
 #container-M02001 #dataGrid-M02001,
 #container-M02001 #sqlGrid-M02001 {
@@ -893,7 +923,6 @@
     padding-bottom: 12px;
 }
 
-#container-M02001 .upload-preview-grid .list-count-footer,
 #container-M02001 #uploadTableTree-M02001 .list-count-footer,
 #container-M02001 #columnsGrid-M02001 .list-count-footer,
 #container-M02001 #dataGrid-M02001 .list-count-footer,
@@ -1104,11 +1133,36 @@
     }}
 
 /* M02001 table analysis panel layout. */
+#container-M02001 > .upload-view-tabs {
+    flex: 0 0 auto;
+    margin-top: 2px;
+}
+
+#container-M02001 > .upload-view-panel {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+#container-M02001 .upload-view-panel[data-upload-panel="table"].is-active {
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+#container-M02001 .upload-table-workspace {
+    align-items: stretch;
+    min-height: 560px;
+}
+
+#container-M02001 .upload-table-tree-panel {
+    min-height: 560px;
+}
+
 #container-M02001 .upload-table-analysis-area {
     border: 1px solid #dcdcdc;
     display: flex;
     flex-direction: column;
-    min-height: 0;
+    /* Keep enough vertical room for the shared toolbar and five visible rows. */
+    min-height: 560px;
     min-width: 0;
     overflow: hidden;
     padding: 22px 24px;
@@ -1144,6 +1198,7 @@
 #container-M02001 .upload-table-analysis-area .table-tab-panel.is-active {
     display: flex;
     flex-direction: column;
+    min-height: 0;
 }
 
 #container-M02001 .upload-table-analysis-area .table-tab-panel > .table-result-grid,
@@ -1166,11 +1221,16 @@
 #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"] .sql-workbench {
     display: grid;
     flex: 1 1 0;
-    gap: 6px;
-    grid-template-rows: minmax(34px, auto) minmax(72px, 112px) auto minmax(180px, 1fr);
+    gap: 0;
+    grid-template-rows: minmax(34px, auto) minmax(52px, 72px) auto minmax(250px, 1fr);
     height: 100%;
     min-height: 0;
     overflow: hidden;
+}
+
+#container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"] .sql-workbench > .grid-command-area:first-child,
+#container-M02001 #sqlEditor-M02001 {
+    margin-bottom: 6px;
 }
 
 #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"] .sql-toolbar {
@@ -1191,7 +1251,6 @@
 #container-M02001 #sqlEditor-M02001 {
     flex: initial;
     height: 100%;
-    margin-bottom: 0;
     max-height: none;
     min-height: 0;
     resize: none;
@@ -1207,19 +1266,25 @@
 #container-M02001 #sqlGrid-M02001 {
     box-sizing: border-box;
     display: flex;
-    flex: 1 1 0;
+    /* Header plus five standard rows; flex fills any remaining analysis-panel space. */
+    flex: 1 0 232px;
     flex-direction: column;
-    height: auto;
+    height: 232px;
     max-height: none;
-    min-height: 0;
+    min-height: 232px;
     overflow: hidden;
-    padding-top: 28px;
+    /* Counts now live in the common toolbar; do not reserve an empty strip here. */
+    padding-top: 0;
     padding-bottom: 12px;
     position: relative;
 }
 
 #container-M02001 #sqlGrid-M02001 {
-    padding-top: 22px;
+    flex-basis: 250px;
+    height: 250px;
+    min-height: 250px;
+    padding-top: 0;
+    padding-bottom: 0;
 }
 
 #container-M02001 #columnsGrid-M02001 > .table-grid-scroll,
@@ -1252,20 +1317,20 @@
     top: 4px;
 }
 
-#container-M02001 #sqlGrid-M02001 > .table-grid-scroll {
-    overflow-x: scroll !important;
-    overflow-y: scroll !important;
-}
-
 #container-M02001 #sqlGrid-M02001 .mobile-grid-scroll-actions {
     display: none;
 }
 
 @media (max-width: 1024px) {
+    #container-M02001 .upload-table-workspace,
+    #container-M02001 .upload-table-tree-panel {
+        min-height: 0;
+    }
+
     #container-M02001 .upload-table-analysis-area {
         height: auto;
         max-height: none;
-        min-height: 360px;
+        min-height: 500px;
         overflow: visible;
         padding: 18px 12px;
     }
@@ -1296,8 +1361,8 @@
     }
 
     #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"] .sql-workbench {
-        gap: 6px;
-        grid-template-rows: 34px 72px auto 280px;
+        gap: 0;
+        grid-template-rows: 34px 56px auto 280px;
         height: auto;
         min-height: 0;
         overflow: visible;
@@ -1325,21 +1390,21 @@
     #container-M02001 #columnsGrid-M02001,
     #container-M02001 #dataGrid-M02001,
     #container-M02001 #sqlGrid-M02001 {
-        flex: 0 0 270px;
-        height: 270px;
-        max-height: 270px;
-        min-height: 0;
+        flex: 0 0 232px;
+        height: 232px;
+        max-height: none;
+        min-height: 232px;
         overflow: hidden;
     }
 
     #container-M02001 #columnsGrid-M02001 > .table-grid-scroll,
     #container-M02001 #dataGrid-M02001 > .table-grid-scroll,
     #container-M02001 #sqlGrid-M02001 > .table-grid-scroll {
-        flex: 0 0 230px;
-        height: 230px;
-        max-height: 230px;
+        flex: 1 1 auto;
+        height: auto;
+        max-height: none;
         min-height: 0;
-        overflow-x: auto !important;
+        overflow-x: hidden !important;
         overflow-y: auto !important;
     }
 
@@ -1347,7 +1412,7 @@
         flex-basis: 280px;
         height: 280px;
         max-height: 280px;
-        padding-bottom: 12px;
+        padding-bottom: 0;
         padding-right: 0;
         position: relative;
     }
@@ -1358,12 +1423,56 @@
         height: auto;
         left: auto;
         max-height: none;
-        overflow-x: scroll !important;
-        overflow-y: scroll !important;
-        padding-bottom: 32px;
+        overflow-x: auto !important;
+        overflow-y: auto !important;
+        padding-bottom: 0;
         position: static;
         right: auto;
-        scroll-padding-bottom: 32px;
+        scroll-padding-bottom: 0;
         top: auto;
         width: 100%;
     }}
+
+/* 분석 탭은 하나의 네이티브 스크롤 영역만 사용한다. */
+#container-M02001 #columnsGrid-M02001 > .table-grid-scroll,
+#container-M02001 #dataGrid-M02001 > .table-grid-scroll,
+#container-M02001 #sqlGrid-M02001 > .table-grid-scroll {
+    overflow-x: auto !important;
+    overflow-y: auto !important;
+    padding-bottom: 32px;
+    scroll-padding-bottom: 32px;
+    scrollbar-gutter: stable;
+}
+
+/* 좁은 해상도에서도 열을 임의로 축소하지 않고 가로 스크롤로 확인한다. */
+#container-M02001 #columnsGrid-M02001 .table-grid,
+#container-M02001 #dataGrid-M02001 .table-grid,
+#container-M02001 #sqlGrid-M02001 .table-grid {
+    min-width: 100%;
+    width: max-content;
+}
+
+#container-M02001 #columnsGrid-M02001 .table-grid th:not(.grid-row-no),
+#container-M02001 #columnsGrid-M02001 .table-grid td:not(.grid-row-no),
+#container-M02001 #dataGrid-M02001 .table-grid th:not(.grid-row-no),
+#container-M02001 #dataGrid-M02001 .table-grid td:not(.grid-row-no),
+#container-M02001 #sqlGrid-M02001 .table-grid th:not(.grid-row-no),
+#container-M02001 #sqlGrid-M02001 .table-grid td:not(.grid-row-no) {
+    min-width: 96px;
+}
+
+/* 작은 화면에서는 분석 박스가 결과 그리드를 감싸고, 남는 내용은 박스 안에서 스크롤한다. */
+@media (max-width: 1024px) {
+    #container-M02001 .upload-table-analysis-area {
+        height: min(620px, calc(100dvh - 120px));
+        max-height: calc(100dvh - 120px);
+        min-height: 0;
+        overflow-x: hidden;
+        overflow-y: auto;
+    }
+
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"].is-active,
+    #container-M02001 .upload-table-analysis-area .table-tab-panel[data-panel="sql"] .sql-workbench {
+        min-height: 0;
+    }
+}

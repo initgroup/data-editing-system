@@ -8,7 +8,22 @@
     "workDescriptionEmpty": "시나리오 테이블과 등록된 상관분석 객체를 선택하세요.",
     "executableObject": "상관분석 프로시저/모델",
     "executableObjectHint": "상관분석 프로시저 기본값은 M90001 객체 상세에서 가져옵니다.",
-    "noExecutableObject": "선택된 상관분석 객체가 없습니다."
+    "noExecutableObject": "선택된 상관분석 객체가 없습니다.",
+    "gridTotal": "전체 {count}건",
+    "page": "Page",
+    "go": "Go",
+    "previousPage": "이전 페이지",
+    "nextPage": "다음 페이지",
+    "rowsPerPage": "페이지당 표시 건수",
+    "freezeColumns": "틀 고정",
+    "freezeColumnsTitle": "가로 스크롤 시 No 컬럼과 지정한 수만큼의 데이터 컬럼을 고정합니다.",
+    "selectColumns": "조회 컬럼 선택",
+    "selectColumnsTitle": "SELECT 절에 표시할 컬럼을 선택합니다.",
+    "selectAllColumnsTitle": "전체 컬럼을 선택합니다.",
+    "clearAllColumnsTitle": "전체 컬럼 선택을 해제합니다.",
+    "exportExcelTitle": "현재 그리드 페이지를 Excel로 내보냅니다.",
+    "exportCsvTitle": "현재 그리드 페이지를 CSV로 내보냅니다.",
+    "exportJsonTitle": "현재 그리드 페이지를 JSON으로 내보냅니다."
   },
   "messages": {}
 }

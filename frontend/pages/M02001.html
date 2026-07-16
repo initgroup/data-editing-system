@@ -27,15 +27,7 @@
         </div>
     </section>
 
-    <section class="table-panel upload-workbench-panel" aria-labelledby="upload-workbench-title-M02001">
-        <header class="table-header">
-            <div>
-                <h1 class="table-title" id="upload-workbench-title-M02001" data-label-key="uploadWorkbenchTitle">File Upload Workbench</h1>
-                <p class="table-desc" id="uploadDescription-M02001" data-label-key="uploadWorkbenchDescription">Preview a file or analyze the uploaded temporary table.</p>
-            </div>
-        </header>
-
-        <nav class="table-tabs upload-view-tabs" aria-label="File upload workbench tabs">
+    <nav class="table-tabs upload-view-tabs" aria-label="File upload workbench tabs">
             <button type="button" class="table-tab is-active" data-upload-view="file" onclick="M02001.switchUploadView('file')">
                 <i class="fas fa-file-upload"></i>
                 <span data-label-key="fileTab">File</span>
@@ -44,9 +36,9 @@
                 <i class="fas fa-table"></i>
                 <span data-label-key="tableTab">Table</span>
             </button>
-        </nav>
+    </nav>
 
-        <section class="upload-view-panel is-active" data-upload-panel="file">
+    <section class="upload-view-panel is-active" data-upload-panel="file">
             <div class="upload-controls">
                 <label class="upload-file-control">
                     <span class="required-title" data-label-key="file">File</span>
@@ -116,10 +108,20 @@
                     </div>
                 </div>
             </div>
+            <div class="grid-command-area upload-preview-command-area">
+                <div class="grid-command-toolbar">
+                    <div class="data-grid-topbar">
+                        <div class="data-grid-status">
+                            <div id="previewGridMessage-M02001" class="table-empty data-grid-message" aria-live="polite"></div>
+                        </div>
+                        <div id="previewGridControls-M02001" class="grid-pager-host"></div>
+                    </div>
+                </div>
+            </div>
             <div id="previewGrid-M02001" class="upload-preview-grid"></div>
-        </section>
+    </section>
 
-        <section class="upload-view-panel" data-upload-panel="table">
+    <section class="upload-view-panel" data-upload-panel="table">
             <div class="upload-table-bar">
                 <div class="upload-table-title">
                     <strong data-label-key="uploadedTableAnalysis">Uploaded Table Analysis</strong>
@@ -183,17 +185,6 @@
                             <h1 class="table-title" id="table-title-M02001" data-label-key="tableAnalysis">Table Analysis</h1>
                             <p class="table-desc" id="tableDescription-M02001" data-label-key="selectUploadTableFromExplorer">Select a table from the explorer.</p>
                         </div>
-                        <div class="table-export-actions" aria-label="Export current grid">
-                            <button type="button" class="table-icon-btn export-excel" title="Export Excel" data-title-key="exportExcelTitle" onclick="M02001.exportActiveGrid('excel')">
-                                <i class="fas fa-file-excel"></i>
-                            </button>
-                            <button type="button" class="table-icon-btn" title="Export CSV" data-title-key="exportCsvTitle" onclick="M02001.exportActiveGrid('csv')">
-                                <i class="fas fa-file-csv"></i>
-                            </button>
-                            <button type="button" class="table-icon-btn" title="Export TSV" data-title-key="exportTsvTitle" onclick="M02001.exportActiveGrid('tsv')">
-                                <i class="fas fa-file-lines"></i>
-                            </button>
-                        </div>
                     </header>
 
                     <nav class="table-tabs upload-table-tabs" aria-label="Uploaded table analysis tabs">
@@ -212,63 +203,64 @@
                     </nav>
 
                     <section class="table-tab-panel is-active" data-panel="columns">
-                        <div class="table-meta-strip">
-                            <div>
-                                <span data-label-key="owner">Owner</span>
-                                <strong id="selectedOwner-M02001">-</strong>
-                            </div>
-                            <div>
-                                <span data-label-key="tableId">Table ID</span>
-                                <strong id="selectedTable-M02001">-</strong>
-                            </div>
-                            <div>
-                                <span data-label-key="comment">Comment</span>
-                                <strong id="selectedComment-M02001">-</strong>
-                            </div>
-                            <div>
-                                <span data-label-key="createdAt">Created At</span>
-                                <strong id="selectedCreatedAt-M02001">-</strong>
-                            </div>
-                        </div>
-                        <div id="columnsGrid-M02001" class="table-result-grid"></div>
+                        <div class="grid-command-area"><div class="grid-command-toolbar"><div class="data-grid-topbar"><div class="data-grid-status"><div id="columnsGridMessage-M02001" class="table-empty data-grid-message"></div></div><div id="columnsGridControls-M02001" class="grid-pager-host"></div><span class="grid-export-actions"><button type="button" class="table-icon-btn" title="Export Excel" data-title-key="exportExcelTitle" onclick="M02001.exportActiveGrid('excel')"><i class="fas fa-file-excel"></i></button><button type="button" class="table-icon-btn" title="Export CSV" data-title-key="exportCsvTitle" onclick="M02001.exportActiveGrid('csv')"><i class="fas fa-file-csv"></i></button><button type="button" class="table-icon-btn" title="Export JSON" data-title-key="exportJsonTitle" onclick="M02001.exportActiveGrid('json')"><i class="fas fa-file-code"></i></button></span></div></div></div>
+                        <div id="columnsGrid-M02001" class="table-result-grid m02001-analysis-grid"></div>
                     </section>
 
                     <section class="table-tab-panel" data-panel="data">
-                        <div class="table-toolbar">
-                            <button type="button" class="table-btn" onclick="M02001.loadTableData()">
-                                <i class="fas fa-play"></i>
-                                <span data-label-key="queryData">Query Data</span>
-                            </button>
-                            <label class="table-limit-control">
-                                <span data-label-key="rows">Rows</span>
-                                <input id="dataLimit-M02001" type="number" min="1" max="1000" value="100">
-                            </label>
+                        <div class="grid-command-area">
+                            <div class="grid-command-extra grid-command-extra-actions">
+                                <button type="button" class="table-btn" onclick="M02001.loadTableData({ force: true, page: 1 })">
+                                    <i class="fas fa-play"></i>
+                                    <span data-label-key="queryData">Query Data</span>
+                                </button>
+                            </div>
+                            <div class="grid-command-toolbar">
+                                <div class="data-grid-topbar">
+                                    <div class="data-grid-status">
+                                        <div id="dataGridPager-M02001" class="grid-pager-host" hidden></div>
+                                        <div id="dataGridMessage-M02001" class="table-empty data-grid-message"></div>
+                                    </div>
+                                    <span class="grid-export-actions">
+                                        <button type="button" class="table-icon-btn" title="Export Excel" data-title-key="exportExcelTitle" onclick="M02001.exportActiveGrid('excel')"><i class="fas fa-file-excel"></i></button>
+                                        <button type="button" class="table-icon-btn" title="Export CSV" data-title-key="exportCsvTitle" onclick="M02001.exportActiveGrid('csv')"><i class="fas fa-file-csv"></i></button>
+                                        <button type="button" class="table-icon-btn" title="Export JSON" data-title-key="exportJsonTitle" onclick="M02001.exportActiveGrid('json')"><i class="fas fa-file-code"></i></button>
+                                    </span>
+                                </div>
+                            </div>
                         </div>
-                        <div id="dataGrid-M02001" class="table-result-grid"></div>
+                        <div id="dataGrid-M02001" class="table-result-grid m02001-analysis-grid"></div>
                     </section>
 
                     <section class="table-tab-panel" data-panel="sql">
                         <div class="sql-workbench">
-                            <div class="sql-toolbar">
-                                <button type="button" class="table-icon-btn sql-tool-icon-btn sql-run-btn" title="Run SQL (Ctrl+Enter)" aria-label="Run SQL" onclick="M02001.executeSql()">
-                                    <i class="fas fa-play"></i>
-                                </button>
-                                <label class="table-limit-control data-sql-freeze-control" title="Freeze No plus this many data columns while scrolling horizontally">
-                                    <span data-label-key="freeze">Freeze</span>
-                                    <input id="sqlFreezeColumns-M02001" type="number" min="0" max="50" value="0" onchange="M02001.applyGridFrozenColumns('sql')" oninput="M02001.applyGridFrozenColumns('sql')">
-                                </label>
-                                <label class="table-limit-control">
-                                    <span data-label-key="rows">Rows</span>
-                                    <input id="sqlLimit-M02001" type="number" min="1" max="1000" value="100">
-                                </label>
+                            <div class="grid-command-area">
+                                <div class="grid-command-toolbar sql-toolbar data-sql-editor-toolbar">
+                                    <button type="button" class="table-icon-btn sql-tool-icon-btn sql-run-btn" title="Run SQL (Ctrl+Enter)" aria-label="Run SQL" onclick="M02001.executeSql()">
+                                        <i class="fas fa-play"></i>
+                                    </button>
+                                </div>
                             </div>
                             <textarea id="sqlEditor-M02001" class="sql-editor table-sql-editor" spellcheck="false" aria-label="SQL worksheet"></textarea>
-                            <div id="sqlMessage-M02001" class="table-empty" aria-live="polite" hidden></div>
-                            <div id="sqlGrid-M02001" class="table-result-grid"></div>
+                            <div class="grid-command-area">
+                                <div class="grid-command-toolbar">
+                                    <div class="data-grid-topbar">
+                                        <div class="data-grid-status">
+                                            <div id="sqlGridPager-M02001" class="grid-pager-host" hidden></div>
+                                            <div id="sqlMessage-M02001" class="table-empty data-grid-message" aria-live="polite"></div>
+                                        </div>
+                                        <span class="grid-export-actions">
+                                            <button type="button" class="table-icon-btn" title="Export Excel" data-title-key="exportExcelTitle" onclick="M02001.exportActiveGrid('excel')"><i class="fas fa-file-excel"></i></button>
+                                            <button type="button" class="table-icon-btn" title="Export CSV" data-title-key="exportCsvTitle" onclick="M02001.exportActiveGrid('csv')"><i class="fas fa-file-csv"></i></button>
+                                            <button type="button" class="table-icon-btn" title="Export JSON" data-title-key="exportJsonTitle" onclick="M02001.exportActiveGrid('json')"><i class="fas fa-file-code"></i></button>
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="sqlGrid-M02001" class="table-result-grid m02001-analysis-grid"></div>
                         </div>
                     </section>
                 </section>
             </div>
-        </section>
     </section>
 </div>

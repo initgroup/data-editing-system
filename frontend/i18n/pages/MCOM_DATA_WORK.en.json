@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "language": "en",
+  "pageCode": "MCOM_DATA_WORK",
+  "description": "Common English labels for data work template pages.",
+  "labels": {
+    "status": "Status",
+    "jobName": "Job name",
+    "jobGroup": "Job group",
+    "resultOwner": "Result owner",
+    "resultTable": "Result table",
+    "sort": "Sort order",
+    "closeTitle": "Close",
+    "refreshHistory": "Refresh history",
+    "gridNo": "No",
+    "historyDetail": "Detail",
+    "historyMessage": "Message",
+    "historyRunType": "Run type",
+    "historyStartedAt": "Started",
+    "historyFinishedAt": "Finished",
+    "historyElapsed": "Elapsed",
+    "historyRunSource": "Run source",
+    "historyRunId": "Run ID",
+    "historyDataRunId": "DATA run ID",
+    "historyCreatedAt": "Created",
+    "historyProfileRunId": "Profile run ID",
+    "historyWorkRunId": "Work run ID",
+    "historyProfileJobId": "Profile job ID",
+    "historyWorkJobId": "Work job ID",
+    "historyMenuCode": "Menu code",
+    "openHistoryDetailTitle": "View run details",
+    "closeHistoryDetailTitle": "Close run details",
+    "copyMessageTitle": "Copy message"
+  },
+  "messages": {
+    "historyTotal": "Total {count}",
+    "noRunHistory": "No run history.",
+    "historyDetailTitle": "Run #{runId} details"
+  }
+}

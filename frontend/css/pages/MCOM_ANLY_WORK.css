@@ -2575,15 +2575,20 @@
 
 .anly-work-rule-facet-panel.is-symbolic .anly-work-rule-facet-block.is-condition {
     border-left-color: #fed7aa;
+}
+
+/* The formula summary has one wide Y-column facet. Keep its wider minimum
+   without forcing every condition facet in the violation summary to 620px. */
+.anly-work-symbolic-summary .anly-work-rule-facet-panel.is-symbolic .anly-work-rule-facet-block.is-condition {
     min-width: min(100%, 620px);
 }
 
-.anly-work-rule-facet-panel.is-symbolic .anly-work-rule-facet-block.is-condition .anly-work-rule-facet-list {
+.anly-work-symbolic-summary .anly-work-rule-facet-panel.is-symbolic .anly-work-rule-facet-block.is-condition .anly-work-rule-facet-list {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
 }
 
-.anly-work-rule-facet-panel.is-symbolic .anly-work-rule-facet-block.is-condition .anly-work-rule-facet-list button {
+.anly-work-symbolic-summary .anly-work-rule-facet-panel.is-symbolic .anly-work-rule-facet-block.is-condition .anly-work-rule-facet-list button {
     align-items: flex-start;
     flex: 1 1 auto;
     flex-wrap: wrap;
@@ -4180,6 +4185,28 @@
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
+    min-height: 48px;
+}
+
+.anly-work-rule-facet-panel .anly-work-rule-facet-empty {
+    align-items: center;
+    box-sizing: border-box;
+    color: #475569;
+    display: flex;
+    flex: 1 1 100%;
+    font-size: 12px;
+    line-height: 1.45;
+    min-height: 48px;
+    overflow-wrap: anywhere;
+    padding: 8px 0;
+}
+
+.anly-work-symbolic-violation-summary > .anly-work-symbolic-violation-empty {
+    box-sizing: border-box;
+    clear: both;
+    margin: 12px 0 0;
+    min-height: 64px;
+    position: relative;
 }
 
 .anly-work-rule-facet-panel .anly-work-rule-facet-list.is-result-column-grid {
@@ -4790,6 +4817,17 @@
     white-space: nowrap;
 }
 
+.anly-work-sample-table-wrap .anly-work-sample-table thead th {
+    background: #f8fafc;
+    position: sticky;
+    top: 0;
+    z-index: 4;
+}
+
+.anly-work-sample-table-wrap .anly-work-sample-table thead th.is-frozen-col {
+    z-index: 6;
+}
+
 .anly-work-table-profile-bars {
     background: #f8fafc;
     border: 1px solid #dbe3ef;
@@ -4904,22 +4942,15 @@
     white-space: nowrap;
 }
 
-.anly-work-grid .anly-work-grid-no-col {
+.anly-work-grid-wrap .anly-work-grid thead th {
     background: #f8fafc;
-    border-right: 1px solid #dbe3ef;
-    left: 0;
-    max-width: 64px;
-    min-width: 56px;
     position: sticky;
-    text-align: center;
-    width: 56px;
-    z-index: 3;
+    top: 0;
+    z-index: 4;
 }
 
-.anly-work-grid td.anly-work-grid-no-col {
-    color: #475569;
-    font-weight: 700;
-    z-index: 2;
+.anly-work-grid-wrap .anly-work-grid thead th.is-frozen-col {
+    z-index: 6;
 }
 
 .anly-work-pager {

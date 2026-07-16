@@ -24,6 +24,11 @@
         gridData: { preview: [], columns: [], data: [], sql: [] },
         gridState: { columns: "", data: "", sql: "" },
         gridFrozenColumns: { preview: 0, columns: 0, data: 0, sql: 0 },
+        gridPages: { data: 1, sql: 1 },
+        gridPageSizes: { data: 100, sql: 100 },
+        gridTotals: { data: 0, sql: 0 },
+        gridTotalPages: { data: 1, sql: 1 },
+        sqlGridText: "",
         sqlKeydownBound: null,
         contextLoadFailed: false,
         isUploading: false,
@@ -38,6 +43,7 @@
             await this.loadWorkContext();
             if (!this.contextLoadFailed) {
                 this.renderGrid("#previewGrid-M02001", [], "preview");
+                this.renderPreviewGridToolbar(0);
             }
             this.switchTab("columns");
             this.isInit = true;
@@ -60,6 +66,11 @@
             this.gridData = { preview: [], columns: [], data: [], sql: [] };
             this.gridState = { columns: "", data: "", sql: "" };
             this.gridFrozenColumns = { preview: 0, columns: 0, data: 0, sql: 0 };
+            this.gridPages = { data: 1, sql: 1 };
+            this.gridPageSizes = { data: 100, sql: 100 };
+            this.gridTotals = { data: 0, sql: 0 };
+            this.gridTotalPages = { data: 1, sql: 1 };
+            this.sqlGridText = "";
             this.sqlKeydownBound = null;
             this.contextLoadFailed = false;
             this.isUploading = false;
@@ -115,7 +126,6 @@
                 this.contextProjects = [];
                 this.selectedProjectId = "";
                 select.innerHTML = `<option value="">${this.escapeHtml(this.t("projectLoadFailed", "Project load failed"))}</option>`;
-                this.setText("#uploadDescription-M02001", message);
                 this.renderError("#previewGrid-M02001", message);
             }
         },
@@ -237,6 +247,7 @@
                 this.applyFileTypeFromName(file.name);
             }
             this.renderGrid("#previewGrid-M02001", [], "preview");
+            this.renderPreviewGridToolbar(0);
         },
 
         getFileBaseName(fileName) {
@@ -400,6 +411,7 @@
             if (!this.ensureWorkContextSelected()) return;
             const grid = getContainerEl("#previewGrid-M02001");
             if (grid) grid.innerHTML = `<div class="table-empty">${this.escapeHtml(this.t("loadingPreview", "Loading preview..."))}</div>`;
+            this.renderPreviewGridToolbar(null, this.t("loadingPreview", "Loading preview..."));
             this.revealPreviewGrid();
             try {
                 const file = this.getSelectedUploadFile();
@@ -422,9 +434,11 @@
                 const json = await this.requestForm(previewUrl, formData);
                 this.applyDetectedEncoding(json?.detectedEncoding);
                 this.renderGrid("#previewGrid-M02001", json.data || [], "preview", json.columns || []);
+                this.renderPreviewGridToolbar((json.data || []).length);
                 this.revealPreviewGrid();
             } catch (error) {
                 this.renderError("#previewGrid-M02001", error.message);
+                this.renderPreviewGridToolbar(null, error.message || this.t("uploadFailed", "Upload failed."));
                 this.revealPreviewGrid();
             }
         },
@@ -466,7 +480,6 @@
                 this.uploadedTableName = json.tableName || "";
                 this.setValue("#uploadedTableId-M02001", this.uploadedTableName);
                 const statsText = json.statsGathered ? this.t("statisticsGathered", " Statistics gathered.") : (json.statsMessage ? ` ${json.statsMessage}` : "");
-                this.setText("#uploadDescription-M02001", this.tl("uploadedTableLoaded", "{tableName} loaded. Rows: {count}.{suffix}", { tableName: this.uploadedTableName, count: json.rowCount ?? 0, suffix: statsText }));
                 this.showUploadProgress(this.tl("uploadCompleted", "Upload completed. Rows: {count}.{suffix}", { count: json.rowCount ?? 0, suffix: statsText }), 100);
                 this.markGridStale();
                 this.setDefaultSql(true);
@@ -648,7 +661,6 @@
                 });
                 this.uploadedTableName = "";
                 this.setValue("#uploadedTableId-M02001", "");
-                this.setText("#uploadDescription-M02001", this.t("uploadTableDescription", "Upload a file to create a temporary table."));
                 this.setValue("#sqlEditor-M02001", "");
                 this.markGridStale();
                 this.renderGrid("#columnsGrid-M02001", [], "columns");
@@ -663,14 +675,13 @@
 
         switchUploadView(viewName, options = {}) {
             if (this.isUploading && viewName === "table") {
-                this.setText("#uploadDescription-M02001", this.t("uploadStillRunning", "Upload is still running. The Table tab will open automatically after completion."));
                 return;
             }
             this.activeUploadView = viewName || "file";
             getContainerEl(".upload-view-tabs")?.querySelectorAll(".table-tab").forEach((tab) => {
                 tab.classList.toggle("is-active", tab.dataset.uploadView === this.activeUploadView);
             });
-            getContainerEl(".upload-workbench-panel")?.querySelectorAll(".upload-view-panel").forEach((panel) => {
+            getContainerEl(".upload-view-tabs")?.parentElement?.querySelectorAll(".upload-view-panel").forEach((panel) => {
                 panel.classList.toggle("is-active", panel.dataset.uploadPanel === this.activeUploadView);
             });
             if (this.activeUploadView === "table" && !options.skipAutoLoad && !this.isUploadTableTreeCurrent()) {
@@ -789,10 +800,6 @@
             this.focusedUploadTableKey = name;
             this.setValue("#uploadedTableId-M02001", name);
             const row = this.uploadTables.find((item) => item.TABLE_NAME === name);
-            const desc = row
-                ? this.tl("selectedTableDescription", "{objectName} selected.", { objectName: `${row.OWNER || ""}.${row.TABLE_NAME}` })
-                : this.tl("selectedTableDescription", "{objectName} selected.", { objectName: name });
-            this.setText("#uploadDescription-M02001", desc);
             if (!isSameTable) {
                 this.markGridStale();
                 this.setDefaultSql(true);
@@ -908,6 +915,7 @@
                     body: { tableName: this.uploadedTableName }
                 });
                 this.renderGrid("#columnsGrid-M02001", json.data || [], "columns", json.columns || []);
+                this.renderColumnsGridToolbar(json.total || (json.data || []).length);
                 this.gridState.columns = gridKey;
             } catch (error) {
                 this.gridState.columns = "";
@@ -917,7 +925,8 @@
 
         async loadTableData(options = {}) {
             if (!this.ensureUploadedTable()) return;
-            const limit = this.getLimit("#dataLimit-M02001");
+            const limit = this.gridPageSizes.data || 100;
+            const page = Math.max(1, Number(options.page || 1));
             const gridKey = this.getDataGridKey(limit);
             if (!options.force && this.isGridCurrent("data", gridKey)) return;
             const grid = getContainerEl("#dataGrid-M02001");
@@ -926,9 +935,13 @@
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/data`, {
                     method: "POST",
                     showLoading: false,
-                    body: { tableName: this.uploadedTableName, limit }
+                    body: { tableName: this.uploadedTableName, limit, page }
                 });
+                this.gridPages.data = Number(json.page || page); this.gridPageSizes.data = Number(json.pageSize || limit); this.gridTotals.data = Number(json.total || 0); this.gridTotalPages.data = Number(json.totalPages || 1);
                 this.renderGrid("#dataGrid-M02001", json.data || [], "data", json.columns || []);
+                this.renderGridPager("data");
+                const message = getContainerEl("#dataGridMessage-M02001");
+                if (message) message.textContent = `${(json.data || []).length.toLocaleString()} rows selected.`;
                 this.gridState.data = gridKey;
             } catch (error) {
                 this.gridState.data = "";
@@ -936,7 +949,7 @@
             }
         },
 
-        async executeSql() {
+        async executeSql(page = 1) {
             const executable = this.getExecutableSqlFromEditor();
             if (!executable.sql) {
                 this.renderSqlMessage(this.t("noSqlAtCursor", "No SQL statement found at the cursor."), "error");
@@ -952,7 +965,7 @@
             }
 
             this.restoreSqlSelection(executable);
-            const limit = this.getLimit("#sqlLimit-M02001");
+            const limit = this.gridPageSizes.sql || 100;
             const gridKey = this.getSqlGridKey(sql, limit);
             const grid = getContainerEl("#sqlGrid-M02001");
             const startedAt = performance.now();
@@ -963,12 +976,14 @@
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/sql`, {
                     method: "POST",
                     showLoading: false,
-                    body: { sql, limit }
+                body: { sql, limit, page }
                 });
                 const elapsedMs = Math.round(performance.now() - startedAt);
                 const rowCount = Array.isArray(json.data) ? json.data.length : 0;
                 this.renderSqlMessage(`${rowCount.toLocaleString()} rows selected. (${elapsedMs.toLocaleString()} ms)`, "success");
+                this.sqlGridText = sql; this.gridPages.sql = Number(json.page || page); this.gridPageSizes.sql = Number(json.pageSize || limit); this.gridTotals.sql = Number(json.total || 0); this.gridTotalPages.sql = Number(json.totalPages || 1);
                 this.renderGrid("#sqlGrid-M02001", json.data || [], "sql", json.columns || []);
+                this.renderGridPager("sql");
                 this.gridState.sql = gridKey;
             } catch (error) {
                 const elapsedMs = Math.round(performance.now() - startedAt);
@@ -1117,11 +1132,11 @@
             return this.uploadedTableName || "";
         },
 
-        getDataGridKey(limit = this.getLimit("#dataLimit-M02001")) {
+        getDataGridKey(limit = this.gridPageSizes.data || 100) {
             return `${this.uploadedTableName || ""}|${limit}`;
         },
 
-        getSqlGridKey(sql = getContainerEl("#sqlEditor-M02001")?.value || "", limit = this.getLimit("#sqlLimit-M02001")) {
+        getSqlGridKey(sql = getContainerEl("#sqlEditor-M02001")?.value || "", limit = this.gridPageSizes.sql || 100) {
             return `${String(sql || "").trim()}|${limit}`;
         },
 
@@ -1133,6 +1148,57 @@
             keys.forEach((key) => {
                 if (this.gridState[key] !== undefined) this.gridState[key] = "";
             });
+        },
+
+        renderGridPager(gridKey) {
+            const host = getContainerEl(`#${gridKey}GridPager-M02001`);
+            if (!host) return;
+            CommonUtils.renderServerPager(host, {
+                visible: true, page: this.gridPages[gridKey], pageSize: this.gridPageSizes[gridKey], totalPages: this.gridTotalPages[gridKey],
+                totalLabel: this.formatGridTotal(this.gridTotals[gridKey]),
+                labels: { page: "Page", go: "Go", previousPage: "Previous page", nextPage: "Next page", rowsPerPage: "Rows per page" },
+                onMove: (delta) => this.loadGridPage(gridKey, this.gridPages[gridKey] + delta),
+                onGo: (page) => this.loadGridPage(gridKey, page),
+                onPageSize: (size) => { this.gridPageSizes[gridKey] = Number(size || 100); this.loadGridPage(gridKey, 1); },
+                trailingNumberControl: { label: this.t("freeze", "Freeze"), title: this.t("freezeColumnsTitle", "Freeze columns"), value: this.gridFrozenColumns[gridKey] || 0, min: 0, max: 50, onInput: (value) => { this.gridFrozenColumns[gridKey] = Number(value || 0); this.applyGridFrozenColumns(gridKey); } }
+            });
+        },
+
+        renderColumnsGridToolbar(total) {
+            const message = getContainerEl("#columnsGridMessage-M02001");
+            if (message) message.textContent = this.formatGridTotal(total);
+            const controls = getContainerEl("#columnsGridControls-M02001");
+            if (controls) controls.innerHTML = `<label class="table-limit-control grid-pager-number-control" title="${this.escapeHtml(this.t("freezeColumnsTitle", "Freeze No and selected data columns while scrolling horizontally."))}"><span>${this.escapeHtml(this.t("freeze", "Freeze"))}</span><input type="number" min="0" max="50" value="${this.gridFrozenColumns.columns || 0}" oninput="M02001.setGridFreeze('columns', this.value)"></label>`;
+        },
+
+        renderPreviewGridToolbar(total, statusText = "") {
+            const message = getContainerEl("#previewGridMessage-M02001");
+            if (message) {
+                message.textContent = statusText || this.tl("previewRows", "Preview: {count} rows", {
+                    count: Number(total || 0).toLocaleString()
+                });
+            }
+            const controls = getContainerEl("#previewGridControls-M02001");
+            if (controls) {
+                controls.innerHTML = `<label class="table-limit-control grid-pager-number-control" title="${this.escapeHtml(this.t("freezeColumnsTitle", "Freeze columns"))}"><span>${this.escapeHtml(this.t("freeze", "Freeze"))}</span><input id="previewGridFreeze-M02001" type="number" min="0" max="50" value="${this.gridFrozenColumns.preview || 0}" oninput="M02001.setGridFreeze('preview', this.value)"></label>`;
+            }
+        },
+
+        formatGridTotal(total) {
+            return this.t("gridTotal", "Total {count}").replace("{count}", Number(total || 0).toLocaleString());
+        },
+
+        setGridFreeze(gridKey, value) {
+            this.gridFrozenColumns[gridKey] = Math.max(0, Number.parseInt(value || 0, 10) || 0);
+            this.applyGridFrozenColumns(gridKey);
+        },
+
+        loadGridPage(gridKey, page) {
+            const next = Math.max(1, Math.min(Number(this.gridTotalPages[gridKey] || 1), Number(page || 1)));
+            if (gridKey === "data") return this.loadTableData({ force: true, page: next });
+            const editor = getContainerEl("#sqlEditor-M02001");
+            if (editor && this.sqlGridText) editor.value = this.sqlGridText;
+            return this.executeSql(next);
         },
 
         ensureUploadedTable() {
@@ -1147,11 +1213,13 @@
             const container = getContainerEl(selector);
             if (!container) return;
             this.gridData[gridKey] = Array.isArray(rows) ? rows : [];
-            const columns = explicitColumns || Object.keys(rows?.[0] || {});
+            const rawColumns = explicitColumns || Object.keys(rows?.[0] || {});
+            const columns = gridKey === "columns"
+                ? rawColumns.filter((column) => !new Set(["OWNER", "TABLE_ID", "TABLE_COMMENT"]).has(String(column).toUpperCase()))
+                : rawColumns;
             if (!columns.length) {
                 const emptyMarkup = `<div class="table-empty">${this.escapeHtml(this.t("noData", "No data."))}</div>`;
-                const footerMarkup = gridKey === "sql" ? "" : this.renderListFooter(0);
-                container.innerHTML = `<div class="table-grid-scroll">${emptyMarkup}</div>${footerMarkup}`;
+                container.innerHTML = `<div class="table-grid-scroll">${emptyMarkup}</div>`;
                 return;
             }
             const tableMarkup = `
@@ -1165,15 +1233,16 @@
                     <tbody>
                         ${(rows || []).map((row, rowIndex) => `
                             <tr>
-                                <td class="grid-row-no">${rowIndex + 1}</td>
+                                <td class="grid-row-no">${(gridKey === "data" || gridKey === "sql") ? ((Number(this.gridPages[gridKey] || 1) - 1) * Number(this.gridPageSizes[gridKey] || 100)) + rowIndex + 1 : rowIndex + 1}</td>
                                 ${columns.map((column, index) => `<td title="${this.escapeHtml(Array.isArray(row) ? row[index] : row[column] ?? "")}">${this.escapeHtml(Array.isArray(row) ? row[index] : row[column] ?? "")}</td>`).join("")}
                             </tr>
                         `).join("")}
                     </tbody>
                 </table>
             `;
-            const footerMarkup = gridKey === "sql" ? "" : this.renderListFooter((rows || []).length);
-            container.innerHTML = `<div class="table-grid-scroll">${tableMarkup}</div>${footerMarkup}`;
+            container.innerHTML = `<div class="table-grid-scroll">${tableMarkup}</div>`;
+            const table = container.querySelector(".table-grid");
+            CommonUtils.enableGridColumnResize(table, () => this.applyGridFrozenColumns(gridKey));
             this.applyGridFrozenColumns(gridKey);
         },
 
@@ -1181,7 +1250,7 @@
             const table = getContainerEl(`[data-grid-key="${gridKey}"]`);
             const headerCells = Array.from(table?.tHead?.rows?.[0]?.children || []);
             const maxDataColumns = Math.max(0, headerCells.length - 1);
-            const input = gridKey === "sql" ? getContainerEl("#sqlFreezeColumns-M02001") : null;
+            const input = getContainerEl(`#${gridKey}GridFreeze-M02001`);
             let dataColumnCount = Number.parseInt(input?.value ?? this.gridFrozenColumns?.[gridKey] ?? 0, 10);
             if (!Number.isFinite(dataColumnCount)) dataColumnCount = 0;
             dataColumnCount = Math.max(0, Math.min(maxDataColumns, dataColumnCount));
@@ -1236,6 +1305,10 @@
             }
             if (format === "tsv") {
                 this.downloadBlob(`${baseName}.tsv`, this.createDelimitedContent(rows, "\t"), "text/tab-separated-values;charset=utf-8");
+                return;
+            }
+            if (format === "json") {
+                this.downloadBlob(`${baseName}.json`, JSON.stringify(rows, null, 2), "application/json;charset=utf-8");
             }
         },
 
