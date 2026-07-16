@@ -4,10 +4,34 @@
     const SUPPORTED_LANGUAGES = new Set(["en", "ko"]);
     const commonPackCache = new Map();
     const pagePackCache = new Map();
+    const mergedPagePackCache = new Map();
+    const pageTranslationStates = new WeakMap();
+    const pageTranslationOwners = new WeakMap();
+    const pageTranslationDescendants = new WeakMap();
+    const pageCommonPackStates = new WeakMap();
     const shellBaseState = new WeakMap();
     let shellTranslatedElements = new Map();
     let languageReadyPromise = Promise.resolve(DEFAULT_LANGUAGE);
     let languageLoading = false;
+    let languageRevision = 0;
+    let languageRequestId = 0;
+
+    const PAGE_TRANSLATION_ATTRIBUTES = [
+        "data-label-key",
+        "data-title-key",
+        "data-placeholder-key",
+        "data-value-key",
+        "data-aria-label-key",
+        "data-placeholder",
+        "class",
+        "id",
+        "hidden",
+        "data-panel",
+        "title",
+        "placeholder",
+        "aria-label",
+        "value"
+    ];
 
     function trackLanguageTask(task) {
         languageLoading = true;
@@ -113,6 +137,81 @@
         shellTranslatedElements = new Map();
     }
 
+    function getPageSectionOwner(root) {
+        if (!root || root.nodeType !== 1) return null;
+        if (root.matches?.('.page-section[id^="page-section-"]')) return root;
+        return root.closest?.('.page-section[id^="page-section-"]') || pageTranslationOwners.get(root) || null;
+    }
+
+    function releaseTranslationState(root) {
+        const state = root ? pageTranslationStates.get(root) : null;
+        state?.observer?.disconnect();
+        state?.observer?.takeRecords?.();
+        if (root) pageTranslationStates.delete(root);
+    }
+
+    function prunePageTranslationDescendants(owner) {
+        const descendants = owner ? pageTranslationDescendants.get(owner) : null;
+        if (!descendants) return;
+        Array.from(descendants).forEach((innerRoot) => {
+            if (owner.contains(innerRoot) && innerRoot.isConnected) return;
+            releaseTranslationState(innerRoot);
+            descendants.delete(innerRoot);
+            pageTranslationOwners.delete(innerRoot);
+        });
+        if (!descendants.size) pageTranslationDescendants.delete(owner);
+    }
+
+    function registerPageTranslationRoot(root) {
+        const owner = getPageSectionOwner(root);
+        if (!owner || owner === root) {
+            if (owner) prunePageTranslationDescendants(owner);
+            return;
+        }
+        prunePageTranslationDescendants(owner);
+        let descendants = pageTranslationDescendants.get(owner);
+        if (!descendants) {
+            descendants = new Set();
+            pageTranslationDescendants.set(owner, descendants);
+        }
+        descendants.add(root);
+        pageTranslationOwners.set(root, owner);
+    }
+
+    function getPageTranslationState(root) {
+        if (!root || typeof root !== "object") return null;
+        registerPageTranslationRoot(root);
+        let state = pageTranslationStates.get(root);
+        if (state) return state;
+
+        state = {
+            pageCode: "",
+            languageRevision: -1,
+            dirty: true,
+            observer: null
+        };
+        if (typeof MutationObserver !== "undefined" && root.nodeType === 1) {
+            state.observer = new MutationObserver(() => {
+                state.dirty = true;
+                state.observer?.disconnect();
+                const owner = getPageSectionOwner(root);
+                if (owner === root) prunePageTranslationDescendants(owner);
+            });
+        }
+        pageTranslationStates.set(root, state);
+        return state;
+    }
+
+    function observePageTranslationRoot(root, state) {
+        if (!root || !state?.observer || !root.isConnected) return;
+        state.observer.observe(root, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: PAGE_TRANSLATION_ATTRIBUTES
+        });
+    }
+
     const I18nManager = {
         defaultLanguage: DEFAULT_LANGUAGE,
         supportedLanguages: Array.from(SUPPORTED_LANGUAGES),
@@ -145,26 +244,32 @@
         },
 
         clearSessionLanguage() {
+            languageRequestId += 1;
             sessionStorage.removeItem(LANGUAGE_STORAGE_KEY);
             this.currentLanguage = DEFAULT_LANGUAGE;
             this.commonPack = {};
+            pagePackCache.clear();
+            mergedPagePackCache.clear();
+            languageRevision += 1;
             document.documentElement.lang = "en";
             this.applyCommonPack({});
             this.updateLanguageBadge(DEFAULT_LANGUAGE);
         },
 
         async initFromSession() {
+            const requestId = ++languageRequestId;
             return trackLanguageTask((async () => {
                 const canUseSessionLanguage = hasAuthenticatedSession();
                 if (!canUseSessionLanguage) sessionStorage.removeItem(LANGUAGE_STORAGE_KEY);
                 const stored = canUseSessionLanguage ? sessionStorage.getItem(LANGUAGE_STORAGE_KEY) : "";
                 const languageCode = stored ? normalizeLanguageCode(stored) : DEFAULT_LANGUAGE;
-                await this.applyLanguageNow(languageCode);
+                await this.applyLanguageNow(languageCode, requestId);
                 return languageCode;
             })());
         },
 
         async loadLanguageFromUserSettings() {
+            const requestId = ++languageRequestId;
             return trackLanguageTask((async () => {
                 let languageCode = DEFAULT_LANGUAGE;
                 try {
@@ -181,20 +286,28 @@
                 } catch (error) {
                     console.warn("[i18n] User language setting load failed. English fallback will be used.", error);
                 }
-                await this.applyLanguageNow(languageCode);
+                await this.applyLanguageNow(languageCode, requestId);
                 return languageCode;
             })());
         },
 
         async applyLanguage(languageCode) {
-            return trackLanguageTask(this.applyLanguageNow(languageCode));
+            const requestId = ++languageRequestId;
+            return trackLanguageTask(this.applyLanguageNow(languageCode, requestId));
         },
 
-        async applyLanguageNow(languageCode) {
-            const normalized = this.setSessionLanguage(languageCode);
-            pagePackCache.clear();
+        async applyLanguageNow(languageCode, requestId) {
+            const normalized = normalizeLanguageCode(languageCode);
+            if (requestId !== languageRequestId) return this.getCurrentLanguage();
             commonPackCache.delete(normalized);
-            this.commonPack = await this.loadCommonPack(normalized);
+            const commonPack = await this.loadCommonPack(normalized);
+            if (requestId !== languageRequestId) return this.getCurrentLanguage();
+
+            this.setSessionLanguage(normalized);
+            pagePackCache.clear();
+            mergedPagePackCache.clear();
+            languageRevision += 1;
+            this.commonPack = commonPack;
             this.applyCommonPack(this.commonPack);
             this.updateLanguageBadge(normalized);
             return normalized;
@@ -214,10 +327,19 @@
         async ensurePagePack(pageCode, languageCode = this.getCurrentLanguage()) {
             const normalizedPageCode = String(pageCode || "").trim();
             const normalizedLanguage = normalizeLanguageCode(languageCode);
+            const requestedLanguageRevision = languageRevision;
             if (!normalizedPageCode || normalizedLanguage === DEFAULT_LANGUAGE) {
                 delete window[`${normalizedPageCode}_WORK_UI_LABELS`];
+                delete window[`${normalizedPageCode}_FLOW_UI_LABELS`];
                 delete window[`${normalizedPageCode}_PAGE_I18N`];
                 return {};
+            }
+
+            const mergedCacheKey = `${normalizedLanguage}:${normalizedPageCode}`;
+            if (mergedPagePackCache.has(mergedCacheKey)) {
+                const cachedPack = mergedPagePackCache.get(mergedCacheKey);
+                this.installPagePack(normalizedPageCode, cachedPack);
+                return cachedPack;
             }
 
             const packs = [];
@@ -225,6 +347,7 @@
                 packs.push(await this.loadPagePack(commonPageCode, normalizedLanguage));
             }
             packs.push(await this.loadPagePack(normalizedPageCode, normalizedLanguage));
+            if (requestedLanguageRevision !== languageRevision) return {};
 
             const mergedPack = packs.reduce((merged, pack) => ({
                 ...merged,
@@ -266,6 +389,7 @@
                     }
                 }
             }), {});
+            mergedPagePackCache.set(mergedCacheKey, mergedPack);
             this.installPagePack(normalizedPageCode, mergedPack);
             return mergedPack;
         },
@@ -300,10 +424,70 @@
 
         applyPagePack(pageCode, root = document) {
             const normalizedPageCode = String(pageCode || "").trim();
-            if (!normalizedPageCode || !root) return;
+            if (!normalizedPageCode || !root) return false;
+            const state = getPageTranslationState(root);
+            const pendingRecords = state?.observer?.takeRecords?.() || [];
+            if (pendingRecords.length) {
+                state.dirty = true;
+                state.observer?.disconnect();
+            }
+            if (
+                state
+                && !state.dirty
+                && state.pageCode === normalizedPageCode
+                && state.languageRevision === languageRevision
+            ) {
+                return false;
+            }
+
+            state?.observer?.disconnect();
+            state?.observer?.takeRecords?.();
             const pack = safeObject(window[`${normalizedPageCode}_PAGE_I18N`]);
             this.applyElementLabels(root, safeObject(pack.labels));
             this.applyScopedSelectorTranslations(root, safeObject(pack.selectors));
+            if (state) {
+                state.pageCode = normalizedPageCode;
+                state.languageRevision = languageRevision;
+                state.dirty = false;
+                state.observer?.takeRecords?.();
+                observePageTranslationRoot(root, state);
+            }
+            return true;
+        },
+
+        releasePageRoot(root) {
+            if (!root) return;
+            Array.from(shellTranslatedElements.keys()).forEach((element) => {
+                if (!element?.isConnected || element === root || root.contains?.(element)) {
+                    shellTranslatedElements.delete(element);
+                }
+            });
+            const owner = getPageSectionOwner(root);
+            if (owner === root) {
+                const descendants = pageTranslationDescendants.get(owner);
+                Array.from(descendants || []).forEach((innerRoot) => {
+                    releaseTranslationState(innerRoot);
+                    pageTranslationOwners.delete(innerRoot);
+                });
+                descendants?.clear();
+                pageTranslationDescendants.delete(owner);
+            } else if (owner) {
+                const descendants = pageTranslationDescendants.get(owner);
+                descendants?.delete(root);
+                if (descendants && !descendants.size) pageTranslationDescendants.delete(owner);
+                pageTranslationOwners.delete(root);
+            }
+            releaseTranslationState(root);
+            pageCommonPackStates.delete(root);
+        },
+
+        acceptPageRootState(root) {
+            const state = root ? pageTranslationStates.get(root) : null;
+            if (!state) return;
+            state.observer?.disconnect();
+            state.observer?.takeRecords?.();
+            state.dirty = false;
+            observePageTranslationRoot(root, state);
         },
 
         applyElementLabels(root, labels = {}) {
@@ -378,6 +562,20 @@
             this.applySelectorTranslations(safeObject(safePack.shell));
         },
 
+        applyCommonPackForPage(root, pack = {}, force = false) {
+            if (!root) {
+                this.applyCommonPack(pack);
+                return true;
+            }
+            if (!force && pageCommonPackStates.get(root) === languageRevision) return false;
+            Array.from(shellTranslatedElements.keys()).forEach((element) => {
+                if (!element?.isConnected) shellTranslatedElements.delete(element);
+            });
+            this.applySelectorTranslations(safeObject(safeObject(pack).shell), root, false);
+            pageCommonPackStates.set(root, languageRevision);
+            return true;
+        },
+
         applyMenuTranslations(menuPack = {}) {
             const menus = Array.isArray(window.MENU_CONFIG) ? window.MENU_CONFIG : [];
             const languageCode = this.getCurrentLanguage();
@@ -404,13 +602,15 @@
             visit(menus);
         },
 
-        applySelectorTranslations(shellPack = {}) {
-            restoreShellTranslations();
+        applySelectorTranslations(shellPack = {}, root = document, restoreExisting = true) {
+            if (restoreExisting) restoreShellTranslations();
             const apply = (groupName, callback) => {
                 const group = safeObject(shellPack[groupName]);
                 Object.entries(group).forEach(([selector, value]) => {
                     try {
-                        document.querySelectorAll(selector).forEach((element) => {
+                        const elements = Array.from(root.querySelectorAll?.(selector) || []);
+                        if (root.nodeType === 1 && root.matches?.(selector)) elements.unshift(root);
+                        elements.forEach((element) => {
                             getShellElementState(element);
                             if (!shellTranslatedElements.has(element)) {
                                 shellTranslatedElements.set(element, new Set());

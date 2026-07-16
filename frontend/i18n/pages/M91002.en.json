@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "language": "en",
+  "pageCode": "M91002",
+  "description": "English messages for my system settings page.",
+  "messages": {
+    "categoryMyAccountName": "My Account",
+    "categoryMyAccountDesc": "Manage your login information, email, and password.",
+    "categoryGeneralName": "System General",
+    "categoryGeneralDesc": "Basic system display settings.",
+    "categoryServerResourceLimitsName": "Server Resource Limits",
+    "categoryServerResourceLimitsDesc": "Per-user and Target DB connection requested limits. Effective values cannot exceed the server environment hard caps."
+  }
+}

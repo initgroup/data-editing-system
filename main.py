@@ -7,6 +7,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from backend.database import close_db_pool
 from backend.target_database import close_all_target_db_pools
+from backend.services.data_work_router import (
+    shutdown_data_work_transactions,
+    start_data_work_transaction_cleanup,
+)
+from backend.services.background_jobs import shutdown_background_jobs
 from backend.auth_context import (
     authenticate_internal_api_request,
     authenticate_request,
@@ -22,6 +27,112 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Data Editing System API")
+
+
+class _GeminiRequestBodyLimitMiddleware:
+    """Bound the Gemini request body even when Content-Length is omitted."""
+
+    def __init__(self, wrapped_app):
+        self.app = wrapped_app
+
+    @staticmethod
+    def _max_request_bytes() -> int:
+        try:
+            return max(1, int(os.getenv("APP_GEMINI_MAX_REQUEST_BYTES", str(20 * 1024 * 1024))))
+        except Exception:
+            return 20 * 1024 * 1024
+
+    @staticmethod
+    async def _send_error(scope, receive, send, status_code: int, detail: str) -> None:
+        response = JSONResponse(status_code=status_code, content={"detail": detail})
+        await response(scope, receive, send)
+
+    async def __call__(self, scope, receive, send):
+        if (
+            scope.get("type") != "http"
+            or scope.get("method", "").upper() != "POST"
+            or scope.get("path") != "/api/googleGenai/search"
+        ):
+            await self.app(scope, receive, send)
+            return
+
+        max_request_bytes = self._max_request_bytes()
+        headers = dict(scope.get("headers") or [])
+        content_length = headers.get(b"content-length", b"").strip()
+        if content_length:
+            try:
+                parsed_content_length = int(content_length)
+                if parsed_content_length < 0:
+                    raise ValueError
+            except (TypeError, ValueError):
+                await self._send_error(scope, receive, send, 400, "Invalid Content-Length header.")
+                return
+            if parsed_content_length > max_request_bytes:
+                await self._send_error(
+                    scope,
+                    receive,
+                    send,
+                    413,
+                    "AI attachment request exceeds the server size limit.",
+                )
+                return
+
+        received_bytes = 0
+        limit_exceeded = False
+        response_start = None
+        response_committed = False
+        replacement_sent = False
+
+        async def limited_receive():
+            nonlocal received_bytes, limit_exceeded
+            if limit_exceeded:
+                return {"type": "http.request", "body": b"", "more_body": False}
+            message = await receive()
+            if message.get("type") == "http.request":
+                received_bytes += len(message.get("body", b""))
+                if received_bytes > max_request_bytes:
+                    limit_exceeded = True
+                    return {"type": "http.request", "body": b"", "more_body": False}
+            return message
+
+        async def send_limit_response() -> None:
+            nonlocal response_committed, replacement_sent
+            if replacement_sent or response_committed:
+                return
+            replacement_sent = True
+            response_committed = True
+            await self._send_error(
+                scope,
+                limited_receive,
+                send,
+                413,
+                "AI attachment request exceeds the server size limit.",
+            )
+
+        async def limited_send(message):
+            nonlocal response_start, response_committed
+            if replacement_sent:
+                return
+            if message.get("type") == "http.response.start":
+                response_start = message
+                return
+            if message.get("type") == "http.response.body":
+                if limit_exceeded:
+                    await send_limit_response()
+                    return
+                if response_start is not None and not response_committed:
+                    await send(response_start)
+                    response_committed = True
+                await send(message)
+                return
+            await send(message)
+
+        await self.app(scope, limited_receive, limited_send)
+        if limit_exceeded and not response_committed:
+            await send_limit_response()
+        elif response_start is not None and not response_committed:
+            await send(response_start)
+            await send({"type": "http.response.body", "body": b"", "more_body": False})
 
 # CORS 설정
 def _get_allowed_origins() -> list[str]:
@@ -140,6 +251,9 @@ async def add_cache_headers(request, call_next):
         response.headers["Expires"] = "0"
     return response
 
+
+app.add_middleware(_GeminiRequestBodyLimitMiddleware)
+
 # [수정] 1. API 라우터 등록을 정적 파일 마운트보다 먼저 수행합니다.
 routers = [
     (common_router.router, "common"), 
@@ -177,6 +291,7 @@ for router, tag in routers:
 # [추가] 서버 시작 시 등록된 경로 확인 로그
 @app.on_event("startup")
 async def startup_event():
+    start_data_work_transaction_cleanup()
     logger.info("==================================================")
 
     logger.info("등록된 API 경로 목록:")
@@ -187,8 +302,17 @@ async def startup_event():
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    close_all_target_db_pools()
-    close_db_pool()
+    cleanup_steps = (
+        ("background jobs", shutdown_background_jobs),
+        ("data work transactions", shutdown_data_work_transactions),
+        ("target DB pools", close_all_target_db_pools),
+        ("system DB pool", close_db_pool),
+    )
+    for label, cleanup in cleanup_steps:
+        try:
+            cleanup()
+        except Exception:
+            logger.exception("Shutdown cleanup failed for %s; continuing.", label)
 
 @app.get("/api/health") # 헬스체크용
 def read_root():

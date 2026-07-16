@@ -794,7 +794,12 @@ def get_dependency_skip_message(
     return ""
 
 
-def execute_flow_plan(conn, flow_run_id: int, plan: List[Dict[str, Any]]) -> Dict[str, Any]:
+def execute_flow_plan(
+    conn,
+    flow_run_id: int,
+    plan: List[Dict[str, Any]],
+    runtime_defaults: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     prepare_flow_run_session(conn)
     executed = 0
     failed = 0
@@ -810,6 +815,7 @@ def execute_flow_plan(conn, flow_run_id: int, plan: List[Dict[str, Any]]) -> Dic
         node_name = step.get("nodeName") or node_key
         step_result = {**step}
         runtime_values = create_runtime_values(step, node_outputs, flow_run_id)
+        runtime_values.update(runtime_defaults or {})
         dependency_skip_message = get_dependency_skip_message(step, node_status, plan_node_keys)
         if dependency_skip_message:
             output = build_node_output(step, {})

@@ -8,6 +8,7 @@ can be called through HTTP and persisted into a result table by OUTPUT rules.
 from __future__ import annotations
 
 import json
+import os
 import re
 import urllib.parse
 import urllib.request
@@ -161,7 +162,16 @@ def call_http_json_api(spec: Dict[str, Any], payload: Dict[str, Any], runtime_va
     request = urllib.request.Request(url, data=data, headers=headers, method=method)
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
-            body = response.read().decode("utf-8")
+            max_response_bytes = max(1024, int(os.getenv("APP_EXTERNAL_API_MAX_RESPONSE_BYTES", str(10 * 1024 * 1024))))
+            body_bytes = response.read(max_response_bytes + 1)
+            if len(body_bytes) > max_response_bytes:
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"External API response exceeded the {max_response_bytes} byte limit.",
+                )
+            body = body_bytes.decode("utf-8")
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"External API call failed: {str(exc)}")
 

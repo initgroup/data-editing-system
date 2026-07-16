@@ -3,6 +3,7 @@ from pydantic import BaseModel, ConfigDict
 from typing import Any, Dict, Optional
 
 from backend.target_database import get_target_db_connection
+from backend.runtime_settings import apply_server_resource_limits
 from backend.services import ml_analysis_service
 
 
@@ -29,10 +30,13 @@ class MlAnalysisRequest(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
-def request_payload(req: MlAnalysisRequest) -> Dict[str, Any]:
+def request_payload(req: MlAnalysisRequest, request: Request) -> Dict[str, Any]:
     payload = dict(req.extra or {})
     payload.update(req.model_dump(exclude={"extra"}, exclude_none=True))
-    return payload
+    return apply_server_resource_limits(
+        payload,
+        getattr(request.state, "server_resource_limits", None),
+    )
 
 
 @router.post("/lasso-feature-select")
@@ -40,7 +44,7 @@ def lasso_feature_select(req: MlAnalysisRequest, request: Request):
     conn = None
     try:
         conn = get_target_db_connection(request)
-        result = ml_analysis_service.run_lasso_feature_select(conn, request_payload(req))
+        result = ml_analysis_service.run_lasso_feature_select(conn, request_payload(req, request))
         conn.commit()
         return result
     except Exception:
@@ -57,7 +61,7 @@ def symbolic_regression_rule(req: MlAnalysisRequest, request: Request):
     conn = None
     try:
         conn = get_target_db_connection(request)
-        result = ml_analysis_service.run_symbolic_regression_rule(conn, request_payload(req))
+        result = ml_analysis_service.run_symbolic_regression_rule(conn, request_payload(req, request))
         conn.commit()
         return result
     except Exception:
@@ -74,7 +78,7 @@ def relation_network_cluster(req: MlAnalysisRequest, request: Request):
     conn = None
     try:
         conn = get_target_db_connection(request)
-        result = ml_analysis_service.run_relation_network_cluster(conn, request_payload(req))
+        result = ml_analysis_service.run_relation_network_cluster(conn, request_payload(req, request))
         conn.commit()
         return result
     except Exception:
@@ -91,7 +95,7 @@ def integrated_relation_cluster(req: MlAnalysisRequest, request: Request):
     conn = None
     try:
         conn = get_target_db_connection(request)
-        result = ml_analysis_service.run_integrated_relation_cluster(conn, request_payload(req))
+        result = ml_analysis_service.run_integrated_relation_cluster(conn, request_payload(req, request))
         conn.commit()
         return result
     except Exception:
@@ -108,7 +112,7 @@ def integrated_rule_discover(req: MlAnalysisRequest, request: Request):
     conn = None
     try:
         conn = get_target_db_connection(request)
-        result = ml_analysis_service.run_integrated_rule_discover(conn, request_payload(req))
+        result = ml_analysis_service.run_integrated_rule_discover(conn, request_payload(req, request))
         conn.commit()
         return result
     except Exception:
@@ -125,7 +129,7 @@ def integrated_rule_violation_detect(req: MlAnalysisRequest, request: Request):
     conn = None
     try:
         conn = get_target_db_connection(request)
-        result = ml_analysis_service.run_integrated_rule_violation_detect(conn, request_payload(req))
+        result = ml_analysis_service.run_integrated_rule_violation_detect(conn, request_payload(req, request))
         conn.commit()
         return result
     except Exception:

@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 from datetime import date, datetime
 from decimal import Decimal
 import logging
+import os
 import re
 import threading
 import time
@@ -18,7 +19,8 @@ from backend.target_database import get_target_connection_id, get_target_db_conn
 from backend.auth_context import get_request_role_code, get_request_user_id
 from backend.database_helper import execute_query, SqlLoader
 from backend.paging import create_page_window, normalize_page_number, normalize_page_size
-from backend.services.background_jobs import submit_background_job
+from backend.runtime_settings import apply_server_resource_limits
+from backend.services.background_jobs import BackgroundJobQueueFull, submit_background_job
 from backend.services import data_work_service as data_work
 from backend.services import api_call_service
 from backend.services.data_work_service import (
@@ -28,6 +30,73 @@ from backend.services.data_work_service import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+_transaction_registries = []
+_transaction_registries_lock = threading.Lock()
+_transaction_cleanup_stop_event = threading.Event()
+_transaction_cleanup_thread = None
+
+
+def _transaction_cleanup_interval_seconds() -> int:
+    try:
+        return max(10, int(os.getenv("DATA_WORK_TRANSACTION_SWEEP_SECONDS", "60")))
+    except Exception:
+        return 60
+
+
+def _run_transaction_cleanup_loop() -> None:
+    interval_seconds = _transaction_cleanup_interval_seconds()
+    while not _transaction_cleanup_stop_event.wait(interval_seconds):
+        with _transaction_registries_lock:
+            registries = list(_transaction_registries)
+        for registry in registries:
+            try:
+                registry["cleanup"]()
+            except Exception:
+                logger.exception("DATA_WORK expired SQL transaction cleanup failed.")
+
+
+def _register_transaction_registry(cleanup_callback, close_all_callback) -> None:
+    with _transaction_registries_lock:
+        _transaction_registries.append({
+            "cleanup": cleanup_callback,
+            "closeAll": close_all_callback,
+        })
+
+
+def start_data_work_transaction_cleanup() -> None:
+    global _transaction_cleanup_thread
+    with _transaction_registries_lock:
+        if _transaction_cleanup_thread and _transaction_cleanup_thread.is_alive():
+            return
+        _transaction_cleanup_stop_event.clear()
+        _transaction_cleanup_thread = threading.Thread(
+            target=_run_transaction_cleanup_loop,
+            name="data-work-transaction-cleanup",
+            daemon=True,
+        )
+        _transaction_cleanup_thread.start()
+
+
+def shutdown_data_work_transactions() -> None:
+    global _transaction_cleanup_thread
+    _transaction_cleanup_stop_event.set()
+    thread = _transaction_cleanup_thread
+    if thread and thread.is_alive():
+        thread.join(timeout=5)
+    if thread and thread.is_alive():
+        logger.warning("DATA_WORK SQL transaction cleanup worker did not stop within 5 seconds.")
+        return
+    _transaction_cleanup_thread = None
+
+    with _transaction_registries_lock:
+        registries = list(_transaction_registries)
+    for registry in registries:
+        try:
+            registry["closeAll"]()
+        except Exception:
+            logger.exception("DATA_WORK SQL transaction shutdown cleanup failed.")
 
 
 class TableRequest(BaseModel):
@@ -133,24 +202,85 @@ def create_data_work_router(
     }
     transaction_lock = threading.Lock()
     active_transactions: Dict[str, Dict[str, Any]] = {}
-    transaction_timeout_seconds = 30 * 60
+    try:
+        transaction_timeout_seconds = max(
+            60,
+            int(os.getenv("DATA_WORK_TRANSACTION_TIMEOUT_SECONDS", str(30 * 60))),
+        )
+    except Exception:
+        transaction_timeout_seconds = 30 * 60
 
     def cleanup_expired_transactions():
         now = time.time()
-        expired_ids = []
+        expired_sessions = []
         with transaction_lock:
-            for transaction_id, session in active_transactions.items():
+            for transaction_id, session in list(active_transactions.items()):
+                if session.get("inUse"):
+                    continue
                 if now - session.get("lastAccessAt", now) > transaction_timeout_seconds:
-                    expired_ids.append(transaction_id)
+                    expired_sessions.append((transaction_id, active_transactions.pop(transaction_id, None)))
 
-            for transaction_id in expired_ids:
-                session = active_transactions.pop(transaction_id, None)
-                conn = session.get("conn") if session else None
-                if conn:
-                    try:
-                        conn.rollback()
-                    finally:
-                        conn.close()
+        for transaction_id, session in expired_sessions:
+            conn = session.get("conn") if session else None
+            if not conn:
+                continue
+            try:
+                conn.rollback()
+            except Exception as rollback_error:
+                logger.warning(
+                    "%s expired SQL transaction rollback failed. transaction_id=%s error=%s",
+                    MENU_CODE,
+                    transaction_id,
+                    rollback_error,
+                )
+            finally:
+                try:
+                    conn.close()
+                except Exception as close_error:
+                    logger.warning(
+                        "%s expired SQL transaction close failed. transaction_id=%s error=%s",
+                        MENU_CODE,
+                        transaction_id,
+                        close_error,
+                    )
+
+        if expired_sessions:
+            logger.info(
+                "%s expired SQL transactions cleaned. count=%s",
+                MENU_CODE,
+                len(expired_sessions),
+            )
+
+    def close_all_transactions():
+        with transaction_lock:
+            sessions = list(active_transactions.items())
+            active_transactions.clear()
+
+        for transaction_id, session in sessions:
+            conn = session.get("conn") if session else None
+            if not conn:
+                continue
+            try:
+                conn.rollback()
+            except Exception as rollback_error:
+                logger.warning(
+                    "%s SQL transaction shutdown rollback failed. transaction_id=%s error=%s",
+                    MENU_CODE,
+                    transaction_id,
+                    rollback_error,
+                )
+            finally:
+                try:
+                    conn.close()
+                except Exception as close_error:
+                    logger.warning(
+                        "%s SQL transaction shutdown close failed. transaction_id=%s error=%s",
+                        MENU_CODE,
+                        transaction_id,
+                        close_error,
+                    )
+
+    _register_transaction_registry(cleanup_expired_transactions, close_all_transactions)
 
     def _assert_transaction_owner(session: Dict[str, Any], request: Request) -> None:
         user_id = get_request_user_id(request)
@@ -172,11 +302,29 @@ def create_data_work_router(
         cleanup_expired_transactions()
         with transaction_lock:
             session = active_transactions.get(transaction_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="SQL transaction session was not found or expired.")
+        _assert_transaction_owner(session, request)
+
+        with transaction_lock:
+            session = active_transactions.get(transaction_id)
             if not session:
                 raise HTTPException(status_code=404, detail="SQL transaction session was not found or expired.")
-            _assert_transaction_owner(session, request)
+            if session.get("inUse"):
+                raise HTTPException(status_code=409, detail="SQL transaction session is already in use.")
+            session["inUse"] = True
             session["lastAccessAt"] = time.time()
             return session["conn"]
+
+    def release_transaction_connection(transaction_id: Optional[str]) -> None:
+        if not transaction_id:
+            return
+        with transaction_lock:
+            session = active_transactions.get(transaction_id)
+            if not session:
+                return
+            session["inUse"] = False
+            session["lastAccessAt"] = time.time()
 
     def register_transaction_connection(conn, request: Request) -> str:
         transaction_id = uuid.uuid4().hex
@@ -190,7 +338,8 @@ def create_data_work_router(
                 "userId": user_id,
                 "connectionId": connection_id,
                 "createdAt": now,
-                "lastAccessAt": now
+                "lastAccessAt": now,
+                "inUse": False,
             }
 
         return transaction_id
@@ -205,6 +354,9 @@ def create_data_work_router(
         _assert_transaction_owner(session, request)
 
         with transaction_lock:
+            session = active_transactions.get(transaction_id)
+            if session and session.get("inUse"):
+                raise HTTPException(status_code=409, detail="SQL transaction session is already in use.")
             session = active_transactions.pop(transaction_id, None)
         if not session:
             raise HTTPException(status_code=404, detail="SQL transaction session was not found or expired.")
@@ -664,6 +816,13 @@ def create_data_work_router(
         values["P_RUN_SOURCE_TYPE"] = "DATA_WORK"
         values["P_RUN_ID"] = effective_run_id
         return values
+
+
+    def with_request_resource_limits(request: Request, runtime_bind_values: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        return apply_server_resource_limits(
+            runtime_bind_values,
+            getattr(request.state, "server_resource_limits", None),
+        )
     
     
     @router.post("/job/run")
@@ -673,7 +832,7 @@ def create_data_work_router(
             conn = get_target_db_connection(request)
             profile_job_id = data_work.require_int(req.profileJobId, "profileJobId")
             job = data_work.load_job(conn, MENU_CODE, profile_job_id)
-            runtime_bind_values = req.runtimeBindValues or {}
+            runtime_bind_values = with_request_resource_limits(request, req.runtimeBindValues)
             data_run_id = resolve_data_run_id(conn, job, runtime_bind_values)
             runtime_bind_values = with_data_run_id(runtime_bind_values, data_run_id)
             if req.batch:
@@ -688,15 +847,47 @@ def create_data_work_router(
                     False,
                     False
                 )
+                target_connection_id = get_target_connection_id(request)
+                user_id = get_request_user_id(request)
                 conn.commit()
-                submit_background_job(
-                    f"{MENU_CODE} profile_job_id={profile_job_id}",
-                    run_profile_job_background,
-                    profile_job_id,
-                    get_target_connection_id(request),
-                    get_request_user_id(request),
-                    runtime_bind_values,
-                )
+                try:
+                    submit_background_job(
+                        f"{MENU_CODE} profile_job_id={profile_job_id}",
+                        run_profile_job_background,
+                        profile_job_id,
+                        target_connection_id,
+                        user_id,
+                        runtime_bind_values,
+                    )
+                except BackgroundJobQueueFull as queue_error:
+                    data_work.update_job_status(
+                        conn,
+                        MENU_CODE,
+                        profile_job_id,
+                        "FAILED",
+                        str(queue_error),
+                        job.get("RESULT_TABLE_NAME") or "",
+                        job.get("RESULT_OWNER") or "",
+                        False,
+                        False,
+                    )
+                    conn.commit()
+                    raise HTTPException(status_code=503, detail=str(queue_error))
+                except Exception as submit_error:
+                    data_work.update_job_status(
+                        conn,
+                        MENU_CODE,
+                        profile_job_id,
+                        "FAILED",
+                        f"Background job submission failed: {submit_error}",
+                        job.get("RESULT_TABLE_NAME") or "",
+                        job.get("RESULT_OWNER") or "",
+                        False,
+                        False,
+                    )
+                    conn.commit()
+                    logger.exception("%s background job submission failed.", MENU_CODE)
+                    raise HTTPException(status_code=500, detail="Background job submission failed.")
                 return {
                     "status": "success",
                     "message": ROUTER_MESSAGES["job_queued"],
@@ -733,7 +924,7 @@ def create_data_work_router(
             profile_job_id = data_work.require_int(req.profileJobId, "profileJobId")
             saved_job = data_work.load_job(conn, MENU_CODE, profile_job_id)
             draft_job = data_work.build_draft_job(conn, MENU_CODE, req, saved_job, DEFAULT_JOB_GROUP)
-            runtime_bind_values = req.runtimeBindValues or {}
+            runtime_bind_values = with_request_resource_limits(request, req.runtimeBindValues)
             data_run_id = resolve_data_run_id(conn, draft_job, runtime_bind_values)
             result = execute_draft_profile_job(conn, profile_job_id, draft_job, with_data_run_id(runtime_bind_values, data_run_id))
             conn.commit()
@@ -774,10 +965,11 @@ def create_data_work_router(
     
             summaries = []
             failed_count = 0
+            runtime_bind_values = with_request_resource_limits(request, None)
             for job in jobs:
                 profile_job_id = int(job["PROFILE_JOB_ID"])
                 try:
-                    run_result = execute_profile_job(conn, profile_job_id)
+                    run_result = execute_profile_job(conn, profile_job_id, runtime_bind_values)
                     summaries.append({
                         "profileJobId": profile_job_id,
                         "jobName": job.get("JOB_NAME"),
@@ -957,7 +1149,11 @@ def create_data_work_router(
     def start_sql_transaction(request: Request):
         cleanup_expired_transactions()
         conn = get_target_db_connection(request)
-        transaction_id = register_transaction_connection(conn, request)
+        try:
+            transaction_id = register_transaction_connection(conn, request)
+        except Exception:
+            conn.close()
+            raise
 
         return {
             "status": "success",
@@ -977,7 +1173,16 @@ def create_data_work_router(
     def rollback_sql_transaction(req: SqlTransactionRequest, request: Request):
         if not req.transactionId:
             raise HTTPException(status_code=400, detail="transactionId is required.")
-        return finish_transaction(req.transactionId, "rollback", request)
+        try:
+            return finish_transaction(req.transactionId, "rollback", request)
+        except HTTPException as error:
+            if error.status_code != 404:
+                raise
+            return {
+                "status": "success",
+                "transactionId": req.transactionId,
+                "message": "Transaction was already closed or expired.",
+            }
 
 
     @router.post("/sql")
@@ -987,6 +1192,7 @@ def create_data_work_router(
         page = normalize_page_number(req.page)
         conn = None
         use_transaction = bool(req.transactionId)
+        transaction_connection_acquired = False
         auto_start_transaction = False
         auto_transaction_id = None
         try:
@@ -997,7 +1203,11 @@ def create_data_work_router(
                 and executable_script is not None
                 and executable_script["type"] == "DML"
             )
-            conn = get_transaction_connection(req.transactionId, request) if use_transaction else get_target_db_connection(request)
+            if use_transaction:
+                conn = get_transaction_connection(req.transactionId, request)
+                transaction_connection_acquired = True
+            else:
+                conn = get_target_db_connection(request)
             if executable_script and executable_script["type"] != "SELECT":
                 message = execute_worksheet_script(conn, executable_script, req.runtimeBindValues or {})
                 if auto_start_transaction:
@@ -1052,7 +1262,9 @@ def create_data_work_router(
             logger.error(f"{MENU_CODE} SQL execution failed: {str(e)}")
             raise HTTPException(status_code=500, detail=str(e))
         finally:
-            if conn and not use_transaction and not auto_start_transaction:
+            if transaction_connection_acquired:
+                release_transaction_connection(req.transactionId)
+            elif conn and not use_transaction and not auto_start_transaction:
                 conn.close()
     
     
@@ -1105,8 +1317,17 @@ def create_data_work_router(
     def run_profile_job_background(profile_job_id: int, connection_id: int, user_id: int, runtime_bind_values: Optional[Dict[str, Any]] = None):
         conn = None
         try:
-            conn = get_target_db_connection_by_id(connection_id, user_id)
-            execute_profile_job(conn, profile_job_id, runtime_bind_values or {})
+            resource_limits = {}
+            conn = get_target_db_connection_by_id(
+                connection_id,
+                user_id,
+                resource_limits_out=resource_limits,
+            )
+            execute_profile_job(
+                conn,
+                profile_job_id,
+                apply_server_resource_limits(runtime_bind_values, resource_limits),
+            )
             conn.commit()
         except Exception as e:
             if conn:

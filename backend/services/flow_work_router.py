@@ -17,9 +17,10 @@ from backend.auth_context import get_request_role_code, get_request_user_id
 from backend.target_database import get_target_connection_id, get_target_db_connection, get_target_db_connection_by_id
 from backend.services import data_work_service as data_work
 from backend.services import flow_work_service as flow_work
-from backend.services.background_jobs import submit_background_job
+from backend.services.background_jobs import BackgroundJobQueueFull, submit_background_job
 from backend.services.flow_work_service import FlowNodeRunRequest, FlowRunRequest, FlowWorkRequest
 from backend.paging import create_page_window, normalize_page_number, normalize_page_size
+from backend.runtime_settings import apply_server_resource_limits
 
 logger = logging.getLogger(__name__)
 
@@ -287,6 +288,29 @@ def create_flow_work_router(
                     continue
                 raise
 
+    def mark_flow_submission_failed(
+        conn,
+        flow_run_id: int,
+        selected_plan: list[dict],
+        run_plan: Dict[str, Any],
+        message: str,
+    ) -> None:
+        flow_work.update_run(conn, flow_run_id, "FAILED", message, run_plan)
+        for step in selected_plan or []:
+            node_key = str(step.get("nodeKey") or "").strip()
+            if not node_key:
+                continue
+            flow_work.update_node_run_by_key(
+                conn,
+                flow_run_id,
+                node_key,
+                "FAILED",
+                message,
+                False,
+                True,
+            )
+        conn.commit()
+
     @router.get("/scenario-tables")
     def get_scenario_tables(request: Request, projectId: int, scenarioId: int):
         conn = None
@@ -548,16 +572,38 @@ def create_flow_work_router(
             manual_run_id = payload_manual_run_id or plan_manual_run_id
             run_id = flow_work.create_run(conn, flow_id, run_type, run_status, message, validation, manual_run_id)
             flow_work.create_node_run_records(conn, run_id, flow_id, validation.get("plan", []))
+            target_connection_id = get_target_connection_id(request)
+            user_id = get_request_user_id(request)
             conn.commit()
-            submit_background_job(
-                f"{MENU_CODE} flow_run_id={run_id}",
-                run_flow_background,
-                run_id,
-                get_target_connection_id(request),
-                get_request_user_id(request),
-                validation.get("plan", []),
-                "Flow batch execution started." if req.batch else "Flow execution started.",
-            )
+            try:
+                submit_background_job(
+                    f"{MENU_CODE} flow_run_id={run_id}",
+                    run_flow_background,
+                    run_id,
+                    target_connection_id,
+                    user_id,
+                    validation.get("plan", []),
+                    "Flow batch execution started." if req.batch else "Flow execution started.",
+                )
+            except BackgroundJobQueueFull as queue_error:
+                mark_flow_submission_failed(
+                    conn,
+                    run_id,
+                    validation.get("plan", []),
+                    {"plan": validation.get("plan", [])},
+                    str(queue_error),
+                )
+                raise HTTPException(status_code=503, detail=str(queue_error))
+            except Exception as submit_error:
+                mark_flow_submission_failed(
+                    conn,
+                    run_id,
+                    validation.get("plan", []),
+                    {"plan": validation.get("plan", [])},
+                    f"Background flow submission failed: {submit_error}",
+                )
+                logger.exception("%s background flow submission failed.", MENU_CODE)
+                raise HTTPException(status_code=500, detail="Background flow submission failed.")
             save_lock.release()
             save_lock = None
             return {
@@ -604,10 +650,20 @@ def create_flow_work_router(
     def run_flow_background(flow_run_id: int, connection_id: int, user_id: int, plan: list[dict], start_message: str = "Flow execution started."):
         conn = None
         try:
-            conn = get_target_db_connection_by_id(connection_id, user_id)
+            resource_limits = {}
+            conn = get_target_db_connection_by_id(
+                connection_id,
+                user_id,
+                resource_limits_out=resource_limits,
+            )
             flow_work.start_run(conn, flow_run_id, start_message)
             conn.commit()
-            flow_work.execute_flow_plan(conn, flow_run_id, plan or [])
+            flow_work.execute_flow_plan(
+                conn,
+                flow_run_id,
+                plan or [],
+                runtime_defaults=apply_server_resource_limits(None, resource_limits),
+            )
         except Exception as e:
             if conn:
                 conn.rollback()
@@ -707,16 +763,38 @@ def create_flow_work_router(
             else:
                 run_id = flow_work.create_run(conn, flow_id, run_type, "STARTED", message, run_plan, manual_run_id)
                 flow_work.create_node_run_records(conn, run_id, flow_id, selected_plan)
+            target_connection_id = get_target_connection_id(request)
+            user_id = get_request_user_id(request)
             conn.commit()
-            submit_background_job(
-                f"{MENU_CODE} flow_node_run_id={run_id}",
-                run_flow_background,
-                run_id,
-                get_target_connection_id(request),
-                get_request_user_id(request),
-                selected_plan,
-                message,
-            )
+            try:
+                submit_background_job(
+                    f"{MENU_CODE} flow_node_run_id={run_id}",
+                    run_flow_background,
+                    run_id,
+                    target_connection_id,
+                    user_id,
+                    selected_plan,
+                    message,
+                )
+            except BackgroundJobQueueFull as queue_error:
+                mark_flow_submission_failed(
+                    conn,
+                    run_id,
+                    selected_plan,
+                    run_plan,
+                    str(queue_error),
+                )
+                raise HTTPException(status_code=503, detail=str(queue_error))
+            except Exception as submit_error:
+                mark_flow_submission_failed(
+                    conn,
+                    run_id,
+                    selected_plan,
+                    run_plan,
+                    f"Background flow submission failed: {submit_error}",
+                )
+                logger.exception("%s background node submission failed.", MENU_CODE)
+                raise HTTPException(status_code=500, detail="Background flow submission failed.")
             return {
                 "status": "success",
                 "message": message,

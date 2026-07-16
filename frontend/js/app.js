@@ -16,6 +16,16 @@ const CURRENT_PAGE_TITLE_KEY = "initCurrentPageTitle";
 const PageManager = {
     modules: {}, // Loaded page modules cache.
     containers: {}, // Open page containers.
+    pageLoadPromises: new Map(), // Coalesce concurrent load/refresh requests per page.
+    pageLoadModes: new Map(), // Distinguish normal activation from an explicit refresh.
+    pageLifecycleVersions: new Map(), // Invalidate async work after a page is closed.
+    readyPages: new Set(), // Containers whose HTML/script/init lifecycle completed.
+    navigationRequestId: 0, // Monotonic menu activation request id.
+    navigationEpoch: 0, // Changes only when the requested page changes.
+    requestedPageCode: "",
+    activePageCode: "",
+    navigationLoadingPageCode: "",
+    navigationLoadingRequestId: 0,
     lastLoadedVersion: null, // Last loaded asset version.
     dataWorkTemplatePages: ['M03001', 'M03002', 'M03003', 'M03004'],
     flowWorkTemplatePages: ['M04001'],
@@ -234,6 +244,116 @@ const PageManager = {
         if (title) sessionStorage.setItem(CURRENT_PAGE_TITLE_KEY, title);
     },
 
+    beginNavigation(pageCode) {
+        const normalizedPageCode = String(pageCode || "");
+        if (this.requestedPageCode !== normalizedPageCode) {
+            this.navigationEpoch += 1;
+        }
+        this.requestedPageCode = normalizedPageCode;
+        this.navigationRequestId += 1;
+        return {
+            id: this.navigationRequestId,
+            epoch: this.navigationEpoch,
+            pageCode: normalizedPageCode
+        };
+    },
+
+    isCurrentNavigation(navigation) {
+        return Boolean(
+            navigation
+            && navigation.id === this.navigationRequestId
+            && navigation.pageCode === this.requestedPageCode
+        );
+    },
+
+    waitForNextPaint() {
+        return new Promise((resolve) => {
+            if (typeof window.requestAnimationFrame === "function") {
+                window.requestAnimationFrame(() => {
+                    window.requestAnimationFrame(() => resolve());
+                });
+                return;
+            }
+            setTimeout(resolve, 0);
+        });
+    },
+
+    getPageLifecycleVersion(pageCode) {
+        return this.pageLifecycleVersions.get(String(pageCode || "")) || 0;
+    },
+
+    invalidatePageLifecycle(pageCode) {
+        const normalizedPageCode = String(pageCode || "");
+        const nextVersion = this.getPageLifecycleVersion(normalizedPageCode) + 1;
+        this.pageLifecycleVersions.set(normalizedPageCode, nextVersion);
+        this.readyPages.delete(normalizedPageCode);
+        return nextVersion;
+    },
+
+    isPageLifecycleCurrent(pageCode, version, container = null) {
+        const normalizedPageCode = String(pageCode || "");
+        if (this.getPageLifecycleVersion(normalizedPageCode) !== version) return false;
+        if (container && this.containers[normalizedPageCode] !== container) return false;
+        return true;
+    },
+
+    cleanupModuleAfterStaleAsync(pageCode, module) {
+        if (!module || typeof module.destroy !== 'function') return;
+        try {
+            module.destroy();
+        } catch (error) {
+            console.warn(`[System] ${pageCode} post-async destroy failed.`, error);
+        }
+    },
+
+    discardStalePageLoad(pageCode, container = null, module = null) {
+        this.cleanupModuleAfterStaleAsync(pageCode, module);
+        this.readyPages.delete(pageCode);
+        if (container && this.containers[pageCode] === container) {
+            window.I18nManager?.releasePageRoot?.(container);
+            container.replaceChildren();
+            container.remove();
+            delete this.containers[pageCode];
+        }
+        if (!this.containers[pageCode]) {
+            delete this.modules[pageCode];
+            if (window[pageCode]) delete window[pageCode];
+            const scriptTag = document.querySelector(`script[src*="${pageCode}.js"]`);
+            if (scriptTag) scriptTag.remove();
+        }
+    },
+
+    showNavigationLoading(navigation, message = "", detail = "") {
+        if (!navigation) return;
+        this.navigationLoadingPageCode = String(navigation.pageCode || "");
+        this.navigationLoadingRequestId = Number(navigation.id || 0);
+        CommonUI.showLoading(message, detail);
+    },
+
+    hideNavigationLoading(navigation = null) {
+        if (!this.navigationLoadingPageCode) return;
+        if (navigation && (
+            this.navigationLoadingPageCode !== String(navigation.pageCode || "")
+            || this.navigationLoadingRequestId !== Number(navigation.id || 0)
+        )) return;
+        this.navigationLoadingPageCode = "";
+        this.navigationLoadingRequestId = 0;
+        CommonUI.hideLoading();
+    },
+
+    markOpenPageVisited(pageCode) {
+        window.MenuRenderer?.visitedPages?.add?.(pageCode);
+        if (this.activePageCode) window.MenuRenderer?.markActivePage?.(this.activePageCode);
+    },
+
+    updateVisiblePageIdentity(pageCode, title, navigation) {
+        if (!this.isCurrentNavigation(navigation)) return false;
+        const displayTitle = this.formatPageTitle(pageCode, title);
+        if (displayTitle) window.updateShellPageHeader?.(pageCode, displayTitle);
+        this.rememberCurrentPage(pageCode, displayTitle);
+        return true;
+    },
+
     getCloseFallbackPage() {
         return { pageCode: "home", title: window.getShellHomeTitle?.() || "Data Editing System" };
     },
@@ -355,41 +475,39 @@ const PageManager = {
             && ((this.isAuthenticated() && !sessionStorage.getItem("targetConnectionId")) || this.isBootstrapAuthenticated());
         document.body.classList.toggle("intro-mode", SHELL_HIDDEN_PAGES.includes(pageCode) || setupWithoutTarget);
 
-        document.querySelectorAll(".page-section").forEach(section => {
+        const targetContainer = this.containers[pageCode];
+        if (!targetContainer) return false;
+
+        const activeContainer = this.activePageCode
+            ? this.containers[this.activePageCode]
+            : document.querySelector(".page-section.active");
+        const isAlreadyActive = activeContainer === targetContainer
+            && targetContainer.classList.contains("active")
+            && targetContainer.style.display !== "none";
+
+        if (isAlreadyActive) {
+            this.activePageCode = pageCode;
+            return false;
+        }
+
+        document.querySelectorAll(".page-section.active").forEach((section) => {
+            if (section === targetContainer) return;
             section.classList.remove("active");
             section.style.display = "none";
         });
 
-        const targetContainer = this.containers[pageCode];
-        if (targetContainer) {
-            targetContainer.classList.add("active");
-            targetContainer.style.display = "block";
-        }
-
-        document.querySelectorAll("#mainNav [data-page]").forEach(el => {
-            el.classList.remove("menu-active");
-        });
-
-        const targetMenu = document.querySelector(`#mainNav [data-page="${pageCode}"]`);
-        if (targetMenu) {
-            targetMenu.classList.add("menu-active", "visited-menu");
-
-            const parentSubmenu = targetMenu.closest(".submenu");
-            if (parentSubmenu && parentSubmenu.classList.contains("hidden")) {
-                parentSubmenu.classList.remove("hidden");
-
-                const folderBtn = parentSubmenu.previousElementSibling;
-                if (folderBtn) {
-                    const arrow = folderBtn.querySelector(".fa-chevron-down");
-                    if (arrow) arrow.classList.add("rotate-180");
-                }
-            }
-        }
+        targetContainer.classList.add("active");
+        targetContainer.style.display = "block";
+        this.activePageCode = pageCode;
         window.MenuRenderer?.markActivePage?.(pageCode);
+        return true;
     },
 
     closeAll() {
-        const openPages = Object.keys(this.containers).filter((pageCode) => pageCode !== DEFAULT_PAGE_CODE);
+        const openPages = Array.from(new Set([
+            ...Object.keys(this.containers),
+            ...this.pageLoadPromises.keys()
+        ])).filter((pageCode) => pageCode !== DEFAULT_PAGE_CODE);
         if (openPages.length === 0) {
             alert("There are no open pages.");
             return;
@@ -403,7 +521,10 @@ const PageManager = {
     },
 
     getOtherOpenPageCodes(currentPageCode) {
-        return Object.keys(this.containers).filter((pageCode) => (
+        return Array.from(new Set([
+            ...Object.keys(this.containers),
+            ...this.pageLoadPromises.keys()
+        ])).filter((pageCode) => (
             pageCode !== DEFAULT_PAGE_CODE && pageCode !== currentPageCode
         ));
     },
@@ -416,12 +537,24 @@ const PageManager = {
     },
 
     resetWorkspaceForLogout(keepLoginSession = false) {
+        const lifecyclePages = new Set([
+            ...Object.keys(this.containers),
+            ...Object.keys(this.modules),
+            ...this.pageLoadPromises.keys()
+        ]);
+        lifecyclePages.forEach((pageCode) => this.invalidatePageLifecycle(pageCode));
         Object.keys(this.containers).forEach((pageCode) => {
-            this.close(pageCode, false);
+            this.close(pageCode, false, { invalidateLoad: false });
         });
         this.containers = {};
         this.modules = {};
-        document.querySelectorAll("#pageContainerHolder .page-section").forEach((section) => section.remove());
+        this.readyPages.clear();
+        this.activePageCode = "";
+        this.hideNavigationLoading();
+        document.querySelectorAll("#pageContainerHolder .page-section").forEach((section) => {
+            window.I18nManager?.releasePageRoot?.(section);
+            section.remove();
+        });
         document.querySelectorAll("#mainNav [data-page]").forEach((el) => {
             el.classList.remove("visited-menu", "menu-active", "bg-blue-700", "text-green-500");
         });
@@ -434,13 +567,15 @@ const PageManager = {
     /**
      * Close one page and release its resources.
      */
-    close(pageCode, moveToMain = true) {
+    close(pageCode, moveToMain = true, options = {}) {
         if (pageCode === DEFAULT_PAGE_CODE) {
             console.log("[System] Closing all open pages.");
             return;
         }
 
         console.log(`[System] Closing ${pageCode}.`);
+        if (options.invalidateLoad !== false) this.invalidatePageLifecycle(pageCode);
+        else this.readyPages.delete(pageCode);
 
         const targetModule = window[pageCode] || this.modules[pageCode];
         if (targetModule && typeof targetModule.destroy === 'function') {
@@ -453,10 +588,12 @@ const PageManager = {
 
         const container = document.getElementById(`page-section-${pageCode}`);
         if (container) {
+            window.I18nManager?.releasePageRoot?.(container);
             container.innerHTML = '';
             container.remove();
-            delete this.containers[pageCode];
         }
+        delete this.containers[pageCode];
+        if (this.activePageCode === pageCode) this.activePageCode = "";
 
         const scriptTag = document.querySelector(`script[src*="${pageCode}.js"]`);
         if (scriptTag) scriptTag.remove();
@@ -467,12 +604,7 @@ const PageManager = {
         }
         window.MenuRenderer?.visitedPages?.delete?.(pageCode);
 
-        if (window[pageCode]) {
-            if (typeof window[pageCode].destroy === 'function') {
-                window[pageCode].destroy();
-            }
-            delete window[pageCode];
-        }
+        if (window[pageCode]) delete window[pageCode];
         delete this.modules[pageCode];
 
         if (moveToMain) {
@@ -587,7 +719,8 @@ const PageManager = {
         const isAnlyTemplate = this.anlyWorkTemplatePages.includes(pageCode);
         const scriptFileName = isAnlyTemplate ? 'MCOM_ANLY_WORK' : pageCode;
 
-        if (!force && document.querySelector(`script[src*="${scriptFileName}.js"]`)) {
+        const existingScript = document.querySelector(`script[src*="${scriptFileName}.js"]`);
+        if (existingScript && (!force || isAnlyTemplate)) {
             if (isAnlyTemplate) this.ensureAnlyWorkPage(pageCode);
             return true;
         }
@@ -634,58 +767,220 @@ const PageManager = {
         return null;
     },
 
+    async activateReadyPage(pageCode, title, navigation, options = {}) {
+        const activationResult = {
+            activationCompleted: false,
+            activationEpoch: navigation?.epoch ?? -1,
+            committed: false
+        };
+        const container = options.container || this.containers[pageCode];
+        const lifecycleVersion = options.lifecycleVersion ?? this.getPageLifecycleVersion(pageCode);
+        const isActivationCurrent = () => Boolean(
+            this.isCurrentNavigation(navigation)
+            && this.readyPages.has(pageCode)
+            && this.isPageLifecycleCurrent(pageCode, lifecycleVersion, container)
+        );
+        if (!isActivationCurrent()) return activationResult;
+
+        const switched = this.show(pageCode);
+        this.updateVisiblePageIdentity(pageCode, title, navigation);
+        if (switched || navigation.previewSwitched) {
+            navigation.previewSwitched = false;
+            await this.waitForNextPaint();
+            if (!isActivationCurrent()) return activationResult;
+        }
+
+        const module = window[pageCode] || this.modules[pageCode];
+        if (options.reinitializeDefaultPage && pageCode === DEFAULT_PAGE_CODE && module && typeof module.init === 'function') {
+            try {
+                await module.init();
+            } catch (error) {
+                if (!this.isPageLifecycleCurrent(pageCode, lifecycleVersion, container)) {
+                    this.cleanupModuleAfterStaleAsync(pageCode, module);
+                }
+                throw error;
+            }
+            if (!isActivationCurrent()) {
+                if (!this.isPageLifecycleCurrent(pageCode, lifecycleVersion, container)) {
+                    this.cleanupModuleAfterStaleAsync(pageCode, module);
+                }
+                return activationResult;
+            }
+        }
+        if (options.runOnShow !== false && module && typeof module.onShow === 'function') {
+            try {
+                await module.onShow();
+            } catch (error) {
+                if (!this.isPageLifecycleCurrent(pageCode, lifecycleVersion, container)) {
+                    this.cleanupModuleAfterStaleAsync(pageCode, module);
+                }
+                throw error;
+            }
+        }
+        activationResult.activationCompleted = true;
+        if (!isActivationCurrent()) {
+            if (!this.isPageLifecycleCurrent(pageCode, lifecycleVersion, container)) {
+                this.cleanupModuleAfterStaleAsync(pageCode, module);
+            }
+            return activationResult;
+        }
+
+        await window.I18nManager?.ensurePagePack?.(pageCode);
+        if (!isActivationCurrent()) return activationResult;
+        const pagePackApplied = window.I18nManager?.applyPagePack?.(pageCode, container);
+        if (typeof window.I18nManager?.applyCommonPackForPage === 'function') {
+            window.I18nManager.applyCommonPackForPage(container, window.I18nManager.commonPack || {}, pagePackApplied === true);
+        } else {
+            window.I18nManager?.applyCommonPack?.(window.I18nManager.commonPack || {});
+        }
+        window.I18nManager?.acceptPageRootState?.(container);
+        this.updateVisiblePageIdentity(pageCode, title, navigation);
+        activationResult.committed = true;
+        return activationResult;
+    },
+
     /**
      * 페이지를 로드하거나 이미 열린 페이지를 활성화합니다.
      * @param {string} pageCode - 페이지 코드
      * @param {string} title - 화면 제목
      * @param {boolean} isRefresh - 강제 새로고침 여부
      */
+    async runPageLoadOperation(pageCode, title, isRefresh, navigation) {
+        const mode = isRefresh ? "refresh" : "load";
+        const loadPromise = Promise.resolve().then(() => this.loadPage(pageCode, title, isRefresh, navigation));
+        this.pageLoadPromises.set(pageCode, loadPromise);
+        this.pageLoadModes.set(pageCode, mode);
+        try {
+            return await loadPromise;
+        } finally {
+            if (this.pageLoadPromises.get(pageCode) === loadPromise) {
+                this.pageLoadPromises.delete(pageCode);
+                this.pageLoadModes.delete(pageCode);
+            }
+        }
+    },
+
     async load(pageCode, title, isRefresh = false) {
+        const loadKey = String(pageCode || "");
+        const navigation = this.beginNavigation(loadKey);
+        const existingPromise = this.pageLoadPromises.get(loadKey);
+        const existingMode = this.pageLoadModes.get(loadKey) || "load";
+        const canPreview = !isRefresh
+            && this.readyPages.has(loadKey)
+            && Boolean(this.containers[loadKey])
+            && (!this.requiresAuth(loadKey) || this.isAuthenticated())
+            && this.isPageAllowed(loadKey);
+
+        if (canPreview) {
+            navigation.previewSwitched = this.show(loadKey);
+            this.updateVisiblePageIdentity(loadKey, title, navigation);
+            if (existingPromise && existingMode === "refresh") this.showNavigationLoading(navigation);
+            else this.hideNavigationLoading();
+        } else {
+            this.showNavigationLoading(navigation);
+        }
+
+        try {
+            while (true) {
+                const pendingPromise = this.pageLoadPromises.get(loadKey);
+                if (pendingPromise) {
+                    const pendingMode = this.pageLoadModes.get(loadKey) || "load";
+                    const pendingResult = await pendingPromise;
+
+                    // A refresh is an explicit rebuild request. Never downgrade it to
+                    // the normal activation that happened to be in progress first.
+                    if (isRefresh && pendingMode !== "refresh") continue;
+                    if (!this.readyPages.has(loadKey) || !this.containers[loadKey]) {
+                        if (!this.isCurrentNavigation(navigation)) return pendingResult;
+                        continue;
+                    }
+                    if (!this.isCurrentNavigation(navigation)) return pendingResult;
+
+                    const activationAlreadyHandled = Boolean(
+                        pendingResult?.activationCompleted
+                        && pendingResult.activationEpoch === navigation.epoch
+                    );
+                    return await this.activateReadyPage(loadKey, title, navigation, {
+                        runOnShow: !activationAlreadyHandled && pendingResult?.suppressOnShow !== true
+                    });
+                }
+
+                const result = await this.runPageLoadOperation(loadKey, title, isRefresh, navigation);
+                if (!this.readyPages.has(loadKey) || !this.containers[loadKey]) {
+                    if (!this.isCurrentNavigation(navigation)) return result;
+                    continue;
+                }
+                return result;
+            }
+        } finally {
+            this.hideNavigationLoading(navigation);
+        }
+    },
+
+    async loadPage(pageCode, title, isRefresh = false, navigation = null) {
+        const emptyResult = () => ({
+            activationCompleted: false,
+            activationEpoch: navigation?.epoch ?? -1,
+            committed: false,
+            suppressOnShow: false
+        });
         if (pageCode === DEFAULT_PAGE_CODE && (Object.keys(this.containers).length || Object.keys(this.modules).length)) {
             this.resetWorkspaceForLogout();
         }
+        const lifecycleVersion = this.getPageLifecycleVersion(pageCode);
 
         if (this.requiresAuth(pageCode) && !this.isAuthenticated()) {
-            await this.load(DEFAULT_PAGE_CODE, DEFAULT_PAGE_TITLE, false);
-            return;
+            if (this.isCurrentNavigation(navigation)) {
+                await this.load(DEFAULT_PAGE_CODE, DEFAULT_PAGE_TITLE, false);
+            }
+            return emptyResult();
         }
         if (this.requiresAuth(pageCode)) {
             this.extendSession();
-            if (window.I18nManager?.isLanguageLoading?.()) {
-                CommonUI.showLoading(
+            if (
+                this.isCurrentNavigation(navigation)
+                && window.I18nManager?.isLanguageLoading?.()
+                && !this.containers[pageCode]
+            ) {
+                this.showNavigationLoading(
+                    navigation,
                     window.I18nManager?.t?.("commonUi.loading.languageTitle", "Loading language pack"),
                     window.I18nManager?.t?.("commonUi.loading.languageDetail", "Preparing labels and messages")
                 );
             }
             await window.I18nManager?.whenReady?.();
+            if (!this.isPageLifecycleCurrent(pageCode, lifecycleVersion)) {
+                this.discardStalePageLoad(pageCode);
+                return emptyResult();
+            }
         }
         if (this.requiresAuth(pageCode) && !this.isPageAllowed(pageCode)) {
-            await this.load("home", window.getShellHomeTitle?.() || "Data Editing System", false);
-            return;
+            if (this.isCurrentNavigation(navigation)) {
+                await this.load("home", window.getShellHomeTitle?.() || "Data Editing System", false);
+            }
+            return emptyResult();
         }
 
         const containerId = `page-section-${pageCode}`;
 
         if (this.containers[pageCode] && !isRefresh) {
-            const module = window[pageCode] || this.modules[pageCode];
-            if (pageCode === DEFAULT_PAGE_CODE && module && typeof module.init === 'function') {
-                await module.init();
+            if (this.readyPages.has(pageCode)) {
+                return this.activateReadyPage(pageCode, title, navigation, {
+                    reinitializeDefaultPage: true,
+                    lifecycleVersion
+                });
             }
-            this.show(pageCode);
-            if (module && typeof module.onShow === 'function') {
-                await module.onShow();
-            }
-            await window.I18nManager?.ensurePagePack?.(pageCode);
-            window.I18nManager?.applyPagePack?.(pageCode, this.containers[pageCode]);
-            window.I18nManager?.applyCommonPack?.(window.I18nManager.commonPack || {});
-            const displayTitle = this.formatPageTitle(pageCode, title);
-            if (displayTitle) window.updateShellPageHeader?.(pageCode, displayTitle);
-            this.rememberCurrentPage(pageCode, displayTitle);
-            return;
+            this.close(pageCode, false, { invalidateLoad: false });
         }
 
         if (isRefresh) {
-            this.close(pageCode, false);
+            const canClose = await this.runPageBeforeCloseHooks([pageCode]);
+            if (!this.isPageLifecycleCurrent(pageCode, lifecycleVersion)) {
+                this.discardStalePageLoad(pageCode);
+                return emptyResult();
+            }
+            if (!canClose) return emptyResult();
+            this.close(pageCode, false, { invalidateLoad: false });
         }
 
         const holder = document.getElementById('pageContainerHolder');
@@ -694,39 +989,71 @@ const PageManager = {
         container.className = 'page-section';
         holder.appendChild(container);
         this.containers[pageCode] = container;
-        this.show(pageCode);
+        if (this.requestedPageCode === pageCode) this.show(pageCode);
 
-        CommonUI.showLoading();
-
+        let activationResult = emptyResult();
         try {
             const hasHtml = await this.injectHtml(pageCode);
+            if (!this.isPageLifecycleCurrent(pageCode, lifecycleVersion, container)) {
+                this.discardStalePageLoad(pageCode, container);
+                return emptyResult();
+            }
             if (hasHtml) {
                 await window.I18nManager?.ensurePagePack?.(pageCode);
+                if (!this.isPageLifecycleCurrent(pageCode, lifecycleVersion, container)) {
+                    this.discardStalePageLoad(pageCode, container);
+                    return emptyResult();
+                }
                 window.I18nManager?.applyPagePack?.(pageCode, container);
                 await this.injectScript(pageCode, isRefresh);
+                if (!this.isPageLifecycleCurrent(pageCode, lifecycleVersion, container)) {
+                    this.discardStalePageLoad(pageCode, container);
+                    return emptyResult();
+                }
             }
 
             const module = window[pageCode];
             if (module && typeof module.init === 'function') {
                 this.modules[pageCode] = module;
-                await module.init();
+                try {
+                    await module.init();
+                } catch (error) {
+                    if (!this.isPageLifecycleCurrent(pageCode, lifecycleVersion, container)) {
+                        this.discardStalePageLoad(pageCode, container, module);
+                        return emptyResult();
+                    }
+                    throw error;
+                }
+                if (!this.isPageLifecycleCurrent(pageCode, lifecycleVersion, container)) {
+                    this.discardStalePageLoad(pageCode, container, module);
+                    return emptyResult();
+                }
             }
 
-            this.show(pageCode);
-            if (module && typeof module.onShow === 'function') {
-                await module.onShow();
+            this.readyPages.add(pageCode);
+            this.markOpenPageVisited(pageCode);
+            if (this.isCurrentNavigation(navigation)) {
+                activationResult = await this.activateReadyPage(pageCode, title, navigation, {
+                    container,
+                    lifecycleVersion
+                });
             }
-            window.I18nManager?.applyPagePack?.(pageCode, container);
-            window.I18nManager?.applyCommonPack?.(window.I18nManager.commonPack || {});
         } catch (e) {
-            CommonUI.showPageError(pageCode, e.message);
+            if (this.isPageLifecycleCurrent(pageCode, lifecycleVersion, container)) {
+                CommonUI.showPageError(pageCode, e.message);
+                this.readyPages.add(pageCode);
+                this.markOpenPageVisited(pageCode);
+                if (this.isCurrentNavigation(navigation)) {
+                    this.show(pageCode);
+                    this.updateVisiblePageIdentity(pageCode, title, navigation);
+                }
+                activationResult.suppressOnShow = true;
+            }
         } finally {
-            CommonUI.hideLoading();
-            const displayTitle = this.formatPageTitle(pageCode, title);
-            if (displayTitle) window.updateShellPageHeader?.(pageCode, displayTitle);
-            this.rememberCurrentPage(pageCode, displayTitle);
+            this.updateVisiblePageIdentity(pageCode, title, navigation);
             this.lastLoadedVersion = APP_VERSION;
         }
+        return activationResult;
     }
 };
 

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>INIT Data Editing System</title>
     <script>
-        window.APP_CACHE_VERSION = "1.1.184";
+        window.APP_CACHE_VERSION = "1.1.186";
         window.APP_ASSET_VERSION_OVERRIDES = {
             // 전체 캐시 갱신: APP_CACHE_VERSION만 올립니다.
             // 부분 캐시 갱신: "js/M90001.js": "1.0.1" 처럼 파일별 버전을 지정합니다.
@@ -331,45 +331,39 @@
             if (page) {
                 console.log("Loading Page:", page, "with Title:", title); // 디버깅용
 
-                // 새 페이지 출력 보장하기 위해 PageManager 호출
-                await PageManager.load(page, title);
-
-                // 메뉴 활성화 스타일 처리
-                document.querySelectorAll('#mainNav a, #mainNav button').forEach(el => {
-                    el.classList.remove('menu-active', 'bg-blue-700');
-                    /* el.classList.remove('visited-menu'); */ // 방문한 메뉴의 배경색을 남기고 싶으면 주석 해제할 것.
-                });
-                
-                if (target.tagName === 'A') {
-                    target.classList.add('menu-active', 'bg-blue-700');
-                    target.classList.add('visited-menu');
-                }
+                // PageManager가 화면과 메뉴 활성 상태를 함께 관리합니다.
+                const loadPromise = PageManager.load(page, title);
 
                 // 7. 모바일 레이아웃 닫기 (비동기로 실행하여 UI 충돌 방지)
                 if (window.innerWidth <= 1024 && typeof LayoutManager !== 'undefined') {
-                    // 새 페이지 찍힌 직후에 닫히도록 50ms 타임아웃 적용
+                    // 느린 초기 로딩을 기다리지 않고 메뉴를 먼저 닫습니다.
                     setTimeout(() => {
                         LayoutManager.close();
-                    }, 50);
+                    }, 0);
                 }
+
+                await loadPromise;
             }
         }
 
         // Refresh the active page.
         async function handlePageRefresh() {
             const icon = document.getElementById('refreshIcon');
+            const button = icon?.closest('button');
             const activeSection = document.querySelector('.page-section.active');
             
-            if (!activeSection) return;
+            if (!activeSection || button?.disabled) return;
 
             const pageCode = activeSection.id.replace('page-section-', '');
             const title = document.getElementById('contentTitle').innerText;
 
             icon.classList.add('fa-spin');
+            if (button) button.disabled = true;
 
             try {
                 await PageManager.load(pageCode, title, true);
             } finally {
+                if (button) button.disabled = false;
                 setTimeout(() => icon.classList.remove('fa-spin'), 500);
             }
         }

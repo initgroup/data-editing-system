@@ -92,6 +92,9 @@ def get_init_data(request: Request):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail="초기 데이터 로드 실패")
+    finally:
+        if conn:
+            conn.close()
     
 # 웹페이지 파라미터를 지정해서 사용할 경우
 @router.post("/searchCombo")
@@ -118,6 +121,9 @@ def search_combo(req: SearchRequest, request: Request):
     except Exception as e:
         # 이 부분이 없거나 잘못되면 브라우저는 에러인 줄 모릅니다!
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
 
 
 # 웹페이지 파라미터를 지정해서 사용할 경우
@@ -146,6 +152,9 @@ def search2_combo(req: SearchRequest, request: Request):
     except Exception as e:
         # 이 부분이 없거나 잘못되면 브라우저는 에러인 줄 모릅니다!
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
 
 # 웹페이지 파라미터를 지정해서 사용할 경우
 @router.post("/search")
@@ -180,6 +189,9 @@ def search_data(req: SearchRequest, request: Request):
     except Exception as e:
         # 이 부분이 없거나 잘못되면 브라우저는 에러인 줄 모릅니다!
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
 
 @router.get("/object-tree")
 def get_object_tree(

@@ -673,11 +673,13 @@
             const code = String(category?.CATEGORY_CODE || this.selectedCategoryCode || "").toUpperCase();
             const defaults = {
                 MY_ACCOUNT: "My Account",
-                GENERAL: "System General"
+                GENERAL: "System General",
+                SERVER_RESOURCE_LIMITS: "Server Resource Limits"
             };
             const keys = {
                 MY_ACCOUNT: "categoryMyAccountName",
-                GENERAL: "categoryGeneralName"
+                GENERAL: "categoryGeneralName",
+                SERVER_RESOURCE_LIMITS: "categoryServerResourceLimitsName"
             };
             return getMessage(keys[code], defaults[code] || category?.CATEGORY_NAME || code || "Settings");
         },
@@ -686,11 +688,13 @@
             const code = String(category?.CATEGORY_CODE || this.selectedCategoryCode || "").toUpperCase();
             const defaults = {
                 MY_ACCOUNT: "Manage your login information, email, and password.",
-                GENERAL: "Basic system display settings."
+                GENERAL: "Basic system display settings.",
+                SERVER_RESOURCE_LIMITS: "Per-user and Target DB connection requested limits. Effective values cannot exceed the server environment hard caps."
             };
             const keys = {
                 MY_ACCOUNT: "categoryMyAccountDesc",
-                GENERAL: "categoryGeneralDesc"
+                GENERAL: "categoryGeneralDesc",
+                SERVER_RESOURCE_LIMITS: "categoryServerResourceLimitsDesc"
             };
             return getMessage(keys[code], defaults[code] || category?.CATEGORY_DESC || "Manage category key/value settings.");
         },

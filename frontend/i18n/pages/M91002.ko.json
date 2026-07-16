@@ -18,6 +18,8 @@
     "categoryMyAccountName": "나의 회원정보",
     "categoryMyAccountDesc": "내 로그인 정보, 이메일, 비밀번호를 관리합니다.",
     "categoryGeneralName": "시스템 일반",
-    "categoryGeneralDesc": "기본 시스템 표시 설정입니다."
+    "categoryGeneralDesc": "기본 시스템 표시 설정입니다.",
+    "categoryServerResourceLimitsName": "서버 리소스 제한",
+    "categoryServerResourceLimitsDesc": "사용자 및 Target DB 연결별 요청 제한값입니다. 실제 적용값은 서버 환경변수의 상한을 초과할 수 없습니다."
   }
 }

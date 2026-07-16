@@ -1,5 +1,6 @@
 import base64
 import json
+import os
 import time
 from typing import Any
 
@@ -15,8 +16,21 @@ GEMINI_MODELS = (
 
 MAX_RETRIES_PER_MODEL = 3
 RETRY_DELAY_SECONDS = 2
-MAX_ATTACHMENT_TEXT_CHARS = 180000
-MAX_ATTACHMENT_BINARY_BYTES = 4 * 1024 * 1024
+def _positive_env_int(name: str, default: int) -> int:
+    try:
+        return max(1, int(os.getenv(name, str(default))))
+    except Exception:
+        return default
+
+
+MAX_QUERY_CHARS = _positive_env_int("APP_GEMINI_MAX_QUERY_CHARS", 20000)
+MAX_ATTACHMENT_COUNT = _positive_env_int("APP_GEMINI_MAX_ATTACHMENTS", 8)
+MAX_ATTACHMENT_TEXT_CHARS = _positive_env_int("APP_GEMINI_MAX_TEXT_CHARS", 180000)
+MAX_ATTACHMENT_METADATA_CHARS = _positive_env_int("APP_GEMINI_MAX_METADATA_CHARS", 20000)
+MAX_ATTACHMENT_BINARY_BYTES = _positive_env_int("APP_GEMINI_MAX_ATTACHMENT_BYTES", 4 * 1024 * 1024)
+MAX_ATTACHMENT_TOTAL_BINARY_BYTES = _positive_env_int("APP_GEMINI_MAX_TOTAL_BINARY_BYTES", 12 * 1024 * 1024)
+MAX_ATTACHMENT_BASE64_CHARS = 4 * ((MAX_ATTACHMENT_BINARY_BYTES + 2) // 3)
+MAX_ATTACHMENT_TOTAL_BASE64_CHARS = 4 * ((MAX_ATTACHMENT_TOTAL_BINARY_BYTES + 2) // 3)
 
 
 def _get_client(api_key: str) -> genai.Client:
@@ -75,7 +89,10 @@ def _truncate_text(value: str, max_chars: int) -> str:
 
 
 def _build_attachment_text_context(context_attachments: list[dict[str, Any]] | None) -> str:
-    attachments = sorted(context_attachments or [], key=lambda item: int(item.get("priority") or 50))
+    attachments = sorted(
+        context_attachments or [],
+        key=lambda item: int(item.get("priority") or 50),
+    )[:MAX_ATTACHMENT_COUNT]
     if not attachments:
         return ""
 
@@ -106,7 +123,7 @@ def _build_attachment_text_context(context_attachments: list[dict[str, Any]] | N
             f"- contentKind: {content_kind}",
             f"- mimeType: {mime_type}",
             f"- size: {size}",
-            f"- metadata: {json.dumps(metadata, ensure_ascii=False)}",
+            f"- metadata: {_truncate_text(json.dumps(metadata, ensure_ascii=False), MAX_ATTACHMENT_METADATA_CHARS)}",
         ]
         body = ""
         if text_content:
@@ -132,11 +149,23 @@ def _build_attachment_text_context(context_attachments: list[dict[str, Any]] | N
 
 def _build_attachment_parts(context_attachments: list[dict[str, Any]] | None) -> list[types.Part]:
     parts: list[types.Part] = []
+    total_binary_bytes = 0
 
-    for item in sorted(context_attachments or [], key=lambda value: int(value.get("priority") or 50)):
+    attachments = sorted(
+        context_attachments or [],
+        key=lambda value: int(value.get("priority") or 50),
+    )[:MAX_ATTACHMENT_COUNT]
+    for item in attachments:
         mime_type = str(item.get("mimeType") or "")
         base64_data = str(item.get("base64Data") or "")
         if not base64_data:
+            continue
+        # Decode 전에 길이를 제한해 잘못되거나 과도한 Base64 문자열이
+        # 원본 문자열과 디코딩 바이트를 동시에 크게 점유하지 않게 한다.
+        if len(base64_data) > MAX_ATTACHMENT_BASE64_CHARS:
+            continue
+        estimated_binary_bytes = (len(base64_data) * 3) // 4
+        if total_binary_bytes + estimated_binary_bytes > MAX_ATTACHMENT_TOTAL_BINARY_BYTES:
             continue
         if not (mime_type.startswith("image/") or mime_type == "application/pdf"):
             continue
@@ -145,10 +174,15 @@ def _build_attachment_parts(context_attachments: list[dict[str, Any]] | None) ->
             data = base64.b64decode(base64_data, validate=True)
         except Exception:
             continue
-        if not data or len(data) > MAX_ATTACHMENT_BINARY_BYTES:
+        if (
+            not data
+            or len(data) > MAX_ATTACHMENT_BINARY_BYTES
+            or total_binary_bytes + len(data) > MAX_ATTACHMENT_TOTAL_BINARY_BYTES
+        ):
             continue
 
         parts.append(types.Part.from_bytes(data=data, mime_type=mime_type))
+        total_binary_bytes += len(data)
 
     return parts
 
@@ -156,6 +190,8 @@ def _build_attachment_parts(context_attachments: list[dict[str, Any]] | None) ->
 def web_search_ai_assistant(user_query: str, api_key: str, context_attachments: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     if not user_query or not user_query.strip():
         raise ValueError("질문을 입력해 주세요.")
+    if len(user_query) > MAX_QUERY_CHARS:
+        raise ValueError(f"질문은 최대 {MAX_QUERY_CHARS}자까지 입력할 수 있습니다.")
 
     attachment_context = _build_attachment_text_context(context_attachments)
     attachment_parts = _build_attachment_parts(context_attachments)

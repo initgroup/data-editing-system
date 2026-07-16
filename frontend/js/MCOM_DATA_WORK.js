@@ -338,6 +338,29 @@
             this.renderCurrentJob();
         },
 
+        async beforeClose() {
+            const transactionId = this.sqlTransactionId;
+            if (!transactionId) return true;
+
+            try {
+                await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/sql/transaction/rollback`, {
+                    method: "POST",
+                    body: { transactionId }
+                });
+                this.sqlTransactionId = "";
+                this.renderSqlTransactionState();
+                return true;
+            } catch (error) {
+                console.warn(`[${PAGE_CODE}] SQL transaction rollback during page close failed.`, error);
+                this.renderSqlMessage(
+                    "sql",
+                    error.message || this.getMessage("transactionFailed", "Transaction rollback failed."),
+                    "error"
+                );
+                return false;
+            }
+        },
+
         destroy() {
             this.endSqlGridColumnResize?.();
             getContainerEl(`#sqlEditor-${PAGE_CODE}`)?.removeEventListener("keydown", this.sqlKeydownBound);

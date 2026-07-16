@@ -58,6 +58,32 @@
       ]
     },
     {
+      "CATEGORY_CODE": "SERVER_RESOURCE_LIMITS",
+      "CATEGORY_NAME": "Server Resource Limits",
+      "CATEGORY_DESC": "Per-user and Target DB connection requested limits. Effective values cannot exceed the server environment hard caps.",
+      "SORT_ORDER": 30,
+      "DEFAULTS": [
+        {
+          "SETTING_KEY": "TARGET_DB_POOL_WAIT_TIMEOUT_MS",
+          "SETTING_VALUE": "30000",
+          "SETTING_DESC": "Requested Target DB pool wait time in milliseconds. The effective value is capped by the server TARGET_DB_POOL_WAIT_TIMEOUT_MS environment value.",
+          "SORT_ORDER": 10
+        },
+        {
+          "SETTING_KEY": "APP_ML_MAX_IN_MEMORY_ROWS",
+          "SETTING_VALUE": "25000",
+          "SETTING_DESC": "Requested maximum rows loaded into memory for one ML analysis. The effective value is capped by the server APP_ML_MAX_IN_MEMORY_ROWS environment value.",
+          "SORT_ORDER": 20
+        },
+        {
+          "SETTING_KEY": "APP_ML_MAX_INPUT_FEATURES",
+          "SETTING_VALUE": "50",
+          "SETTING_DESC": "Requested maximum input features for one ML analysis. The effective value is capped by the server APP_ML_MAX_INPUT_FEATURES environment value.",
+          "SORT_ORDER": 30
+        }
+      ]
+    },
+    {
       "CATEGORY_CODE": "OTHER",
       "CATEGORY_NAME": "Other Settings",
       "CATEGORY_DESC": "Additional system settings.",

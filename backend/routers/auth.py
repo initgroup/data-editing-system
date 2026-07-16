@@ -15,6 +15,7 @@ from backend.auth_context import (
 )
 from backend.database import get_db_connection
 from backend.database_helper import SqlLoader
+from backend.runtime_settings import load_server_resource_limits
 from backend.routers.M99001 import (
     LoginRequest,
     SessionCleanupRequest,
@@ -203,12 +204,23 @@ def login(req: LoginRequest, response: Response, request: Request):
                 }
             elif len(target_connections) == 1:
                 connection_row = _get_connection_detail(system_conn, int(target_connections[0]["connectionId"]), user_id)
+        selected_connection_id = int(connection_row.get("CONNECTION_ID")) if connection_row else None
+        if selected_connection_id is not None:
+            # Load resource settings once at login. Target DB acquisitions and
+            # background jobs reuse this bounded server-side snapshot until a
+            # M91002 change explicitly invalidates it.
+            load_server_resource_limits(
+                system_conn,
+                user_id,
+                selected_connection_id,
+                force_refresh=True,
+            )
         _issue_login_session(
             response,
             request,
             system_conn,
             user_id,
-            int(connection_row.get("CONNECTION_ID")) if connection_row else None,
+            selected_connection_id,
         )
         return {
             "status": "success",

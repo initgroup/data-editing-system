@@ -20,6 +20,13 @@ from backend.auth_context import get_request_user_id
 from backend.security import decrypt_secret, encrypt_secret
 from backend.target_database import get_target_connection_id, get_target_db_connection
 from backend.routers.M99001 import _hash_password, _verify_password
+from backend.runtime_settings import (
+    RuntimeSettingValidationError,
+    invalidate_server_resource_limits,
+    is_server_resource_category,
+    normalize_server_resource_setting_key,
+    validate_server_resource_setting,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -181,6 +188,12 @@ def save_setting(req: SettingSaveRequest, request: Request):
     setting_key = (req.settingKey or "").strip()
     if not setting_key:
         raise HTTPException(status_code=400, detail="Setting key is required.")
+    setting_value = req.settingValue or ""
+    if is_server_resource_category(category_code):
+        try:
+            setting_key, setting_value = validate_server_resource_setting(setting_key, setting_value)
+        except RuntimeSettingValidationError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
     use_yn = "N" if str(req.useYn or "Y").upper() == "N" else "Y"
 
     conn = None
@@ -195,12 +208,14 @@ def save_setting(req: SettingSaveRequest, request: Request):
             "connectionId": connection_id,
             "categoryCode": category_code,
             "settingKey": setting_key,
-            "settingValue": req.settingValue or "",
+            "settingValue": setting_value,
             "settingDesc": req.settingDesc or "",
             "sortOrder": req.sortOrder if req.sortOrder is not None else 0,
             "useYn": use_yn,
         })
         conn.commit()
+        if is_server_resource_category(category_code):
+            invalidate_server_resource_limits(user_id, connection_id)
         return {"status": "success", "message": "Setting saved."}
     except Exception as e:
         if conn:
@@ -269,6 +284,11 @@ def delete_setting(req: SettingDeleteRequest, request: Request):
     setting_key = (req.settingKey or "").strip()
     if not setting_key:
         raise HTTPException(status_code=400, detail="Setting key is required.")
+    if is_server_resource_category(category_code):
+        try:
+            setting_key = normalize_server_resource_setting_key(setting_key)
+        except RuntimeSettingValidationError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
 
     conn = None
     cursor = None
@@ -283,6 +303,8 @@ def delete_setting(req: SettingDeleteRequest, request: Request):
             "settingKey": setting_key,
         })
         conn.commit()
+        if is_server_resource_category(category_code):
+            invalidate_server_resource_limits(user_id, connection_id)
         return {"status": "success", "message": "Setting deleted.", "deletedCount": cursor.rowcount}
     except Exception as e:
         if conn:
@@ -341,6 +363,8 @@ def create_default_settings(req: SettingDefaultsRequest, request: Request):
                 else:
                     created += 1
         conn.commit()
+        if any(is_server_resource_category(category["CATEGORY_CODE"]) for category in categories):
+            invalidate_server_resource_limits(user_id, connection_id)
         return {
             "status": "success",
             "message": f"{created} default setting(s) created. {updated} existing setting(s) updated. {skipped} skipped.",
@@ -772,9 +796,18 @@ def normalize_default_categories(categories: List[Dict[str, Any]]) -> List[Dict[
         defaults = category.get("DEFAULTS") or []
         if not isinstance(defaults, list):
             raise HTTPException(status_code=400, detail="Invalid default setting item list.")
+        normalized_defaults = [normalize_default_item(item) for item in defaults]
+        if is_server_resource_category(category_code):
+            for item in normalized_defaults:
+                try:
+                    item["SETTING_KEY"], item["SETTING_VALUE"] = validate_server_resource_setting(
+                        item["SETTING_KEY"], item["SETTING_VALUE"]
+                    )
+                except RuntimeSettingValidationError as exc:
+                    raise HTTPException(status_code=400, detail=str(exc))
         normalized.append({
             "CATEGORY_CODE": category_code,
-            "DEFAULTS": [normalize_default_item(item) for item in defaults]
+            "DEFAULTS": normalized_defaults
         })
     return normalized
 

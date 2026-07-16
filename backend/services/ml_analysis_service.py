@@ -8,32 +8,83 @@ still execute feature selection and symbolic rule discovery.
 
 from fastapi import HTTPException
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
+from functools import wraps
 import hashlib
 import json
 import math
+import os
 import re
+import threading
 
 from backend.database_helper import SqlLoader
 from backend.oracle_session import disable_parallel_execution
 
-try:
-    import numpy as np
-    from sklearn.linear_model import Lasso, LassoCV, LinearRegression
-    from sklearn.metrics import r2_score
-    from sklearn.preprocessing import PolynomialFeatures, StandardScaler
-except Exception:  # pragma: no cover - dependency availability is runtime-specific.
-    np = None
-    Lasso = None
-    LassoCV = None
-    LinearRegression = None
-    PolynomialFeatures = None
-    StandardScaler = None
-    r2_score = None
+for _thread_env_name in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS"):
+    os.environ.setdefault(_thread_env_name, "1")
 
-try:
-    import networkx as nx
-except Exception:  # pragma: no cover - dependency availability is runtime-specific.
-    nx = None
+np = None
+Lasso = None
+LassoCV = None
+LinearRegression = None
+PolynomialFeatures = None
+StandardScaler = None
+r2_score = None
+nx = None
+_sklearn_import_error = None
+_networkx_import_attempted = False
+_sklearn_import_lock = threading.Lock()
+_networkx_import_lock = threading.Lock()
+
+
+def _positive_env_int(name: str, default: int, minimum: int = 1) -> int:
+    try:
+        return max(minimum, int(os.getenv(name, str(default))))
+    except Exception:
+        return max(minimum, default)
+
+
+_ml_execution_semaphore = threading.BoundedSemaphore(_positive_env_int("APP_ML_MAX_CONCURRENT", 1))
+_ml_execution_state = threading.local()
+
+
+def _limit_ml_concurrency(func):
+    @wraps(func)
+    def wrapped(*args, **kwargs):
+        depth = int(getattr(_ml_execution_state, "depth", 0) or 0)
+        if depth > 0:
+            return func(*args, **kwargs)
+
+        wait_seconds = _positive_env_int("APP_ML_WAIT_SECONDS", 0, 0)
+        acquired = _ml_execution_semaphore.acquire(timeout=wait_seconds)
+        if not acquired:
+            raise HTTPException(
+                status_code=503,
+                detail="Another ML analysis is running. Please try again after it completes.",
+            )
+        _ml_execution_state.depth = 1
+        try:
+            return func(*args, **kwargs)
+        finally:
+            _ml_execution_state.depth = 0
+            _ml_execution_semaphore.release()
+
+    return wrapped
+
+
+def _load_networkx_dependency():
+    global nx, _networkx_import_attempted
+    if _networkx_import_attempted:
+        return nx
+    with _networkx_import_lock:
+        if _networkx_import_attempted:
+            return nx
+        try:
+            import networkx as networkx_module
+            nx = networkx_module
+        except Exception:
+            nx = None
+        _networkx_import_attempted = True
+        return nx
 
 
 WEB_API_METHODS = {
@@ -317,6 +368,7 @@ def build_feature_cluster_usage(
     }
 
 
+@_limit_ml_concurrency
 def run_lasso_feature_select(conn, payload: Dict[str, Any]) -> Dict[str, Any]:
     require_sklearn()
     owner = require_identifier(get_value(payload, "P_TARGET_OWNER", "targetOwner", "owner"), "targetOwner")
@@ -363,12 +415,31 @@ def run_lasso_feature_select(conn, payload: Dict[str, Any]) -> Dict[str, Any]:
     if not candidates:
         raise HTTPException(status_code=400, detail="No numeric candidate features remained after applying cluster usage mode.")
 
-    x_values, y_values, used_features = fetch_numeric_matrix(conn, owner, table, target_column, candidates, sample_rows)
+    x_values, y_values, used_features, matrix_limits = fetch_numeric_matrix(
+        conn,
+        owner,
+        table,
+        target_column,
+        candidates,
+        sample_rows,
+        max_in_memory_rows=_ml_runtime_limit(
+            payload,
+            "APP_ML_MAX_IN_MEMORY_ROWS",
+            _ml_in_memory_row_limit(),
+            1000,
+        ),
+        max_input_features=_ml_runtime_limit(
+            payload,
+            "APP_ML_MAX_INPUT_FEATURES",
+            _ml_input_feature_limit(),
+            1,
+        ),
+    )
     if len(y_values) < 10:
         raise HTTPException(status_code=400, detail="LASSO requires at least 10 complete numeric rows.")
 
-    x_scaler = StandardScaler()
-    y_scaler = StandardScaler()
+    x_scaler = StandardScaler(copy=False)
+    y_scaler = StandardScaler(copy=False)
     x_scaled = x_scaler.fit_transform(x_values)
     y_scaled = y_scaler.fit_transform(y_values.reshape(-1, 1)).ravel()
 
@@ -399,6 +470,9 @@ def run_lasso_feature_select(conn, payload: Dict[str, Any]) -> Dict[str, Any]:
     score = float(model.score(x_scaled, y_scaled))
     message = (
         f"rows={len(y_scaled)}, alpha={model_alpha}, selected={len(selected_names)}, "
+        f"requestedRows={matrix_limits['requestedSampleRows']}, "
+        f"effectiveRowLimit={matrix_limits['effectiveSampleRows']}, "
+        f"inputFeatures={matrix_limits['effectiveFeatureCount']}/{matrix_limits['requestedFeatureCount']}, "
         f"clusterMode={cluster_usage.get('effectiveMode')}, "
         f"targetCluster={cluster_usage.get('targetClusterId')}, "
         f"clusterCandidates={cluster_usage.get('candidateCount')}"
@@ -482,9 +556,11 @@ def run_lasso_feature_select(conn, payload: Dict[str, Any]) -> Dict[str, Any]:
         "r2Score": score,
         "alpha": model_alpha,
         "clusterUsage": cluster_usage,
+        "memoryLimits": matrix_limits,
     }
 
 
+@_limit_ml_concurrency
 def run_symbolic_regression_rule(conn, payload: Dict[str, Any]) -> Dict[str, Any]:
     require_sklearn()
     owner = require_identifier(get_value(payload, "P_TARGET_OWNER", "targetOwner", "owner"), "targetOwner")
@@ -526,7 +602,26 @@ def run_symbolic_regression_rule(conn, payload: Dict[str, Any]) -> Dict[str, Any
         raise HTTPException(status_code=400, detail=f"No LASSO selected features were found for symbolic regression. Required SELECTED_YN=Y and R2_SCORE >= {min_r2_score}.")
     features = features[:max_features]
 
-    x_values, y_values, used_features = fetch_numeric_matrix(conn, owner, table, target_column, features, sample_rows)
+    x_values, y_values, used_features, matrix_limits = fetch_numeric_matrix(
+        conn,
+        owner,
+        table,
+        target_column,
+        features,
+        sample_rows,
+        max_in_memory_rows=_ml_runtime_limit(
+            payload,
+            "APP_ML_MAX_IN_MEMORY_ROWS",
+            _ml_in_memory_row_limit(),
+            1000,
+        ),
+        max_input_features=_ml_runtime_limit(
+            payload,
+            "APP_ML_MAX_INPUT_FEATURES",
+            _ml_input_feature_limit(),
+            1,
+        ),
+    )
     if len(y_values) < 10:
         raise HTTPException(status_code=400, detail="Symbolic regression requires at least 10 complete numeric rows.")
 
@@ -543,7 +638,10 @@ def run_symbolic_regression_rule(conn, payload: Dict[str, Any]) -> Dict[str, Any
         linear_r2_threshold,
     )
     message = (
-        f"{message} clusterMode={cluster_usage.get('effectiveMode')}, "
+        f"{message} requestedRows={matrix_limits['requestedSampleRows']}, "
+        f"effectiveRowLimit={matrix_limits['effectiveSampleRows']}, "
+        f"inputFeatures={matrix_limits['effectiveFeatureCount']}/{matrix_limits['requestedFeatureCount']}, "
+        f"clusterMode={cluster_usage.get('effectiveMode')}, "
         f"targetCluster={cluster_usage.get('targetClusterId')}, "
         f"sameClusterFeatures={cluster_usage.get('sameClusterFeatureCount')}, "
         f"crossClusterFeatures={cluster_usage.get('crossClusterFeatureCount')}."
@@ -631,9 +729,11 @@ def run_symbolic_regression_rule(conn, payload: Dict[str, Any]) -> Dict[str, Any
         "score": score,
         "ruleId": rule_id,
         "clusterUsage": cluster_usage,
+        "memoryLimits": matrix_limits,
     }
 
 
+@_limit_ml_concurrency
 def run_relation_network_cluster(conn, payload: Dict[str, Any]) -> Dict[str, Any]:
     owner = require_identifier(get_value(payload, "P_TARGET_OWNER", "targetOwner", "owner"), "targetOwner")
     table = require_identifier(get_value(payload, "P_TARGET_TABLE", "targetTable", "tableName"), "targetTable")
@@ -687,6 +787,7 @@ def run_relation_network_cluster(conn, payload: Dict[str, Any]) -> Dict[str, Any
         cursor.close()
 
 
+@_limit_ml_concurrency
 def run_integrated_relation_cluster(conn, payload: Dict[str, Any]) -> Dict[str, Any]:
     owner = require_identifier(get_value(payload, "P_TARGET_OWNER", "targetOwner", "owner"), "targetOwner")
     table = require_identifier(get_value(payload, "P_TARGET_TABLE", "targetTable", "tableName"), "targetTable")
@@ -777,6 +878,7 @@ def run_integrated_relation_cluster(conn, payload: Dict[str, Any]) -> Dict[str, 
     }
 
 
+@_limit_ml_concurrency
 def run_integrated_rule_discover(conn, payload: Dict[str, Any]) -> Dict[str, Any]:
     payload = dict(payload)
     owner = require_identifier(get_value(payload, "P_TARGET_OWNER", "targetOwner", "owner"), "targetOwner")
@@ -889,6 +991,7 @@ def run_integrated_rule_discover(conn, payload: Dict[str, Any]) -> Dict[str, Any
     }
 
 
+@_limit_ml_concurrency
 def run_integrated_rule_violation_detect(conn, payload: Dict[str, Any]) -> Dict[str, Any]:
     owner = require_identifier(get_value(payload, "P_TARGET_OWNER", "targetOwner", "owner"), "targetOwner")
     table = require_identifier(get_value(payload, "P_TARGET_TABLE", "targetTable", "tableName"), "targetTable")
@@ -1418,8 +1521,8 @@ def fit_linear_expression(x_values, y_values, feature_names: Sequence[str]) -> T
 
 
 def fit_polynomial_fallback(x_values, y_values, feature_names: Sequence[str], reason: str) -> Tuple[str, float, int, str, str]:
-    x_scaler = StandardScaler()
-    y_scaler = StandardScaler()
+    x_scaler = StandardScaler(copy=False)
+    y_scaler = StandardScaler(copy=False)
     x_scaled = x_scaler.fit_transform(x_values)
     y_scaled = y_scaler.fit_transform(y_values.reshape(-1, 1)).ravel()
     poly = PolynomialFeatures(degree=2, include_bias=False)
@@ -1752,6 +1855,27 @@ def load_numeric_table_columns(conn, owner: str, table: str, exclude: Set[str], 
         cursor.close()
 
 
+def _ml_in_memory_row_limit() -> int:
+    return _positive_env_int("APP_ML_MAX_IN_MEMORY_ROWS", 25000, 1000)
+
+
+def _ml_input_feature_limit() -> int:
+    return _positive_env_int("APP_ML_MAX_INPUT_FEATURES", 50, 1)
+
+
+def _ml_fetch_batch_rows() -> int:
+    return _positive_env_int("APP_ML_FETCH_BATCH_ROWS", 1000, 100)
+
+
+def _ml_runtime_limit(payload: Dict[str, Any], key: str, hard_limit: int, minimum: int) -> int:
+    """Return a request/job limit without allowing it to exceed the server cap."""
+    try:
+        requested = int((payload or {}).get(key, hard_limit))
+    except (TypeError, ValueError):
+        requested = hard_limit
+    return min(hard_limit, max(minimum, requested))
+
+
 def fetch_numeric_matrix(
     conn,
     owner: str,
@@ -1759,8 +1883,29 @@ def fetch_numeric_matrix(
     target_column: str,
     feature_columns: Sequence[str],
     sample_rows: Optional[int],
+    max_in_memory_rows: Optional[int] = None,
+    max_input_features: Optional[int] = None,
 ):
-    columns = [target_column] + list(feature_columns)
+    hard_row_limit = _ml_in_memory_row_limit()
+    hard_feature_limit = _ml_input_feature_limit()
+    row_limit = min(
+        hard_row_limit,
+        max(1000, int(max_in_memory_rows or hard_row_limit)),
+    )
+    feature_limit = min(
+        hard_feature_limit,
+        max(1, int(max_input_features or hard_feature_limit)),
+    )
+    requested_features = list(feature_columns)
+    effective_features = requested_features[:feature_limit]
+    if not effective_features:
+        raise HTTPException(status_code=400, detail="At least one numeric feature column is required.")
+
+    effective_sample_rows = min(
+        int(sample_rows) if sample_rows and int(sample_rows) > 0 else row_limit,
+        row_limit,
+    )
+    columns = [target_column] + effective_features
     select_list = ", ".join(quote_identifier(column) for column in columns)
     null_filter = " AND ".join(f"{quote_identifier(column)} IS NOT NULL" for column in columns)
     sql = (
@@ -1768,25 +1913,50 @@ def fetch_numeric_matrix(
         f"  FROM {quote_identifier(owner)}.{quote_identifier(table)}\n"
         f" WHERE {null_filter}"
     )
-    binds = {}
-    if sample_rows:
-        sql += "\n   AND ROWNUM <= :sampleRows"
-        binds["sampleRows"] = int(sample_rows)
+    binds = {"sampleRows": effective_sample_rows}
+    sql += "\n   AND ROWNUM <= :sampleRows"
 
     cursor = conn.cursor()
     try:
+        batch_rows = min(_ml_fetch_batch_rows(), effective_sample_rows)
+        try:
+            cursor.arraysize = batch_rows
+            cursor.prefetchrows = batch_rows
+        except Exception:
+            pass
         cursor.execute(sql, binds)
-        x_rows = []
-        y_rows = []
-        for row in cursor.fetchall():
-            values = [to_float(value) for value in row]
-            if any(value is None or not math.isfinite(value) for value in values):
-                continue
-            y_rows.append(values[0])
-            x_rows.append(values[1:])
-        if not y_rows:
+        x_values = np.empty((effective_sample_rows, len(effective_features)), dtype=float)
+        y_values = np.empty(effective_sample_rows, dtype=float)
+        valid_row_count = 0
+        while valid_row_count < effective_sample_rows:
+            rows = cursor.fetchmany(min(batch_rows, effective_sample_rows - valid_row_count))
+            if not rows:
+                break
+            for row in rows:
+                values = [to_float(value) for value in row]
+                if any(value is None or not math.isfinite(value) for value in values):
+                    continue
+                y_values[valid_row_count] = values[0]
+                x_values[valid_row_count, :] = values[1:]
+                valid_row_count += 1
+                if valid_row_count >= effective_sample_rows:
+                    break
+        if not valid_row_count:
             raise HTTPException(status_code=400, detail="No complete numeric rows were found.")
-        return np.asarray(x_rows, dtype=float), np.asarray(y_rows, dtype=float), list(feature_columns)
+        return (
+            x_values[:valid_row_count],
+            y_values[:valid_row_count],
+            effective_features,
+            {
+                "requestedSampleRows": int(sample_rows) if sample_rows else None,
+                "effectiveSampleRows": effective_sample_rows,
+                "loadedRows": valid_row_count,
+                "requestedFeatureCount": len(requested_features),
+                "effectiveFeatureCount": len(effective_features),
+                "maxInMemoryRows": row_limit,
+                "maxInputFeatures": feature_limit,
+            },
+        )
     finally:
         cursor.close()
 
@@ -1920,8 +2090,9 @@ def build_relation_network(edge_rows: Sequence[Dict[str, Any]]) -> Tuple[Dict[st
         weighted_degree[col_a] = weighted_degree.get(col_a, 0.0) + weight
         weighted_degree[col_b] = weighted_degree.get(col_b, 0.0) + weight
 
-    if nx is not None:
-        graph = nx.Graph()
+    networkx_module = _load_networkx_dependency()
+    if networkx_module is not None:
+        graph = networkx_module.Graph()
         for node, column_type in node_types.items():
             graph.add_node(node, columnType=column_type)
         for row in edge_rows:
@@ -1931,12 +2102,12 @@ def build_relation_network(edge_rows: Sequence[Dict[str, Any]]) -> Tuple[Dict[st
                 weight=float(row.get("ABS_METRIC_VALUE") or 0),
             )
         try:
-            communities = list(nx.community.louvain_communities(graph, weight="weight", seed=42))
+            communities = list(networkx_module.community.louvain_communities(graph, weight="weight", seed=42))
             algorithm = "LOUVAIN"
         except Exception:
-            communities = [set(component) for component in nx.connected_components(graph)]
+            communities = [set(component) for component in networkx_module.connected_components(graph)]
             algorithm = "CONNECTED_COMPONENT"
-        centrality = nx.degree_centrality(graph) if graph.number_of_nodes() else {}
+        centrality = networkx_module.degree_centrality(graph) if graph.number_of_nodes() else {}
         degree_count = dict(graph.degree())
         weighted_degree = dict(graph.degree(weight="weight"))
     else:
@@ -2133,11 +2304,37 @@ def update_relation_pair_clusters(
 
 
 def require_sklearn() -> None:
+    global np, Lasso, LassoCV, LinearRegression, PolynomialFeatures, StandardScaler, r2_score
+    global _sklearn_import_error
+    if np is None or LassoCV is None or LinearRegression is None or StandardScaler is None:
+        with _sklearn_import_lock:
+            if np is None or LassoCV is None or LinearRegression is None or StandardScaler is None:
+                try:
+                    import numpy as numpy_module
+                    from sklearn.linear_model import Lasso as lasso_class
+                    from sklearn.linear_model import LassoCV as lasso_cv_class
+                    from sklearn.linear_model import LinearRegression as linear_regression_class
+                    from sklearn.metrics import r2_score as r2_score_function
+                    from sklearn.preprocessing import PolynomialFeatures as polynomial_features_class
+                    from sklearn.preprocessing import StandardScaler as standard_scaler_class
+
+                    np = numpy_module
+                    Lasso = lasso_class
+                    LassoCV = lasso_cv_class
+                    LinearRegression = linear_regression_class
+                    PolynomialFeatures = polynomial_features_class
+                    StandardScaler = standard_scaler_class
+                    r2_score = r2_score_function
+                    _sklearn_import_error = None
+                except Exception as error:  # pragma: no cover - runtime dependency availability.
+                    _sklearn_import_error = error
+
     if np is None or LassoCV is None or LinearRegression is None or StandardScaler is None:
         raise HTTPException(
             status_code=500,
             detail=(
                 "Python ML dependencies are not installed. Install numpy and scikit-learn in the WAS environment."
+                + (f" ({_sklearn_import_error})" if _sklearn_import_error else "")
             ),
         )
 
