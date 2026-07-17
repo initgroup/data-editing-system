@@ -24,6 +24,7 @@ from backend.runtime_settings import (
     RuntimeSettingValidationError,
     invalidate_server_resource_limits,
     is_server_resource_category,
+    load_server_resource_limits,
     normalize_server_resource_setting_key,
     validate_server_resource_setting,
 )
@@ -214,9 +215,20 @@ def save_setting(req: SettingSaveRequest, request: Request):
             "useYn": use_yn,
         })
         conn.commit()
+        runtime_settings = None
         if is_server_resource_category(category_code):
             invalidate_server_resource_limits(user_id, connection_id)
-        return {"status": "success", "message": "Setting saved."}
+            runtime_settings = load_server_resource_limits(
+                conn,
+                user_id,
+                connection_id,
+                force_refresh=True,
+            )
+        return {
+            "status": "success",
+            "message": "Setting saved.",
+            "runtimeSettings": runtime_settings,
+        }
     except Exception as e:
         if conn:
             conn.rollback()
@@ -303,9 +315,21 @@ def delete_setting(req: SettingDeleteRequest, request: Request):
             "settingKey": setting_key,
         })
         conn.commit()
+        runtime_settings = None
         if is_server_resource_category(category_code):
             invalidate_server_resource_limits(user_id, connection_id)
-        return {"status": "success", "message": "Setting deleted.", "deletedCount": cursor.rowcount}
+            runtime_settings = load_server_resource_limits(
+                conn,
+                user_id,
+                connection_id,
+                force_refresh=True,
+            )
+        return {
+            "status": "success",
+            "message": "Setting deleted.",
+            "deletedCount": cursor.rowcount,
+            "runtimeSettings": runtime_settings,
+        }
     except Exception as e:
         if conn:
             conn.rollback()
@@ -363,14 +387,22 @@ def create_default_settings(req: SettingDefaultsRequest, request: Request):
                 else:
                     created += 1
         conn.commit()
+        runtime_settings = None
         if any(is_server_resource_category(category["CATEGORY_CODE"]) for category in categories):
             invalidate_server_resource_limits(user_id, connection_id)
+            runtime_settings = load_server_resource_limits(
+                conn,
+                user_id,
+                connection_id,
+                force_refresh=True,
+            )
         return {
             "status": "success",
             "message": f"{created} default setting(s) created. {updated} existing setting(s) updated. {skipped} skipped.",
             "createdCount": created,
             "updatedCount": updated,
             "skippedCount": skipped,
+            "runtimeSettings": runtime_settings,
         }
     except Exception as e:
         if conn:

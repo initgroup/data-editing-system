@@ -253,7 +253,11 @@
         async deleteSetting() {
             const settingKey = getContainerEl("#settingKey-M91003")?.value.trim() || "";
             if (!settingKey) return;
-            if (!(await CommonMessage.confirm(`Delete target setting "${settingKey}"?`))) return;
+            if (!(await CommonMessage.confirm(getMessage(
+                "confirmDeleteOverride",
+                'Delete the Target DB override "{settingKey}"? The model default will apply afterward.',
+                { settingKey }
+            )))) return;
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${API_CODE}/setting/delete`, {
                     method: "POST",
@@ -262,7 +266,10 @@
                         settingKey
                     }
                 });
-                this.setSystemMessage(json.message || "Target setting deleted.");
+                this.setSystemMessage(getMessage(
+                    "overrideDeleted",
+                    "Target DB override deleted. The model default now applies."
+                ));
                 await this.loadSettings();
                 this.newSetting(false);
             } catch (error) {
@@ -271,14 +278,17 @@
         },
 
         async createDefaultSettings() {
-            if (!(await CommonMessage.confirm("Create or update default target settings in the target database?", { defaultAction: "cancel" }))) return;
+            if (!(await CommonMessage.confirm(getMessage(
+                "confirmApplyDefaultOverrides",
+                "Create or update Target DB overrides from the preset JSON? Existing override values may be overwritten."
+            ), { defaultAction: "cancel" }))) return;
             const button = getContainerEl("#createDefaultSettingsBtn-M91003");
             const originalHtml = button?.innerHTML || "";
             if (button) {
                 button.disabled = true;
                 button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
             }
-            this.setSystemMessage("Creating missing target default settings...");
+            this.setSystemMessage(getMessage("applyingDefaultOverrides", "Applying default overrides to the Target DB..."));
             try {
                 const categories = await this.loadDefaultCategories();
                 const json = await CommonUtils.request(`${API_BASE_URL}/${API_CODE}/setting/defaults`, {
@@ -286,8 +296,12 @@
                     body: { categories }
                 });
                 const created = Number(json.createdCount || 0);
-                const skipped = Number(json.skippedCount || 0);
-                const message = json.message || `Target default settings checked. ${created} created, ${skipped} skipped.`;
+                const updated = Number(json.updatedCount || 0);
+                const message = getMessage(
+                    "defaultOverridesApplied",
+                    "Default overrides applied. {created} created and {updated} updated.",
+                    { created, updated }
+                );
                 this.categories = categories;
                 this.selectedCategoryCode = DEFAULT_CATEGORY_CODE;
                 this.renderCategories();
@@ -314,7 +328,7 @@
         getCategoryDisplayName(category = null) {
             const code = String(category?.CATEGORY_CODE || this.selectedCategoryCode || "").toUpperCase();
             const defaults = {
-                DATA_PROFILING: "Column Type Analysis"
+                DATA_PROFILING: "Column Type Classification Rules"
             };
             const keys = {
                 DATA_PROFILING: "categoryDataProfilingName"
@@ -325,7 +339,7 @@
         getCategoryDisplayDesc(category = null) {
             const code = String(category?.CATEGORY_CODE || this.selectedCategoryCode || "").toUpperCase();
             const defaults = {
-                DATA_PROFILING: "Stores classification prediction rules and column type analysis thresholds in the Target DB."
+                DATA_PROFILING: "Stores Target DB overrides for column type classification model defaults."
             };
             const keys = {
                 DATA_PROFILING: "categoryDataProfilingDesc"

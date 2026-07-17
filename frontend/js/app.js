@@ -117,6 +117,7 @@ const PageManager = {
         sessionStorage.removeItem("initLoginUser");
         sessionStorage.removeItem("targetConnectionId");
         sessionStorage.removeItem("targetConnectionName");
+        sessionStorage.removeItem("initRuntimeSettings");
         sessionStorage.removeItem("initBootstrapToken");
         sessionStorage.removeItem("initBootstrapAdminLoginId");
         sessionStorage.removeItem(SESSION_EXPIRES_AT_KEY);
@@ -228,6 +229,7 @@ const PageManager = {
             const json = await response.json().catch(() => ({}));
             if (json.user) {
                 sessionStorage.setItem("initLoginUser", JSON.stringify(json.user));
+                CommonUtils.setRuntimeSettings(json.runtimeSettings);
                 this.extendSession(json.sessionTtlSeconds || response.headers.get("X-INIT-Session-TTL-Seconds"));
             }
             return true;

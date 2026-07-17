@@ -161,6 +161,7 @@ def _issue_login_session(
 def login(req: LoginRequest, response: Response, request: Request):
     system_conn = None
     cursor = None
+    runtime_settings = {}
     login_id = (req.loginId or "").strip()
     if not login_id or not req.loginPassword:
         raise HTTPException(status_code=400, detail="Login ID and password are required.")
@@ -209,7 +210,7 @@ def login(req: LoginRequest, response: Response, request: Request):
             # Load resource settings once at login. Target DB acquisitions and
             # background jobs reuse this bounded server-side snapshot until a
             # M91002 change explicitly invalidates it.
-            load_server_resource_limits(
+            runtime_settings = load_server_resource_limits(
                 system_conn,
                 user_id,
                 selected_connection_id,
@@ -227,6 +228,7 @@ def login(req: LoginRequest, response: Response, request: Request):
             "message": "Login succeeded.",
             "setupRequired": connection_row is None,
             "sessionTtlSeconds": get_session_ttl_seconds(),
+            "runtimeSettings": runtime_settings,
             "user": _public_user_payload(row),
             "connection": {
                 "connectionId": connection_row.get("CONNECTION_ID"),
@@ -253,18 +255,33 @@ def login(req: LoginRequest, response: Response, request: Request):
 @router.get("/session/me")
 def get_current_session(request: Request):
     user = authenticate_request(request)
-    return {
-        "status": "success",
-        "sessionTtlSeconds": get_session_ttl_seconds(),
-        "user": {
-            "userId": user.get("userId"),
-            "loginId": user.get("loginId"),
-            "userName": user.get("userName"),
-            "email": user.get("email"),
-            "roleCode": user.get("roleCode") or "USER",
-        },
-        "targetConnectionId": user.get("targetConnectionId"),
-    }
+    system_conn = None
+    runtime_settings = {}
+    try:
+        target_connection_id = user.get("targetConnectionId")
+        if target_connection_id is not None:
+            system_conn = get_db_connection()
+            runtime_settings = load_server_resource_limits(
+                system_conn,
+                int(user.get("userId")),
+                int(target_connection_id),
+            )
+        return {
+            "status": "success",
+            "sessionTtlSeconds": get_session_ttl_seconds(),
+            "runtimeSettings": runtime_settings,
+            "user": {
+                "userId": user.get("userId"),
+                "loginId": user.get("loginId"),
+                "userName": user.get("userName"),
+                "email": user.get("email"),
+                "roleCode": user.get("roleCode") or "USER",
+            },
+            "targetConnectionId": target_connection_id,
+        }
+    finally:
+        if system_conn:
+            system_conn.close()
 
 
 @router.post("/logout")

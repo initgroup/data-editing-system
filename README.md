@@ -79,6 +79,7 @@ TARGET_DB_POOL_MAX=3
 TARGET_DB_POOL_INCREMENT=1
 TARGET_DB_POOL_TIMEOUT_SECONDS=120
 TARGET_DB_POOL_WAIT_TIMEOUT_MS=30000
+APP_RULE_SUMMARY_TIMEOUT_MS=60000
 TARGET_DB_POOL_MAX_LIFETIME_SECONDS=1800
 TARGET_DB_POOL_REGISTRY_MAX=16
 DATA_WORK_TRANSACTION_TIMEOUT_SECONDS=1800
@@ -124,7 +125,7 @@ INIT_INTERNAL_API_CONNECTION_ID=기본 Target DB CONNECTION_ID
 
 ### 서버 리소스 제한과 M91002 설정
 
-`TARGET_DB_POOL_WAIT_TIMEOUT_MS`, `APP_ML_MAX_IN_MEMORY_ROWS`, `APP_ML_MAX_INPUT_FEATURES` 환경변수는 서버 프로세스의 안전 상한입니다. Render 무료 인스턴스의 Target DB 연결 지연을 고려해 풀 대기 기본값은 30초(`30000ms`)이며, ML 분석은 기본적으로 한 번에 최대 25,000행과 50개 피처를 메모리에 적재합니다.
+`TARGET_DB_POOL_WAIT_TIMEOUT_MS`, `APP_RULE_SUMMARY_TIMEOUT_MS`, `APP_ML_MAX_IN_MEMORY_ROWS`, `APP_ML_MAX_INPUT_FEATURES` 환경변수는 서버 프로세스의 안전 상한입니다. Render 무료 인스턴스의 Target DB 연결 지연을 고려해 풀 대기 기본값은 30초(`30000ms`), 규칙 요약 브라우저 요청 제한은 60초(`60000ms`)이며, ML 분석은 기본적으로 한 번에 최대 25,000행과 50개 피처를 메모리에 적재합니다.
 
 M91002의 `SERVER_RESOURCE_LIMITS` 카테고리에서는 같은 키를 사용자 및 Target DB 연결별 요청값으로 관리합니다. 실제 적용값은 `min(M91002 요청값, 서버 환경변수)`이므로 M91002에서 서버 상한을 높일 수 없고, 더 보수적인 값으로 낮출 수만 있습니다. 설정은 로그인 시 한 번 서버의 bounded LRU 캐시에 적재되어 세션 동안 재사용되며, M91002에서 저장·삭제·기본값 생성을 수행한 경우에만 해당 사용자/연결 캐시가 무효화됩니다. 프로세스 재시작 또는 로그인 전환 뒤에는 다시 적재됩니다. 유료 인스턴스 등에서 상한 자체를 늘리려면 배포 환경변수를 먼저 조정한 뒤 M91002 값을 설정해야 합니다.
 

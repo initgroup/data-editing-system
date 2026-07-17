@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "description": "M91003 default target database settings. The UI fetches this file when loading categories and when Create default settings is clicked.",
+  "description": "Target DB override presets for INIT$_SP_PREDICTED_TYPE. M90001 loads these values from the selected internal model resource.",
   "targetSettingCategories": [
     {
       "CATEGORY_CODE": "DATA_PROFILING",
-      "CATEGORY_NAME": "Column Type Analysis",
-      "CATEGORY_DESC": "Stores classification prediction rules and column type analysis thresholds in the Target DB.",
+      "CATEGORY_NAME": "Column Type Classification Rules",
+      "CATEGORY_DESC": "Stores Target DB overrides for column type classification model defaults.",
       "SORT_ORDER": 10,
       "DEFAULTS": [
         {

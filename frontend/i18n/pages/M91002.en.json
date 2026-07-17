@@ -3,12 +3,21 @@
   "language": "en",
   "pageCode": "M91002",
   "description": "English messages for my system settings page.",
+  "labels": {
+    "createDefaultSettings": "Create or update default settings"
+  },
   "messages": {
     "categoryMyAccountName": "My Account",
     "categoryMyAccountDesc": "Manage your login information, email, and password.",
     "categoryGeneralName": "System General",
     "categoryGeneralDesc": "Basic system display settings.",
+    "categoryM02002TableFilterName": "Target Table Restrictions",
+    "categoryM02002TableFilterDesc": "Include and exclude constraints used by the M02002 target table explorer.",
     "categoryServerResourceLimitsName": "Server Resource Limits",
-    "categoryServerResourceLimitsDesc": "Per-user and Target DB connection requested limits. Effective values cannot exceed the server environment hard caps."
+    "categoryServerResourceLimitsDesc": "Per-user and Target DB connection requested limits. Effective values cannot exceed the server environment hard caps.",
+    "createDefaultSettingsConfirm": "Create missing settings and update existing settings from the default JSON. Existing custom values may be overwritten. Continue?",
+    "creatingDefaultSettings": "Applying default settings...",
+    "defaultSettingsApplied": "Default settings applied. {created} created, {updated} updated, {skipped} skipped.",
+    "defaultSettingsFailed": "Default setting save failed."
   }
 }

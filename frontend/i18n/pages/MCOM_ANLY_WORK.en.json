@@ -59,6 +59,11 @@
     "Metric below threshold: {value} {operator} {threshold}": "Metric below threshold: {value} {operator} {threshold}",
     "P-value threshold not met: {value} >= {threshold}": "P-value threshold not met: {value} >= {threshold}",
     "Insufficient valid rows: {value} < {threshold}": "Insufficient valid rows: {value} < {threshold}",
-    "Stored as PASS_YN=N by the analysis procedure.": "Stored as PASS_YN=N by the analysis procedure."
+    "Stored as PASS_YN=N by the analysis procedure.": "Stored as PASS_YN=N by the analysis procedure.",
+    "Cluster visibility": "Cluster visibility",
+    "Select all clusters": "Select all clusters",
+    "Clear all clusters": "Clear all clusters",
+    "{selected} / {total} selected": "{selected} / {total} selected",
+    "Select at least one cluster to display the graph.": "Select at least one cluster to display the graph."
   }
 }

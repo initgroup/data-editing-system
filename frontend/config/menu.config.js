@@ -233,13 +233,6 @@ window.MENU_CONFIG = [
                 label: 'My System Settings',
                 iconClass: 'fas fa-sliders text-slate-300',
                 enabled: true
-            },
-            {
-                page: 'M91003',
-                title: 'Editing Defaults',
-                label: 'Editing Defaults',
-                iconClass: 'fas fa-database text-slate-300',
-                enabled: true
             }
         ]
     },
@@ -288,6 +281,6 @@ window.MENU_CONFIG = [
 ];
 
 window.PAGE_FILE_CONFIG = {
-    htmlPages: ['home', 'login', 'M01001', 'M01002', 'M02001', 'M02002', 'M03001', 'M03002', 'M03003', 'M03004', 'M04001', 'M04002', 'M05001', 'M05002', 'M06001', 'M06002', 'M07001', 'M07002', 'M07003', 'M90001', 'M90002', 'M91001', 'M91002', 'M91003', 'M99001', 'M99002', 'M99003', 'M99004'],
-    scriptPages: ['home', 'login', 'M01001', 'M01002', 'M02001', 'M02002', 'M03001', 'M03002', 'M03003', 'M03004', 'M04001', 'M04002', 'M90001', 'M90002', 'M91001', 'M91002', 'M91003', 'M99001', 'M99002', 'M99003', 'M99004']
+    htmlPages: ['home', 'login', 'M01001', 'M01002', 'M02001', 'M02002', 'M03001', 'M03002', 'M03003', 'M03004', 'M04001', 'M04002', 'M05001', 'M05002', 'M06001', 'M06002', 'M07001', 'M07002', 'M07003', 'M90001', 'M90002', 'M91001', 'M91002', 'M99001', 'M99002', 'M99003', 'M99004'],
+    scriptPages: ['home', 'login', 'M01001', 'M01002', 'M02001', 'M02002', 'M03001', 'M03002', 'M03003', 'M03004', 'M04001', 'M04002', 'M90001', 'M90002', 'M91001', 'M91002', 'M99001', 'M99002', 'M99003', 'M99004']
 };

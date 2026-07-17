@@ -148,6 +148,10 @@
                 <button type="button" class="table-icon-btn env-detail-preset-btn" title="Apply registered comment/default presets" onclick="M90001.applyDetailPresets()" hidden>
                     <i class="fas fa-file-import"></i>
                 </button>
+                <button type="button" class="env-btn env-cancel env-classification-settings-btn" title="Column type classification settings" data-title-key="classificationSettingsTitle" onclick="M90001.openClassificationSettings()" hidden>
+                    <i class="fas fa-sliders"></i>
+                    <span data-label-key="classificationSettingsButton">Classification settings</span>
+                </button>
             </div>
 
             <div id="envRows-M90001" class="env-detail-grid" role="grid" aria-label="Object detail items"></div>
@@ -172,4 +176,93 @@
             </section>
         </section>
     </section>
+
+    <div id="classificationSettingsLayer-M90001" class="data-help-layer" hidden onclick="M90001.handleClassificationSettingsLayerClick(event)">
+        <section class="data-help-dialog env-classification-settings-dialog" role="dialog" aria-modal="true" aria-labelledby="classificationSettingsTitle-M90001">
+            <header>
+                <div>
+                    <h2 id="classificationSettingsTitle-M90001" data-label-key="classificationSettingsTitle">Column Type Classification Settings</h2>
+                    <p data-label-key="classificationSettingsDescription">Manage Target DB overrides for INIT$_SP_PREDICTED_TYPE model defaults.</p>
+                </div>
+                <button type="button" class="table-icon-btn" title="Close" data-title-key="close" onclick="M90001.closeClassificationSettings()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </header>
+
+            <div class="data-help-content env-classification-settings-content">
+                <div class="env-classification-settings-toolbar">
+                    <button type="button" class="env-btn env-cancel" onclick="M90001.applyClassificationDefaults()">
+                        <i class="fas fa-wand-magic-sparkles"></i>
+                        <span data-label-key="applyDefaultOverrides">Apply preset overrides</span>
+                    </button>
+                    <button type="button" class="env-btn env-cancel" onclick="M90001.newClassificationSetting()">
+                        <i class="fas fa-plus"></i>
+                        <span data-label-key="newOverride">New override</span>
+                    </button>
+                    <button type="button" class="table-icon-btn" title="Refresh" data-title-key="refresh" onclick="M90001.loadClassificationSettings()">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+
+                <div class="env-classification-settings-layout">
+                    <div id="classificationSettingsList-M90001" class="env-classification-settings-list"></div>
+                    <div class="env-classification-settings-form">
+                        <label>
+                            <span data-label-key="settingKey">Key</span>
+                            <input id="classificationSettingKey-M90001" class="env-field env-meta-field" type="text">
+                        </label>
+                        <div class="env-classification-settings-form-row">
+                            <label>
+                                <span data-label-key="use">Use</span>
+                                <select id="classificationSettingUseYn-M90001" class="env-field env-meta-field">
+                                    <option value="Y">Y</option>
+                                    <option value="N">N</option>
+                                </select>
+                            </label>
+                            <label>
+                                <span data-label-key="sort">Sort</span>
+                                <input id="classificationSettingSort-M90001" class="env-field env-meta-field" type="number" value="0">
+                            </label>
+                            <label>
+                                <span data-label-key="valueSource">Value source</span>
+                                <input id="classificationSettingSource-M90001" class="env-field env-meta-field" type="text" readonly>
+                            </label>
+                        </div>
+                        <label>
+                            <span data-label-key="value">Value</span>
+                            <textarea id="classificationSettingValue-M90001" class="env-field env-meta-textarea" rows="4"></textarea>
+                        </label>
+                        <label>
+                            <span data-label-key="description">Description</span>
+                            <textarea id="classificationSettingDesc-M90001" class="env-field env-meta-textarea" rows="4"></textarea>
+                        </label>
+                    </div>
+                </div>
+                <p id="classificationSettingsMessage-M90001" class="env-detail-hint" aria-live="polite"></p>
+            </div>
+
+            <footer>
+                <div class="env-footer-group">
+                    <span data-label-key="overrideHint">Deleting an override restores the model default.</span>
+                </div>
+                <div class="env-footer-group">
+                    <button type="button" class="env-btn env-save" onclick="M90001.saveClassificationSetting()">
+                        <i class="far fa-save"></i>
+                        <span data-label-key="saveOverride">Save override</span>
+                    </button>
+                    <button type="button" class="env-btn env-cancel" onclick="M90001.resetClassificationSetting()">
+                        <i class="fas fa-undo-alt"></i>
+                        <span data-label-key="reset">Reset</span>
+                    </button>
+                    <button id="deleteClassificationSettingBtn-M90001" type="button" class="env-btn env-danger" onclick="M90001.deleteClassificationSetting()">
+                        <i class="far fa-trash-alt"></i>
+                        <span data-label-key="deleteOverride">Delete override</span>
+                    </button>
+                    <button type="button" class="env-btn env-cancel" onclick="M90001.closeClassificationSettings()">
+                        <span data-label-key="close">Close</span>
+                    </button>
+                </div>
+            </footer>
+        </section>
+    </div>
 </div>

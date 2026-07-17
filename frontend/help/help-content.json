@@ -815,7 +815,8 @@
       "purpose": [
         "DB 내부 객체를 데이터 작업 또는 플로우 노드에서 사용할 실행 객체로 관리합니다.",
         "객체 소스, 파라미터, 상세 정보를 확인합니다.",
-        "컬럼 유형·상관·규칙·위반 모델의 결과 계약과 실행 파라미터 기본값을 표준 프리셋으로 맞춰 데이터 작업과 Flow에서 재사용합니다."
+        "컬럼 유형·상관·규칙·위반 모델의 결과 계약과 실행 파라미터 기본값을 표준 프리셋으로 맞춰 데이터 작업과 Flow에서 재사용합니다.",
+        "INIT$_SP_PREDICTED_TYPE 모델의 기본 판정값과 선택한 Target DB의 재정의 값을 한 화면에서 관리합니다."
       ],
       "layout": [
         { "name": "객체 트리", "description": "스키마, 패키지, 프로시저, 함수 등 DB 객체를 탐색합니다." },
@@ -829,6 +830,7 @@
         "등록할 프로시저 또는 모델 객체를 선택합니다.",
         "파라미터와 설명을 확인합니다.",
         "실행 리소스로 저장합니다.",
+        "INIT$_SP_PREDICTED_TYPE을 선택한 경우 컬럼 유형 판정 설정에서 Target DB별 재정의 값을 확인하거나 수정합니다.",
         "등록 전 객체의 실제 파라미터 목록과 프리셋의 변수명·타입·기본값이 일치하는지 확인합니다.",
         "Symbolic Regression 객체는 P_USE_PYSR 기본값 N으로 polynomial LASSO fallback을 사용하고, PySR 환경이 준비된 경우에만 Y로 켭니다.",
         "Symbolic Rule 위반 탐지처럼 결과 테이블이 필요한 객체는 Result Table 기본값과 허용 오차 기본값을 확인합니다.",
@@ -841,13 +843,15 @@
         "Source: 소스 확인",
         "Save: 내부 모델 등록",
         "Preset defaults: 객체별 설명/Result Table/파라미터 기본값 확인",
-        "Parameter comments: 데이터 작업과 Flow Inspector에 표시할 변수별 의미 확인"
+        "Parameter comments: 데이터 작업과 Flow Inspector에 표시할 변수별 의미 확인",
+        "Column type classification settings: INIT$_SP_PREDICTED_TYPE의 모델 기본값과 Target DB 재정의 값 관리"
       ],
       "aiGuidance": [
         "객체 등록 질문은 DB 객체 타입, 파라미터, 권한, Target DB 연결 상태를 기준으로 답변합니다.",
         "정적 SQL은 database SQL 파일 패턴을 따르는 프로젝트 규칙을 함께 고려합니다.",
         "PySR은 로컬 Python/Julia 환경 준비가 필요하므로 기본 미사용이며, P_USE_PYSR=Y일 때만 실제 PySR 탐색을 시도한다고 안내합니다.",
         "P_RUN_ID와 RUN_SOURCE_TYPE은 같은 데이터 작업 또는 Flow 실행 결과를 연결하는 기준이므로 임의의 화면 값으로 해석하지 않습니다.",
+        "컬럼 유형 판정 설정을 삭제하면 해당 Target DB 재정의 값만 삭제되고 모델 기본값으로 복귀하며, 프리셋 적용은 기존 재정의 값을 덮어쓸 수 있음을 안내합니다.",
         "Symbolic Rule 위반 탐지 객체는 허용 오차율 기본값 0.05가 ±5% 기준이며 P_SYMBOLIC_RULE_TABLE_NAME은 Symbolic 규칙 저장 테이블을 뜻한다고 안내합니다.",
         "규칙 위반 결과 테이블 적재가 오래 걸리면 P_MAX_RULES, P_MAX_VIOLATIONS_PER_RULE, P_MAX_SCAN_ROWS, P_COMMIT_INTERVAL 순서로 실행 범위와 커밋 단위를 확인하도록 안내합니다."
       ]
@@ -956,41 +960,6 @@
         "사용자 설정은 개인 단위 설정이며 관리자 전역 설정과 구분합니다.",
         "언어 설정은 다음 로그인부터 적용될 수 있음을 안내합니다.",
         "비밀번호와 Gemini API Key는 저장 후 다시 표시하지 않는 민감 정보이므로 답변이나 화면 로그에 값을 포함하지 않습니다."
-      ]
-    },
-    "M91003": {
-      "pageCode": "M91003",
-      "title": "에디팅 기본값",
-      "label": "에디팅 기본값",
-      "group": "내환경 설정",
-      "status": "enabled",
-      "summary": "선택한 Target DB에 저장되는 컬럼 유형 분석 분류 기준과 기본 옵션을 관리하는 화면입니다.",
-      "purpose": [
-        "Target DB별 컬럼 유형 분석 기준값과 기본 옵션을 조회, 저장, 삭제합니다.",
-        "숫자 타입, 식별자 비율, 저카디널리티, 텍스트 비율, 엔트로피, 강제 식별자 컬럼 기준을 표준화합니다."
-      ],
-      "layout": [
-        { "name": "설정 카테고리", "description": "Target DB 설정 그룹을 선택합니다." },
-        { "name": "Target DB 설정", "description": "선택 카테고리의 키/값 목록과 사용 여부, 정렬 순서를 확인합니다." },
-        { "name": "설정 상세", "description": "설정 키, 값, 설명, 사용 여부를 입력하거나 수정합니다." }
-      ],
-      "workflow": [
-        "Target DB가 선택되어 있는지 확인합니다.",
-        "설정 카테고리를 선택합니다.",
-        "설정 값을 확인하거나 수정합니다.",
-        "필요하면 기본 설정을 생성한 뒤 값과 설명을 검토해 저장합니다."
-      ],
-      "controls": [
-        "Create default target settings: 기본 Target DB 설정 생성",
-        "Refresh: 선택 카테고리 다시 조회",
-        "New setting: 새 설정 입력",
-        "Save setting: 설정 저장",
-        "Delete setting: 선택 설정 삭제"
-      ],
-      "aiGuidance": [
-        "현재 제공되는 기본 카테고리는 DATA_PROFILING이며 상관·규칙 API의 기본 JSON을 관리하는 화면과 구분합니다.",
-        "이 설정은 사용자 개인 설정이 아니라 선택된 Target DB에 저장되는 컬럼 유형 판정 기준입니다.",
-        "Target DB가 선택되지 않았거나 연결되지 않은 경우 먼저 Target DB 선택 상태를 확인하도록 안내합니다."
       ]
     },
     "M99001": {

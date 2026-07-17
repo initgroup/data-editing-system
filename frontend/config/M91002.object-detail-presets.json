@@ -39,8 +39,8 @@
     },
     {
       "CATEGORY_CODE": "M02002_TABLE_FILTER",
-      "CATEGORY_NAME": "M02002 Table Filter",
-      "CATEGORY_DESC": "M02002 Table Explorer include/exclude settings.",
+      "CATEGORY_NAME": "Target Table Restrictions",
+      "CATEGORY_DESC": "Include and exclude constraints used by the M02002 target table explorer.",
       "SORT_ORDER": 20,
       "DEFAULTS": [
         {
@@ -80,6 +80,12 @@
           "SETTING_VALUE": "50",
           "SETTING_DESC": "Requested maximum input features for one ML analysis. The effective value is capped by the server APP_ML_MAX_INPUT_FEATURES environment value.",
           "SORT_ORDER": 30
+        },
+        {
+          "SETTING_KEY": "APP_RULE_SUMMARY_TIMEOUT_MS",
+          "SETTING_VALUE": "60000",
+          "SETTING_DESC": "Rule summary browser request timeout in milliseconds. The effective value is capped by the server APP_RULE_SUMMARY_TIMEOUT_MS environment value and is loaded once per login session.",
+          "SORT_ORDER": 40
         }
       ]
     },

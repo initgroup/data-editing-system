@@ -1644,7 +1644,13 @@ aside::-webkit-scrollbar-thumb:hover {
 /* 본문 가로 스크롤 방지 및 최소 너비 */
 main { min-width: 0; flex: 1; }
 #contentBodyWrapper { 
-    min-width: 800px; /* 본문이 깨지지 않는 최소 가로 폭 설정 */
+    min-width: 0;
+}
+
+@media (min-width: 1025px) {
+    #contentBodyWrapper {
+        min-width: 800px; /* 본문이 깨지지 않는 최소 가로 폭 설정 */
+    }
 }
 
 /* [수정] 페이지 컨테이너 기본 스타일: 평소에는 숨김 */

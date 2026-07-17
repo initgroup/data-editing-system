@@ -172,6 +172,8 @@
         relationPairFilter: { colA: "", colB: "" },
         relationNetworkClusterFilter: "ALL",
         relationNetworkPairFilter: { clusterId: "", colA: "", colB: "" },
+        relationNetworkGraphClusterIds: [],
+        relationNetworkGraphVisibleClusters: null,
         lassoSummaryFilter: { direction: "ALL", targetColumn: "" },
         lassoPairFilter: { targetColumn: "", featureName: "" },
         predictedTypeFilter: "ALL",
@@ -1601,7 +1603,7 @@
                 const json = await CommonUtils.request(`${API_BASE_URL}/${API_PAGE_CODE}/model-rule-summary?${params.toString()}`, {
                     method: "GET",
                     showLoading: false,
-                    timeoutMs: 12000,
+                    timeoutMs: CommonUtils.getRuntimeSetting("APP_RULE_SUMMARY_TIMEOUT_MS", 60000, 12000, 300000),
                     timeoutMessage: getText("Rule summary lookup took too long and was stopped.")
                 });
                 if (this.selectedNode !== node || !this.currentModelDetail) return;
@@ -3513,6 +3515,30 @@
                     </div>
                 </section>
             `;
+            this.applyViolationSqlGridDefaults();
+        },
+
+        applyViolationSqlGridDefaults() {
+            const table = document.querySelector(`#${PAGE_ID_PREFIX}ViolationSqlPopup .anly-work-violation-sql-grid`);
+            const gridUtils = window.CommonUtils;
+            if (!table || !gridUtils) return;
+            // The popup is rendered outside the page container. Apply the common grid
+            // setup synchronously instead of waiting for its MutationObserver.
+            gridUtils.applyStandardGridDefaults(table);
+            window.requestAnimationFrame(() => {
+                if (!table.isConnected) return;
+                gridUtils.applyStandardGridFreeze(
+                    table,
+                    Math.max(0, Number.parseInt(table.dataset.standardGridFreezeColumns || "0", 10) || 0)
+                );
+                const noHeader = table.tHead?.rows?.[0]?.cells?.[0];
+                if (noHeader?.classList?.contains("grid-row-no")) {
+                    noHeader.style.position = "sticky";
+                    noHeader.style.top = "0px";
+                    noHeader.style.left = "0px";
+                    noHeader.style.zIndex = "90";
+                }
+            });
         },
 
         renderViolationSqlRuleContext(rule = null) {
@@ -3678,6 +3704,7 @@
             result.innerHTML = state.columns?.length
                 ? this.renderViolationSqlGrid(state.columns, state.rows || [], state.ruleColumns || [])
                 : "";
+            this.applyViolationSqlGridDefaults();
         },
 
         startViolationSqlColumnResize(event, columnIndex) {
@@ -4665,8 +4692,8 @@
             return positions;
         },
 
-        renderRelationNetworkGraphSvg(summary = {}) {
-            const graph = this.buildRelationNetworkGraphData(summary);
+        renderRelationNetworkGraphSvg(summary = {}, graphInput = null) {
+            const graph = graphInput || this.buildRelationNetworkGraphData(summary);
             if (!graph.nodes.length) {
                 return `<div class="table-empty">${this.escapeHtml(getText("No network nodes to display."))}</div>`;
             }
@@ -4691,6 +4718,7 @@
                 if (!clusterNodeMap.has(node.clusterId)) clusterNodeMap.set(node.clusterId, []);
                 clusterNodeMap.get(node.clusterId).push(node);
             });
+            const nodeClusterByName = new Map(graph.nodes.map((node) => [String(node.name), String(node.clusterId)]));
             const positions = this.calculateRelationNetworkGraphPositions(graph, summary, width, height, clusterCenters, clusterNodeMap);
             const edgeLines = graph.edges.map((edge) => {
                 const from = positions.get(edge.source);
@@ -4708,8 +4736,10 @@
                 const labelX = ((from.x + to.x) / 2) + ((-dy / distance) * 16);
                 const labelY = ((from.y + to.y) / 2) + ((dx / distance) * 16);
                 const showEdgeLabel = graph.edges.length <= 10 && distance >= 150;
+                const sourceCluster = nodeClusterByName.get(String(edge.source)) || String(edge.clusterId);
+                const targetCluster = nodeClusterByName.get(String(edge.target)) || String(edge.clusterId);
                 return `
-                    <g class="edge-group">
+                    <g class="edge-group" data-anly-network-edge-source-cluster="${this.escapeHtml(sourceCluster)}" data-anly-network-edge-target-cluster="${this.escapeHtml(targetCluster)}">
                     <line x1="${from.x.toFixed(1)}" y1="${from.y.toFixed(1)}" x2="${to.x.toFixed(1)}" y2="${to.y.toFixed(1)}" stroke="#64748b" stroke-width="${widthValue.toFixed(2)}" stroke-opacity="0.42">
                         <title>${this.escapeHtml(title)}</title>
                     </line>
@@ -4731,8 +4761,10 @@
                     return Math.max(max, Math.hypot(pos.x - center.x, pos.y - center.y) + 58);
                 }, 96)));
                 return `
-                    <circle cx="${center.x.toFixed(1)}" cy="${center.y.toFixed(1)}" r="${radius}" fill="${center.color}" fill-opacity="0.055" stroke="${center.color}" stroke-opacity="0.2" stroke-width="1.5"></circle>
-                    <text x="${center.x.toFixed(1)}" y="${(center.y - radius - 10).toFixed(1)}" class="cluster-label" text-anchor="middle" fill="${center.color}">${this.escapeHtml(getText("Cluster {cluster}", { cluster: clusterId }))}</text>
+                    <g data-anly-network-cluster-group="${this.escapeHtml(clusterId)}">
+                        <circle cx="${center.x.toFixed(1)}" cy="${center.y.toFixed(1)}" r="${radius}" fill="${center.color}" fill-opacity="0.055" stroke="${center.color}" stroke-opacity="0.2" stroke-width="1.5"></circle>
+                        <text x="${center.x.toFixed(1)}" y="${(center.y - radius - 10).toFixed(1)}" class="cluster-label" text-anchor="middle" fill="${center.color}">${this.escapeHtml(getText("Cluster {cluster}", { cluster: clusterId }))}</text>
+                    </g>
                 `;
             }).join("");
             const nodeLabels = graph.nodes.map((node, index) => {
@@ -4772,7 +4804,7 @@
                     `${getText("centrality")} ${this.formatDecimal(node.centrality)}`
                 ].filter(Boolean).join(" · ");
                 return `
-                    <g>
+                    <g data-anly-network-cluster-node="${this.escapeHtml(node.clusterId)}">
                         <circle cx="${pos.x.toFixed(1)}" cy="${pos.y.toFixed(1)}" r="${radius.toFixed(1)}" fill="${pos.color}" stroke="#ffffff" stroke-width="2">
                             <title>${this.escapeHtml(title)}</title>
                         </circle>
@@ -4790,6 +4822,7 @@
             }).join("");
             return `
                 <div class="anly-work-network-graph-shell">
+                    ${this.renderRelationNetworkGraphClusterLegend(graph)}
                     <div class="anly-work-network-graph-tools">
                         <button type="button" onclick="${PAGE_CODE}.zoomRelationNetworkGraph(1.16)" title="${this.escapeHtml(getText("Zoom in"))}"><i class="fas fa-search-plus"></i></button>
                         <button type="button" onclick="${PAGE_CODE}.zoomRelationNetworkGraph(0.86)" title="${this.escapeHtml(getText("Zoom out"))}"><i class="fas fa-search-minus"></i></button>
@@ -4805,8 +4838,97 @@
                             ${nodeLabels}
                         </g>
                     </svg>
+                    <div class="anly-work-network-cluster-empty" data-anly-network-cluster-empty hidden>${this.escapeHtml(getText("Select at least one cluster to display the graph."))}</div>
                 </div>
             `;
+        },
+
+        renderRelationNetworkGraphClusterLegend(graph = {}) {
+            const clusterIds = Array.isArray(graph.clusterIds) ? graph.clusterIds.map((clusterId) => String(clusterId)) : [];
+            if (!clusterIds.length) return "";
+            const palette = ["#2563eb", "#059669", "#d97706", "#7c3aed", "#dc2626", "#0891b2", "#be123c", "#4f46e5", "#65a30d", "#9333ea", "#0f766e", "#ea580c"];
+            const selected = this.getRelationNetworkGraphVisibleClusters(clusterIds);
+            return `
+                <div class="anly-work-network-cluster-legend" aria-label="${this.escapeHtml(getText("Cluster visibility"))}">
+                    <div class="anly-work-network-cluster-legend-actions">
+                        <strong>${this.escapeHtml(getText("Clusters"))}</strong>
+                        <button type="button" onclick="${PAGE_CODE}.setAllRelationNetworkGraphClusters(true)" title="${this.escapeHtml(getText("Select all clusters"))}" aria-label="${this.escapeHtml(getText("Select all clusters"))}"><i class="fas fa-check-double"></i></button>
+                        <button type="button" onclick="${PAGE_CODE}.setAllRelationNetworkGraphClusters(false)" title="${this.escapeHtml(getText("Clear all clusters"))}" aria-label="${this.escapeHtml(getText("Clear all clusters"))}"><i class="fas fa-square"></i></button>
+                        <small data-anly-network-cluster-count>${this.escapeHtml(getText("{selected} / {total} selected", { selected: selected.size, total: clusterIds.length }))}</small>
+                    </div>
+                    <div class="anly-work-network-cluster-legend-items">
+                        ${clusterIds.map((clusterId, index) => `
+                            <label class="${selected.has(clusterId) ? "is-active" : ""}" style="--anly-cluster-color: ${palette[index % palette.length]};">
+                                <input type="checkbox" data-anly-network-cluster-checkbox value="${this.escapeHtml(clusterId)}" ${selected.has(clusterId) ? "checked" : ""} onchange="${PAGE_CODE}.toggleRelationNetworkGraphCluster('${this.escapeJs(clusterId)}', this.checked)">
+                                <i aria-hidden="true"></i>
+                                <span>${this.escapeHtml(getText("Cluster {cluster}", { cluster: clusterId }))}</span>
+                            </label>
+                        `).join("")}
+                    </div>
+                </div>
+            `;
+        },
+
+        getRelationNetworkGraphVisibleClusters(clusterIds = this.relationNetworkGraphClusterIds || []) {
+            const validIds = [...new Set((clusterIds || []).map((clusterId) => String(clusterId)))];
+            const validSet = new Set(validIds);
+            if (!(this.relationNetworkGraphVisibleClusters instanceof Set)) {
+                this.relationNetworkGraphVisibleClusters = new Set(validIds);
+            } else {
+                this.relationNetworkGraphVisibleClusters = new Set(
+                    [...this.relationNetworkGraphVisibleClusters].map(String).filter((clusterId) => validSet.has(clusterId))
+                );
+            }
+            this.relationNetworkGraphClusterIds = validIds;
+            return this.relationNetworkGraphVisibleClusters;
+        },
+
+        toggleRelationNetworkGraphCluster(clusterId = "", visible = true) {
+            const normalized = String(clusterId);
+            const selected = this.getRelationNetworkGraphVisibleClusters();
+            if (visible) selected.add(normalized);
+            else selected.delete(normalized);
+            // Filtering a cluster must not recalculate the viewport. Preserve the
+            // user's current wheel/pinch zoom and pan position while elements hide/show.
+            this.applyRelationNetworkGraphClusterVisibility({ fit: false });
+        },
+
+        setAllRelationNetworkGraphClusters(visible = true) {
+            const clusterIds = this.relationNetworkGraphClusterIds || [];
+            this.relationNetworkGraphVisibleClusters = new Set(visible ? clusterIds.map(String) : []);
+            this.applyRelationNetworkGraphClusterVisibility({ fit: false });
+        },
+
+        applyRelationNetworkGraphClusterVisibility({ fit = true } = {}) {
+            const { popup } = this.getRelationNetworkGraphElements();
+            if (!popup) return;
+            const clusterIds = this.relationNetworkGraphClusterIds || [];
+            const selected = this.getRelationNetworkGraphVisibleClusters(clusterIds);
+            popup.querySelectorAll("[data-anly-network-cluster-checkbox]").forEach((input) => {
+                const checked = selected.has(String(input.value));
+                input.checked = checked;
+                input.closest("label")?.classList.toggle("is-active", checked);
+            });
+            popup.querySelectorAll("[data-anly-network-cluster-group]").forEach((element) => {
+                element.classList.toggle("is-cluster-hidden", !selected.has(String(element.dataset.anlyNetworkClusterGroup)));
+            });
+            popup.querySelectorAll("[data-anly-network-cluster-node]").forEach((element) => {
+                element.classList.toggle("is-cluster-hidden", !selected.has(String(element.dataset.anlyNetworkClusterNode)));
+            });
+            popup.querySelectorAll("[data-anly-network-edge-source-cluster]").forEach((element) => {
+                const sourceVisible = selected.has(String(element.dataset.anlyNetworkEdgeSourceCluster));
+                const targetVisible = selected.has(String(element.dataset.anlyNetworkEdgeTargetCluster));
+                element.classList.toggle("is-cluster-hidden", !(sourceVisible && targetVisible));
+            });
+            const count = popup.querySelector("[data-anly-network-cluster-count]");
+            if (count) {
+                count.textContent = getText("{selected} / {total} selected", { selected: selected.size, total: clusterIds.length });
+            }
+            const empty = popup.querySelector("[data-anly-network-cluster-empty]");
+            if (empty) empty.hidden = selected.size > 0;
+            if (fit && selected.size > 0) {
+                window.requestAnimationFrame(() => this.fitRelationNetworkGraphToStage());
+            }
         },
 
         renderRelationNetworkPopupOverview(summary = {}, graph = {}) {
@@ -4896,12 +5018,16 @@
                 return;
             }
             this.closeRelationNetworkPopup();
+            const graph = this.buildRelationNetworkGraphData(summary);
+            this.relationNetworkGraphClusterIds = [...graph.clusterIds].map(String);
+            this.relationNetworkGraphVisibleClusters = new Set(this.relationNetworkGraphClusterIds);
             const popup = document.createElement("div");
             popup.id = `${PAGE_ID_PREFIX}RelationNetworkPopup`;
             popup.className = "anly-work-symbolic-popup anly-work-relation-network-popup";
-            popup.innerHTML = this.renderRelationNetworkPopup(summary);
+            popup.innerHTML = this.renderRelationNetworkPopup(summary, graph);
             document.body.appendChild(popup);
             this.initRelationNetworkGraphInteraction();
+            this.applyRelationNetworkGraphClusterVisibility({ fit: false });
         },
 
         closeRelationNetworkPopup() {
@@ -4911,6 +5037,8 @@
             }
             const popup = document.getElementById(`${PAGE_ID_PREFIX}RelationNetworkPopup`);
             if (popup) popup.remove();
+            this.relationNetworkGraphClusterIds = [];
+            this.relationNetworkGraphVisibleClusters = null;
         },
 
         getRelationNetworkGraphElements() {
@@ -5037,32 +5165,96 @@
             const { svg } = this.getRelationNetworkGraphElements();
             if (!svg) return;
             this.relationNetworkGraphView = { scale: 1, x: 0, y: 0 };
+            const activePointers = new Map();
             let dragState = null;
+            let pinchState = null;
+            const getPointerPair = () => [...activePointers.values()].slice(0, 2);
+            const getMidpoint = (first, second) => ({
+                clientX: (first.clientX + second.clientX) / 2,
+                clientY: (first.clientY + second.clientY) / 2
+            });
+            const beginPan = (pointer) => {
+                if (!pointer) {
+                    dragState = null;
+                    return;
+                }
+                const point = this.getRelationNetworkGraphPoint(pointer, svg);
+                const view = this.relationNetworkGraphView || { scale: 1, x: 0, y: 0 };
+                dragState = {
+                    pointerId: pointer.pointerId,
+                    startClientX: pointer.clientX,
+                    startClientY: pointer.clientY,
+                    scaleX: point.scaleX,
+                    scaleY: point.scaleY,
+                    startX: Number(view.x || 0),
+                    startY: Number(view.y || 0)
+                };
+                pinchState = null;
+            };
+            const beginPinch = () => {
+                const [first, second] = getPointerPair();
+                if (!first || !second) return;
+                const midpoint = getMidpoint(first, second);
+                const anchor = this.getRelationNetworkGraphPoint(midpoint, svg);
+                const view = this.relationNetworkGraphView || { scale: 1, x: 0, y: 0 };
+                pinchState = {
+                    pointerIds: [first.pointerId, second.pointerId],
+                    startDistance: Math.max(1, Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY)),
+                    startMidpoint: midpoint,
+                    anchor,
+                    startScale: Number(view.scale || 1),
+                    startX: Number(view.x || 0),
+                    startY: Number(view.y || 0)
+                };
+                dragState = null;
+                svg.classList.add("is-pinching");
+            };
             const onWheel = (event) => {
                 event.preventDefault();
                 const point = this.getRelationNetworkGraphPoint(event, svg);
                 this.zoomRelationNetworkGraph(event.deltaY < 0 ? 1.12 : 0.89, point);
             };
             const onPointerDown = (event) => {
-                if (event.button !== 0) return;
+                if (event.pointerType === "mouse" && event.button !== 0) return;
                 event.preventDefault();
-                const point = this.getRelationNetworkGraphPoint(event, svg);
-                const view = this.relationNetworkGraphView || { scale: 1, x: 0, y: 0 };
-                dragState = {
+                activePointers.set(event.pointerId, {
                     pointerId: event.pointerId,
-                    startClientX: event.clientX,
-                    startClientY: event.clientY,
-                    scaleX: point.scaleX,
-                    scaleY: point.scaleY,
-                    startX: Number(view.x || 0),
-                    startY: Number(view.y || 0)
-                };
+                    clientX: event.clientX,
+                    clientY: event.clientY
+                });
                 svg.classList.add("is-dragging");
                 svg.setPointerCapture?.(event.pointerId);
+                if (activePointers.size >= 2) beginPinch();
+                else beginPan(activePointers.get(event.pointerId));
             };
             const onPointerMove = (event) => {
-                if (!dragState) return;
+                if (!activePointers.has(event.pointerId)) return;
                 event.preventDefault();
+                activePointers.set(event.pointerId, {
+                    pointerId: event.pointerId,
+                    clientX: event.clientX,
+                    clientY: event.clientY
+                });
+                if (activePointers.size >= 2) {
+                    const [first, second] = getPointerPair();
+                    if (!pinchState || !pinchState.pointerIds.every((pointerId) => activePointers.has(pointerId))) {
+                        beginPinch();
+                    }
+                    const currentMidpoint = getMidpoint(first, second);
+                    const currentDistance = Math.max(1, Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY));
+                    const startScale = Math.max(0.0001, Number(pinchState.startScale || 1));
+                    const nextScale = Math.min(4, Math.max(0.45, startScale * (currentDistance / pinchState.startDistance)));
+                    this.relationNetworkGraphView = {
+                        scale: nextScale,
+                        x: pinchState.anchor.x - (((pinchState.anchor.x - pinchState.startX) / startScale) * nextScale)
+                            + ((currentMidpoint.clientX - pinchState.startMidpoint.clientX) * pinchState.anchor.scaleX),
+                        y: pinchState.anchor.y - (((pinchState.anchor.y - pinchState.startY) / startScale) * nextScale)
+                            + ((currentMidpoint.clientY - pinchState.startMidpoint.clientY) * pinchState.anchor.scaleY)
+                    };
+                    this.applyRelationNetworkGraphTransform();
+                    return;
+                }
+                if (!dragState || dragState.pointerId !== event.pointerId) beginPan(activePointers.get(event.pointerId));
                 this.relationNetworkGraphView = {
                     ...(this.relationNetworkGraphView || { scale: 1 }),
                     x: dragState.startX + ((event.clientX - dragState.startClientX) * dragState.scaleX),
@@ -5070,38 +5262,46 @@
                 };
                 this.applyRelationNetworkGraphTransform();
             };
-            const stopDrag = (event) => {
-                if (!dragState) return;
-                const pointerId = dragState.pointerId;
-                dragState = null;
-                svg.classList.remove("is-dragging");
+            const stopPointer = (event) => {
+                if (!activePointers.has(event.pointerId)) return;
+                activePointers.delete(event.pointerId);
                 try {
-                    svg.releasePointerCapture?.(pointerId);
+                    if (svg.hasPointerCapture?.(event.pointerId)) svg.releasePointerCapture(event.pointerId);
                 } catch (error) {
                     // Pointer capture may already be released by the browser.
                 }
-                event?.preventDefault?.();
+                pinchState = null;
+                svg.classList.remove("is-pinching");
+                if (activePointers.size === 1) beginPan([...activePointers.values()][0]);
+                else if (activePointers.size === 0) {
+                    dragState = null;
+                    svg.classList.remove("is-dragging");
+                } else {
+                    beginPinch();
+                }
+                event.preventDefault();
             };
             svg.addEventListener("wheel", onWheel, { passive: false });
             svg.addEventListener("pointerdown", onPointerDown);
             svg.addEventListener("pointermove", onPointerMove);
-            svg.addEventListener("pointerup", stopDrag);
-            svg.addEventListener("pointercancel", stopDrag);
-            svg.addEventListener("lostpointercapture", stopDrag);
+            svg.addEventListener("pointerup", stopPointer);
+            svg.addEventListener("pointercancel", stopPointer);
+            svg.addEventListener("lostpointercapture", stopPointer);
             this.relationNetworkGraphCleanup = () => {
+                activePointers.clear();
                 svg.removeEventListener("wheel", onWheel);
                 svg.removeEventListener("pointerdown", onPointerDown);
                 svg.removeEventListener("pointermove", onPointerMove);
-                svg.removeEventListener("pointerup", stopDrag);
-                svg.removeEventListener("pointercancel", stopDrag);
-                svg.removeEventListener("lostpointercapture", stopDrag);
+                svg.removeEventListener("pointerup", stopPointer);
+                svg.removeEventListener("pointercancel", stopPointer);
+                svg.removeEventListener("lostpointercapture", stopPointer);
             };
             requestAnimationFrame(() => this.fitRelationNetworkGraphToStage());
         },
 
-        renderRelationNetworkPopup(summary = {}) {
+        renderRelationNetworkPopup(summary = {}, graphInput = null) {
             const clusters = this.buildRelationNetworkClusters(summary);
-            const graph = this.buildRelationNetworkGraphData(summary);
+            const graph = graphInput || this.buildRelationNetworkGraphData(summary);
             return `
                 <section>
                     <header class="anly-work-sql-popup-title" onmousedown="${PAGE_CODE}.startRelationNetworkPopupDrag(event)">
@@ -5119,7 +5319,7 @@
                         <div class="anly-work-relation-network-main">
                             ${this.renderRelationNetworkPopupOverview(summary, graph)}
                             <div class="anly-work-relation-network-graph-stage">
-                                ${this.renderRelationNetworkGraphSvg(summary)}
+                                ${this.renderRelationNetworkGraphSvg(summary, graph)}
                             </div>
                             <div class="anly-work-network-detail-panels">
                                 <section>

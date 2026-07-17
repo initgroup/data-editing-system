@@ -3043,6 +3043,11 @@
         padding: 8px 12px;
     }
 
+    /* On narrow screens the job palette is already stacked above the canvas. */
+    .flow-work-page .flow-sidebar-toggle {
+        display: none;
+    }
+
     .flow-work-page .flow-palette-card {
         flex: 1 1 auto;
         min-height: 156px;
@@ -3321,6 +3326,39 @@
 }
 
 @media (max-width: 760px) {
+    .flow-work-page .flow-canvas-toolbar {
+        align-items: flex-start;
+        max-width: 100%;
+        overflow: hidden;
+        width: 100%;
+    }
+
+    .flow-work-page .flow-canvas-toolbar .data-selected-object {
+        flex-basis: 100%;
+        max-width: 100%;
+    }
+
+    .flow-work-page .flow-canvas-actions {
+        flex: 1 1 100%;
+        flex-wrap: nowrap;
+        justify-content: flex-start;
+        max-width: 100%;
+        min-width: 0;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding-bottom: 2px;
+        width: 100%;
+    }
+
+    .flow-work-page .flow-canvas-actions > .table-icon-btn {
+        flex: 0 0 auto;
+    }
+
+    .flow-work-page .flow-canvas-stage {
+        max-width: 100%;
+        width: 100%;
+    }
+
     .flow-work-page .flow-import-dialog {
         max-height: calc(100dvh - 16px);
         width: calc(100vw - 16px);

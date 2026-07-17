@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 SERVER_RESOURCE_LIMITS_CATEGORY = "SERVER_RESOURCE_LIMITS"
 TARGET_DB_POOL_WAIT_TIMEOUT_MS = "TARGET_DB_POOL_WAIT_TIMEOUT_MS"
+APP_RULE_SUMMARY_TIMEOUT_MS = "APP_RULE_SUMMARY_TIMEOUT_MS"
 APP_ML_MAX_IN_MEMORY_ROWS = "APP_ML_MAX_IN_MEMORY_ROWS"
 APP_ML_MAX_INPUT_FEATURES = "APP_ML_MAX_INPUT_FEATURES"
 
@@ -40,6 +41,12 @@ _RESOURCE_SETTING_SPECS = {
         minimum=1000,
         maximum=300000,
         env_name=TARGET_DB_POOL_WAIT_TIMEOUT_MS,
+    ),
+    APP_RULE_SUMMARY_TIMEOUT_MS: _ResourceSettingSpec(
+        default=60000,
+        minimum=12000,
+        maximum=300000,
+        env_name=APP_RULE_SUMMARY_TIMEOUT_MS,
     ),
     APP_ML_MAX_IN_MEMORY_ROWS: _ResourceSettingSpec(
         default=25000,

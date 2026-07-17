@@ -10,6 +10,7 @@
     "mySystemSettingsDescription": "내 개인 시스템 설정을 관리합니다.",
     "languageEnglish": "영어",
     "languageKorean": "한국어",
+    "createDefaultSettings": "기본 설정 생성/갱신",
     "save": "저장",
     "cancel": "취소",
     "delete": "삭제"
@@ -19,7 +20,13 @@
     "categoryMyAccountDesc": "내 로그인 정보, 이메일, 비밀번호를 관리합니다.",
     "categoryGeneralName": "시스템 일반",
     "categoryGeneralDesc": "기본 시스템 표시 설정입니다.",
+    "categoryM02002TableFilterName": "대상 테이블 제약",
+    "categoryM02002TableFilterDesc": "M02002 대상 테이블 탐색에 적용할 포함 및 제외 조건입니다.",
     "categoryServerResourceLimitsName": "서버 리소스 제한",
-    "categoryServerResourceLimitsDesc": "사용자 및 Target DB 연결별 요청 제한값입니다. 실제 적용값은 서버 환경변수의 상한을 초과할 수 없습니다."
+    "categoryServerResourceLimitsDesc": "사용자 및 Target DB 연결별 요청 제한값입니다. 실제 적용값은 서버 환경변수의 상한을 초과할 수 없습니다.",
+    "createDefaultSettingsConfirm": "기본 설정 JSON의 누락 항목을 생성하고 기존 항목을 기본값으로 갱신합니다. 기존에 수정한 값이 기본값으로 덮어써질 수 있습니다. 계속하시겠습니까?",
+    "creatingDefaultSettings": "기본 설정을 적용하고 있습니다...",
+    "defaultSettingsApplied": "기본 설정을 적용했습니다. 생성 {created}건, 갱신 {updated}건, 건너뜀 {skipped}건.",
+    "defaultSettingsFailed": "기본 설정 저장에 실패했습니다."
   }
 }

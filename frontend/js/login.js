@@ -540,6 +540,7 @@
 
                 if (json.user) {
                     sessionStorage.setItem("initLoginUser", JSON.stringify(json.user || {}));
+                    CommonUtils.setRuntimeSettings(json.runtimeSettings);
                     PageManager.extendSession?.(json.sessionTtlSeconds);
                 }
 

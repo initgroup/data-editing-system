@@ -1415,6 +1415,7 @@
     min-height: 0;
     overflow: auto;
     overscroll-behavior: contain;
+    position: relative;
 }
 
 .anly-work-violation-sql-grid-wrap {
@@ -1457,6 +1458,15 @@
     min-width: 48px;
     padding-left: 6px;
     padding-right: 6px;
+}
+
+/* The shared grid inserts No after the popup table is rendered. Keep its
+   header at the intersection of the vertical header and horizontal freeze. */
+.anly-work-sql-result .anly-work-violation-sql-grid th.grid-row-no.is-frozen-col {
+    left: 0 !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 90 !important;
 }
 
 .anly-work-violation-sql-grid th.is-resizable {
@@ -2833,10 +2843,131 @@
 .anly-work-network-graph-shell {
     background: #f8fafc;
     display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
     height: 100%;
     min-height: 100%;
     min-width: 0;
     position: relative;
+}
+
+.anly-work-network-cluster-legend {
+    align-items: center;
+    background: rgba(255, 255, 255, 0.96);
+    border-bottom: 1px solid #dbe3ef;
+    display: flex;
+    gap: 8px;
+    min-width: 0;
+    padding: 8px 190px 8px 8px;
+    position: relative;
+    z-index: 3;
+}
+
+.anly-work-network-cluster-legend-actions,
+.anly-work-network-cluster-legend-items {
+    align-items: center;
+    display: flex;
+    gap: 5px;
+}
+
+.anly-work-network-cluster-legend-actions {
+    flex: 0 0 auto;
+}
+
+.anly-work-network-cluster-legend-actions strong {
+    color: #0f172a;
+    font-size: 12px;
+    font-weight: 850;
+}
+
+.anly-work-network-cluster-legend-actions button {
+    align-items: center;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    color: #334155;
+    cursor: pointer;
+    display: inline-flex;
+    height: 26px;
+    justify-content: center;
+    width: 28px;
+}
+
+.anly-work-network-cluster-legend-actions button:hover,
+.anly-work-network-cluster-legend-actions button:focus-visible {
+    background: #eff6ff;
+    border-color: #2563eb;
+    color: #1d4ed8;
+}
+
+.anly-work-network-cluster-legend-actions small {
+    color: #64748b;
+    font-size: 10px;
+    white-space: nowrap;
+}
+
+.anly-work-network-cluster-legend-items {
+    -webkit-overflow-scrolling: touch;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    padding-bottom: 2px;
+}
+
+.anly-work-network-cluster-legend-items label {
+    align-items: center;
+    background: #ffffff;
+    border: 1px solid #dbe3ef;
+    color: #64748b;
+    cursor: pointer;
+    display: inline-flex;
+    flex: 0 0 auto;
+    font-size: 11px;
+    font-weight: 750;
+    gap: 5px;
+    height: 26px;
+    padding: 0 8px;
+    white-space: nowrap;
+}
+
+.anly-work-network-cluster-legend-items label.is-active {
+    border-color: var(--anly-cluster-color);
+    color: #0f172a;
+}
+
+.anly-work-network-cluster-legend-items input {
+    accent-color: var(--anly-cluster-color);
+    height: 14px;
+    margin: 0;
+    width: 14px;
+}
+
+.anly-work-network-cluster-legend-items label > i {
+    background: var(--anly-cluster-color);
+    border-radius: 50%;
+    display: inline-block;
+    height: 8px;
+    width: 8px;
+}
+
+.anly-work-network-svg [data-anly-network-cluster-group].is-cluster-hidden,
+.anly-work-network-svg [data-anly-network-cluster-node].is-cluster-hidden,
+.anly-work-network-svg [data-anly-network-edge-source-cluster].is-cluster-hidden {
+    display: none;
+}
+
+.anly-work-network-cluster-empty {
+    background: rgba(255, 255, 255, 0.94);
+    border: 1px solid #cbd5e1;
+    color: #64748b;
+    font-size: 12px;
+    font-weight: 750;
+    left: 50%;
+    padding: 12px 16px;
+    pointer-events: none;
+    position: absolute;
+    top: 52%;
+    transform: translate(-50%, -50%);
+    z-index: 3;
 }
 
 .anly-work-network-graph-tools {
@@ -2846,7 +2977,7 @@
     position: absolute;
     right: 10px;
     top: 10px;
-    z-index: 2;
+    z-index: 4;
 }
 
 .anly-work-network-graph-tools button,
@@ -2879,6 +3010,7 @@
     cursor: grab;
     display: block;
     height: 100%;
+    grid-row: 2;
     min-height: 0;
     min-width: 0;
     touch-action: none;
@@ -2888,6 +3020,10 @@
 
 .anly-work-network-svg.is-dragging {
     cursor: grabbing;
+}
+
+.anly-work-network-svg.is-pinching {
+    cursor: zoom-in;
 }
 
 .anly-work-network-svg text {
@@ -5134,6 +5270,32 @@
         grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 
+    /* Symbolic-rule Y columns carry an ID, comment, cluster and rule count.
+       Keep that card inside the mobile panel rather than clipping its count. */
+    .anly-work-symbolic-summary .anly-work-rule-facet-panel.is-symbolic .anly-work-rule-facet-block.is-condition {
+        min-width: 0;
+        width: 100%;
+    }
+
+    .anly-work-symbolic-summary .anly-work-rule-facet-panel.is-symbolic .anly-work-rule-facet-block.is-condition .anly-work-rule-facet-list {
+        grid-template-columns: minmax(0, 1fr);
+        max-width: 100%;
+        width: 100%;
+    }
+
+    .anly-work-symbolic-summary .anly-work-rule-facet-panel.is-symbolic .anly-work-rule-facet-block.is-condition .anly-work-rule-facet-list button {
+        box-sizing: border-box;
+        max-width: 100%;
+        min-width: 0;
+        width: 100%;
+    }
+
+    .anly-work-symbolic-summary .anly-work-rule-facet-panel.is-symbolic .anly-work-rule-facet-block.is-condition .anly-work-rule-facet-list button > b {
+        max-width: 100%;
+        overflow-wrap: anywhere;
+        white-space: normal;
+    }
+
     .home-session-strip,
     .home-kpi-grid,
     .home-workflow-kpi-grid,
@@ -5188,7 +5350,10 @@
 
     .anly-work-symbolic-formula-banner {
         align-items: start;
-        grid-template-columns: 1fr;
+        display: flex;
+        flex-direction: column;
+        max-height: min(42dvh, 320px);
+        min-height: 0;
         padding: 8px 10px;
     }
 
@@ -5198,6 +5363,19 @@
 
     .anly-work-symbolic-formula-banner strong {
         font-size: 13px;
+    }
+
+    .anly-work-symbolic-formula-text {
+        -webkit-overflow-scrolling: touch;
+        flex: 0 1 auto;
+        min-height: 0;
+        overflow: auto;
+        overscroll-behavior: contain;
+        width: 100%;
+    }
+
+    .anly-work-symbolic-formula-copy {
+        flex: 0 0 auto;
     }
 
     .anly-work-symbolic-popup-body {
@@ -5226,10 +5404,15 @@
         flex: 0 0 34px;
     }
 
-    .anly-work-symbolic-chart-wrap,
     .anly-work-symbolic-visual-shell {
-        height: clamp(260px, 38vh, 330px);
+        height: clamp(380px, 48dvh, 460px);
         min-height: 0;
+    }
+
+    .anly-work-symbolic-chart-wrap {
+        height: auto;
+        min-height: 0;
+        overflow: hidden;
     }
 
     .anly-work-symbolic-raw-panel > header {
@@ -5449,6 +5632,30 @@
 
     .anly-work-relation-network-graph-stage {
         min-height: 380px;
+    }
+
+    .anly-work-network-cluster-legend {
+        align-items: stretch;
+        flex-direction: column;
+        padding: 46px 8px 8px;
+    }
+
+    .anly-work-network-cluster-legend-actions {
+        flex-wrap: wrap;
+        width: 100%;
+    }
+
+    .anly-work-network-cluster-legend-actions small {
+        margin-left: auto;
+    }
+
+    .anly-work-network-cluster-legend-items {
+        width: 100%;
+    }
+
+    .anly-work-network-graph-tools {
+        right: 8px;
+        top: 8px;
     }
 
     .anly-work-network-node-list,

@@ -3,11 +3,11 @@
         <aside class="env-object-panel">
             <header class="env-object-header">
                 <div>
-                    <h2 class="env-section-title" data-label-key="targetSettingCategoryTitle">Target Setting Categories</h2>
-                    <p class="env-section-desc" data-label-key="targetSettingCategoryDescription">Select a Target DB setting group.</p>
+                    <h2 class="env-section-title" data-label-key="targetSettingCategoryTitle">Classification Setting Categories</h2>
+                    <p class="env-section-desc" data-label-key="targetSettingCategoryDescription">Select a Target DB model setting group.</p>
                 </div>
                 <div class="env-object-actions">
-                    <button id="createDefaultSettingsBtn-M91003" type="button" class="env-icon-btn" title="Create default target settings" onclick="M91003.createDefaultSettings()">
+                    <button id="createDefaultSettingsBtn-M91003" type="button" class="env-icon-btn" title="Apply default overrides" data-title-key="applyDefaultOverrides" aria-label="Apply default overrides" onclick="M91003.createDefaultSettings()">
                         <i class="fas fa-wand-magic-sparkles"></i>
                     </button>
                     <button type="button" class="env-icon-btn" title="Refresh" onclick="M91003.refreshSelectedCategory()">
@@ -20,8 +20,8 @@
 
         <section class="env-panel" aria-labelledby="settings-title-M91003">
             <header class="env-header">
-                <h1 class="env-title" id="settings-title-M91003" data-label-key="targetDbSettingsTitle">Target DB Settings</h1>
-                <p class="env-desc" id="settingsDescription-M91003" data-label-key="targetDbSettingsDescription">Manage setting values for the selected Target DB.</p>
+                <h1 class="env-title" id="settings-title-M91003" data-label-key="targetDbSettingsTitle">Column Type Classification Settings</h1>
+                <p class="env-desc" id="settingsDescription-M91003" data-label-key="targetDbSettingsDescription">Manage Target DB overrides for column type model defaults.</p>
             </header>
 
             <section class="scenario-list-panel" aria-label="Target settings list">

@@ -287,15 +287,18 @@
       "summary": "Browses Target DB procedures, packages, and model objects and registers them as executable internal resources without changing object IDs or parameter names.",
       "purpose": [
         "Standardize descriptions, result contracts, and defaults for column typing, relationship, rule, and violation procedures.",
-        "Expose accurate parameter comments in Data Work and the Flow node inspector."
+        "Expose accurate parameter comments in Data Work and the Flow node inspector.",
+        "Manage INIT$_SP_PREDICTED_TYPE model defaults and Target DB-specific overrides from the model resource itself."
       ],
       "workflow": [
         "Select a Target DB procedure or model object.",
         "Verify that its actual parameter names and types match the preset metadata.",
+        "For INIT$_SP_PREDICTED_TYPE, review or edit Target DB overrides in Column Type Classification Settings.",
         "Review the result table/model contract and defaults, then register the resource."
       ],
       "aiGuidance": [
         "P_RUN_ID and RUN_SOURCE_TYPE link results from the same Data Work or Flow run.",
+        "Deleting a column-type override restores the model default; applying preset overrides may overwrite existing Target DB overrides.",
         "P_SYMBOLIC_RULE_TABLE_NAME identifies symbolic rule storage, not an association model.",
         "For integrated detection, explain P_RULE_PARTS, P_CONTINUE_ON_ERROR, and P_COMMIT_YN together."
       ]
@@ -357,22 +360,6 @@
       "aiGuidance": [
         "Passwords and Gemini keys are secrets and must not be repeated in help text, responses, or logs.",
         "A saved language setting may take effect on the next login."
-      ]
-    },
-    "M91003": {
-      "pageCode": "M91003",
-      "title": "Editing Defaults",
-      "label": "Editing Defaults",
-      "group": "My Environment Settings",
-      "status": "enabled",
-      "summary": "Manages Target DB-level defaults used specifically by column type analysis and classification.",
-      "purpose": [
-        "Standardize numeric types, identifier ratios, low-cardinality limits, text ratios, entropy, and forced identifier columns.",
-        "Store these defaults in the selected Target DB rather than as personal UI preferences."
-      ],
-      "aiGuidance": [
-        "The current preset category is DATA_PROFILING; correlation and rule API preset JSON is managed separately.",
-        "Verify the selected Target DB before creating, saving, or deleting a default."
       ]
     },
     "M99001": {

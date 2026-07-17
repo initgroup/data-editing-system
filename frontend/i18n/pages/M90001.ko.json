@@ -2,7 +2,25 @@
   "language": "ko",
   "pageCode": "M90001",
   "description": "Korean labels for Internal Model Registration.",
-  "labels": {},
+  "labels": {
+    "classificationSettingsButton": "컬럼 유형 판정 기준",
+    "classificationSettingsTitle": "컬럼 유형 판정 설정",
+    "classificationSettingsDescription": "INIT$_SP_PREDICTED_TYPE 모델 기본값을 재정의할 Target DB 판정 기준을 관리합니다.",
+    "applyDefaultOverrides": "프리셋 재정의 값 적용",
+    "newOverride": "새 재정의 값",
+    "refresh": "새로고침",
+    "settingKey": "설정 키",
+    "use": "사용",
+    "sort": "정렬",
+    "valueSource": "값 출처",
+    "value": "값",
+    "description": "설명",
+    "overrideHint": "재정의 값을 삭제하면 모델 기본값으로 복귀합니다.",
+    "saveOverride": "재정의 저장",
+    "reset": "초기화",
+    "deleteOverride": "재정의 삭제",
+    "close": "닫기"
+  },
   "selectors": {
     "text": {
       ".env-object-header .env-section-title": "DB 객체 스키마",
@@ -53,5 +71,21 @@
       "#objectSourceViewer-M90001": "선택 객체 스크립트"
     }
   },
-  "messages": {}
+  "messages": {
+    "loadingClassificationSettings": "컬럼 유형 판정 기준을 불러오는 중입니다...",
+    "classificationSettingsLoaded": "컬럼 유형 판정 기준 {count}건을 불러왔습니다.",
+    "classificationSettingsLoadFailed": "컬럼 유형 판정 기준을 불러오지 못했습니다.",
+    "targetDbOverride": "Target DB 재정의",
+    "modelDefault": "모델 기본값",
+    "noClassificationSettings": "표시할 컬럼 유형 판정 기준이 없습니다.",
+    "classificationKeyRequired": "설정 키는 필수입니다.",
+    "classificationOverrideSaved": "Target DB 재정의 값을 저장했습니다.",
+    "classificationOverrideSaveFailed": "재정의 값 저장에 실패했습니다.",
+    "confirmDeleteClassificationOverride": "Target DB 재정의 값 \"{settingKey}\"을 삭제하시겠습니까? 삭제 후에는 모델 기본값이 적용됩니다.",
+    "classificationOverrideDeleted": "재정의 값을 삭제했습니다. 이제 모델 기본값이 적용됩니다.",
+    "classificationOverrideDeleteFailed": "재정의 값 삭제에 실패했습니다.",
+    "confirmApplyClassificationDefaults": "프리셋의 모든 값을 Target DB 재정의 값으로 적용하시겠습니까? 기존 재정의 값이 덮어써질 수 있습니다.",
+    "classificationDefaultsApplied": "프리셋 재정의 값을 적용했습니다. 생성 {created}건, 갱신 {updated}건.",
+    "classificationDefaultsApplyFailed": "프리셋 재정의 값 적용에 실패했습니다."
+  }
 }

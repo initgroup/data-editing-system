@@ -3,6 +3,19 @@
     const { getContainerEl } = PageManager.createHelper(PAGE_CODE);
     const COMMON = MCOMMON.createPageHelper(PAGE_CODE);
     const DETAIL_PRESET_URL = "./config/M90001.object-detail-presets.json";
+    const CLASSIFICATION_PRESET_URL = "./config/M91003.object-detail-presets.json";
+    const CLASSIFICATION_API_CODE = "M91003";
+    const CLASSIFICATION_CATEGORY = "DATA_PROFILING";
+    const CLASSIFICATION_OBJECT_NAME = "INIT$_SP_PREDICTED_TYPE";
+    const getPageMessage = (key, fallback = "", values = {}) => {
+        const pack = window[`${PAGE_CODE}_PAGE_I18N`] || {};
+        const messages = pack && typeof pack.messages === "object" && !Array.isArray(pack.messages) ? pack.messages : {};
+        let text = Object.prototype.hasOwnProperty.call(messages, key) ? String(messages[key] ?? "") : fallback;
+        Object.entries(values || {}).forEach(([name, value]) => {
+            text = text.replace(new RegExp(`\\{${name}\\}`, "g"), String(value ?? ""));
+        });
+        return text;
+    };
 
     const M90001 = {
         
@@ -12,6 +25,9 @@
         objectMeta: null,
         detailSource: "",
         detailPresets: null,
+        classificationDefaults: [],
+        classificationSettings: [],
+        selectedClassificationKey: "",
         objectSourceRequestSeq: 0,
         rows: [],
         originalRows: [],
@@ -81,8 +97,13 @@
             this.objectMeta = null;
             this.detailSource = "";
             this.detailPresets = null;
+            this.classificationDefaults = [];
+            this.classificationSettings = [];
+            this.selectedClassificationKey = "";
             this.objectSourceRequestSeq += 1;
             this.setDetailPresetButtonVisible(false);
+            this.updateClassificationSettingsButton();
+            this.closeClassificationSettings();
             this.renderObjectSource("", "Select an object to load source.");
             this.isInit = false;
         },
@@ -994,6 +1015,10 @@
         async selectObject(objectRow) {
             this.selectedObject = objectRow;
             this.setDetailPresetButtonVisible(false);
+            this.updateClassificationSettingsButton();
+            if (!this.isClassificationSettingsObject(objectRow)) {
+                this.closeClassificationSettings();
+            }
             this.updateDescription(`Loading ${objectRow.OWNER}.${objectRow.OBJECT_NAME}...`);
             const sourceRequestSeq = this.objectSourceRequestSeq + 1;
             this.objectSourceRequestSeq = sourceRequestSeq;
@@ -1013,7 +1038,7 @@
                 this.objectMeta = this.normalizeObjectMeta(json.metadata, objectRow);
                 this.renderObjectMeta();
 
-                const data = Array.isArray(json.data) ? json.data : [];
+                const data = this.dedupePredictedTypeDetailRows(Array.isArray(json.data) ? json.data : [], objectRow);
                 this.detailSource = this.normalizeDetailSource(data, json.source);
                 this.renderDetailSource();
                 this.rows = data.map((item) => ({
@@ -1172,6 +1197,27 @@
         setDetailPresetButtonVisible(visible) {
             const button = getContainerEl(".env-detail-preset-btn");
             if (button) button.hidden = !visible;
+        },
+
+        isClassificationSettingsObject(objectRow = this.selectedObject) {
+            return this.normalizePresetKey(objectRow?.OBJECT_TYPE) === "PROCEDURE"
+                && this.normalizePresetObjectName(objectRow?.OBJECT_NAME) === CLASSIFICATION_OBJECT_NAME;
+        },
+
+        dedupePredictedTypeDetailRows(rows, objectRow = this.selectedObject) {
+            if (!this.isClassificationSettingsObject(objectRow)) return rows;
+            const seen = new Set();
+            return rows.filter((row) => {
+                const key = this.normalizePresetKey(row?.ITEM_NAME);
+                if (!key || seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            });
+        },
+
+        updateClassificationSettingsButton() {
+            const button = getContainerEl(".env-classification-settings-btn");
+            if (button) button.hidden = !this.isClassificationSettingsObject();
         },
 
         updateObjectMeta(field, value) {
@@ -1443,6 +1489,326 @@
             return this.normalizePresetKey(value).replace(/\s+/g, "");
         },
 
+        async openClassificationSettings() {
+            if (!this.isClassificationSettingsObject()) return;
+            const layer = getContainerEl("#classificationSettingsLayer-M90001");
+            if (!layer) return;
+            layer.hidden = false;
+            this.enableClassificationSettingsLayerDrag(layer);
+            await this.loadClassificationSettings();
+        },
+
+        closeClassificationSettings() {
+            const layer = getContainerEl("#classificationSettingsLayer-M90001");
+            if (!layer) return;
+            layer.hidden = true;
+            const dialog = layer.querySelector(".env-classification-settings-dialog");
+            if (dialog) {
+                dialog.style.position = "";
+                dialog.style.margin = "";
+                dialog.style.left = "";
+                dialog.style.top = "";
+            }
+        },
+
+        handleClassificationSettingsLayerClick(event) {
+            if (event?.target?.id === "classificationSettingsLayer-M90001") {
+                this.closeClassificationSettings();
+            }
+        },
+
+        enableClassificationSettingsLayerDrag(layer) {
+            const dialog = layer?.querySelector(".env-classification-settings-dialog");
+            const header = dialog?.querySelector(":scope > header");
+            if (!dialog || !header || dialog.dataset.dragBound === "Y") return;
+            dialog.dataset.dragBound = "Y";
+            header.classList.add("is-draggable");
+            header.addEventListener("pointerdown", (event) => {
+                if (event.button !== undefined && event.button !== 0) return;
+                if (event.target.closest("button, a, input, select, textarea")) return;
+                event.preventDefault();
+                const rect = dialog.getBoundingClientRect();
+                const pointerId = event.pointerId;
+                const startX = event.clientX;
+                const startY = event.clientY;
+                const startLeft = rect.left;
+                const startTop = rect.top;
+                dialog.style.position = "fixed";
+                dialog.style.margin = "0";
+                dialog.style.left = `${startLeft}px`;
+                dialog.style.top = `${startTop}px`;
+                header.setPointerCapture?.(pointerId);
+
+                const move = (moveEvent) => {
+                    if (moveEvent.pointerId !== pointerId) return;
+                    const maxLeft = Math.max(8, window.innerWidth - dialog.offsetWidth - 8);
+                    const maxTop = Math.max(8, window.innerHeight - dialog.offsetHeight - 8);
+                    const nextLeft = Math.max(8, Math.min(maxLeft, startLeft + moveEvent.clientX - startX));
+                    const nextTop = Math.max(8, Math.min(maxTop, startTop + moveEvent.clientY - startY));
+                    dialog.style.left = `${nextLeft}px`;
+                    dialog.style.top = `${nextTop}px`;
+                };
+                const end = (endEvent) => {
+                    if (endEvent.pointerId !== pointerId) return;
+                    header.removeEventListener("pointermove", move);
+                    header.removeEventListener("pointerup", end);
+                    header.removeEventListener("pointercancel", end);
+                    if (header.hasPointerCapture?.(pointerId)) header.releasePointerCapture(pointerId);
+                };
+                header.addEventListener("pointermove", move);
+                header.addEventListener("pointerup", end);
+                header.addEventListener("pointercancel", end);
+            });
+        },
+
+        async loadClassificationDefaults() {
+            try {
+                const response = await fetch(`${CLASSIFICATION_PRESET_URL}?v=${Date.now()}`, { cache: "no-store" });
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const preset = await response.json();
+                const categories = Array.isArray(preset?.targetSettingCategories) ? preset.targetSettingCategories : [];
+                const category = categories.find((item) => this.normalizePresetKey(item?.CATEGORY_CODE) === CLASSIFICATION_CATEGORY);
+                this.classificationDefaults = Array.isArray(category?.DEFAULTS)
+                    ? category.DEFAULTS.map((item) => ({ ...item }))
+                    : [];
+                return categories;
+            } catch (error) {
+                console.error("[M90001] classification preset load failed", error);
+                this.classificationDefaults = [];
+                throw error;
+            }
+        },
+
+        async loadClassificationSettings(preferredKey = this.selectedClassificationKey) {
+            this.setClassificationSettingsMessage(getPageMessage(
+                "loadingClassificationSettings",
+                "Loading column type classification settings..."
+            ));
+            try {
+                await this.loadClassificationDefaults();
+                const params = new URLSearchParams({ categoryCode: CLASSIFICATION_CATEGORY });
+                const json = await CommonUtils.request(`${API_BASE_URL}/${CLASSIFICATION_API_CODE}/settings?${params.toString()}`, {
+                    method: "GET",
+                    showLoading: false
+                });
+                const overrides = Array.isArray(json.data) ? json.data : [];
+                this.classificationSettings = this.mergeClassificationSettings(this.classificationDefaults, overrides);
+                const normalizedPreferred = this.normalizePresetKey(preferredKey);
+                this.selectedClassificationKey = this.classificationSettings.some((item) => item.SETTING_KEY === normalizedPreferred)
+                    ? normalizedPreferred
+                    : (this.classificationSettings[0]?.SETTING_KEY || "");
+                this.renderClassificationSettings();
+                this.setClassificationSettingsMessage(getPageMessage(
+                    "classificationSettingsLoaded",
+                    "{count} classification setting(s) loaded.",
+                    { count: this.classificationSettings.length }
+                ));
+            } catch (error) {
+                this.classificationSettings = [];
+                this.selectedClassificationKey = "";
+                this.renderClassificationSettings();
+                this.setClassificationSettingsMessage(
+                    `${getPageMessage("classificationSettingsLoadFailed", "Classification settings could not be loaded.")} ${error.message || ""}`.trim(),
+                    "error"
+                );
+            }
+        },
+
+        mergeClassificationSettings(defaults, overrides) {
+            const rows = new Map();
+            (Array.isArray(defaults) ? defaults : []).forEach((item) => {
+                const key = this.normalizePresetKey(item?.SETTING_KEY);
+                if (!key) return;
+                rows.set(key, {
+                    CATEGORY_CODE: CLASSIFICATION_CATEGORY,
+                    SETTING_KEY: key,
+                    SETTING_VALUE: String(item?.SETTING_VALUE ?? ""),
+                    SETTING_DESC: String(item?.SETTING_DESC ?? ""),
+                    SORT_ORDER: Number(item?.SORT_ORDER || 0),
+                    USE_YN: "Y",
+                    DEFAULT_VALUE: String(item?.SETTING_VALUE ?? ""),
+                    IS_OVERRIDE: false
+                });
+            });
+            (Array.isArray(overrides) ? overrides : []).forEach((item) => {
+                const key = this.normalizePresetKey(item?.SETTING_KEY);
+                if (!key) return;
+                const base = rows.get(key) || {
+                    CATEGORY_CODE: CLASSIFICATION_CATEGORY,
+                    SETTING_KEY: key,
+                    DEFAULT_VALUE: ""
+                };
+                rows.set(key, {
+                    ...base,
+                    SETTING_VALUE: String(item?.SETTING_VALUE ?? ""),
+                    SETTING_DESC: String(item?.SETTING_DESC ?? base.SETTING_DESC ?? ""),
+                    SORT_ORDER: Number(item?.SORT_ORDER ?? base.SORT_ORDER ?? 0),
+                    USE_YN: String(item?.USE_YN || "Y").toUpperCase() === "N" ? "N" : "Y",
+                    IS_OVERRIDE: true
+                });
+            });
+            return Array.from(rows.values()).sort((left, right) => {
+                const sortDiff = Number(left.SORT_ORDER || 0) - Number(right.SORT_ORDER || 0);
+                return sortDiff || left.SETTING_KEY.localeCompare(right.SETTING_KEY);
+            });
+        },
+
+        renderClassificationSettings() {
+            const list = getContainerEl("#classificationSettingsList-M90001");
+            if (list) {
+                list.innerHTML = this.classificationSettings.length
+                    ? this.classificationSettings.map((item) => {
+                        const selected = item.SETTING_KEY === this.selectedClassificationKey ? " is-selected" : "";
+                        const source = item.IS_OVERRIDE
+                            ? getPageMessage("targetDbOverride", "Target DB override")
+                            : getPageMessage("modelDefault", "Model default");
+                        return `
+                            <button type="button" class="env-classification-setting-row${selected}" onclick="M90001.selectClassificationSetting('${this.escapeAttr(item.SETTING_KEY)}')">
+                                <strong>${this.escapeHtml(item.SETTING_KEY)}</strong>
+                                <span>${this.escapeHtml(item.SETTING_VALUE)}</span>
+                                <small>${this.escapeHtml(source)}</small>
+                            </button>
+                        `;
+                    }).join("")
+                    : `<div class="project-empty">${this.escapeHtml(getPageMessage("noClassificationSettings", "No classification settings found."))}</div>`;
+            }
+            this.renderClassificationSettingDetail();
+        },
+
+        selectClassificationSetting(settingKey) {
+            this.selectedClassificationKey = this.normalizePresetKey(settingKey);
+            this.renderClassificationSettings();
+        },
+
+        getSelectedClassificationSetting() {
+            return this.classificationSettings.find((item) => item.SETTING_KEY === this.selectedClassificationKey) || null;
+        },
+
+        renderClassificationSettingDetail() {
+            const item = this.getSelectedClassificationSetting();
+            this.setFieldValue("#classificationSettingKey-M90001", item?.SETTING_KEY || "");
+            this.setFieldValue("#classificationSettingValue-M90001", item?.SETTING_VALUE || "");
+            this.setFieldValue("#classificationSettingDesc-M90001", item?.SETTING_DESC || "");
+            this.setFieldValue("#classificationSettingSort-M90001", item?.SORT_ORDER ?? 0);
+            this.setFieldValue("#classificationSettingUseYn-M90001", item?.USE_YN || "Y");
+            this.setFieldValue(
+                "#classificationSettingSource-M90001",
+                item?.IS_OVERRIDE
+                    ? getPageMessage("targetDbOverride", "Target DB override")
+                    : getPageMessage("modelDefault", "Model default")
+            );
+            const keyField = getContainerEl("#classificationSettingKey-M90001");
+            if (keyField) keyField.readOnly = Boolean(item);
+            const deleteButton = getContainerEl("#deleteClassificationSettingBtn-M90001");
+            if (deleteButton) deleteButton.disabled = !item?.IS_OVERRIDE;
+        },
+
+        newClassificationSetting() {
+            this.selectedClassificationKey = "";
+            this.renderClassificationSettings();
+            const keyField = getContainerEl("#classificationSettingKey-M90001");
+            if (keyField) keyField.readOnly = false;
+            this.setFieldValue("#classificationSettingSource-M90001", getPageMessage("newOverride", "New override"));
+        },
+
+        resetClassificationSetting() {
+            if (this.selectedClassificationKey) {
+                this.renderClassificationSettingDetail();
+            } else {
+                this.newClassificationSetting();
+            }
+        },
+
+        readClassificationSettingPayload() {
+            return {
+                categoryCode: CLASSIFICATION_CATEGORY,
+                settingKey: this.normalizePresetKey(getContainerEl("#classificationSettingKey-M90001")?.value),
+                settingValue: getContainerEl("#classificationSettingValue-M90001")?.value || "",
+                settingDesc: getContainerEl("#classificationSettingDesc-M90001")?.value || "",
+                sortOrder: Number(getContainerEl("#classificationSettingSort-M90001")?.value || 0),
+                useYn: String(getContainerEl("#classificationSettingUseYn-M90001")?.value || "Y").toUpperCase() === "N" ? "N" : "Y"
+            };
+        },
+
+        async saveClassificationSetting() {
+            const payload = this.readClassificationSettingPayload();
+            if (!payload.settingKey) {
+                this.setClassificationSettingsMessage(getPageMessage("classificationKeyRequired", "Setting key is required."), "error");
+                return;
+            }
+            try {
+                await CommonUtils.request(`${API_BASE_URL}/${CLASSIFICATION_API_CODE}/setting/save`, {
+                    method: "POST",
+                    body: payload
+                });
+                this.selectedClassificationKey = payload.settingKey;
+                await this.loadClassificationSettings(payload.settingKey);
+                this.setClassificationSettingsMessage(getPageMessage("classificationOverrideSaved", "Target DB override saved."));
+            } catch (error) {
+                this.setClassificationSettingsMessage(error.message || getPageMessage("classificationOverrideSaveFailed", "Override save failed."), "error");
+            }
+        },
+
+        async deleteClassificationSetting() {
+            const item = this.getSelectedClassificationSetting();
+            if (!item?.IS_OVERRIDE) return;
+            const confirmed = await CommonMessage.confirm(getPageMessage(
+                "confirmDeleteClassificationOverride",
+                'Delete the Target DB override "{settingKey}"? The model default will apply afterward.',
+                { settingKey: item.SETTING_KEY }
+            ));
+            if (!confirmed) return;
+            try {
+                await CommonUtils.request(`${API_BASE_URL}/${CLASSIFICATION_API_CODE}/setting/delete`, {
+                    method: "POST",
+                    body: {
+                        categoryCode: CLASSIFICATION_CATEGORY,
+                        settingKey: item.SETTING_KEY
+                    }
+                });
+                await this.loadClassificationSettings(item.SETTING_KEY);
+                this.setClassificationSettingsMessage(getPageMessage("classificationOverrideDeleted", "Override deleted. The model default now applies."));
+            } catch (error) {
+                this.setClassificationSettingsMessage(error.message || getPageMessage("classificationOverrideDeleteFailed", "Override delete failed."), "error");
+            }
+        },
+
+        async applyClassificationDefaults() {
+            const confirmed = await CommonMessage.confirm(getPageMessage(
+                "confirmApplyClassificationDefaults",
+                "Apply all preset values as Target DB overrides? Existing override values may be overwritten."
+            ), { defaultAction: "cancel" });
+            if (!confirmed) return;
+            try {
+                const response = await fetch(`${CLASSIFICATION_PRESET_URL}?v=${Date.now()}`, { cache: "no-store" });
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const preset = await response.json();
+                const categories = Array.isArray(preset?.targetSettingCategories) ? preset.targetSettingCategories : [];
+                const json = await CommonUtils.request(`${API_BASE_URL}/${CLASSIFICATION_API_CODE}/setting/defaults`, {
+                    method: "POST",
+                    body: { categories }
+                });
+                await this.loadClassificationSettings();
+                this.setClassificationSettingsMessage(getPageMessage(
+                    "classificationDefaultsApplied",
+                    "Preset overrides applied. {created} created and {updated} updated.",
+                    {
+                        created: Number(json.createdCount || 0),
+                        updated: Number(json.updatedCount || 0)
+                    }
+                ));
+            } catch (error) {
+                this.setClassificationSettingsMessage(error.message || getPageMessage("classificationDefaultsApplyFailed", "Preset override apply failed."), "error");
+            }
+        },
+
+        setClassificationSettingsMessage(message, type = "info") {
+            const element = getContainerEl("#classificationSettingsMessage-M90001");
+            if (!element) return;
+            element.textContent = message || "";
+            element.className = type === "error" ? "table-error" : "env-detail-hint";
+        },
+
         async resetVariables() {
             this.rows = this.originalRows.map((row) => ({ ...row }));
             this.selectedRowIndex = this.rows.length > 0 ? 0 : null;
@@ -1629,6 +1995,8 @@
             this.renderObjectMeta();
             this.renderDetailSource();
             this.renderRows();
+            this.updateClassificationSettingsButton();
+            this.closeClassificationSettings();
         },
 
         getExpandIcon(row) {

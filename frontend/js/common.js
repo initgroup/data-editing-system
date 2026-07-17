@@ -384,6 +384,26 @@ const CommonUtils = {
         }
     },
 
+    setRuntimeSettings(settings = null) {
+        if (!settings || typeof settings !== "object" || Array.isArray(settings)) return;
+        sessionStorage.setItem("initRuntimeSettings", JSON.stringify(settings));
+    },
+
+    getRuntimeSetting(settingKey, fallbackValue, minimum = null, maximum = null) {
+        let settings = {};
+        try {
+            settings = JSON.parse(sessionStorage.getItem("initRuntimeSettings") || "{}");
+        } catch (_error) {
+            settings = {};
+        }
+        const parsed = Number(settings?.[String(settingKey || "").trim().toUpperCase()]);
+        let value = Number.isFinite(parsed) ? parsed : Number(fallbackValue);
+        if (!Number.isFinite(value)) value = 0;
+        if (Number.isFinite(Number(minimum))) value = Math.max(Number(minimum), value);
+        if (Number.isFinite(Number(maximum))) value = Math.min(Number(maximum), value);
+        return value;
+    },
+
     isAdminUser() {
         const user = this.getLoginUser();
         return String(user.roleCode || user.ROLE_CODE || user.role || "").toUpperCase() === "ADMIN";

@@ -372,6 +372,7 @@
                     method: "POST",
                     body: payload
                 });
+                CommonUtils.setRuntimeSettings(json.runtimeSettings);
                 const isLanguageSetting = this.isLanguageSetting();
                 this.setSystemMessage(isLanguageSetting
                     ? "Setting saved. Language changes are applied after logout and next login."
@@ -398,6 +399,7 @@
                         settingKey
                     }
                 });
+                CommonUtils.setRuntimeSettings(json.runtimeSettings);
                 this.setSystemMessage(json.message || "Setting deleted.");
                 await this.loadSettings();
                 this.newSetting(false);
@@ -407,23 +409,35 @@
         },
 
         async createDefaultSettings() {
-            if (!(await CommonMessage.confirm("Create or update default settings in the database?", { defaultAction: "cancel" }))) return;
+            const confirmMessage = getMessage(
+                "createDefaultSettingsConfirm",
+                "Create missing settings and update existing settings from the default JSON. Existing custom values may be overwritten. Continue?"
+            );
+            if (!(await CommonMessage.confirm(confirmMessage, { defaultAction: "cancel" }))) return;
             const button = getContainerEl("#createDefaultSettingsBtn-M91002");
             const originalHtml = button?.innerHTML || "";
             if (button) {
                 button.disabled = true;
                 button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
             }
-            this.setSystemMessage("Creating missing default settings...");
+            this.setSystemMessage(getMessage("creatingDefaultSettings", "Applying default settings..."));
             try {
                 const categories = await this.loadDefaultCategories();
                 const json = await CommonUtils.request(`${API_BASE_URL}/${API_CODE}/setting/defaults`, {
                     method: "POST",
                     body: { categories }
                 });
+                CommonUtils.setRuntimeSettings(json.runtimeSettings);
                 const created = Number(json.createdCount || 0);
+                const updated = Number(json.updatedCount || 0);
                 const skipped = Number(json.skippedCount || 0);
-                const message = json.message || `Default settings checked. ${created} created, ${skipped} skipped.`;
+                const message = getMessage(
+                    "defaultSettingsApplied",
+                    "Default settings applied. {created} created, {updated} updated, {skipped} skipped."
+                )
+                    .replace("{created}", String(created))
+                    .replace("{updated}", String(updated))
+                    .replace("{skipped}", String(skipped));
                 this.categories = categories.filter((item) => item.CATEGORY_CODE !== "MY_ACCOUNT");
                 this.selectedCategoryCode = "GENERAL";
                 this.renderCategories();
@@ -433,7 +447,10 @@
                 this.selectFirstSettingOrNew();
                 await window.reloadShellDisplaySettings?.();
             } catch (error) {
-                this.setSystemMessage(error.message || "Default setting save failed.", "error");
+                this.setSystemMessage(
+                    error.message || getMessage("defaultSettingsFailed", "Default setting save failed."),
+                    "error"
+                );
             } finally {
                 if (button) {
                     button.disabled = false;
@@ -674,11 +691,13 @@
             const defaults = {
                 MY_ACCOUNT: "My Account",
                 GENERAL: "System General",
+                M02002_TABLE_FILTER: "Target Table Restrictions",
                 SERVER_RESOURCE_LIMITS: "Server Resource Limits"
             };
             const keys = {
                 MY_ACCOUNT: "categoryMyAccountName",
                 GENERAL: "categoryGeneralName",
+                M02002_TABLE_FILTER: "categoryM02002TableFilterName",
                 SERVER_RESOURCE_LIMITS: "categoryServerResourceLimitsName"
             };
             return getMessage(keys[code], defaults[code] || category?.CATEGORY_NAME || code || "Settings");
@@ -689,11 +708,13 @@
             const defaults = {
                 MY_ACCOUNT: "Manage your login information, email, and password.",
                 GENERAL: "Basic system display settings.",
+                M02002_TABLE_FILTER: "Include and exclude constraints used by the M02002 target table explorer.",
                 SERVER_RESOURCE_LIMITS: "Per-user and Target DB connection requested limits. Effective values cannot exceed the server environment hard caps."
             };
             const keys = {
                 MY_ACCOUNT: "categoryMyAccountDesc",
                 GENERAL: "categoryGeneralDesc",
+                M02002_TABLE_FILTER: "categoryM02002TableFilterDesc",
                 SERVER_RESOURCE_LIMITS: "categoryServerResourceLimitsDesc"
             };
             return getMessage(keys[code], defaults[code] || category?.CATEGORY_DESC || "Manage category key/value settings.");
