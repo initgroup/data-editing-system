@@ -355,7 +355,15 @@ BEGIN
         WHEN v_algorithm_code = 'RANDOM_FOREST' THEN 'ALGO_RANDOM_FOREST'
         ELSE 'ALGO_DECISION_TREE'
     END;
-    v_setlist('PREP_AUTO') := 'ON';
+    -- Decision Tree natively handles numerical/categorical predictors and
+    -- missing values.  On some Target DB releases ADP removes every V2
+    -- profile predictor from this small multi-class data set, leaving only
+    -- TARGET_TYPE_CODE in the model signature.  Keep ADP for Random Forest,
+    -- but feed the declared V2 columns directly to Decision Tree.
+    v_setlist('PREP_AUTO') := CASE
+        WHEN v_algorithm_code = 'DECISION_TREE' THEN 'OFF'
+        ELSE 'ON'
+    END;
 
     /*
        The default Decision Tree termination values (20 records to split and
