@@ -201,15 +201,7 @@ BEGIN
                        AND P."TABLE_NAME" = v_table_name
                        AND P."RUN_SOURCE_TYPE" = v_run_source_type
                        AND (v_run_source_type = 'DATA_WORK' OR P."RUN_ID" = v_run_id)
-                       AND COALESCE(
-                               TRIM(F."TYPE_GROUP_CODE")
-                             , TRIM(P."TYPE_GROUP_CODE")
-                             , CASE
-                                   WHEN COALESCE(TRIM(F."FINAL_PREDICTED_TYPE"), TRIM(P."FINAL_PREDICTED_TYPE"), TRIM(P."MODL_PREDICTED_TYPE"), TRIM(P."BASE_PREDICTED_TYPE")) LIKE '%범주형' THEN 'CATEGORICAL'
-                                   WHEN COALESCE(TRIM(F."FINAL_PREDICTED_TYPE"), TRIM(P."FINAL_PREDICTED_TYPE"), TRIM(P."MODL_PREDICTED_TYPE"), TRIM(P."BASE_PREDICTED_TYPE")) LIKE '%연속형' THEN 'CONTINUOUS'
-                                   ELSE 'OTHER'
-                               END
-                           ) = 'CATEGORICAL'
+                       AND COALESCE(TRIM(F."TYPE_GROUP_CODE"), TRIM(P."TYPE_GROUP_CODE")) = 'CATEGORICAL'
                      GROUP BY P.COLUMN_NAME
                      ORDER BY COLUMN_ID, COLUMN_NAME
                    )
@@ -661,14 +653,7 @@ BEGIN
                  , COLUMN_TYPE
               FROM (
                     SELECT F."COLUMN_NAME" AS COLUMN_NAME
-                         , CASE COALESCE(
-                                    TRIM(F."TYPE_GROUP_CODE")
-                                  , CASE
-                                        WHEN TRIM(F."FINAL_PREDICTED_TYPE") LIKE '%연속형' THEN 'CONTINUOUS'
-                                        WHEN TRIM(F."FINAL_PREDICTED_TYPE") LIKE '%범주형' THEN 'CATEGORICAL'
-                                        ELSE 'OTHER'
-                                    END
-                                )
+                         , CASE TRIM(F."TYPE_GROUP_CODE")
                                WHEN 'CONTINUOUS' THEN 'NUMERIC'
                                WHEN 'CATEGORICAL' THEN 'CATEGORICAL'
                            END AS COLUMN_TYPE
@@ -680,23 +665,9 @@ BEGIN
                        AND C.COLUMN_NAME = F."COLUMN_NAME"
                      WHERE F."OWNER" = v_owner
                        AND F."TABLE_NAME" = v_table_name
-                       AND COALESCE(
-                               TRIM(F."TYPE_GROUP_CODE")
-                             , CASE
-                                   WHEN TRIM(F."FINAL_PREDICTED_TYPE") LIKE '%연속형' THEN 'CONTINUOUS'
-                                   WHEN TRIM(F."FINAL_PREDICTED_TYPE") LIKE '%범주형' THEN 'CATEGORICAL'
-                                   ELSE 'OTHER'
-                               END
-                           ) IN ('CONTINUOUS', 'CATEGORICAL')
+                       AND TRIM(F."TYPE_GROUP_CODE") IN ('CONTINUOUS', 'CATEGORICAL')
                      GROUP BY F."COLUMN_NAME"
-                            , CASE COALESCE(
-                                       TRIM(F."TYPE_GROUP_CODE")
-                                     , CASE
-                                           WHEN TRIM(F."FINAL_PREDICTED_TYPE") LIKE '%연속형' THEN 'CONTINUOUS'
-                                           WHEN TRIM(F."FINAL_PREDICTED_TYPE") LIKE '%범주형' THEN 'CATEGORICAL'
-                                           ELSE 'OTHER'
-                                       END
-                                   )
+                            , CASE TRIM(F."TYPE_GROUP_CODE")
                                   WHEN 'CONTINUOUS' THEN 'NUMERIC'
                                   WHEN 'CATEGORICAL' THEN 'CATEGORICAL'
                               END
@@ -1254,14 +1225,7 @@ BEGIN
                        AND P."TABLE_NAME" = v_table_name
                        AND P."RUN_SOURCE_TYPE" = v_run_source_type
                        AND (v_run_source_type = 'DATA_WORK' OR P."RUN_ID" = v_run_id)
-                       AND COALESCE(
-                               TRIM(F."TYPE_GROUP_CODE")
-                             , CASE
-                                   WHEN TRIM(F."FINAL_PREDICTED_TYPE") LIKE '%연속형' THEN 'CONTINUOUS'
-                                   WHEN TRIM(F."FINAL_PREDICTED_TYPE") LIKE '%범주형' THEN 'CATEGORICAL'
-                                   ELSE 'OTHER'
-                               END
-                           ) = 'CONTINUOUS'
+                       AND TRIM(F."TYPE_GROUP_CODE") = 'CONTINUOUS'
                      GROUP BY P."COLUMN_NAME"
                      ORDER BY COLUMN_ID, COLUMN_NAME
                    )

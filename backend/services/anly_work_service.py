@@ -332,17 +332,11 @@ SELECT COALESCE(P."RUN_SOURCE_TYPE", F."SOURCE_RUN_SOURCE_TYPE") AS "RUN_SOURCE_
      , P."MODL_TYPE_CODE" AS "MODL_TYPE_CODE"
      , COALESCE(F."FINAL_PREDICTED_TYPE", P."FINAL_PREDICTED_TYPE", P."MODL_PREDICTED_TYPE", P."BASE_PREDICTED_TYPE") AS "FINAL_PREDICTED_TYPE"
      , COALESCE(F."FINAL_TYPE_CODE", P."FINAL_TYPE_CODE", P."MODL_TYPE_CODE", P."BASE_TYPE_CODE") AS "FINAL_TYPE_CODE"
-     , COALESCE(
-           F."TYPE_GROUP_CODE"
-         , P."TYPE_GROUP_CODE"
-         , CASE
-               WHEN COALESCE(F."FINAL_PREDICTED_TYPE", P."FINAL_PREDICTED_TYPE", P."MODL_PREDICTED_TYPE", P."BASE_PREDICTED_TYPE") LIKE '%범주형' THEN 'CATEGORICAL'
-               WHEN COALESCE(F."FINAL_PREDICTED_TYPE", P."FINAL_PREDICTED_TYPE", P."MODL_PREDICTED_TYPE", P."BASE_PREDICTED_TYPE") LIKE '%연속형' THEN 'CONTINUOUS'
-               ELSE 'OTHER'
-           END
-       ) AS "TYPE_GROUP_CODE"
+     , COALESCE(F."TYPE_GROUP_CODE", P."TYPE_GROUP_CODE") AS "TYPE_GROUP_CODE"
      , P."FINAL_PREDICTED_TYPE" AS "RUN_FINAL_PREDICTED_TYPE"
      , F."FINAL_PREDICTED_TYPE" AS "MASTER_FINAL_PREDICTED_TYPE"
+     , P."TYPE_GROUP_CODE" AS "RUN_TYPE_GROUP_CODE"
+     , F."TYPE_GROUP_CODE" AS "MASTER_TYPE_GROUP_CODE"
      , CASE
            WHEN F."FINAL_PREDICTED_TYPE" IS NOT NULL THEN 'MASTER_FINAL'
            WHEN P."FINAL_PREDICTED_TYPE" IS NOT NULL THEN 'RUN_FINAL'
@@ -398,9 +392,7 @@ def _predicted_type_compare_expr(column_name: str) -> str:
     return (
         "CASE "
         f"WHEN {value_expr} IS NULL THEN NULL "
-        f"WHEN {value_expr} LIKE '%범주형' THEN '범주형' "
-        f"WHEN {value_expr} LIKE '%연속형' THEN '연속형' "
-        f"ELSE {value_expr} END"
+        f"ELSE \"INIT$_FN_TYPE_GROUP_CODE\"({value_expr}) END"
     )
 
 
@@ -1631,20 +1623,17 @@ def _fetch_predicted_type_summary(
         include_order=False,
     )
     result_object = f"({result_sql})"
-    effective_type_expr = "COALESCE(TRIM(FINAL_PREDICTED_TYPE), TRIM(MODL_PREDICTED_TYPE), TRIM(BASE_PREDICTED_TYPE))"
-    final_type_expr = "TRIM(MASTER_FINAL_PREDICTED_TYPE)"
-    run_type_expr = "COALESCE(TRIM(RUN_FINAL_PREDICTED_TYPE), TRIM(MODL_PREDICTED_TYPE), TRIM(BASE_PREDICTED_TYPE))"
     rule_type_expr = "TRIM(BASE_PREDICTED_TYPE)"
     model_type_expr = "TRIM(MODL_PREDICTED_TYPE)"
     predicted_case_expr = _predicted_type_case_expr()
 
-    def fetch_group_map(type_expr: str) -> dict[str, list[str]]:
+    def fetch_group_map(group_expr: str) -> dict[str, list[str]]:
         cursor.execute(
             "SELECT TYPE_GROUP, COLUMN_NAME "
             "  FROM ("
             "        SELECT CASE "
-            f"                 WHEN {type_expr} LIKE '%범주형' THEN '범주형' "
-            f"                 WHEN {type_expr} LIKE '%연속형' THEN '연속형' "
+            f"                 WHEN {group_expr} = 'CATEGORICAL' THEN '범주형' "
+            f"                 WHEN {group_expr} = 'CONTINUOUS' THEN '연속형' "
             "                 ELSE '기타' "
             "               END AS TYPE_GROUP, "
             "               COLUMN_NAME, "
@@ -1652,8 +1641,8 @@ def _fetch_predicted_type_summary(
             f"          FROM {result_object} "
             "         WHERE COLUMN_NAME IS NOT NULL "
             "         GROUP BY CASE "
-            f"                    WHEN {type_expr} LIKE '%범주형' THEN '범주형' "
-            f"                    WHEN {type_expr} LIKE '%연속형' THEN '연속형' "
+            f"                    WHEN {group_expr} = 'CATEGORICAL' THEN '범주형' "
+            f"                    WHEN {group_expr} = 'CONTINUOUS' THEN '연속형' "
             "                    ELSE '기타' "
             "                  END, COLUMN_NAME "
             "       ) "
@@ -1673,23 +1662,23 @@ def _fetch_predicted_type_summary(
             if columns or key in ("범주형", "연속형")
         ]
 
-    group_map = fetch_group_map(effective_type_expr)
-    final_group_map = fetch_group_map(final_type_expr)
-    run_group_map = fetch_group_map(run_type_expr)
+    group_map = fetch_group_map("TRIM(TYPE_GROUP_CODE)")
+    final_group_map = fetch_group_map("TRIM(MASTER_TYPE_GROUP_CODE)")
+    run_group_map = fetch_group_map("TRIM(RUN_TYPE_GROUP_CODE)")
     prediction_source_groups = [
         {
             "sourceCode": "RULE",
             "sourceLabel": "RULE",
             "sourceColumn": "BASE_PREDICTED_TYPE",
             "description": "규칙 기반 BASE_PREDICTED_TYPE",
-            "groups": to_summary_groups(fetch_group_map(rule_type_expr)),
+            "groups": to_summary_groups(fetch_group_map(f'\"INIT$_FN_TYPE_GROUP_CODE\"({rule_type_expr})')),
         },
         {
             "sourceCode": "MODEL",
             "sourceLabel": "MODEL",
             "sourceColumn": "MODL_PREDICTED_TYPE",
             "description": "모델 기반 MODL_PREDICTED_TYPE",
-            "groups": to_summary_groups(fetch_group_map(model_type_expr)),
+            "groups": to_summary_groups(fetch_group_map(f'\"INIT$_FN_TYPE_GROUP_CODE\"({model_type_expr})')),
         },
         {
             "sourceCode": "FINAL",

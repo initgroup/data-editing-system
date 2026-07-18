@@ -118,6 +118,13 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_TYPE_MODEL_TRAIN" (
     v_train_class_count    NUMBER;
     v_min_class_count      NUMBER;
     v_unseen_class_count   NUMBER;
+    v_score_row_count      NUMBER;
+    v_prediction_count     NUMBER;
+    v_model_attribute_count NUMBER;
+    v_model_predictor_count NUMBER;
+    v_model_target_count    NUMBER;
+    v_model_target_name     VARCHAR2(128);
+    v_model_target_value_count NUMBER;
     v_eligible_query       VARCHAR2(32767);
     v_feature_projection   VARCHAR2(32767);
     v_data_query           VARCHAR2(32767);
@@ -360,6 +367,79 @@ BEGIN
     );
     v_model_created := TRUE;
 
+    SELECT COUNT(*)
+         , SUM(CASE WHEN "TARGET" = 'NO' THEN 1 ELSE 0 END)
+         , SUM(CASE WHEN "TARGET" = 'YES' THEN 1 ELSE 0 END)
+         , MAX(CASE WHEN "TARGET" = 'YES' THEN "ATTRIBUTE_NAME" END)
+      INTO v_model_attribute_count
+         , v_model_predictor_count
+         , v_model_target_count
+         , v_model_target_name
+      FROM USER_MINING_MODEL_ATTRIBUTES
+     WHERE "MODEL_NAME" = v_candidate_model_name;
+
+    v_sql := 'SELECT COUNT(*) FROM "DM$VT' || v_candidate_model_name || '"';
+    EXECUTE IMMEDIATE v_sql INTO v_model_target_value_count;
+
+    IF NVL(v_model_predictor_count, 0) = 0
+       OR NVL(v_model_target_count, 0) <> 1
+       OR v_model_target_name <> 'TARGET_TYPE_CODE'
+       OR NVL(v_model_target_value_count, 0) < 2 THEN
+        RAISE_APPLICATION_ERROR(
+            -20726,
+            'Candidate model has an invalid classification signature: '
+            || v_candidate_model_name
+            || ' (attributes=' || NVL(v_model_attribute_count, 0)
+            || ', predictors=' || NVL(v_model_predictor_count, 0)
+            || ', targets=' || NVL(v_model_target_count, 0)
+            || ', target=' || NVL(v_model_target_name, '-')
+            || ', target values=' || NVL(v_model_target_value_count, 0) || ').'
+        );
+    END IF;
+
+    /*
+       PREDICTION_SET is the classification-specific scoring interface.  Pick
+       its highest-probability class explicitly instead of relying on a scalar
+       PREDICTION result that some Target DB releases returned as NULL for an
+       otherwise valid multi-class Decision Tree model.
+    */
+    v_score_expr := '(SELECT MAX(PS.PREDICTION) KEEP ('
+        || 'DENSE_RANK FIRST ORDER BY PS.PROBABILITY DESC NULLS LAST, PS.PREDICTION) '
+        || 'FROM TABLE(PREDICTION_SET(' || v_candidate_model_name || ' USING '
+        || '"DATA_TYPE" AS "DATA_TYPE"'
+        || ', "TOTAL_ROWS" AS "TOTAL_ROWS"'
+        || ', "NON_NULL_ROWS" AS "NON_NULL_ROWS"'
+        || ', "SAMPLE_ROWS" AS "SAMPLE_ROWS"'
+        || ', "SAMPLE_NOT_NULL_ROWS" AS "SAMPLE_NOT_NULL_ROWS"'
+        || ', "NUM_DISTINCT" AS "NUM_DISTINCT"'
+        || ', "SAMPLE_DISTINCT" AS "SAMPLE_DISTINCT"'
+        || ', "DIST_VAL_RT" AS "DIST_VAL_RT"'
+        || ', "NULL_RATIO" AS "NULL_RATIO"'
+        || ', "LOG_DATA_TYPE" AS "LOG_DATA_TYPE"'
+        || ', "ENTROPY" AS "ENTROPY"'
+        || ', "NORM_ENTROPY" AS "NORM_ENTROPY"'
+        || ', "NUMERIC_RATIO" AS "NUMERIC_RATIO"'
+        || ', "INTEGER_RATIO" AS "INTEGER_RATIO"'
+        || ', "MIN_NUM_VALUE" AS "MIN_NUM_VALUE"'
+        || ', "MAX_NUM_VALUE" AS "MAX_NUM_VALUE"'
+        || ', "AVG_TEXT_LENGTH" AS "AVG_TEXT_LENGTH"'
+        || ', "MAX_TEXT_LENGTH" AS "MAX_TEXT_LENGTH")) PS)';
+
+    v_sql := 'SELECT COUNT(*), COUNT(PREDICTED_TYPE) '
+        || 'FROM (SELECT ' || v_score_expr || ' PREDICTED_TYPE FROM (' || v_data_query || '))';
+    EXECUTE IMMEDIATE v_sql INTO v_score_row_count, v_prediction_count;
+
+    IF v_score_row_count = 0 OR v_prediction_count = 0 THEN
+        RAISE_APPLICATION_ERROR(
+            -20726,
+            'Candidate model returned no predictions for its training data: '
+            || v_candidate_model_name
+            || ' (training rows=' || NVL(v_score_row_count, 0)
+            || ', predictors=' || NVL(v_model_predictor_count, 0)
+            || ', target values=' || NVL(v_model_target_value_count, 0) || ').'
+        );
+    END IF;
+
     INSERT INTO "INIT$_TB_OML_MODEL_REGISTRY" (
         "MODEL_KEY", "VERSION_NO", "PHYSICAL_MODEL_NAME", "ALGORITHM_CODE", "FEATURE_VERSION",
         "LABEL_VERSION", "STATUS_CODE", "TRAIN_RUN_ID", "TRAIN_ROW_COUNT", "VALID_ROW_COUNT",
@@ -369,15 +449,6 @@ BEGIN
         v_label_version, 'CANDIDATE', p_train_run_id, v_train_rows, v_holdout_rows,
         0, v_requested_by, SYSTIMESTAMP
     ) RETURNING "MODEL_VERSION_ID" INTO v_model_version_id;
-
-    v_score_expr := 'PREDICTION(' || v_candidate_model_name || ' USING '
-        || '"DATA_TYPE" AS "DATA_TYPE", "TOTAL_ROWS" AS "TOTAL_ROWS", "NON_NULL_ROWS" AS "NON_NULL_ROWS", '
-        || '"SAMPLE_ROWS" AS "SAMPLE_ROWS", "SAMPLE_NOT_NULL_ROWS" AS "SAMPLE_NOT_NULL_ROWS", '
-        || '"NUM_DISTINCT" AS "NUM_DISTINCT", "SAMPLE_DISTINCT" AS "SAMPLE_DISTINCT", "DIST_VAL_RT" AS "DIST_VAL_RT", '
-        || '"NULL_RATIO" AS "NULL_RATIO", "LOG_DATA_TYPE" AS "LOG_DATA_TYPE", "ENTROPY" AS "ENTROPY", '
-        || '"NORM_ENTROPY" AS "NORM_ENTROPY", "NUMERIC_RATIO" AS "NUMERIC_RATIO", "INTEGER_RATIO" AS "INTEGER_RATIO", '
-        || '"MIN_NUM_VALUE" AS "MIN_NUM_VALUE", "MAX_NUM_VALUE" AS "MAX_NUM_VALUE", '
-        || '"AVG_TEXT_LENGTH" AS "AVG_TEXT_LENGTH", "MAX_TEXT_LENGTH" AS "MAX_TEXT_LENGTH")';
 
     v_sql := 'INSERT INTO "INIT$_TB_OML_MODEL_METRIC" '
         || '("MODEL_VERSION_ID", "SPLIT_CODE", "METRIC_NAME", "METRIC_VALUE", "SUPPORT_COUNT") '
@@ -908,6 +979,40 @@ BEGIN
         WHEN 'CONTINUOUS' THEN '연속형'
         ELSE '기타'
     END;
+END;
+/
+
+BEGIN
+    UPDATE "INIT$_TB_COLTYPE_RESULT"
+       SET "FINAL_TYPE_CODE" = COALESCE(
+               "FINAL_TYPE_CODE"
+             , "INIT$_FN_TYPE_CODE"(
+                   COALESCE("FINAL_PREDICTED_TYPE", "MODL_PREDICTED_TYPE", "BASE_PREDICTED_TYPE")
+               )
+           )
+         , "TYPE_GROUP_CODE" = "INIT$_FN_TYPE_GROUP_CODE"(
+               COALESCE(
+                   "FINAL_TYPE_CODE"
+                 , "INIT$_FN_TYPE_CODE"(
+                       COALESCE("FINAL_PREDICTED_TYPE", "MODL_PREDICTED_TYPE", "BASE_PREDICTED_TYPE")
+                   )
+               )
+           )
+     WHERE "TYPE_GROUP_CODE" IS NULL
+       AND COALESCE("FINAL_PREDICTED_TYPE", "MODL_PREDICTED_TYPE", "BASE_PREDICTED_TYPE") IS NOT NULL;
+
+    UPDATE "INIT$_TB_COLTYPE_FINAL"
+       SET "FINAL_TYPE_CODE" = COALESCE(
+               "FINAL_TYPE_CODE"
+             , "INIT$_FN_TYPE_CODE"("FINAL_PREDICTED_TYPE")
+           )
+         , "TYPE_GROUP_CODE" = "INIT$_FN_TYPE_GROUP_CODE"(
+               COALESCE("FINAL_TYPE_CODE", "INIT$_FN_TYPE_CODE"("FINAL_PREDICTED_TYPE"))
+           )
+     WHERE "TYPE_GROUP_CODE" IS NULL
+       AND "FINAL_PREDICTED_TYPE" IS NOT NULL;
+
+    COMMIT;
 END;
 /
 
@@ -1455,8 +1560,8 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_PREDICTED_TYPE" (
     v_update_rule_sql         CLOB := '';
     v_update_model_sql        CLOB := '';
     v_update_final_sql        CLOB := '';
-    v_model_prediction_expr   VARCHAR2(1000);
-    v_model_confidence_expr   VARCHAR2(1000);
+    v_model_prediction_expr   VARCHAR2(4000);
+    v_model_confidence_expr   VARCHAR2(4000);
     v_insert_base_type_expr   VARCHAR2(1000);
     v_insert_base_reason_expr VARCHAR2(1000);
     v_insert_model_expr       VARCHAR2(1000);
@@ -1467,6 +1572,7 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_PREDICTED_TYPE" (
     v_run_source_type         VARCHAR2(30);
     v_run_id                  NUMBER;
     v_predicted_rowcount      NUMBER := 0;
+    v_model_predicted_count   NUMBER := 0;
     v_final_rowcount          NUMBER := 0;
     v_model_version_id        NUMBER;
     v_model_version           NUMBER;
@@ -1602,8 +1708,50 @@ BEGIN
         T."MODEL_VERSION" = S."MODEL_VERSION",
         T."MODEL_CONFIDENCE" = S."MODEL_CONFIDENCE",
 ]';
-        v_model_prediction_expr := 'PREDICTION(' || v_scoring_model_name || ' USING *)';
-        v_model_confidence_expr := 'PREDICTION_PROBABILITY(' || v_scoring_model_name || ' USING *)';
+        -- Use the exact predictor names registered by
+        -- INIT$_SP_TYPE_MODEL_TRAIN. Explicit mapping avoids differences in
+        -- wildcard expansion across nested dynamic-query projections.
+        v_model_prediction_expr := '(SELECT MAX(PS.PREDICTION) KEEP ('
+            || 'DENSE_RANK FIRST ORDER BY PS.PROBABILITY DESC NULLS LAST, PS.PREDICTION) '
+            || 'FROM TABLE(PREDICTION_SET(' || v_scoring_model_name || ' USING '
+            || 'I."DATA_TYPE" AS "DATA_TYPE"'
+            || ', I."TOTAL_ROWS" AS "TOTAL_ROWS"'
+            || ', I."NON_NULL_ROWS" AS "NON_NULL_ROWS"'
+            || ', I."SAMPLE_ROWS" AS "SAMPLE_ROWS"'
+            || ', I."SAMPLE_NOT_NULL_ROWS" AS "SAMPLE_NOT_NULL_ROWS"'
+            || ', I."NUM_DISTINCT" AS "NUM_DISTINCT"'
+            || ', I."SAMPLE_DISTINCT" AS "SAMPLE_DISTINCT"'
+            || ', I."DIST_VAL_RT" AS "DIST_VAL_RT"'
+            || ', I."NULL_RATIO" AS "NULL_RATIO"'
+            || ', I."LOG_DATA_TYPE" AS "LOG_DATA_TYPE"'
+            || ', I."ENTROPY" AS "ENTROPY"'
+            || ', I."NORM_ENTROPY" AS "NORM_ENTROPY"'
+            || ', I."NUMERIC_RATIO" AS "NUMERIC_RATIO"'
+            || ', I."INTEGER_RATIO" AS "INTEGER_RATIO"'
+            || ', I."MIN_NUM_VALUE" AS "MIN_NUM_VALUE"'
+            || ', I."MAX_NUM_VALUE" AS "MAX_NUM_VALUE"'
+            || ', I."AVG_TEXT_LENGTH" AS "AVG_TEXT_LENGTH"'
+            || ', I."MAX_TEXT_LENGTH" AS "MAX_TEXT_LENGTH")) PS)';
+        v_model_confidence_expr := '(SELECT MAX(PS.PROBABILITY) '
+            || 'FROM TABLE(PREDICTION_SET(' || v_scoring_model_name || ' USING '
+            || 'I."DATA_TYPE" AS "DATA_TYPE"'
+            || ', I."TOTAL_ROWS" AS "TOTAL_ROWS"'
+            || ', I."NON_NULL_ROWS" AS "NON_NULL_ROWS"'
+            || ', I."SAMPLE_ROWS" AS "SAMPLE_ROWS"'
+            || ', I."SAMPLE_NOT_NULL_ROWS" AS "SAMPLE_NOT_NULL_ROWS"'
+            || ', I."NUM_DISTINCT" AS "NUM_DISTINCT"'
+            || ', I."SAMPLE_DISTINCT" AS "SAMPLE_DISTINCT"'
+            || ', I."DIST_VAL_RT" AS "DIST_VAL_RT"'
+            || ', I."NULL_RATIO" AS "NULL_RATIO"'
+            || ', I."LOG_DATA_TYPE" AS "LOG_DATA_TYPE"'
+            || ', I."ENTROPY" AS "ENTROPY"'
+            || ', I."NORM_ENTROPY" AS "NORM_ENTROPY"'
+            || ', I."NUMERIC_RATIO" AS "NUMERIC_RATIO"'
+            || ', I."INTEGER_RATIO" AS "INTEGER_RATIO"'
+            || ', I."MIN_NUM_VALUE" AS "MIN_NUM_VALUE"'
+            || ', I."MAX_NUM_VALUE" AS "MAX_NUM_VALUE"'
+            || ', I."AVG_TEXT_LENGTH" AS "AVG_TEXT_LENGTH"'
+            || ', I."MAX_TEXT_LENGTH" AS "MAX_TEXT_LENGTH")) PS)';
         v_insert_model_expr := 'S."MODL_PREDICTED_TYPE"';
     ELSE
         v_model_prediction_expr := 'CAST(NULL AS VARCHAR2(4000))';
@@ -1880,11 +2028,45 @@ USING (
                        MAX_TEXT_LENGTH            NUMBER PATH 'MAX_TEXT_LENGTH'
                ) X
     ),
-    SCORE AS (
-        SELECT /*+ NO_MERGE */ P.*,
+    SCORE_INPUT AS (
+        SELECT /*+ NO_MERGE */
+               CAST(P.OWNER || '|' || P.TABLE_NAME || '|' || P.COLUMN_NAME AS VARCHAR2(4000)) AS CASE_ID,
+               P.DATA_TYPE,
+               P.TOTAL_ROWS,
+               P.NON_NULL_ROWS,
+               P.SAMPLE_ROWS,
+               P.SAMPLE_NOT_NULL_COUNT AS SAMPLE_NOT_NULL_ROWS,
+               P.NUM_DISTINCT,
+               P.SAMPLE_DISTINCT,
+               P.DIST_VAL_RT,
+               P.NULL_RATIO,
+               P.LOG_DATA_TYPE,
+               P.ENTROPY,
+               P.NORM_ENTROPY,
+               P.NUMERIC_RATIO,
+               P.INTEGER_RATIO,
+               P.MIN_NUM_VALUE,
+               P.MAX_NUM_VALUE,
+               P.AVG_TEXT_LENGTH,
+               P.MAX_TEXT_LENGTH
+          FROM PROFILE P
+    ),
+    MODEL_SCORE AS (
+        SELECT /*+ NO_MERGE */ I.CASE_ID,
                ~' || v_model_prediction_expr || q'~ AS MODEL_PREDICTION_VALUE,
                ~' || v_model_confidence_expr || q'~ AS MODEL_CONFIDENCE
+          FROM SCORE_INPUT I
+    ),
+    SCORE AS (
+        SELECT /*+ NO_MERGE */ P.*,
+               M.MODEL_PREDICTION_VALUE,
+               M.MODEL_CONFIDENCE
           FROM PROFILE P
+          JOIN MODEL_SCORE M
+            ON M.CASE_ID = CAST(
+                   P.OWNER || '|' || P.TABLE_NAME || '|' || P.COLUMN_NAME
+                   AS VARCHAR2(4000)
+               )
     )
     SELECT ~' || sql_literal(v_run_source_type) || q'~ AS "RUN_SOURCE_TYPE",
            ~' || TO_CHAR(v_run_id, 'TM9', 'NLS_NUMERIC_CHARACTERS=.,') || q'~ AS "RUN_ID",
@@ -2074,6 +2256,39 @@ WHEN NOT MATCHED THEN INSERT (
     EXECUTE IMMEDIATE v_sql;
     v_predicted_rowcount := SQL%ROWCOUNT;
 
+    IF v_use_model THEN
+        SELECT COUNT(*)
+          INTO v_model_predicted_count
+          FROM "INIT$_TB_COLTYPE_RESULT"
+         WHERE "RUN_SOURCE_TYPE" = v_run_source_type
+           AND "RUN_ID" = v_run_id
+           AND "OWNER" = v_owner
+           AND "TABLE_NAME" = v_table_name
+           AND "MODEL_NAME" = v_model_name
+           AND "MODL_TYPE_CODE" IS NOT NULL;
+
+        IF v_model_predicted_count = 0 THEN
+            IF v_auto_mode THEN
+                -- An unusable active model must not stop the unattended
+                -- four-stage run. FINAL_BOTH already selects BASE when the
+                -- model value is NULL, so keep the attempted model metadata
+                -- for audit and classify this run as a rule fallback.
+                v_auto_label_source := 'AUTO_RULE';
+                DBMS_OUTPUT.PUT_LINE(
+                    '[WARN] Active COLUMN_TYPE model returned no predictions: '
+                    || v_model_name
+                    || '. AUTO continued with rule predictions. Train and activate a new candidate in M90003.'
+                );
+            ELSE
+                RAISE_APPLICATION_ERROR(
+                    -20005,
+                    'Active COLUMN_TYPE model returned no predictions: ' || v_model_name
+                    || '. Train and activate a new candidate in M90003. Recompiling the scoring procedure does not retrain this physical model.'
+                );
+            END IF;
+        END IF;
+    END IF;
+
     MERGE /*+ NO_PARALLEL */ INTO "INIT$_TB_COLTYPE_PROFILE" T
     USING (
         SELECT "RUN_SOURCE_TYPE"
@@ -2199,19 +2414,41 @@ WHEN NOT MATCHED THEN INSERT (
             , T."SOURCE_MODEL_NAME" = S."MODEL_NAME"
             , T."BASE_PREDICTED_TYPE" = S."BASE_PREDICTED_TYPE"
             , T."MODL_PREDICTED_TYPE" = S."MODL_PREDICTED_TYPE"
-            , T."FINAL_PREDICTED_TYPE" = S."FINAL_PREDICTED_TYPE"
-            , T."FINAL_TYPE_CODE" = S."FINAL_TYPE_CODE"
-            , T."TYPE_GROUP_CODE" = S."TYPE_GROUP_CODE"
-            , T."LABEL_SOURCE" = v_auto_label_source
-            , T."CONFIRMED_YN" = 'N'
             , T."MODEL_VERSION_ID" = S."MODEL_VERSION_ID"
             , T."MODEL_VERSION" = S."MODEL_VERSION"
             , T."MODEL_CONFIDENCE" = S."MODEL_CONFIDENCE"
-            , T."FINAL_REASON" = S."FINAL_REASON"
-            , T."FINAL_UPDATE_DT" = SYSDATE
-            , T."FINAL_UPDATE_USER" = SYS_CONTEXT('USERENV', 'SESSION_USER')
-        WHERE NVL(T."CONFIRMED_YN", 'N') = 'N'
-          AND T."LABEL_SOURCE" IN ('AUTO_RULE', 'AUTO_MODEL', 'AUTO_BOTH', 'LEGACY_UNKNOWN')
+            , T."FINAL_PREDICTED_TYPE" = CASE
+                  WHEN NVL(T."CONFIRMED_YN", 'N') = 'Y' THEN T."FINAL_PREDICTED_TYPE"
+                  ELSE S."FINAL_PREDICTED_TYPE"
+              END
+            , T."FINAL_TYPE_CODE" = CASE
+                  WHEN NVL(T."CONFIRMED_YN", 'N') = 'Y' THEN T."FINAL_TYPE_CODE"
+                  ELSE S."FINAL_TYPE_CODE"
+              END
+            , T."TYPE_GROUP_CODE" = CASE
+                  WHEN NVL(T."CONFIRMED_YN", 'N') = 'Y' THEN T."TYPE_GROUP_CODE"
+                  ELSE S."TYPE_GROUP_CODE"
+              END
+            , T."LABEL_SOURCE" = CASE
+                  WHEN NVL(T."CONFIRMED_YN", 'N') = 'Y' THEN T."LABEL_SOURCE"
+                  ELSE v_auto_label_source
+              END
+            , T."CONFIRMED_YN" = CASE
+                  WHEN NVL(T."CONFIRMED_YN", 'N') = 'Y' THEN T."CONFIRMED_YN"
+                  ELSE 'N'
+              END
+            , T."FINAL_REASON" = CASE
+                  WHEN NVL(T."CONFIRMED_YN", 'N') = 'Y' THEN T."FINAL_REASON"
+                  ELSE S."FINAL_REASON"
+              END
+            , T."FINAL_UPDATE_DT" = CASE
+                  WHEN NVL(T."CONFIRMED_YN", 'N') = 'Y' THEN T."FINAL_UPDATE_DT"
+                  ELSE SYSDATE
+              END
+            , T."FINAL_UPDATE_USER" = CASE
+                  WHEN NVL(T."CONFIRMED_YN", 'N') = 'Y' THEN T."FINAL_UPDATE_USER"
+                  ELSE SYS_CONTEXT('USERENV', 'SESSION_USER')
+              END
      WHEN NOT MATCHED THEN INSERT (
             "OWNER"
           , "TABLE_NAME"
@@ -2320,7 +2557,8 @@ WHEN NOT MATCHED THEN INSERT (
     DBMS_OUTPUT.PUT_LINE('[OK] INIT$_SP_PREDICTED_TYPE loaded '
         || v_predicted_rowcount || ' column prediction rows and merged '
         || v_final_rowcount || ' final rows for '
-        || v_owner || '.' || v_table_name || ' using ' || v_method || ' / ' || v_model_name);
+        || v_owner || '.' || v_table_name || ' using ' || v_method || ' / ' || v_model_name
+        || '; model predictions ' || v_model_predicted_count);
 EXCEPTION
     WHEN OTHERS THEN
         ROLLBACK;

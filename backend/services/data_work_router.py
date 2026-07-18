@@ -1449,6 +1449,7 @@ def create_data_work_router(
                 job,
                 runtime_bind_values or {},
                 data_run_id,
+                executable_script.get("text") or "",
             )
             if not update_saved_job:
                 draft_name = job.get("JOB_NAME") or f"Job #{profile_job_id}"
@@ -1528,13 +1529,20 @@ def create_data_work_router(
             cursor.close()
 
 
-    def is_column_type_prediction_job(job: Dict[str, Any]) -> bool:
-        object_name = str(
-            job.get("EXEC_OBJECT_NAME")
-            or job.get("execObjectName")
-            or ""
-        ).strip().upper()
-        return object_name == "INIT$_SP_PREDICTED_TYPE"
+    def is_column_type_prediction_job(
+        job: Dict[str, Any],
+        executable_script_text: str = "",
+    ) -> bool:
+        object_names = {
+            str(job.get("EXEC_OBJECT_NAME") or "").strip().upper(),
+            str(job.get("execObjectName") or "").strip().upper(),
+        }
+        if "INIT$_SP_PREDICTED_TYPE" in object_names:
+            return True
+        return bool(re.search(
+            r'(?i)(?:(?:"[^"\r\n]+"|[A-Z][A-Z0-9_$#]*)\s*\.\s*)?"?INIT\$_SP_PREDICTED_TYPE"?\s*\(',
+            executable_script_text or "",
+        ))
 
 
     def append_coltype_model_execution_log(
@@ -1543,9 +1551,10 @@ def create_data_work_router(
         job: Dict[str, Any],
         runtime_bind_values: Optional[Dict[str, Any]] = None,
         run_id: Optional[int] = None,
+        executable_script_text: str = "",
     ) -> str:
         """Append the physical OML model used by M03001 to the run history message."""
-        if not is_column_type_prediction_job(job):
+        if not is_column_type_prediction_job(job, executable_script_text):
             return message
 
         system_values = build_system_bind_values(job, run_id)

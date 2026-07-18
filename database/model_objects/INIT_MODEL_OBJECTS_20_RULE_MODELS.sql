@@ -153,14 +153,7 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_APRIORI_ASSOC_MODEL" (
                    AND P."TABLE_NAME" = v_target_table
                    AND P."RUN_SOURCE_TYPE" = v_run_source_type
                    AND (v_run_source_type = 'DATA_WORK' OR P."RUN_ID" = v_run_id)
-                   AND (
-                        COALESCE(F."TYPE_GROUP_CODE", P."TYPE_GROUP_CODE") = 'CATEGORICAL'
-                        OR (
-                            F."TYPE_GROUP_CODE" IS NULL
-                            AND P."TYPE_GROUP_CODE" IS NULL
-                            AND COALESCE(TRIM(F."FINAL_PREDICTED_TYPE"), TRIM(P."FINAL_PREDICTED_TYPE"), TRIM(P."MODL_PREDICTED_TYPE"), TRIM(P."BASE_PREDICTED_TYPE")) LIKE '%범주형'
-                        )
-                   )
+                   AND COALESCE(F."TYPE_GROUP_CODE", P."TYPE_GROUP_CODE") = 'CATEGORICAL'
                  GROUP BY P."COLUMN_NAME"
             )
             SELECT C."COLUMN_NAME"
@@ -196,14 +189,7 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_APRIORI_ASSOC_MODEL" (
                        AND P."TABLE_NAME" = v_target_table
                        AND P."RUN_SOURCE_TYPE" = v_run_source_type
                        AND (v_run_source_type = 'DATA_WORK' OR P."RUN_ID" = v_run_id)
-                       AND (
-                            COALESCE(F."TYPE_GROUP_CODE", P."TYPE_GROUP_CODE") = 'CATEGORICAL'
-                            OR (
-                                F."TYPE_GROUP_CODE" IS NULL
-                                AND P."TYPE_GROUP_CODE" IS NULL
-                                AND COALESCE(TRIM(F."FINAL_PREDICTED_TYPE"), TRIM(P."FINAL_PREDICTED_TYPE"), TRIM(P."MODL_PREDICTED_TYPE"), TRIM(P."BASE_PREDICTED_TYPE")) LIKE '%범주형'
-                            )
-                       )
+                       AND COALESCE(F."TYPE_GROUP_CODE", P."TYPE_GROUP_CODE") = 'CATEGORICAL'
                      GROUP BY P."COLUMN_NAME"
                      ORDER BY COLUMN_ID, "COLUMN_NAME"
                    )
@@ -243,14 +229,7 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_APRIORI_ASSOC_MODEL" (
            AND P."TABLE_NAME" = v_target_table
            AND P."RUN_SOURCE_TYPE" = v_run_source_type
            AND (v_run_source_type = 'DATA_WORK' OR P."RUN_ID" = v_run_id)
-           AND (
-                COALESCE(F."TYPE_GROUP_CODE", P."TYPE_GROUP_CODE") = 'CATEGORICAL'
-                OR (
-                    F."TYPE_GROUP_CODE" IS NULL
-                    AND P."TYPE_GROUP_CODE" IS NULL
-                    AND COALESCE(TRIM(F."FINAL_PREDICTED_TYPE"), TRIM(P."FINAL_PREDICTED_TYPE"), TRIM(P."MODL_PREDICTED_TYPE"), TRIM(P."BASE_PREDICTED_TYPE")) LIKE '%범주형'
-                )
-           );
+           AND COALESCE(F."TYPE_GROUP_CODE", P."TYPE_GROUP_CODE") = 'CATEGORICAL';
 
         SELECT COUNT(*)
           INTO v_corr_pair_count
@@ -320,14 +299,7 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_APRIORI_ASSOC_MODEL" (
                        AND P."TABLE_NAME" = v_target_table
                        AND P."RUN_SOURCE_TYPE" = v_run_source_type
                        AND (v_run_source_type = 'DATA_WORK' OR P."RUN_ID" = v_run_id)
-                       AND (
-                            COALESCE(F."TYPE_GROUP_CODE", P."TYPE_GROUP_CODE") = 'CATEGORICAL'
-                            OR (
-                                F."TYPE_GROUP_CODE" IS NULL
-                                AND P."TYPE_GROUP_CODE" IS NULL
-                                AND COALESCE(TRIM(F."FINAL_PREDICTED_TYPE"), TRIM(P."FINAL_PREDICTED_TYPE"), TRIM(P."MODL_PREDICTED_TYPE"), TRIM(P."BASE_PREDICTED_TYPE")) LIKE '%범주형'
-                            )
-                       )
+                       AND COALESCE(F."TYPE_GROUP_CODE", P."TYPE_GROUP_CODE") = 'CATEGORICAL'
                 )
                 SELECT C."COLUMN_NAME"
                   FROM CATEGORICAL_COLS C
