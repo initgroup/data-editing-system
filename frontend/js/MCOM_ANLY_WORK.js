@@ -152,6 +152,8 @@
         FEATURE_RESPONSE: "FEATURE_RESPONSE",
         SENSITIVITY: "SENSITIVITY"
     });
+    const RELATION_NETWORK_WHEEL_ZOOM_IN_FACTOR = 1.22;
+    const RELATION_NETWORK_WHEEL_ZOOM_OUT_FACTOR = 1 / RELATION_NETWORK_WHEEL_ZOOM_IN_FACTOR;
 
     const page = {
         runs: [],
@@ -174,6 +176,14 @@
         relationNetworkPairFilter: { clusterId: "", colA: "", colB: "" },
         relationNetworkGraphClusterIds: [],
         relationNetworkGraphVisibleClusters: null,
+        relationNetworkGraphData: null,
+        relationNetworkClusterBackdropData: [],
+        relationNetworkCy: null,
+        relationNetworkSelectedNodeId: "",
+        relationNetworkSelectedEdgeId: "",
+        relationNetworkWheelZoomEnabled: true,
+        relationNetworkEdgeFilter: { scope: "ALL", minWeightPercent: 0, aggregateClusters: false },
+        relationNetworkPinnedNodeIds: new Set(),
         lassoSummaryFilter: { direction: "ALL", targetColumn: "" },
         lassoPairFilter: { targetColumn: "", featureName: "" },
         predictedTypeFilter: "ALL",
@@ -245,6 +255,9 @@
             this.relationPairFilter = { colA: "", colB: "" };
             this.relationNetworkClusterFilter = "ALL";
             this.relationNetworkPairFilter = { clusterId: "", colA: "", colB: "" };
+            this.relationNetworkEdgeFilter = { scope: "ALL", minWeightPercent: 0, aggregateClusters: false };
+            this.relationNetworkWheelZoomEnabled = true;
+            this.relationNetworkPinnedNodeIds = new Set();
             this.lassoSummaryFilter = { direction: "ALL", targetColumn: "" };
             this.lassoPairFilter = { targetColumn: "", featureName: "" };
             this.predictedTypeFilter = "ALL";
@@ -4567,7 +4580,8 @@
                 .slice(0, 120);
             const nodeNames = new Set(nodes.map((node) => node.name));
             const edges = rawEdges
-                .map((edge) => ({
+                .map((edge, index) => ({
+                    id: `edge-${index + 1}`,
                     source: String(edge.COL_A || "").trim(),
                     target: String(edge.COL_B || "").trim(),
                     clusterId: this.getRelationClusterId(edge.CLUSTER_ID),
@@ -4692,7 +4706,7 @@
             return positions;
         },
 
-        renderRelationNetworkGraphSvg(summary = {}, graphInput = null) {
+        renderRelationNetworkGraphLegacySvg(summary = {}, graphInput = null) {
             const graph = graphInput || this.buildRelationNetworkGraphData(summary);
             if (!graph.nodes.length) {
                 return `<div class="table-empty">${this.escapeHtml(getText("No network nodes to display."))}</div>`;
@@ -4826,6 +4840,7 @@
                     <div class="anly-work-network-graph-tools">
                         <button type="button" onclick="${PAGE_CODE}.zoomRelationNetworkGraph(1.16)" title="${this.escapeHtml(getText("Zoom in"))}"><i class="fas fa-search-plus"></i></button>
                         <button type="button" onclick="${PAGE_CODE}.zoomRelationNetworkGraph(0.86)" title="${this.escapeHtml(getText("Zoom out"))}"><i class="fas fa-search-minus"></i></button>
+                        <button type="button" data-anly-network-wheel-btn onclick="${PAGE_CODE}.toggleRelationNetworkWheelZoom()" title="${this.escapeHtml(getText("Enable mouse wheel zoom"))}" aria-label="${this.escapeHtml(getText("Enable mouse wheel zoom"))}" aria-pressed="false"><i class="fas fa-ban"></i></button>
                         <button type="button" onclick="${PAGE_CODE}.resetRelationNetworkGraphView()" title="${this.escapeHtml(getText("Reset view"))}"><i class="fas fa-compress-arrows-alt"></i></button>
                         <button type="button" data-anly-network-maximize-btn onclick="${PAGE_CODE}.toggleRelationNetworkGraphMaximize()" title="${this.escapeHtml(getText("Maximize graph"))}" aria-pressed="false"><i class="fas fa-expand"></i></button>
                         <span data-anly-network-zoom-label>100%</span>
@@ -4838,6 +4853,56 @@
                             ${nodeLabels}
                         </g>
                     </svg>
+                    <div class="anly-work-network-cluster-empty" data-anly-network-cluster-empty hidden>${this.escapeHtml(getText("Select at least one cluster to display the graph."))}</div>
+                </div>
+            `;
+        },
+
+        renderRelationNetworkGraph(summary = {}, graphInput = null) {
+            const graph = graphInput || this.buildRelationNetworkGraphData(summary);
+            if (!graph.nodes.length) {
+                return `<div class="table-empty">${this.escapeHtml(getText("No network nodes to display."))}</div>`;
+            }
+            if (typeof window.cytoscape !== "function") {
+                return this.renderRelationNetworkGraphLegacySvg(summary, graph);
+            }
+            const filter = this.relationNetworkEdgeFilter || { scope: "ALL", minWeightPercent: 0, aggregateClusters: false };
+            return `
+                <div class="anly-work-network-graph-shell">
+                    ${this.renderRelationNetworkGraphClusterLegend(graph)}
+                    <div class="anly-work-network-filter-bar">
+                        <label>
+                            <span>${this.escapeHtml(getText("Connections"))}</span>
+                            <select data-anly-network-edge-scope onchange="${PAGE_CODE}.setRelationNetworkEdgeScope(this.value)">
+                                <option value="ALL" ${filter.scope === "ALL" ? "selected" : ""}>${this.escapeHtml(getText("All connections"))}</option>
+                                <option value="INTRA" ${filter.scope === "INTRA" ? "selected" : ""}>${this.escapeHtml(getText("Within clusters"))}</option>
+                                <option value="INTER" ${filter.scope === "INTER" ? "selected" : ""}>${this.escapeHtml(getText("Between clusters"))}</option>
+                            </select>
+                        </label>
+                        <label class="anly-work-network-weight-filter">
+                            <span>${this.escapeHtml(getText("Minimum strength"))}</span>
+                            <input type="range" min="0" max="100" step="5" value="${Number(filter.minWeightPercent || 0)}" oninput="${PAGE_CODE}.setRelationNetworkEdgeWeight(this.value)">
+                            <b data-anly-network-weight-label>${Number(filter.minWeightPercent || 0)}%</b>
+                        </label>
+                        <button type="button" data-anly-network-aggregate-btn class="${filter.aggregateClusters ? "is-active" : ""}" onclick="${PAGE_CODE}.toggleRelationNetworkClusterAggregation()" title="${this.escapeHtml(getText("Aggregate connections between clusters"))}" aria-pressed="${filter.aggregateClusters ? "true" : "false"}">
+                            <i class="fas fa-object-group"></i>
+                            <span>${this.escapeHtml(getText("Cluster aggregate"))}</span>
+                        </button>
+                        <small data-anly-network-selection-status>${this.escapeHtml(getText("Select a node to highlight its direct connections."))}</small>
+                    </div>
+                    <div class="anly-work-network-graph-tools">
+                        <button type="button" onclick="${PAGE_CODE}.zoomRelationNetworkGraph(1.16)" title="${this.escapeHtml(getText("Zoom in"))}"><i class="fas fa-search-plus"></i></button>
+                        <button type="button" onclick="${PAGE_CODE}.zoomRelationNetworkGraph(0.86)" title="${this.escapeHtml(getText("Zoom out"))}"><i class="fas fa-search-minus"></i></button>
+                        <button type="button" data-anly-network-wheel-btn onclick="${PAGE_CODE}.toggleRelationNetworkWheelZoom()" title="${this.escapeHtml(getText("Enable mouse wheel zoom"))}" aria-label="${this.escapeHtml(getText("Enable mouse wheel zoom"))}" aria-pressed="false"><i class="fas fa-ban"></i></button>
+                        <button type="button" onclick="${PAGE_CODE}.resetRelationNetworkGraphView()" title="${this.escapeHtml(getText("Reset view"))}"><i class="fas fa-compress-arrows-alt"></i></button>
+                        <button type="button" data-anly-network-pin-btn onclick="${PAGE_CODE}.toggleSelectedRelationNetworkNodePin()" title="${this.escapeHtml(getText("Pin or unpin selected node"))}" aria-pressed="false" disabled><i class="fas fa-thumbtack"></i></button>
+                        <button type="button" onclick="${PAGE_CODE}.clearRelationNetworkNodeSelection()" title="${this.escapeHtml(getText("Clear node selection"))}"><i class="fas fa-eye"></i></button>
+                        <button type="button" data-anly-network-maximize-btn onclick="${PAGE_CODE}.toggleRelationNetworkGraphMaximize()" title="${this.escapeHtml(getText("Maximize graph"))}" aria-pressed="false"><i class="fas fa-expand"></i></button>
+                        <span data-anly-network-zoom-label>100%</span>
+                    </div>
+                    <svg class="anly-work-network-cluster-backdrops" data-anly-network-cluster-backdrops aria-hidden="true"></svg>
+                    <div class="anly-work-network-cytoscape" data-anly-network-cytoscape role="img" aria-label="${this.escapeHtml(getText("Relation network graph"))}"></div>
+                    <div class="anly-work-network-tooltip" data-anly-network-tooltip hidden></div>
                     <div class="anly-work-network-cluster-empty" data-anly-network-cluster-empty hidden>${this.escapeHtml(getText("Select at least one cluster to display the graph."))}</div>
                 </div>
             `;
@@ -4909,23 +4974,40 @@
                 input.checked = checked;
                 input.closest("label")?.classList.toggle("is-active", checked);
             });
-            popup.querySelectorAll("[data-anly-network-cluster-group]").forEach((element) => {
-                element.classList.toggle("is-cluster-hidden", !selected.has(String(element.dataset.anlyNetworkClusterGroup)));
-            });
-            popup.querySelectorAll("[data-anly-network-cluster-node]").forEach((element) => {
-                element.classList.toggle("is-cluster-hidden", !selected.has(String(element.dataset.anlyNetworkClusterNode)));
-            });
-            popup.querySelectorAll("[data-anly-network-edge-source-cluster]").forEach((element) => {
-                const sourceVisible = selected.has(String(element.dataset.anlyNetworkEdgeSourceCluster));
-                const targetVisible = selected.has(String(element.dataset.anlyNetworkEdgeTargetCluster));
-                element.classList.toggle("is-cluster-hidden", !(sourceVisible && targetVisible));
-            });
+            const cy = this.relationNetworkCy;
+            if (cy && !cy.destroyed()) {
+                cy.batch(() => {
+                    cy.nodes().forEach((node) => {
+                        const clusterId = String(node.data("clusterId") || "");
+                        node.toggleClass("is-cluster-hidden", !selected.has(clusterId));
+                    });
+                    cy.edges().forEach((edge) => {
+                        const sourceVisible = selected.has(String(edge.data("sourceCluster") || ""));
+                        const targetVisible = selected.has(String(edge.data("targetCluster") || ""));
+                        edge.toggleClass("is-cluster-hidden", !(sourceVisible && targetVisible));
+                    });
+                });
+                this.applyRelationNetworkEdgeFilters();
+            } else {
+                popup.querySelectorAll("[data-anly-network-cluster-group]").forEach((element) => {
+                    element.classList.toggle("is-cluster-hidden", !selected.has(String(element.dataset.anlyNetworkClusterGroup)));
+                });
+                popup.querySelectorAll("[data-anly-network-cluster-node]").forEach((element) => {
+                    element.classList.toggle("is-cluster-hidden", !selected.has(String(element.dataset.anlyNetworkClusterNode)));
+                });
+                popup.querySelectorAll("[data-anly-network-edge-source-cluster]").forEach((element) => {
+                    const sourceVisible = selected.has(String(element.dataset.anlyNetworkEdgeSourceCluster));
+                    const targetVisible = selected.has(String(element.dataset.anlyNetworkEdgeTargetCluster));
+                    element.classList.toggle("is-cluster-hidden", !(sourceVisible && targetVisible));
+                });
+            }
             const count = popup.querySelector("[data-anly-network-cluster-count]");
             if (count) {
                 count.textContent = getText("{selected} / {total} selected", { selected: selected.size, total: clusterIds.length });
             }
             const empty = popup.querySelector("[data-anly-network-cluster-empty]");
             if (empty) empty.hidden = selected.size > 0;
+            this.renderRelationNetworkClusterBackdrops();
             if (fit && selected.size > 0) {
                 window.requestAnimationFrame(() => this.fitRelationNetworkGraphToStage());
             }
@@ -4981,7 +5063,7 @@
             if (!edges.length) return `<div class="table-empty">${this.escapeHtml(getText("No network edges to display."))}</div>`;
             return `
                 <div class="anly-work-network-edge-table-wrap">
-                    <table class="table-grid anly-work-network-edge-table">
+                    <table class="table-grid anly-work-network-edge-table" data-standard-grid-freeze-columns="0">
                         <thead>
                             <tr>
                                 <th>${this.escapeHtml(getText("Cluster"))}</th>
@@ -4994,8 +5076,8 @@
                             </tr>
                         </thead>
                         <tbody>
-                            ${edges.slice(0, 120).map((edge) => `
-                                <tr>
+                            ${edges.slice(0, 240).map((edge) => `
+                                <tr data-anly-network-edge-row="${this.escapeHtml(edge.id)}" tabindex="0" onclick="${PAGE_CODE}.focusRelationNetworkEdge('${this.escapeJs(edge.id)}', { source: 'grid' })" onkeydown="if(event.key === 'Enter' || event.key === ' '){ event.preventDefault(); ${PAGE_CODE}.focusRelationNetworkEdge('${this.escapeJs(edge.id)}', { source: 'grid' }); }">
                                     <td>${this.escapeHtml(edge.clusterId)}</td>
                                     <td>${this.renderColumnAwareCell(edge.source, summary)}</td>
                                     <td>${this.renderColumnAwareCell(edge.target, summary)}</td>
@@ -5019,8 +5101,15 @@
             }
             this.closeRelationNetworkPopup();
             const graph = this.buildRelationNetworkGraphData(summary);
+            this.relationNetworkGraphData = graph;
+            this.relationNetworkClusterBackdropData = [];
             this.relationNetworkGraphClusterIds = [...graph.clusterIds].map(String);
             this.relationNetworkGraphVisibleClusters = new Set(this.relationNetworkGraphClusterIds);
+            this.relationNetworkSelectedNodeId = "";
+            this.relationNetworkSelectedEdgeId = "";
+            this.relationNetworkWheelZoomEnabled = true;
+            this.relationNetworkEdgeFilter = { scope: "ALL", minWeightPercent: 0, aggregateClusters: false };
+            this.relationNetworkPinnedNodeIds = new Set();
             const popup = document.createElement("div");
             popup.id = `${PAGE_ID_PREFIX}RelationNetworkPopup`;
             popup.className = "anly-work-symbolic-popup anly-work-relation-network-popup";
@@ -5035,18 +5124,28 @@
                 this.relationNetworkGraphCleanup();
                 this.relationNetworkGraphCleanup = null;
             }
+            if (this.relationNetworkCy && !this.relationNetworkCy.destroyed()) {
+                this.relationNetworkCy.destroy();
+            }
             const popup = document.getElementById(`${PAGE_ID_PREFIX}RelationNetworkPopup`);
             if (popup) popup.remove();
+            this.relationNetworkCy = null;
+            this.relationNetworkGraphData = null;
+            this.relationNetworkClusterBackdropData = [];
+            this.relationNetworkSelectedNodeId = "";
+            this.relationNetworkSelectedEdgeId = "";
             this.relationNetworkGraphClusterIds = [];
             this.relationNetworkGraphVisibleClusters = null;
         },
 
         getRelationNetworkGraphElements() {
             const popup = document.getElementById(`${PAGE_ID_PREFIX}RelationNetworkPopup`);
+            const container = popup?.querySelector("[data-anly-network-cytoscape]");
             const svg = popup?.querySelector("[data-anly-network-svg]");
             const viewport = popup?.querySelector("[data-anly-network-viewport]");
             const zoomLabel = popup?.querySelector("[data-anly-network-zoom-label]");
-            return { popup, svg, viewport, zoomLabel };
+            const clusterBackdrops = popup?.querySelector("[data-anly-network-cluster-backdrops]");
+            return { popup, container, svg, viewport, zoomLabel, clusterBackdrops, cy: this.relationNetworkCy };
         },
 
         getRelationNetworkGraphPoint(event, svg) {
@@ -5086,6 +5185,56 @@
         },
 
         fitRelationNetworkGraphToStage() {
+            const cy = this.relationNetworkCy;
+            if (cy && !cy.destroyed()) {
+                const visible = cy.elements().not(".is-cluster-hidden").not(".is-filter-hidden").not(".is-mode-hidden");
+                if (visible.length) {
+                    const container = this.getRelationNetworkGraphElements().container;
+                    const stageWidth = Math.max(1, container?.clientWidth || cy.width() || 1);
+                    const stageHeight = Math.max(1, container?.clientHeight || cy.height() || 1);
+                    const bounds = visible.boundingBox({
+                        includeNodes: true,
+                        includeEdges: true,
+                        includeLabels: true,
+                        includeOverlays: false
+                    });
+                    let minX = Number(bounds.x1);
+                    let minY = Number(bounds.y1);
+                    let maxX = Number(bounds.x2);
+                    let maxY = Number(bounds.y2);
+                    if (!this.relationNetworkEdgeFilter?.aggregateClusters) {
+                        const selectedClusters = this.getRelationNetworkGraphVisibleClusters(this.relationNetworkGraphClusterIds || []);
+                        (this.relationNetworkClusterBackdropData || []).forEach((item) => {
+                            if (!selectedClusters.has(String(item.clusterId))) return;
+                            const radius = Math.max(0, Number(item.radius) || 0);
+                            minX = Math.min(minX, Number(item.x) - radius);
+                            minY = Math.min(minY, Number(item.y) - radius);
+                            maxX = Math.max(maxX, Number(item.x) + radius);
+                            maxY = Math.max(maxY, Number(item.y) + radius);
+                        });
+                    }
+                    const padding = 34;
+                    const contentWidth = Math.max(1, maxX - minX);
+                    const contentHeight = Math.max(1, maxY - minY);
+                    const fitZoom = Math.min(
+                        (Math.max(1, stageWidth - (padding * 2))) / contentWidth,
+                        (Math.max(1, stageHeight - (padding * 2))) / contentHeight
+                    );
+                    const dynamicMinZoom = Math.max(0.02, Math.min(0.35, fitZoom));
+                    const targetZoom = Math.min(cy.maxZoom(), Math.max(dynamicMinZoom, fitZoom));
+                    cy.minZoom(dynamicMinZoom);
+                    cy.viewport({
+                        zoom: targetZoom,
+                        pan: {
+                            x: (stageWidth / 2) - (((minX + maxX) / 2) * targetZoom),
+                            y: (stageHeight / 2) - (((minY + maxY) / 2) * targetZoom)
+                        }
+                    });
+                    this.renderRelationNetworkClusterBackdrops();
+                }
+                this.updateRelationNetworkZoomLabel();
+                return;
+            }
             const { svg, viewport } = this.getRelationNetworkGraphElements();
             if (!svg || !viewport) return;
             const viewBox = svg.viewBox.baseVal;
@@ -5103,10 +5252,7 @@
             const padding = 54;
             const availableWidth = Math.max(1, viewBox.width - (padding * 2));
             const availableHeight = Math.max(1, viewBox.height - (padding * 2));
-            const scale = Math.min(
-                1,
-                Math.max(0.45, Math.min(availableWidth / bbox.width, availableHeight / bbox.height))
-            );
+            const scale = Math.min(1, Math.max(0.05, Math.min(availableWidth / bbox.width, availableHeight / bbox.height)));
             this.relationNetworkGraphView = {
                 scale,
                 x: (viewBox.x + (viewBox.width / 2)) - ((bbox.x + (bbox.width / 2)) * scale),
@@ -5116,11 +5262,23 @@
         },
 
         zoomRelationNetworkGraph(factor = 1, anchor = null) {
+            const cy = this.relationNetworkCy;
+            if (cy && !cy.destroyed()) {
+                const renderedPosition = anchor && Number.isFinite(anchor.x) && Number.isFinite(anchor.y)
+                    ? anchor
+                    : { x: cy.width() / 2, y: cy.height() / 2 };
+                cy.zoom({
+                    level: Math.min(cy.maxZoom(), Math.max(cy.minZoom(), cy.zoom() * Number(factor || 1))),
+                    renderedPosition
+                });
+                this.updateRelationNetworkZoomLabel();
+                return;
+            }
             const { svg } = this.getRelationNetworkGraphElements();
             if (!svg) return;
             const view = this.relationNetworkGraphView || { scale: 1, x: 0, y: 0 };
             const oldScale = Number(view.scale || 1);
-            const nextScale = Math.min(4, Math.max(0.45, oldScale * Number(factor || 1)));
+            const nextScale = Math.min(4, Math.max(0.05, oldScale * Number(factor || 1)));
             const viewBox = svg.viewBox.baseVal;
             const point = anchor || {
                 x: viewBox.x + (viewBox.width / 2),
@@ -5135,6 +5293,7 @@
         },
 
         resetRelationNetworkGraphView() {
+            this.clearRelationNetworkNodeSelection({ preserveViewport: true });
             this.fitRelationNetworkGraphToStage();
         },
 
@@ -5148,16 +5307,71 @@
             const button = popup.querySelector("[data-anly-network-maximize-btn]");
             if (button) {
                 button.setAttribute("aria-pressed", nextMaximized ? "true" : "false");
-                button.title = getText(nextMaximized ? "Restore graph" : "Maximize graph");
+                const label = getText(nextMaximized ? "Restore graph" : "Maximize graph");
+                button.title = label;
+                button.setAttribute("aria-label", label);
                 const icon = button.querySelector("i");
                 if (icon) {
                     icon.className = nextMaximized ? "fas fa-compress" : "fas fa-expand";
                 }
             }
-            requestAnimationFrame(() => this.fitRelationNetworkGraphToStage());
+            requestAnimationFrame(() => {
+                this.resizeRelationNetworkEdgeGrid(nextMaximized);
+                this.relationNetworkCy?.resize();
+                this.fitRelationNetworkGraphToStage();
+            });
         },
 
-        initRelationNetworkGraphInteraction() {
+        resizeRelationNetworkEdgeGrid(maximized = false) {
+            const { popup } = this.getRelationNetworkGraphElements();
+            const table = popup?.querySelector(".anly-work-network-edge-table");
+            const viewport = table?.closest(".anly-work-network-edge-table-wrap");
+            if (!table || !viewport) return;
+
+            CommonUtils?.applyStandardGridDefaults?.(table);
+            const colgroup = Array.from(table.children || []).find((child) => child.tagName === "COLGROUP");
+            const columns = Array.from(colgroup?.children || []);
+            if (columns.length !== 8) return;
+
+            if (!maximized) {
+                const savedWidths = String(table.dataset.networkNormalColumnWidths || "")
+                    .split(",")
+                    .map(Number)
+                    .filter(Number.isFinite);
+                if (savedWidths.length === columns.length) {
+                    columns.forEach((column, index) => {
+                        column.style.width = `${savedWidths[index]}px`;
+                    });
+                    table.style.width = `${savedWidths.reduce((sum, width) => sum + width, 0)}px`;
+                }
+                delete table.dataset.networkNormalColumnWidths;
+                return;
+            }
+
+            const currentWidths = columns.map((column, index) => Math.max(48, Number.parseFloat(column.style.width || "")
+                || table.tHead?.rows?.[0]?.cells?.[index]?.getBoundingClientRect?.().width
+                || 48));
+            if (!table.dataset.networkNormalColumnWidths) {
+                table.dataset.networkNormalColumnWidths = currentWidths.join(",");
+            }
+
+            const availableWidth = Math.floor(viewport.clientWidth || 0);
+            const currentWidth = currentWidths.reduce((sum, width) => sum + width, 0);
+            if (availableWidth <= currentWidth) return;
+
+            const rowNumberWidth = 48;
+            const distributableWidth = Math.max(0, availableWidth - rowNumberWidth);
+            const ratios = [0.08, 0.24, 0.24, 0.15, 0.13, 0.08, 0.08];
+            const expandedWidths = [rowNumberWidth, ...ratios.map((ratio) => Math.floor(distributableWidth * ratio))];
+            expandedWidths[expandedWidths.length - 1] += availableWidth
+                - expandedWidths.reduce((sum, width) => sum + width, 0);
+            columns.forEach((column, index) => {
+                column.style.width = `${expandedWidths[index]}px`;
+            });
+            table.style.width = `${availableWidth}px`;
+        },
+
+        initRelationNetworkGraphLegacyInteraction() {
             if (typeof this.relationNetworkGraphCleanup === "function") {
                 this.relationNetworkGraphCleanup();
                 this.relationNetworkGraphCleanup = null;
@@ -5210,9 +5424,13 @@
                 svg.classList.add("is-pinching");
             };
             const onWheel = (event) => {
+                if (!this.relationNetworkWheelZoomEnabled) return;
                 event.preventDefault();
                 const point = this.getRelationNetworkGraphPoint(event, svg);
-                this.zoomRelationNetworkGraph(event.deltaY < 0 ? 1.12 : 0.89, point);
+                this.zoomRelationNetworkGraph(
+                    event.deltaY < 0 ? RELATION_NETWORK_WHEEL_ZOOM_IN_FACTOR : RELATION_NETWORK_WHEEL_ZOOM_OUT_FACTOR,
+                    point
+                );
             };
             const onPointerDown = (event) => {
                 if (event.pointerType === "mouse" && event.button !== 0) return;
@@ -5299,6 +5517,583 @@
             requestAnimationFrame(() => this.fitRelationNetworkGraphToStage());
         },
 
+        buildRelationNetworkCytoscapeElements(graph = this.relationNetworkGraphData || {}) {
+            const palette = ["#2563eb", "#059669", "#d97706", "#7c3aed", "#dc2626", "#0891b2", "#be123c", "#4f46e5", "#65a30d", "#9333ea", "#0f766e", "#ea580c"];
+            const clusterIds = Array.isArray(graph.clusterIds) ? graph.clusterIds.map(String) : [];
+            const clusterColor = new Map(clusterIds.map((clusterId, index) => [clusterId, palette[index % palette.length]]));
+            const nodeIdByName = new Map();
+            const graphNodes = Array.isArray(graph.nodes) ? graph.nodes : [];
+            const nodeByName = new Map(graphNodes.map((node) => [String(node.name), node]));
+            const labelRankByName = new Map(
+                [...graphNodes]
+                    .sort((a, b) => (Number(b.degree || 0) - Number(a.degree || 0)) || (Number(b.centrality || 0) - Number(a.centrality || 0)))
+                    .map((node, index) => [String(node.name), index])
+            );
+            const maxDegree = Math.max(1, ...graphNodes.map((node) => Number(node.degree || 0)));
+            const elements = [];
+            graphNodes.forEach((node, index) => {
+                const id = `node-${index + 1}`;
+                const clusterId = String(node.clusterId || "-");
+                const comment = String(node.comment || "").trim();
+                nodeIdByName.set(String(node.name), id);
+                elements.push({
+                    group: "nodes",
+                    classes: "detail-element detail-node",
+                    data: {
+                        id,
+                        name: String(node.name || ""),
+                        label: comment ? `${node.name}\n${comment}` : String(node.name || ""),
+                        comment,
+                        clusterId,
+                        color: clusterColor.get(clusterId) || "#64748b",
+                        degree: Number(node.degree || 0),
+                        centrality: Number(node.centrality || 0),
+                        size: 18 + Math.min(28, Math.sqrt(Number(node.degree || 0) / maxDegree) * 28),
+                        labelRank: labelRankByName.get(String(node.name)) ?? index
+                    }
+                });
+            });
+            (graph.edges || []).forEach((edge, index) => {
+                const sourceId = nodeIdByName.get(String(edge.source));
+                const targetId = nodeIdByName.get(String(edge.target));
+                if (!sourceId || !targetId) return;
+                const sourceNode = nodeByName.get(String(edge.source));
+                const targetNode = nodeByName.get(String(edge.target));
+                const sourceCluster = String(sourceNode?.clusterId || edge.clusterId || "-");
+                const targetCluster = String(targetNode?.clusterId || edge.clusterId || "-");
+                const weight = Number(edge.weight || 0);
+                elements.push({
+                    group: "edges",
+                    classes: "detail-element detail-edge",
+                    data: {
+                        id: String(edge.id || `edge-${index + 1}`),
+                        source: sourceId,
+                        target: targetId,
+                        sourceName: String(edge.source || ""),
+                        targetName: String(edge.target || ""),
+                        sourceCluster,
+                        targetCluster,
+                        isInterCluster: sourceCluster !== targetCluster ? 1 : 0,
+                        metricName: String(edge.metricName || ""),
+                        metricValue: Number(edge.metricValue || 0),
+                        weight,
+                        weightPercent: Math.min(100, (weight / Math.max(0.0001, Number(graph.maxMetric || 1))) * 100),
+                        lineWidth: 1 + Math.min(5, (weight / Math.max(0.0001, Number(graph.maxMetric || 1))) * 5)
+                    }
+                });
+            });
+            const aggregateNodeId = new Map();
+            clusterIds.forEach((clusterId, index) => {
+                const id = `cluster-${index + 1}`;
+                aggregateNodeId.set(clusterId, id);
+                const nodeCount = graphNodes.filter((node) => String(node.clusterId) === clusterId).length;
+                elements.push({
+                    group: "nodes",
+                    classes: "aggregate-element aggregate-node is-mode-hidden",
+                    position: {
+                        x: 460 + Math.cos(((Math.PI * 2 * index) / Math.max(1, clusterIds.length)) - (Math.PI / 2)) * 260,
+                        y: 280 + Math.sin(((Math.PI * 2 * index) / Math.max(1, clusterIds.length)) - (Math.PI / 2)) * 180
+                    },
+                    data: {
+                        id,
+                        name: getText("Cluster {cluster}", { cluster: clusterId }),
+                        label: `${getText("Cluster {cluster}", { cluster: clusterId })}\n${this.formatNumber(nodeCount)} ${getText("nodes")}`,
+                        clusterId,
+                        color: clusterColor.get(clusterId) || "#64748b",
+                        size: 54 + Math.min(34, nodeCount * 2)
+                    }
+                });
+            });
+            const aggregateMap = new Map();
+            (graph.edges || []).forEach((edge) => {
+                const sourceNode = nodeByName.get(String(edge.source));
+                const targetNode = nodeByName.get(String(edge.target));
+                const sourceCluster = String(sourceNode?.clusterId || edge.clusterId || "-");
+                const targetCluster = String(targetNode?.clusterId || edge.clusterId || "-");
+                if (sourceCluster === targetCluster) return;
+                const pair = [sourceCluster, targetCluster].sort((a, b) => a.localeCompare(b, "ko-KR", { numeric: true }));
+                const key = pair.join("\u0000");
+                const item = aggregateMap.get(key) || { sourceCluster: pair[0], targetCluster: pair[1], count: 0, weight: 0 };
+                item.count += 1;
+                item.weight += Number(edge.weight || 0);
+                aggregateMap.set(key, item);
+            });
+            const maxAggregateWeight = Math.max(0.0001, ...[...aggregateMap.values()].map((item) => item.weight));
+            [...aggregateMap.values()].forEach((item, index) => {
+                elements.push({
+                    group: "edges",
+                    classes: "aggregate-element aggregate-edge is-mode-hidden",
+                    data: {
+                        id: `aggregate-edge-${index + 1}`,
+                        source: aggregateNodeId.get(item.sourceCluster),
+                        target: aggregateNodeId.get(item.targetCluster),
+                        sourceCluster: item.sourceCluster,
+                        targetCluster: item.targetCluster,
+                        count: item.count,
+                        weight: item.weight,
+                        weightPercent: Math.min(100, (item.weight / maxAggregateWeight) * 100),
+                        lineWidth: 2 + Math.min(9, (item.weight / maxAggregateWeight) * 9),
+                        label: `${this.formatNumber(item.count)} ${getText("connections")}`
+                    }
+                });
+            });
+            return elements;
+        },
+
+        addRelationNetworkClusterBackdrops() {
+            const cy = this.relationNetworkCy;
+            if (!cy || cy.destroyed()) return;
+            const clusterIds = Array.isArray(this.relationNetworkGraphData?.clusterIds)
+                ? this.relationNetworkGraphData.clusterIds.map(String)
+                : [];
+            this.relationNetworkClusterBackdropData = clusterIds.map((clusterId) => {
+                const clusterNodes = cy.nodes(".detail-node").filter((node) => String(node.data("clusterId") || "") === clusterId);
+                if (!clusterNodes.length) return null;
+                const centerNode = [...clusterNodes].sort((first, second) => (
+                    Number(second.data("degree") || 0) - Number(first.data("degree") || 0)
+                ))[0];
+                const center = centerNode.position();
+                let radius = 42;
+                clusterNodes.forEach((node) => {
+                    const position = node.position();
+                    const distance = Math.hypot(position.x - center.x, position.y - center.y);
+                    radius = Math.max(radius, distance + (Number(node.data("size") || 18) / 2) + 18);
+                });
+                return {
+                    clusterId,
+                    color: centerNode.data("color") || "#64748b",
+                    label: getText("Cluster {cluster}", { cluster: clusterId }),
+                    x: center.x,
+                    y: center.y,
+                    radius
+                };
+            }).filter(Boolean);
+            this.renderRelationNetworkClusterBackdrops();
+        },
+
+        renderRelationNetworkClusterBackdrops() {
+            const { container, clusterBackdrops } = this.getRelationNetworkGraphElements();
+            const cy = this.relationNetworkCy;
+            if (!container || !clusterBackdrops || !cy || cy.destroyed()) return;
+            const width = Math.max(1, container.clientWidth || 1);
+            const height = Math.max(1, container.clientHeight || 1);
+            clusterBackdrops.setAttribute("viewBox", `0 0 ${width} ${height}`);
+            clusterBackdrops.setAttribute("width", String(width));
+            clusterBackdrops.setAttribute("height", String(height));
+            if (this.relationNetworkEdgeFilter?.aggregateClusters) {
+                clusterBackdrops.replaceChildren();
+                return;
+            }
+            const visibleClusters = this.getRelationNetworkGraphVisibleClusters(this.relationNetworkGraphClusterIds || []);
+            const zoom = cy.zoom();
+            const pan = cy.pan();
+            clusterBackdrops.innerHTML = (this.relationNetworkClusterBackdropData || [])
+                .filter((item) => visibleClusters.has(String(item.clusterId)))
+                .map((item) => {
+                    const x = (Number(item.x) * zoom) + pan.x;
+                    const y = (Number(item.y) * zoom) + pan.y;
+                    const radius = Math.max(1, Number(item.radius) * zoom);
+                    const color = this.escapeHtml(item.color || "#64748b");
+                    const label = this.escapeHtml(item.label || "");
+                    return `
+                        <g>
+                            <circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${radius.toFixed(2)}" fill="${color}" fill-opacity="0.08" stroke="${color}" stroke-opacity="0.24" stroke-width="1.5"></circle>
+                            <text x="${x.toFixed(2)}" y="${(y - radius + 18).toFixed(2)}" text-anchor="middle" fill="${color}">${label}</text>
+                        </g>
+                    `;
+                }).join("");
+        },
+
+        initRelationNetworkGraphInteraction() {
+            if (typeof this.relationNetworkGraphCleanup === "function") {
+                this.relationNetworkGraphCleanup();
+                this.relationNetworkGraphCleanup = null;
+            }
+            const { container } = this.getRelationNetworkGraphElements();
+            if (!container || typeof window.cytoscape !== "function") {
+                this.initRelationNetworkGraphLegacyInteraction();
+                return;
+            }
+            // Cytoscape also registers its wheel handler in the capture phase.
+            // Register ours first so disabled wheel zoom cannot reach Cytoscape,
+            // while normal page scrolling and touch pinch gestures remain intact.
+            const wheelGuard = (event) => {
+                event.stopImmediatePropagation();
+                if (!this.relationNetworkWheelZoomEnabled || !Number(event.deltaY)) return;
+                event.preventDefault();
+                const rect = container.getBoundingClientRect();
+                this.zoomRelationNetworkGraph(
+                    event.deltaY < 0 ? RELATION_NETWORK_WHEEL_ZOOM_IN_FACTOR : RELATION_NETWORK_WHEEL_ZOOM_OUT_FACTOR,
+                    {
+                        x: event.clientX - rect.left,
+                        y: event.clientY - rect.top
+                    }
+                );
+            };
+            container.addEventListener("wheel", wheelGuard, { capture: true, passive: false });
+            const graph = this.relationNetworkGraphData || { nodes: [], edges: [], clusterIds: [] };
+            const cy = window.cytoscape({
+                container,
+                elements: this.buildRelationNetworkCytoscapeElements(graph),
+                layout: { name: "preset" },
+                minZoom: 0.35,
+                maxZoom: 4,
+                // Wheel zoom is handled below so the toolbar toggle can disable only
+                // mouse-wheel zoom while Cytoscape's touch pinch zoom stays enabled.
+                userZoomingEnabled: true,
+                boxSelectionEnabled: true,
+                autoungrabify: false,
+                style: [
+                    { selector: "node.detail-node", style: { "background-color": "data(color)", width: "data(size)", height: "data(size)", label: "data(label)", color: "#0f172a", "font-size": 10, "font-weight": 700, "text-wrap": "wrap", "text-max-width": 150, "text-background-color": "#ffffff", "text-background-opacity": 0.88, "text-background-padding": 4, "text-border-color": "#cbd5e1", "text-border-width": 1, "text-border-opacity": 0.75, "text-valign": "center", "text-halign": "right", "text-margin-x": 10, "border-color": "#ffffff", "border-width": 2, "overlay-opacity": 0 } },
+                    { selector: "edge.detail-edge", style: { width: "data(lineWidth)", "line-color": "#64748b", opacity: 0.38, "curve-style": "bezier", "target-arrow-shape": "none", "source-arrow-shape": "none", "overlay-opacity": 0 } },
+                    { selector: "node.aggregate-node", style: { shape: "round-rectangle", "background-color": "data(color)", width: "data(size)", height: "data(size)", label: "data(label)", color: "#0f172a", "font-size": 12, "font-weight": 800, "text-wrap": "wrap", "text-max-width": 130, "text-background-color": "#ffffff", "text-background-opacity": 0.92, "text-background-padding": 5, "border-color": "#ffffff", "border-width": 3 } },
+                    { selector: "edge.aggregate-edge", style: { width: "data(lineWidth)", "line-color": "#475569", opacity: 0.7, "curve-style": "bezier", label: "data(label)", color: "#334155", "font-size": 11, "font-weight": 800, "text-background-color": "#ffffff", "text-background-opacity": 0.9, "text-background-padding": 3, "text-rotation": "autorotate" } },
+                    { selector: ".is-mode-hidden, .is-cluster-hidden, .is-filter-hidden", style: { display: "none" } },
+                    { selector: ".label-hidden", style: { "text-opacity": 0, "text-background-opacity": 0, "text-border-opacity": 0 } },
+                    { selector: ".label-visible", style: { "text-opacity": 1 } },
+                    { selector: ".is-dimmed", style: { opacity: 0.07, "text-opacity": 0, "text-background-opacity": 0, "text-border-opacity": 0, events: "no" } },
+                    { selector: "node.is-selected", style: { "border-color": "#f59e0b", "border-width": 5, "underlay-color": "#fbbf24", "underlay-opacity": 0.22, "underlay-padding": 10, "z-index": 9999 } },
+                    { selector: "node.is-neighbor", style: { "border-color": "#0f172a", "border-width": 3, "z-index": 9000 } },
+                    { selector: "edge.is-highlighted", style: { "line-color": "#f59e0b", opacity: 0.95, width: 5, "z-index": 9000 } },
+                    { selector: "edge.is-selected", style: { "line-color": "#dc2626", opacity: 1, width: 7, "z-index": 9999 } },
+                    { selector: "node.is-pinned", style: { "border-style": "double", "border-color": "#7c3aed", "border-width": 5 } }
+                ]
+            });
+            this.relationNetworkCy = cy;
+            this.updateRelationNetworkNodeGrabbability();
+            let labelFrame = 0;
+            let resizeFrame = 0;
+            const resizeObserver = typeof ResizeObserver === "function"
+                ? new ResizeObserver(() => {
+                    if (resizeFrame) cancelAnimationFrame(resizeFrame);
+                    resizeFrame = requestAnimationFrame(() => {
+                        resizeFrame = 0;
+                        if (!cy.destroyed()) {
+                            cy.resize();
+                            this.renderRelationNetworkClusterBackdrops();
+                        }
+                    });
+                })
+                : null;
+            resizeObserver?.observe(container);
+            const requestLabelUpdate = () => {
+                if (labelFrame) cancelAnimationFrame(labelFrame);
+                labelFrame = requestAnimationFrame(() => {
+                    labelFrame = 0;
+                    this.updateRelationNetworkSemanticLabels();
+                    this.updateRelationNetworkZoomLabel();
+                    this.renderRelationNetworkClusterBackdrops();
+                });
+            };
+            cy.on("zoom pan", requestLabelUpdate);
+            cy.on("tap", "node.detail-node", (event) => this.focusRelationNetworkNode(event.target.id()));
+            cy.on("tap", "edge.detail-edge", (event) => this.focusRelationNetworkEdge(event.target.id(), { source: "graph" }));
+            cy.on("tap", "edge.aggregate-edge", (event) => this.focusRelationNetworkAggregateEdge(event.target.id()));
+            cy.on("tap", (event) => {
+                if (event.target === cy) this.clearRelationNetworkNodeSelection({ preserveViewport: true });
+            });
+            cy.on("dragfree", "node", (event) => {
+                event.target.data("manualPosition", true);
+            });
+            const tooltip = container.closest(".anly-work-network-graph-shell")?.querySelector("[data-anly-network-tooltip]");
+            cy.on("mouseover", "node, edge", (event) => {
+                if (!tooltip) return;
+                const target = event.target;
+                tooltip.textContent = target.isNode()
+                    ? [target.data("name"), target.data("comment"), `${getText("degree")} ${this.formatNumber(target.data("degree"))}`].filter(Boolean).join(" · ")
+                    : `${target.data("sourceName") || target.source().data("name")} ↔ ${target.data("targetName") || target.target().data("name")} · ${target.data("metricName") || ""} ${this.formatDecimal(target.data("weight"))}`;
+                tooltip.hidden = false;
+                tooltip.style.left = `${Math.max(8, event.renderedPosition.x + 16)}px`;
+                tooltip.style.top = `${Math.max(70, event.renderedPosition.y + 16)}px`;
+            });
+            cy.on("mouseout", "node, edge", () => {
+                if (tooltip) tooltip.hidden = true;
+            });
+            const detailElements = cy.elements(".detail-element");
+            let layout = null;
+            try {
+                layout = detailElements.layout({
+                    name: "fcose",
+                    quality: "default",
+                    randomize: true,
+                    animate: false,
+                    fit: true,
+                    padding: 55,
+                    nodeDimensionsIncludeLabels: true,
+                    packComponents: true,
+                    nodeRepulsion: 8500,
+                    idealEdgeLength: 118,
+                    edgeElasticity: 0.38,
+                    gravity: 0.2,
+                    numIter: 2500
+                });
+            } catch (error) {
+                console.warn("fCoSE layout unavailable; falling back to CoSE.", error);
+                layout = detailElements.layout({ name: "cose", animate: false, fit: true, padding: 55, nodeDimensionsIncludeLabels: true, idealEdgeLength: 118, nodeRepulsion: 8500 });
+            }
+            layout.one("layoutstop", () => {
+                this.addRelationNetworkClusterBackdrops();
+                this.applyRelationNetworkGraphClusterVisibility({ fit: false });
+                this.updateRelationNetworkSemanticLabels();
+                this.fitRelationNetworkGraphToStage();
+            });
+            layout.run();
+            this.updateRelationNetworkWheelZoomControl();
+            this.relationNetworkGraphCleanup = () => {
+                if (labelFrame) cancelAnimationFrame(labelFrame);
+                if (resizeFrame) cancelAnimationFrame(resizeFrame);
+                resizeObserver?.disconnect();
+                container.removeEventListener("wheel", wheelGuard, true);
+                try { layout?.stop(); } catch (error) { /* Layout may already be stopped. */ }
+                if (!cy.destroyed()) cy.destroy();
+                if (this.relationNetworkCy === cy) this.relationNetworkCy = null;
+            };
+        },
+
+        updateRelationNetworkZoomLabel() {
+            const { zoomLabel } = this.getRelationNetworkGraphElements();
+            const cy = this.relationNetworkCy;
+            if (zoomLabel && cy && !cy.destroyed()) zoomLabel.textContent = `${Math.round(cy.zoom() * 100)}%`;
+        },
+
+        updateRelationNetworkSemanticLabels() {
+            const cy = this.relationNetworkCy;
+            if (!cy || cy.destroyed()) return;
+            const zoom = cy.zoom();
+            const rankLimit = zoom < 0.75 ? 14 : (zoom < 1.25 ? 36 : Number.MAX_SAFE_INTEGER);
+            cy.batch(() => {
+                cy.nodes(".detail-node").forEach((node) => {
+                    const forceVisible = node.hasClass("is-selected") || node.hasClass("is-neighbor");
+                    const visible = forceVisible || Number(node.data("labelRank")) < rankLimit;
+                    node.toggleClass("label-hidden", !visible);
+                    node.toggleClass("label-visible", visible);
+                });
+            });
+        },
+
+        updateRelationNetworkNodeGrabbability(activeNodes = null) {
+            const cy = this.relationNetworkCy;
+            if (!cy || cy.destroyed()) return;
+            const restricted = Boolean(activeNodes && activeNodes.length);
+            cy.nodes().forEach((node) => {
+                const movable = node.hasClass("detail-node") || node.hasClass("aggregate-node");
+                const active = !restricted || activeNodes.contains(node);
+                if (movable && active) node.grabify();
+                else node.ungrabify();
+            });
+        },
+
+        setRelationNetworkEdgeScope(scope = "ALL") {
+            const normalized = ["ALL", "INTRA", "INTER"].includes(String(scope)) ? String(scope) : "ALL";
+            this.relationNetworkEdgeFilter = { ...(this.relationNetworkEdgeFilter || {}), scope: normalized };
+            this.applyRelationNetworkEdgeFilters();
+        },
+
+        setRelationNetworkEdgeWeight(value = 0) {
+            const percent = Math.min(100, Math.max(0, Number(value || 0)));
+            this.relationNetworkEdgeFilter = { ...(this.relationNetworkEdgeFilter || {}), minWeightPercent: percent };
+            const label = this.getRelationNetworkGraphElements().popup?.querySelector("[data-anly-network-weight-label]");
+            if (label) label.textContent = `${Math.round(percent)}%`;
+            this.applyRelationNetworkEdgeFilters();
+        },
+
+        toggleRelationNetworkClusterAggregation(force = null) {
+            const current = Boolean(this.relationNetworkEdgeFilter?.aggregateClusters);
+            const enabled = typeof force === "boolean" ? force : !current;
+            this.relationNetworkEdgeFilter = { ...(this.relationNetworkEdgeFilter || {}), aggregateClusters: enabled };
+            this.clearRelationNetworkNodeSelection({ preserveViewport: true });
+            this.applyRelationNetworkEdgeFilters();
+            const button = this.getRelationNetworkGraphElements().popup?.querySelector("[data-anly-network-aggregate-btn]");
+            if (button) {
+                button.classList.toggle("is-active", enabled);
+                button.setAttribute("aria-pressed", enabled ? "true" : "false");
+            }
+        },
+
+        applyRelationNetworkEdgeFilters() {
+            const cy = this.relationNetworkCy;
+            if (!cy || cy.destroyed()) return;
+            const filter = this.relationNetworkEdgeFilter || { scope: "ALL", minWeightPercent: 0, aggregateClusters: false };
+            const aggregate = Boolean(filter.aggregateClusters);
+            cy.batch(() => {
+                cy.elements(".detail-element").toggleClass("is-mode-hidden", aggregate);
+                cy.elements(".aggregate-element").toggleClass("is-mode-hidden", !aggregate);
+                cy.edges(".detail-edge").forEach((edge) => {
+                    const inter = Number(edge.data("isInterCluster")) === 1;
+                    const scopeHidden = filter.scope === "INTRA" ? inter : (filter.scope === "INTER" ? !inter : false);
+                    const weightHidden = Number(edge.data("weightPercent") || 0) < Number(filter.minWeightPercent || 0);
+                    edge.toggleClass("is-filter-hidden", scopeHidden || weightHidden);
+                });
+                cy.edges(".aggregate-edge").forEach((edge) => {
+                    edge.toggleClass("is-filter-hidden", Number(edge.data("weightPercent") || 0) < Number(filter.minWeightPercent || 0));
+                });
+            });
+            this.updateRelationNetworkSemanticLabels();
+            this.renderRelationNetworkClusterBackdrops();
+        },
+
+        focusRelationNetworkNode(nodeId = "") {
+            const cy = this.relationNetworkCy;
+            if (!cy || cy.destroyed()) return;
+            const node = cy.getElementById(String(nodeId));
+            if (!node.length || !node.hasClass("detail-node")) return;
+            this.relationNetworkSelectedNodeId = node.id();
+            this.relationNetworkSelectedEdgeId = "";
+            const visibleElements = cy.elements().not(".is-mode-hidden").not(".is-cluster-hidden").not(".is-filter-hidden");
+            const neighborhood = node.closedNeighborhood().intersection(visibleElements);
+            cy.batch(() => {
+                cy.elements().removeClass("is-selected is-neighbor is-highlighted is-dimmed");
+                visibleElements.not(neighborhood).addClass("is-dimmed");
+                node.addClass("is-selected label-visible").removeClass("label-hidden is-dimmed");
+                node.neighborhood("node").intersection(visibleElements).addClass("is-neighbor label-visible").removeClass("label-hidden is-dimmed");
+                node.connectedEdges().intersection(visibleElements).addClass("is-highlighted").removeClass("is-dimmed");
+            });
+            this.updateRelationNetworkNodeGrabbability(neighborhood.nodes().filter(".detail-node"));
+            this.clearRelationNetworkRawRowSelection();
+            const relatedRows = [];
+            node.connectedEdges(".detail-edge").forEach((edge) => {
+                const row = this.getRelationNetworkGraphElements().popup?.querySelector(`[data-anly-network-edge-row="${edge.id()}"]`);
+                if (row) {
+                    row.classList.add("is-related");
+                    relatedRows.push(row);
+                }
+            });
+            if (relatedRows.length && this.getRelationNetworkGraphElements().popup?.classList.contains("is-network-graph-maximized")) {
+                relatedRows[0].scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+            }
+            this.updateRelationNetworkSelectionStatus(`${node.data("name")} · ${this.formatNumber(node.degree())} ${getText("connections")}`);
+            this.updateRelationNetworkPinControl();
+            this.updateRelationNetworkSemanticLabels();
+        },
+
+        focusRelationNetworkEdge(edgeId = "", { source = "graph" } = {}) {
+            const cy = this.relationNetworkCy;
+            if (!cy || cy.destroyed()) return;
+            if (source === "grid" && this.relationNetworkEdgeFilter?.aggregateClusters) {
+                this.relationNetworkEdgeFilter = { ...(this.relationNetworkEdgeFilter || {}), aggregateClusters: false };
+                this.applyRelationNetworkEdgeFilters();
+                const aggregateButton = this.getRelationNetworkGraphElements().popup?.querySelector("[data-anly-network-aggregate-btn]");
+                if (aggregateButton) {
+                    aggregateButton.classList.remove("is-active");
+                    aggregateButton.setAttribute("aria-pressed", "false");
+                }
+            }
+            const edge = cy.getElementById(String(edgeId));
+            if (!edge.length || !edge.hasClass("detail-edge")) return;
+            this.relationNetworkSelectedEdgeId = edge.id();
+            this.relationNetworkSelectedNodeId = "";
+            const endpoints = edge.connectedNodes();
+            if (source === "grid") {
+                edge.removeClass("is-mode-hidden is-cluster-hidden is-filter-hidden");
+                endpoints.removeClass("is-mode-hidden is-cluster-hidden");
+            }
+            const visibleElements = cy.elements().not(".is-mode-hidden").not(".is-cluster-hidden").not(".is-filter-hidden");
+            cy.batch(() => {
+                cy.elements().removeClass("is-selected is-neighbor is-highlighted is-dimmed");
+                visibleElements.not(edge).not(endpoints).addClass("is-dimmed");
+                edge.addClass("is-selected").removeClass("is-dimmed");
+                endpoints.addClass("is-neighbor label-visible").removeClass("label-hidden is-dimmed");
+            });
+            this.updateRelationNetworkNodeGrabbability(endpoints.filter(".detail-node"));
+            this.clearRelationNetworkRawRowSelection();
+            const row = this.getRelationNetworkGraphElements().popup?.querySelector(`[data-anly-network-edge-row="${edge.id()}"]`);
+            if (row) {
+                row.classList.add("is-selected");
+                if (source === "graph") row.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+            }
+            if (source === "grid") cy.animate({ center: { eles: endpoints }, duration: 260 });
+            this.updateRelationNetworkSelectionStatus(`${edge.data("sourceName")} ↔ ${edge.data("targetName")} · ${edge.data("metricName") || ""} ${this.formatDecimal(edge.data("weight"))}`);
+            this.updateRelationNetworkPinControl();
+            this.updateRelationNetworkSemanticLabels();
+        },
+
+        focusRelationNetworkAggregateEdge(edgeId = "") {
+            const cy = this.relationNetworkCy;
+            if (!cy || cy.destroyed()) return;
+            const edge = cy.getElementById(String(edgeId));
+            if (!edge.length) return;
+            const endpoints = edge.connectedNodes();
+            cy.batch(() => {
+                cy.elements().removeClass("is-selected is-neighbor is-highlighted is-dimmed");
+                cy.elements().not(".is-mode-hidden").not(edge).not(endpoints).addClass("is-dimmed");
+                edge.addClass("is-selected");
+                endpoints.addClass("is-neighbor");
+            });
+            this.updateRelationNetworkNodeGrabbability(endpoints.filter(".aggregate-node"));
+            this.updateRelationNetworkSelectionStatus(`${getText("Cluster {cluster}", { cluster: edge.data("sourceCluster") })} ↔ ${getText("Cluster {cluster}", { cluster: edge.data("targetCluster") })} · ${this.formatNumber(edge.data("count"))} ${getText("connections")}`);
+        },
+
+        clearRelationNetworkRawRowSelection() {
+            this.getRelationNetworkGraphElements().popup?.querySelectorAll("[data-anly-network-edge-row].is-selected, [data-anly-network-edge-row].is-related").forEach((row) => row.classList.remove("is-selected", "is-related"));
+        },
+
+        clearRelationNetworkNodeSelection({ preserveViewport = true } = {}) {
+            const cy = this.relationNetworkCy;
+            this.relationNetworkSelectedNodeId = "";
+            this.relationNetworkSelectedEdgeId = "";
+            if (cy && !cy.destroyed()) {
+                cy.elements().removeClass("is-selected is-neighbor is-highlighted is-dimmed");
+                this.updateRelationNetworkNodeGrabbability();
+            }
+            this.clearRelationNetworkRawRowSelection();
+            this.updateRelationNetworkSelectionStatus(getText("Select a node to highlight its direct connections."));
+            this.updateRelationNetworkPinControl();
+            this.updateRelationNetworkSemanticLabels();
+            if (!preserveViewport) this.fitRelationNetworkGraphToStage();
+        },
+
+        toggleSelectedRelationNetworkNodePin() {
+            const cy = this.relationNetworkCy;
+            if (!cy || cy.destroyed() || !this.relationNetworkSelectedNodeId) return;
+            const node = cy.getElementById(this.relationNetworkSelectedNodeId);
+            if (!node.length) return;
+            const pinned = node.locked();
+            if (pinned) {
+                node.unlock().removeClass("is-pinned");
+                this.relationNetworkPinnedNodeIds.delete(node.id());
+            } else {
+                node.lock().addClass("is-pinned");
+                this.relationNetworkPinnedNodeIds.add(node.id());
+            }
+            this.updateRelationNetworkPinControl();
+        },
+
+        updateRelationNetworkPinControl() {
+            const cy = this.relationNetworkCy;
+            const button = this.getRelationNetworkGraphElements().popup?.querySelector("[data-anly-network-pin-btn]");
+            if (!button) return;
+            const node = cy && !cy.destroyed() && this.relationNetworkSelectedNodeId ? cy.getElementById(this.relationNetworkSelectedNodeId) : null;
+            const enabled = Boolean(node?.length);
+            const pinned = enabled && node.locked();
+            button.disabled = !enabled;
+            button.classList.toggle("is-active", pinned);
+            button.setAttribute("aria-pressed", pinned ? "true" : "false");
+            button.title = getText(pinned ? "Unpin selected node" : "Pin selected node");
+        },
+
+        updateRelationNetworkSelectionStatus(text = "") {
+            const element = this.getRelationNetworkGraphElements().popup?.querySelector("[data-anly-network-selection-status]");
+            if (element) element.textContent = String(text || "");
+        },
+
+        toggleRelationNetworkWheelZoom() {
+            this.relationNetworkWheelZoomEnabled = !this.relationNetworkWheelZoomEnabled;
+            this.updateRelationNetworkWheelZoomControl();
+        },
+
+        updateRelationNetworkWheelZoomControl() {
+            const button = this.getRelationNetworkGraphElements().popup?.querySelector("[data-anly-network-wheel-btn]");
+            if (!button) return;
+            const enabled = this.relationNetworkWheelZoomEnabled === true;
+            button.classList.toggle("is-active", enabled);
+            button.setAttribute("aria-pressed", enabled ? "true" : "false");
+            const label = getText(enabled ? "Disable mouse wheel zoom" : "Enable mouse wheel zoom");
+            button.title = label;
+            button.setAttribute("aria-label", label);
+            const icon = button.querySelector("i");
+            if (icon) icon.className = enabled ? "fas fa-computer-mouse" : "fas fa-ban";
+        },
+
         renderRelationNetworkPopup(summary = {}, graphInput = null) {
             const clusters = this.buildRelationNetworkClusters(summary);
             const graph = graphInput || this.buildRelationNetworkGraphData(summary);
@@ -5319,14 +6114,14 @@
                         <div class="anly-work-relation-network-main">
                             ${this.renderRelationNetworkPopupOverview(summary, graph)}
                             <div class="anly-work-relation-network-graph-stage">
-                                ${this.renderRelationNetworkGraphSvg(summary, graph)}
+                                ${this.renderRelationNetworkGraph(summary, graph)}
                             </div>
                             <div class="anly-work-network-detail-panels">
-                                <section>
+                                <section data-anly-network-column-details>
                                     <strong>${this.escapeHtml(getText("Column details"))}</strong>
                                     ${this.renderRelationNetworkPopupNodeCards(summary, graph)}
                                 </section>
-                                <section>
+                                <section data-anly-network-edge-raw-data>
                                     <strong>${this.escapeHtml(getText("Edge raw data"))}</strong>
                                     ${this.renderRelationNetworkPopupEdgeTable(summary, graph)}
                                 </section>

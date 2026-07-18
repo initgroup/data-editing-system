@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>INIT Data Editing System</title>
     <script>
-        window.APP_CACHE_VERSION = "1.1.206";
+        window.APP_CACHE_VERSION = "1.1.218";
         window.APP_ASSET_VERSION_OVERRIDES = {
             // 전체 캐시 갱신: APP_CACHE_VERSION만 올립니다.
             // 부분 캐시 갱신: "js/M90001.js": "1.0.1" 처럼 파일별 버전을 지정합니다.
@@ -283,6 +283,10 @@
 
     <script>
         [
+            "./js/vendor/cytoscape/layout-base.js",
+            "./js/vendor/cytoscape/cose-base.js",
+            "./js/vendor/cytoscape/cytoscape.min.js",
+            "./js/vendor/cytoscape/cytoscape-fcose.js",
             "./js/cache-version-utils.js",
             "./js/i18n-manager.js",
             "./js/app.js",
