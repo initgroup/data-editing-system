@@ -177,7 +177,7 @@
     "paramDescAssocModelName": "범주형 규칙 발굴에서 생성할 연관 규칙 모델명",
     "paramDescRuleOwnerName": "선행 규칙 발굴 Run에서 생성한 연관 규칙 모델 Owner",
     "paramDescRuleModelName": "선행 규칙 발굴 Run에서 생성한 연관 규칙 모델명",
-    "paramDescSymbolicRuleTableName": "Symbolic 규칙 저장 테이블. OML 연관 모델명이 아니라 INIT$_TB_SYMBOLIC_RULE을 사용합니다.",
+    "paramDescSymbolicRuleTableName": "Symbolic 규칙 저장 테이블. OML 연관 모델명이 아니라 INIT$_TB_RULEDISC_SYMBOLIC을 사용합니다.",
     "paramDescRuleId": "선택 Symbolic RULE_ID. (auto)는 실행 조건에 맞는 전체 규칙을 평가합니다.",
     "paramDescClusterUsageMode": "군집 활용: NONE/PREFER_SAME_CLUSTER/WITHIN_CLUSTER_ONLY. NONE이 아니면 같은 Run의 관계 네트워크가 필요합니다.",
     "paramDescCaseIdColumn": "원본 Row를 식별할 Case ID 컬럼",

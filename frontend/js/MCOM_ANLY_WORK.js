@@ -49,79 +49,79 @@
         summaryRenderer: ""
     });
     const TABLE_RESULT_LAYOUTS = Object.freeze({
-        "INIT$_TB_PREDICTED_TYPE": Object.freeze({
+        "INIT$_TB_COLTYPE_RESULT": Object.freeze({
             kind: "TABLE",
-            key: "TABLE:INIT$_TB_PREDICTED_TYPE",
+            key: "TABLE:INIT$_TB_COLTYPE_RESULT",
             title: "Result Table",
             summaryKey: "predictedTypeSummary",
             summaryRenderer: "renderPredictedTypeSummary"
         }),
-        "INIT$_TB_PREDICTED_TYPE_FINAL": Object.freeze({
+        "INIT$_TB_COLTYPE_FINAL": Object.freeze({
             kind: "TABLE",
-            key: "TABLE:INIT$_TB_PREDICTED_TYPE",
+            key: "TABLE:INIT$_TB_COLTYPE_RESULT",
             title: "Result Table",
             summaryKey: "predictedTypeSummary",
             summaryRenderer: "renderPredictedTypeSummary"
         }),
-        "INIT$_TB_CAT_CORR_PAIR": Object.freeze({
+        "INIT$_TB_COLREL_CAT_PAIR": Object.freeze({
             kind: "TABLE",
-            key: "TABLE:INIT$_TB_CAT_CORR_PAIR",
+            key: "TABLE:INIT$_TB_COLREL_CAT_PAIR",
             title: "Result Table",
             summaryKey: "correlationSummary",
             summaryRenderer: "renderCorrelationSummary"
         }),
-        "INIT$_TB_NUM_CORR_PAIR": Object.freeze({
+        "INIT$_TB_COLREL_NUM_PAIR": Object.freeze({
             kind: "TABLE",
-            key: "TABLE:INIT$_TB_NUM_CORR_PAIR",
+            key: "TABLE:INIT$_TB_COLREL_NUM_PAIR",
             title: "Result Table",
             summaryKey: "correlationSummary",
             summaryRenderer: "renderCorrelationSummary"
         }),
-        "INIT$_TB_RELATION_PAIR": Object.freeze({
+        "INIT$_TB_COLREL_PAIR": Object.freeze({
             kind: "TABLE",
-            key: "TABLE:INIT$_TB_RELATION_PAIR",
+            key: "TABLE:INIT$_TB_COLREL_PAIR",
             title: "Result Table",
             summaryKey: "relationSummary",
             summaryRenderer: "renderRelationSummary"
         }),
-        "INIT$_TB_RELATION_NETWORK_NODE": Object.freeze({
+        "INIT$_TB_COLREL_NETWORK_NODE": Object.freeze({
             kind: "TABLE",
-            key: "TABLE:INIT$_TB_RELATION_NETWORK_NODE",
+            key: "TABLE:INIT$_TB_COLREL_NETWORK_NODE",
             title: "Result Table",
             summaryKey: "relationNetworkSummary",
             summaryRenderer: "renderRelationNetworkSummary"
         }),
-        "INIT$_TB_RELATION_NETWORK_EDGE": Object.freeze({
+        "INIT$_TB_COLREL_NETWORK_EDGE": Object.freeze({
             kind: "TABLE",
-            key: "TABLE:INIT$_TB_RELATION_NETWORK_EDGE",
+            key: "TABLE:INIT$_TB_COLREL_NETWORK_EDGE",
             title: "Result Table",
             summaryKey: "relationNetworkSummary",
             summaryRenderer: "renderRelationNetworkSummary"
         }),
-        "INIT$_TB_LASSO_FEATURE": Object.freeze({
+        "INIT$_TB_COLREL_LASSO_FEATURE": Object.freeze({
             kind: "TABLE",
-            key: "TABLE:INIT$_TB_LASSO_FEATURE",
+            key: "TABLE:INIT$_TB_COLREL_LASSO_FEATURE",
             title: "Result Table",
             summaryKey: "lassoSummary",
             summaryRenderer: "renderLassoSummary"
         }),
-        "INIT$_TB_SYMBOLIC_RULE": Object.freeze({
+        "INIT$_TB_RULEDISC_SYMBOLIC": Object.freeze({
             kind: "TABLE",
-            key: "TABLE:INIT$_TB_SYMBOLIC_RULE",
+            key: "TABLE:INIT$_TB_RULEDISC_SYMBOLIC",
             title: "Result Table",
             summaryKey: "symbolicRuleSummary",
             summaryRenderer: "renderSymbolicRuleSummary"
         }),
-        "INIT$_TB_RULE_VIOLATION_RESULT": Object.freeze({
+        "INIT$_TB_RULEVIOL_ASSOC": Object.freeze({
             kind: "TABLE",
-            key: "TABLE:INIT$_TB_RULE_VIOLATION_RESULT",
+            key: "TABLE:INIT$_TB_RULEVIOL_ASSOC",
             title: "Result Table",
             summaryKey: "violationSummary",
             summaryRenderer: "renderViolationSummary"
         }),
-        "INIT$_TB_SYMBOLIC_RULE_VIOLATION": Object.freeze({
+        "INIT$_TB_RULEVIOL_SYMBOLIC": Object.freeze({
             kind: "TABLE",
-            key: "TABLE:INIT$_TB_SYMBOLIC_RULE_VIOLATION",
+            key: "TABLE:INIT$_TB_RULEVIOL_SYMBOLIC",
             title: "Result Table",
             summaryKey: "symbolicViolationSummary",
             summaryRenderer: "renderSymbolicViolationSummary"
@@ -328,22 +328,22 @@
             const results = Array.isArray(node?.RESULT_OBJECTS) ? node.RESULT_OBJECTS : [];
             const runProfile = results.find((item) => (
                 String(item?.artifact || "").trim().toUpperCase() === "PREDICTED_TYPE_RUN"
-                || String(item?.objectName || "").trim().toUpperCase() === "INIT$_TB_PREDICTED_TYPE"
+                || String(item?.objectName || "").trim().toUpperCase() === "INIT$_TB_COLTYPE_RESULT"
             ));
             const hasFinalProfile = results.some((item) => (
                 String(item?.artifact || "").trim().toUpperCase() === "PREDICTED_TYPE_FINAL"
-                || String(item?.objectName || "").trim().toUpperCase() === "INIT$_TB_PREDICTED_TYPE_FINAL"
+                || String(item?.objectName || "").trim().toUpperCase() === "INIT$_TB_COLTYPE_FINAL"
             ));
             const relationMatrix = results.find((item) => (
                 String(item?.artifact || "").trim().toUpperCase() === "RELATION_PAIR"
-                || String(item?.objectName || "").trim().toUpperCase() === "INIT$_TB_RELATION_PAIR"
+                || String(item?.objectName || "").trim().toUpperCase() === "INIT$_TB_COLREL_PAIR"
             ));
             const integratedRelationArtifacts = new Set(results.map((item) => String(item?.artifact || "").trim().toUpperCase()));
             const integratedRelationObjects = new Set(results.map((item) => String(item?.objectName || "").trim().toUpperCase()));
             const hasIntegratedRelationResults = (
-                (integratedRelationArtifacts.has("RELATION_PAIR") || integratedRelationObjects.has("INIT$_TB_RELATION_PAIR"))
-                && (integratedRelationArtifacts.has("CAT_CORR_PAIR") || integratedRelationObjects.has("INIT$_TB_CAT_CORR_PAIR"))
-                && (integratedRelationArtifacts.has("NUM_CORR_PAIR") || integratedRelationObjects.has("INIT$_TB_NUM_CORR_PAIR"))
+                (integratedRelationArtifacts.has("RELATION_PAIR") || integratedRelationObjects.has("INIT$_TB_COLREL_PAIR"))
+                && (integratedRelationArtifacts.has("CAT_CORR_PAIR") || integratedRelationObjects.has("INIT$_TB_COLREL_CAT_PAIR"))
+                && (integratedRelationArtifacts.has("NUM_CORR_PAIR") || integratedRelationObjects.has("INIT$_TB_COLREL_NUM_PAIR"))
             );
             const integratedCategoricalRule = this.isIntegratedRuleDiscoveryNode(node)
                 ? this.getPreferredIntegratedRuleResult(
@@ -1047,7 +1047,7 @@
         },
 
         isRelationNetworkResultObject(item = {}) {
-            return ["INIT$_TB_RELATION_NETWORK_EDGE", "INIT$_TB_RELATION_NETWORK_NODE"].includes(
+            return ["INIT$_TB_COLREL_NETWORK_EDGE", "INIT$_TB_COLREL_NETWORK_NODE"].includes(
                 String(item?.objectName || "").trim().toUpperCase()
             );
         },
@@ -1060,11 +1060,11 @@
             const artifact = String(item?.artifact || "").trim().toUpperCase();
             const objectName = String(item?.objectName || "").trim().toUpperCase();
             if (["ASSOCIATION_MODEL", "ASSOC_RULE_SUMMARY"].includes(artifact)
-                || objectName === "INIT$_TB_ASSOC_RULE_SUMMARY") {
+                || objectName === "INIT$_TB_RULEDISC_ASSOC_SUM") {
                 return "CATEGORICAL";
             }
             if (["LASSO_FEATURE", "SYMBOLIC_RULE"].includes(artifact)
-                || ["INIT$_TB_LASSO_FEATURE", "INIT$_TB_SYMBOLIC_RULE"].includes(objectName)) {
+                || ["INIT$_TB_COLREL_LASSO_FEATURE", "INIT$_TB_RULEDISC_SYMBOLIC"].includes(objectName)) {
                 return "CONTINUOUS";
             }
             return "";
@@ -1129,7 +1129,7 @@
             const activeNetworkResult = networkResults.find((item) => String(item?.objectName || "").trim().toUpperCase() === activeName);
             const integratedNetworkResult = {
                 ...(activeNetworkResult || networkResults.find((item) =>
-                    String(item?.objectName || "").trim().toUpperCase() === "INIT$_TB_RELATION_NETWORK_NODE"
+                    String(item?.objectName || "").trim().toUpperCase() === "INIT$_TB_COLREL_NETWORK_NODE"
                 ) || networkResults[0]),
                 integratedNetwork: true
             };
@@ -1151,8 +1151,8 @@
             if (item.integratedRuleGroup === "CONTINUOUS") return getText("Continuous automatic rules");
             const objectName = String(item.objectName || "").trim().toUpperCase();
             const objectLabels = {
-                "INIT$_TB_RELATION_NETWORK_EDGE": "Relation network edges",
-                "INIT$_TB_RELATION_NETWORK_NODE": "Relation network nodes"
+                "INIT$_TB_COLREL_NETWORK_EDGE": "Relation network edges",
+                "INIT$_TB_COLREL_NETWORK_NODE": "Relation network nodes"
             };
             return getText(objectLabels[objectName] || item.label || item.artifact || objectName);
         },
@@ -1242,7 +1242,7 @@
             let resolved = selected;
             if (selected.integratedNetwork) {
                 resolved = this.getRelationNetworkResultObjects().find((item) => String(item?.objectName || "").trim().toUpperCase() === activeName)
-                    || this.getRelationNetworkResultObjects().find((item) => String(item?.objectName || "").trim().toUpperCase() === "INIT$_TB_RELATION_NETWORK_NODE")
+                    || this.getRelationNetworkResultObjects().find((item) => String(item?.objectName || "").trim().toUpperCase() === "INIT$_TB_COLREL_NETWORK_NODE")
                     || selected;
             } else if (selected.integratedRuleGroup) {
                 const groupResults = this.getIntegratedRuleDiscoveryResults(selected.integratedRuleGroup);
@@ -1319,7 +1319,7 @@
             };
             const activated = await this.activateNodeResultObject(
                 violationNode,
-                "INIT$_TB_RULE_VIOLATION_RESULT",
+                "INIT$_TB_RULEVIOL_ASSOC",
                 { preserveViolationRuleFilter: true, forceRefresh: true }
             );
             if (activated) return;
@@ -1328,7 +1328,7 @@
 
         findViolationNode() {
             return (this.nodes || []).find((node) =>
-                this.isRuleViolationNode(node) || this.getNodeResultObject(node, "INIT$_TB_RULE_VIOLATION_RESULT")
+                this.isRuleViolationNode(node) || this.getNodeResultObject(node, "INIT$_TB_RULEVIOL_ASSOC")
             ) || null;
         },
 
@@ -1351,7 +1351,7 @@
             };
             const activated = await this.activateNodeResultObject(
                 violationNode,
-                "INIT$_TB_SYMBOLIC_RULE_VIOLATION",
+                "INIT$_TB_RULEVIOL_SYMBOLIC",
                 { preserveViolationRuleFilter: true, forceRefresh: true }
             );
             if (activated) return;
@@ -1360,7 +1360,7 @@
 
         findSymbolicViolationNode() {
             return (this.nodes || []).find((node) =>
-                this.isSymbolicViolationNode(node) || this.getNodeResultObject(node, "INIT$_TB_SYMBOLIC_RULE_VIOLATION")
+                this.isSymbolicViolationNode(node) || this.getNodeResultObject(node, "INIT$_TB_RULEVIOL_SYMBOLIC")
             ) || null;
         },
 
@@ -3338,7 +3338,7 @@
                 "P_RULE_TABLE_NAME",
                 "pRuleTableName",
                 "ruleTableName"
-            ], "INIT$_TB_SYMBOLIC_RULE")) || "INIT$_TB_SYMBOLIC_RULE";
+            ], "INIT$_TB_RULEDISC_SYMBOLIC")) || "INIT$_TB_RULEDISC_SYMBOLIC";
             const caseIdColumn = this.normalizeIdentifierParam(this.getNodeParamValue(node, [
                 "P_CASE_ID_COLUMN_NAME",
                 "pCaseIdColumnName",
@@ -3548,7 +3548,7 @@
                 const featureLabel = features.join(", ") || "x";
                 const targetColumn = String(rule.TARGET_COLUMN || "Y").trim() || "Y";
                 return `
-                    <section class="anly-work-violation-rule-context">
+                    <section class="anly-work-violation-rule-context is-symbolic-formula">
                         <header>
                             <strong>${this.escapeHtml(rule.RULE_ID || "")}</strong>
                             <span>${this.escapeHtml(getText("{count} rows", { count: this.formatNumber(rule.VIOLATION_COUNT) }))} · max error ${this.formatPercentMetric(rule.MAX_ERROR_PCT)} · tolerance ${this.formatPercentMetric(rule.TOLERANCE_PCT)}</span>
@@ -5919,6 +5919,7 @@
                                 const features = this.parseFeatureList(rule.FEATURE_COLUMNS);
                                 const featureLabel = features.join(", ") || "x";
                                 const targetColumn = String(rule.TARGET_COLUMN || "Y").trim() || "Y";
+                                const formulaText = this.getSymbolicFormulaText(rule, features, targetColumn);
                                 return `
                                 <article class="${hasViolation ? "" : "is-no-violation"}">
                                     <header>
@@ -5932,10 +5933,10 @@
                                             </button>
                                         </span>
                                     </header>
-                                    <p>
-                                        <b>F(X)</b>
-                                        f(${this.escapeHtml(featureLabel)}) = ${this.escapeHtml(rule.EXPRESSION || "")} = ${this.renderColumnAwareCell(targetColumn, summary)}
-                                    </p>
+                                    <div class="anly-work-symbolic-formula-row anly-work-violation-formula-row">
+                                        <code><b>F(X)</b> f(${this.escapeHtml(featureLabel)}) = ${this.escapeHtml(rule.EXPRESSION || "")} = ${this.renderColumnAwareCell(targetColumn, summary)}</code>
+                                        <button type="button" class="anly-work-rule-copy-btn" title="${this.escapeHtml(getText("Copy formula"))}" onclick="${PAGE_CODE}.copySymbolicFormula('${this.escapeJs(formulaText)}', event)"><i class="far fa-copy"></i></button>
+                                    </div>
                                     <footer>
                                         <span><small>${this.escapeHtml(getText("Violation rows"))}</small><b>${this.formatNumber(rule.VIOLATED_ROW_COUNT)}</b></span>
                                         <span><small>${this.escapeHtml(getText("Max error rate"))}</small><b>${this.formatPercentMetric(rule.MAX_ERROR_PCT)}</b></span>
@@ -6145,6 +6146,7 @@
                                 <div class="anly-work-symbolic-chart-tools">
                                     <button type="button" onclick="${PAGE_CODE}.zoomSymbolicRuleChart(1.25)" title="${this.escapeHtml(getText("Zoom in"))}"><i class="fas fa-search-plus"></i></button>
                                     <button type="button" onclick="${PAGE_CODE}.zoomSymbolicRuleChart(0.8)" title="${this.escapeHtml(getText("Zoom out"))}"><i class="fas fa-search-minus"></i></button>
+                                    <button type="button" id="${PAGE_ID_PREFIX}SymbolicWheelZoomToggle" onclick="${PAGE_CODE}.toggleSymbolicRuleWheelZoom()" title="${this.escapeHtml(getText("Enable mouse wheel zoom"))}" aria-label="${this.escapeHtml(getText("Enable mouse wheel zoom"))}" aria-pressed="false"><i class="fas fa-ban"></i></button>
                                     <button type="button" onclick="${PAGE_CODE}.resetSymbolicRuleChartZoom()" title="${this.escapeHtml(getText("Reset view"))}"><i class="fas fa-compress-arrows-alt"></i></button>
                                     <button type="button" data-anly-symbolic-maximize-btn onclick="${PAGE_CODE}.toggleSymbolicRuleChartMaximize()" title="${this.escapeHtml(getText("Maximize graph"))}" aria-pressed="false"><i class="fas fa-expand"></i></button>
                                     <em id="${PAGE_ID_PREFIX}SymbolicZoomLabel">100%</em>
@@ -6221,6 +6223,7 @@
                 chartPanEndAt: 0,
                 popupInlinePosition: null,
                 zoomPercent: 100,
+                wheelZoomEnabled: false,
                 loading: true,
                 error: ""
             };
@@ -6359,6 +6362,7 @@
             if (sampleR2) sampleR2.textContent = Number.isFinite(state.sampleMetrics?.r2) ? this.formatSymbolicDiagnosticNumber(state.sampleMetrics.r2) : "-";
             if (sampleMae) sampleMae.textContent = Number.isFinite(state.sampleMetrics?.mae) ? this.formatSymbolicDiagnosticNumber(state.sampleMetrics.mae) : "-";
             if (sampleRmse) sampleRmse.textContent = Number.isFinite(state.sampleMetrics?.rmse) ? this.formatSymbolicDiagnosticNumber(state.sampleMetrics.rmse) : "-";
+            this.updateSymbolicRuleWheelZoomControl();
         },
 
         getSymbolicSampleValue(row = {}, columnName = "") {
@@ -6727,7 +6731,7 @@
         handleSymbolicRuleChartWheel(event) {
             const chart = this.symbolicRuleChart;
             const state = this.symbolicRuleChartState;
-            if (!chart || !state || !Number.isFinite(event.deltaY)) return;
+            if (!chart || !state || !state.wheelZoomEnabled || !Number.isFinite(event.deltaY)) return;
             event.preventDefault();
             const factor = event.deltaY < 0 ? 0.82 : 1.22;
             const rect = chart.canvas.getBoundingClientRect();
@@ -6744,6 +6748,26 @@
             state.zoomPercent = Math.min(800, Math.max(50, Number(state.zoomPercent || 100) / factor));
             chart.update("none");
             this.updateSymbolicRuleZoomLabel();
+        },
+
+        toggleSymbolicRuleWheelZoom() {
+            const state = this.symbolicRuleChartState;
+            if (!state) return;
+            state.wheelZoomEnabled = !state.wheelZoomEnabled;
+            this.updateSymbolicRuleWheelZoomControl();
+        },
+
+        updateSymbolicRuleWheelZoomControl() {
+            const state = this.symbolicRuleChartState;
+            const button = document.getElementById(`${PAGE_ID_PREFIX}SymbolicWheelZoomToggle`);
+            if (!state || !button) return;
+            const enabled = state.wheelZoomEnabled === true;
+            const label = getText(enabled ? "Disable mouse wheel zoom" : "Enable mouse wheel zoom");
+            button.setAttribute("aria-pressed", enabled ? "true" : "false");
+            button.setAttribute("aria-label", label);
+            button.title = label;
+            const icon = button.querySelector("i");
+            if (icon) icon.className = enabled ? "fas fa-mouse" : "fas fa-ban";
         },
 
         startSymbolicRuleChartPan(event) {
@@ -7324,7 +7348,7 @@
                     if (code === "FINAL") {
                         return {
                             ...source,
-                            description: getMessage("finalAppliedPredictionDescription", "Final applied INIT$_TB_PREDICTED_TYPE_FINAL.FINAL_PREDICTED_TYPE")
+                            description: getMessage("finalAppliedPredictionDescription", "Final applied INIT$_TB_COLTYPE_FINAL.FINAL_PREDICTED_TYPE")
                         };
                     }
                     return {
@@ -7337,7 +7361,7 @@
                         sourceCode: "FINAL",
                         sourceLabel: "FINAL",
                         sourceColumn: "FINAL_PREDICTED_TYPE",
-                        description: getMessage("finalAppliedPredictionDescription", "Final applied INIT$_TB_PREDICTED_TYPE_FINAL.FINAL_PREDICTED_TYPE"),
+                        description: getMessage("finalAppliedPredictionDescription", "Final applied INIT$_TB_COLTYPE_FINAL.FINAL_PREDICTED_TYPE"),
                         groups: finalGroups
                     };
                 }
@@ -7353,7 +7377,7 @@
             if (!safeSourceGroups.length) {
                 return this.renderPredictedTypeVersion(
                     getMessage("runBasedTitle", "RUN based"),
-                    getMessage("runBasedPredictionNote", "INIT$_TB_PREDICTED_TYPE prediction value at {method} execution", { method: methodLabel }),
+                    getMessage("runBasedPredictionNote", "INIT$_TB_COLTYPE_RESULT prediction value at {method} execution", { method: methodLabel }),
                     fallbackGroups,
                     summary
                 );
@@ -7362,7 +7386,7 @@
                 <section class="anly-work-type-version">
                     <header>
                         <strong>${this.escapeHtml(getMessage("runBasedTitle", "RUN based"))}</strong>
-                        <span>${this.escapeHtml(getMessage("runBasedPredictionNote", "INIT$_TB_PREDICTED_TYPE prediction value at {method} execution", { method: methodLabel }))}</span>
+                        <span>${this.escapeHtml(getMessage("runBasedPredictionNote", "INIT$_TB_COLTYPE_RESULT prediction value at {method} execution", { method: methodLabel }))}</span>
                     </header>
                     <div class="anly-work-type-run-source-grid">
                         ${safeSourceGroups.map((source) => this.renderPredictedTypeSourceGroup(source, summary, true)).join("")}
@@ -7841,7 +7865,7 @@
             const hasName = (...tokens) => names.some((name) =>
                 tokens.some((token) => name === token || name.endsWith(`.${token}`))
             );
-            if (!hasName("INIT$_SP_PREDICTED_TYPE", "INIT$_TB_PREDICTED_TYPE", "INIT$_TB_PREDICTED_TYPE_FINAL")) {
+            if (!hasName("INIT$_SP_PREDICTED_TYPE", "INIT$_TB_COLTYPE_RESULT", "INIT$_TB_COLTYPE_FINAL")) {
                 return [];
             }
             return [
@@ -8608,50 +8632,50 @@
 
         isRuleViolationNode(node) {
             const resultObject = String(node?.RESULT_OBJECT_NAME || "").trim().toUpperCase();
-            if (resultObject === "INIT$_TB_RULE_VIOLATION_RESULT") return true;
-            if (resultObject === "INIT$_TB_SYMBOLIC_RULE_VIOLATION") return false;
+            if (resultObject === "INIT$_TB_RULEVIOL_ASSOC") return true;
+            if (resultObject === "INIT$_TB_RULEVIOL_SYMBOLIC") return false;
             return this.nodeWorkContains(node, "INIT$_SP_RULE_VIOLATION_DETECT")
                 && !this.nodeWorkContains(node, "INIT$_SP_SYMBOLIC_RULE_VIOLATION_DETECT");
         },
 
         isSymbolicViolationNode(node) {
             const resultObject = String(node?.RESULT_OBJECT_NAME || "").trim().toUpperCase();
-            if (resultObject === "INIT$_TB_SYMBOLIC_RULE_VIOLATION") return true;
-            if (resultObject === "INIT$_TB_RULE_VIOLATION_RESULT") return false;
+            if (resultObject === "INIT$_TB_RULEVIOL_SYMBOLIC") return true;
+            if (resultObject === "INIT$_TB_RULEVIOL_ASSOC") return false;
             return this.nodeWorkContains(node, "INIT$_SP_SYMBOLIC_RULE_VIOLATION_DETECT");
         },
 
         isSymbolicRuleNode(node) {
             const resultObject = String(node?.RESULT_OBJECT_NAME || "").trim().toUpperCase();
-            if (resultObject === "INIT$_TB_SYMBOLIC_RULE") return true;
-            if (resultObject === "INIT$_TB_SYMBOLIC_RULE_VIOLATION") return false;
+            if (resultObject === "INIT$_TB_RULEDISC_SYMBOLIC") return true;
+            if (resultObject === "INIT$_TB_RULEVIOL_SYMBOLIC") return false;
             return this.nodeWorkContains(node, "SYMBOLIC_REGRESSION_RULE");
         },
 
         isPredictedTypeNode(node) {
-            return ["INIT$_TB_PREDICTED_TYPE", "INIT$_TB_PREDICTED_TYPE_FINAL"].includes(
+            return ["INIT$_TB_COLTYPE_RESULT", "INIT$_TB_COLTYPE_FINAL"].includes(
                 String(node?.RESULT_OBJECT_NAME || "").trim().toUpperCase()
             );
         },
 
         isCorrelationPairNode(node) {
-            return ["INIT$_TB_CAT_CORR_PAIR", "INIT$_TB_NUM_CORR_PAIR"].includes(
+            return ["INIT$_TB_COLREL_CAT_PAIR", "INIT$_TB_COLREL_NUM_PAIR"].includes(
                 String(node?.RESULT_OBJECT_NAME || "").trim().toUpperCase()
             );
         },
 
         isRelationPairNode(node) {
-            return String(node?.RESULT_OBJECT_NAME || "").trim().toUpperCase() === "INIT$_TB_RELATION_PAIR";
+            return String(node?.RESULT_OBJECT_NAME || "").trim().toUpperCase() === "INIT$_TB_COLREL_PAIR";
         },
 
         isRelationNetworkResultNode(node) {
-            return ["INIT$_TB_RELATION_NETWORK_NODE", "INIT$_TB_RELATION_NETWORK_EDGE"].includes(
+            return ["INIT$_TB_COLREL_NETWORK_NODE", "INIT$_TB_COLREL_NETWORK_EDGE"].includes(
                 String(node?.RESULT_OBJECT_NAME || "").trim().toUpperCase()
             );
         },
 
         isLassoFeatureNode(node) {
-            return String(node?.RESULT_OBJECT_NAME || "").trim().toUpperCase() === "INIT$_TB_LASSO_FEATURE";
+            return String(node?.RESULT_OBJECT_NAME || "").trim().toUpperCase() === "INIT$_TB_COLREL_LASSO_FEATURE";
         },
 
         matchesNodeWork(node, menuCode, procedureName) {

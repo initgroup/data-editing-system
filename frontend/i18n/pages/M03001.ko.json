@@ -42,6 +42,7 @@
     "predictedTypeGeneralCategory": "일반적범주형",
     "predictedTypeNumericContinuous": "숫자형연속형",
     "predictedTypeSimpleText": "단순형텍스트",
-    "predictedTypeOtherData": "기타데이터형"
+    "predictedTypeOtherData": "기타데이터형",
+    "predictedTypeUnknownData": "미상데이터형"
   }
 }

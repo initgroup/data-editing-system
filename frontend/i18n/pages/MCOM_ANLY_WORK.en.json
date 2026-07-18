@@ -4,6 +4,8 @@
   "pageCode": "MCOM_ANLY_WORK",
   "description": "Common English labels for analysis work template pages.",
   "messages": {
+    "Enable mouse wheel zoom": "Enable mouse wheel zoom",
+    "Disable mouse wheel zoom": "Disable mouse wheel zoom",
     "Integrated Results": "Integrated Results",
     "Integrated result outputs": "Integrated result outputs",
     "Target table": "Target table",

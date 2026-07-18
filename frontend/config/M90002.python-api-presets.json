@@ -27,7 +27,7 @@
           "output": {
             "resultCreateYn": "T",
             "resultOwner": ":INIT$TargetOwner",
-            "resultTableName": "INIT$_TB_LASSO_FEATURE",
+            "resultTableName": "INIT$_TB_COLREL_LASSO_FEATURE",
             "persistMode": "SERVICE_MANAGED",
             "rules": [
               {
@@ -38,9 +38,9 @@
               },
               {
                 "key": "OUTPUT.resultTable",
-                "value": "$.resultTable -> INIT$_TB_LASSO_FEATURE",
+                "value": "$.resultTable -> INIT$_TB_COLREL_LASSO_FEATURE",
                 "comment": "Result table managed by the internal Python service",
-                "defaultValue": "INIT$_TB_LASSO_FEATURE"
+                "defaultValue": "INIT$_TB_COLREL_LASSO_FEATURE"
               }
             ]
           },
@@ -124,9 +124,9 @@
             },
             {
               "key": "OUTPUT.resultTable",
-              "value": "$.resultTable -> INIT$_TB_LASSO_FEATURE",
+              "value": "$.resultTable -> INIT$_TB_COLREL_LASSO_FEATURE",
               "comment": "Result table managed by the internal Python service",
-              "defaultValue": "INIT$_TB_LASSO_FEATURE",
+              "defaultValue": "INIT$_TB_COLREL_LASSO_FEATURE",
               "order": 12
             }
           ]
@@ -146,7 +146,7 @@
           "output": {
             "resultCreateYn": "T",
             "resultOwner": ":INIT$TargetOwner",
-            "resultTableName": "INIT$_TB_RELATION_NETWORK_EDGE",
+            "resultTableName": "INIT$_TB_COLREL_NETWORK_EDGE",
             "persistMode": "SERVICE_MANAGED",
             "rules": [
               {
@@ -157,9 +157,9 @@
               },
               {
                 "key": "OUTPUT.resultTable",
-                "value": "$.resultTable -> INIT$_TB_RELATION_NETWORK_EDGE",
+                "value": "$.resultTable -> INIT$_TB_COLREL_NETWORK_EDGE",
                 "comment": "Result table managed by the internal Python service",
-                "defaultValue": "INIT$_TB_RELATION_NETWORK_EDGE"
+                "defaultValue": "INIT$_TB_COLREL_NETWORK_EDGE"
               }
             ]
           },
@@ -229,9 +229,9 @@
             },
             {
               "key": "OUTPUT.resultTable",
-              "value": "$.resultTable -> INIT$_TB_RELATION_NETWORK_EDGE",
+              "value": "$.resultTable -> INIT$_TB_COLREL_NETWORK_EDGE",
               "comment": "Result table managed by the internal Python service",
-              "defaultValue": "INIT$_TB_RELATION_NETWORK_EDGE",
+              "defaultValue": "INIT$_TB_COLREL_NETWORK_EDGE",
               "order": 10
             }
           ]
@@ -251,7 +251,7 @@
           "output": {
             "resultCreateYn": "T",
             "resultOwner": ":INIT$TargetOwner",
-            "resultTableName": "INIT$_TB_RELATION_NETWORK_EDGE",
+            "resultTableName": "INIT$_TB_COLREL_NETWORK_EDGE",
             "persistMode": "SERVICE_MANAGED",
             "rules": []
           },
@@ -274,7 +274,7 @@
             { "key": "INPUT.P_METRIC_NAMES", "value": "IN VARCHAR2", "comment": "Optional metric filter", "defaultValue": "(auto)", "order": 16 },
             { "key": "INPUT.P_RUN_SOURCE_TYPE", "value": "IN VARCHAR2", "comment": "DATA_WORK or FLOW_WORK", "defaultValue": ":INIT$RunSourceType", "order": 17 },
             { "key": "INPUT.P_RUN_ID", "value": "IN NUMBER", "comment": "Run ID linking relation pairs and network results from the same DATA_WORK or FLOW_WORK execution", "defaultValue": ":INIT$RunId", "order": 18 },
-            { "key": "OUTPUT.resultTables", "value": "$.resultTables", "comment": "Service-managed relation and network result tables", "defaultValue": "INIT$_TB_RELATION_PAIR,INIT$_TB_RELATION_NETWORK_NODE,INIT$_TB_RELATION_NETWORK_EDGE", "order": 19 }
+            { "key": "OUTPUT.resultTables", "value": "$.resultTables", "comment": "Service-managed relation and network result tables", "defaultValue": "INIT$_TB_COLREL_PAIR,INIT$_TB_COLREL_NETWORK_NODE,INIT$_TB_COLREL_NETWORK_EDGE", "order": 19 }
           ]
         },
         {
@@ -292,7 +292,7 @@
           "output": {
             "resultCreateYn": "T",
             "resultOwner": ":INIT$TargetOwner",
-            "resultTableName": "INIT$_TB_SYMBOLIC_RULE",
+            "resultTableName": "INIT$_TB_RULEDISC_SYMBOLIC",
             "persistMode": "SERVICE_MANAGED",
             "rules": [
               {
@@ -303,9 +303,9 @@
               },
               {
                 "key": "OUTPUT.resultTable",
-                "value": "$.resultTable -> INIT$_TB_SYMBOLIC_RULE",
+                "value": "$.resultTable -> INIT$_TB_RULEDISC_SYMBOLIC",
                 "comment": "Result table managed by the internal Python service",
-                "defaultValue": "INIT$_TB_SYMBOLIC_RULE"
+                "defaultValue": "INIT$_TB_RULEDISC_SYMBOLIC"
               }
             ]
           },
@@ -396,9 +396,9 @@
             },
             {
               "key": "OUTPUT.resultTable",
-              "value": "$.resultTable -> INIT$_TB_SYMBOLIC_RULE",
+              "value": "$.resultTable -> INIT$_TB_RULEDISC_SYMBOLIC",
               "comment": "Result table managed by the internal Python service",
-              "defaultValue": "INIT$_TB_SYMBOLIC_RULE",
+              "defaultValue": "INIT$_TB_RULEDISC_SYMBOLIC",
               "order": 13
             }
           ]
@@ -431,7 +431,7 @@
                 "key": "OUTPUT.resultTables",
                 "value": "$.resultTables",
                 "comment": "Service-managed tables: association summary, LASSO feature, symbolic rule",
-                "defaultValue": "INIT$_TB_ASSOC_RULE_SUMMARY,INIT$_TB_LASSO_FEATURE,INIT$_TB_SYMBOLIC_RULE"
+                "defaultValue": "INIT$_TB_RULEDISC_ASSOC_SUM,INIT$_TB_COLREL_LASSO_FEATURE,INIT$_TB_RULEDISC_SYMBOLIC"
               }
             ]
           },
@@ -650,7 +650,7 @@
               "key": "OUTPUT.resultTables",
               "value": "$.resultTables",
               "comment": "Service-managed result tables",
-              "defaultValue": "INIT$_TB_ASSOC_RULE_SUMMARY,INIT$_TB_LASSO_FEATURE,INIT$_TB_SYMBOLIC_RULE",
+              "defaultValue": "INIT$_TB_RULEDISC_ASSOC_SUM,INIT$_TB_COLREL_LASSO_FEATURE,INIT$_TB_RULEDISC_SYMBOLIC",
               "order": 31
             }
           ]
@@ -670,7 +670,7 @@
           "output": {
             "resultCreateYn": "T",
             "resultOwner": ":INIT$TargetOwner",
-            "resultTableName": "INIT$_TB_RULE_VIOLATION_RESULT",
+            "resultTableName": "INIT$_TB_RULEVIOL_ASSOC",
             "persistMode": "SERVICE_MANAGED",
             "rules": [
               {
@@ -683,7 +683,7 @@
                 "key": "OUTPUT.resultTables",
                 "value": "$.resultTables",
                 "comment": "Service-managed tables: categorical violation and symbolic violation",
-                "defaultValue": "INIT$_TB_RULE_VIOLATION_RESULT,INIT$_TB_SYMBOLIC_RULE_VIOLATION"
+                "defaultValue": "INIT$_TB_RULEVIOL_ASSOC,INIT$_TB_RULEVIOL_SYMBOLIC"
               }
             ]
           },
@@ -712,8 +712,8 @@
             {
               "key": "INPUT.P_SYMBOLIC_RULE_TABLE_NAME",
               "value": "IN VARCHAR2",
-              "comment": "Symbolic rule storage table. Use INIT$_TB_SYMBOLIC_RULE; do not use :INIT$PreResultTable or an OML_ASSOC model name.",
-              "defaultValue": "INIT$_TB_SYMBOLIC_RULE",
+              "comment": "Symbolic rule storage table. Use INIT$_TB_RULEDISC_SYMBOLIC; do not use :INIT$PreResultTable or an OML_ASSOC model name.",
+              "defaultValue": "INIT$_TB_RULEDISC_SYMBOLIC",
               "order": 4
             },
             {
@@ -755,7 +755,7 @@
               "key": "INPUT.P_CAT_RESULT_TABLE",
               "value": "IN VARCHAR2",
               "comment": "Categorical violation result table",
-              "defaultValue": "INIT$_TB_RULE_VIOLATION_RESULT",
+              "defaultValue": "INIT$_TB_RULEVIOL_ASSOC",
               "order": 10
             },
             {
@@ -769,7 +769,7 @@
               "key": "INPUT.P_SYMBOLIC_RESULT_TABLE",
               "value": "IN VARCHAR2",
               "comment": "Symbolic violation result table",
-              "defaultValue": "INIT$_TB_SYMBOLIC_RULE_VIOLATION",
+              "defaultValue": "INIT$_TB_RULEVIOL_SYMBOLIC",
               "order": 12
             },
             {
@@ -895,7 +895,7 @@
               "key": "OUTPUT.resultTables",
               "value": "$.resultTables",
               "comment": "Service-managed result tables",
-              "defaultValue": "INIT$_TB_RULE_VIOLATION_RESULT,INIT$_TB_SYMBOLIC_RULE_VIOLATION",
+              "defaultValue": "INIT$_TB_RULEVIOL_ASSOC,INIT$_TB_RULEVIOL_SYMBOLIC",
               "order": 30
             }
           ]

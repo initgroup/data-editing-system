@@ -18,8 +18,9 @@ import time
 import uuid
 from pathlib import Path
 
+from backend.database import get_db_connection
 from backend.database_helper import execute_query
-from backend.auth_context import get_request_login_id, get_request_user_id
+from backend.auth_context import get_request_login_id, get_request_role_code, get_request_user_id
 from backend.target_database import get_target_db_connection
 from backend.paging import create_page_window, normalize_page_number, normalize_page_size
 
@@ -159,6 +160,7 @@ async def upload_staged_file_to_table(
     fixedWidths: str = Form(""),
     hasHeader: str = Form("Y"),
     encoding: str = Form("auto"),
+    projectId: str = Form(""),
     projectCode: str = Form(""),
     tableComment: str = Form(""),
     tableNameRule: str = Form("INITUP$_{LOGIN_ID}_{PROJECT_CODE}_{TIME}"),
@@ -174,6 +176,7 @@ async def upload_staged_file_to_table(
             fixedWidths,
             hasHeader,
             encoding,
+            projectId,
             projectCode,
             tableComment,
             tableNameRule,
@@ -220,12 +223,13 @@ async def upload_file_to_table(
     fixedWidths: str = Form(""),
     hasHeader: str = Form("Y"),
     encoding: str = Form("auto"),
+    projectId: str = Form(""),
     projectCode: str = Form(""),
     tableComment: str = Form(""),
     tableNameRule: str = Form("INITUP$_{LOGIN_ID}_{PROJECT_CODE}_{TIME}")
 ):
     user_id = get_request_user_id(request)
-    login_id = get_request_login_id(request) or str(user_id)
+    login_id = resolve_project_owner_login_id(request, projectId, projectCode)
     stream = file.file
     filename = file.filename or ""
     resolved_encoding = resolve_upload_encoding(stream, fileType, encoding)
@@ -362,9 +366,13 @@ def drop_upload_table(req: DropTableRequest, request: Request):
 
 
 @router.get("/upload-table-tree")
-def get_upload_table_tree(request: Request, projectCode: str = "", tablePrefix: str = ""):
-    user_id = get_request_user_id(request)
-    login_id = get_request_login_id(request) or str(user_id)
+def get_upload_table_tree(
+    request: Request,
+    projectId: str = "",
+    projectCode: str = "",
+    tablePrefix: str = "",
+):
+    login_id = resolve_project_owner_login_id(request, projectId, projectCode)
     base_prefix = create_upload_table_prefix(projectCode, login_id)
     table_prefix = normalize_upload_table_search_prefix(tablePrefix, base_prefix)
     conn = None
@@ -826,6 +834,49 @@ def add_row_numbers_to_preview(columns, rows):
         for row_number, row in enumerate(rows or [], start=1)
     ]
     return preview_columns, preview_rows
+
+
+def resolve_project_owner_login_id(request, project_id="", project_code=""):
+    """Resolve the selected project's owner without trusting browser identity fields."""
+    request_user_id = get_request_user_id(request)
+    current_login_id = get_request_login_id(request) or str(request_user_id)
+    normalized_project_id = str(project_id or "").strip()
+    normalized_project_code = str(project_code or "").strip()
+    if not normalized_project_id:
+        return current_login_id
+
+    target_conn = None
+    system_conn = None
+    try:
+        target_conn = get_target_db_connection(request)
+        project_result = execute_query(target_conn, "M02001_PROJECT_OWNER_CONTEXT", {
+            "projectId": normalized_project_id,
+            "projectCode": normalized_project_code,
+        })
+        project_rows = project_result.get("data", []) if project_result.get("status") == "success" else []
+        if not project_rows:
+            raise HTTPException(status_code=404, detail="Project not found.")
+
+        project_owner_user_id = int(project_rows[0].get("USER_ID") or 0)
+        if project_owner_user_id <= 0:
+            raise HTTPException(status_code=409, detail="Project owner is not configured.")
+        if project_owner_user_id != int(request_user_id) and get_request_role_code(request) != "ADMIN":
+            raise HTTPException(status_code=403, detail="Project access denied.")
+
+        system_conn = get_db_connection()
+        user_result = execute_query(system_conn, "M02001_PROJECT_OWNER_LOGIN", {
+            "userId": project_owner_user_id,
+        })
+        user_rows = user_result.get("data", []) if user_result.get("status") == "success" else []
+        owner_login_id = str(user_rows[0].get("LOGIN_ID") or "").strip() if user_rows else ""
+        if not owner_login_id:
+            raise HTTPException(status_code=409, detail="Project owner login ID was not found.")
+        return owner_login_id
+    finally:
+        if target_conn:
+            target_conn.close()
+        if system_conn:
+            system_conn.close()
 
 
 def create_upload_table_name(project_code="", table_name_rule="", login_id="", user_id=""):

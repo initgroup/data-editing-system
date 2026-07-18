@@ -297,6 +297,7 @@
             formData.append("fixedWidths", getContainerEl("#fixedWidths-M02001")?.value || "");
             formData.append("hasHeader", getContainerEl("#hasHeader-M02001")?.value || "Y");
             formData.append("encoding", getContainerEl("#encoding-M02001")?.value || "auto");
+            formData.append("projectId", this.selectedProjectId || "");
             formData.append("projectCode", this.getSelectedProject()?.PROJECT_CODE || "");
             formData.append("tableComment", getContainerEl("#tableComment-M02001")?.value || "");
             formData.append("tableNameRule", getContainerEl("#tableIdRule-M02001")?.value || "INITUP$_{LOGIN_ID}_{PROJECT_CODE}_{TIME}");
@@ -721,6 +722,7 @@
             try {
                 this.setUploadTableSearchPrefix(false);
                 const params = new URLSearchParams({
+                    projectId: this.selectedProjectId,
                     projectCode: this.getSelectedProjectCode(),
                     tablePrefix: getContainerEl("#uploadTableSearch-M02001")?.value || this.getUploadTableSearchPrefix()
                 });
@@ -729,6 +731,13 @@
                     throw new Error(json.message || json.detail || this.t("uploadTableListLoadFailed", "Upload table list load failed."));
                 }
                 this.uploadTables = Array.isArray(json.data) ? json.data : [];
+                if (json.tablePrefix) {
+                    const searchInput = getContainerEl("#uploadTableSearch-M02001");
+                    if (searchInput) {
+                        searchInput.value = json.tablePrefix;
+                        searchInput.placeholder = json.tablePrefix;
+                    }
+                }
                 this.displayedUploadTables = this.uploadTables;
                 this.uploadTableTreeLoaded = true;
                 this.uploadTableTreeKey = this.getUploadTableTreeKey();

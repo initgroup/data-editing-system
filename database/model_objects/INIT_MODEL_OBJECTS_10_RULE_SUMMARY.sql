@@ -212,7 +212,7 @@ CREATE OR REPLACE PACKAGE BODY "INIT$_PKG_RULE_SUMMARY" AS
             RETURN v_cols;
         END IF;
 
-        IF NOT table_exists('INIT$_TB_CAT_CORR_PAIR') THEN
+        IF NOT table_exists('INIT$_TB_COLREL_CAT_PAIR') THEN
             RETURN v_cols;
         END IF;
 
@@ -222,7 +222,7 @@ CREATE OR REPLACE PACKAGE BODY "INIT$_PKG_RULE_SUMMARY" AS
                     SELECT DISTINCT COL1
                       FROM (
                             SELECT "COL_A" AS COL1
-                             FROM "INIT$_TB_CAT_CORR_PAIR"
+                             FROM "INIT$_TB_COLREL_CAT_PAIR"
                              WHERE "OWNER" = p_target_owner
                                AND "TABLE_NAME" = p_target_table
                                AND "RUN_SOURCE_TYPE" = p_run_source_type
@@ -230,7 +230,7 @@ CREATE OR REPLACE PACKAGE BODY "INIT$_PKG_RULE_SUMMARY" AS
                                AND "PASS_YN" = 'Y'
                             UNION
                             SELECT "COL_B" AS COL1
-                              FROM "INIT$_TB_CAT_CORR_PAIR"
+                              FROM "INIT$_TB_COLREL_CAT_PAIR"
                              WHERE "OWNER" = p_target_owner
                                AND "TABLE_NAME" = p_target_table
                                AND "RUN_SOURCE_TYPE" = p_run_source_type
@@ -346,7 +346,7 @@ CREATE OR REPLACE PACKAGE BODY "INIT$_PKG_RULE_SUMMARY" AS
             END LOOP;
 
             v_sql := q'[
-INSERT /*+ NO_PARALLEL */ INTO "INIT$_TB_ASSOC_RULE_SUMMARY" (
+INSERT /*+ NO_PARALLEL */ INTO "INIT$_TB_RULEDISC_ASSOC_SUM" (
     "RUN_SOURCE_TYPE",
     "RUN_ID",
     "OWNER",
@@ -550,7 +550,7 @@ SELECT ]' || sql_literal(v_run_source_type) || q'[,
             );
 
             IF v_candidates.COUNT > 0 THEN
-                DBMS_OUTPUT.PUT_LINE('[INFO] Candidate columns loaded from INIT$_TB_CAT_CORR_PAIR PASS_YN=Y: '
+                DBMS_OUTPUT.PUT_LINE('[INFO] Candidate columns loaded from INIT$_TB_COLREL_CAT_PAIR PASS_YN=Y: '
                     || v_candidates.COUNT || ' columns for ' || v_target_owner || '.' || v_target_table);
             ELSE
                 v_candidates := v_described_candidates;
@@ -588,7 +588,7 @@ SELECT ]' || sql_literal(v_run_source_type) || q'[,
         END IF;
 
         IF UPPER(TRIM(NVL(p_clear_existing_yn, 'Y'))) = 'Y' THEN
-            DELETE /*+ NO_PARALLEL */ FROM "INIT$_TB_ASSOC_RULE_SUMMARY"
+            DELETE /*+ NO_PARALLEL */ FROM "INIT$_TB_RULEDISC_ASSOC_SUM"
              WHERE "OWNER" = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')
                AND "RUN_SOURCE_TYPE" = v_run_source_type
                AND "RUN_ID" = v_run_id
@@ -610,7 +610,7 @@ SELECT ]' || sql_literal(v_run_source_type) || q'[,
                 END IF;
 
                 v_sql := q'[
-INSERT /*+ NO_PARALLEL */ INTO "INIT$_TB_ASSOC_RULE_SUMMARY" (
+INSERT /*+ NO_PARALLEL */ INTO "INIT$_TB_RULEDISC_ASSOC_SUM" (
     "RUN_SOURCE_TYPE",
     "RUN_ID",
     "OWNER",
@@ -748,7 +748,7 @@ SELECT ]' || sql_literal(v_run_source_type) || q'[,
                         END IF;
 
                         v_sql := q'[
-INSERT /*+ NO_PARALLEL */ INTO "INIT$_TB_ASSOC_RULE_SUMMARY" (
+INSERT /*+ NO_PARALLEL */ INTO "INIT$_TB_RULEDISC_ASSOC_SUM" (
     "RUN_SOURCE_TYPE",
     "RUN_ID",
     "OWNER",

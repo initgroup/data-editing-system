@@ -4288,7 +4288,7 @@
                     passocmodelname: "Association model name for categorical rule discovery.",
                     pruleownername: "Owner of the upstream association rule model.",
                     prulemodelname: "Association rule model name produced by the upstream rule-discovery run.",
-                    psymbolicruletablename: "Symbolic rule storage table; use INIT$_TB_SYMBOLIC_RULE, not an OML association model name.",
+                    psymbolicruletablename: "Symbolic rule storage table; use INIT$_TB_RULEDISC_SYMBOLIC, not an OML association model name.",
                     pruleid: "Optional symbolic rule ID; (auto) evaluates all eligible rules.",
                     pclusterusagemode: "Cluster usage: NONE, PREFER_SAME_CLUSTER, or WITHIN_CLUSTER_ONLY; non-NONE requires the same run's relationship network.",
                     pcaseidcolumnname: "Case ID column used to identify source rows.",

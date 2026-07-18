@@ -19,7 +19,7 @@ from backend.auth_context import (
     refresh_session_cookie,
     require_admin_role,
 )
-from backend.routers import common_router, googleGenai, home, M01001, M01002, M02001, M02002, M03001, M03002, M03003, M03004, M04001, M90001, M90002, M91001, M91002, M91003, M99001, M99002, M99003, M99004, metadata, ml_analysis, population_api
+from backend.routers import common_router, googleGenai, home, M01001, M01002, M02001, M02002, M03001, M03002, M03003, M03004, M04001, M90001, M90002, M90003, M91001, M91002, M91003, M99001, M99002, M99003, M99004, metadata, ml_analysis, population_api
 from backend.services.anly_work_router import create_anly_work_router
 
 # 로깅 설정
@@ -176,6 +176,7 @@ PUBLIC_API_PATHS = {
 }
 
 ADMIN_API_PREFIXES = (
+    "/api/M90003",
     "/api/M99001",
     "/api/M99002",
     "/api/M99003",
@@ -270,6 +271,7 @@ routers = [
     (create_anly_work_router(menu_code="M04002", flow_menu_code="M04001"), "M04002"),
     (M90001.router, "M90001"),
     (M90002.router, "M90002"),
+    (M90003.router, "M90003"),
     (M91001.router, "M91001"),
     (M91002.router, "M91002"),
     (M91003.router, "M91003"),

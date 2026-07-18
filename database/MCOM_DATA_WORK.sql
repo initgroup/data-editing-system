@@ -219,6 +219,22 @@ SELECT ROWIDTOCHAR(T.ROWID) AS "INIT$ROWID"
  FETCH NEXT :limit ROWS ONLY
 ;
 
+-- [DATA_WORK_COLUMN_TYPE_CONFIRM]
+BEGIN
+    INIT$_SP_COLUMN_TYPE_CONFIRM(
+        p_owner           => :owner
+      , p_table_name      => :tableName
+      , p_column_name     => :columnName
+      , p_display_type    => :displayType
+      , p_reason          => :reason
+      , p_run_source_type => :runSourceType
+      , p_run_id          => :runId
+      , p_model_name      => :modelName
+      , p_user_id         => :userId
+      , p_label_source    => 'USER_CONFIRMED'
+    );
+END;
+
 -- [DATA_WORK_JOB_DETAIL]
 SELECT WORK_JOB_ID AS PROFILE_JOB_ID
      , WORK_JOB_ID

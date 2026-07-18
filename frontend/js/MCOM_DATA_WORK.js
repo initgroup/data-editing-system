@@ -1,4 +1,4 @@
-﻿(function() {
+(function() {
     const MCOMMON = {
         createPageHelper(pageCode) {
             const { getContainerEl } = PageManager.createHelper(pageCode);
@@ -44,17 +44,17 @@
 
                 shouldApplyTargetResultFilter(tableName) {
                     return new Set([
-                        "INIT$_TB_PREDICTED_TYPE",
-                        "INIT$_TB_PREDICTED_TYPE_FINAL",
-                        "INIT$_TB_CAT_CORR_PAIR",
-                        "INIT$_TB_CAT_CORR_SUMMARY",
-                        "INIT$_TB_NUM_CORR_PAIR",
-                        "INIT$_TB_NUM_CORR_SUMMARY",
-                        "INIT$_TB_LASSO_FEATURE",
-                        "INIT$_TB_SYMBOLIC_RULE",
-                        "INIT$_TB_ASSOC_RULE_SUMMARY",
-                        "INIT$_TB_RULE_VIOLATION_RESULT",
-                        "INIT$_TB_SYMBOLIC_RULE_VIOLATION"
+                        "INIT$_TB_COLTYPE_RESULT",
+                        "INIT$_TB_COLTYPE_FINAL",
+                        "INIT$_TB_COLREL_CAT_PAIR",
+                        "INIT$_TB_COLREL_CAT_SUMMARY",
+                        "INIT$_TB_COLREL_NUM_PAIR",
+                        "INIT$_TB_COLREL_NUM_SUMMARY",
+                        "INIT$_TB_COLREL_LASSO_FEATURE",
+                        "INIT$_TB_RULEDISC_SYMBOLIC",
+                        "INIT$_TB_RULEDISC_ASSOC_SUM",
+                        "INIT$_TB_RULEVIOL_ASSOC",
+                        "INIT$_TB_RULEVIOL_SYMBOLIC"
                     ])
                         .has(String(tableName || "").trim().toUpperCase());
                 },
@@ -76,9 +76,9 @@
                     const owner = String(targetOwner || "").trim();
                     const target = String(targetTable || "").trim();
                     if (!this.shouldApplyTargetResultFilter(table) || !owner || !target) return "";
-                    const clauses = table === "INIT$_TB_ASSOC_RULE_SUMMARY"
-                        || table === "INIT$_TB_RULE_VIOLATION_RESULT"
-                        || table === "INIT$_TB_SYMBOLIC_RULE_VIOLATION"
+                    const clauses = table === "INIT$_TB_RULEDISC_ASSOC_SUM"
+                        || table === "INIT$_TB_RULEVIOL_ASSOC"
+                        || table === "INIT$_TB_RULEVIOL_SYMBOLIC"
                         ? [
                             `TARGET_OWNER = '${this.escapeSqlLiteral(owner.toUpperCase())}'`,
                             ` AND TARGET_TABLE = '${this.escapeSqlLiteral(target.toUpperCase())}'`
@@ -87,7 +87,7 @@
                             `OWNER = '${this.escapeSqlLiteral(owner.toUpperCase())}'`,
                             ` AND TABLE_NAME = '${this.escapeSqlLiteral(target.toUpperCase())}'`
                         ];
-                    if (table === "INIT$_TB_PREDICTED_TYPE_FINAL") {
+                    if (table === "INIT$_TB_COLTYPE_FINAL") {
                         return clauses.join("\n");
                     }
                     const runId = runIdOverride !== null
@@ -102,27 +102,27 @@
 
                 isPredictedTypeResultTable(tableName) {
                     const table = String(tableName || "").trim().toUpperCase();
-                    return table === "INIT$_TB_PREDICTED_TYPE" || table === "INIT$_TB_PREDICTED_TYPE_FINAL";
+                    return table === "INIT$_TB_COLTYPE_RESULT" || table === "INIT$_TB_COLTYPE_FINAL";
                 },
 
                 shouldLookupExistingResultRunId(tableName) {
                     const table = String(tableName || "").trim().toUpperCase();
                     return new Set([
-                        "INIT$_TB_CAT_CORR_PAIR",
-                        "INIT$_TB_CAT_CORR_SUMMARY",
-                        "INIT$_TB_NUM_CORR_PAIR",
-                        "INIT$_TB_NUM_CORR_SUMMARY",
-                        "INIT$_TB_LASSO_FEATURE",
-                        "INIT$_TB_SYMBOLIC_RULE",
-                        "INIT$_TB_ASSOC_RULE_SUMMARY",
-                        "INIT$_TB_RULE_VIOLATION_RESULT",
-                        "INIT$_TB_SYMBOLIC_RULE_VIOLATION"
+                        "INIT$_TB_COLREL_CAT_PAIR",
+                        "INIT$_TB_COLREL_CAT_SUMMARY",
+                        "INIT$_TB_COLREL_NUM_PAIR",
+                        "INIT$_TB_COLREL_NUM_SUMMARY",
+                        "INIT$_TB_COLREL_LASSO_FEATURE",
+                        "INIT$_TB_RULEDISC_SYMBOLIC",
+                        "INIT$_TB_RULEDISC_ASSOC_SUM",
+                        "INIT$_TB_RULEVIOL_ASSOC",
+                        "INIT$_TB_RULEVIOL_SYMBOLIC"
                     ]).has(table);
                 },
 
                 getPredictedTypeFinalTableName(tableName) {
                     return this.isPredictedTypeResultTable(tableName)
-                        ? "INIT$_TB_PREDICTED_TYPE_FINAL"
+                        ? "INIT$_TB_COLTYPE_FINAL"
                         : String(tableName || "").trim();
                 },
 
@@ -145,9 +145,9 @@
                     }
 
                     const historyObjectName = owner
-                        ? `${this.quoteName(owner)}.${this.quoteName("INIT$_TB_PREDICTED_TYPE")}`
-                        : this.quoteName("INIT$_TB_PREDICTED_TYPE");
-                    const historyWhereClause = this.createTargetResultWhereClause("INIT$_TB_PREDICTED_TYPE", targetOwner, targetTable, runIdOverride);
+                        ? `${this.quoteName(owner)}.${this.quoteName("INIT$_TB_COLTYPE_RESULT")}`
+                        : this.quoteName("INIT$_TB_COLTYPE_RESULT");
+                    const historyWhereClause = this.createTargetResultWhereClause("INIT$_TB_COLTYPE_RESULT", targetOwner, targetTable, runIdOverride);
                     const historySql = !historyWhereClause ? `SELECT *\n  FROM ${historyObjectName};` : [
                         "SELECT *",
                         `  FROM ${historyObjectName}`,
@@ -1282,7 +1282,7 @@
                     method: "LASSO_FEATURE_SELECT",
                     label: "LASSO Feature Select",
                     endpoint: "/api/mlAnalysis/lasso-feature-select",
-                    resultTable: "INIT$_TB_LASSO_FEATURE",
+                    resultTable: "INIT$_TB_COLREL_LASSO_FEATURE",
                     params: [
                         { itemName: "P_TARGET_OWNER", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescTargetOwner", "Target table owner"), itemDefault: targetOwner },
                         { itemName: "P_TARGET_TABLE", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescTargetTable", "Target table name"), itemDefault: targetTable },
@@ -1300,7 +1300,7 @@
                     method: "SYMBOLIC_REGRESSION_RULE",
                     label: "Symbolic Regression Rule",
                     endpoint: "/api/mlAnalysis/symbolic-regression-rule",
-                    resultTable: "INIT$_TB_SYMBOLIC_RULE",
+                    resultTable: "INIT$_TB_RULEDISC_SYMBOLIC",
                     params: [
                         { itemName: "P_TARGET_OWNER", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescTargetOwner", "Target table owner"), itemDefault: targetOwner },
                         { itemName: "P_TARGET_TABLE", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescTargetTable", "Target table name"), itemDefault: targetTable },
@@ -1349,7 +1349,7 @@
                     endpoint: "/api/mlAnalysis/integrated-rule-violation-detect",
                     resultCreateYn: "T",
                     resultOwner: targetOwner,
-                    resultTable: "INIT$_TB_RULE_VIOLATION_RESULT",
+                    resultTable: "INIT$_TB_RULEVIOL_ASSOC",
                     params: [
                         { itemName: "P_RULE_PARTS", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescRuleParts", "Execution scope: ALL, CATEGORICAL, or CONTINUOUS"), itemDefault: "ALL" },
                         { itemName: "P_RULE_OWNER_NAME", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescRuleOwnerName", "Owner of the association rule model from the upstream rule-discovery run"), itemDefault: targetOwner },
@@ -4430,7 +4430,7 @@ END;`;
             if (configured?.length) {
                 return new Set(configured.map((column) => String(column).trim().toUpperCase()).filter(Boolean));
             }
-            if (PAGE_CODE === "M03001" && (tableKey === "INIT$_TB_PREDICTED_TYPE" || tableKey === "INIT$_TB_PREDICTED_TYPE_FINAL")) {
+            if (PAGE_CODE === "M03001" && (tableKey === "INIT$_TB_COLTYPE_RESULT" || tableKey === "INIT$_TB_COLTYPE_FINAL")) {
                 return new Set(["FINAL_PREDICTED_TYPE", "FINAL_REASON"]);
             }
             return new Set();
@@ -4473,7 +4473,10 @@ END;`;
                     }
                 });
                 const rows = json.data || [];
-                const columns = (json.columns || []).filter((column) => column !== "INIT$ROWID");
+                const columns = this.orderEditableDataColumns(
+                    (json.columns || []).filter((column) => column !== "INIT$ROWID"),
+                    target
+                );
                 this.dataGridRows = rows;
                 this.dataGridColumns = columns;
                 this.dataGridTargetKey = `${target.owner}.${target.tableName}`;
@@ -4507,6 +4510,27 @@ END;`;
                 * Math.max(1, Number(this.dataGridPageSize || 100))
                 + Number(rowIndex || 0)
                 + 1;
+        },
+
+        orderEditableDataColumns(columns, target = this.getDataEditTarget()) {
+            const orderedColumns = [...(columns || [])];
+            const tableName = String(target?.tableName || "").trim().toUpperCase();
+            if (PAGE_CODE !== "M03001" || !["INIT$_TB_COLTYPE_RESULT", "INIT$_TB_COLTYPE_FINAL"].includes(tableName)) {
+                return orderedColumns;
+            }
+
+            // Keep the user-editable final type and the values derived from it together.
+            // FINAL_REASON is editable too, so it belongs in the same compact group.
+            const group = ["FINAL_PREDICTED_TYPE", "FINAL_TYPE_CODE", "TYPE_GROUP_CODE", "FINAL_REASON"];
+            const available = new Map(orderedColumns.map((column) => [String(column).toUpperCase(), column]));
+            const grouped = group.map((name) => available.get(name)).filter(Boolean);
+            if (!grouped.length) return orderedColumns;
+
+            const firstIndex = Math.min(...grouped.map((column) => orderedColumns.indexOf(column)));
+            const remaining = orderedColumns.filter((column) => !group.includes(String(column).toUpperCase()));
+            const insertAt = Math.min(firstIndex, remaining.length);
+            remaining.splice(insertAt, 0, ...grouped);
+            return remaining;
         },
 
         renderEditableDataGrid(rows, columns, target) {
@@ -4672,8 +4696,50 @@ END;`;
                 { value: "\uC77C\uBC18\uC801\uBC94\uC8FC\uD615", label: this.getLabel("predictedTypeGeneralCategory") || "General category" },
                 { value: "\uC22B\uC790\uD615\uC5F0\uC18D\uD615", label: this.getLabel("predictedTypeNumericContinuous") || "Numeric continuous" },
                 { value: "\uB2E8\uC21C\uD615\uD14D\uC2A4\uD2B8", label: this.getLabel("predictedTypeSimpleText") || "Simple text" },
-                { value: "\uAE30\uD0C0\uB370\uC774\uD130\uD615", label: this.getLabel("predictedTypeOtherData") || "Other data type" }
+                { value: "\uAE30\uD0C0\uB370\uC774\uD130\uD615", label: this.getLabel("predictedTypeOtherData") || "Other data type" },
+                { value: "\uBBF8\uC0C1\uB370\uC774\uD130\uD615", label: this.getLabel("predictedTypeUnknownData") || "Unknown data type" }
             ];
+        },
+
+        getPredictedTypeMetadata(displayType) {
+            const type = String(displayType ?? "").trim();
+            const metadata = {
+                "숫자형식별자": { typeCode: "NUM_IDENTIFIER", groupCode: "OTHER" },
+                "문자형식별자": { typeCode: "CHAR_IDENTIFIER", groupCode: "OTHER" },
+                "숫자형범주형": { typeCode: "CAT_NUMERIC", groupCode: "CATEGORICAL" },
+                "순서형범주형": { typeCode: "CAT_ORDINAL", groupCode: "CATEGORICAL" },
+                "이산형연속형": { typeCode: "NUM_DISCRETE", groupCode: "CONTINUOUS" },
+                "문자형범주형": { typeCode: "CAT_CHAR", groupCode: "CATEGORICAL" },
+                "일반적범주형": { typeCode: "CAT_GENERAL", groupCode: "CATEGORICAL" },
+                "숫자형연속형": { typeCode: "NUM_CONTINUOUS", groupCode: "CONTINUOUS" },
+                "단순형텍스트": { typeCode: "FREE_TEXT", groupCode: "OTHER" },
+                "기타데이터형": { typeCode: "OTHER", groupCode: "OTHER" },
+                "미상데이터형": { typeCode: "UNKNOWN", groupCode: "OTHER" }
+            };
+            return metadata[type] || { typeCode: "", groupCode: "" };
+        },
+
+        syncPredictedTypeDerivedCells(rowIndex, displayType) {
+            const row = this.dataGridRows?.[rowIndex];
+            if (!row) return;
+            const metadata = this.getPredictedTypeMetadata(displayType);
+            const derivedValues = {
+                FINAL_TYPE_CODE: metadata.typeCode,
+                TYPE_GROUP_CODE: metadata.groupCode,
+                LABEL_SOURCE: metadata.typeCode ? "USER_CONFIRMED" : "LEGACY_UNKNOWN",
+                CONFIRMED_YN: metadata.typeCode ? "Y" : "N"
+            };
+            Object.entries(derivedValues).forEach(([columnName, value]) => {
+                if (!(this.dataGridColumns || []).some((column) => String(column).toUpperCase() === columnName)) return;
+                row[columnName] = value;
+                const cell = getContainerEl(`#dataEditGrid-${PAGE_CODE}`)?.querySelector(
+                    `tbody tr:nth-child(${rowIndex + 1}) td:nth-child(${(this.dataGridColumns || []).findIndex((column) => String(column).toUpperCase() === columnName) + 2})`
+                );
+                if (cell) {
+                    cell.textContent = value;
+                    cell.title = value;
+                }
+            });
         },
 
         handleEditableDataCellInput(event) {
@@ -4782,6 +4848,9 @@ END;`;
                     value: normalizedValue
                 });
                 targetCell?.classList?.add("is-dirty");
+            }
+            if (this.isPredictedTypeEditColumn(columnName)) {
+                this.syncPredictedTypeDerivedCells(rowIndex, normalizedValue);
             }
             this.syncEditableDataSaveButton();
         },
@@ -5483,7 +5552,7 @@ END;`;
 
         createDefaultDataOrderByClause(target = this.getDataEditTarget()) {
             const { tableName } = target || {};
-            return String(tableName || "").trim().toUpperCase() === "INIT$_TB_PREDICTED_TYPE_FINAL"
+            return String(tableName || "").trim().toUpperCase() === "INIT$_TB_COLTYPE_FINAL"
                 ? "COLUMN_ID"
                 : "";
         },
@@ -5683,10 +5752,10 @@ END;`;
                 lines[lines.length - 1] = `${lines[lines.length - 1]};`;
                 return lines.join("\n");
             };
-            if (table === "INIT$_TB_PREDICTED_TYPE" || table === "INIT$_TB_PREDICTED_TYPE_FINAL") {
+            if (table === "INIT$_TB_COLTYPE_RESULT" || table === "INIT$_TB_COLTYPE_FINAL") {
                 return [
-                    buildPredictionSql("INIT$_TB_PREDICTED_TYPE", true),
-                    buildPredictionSql("INIT$_TB_PREDICTED_TYPE_FINAL", false)
+                    buildPredictionSql("INIT$_TB_COLTYPE_RESULT", true),
+                    buildPredictionSql("INIT$_TB_COLTYPE_FINAL", false)
                 ].join("\n\n");
             }
             const targetObject = `${this.quoteName(tableOwner)}.${this.quoteName(table)}`;

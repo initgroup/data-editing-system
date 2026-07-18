@@ -37,59 +37,59 @@ GENERIC_TABLE_RESULT_LAYOUT = {
     "summary": "",
 }
 TABLE_RESULT_LAYOUTS = {
-    "INIT$_TB_PREDICTED_TYPE": {
+    "INIT$_TB_COLTYPE_RESULT": {
         "kind": "TABLE",
-        "key": "TABLE:INIT$_TB_PREDICTED_TYPE",
+        "key": "TABLE:INIT$_TB_COLTYPE_RESULT",
         "summary": "predictedTypeSummary",
     },
-    "INIT$_TB_PREDICTED_TYPE_FINAL": {
+    "INIT$_TB_COLTYPE_FINAL": {
         "kind": "TABLE",
-        "key": "TABLE:INIT$_TB_PREDICTED_TYPE",
+        "key": "TABLE:INIT$_TB_COLTYPE_RESULT",
         "summary": "predictedTypeSummary",
     },
-    "INIT$_TB_CAT_CORR_PAIR": {
+    "INIT$_TB_COLREL_CAT_PAIR": {
         "kind": "TABLE",
-        "key": "TABLE:INIT$_TB_CAT_CORR_PAIR",
+        "key": "TABLE:INIT$_TB_COLREL_CAT_PAIR",
         "summary": "correlationSummary",
     },
-    "INIT$_TB_NUM_CORR_PAIR": {
+    "INIT$_TB_COLREL_NUM_PAIR": {
         "kind": "TABLE",
-        "key": "TABLE:INIT$_TB_NUM_CORR_PAIR",
+        "key": "TABLE:INIT$_TB_COLREL_NUM_PAIR",
         "summary": "correlationSummary",
     },
-    "INIT$_TB_RELATION_PAIR": {
+    "INIT$_TB_COLREL_PAIR": {
         "kind": "TABLE",
-        "key": "TABLE:INIT$_TB_RELATION_PAIR",
+        "key": "TABLE:INIT$_TB_COLREL_PAIR",
         "summary": "relationSummary",
     },
-    "INIT$_TB_RELATION_NETWORK_NODE": {
+    "INIT$_TB_COLREL_NETWORK_NODE": {
         "kind": "TABLE",
-        "key": "TABLE:INIT$_TB_RELATION_NETWORK_NODE",
+        "key": "TABLE:INIT$_TB_COLREL_NETWORK_NODE",
         "summary": "relationNetworkSummary",
     },
-    "INIT$_TB_RELATION_NETWORK_EDGE": {
+    "INIT$_TB_COLREL_NETWORK_EDGE": {
         "kind": "TABLE",
-        "key": "TABLE:INIT$_TB_RELATION_NETWORK_EDGE",
+        "key": "TABLE:INIT$_TB_COLREL_NETWORK_EDGE",
         "summary": "relationNetworkSummary",
     },
-    "INIT$_TB_LASSO_FEATURE": {
+    "INIT$_TB_COLREL_LASSO_FEATURE": {
         "kind": "TABLE",
-        "key": "TABLE:INIT$_TB_LASSO_FEATURE",
+        "key": "TABLE:INIT$_TB_COLREL_LASSO_FEATURE",
         "summary": "lassoSummary",
     },
-    "INIT$_TB_SYMBOLIC_RULE": {
+    "INIT$_TB_RULEDISC_SYMBOLIC": {
         "kind": "TABLE",
-        "key": "TABLE:INIT$_TB_SYMBOLIC_RULE",
+        "key": "TABLE:INIT$_TB_RULEDISC_SYMBOLIC",
         "summary": "symbolicRuleSummary",
     },
-    "INIT$_TB_RULE_VIOLATION_RESULT": {
+    "INIT$_TB_RULEVIOL_ASSOC": {
         "kind": "TABLE",
-        "key": "TABLE:INIT$_TB_RULE_VIOLATION_RESULT",
+        "key": "TABLE:INIT$_TB_RULEVIOL_ASSOC",
         "summary": "violationSummary",
     },
-    "INIT$_TB_SYMBOLIC_RULE_VIOLATION": {
+    "INIT$_TB_RULEVIOL_SYMBOLIC": {
         "kind": "TABLE",
-        "key": "TABLE:INIT$_TB_SYMBOLIC_RULE_VIOLATION",
+        "key": "TABLE:INIT$_TB_RULEVIOL_SYMBOLIC",
         "summary": "symbolicViolationSummary",
     },
 }
@@ -271,7 +271,7 @@ def _normalize_optional_int(value: str | int | None, label: str) -> int | None:
 
 
 def _is_predicted_type_result_table(object_name: str) -> bool:
-    return str(object_name or "").strip().upper() in {"INIT$_TB_PREDICTED_TYPE", "INIT$_TB_PREDICTED_TYPE_FINAL"}
+    return str(object_name or "").strip().upper() in {"INIT$_TB_COLTYPE_RESULT", "INIT$_TB_COLTYPE_FINAL"}
 
 
 def _build_predicted_type_result_sql(
@@ -283,8 +283,8 @@ def _build_predicted_type_result_sql(
     predicted_type_case: str | None = None,
     include_order: bool = True,
 ) -> tuple[str, dict[str, Any]]:
-    predicted_object = f"{_quote_identifier(owner_name)}.\"INIT$_TB_PREDICTED_TYPE\""
-    final_object = f"{_quote_identifier(owner_name)}.\"INIT$_TB_PREDICTED_TYPE_FINAL\""
+    predicted_object = f"{_quote_identifier(owner_name)}.\"INIT$_TB_COLTYPE_RESULT\""
+    final_object = f"{_quote_identifier(owner_name)}.\"INIT$_TB_COLTYPE_FINAL\""
     bind_params: dict[str, Any] = {}
     predicted_filters = []
     final_filters = []
@@ -326,9 +326,21 @@ SELECT COALESCE(P."RUN_SOURCE_TYPE", F."SOURCE_RUN_SOURCE_TYPE") AS "RUN_SOURCE_
      , P."ENTROPY" AS "ENTROPY"
      , P."NORM_ENTROPY" AS "NORM_ENTROPY"
      , COALESCE(P."BASE_PREDICTED_TYPE", F."BASE_PREDICTED_TYPE") AS "BASE_PREDICTED_TYPE"
+     , P."BASE_TYPE_CODE" AS "BASE_TYPE_CODE"
      , P."BASE_REASON" AS "BASE_REASON"
      , COALESCE(P."MODL_PREDICTED_TYPE", F."MODL_PREDICTED_TYPE") AS "MODL_PREDICTED_TYPE"
+     , P."MODL_TYPE_CODE" AS "MODL_TYPE_CODE"
      , COALESCE(F."FINAL_PREDICTED_TYPE", P."FINAL_PREDICTED_TYPE", P."MODL_PREDICTED_TYPE", P."BASE_PREDICTED_TYPE") AS "FINAL_PREDICTED_TYPE"
+     , COALESCE(F."FINAL_TYPE_CODE", P."FINAL_TYPE_CODE", P."MODL_TYPE_CODE", P."BASE_TYPE_CODE") AS "FINAL_TYPE_CODE"
+     , COALESCE(
+           F."TYPE_GROUP_CODE"
+         , P."TYPE_GROUP_CODE"
+         , CASE
+               WHEN COALESCE(F."FINAL_PREDICTED_TYPE", P."FINAL_PREDICTED_TYPE", P."MODL_PREDICTED_TYPE", P."BASE_PREDICTED_TYPE") LIKE '%범주형' THEN 'CATEGORICAL'
+               WHEN COALESCE(F."FINAL_PREDICTED_TYPE", P."FINAL_PREDICTED_TYPE", P."MODL_PREDICTED_TYPE", P."BASE_PREDICTED_TYPE") LIKE '%연속형' THEN 'CONTINUOUS'
+               ELSE 'OTHER'
+           END
+       ) AS "TYPE_GROUP_CODE"
      , P."FINAL_PREDICTED_TYPE" AS "RUN_FINAL_PREDICTED_TYPE"
      , F."FINAL_PREDICTED_TYPE" AS "MASTER_FINAL_PREDICTED_TYPE"
      , CASE
@@ -341,6 +353,11 @@ SELECT COALESCE(P."RUN_SOURCE_TYPE", F."SOURCE_RUN_SOURCE_TYPE") AS "RUN_SOURCE_
      , COALESCE(F."FINAL_REASON", P."FINAL_REASON") AS "FINAL_REASON"
      , COALESCE(F."FINAL_UPDATE_DT", P."FINAL_UPDATE_DT") AS "FINAL_UPDATE_DT"
      , COALESCE(F."FINAL_UPDATE_USER", P."FINAL_UPDATE_USER") AS "FINAL_UPDATE_USER"
+     , F."LABEL_SOURCE" AS "LABEL_SOURCE"
+     , F."CONFIRMED_YN" AS "CONFIRMED_YN"
+     , COALESCE(F."MODEL_VERSION_ID", P."MODEL_VERSION_ID") AS "MODEL_VERSION_ID"
+     , COALESCE(F."MODEL_VERSION", P."MODEL_VERSION") AS "MODEL_VERSION"
+     , COALESCE(F."MODEL_CONFIDENCE", P."MODEL_CONFIDENCE") AS "MODEL_CONFIDENCE"
      , F."SOURCE_RUN_SOURCE_TYPE" AS "SOURCE_RUN_SOURCE_TYPE"
      , F."SOURCE_RUN_ID" AS "SOURCE_RUN_ID"
      , F."SOURCE_MODEL_NAME" AS "SOURCE_MODEL_NAME"
@@ -594,9 +611,9 @@ def _fetch_cat_corr_summary(
     run_source_type: str = "",
     run_id: int | None = None,
 ) -> dict[str, Any] | None:
-    if object_name not in {"INIT$_TB_CAT_CORR_PAIR", "INIT$_TB_NUM_CORR_PAIR"} or not target_owner or not target_table:
+    if object_name not in {"INIT$_TB_COLREL_CAT_PAIR", "INIT$_TB_COLREL_NUM_PAIR"} or not target_owner or not target_table:
         return None
-    is_numeric = object_name == "INIT$_TB_NUM_CORR_PAIR"
+    is_numeric = object_name == "INIT$_TB_COLREL_NUM_PAIR"
     metric_column = "ABS_PEARSON_R" if is_numeric else "CRAMERS_V"
     signed_metric_column = "PEARSON_R" if is_numeric else "CRAMERS_V"
     cursor.execute(SqlLoader.get_sql("MCOMMON_ANLY_WORK_TARGET_TABLE_COLUMN_COUNT"), {
@@ -681,7 +698,7 @@ def _fetch_relation_summary(
     run_source_type: str = "",
     run_id: int | None = None,
 ) -> dict[str, Any] | None:
-    if object_name != "INIT$_TB_RELATION_PAIR" or not target_owner or not target_table:
+    if object_name != "INIT$_TB_COLREL_PAIR" or not target_owner or not target_table:
         return None
     cursor.execute(SqlLoader.get_sql("MCOMMON_ANLY_WORK_TARGET_TABLE_COLUMN_COUNT"), {
         "owner": target_owner,
@@ -824,10 +841,10 @@ def _fetch_relation_network_summary(
     run_source_type: str = "",
     run_id: int | None = None,
 ) -> dict[str, Any] | None:
-    if object_name not in {"INIT$_TB_RELATION_NETWORK_NODE", "INIT$_TB_RELATION_NETWORK_EDGE"} or not target_owner or not target_table:
+    if object_name not in {"INIT$_TB_COLREL_NETWORK_NODE", "INIT$_TB_COLREL_NETWORK_EDGE"} or not target_owner or not target_table:
         return None
-    node_object = f"{_quote_identifier(owner_name)}.{_quote_identifier('INIT$_TB_RELATION_NETWORK_NODE')}"
-    edge_object = f"{_quote_identifier(owner_name)}.{_quote_identifier('INIT$_TB_RELATION_NETWORK_EDGE')}"
+    node_object = f"{_quote_identifier(owner_name)}.{_quote_identifier('INIT$_TB_COLREL_NETWORK_NODE')}"
+    edge_object = f"{_quote_identifier(owner_name)}.{_quote_identifier('INIT$_TB_COLREL_NETWORK_EDGE')}"
     run_filter_sql = ""
     run_params: dict[str, Any] = {}
     if run_source_type and run_id is not None:
@@ -1107,7 +1124,7 @@ def _fetch_lasso_summary(
     max_auto_targets: int = 10,
     auto_target_yn: str = "N",
 ) -> dict[str, Any] | None:
-    if object_name != "INIT$_TB_LASSO_FEATURE" or not target_owner or not target_table:
+    if object_name != "INIT$_TB_COLREL_LASSO_FEATURE" or not target_owner or not target_table:
         return None
     result_object = f"{_quote_identifier(owner_name)}.{_quote_identifier(object_name)}"
     run_filter_sql = ""
@@ -1266,7 +1283,7 @@ def _fetch_symbolic_rule_summary(
     method_filter: str = "",
     target_column_filter: str = "",
 ) -> dict[str, Any] | None:
-    if object_name != "INIT$_TB_SYMBOLIC_RULE" or not target_owner or not target_table:
+    if object_name != "INIT$_TB_RULEDISC_SYMBOLIC" or not target_owner or not target_table:
         return None
     result_object = f"{_quote_identifier(owner_name)}.{_quote_identifier(object_name)}"
     run_filter_sql = ""
@@ -1401,10 +1418,10 @@ def _fetch_symbolic_violation_summary(
     target_column_filter: str = "",
     result_scope: str = "ALL",
 ) -> dict[str, Any] | None:
-    if object_name != "INIT$_TB_SYMBOLIC_RULE_VIOLATION" or not target_owner or not target_table:
+    if object_name != "INIT$_TB_RULEVIOL_SYMBOLIC" or not target_owner or not target_table:
         return None
     result_object = f"{_quote_identifier(owner_name)}.{_quote_identifier(object_name)}"
-    rule_object = f"{_quote_identifier(owner_name)}.\"INIT$_TB_SYMBOLIC_RULE\""
+    rule_object = f"{_quote_identifier(owner_name)}.\"INIT$_TB_RULEDISC_SYMBOLIC\""
     run_filter_sql = ""
     rule_run_filter_sql = ""
     run_params: dict[str, Any] = {}
@@ -1678,7 +1695,7 @@ def _fetch_predicted_type_summary(
             "sourceCode": "FINAL",
             "sourceLabel": "FINAL",
             "sourceColumn": "MASTER_FINAL_PREDICTED_TYPE",
-            "description": "후속 노드에 적용되는 INIT$_TB_PREDICTED_TYPE_FINAL.FINAL_PREDICTED_TYPE",
+            "description": "후속 노드에 적용되는 INIT$_TB_COLTYPE_FINAL.FINAL_PREDICTED_TYPE",
             "groups": to_summary_groups(fetch_group_map(final_type_expr)),
         },
     ]
@@ -1750,7 +1767,7 @@ def _fetch_rule_violation_summary(
     run_source_type: str = "",
     run_id: int | None = None,
 ) -> dict[str, Any] | None:
-    if object_name != "INIT$_TB_RULE_VIOLATION_RESULT":
+    if object_name != "INIT$_TB_RULEVIOL_ASSOC":
         return None
     result_object = f"{_quote_identifier(owner_name)}.{_quote_identifier(object_name)}"
     where_clauses = []
@@ -1892,7 +1909,7 @@ def _fetch_rule_violation_summary(
     detection_overview = fetch_one(
         "WITH BASE_CANDIDATES AS ("
         "        SELECT S.* "
-        "          FROM \"INIT$_TB_ASSOC_RULE_SUMMARY\" S "
+        "          FROM \"INIT$_TB_RULEDISC_ASSOC_SUM\" S "
         f"         WHERE {candidate_filter_sql}"
         "     ), DISPLAY_CANDIDATES AS ("
         "        SELECT C.* "
@@ -1985,11 +2002,11 @@ def _fetch_rule_violation_summary(
         '                       S."RULE_SUPPORT" AS RULE_SUPPORT, '
         '                       S."RULE_CONFIDENCE" AS RULE_CONFIDENCE, '
         '                       S."RULE_LIFT" AS RULE_LIFT '
-        '                  FROM "INIT$_TB_ASSOC_RULE_SUMMARY" S '
+        '                  FROM "INIT$_TB_RULEDISC_ASSOC_SUM" S '
         "                  LEFT JOIN ("
         '                        SELECT A."RULE_ID", '
         '                               ROW_NUMBER() OVER (ORDER BY A."RULE_CONFIDENCE" DESC NULLS LAST, A."RULE_LIFT" DESC NULLS LAST, A."SUPPORT_COUNT" DESC NULLS LAST, A."RULE_ID") AS DETECTION_RN '
-        '                          FROM "INIT$_TB_ASSOC_RULE_SUMMARY" A '
+        '                          FROM "INIT$_TB_RULEDISC_ASSOC_SUM" A '
         '                         WHERE A."OWNER" = :candidateOwner '
         '                           AND A."TARGET_OWNER" = :candidateTargetOwner '
         '                           AND A."TARGET_TABLE" = :candidateTargetTable '
@@ -2504,27 +2521,27 @@ def get_result_table(
         where_clauses = []
         bind_params: dict[str, Any] = {}
         order_sql = ""
-        if object_name in {"INIT$_TB_CAT_CORR_PAIR", "INIT$_TB_NUM_CORR_PAIR"} and str(menuCode or "").upper() == "M03002":
+        if object_name in {"INIT$_TB_COLREL_CAT_PAIR", "INIT$_TB_COLREL_NUM_PAIR"} and str(menuCode or "").upper() == "M03002":
             where_clauses.append("PASS_YN = 'Y'")
-            if object_name == "INIT$_TB_CAT_CORR_PAIR":
+            if object_name == "INIT$_TB_COLREL_CAT_PAIR":
                 order_sql = " ORDER BY CRAMERS_V DESC, P_VALUE ASC"
-        if object_name == "INIT$_TB_NUM_CORR_PAIR":
+        if object_name == "INIT$_TB_COLREL_NUM_PAIR":
             order_sql = " ORDER BY PASS_YN DESC, ABS_PEARSON_R DESC NULLS LAST, P_VALUE ASC NULLS LAST, COL_A, COL_B"
-        if object_name == "INIT$_TB_LASSO_FEATURE":
+        if object_name == "INIT$_TB_COLREL_LASSO_FEATURE":
             order_sql = " ORDER BY TARGET_COLUMN, SELECTED_YN DESC, RANK_NO NULLS LAST, ABS_COEFFICIENT DESC NULLS LAST, FEATURE_NAME"
-        if object_name == "INIT$_TB_RELATION_PAIR":
+        if object_name == "INIT$_TB_COLREL_PAIR":
             order_sql = " ORDER BY PASS_YN DESC, RELATION_TYPE, ABS_METRIC_VALUE DESC NULLS LAST, P_VALUE ASC NULLS LAST, COL_A, COL_B, METRIC_NAME"
-        if object_name == "INIT$_TB_RELATION_NETWORK_EDGE":
+        if object_name == "INIT$_TB_COLREL_NETWORK_EDGE":
             order_sql = " ORDER BY CLUSTER_ID NULLS LAST, ABS_METRIC_VALUE DESC NULLS LAST, COL_A, COL_B, METRIC_NAME"
-        if object_name == "INIT$_TB_RELATION_NETWORK_NODE":
+        if object_name == "INIT$_TB_COLREL_NETWORK_NODE":
             order_sql = " ORDER BY CLUSTER_ID NULLS LAST, CENTRALITY_SCORE DESC NULLS LAST, DEGREE_COUNT DESC NULLS LAST, COLUMN_NAME"
-        if object_name == "INIT$_TB_SYMBOLIC_RULE":
+        if object_name == "INIT$_TB_RULEDISC_SYMBOLIC":
             order_sql = " ORDER BY TARGET_COLUMN, SELECTED_YN DESC, RANK_NO NULLS LAST, SCORE DESC NULLS LAST, RULE_ID"
         if _is_predicted_type_result_table(object_name) and "COLUMN_ID" in columns:
             order_sql = " ORDER BY COLUMN_ID NULLS LAST, COLUMN_NAME"
-        if object_name == "INIT$_TB_RULE_VIOLATION_RESULT":
+        if object_name == "INIT$_TB_RULEVIOL_ASSOC":
             order_sql = " ORDER BY VIOLATION_SCORE DESC NULLS LAST, RULE_CONFIDENCE DESC NULLS LAST, VIOLATION_ID"
-        if object_name == "INIT$_TB_SYMBOLIC_RULE_VIOLATION":
+        if object_name == "INIT$_TB_RULEVIOL_SYMBOLIC":
             order_sql = " ORDER BY VIOLATION_SCORE DESC NULLS LAST, ERROR_PCT DESC NULLS LAST, ABS_ERROR DESC NULLS LAST, VIOLATION_ID"
         if target_owner and "OWNER" in columns:
             where_clauses.append("OWNER = :targetOwner")
@@ -2538,10 +2555,10 @@ def get_result_table(
         elif target_table and "TARGET_TABLE" in columns:
             where_clauses.append("TARGET_TABLE = :targetTable")
             bind_params["targetTable"] = target_table
-        if object_name == "INIT$_TB_RULE_VIOLATION_RESULT" and rule_model_name and "MODEL_NAME" in columns:
+        if object_name == "INIT$_TB_RULEVIOL_ASSOC" and rule_model_name and "MODEL_NAME" in columns:
             where_clauses.append("MODEL_NAME = :ruleModelName")
             bind_params["ruleModelName"] = rule_model_name
-        if object_name in {"INIT$_TB_CAT_CORR_PAIR", "INIT$_TB_NUM_CORR_PAIR"} and {"COL_A", "COL_B"}.issubset(columns):
+        if object_name in {"INIT$_TB_COLREL_CAT_PAIR", "INIT$_TB_COLREL_NUM_PAIR"} and {"COL_A", "COL_B"}.issubset(columns):
             if normalized_correlation_col_a and normalized_correlation_col_b:
                 where_clauses.append(
                     "((COL_A = :correlationColA AND COL_B = :correlationColB) "
@@ -2552,7 +2569,7 @@ def get_result_table(
             elif normalized_correlation_col_a:
                 where_clauses.append("(COL_A = :correlationColA OR COL_B = :correlationColA)")
                 bind_params["correlationColA"] = normalized_correlation_col_a
-        if object_name == "INIT$_TB_RELATION_PAIR":
+        if object_name == "INIT$_TB_COLREL_PAIR":
             if normalized_relation_type != "ALL" and "RELATION_TYPE" in columns:
                 if normalized_relation_type == "CATEGORICAL_NUMERIC":
                     where_clauses.append("RELATION_TYPE IN ('CATEGORICAL_NUMERIC', 'NUMERIC_CATEGORICAL')")
@@ -2573,11 +2590,11 @@ def get_result_table(
                 elif normalized_relation_col_a:
                     where_clauses.append("(COL_A = :relationColA OR COL_B = :relationColA)")
                     bind_params["relationColA"] = normalized_relation_col_a
-        if object_name in {"INIT$_TB_RELATION_NETWORK_NODE", "INIT$_TB_RELATION_NETWORK_EDGE"}:
+        if object_name in {"INIT$_TB_COLREL_NETWORK_NODE", "INIT$_TB_COLREL_NETWORK_EDGE"}:
             if normalized_network_cluster_id is not None and "CLUSTER_ID" in columns:
                 where_clauses.append("CLUSTER_ID = :networkClusterId")
                 bind_params["networkClusterId"] = normalized_network_cluster_id
-            if object_name == "INIT$_TB_RELATION_NETWORK_EDGE" and {"COL_A", "COL_B"}.issubset(columns):
+            if object_name == "INIT$_TB_COLREL_NETWORK_EDGE" and {"COL_A", "COL_B"}.issubset(columns):
                 if normalized_network_col_a and normalized_network_col_b:
                     where_clauses.append(
                         "((COL_A = :networkColA AND COL_B = :networkColB) "
@@ -2588,7 +2605,7 @@ def get_result_table(
                 elif normalized_network_col_a:
                     where_clauses.append("(COL_A = :networkColA OR COL_B = :networkColA)")
                     bind_params["networkColA"] = normalized_network_col_a
-            elif object_name == "INIT$_TB_RELATION_NETWORK_NODE" and normalized_network_col_a and "COLUMN_NAME" in columns:
+            elif object_name == "INIT$_TB_COLREL_NETWORK_NODE" and normalized_network_col_a and "COLUMN_NAME" in columns:
                 if normalized_network_col_b:
                     where_clauses.append("COLUMN_NAME IN (:networkColA, :networkColB)")
                     bind_params["networkColA"] = normalized_network_col_a
@@ -2596,7 +2613,7 @@ def get_result_table(
                 else:
                     where_clauses.append("COLUMN_NAME = :networkColA")
                     bind_params["networkColA"] = normalized_network_col_a
-        if object_name == "INIT$_TB_LASSO_FEATURE":
+        if object_name == "INIT$_TB_COLREL_LASSO_FEATURE":
             if normalized_lasso_target_column and "TARGET_COLUMN" in columns:
                 where_clauses.append("TARGET_COLUMN = :lassoTargetColumn")
                 bind_params["lassoTargetColumn"] = normalized_lasso_target_column
@@ -2609,19 +2626,19 @@ def get_result_table(
                 where_clauses.append("NVL(COEFFICIENT, 0) > 0")
             elif normalized_lasso_direction == "NEGATIVE" and "COEFFICIENT" in columns:
                 where_clauses.append("NVL(COEFFICIENT, 0) < 0")
-        if object_name == "INIT$_TB_RULE_VIOLATION_RESULT" and violationConditionCount is not None and "CONDITION_COUNT" in columns:
+        if object_name == "INIT$_TB_RULEVIOL_ASSOC" and violationConditionCount is not None and "CONDITION_COUNT" in columns:
             where_clauses.append("CONDITION_COUNT = :violationConditionCount")
             bind_params["violationConditionCount"] = violationConditionCount
-        if object_name == "INIT$_TB_RULE_VIOLATION_RESULT" and normalized_violation_confidence_scope == "NON_PERFECT" and "RULE_CONFIDENCE" in columns:
+        if object_name == "INIT$_TB_RULEVIOL_ASSOC" and normalized_violation_confidence_scope == "NON_PERFECT" and "RULE_CONFIDENCE" in columns:
             where_clauses.append(
                 "RULE_CONFIDENCE IS NOT NULL "
                 "AND ((RULE_CONFIDENCE <= 1 AND RULE_CONFIDENCE < 0.999999) "
                 " OR (RULE_CONFIDENCE > 1 AND RULE_CONFIDENCE < 99.9999))"
             )
-        if object_name == "INIT$_TB_RULE_VIOLATION_RESULT" and normalized_violation_rule_id and "RULE_ID" in columns:
+        if object_name == "INIT$_TB_RULEVIOL_ASSOC" and normalized_violation_rule_id and "RULE_ID" in columns:
             where_clauses.append("UPPER(RULE_ID) LIKE '%' || UPPER(:violationRuleId) || '%'")
             bind_params["violationRuleId"] = normalized_violation_rule_id
-        if object_name == "INIT$_TB_SYMBOLIC_RULE_VIOLATION" and normalized_violation_rule_id and "RULE_ID" in columns:
+        if object_name == "INIT$_TB_RULEVIOL_SYMBOLIC" and normalized_violation_rule_id and "RULE_ID" in columns:
             where_clauses.append("UPPER(RULE_ID) LIKE '%' || UPPER(:violationRuleId) || '%'")
             bind_params["violationRuleId"] = normalized_violation_rule_id
         if (
@@ -2782,7 +2799,7 @@ def get_symbolic_rule_sample(
     try:
         conn = get_target_db_connection(request)
         cursor = conn.cursor()
-        rule_object = f'{_quote_identifier(owner_name)}."INIT$_TB_SYMBOLIC_RULE"'
+        rule_object = f'{_quote_identifier(owner_name)}."INIT$_TB_RULEDISC_SYMBOLIC"'
         context_sql = SqlLoader.get_sql("MCOMMON_ANLY_WORK_SYMBOLIC_SAMPLE_CONTEXT").replace(
             "{ruleObject}",
             rule_object,

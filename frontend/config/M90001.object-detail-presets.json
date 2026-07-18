@@ -103,8 +103,8 @@
       "owner": "*",
       "objectType": "PROCEDURE",
       "objectName": "INIT$_SP_DECISION_TREE_RULE_MODEL",
-      "label": "M04_DECISION_TREE_RULE_모델생성",
-      "description": "컬럼 유형 분석 결과와 최종 분류값을 학습 데이터로 사용하여 의사결정트리 기반 규칙 모델을 생성하고, 컬럼 분류 규칙 요약을 만들기 위한 프로시저입니다.",
+      "label": "DECISION_TREE_RULE_모델학습",
+      "description": "사용자가 확정했거나 검증 데이터로 가져온 컬럼 유형 라벨만 학습 데이터로 사용하여 의사결정트리 후보 모델과 규칙 요약을 생성합니다. 범용 모델의 학습·평가·활성화는 M90003을 사용하세요.",
       "resultCreateYn": "M",
       "resultOwner": "__CURRENT_OWNER__",
       "resultTableName": "OML_DECISION_TREE_MODEL_01",
@@ -117,7 +117,7 @@
         {
           "key": "P_DATA_QUERY",
           "comment": "학습 입력 데이터 SELECT 문",
-          "defaultValue": "'SELECT CAST(R.OWNER || ''|'' || R.TABLE_NAME || ''|'' || R.MODEL_NAME || ''|'' || R.COLUMN_NAME AS VARCHAR2(4000)) AS CASE_ID, R.DATA_TYPE, R.TOTAL_ROWS, R.NUM_DISTINCT, R.DIST_VAL_RT, R.LOG_DATA_TYPE, R.ENTROPY, R.NORM_ENTROPY, COALESCE(F.FINAL_PREDICTED_TYPE, R.FINAL_PREDICTED_TYPE, R.MODL_PREDICTED_TYPE, R.BASE_PREDICTED_TYPE) AS TARGET_TYPE FROM (SELECT R.*, ROW_NUMBER() OVER (PARTITION BY R.OWNER, R.TABLE_NAME, R.MODEL_NAME, R.COLUMN_NAME ORDER BY R.RUN_ID DESC) AS RN FROM '||:INIT$TargetOwner||'.'||:INIT$TargetTable||' R WHERE R.RUN_SOURCE_TYPE = '''||:INIT$RunSourceType||''' AND ('''||:INIT$RunSourceType||''' <> ''FLOW_WORK'' OR R.RUN_ID = '||:INIT$RunId||')) R LEFT JOIN '||:INIT$TargetOwner||'.INIT$_TB_PREDICTED_TYPE_FINAL F ON F.OWNER = R.OWNER AND F.TABLE_NAME = R.TABLE_NAME AND F.COLUMN_NAME = R.COLUMN_NAME WHERE R.RN = 1 AND COALESCE(F.FINAL_PREDICTED_TYPE, R.FINAL_PREDICTED_TYPE, R.MODL_PREDICTED_TYPE, R.BASE_PREDICTED_TYPE) IS NOT NULL'"
+          "defaultValue": "'SELECT CAST(R.OWNER || ''|'' || R.TABLE_NAME || ''|'' || R.COLUMN_NAME AS VARCHAR2(4000)) AS CASE_ID, R.DATA_TYPE, R.TOTAL_ROWS, R.NUM_DISTINCT, R.DIST_VAL_RT, R.LOG_DATA_TYPE, R.ENTROPY, R.NORM_ENTROPY, L.TYPE_CODE AS TARGET_TYPE FROM (SELECT R.*, ROW_NUMBER() OVER (PARTITION BY R.OWNER, R.TABLE_NAME, R.COLUMN_NAME ORDER BY R.CREATE_DT DESC NULLS LAST, R.RUN_ID DESC, R.MODEL_NAME DESC) AS RN FROM '||:INIT$TargetOwner||'.'||:INIT$TargetTable||' R WHERE R.RUN_SOURCE_TYPE = '''||:INIT$RunSourceType||''' AND ('''||:INIT$RunSourceType||''' <> ''FLOW_WORK'' OR R.RUN_ID = '||:INIT$RunId||')) R JOIN '||:INIT$TargetOwner||'.INIT$_TB_COLTYPE_LABEL L ON L.OWNER = R.OWNER AND L.TABLE_NAME = R.TABLE_NAME AND L.COLUMN_NAME = R.COLUMN_NAME AND L.CONFIRMED_YN = ''Y'' AND L.LABEL_SOURCE IN (''USER_CONFIRMED'', ''IMPORTED_GOLD'') WHERE R.RN = 1 AND L.TYPE_CODE IS NOT NULL'"
         },
         {
           "key": "P_CASE_ID_COLUMN_NAME",
@@ -199,7 +199,7 @@
       "description": "생성된 연관규칙 모델을 기준으로 대상 테이블의 행을 검사하여 규칙 위반 후보를 탐지하고, 위반 점수와 규칙 정보를 결과 테이블에 적재하는 프로시저입니다.",
       "resultCreateYn": "T",
       "resultOwner": "__CURRENT_OWNER__",
-      "resultTableName": "INIT$_TB_RULE_VIOLATION_RESULT",
+      "resultTableName": "INIT$_TB_RULEVIOL_ASSOC",
       "items": [
         {
           "key": "P_RULE_OWNER_NAME",
@@ -291,7 +291,7 @@
       "description": "대상 테이블의 범주형 후보 컬럼 조합을 분석하여 p-value와 Cramer V 기준의 상관관계를 계산하고, 컬럼 쌍 및 요약 결과를 생성하는 프로시저입니다.",
       "resultCreateYn": "T",
       "resultOwner": "__CURRENT_OWNER__",
-      "resultTableName": "INIT$_TB_CAT_CORR_PAIR",
+      "resultTableName": "INIT$_TB_COLREL_CAT_PAIR",
       "items": [
         {
           "key": "P_TARGET_OWNER",
@@ -358,7 +358,7 @@
       "description": "대상 테이블의 연속형 후보 컬럼 조합을 분석하여 Pearson r와 p-value 기준의 상관관계를 계산하고, 컬럼 쌍 및 요약 결과를 생성하는 프로시저입니다.",
       "resultCreateYn": "T",
       "resultOwner": "__CURRENT_OWNER__",
-      "resultTableName": "INIT$_TB_NUM_CORR_PAIR",
+      "resultTableName": "INIT$_TB_COLREL_NUM_PAIR",
       "items": [
         {
           "key": "P_TARGET_OWNER",
@@ -425,7 +425,7 @@
       "description": "범주형/연속형/혼합형 변수 관계를 Cramer V, Pearson, Spearman, Eta Squared 기준으로 통합 계산하고 네트워크 분석용 관계 쌍 결과를 생성하는 프로시저입니다.",
       "resultCreateYn": "T",
       "resultOwner": "__CURRENT_OWNER__",
-      "resultTableName": "INIT$_TB_RELATION_PAIR",
+      "resultTableName": "INIT$_TB_COLREL_PAIR",
       "items": [
         {
           "key": "P_TARGET_OWNER",
@@ -509,10 +509,10 @@
       "objectType": "WEB_API",
       "objectName": "LASSO_FEATURE_SELECT",
       "label": "M02_LASSO_중요변수선택",
-      "description": "WAS Python API에서 LASSO Regression을 실행하여 상관분석 후보 변수 중 종속변수에 영향이 큰 독립변수를 선택하고 INIT$_TB_LASSO_FEATURE에 적재합니다.",
+      "description": "WAS Python API에서 LASSO Regression을 실행하여 상관분석 후보 변수 중 종속변수에 영향이 큰 독립변수를 선택하고 INIT$_TB_COLREL_LASSO_FEATURE에 적재합니다.",
       "resultCreateYn": "T",
       "resultOwner": "__CURRENT_OWNER__",
-      "resultTableName": "INIT$_TB_LASSO_FEATURE",
+      "resultTableName": "INIT$_TB_COLREL_LASSO_FEATURE",
       "items": [
         {
           "key": "P_TARGET_OWNER",
@@ -571,10 +571,10 @@
       "objectType": "WEB_API",
       "objectName": "RELATION_NETWORK_CLUSTER",
       "label": "M02_네트워크군집분석",
-      "description": "통합 변수 관계 매트릭스 결과를 기반으로 변수 네트워크의 핵심 연결과 군집을 계산하고 INIT$_TB_RELATION_NETWORK_NODE/EDGE에 적재합니다.",
+      "description": "통합 변수 관계 매트릭스 결과를 기반으로 변수 네트워크의 핵심 연결과 군집을 계산하고 INIT$_TB_COLREL_NETWORK_NODE/EDGE에 적재합니다.",
       "resultCreateYn": "T",
       "resultOwner": "__CURRENT_OWNER__",
-      "resultTableName": "INIT$_TB_RELATION_NETWORK_EDGE",
+      "resultTableName": "INIT$_TB_COLREL_NETWORK_EDGE",
       "items": [
         {
           "key": "P_TARGET_OWNER",
@@ -626,7 +626,7 @@
       "description": "범주형-범주형, 연속형-연속형, 범주형-연속형 전체 관계 매트릭스를 생성하고 PASS_YN으로 통과/기준 미달을 구분한 뒤, 같은 RUN_ID의 통과 관계로 네트워크 연결·노드·군집을 생성하는 2단계 통합 모델입니다.",
       "resultCreateYn": "T",
       "resultOwner": "__CURRENT_OWNER__",
-      "resultTableName": "INIT$_TB_RELATION_NETWORK_EDGE",
+      "resultTableName": "INIT$_TB_COLREL_NETWORK_EDGE",
       "items": [
         { "key": "P_TARGET_OWNER", "comment": "분석 대상 테이블 계정", "defaultValue": ":INIT$TargetOwner" },
         { "key": "P_TARGET_TABLE", "comment": "분석 대상 테이블명", "defaultValue": ":INIT$TargetTable" },
@@ -653,10 +653,10 @@
       "objectType": "WEB_API",
       "objectName": "SYMBOLIC_REGRESSION_RULE",
       "label": "M02_SymbolicRegression_공식규칙발굴",
-      "description": "WAS Python API에서 LASSO로 선택된 상위 변수로 먼저 단순 선형식을 확인하고, 필요 시 Symbolic Regression 또는 polynomial fallback을 실행해 INIT$_TB_SYMBOLIC_RULE에 적재합니다.",
+      "description": "WAS Python API에서 LASSO로 선택된 상위 변수로 먼저 단순 선형식을 확인하고, 필요 시 Symbolic Regression 또는 polynomial fallback을 실행해 INIT$_TB_RULEDISC_SYMBOLIC에 적재합니다.",
       "resultCreateYn": "T",
       "resultOwner": "__CURRENT_OWNER__",
-      "resultTableName": "INIT$_TB_SYMBOLIC_RULE",
+      "resultTableName": "INIT$_TB_RULEDISC_SYMBOLIC",
       "items": [
         {
           "key": "P_TARGET_OWNER",
@@ -895,7 +895,7 @@
       "description": "범주형 연관규칙 위반과 연속형 Symbolic 수식 오차 위반을 한 번에 탐지합니다. P_RULE_PARTS로 범위를 선택하며 일부 하위 작업 실패 시 부분 완료 상태와 실패 작업을 함께 반환할 수 있습니다.",
       "resultCreateYn": "T",
       "resultOwner": "__CURRENT_OWNER__",
-      "resultTableName": "INIT$_TB_RULE_VIOLATION_RESULT",
+      "resultTableName": "INIT$_TB_RULEVIOL_ASSOC",
       "items": [
         {
           "key": "P_RULE_PARTS",
@@ -914,8 +914,8 @@
         },
         {
           "key": "P_SYMBOLIC_RULE_TABLE_NAME",
-          "comment": "연속형 Symbolic 규칙 저장 테이블명. INIT$_TB_SYMBOLIC_RULE을 사용하며 :INIT$PreResultTable이나 OML_ASSOC 모델명을 사용하지 않습니다.",
-          "defaultValue": "INIT$_TB_SYMBOLIC_RULE"
+          "comment": "연속형 Symbolic 규칙 저장 테이블명. INIT$_TB_RULEDISC_SYMBOLIC을 사용하며 :INIT$PreResultTable이나 OML_ASSOC 모델명을 사용하지 않습니다.",
+          "defaultValue": "INIT$_TB_RULEDISC_SYMBOLIC"
         },
         {
           "key": "P_RULE_ID",
@@ -945,7 +945,7 @@
         {
           "key": "P_CAT_RESULT_TABLE",
           "comment": "범주형 위반 결과 테이블명",
-          "defaultValue": "INIT$_TB_RULE_VIOLATION_RESULT"
+          "defaultValue": "INIT$_TB_RULEVIOL_ASSOC"
         },
         {
           "key": "P_SYMBOLIC_RESULT_OWNER",
@@ -955,7 +955,7 @@
         {
           "key": "P_SYMBOLIC_RESULT_TABLE",
           "comment": "연속형 Symbolic 위반 결과 테이블명",
-          "defaultValue": "INIT$_TB_SYMBOLIC_RULE_VIOLATION"
+          "defaultValue": "INIT$_TB_RULEVIOL_SYMBOLIC"
         },
         {
           "key": "P_MIN_CONFIDENCE",
@@ -1044,10 +1044,10 @@
       "objectType": "PROCEDURE",
       "objectName": "INIT$_SP_SYMBOLIC_RULE_VIOLATION_DETECT",
       "label": "M05_SymbolicRule_오차범위위반탐지",
-      "description": "INIT$_TB_SYMBOLIC_RULE에 저장된 f(x)=y 수식 규칙으로 대상 테이블의 예측값을 계산하고, 실제값이 허용 오차율 또는 절대 오차 기준을 벗어난 행을 INIT$_TB_SYMBOLIC_RULE_VIOLATION에 적재하는 프로시저입니다.",
+      "description": "INIT$_TB_RULEDISC_SYMBOLIC에 저장된 f(x)=y 수식 규칙으로 대상 테이블의 예측값을 계산하고, 실제값이 허용 오차율 또는 절대 오차 기준을 벗어난 행을 INIT$_TB_RULEVIOL_SYMBOLIC에 적재하는 프로시저입니다.",
       "resultCreateYn": "T",
       "resultOwner": "__CURRENT_OWNER__",
-      "resultTableName": "INIT$_TB_SYMBOLIC_RULE_VIOLATION",
+      "resultTableName": "INIT$_TB_RULEVIOL_SYMBOLIC",
       "items": [
         {
           "key": "P_RULE_OWNER_NAME",
@@ -1057,7 +1057,7 @@
         {
           "key": "P_RULE_TABLE_NAME",
           "comment": "Symbolic Rule 결과 테이블명. :INIT$PreResultTable이나 OML_ASSOC 모델명을 사용하지 않습니다.",
-          "defaultValue": "INIT$_TB_SYMBOLIC_RULE"
+          "defaultValue": "INIT$_TB_RULEDISC_SYMBOLIC"
         },
         {
           "key": "P_RULE_ID",
@@ -1155,11 +1155,11 @@
       "owner": "*",
       "objectType": "PROCEDURE",
       "objectName": "INIT$_SP_PREDICTED_TYPE",
-      "label": "M01_분류모델(DECISION_TREE)_범주형_연속형",
+      "label": "DECISION_TREE_범주형_연속형",
       "description": "대상 테이블에 대해서 논리적데이터타입(LOG_DATA_TYPE), 고유값비율(DIST_VAL_RT), 정규화 엔트로피(NORM_ENTROPY)를 자동으로 계산한 후에 기본 분류모델인 \"OML_DECISION_TREE_MODEL_01\"을 사용하여 최종적으로 항목 분류결과(MODL_PREDICTED_TYPE)를 적재하는 프로시저입니다.",
       "resultCreateYn": "T",
       "resultOwner": "__CURRENT_OWNER__",
-      "resultTableName": "INIT$_TB_PREDICTED_TYPE_FINAL",
+      "resultTableName": "INIT$_TB_COLTYPE_FINAL",
       "items": [
         {
           "key": "P_TARGET_OWNER",

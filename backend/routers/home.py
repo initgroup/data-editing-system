@@ -29,10 +29,10 @@ TARGET_TABLES = [
     "INIT$_TB_FLOW_WORK",
     "INIT$_TB_FLOW_WORK_RUN",
     "INIT$_TB_FLOW_WORK_NODE_RUN",
-    "INIT$_TB_PREDICTED_TYPE",
-    "INIT$_TB_PREDICTED_TYPE_FINAL",
-    "INIT$_TB_CAT_CORR_PAIR",
-    "INIT$_TB_CAT_CORR_SUMMARY",
+    "INIT$_TB_COLTYPE_RESULT",
+    "INIT$_TB_COLTYPE_FINAL",
+    "INIT$_TB_COLREL_CAT_PAIR",
+    "INIT$_TB_COLREL_CAT_SUMMARY",
 ]
 
 MODEL_DETAIL_VIEW_TYPES = [
@@ -344,11 +344,11 @@ def _get_target_summary(request: Request, user_id: int, connection_id: int | Non
             "HOME_FLOW_COUNT", scope_params) if existing.get("INIT$_TB_PROJECT") else 0
         counts["flowRuns"] = _count_if(cursor, existing, "INIT$_TB_FLOW_WORK_RUN",
             "HOME_FLOW_RUN_COUNT", scope_params) if existing.get("INIT$_TB_FLOW_WORK") and existing.get("INIT$_TB_PROJECT") else 0
-        counts["predictedColumns"] = _count_if(cursor, existing, "INIT$_TB_PREDICTED_TYPE",
+        counts["predictedColumns"] = _count_if(cursor, existing, "INIT$_TB_COLTYPE_RESULT",
             "HOME_PREDICTED_COLUMN_COUNT")
-        counts["correlationPairs"] = _count_if(cursor, existing, "INIT$_TB_CAT_CORR_PAIR",
+        counts["correlationPairs"] = _count_if(cursor, existing, "INIT$_TB_COLREL_CAT_PAIR",
             "HOME_CORRELATION_PAIR_COUNT")
-        counts["selectedCorrelations"] = _count_if(cursor, existing, "INIT$_TB_CAT_CORR_SUMMARY",
+        counts["selectedCorrelations"] = _count_if(cursor, existing, "INIT$_TB_COLREL_CAT_SUMMARY",
             "HOME_SELECTED_CORRELATION_COUNT")
 
         if existing.get("INIT$_TB_DATA_WORK_RUN") and existing.get("INIT$_TB_DATA_WORK_JOB") and existing.get("INIT$_TB_PROJECT"):
@@ -597,7 +597,7 @@ def get_result_sample(request: Request, owner: str, objectName: str, limit: int 
         cursor = conn.cursor()
         where_sql = ""
         order_sql = ""
-        if str(menuCode or "").upper() == "M03002" and object_name == "INIT$_TB_CAT_CORR_PAIR":
+        if str(menuCode or "").upper() == "M03002" and object_name == "INIT$_TB_COLREL_CAT_PAIR":
             where_sql = " WHERE PASS_YN = 'Y'"
             order_sql = " ORDER BY CRAMERS_V DESC, P_VALUE ASC"
         select_sql = f"SELECT * FROM {_quote_identifier(owner_name)}.{_quote_identifier(object_name)}{where_sql}{order_sql}"

@@ -1,4 +1,4 @@
-﻿-- [MCOMMON_ANLY_WORK_FLOW_RUN_LIST]
+-- [MCOMMON_ANLY_WORK_FLOW_RUN_LIST]
 SELECT *
   FROM (
         SELECT Q.*
@@ -107,20 +107,20 @@ DECLARE
         END IF;
     END;
 BEGIN
-    delete_run_result_table('INIT$_TB_SYMBOLIC_RULE_VIOLATION');
-    delete_run_result_table('INIT$_TB_RULE_VIOLATION_RESULT');
-    delete_run_result_table('INIT$_TB_SYMBOLIC_RULE');
-    delete_run_result_table('INIT$_TB_LASSO_FEATURE');
-    delete_run_result_table('INIT$_TB_RELATION_NETWORK_EDGE');
-    delete_run_result_table('INIT$_TB_RELATION_NETWORK_NODE');
-    delete_run_result_table('INIT$_TB_RELATION_SUMMARY');
-    delete_run_result_table('INIT$_TB_RELATION_PAIR');
-    delete_run_result_table('INIT$_TB_NUM_CORR_SUMMARY');
-    delete_run_result_table('INIT$_TB_NUM_CORR_PAIR');
-    delete_run_result_table('INIT$_TB_CAT_CORR_SUMMARY');
-    delete_run_result_table('INIT$_TB_CAT_CORR_PAIR');
-    delete_run_result_table('INIT$_TB_ASSOC_RULE_SUMMARY');
-    delete_run_result_table('INIT$_TB_PREDICTED_TYPE');
+    delete_run_result_table('INIT$_TB_RULEVIOL_SYMBOLIC');
+    delete_run_result_table('INIT$_TB_RULEVIOL_ASSOC');
+    delete_run_result_table('INIT$_TB_RULEDISC_SYMBOLIC');
+    delete_run_result_table('INIT$_TB_COLREL_LASSO_FEATURE');
+    delete_run_result_table('INIT$_TB_COLREL_NETWORK_EDGE');
+    delete_run_result_table('INIT$_TB_COLREL_NETWORK_NODE');
+    delete_run_result_table('INIT$_TB_COLREL_SUMMARY');
+    delete_run_result_table('INIT$_TB_COLREL_PAIR');
+    delete_run_result_table('INIT$_TB_COLREL_NUM_SUMMARY');
+    delete_run_result_table('INIT$_TB_COLREL_NUM_PAIR');
+    delete_run_result_table('INIT$_TB_COLREL_CAT_SUMMARY');
+    delete_run_result_table('INIT$_TB_COLREL_CAT_PAIR');
+    delete_run_result_table('INIT$_TB_RULEDISC_ASSOC_SUM');
+    delete_run_result_table('INIT$_TB_COLTYPE_RESULT');
     delete_run_result_table('INIT$_TB_API_RESULT');
 
     DELETE FROM "INIT$_TB_FLOW_WORK_NODE_RUN"
@@ -214,10 +214,33 @@ SELECT *
 -- [MCOMMON_ANLY_WORK_CONTINUOUS_TARGET_COLUMNS]
 SELECT COLUMN_NAME
      , COLUMN_ID
-  FROM "INIT$_TB_PREDICTED_TYPE_FINAL"
+  FROM "INIT$_TB_COLTYPE_FINAL"
  WHERE OWNER = :targetOwner
    AND TABLE_NAME = :targetTable
-   AND TRIM(FINAL_PREDICTED_TYPE) LIKE '%연속형'
+   AND COALESCE(
+           TRIM(TYPE_GROUP_CODE)
+         , CASE
+               WHEN TRIM(FINAL_PREDICTED_TYPE) LIKE '%연속형' THEN 'CONTINUOUS'
+               WHEN TRIM(FINAL_PREDICTED_TYPE) LIKE '%범주형' THEN 'CATEGORICAL'
+               ELSE 'OTHER'
+           END
+       ) = 'CONTINUOUS'
+ ORDER BY COLUMN_ID NULLS LAST
+        , COLUMN_NAME;
+
+-- [ML_ANALYSIS_CONTINUOUS_TARGET_COLUMNS]
+SELECT COLUMN_NAME
+  FROM "INIT$_TB_COLTYPE_FINAL"
+ WHERE OWNER = :owner
+   AND TABLE_NAME = :tableName
+   AND COALESCE(
+           TRIM(TYPE_GROUP_CODE)
+         , CASE
+               WHEN TRIM(FINAL_PREDICTED_TYPE) LIKE '%연속형' THEN 'CONTINUOUS'
+               WHEN TRIM(FINAL_PREDICTED_TYPE) LIKE '%범주형' THEN 'CATEGORICAL'
+               ELSE 'OTHER'
+           END
+       ) = 'CONTINUOUS'
  ORDER BY COLUMN_ID NULLS LAST
         , COLUMN_NAME;
 
@@ -229,7 +252,7 @@ SELECT COLUMN_NAME
      , WEIGHTED_DEGREE
      , CENTRALITY_SCORE
      , SELECTED_YN
-  FROM "INIT$_TB_RELATION_NETWORK_NODE"
+  FROM "INIT$_TB_COLREL_NETWORK_NODE"
  WHERE RUN_SOURCE_TYPE = :runSourceType
    AND RUN_ID = :runId
    AND OWNER = :owner
@@ -282,7 +305,7 @@ SELECT *
                                   , COL_B
                                   , METRIC_NAME
                        ) AS RN
-                  FROM "INIT$_TB_RELATION_PAIR"
+                  FROM "INIT$_TB_COLREL_PAIR"
                  WHERE OWNER = :targetOwner
                    AND TABLE_NAME = :targetTable
                    AND (:runSourceType IS NULL OR (RUN_SOURCE_TYPE = :runSourceType AND RUN_ID = :runId))
@@ -327,7 +350,7 @@ SELECT COUNT(*) AS TOTAL_RULES
      , MAX(RULE_SUPPORT) AS MAX_SUPPORT
      , MAX(RULE_CONFIDENCE) AS MAX_CONFIDENCE
      , MAX(RULE_LIFT) AS MAX_LIFT
-  FROM "INIT$_TB_ASSOC_RULE_SUMMARY"
+  FROM "INIT$_TB_RULEDISC_ASSOC_SUM"
  WHERE OWNER = :owner
    AND TARGET_OWNER = :targetOwner
    AND TARGET_TABLE = :targetTable
@@ -349,7 +372,7 @@ SELECT CONDITION_COUNT
      , AVG(RULE_SUPPORT) AS AVG_SUPPORT
      , AVG(RULE_CONFIDENCE) AS AVG_CONFIDENCE
      , AVG(RULE_LIFT) AS AVG_LIFT
-  FROM "INIT$_TB_ASSOC_RULE_SUMMARY"
+  FROM "INIT$_TB_RULEDISC_ASSOC_SUM"
  WHERE OWNER = :owner
    AND TARGET_OWNER = :targetOwner
    AND TARGET_TABLE = :targetTable
@@ -372,7 +395,7 @@ SELECT *
                      , SUM(SUPPORT_COUNT) AS SUPPORT_COUNT
                      , AVG(RULE_CONFIDENCE) AS AVG_CONFIDENCE
                      , AVG(RULE_LIFT) AS AVG_LIFT
-                 FROM "INIT$_TB_ASSOC_RULE_SUMMARY"
+                 FROM "INIT$_TB_RULEDISC_ASSOC_SUM"
                  WHERE OWNER = :owner
                    AND TARGET_OWNER = :targetOwner
                    AND TARGET_TABLE = :targetTable
@@ -416,7 +439,7 @@ SELECT *
                      , CONDITION_TEXT
                      , RESULT_TEXT
                      , CREATE_DT
-                 FROM "INIT$_TB_ASSOC_RULE_SUMMARY"
+                 FROM "INIT$_TB_RULEDISC_ASSOC_SUM"
                  WHERE OWNER = :owner
                    AND TARGET_OWNER = :targetOwner
                    AND TARGET_TABLE = :targetTable

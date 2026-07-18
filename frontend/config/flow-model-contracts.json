@@ -23,8 +23,8 @@
         { "port": "target", "artifact": "TARGET_TABLE", "required": false, "runScope": "STATIC_OR_INDEPENDENT" }
       ],
       "outputs": [
-        { "port": "profile-run", "artifact": "PREDICTED_TYPE_RUN", "objectName": "INIT$_TB_PREDICTED_TYPE", "runScope": "SAME_RUN" },
-        { "port": "profile-final", "artifact": "PREDICTED_TYPE_FINAL", "objectName": "INIT$_TB_PREDICTED_TYPE_FINAL", "runScope": "LATEST_MASTER" }
+        { "port": "profile-run", "artifact": "PREDICTED_TYPE_RUN", "objectName": "INIT$_TB_COLTYPE_RESULT", "runScope": "SAME_RUN" },
+        { "port": "profile-final", "artifact": "PREDICTED_TYPE_FINAL", "objectName": "INIT$_TB_COLTYPE_FINAL", "runScope": "LATEST_MASTER" }
       ]
     },
     "INIT$_SP_CAT_CORR_ANALYZE": {
@@ -33,7 +33,7 @@
         { "port": "profile", "artifact": "PREDICTED_TYPE_FINAL", "required": false, "runScope": "LATEST_MASTER" }
       ],
       "outputs": [
-        { "port": "cat-corr", "artifact": "CAT_CORR_PAIR", "objectName": "INIT$_TB_CAT_CORR_PAIR", "runScope": "SAME_RUN" }
+        { "port": "cat-corr", "artifact": "CAT_CORR_PAIR", "objectName": "INIT$_TB_COLREL_CAT_PAIR", "runScope": "SAME_RUN" }
       ]
     },
     "INIT$_SP_NUM_CORR_ANALYZE": {
@@ -42,7 +42,7 @@
         { "port": "profile", "artifact": "PREDICTED_TYPE_FINAL", "required": false, "runScope": "LATEST_MASTER" }
       ],
       "outputs": [
-        { "port": "num-corr", "artifact": "NUM_CORR_PAIR", "objectName": "INIT$_TB_NUM_CORR_PAIR", "runScope": "SAME_RUN" }
+        { "port": "num-corr", "artifact": "NUM_CORR_PAIR", "objectName": "INIT$_TB_COLREL_NUM_PAIR", "runScope": "SAME_RUN" }
       ]
     },
     "INIT$_SP_RELATION_MATRIX_ANALYZE": {
@@ -51,9 +51,9 @@
         { "port": "profile", "artifact": "PREDICTED_TYPE_FINAL", "required": false, "runScope": "LATEST_MASTER" }
       ],
       "outputs": [
-        { "port": "relation", "artifact": "RELATION_PAIR", "objectName": "INIT$_TB_RELATION_PAIR", "runScope": "SAME_RUN" },
-        { "port": "cat-corr", "artifact": "CAT_CORR_PAIR", "objectName": "INIT$_TB_CAT_CORR_PAIR", "runScope": "SAME_RUN" },
-        { "port": "num-corr", "artifact": "NUM_CORR_PAIR", "objectName": "INIT$_TB_NUM_CORR_PAIR", "runScope": "SAME_RUN" }
+        { "port": "relation", "artifact": "RELATION_PAIR", "objectName": "INIT$_TB_COLREL_PAIR", "runScope": "SAME_RUN" },
+        { "port": "cat-corr", "artifact": "CAT_CORR_PAIR", "objectName": "INIT$_TB_COLREL_CAT_PAIR", "runScope": "SAME_RUN" },
+        { "port": "num-corr", "artifact": "NUM_CORR_PAIR", "objectName": "INIT$_TB_COLREL_NUM_PAIR", "runScope": "SAME_RUN" }
       ]
     },
     "RELATION_NETWORK_CLUSTER": {
@@ -62,8 +62,8 @@
         { "port": "relation", "artifact": "RELATION_PAIR", "required": true, "runScope": "SAME_RUN" }
       ],
       "outputs": [
-        { "port": "network-edge", "artifact": "RELATION_NETWORK", "label": "Relation network edges", "objectName": "INIT$_TB_RELATION_NETWORK_EDGE", "runScope": "SAME_RUN" },
-        { "port": "network-node", "artifact": "RELATION_NETWORK", "label": "Relation network nodes", "objectName": "INIT$_TB_RELATION_NETWORK_NODE", "runScope": "SAME_RUN" }
+        { "port": "network-edge", "artifact": "RELATION_NETWORK", "label": "Relation network edges", "objectName": "INIT$_TB_COLREL_NETWORK_EDGE", "runScope": "SAME_RUN" },
+        { "port": "network-node", "artifact": "RELATION_NETWORK", "label": "Relation network nodes", "objectName": "INIT$_TB_COLREL_NETWORK_NODE", "runScope": "SAME_RUN" }
       ]
     },
     "INTEGRATED_RELATION_CLUSTER": {
@@ -72,11 +72,11 @@
         { "port": "profile", "artifact": "PREDICTED_TYPE_FINAL", "required": false, "runScope": "LATEST_MASTER" }
       ],
       "outputs": [
-        { "port": "relation", "artifact": "RELATION_PAIR", "objectName": "INIT$_TB_RELATION_PAIR", "runScope": "SAME_RUN" },
-        { "port": "cat-corr", "artifact": "CAT_CORR_PAIR", "objectName": "INIT$_TB_CAT_CORR_PAIR", "runScope": "SAME_RUN" },
-        { "port": "num-corr", "artifact": "NUM_CORR_PAIR", "objectName": "INIT$_TB_NUM_CORR_PAIR", "runScope": "SAME_RUN" },
-        { "port": "network-edge", "artifact": "RELATION_NETWORK", "label": "Relation network edges", "objectName": "INIT$_TB_RELATION_NETWORK_EDGE", "runScope": "SAME_RUN" },
-        { "port": "network-node", "artifact": "RELATION_NETWORK", "label": "Relation network nodes", "objectName": "INIT$_TB_RELATION_NETWORK_NODE", "runScope": "SAME_RUN" }
+        { "port": "relation", "artifact": "RELATION_PAIR", "objectName": "INIT$_TB_COLREL_PAIR", "runScope": "SAME_RUN" },
+        { "port": "cat-corr", "artifact": "CAT_CORR_PAIR", "objectName": "INIT$_TB_COLREL_CAT_PAIR", "runScope": "SAME_RUN" },
+        { "port": "num-corr", "artifact": "NUM_CORR_PAIR", "objectName": "INIT$_TB_COLREL_NUM_PAIR", "runScope": "SAME_RUN" },
+        { "port": "network-edge", "artifact": "RELATION_NETWORK", "label": "Relation network edges", "objectName": "INIT$_TB_COLREL_NETWORK_EDGE", "runScope": "SAME_RUN" },
+        { "port": "network-node", "artifact": "RELATION_NETWORK", "label": "Relation network nodes", "objectName": "INIT$_TB_COLREL_NETWORK_NODE", "runScope": "SAME_RUN" }
       ]
     },
     "INIT$_SP_APRIORI_ASSOC_MODEL": {
@@ -87,7 +87,7 @@
       ],
       "outputs": [
         { "port": "assoc-model", "artifact": "ASSOCIATION_MODEL", "objectName": ":INIT$ResultModelName", "runScope": "SAME_RUN" },
-        { "port": "cat-rules", "artifact": "ASSOC_RULE_SUMMARY", "objectName": "INIT$_TB_ASSOC_RULE_SUMMARY", "runScope": "SAME_RUN" }
+        { "port": "cat-rules", "artifact": "ASSOC_RULE_SUMMARY", "objectName": "INIT$_TB_RULEDISC_ASSOC_SUM", "runScope": "SAME_RUN" }
       ]
     },
     "INIT$_SP_DECISION_TREE_RULE_MODEL": {
@@ -97,7 +97,7 @@
       ],
       "outputs": [
         { "port": "decision-model", "artifact": "ASSOCIATION_MODEL", "objectName": ":INIT$ResultModelName", "runScope": "SAME_RUN" },
-        { "port": "cat-rules", "artifact": "ASSOC_RULE_SUMMARY", "objectName": "INIT$_TB_ASSOC_RULE_SUMMARY", "runScope": "SAME_RUN" }
+        { "port": "cat-rules", "artifact": "ASSOC_RULE_SUMMARY", "objectName": "INIT$_TB_RULEDISC_ASSOC_SUM", "runScope": "SAME_RUN" }
       ]
     },
     "LASSO_FEATURE_SELECT": {
@@ -107,7 +107,7 @@
         { "port": "num-corr", "artifact": "NUM_CORR_PAIR", "required": false, "runScope": "SAME_RUN" }
       ],
       "outputs": [
-        { "port": "lasso", "artifact": "LASSO_FEATURE", "objectName": "INIT$_TB_LASSO_FEATURE", "runScope": "SAME_RUN" }
+        { "port": "lasso", "artifact": "LASSO_FEATURE", "objectName": "INIT$_TB_COLREL_LASSO_FEATURE", "runScope": "SAME_RUN" }
       ]
     },
     "SYMBOLIC_REGRESSION_RULE": {
@@ -118,7 +118,7 @@
         { "port": "lasso", "artifact": "LASSO_FEATURE", "required": true, "runScope": "SAME_RUN" }
       ],
       "outputs": [
-        { "port": "symbolic-rule", "artifact": "SYMBOLIC_RULE", "objectName": "INIT$_TB_SYMBOLIC_RULE", "runScope": "SAME_RUN" }
+        { "port": "symbolic-rule", "artifact": "SYMBOLIC_RULE", "objectName": "INIT$_TB_RULEDISC_SYMBOLIC", "runScope": "SAME_RUN" }
       ]
     },
     "INTEGRATED_RULE_DISCOVER": {
@@ -132,9 +132,9 @@
       ],
       "outputs": [
         { "port": "assoc-model", "artifact": "ASSOCIATION_MODEL", "objectName": ":INIT$ResultModelName", "runScope": "SAME_RUN" },
-        { "port": "cat-rules", "artifact": "ASSOC_RULE_SUMMARY", "objectName": "INIT$_TB_ASSOC_RULE_SUMMARY", "runScope": "SAME_RUN" },
-        { "port": "lasso", "artifact": "LASSO_FEATURE", "objectName": "INIT$_TB_LASSO_FEATURE", "runScope": "SAME_RUN" },
-        { "port": "symbolic-rule", "artifact": "SYMBOLIC_RULE", "objectName": "INIT$_TB_SYMBOLIC_RULE", "runScope": "SAME_RUN" }
+        { "port": "cat-rules", "artifact": "ASSOC_RULE_SUMMARY", "objectName": "INIT$_TB_RULEDISC_ASSOC_SUM", "runScope": "SAME_RUN" },
+        { "port": "lasso", "artifact": "LASSO_FEATURE", "objectName": "INIT$_TB_COLREL_LASSO_FEATURE", "runScope": "SAME_RUN" },
+        { "port": "symbolic-rule", "artifact": "SYMBOLIC_RULE", "objectName": "INIT$_TB_RULEDISC_SYMBOLIC", "runScope": "SAME_RUN" }
       ]
     },
     "INIT$_SP_RULE_VIOLATION_DETECT": {
@@ -144,7 +144,7 @@
         { "port": "cat-rules", "artifact": "ASSOC_RULE_SUMMARY", "required": true, "runScope": "SAME_RUN" }
       ],
       "outputs": [
-        { "port": "cat-violation", "artifact": "CAT_RULE_VIOLATION", "objectName": "INIT$_TB_RULE_VIOLATION_RESULT", "runScope": "SAME_RUN" }
+        { "port": "cat-violation", "artifact": "CAT_RULE_VIOLATION", "objectName": "INIT$_TB_RULEVIOL_ASSOC", "runScope": "SAME_RUN" }
       ]
     },
     "INIT$_SP_SYMBOLIC_RULE_VIOLATION_DETECT": {
@@ -153,7 +153,7 @@
         { "port": "symbolic-rule", "artifact": "SYMBOLIC_RULE", "required": true, "runScope": "SAME_RUN" }
       ],
       "outputs": [
-        { "port": "symbolic-violation", "artifact": "SYMBOLIC_RULE_VIOLATION", "objectName": "INIT$_TB_SYMBOLIC_RULE_VIOLATION", "runScope": "SAME_RUN" }
+        { "port": "symbolic-violation", "artifact": "SYMBOLIC_RULE_VIOLATION", "objectName": "INIT$_TB_RULEVIOL_SYMBOLIC", "runScope": "SAME_RUN" }
       ]
     },
     "INTEGRATED_RULE_VIOLATION_DETECT": {
@@ -164,8 +164,8 @@
         { "port": "symbolic-rule", "artifact": "SYMBOLIC_RULE", "required": true, "runScope": "SAME_RUN", "requiredForParts": ["CONTINUOUS"] }
       ],
       "outputs": [
-        { "port": "cat-violation", "artifact": "CAT_RULE_VIOLATION", "objectName": "INIT$_TB_RULE_VIOLATION_RESULT", "runScope": "SAME_RUN" },
-        { "port": "symbolic-violation", "artifact": "SYMBOLIC_RULE_VIOLATION", "objectName": "INIT$_TB_SYMBOLIC_RULE_VIOLATION", "runScope": "SAME_RUN" }
+        { "port": "cat-violation", "artifact": "CAT_RULE_VIOLATION", "objectName": "INIT$_TB_RULEVIOL_ASSOC", "runScope": "SAME_RUN" },
+        { "port": "symbolic-violation", "artifact": "SYMBOLIC_RULE_VIOLATION", "objectName": "INIT$_TB_RULEVIOL_SYMBOLIC", "runScope": "SAME_RUN" }
       ]
     }
   }

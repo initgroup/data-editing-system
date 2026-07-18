@@ -1253,6 +1253,12 @@
     padding: 10px;
 }
 
+[id$="ViolationSqlPopup"] .anly-work-sql-popup-body {
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
 .anly-work-sql-editor {
     border: 1px solid #cbd5e1;
     color: #0f172a;
@@ -1340,6 +1346,24 @@
     margin: 0;
 }
 
+.anly-work-violation-rule-context.is-symbolic-formula {
+    display: flex;
+    flex-direction: column;
+    max-height: clamp(150px, 28vh, 280px);
+    min-height: 112px;
+    overflow: hidden;
+}
+
+.anly-work-violation-rule-context.is-symbolic-formula p {
+    -webkit-overflow-scrolling: touch;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    overflow-wrap: anywhere;
+    overscroll-behavior: contain;
+    padding-right: 4px;
+}
+
 .anly-work-violation-rule-context p > b {
     color: #e11d48;
     margin: 0 4px 0 0;
@@ -1416,6 +1440,12 @@
     overflow: auto;
     overscroll-behavior: contain;
     position: relative;
+}
+
+[id$="ViolationSqlPopup"] .anly-work-sql-result {
+    flex: 1 0 clamp(190px, 30vh, 320px);
+    height: auto;
+    min-height: 190px;
 }
 
 .anly-work-violation-sql-grid-wrap {
@@ -2532,7 +2562,13 @@
 .anly-work-symbolic-formula-row code {
     flex: 1 1 auto;
     margin: 0;
+    max-height: clamp(108px, 18vh, 210px);
     min-width: 0;
+    overflow: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    white-space: pre-wrap;
+    word-break: break-word;
 }
 
 .anly-work-symbolic-formula-row .anly-work-rule-copy-btn {
@@ -3165,7 +3201,7 @@
 }
 
 .anly-work-symbolic-formula-banner {
-    align-items: center;
+    align-items: start;
     background: #1e3a8a;
     border-bottom: 1px solid #1d4ed8;
     display: grid;
@@ -3199,6 +3235,11 @@
 
 .anly-work-symbolic-formula-text {
     min-width: 0;
+    max-height: clamp(96px, 22vh, 220px);
+    min-height: 0;
+    overflow: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
 }
 
 .anly-work-symbolic-formula-copy {
@@ -3403,7 +3444,7 @@
     flex: 0 0 auto;
     gap: 8px;
     grid-template-rows: auto minmax(0, 1fr);
-    height: clamp(260px, 34vh, 340px);
+    height: clamp(340px, 46vh, 520px);
     min-height: 0;
     min-width: 0;
 }
@@ -3550,7 +3591,7 @@
 .anly-work-symbolic-raw-table-wrap {
     border: 1px solid #dbe3ef;
     contain: layout paint;
-    height: clamp(220px, 30vh, 320px);
+    height: clamp(160px, 22vh, 240px);
     min-width: 0;
     overscroll-behavior: contain;
     overflow: auto;
@@ -5350,9 +5391,9 @@
 
     .anly-work-symbolic-formula-banner {
         align-items: start;
-        display: flex;
-        flex-direction: column;
-        max-height: min(42dvh, 320px);
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        max-height: none;
         min-height: 0;
         padding: 8px 10px;
     }
@@ -5367,7 +5408,9 @@
 
     .anly-work-symbolic-formula-text {
         -webkit-overflow-scrolling: touch;
-        flex: 0 1 auto;
+        grid-column: 2;
+        grid-row: 1;
+        max-height: clamp(120px, 28dvh, 250px);
         min-height: 0;
         overflow: auto;
         overscroll-behavior: contain;
@@ -5375,7 +5418,9 @@
     }
 
     .anly-work-symbolic-formula-copy {
-        flex: 0 0 auto;
+        align-self: start;
+        grid-column: 3;
+        grid-row: 1;
     }
 
     .anly-work-symbolic-popup-body {
@@ -5405,7 +5450,7 @@
     }
 
     .anly-work-symbolic-visual-shell {
-        height: clamp(380px, 48dvh, 460px);
+        height: clamp(400px, 52dvh, 560px);
         min-height: 0;
     }
 
@@ -5425,7 +5470,7 @@
     }
 
     .anly-work-symbolic-raw-table-wrap {
-        height: clamp(180px, 30vh, 240px);
+        height: clamp(156px, 20dvh, 220px);
     }
 
     .anly-work-symbolic-visual-popup.is-symbolic-chart-maximized .anly-work-symbolic-chart-wrap,
@@ -5462,6 +5507,16 @@
         overflow-wrap: anywhere;
         text-overflow: clip;
         white-space: normal;
+    }
+
+    .anly-work-violation-rule-context.is-symbolic-formula {
+        max-height: clamp(140px, 27dvh, 240px);
+        min-height: 104px;
+    }
+
+    [id$="ViolationSqlPopup"] .anly-work-sql-result {
+        flex-basis: clamp(190px, 30dvh, 280px);
+        min-height: 190px;
     }
 
     .anly-work-sql-mode-switch,

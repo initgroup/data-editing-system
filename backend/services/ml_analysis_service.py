@@ -482,7 +482,7 @@ def run_lasso_feature_select(conn, payload: Dict[str, Any]) -> Dict[str, Any]:
     try:
         cursor.execute(
             """
-            DELETE FROM "INIT$_TB_LASSO_FEATURE"
+            DELETE FROM "INIT$_TB_COLREL_LASSO_FEATURE"
              WHERE "RUN_SOURCE_TYPE" = :runSourceType
                AND "RUN_ID" = :runId
                AND "OWNER" = :owner
@@ -498,7 +498,7 @@ def run_lasso_feature_select(conn, payload: Dict[str, Any]) -> Dict[str, Any]:
             },
         )
         insert_sql = """
-            INSERT INTO "INIT$_TB_LASSO_FEATURE" (
+            INSERT INTO "INIT$_TB_COLREL_LASSO_FEATURE" (
                 "RUN_SOURCE_TYPE"
               , "RUN_ID"
               , "OWNER"
@@ -652,7 +652,7 @@ def run_symbolic_regression_rule(conn, payload: Dict[str, Any]) -> Dict[str, Any
     try:
         cursor.execute(
             """
-            DELETE FROM "INIT$_TB_SYMBOLIC_RULE"
+            DELETE FROM "INIT$_TB_RULEDISC_SYMBOLIC"
              WHERE "RUN_SOURCE_TYPE" = :runSourceType
                AND "RUN_ID" = :runId
                AND "OWNER" = :owner
@@ -669,7 +669,7 @@ def run_symbolic_regression_rule(conn, payload: Dict[str, Any]) -> Dict[str, Any
         )
         cursor.execute(
             """
-            INSERT INTO "INIT$_TB_SYMBOLIC_RULE" (
+            INSERT INTO "INIT$_TB_RULEDISC_SYMBOLIC" (
                 "RUN_SOURCE_TYPE"
               , "RUN_ID"
               , "OWNER"
@@ -765,7 +765,7 @@ def run_relation_network_cluster(conn, payload: Dict[str, Any]) -> Dict[str, Any
                 "edgeCount": 0,
                 "clusterCount": 0,
                 "algorithm": "NONE",
-                "resultTable": "INIT$_TB_RELATION_NETWORK_EDGE",
+                "resultTable": "INIT$_TB_COLREL_NETWORK_EDGE",
                 "message": "No passed relation pairs were found for network clustering.",
             }
 
@@ -781,7 +781,7 @@ def run_relation_network_cluster(conn, payload: Dict[str, Any]) -> Dict[str, Any
             "clusterCount": cluster_count,
             "algorithm": algorithm,
             "minMetric": min_metric,
-            "resultTable": "INIT$_TB_RELATION_NETWORK_EDGE",
+            "resultTable": "INIT$_TB_COLREL_NETWORK_EDGE",
         }
     finally:
         cursor.close()
@@ -836,7 +836,7 @@ def run_integrated_relation_cluster(conn, payload: Dict[str, Any]) -> Dict[str, 
         )
         relation_count = count_result_rows(
             cursor,
-            "INIT$_TB_RELATION_PAIR",
+            "INIT$_TB_COLREL_PAIR",
             {
                 "RUN_SOURCE_TYPE": run_source_type,
                 "RUN_ID": run_id,
@@ -866,12 +866,12 @@ def run_integrated_relation_cluster(conn, payload: Dict[str, Any]) -> Dict[str, 
         "parts": ["RELATION_MATRIX", "RELATION_NETWORK"],
         "relationCount": relation_count,
         "resultTables": [
-            "INIT$_TB_CAT_CORR_PAIR",
-            "INIT$_TB_NUM_CORR_PAIR",
-            "INIT$_TB_RELATION_PAIR",
-            "INIT$_TB_RELATION_SUMMARY",
-            "INIT$_TB_RELATION_NETWORK_NODE",
-            "INIT$_TB_RELATION_NETWORK_EDGE",
+            "INIT$_TB_COLREL_CAT_PAIR",
+            "INIT$_TB_COLREL_NUM_PAIR",
+            "INIT$_TB_COLREL_PAIR",
+            "INIT$_TB_COLREL_SUMMARY",
+            "INIT$_TB_COLREL_NETWORK_NODE",
+            "INIT$_TB_COLREL_NETWORK_EDGE",
         ],
         "relationCriteria": relation_criteria,
         "network": network_result,
@@ -922,7 +922,7 @@ def run_integrated_rule_discover(conn, payload: Dict[str, Any]) -> Dict[str, Any
         try:
             categorical_result = run_integrated_apriori_assoc_model(conn, payload, owner, table, run_source_type, run_id)
             results.append(categorical_result)
-            result_tables.append(str(categorical_result.get("resultTable") or "INIT$_TB_ASSOC_RULE_SUMMARY"))
+            result_tables.append(str(categorical_result.get("resultTable") or "INIT$_TB_RULEDISC_ASSOC_SUM"))
             if categorical_result.get("modelName"):
                 result_models.append(str(categorical_result["modelName"]))
         except Exception as exc:
@@ -939,8 +939,8 @@ def run_integrated_rule_discover(conn, payload: Dict[str, Any]) -> Dict[str, Any
             lasso_result = run_lasso_feature_select(conn, lasso_payload)
             if isinstance(lasso_result.get("clusterUsage"), dict):
                 cluster_usage = dict(lasso_result["clusterUsage"])
-            results.append({"task": "CONTINUOUS_LASSO", "resultTable": "INIT$_TB_LASSO_FEATURE", **lasso_result})
-            result_tables.append("INIT$_TB_LASSO_FEATURE")
+            results.append({"task": "CONTINUOUS_LASSO", "resultTable": "INIT$_TB_COLREL_LASSO_FEATURE", **lasso_result})
+            result_tables.append("INIT$_TB_COLREL_LASSO_FEATURE")
             if str(lasso_result.get("status") or "").lower() == "partial_success":
                 failures.append({
                     "task": "CONTINUOUS_LASSO",
@@ -958,8 +958,8 @@ def run_integrated_rule_discover(conn, payload: Dict[str, Any]) -> Dict[str, Any
                 symbolic_payload.setdefault("P_TARGET_COLUMN", "(auto)")
                 symbolic_payload.setdefault("targetColumn", symbolic_payload["P_TARGET_COLUMN"])
                 symbolic_result = run_symbolic_regression_rule(conn, symbolic_payload)
-                results.append({"task": "CONTINUOUS_SYMBOLIC", "resultTable": "INIT$_TB_SYMBOLIC_RULE", **symbolic_result})
-                result_tables.append("INIT$_TB_SYMBOLIC_RULE")
+                results.append({"task": "CONTINUOUS_SYMBOLIC", "resultTable": "INIT$_TB_RULEDISC_SYMBOLIC", **symbolic_result})
+                result_tables.append("INIT$_TB_RULEDISC_SYMBOLIC")
                 if str(symbolic_result.get("status") or "").lower() == "partial_success":
                     failures.append({
                         "task": "CONTINUOUS_SYMBOLIC",
@@ -1019,7 +1019,7 @@ def run_integrated_rule_violation_detect(conn, payload: Dict[str, Any]) -> Dict[
         try:
             categorical_result = run_integrated_assoc_rule_violation(conn, payload, owner, table, run_source_type, run_id)
             results.append(categorical_result)
-            result_tables.append(str(categorical_result.get("resultTable") or "INIT$_TB_RULE_VIOLATION_RESULT"))
+            result_tables.append(str(categorical_result.get("resultTable") or "INIT$_TB_RULEVIOL_ASSOC"))
         except Exception as exc:
             rollback_integrated_task(conn)
             failures.append({"task": "CATEGORICAL_RULE_VIOLATION", "message": get_error_message(exc)})
@@ -1031,7 +1031,7 @@ def run_integrated_rule_violation_detect(conn, payload: Dict[str, Any]) -> Dict[
         try:
             continuous_result = run_integrated_symbolic_rule_violation(conn, payload, owner, table, run_source_type, run_id)
             results.append(continuous_result)
-            result_tables.append(str(continuous_result.get("resultTable") or "INIT$_TB_SYMBOLIC_RULE_VIOLATION"))
+            result_tables.append(str(continuous_result.get("resultTable") or "INIT$_TB_RULEVIOL_SYMBOLIC"))
         except Exception as exc:
             rollback_integrated_task(conn)
             failures.append({"task": "CONTINUOUS_SYMBOLIC_VIOLATION", "message": get_error_message(exc)})
@@ -1160,7 +1160,7 @@ def run_integrated_apriori_assoc_model(
         )
         summary_count = count_result_rows(
             cursor,
-            "INIT$_TB_ASSOC_RULE_SUMMARY",
+            "INIT$_TB_RULEDISC_ASSOC_SUM",
             {
                 "RUN_SOURCE_TYPE": run_source_type,
                 "RUN_ID": run_id,
@@ -1173,7 +1173,7 @@ def run_integrated_apriori_assoc_model(
             "task": "CATEGORICAL_APRIORI",
             "status": "success",
             "modelName": model_name,
-            "resultTable": "INIT$_TB_ASSOC_RULE_SUMMARY",
+            "resultTable": "INIT$_TB_RULEDISC_ASSOC_SUM",
             "summaryCount": summary_count,
         }
     finally:
@@ -1206,7 +1206,7 @@ def run_integrated_assoc_rule_violation(
     result_table = require_identifier(
         default_if_runtime_reference(
             get_value(payload, "P_CAT_RESULT_TABLE", "P_RESULT_TABLE", "resultTable"),
-            "INIT$_TB_RULE_VIOLATION_RESULT",
+            "INIT$_TB_RULEVIOL_ASSOC",
         ),
         "resultTable",
     )
@@ -1273,7 +1273,7 @@ def run_integrated_symbolic_rule_violation(
     rule_table = require_identifier(
         default_if_runtime_reference(
             get_value(payload, "P_SYMBOLIC_RULE_TABLE_NAME", "P_RULE_TABLE_NAME", "ruleTableName"),
-            "INIT$_TB_SYMBOLIC_RULE",
+            "INIT$_TB_RULEDISC_SYMBOLIC",
         ),
         "ruleTableName",
     )
@@ -1287,7 +1287,7 @@ def run_integrated_symbolic_rule_violation(
     result_table = require_identifier(
         default_if_runtime_reference(
             get_value(payload, "P_SYMBOLIC_RESULT_TABLE", "resultTable"),
-            "INIT$_TB_SYMBOLIC_RULE_VIOLATION",
+            "INIT$_TB_RULEVIOL_SYMBOLIC",
         ),
         "resultTable",
     )
@@ -1608,15 +1608,7 @@ def load_predicted_continuous_columns(
     cursor = conn.cursor()
     try:
         cursor.execute(
-            """
-            SELECT "COLUMN_NAME"
-              FROM "INIT$_TB_PREDICTED_TYPE_FINAL"
-             WHERE "OWNER" = :owner
-               AND "TABLE_NAME" = :tableName
-               AND TRIM("FINAL_PREDICTED_TYPE") LIKE '%연속형'
-             ORDER BY "COLUMN_ID" NULLS LAST
-                    , "COLUMN_NAME"
-            """,
+            SqlLoader.get_sql("ML_ANALYSIS_CONTINUOUS_TARGET_COLUMNS"),
             {
                 "owner": owner,
                 "tableName": table,
@@ -1649,7 +1641,7 @@ def load_numeric_corr_candidates(
                        WHEN "COL_A" = :targetColumn THEN "COL_B"
                        ELSE "COL_A"
                    END AS "COLUMN_NAME"
-              FROM "INIT$_TB_NUM_CORR_PAIR"
+              FROM "INIT$_TB_COLREL_NUM_PAIR"
              WHERE "RUN_SOURCE_TYPE" = :runSourceType
                AND "RUN_ID" = :runId
                AND "OWNER" = :owner
@@ -1674,7 +1666,7 @@ def load_numeric_corr_candidates(
         cursor.execute(
             """
             SELECT "COLUMN_NAME"
-              FROM "INIT$_TB_NUM_CORR_SUMMARY"
+              FROM "INIT$_TB_COLREL_NUM_SUMMARY"
              WHERE "RUN_SOURCE_TYPE" = :runSourceType
                AND "RUN_ID" = :runId
                AND "OWNER" = :owner
@@ -1717,7 +1709,7 @@ def load_auto_corr_target_columns(
                       FROM (
                             SELECT "COL_A" AS COLUMN_NAME
                                  , "ABS_PEARSON_R" AS SORT_SCORE
-                              FROM "INIT$_TB_NUM_CORR_PAIR"
+                              FROM "INIT$_TB_COLREL_NUM_PAIR"
                              WHERE "RUN_SOURCE_TYPE" = :runSourceType
                                AND "RUN_ID" = :runId
                                AND "OWNER" = :owner
@@ -1726,7 +1718,7 @@ def load_auto_corr_target_columns(
                             UNION ALL
                             SELECT "COL_B" AS COLUMN_NAME
                                  , "ABS_PEARSON_R" AS SORT_SCORE
-                              FROM "INIT$_TB_NUM_CORR_PAIR"
+                              FROM "INIT$_TB_COLREL_NUM_PAIR"
                              WHERE "RUN_SOURCE_TYPE" = :runSourceType
                                AND "RUN_ID" = :runId
                                AND "OWNER" = :owner
@@ -1764,7 +1756,7 @@ def load_lasso_target_columns(
         cursor.execute(
             """
             SELECT "TARGET_COLUMN"
-              FROM "INIT$_TB_LASSO_FEATURE"
+              FROM "INIT$_TB_COLREL_LASSO_FEATURE"
              WHERE "RUN_SOURCE_TYPE" = :runSourceType
                AND "RUN_ID" = :runId
                AND "OWNER" = :owner
@@ -1805,7 +1797,7 @@ def load_lasso_selected_features(
         cursor.execute(
             """
             SELECT "FEATURE_NAME"
-              FROM "INIT$_TB_LASSO_FEATURE"
+              FROM "INIT$_TB_COLREL_LASSO_FEATURE"
              WHERE "RUN_SOURCE_TYPE" = :runSourceType
                AND "RUN_ID" = :runId
                AND "OWNER" = :owner
@@ -1970,7 +1962,7 @@ def clear_relation_network_rows(cursor, owner: str, table: str, run_source_type:
     }
     cursor.execute(
         """
-        DELETE FROM "INIT$_TB_RELATION_NETWORK_EDGE"
+        DELETE FROM "INIT$_TB_COLREL_NETWORK_EDGE"
          WHERE "RUN_SOURCE_TYPE" = :runSourceType
            AND "RUN_ID" = :runId
            AND "OWNER" = :owner
@@ -1980,7 +1972,7 @@ def clear_relation_network_rows(cursor, owner: str, table: str, run_source_type:
     )
     cursor.execute(
         """
-        DELETE FROM "INIT$_TB_RELATION_NETWORK_NODE"
+        DELETE FROM "INIT$_TB_COLREL_NETWORK_NODE"
          WHERE "RUN_SOURCE_TYPE" = :runSourceType
            AND "RUN_ID" = :runId
            AND "OWNER" = :owner
@@ -2040,7 +2032,7 @@ def load_relation_pairs_for_network(
              , "METRIC_NAME"
              , "METRIC_VALUE"
              , "ABS_METRIC_VALUE"
-          FROM "INIT$_TB_RELATION_PAIR"
+          FROM "INIT$_TB_COLREL_PAIR"
          WHERE {" AND ".join(where_sql)}
          ORDER BY "ABS_METRIC_VALUE" DESC NULLS LAST
                 , "COL_A"
@@ -2171,7 +2163,7 @@ def insert_relation_network_rows(
     node_metrics: Dict[str, Dict[str, Any]],
 ) -> None:
     node_sql = """
-        INSERT INTO "INIT$_TB_RELATION_NETWORK_NODE" (
+        INSERT INTO "INIT$_TB_COLREL_NETWORK_NODE" (
             "RUN_SOURCE_TYPE"
           , "RUN_ID"
           , "OWNER"
@@ -2214,7 +2206,7 @@ def insert_relation_network_rows(
         })
 
     edge_sql = """
-        INSERT INTO "INIT$_TB_RELATION_NETWORK_EDGE" (
+        INSERT INTO "INIT$_TB_COLREL_NETWORK_EDGE" (
             "RUN_SOURCE_TYPE"
           , "RUN_ID"
           , "OWNER"
@@ -2272,7 +2264,7 @@ def update_relation_pair_clusters(
     cluster_map: Dict[str, int],
 ) -> None:
     update_sql = """
-        UPDATE "INIT$_TB_RELATION_PAIR"
+        UPDATE "INIT$_TB_COLREL_PAIR"
            SET "CLUSTER_ID" = :clusterId
          WHERE "RUN_SOURCE_TYPE" = :runSourceType
            AND "RUN_ID" = :runId

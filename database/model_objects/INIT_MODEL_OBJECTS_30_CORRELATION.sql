@@ -172,14 +172,14 @@ BEGIN
     disable_parallel_if_needed;
 
     DELETE /*+ NO_PARALLEL */
-      FROM "INIT$_TB_CAT_CORR_SUMMARY"
+      FROM "INIT$_TB_COLREL_CAT_SUMMARY"
      WHERE "OWNER" = v_owner
        AND "TABLE_NAME" = v_table_name
        AND "RUN_SOURCE_TYPE" = v_run_source_type
        AND "RUN_ID" = v_run_id;
 
     DELETE /*+ NO_PARALLEL */
-      FROM "INIT$_TB_CAT_CORR_PAIR"
+      FROM "INIT$_TB_COLREL_CAT_PAIR"
      WHERE "OWNER" = v_owner
        AND "TABLE_NAME" = v_table_name
        AND "RUN_SOURCE_TYPE" = v_run_source_type
@@ -192,8 +192,8 @@ BEGIN
               FROM (
                     SELECT P.COLUMN_NAME
                          , MIN(NVL(P.COLUMN_ID, 999999)) AS COLUMN_ID
-                      FROM "INIT$_TB_PREDICTED_TYPE" P
-                      LEFT JOIN "INIT$_TB_PREDICTED_TYPE_FINAL" F
+                      FROM "INIT$_TB_COLTYPE_RESULT" P
+                      LEFT JOIN "INIT$_TB_COLTYPE_FINAL" F
                         ON F."OWNER" = P."OWNER"
                        AND F."TABLE_NAME" = P."TABLE_NAME"
                        AND F."COLUMN_NAME" = P."COLUMN_NAME"
@@ -201,7 +201,15 @@ BEGIN
                        AND P."TABLE_NAME" = v_table_name
                        AND P."RUN_SOURCE_TYPE" = v_run_source_type
                        AND (v_run_source_type = 'DATA_WORK' OR P."RUN_ID" = v_run_id)
-                       AND COALESCE(TRIM(F."FINAL_PREDICTED_TYPE"), TRIM(P."FINAL_PREDICTED_TYPE"), TRIM(P."MODL_PREDICTED_TYPE"), TRIM(P."BASE_PREDICTED_TYPE")) LIKE '%범주형'
+                       AND COALESCE(
+                               TRIM(F."TYPE_GROUP_CODE")
+                             , TRIM(P."TYPE_GROUP_CODE")
+                             , CASE
+                                   WHEN COALESCE(TRIM(F."FINAL_PREDICTED_TYPE"), TRIM(P."FINAL_PREDICTED_TYPE"), TRIM(P."MODL_PREDICTED_TYPE"), TRIM(P."BASE_PREDICTED_TYPE")) LIKE '%범주형' THEN 'CATEGORICAL'
+                                   WHEN COALESCE(TRIM(F."FINAL_PREDICTED_TYPE"), TRIM(P."FINAL_PREDICTED_TYPE"), TRIM(P."MODL_PREDICTED_TYPE"), TRIM(P."BASE_PREDICTED_TYPE")) LIKE '%연속형' THEN 'CONTINUOUS'
+                                   ELSE 'OTHER'
+                               END
+                           ) = 'CATEGORICAL'
                      GROUP BY P.COLUMN_NAME
                      ORDER BY COLUMN_ID, COLUMN_NAME
                    )
@@ -307,7 +315,7 @@ SELECT TOT.TOTAL_CNT,
                              ELSE 'N'
                          END;
 
-            INSERT /*+ NO_PARALLEL */ INTO "INIT$_TB_CAT_CORR_PAIR" (
+            INSERT /*+ NO_PARALLEL */ INTO "INIT$_TB_COLREL_CAT_PAIR" (
                 "RUN_SOURCE_TYPE"
               , "RUN_ID"
               , "OWNER"
@@ -339,7 +347,7 @@ SELECT TOT.TOTAL_CNT,
         END LOOP;
     END LOOP;
 
-    INSERT /*+ NO_PARALLEL */ INTO "INIT$_TB_CAT_CORR_SUMMARY" (
+    INSERT /*+ NO_PARALLEL */ INTO "INIT$_TB_COLREL_CAT_SUMMARY" (
         "RUN_SOURCE_TYPE"
       , "RUN_ID"
       , "OWNER"
@@ -355,14 +363,14 @@ SELECT TOT.TOTAL_CNT,
     )
     WITH PAIRS AS (
         SELECT COL_A AS COLUMN_NAME, CRAMERS_V, PASS_YN
-          FROM "INIT$_TB_CAT_CORR_PAIR"
+          FROM "INIT$_TB_COLREL_CAT_PAIR"
          WHERE "OWNER" = v_owner
            AND "TABLE_NAME" = v_table_name
            AND "RUN_SOURCE_TYPE" = v_run_source_type
            AND "RUN_ID" = v_run_id
         UNION ALL
         SELECT COL_B AS COLUMN_NAME, CRAMERS_V, PASS_YN
-          FROM "INIT$_TB_CAT_CORR_PAIR"
+          FROM "INIT$_TB_COLREL_CAT_PAIR"
          WHERE "OWNER" = v_owner
            AND "TABLE_NAME" = v_table_name
            AND "RUN_SOURCE_TYPE" = v_run_source_type
@@ -549,7 +557,7 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_RELATION_MATRIX_ANALYZE" (
         p_pass_yn IN CHAR
     ) IS
     BEGIN
-        INSERT /*+ NO_PARALLEL */ INTO "INIT$_TB_RELATION_PAIR" (
+        INSERT /*+ NO_PARALLEL */ INTO "INIT$_TB_COLREL_PAIR" (
             "RUN_SOURCE_TYPE"
           , "RUN_ID"
           , "OWNER"
@@ -618,28 +626,28 @@ BEGIN
     disable_parallel_if_needed;
 
     DELETE /*+ NO_PARALLEL */
-      FROM "INIT$_TB_RELATION_NETWORK_EDGE"
+      FROM "INIT$_TB_COLREL_NETWORK_EDGE"
      WHERE "OWNER" = v_owner
        AND "TABLE_NAME" = v_table_name
        AND "RUN_SOURCE_TYPE" = v_run_source_type
        AND "RUN_ID" = v_run_id;
 
     DELETE /*+ NO_PARALLEL */
-      FROM "INIT$_TB_RELATION_NETWORK_NODE"
+      FROM "INIT$_TB_COLREL_NETWORK_NODE"
      WHERE "OWNER" = v_owner
        AND "TABLE_NAME" = v_table_name
        AND "RUN_SOURCE_TYPE" = v_run_source_type
        AND "RUN_ID" = v_run_id;
 
     DELETE /*+ NO_PARALLEL */
-      FROM "INIT$_TB_RELATION_SUMMARY"
+      FROM "INIT$_TB_COLREL_SUMMARY"
      WHERE "OWNER" = v_owner
        AND "TABLE_NAME" = v_table_name
        AND "RUN_SOURCE_TYPE" = v_run_source_type
        AND "RUN_ID" = v_run_id;
 
     DELETE /*+ NO_PARALLEL */
-      FROM "INIT$_TB_RELATION_PAIR"
+      FROM "INIT$_TB_COLREL_PAIR"
      WHERE "OWNER" = v_owner
        AND "TABLE_NAME" = v_table_name
        AND "RUN_SOURCE_TYPE" = v_run_source_type
@@ -653,26 +661,44 @@ BEGIN
                  , COLUMN_TYPE
               FROM (
                     SELECT F."COLUMN_NAME" AS COLUMN_NAME
-                         , CASE
-                               WHEN TRIM(F."FINAL_PREDICTED_TYPE") LIKE '%연속형' THEN 'NUMERIC'
-                               WHEN TRIM(F."FINAL_PREDICTED_TYPE") LIKE '%범주형' THEN 'CATEGORICAL'
+                         , CASE COALESCE(
+                                    TRIM(F."TYPE_GROUP_CODE")
+                                  , CASE
+                                        WHEN TRIM(F."FINAL_PREDICTED_TYPE") LIKE '%연속형' THEN 'CONTINUOUS'
+                                        WHEN TRIM(F."FINAL_PREDICTED_TYPE") LIKE '%범주형' THEN 'CATEGORICAL'
+                                        ELSE 'OTHER'
+                                    END
+                                )
+                               WHEN 'CONTINUOUS' THEN 'NUMERIC'
+                               WHEN 'CATEGORICAL' THEN 'CATEGORICAL'
                            END AS COLUMN_TYPE
                          , MIN(NVL(F."COLUMN_ID", C.COLUMN_ID)) AS COLUMN_ID
-                      FROM "INIT$_TB_PREDICTED_TYPE_FINAL" F
+                      FROM "INIT$_TB_COLTYPE_FINAL" F
                       JOIN ALL_TAB_COLUMNS C
                         ON C.OWNER = F."OWNER"
                        AND C.TABLE_NAME = F."TABLE_NAME"
                        AND C.COLUMN_NAME = F."COLUMN_NAME"
                      WHERE F."OWNER" = v_owner
                        AND F."TABLE_NAME" = v_table_name
-                       AND (
-                               TRIM(F."FINAL_PREDICTED_TYPE") LIKE '%연속형'
-                            OR TRIM(F."FINAL_PREDICTED_TYPE") LIKE '%범주형'
-                           )
+                       AND COALESCE(
+                               TRIM(F."TYPE_GROUP_CODE")
+                             , CASE
+                                   WHEN TRIM(F."FINAL_PREDICTED_TYPE") LIKE '%연속형' THEN 'CONTINUOUS'
+                                   WHEN TRIM(F."FINAL_PREDICTED_TYPE") LIKE '%범주형' THEN 'CATEGORICAL'
+                                   ELSE 'OTHER'
+                               END
+                           ) IN ('CONTINUOUS', 'CATEGORICAL')
                      GROUP BY F."COLUMN_NAME"
-                            , CASE
-                                  WHEN TRIM(F."FINAL_PREDICTED_TYPE") LIKE '%연속형' THEN 'NUMERIC'
-                                  WHEN TRIM(F."FINAL_PREDICTED_TYPE") LIKE '%범주형' THEN 'CATEGORICAL'
+                            , CASE COALESCE(
+                                       TRIM(F."TYPE_GROUP_CODE")
+                                     , CASE
+                                           WHEN TRIM(F."FINAL_PREDICTED_TYPE") LIKE '%연속형' THEN 'CONTINUOUS'
+                                           WHEN TRIM(F."FINAL_PREDICTED_TYPE") LIKE '%범주형' THEN 'CATEGORICAL'
+                                           ELSE 'OTHER'
+                                       END
+                                   )
+                                  WHEN 'CONTINUOUS' THEN 'NUMERIC'
+                                  WHEN 'CATEGORICAL' THEN 'CATEGORICAL'
                               END
                      ORDER BY COLUMN_ID, COLUMN_NAME
                    )
@@ -725,7 +751,7 @@ BEGIN
             p_manage_parallel_state => 'N'
         );
 
-        INSERT /*+ NO_PARALLEL */ INTO "INIT$_TB_RELATION_PAIR" (
+        INSERT /*+ NO_PARALLEL */ INTO "INIT$_TB_COLREL_PAIR" (
             "RUN_SOURCE_TYPE"
           , "RUN_ID"
           , "OWNER"
@@ -765,7 +791,7 @@ BEGIN
              , "PASS_YN"
              , NULL
              , SYSDATE
-          FROM "INIT$_TB_CAT_CORR_PAIR"
+          FROM "INIT$_TB_COLREL_CAT_PAIR"
          WHERE "OWNER" = v_owner
            AND "TABLE_NAME" = v_table_name
            AND "RUN_SOURCE_TYPE" = v_run_source_type
@@ -787,7 +813,7 @@ BEGIN
             p_manage_parallel_state => 'N'
         );
 
-        INSERT /*+ NO_PARALLEL */ INTO "INIT$_TB_RELATION_PAIR" (
+        INSERT /*+ NO_PARALLEL */ INTO "INIT$_TB_COLREL_PAIR" (
             "RUN_SOURCE_TYPE"
           , "RUN_ID"
           , "OWNER"
@@ -827,7 +853,7 @@ BEGIN
              , "PASS_YN"
              , NULL
              , SYSDATE
-          FROM "INIT$_TB_NUM_CORR_PAIR"
+          FROM "INIT$_TB_COLREL_NUM_PAIR"
          WHERE "OWNER" = v_owner
            AND "TABLE_NAME" = v_table_name
            AND "RUN_SOURCE_TYPE" = v_run_source_type
@@ -837,7 +863,7 @@ BEGIN
             FOR pair_rec IN (
                 SELECT "COL_A" AS COL_A
                      , "COL_B" AS COL_B
-                  FROM "INIT$_TB_NUM_CORR_PAIR"
+                  FROM "INIT$_TB_COLREL_NUM_PAIR"
                  WHERE "OWNER" = v_owner
                    AND "TABLE_NAME" = v_table_name
                    AND "RUN_SOURCE_TYPE" = v_run_source_type
@@ -989,7 +1015,7 @@ SELECT TOTALS.TOTAL_CNT
         END LOOP;
     END LOOP;
 
-    INSERT /*+ NO_PARALLEL */ INTO "INIT$_TB_RELATION_SUMMARY" (
+    INSERT /*+ NO_PARALLEL */ INTO "INIT$_TB_COLREL_SUMMARY" (
         "RUN_SOURCE_TYPE"
       , "RUN_ID"
       , "OWNER"
@@ -1009,7 +1035,7 @@ SELECT TOTALS.TOTAL_CNT
              , "COL_A_TYPE" AS COLUMN_TYPE
              , "ABS_METRIC_VALUE"
              , "PASS_YN"
-          FROM "INIT$_TB_RELATION_PAIR"
+          FROM "INIT$_TB_COLREL_PAIR"
          WHERE "OWNER" = v_owner
            AND "TABLE_NAME" = v_table_name
            AND "RUN_SOURCE_TYPE" = v_run_source_type
@@ -1019,7 +1045,7 @@ SELECT TOTALS.TOTAL_CNT
              , "COL_B_TYPE" AS COLUMN_TYPE
              , "ABS_METRIC_VALUE"
              , "PASS_YN"
-          FROM "INIT$_TB_RELATION_PAIR"
+          FROM "INIT$_TB_COLREL_PAIR"
          WHERE "OWNER" = v_owner
            AND "TABLE_NAME" = v_table_name
            AND "RUN_SOURCE_TYPE" = v_run_source_type
@@ -1195,14 +1221,14 @@ BEGIN
     disable_parallel_if_needed;
 
     DELETE /*+ NO_PARALLEL */
-      FROM "INIT$_TB_NUM_CORR_SUMMARY"
+      FROM "INIT$_TB_COLREL_NUM_SUMMARY"
      WHERE "OWNER" = v_owner
        AND "TABLE_NAME" = v_table_name
        AND "RUN_SOURCE_TYPE" = v_run_source_type
        AND "RUN_ID" = v_run_id;
 
     DELETE /*+ NO_PARALLEL */
-      FROM "INIT$_TB_NUM_CORR_PAIR"
+      FROM "INIT$_TB_COLREL_NUM_PAIR"
      WHERE "OWNER" = v_owner
        AND "TABLE_NAME" = v_table_name
        AND "RUN_SOURCE_TYPE" = v_run_source_type
@@ -1215,12 +1241,12 @@ BEGIN
               FROM (
                     SELECT P."COLUMN_NAME"
                          , MIN(NVL(P."COLUMN_ID", C.COLUMN_ID)) AS COLUMN_ID
-                      FROM "INIT$_TB_PREDICTED_TYPE" P
+                      FROM "INIT$_TB_COLTYPE_RESULT" P
                       JOIN ALL_TAB_COLUMNS C
                         ON C.OWNER = P."OWNER"
                        AND C.TABLE_NAME = P."TABLE_NAME"
                        AND C.COLUMN_NAME = P."COLUMN_NAME"
-                      JOIN "INIT$_TB_PREDICTED_TYPE_FINAL" F
+                      JOIN "INIT$_TB_COLTYPE_FINAL" F
                         ON F."OWNER" = P."OWNER"
                        AND F."TABLE_NAME" = P."TABLE_NAME"
                        AND F."COLUMN_NAME" = P."COLUMN_NAME"
@@ -1228,7 +1254,14 @@ BEGIN
                        AND P."TABLE_NAME" = v_table_name
                        AND P."RUN_SOURCE_TYPE" = v_run_source_type
                        AND (v_run_source_type = 'DATA_WORK' OR P."RUN_ID" = v_run_id)
-                       AND TRIM(F."FINAL_PREDICTED_TYPE") LIKE '%연속형'
+                       AND COALESCE(
+                               TRIM(F."TYPE_GROUP_CODE")
+                             , CASE
+                                   WHEN TRIM(F."FINAL_PREDICTED_TYPE") LIKE '%연속형' THEN 'CONTINUOUS'
+                                   WHEN TRIM(F."FINAL_PREDICTED_TYPE") LIKE '%범주형' THEN 'CATEGORICAL'
+                                   ELSE 'OTHER'
+                               END
+                           ) = 'CONTINUOUS'
                      GROUP BY P."COLUMN_NAME"
                      ORDER BY COLUMN_ID, COLUMN_NAME
                    )
@@ -1270,7 +1303,7 @@ SELECT COUNT(*) AS ROW_COUNT
                              ELSE 'N'
                          END;
 
-            INSERT /*+ NO_PARALLEL */ INTO "INIT$_TB_NUM_CORR_PAIR" (
+            INSERT /*+ NO_PARALLEL */ INTO "INIT$_TB_COLREL_NUM_PAIR" (
                 "RUN_SOURCE_TYPE"
               , "RUN_ID"
               , "OWNER"
@@ -1300,7 +1333,7 @@ SELECT COUNT(*) AS ROW_COUNT
         END LOOP;
     END LOOP;
 
-    INSERT /*+ NO_PARALLEL */ INTO "INIT$_TB_NUM_CORR_SUMMARY" (
+    INSERT /*+ NO_PARALLEL */ INTO "INIT$_TB_COLREL_NUM_SUMMARY" (
         "RUN_SOURCE_TYPE"
       , "RUN_ID"
       , "OWNER"
@@ -1316,14 +1349,14 @@ SELECT COUNT(*) AS ROW_COUNT
     )
     WITH PAIRS AS (
         SELECT "COL_A" AS COLUMN_NAME, "ABS_PEARSON_R", "PASS_YN"
-          FROM "INIT$_TB_NUM_CORR_PAIR"
+          FROM "INIT$_TB_COLREL_NUM_PAIR"
          WHERE "OWNER" = v_owner
            AND "TABLE_NAME" = v_table_name
            AND "RUN_SOURCE_TYPE" = v_run_source_type
            AND "RUN_ID" = v_run_id
         UNION ALL
         SELECT "COL_B" AS COLUMN_NAME, "ABS_PEARSON_R", "PASS_YN"
-          FROM "INIT$_TB_NUM_CORR_PAIR"
+          FROM "INIT$_TB_COLREL_NUM_PAIR"
          WHERE "OWNER" = v_owner
            AND "TABLE_NAME" = v_table_name
            AND "RUN_SOURCE_TYPE" = v_run_source_type

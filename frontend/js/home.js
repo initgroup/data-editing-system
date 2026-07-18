@@ -768,7 +768,7 @@
             const rows = Array.isArray(json.data) ? json.data : [];
             const columns = Array.isArray(json.columns) ? json.columns : [];
             const numericProfile = this.extractNumericProfile(rows, columns).slice(0, 8);
-            const filterHint = node.menuCode === "M03002" && node.resultObjectName === "INIT$_TB_CAT_CORR_PAIR"
+            const filterHint = node.menuCode === "M03002" && node.resultObjectName === "INIT$_TB_COLREL_CAT_PAIR"
                 ? "PASS_YN = 'Y' only"
                 : `${this.formatNumber(rows.length)} sample rows`;
             return `

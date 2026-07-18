@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "description": "Target DB override presets for INIT$_SP_PREDICTED_TYPE. M90001 loads these values from the selected internal model resource.",
   "targetSettingCategories": [
     {
@@ -13,6 +13,12 @@
           "SETTING_VALUE": "NUMBER,FLOAT",
           "SETTING_DESC": "If the physical data type is in this list, it is classified as NUM before sample conversion checks. Separate values with commas or line breaks.",
           "SORT_ORDER": 10
+        },
+        {
+          "SETTING_KEY": "NUMERIC_CONVERT_RATIO",
+          "SETTING_VALUE": "0.98",
+          "SETTING_DESC": "Minimum share of non-null sample values that must convert safely to NUMBER before a character column is treated as numeric.",
+          "SORT_ORDER": 15
         },
         {
           "SETTING_KEY": "IDENTIFIER_DIST_RATIO",
@@ -43,6 +49,36 @@
           "SETTING_VALUE": "FILE_ROW_NO",
           "SETTING_DESC": "Column names that should always be classified as identifiers. Separate values with commas or line breaks.",
           "SORT_ORDER": 60
+        },
+        {
+          "SETTING_KEY": "DISCRETE_NUMERIC_MIN_DISTINCT",
+          "SETTING_VALUE": "16",
+          "SETTING_DESC": "Minimum distinct-value count for a dense non-negative integer column to be classified as numeric discrete instead of categorical.",
+          "SORT_ORDER": 70
+        },
+        {
+          "SETTING_KEY": "DENSE_NUMERIC_RANGE_RATIO",
+          "SETTING_VALUE": "0.8",
+          "SETTING_DESC": "Minimum observed distinct values divided by the integer value range for numeric-discrete classification.",
+          "SORT_ORDER": 80
+        },
+        {
+          "SETTING_KEY": "ORDINAL_MAX_DISTINCT",
+          "SETTING_VALUE": "30",
+          "SETTING_DESC": "Maximum distinct-value count considered for low-entropy ordinal categorical numeric columns.",
+          "SORT_ORDER": 90
+        },
+        {
+          "SETTING_KEY": "INTEGER_TOLERANCE",
+          "SETTING_VALUE": "0.000000001",
+          "SETTING_DESC": "Relative tolerance used when deciding whether sampled numeric values are effectively integers.",
+          "SORT_ORDER": 100
+        },
+        {
+          "SETTING_KEY": "MODEL_AUTO_CONFIDENCE",
+          "SETTING_VALUE": "0.85",
+          "SETTING_DESC": "Minimum model probability required for FINAL_BOTH to override a disagreeing rule-based prediction.",
+          "SORT_ORDER": 110
         }
       ]
     }

@@ -502,7 +502,7 @@ def create_data_work_router(
             model_name = data_work.normalize_optional_identifier(modelName)
             conn = get_target_db_connection(request)
             cursor = conn.cursor()
-            target_object = quote_identifier(result_owner) + "." + quote_identifier("INIT$_TB_PREDICTED_TYPE")
+            target_object = quote_identifier(result_owner) + "." + quote_identifier("INIT$_TB_COLTYPE_RESULT")
             sql = SqlLoader.get_sql("DATA_WORK_PREDICTED_TYPE_RUN_ID").replace(
                 "/* --PREDICTED_TYPE_OBJECT-- */",
                 target_object
@@ -548,15 +548,15 @@ def create_data_work_router(
             source_owner = data_work.require_identifier(targetOwner, "targetOwner")
             source_table = data_work.require_identifier(targetTable, "targetTable")
             filter_columns = {
-                "INIT$_TB_CAT_CORR_PAIR": ("OWNER", "TABLE_NAME"),
-                "INIT$_TB_CAT_CORR_SUMMARY": ("OWNER", "TABLE_NAME"),
-                "INIT$_TB_NUM_CORR_PAIR": ("OWNER", "TABLE_NAME"),
-                "INIT$_TB_NUM_CORR_SUMMARY": ("OWNER", "TABLE_NAME"),
-                "INIT$_TB_LASSO_FEATURE": ("OWNER", "TABLE_NAME"),
-                "INIT$_TB_SYMBOLIC_RULE": ("OWNER", "TABLE_NAME"),
-                "INIT$_TB_ASSOC_RULE_SUMMARY": ("TARGET_OWNER", "TARGET_TABLE"),
-                "INIT$_TB_RULE_VIOLATION_RESULT": ("TARGET_OWNER", "TARGET_TABLE"),
-                "INIT$_TB_SYMBOLIC_RULE_VIOLATION": ("TARGET_OWNER", "TARGET_TABLE")
+                "INIT$_TB_COLREL_CAT_PAIR": ("OWNER", "TABLE_NAME"),
+                "INIT$_TB_COLREL_CAT_SUMMARY": ("OWNER", "TABLE_NAME"),
+                "INIT$_TB_COLREL_NUM_PAIR": ("OWNER", "TABLE_NAME"),
+                "INIT$_TB_COLREL_NUM_SUMMARY": ("OWNER", "TABLE_NAME"),
+                "INIT$_TB_COLREL_LASSO_FEATURE": ("OWNER", "TABLE_NAME"),
+                "INIT$_TB_RULEDISC_SYMBOLIC": ("OWNER", "TABLE_NAME"),
+                "INIT$_TB_RULEDISC_ASSOC_SUM": ("TARGET_OWNER", "TARGET_TABLE"),
+                "INIT$_TB_RULEVIOL_ASSOC": ("TARGET_OWNER", "TARGET_TABLE"),
+                "INIT$_TB_RULEVIOL_SYMBOLIC": ("TARGET_OWNER", "TARGET_TABLE")
             }
             if result_table not in filter_columns:
                 raise HTTPException(status_code=400, detail="Unsupported result table for run id lookup.")
@@ -1094,8 +1094,8 @@ def create_data_work_router(
                     if not re.match(r"^[A-Za-z0-9+/=._-]+$", row_id):
                         raise HTTPException(status_code=400, detail="Invalid row identifier.")
 
-                    if is_predicted_type_table(table_name):
-                        updated_count += merge_predicted_type_final(
+                    if is_predicted_type_table(table_name) or is_predicted_type_final_table(table_name):
+                        updated_count += confirm_predicted_type_final(
                             cursor,
                             owner,
                             table_name,
@@ -1969,18 +1969,18 @@ def create_data_work_router(
 
 
     def is_predicted_type_table(table_name: str) -> bool:
-        return str(table_name or "").upper() == "INIT$_TB_PREDICTED_TYPE"
+        return str(table_name or "").upper() == "INIT$_TB_COLTYPE_RESULT"
 
 
     def is_predicted_type_final_table(table_name: str) -> bool:
-        return str(table_name or "").upper() == "INIT$_TB_PREDICTED_TYPE_FINAL"
+        return str(table_name or "").upper() == "INIT$_TB_COLTYPE_FINAL"
 
 
     def final_table_object(owner: str) -> str:
-        return quote_identifier(owner) + "." + quote_identifier("INIT$_TB_PREDICTED_TYPE_FINAL")
+        return quote_identifier(owner) + "." + quote_identifier("INIT$_TB_COLTYPE_FINAL")
 
 
-    def merge_predicted_type_final(
+    def confirm_predicted_type_final(
         cursor,
         owner: str,
         table_name: str,
@@ -1993,132 +1993,91 @@ def create_data_work_router(
         target_object = quote_identifier(owner) + "." + quote_identifier(table_name)
         final_object = final_table_object(owner)
         where_sql = f" AND ({where_clause})" if where_clause else ""
-        source_sql = (
-            'SELECT R."RUN_SOURCE_TYPE", R."RUN_ID", R."OWNER", R."TABLE_NAME", R."MODEL_NAME", '
-            '       COALESCE(R."COLUMN_DESC", TC.COMMENTS) AS "COLUMN_DESC", '
-            '       R."COLUMN_ID", R."COLUMN_NAME", R."DATA_TYPE", R."BASE_PREDICTED_TYPE", '
-            '       R."MODL_PREDICTED_TYPE", R."FINAL_PREDICTED_TYPE", R."FINAL_REASON", '
-            '       F."FINAL_PREDICTED_TYPE" AS "SAVED_FINAL_PREDICTED_TYPE", '
-            '       F."FINAL_REASON" AS "SAVED_FINAL_REASON" '
-            "  FROM ("
-            f"SELECT T.* FROM {target_object} T "
-            " WHERE T.ROWID = CHARTOROWID(:row_id)"
-            f"{where_sql}"
-            ") R "
-            f"  LEFT JOIN {final_object} F "
-            '    ON F."OWNER" = R."OWNER" '
-            '   AND F."TABLE_NAME" = R."TABLE_NAME" '
-            '   AND F."COLUMN_NAME" = R."COLUMN_NAME" '
-            '  LEFT JOIN ALL_COL_COMMENTS TC '
-            '    ON TC.OWNER = R."OWNER" '
-            '   AND TC.TABLE_NAME = R."TABLE_NAME" '
-            '   AND TC.COLUMN_NAME = R."COLUMN_NAME" '
-        )
+        if is_predicted_type_final_table(table_name):
+            source_sql = (
+                'SELECT F."SOURCE_RUN_SOURCE_TYPE" AS "RUN_SOURCE_TYPE", '
+                '       F."SOURCE_RUN_ID" AS "RUN_ID", F."OWNER", F."TABLE_NAME", '
+                '       F."SOURCE_MODEL_NAME" AS "MODEL_NAME", F."COLUMN_NAME", '
+                '       F."BASE_PREDICTED_TYPE", F."MODL_PREDICTED_TYPE", '
+                '       F."FINAL_PREDICTED_TYPE", F."FINAL_REASON", '
+                '       F."FINAL_PREDICTED_TYPE" AS "SAVED_FINAL_PREDICTED_TYPE", '
+                '       F."FINAL_REASON" AS "SAVED_FINAL_REASON" '
+                f"  FROM {target_object} F "
+                " WHERE F.ROWID = CHARTOROWID(:row_id)"
+                f"{where_sql}"
+            )
+        else:
+            source_sql = (
+                'SELECT R."RUN_SOURCE_TYPE", R."RUN_ID", R."OWNER", R."TABLE_NAME", R."MODEL_NAME", '
+                '       R."COLUMN_NAME", R."BASE_PREDICTED_TYPE", R."MODL_PREDICTED_TYPE", '
+                '       R."FINAL_PREDICTED_TYPE", R."FINAL_REASON", '
+                '       F."FINAL_PREDICTED_TYPE" AS "SAVED_FINAL_PREDICTED_TYPE", '
+                '       F."FINAL_REASON" AS "SAVED_FINAL_REASON" '
+                "  FROM ("
+                f"SELECT T.* FROM {target_object} T "
+                " WHERE T.ROWID = CHARTOROWID(:row_id)"
+                f"{where_sql}"
+                ") R "
+                f"  LEFT JOIN {final_object} F "
+                '    ON F."OWNER" = R."OWNER" '
+                '   AND F."TABLE_NAME" = R."TABLE_NAME" '
+                '   AND F."COLUMN_NAME" = R."COLUMN_NAME" '
+            )
         cursor.execute(source_sql, {"row_id": row_id})
         row = cursor.fetchone()
         if not row:
             return 0
         columns = [desc[0] for desc in cursor.description]
         source = {col: row[index] for index, col in enumerate(columns)}
-        final_type = value if column_name == "FINAL_PREDICTED_TYPE" else (
+        is_final_type_change = column_name == "FINAL_PREDICTED_TYPE"
+        final_type = value if is_final_type_change else (
             source.get("SAVED_FINAL_PREDICTED_TYPE") or source.get("FINAL_PREDICTED_TYPE")
         )
         final_reason = value if column_name == "FINAL_REASON" else (
             source.get("SAVED_FINAL_REASON") or source.get("FINAL_REASON")
         )
-        if final_type is None or str(final_type).strip() == "":
+        if not is_final_type_change and (final_type is None or str(final_type).strip() == ""):
             final_type = source.get("MODL_PREDICTED_TYPE") or source.get("BASE_PREDICTED_TYPE")
         if final_type is None or str(final_type).strip() == "":
-            raise HTTPException(status_code=400, detail="FINAL_PREDICTED_TYPE is required before saving final reason.")
-
-        merge_sql = f"""
-MERGE INTO {final_object} F
-USING (
-    SELECT :owner AS "OWNER"
-         , :table_name AS "TABLE_NAME"
-         , :column_name AS "COLUMN_NAME"
-         , :column_desc AS "COLUMN_DESC"
-         , :column_id AS "COLUMN_ID"
-         , :data_type AS "DATA_TYPE"
-         , :source_run_source_type AS "SOURCE_RUN_SOURCE_TYPE"
-         , :source_run_id AS "SOURCE_RUN_ID"
-         , :source_model_name AS "SOURCE_MODEL_NAME"
-         , :base_predicted_type AS "BASE_PREDICTED_TYPE"
-         , :modl_predicted_type AS "MODL_PREDICTED_TYPE"
-         , :final_predicted_type AS "FINAL_PREDICTED_TYPE"
-         , :final_reason AS "FINAL_REASON"
-         , :final_update_user AS "FINAL_UPDATE_USER"
-      FROM DUAL
-) S
-   ON (F."OWNER" = S."OWNER"
-  AND F."TABLE_NAME" = S."TABLE_NAME"
-  AND F."COLUMN_NAME" = S."COLUMN_NAME")
- WHEN MATCHED THEN UPDATE
-      SET F."COLUMN_DESC" = S."COLUMN_DESC"
-        , F."COLUMN_ID" = S."COLUMN_ID"
-        , F."DATA_TYPE" = S."DATA_TYPE"
-        , F."SOURCE_RUN_SOURCE_TYPE" = S."SOURCE_RUN_SOURCE_TYPE"
-        , F."SOURCE_RUN_ID" = S."SOURCE_RUN_ID"
-        , F."SOURCE_MODEL_NAME" = S."SOURCE_MODEL_NAME"
-        , F."BASE_PREDICTED_TYPE" = S."BASE_PREDICTED_TYPE"
-        , F."MODL_PREDICTED_TYPE" = S."MODL_PREDICTED_TYPE"
-        , F."FINAL_PREDICTED_TYPE" = S."FINAL_PREDICTED_TYPE"
-        , F."FINAL_REASON" = S."FINAL_REASON"
-        , F."FINAL_UPDATE_DT" = SYSDATE
-        , F."FINAL_UPDATE_USER" = S."FINAL_UPDATE_USER"
- WHEN NOT MATCHED THEN INSERT (
-        "OWNER"
-      , "TABLE_NAME"
-      , "COLUMN_NAME"
-      , "COLUMN_DESC"
-      , "COLUMN_ID"
-      , "DATA_TYPE"
-      , "SOURCE_RUN_SOURCE_TYPE"
-      , "SOURCE_RUN_ID"
-      , "SOURCE_MODEL_NAME"
-      , "BASE_PREDICTED_TYPE"
-      , "MODL_PREDICTED_TYPE"
-      , "FINAL_PREDICTED_TYPE"
-      , "FINAL_REASON"
-      , "FINAL_UPDATE_DT"
-      , "FINAL_UPDATE_USER"
-      , "CREATE_DT"
-      )
-      VALUES (
-        S."OWNER"
-      , S."TABLE_NAME"
-      , S."COLUMN_NAME"
-      , S."COLUMN_DESC"
-      , S."COLUMN_ID"
-      , S."DATA_TYPE"
-      , S."SOURCE_RUN_SOURCE_TYPE"
-      , S."SOURCE_RUN_ID"
-      , S."SOURCE_MODEL_NAME"
-      , S."BASE_PREDICTED_TYPE"
-      , S."MODL_PREDICTED_TYPE"
-      , S."FINAL_PREDICTED_TYPE"
-      , S."FINAL_REASON"
-      , SYSDATE
-      , S."FINAL_UPDATE_USER"
-      , SYSDATE
-      )
-"""
-        cursor.execute(merge_sql, {
+            if not is_final_type_change:
+                raise HTTPException(status_code=400, detail="FINAL_PREDICTED_TYPE is required before saving final reason.")
+        cursor.execute(SqlLoader.get_sql("DATA_WORK_COLUMN_TYPE_CONFIRM"), {
             "owner": source.get("OWNER"),
-            "table_name": source.get("TABLE_NAME"),
-            "column_name": source.get("COLUMN_NAME"),
-            "column_desc": source.get("COLUMN_DESC"),
-            "column_id": source.get("COLUMN_ID"),
-            "data_type": source.get("DATA_TYPE"),
-            "source_run_source_type": source.get("RUN_SOURCE_TYPE"),
-            "source_run_id": source.get("RUN_ID"),
-            "source_model_name": source.get("MODEL_NAME"),
-            "base_predicted_type": source.get("BASE_PREDICTED_TYPE"),
-            "modl_predicted_type": source.get("MODL_PREDICTED_TYPE"),
-            "final_predicted_type": final_type,
-            "final_reason": final_reason,
-            "final_update_user": str(user_id or "")
+            "tableName": source.get("TABLE_NAME"),
+            "columnName": source.get("COLUMN_NAME"),
+            "displayType": final_type,
+            "reason": final_reason,
+            "runSourceType": source.get("RUN_SOURCE_TYPE"),
+            "runId": source.get("RUN_ID"),
+            "modelName": source.get("MODEL_NAME"),
+            "userId": str(user_id or "")
         })
+
+        # INIT$_TB_COLTYPE_RESULT is an execution snapshot, while the FINAL
+        # master and label corpus are the source of truth. Keep the edited
+        # snapshot row in sync so a grid reload does not appear to undo the
+        # user's explicit confirmation.
+        if is_predicted_type_table(table_name):
+            snapshot_set_items = [
+                '"FINAL_PREDICTED_TYPE" = :final_predicted_type',
+                '"FINAL_TYPE_CODE" = CASE WHEN NULLIF(TRIM(:final_predicted_type), \'\') IS NULL THEN NULL ELSE INIT$_FN_TYPE_CODE(:final_predicted_type) END',
+                '"TYPE_GROUP_CODE" = CASE WHEN NULLIF(TRIM(:final_predicted_type), \'\') IS NULL THEN NULL ELSE INIT$_FN_TYPE_GROUP_CODE(:final_predicted_type) END',
+                '"FINAL_REASON" = :final_reason',
+                '"FINAL_UPDATE_DT" = SYSDATE',
+                '"FINAL_UPDATE_USER" = :final_update_user'
+            ]
+            snapshot_params = {
+                "final_predicted_type": final_type,
+                "final_reason": final_reason,
+                "final_update_user": str(user_id or ""),
+                "row_id": row_id
+            }
+            cursor.execute(
+                f"UPDATE {target_object} "
+                f"SET {', '.join(snapshot_set_items)} "
+                f"WHERE ROWID = CHARTOROWID(:row_id){where_sql}",
+                snapshot_params
+            )
         return 1
 
 

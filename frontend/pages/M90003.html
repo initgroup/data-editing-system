@@ -1,0 +1,341 @@
+<div class="page-container type-model-page" id="container-M90003">
+    <header class="type-model-header">
+        <div class="type-model-heading">
+            <span class="type-model-kicker" data-label-key="targetDbGlobalResource">Target DB Global Resource</span>
+            <h1 data-label-key="pageTitle">Column Type Model Training</h1>
+            <p data-label-key="pageDescription">Train, compare, activate, and roll back reusable column type models using confirmed gold labels collected across projects.</p>
+        </div>
+        <div class="type-model-header-actions">
+            <span id="targetDb-M90003" class="type-model-target-db" data-label-key="currentTargetDb">Current Target DB</span>
+            <button type="button" class="type-model-icon-btn" data-action="refresh-all" title="Refresh all" data-title-key="refreshAllTitle">
+                <i class="fas fa-sync-alt" aria-hidden="true"></i>
+            </button>
+        </div>
+    </header>
+
+    <div id="pageMessage-M90003" class="type-model-message" role="status" aria-live="polite" hidden></div>
+
+    <nav class="type-model-tabs" aria-label="Column type model training sections" data-aria-label-key="sectionTabsAriaLabel">
+        <button type="button" class="type-model-tab is-active" data-tab="overview" aria-selected="true">
+            <i class="fas fa-chart-pie" aria-hidden="true"></i>
+            <span data-label-key="overviewTab">Overview</span>
+        </button>
+        <button type="button" class="type-model-tab" data-tab="dataset" aria-selected="false">
+            <i class="fas fa-database" aria-hidden="true"></i>
+            <span data-label-key="trainingDataTab">Training Data &amp; Label Quality</span>
+        </button>
+        <button type="button" class="type-model-tab" data-tab="train" aria-selected="false">
+            <i class="fas fa-flask" aria-hidden="true"></i>
+            <span data-label-key="trainCompareTab">Train &amp; Compare</span>
+        </button>
+        <button type="button" class="type-model-tab" data-tab="versions" aria-selected="false">
+            <i class="fas fa-code-branch" aria-hidden="true"></i>
+            <span data-label-key="modelVersionsTab">Model Versions</span>
+        </button>
+        <button type="button" class="type-model-tab" data-tab="runs" aria-selected="false">
+            <i class="fas fa-history" aria-hidden="true"></i>
+            <span data-label-key="runHistoryTab">Run History</span>
+        </button>
+    </nav>
+
+    <main class="type-model-content">
+        <section class="type-model-panel is-active" data-panel="overview">
+            <div class="type-model-section-head">
+                <div>
+                    <h2 data-label-key="activeModelTitle">Active Model</h2>
+                    <p data-label-key="activeModelDescription">The champion model currently used by INIT$_SP_PREDICTED_TYPE in this Target DB.</p>
+                </div>
+                <span id="activeStatus-M90003" class="type-model-status is-empty">-</span>
+            </div>
+
+            <div id="activeModelCards-M90003" class="type-model-metric-grid" aria-live="polite"></div>
+
+            <div class="type-model-overview-grid">
+                <section class="type-model-card type-model-group-card">
+                    <header>
+                        <div>
+                            <h3 data-label-key="finalGroupDistributionTitle">Final Type Group Distribution</h3>
+                            <p data-label-key="finalGroupDistributionDescription">Final analytical groups are CATEGORICAL, CONTINUOUS, and OTHER.</p>
+                        </div>
+                    </header>
+                    <div id="groupDistribution-M90003" class="type-group-distribution"></div>
+                </section>
+
+                <section class="type-model-card type-model-quality-card">
+                    <header>
+                        <div>
+                            <h3 data-label-key="labelQualityTitle">Confirmed Gold Label Quality</h3>
+                            <p data-label-key="labelQualityDescription">Only explicitly confirmed labels are eligible. Automatic and legacy labels remain excluded.</p>
+                        </div>
+                    </header>
+                    <div id="labelQuality-M90003" class="type-model-quality-grid"></div>
+                </section>
+            </div>
+
+            <section class="type-model-card">
+                <header>
+                    <div>
+                        <h3 data-label-key="detailedTypeDistributionTitle">Detailed Canonical Type Distribution</h3>
+                        <p data-label-key="detailedTypeDistributionDescription">Detailed type codes are kept separately from the three final type groups.</p>
+                    </div>
+                </header>
+                <div class="type-model-table-wrap compact">
+                    <table class="type-model-table">
+                        <thead>
+                            <tr>
+                                <th data-label-key="canonicalTypeCode">Detailed Type Code</th>
+                                <th data-label-key="finalTypeGroup">Final Type Group</th>
+                                <th data-label-key="confirmedCount">Confirmed</th>
+                                <th data-label-key="percentage">Percentage</th>
+                            </tr>
+                        </thead>
+                        <tbody id="typeDistributionBody-M90003"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="type-model-card">
+                <header>
+                    <div>
+                        <h3 data-label-key="validationMetricsTitle">Champion Validation</h3>
+                        <p data-label-key="validationMetricsDescription">Macro F1, balanced accuracy, per-class recall, and confusion data from an independent holdout.</p>
+                    </div>
+                </header>
+                <div id="championMetrics-M90003" class="type-model-validation"></div>
+            </section>
+        </section>
+
+        <section class="type-model-panel" data-panel="dataset" hidden>
+            <div class="type-model-section-head">
+                <div>
+                    <h2 data-label-key="trainingDatasetTitle">Training Dataset &amp; Label Quality</h2>
+                    <p data-label-key="trainingDatasetDescription">Review deduplicated, user-confirmed gold labels and inspect labels excluded from training.</p>
+                </div>
+                <button type="button" class="type-model-icon-btn" data-action="refresh-dataset" title="Refresh training data" data-title-key="refreshDatasetTitle">
+                    <i class="fas fa-sync-alt" aria-hidden="true"></i>
+                </button>
+            </div>
+
+            <div class="type-model-note is-info">
+                <i class="fas fa-circle-info" aria-hidden="true"></i>
+                <span data-label-key="goldLabelNotice">Training eligibility requires an explicitly confirmed gold label. AUTO_RULE, AUTO_MODEL, AUTO_BOTH, and LEGACY_UNKNOWN are never treated as gold labels.</span>
+            </div>
+
+            <div class="type-model-toolbar dataset-toolbar">
+                <label>
+                    <span data-label-key="labelStatus">Label Status</span>
+                    <select id="datasetStatus-M90003" data-filter="dataset">
+                        <option value="ELIGIBLE" data-label-key="eligibleConfirmed">Eligible Confirmed</option>
+                        <option value="EXCLUDED_AUTO" data-label-key="excludedAutomatic">Excluded Automatic</option>
+                        <option value="EXCLUDED_LEGACY" data-label-key="excludedLegacy">Excluded Legacy</option>
+                        <option value="CONFLICT" data-label-key="conflicts">Conflicts</option>
+                        <option value="ALL" data-label-key="all">All</option>
+                    </select>
+                </label>
+                <label>
+                    <span data-label-key="finalTypeGroup">Final Type Group</span>
+                    <select id="datasetGroup-M90003" data-filter="dataset">
+                        <option value="" data-label-key="allGroups">All Groups</option>
+                        <option value="CATEGORICAL">CATEGORICAL</option>
+                        <option value="CONTINUOUS">CONTINUOUS</option>
+                        <option value="OTHER">OTHER</option>
+                    </select>
+                </label>
+                <label class="type-model-search-field">
+                    <span data-label-key="search">Search</span>
+                    <input id="datasetKeyword-M90003" type="search" data-search="dataset" placeholder="Owner, table, column, comment" data-placeholder-key="datasetSearchPlaceholder">
+                </label>
+                <button type="button" class="type-model-btn" data-action="search-dataset">
+                    <i class="fas fa-search" aria-hidden="true"></i>
+                    <span data-label-key="search">Search</span>
+                </button>
+            </div>
+
+            <div class="type-model-grid-shell">
+                <div class="type-model-grid-toolbar">
+                    <span id="datasetTotal-M90003">0</span>
+                    <div class="type-model-pager">
+                        <button type="button" class="type-model-icon-btn" data-action="dataset-prev" title="Previous page" data-title-key="previousPageTitle"><i class="fas fa-chevron-left"></i></button>
+                        <span data-label-key="page">Page</span>
+                        <input id="datasetPage-M90003" type="number" min="1" value="1" data-page-input="dataset">
+                        <span id="datasetPageCount-M90003">/ 1</span>
+                        <button type="button" class="type-model-icon-btn" data-action="dataset-next" title="Next page" data-title-key="nextPageTitle"><i class="fas fa-chevron-right"></i></button>
+                        <select id="datasetPageSize-M90003" data-page-size="dataset" title="Rows per page" data-title-key="rowsPerPageTitle">
+                            <option value="25">25</option>
+                            <option value="50" selected>50</option>
+                            <option value="100">100</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="type-model-table-wrap">
+                    <table class="type-model-table type-model-data-table">
+                        <thead>
+                            <tr>
+                                <th class="no-column">No</th>
+                                <th data-label-key="owner">Owner</th>
+                                <th data-label-key="tableName">Table</th>
+                                <th data-label-key="columnName">Column</th>
+                                <th data-label-key="columnComment">Comment</th>
+                                <th data-label-key="canonicalTypeCode">Detailed Type Code</th>
+                                <th data-label-key="finalTypeGroup">Final Type Group</th>
+                                <th data-label-key="labelSource">Label Source</th>
+                                <th data-label-key="confirmed">Confirmed</th>
+                                <th data-label-key="duplicateCount">Duplicates</th>
+                                <th data-label-key="conflict">Conflict</th>
+                                <th data-label-key="updatedAt">Updated</th>
+                            </tr>
+                        </thead>
+                        <tbody id="datasetBody-M90003"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="type-model-panel" data-panel="train" hidden>
+            <div class="type-model-section-head">
+                <div>
+                    <h2 data-label-key="trainCandidateTitle">Train Candidate Model</h2>
+                    <p data-label-key="trainCandidateDescription">Training creates an immutable candidate. The active champion is not replaced until validation and explicit activation.</p>
+                </div>
+            </div>
+
+            <form id="trainForm-M90003" class="type-model-train-form">
+                <label>
+                    <span data-label-key="algorithm">Algorithm</span>
+                    <select id="trainAlgorithm-M90003" required>
+                        <option value="DECISION_TREE">DECISION_TREE</option>
+                        <option value="RANDOM_FOREST">RANDOM_FOREST</option>
+                    </select>
+                </label>
+                <label>
+                    <span data-label-key="featureVersion">Feature Version</span>
+                    <input id="trainFeatureVersion-M90003" type="text" maxlength="40" value="V2" required>
+                </label>
+                <label>
+                    <span data-label-key="maximumRows">Maximum Rows</span>
+                    <input id="trainMaxRows-M90003" type="number" min="100" max="1000000" step="100" value="25000" required>
+                </label>
+                <label>
+                    <span data-label-key="randomSeed">Random Seed</span>
+                    <input id="trainSeed-M90003" type="number" min="1" max="2147483647" value="42" required>
+                </label>
+                <label>
+                    <span data-label-key="holdoutRatio">Holdout Ratio</span>
+                    <input id="trainHoldout-M90003" type="number" min="0.1" max="0.4" step="0.05" value="0.2" required>
+                </label>
+                <label class="type-model-confirmed-only">
+                    <input type="checkbox" checked disabled>
+                    <span data-label-key="confirmedGoldOnly">Confirmed gold labels only</span>
+                </label>
+                <button id="startTrainingBtn-M90003" type="submit" class="type-model-btn is-primary">
+                    <i class="fas fa-play" aria-hidden="true"></i>
+                    <span data-label-key="startTraining">Start Training</span>
+                </button>
+            </form>
+
+            <div class="type-model-note is-warning">
+                <i class="fas fa-triangle-exclamation" aria-hidden="true"></i>
+                <span data-label-key="trainingSafetyNotice">Rows, seed, and holdout are bounded. Training runs in the Target DB and never replaces the champion automatically.</span>
+            </div>
+
+            <section class="type-model-card">
+                <header>
+                    <div>
+                        <h3 data-label-key="candidateComparisonTitle">Candidate vs Champion</h3>
+                        <p data-label-key="candidateComparisonDescription">Compare independent holdout metrics before activation.</p>
+                    </div>
+                    <button type="button" class="type-model-icon-btn" data-action="refresh-models" title="Refresh models" data-title-key="refreshModelsTitle"><i class="fas fa-sync-alt"></i></button>
+                </header>
+                <div id="candidateComparison-M90003" class="type-model-comparison"></div>
+            </section>
+        </section>
+
+        <section class="type-model-panel" data-panel="versions" hidden>
+            <div class="type-model-section-head">
+                <div>
+                    <h2 data-label-key="modelVersionsTitle">Model Versions &amp; Deployment</h2>
+                    <p data-label-key="modelVersionsDescription">Activate a validated candidate, roll back to a previous version, or archive unused candidates.</p>
+                </div>
+                <div class="type-model-row-actions">
+                    <button type="button" class="type-model-btn" data-action="rollback-current">
+                        <i class="fas fa-rotate-left" aria-hidden="true"></i>
+                        <span data-label-key="rollback">Rollback</span>
+                    </button>
+                    <button type="button" class="type-model-icon-btn" data-action="refresh-models" title="Refresh models" data-title-key="refreshModelsTitle"><i class="fas fa-sync-alt"></i></button>
+                </div>
+            </div>
+
+            <div class="type-model-grid-shell">
+                <div class="type-model-grid-toolbar">
+                    <span id="modelTotal-M90003">0</span>
+                </div>
+                <div class="type-model-table-wrap">
+                    <table class="type-model-table">
+                        <thead>
+                            <tr>
+                                <th class="no-column">No</th>
+                                <th data-label-key="status">Status</th>
+                                <th data-label-key="modelVersion">Version</th>
+                                <th data-label-key="physicalModelName">Physical Model</th>
+                                <th data-label-key="algorithm">Algorithm</th>
+                                <th data-label-key="featureVersion">Feature Version</th>
+                                <th data-label-key="trainingRows">Training Rows</th>
+                                <th>Macro F1</th>
+                                <th data-label-key="balancedAccuracy">Balanced Accuracy</th>
+                                <th data-label-key="createdAt">Created</th>
+                                <th data-label-key="actions">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="modelsBody-M90003"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="type-model-panel" data-panel="runs" hidden>
+            <div class="type-model-section-head">
+                <div>
+                    <h2 data-label-key="runHistoryTitle">Training Run History</h2>
+                    <p data-label-key="runHistoryDescription">Review immutable training requests, bounded resources, validation results, and errors.</p>
+                </div>
+                <button type="button" class="type-model-icon-btn" data-action="refresh-runs" title="Refresh runs" data-title-key="refreshRunsTitle"><i class="fas fa-sync-alt"></i></button>
+            </div>
+
+            <div class="type-model-grid-shell">
+                <div class="type-model-grid-toolbar">
+                    <span id="runTotal-M90003">0</span>
+                    <div class="type-model-pager">
+                        <button type="button" class="type-model-icon-btn" data-action="runs-prev" title="Previous page" data-title-key="previousPageTitle"><i class="fas fa-chevron-left"></i></button>
+                        <span data-label-key="page">Page</span>
+                        <input id="runPage-M90003" type="number" min="1" value="1" data-page-input="runs">
+                        <span id="runPageCount-M90003">/ 1</span>
+                        <button type="button" class="type-model-icon-btn" data-action="runs-next" title="Next page" data-title-key="nextPageTitle"><i class="fas fa-chevron-right"></i></button>
+                    </div>
+                </div>
+                <div class="type-model-table-wrap">
+                    <table class="type-model-table">
+                        <thead>
+                            <tr>
+                                <th class="no-column">No</th>
+                                <th data-label-key="runId">Run ID</th>
+                                <th data-label-key="status">Status</th>
+                                <th data-label-key="algorithm">Algorithm</th>
+                                <th data-label-key="featureVersion">Feature Version</th>
+                                <th data-label-key="maximumRows">Maximum Rows</th>
+                                <th data-label-key="randomSeed">Seed</th>
+                                <th data-label-key="holdoutRatio">Holdout</th>
+                                <th data-label-key="eligibleRows">Eligible Rows</th>
+                                <th>Macro F1</th>
+                                <th data-label-key="balancedAccuracy">Balanced Accuracy</th>
+                                <th data-label-key="startedAt">Started</th>
+                                <th data-label-key="finishedAt">Finished</th>
+                                <th data-label-key="message">Message</th>
+                            </tr>
+                        </thead>
+                        <tbody id="runsBody-M90003"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </main>
+</div>
