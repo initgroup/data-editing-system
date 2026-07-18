@@ -12,6 +12,26 @@
     "trainingAdapter": "학습 어댑터",
     "candidateModelNamePattern": "새 후보 모델명 규칙",
     "trainingSources": "학습 원천",
+    "trainingFeatures": "학습 X 피처",
+    "featureProfileMissing": "학습 피처 프로파일 없음",
+    "caseId": "복합 CASE_ID",
+    "featureVersion": "피처 버전",
+    "physicalDataType": "물리 데이터 타입",
+    "logicalDataType": "논리 데이터 타입",
+    "totalRows": "전체 행 수",
+    "nonNullRows": "NULL 제외 행 수",
+    "sampleRows": "표본 행 수",
+    "sampleNonNullRows": "표본 NULL 제외 행 수",
+    "distinctCount": "중복 제거값 수",
+    "sampleDistinctCount": "표본 중복 제거값 수",
+    "distinctRatio": "중복 제거값 비율",
+    "nullRatio": "NULL 비율",
+    "entropy": "엔트로피",
+    "normalizedEntropy": "표준화 엔트로피",
+    "numericRatio": "숫자 변환 가능 비율",
+    "integerRatio": "정수 비율",
+    "numericRange": "숫자 최소/최대",
+    "textLength": "텍스트 길이(평균/최대)",
     "consumerObject": "사용 객체",
     "notRegistered": "미등록",
     "modelAndRunCounts": "모델 {models}개 · 실행 {runs}건",
@@ -69,6 +89,8 @@
     "allGroups": "전체 그룹",
     "deleteSelectedLabels": "선택 라벨 삭제",
     "resetTrainingLabels": "학습 라벨 초기화",
+    "createInitialSampleData": "초기 샘플 학습 데이터 생성",
+    "createInitialSampleDataTitle": "확정 라벨이 없을 때만 초기 샘플 학습 데이터를 생성합니다.",
     "noSelectedLabels": "선택한 라벨 없음",
     "selectedLabelsCount": "라벨 {count}건 선택됨",
     "selectAllLabels": "현재 페이지 라벨 전체 선택",
@@ -119,6 +141,11 @@
     "runHistoryDescription": "학습 요청, 자원 제한, 검증 결과 및 오류를 확인합니다.",
     "refreshRunsTitle": "실행 이력 새로고침",
     "runId": "실행 ID",
+    "details": "상세",
+    "runDetails": "실행 상세",
+    "showRunDetails": "실행 상세 보기",
+    "hideRunDetails": "실행 상세 닫기",
+    "copyMessage": "메시지 복사",
     "eligibleRows": "학습 가능 행",
     "startedAt": "시작일시",
     "finishedAt": "종료일시",
@@ -213,5 +240,11 @@
     "trainingLabelsReset": "학습 라벨을 초기화했습니다.",
     "labelDeletionFailed": "라벨을 삭제하지 못했습니다.",
     "labelResetFailed": "학습 라벨을 초기화하지 못했습니다."
+    ,"confirmCreateInitialSampleData": "확정 라벨이 없을 때만 초기 샘플 학습 데이터(6개 샘플 테이블, 42개 라벨)를 생성합니다. 기존 확정 라벨은 절대 변경하지 않습니다. 생성할까요?"
+    ,"creatingInitialSampleData": "초기 샘플 데이터를 생성하는 중..."
+    ,"initialSampleDataCreated": "초기 샘플 학습 데이터를 생성했습니다."
+    ,"initialSampleDataCreateFailed": "초기 샘플 학습 데이터를 생성하지 못했습니다."
+    ,"messageCopied": "메시지를 복사했습니다."
+    ,"messageCopyFailed": "메시지를 복사하지 못했습니다."
   }
 }

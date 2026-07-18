@@ -2448,8 +2448,9 @@ END;
 -- INIT$_SP_TYPE_MODEL_TRAIN. Remove the former per-job training procedure so
 -- it cannot be registered again as an M03001/FLOW work item.
 DECLARE
-    v_count       NUMBER;
-    v_table_count NUMBER;
+    v_count           NUMBER;
+    v_table_count     NUMBER;
+    v_reference_count NUMBER;
 BEGIN
     SELECT COUNT(*)
       INTO v_table_count
@@ -2587,6 +2588,76 @@ UPDATE "INIT$_TB_FLOW_WORK_NODE" N
         DBMS_OUTPUT.PUT_LINE('[OK] DROP DEPRECATED PROCEDURE INIT$_SP_DECISION_TREE_RULE_MODEL');
     ELSE
         DBMS_OUTPUT.PUT_LINE('[SKIP] DEPRECATED PROCEDURE INIT$_SP_DECISION_TREE_RULE_MODEL is missing.');
+    END IF;
+
+    /*
+       SP_ANALYZE_FEATURE_TYPES was an abandoned internal-model prototype.
+       It is not part of the current INIT$_SP_PREDICTED_TYPE execution path.
+       Retire it only when no saved DATA_WORK job still references it.
+    */
+    v_reference_count := 0;
+    SELECT COUNT(*)
+      INTO v_table_count
+      FROM USER_TABLES
+     WHERE TABLE_NAME = 'INIT$_TB_DATA_WORK_JOB';
+
+    IF v_table_count > 0 THEN
+        EXECUTE IMMEDIATE q'[
+SELECT COUNT(*)
+  FROM "INIT$_TB_DATA_WORK_JOB"
+ WHERE "EXEC_OBJECT_NAME" IN ('SP_ANALYZE_FEATURE_TYPES', 'INIT$_SP_ANALYZE_FEATURE_TYPES')
+]'
+           INTO v_reference_count;
+    END IF;
+
+    IF v_reference_count > 0 THEN
+        DBMS_OUTPUT.PUT_LINE('[SKIP] RETAIN deprecated SP_ANALYZE_FEATURE_TYPES because saved jobs still reference it: ' || v_reference_count);
+    ELSE
+        SELECT COUNT(*)
+          INTO v_table_count
+          FROM USER_TABLES
+         WHERE TABLE_NAME = 'INIT$_TB_OBJECT_DETAIL';
+
+        IF v_table_count > 0 THEN
+            DELETE FROM "INIT$_TB_OBJECT_DETAIL"
+             WHERE "OBJECT_NAME" IN ('SP_ANALYZE_FEATURE_TYPES', 'INIT$_SP_ANALYZE_FEATURE_TYPES');
+        END IF;
+
+        SELECT COUNT(*)
+          INTO v_table_count
+          FROM USER_TABLES
+         WHERE TABLE_NAME = 'INIT$_TB_OBJECT';
+
+        IF v_table_count > 0 THEN
+            DELETE FROM "INIT$_TB_OBJECT"
+             WHERE "OBJECT_NAME" IN ('SP_ANALYZE_FEATURE_TYPES', 'INIT$_SP_ANALYZE_FEATURE_TYPES')
+               AND "OBJECT_TYPE" = 'PROCEDURE';
+        END IF;
+
+        SELECT COUNT(*)
+          INTO v_count
+          FROM USER_OBJECTS
+         WHERE OBJECT_NAME = 'SP_ANALYZE_FEATURE_TYPES'
+           AND OBJECT_TYPE = 'PROCEDURE';
+
+        IF v_count > 0 THEN
+            EXECUTE IMMEDIATE 'DROP PROCEDURE "SP_ANALYZE_FEATURE_TYPES"';
+            DBMS_OUTPUT.PUT_LINE('[OK] DROP UNUSED PROCEDURE SP_ANALYZE_FEATURE_TYPES');
+        ELSE
+            DBMS_OUTPUT.PUT_LINE('[SKIP] UNUSED PROCEDURE SP_ANALYZE_FEATURE_TYPES is missing.');
+        END IF;
+
+        SELECT COUNT(*)
+          INTO v_count
+          FROM USER_OBJECTS
+         WHERE OBJECT_NAME = 'INIT$_SP_ANALYZE_FEATURE_TYPES'
+           AND OBJECT_TYPE = 'PROCEDURE';
+
+        IF v_count > 0 THEN
+            EXECUTE IMMEDIATE 'DROP PROCEDURE "INIT$_SP_ANALYZE_FEATURE_TYPES"';
+            DBMS_OUTPUT.PUT_LINE('[OK] DROP UNUSED PROCEDURE INIT$_SP_ANALYZE_FEATURE_TYPES');
+        END IF;
+        COMMIT;
     END IF;
 END;
 /

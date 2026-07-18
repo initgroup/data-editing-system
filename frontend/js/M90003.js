@@ -65,6 +65,8 @@
         runPage: 1,
         runPageSize: 50,
         runTotal: 0,
+        expandedRunId: null,
+        runDetailsById: new Map(),
         loadedTabs: new Set(),
         loading: new Set(),
 
@@ -114,6 +116,8 @@
             this.selectedLabelIds = new Set();
             this.runPage = 1;
             this.runTotal = 0;
+            this.expandedRunId = null;
+            this.runDetailsById = new Map();
             this.loadedTabs = new Set();
             this.loading = new Set();
         },
@@ -203,6 +207,7 @@
                 this.datasetPage = 1;
                 return this.loadDataset();
             }
+            if (action === "generate-sample-labels") return this.generateInitialSampleLabels(button);
             if (action === "delete-selected-labels") return this.deleteSelectedLabels(button);
             if (action === "reset-training-labels") return this.resetTrainingLabels(button);
             if (action === "dataset-prev") return this.changePage("dataset", -1);
@@ -212,6 +217,8 @@
             if (action === "refresh-runs") return this.loadRuns();
             if (action === "runs-prev") return this.changePage("runs", -1);
             if (action === "runs-next") return this.changePage("runs", 1);
+            if (action === "toggle-run-detail") return this.toggleRunDetail(button?.dataset.runId);
+            if (action === "copy-run-message") return this.copyRunMessage(button?.dataset.runId);
             const modelId = button?.dataset.modelId || "";
             if (action === "activate-model") return this.activateModel(modelId, false);
             if (action === "rollback-model") return this.rollbackCurrentModel();
@@ -394,7 +401,7 @@
             if (this.loading.has("runs")) return;
             this.loading.add("runs");
             const generation = this.generation;
-            this.renderTableLoading("#runsBody-M90003", 14);
+            this.renderTableLoading("#runsBody-M90003", 15);
             try {
                 const params = new URLSearchParams({
                     modelKey: this.selectedModelKey,
@@ -545,6 +552,85 @@
                 this.showMessage("error", error.message || t("labelResetFailed", "Training labels could not be reset."));
             } finally {
                 this.setButtonLoading(button, false);
+            }
+        },
+
+        async generateInitialSampleLabels(button) {
+            const message = t(
+                "confirmCreateInitialSampleData",
+                "Create initial sample training data only when no confirmed labels exist? Existing confirmed labels are never overwritten."
+            );
+            if (!(await this.confirm(message))) return;
+            this.setButtonLoading(button, true, t("creatingInitialSampleData", "Creating sample data..."));
+            try {
+                await this.request("/dataset/sample", {
+                    method: "POST",
+                    body: { modelKey: this.selectedModelKey }
+                });
+                this.selectedLabelIds.clear();
+                this.datasetPage = 1;
+                this.loadedTabs.delete("dataset");
+                await Promise.allSettled([this.loadDataset(), this.loadDatasetStats(), this.loadSummary()]);
+                this.renderOverview();
+                this.renderTrainingReadiness();
+                this.showMessage("success", t("initialSampleDataCreated", "Initial sample training data was created."));
+            } catch (error) {
+                this.showMessage("error", error.message || t("initialSampleDataCreateFailed", "Initial sample training data could not be created."));
+            } finally {
+                this.setButtonLoading(button, false);
+            }
+        },
+
+        async toggleRunDetail(runId) {
+            const normalizedId = String(runId || "").trim();
+            if (!normalizedId) return;
+            if (String(this.expandedRunId || "") === normalizedId) {
+                this.expandedRunId = null;
+                this.renderRuns();
+                return;
+            }
+            this.expandedRunId = normalizedId;
+            if (!this.runDetailsById.has(normalizedId)) {
+                try {
+                    const json = await this.request(`/runs/${encodeURIComponent(normalizedId)}`);
+                    this.runDetailsById.set(normalizedId, {
+                        run: this.unwrapObject(json),
+                        metrics: this.asArray(json?.metrics),
+                        metricSummary: json?.metricSummary || {}
+                    });
+                } catch (error) {
+                    this.runDetailsById.set(normalizedId, {
+                        run: null,
+                        metrics: [],
+                        error: error.message || t("runsLoadFailed", "Training runs could not be loaded.")
+                    });
+                }
+            }
+            this.renderRuns();
+        },
+
+        async copyRunMessage(runId) {
+            const normalizedId = String(runId || "").trim();
+            const row = this.runRows.find((item) => String(this.pick(item, "id", "runId", "RUN_ID")) === normalizedId);
+            const detail = this.runDetailsById.get(normalizedId)?.run;
+            const message = this.pick(detail || row, "message", "MESSAGE", "errorMessage", "ERROR_MESSAGE") || "";
+            if (!String(message).trim()) return;
+            try {
+                if (navigator.clipboard?.writeText) {
+                    await navigator.clipboard.writeText(String(message));
+                } else {
+                    const textArea = document.createElement("textarea");
+                    textArea.value = String(message);
+                    textArea.style.position = "fixed";
+                    textArea.style.opacity = "0";
+                    document.body.appendChild(textArea);
+                    textArea.select();
+                    document.execCommand("copy");
+                    textArea.remove();
+                }
+                this.showMessage("success", t("messageCopied", "Message copied."), 1400);
+            } catch (_) {
+                this.showMessage("error", t("messageCopyFailed", "Message could not be copied."));
             }
         },
 
@@ -705,6 +791,16 @@
         renderTrainingReadiness() {
             const note = getContainerEl("#trainingReadiness-M90003");
             const button = getContainerEl("#startTrainingBtn-M90003");
+            const sampleButton = getPageContainer()?.querySelector('[data-action="generate-sample-labels"]');
+            const confirmedEligibleCount = Number(this.pick(
+                this.datasetStats || {},
+                "confirmedEligibleCount",
+                "CONFIRMED_ELIGIBLE_COUNT"
+            ) || 0);
+            if (sampleButton) {
+                // Initial samples are only a first-install bootstrap. The API repeats this guard.
+                sampleButton.disabled = confirmedEligibleCount > 0;
+            }
             if (!note || !button) return;
             const family = this.currentFamily();
             if (!this.asBoolean(this.pick(family, "supportsTraining", "SUPPORTS_TRAINING"))) {
@@ -850,6 +946,45 @@
             `;
         },
 
+        renderTrainingFeatures(row) {
+            const profileId = this.pick(row, "profileId", "PROFILE_ID");
+            const caseId = this.pick(row, "caseId", "CASE_ID");
+            if (profileId === undefined || profileId === null || profileId === "") {
+                return `<span class="type-model-muted" title="${this.escapeHtml(String(caseId || ""))}">${this.escapeHtml(t("featureProfileMissing", "No feature profile"))}</span>`;
+            }
+            const logicalType = this.pick(row, "logDataType", "LOG_DATA_TYPE") || "-";
+            const distinctRatio = this.formatMetric(this.pick(row, "distValRt", "DIST_VAL_RT"));
+            const normEntropy = this.formatMetric(this.pick(row, "normEntropy", "NORM_ENTROPY"));
+            const items = [
+                [t("caseId", "CASE_ID"), caseId],
+                [t("featureVersion", "Feature Version"), this.pick(row, "featureVersion", "FEATURE_VERSION")],
+                [t("physicalDataType", "Physical Type"), this.pick(row, "dataType", "DATA_TYPE")],
+                [t("logicalDataType", "Logical Type"), logicalType],
+                [t("totalRows", "Total Rows"), this.formatInteger(this.pick(row, "totalRows", "TOTAL_ROWS"))],
+                [t("nonNullRows", "Non-null Rows"), this.formatInteger(this.pick(row, "nonNullRows", "NON_NULL_ROWS"))],
+                [t("sampleRows", "Sample Rows"), this.formatInteger(this.pick(row, "sampleRows", "SAMPLE_ROWS"))],
+                [t("sampleNonNullRows", "Sample Non-null"), this.formatInteger(this.pick(row, "sampleNotNullRows", "SAMPLE_NOT_NULL_ROWS"))],
+                [t("distinctCount", "Distinct Count"), this.formatInteger(this.pick(row, "numDistinct", "NUM_DISTINCT"))],
+                [t("sampleDistinctCount", "Sample Distinct"), this.formatInteger(this.pick(row, "sampleDistinct", "SAMPLE_DISTINCT"))],
+                [t("distinctRatio", "Distinct Ratio"), distinctRatio],
+                [t("nullRatio", "Null Ratio"), this.formatMetric(this.pick(row, "nullRatio", "NULL_RATIO"))],
+                [t("entropy", "Entropy"), this.formatMetric(this.pick(row, "entropy", "ENTROPY"))],
+                [t("normalizedEntropy", "Normalized Entropy"), normEntropy],
+                [t("numericRatio", "Numeric Ratio"), this.formatMetric(this.pick(row, "numericRatio", "NUMERIC_RATIO"))],
+                [t("integerRatio", "Integer Ratio"), this.formatMetric(this.pick(row, "integerRatio", "INTEGER_RATIO"))],
+                [t("numericRange", "Numeric Range"), `${this.formatMetric(this.pick(row, "minNumValue", "MIN_NUM_VALUE"))} ~ ${this.formatMetric(this.pick(row, "maxNumValue", "MAX_NUM_VALUE"))}`],
+                [t("textLength", "Text Length (avg/max)"), `${this.formatMetric(this.pick(row, "avgTextLength", "AVG_TEXT_LENGTH"))} / ${this.formatInteger(this.pick(row, "maxTextLength", "MAX_TEXT_LENGTH"))}`]
+            ];
+            return `
+                <details class="type-model-feature-details">
+                    <summary><strong>${this.escapeHtml(String(logicalType))}</strong><span>DV ${this.escapeHtml(distinctRatio)} · Hn ${this.escapeHtml(normEntropy)}</span></summary>
+                    <dl>${items.map(([label, value]) => `
+                        <div><dt>${this.escapeHtml(label)}</dt><dd title="${this.escapeHtml(String(value ?? "-"))}">${this.escapeHtml(String(value ?? "-"))}</dd></div>
+                    `).join("")}</dl>
+                </details>
+            `;
+        },
+
         renderDataset(errorMessage = "") {
             const body = getContainerEl("#datasetBody-M90003");
             if (!body) return;
@@ -859,12 +994,12 @@
             this.setValue("#datasetPage-M90003", this.datasetPage);
             this.setText("#datasetPageCount-M90003", `/ ${this.formatInteger(pageCount)}`);
             if (errorMessage) {
-                body.innerHTML = this.tableMessage(errorMessage, 13, "error");
+                body.innerHTML = this.tableMessage(errorMessage, 14, "error");
                 this.updateDatasetSelectionControls();
                 return;
             }
             if (!this.datasetRows.length) {
-                body.innerHTML = this.tableMessage(t("noTrainingData", "No training data matches the current filters."), 13);
+                body.innerHTML = this.tableMessage(t("noTrainingData", "No training data matches the current filters."), 14);
                 this.updateDatasetSelectionControls();
                 return;
             }
@@ -882,6 +1017,7 @@
                         <td>${this.cell(this.pick(row, "tableName", "TABLE_NAME", "targetTable", "TARGET_TABLE"))}</td>
                         <td><strong>${this.cell(this.pick(row, "columnName", "COLUMN_NAME"))}</strong></td>
                         <td>${this.cell(this.pick(row, "columnComment", "COLUMN_COMMENT", "columnDesc", "COLUMN_DESC"))}</td>
+                        <td class="feature-column">${this.renderTrainingFeatures(row)}</td>
                         <td><span title="${this.escapeHtml(typeCode)}">${this.escapeHtml(this.canonicalTypeLabel(typeCode))}</span><small class="type-model-code">${this.escapeHtml(typeCode)}</small></td>
                         <td><span class="type-group-pill is-${groupCode.toLowerCase()}">${this.escapeHtml(this.typeGroupLabel(groupCode))}</span></td>
                         <td>${this.cell(this.pick(row, "labelSource", "LABEL_SOURCE"))}</td>
@@ -962,19 +1098,27 @@
             this.setValue("#runPage-M90003", this.runPage);
             this.setText("#runPageCount-M90003", `/ ${this.formatInteger(pageCount)}`);
             if (errorMessage) {
-                body.innerHTML = this.tableMessage(errorMessage, 14, "error");
+                body.innerHTML = this.tableMessage(errorMessage, 15, "error");
                 return;
             }
             if (!this.runRows.length) {
-                body.innerHTML = this.tableMessage(t("noTrainingRuns", "No training runs."), 14);
+                body.innerHTML = this.tableMessage(t("noTrainingRuns", "No training runs."), 15);
                 return;
             }
             body.innerHTML = this.runRows.map((row, index) => {
+                const runId = String(this.pick(row, "id", "runId", "RUN_ID") || "");
+                const isExpanded = runId && runId === String(this.expandedRunId || "");
                 const status = String(this.pick(row, "status", "STATUS") || "UNKNOWN").toUpperCase();
+                const message = this.pick(row, "message", "MESSAGE", "errorMessage", "ERROR_MESSAGE") || "";
                 return `
                     <tr>
                         <td class="no-column">${this.formatInteger((this.runPage - 1) * this.runPageSize + index + 1)}</td>
-                        <td>${this.cell(this.pick(row, "id", "runId", "RUN_ID"))}</td>
+                        <td class="run-detail-column">
+                            <button type="button" class="type-model-icon-btn type-model-run-detail-btn" data-action="toggle-run-detail" data-run-id="${this.escapeHtml(runId)}" title="${this.escapeHtml(isExpanded ? t("hideRunDetails", "Hide run details") : t("showRunDetails", "Show run details"))}" aria-expanded="${isExpanded ? "true" : "false"}">
+                                <i class="fas ${isExpanded ? "fa-chevron-up" : "fa-ellipsis-h"}" aria-hidden="true"></i>
+                            </button>
+                        </td>
+                        <td>${this.cell(runId)}</td>
                         <td><span class="type-model-status ${this.statusClass(status)}">${this.escapeHtml(this.statusLabel(status))}</span></td>
                         <td>${this.cell(this.pick(row, "algorithmCode", "ALGORITHM_CODE"))}</td>
                         <td>${this.cell(this.pick(row, "featureVersion", "FEATURE_VERSION"))}</td>
@@ -986,10 +1130,50 @@
                         <td class="is-number">${this.formatMetric(this.pick(row, "balancedAccuracy", "BALANCED_ACCURACY"))}</td>
                         <td>${this.escapeHtml(this.formatDate(this.pick(row, "startedAt", "STARTED_AT")))}</td>
                         <td>${this.escapeHtml(this.formatDate(this.pick(row, "finishedAt", "FINISHED_AT")))}</td>
-                        <td class="type-model-message-cell" title="${this.escapeHtml(this.pick(row, "message", "MESSAGE", "errorMessage", "ERROR_MESSAGE") || "")}">${this.cell(this.pick(row, "message", "MESSAGE", "errorMessage", "ERROR_MESSAGE"))}</td>
+                        <td class="type-model-message-cell" title="${this.escapeHtml(message)}">
+                            <span class="type-model-message-text">${this.cell(message)}</span>
+                            <button type="button" class="type-model-icon-btn type-model-message-copy" data-action="copy-run-message" data-run-id="${this.escapeHtml(runId)}" title="${this.escapeHtml(t("copyMessage", "Copy message"))}"><i class="fas fa-copy" aria-hidden="true"></i></button>
+                        </td>
                     </tr>
+                    ${isExpanded ? this.renderRunDetail(runId, row) : ""}
                 `;
             }).join("");
+            const table = getContainerEl(".type-model-run-table");
+            if (table && window.CommonUtils?.enableGridColumnResize) {
+                window.CommonUtils.enableGridColumnResize(table);
+            }
+        },
+
+        renderRunDetail(runId, summaryRow) {
+            const detail = this.runDetailsById.get(String(runId));
+            if (!detail) {
+                return `<tr class="type-model-run-detail-row"><td colspan="15"><div class="type-model-run-detail type-model-muted">${this.escapeHtml(t("loading", "Loading..."))}</div></td></tr>`;
+            }
+            if (detail.error) {
+                return `<tr class="type-model-run-detail-row"><td colspan="15"><div class="type-model-run-detail is-error">${this.escapeHtml(detail.error)}</div></td></tr>`;
+            }
+            const run = detail.run || summaryRow || {};
+            const message = this.pick(run, "message", "MESSAGE", "errorMessage", "ERROR_MESSAGE") || "";
+            const metrics = detail.metricSummary || {};
+            return `
+                <tr class="type-model-run-detail-row">
+                    <td colspan="15">
+                        <section class="type-model-run-detail">
+                            <div class="type-model-run-detail-heading">
+                                <strong>${this.escapeHtml(t("runDetails", "Run details"))}</strong>
+                                <button type="button" class="type-model-icon-btn type-model-message-copy" data-action="copy-run-message" data-run-id="${this.escapeHtml(runId)}" title="${this.escapeHtml(t("copyMessage", "Copy message"))}"><i class="fas fa-copy" aria-hidden="true"></i></button>
+                            </div>
+                            <div class="type-model-run-detail-message"><strong>${this.escapeHtml(t("message", "Message"))}</strong><pre>${this.escapeHtml(message || t("notAvailable", "Not available"))}</pre></div>
+                            <div class="type-model-run-detail-metrics">
+                                <span><b>${this.escapeHtml(t("trainingRows", "Training Rows"))}</b>${this.escapeHtml(this.formatInteger(this.pick(run, "trainingRows", "TRAINING_ROWS")))}</span>
+                                <span><b>${this.escapeHtml(t("holdoutRows", "Holdout Rows"))}</b>${this.escapeHtml(this.formatInteger(this.pick(run, "holdoutRows", "HOLDOUT_ROWS")))}</span>
+                                <span><b>Macro F1</b>${this.escapeHtml(this.formatMetric(this.pick(metrics, "macroF1", "MACRO_F1", "macro_f1")))}</span>
+                                <span><b>${this.escapeHtml(t("balancedAccuracy", "Balanced Accuracy"))}</b>${this.escapeHtml(this.formatMetric(this.pick(metrics, "balancedAccuracy", "BALANCED_ACCURACY", "balanced_accuracy")))}</span>
+                            </div>
+                        </section>
+                    </td>
+                </tr>
+            `;
         },
 
         normalizeGroupDistribution() {

@@ -112,6 +112,8 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_TYPE_MODEL_TRAIN" (
     v_total_rows           NUMBER;
     v_train_rows           NUMBER;
     v_holdout_rows         NUMBER;
+    v_source_group_count   NUMBER;
+    v_holdout_group_count  NUMBER;
     v_running_count        NUMBER;
     v_train_class_count    NUMBER;
     v_min_class_count      NUMBER;
@@ -213,7 +215,7 @@ BEGIN
     -- after the cap, so both memory use and evaluation size remain bounded.
     v_eligible_query :=
         'SELECT * FROM (
-             SELECT RAWTOHEX(STANDARD_HASH(P."OWNER" || ''|'' || P."TABLE_NAME" || ''|'' || P."COLUMN_NAME", ''SHA256'')) AS "CASE_ID"
+             SELECT CAST(P."OWNER" || ''|'' || P."TABLE_NAME" || ''|'' || P."COLUMN_NAME" AS VARCHAR2(4000)) AS "CASE_ID"
                   , P."OWNER" AS "SOURCE_OWNER"
                   , P."TABLE_NAME" AS "SOURCE_TABLE"
                   , P."DATA_TYPE"
@@ -258,15 +260,55 @@ BEGIN
                      , P."PROFILE_ID"
          ) WHERE ROWNUM <= ' || number_literal(v_max_input_rows);
 
-    v_data_query :=
-          'SELECT ' || v_feature_projection || ' FROM (' || v_eligible_query || ') E '
-        || 'WHERE MOD(ORA_HASH(E."SOURCE_OWNER" || ''|'' || E."SOURCE_TABLE", 4294967295, '
-        || number_literal(v_random_seed) || '), 100) >= ' || number_literal(v_holdout_percent);
+    EXECUTE IMMEDIATE
+        'SELECT COUNT(*) FROM ('
+        || 'SELECT DISTINCT E."SOURCE_OWNER", E."SOURCE_TABLE" FROM (' || v_eligible_query || ') E)'
+        INTO v_source_group_count;
 
-    v_holdout_query :=
-          'SELECT ' || v_feature_projection || ' FROM (' || v_eligible_query || ') E '
-        || 'WHERE MOD(ORA_HASH(E."SOURCE_OWNER" || ''|'' || E."SOURCE_TABLE", 4294967295, '
-        || number_literal(v_random_seed) || '), 100) < ' || number_literal(v_holdout_percent);
+    /*
+       A hash-threshold split can put every small source-table population on one
+       side of the holdout.  Keep the no-leakage table grouping, but rank the
+       groups deterministically and reserve at least one group for validation.
+    */
+    IF v_source_group_count >= 2 THEN
+        v_holdout_group_count := LEAST(
+            v_source_group_count - 1,
+            GREATEST(1, ROUND(v_source_group_count * v_holdout_percent / 100))
+        );
+
+        v_data_query :=
+              'WITH E AS (' || v_eligible_query || ') '
+            || ', G AS ('
+            || 'SELECT "SOURCE_OWNER", "SOURCE_TABLE"'
+            || '     , ROW_NUMBER() OVER ('
+            || '           ORDER BY ORA_HASH("SOURCE_OWNER" || ''|'' || "SOURCE_TABLE", 4294967295, ' || number_literal(v_random_seed) || ')'
+            || '                  , "SOURCE_OWNER", "SOURCE_TABLE") AS "GROUP_RN"'
+            || '  FROM (SELECT DISTINCT "SOURCE_OWNER", "SOURCE_TABLE" FROM E)'
+            || ') '
+            || 'SELECT ' || v_feature_projection
+            || '  FROM E JOIN G'
+            || '    ON G."SOURCE_OWNER" = E."SOURCE_OWNER"'
+            || '   AND G."SOURCE_TABLE" = E."SOURCE_TABLE"'
+            || ' WHERE G."GROUP_RN" > ' || number_literal(v_holdout_group_count);
+
+        v_holdout_query :=
+              'WITH E AS (' || v_eligible_query || ') '
+            || ', G AS ('
+            || 'SELECT "SOURCE_OWNER", "SOURCE_TABLE"'
+            || '     , ROW_NUMBER() OVER ('
+            || '           ORDER BY ORA_HASH("SOURCE_OWNER" || ''|'' || "SOURCE_TABLE", 4294967295, ' || number_literal(v_random_seed) || ')'
+            || '                  , "SOURCE_OWNER", "SOURCE_TABLE") AS "GROUP_RN"'
+            || '  FROM (SELECT DISTINCT "SOURCE_OWNER", "SOURCE_TABLE" FROM E)'
+            || ') '
+            || 'SELECT ' || v_feature_projection
+            || '  FROM E JOIN G'
+            || '    ON G."SOURCE_OWNER" = E."SOURCE_OWNER"'
+            || '   AND G."SOURCE_TABLE" = E."SOURCE_TABLE"'
+            || ' WHERE G."GROUP_RN" <= ' || number_literal(v_holdout_group_count);
+    ELSE
+        v_data_query := 'SELECT ' || v_feature_projection || ' FROM (' || v_eligible_query || ') E';
+        v_holdout_query := 'SELECT ' || v_feature_projection || ' FROM (' || v_eligible_query || ') E WHERE 1 = 0';
+    END IF;
 
     EXECUTE IMMEDIATE 'SELECT COUNT(*) FROM (' || v_data_query || ')' INTO v_train_rows;
     EXECUTE IMMEDIATE 'SELECT COUNT(*) FROM (' || v_holdout_query || ')' INTO v_holdout_rows;
@@ -275,8 +317,11 @@ BEGIN
     IF v_total_rows < v_min_rows THEN
         RAISE_APPLICATION_ERROR(-20714, 'Confirmed gold labels are insufficient: ' || v_total_rows || ' < ' || v_min_rows);
     END IF;
+    IF v_source_group_count < 2 THEN
+        RAISE_APPLICATION_ERROR(-20715, 'Grouped holdout requires confirmed labels from at least two source tables. Eligible tables: ' || v_source_group_count || '.');
+    END IF;
     IF v_train_rows = 0 OR v_holdout_rows = 0 THEN
-        RAISE_APPLICATION_ERROR(-20715, 'Grouped holdout split produced an empty train or holdout set. Add labels from more tables.');
+        RAISE_APPLICATION_ERROR(-20715, 'Grouped holdout split produced an empty train or holdout set after deterministic group allocation.');
     END IF;
 
     EXECUTE IMMEDIATE
@@ -1312,7 +1357,7 @@ END;
 CREATE OR REPLACE PROCEDURE "INIT$_SP_PREDICTED_TYPE" (
     p_target_owner       IN VARCHAR2,
     p_target_table       IN VARCHAR2,
-    p_prediction_method  IN VARCHAR2 DEFAULT 'ONLY_RULE',
+    p_prediction_method  IN VARCHAR2 DEFAULT 'AUTO',
     p_run_source_type    IN VARCHAR2 DEFAULT 'DATA_WORK',
     p_run_id             IN NUMBER   DEFAULT 0
 ) AUTHID CURRENT_USER IS
@@ -1323,6 +1368,7 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_PREDICTED_TYPE" (
     v_method                  VARCHAR2(20);
     v_use_rule                BOOLEAN;
     v_use_model               BOOLEAN;
+    v_auto_mode               BOOLEAN := FALSE;
     v_sql                     CLOB;
     v_update_rule_sql         CLOB := '';
     v_update_model_sql        CLOB := '';
@@ -1381,7 +1427,7 @@ BEGIN
     v_table_name := UPPER(TRIM(p_target_table));
     v_model_name := 'COLUMN_TYPE_RULE';
     v_scoring_model_name := NULL;
-    v_method := UPPER(TRIM(NVL(p_prediction_method, 'ONLY_RULE')));
+    v_method := UPPER(TRIM(NVL(p_prediction_method, 'AUTO')));
     v_run_source_type := normalize_run_source_type(p_run_source_type);
     v_run_id := NVL(p_run_id, 0);
     v_model_auto_confidence := LEAST(1, GREATEST(0, "INIT$_FN_TARGET_SETTING_NUMBER"('DATA_PROFILING', 'MODEL_AUTO_CONFIDENCE', 0.85)));
@@ -1403,8 +1449,17 @@ BEGIN
         v_method := 'ONLY_BOTH';
     END IF;
 
-    IF v_method NOT IN ('ONLY_RULE', 'ONLY_MODEL', 'ONLY_BOTH', 'FINAL_RULE', 'FINAL_MODEL', 'FINAL_BOTH') THEN
-        RAISE_APPLICATION_ERROR(-20003, 'Invalid prediction_method parameter. Use ONLY_RULE, ONLY_MODEL, ONLY_BOTH, FINAL_RULE, FINAL_MODEL, or FINAL_BOTH.');
+    IF v_method NOT IN ('AUTO', 'ONLY_RULE', 'ONLY_MODEL', 'ONLY_BOTH', 'FINAL_RULE', 'FINAL_MODEL', 'FINAL_BOTH') THEN
+        RAISE_APPLICATION_ERROR(-20003, 'Invalid prediction_method parameter. Use AUTO, ONLY_RULE, ONLY_MODEL, ONLY_BOTH, FINAL_RULE, FINAL_MODEL, or FINAL_BOTH.');
+    END IF;
+
+    -- AUTO is the unattended four-stage default. It applies both rule and
+    -- model evidence when an active COLUMN_TYPE model exists. A fresh
+    -- installation can still complete the first run with rule evidence only;
+    -- after M90003 activates a model, the same option automatically includes it.
+    v_auto_mode := v_method = 'AUTO';
+    IF v_auto_mode THEN
+        v_method := 'FINAL_BOTH';
     END IF;
 
     v_use_rule := v_method IN ('ONLY_RULE', 'ONLY_BOTH', 'FINAL_RULE', 'FINAL_BOTH');
@@ -1429,10 +1484,18 @@ BEGIN
             v_model_name := v_scoring_model_name;
         EXCEPTION
             WHEN NO_DATA_FOUND THEN
-                RAISE_APPLICATION_ERROR(
-                    -20004,
-                    'No active COLUMN_TYPE model. Train, validate, and activate a model in M90003 first.'
-                );
+                IF v_auto_mode THEN
+                    v_method := 'FINAL_RULE';
+                    v_use_model := FALSE;
+                    v_model_name := 'COLUMN_TYPE_RULE';
+                    v_model_version_id := NULL;
+                    v_model_version := NULL;
+                ELSE
+                    RAISE_APPLICATION_ERROR(
+                        -20004,
+                        'No active COLUMN_TYPE model. Train, validate, and activate a model in M90003 first.'
+                    );
+                END IF;
         END;
     END IF;
 

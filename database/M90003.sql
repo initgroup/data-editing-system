@@ -361,7 +361,27 @@ WITH PROFILE_COUNTS AS
            , L.COLUMN_NAME
            , P.COLUMN_DESC
            , P.COLUMN_ID
+           , CAST(L.OWNER || '|' || L.TABLE_NAME || '|' || L.COLUMN_NAME AS VARCHAR2(4000)) AS CASE_ID
+           , P.PROFILE_ID
+           , P.FEATURE_VERSION
            , P.DATA_TYPE
+           , P.TOTAL_ROWS
+           , P.NON_NULL_ROWS
+           , P.SAMPLE_ROWS
+           , P.SAMPLE_NOT_NULL_ROWS
+           , P.NUM_DISTINCT
+           , P.SAMPLE_DISTINCT
+           , P.DISTINCT_RATIO AS DIST_VAL_RT
+           , P.NULL_RATIO
+           , P.LOG_DATA_TYPE
+           , P.ENTROPY
+           , P.NORM_ENTROPY
+           , P.NUMERIC_RATIO
+           , P.INTEGER_RATIO
+           , P.MIN_NUM_VALUE
+           , P.MAX_NUM_VALUE
+           , P.AVG_TEXT_LENGTH
+           , P.MAX_TEXT_LENGTH
            , L.TYPE_CODE
            , L.TYPE_GROUP_CODE
            , L.DISPLAY_TYPE_VALUE
@@ -444,7 +464,27 @@ SELECT X.LABEL_ID
      , X.COLUMN_NAME
      , X.COLUMN_DESC
      , X.COLUMN_ID
+     , X.CASE_ID
+     , X.PROFILE_ID
+     , X.FEATURE_VERSION
      , X.DATA_TYPE
+     , X.TOTAL_ROWS
+     , X.NON_NULL_ROWS
+     , X.SAMPLE_ROWS
+     , X.SAMPLE_NOT_NULL_ROWS
+     , X.NUM_DISTINCT
+     , X.SAMPLE_DISTINCT
+     , X.DIST_VAL_RT
+     , X.NULL_RATIO
+     , X.LOG_DATA_TYPE
+     , X.ENTROPY
+     , X.NORM_ENTROPY
+     , X.NUMERIC_RATIO
+     , X.INTEGER_RATIO
+     , X.MIN_NUM_VALUE
+     , X.MAX_NUM_VALUE
+     , X.AVG_TEXT_LENGTH
+     , X.MAX_TEXT_LENGTH
      , X.TYPE_CODE
      , X.TYPE_GROUP_CODE
      , X.DISPLAY_TYPE_VALUE
@@ -767,6 +807,160 @@ BEGIN
                   AND P."COLUMN_NAME" = L."COLUMN_NAME"
                   AND P."FEATURE_VERSION" = 'V2'
            );
+END;
+/
+
+-- [M90003_LABEL_CREATE_INITIAL_SAMPLE]
+DECLARE
+    v_confirmed_count NUMBER;
+BEGIN
+    SELECT COUNT(*)
+      INTO v_confirmed_count
+      FROM "INIT$_TB_COLTYPE_LABEL"
+     WHERE "CONFIRMED_YN" = 'Y'
+       AND "LABEL_SOURCE" IN ('USER_CONFIRMED', 'IMPORTED_GOLD');
+
+    IF v_confirmed_count > 0 THEN
+        RAISE_APPLICATION_ERROR(-20726, 'Initial sample labels can only be created when no confirmed training labels exist.');
+    END IF;
+
+    MERGE INTO "INIT$_TB_COLTYPE_PROFILE" T
+    USING (
+        WITH SAMPLE_TABLES AS (
+            SELECT LEVEL AS TABLE_SEQ
+                 , 'INIT$SAMPLE_COLTYPE_' || TO_CHAR(LEVEL, 'FM00') AS TABLE_NAME
+              FROM DUAL
+            CONNECT BY LEVEL <= 6
+        )
+        , SAMPLE_TYPES AS (
+            SELECT 1 AS TYPE_SEQ, 'NUM_IDENTIFIER' AS TYPE_CODE, 'OTHER' AS TYPE_GROUP_CODE, 'NUMBER' AS DATA_TYPE FROM DUAL
+            UNION ALL SELECT 2, 'CHAR_IDENTIFIER', 'OTHER', 'VARCHAR2' FROM DUAL
+            UNION ALL SELECT 3, 'NUM_CONTINUOUS', 'CONTINUOUS', 'NUMBER' FROM DUAL
+            UNION ALL SELECT 4, 'NUM_DISCRETE', 'CATEGORICAL', 'NUMBER' FROM DUAL
+            UNION ALL SELECT 5, 'CAT_GENERAL', 'CATEGORICAL', 'VARCHAR2' FROM DUAL
+            UNION ALL SELECT 6, 'CAT_NUMERIC', 'CATEGORICAL', 'NUMBER' FROM DUAL
+            UNION ALL SELECT 7, 'FREE_TEXT', 'OTHER', 'VARCHAR2' FROM DUAL
+        )
+        SELECT 'DATA_WORK' AS "RUN_SOURCE_TYPE"
+             , 0 AS "RUN_ID"
+             , 'INIT$SAMPLE' AS "OWNER"
+             , TBL.TABLE_NAME AS "TABLE_NAME"
+             , 'COL_' || TYP.TYPE_CODE AS "COLUMN_NAME"
+             , 'V2' AS "FEATURE_VERSION"
+             , 'M90003 initial sample: ' || TYP.TYPE_CODE AS "COLUMN_DESC"
+             , TYP.TYPE_SEQ AS "COLUMN_ID"
+             , TYP.DATA_TYPE AS "DATA_TYPE"
+             , 1000 AS "TOTAL_ROWS"
+             , 1000 AS "NON_NULL_ROWS"
+             , 1000 AS "SAMPLE_ROWS"
+             , 1000 AS "SAMPLE_NOT_NULL_ROWS"
+             , CASE TYP.TYPE_CODE
+                   WHEN 'NUM_IDENTIFIER' THEN 1000
+                   WHEN 'CHAR_IDENTIFIER' THEN 1000
+                   WHEN 'NUM_CONTINUOUS' THEN 950
+                   WHEN 'NUM_DISCRETE' THEN 12
+                   WHEN 'CAT_GENERAL' THEN 8
+                   WHEN 'CAT_NUMERIC' THEN 10
+                   ELSE 995
+               END AS "NUM_DISTINCT"
+             , CASE TYP.TYPE_CODE
+                   WHEN 'NUM_IDENTIFIER' THEN 1000
+                   WHEN 'CHAR_IDENTIFIER' THEN 1000
+                   WHEN 'NUM_CONTINUOUS' THEN 950
+                   WHEN 'NUM_DISCRETE' THEN 12
+                   WHEN 'CAT_GENERAL' THEN 8
+                   WHEN 'CAT_NUMERIC' THEN 10
+                   ELSE 995
+               END AS "SAMPLE_DISTINCT"
+             , CASE TYP.TYPE_CODE
+                   WHEN 'NUM_IDENTIFIER' THEN 1
+                   WHEN 'CHAR_IDENTIFIER' THEN 1
+                   WHEN 'NUM_CONTINUOUS' THEN .95
+                   WHEN 'NUM_DISCRETE' THEN .012
+                   WHEN 'CAT_GENERAL' THEN .008
+                   WHEN 'CAT_NUMERIC' THEN .01
+                   ELSE .995
+               END AS "DISTINCT_RATIO"
+             , 0 AS "NULL_RATIO"
+             , CASE WHEN TYP.DATA_TYPE = 'NUMBER' THEN 'NUMERIC' ELSE 'TEXT' END AS "LOG_DATA_TYPE"
+             , CASE TYP.TYPE_CODE
+                   WHEN 'NUM_DISCRETE' THEN 1.5
+                   WHEN 'CAT_GENERAL' THEN 1.7
+                   WHEN 'CAT_NUMERIC' THEN 1.9
+                   ELSE 6.5
+               END AS "ENTROPY"
+             , CASE TYP.TYPE_CODE
+                   WHEN 'NUM_DISCRETE' THEN .22
+                   WHEN 'CAT_GENERAL' THEN .26
+                   WHEN 'CAT_NUMERIC' THEN .28
+                   ELSE .94
+               END AS "NORM_ENTROPY"
+             , CASE WHEN TYP.DATA_TYPE = 'NUMBER' THEN 1 ELSE 0 END AS "NUMERIC_RATIO"
+             , CASE WHEN TYP.TYPE_CODE IN ('NUM_IDENTIFIER', 'NUM_DISCRETE', 'CAT_NUMERIC') THEN 1 ELSE 0 END AS "INTEGER_RATIO"
+             , CASE WHEN TYP.DATA_TYPE = 'NUMBER' THEN 1 END AS "MIN_NUM_VALUE"
+             , CASE WHEN TYP.DATA_TYPE = 'NUMBER' THEN 1000 END AS "MAX_NUM_VALUE"
+             , CASE WHEN TYP.TYPE_CODE = 'FREE_TEXT' THEN 72 ELSE 12 END AS "AVG_TEXT_LENGTH"
+             , CASE WHEN TYP.TYPE_CODE = 'FREE_TEXT' THEN 320 ELSE 30 END AS "MAX_TEXT_LENGTH"
+             , RAWTOHEX(STANDARD_HASH('M90003|SAMPLE|' || TBL.TABLE_NAME || '|' || TYP.TYPE_CODE, 'SHA256')) AS "PROFILE_HASH"
+          FROM SAMPLE_TABLES TBL
+         CROSS JOIN SAMPLE_TYPES TYP
+    ) S
+       ON (
+               T."RUN_SOURCE_TYPE" = S."RUN_SOURCE_TYPE"
+           AND T."RUN_ID" = S."RUN_ID"
+           AND T."OWNER" = S."OWNER"
+           AND T."TABLE_NAME" = S."TABLE_NAME"
+           AND T."COLUMN_NAME" = S."COLUMN_NAME"
+           AND T."FEATURE_VERSION" = S."FEATURE_VERSION"
+       )
+     WHEN NOT MATCHED THEN
+        INSERT (
+            "RUN_SOURCE_TYPE", "RUN_ID", "OWNER", "TABLE_NAME", "COLUMN_NAME", "FEATURE_VERSION"
+          , "COLUMN_DESC", "COLUMN_ID", "DATA_TYPE", "TOTAL_ROWS", "NON_NULL_ROWS", "SAMPLE_ROWS"
+          , "SAMPLE_NOT_NULL_ROWS", "NUM_DISTINCT", "SAMPLE_DISTINCT", "DISTINCT_RATIO", "NULL_RATIO"
+          , "LOG_DATA_TYPE", "ENTROPY", "NORM_ENTROPY", "NUMERIC_RATIO", "INTEGER_RATIO", "MIN_NUM_VALUE"
+          , "MAX_NUM_VALUE", "AVG_TEXT_LENGTH", "MAX_TEXT_LENGTH", "PROFILE_HASH"
+        ) VALUES (
+            S."RUN_SOURCE_TYPE", S."RUN_ID", S."OWNER", S."TABLE_NAME", S."COLUMN_NAME", S."FEATURE_VERSION"
+          , S."COLUMN_DESC", S."COLUMN_ID", S."DATA_TYPE", S."TOTAL_ROWS", S."NON_NULL_ROWS", S."SAMPLE_ROWS"
+          , S."SAMPLE_NOT_NULL_ROWS", S."NUM_DISTINCT", S."SAMPLE_DISTINCT", S."DISTINCT_RATIO", S."NULL_RATIO"
+          , S."LOG_DATA_TYPE", S."ENTROPY", S."NORM_ENTROPY", S."NUMERIC_RATIO", S."INTEGER_RATIO", S."MIN_NUM_VALUE"
+          , S."MAX_NUM_VALUE", S."AVG_TEXT_LENGTH", S."MAX_TEXT_LENGTH", S."PROFILE_HASH"
+        );
+
+    MERGE INTO "INIT$_TB_COLTYPE_LABEL" T
+    USING (
+        SELECT P."OWNER"
+             , P."TABLE_NAME"
+             , P."COLUMN_NAME"
+             , SUBSTR(P."COLUMN_NAME", 5) AS "TYPE_CODE"
+             , CASE SUBSTR(P."COLUMN_NAME", 5)
+                   WHEN 'NUM_CONTINUOUS' THEN 'CONTINUOUS'
+                   WHEN 'NUM_DISCRETE' THEN 'CATEGORICAL'
+                   WHEN 'CAT_GENERAL' THEN 'CATEGORICAL'
+                   WHEN 'CAT_NUMERIC' THEN 'CATEGORICAL'
+                   ELSE 'OTHER'
+               END AS "TYPE_GROUP_CODE"
+             , P."PROFILE_ID"
+          FROM "INIT$_TB_COLTYPE_PROFILE" P
+         WHERE P."OWNER" = 'INIT$SAMPLE'
+           AND P."FEATURE_VERSION" = 'V2'
+    ) S
+       ON (
+               T."OWNER" = S."OWNER"
+           AND T."TABLE_NAME" = S."TABLE_NAME"
+           AND T."COLUMN_NAME" = S."COLUMN_NAME"
+       )
+     WHEN NOT MATCHED THEN
+        INSERT (
+            "OWNER", "TABLE_NAME", "COLUMN_NAME", "TYPE_CODE", "TYPE_GROUP_CODE", "DISPLAY_TYPE_VALUE"
+          , "LABEL_SOURCE", "CONFIRMED_YN", "LABEL_CONFIDENCE", "SOURCE_PROFILE_ID", "SOURCE_RUN_SOURCE_TYPE"
+          , "SOURCE_RUN_ID", "LABEL_REASON", "CONFIRMED_BY", "CONFIRMED_AT"
+        ) VALUES (
+            S."OWNER", S."TABLE_NAME", S."COLUMN_NAME", S."TYPE_CODE", S."TYPE_GROUP_CODE", S."TYPE_CODE"
+          , 'IMPORTED_GOLD', 'Y', 1, S."PROFILE_ID", 'DATA_WORK'
+          , 0, 'M90003 initial synthetic sample training data', :requestedBy, SYSTIMESTAMP
+        );
 END;
 /
 

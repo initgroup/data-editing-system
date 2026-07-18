@@ -107,6 +107,8 @@ BEGIN
     drop_procedure_if_exists('INIT$_SP_TYPE_MODEL_ACTIVATE');
     drop_procedure_if_exists('INIT$_SP_TYPE_MODEL_TRAIN');
     drop_procedure_if_exists('INIT$_SP_COLUMN_TYPE_CONFIRM');
+    drop_procedure_if_exists('SP_ANALYZE_FEATURE_TYPES');
+    drop_procedure_if_exists('INIT$_SP_ANALYZE_FEATURE_TYPES');
 
     DBMS_OUTPUT.PUT_LINE('[INIT_TARGET] Drop tables');
     drop_table_if_exists('INIT$_TB_OBJECT_DEPLOY');

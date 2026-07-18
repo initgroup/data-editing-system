@@ -202,6 +202,10 @@
 
             <div class="type-model-row-actions dataset-data-actions">
                 <span id="datasetSelectionCount-M90003" class="type-model-muted" data-label-key="noSelectedLabels">No labels selected</span>
+                <button type="button" class="type-model-btn" data-action="generate-sample-labels" title="Create initial sample training data" data-title-key="createInitialSampleDataTitle">
+                    <i class="fas fa-flask" aria-hidden="true"></i>
+                    <span data-label-key="createInitialSampleData">Create initial sample data</span>
+                </button>
                 <button type="button" class="type-model-btn is-danger" data-action="delete-selected-labels" disabled>
                     <i class="fas fa-trash-alt" aria-hidden="true"></i>
                     <span data-label-key="deleteSelectedLabels">Delete selected labels</span>
@@ -240,6 +244,7 @@
                                 <th data-label-key="tableName">Table</th>
                                 <th data-label-key="columnName">Column</th>
                                 <th data-label-key="columnComment">Comment</th>
+                                <th data-label-key="trainingFeatures">Training X Features</th>
                                 <th data-label-key="canonicalTypeCode">Detailed Type Code</th>
                                 <th data-label-key="finalTypeGroup">Final Type Group</th>
                                 <th data-label-key="labelSource">Label Source</th>
@@ -382,11 +387,12 @@
                         <button type="button" class="type-model-icon-btn" data-action="runs-next" title="Next page" data-title-key="nextPageTitle"><i class="fas fa-chevron-right"></i></button>
                     </div>
                 </div>
-                <div class="type-model-table-wrap">
-                    <table class="type-model-table">
+                <div class="type-model-table-wrap type-model-run-table-wrap">
+                    <table class="type-model-table type-model-run-table">
                         <thead>
                             <tr>
                                 <th class="no-column">No</th>
+                                <th class="run-detail-column" data-label-key="details">Details</th>
                                 <th data-label-key="runId">Run ID</th>
                                 <th data-label-key="status">Status</th>
                                 <th data-label-key="algorithm">Algorithm</th>

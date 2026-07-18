@@ -12,6 +12,26 @@
     "trainingAdapter": "Training Adapter",
     "candidateModelNamePattern": "New candidate model name pattern",
     "trainingSources": "Training Sources",
+    "trainingFeatures": "Training X Features",
+    "featureProfileMissing": "No training feature profile",
+    "caseId": "Composite CASE_ID",
+    "featureVersion": "Feature Version",
+    "physicalDataType": "Physical Data Type",
+    "logicalDataType": "Logical Data Type",
+    "totalRows": "Total Rows",
+    "nonNullRows": "Non-null Rows",
+    "sampleRows": "Sample Rows",
+    "sampleNonNullRows": "Sample Non-null Rows",
+    "distinctCount": "Distinct Count",
+    "sampleDistinctCount": "Sample Distinct Count",
+    "distinctRatio": "Distinct Ratio",
+    "nullRatio": "Null Ratio",
+    "entropy": "Entropy",
+    "normalizedEntropy": "Normalized Entropy",
+    "numericRatio": "Numeric Ratio",
+    "integerRatio": "Integer Ratio",
+    "numericRange": "Numeric Min / Max",
+    "textLength": "Text Length (Avg / Max)",
     "consumerObject": "Consumer",
     "notRegistered": "Not registered",
     "modelAndRunCounts": "{models} models · {runs} runs",
@@ -69,6 +89,8 @@
     "allGroups": "All Groups",
     "deleteSelectedLabels": "Delete Selected Labels",
     "resetTrainingLabels": "Reset Training Labels",
+    "createInitialSampleData": "Create Initial Sample Data",
+    "createInitialSampleDataTitle": "Create initial sample training data only when no confirmed labels exist.",
     "noSelectedLabels": "No labels selected",
     "selectedLabelsCount": "{count} labels selected",
     "selectAllLabels": "Select all labels on this page",
@@ -119,6 +141,11 @@
     "runHistoryDescription": "Review immutable training requests, bounded resources, validation results, and errors.",
     "refreshRunsTitle": "Refresh runs",
     "runId": "Run ID",
+    "details": "Details",
+    "runDetails": "Run Details",
+    "showRunDetails": "Show Run Details",
+    "hideRunDetails": "Hide Run Details",
+    "copyMessage": "Copy Message",
     "eligibleRows": "Eligible Rows",
     "startedAt": "Started",
     "finishedAt": "Finished",
@@ -213,5 +240,11 @@
     "trainingLabelsReset": "Training labels were reset.",
     "labelDeletionFailed": "Labels could not be deleted.",
     "labelResetFailed": "Training labels could not be reset."
+    ,"confirmCreateInitialSampleData": "Create initial sample training data (6 sample tables and 42 labels) only when no confirmed labels exist? Existing confirmed labels are never changed."
+    ,"creatingInitialSampleData": "Creating initial sample data..."
+    ,"initialSampleDataCreated": "Initial sample training data was created."
+    ,"initialSampleDataCreateFailed": "Initial sample training data could not be created."
+    ,"messageCopied": "Message copied."
+    ,"messageCopyFailed": "Message could not be copied."
   }
 }

@@ -422,7 +422,7 @@
     "paramDescTargetOwner": "분석 대상 테이블 계정",
     "paramDescTargetTable": "분석 대상 테이블명",
     "paramDescDynamicModelName": "분류/예측 모델명",
-    "paramDescPredictionMethod": "예측 방식 선택(ONLY_RULE: BASE 컬럼만, ONLY_MODEL: MODL 컬럼만, ONLY_BOTH: BASE/MODL 컬럼, FINAL_RULE/MODEL/BOTH: FINAL 자동 반영)",
+    "paramDescPredictionMethod": "예측 방식(AUTO: 활성 모델이 있으면 규칙+모델로 FINAL 자동 반영, 없으면 규칙으로 안전하게 최초 수행)",
     "paramDescRunSourceType": "실행 출처 구분(DATA_WORK/FLOW_WORK)",
     "paramDescRunId": "실행 이력 ID",
     "Symbolic formula eligibility": "수식 생성 선별 기준",

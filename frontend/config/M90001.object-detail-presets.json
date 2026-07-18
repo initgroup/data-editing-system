@@ -1081,8 +1081,8 @@
         },
         {
           "key": "P_PREDICTION_METHOD",
-          "comment": "Prediction method (ONLY_RULE: BASE columns only, ONLY_MODEL: model columns only, ONLY_BOTH: BASE/MODEL columns, FINAL_RULE/MODEL/BOTH: apply FINAL automatically)",
-          "defaultValue": "ONLY_BOTH"
+          "comment": "Prediction method (AUTO: use rule + active model and apply FINAL; if no active model, safely use rule only)",
+          "defaultValue": "AUTO"
         },
         {
           "key": "P_RUN_SOURCE_TYPE",

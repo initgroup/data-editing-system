@@ -98,6 +98,11 @@ class LabelResetRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class InitialSampleRequest(BaseModel):
+    modelKey: str = MODEL_KEY_COLUMN_TYPE
+    model_config = ConfigDict(extra="forbid")
+
+
 def _normalize_choice(value: Any, allowed: set[str], field_name: str) -> str:
     text = str(value or "").strip().upper()
     if text not in allowed:
@@ -529,6 +534,30 @@ def reset_training_labels(req: LabelResetRequest, request: Request):
         raise
     except Exception as error:
         logger.exception("M90003 training label reset failed.")
+        raise HTTPException(status_code=500, detail=str(error))
+    finally:
+        if conn:
+            conn.close()
+
+
+@router.post("/dataset/sample")
+def create_initial_sample_labels(req: InitialSampleRequest, request: Request):
+    model_key = _require_dataset_family(req.modelKey)
+    if model_key != MODEL_KEY_COLUMN_TYPE:
+        raise HTTPException(status_code=400, detail="Initial sample data is not registered for this model family.")
+    conn = None
+    try:
+        conn = get_target_db_connection(request)
+        _execute_proc(
+            conn,
+            "M90003_LABEL_CREATE_INITIAL_SAMPLE",
+            {"requestedBy": get_request_user_id(request)},
+        )
+        return {"status": "success", "data": {"modelKey": model_key}}
+    except HTTPException:
+        raise
+    except Exception as error:
+        logger.exception("M90003 initial sample label creation failed.")
         raise HTTPException(status_code=500, detail=str(error))
     finally:
         if conn:

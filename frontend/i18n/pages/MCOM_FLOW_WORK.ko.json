@@ -171,7 +171,7 @@
     "paramDescTargetOwner": "분석 대상 테이블 Owner",
     "paramDescTargetTable": "분석 대상 테이블명",
     "paramDescDynamicModelName": "분류/예측 모델명",
-    "paramDescPredictionMethod": "예측 방식. ONLY_RULE/MODEL/BOTH는 BASE 결과, FINAL_RULE/MODEL/BOTH는 최종 컬럼 유형을 적용합니다.",
+    "paramDescPredictionMethod": "예측 방식. AUTO는 활성 모델이 있으면 규칙+모델로 최종 컬럼 유형을 적용하고, 없으면 규칙으로 최초 실행을 완료합니다.",
     "paramDescTargetColumn": "종속변수 컬럼. (auto)는 실행 조건에 맞는 target을 자동 평가합니다.",
     "paramDescRuleParts": "실행 범위: ALL, CATEGORICAL 또는 CONTINUOUS",
     "paramDescAssocModelName": "범주형 규칙 발굴에서 생성할 연관 규칙 모델명",

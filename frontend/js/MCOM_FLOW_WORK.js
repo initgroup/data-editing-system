@@ -4282,7 +4282,7 @@
                     ptargetowner: "Target table owner",
                     ptargettable: "Target table name",
                     pdynamicmodelname: "Classification/prediction model name",
-                    ppredictionmethod: "Prediction method (ONLY_RULE: BASE columns only, ONLY_MODEL: model columns only, ONLY_BOTH: BASE/MODEL columns, FINAL_RULE/MODEL/BOTH: apply FINAL automatically)",
+                    ppredictionmethod: "Prediction method (AUTO: use rule + active model and apply FINAL; if no active model, safely use rules)",
                     ptargetcolumn: "Dependent variable column; (auto) evaluates eligible targets.",
                     pruleparts: "Execution scope: ALL, CATEGORICAL, or CONTINUOUS.",
                     passocmodelname: "Association model name for categorical rule discovery.",
