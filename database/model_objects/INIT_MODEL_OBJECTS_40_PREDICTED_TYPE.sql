@@ -129,15 +129,54 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_TYPE_MODEL_TRAIN" (
     v_feature_projection   VARCHAR2(32767);
     v_data_query           VARCHAR2(32767);
     v_holdout_query        VARCHAR2(32767);
+    v_model_data_query     VARCHAR2(32767);
+    v_model_holdout_query  VARCHAR2(32767);
     v_score_expr           VARCHAR2(32767);
     v_sql                  VARCHAR2(32767);
     v_error_message        VARCHAR2(4000);
+    v_predictor_cardinality VARCHAR2(4000);
+    v_usable_predictor_count NUMBER;
     v_model_created        BOOLEAN := FALSE;
     v_run_loaded           BOOLEAN := FALSE;
 
     FUNCTION number_literal(p_value IN NUMBER) RETURN VARCHAR2 IS
     BEGIN
         RETURN TO_CHAR(p_value, 'TM9', 'NLS_NUMERIC_CHARACTERS=.,');
+    END;
+
+    /*
+       CREATE_MODEL2 derives the model signature from the DATA_QUERY result
+       metadata.  The source query contains outer joins, scalar subqueries and
+       grouped holdout CTEs, so nullable expressions can be exposed
+       differently by Oracle releases even though an ordinary SELECT returns
+       the expected values.  Present one stable, fully typed contract to model
+       build, validation and scoring instead of allowing each step to infer a
+       slightly different schema.
+    */
+    FUNCTION model_input_query(p_query IN VARCHAR2) RETURN VARCHAR2 IS
+    BEGIN
+        RETURN
+              'SELECT CAST(Q."CASE_ID" AS VARCHAR2(4000)) AS "CASE_ID"'
+            || '     , CAST(NVL(Q."DATA_TYPE", ''UNKNOWN'') AS VARCHAR2(128)) AS "DATA_TYPE"'
+            || '     , CAST(NVL(Q."TOTAL_ROWS", 0) AS NUMBER) AS "TOTAL_ROWS"'
+            || '     , CAST(NVL(Q."NON_NULL_ROWS", 0) AS NUMBER) AS "NON_NULL_ROWS"'
+            || '     , CAST(NVL(Q."SAMPLE_ROWS", 0) AS NUMBER) AS "SAMPLE_ROWS"'
+            || '     , CAST(NVL(Q."SAMPLE_NOT_NULL_ROWS", 0) AS NUMBER) AS "SAMPLE_NOT_NULL_ROWS"'
+            || '     , CAST(NVL(Q."NUM_DISTINCT", 0) AS NUMBER) AS "NUM_DISTINCT"'
+            || '     , CAST(NVL(Q."SAMPLE_DISTINCT", 0) AS NUMBER) AS "SAMPLE_DISTINCT"'
+            || '     , CAST(NVL(Q."DIST_VAL_RT", 0) AS NUMBER) AS "DIST_VAL_RT"'
+            || '     , CAST(NVL(Q."NULL_RATIO", 0) AS NUMBER) AS "NULL_RATIO"'
+            || '     , CAST(NVL(Q."LOG_DATA_TYPE", ''UNKNOWN'') AS VARCHAR2(30)) AS "LOG_DATA_TYPE"'
+            || '     , CAST(NVL(Q."ENTROPY", 0) AS NUMBER) AS "ENTROPY"'
+            || '     , CAST(NVL(Q."NORM_ENTROPY", 0) AS NUMBER) AS "NORM_ENTROPY"'
+            || '     , CAST(NVL(Q."NUMERIC_RATIO", 0) AS NUMBER) AS "NUMERIC_RATIO"'
+            || '     , CAST(NVL(Q."INTEGER_RATIO", 0) AS NUMBER) AS "INTEGER_RATIO"'
+            || '     , CAST(NVL(Q."MIN_NUM_VALUE", 0) AS NUMBER) AS "MIN_NUM_VALUE"'
+            || '     , CAST(NVL(Q."MAX_NUM_VALUE", 0) AS NUMBER) AS "MAX_NUM_VALUE"'
+            || '     , CAST(NVL(Q."AVG_TEXT_LENGTH", 0) AS NUMBER) AS "AVG_TEXT_LENGTH"'
+            || '     , CAST(NVL(Q."MAX_TEXT_LENGTH", 0) AS NUMBER) AS "MAX_TEXT_LENGTH"'
+            || '     , CAST(Q."TARGET_TYPE_CODE" AS VARCHAR2(40)) AS "TARGET_TYPE_CODE"'
+            || '  FROM (' || p_query || ') Q';
     END;
 BEGIN
     IF p_train_run_id IS NULL THEN
@@ -351,6 +390,57 @@ BEGIN
         RAISE_APPLICATION_ERROR(-20725, 'Holdout contains a type class that is absent from training. Add labels from more tables.');
     END IF;
 
+    v_model_data_query := model_input_query(v_data_query);
+    v_model_holdout_query := model_input_query(v_holdout_query);
+
+    /*
+       Fail before model creation when the actual bounded training split has
+       no varying predictor.  The cardinality summary is also included in a
+       post-build signature error, which makes a data defect distinguishable
+       from an OML build/signature defect without another speculative change.
+    */
+    v_sql :=
+          'SELECT '
+        || '  CASE WHEN COUNT(DISTINCT "DATA_TYPE") > 1 THEN 1 ELSE 0 END'
+        || '+ CASE WHEN COUNT(DISTINCT "TOTAL_ROWS") > 1 THEN 1 ELSE 0 END'
+        || '+ CASE WHEN COUNT(DISTINCT "NON_NULL_ROWS") > 1 THEN 1 ELSE 0 END'
+        || '+ CASE WHEN COUNT(DISTINCT "SAMPLE_ROWS") > 1 THEN 1 ELSE 0 END'
+        || '+ CASE WHEN COUNT(DISTINCT "SAMPLE_NOT_NULL_ROWS") > 1 THEN 1 ELSE 0 END'
+        || '+ CASE WHEN COUNT(DISTINCT "NUM_DISTINCT") > 1 THEN 1 ELSE 0 END'
+        || '+ CASE WHEN COUNT(DISTINCT "SAMPLE_DISTINCT") > 1 THEN 1 ELSE 0 END'
+        || '+ CASE WHEN COUNT(DISTINCT "DIST_VAL_RT") > 1 THEN 1 ELSE 0 END'
+        || '+ CASE WHEN COUNT(DISTINCT "NULL_RATIO") > 1 THEN 1 ELSE 0 END'
+        || '+ CASE WHEN COUNT(DISTINCT "LOG_DATA_TYPE") > 1 THEN 1 ELSE 0 END'
+        || '+ CASE WHEN COUNT(DISTINCT "ENTROPY") > 1 THEN 1 ELSE 0 END'
+        || '+ CASE WHEN COUNT(DISTINCT "NORM_ENTROPY") > 1 THEN 1 ELSE 0 END'
+        || '+ CASE WHEN COUNT(DISTINCT "NUMERIC_RATIO") > 1 THEN 1 ELSE 0 END'
+        || '+ CASE WHEN COUNT(DISTINCT "INTEGER_RATIO") > 1 THEN 1 ELSE 0 END'
+        || '+ CASE WHEN COUNT(DISTINCT "MIN_NUM_VALUE") > 1 THEN 1 ELSE 0 END'
+        || '+ CASE WHEN COUNT(DISTINCT "MAX_NUM_VALUE") > 1 THEN 1 ELSE 0 END'
+        || '+ CASE WHEN COUNT(DISTINCT "AVG_TEXT_LENGTH") > 1 THEN 1 ELSE 0 END'
+        || '+ CASE WHEN COUNT(DISTINCT "MAX_TEXT_LENGTH") > 1 THEN 1 ELSE 0 END'
+        || '     , ''DATA_TYPE='' || COUNT(DISTINCT "DATA_TYPE")'
+        || '       || '', LOG_DATA_TYPE='' || COUNT(DISTINCT "LOG_DATA_TYPE")'
+        || '       || '', TOTAL_ROWS='' || COUNT(DISTINCT "TOTAL_ROWS")'
+        || '       || '', NUM_DISTINCT='' || COUNT(DISTINCT "NUM_DISTINCT")'
+        || '       || '', DIST_VAL_RT='' || COUNT(DISTINCT "DIST_VAL_RT")'
+        || '       || '', NORM_ENTROPY='' || COUNT(DISTINCT "NORM_ENTROPY")'
+        || '       || '', NUMERIC_RATIO='' || COUNT(DISTINCT "NUMERIC_RATIO")'
+        || '       || '', INTEGER_RATIO='' || COUNT(DISTINCT "INTEGER_RATIO")'
+        || '       || '', AVG_TEXT_LENGTH='' || COUNT(DISTINCT "AVG_TEXT_LENGTH")'
+        || '       || '', TARGET_TYPE_CODE='' || COUNT(DISTINCT "TARGET_TYPE_CODE")'
+        || '  FROM (' || v_model_data_query || ')';
+    EXECUTE IMMEDIATE v_sql
+       INTO v_usable_predictor_count
+          , v_predictor_cardinality;
+
+    IF NVL(v_usable_predictor_count, 0) = 0 THEN
+        RAISE_APPLICATION_ERROR(
+            -20726,
+            'Training split has no varying predictors. ' || NVL(v_predictor_cardinality, '-')
+        );
+    END IF;
+
     v_setlist(DBMS_DATA_MINING.ALGO_NAME) := CASE
         WHEN v_algorithm_code = 'RANDOM_FOREST' THEN 'ALGO_RANDOM_FOREST'
         ELSE 'ALGO_DECISION_TREE'
@@ -391,7 +481,7 @@ BEGIN
     DBMS_DATA_MINING.CREATE_MODEL2(
         MODEL_NAME          => v_candidate_model_name,
         MINING_FUNCTION     => DBMS_DATA_MINING.CLASSIFICATION,
-        DATA_QUERY          => v_data_query,
+        DATA_QUERY          => v_model_data_query,
         SET_LIST            => v_setlist,
         CASE_ID_COLUMN_NAME => 'CASE_ID',
         TARGET_COLUMN_NAME  => 'TARGET_TYPE_CODE'
@@ -424,7 +514,9 @@ BEGIN
             || ', predictors=' || NVL(v_model_predictor_count, 0)
             || ', targets=' || NVL(v_model_target_count, 0)
             || ', target=' || NVL(v_model_target_name, '-')
-            || ', target values=' || NVL(v_model_target_value_count, 0) || ').'
+            || ', target values=' || NVL(v_model_target_value_count, 0)
+            || ', usable predictors=' || NVL(v_usable_predictor_count, 0)
+            || '; ' || NVL(v_predictor_cardinality, '-') || ').'
         );
     END IF;
 
@@ -457,7 +549,7 @@ BEGIN
         || ', "MAX_TEXT_LENGTH" AS "MAX_TEXT_LENGTH")) PS)';
 
     v_sql := 'SELECT COUNT(*), COUNT(PREDICTED_TYPE) '
-        || 'FROM (SELECT ' || v_score_expr || ' PREDICTED_TYPE FROM (' || v_data_query || '))';
+        || 'FROM (SELECT ' || v_score_expr || ' PREDICTED_TYPE FROM (' || v_model_data_query || '))';
     EXECUTE IMMEDIATE v_sql INTO v_score_row_count, v_prediction_count;
 
     IF v_score_row_count = 0 OR v_prediction_count = 0 THEN
@@ -485,12 +577,12 @@ BEGIN
         || '("MODEL_VERSION_ID", "SPLIT_CODE", "METRIC_NAME", "METRIC_VALUE", "SUPPORT_COUNT") '
         || 'SELECT ' || number_literal(v_model_version_id) || ', ''HOLDOUT'', ''ACCURACY'', '
         || 'AVG(CASE WHEN ACTUAL_TYPE = PREDICTED_TYPE THEN 1 ELSE 0 END), COUNT(*) '
-        || 'FROM (SELECT "TARGET_TYPE_CODE" ACTUAL_TYPE, ' || v_score_expr || ' PREDICTED_TYPE FROM (' || v_holdout_query || '))';
+        || 'FROM (SELECT "TARGET_TYPE_CODE" ACTUAL_TYPE, ' || v_score_expr || ' PREDICTED_TYPE FROM (' || v_model_holdout_query || '))';
     EXECUTE IMMEDIATE v_sql;
 
     v_sql := 'INSERT INTO "INIT$_TB_OML_MODEL_METRIC" '
         || '("MODEL_VERSION_ID", "SPLIT_CODE", "ACTUAL_CLASS_CODE", "CLASS_GROUP_CODE", "METRIC_NAME", "METRIC_VALUE", "SUPPORT_COUNT") '
-        || 'WITH E AS (SELECT "TARGET_TYPE_CODE" A, ' || v_score_expr || ' P FROM (' || v_holdout_query || ')), '
+        || 'WITH E AS (SELECT "TARGET_TYPE_CODE" A, ' || v_score_expr || ' P FROM (' || v_model_holdout_query || ')), '
         || 'C AS (SELECT A TYPE_CODE FROM E UNION SELECT P FROM E), M AS ('
         || 'SELECT C.TYPE_CODE, SUM(CASE WHEN E.A=C.TYPE_CODE AND E.P=C.TYPE_CODE THEN 1 ELSE 0 END) TP, '
         || 'SUM(CASE WHEN E.A<>C.TYPE_CODE AND E.P=C.TYPE_CODE THEN 1 ELSE 0 END) FP, '
@@ -506,7 +598,7 @@ BEGIN
 
     v_sql := 'INSERT INTO "INIT$_TB_OML_MODEL_METRIC" '
         || '("MODEL_VERSION_ID", "SPLIT_CODE", "ACTUAL_CLASS_CODE", "PREDICTED_CLASS_CODE", "CLASS_GROUP_CODE", "METRIC_NAME", "METRIC_VALUE", "SUPPORT_COUNT") '
-        || 'WITH E AS (SELECT "TARGET_TYPE_CODE" A, ' || v_score_expr || ' P FROM (' || v_holdout_query || ')) '
+        || 'WITH E AS (SELECT "TARGET_TYPE_CODE" A, ' || v_score_expr || ' P FROM (' || v_model_holdout_query || ')) '
         || 'SELECT ' || number_literal(v_model_version_id) || ', ''HOLDOUT'', A, P, "INIT$_FN_TYPE_GROUP_CODE"(A), ''CONFUSION'', '
         || 'COUNT(*), SUM(COUNT(*)) OVER (PARTITION BY A) FROM E GROUP BY A, P';
     EXECUTE IMMEDIATE v_sql;
@@ -542,7 +634,7 @@ BEGIN
         || 'SELECT ' || number_literal(v_model_version_id) || ', ''HOLDOUT'', ACTUAL_GROUP, ''GROUP_ACCURACY'', '
         || 'AVG(CASE WHEN ACTUAL_GROUP=PREDICTED_GROUP THEN 1 ELSE 0 END), COUNT(*) FROM ('
         || 'SELECT "INIT$_FN_TYPE_GROUP_CODE"("TARGET_TYPE_CODE") ACTUAL_GROUP, '
-        || '"INIT$_FN_TYPE_GROUP_CODE"(' || v_score_expr || ') PREDICTED_GROUP FROM (' || v_holdout_query || ')) '
+        || '"INIT$_FN_TYPE_GROUP_CODE"(' || v_score_expr || ') PREDICTED_GROUP FROM (' || v_model_holdout_query || ')) '
         || 'GROUP BY ACTUAL_GROUP';
     EXECUTE IMMEDIATE v_sql;
 
@@ -558,7 +650,18 @@ BEGIN
     COMMIT;
 EXCEPTION
     WHEN OTHERS THEN
-        v_error_message := SUBSTR(SQLERRM || CHR(10) || DBMS_UTILITY.FORMAT_ERROR_BACKTRACE, 1, 4000);
+        v_error_message := SUBSTR(
+              SQLERRM
+            || CASE
+                   WHEN v_predictor_cardinality IS NOT NULL
+                   THEN CHR(10) || 'OML input diagnostics: usable predictors='
+                        || NVL(v_usable_predictor_count, 0) || '; ' || v_predictor_cardinality
+                   ELSE NULL
+               END
+            || CHR(10) || DBMS_UTILITY.FORMAT_ERROR_BACKTRACE
+          , 1
+          , 4000
+        );
         ROLLBACK;
         IF v_model_created THEN
             BEGIN
@@ -1803,44 +1906,44 @@ BEGIN
         v_model_prediction_expr := '(SELECT MAX(PS.PREDICTION) KEEP ('
             || 'DENSE_RANK FIRST ORDER BY PS.PROBABILITY DESC NULLS LAST, PS.PREDICTION) '
             || 'FROM TABLE(PREDICTION_SET(' || v_scoring_model_name || ' USING '
-            || 'I."DATA_TYPE" AS "DATA_TYPE"'
-            || ', I."TOTAL_ROWS" AS "TOTAL_ROWS"'
-            || ', I."NON_NULL_ROWS" AS "NON_NULL_ROWS"'
-            || ', I."SAMPLE_ROWS" AS "SAMPLE_ROWS"'
-            || ', I."SAMPLE_NOT_NULL_ROWS" AS "SAMPLE_NOT_NULL_ROWS"'
-            || ', I."NUM_DISTINCT" AS "NUM_DISTINCT"'
-            || ', I."SAMPLE_DISTINCT" AS "SAMPLE_DISTINCT"'
-            || ', I."DIST_VAL_RT" AS "DIST_VAL_RT"'
-            || ', I."NULL_RATIO" AS "NULL_RATIO"'
-            || ', I."LOG_DATA_TYPE" AS "LOG_DATA_TYPE"'
-            || ', I."ENTROPY" AS "ENTROPY"'
-            || ', I."NORM_ENTROPY" AS "NORM_ENTROPY"'
-            || ', I."NUMERIC_RATIO" AS "NUMERIC_RATIO"'
-            || ', I."INTEGER_RATIO" AS "INTEGER_RATIO"'
-            || ', I."MIN_NUM_VALUE" AS "MIN_NUM_VALUE"'
-            || ', I."MAX_NUM_VALUE" AS "MAX_NUM_VALUE"'
-            || ', I."AVG_TEXT_LENGTH" AS "AVG_TEXT_LENGTH"'
-            || ', I."MAX_TEXT_LENGTH" AS "MAX_TEXT_LENGTH")) PS)';
+            || 'CAST(NVL(I."DATA_TYPE", ''UNKNOWN'') AS VARCHAR2(128)) AS "DATA_TYPE"'
+            || ', CAST(NVL(I."TOTAL_ROWS", 0) AS NUMBER) AS "TOTAL_ROWS"'
+            || ', CAST(NVL(I."NON_NULL_ROWS", 0) AS NUMBER) AS "NON_NULL_ROWS"'
+            || ', CAST(NVL(I."SAMPLE_ROWS", 0) AS NUMBER) AS "SAMPLE_ROWS"'
+            || ', CAST(NVL(I."SAMPLE_NOT_NULL_ROWS", 0) AS NUMBER) AS "SAMPLE_NOT_NULL_ROWS"'
+            || ', CAST(NVL(I."NUM_DISTINCT", 0) AS NUMBER) AS "NUM_DISTINCT"'
+            || ', CAST(NVL(I."SAMPLE_DISTINCT", 0) AS NUMBER) AS "SAMPLE_DISTINCT"'
+            || ', CAST(NVL(I."DIST_VAL_RT", 0) AS NUMBER) AS "DIST_VAL_RT"'
+            || ', CAST(NVL(I."NULL_RATIO", 0) AS NUMBER) AS "NULL_RATIO"'
+            || ', CAST(NVL(I."LOG_DATA_TYPE", ''UNKNOWN'') AS VARCHAR2(30)) AS "LOG_DATA_TYPE"'
+            || ', CAST(NVL(I."ENTROPY", 0) AS NUMBER) AS "ENTROPY"'
+            || ', CAST(NVL(I."NORM_ENTROPY", 0) AS NUMBER) AS "NORM_ENTROPY"'
+            || ', CAST(NVL(I."NUMERIC_RATIO", 0) AS NUMBER) AS "NUMERIC_RATIO"'
+            || ', CAST(NVL(I."INTEGER_RATIO", 0) AS NUMBER) AS "INTEGER_RATIO"'
+            || ', CAST(NVL(I."MIN_NUM_VALUE", 0) AS NUMBER) AS "MIN_NUM_VALUE"'
+            || ', CAST(NVL(I."MAX_NUM_VALUE", 0) AS NUMBER) AS "MAX_NUM_VALUE"'
+            || ', CAST(NVL(I."AVG_TEXT_LENGTH", 0) AS NUMBER) AS "AVG_TEXT_LENGTH"'
+            || ', CAST(NVL(I."MAX_TEXT_LENGTH", 0) AS NUMBER) AS "MAX_TEXT_LENGTH")) PS)';
         v_model_confidence_expr := '(SELECT MAX(PS.PROBABILITY) '
             || 'FROM TABLE(PREDICTION_SET(' || v_scoring_model_name || ' USING '
-            || 'I."DATA_TYPE" AS "DATA_TYPE"'
-            || ', I."TOTAL_ROWS" AS "TOTAL_ROWS"'
-            || ', I."NON_NULL_ROWS" AS "NON_NULL_ROWS"'
-            || ', I."SAMPLE_ROWS" AS "SAMPLE_ROWS"'
-            || ', I."SAMPLE_NOT_NULL_ROWS" AS "SAMPLE_NOT_NULL_ROWS"'
-            || ', I."NUM_DISTINCT" AS "NUM_DISTINCT"'
-            || ', I."SAMPLE_DISTINCT" AS "SAMPLE_DISTINCT"'
-            || ', I."DIST_VAL_RT" AS "DIST_VAL_RT"'
-            || ', I."NULL_RATIO" AS "NULL_RATIO"'
-            || ', I."LOG_DATA_TYPE" AS "LOG_DATA_TYPE"'
-            || ', I."ENTROPY" AS "ENTROPY"'
-            || ', I."NORM_ENTROPY" AS "NORM_ENTROPY"'
-            || ', I."NUMERIC_RATIO" AS "NUMERIC_RATIO"'
-            || ', I."INTEGER_RATIO" AS "INTEGER_RATIO"'
-            || ', I."MIN_NUM_VALUE" AS "MIN_NUM_VALUE"'
-            || ', I."MAX_NUM_VALUE" AS "MAX_NUM_VALUE"'
-            || ', I."AVG_TEXT_LENGTH" AS "AVG_TEXT_LENGTH"'
-            || ', I."MAX_TEXT_LENGTH" AS "MAX_TEXT_LENGTH")) PS)';
+            || 'CAST(NVL(I."DATA_TYPE", ''UNKNOWN'') AS VARCHAR2(128)) AS "DATA_TYPE"'
+            || ', CAST(NVL(I."TOTAL_ROWS", 0) AS NUMBER) AS "TOTAL_ROWS"'
+            || ', CAST(NVL(I."NON_NULL_ROWS", 0) AS NUMBER) AS "NON_NULL_ROWS"'
+            || ', CAST(NVL(I."SAMPLE_ROWS", 0) AS NUMBER) AS "SAMPLE_ROWS"'
+            || ', CAST(NVL(I."SAMPLE_NOT_NULL_ROWS", 0) AS NUMBER) AS "SAMPLE_NOT_NULL_ROWS"'
+            || ', CAST(NVL(I."NUM_DISTINCT", 0) AS NUMBER) AS "NUM_DISTINCT"'
+            || ', CAST(NVL(I."SAMPLE_DISTINCT", 0) AS NUMBER) AS "SAMPLE_DISTINCT"'
+            || ', CAST(NVL(I."DIST_VAL_RT", 0) AS NUMBER) AS "DIST_VAL_RT"'
+            || ', CAST(NVL(I."NULL_RATIO", 0) AS NUMBER) AS "NULL_RATIO"'
+            || ', CAST(NVL(I."LOG_DATA_TYPE", ''UNKNOWN'') AS VARCHAR2(30)) AS "LOG_DATA_TYPE"'
+            || ', CAST(NVL(I."ENTROPY", 0) AS NUMBER) AS "ENTROPY"'
+            || ', CAST(NVL(I."NORM_ENTROPY", 0) AS NUMBER) AS "NORM_ENTROPY"'
+            || ', CAST(NVL(I."NUMERIC_RATIO", 0) AS NUMBER) AS "NUMERIC_RATIO"'
+            || ', CAST(NVL(I."INTEGER_RATIO", 0) AS NUMBER) AS "INTEGER_RATIO"'
+            || ', CAST(NVL(I."MIN_NUM_VALUE", 0) AS NUMBER) AS "MIN_NUM_VALUE"'
+            || ', CAST(NVL(I."MAX_NUM_VALUE", 0) AS NUMBER) AS "MAX_NUM_VALUE"'
+            || ', CAST(NVL(I."AVG_TEXT_LENGTH", 0) AS NUMBER) AS "AVG_TEXT_LENGTH"'
+            || ', CAST(NVL(I."MAX_TEXT_LENGTH", 0) AS NUMBER) AS "MAX_TEXT_LENGTH")) PS)';
         v_insert_model_expr := 'S."MODL_PREDICTED_TYPE"';
     ELSE
         v_model_prediction_expr := 'CAST(NULL AS VARCHAR2(4000))';
