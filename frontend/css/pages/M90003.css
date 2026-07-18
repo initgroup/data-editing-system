@@ -76,7 +76,12 @@
     margin: 5px 0 0;
 }
 
-#container-M90003 .type-model-header-actions,
+#container-M90003 .type-model-header-actions {
+    align-items: flex-end;
+    display: flex;
+    gap: 6px;
+}
+
 #container-M90003 .type-model-row-actions,
 #container-M90003 .type-model-pager {
     align-items: center;
@@ -699,6 +704,43 @@
     flex: 1 1 260px;
 }
 
+/* Keep the search action level with the select/input controls, not their labels. */
+#container-M90003 .dataset-toolbar > .type-model-btn {
+    align-self: flex-end;
+    flex: 0 0 auto;
+}
+
+#container-M90003 .dataset-data-actions {
+    justify-content: flex-end;
+    margin: 8px 0;
+}
+
+#container-M90003 .dataset-data-actions .type-model-muted {
+    color: var(--model-muted);
+    font-size: 12px;
+    margin-right: auto;
+}
+
+#container-M90003 .type-model-btn.is-danger {
+    border-color: #f1b4b4;
+    color: #b42318;
+}
+
+#container-M90003 .type-model-btn.is-danger:hover {
+    background: #fff1f0;
+    border-color: #e77878;
+}
+
+#container-M90003 .type-model-table .select-column {
+    text-align: center;
+    width: 38px;
+}
+
+#container-M90003 .type-model-table .select-column input {
+    accent-color: var(--model-primary);
+    cursor: pointer;
+}
+
 #container-M90003 .type-model-pager input {
     width: 58px;
 }
@@ -1071,6 +1113,10 @@
     #container-M90003 .type-model-toolbar .type-model-btn {
         flex: 1 1 100%;
         width: 100%;
+    }
+
+    #container-M90003 .dataset-toolbar > .type-model-btn {
+        align-self: stretch;
     }
 
     #container-M90003 .type-model-grid-toolbar {

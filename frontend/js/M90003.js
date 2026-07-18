@@ -61,6 +61,7 @@
         datasetPage: 1,
         datasetPageSize: 50,
         datasetTotal: 0,
+        selectedLabelIds: new Set(),
         runPage: 1,
         runPageSize: 50,
         runTotal: 0,
@@ -110,6 +111,7 @@
             this.runRows = [];
             this.datasetPage = 1;
             this.datasetTotal = 0;
+            this.selectedLabelIds = new Set();
             this.runPage = 1;
             this.runTotal = 0;
             this.loadedTabs = new Set();
@@ -132,12 +134,17 @@
                 if (event.target.matches("#modelFamily-M90003")) {
                     this.selectModelFamily(event.target.value);
                 } else if (event.target.matches("[data-filter='dataset']")) {
+                    this.selectedLabelIds.clear();
                     this.datasetPage = 1;
                     this.loadDataset();
                 } else if (event.target.matches("[data-page-size='dataset']")) {
-                    this.datasetPageSize = this.boundInteger(event.target.value, 25, 100, 50);
+                    this.datasetPageSize = this.boundInteger(event.target.value, 25, 1000, 50);
                     this.datasetPage = 1;
                     this.loadDataset();
+                } else if (event.target.matches("#datasetSelectAll-M90003")) {
+                    this.toggleCurrentPageLabels(event.target.checked);
+                } else if (event.target.matches("[data-label-select]")) {
+                    this.toggleLabelSelection(event.target.dataset.labelSelect, event.target.checked);
                 } else if (event.target.matches("#trainMinRows-M90003")) {
                     this.renderTrainingReadiness();
                 }
@@ -192,9 +199,12 @@
             if (action === "tab-next") return this.moveTab(1);
             if (action === "refresh-dataset") return Promise.allSettled([this.loadDatasetStats(), this.loadDataset()]);
             if (action === "search-dataset") {
+                this.selectedLabelIds.clear();
                 this.datasetPage = 1;
                 return this.loadDataset();
             }
+            if (action === "delete-selected-labels") return this.deleteSelectedLabels(button);
+            if (action === "reset-training-labels") return this.resetTrainingLabels(button);
             if (action === "dataset-prev") return this.changePage("dataset", -1);
             if (action === "dataset-next") return this.changePage("dataset", 1);
             if (action === "refresh-models") return this.loadModels();
@@ -327,7 +337,7 @@
             if (this.loading.has("dataset")) return;
             this.loading.add("dataset");
             const generation = this.generation;
-            this.renderTableLoading("#datasetBody-M90003", 12);
+            this.renderTableLoading("#datasetBody-M90003", 13);
             try {
                 const params = new URLSearchParams({
                     page: String(this.datasetPage),
@@ -446,6 +456,98 @@
             }
         },
 
+        toggleLabelSelection(labelId, selected) {
+            const id = String(labelId || "").trim();
+            if (!id) return;
+            if (selected) this.selectedLabelIds.add(id);
+            else this.selectedLabelIds.delete(id);
+            this.updateDatasetSelectionControls();
+        },
+
+        toggleCurrentPageLabels(selected) {
+            this.datasetRows.forEach((row) => {
+                const id = String(this.pick(row, "labelId", "LABEL_ID") || "").trim();
+                if (!id) return;
+                if (selected) this.selectedLabelIds.add(id);
+                else this.selectedLabelIds.delete(id);
+            });
+            getPageContainer()?.querySelectorAll("[data-label-select]").forEach((checkbox) => {
+                checkbox.checked = Boolean(selected);
+            });
+            this.updateDatasetSelectionControls();
+        },
+
+        updateDatasetSelectionControls() {
+            const count = this.selectedLabelIds.size;
+            const deleteButton = getPageContainer()?.querySelector('[data-action="delete-selected-labels"]');
+            if (deleteButton) deleteButton.disabled = count === 0;
+            this.setText(
+                "#datasetSelectionCount-M90003",
+                count
+                    ? t("selectedLabelsCount", "{count} labels selected", { count: this.formatInteger(count) })
+                    : t("noSelectedLabels", "No labels selected")
+            );
+            const selectAll = getContainerEl("#datasetSelectAll-M90003");
+            if (selectAll) {
+                const pageIds = this.datasetRows
+                    .map((row) => String(this.pick(row, "labelId", "LABEL_ID") || "").trim())
+                    .filter(Boolean);
+                selectAll.checked = pageIds.length > 0 && pageIds.every((id) => this.selectedLabelIds.has(id));
+                selectAll.indeterminate = !selectAll.checked && pageIds.some((id) => this.selectedLabelIds.has(id));
+            }
+        },
+
+        async deleteSelectedLabels(button) {
+            const labelIds = Array.from(this.selectedLabelIds);
+            if (!labelIds.length) return;
+            const message = t(
+                "confirmDeleteSelectedLabels",
+                "Delete {count} selected labels from the training dataset? Final analysis results are not changed.",
+                { count: this.formatInteger(labelIds.length) }
+            );
+            if (!(await this.confirm(message))) return;
+            this.setButtonLoading(button, true, t("deleting", "Deleting..."));
+            try {
+                await this.request("/dataset/labels/delete", {
+                    method: "POST",
+                    body: { modelKey: this.selectedModelKey, labelIds }
+                });
+                this.showMessage("success", t("selectedLabelsDeleted", "Selected labels were deleted."));
+                this.datasetPage = 1;
+                await Promise.allSettled([this.loadDataset(), this.loadDatasetStats(), this.loadSummary()]);
+                this.renderOverview();
+                this.renderTrainingReadiness();
+            } catch (error) {
+                this.showMessage("error", error.message || t("labelDeletionFailed", "Labels could not be deleted."));
+            } finally {
+                this.setButtonLoading(button, false);
+            }
+        },
+
+        async resetTrainingLabels(button) {
+            const message = t(
+                "confirmResetTrainingLabels",
+                "Delete all eligible confirmed labels from the training dataset? Final analysis results and automatic labels are not changed.",
+            );
+            if (!(await this.confirm(message))) return;
+            this.setButtonLoading(button, true, t("resetting", "Resetting..."));
+            try {
+                await this.request("/dataset/labels/reset", {
+                    method: "POST",
+                    body: { modelKey: this.selectedModelKey }
+                });
+                this.showMessage("success", t("trainingLabelsReset", "Training labels were reset."));
+                this.datasetPage = 1;
+                await Promise.allSettled([this.loadDataset(), this.loadDatasetStats(), this.loadSummary()]);
+                this.renderOverview();
+                this.renderTrainingReadiness();
+            } catch (error) {
+                this.showMessage("error", error.message || t("labelResetFailed", "Training labels could not be reset."));
+            } finally {
+                this.setButtonLoading(button, false);
+            }
+        },
+
         async activateModel(modelId) {
             if (!modelId) return;
             const model = this.models.find((item) => String(this.pick(item, "id", "modelId", "MODEL_ID", "modelVersionId", "MODEL_VERSION_ID")) === String(modelId));
@@ -548,6 +650,10 @@
             const trainer = this.pick(family, "trainerCode", "TRAINER_CODE");
             const modelCount = this.pick(family, "modelCount", "MODEL_COUNT") || 0;
             const runCount = this.pick(family, "runCount", "RUN_COUNT") || 0;
+            const nextVersion = Number(this.pick(family, "latestVersionNo", "LATEST_VERSION_NO") || 0) + 1;
+            const candidatePattern = this.selectedModelKey === "COLUMN_TYPE"
+                ? `INIT$CT_V${nextVersion}_R{runId}`
+                : "-";
             const sources = [sourceProfile, sourceLabel].filter(Boolean).map((value) => `<code>${this.escapeHtml(value)}</code>`).join(" · ") || "-";
             element.innerHTML = `
                 <strong>${this.escapeHtml(this.familyLabel(family))}</strong>
@@ -555,6 +661,7 @@
                 <span>${this.escapeHtml(t("trainingAdapter", "Training Adapter"))}: <code>${this.escapeHtml(trainer || t("notRegistered", "Not registered"))}</code></span>
                 <span>${this.escapeHtml(t("trainingSources", "Training Sources"))}: ${sources}</span>
                 <span>${this.escapeHtml(t("consumerObject", "Consumer"))}: <code>${this.escapeHtml(consumer || "-")}</code></span>
+                <span>${this.escapeHtml(t("candidateModelNamePattern", "New candidate model name"))}: <code>${this.escapeHtml(candidatePattern)}</code></span>
                 <span>${this.escapeHtml(t("modelAndRunCounts", "{models} models · {runs} runs", { models: this.formatInteger(modelCount), runs: this.formatInteger(runCount) }))}</span>
             `;
         },
@@ -752,20 +859,24 @@
             this.setValue("#datasetPage-M90003", this.datasetPage);
             this.setText("#datasetPageCount-M90003", `/ ${this.formatInteger(pageCount)}`);
             if (errorMessage) {
-                body.innerHTML = this.tableMessage(errorMessage, 12, "error");
+                body.innerHTML = this.tableMessage(errorMessage, 13, "error");
+                this.updateDatasetSelectionControls();
                 return;
             }
             if (!this.datasetRows.length) {
-                body.innerHTML = this.tableMessage(t("noTrainingData", "No training data matches the current filters."), 12);
+                body.innerHTML = this.tableMessage(t("noTrainingData", "No training data matches the current filters."), 13);
+                this.updateDatasetSelectionControls();
                 return;
             }
             body.innerHTML = this.datasetRows.map((row, index) => {
+                const labelId = String(this.pick(row, "labelId", "LABEL_ID") || "").trim();
                 const typeCode = String(this.pick(row, "canonicalTypeCode", "CANONICAL_TYPE_CODE", "typeCode", "TYPE_CODE") || "UNKNOWN").toUpperCase();
                 const groupCode = String(this.pick(row, "typeGroupCode", "TYPE_GROUP_CODE") || TYPE_GROUP_FALLBACK[typeCode] || "OTHER").toUpperCase();
                 const confirmed = this.asBoolean(this.pick(row, "confirmedYn", "CONFIRMED_YN", "confirmed", "CONFIRMED"));
                 const conflict = this.asBoolean(this.pick(row, "conflictYn", "CONFLICT_YN", "conflict", "CONFLICT"));
                 return `
                     <tr>
+                        <td class="select-column"><input type="checkbox" data-label-select="${this.escapeHtml(labelId)}" ${this.selectedLabelIds.has(labelId) ? "checked" : ""} aria-label="Select label"></td>
                         <td class="no-column">${this.formatInteger((this.datasetPage - 1) * this.datasetPageSize + index + 1)}</td>
                         <td>${this.cell(this.pick(row, "owner", "OWNER", "targetOwner", "TARGET_OWNER"))}</td>
                         <td>${this.cell(this.pick(row, "tableName", "TABLE_NAME", "targetTable", "TARGET_TABLE"))}</td>
@@ -781,6 +892,7 @@
                     </tr>
                 `;
             }).join("");
+            this.updateDatasetSelectionControls();
         },
 
         renderModels(errorMessage = "") {

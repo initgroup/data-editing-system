@@ -10,6 +10,7 @@
     "modelFamily_COLUMN_TYPE": "컬럼 유형 분류 모델",
     "modelFamilyKey": "모델 키",
     "trainingAdapter": "학습 어댑터",
+    "candidateModelNamePattern": "새 후보 모델명 규칙",
     "trainingSources": "학습 원천",
     "consumerObject": "사용 객체",
     "notRegistered": "미등록",
@@ -66,6 +67,11 @@
     "conflicts": "충돌",
     "all": "전체",
     "allGroups": "전체 그룹",
+    "deleteSelectedLabels": "선택 라벨 삭제",
+    "resetTrainingLabels": "학습 라벨 초기화",
+    "noSelectedLabels": "선택한 라벨 없음",
+    "selectedLabelsCount": "라벨 {count}건 선택됨",
+    "selectAllLabels": "현재 페이지 라벨 전체 선택",
     "search": "검색",
     "datasetSearchPlaceholder": "Owner, 테이블, 컬럼, 코멘트",
     "previousPageTitle": "이전 페이지",
@@ -198,6 +204,14 @@
     "noModelVersions": "등록된 모델 버전이 없습니다.",
     "noModelsToCompare": "비교할 운영 모델 또는 후보 모델이 없습니다.",
     "noTrainingRuns": "학습 실행 이력이 없습니다.",
-    "requestFailed": "요청 처리에 실패했습니다."
+    "requestFailed": "요청 처리에 실패했습니다.",
+    "confirmDeleteSelectedLabels": "선택한 라벨 {count}건을 학습 데이터에서 삭제할까요? 최종 분석 결과는 변경되지 않습니다.",
+    "confirmResetTrainingLabels": "학습 가능한 확정 라벨을 모두 삭제할까요? 최종 분석 결과와 자동 판정 라벨은 변경되지 않습니다.",
+    "deleting": "삭제 중...",
+    "resetting": "초기화 중...",
+    "selectedLabelsDeleted": "선택한 라벨을 삭제했습니다.",
+    "trainingLabelsReset": "학습 라벨을 초기화했습니다.",
+    "labelDeletionFailed": "라벨을 삭제하지 못했습니다.",
+    "labelResetFailed": "학습 라벨을 초기화하지 못했습니다."
   }
 }

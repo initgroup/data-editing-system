@@ -160,14 +160,22 @@
 
 .data-work-page:not(.flow-work-page) .data-target-picker-control {
     align-items: stretch;
+    align-self: end;
     display: grid;
     gap: 6px;
     grid-template-columns: minmax(0, 1fr) 34px;
+    grid-template-rows: 34px;
+    height: 34px;
     min-width: 0;
 }
 
+.data-work-page:not(.flow-work-page) .data-target-picker-control .env-field,
 .data-work-page:not(.flow-work-page) .data-target-picker-control .table-icon-btn {
     height: 34px;
+    min-height: 34px;
+}
+
+.data-work-page:not(.flow-work-page) .data-target-picker-control .table-icon-btn {
     width: 34px;
 }
 
@@ -776,21 +784,20 @@
     }
 
     .data-work-page:not(.flow-work-page) .data-param-table th {
-        position: static;
-        top: auto;
-        z-index: auto;
+        position: sticky;
+        top: 0;
+        z-index: 8;
     }
 
-    .data-work-page:not(.flow-work-page) .data-param-table th:nth-child(2),
-    .data-work-page:not(.flow-work-page) .data-param-table td:nth-child(1),
-    .data-work-page:not(.flow-work-page) .data-param-table td:nth-child(2) {
-        left: auto;
-        position: static;
-        z-index: auto;
+    .data-work-page:not(.flow-work-page) .data-param-table th:nth-child(1),
+    .data-work-page:not(.flow-work-page) .data-param-table td:nth-child(1) {
+        left: 0;
+        position: sticky;
+        z-index: 3;
     }
 
-    .data-work-page:not(.flow-work-page) .data-param-table td:nth-child(2) {
-        box-shadow: none;
+    .data-work-page:not(.flow-work-page) .data-param-table th:nth-child(1) {
+        z-index: 12;
     }
 
     .data-work-page:not(.flow-work-page) .data-param-grid,

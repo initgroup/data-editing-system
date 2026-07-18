@@ -10,6 +10,7 @@
     "modelFamily_COLUMN_TYPE": "Column Type Classification",
     "modelFamilyKey": "Model Key",
     "trainingAdapter": "Training Adapter",
+    "candidateModelNamePattern": "New candidate model name pattern",
     "trainingSources": "Training Sources",
     "consumerObject": "Consumer",
     "notRegistered": "Not registered",
@@ -66,6 +67,11 @@
     "conflicts": "Conflicts",
     "all": "All",
     "allGroups": "All Groups",
+    "deleteSelectedLabels": "Delete Selected Labels",
+    "resetTrainingLabels": "Reset Training Labels",
+    "noSelectedLabels": "No labels selected",
+    "selectedLabelsCount": "{count} labels selected",
+    "selectAllLabels": "Select all labels on this page",
     "search": "Search",
     "datasetSearchPlaceholder": "Owner, table, column, comment",
     "previousPageTitle": "Previous page",
@@ -198,6 +204,14 @@
     "noModelVersions": "No model versions.",
     "noModelsToCompare": "No champion or candidate is available for comparison.",
     "noTrainingRuns": "No training runs.",
-    "requestFailed": "Request failed."
+    "requestFailed": "Request failed.",
+    "confirmDeleteSelectedLabels": "Delete {count} selected labels from the training dataset? Final analysis results are not changed.",
+    "confirmResetTrainingLabels": "Delete all eligible confirmed labels from the training dataset? Final analysis results and automatic labels are not changed.",
+    "deleting": "Deleting...",
+    "resetting": "Resetting...",
+    "selectedLabelsDeleted": "Selected labels were deleted.",
+    "trainingLabelsReset": "Training labels were reset.",
+    "labelDeletionFailed": "Labels could not be deleted.",
+    "labelResetFailed": "Training labels could not be reset."
   }
 }

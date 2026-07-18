@@ -4558,7 +4558,7 @@ body.is-column-resizing .data-sql-grid-col-resizer::after {
     max-height: 300px;
     min-height: 300px;
     overflow: hidden;
-    padding-top: 24px;
+    padding: 0;
     position: relative;
 }
 
@@ -4723,12 +4723,27 @@ body.is-column-resizing .data-sql-grid-col-resizer::after {
 .data-param-grid .table-grid {
     border-collapse: separate;
     border-spacing: 0;
-    min-width: 880px;
+    min-width: 1060px;
 }
 
-.data-param-table thead {
-    position: relative;
-    z-index: 8;
+.data-param-table .grid-row-no-col {
+    width: 58px;
+}
+
+.data-param-table .data-param-name-col {
+    width: 220px;
+}
+
+.data-param-table .data-param-type-col {
+    width: 180px;
+}
+
+.data-param-table .data-param-comment-col {
+    width: 340px;
+}
+
+.data-param-table .data-param-default-col {
+    width: 260px;
 }
 
 .data-param-table th {
@@ -4742,39 +4757,29 @@ body.is-column-resizing .data-sql-grid-col-resizer::after {
 .data-param-table th:nth-child(1),
 .data-param-table td:nth-child(1) {
     left: 0;
+    max-width: 58px;
+    min-width: 58px;
     position: sticky;
     z-index: 3;
+    width: 58px;
 }
 
-.data-param-table th:nth-child(2),
-.data-param-table td:nth-child(2) {
-    left: 58px;
-    max-width: 200px;
-    min-width: 200px;
-    position: sticky;
-    width: 200px;
-    z-index: 3;
-}
-
-.data-param-table th:nth-child(1),
-.data-param-table th:nth-child(2) {
+.data-param-table th:nth-child(1) {
     background: #f8fafc;
-    z-index: 10;
+    background-clip: padding-box;
+    box-shadow: 2px 0 3px rgba(15, 23, 42, 0.12), 0 1px 0 #dbe3ef;
+    z-index: 12;
 }
 
 .data-param-table td:nth-child(1) {
     background: #f8fafc;
+    background-clip: padding-box;
+    box-shadow: 2px 0 3px rgba(15, 23, 42, 0.12);
 }
 
+.data-param-table th:nth-child(2),
 .data-param-table td:nth-child(2) {
-    background: #fff;
-    box-shadow: 1px 0 0 #e5e7eb;
     font-weight: 600;
-}
-
-.data-param-table th:nth-child(5),
-.data-param-table td:nth-child(5) {
-    min-width: 240px;
 }
 
 .data-param-table td {

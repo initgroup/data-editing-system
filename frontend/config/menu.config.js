@@ -199,22 +199,22 @@ window.MENU_CONFIG = [
         children: [
             {
                 page: 'M90001',
-                title: 'Internal Model Registration',
-                label: 'Internal Model Registration',
+                title: 'Internal Model',
+                label: 'Internal Model',
                 iconClass: 'fas fa-microchip text-pink-300',
                 enabled: true
             },
             {
                 page: 'M90002',
-                title: 'External Model Registration',
-                label: 'External Model Registration',
+                title: 'External Model',
+                label: 'External Model',
                 iconClass: 'fas fa-code text-pink-300',
                 enabled: true
             },
             {
                 page: 'M90003',
-                title: 'Model Training Management',
-                label: 'Model Training Management',
+                title: 'Model Training',
+                label: 'Model Training',
                 iconClass: 'fas fa-graduation-cap text-pink-300',
                 roles: ['ADMIN'],
                 enabled: true

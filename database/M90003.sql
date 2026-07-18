@@ -674,6 +674,102 @@ UPDATE "INIT$_TB_OML_TRAIN_RUN"
    AND STATUS_CODE NOT IN ('SUCCESS', 'CANCELLED')
 ;
 
+-- [M90003_LABEL_DELETE_SELECTED]
+DECLARE
+BEGIN
+    INSERT INTO "INIT$_TB_COLTYPE_LABEL_HIST" (
+        "LABEL_ID", "OWNER", "TABLE_NAME", "COLUMN_NAME", "PREVIOUS_TYPE_CODE", "NEW_TYPE_CODE",
+        "PREVIOUS_GROUP_CODE", "NEW_GROUP_CODE", "PREVIOUS_DISPLAY_VALUE", "NEW_DISPLAY_VALUE",
+        "LABEL_SOURCE", "CONFIRMED_YN", "CHANGE_REASON", "SOURCE_RUN_SOURCE_TYPE", "SOURCE_RUN_ID",
+        "SOURCE_MODEL_NAME", "CHANGED_BY", "CHANGED_AT"
+    )
+    SELECT L."LABEL_ID"
+         , L."OWNER"
+         , L."TABLE_NAME"
+         , L."COLUMN_NAME"
+         , L."TYPE_CODE"
+         , NULL
+         , L."TYPE_GROUP_CODE"
+         , NULL
+         , L."DISPLAY_TYPE_VALUE"
+         , NULL
+         , L."LABEL_SOURCE"
+         , L."CONFIRMED_YN"
+         , 'M90003 selected training label deletion'
+         , L."SOURCE_RUN_SOURCE_TYPE"
+         , L."SOURCE_RUN_ID"
+         , L."SOURCE_MODEL_NAME"
+         , :requestedBy
+         , SYSTIMESTAMP
+      FROM "INIT$_TB_COLTYPE_LABEL" L
+     WHERE L."LABEL_ID" IN (
+               SELECT TO_NUMBER(REGEXP_SUBSTR(:labelIds, '[^,]+', 1, LEVEL))
+                 FROM DUAL
+              CONNECT BY REGEXP_SUBSTR(:labelIds, '[^,]+', 1, LEVEL) IS NOT NULL
+           );
+
+    DELETE FROM "INIT$_TB_COLTYPE_LABEL" L
+     WHERE L."LABEL_ID" IN (
+               SELECT TO_NUMBER(REGEXP_SUBSTR(:labelIds, '[^,]+', 1, LEVEL))
+                 FROM DUAL
+              CONNECT BY REGEXP_SUBSTR(:labelIds, '[^,]+', 1, LEVEL) IS NOT NULL
+           );
+END;
+/
+
+-- [M90003_LABEL_RESET_TRAINING]
+DECLARE
+BEGIN
+    INSERT INTO "INIT$_TB_COLTYPE_LABEL_HIST" (
+        "LABEL_ID", "OWNER", "TABLE_NAME", "COLUMN_NAME", "PREVIOUS_TYPE_CODE", "NEW_TYPE_CODE",
+        "PREVIOUS_GROUP_CODE", "NEW_GROUP_CODE", "PREVIOUS_DISPLAY_VALUE", "NEW_DISPLAY_VALUE",
+        "LABEL_SOURCE", "CONFIRMED_YN", "CHANGE_REASON", "SOURCE_RUN_SOURCE_TYPE", "SOURCE_RUN_ID",
+        "SOURCE_MODEL_NAME", "CHANGED_BY", "CHANGED_AT"
+    )
+    SELECT L."LABEL_ID"
+         , L."OWNER"
+         , L."TABLE_NAME"
+         , L."COLUMN_NAME"
+         , L."TYPE_CODE"
+         , NULL
+         , L."TYPE_GROUP_CODE"
+         , NULL
+         , L."DISPLAY_TYPE_VALUE"
+         , NULL
+         , L."LABEL_SOURCE"
+         , L."CONFIRMED_YN"
+         , 'M90003 training label reset'
+         , L."SOURCE_RUN_SOURCE_TYPE"
+         , L."SOURCE_RUN_ID"
+         , L."SOURCE_MODEL_NAME"
+         , :requestedBy
+         , SYSTIMESTAMP
+      FROM "INIT$_TB_COLTYPE_LABEL" L
+     WHERE L."CONFIRMED_YN" = 'Y'
+       AND L."LABEL_SOURCE" IN ('USER_CONFIRMED', 'IMPORTED_GOLD')
+       AND EXISTS (
+               SELECT 1
+                 FROM "INIT$_TB_COLTYPE_PROFILE" P
+                WHERE P."OWNER" = L."OWNER"
+                  AND P."TABLE_NAME" = L."TABLE_NAME"
+                  AND P."COLUMN_NAME" = L."COLUMN_NAME"
+                  AND P."FEATURE_VERSION" = 'V2'
+           );
+
+    DELETE FROM "INIT$_TB_COLTYPE_LABEL" L
+     WHERE L."CONFIRMED_YN" = 'Y'
+       AND L."LABEL_SOURCE" IN ('USER_CONFIRMED', 'IMPORTED_GOLD')
+       AND EXISTS (
+               SELECT 1
+                 FROM "INIT$_TB_COLTYPE_PROFILE" P
+                WHERE P."OWNER" = L."OWNER"
+                  AND P."TABLE_NAME" = L."TABLE_NAME"
+                  AND P."COLUMN_NAME" = L."COLUMN_NAME"
+                  AND P."FEATURE_VERSION" = 'V2'
+           );
+END;
+/
+
 -- [M90003_TYPE_MODEL_TRAIN_CALL]
 BEGIN
     INIT$_SP_TYPE_MODEL_TRAIN(

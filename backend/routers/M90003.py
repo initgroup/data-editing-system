@@ -87,6 +87,17 @@ class ModelRollbackRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class LabelDeleteRequest(BaseModel):
+    modelKey: str = MODEL_KEY_COLUMN_TYPE
+    labelIds: list[int] = []
+    model_config = ConfigDict(extra="forbid")
+
+
+class LabelResetRequest(BaseModel):
+    modelKey: str = MODEL_KEY_COLUMN_TYPE
+    model_config = ConfigDict(extra="forbid")
+
+
 def _normalize_choice(value: Any, allowed: set[str], field_name: str) -> str:
     text = str(value or "").strip().upper()
     if text not in allowed:
@@ -108,6 +119,23 @@ def _require_training_adapter(value: Any) -> tuple[str, dict[str, Any]]:
     if not family.get("supportsTraining") or not adapter:
         raise HTTPException(status_code=400, detail="This model family does not have a registered training adapter.")
     return model_key, adapter
+
+
+def _require_dataset_family(value: Any) -> str:
+    model_key = _normalize_model_key(value)
+    family = MODEL_FAMILY_CAPABILITIES.get(model_key, {})
+    if not family.get("supportsDataset") or not family.get("sourceLabelTable"):
+        raise HTTPException(status_code=400, detail="This model family does not have a managed training dataset.")
+    return model_key
+
+
+def _normalize_label_ids(value: list[int]) -> list[int]:
+    normalized = sorted({int(item) for item in (value or []) if int(item) > 0})
+    if not normalized:
+        raise HTTPException(status_code=400, detail="Select at least one label.")
+    if len(normalized) > 1000:
+        raise HTTPException(status_code=400, detail="At most 1,000 labels can be deleted at once.")
+    return normalized
 
 
 def _normalize_version(value: Any, field_name: str) -> str:
@@ -424,7 +452,7 @@ def get_dataset_distribution(request: Request):
 def get_labels(
     request: Request,
     page: int = Query(1, ge=1),
-    pageSize: int = Query(50, ge=1, le=200),
+    pageSize: int = Query(50, ge=1, le=1000),
     scope: str = Query("ALL"),
     status: Optional[str] = Query(None),
     typeGroupCode: str = Query("ALL"),
@@ -453,6 +481,54 @@ def get_labels(
         raise
     except Exception as error:
         logger.exception("M90003 label list load failed.")
+        raise HTTPException(status_code=500, detail=str(error))
+    finally:
+        if conn:
+            conn.close()
+
+
+@router.post("/dataset/labels/delete")
+def delete_selected_labels(req: LabelDeleteRequest, request: Request):
+    _require_dataset_family(req.modelKey)
+    label_ids = _normalize_label_ids(req.labelIds)
+    conn = None
+    try:
+        conn = get_target_db_connection(request)
+        _execute_proc(
+            conn,
+            "M90003_LABEL_DELETE_SELECTED",
+            {
+                "labelIds": ",".join(str(item) for item in label_ids),
+                "requestedBy": get_request_user_id(request),
+            },
+        )
+        return {"status": "success", "data": {"deletedCount": len(label_ids)}}
+    except HTTPException:
+        raise
+    except Exception as error:
+        logger.exception("M90003 selected label deletion failed.")
+        raise HTTPException(status_code=500, detail=str(error))
+    finally:
+        if conn:
+            conn.close()
+
+
+@router.post("/dataset/labels/reset")
+def reset_training_labels(req: LabelResetRequest, request: Request):
+    _require_dataset_family(req.modelKey)
+    conn = None
+    try:
+        conn = get_target_db_connection(request)
+        _execute_proc(
+            conn,
+            "M90003_LABEL_RESET_TRAINING",
+            {"requestedBy": get_request_user_id(request)},
+        )
+        return {"status": "success", "data": {"modelKey": _normalize_model_key(req.modelKey)}}
+    except HTTPException:
+        raise
+    except Exception as error:
+        logger.exception("M90003 training label reset failed.")
         raise HTTPException(status_code=500, detail=str(error))
     finally:
         if conn:

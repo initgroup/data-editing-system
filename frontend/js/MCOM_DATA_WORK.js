@@ -1652,6 +1652,13 @@
             setCount(this.parameters.length);
             container.innerHTML = `
                 <table class="table-grid data-param-table">
+                    <colgroup>
+                        <col class="grid-row-no-col">
+                        <col class="data-param-name-col">
+                        <col class="data-param-type-col">
+                        <col class="data-param-comment-col">
+                        <col class="data-param-default-col">
+                    </colgroup>
                     <thead>
                         <tr>
                             <th class="grid-row-no">No</th>
@@ -1674,6 +1681,39 @@
                     </tbody>
                 </table>
             `;
+            this.applyParameterGridFreeze(container);
+        },
+
+        applyParameterGridFreeze(container) {
+            const table = container?.querySelector?.(".data-param-table");
+            const headerCells = Array.from(table?.tHead?.rows?.[0]?.cells || []);
+            if (!table || !headerCells.length) return;
+
+            // Parameter grids are rendered inside a separately scrollable panel.
+            // Apply the common No-column rule immediately rather than waiting for
+            // the document observer, then keep the header fixed on narrow layouts.
+            CommonUtils.applyStandardGridDefaults?.(table);
+            headerCells.forEach((cell, index) => {
+                cell.style.position = "sticky";
+                cell.style.top = "0";
+                cell.style.zIndex = index === 0 ? "12" : "8";
+            });
+
+            const applyNoColumn = () => {
+                CommonUtils.applyStandardGridFreeze?.(table, 0);
+                const noWidth = headerCells[0].getBoundingClientRect().width || 58;
+                Array.from(table.rows || []).forEach((row) => {
+                    const cell = row.cells?.[0];
+                    if (!cell) return;
+                    cell.style.position = "sticky";
+                    cell.style.left = "0";
+                    cell.style.zIndex = row.parentElement?.tagName === "THEAD" ? "12" : "3";
+                    cell.style.minWidth = `${Math.round(noWidth)}px`;
+                    cell.style.width = `${Math.round(noWidth)}px`;
+                });
+            };
+            applyNoColumn();
+            requestAnimationFrame(applyNoColumn);
         },
 
         getSelectedResourceMeta() {

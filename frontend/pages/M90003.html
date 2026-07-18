@@ -185,9 +185,9 @@
                     <span data-label-key="finalTypeGroup">Final Type Group</span>
                     <select id="datasetGroup-M90003" data-filter="dataset">
                         <option value="" data-label-key="allGroups">All Groups</option>
-                        <option value="CATEGORICAL">CATEGORICAL</option>
-                        <option value="CONTINUOUS">CONTINUOUS</option>
-                        <option value="OTHER">OTHER</option>
+                        <option value="CATEGORICAL" data-label-key="group_CATEGORICAL">CATEGORICAL</option>
+                        <option value="CONTINUOUS" data-label-key="group_CONTINUOUS">CONTINUOUS</option>
+                        <option value="OTHER" data-label-key="group_OTHER">OTHER</option>
                     </select>
                 </label>
                 <label class="type-model-search-field">
@@ -197,6 +197,18 @@
                 <button type="button" class="type-model-btn" data-action="search-dataset">
                     <i class="fas fa-search" aria-hidden="true"></i>
                     <span data-label-key="search">Search</span>
+                </button>
+            </div>
+
+            <div class="type-model-row-actions dataset-data-actions">
+                <span id="datasetSelectionCount-M90003" class="type-model-muted" data-label-key="noSelectedLabels">No labels selected</span>
+                <button type="button" class="type-model-btn is-danger" data-action="delete-selected-labels" disabled>
+                    <i class="fas fa-trash-alt" aria-hidden="true"></i>
+                    <span data-label-key="deleteSelectedLabels">Delete selected labels</span>
+                </button>
+                <button type="button" class="type-model-btn is-danger" data-action="reset-training-labels">
+                    <i class="fas fa-broom" aria-hidden="true"></i>
+                    <span data-label-key="resetTrainingLabels">Reset training labels</span>
                 </button>
             </div>
 
@@ -213,6 +225,8 @@
                             <option value="25">25</option>
                             <option value="50" selected>50</option>
                             <option value="100">100</option>
+                            <option value="500">500</option>
+                            <option value="1000">1000</option>
                         </select>
                     </div>
                 </div>
@@ -220,6 +234,7 @@
                     <table class="type-model-table type-model-data-table">
                         <thead>
                             <tr>
+                                <th class="select-column"><input id="datasetSelectAll-M90003" type="checkbox" aria-label="Select all labels" data-aria-label-key="selectAllLabels"></th>
                                 <th class="no-column">No</th>
                                 <th data-label-key="owner">Owner</th>
                                 <th data-label-key="tableName">Table</th>
