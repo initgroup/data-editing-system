@@ -649,7 +649,24 @@ BEGIN
      WHERE "MODEL_KEY" = v_model_key
      FOR UPDATE;
     IF v_previous_id IS NULL THEN
-        RAISE_APPLICATION_ERROR(-20722, 'No previous model version is available for rollback.');
+        -- The first explicit activation has no pointer history.  A prior
+        -- candidate/archived version is still a valid rollback target.
+        BEGIN
+            SELECT "MODEL_VERSION_ID"
+              INTO v_previous_id
+              FROM (
+                    SELECT "MODEL_VERSION_ID"
+                      FROM "INIT$_TB_OML_MODEL_REGISTRY"
+                     WHERE "MODEL_KEY" = v_model_key
+                       AND "MODEL_VERSION_ID" < v_current_id
+                       AND "STATUS_CODE" IN ('CANDIDATE', 'ARCHIVED', 'ACTIVE')
+                     ORDER BY "VERSION_NO" DESC, "MODEL_VERSION_ID" DESC
+                   )
+             WHERE ROWNUM = 1;
+        EXCEPTION
+            WHEN NO_DATA_FOUND THEN
+                RAISE_APPLICATION_ERROR(-20722, 'No previous model version is available for rollback.');
+        END;
     END IF;
     IF v_previous_id = v_current_id THEN
         RAISE_APPLICATION_ERROR(-20722, 'Previous model version must differ from the active model.');
@@ -697,6 +714,71 @@ BEGIN
         "MODEL_KEY", "MODEL_VERSION_ID", "PREVIOUS_MODEL_VERSION_ID", "ACTION_CODE", "ACTION_BY", "ACTION_AT"
     ) VALUES (v_model_key, v_previous_id, v_current_id, 'ROLLBACK', v_user_id, SYSTIMESTAMP);
     COMMIT;
+END;
+/
+
+CREATE OR REPLACE PROCEDURE "INIT$_SP_TYPE_MODEL_DELETE" (
+    p_model_version_id IN NUMBER,
+    p_user_id          IN VARCHAR2
+) AUTHID CURRENT_USER IS
+    v_model_key          VARCHAR2(100);
+    v_status             VARCHAR2(20);
+    v_physical_model_name VARCHAR2(128);
+    v_active_count       NUMBER;
+    v_physical_count     NUMBER;
+BEGIN
+    SELECT "MODEL_KEY", "STATUS_CODE", "PHYSICAL_MODEL_NAME"
+      INTO v_model_key, v_status, v_physical_model_name
+      FROM "INIT$_TB_OML_MODEL_REGISTRY"
+     WHERE "MODEL_VERSION_ID" = p_model_version_id;
+
+    FOR R IN (
+        SELECT "MODEL_VERSION_ID"
+          FROM "INIT$_TB_OML_MODEL_REGISTRY"
+         WHERE "MODEL_KEY" = v_model_key
+         ORDER BY "MODEL_VERSION_ID"
+         FOR UPDATE
+    ) LOOP
+        NULL;
+    END LOOP;
+
+    SELECT COUNT(*)
+      INTO v_active_count
+      FROM "INIT$_TB_OML_ACTIVE_MODEL"
+     WHERE "MODEL_KEY" = v_model_key
+       AND "MODEL_VERSION_ID" = p_model_version_id;
+    IF v_status = 'ACTIVE' OR v_active_count > 0 THEN
+        RAISE_APPLICATION_ERROR(-20728, 'Active model cannot be deleted. Activate or roll back to another model first.');
+    END IF;
+    IF v_status NOT IN ('CANDIDATE', 'ARCHIVED', 'FAILED') THEN
+        RAISE_APPLICATION_ERROR(-20728, 'Only candidate, archived, or failed models can be deleted.');
+    END IF;
+
+    SELECT COUNT(*)
+      INTO v_physical_count
+      FROM USER_MINING_MODELS
+     WHERE MODEL_NAME = UPPER(v_physical_model_name);
+    IF v_physical_count > 0 THEN
+        DBMS_DATA_MINING.DROP_MODEL(v_physical_model_name);
+    END IF;
+
+    -- Keep immutable training-run audit rows, but remove the model version
+    -- reference and all version-scoped metrics/deployment metadata.
+    UPDATE "INIT$_TB_OML_TRAIN_RUN"
+       SET "MODEL_VERSION_ID" = NULL
+     WHERE "MODEL_VERSION_ID" = p_model_version_id;
+    DELETE FROM "INIT$_TB_OML_MODEL_METRIC"
+     WHERE "MODEL_VERSION_ID" = p_model_version_id;
+    DELETE FROM "INIT$_TB_OML_MODEL_DEPLOY_HIST"
+     WHERE "MODEL_VERSION_ID" = p_model_version_id
+        OR "PREVIOUS_MODEL_VERSION_ID" = p_model_version_id;
+    DELETE FROM "INIT$_TB_OML_MODEL_REGISTRY"
+     WHERE "MODEL_VERSION_ID" = p_model_version_id;
+    COMMIT;
+EXCEPTION
+    WHEN OTHERS THEN
+        ROLLBACK;
+        RAISE;
 END;
 /
 

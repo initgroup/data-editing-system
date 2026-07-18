@@ -811,99 +811,69 @@ END;
 /
 
 -- [M90003_LABEL_CREATE_INITIAL_SAMPLE]
-DECLARE
-    v_confirmed_count NUMBER;
 BEGIN
-    SELECT COUNT(*)
-      INTO v_confirmed_count
-      FROM "INIT$_TB_COLTYPE_LABEL"
-     WHERE "CONFIRMED_YN" = 'Y'
-       AND "LABEL_SOURCE" IN ('USER_CONFIRMED', 'IMPORTED_GOLD');
-
-    IF v_confirmed_count > 0 THEN
-        RAISE_APPLICATION_ERROR(-20726, 'Initial sample labels can only be created when no confirmed training labels exist.');
-    END IF;
-
     MERGE INTO "INIT$_TB_COLTYPE_PROFILE" T
     USING (
-        WITH SAMPLE_TABLES AS (
-            SELECT LEVEL AS TABLE_SEQ
-                 , 'INIT$SAMPLE_COLTYPE_' || TO_CHAR(LEVEL, 'FM00') AS TABLE_NAME
-              FROM DUAL
-            CONNECT BY LEVEL <= 6
-        )
-        , SAMPLE_TYPES AS (
-            SELECT 1 AS TYPE_SEQ, 'NUM_IDENTIFIER' AS TYPE_CODE, 'OTHER' AS TYPE_GROUP_CODE, 'NUMBER' AS DATA_TYPE FROM DUAL
-            UNION ALL SELECT 2, 'CHAR_IDENTIFIER', 'OTHER', 'VARCHAR2' FROM DUAL
-            UNION ALL SELECT 3, 'NUM_CONTINUOUS', 'CONTINUOUS', 'NUMBER' FROM DUAL
-            UNION ALL SELECT 4, 'NUM_DISCRETE', 'CATEGORICAL', 'NUMBER' FROM DUAL
-            UNION ALL SELECT 5, 'CAT_GENERAL', 'CATEGORICAL', 'VARCHAR2' FROM DUAL
-            UNION ALL SELECT 6, 'CAT_NUMERIC', 'CATEGORICAL', 'NUMBER' FROM DUAL
-            UNION ALL SELECT 7, 'FREE_TEXT', 'OTHER', 'VARCHAR2' FROM DUAL
-        )
-        SELECT 'DATA_WORK' AS "RUN_SOURCE_TYPE"
-             , 0 AS "RUN_ID"
-             , 'INIT$SAMPLE' AS "OWNER"
-             , TBL.TABLE_NAME AS "TABLE_NAME"
-             , 'COL_' || TYP.TYPE_CODE AS "COLUMN_NAME"
-             , 'V2' AS "FEATURE_VERSION"
-             , 'M90003 initial sample: ' || TYP.TYPE_CODE AS "COLUMN_DESC"
-             , TYP.TYPE_SEQ AS "COLUMN_ID"
-             , TYP.DATA_TYPE AS "DATA_TYPE"
-             , 1000 AS "TOTAL_ROWS"
-             , 1000 AS "NON_NULL_ROWS"
-             , 1000 AS "SAMPLE_ROWS"
-             , 1000 AS "SAMPLE_NOT_NULL_ROWS"
-             , CASE TYP.TYPE_CODE
-                   WHEN 'NUM_IDENTIFIER' THEN 1000
-                   WHEN 'CHAR_IDENTIFIER' THEN 1000
-                   WHEN 'NUM_CONTINUOUS' THEN 950
-                   WHEN 'NUM_DISCRETE' THEN 12
-                   WHEN 'CAT_GENERAL' THEN 8
-                   WHEN 'CAT_NUMERIC' THEN 10
-                   ELSE 995
-               END AS "NUM_DISTINCT"
-             , CASE TYP.TYPE_CODE
-                   WHEN 'NUM_IDENTIFIER' THEN 1000
-                   WHEN 'CHAR_IDENTIFIER' THEN 1000
-                   WHEN 'NUM_CONTINUOUS' THEN 950
-                   WHEN 'NUM_DISCRETE' THEN 12
-                   WHEN 'CAT_GENERAL' THEN 8
-                   WHEN 'CAT_NUMERIC' THEN 10
-                   ELSE 995
-               END AS "SAMPLE_DISTINCT"
-             , CASE TYP.TYPE_CODE
-                   WHEN 'NUM_IDENTIFIER' THEN 1
-                   WHEN 'CHAR_IDENTIFIER' THEN 1
-                   WHEN 'NUM_CONTINUOUS' THEN .95
-                   WHEN 'NUM_DISCRETE' THEN .012
-                   WHEN 'CAT_GENERAL' THEN .008
-                   WHEN 'CAT_NUMERIC' THEN .01
-                   ELSE .995
-               END AS "DISTINCT_RATIO"
-             , 0 AS "NULL_RATIO"
-             , CASE WHEN TYP.DATA_TYPE = 'NUMBER' THEN 'NUMERIC' ELSE 'TEXT' END AS "LOG_DATA_TYPE"
-             , CASE TYP.TYPE_CODE
-                   WHEN 'NUM_DISCRETE' THEN 1.5
-                   WHEN 'CAT_GENERAL' THEN 1.7
-                   WHEN 'CAT_NUMERIC' THEN 1.9
-                   ELSE 6.5
-               END AS "ENTROPY"
-             , CASE TYP.TYPE_CODE
-                   WHEN 'NUM_DISCRETE' THEN .22
-                   WHEN 'CAT_GENERAL' THEN .26
-                   WHEN 'CAT_NUMERIC' THEN .28
-                   ELSE .94
-               END AS "NORM_ENTROPY"
-             , CASE WHEN TYP.DATA_TYPE = 'NUMBER' THEN 1 ELSE 0 END AS "NUMERIC_RATIO"
-             , CASE WHEN TYP.TYPE_CODE IN ('NUM_IDENTIFIER', 'NUM_DISCRETE', 'CAT_NUMERIC') THEN 1 ELSE 0 END AS "INTEGER_RATIO"
-             , CASE WHEN TYP.DATA_TYPE = 'NUMBER' THEN 1 END AS "MIN_NUM_VALUE"
-             , CASE WHEN TYP.DATA_TYPE = 'NUMBER' THEN 1000 END AS "MAX_NUM_VALUE"
-             , CASE WHEN TYP.TYPE_CODE = 'FREE_TEXT' THEN 72 ELSE 12 END AS "AVG_TEXT_LENGTH"
-             , CASE WHEN TYP.TYPE_CODE = 'FREE_TEXT' THEN 320 ELSE 30 END AS "MAX_TEXT_LENGTH"
-             , RAWTOHEX(STANDARD_HASH('M90003|SAMPLE|' || TBL.TABLE_NAME || '|' || TYP.TYPE_CODE, 'SHA256')) AS "PROFILE_HASH"
-          FROM SAMPLE_TABLES TBL
-         CROSS JOIN SAMPLE_TYPES TYP
+        SELECT J."RUN_SOURCE_TYPE"
+             , J."RUN_ID"
+             , J."OWNER"
+             , J."TABLE_NAME"
+             , J."COLUMN_NAME"
+             , J."FEATURE_VERSION"
+             , J."COLUMN_DESC"
+             , J."COLUMN_ID"
+             , J."DATA_TYPE"
+             , J."TOTAL_ROWS"
+             , J."NON_NULL_ROWS"
+             , J."SAMPLE_ROWS"
+             , J."SAMPLE_NOT_NULL_ROWS"
+             , J."NUM_DISTINCT"
+             , J."SAMPLE_DISTINCT"
+             , J."DISTINCT_RATIO"
+             , J."NULL_RATIO"
+             , J."LOG_DATA_TYPE"
+             , J."ENTROPY"
+             , J."NORM_ENTROPY"
+             , J."NUMERIC_RATIO"
+             , J."INTEGER_RATIO"
+             , J."MIN_NUM_VALUE"
+             , J."MAX_NUM_VALUE"
+             , J."AVG_TEXT_LENGTH"
+             , J."MAX_TEXT_LENGTH"
+             , J."PROFILE_HASH"
+          FROM JSON_TABLE(
+                   :samplePayload
+                 , '$.profiles[*]'
+                   COLUMNS (
+                       "RUN_SOURCE_TYPE" VARCHAR2(30) PATH '$.runSourceType'
+                     , "RUN_ID" NUMBER PATH '$.runId'
+                     , "OWNER" VARCHAR2(128) PATH '$.owner'
+                     , "TABLE_NAME" VARCHAR2(128) PATH '$.tableName'
+                     , "COLUMN_NAME" VARCHAR2(128) PATH '$.columnName'
+                     , "FEATURE_VERSION" VARCHAR2(30) PATH '$.featureVersion'
+                     , "COLUMN_DESC" VARCHAR2(4000) PATH '$.columnDesc'
+                     , "COLUMN_ID" NUMBER PATH '$.columnId'
+                     , "DATA_TYPE" VARCHAR2(128) PATH '$.dataType'
+                     , "TOTAL_ROWS" NUMBER PATH '$.totalRows'
+                     , "NON_NULL_ROWS" NUMBER PATH '$.nonNullRows'
+                     , "SAMPLE_ROWS" NUMBER PATH '$.sampleRows'
+                     , "SAMPLE_NOT_NULL_ROWS" NUMBER PATH '$.sampleNotNullRows'
+                     , "NUM_DISTINCT" NUMBER PATH '$.numDistinct'
+                     , "SAMPLE_DISTINCT" NUMBER PATH '$.sampleDistinct'
+                     , "DISTINCT_RATIO" NUMBER PATH '$.distinctRatio'
+                     , "NULL_RATIO" NUMBER PATH '$.nullRatio'
+                     , "LOG_DATA_TYPE" VARCHAR2(30) PATH '$.logDataType'
+                     , "ENTROPY" NUMBER PATH '$.entropy'
+                     , "NORM_ENTROPY" NUMBER PATH '$.normEntropy'
+                     , "NUMERIC_RATIO" NUMBER PATH '$.numericRatio'
+                     , "INTEGER_RATIO" NUMBER PATH '$.integerRatio'
+                     , "MIN_NUM_VALUE" NUMBER PATH '$.minNumValue' NULL ON ERROR
+                     , "MAX_NUM_VALUE" NUMBER PATH '$.maxNumValue' NULL ON ERROR
+                     , "AVG_TEXT_LENGTH" NUMBER PATH '$.avgTextLength' NULL ON ERROR
+                     , "MAX_TEXT_LENGTH" NUMBER PATH '$.maxTextLength' NULL ON ERROR
+                     , "PROFILE_HASH" VARCHAR2(64) PATH '$.profileHash'
+                   )
+               ) J
     ) S
        ON (
                T."RUN_SOURCE_TYPE" = S."RUN_SOURCE_TYPE"
@@ -933,18 +903,34 @@ BEGIN
         SELECT P."OWNER"
              , P."TABLE_NAME"
              , P."COLUMN_NAME"
-             , SUBSTR(P."COLUMN_NAME", 5) AS "TYPE_CODE"
-             , CASE SUBSTR(P."COLUMN_NAME", 5)
-                   WHEN 'NUM_CONTINUOUS' THEN 'CONTINUOUS'
-                   WHEN 'NUM_DISCRETE' THEN 'CATEGORICAL'
-                   WHEN 'CAT_GENERAL' THEN 'CATEGORICAL'
-                   WHEN 'CAT_NUMERIC' THEN 'CATEGORICAL'
-                   ELSE 'OTHER'
-               END AS "TYPE_GROUP_CODE"
+             , J."TYPE_CODE"
+             , J."TYPE_GROUP_CODE"
+             , J."DISPLAY_TYPE_VALUE"
+             , J."LABEL_REASON"
              , P."PROFILE_ID"
-          FROM "INIT$_TB_COLTYPE_PROFILE" P
-         WHERE P."OWNER" = 'INIT$SAMPLE'
-           AND P."FEATURE_VERSION" = 'V2'
+          FROM JSON_TABLE(
+                   :samplePayload
+                 , '$.profiles[*]'
+                   COLUMNS (
+                       "RUN_SOURCE_TYPE" VARCHAR2(30) PATH '$.runSourceType'
+                     , "RUN_ID" NUMBER PATH '$.runId'
+                     , "OWNER" VARCHAR2(128) PATH '$.owner'
+                     , "TABLE_NAME" VARCHAR2(128) PATH '$.tableName'
+                     , "COLUMN_NAME" VARCHAR2(128) PATH '$.columnName'
+                     , "FEATURE_VERSION" VARCHAR2(30) PATH '$.featureVersion'
+                     , "TYPE_CODE" VARCHAR2(40) PATH '$.typeCode'
+                     , "TYPE_GROUP_CODE" VARCHAR2(20) PATH '$.typeGroupCode'
+                     , "DISPLAY_TYPE_VALUE" VARCHAR2(4000) PATH '$.displayTypeValue'
+                     , "LABEL_REASON" VARCHAR2(1000) PATH '$.labelReason'
+                   )
+               ) J
+          JOIN "INIT$_TB_COLTYPE_PROFILE" P
+            ON P."RUN_SOURCE_TYPE" = J."RUN_SOURCE_TYPE"
+           AND P."RUN_ID" = J."RUN_ID"
+           AND P."OWNER" = J."OWNER"
+           AND P."TABLE_NAME" = J."TABLE_NAME"
+           AND P."COLUMN_NAME" = J."COLUMN_NAME"
+           AND P."FEATURE_VERSION" = J."FEATURE_VERSION"
     ) S
        ON (
                T."OWNER" = S."OWNER"
@@ -957,9 +943,9 @@ BEGIN
           , "LABEL_SOURCE", "CONFIRMED_YN", "LABEL_CONFIDENCE", "SOURCE_PROFILE_ID", "SOURCE_RUN_SOURCE_TYPE"
           , "SOURCE_RUN_ID", "LABEL_REASON", "CONFIRMED_BY", "CONFIRMED_AT"
         ) VALUES (
-            S."OWNER", S."TABLE_NAME", S."COLUMN_NAME", S."TYPE_CODE", S."TYPE_GROUP_CODE", S."TYPE_CODE"
+            S."OWNER", S."TABLE_NAME", S."COLUMN_NAME", S."TYPE_CODE", S."TYPE_GROUP_CODE", S."DISPLAY_TYPE_VALUE"
           , 'IMPORTED_GOLD', 'Y', 1, S."PROFILE_ID", 'DATA_WORK'
-          , 0, 'M90003 initial synthetic sample training data', :requestedBy, SYSTIMESTAMP
+          , 0, S."LABEL_REASON", :requestedBy, SYSTIMESTAMP
         );
 END;
 /
@@ -985,6 +971,15 @@ END;
 -- [M90003_TYPE_MODEL_ARCHIVE_CALL]
 BEGIN
     INIT$_SP_TYPE_MODEL_ARCHIVE(
+        P_MODEL_VERSION_ID => :modelVersionId
+      , P_USER_ID => :userId
+    );
+END;
+/
+
+-- [M90003_TYPE_MODEL_DELETE_CALL]
+BEGIN
+    INIT$_SP_TYPE_MODEL_DELETE(
         P_MODEL_VERSION_ID => :modelVersionId
       , P_USER_ID => :userId
     );

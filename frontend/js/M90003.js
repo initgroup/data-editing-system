@@ -223,6 +223,7 @@
             if (action === "activate-model") return this.activateModel(modelId, false);
             if (action === "rollback-model") return this.rollbackCurrentModel();
             if (action === "archive-model") return this.archiveModel(modelId);
+            if (action === "delete-model") return this.deleteModel(modelId);
         },
 
         moveTab(direction) {
@@ -558,7 +559,7 @@
         async generateInitialSampleLabels(button) {
             const message = t(
                 "confirmCreateInitialSampleData",
-                "Create initial sample training data only when no confirmed labels exist? Existing confirmed labels are never overwritten."
+                "Add missing initial profiles derived from public-data statistics and boundary samples. Existing confirmed labels are never overwritten."
             );
             if (!(await this.confirm(message))) return;
             this.setButtonLoading(button, true, t("creatingInitialSampleData", "Creating sample data..."));
@@ -573,7 +574,7 @@
                 await Promise.allSettled([this.loadDataset(), this.loadDatasetStats(), this.loadSummary()]);
                 this.renderOverview();
                 this.renderTrainingReadiness();
-                this.showMessage("success", t("initialSampleDataCreated", "Initial sample training data was created."));
+                this.showMessage("success", t("initialSampleDataCreated", "Missing public-data-based initial training profiles were added."));
             } catch (error) {
                 this.showMessage("error", error.message || t("initialSampleDataCreateFailed", "Initial sample training data could not be created."));
             } finally {
@@ -679,6 +680,20 @@
                 await this.loadModels();
             } catch (error) {
                 this.showMessage("error", error.message || t("modelArchiveFailed", "Model archive failed."));
+            }
+        },
+
+        async deleteModel(modelId) {
+            if (!modelId) return;
+            const model = this.models.find((item) => String(this.pick(item, "id", "modelId", "MODEL_ID", "modelVersionId", "MODEL_VERSION_ID")) === String(modelId));
+            const version = this.pick(model, "modelVersion", "MODEL_VERSION", "version") || modelId;
+            if (!(await this.confirm(t("confirmDeleteModel", "Delete model version {version}? Its physical OML model and version metrics will be permanently removed.", { version })))) return;
+            try {
+                await this.request(`/models/${encodeURIComponent(modelId)}`, { method: "DELETE" });
+                this.showMessage("success", t("modelDeleted", "The model version was permanently deleted."));
+                await Promise.allSettled([this.loadSummary(), this.loadModels(), this.loadRuns()]);
+            } catch (error) {
+                this.showMessage("error", error.message || t("modelDeleteFailed", "Model deletion failed."));
             }
         },
 
@@ -791,16 +806,6 @@
         renderTrainingReadiness() {
             const note = getContainerEl("#trainingReadiness-M90003");
             const button = getContainerEl("#startTrainingBtn-M90003");
-            const sampleButton = getPageContainer()?.querySelector('[data-action="generate-sample-labels"]');
-            const confirmedEligibleCount = Number(this.pick(
-                this.datasetStats || {},
-                "confirmedEligibleCount",
-                "CONFIRMED_ELIGIBLE_COUNT"
-            ) || 0);
-            if (sampleButton) {
-                // Initial samples are only a first-install bootstrap. The API repeats this guard.
-                sampleButton.disabled = confirmedEligibleCount > 0;
-            }
             if (!note || !button) return;
             const family = this.currentFamily();
             if (!this.asBoolean(this.pick(family, "supportsTraining", "SUPPORTS_TRAINING"))) {
@@ -1049,6 +1054,7 @@
                 const escapedId = this.escapeHtml(String(modelId ?? ""));
                 const canActivate = ["CANDIDATE", "ARCHIVED"].includes(status);
                 const canArchive = status === "CANDIDATE";
+                const canDelete = ["CANDIDATE", "ARCHIVED", "FAILED"].includes(status);
                 return `
                     <tr>
                         <td class="no-column">${index + 1}</td>
@@ -1064,6 +1070,7 @@
                         <td><div class="type-model-row-actions">
                             ${canActivate ? this.actionButton("activate-model", escapedId, "fa-check", t("activate", "Activate"), "is-primary") : ""}
                             ${canArchive ? this.actionButton("archive-model", escapedId, "fa-box-archive", t("archive", "Archive"), "") : ""}
+                            ${canDelete ? this.actionButton("delete-model", escapedId, "fa-trash", t("delete", "Delete"), "is-danger") : ""}
                         </div></td>
                     </tr>
                 `;
@@ -1139,9 +1146,48 @@
                 `;
             }).join("");
             const table = getContainerEl(".type-model-run-table");
-            if (table && window.CommonUtils?.enableGridColumnResize) {
-                window.CommonUtils.enableGridColumnResize(table);
+            if (table) {
+                this.applyRunGridInitialWidths(table);
+                if (window.CommonUtils?.enableGridColumnResize) {
+                    window.CommonUtils.enableGridColumnResize(table);
+                }
             }
+        },
+
+        applyRunGridInitialWidths(table) {
+            const headers = Array.from(table?.tHead?.rows?.[0]?.cells || []);
+            if (!headers.length) return;
+
+            // Run-history values have known display characteristics.  Seed the
+            // common resizer with readable widths before it captures the table
+            // geometry; otherwise an initially constrained table can lock each
+            // column to its minimum width.
+            const defaultWidths = [
+                54, 56, 84, 100, 156,
+                122, 112, 84, 96, 112,
+                92, 146, 182, 182, 380
+            ];
+            let colgroup = Array.from(table.children || []).find((child) => child.tagName === "COLGROUP");
+            if (!colgroup) {
+                colgroup = document.createElement("colgroup");
+                table.insertBefore(colgroup, table.firstChild);
+            }
+            while (colgroup.children.length < headers.length) {
+                colgroup.appendChild(document.createElement("col"));
+            }
+            while (colgroup.children.length > headers.length) {
+                colgroup.lastElementChild.remove();
+            }
+
+            const widths = headers.map((header, index) => {
+                const configuredWidth = defaultWidths[index] || 130;
+                const width = Math.max(48, configuredWidth);
+                colgroup.children[index].style.width = `${width}px`;
+                return width;
+            });
+            colgroup.dataset.gridWidthsReady = "Y";
+            table.style.tableLayout = "fixed";
+            table.style.width = `${widths.reduce((sum, width) => sum + width, 0)}px`;
         },
 
         renderRunDetail(runId, summaryRow) {

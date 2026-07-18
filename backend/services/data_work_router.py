@@ -1443,6 +1443,13 @@ def create_data_work_router(
                 return {"status": "skipped", "message": message, "dataRunId": data_run_id, "workRunId": work_run_id}
     
             message = execute_saved_script(conn, executable_script, job, runtime_bind_values or {}, data_run_id)
+            message = append_coltype_model_execution_log(
+                conn,
+                message,
+                job,
+                runtime_bind_values or {},
+                data_run_id,
+            )
             if not update_saved_job:
                 draft_name = job.get("JOB_NAME") or f"Job #{profile_job_id}"
                 message = f"Draft test: {draft_name}. {message}"
@@ -1519,6 +1526,85 @@ def create_data_work_router(
             return f"{label} PL/SQL block executed."
         finally:
             cursor.close()
+
+
+    def is_column_type_prediction_job(job: Dict[str, Any]) -> bool:
+        object_name = str(
+            job.get("EXEC_OBJECT_NAME")
+            or job.get("execObjectName")
+            or ""
+        ).strip().upper()
+        return object_name == "INIT$_SP_PREDICTED_TYPE"
+
+
+    def append_coltype_model_execution_log(
+        conn,
+        message: str,
+        job: Dict[str, Any],
+        runtime_bind_values: Optional[Dict[str, Any]] = None,
+        run_id: Optional[int] = None,
+    ) -> str:
+        """Append the physical OML model used by M03001 to the run history message."""
+        if not is_column_type_prediction_job(job):
+            return message
+
+        system_values = build_system_bind_values(job, run_id)
+        runtime_values = runtime_bind_values or {}
+        target_owner = (
+            runtime_values.get("INIT$TargetOwner")
+            or runtime_values.get("targetOwner")
+            or system_values["INIT$TargetOwner"]
+        )
+        target_table = (
+            runtime_values.get("INIT$TargetTable")
+            or runtime_values.get("targetTable")
+            or system_values["INIT$TargetTable"]
+        )
+        if not target_owner or not target_table or not run_id:
+            return message
+
+        result = execute_query(conn, "DATA_WORK_COLTYPE_MODEL_EXECUTION_LOG", {
+            "runSourceType": "DATA_WORK",
+            "runId": int(run_id),
+            "targetOwner": str(target_owner).strip().upper(),
+            "targetTable": str(target_table).strip().upper(),
+        })
+        if result.get("status") != "success" or not result.get("data"):
+            return message
+
+        row = result["data"][0]
+        model_name = str(row.get("PHYSICAL_MODEL_NAME") or "").strip()
+        result_row_count = int(row.get("RESULT_ROW_COUNT") or 0)
+        predicted_row_count = int(row.get("MODEL_PREDICTED_ROW_COUNT") or 0)
+        if result_row_count <= 0:
+            return message
+
+        if not model_name or model_name == "COLUMN_TYPE_RULE":
+            model_log = "Column type model: no active physical model; rule-based prediction only."
+        else:
+            version_parts = []
+            if row.get("MODEL_VERSION") is not None:
+                version_parts.append(f"version {row['MODEL_VERSION']}")
+            if row.get("MODEL_VERSION_ID") is not None:
+                version_parts.append(f"registry ID {row['MODEL_VERSION_ID']}")
+            version_log = f" ({', '.join(version_parts)})" if version_parts else ""
+            model_log = (
+                f"Column type physical model: {model_name}{version_log}; "
+                f"model predictions {predicted_row_count}/{result_row_count}."
+            )
+            active_model_name = str(row.get("ACTIVE_PHYSICAL_MODEL_NAME") or "").strip()
+            if active_model_name and active_model_name != model_name:
+                active_version_parts = []
+                if row.get("ACTIVE_MODEL_VERSION") is not None:
+                    active_version_parts.append(f"version {row['ACTIVE_MODEL_VERSION']}")
+                if row.get("ACTIVE_MODEL_VERSION_ID") is not None:
+                    active_version_parts.append(f"registry ID {row['ACTIVE_MODEL_VERSION_ID']}")
+                active_version_log = f" ({', '.join(active_version_parts)})" if active_version_parts else ""
+                model_log += (
+                    f" Active COLUMN_TYPE registry points to {active_model_name}{active_version_log}; "
+                    "verify the deployed INIT$_SP_PREDICTED_TYPE procedure."
+                )
+        return f"{message} {model_log}".strip()
 
 
     def prepare_saved_script(

@@ -90,7 +90,7 @@
     "deleteSelectedLabels": "선택 라벨 삭제",
     "resetTrainingLabels": "학습 라벨 초기화",
     "createInitialSampleData": "초기 샘플 학습 데이터 생성",
-    "createInitialSampleDataTitle": "확정 라벨이 없을 때만 초기 샘플 학습 데이터를 생성합니다.",
+    "createInitialSampleDataTitle": "공개 데이터의 파생 통계와 경계값 샘플 중 누락된 초기 학습 데이터만 추가합니다. 기존 확정 라벨은 변경하지 않습니다.",
     "noSelectedLabels": "선택한 라벨 없음",
     "selectedLabelsCount": "라벨 {count}건 선택됨",
     "selectAllLabels": "현재 페이지 라벨 전체 선택",
@@ -128,7 +128,7 @@
     "candidateComparisonDescription": "활성화 전에 독립 검증 성능을 비교합니다.",
     "refreshModelsTitle": "모델 새로고침",
     "modelVersionsTitle": "모델 버전 및 배포",
-    "modelVersionsDescription": "검증된 후보를 활성화하거나 이전 버전으로 롤백하고, 사용하지 않는 후보를 보관합니다.",
+    "modelVersionsDescription": "검증된 후보를 활성화하거나 이전 버전으로 롤백하고, 사용하지 않는 후보를 보관하거나 삭제합니다. 보관은 재접속 후에도 유지되며 삭제와 다릅니다.",
     "status": "상태",
     "physicalModelName": "물리 모델명",
     "trainingRows": "학습 행",
@@ -137,6 +137,7 @@
     "activate": "활성화",
     "rollback": "롤백",
     "archive": "보관",
+    "delete": "삭제",
     "runHistoryTitle": "학습 실행 이력",
     "runHistoryDescription": "학습 요청, 자원 제한, 검증 결과 및 오류를 확인합니다.",
     "refreshRunsTitle": "실행 이력 새로고침",
@@ -224,6 +225,9 @@
     "confirmArchiveModel": "모델 버전 {version}을 보관할까요?",
     "modelArchived": "모델 버전을 보관했습니다.",
     "modelArchiveFailed": "모델 보관에 실패했습니다.",
+    "confirmDeleteModel": "모델 버전 {version}을 영구 삭제할까요? 물리 OML 모델과 버전 성능 지표도 함께 제거됩니다.",
+    "modelDeleted": "모델 버전을 영구 삭제했습니다.",
+    "modelDeleteFailed": "모델 삭제에 실패했습니다.",
     "noActiveModel": "활성화된 운영 모델이 없습니다.",
     "noPerClassMetrics": "클래스별 성능 정보가 없습니다.",
     "noConfusionMatrix": "혼동행렬 정보가 없습니다.",
@@ -240,9 +244,9 @@
     "trainingLabelsReset": "학습 라벨을 초기화했습니다.",
     "labelDeletionFailed": "라벨을 삭제하지 못했습니다.",
     "labelResetFailed": "학습 라벨을 초기화하지 못했습니다."
-    ,"confirmCreateInitialSampleData": "확정 라벨이 없을 때만 초기 샘플 학습 데이터(6개 샘플 테이블, 42개 라벨)를 생성합니다. 기존 확정 라벨은 절대 변경하지 않습니다. 생성할까요?"
+    ,"confirmCreateInitialSampleData": "공개 데이터의 파생 통계와 경계값 샘플 중 누락된 초기 학습 데이터를 추가합니다. 기존 확정 라벨은 절대 변경하지 않습니다. 계속할까요?"
     ,"creatingInitialSampleData": "초기 샘플 데이터를 생성하는 중..."
-    ,"initialSampleDataCreated": "초기 샘플 학습 데이터를 생성했습니다."
+    ,"initialSampleDataCreated": "누락된 공개 데이터 기반 초기 학습 프로파일을 추가했습니다."
     ,"initialSampleDataCreateFailed": "초기 샘플 학습 데이터를 생성하지 못했습니다."
     ,"messageCopied": "메시지를 복사했습니다."
     ,"messageCopyFailed": "메시지를 복사하지 못했습니다."

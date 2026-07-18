@@ -102,6 +102,7 @@ BEGIN
     drop_function_if_exists('INIT$_FN_TARGET_SETTING_VALUE');
 
     DBMS_OUTPUT.PUT_LINE('[INIT_TARGET] Drop column type lifecycle procedures');
+    drop_procedure_if_exists('INIT$_SP_TYPE_MODEL_DELETE');
     drop_procedure_if_exists('INIT$_SP_TYPE_MODEL_ROLLBACK');
     drop_procedure_if_exists('INIT$_SP_TYPE_MODEL_ARCHIVE');
     drop_procedure_if_exists('INIT$_SP_TYPE_MODEL_ACTIVATE');

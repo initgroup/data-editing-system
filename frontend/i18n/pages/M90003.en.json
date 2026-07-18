@@ -90,7 +90,7 @@
     "deleteSelectedLabels": "Delete Selected Labels",
     "resetTrainingLabels": "Reset Training Labels",
     "createInitialSampleData": "Create Initial Sample Data",
-    "createInitialSampleDataTitle": "Create initial sample training data only when no confirmed labels exist.",
+    "createInitialSampleDataTitle": "Add only missing initial profiles derived from public-data statistics and boundary samples. Existing confirmed labels are never changed.",
     "noSelectedLabels": "No labels selected",
     "selectedLabelsCount": "{count} labels selected",
     "selectAllLabels": "Select all labels on this page",
@@ -128,7 +128,7 @@
     "candidateComparisonDescription": "Compare independent holdout metrics before activation.",
     "refreshModelsTitle": "Refresh models",
     "modelVersionsTitle": "Model Versions & Deployment",
-    "modelVersionsDescription": "Activate a validated candidate, roll back to a previous version, or archive unused candidates.",
+    "modelVersionsDescription": "Activate a validated candidate, roll back to a previous version, archive unused candidates, or delete them. Archives persist across sign-in and are not deletions.",
     "status": "Status",
     "physicalModelName": "Physical Model",
     "trainingRows": "Training Rows",
@@ -137,6 +137,7 @@
     "activate": "Activate",
     "rollback": "Rollback",
     "archive": "Archive",
+    "delete": "Delete",
     "runHistoryTitle": "Training Run History",
     "runHistoryDescription": "Review immutable training requests, bounded resources, validation results, and errors.",
     "refreshRunsTitle": "Refresh runs",
@@ -224,6 +225,9 @@
     "confirmArchiveModel": "Archive model version {version}?",
     "modelArchived": "The model version was archived.",
     "modelArchiveFailed": "Model archive failed.",
+    "confirmDeleteModel": "Permanently delete model version {version}? Its physical OML model and version metrics will also be removed.",
+    "modelDeleted": "The model version was permanently deleted.",
+    "modelDeleteFailed": "Model deletion failed.",
     "noActiveModel": "No active champion model.",
     "noPerClassMetrics": "Per-class metrics are not available.",
     "noConfusionMatrix": "Confusion matrix data is not available.",
@@ -240,9 +244,9 @@
     "trainingLabelsReset": "Training labels were reset.",
     "labelDeletionFailed": "Labels could not be deleted.",
     "labelResetFailed": "Training labels could not be reset."
-    ,"confirmCreateInitialSampleData": "Create initial sample training data (6 sample tables and 42 labels) only when no confirmed labels exist? Existing confirmed labels are never changed."
+    ,"confirmCreateInitialSampleData": "Add missing initial profiles derived from public-data statistics and boundary samples. Existing confirmed labels are never changed. Continue?"
     ,"creatingInitialSampleData": "Creating initial sample data..."
-    ,"initialSampleDataCreated": "Initial sample training data was created."
+    ,"initialSampleDataCreated": "Missing public-data-based initial training profiles were added."
     ,"initialSampleDataCreateFailed": "Initial sample training data could not be created."
     ,"messageCopied": "Message copied."
     ,"messageCopyFailed": "Message could not be copied."

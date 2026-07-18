@@ -6,8 +6,11 @@
 import json
 import logging
 import re
+from functools import lru_cache
+from pathlib import Path
 from typing import Any, Optional
 
+import oracledb
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict
 
@@ -23,6 +26,13 @@ from backend.target_database import (
 
 logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(require_admin_role)])
+
+INITIAL_SAMPLE_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "database"
+    / "seeds"
+    / "M90003_coltype_initial_samples.json"
+)
 
 MODEL_KEY_COLUMN_TYPE = "COLUMN_TYPE"
 TRAINING_ADAPTERS = {
@@ -255,10 +265,46 @@ def _paged_payload(result: dict[str, Any], page: int, page_size: int) -> dict[st
     }
 
 
-def _execute_proc(conn, sql_id: str, params: dict[str, Any]) -> None:
+@lru_cache(maxsize=1)
+def _load_initial_sample_payload() -> tuple[str, int]:
+    payload = json.loads(INITIAL_SAMPLE_PATH.read_text(encoding="utf-8"))
+    profiles = payload.get("profiles")
+    if payload.get("featureVersion") != "V2" or not isinstance(profiles, list) or not profiles:
+        raise RuntimeError("M90003 initial sample profile pack is invalid.")
+
+    required_keys = {
+        "owner",
+        "tableName",
+        "columnName",
+        "featureVersion",
+        "typeCode",
+        "typeGroupCode",
+        "profileHash",
+    }
+    if any(not isinstance(profile, dict) or not required_keys.issubset(profile) for profile in profiles):
+        raise RuntimeError("M90003 initial sample profile pack contains an invalid profile.")
+
+    sql_payload = json.dumps(
+        {"profiles": profiles},
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    return sql_payload, len(profiles)
+
+
+def _execute_proc(
+    conn,
+    sql_id: str,
+    params: dict[str, Any],
+    clob_params: Optional[set[str]] = None,
+) -> None:
     cursor = None
     try:
         cursor = conn.cursor()
+        if clob_params:
+            cursor.setinputsizes(
+                **{param_name: oracledb.DB_TYPE_CLOB for param_name in clob_params}
+            )
         cursor.execute(SqlLoader.get_sql(sql_id), params)
         conn.commit()
     except Exception:
@@ -547,13 +593,21 @@ def create_initial_sample_labels(req: InitialSampleRequest, request: Request):
         raise HTTPException(status_code=400, detail="Initial sample data is not registered for this model family.")
     conn = None
     try:
+        sample_payload, profile_count = _load_initial_sample_payload()
         conn = get_target_db_connection(request)
         _execute_proc(
             conn,
             "M90003_LABEL_CREATE_INITIAL_SAMPLE",
-            {"requestedBy": get_request_user_id(request)},
+            {
+                "requestedBy": get_request_user_id(request),
+                "samplePayload": sample_payload,
+            },
+            clob_params={"samplePayload"},
         )
-        return {"status": "success", "data": {"modelKey": model_key}}
+        return {
+            "status": "success",
+            "data": {"modelKey": model_key, "profileCount": profile_count},
+        }
     except HTTPException:
         raise
     except Exception as error:
@@ -818,6 +872,30 @@ def archive_model(
         raise
     except Exception as error:
         logger.exception("M90003 model archive failed. model_version_id=%s", model_version_id)
+        raise HTTPException(status_code=500, detail=str(error))
+    finally:
+        if conn:
+            conn.close()
+
+
+@router.delete("/models/{model_version_id}")
+def delete_model(model_version_id: int, request: Request):
+    if model_version_id <= 0:
+        raise HTTPException(status_code=400, detail="Invalid model version ID.")
+    user_id = get_request_user_id(request)
+    conn = None
+    try:
+        conn = get_target_db_connection(request)
+        _execute_proc(
+            conn,
+            "M90003_TYPE_MODEL_DELETE_CALL",
+            {"modelVersionId": model_version_id, "userId": user_id},
+        )
+        return {"status": "success", "data": {"modelVersionId": model_version_id, "deleted": True}}
+    except HTTPException:
+        raise
+    except Exception as error:
+        logger.exception("M90003 model delete failed. model_version_id=%s", model_version_id)
         raise HTTPException(status_code=500, detail=str(error))
     finally:
         if conn:
