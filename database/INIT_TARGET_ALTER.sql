@@ -1414,6 +1414,72 @@ CREATE TABLE "INIT$_TB_COLTYPE_FINAL" (
         add_column_if_missing('INIT$_TB_COLTYPE_FINAL', 'MODEL_VERSION_ID', '"MODEL_VERSION_ID" NUMBER');
         add_column_if_missing('INIT$_TB_COLTYPE_FINAL', 'MODEL_VERSION', '"MODEL_VERSION" NUMBER');
         add_column_if_missing('INIT$_TB_COLTYPE_FINAL', 'MODEL_CONFIDENCE', '"MODEL_CONFIDENCE" NUMBER');
+
+        -- Existing rows survive a RENAME, but their new canonical-code columns
+        -- must be populated before the model-lifecycle screens can group them.
+        -- Do not promote historical values to confirmed labels here: old final
+        -- values may have come from a rule/model rather than an explicit user
+        -- decision. M90003 trains only after a user confirms the label.
+        run_ddl('BACKFILL INIT$_TB_COLTYPE_FINAL TYPE CODES', q'[
+MERGE INTO "INIT$_TB_COLTYPE_FINAL" T
+USING (
+    SELECT ROWID AS ROW_KEY
+         , CASE UPPER(TRIM("FINAL_PREDICTED_TYPE"))
+               WHEN '숫자형식별자' THEN 'NUM_IDENTIFIER'
+               WHEN 'NUM_IDENTIFIER' THEN 'NUM_IDENTIFIER'
+               WHEN 'NUMERIC IDENTIFIER' THEN 'NUM_IDENTIFIER'
+               WHEN '문자형식별자' THEN 'CHAR_IDENTIFIER'
+               WHEN 'CHAR_IDENTIFIER' THEN 'CHAR_IDENTIFIER'
+               WHEN 'CHARACTER IDENTIFIER' THEN 'CHAR_IDENTIFIER'
+               WHEN '숫자형연속형' THEN 'NUM_CONTINUOUS'
+               WHEN 'NUM_CONTINUOUS' THEN 'NUM_CONTINUOUS'
+               WHEN 'NUMERIC CONTINUOUS' THEN 'NUM_CONTINUOUS'
+               WHEN '이산형연속형' THEN 'NUM_DISCRETE'
+               WHEN 'NUM_DISCRETE' THEN 'NUM_DISCRETE'
+               WHEN 'NUMERIC DISCRETE' THEN 'NUM_DISCRETE'
+               WHEN '일반적범주형' THEN 'CAT_GENERAL'
+               WHEN 'CAT_GENERAL' THEN 'CAT_GENERAL'
+               WHEN 'GENERAL CATEGORICAL' THEN 'CAT_GENERAL'
+               WHEN '문자형범주형' THEN 'CAT_CHAR'
+               WHEN 'CAT_CHAR' THEN 'CAT_CHAR'
+               WHEN 'CHARACTER CATEGORICAL' THEN 'CAT_CHAR'
+               WHEN '순서형범주형' THEN 'CAT_ORDINAL'
+               WHEN 'CAT_ORDINAL' THEN 'CAT_ORDINAL'
+               WHEN 'ORDINAL CATEGORICAL' THEN 'CAT_ORDINAL'
+               WHEN '숫자형범주형' THEN 'CAT_NUMERIC'
+               WHEN 'CAT_NUMERIC' THEN 'CAT_NUMERIC'
+               WHEN 'NUMERIC CATEGORICAL' THEN 'CAT_NUMERIC'
+               WHEN '단순형텍스트' THEN 'FREE_TEXT'
+               WHEN 'FREE_TEXT' THEN 'FREE_TEXT'
+               WHEN 'FREE TEXT' THEN 'FREE_TEXT'
+               WHEN '기타데이터형' THEN 'OTHER'
+               WHEN 'OTHER' THEN 'OTHER'
+               WHEN '미상데이터형' THEN 'UNKNOWN'
+               WHEN 'UNKNOWN' THEN 'UNKNOWN'
+               ELSE 'UNKNOWN'
+           END AS TYPE_CODE
+      FROM "INIT$_TB_COLTYPE_FINAL"
+     WHERE "FINAL_PREDICTED_TYPE" IS NOT NULL
+) S
+   ON (T.ROWID = S.ROW_KEY)
+ WHEN MATCHED THEN UPDATE
+     SET T."FINAL_TYPE_CODE" = S.TYPE_CODE
+       , T."TYPE_GROUP_CODE" = CASE
+             WHEN S.TYPE_CODE IN ('NUM_CONTINUOUS', 'NUM_DISCRETE') THEN 'CONTINUOUS'
+             WHEN S.TYPE_CODE IN ('CAT_GENERAL', 'CAT_CHAR', 'CAT_ORDINAL', 'CAT_NUMERIC') THEN 'CATEGORICAL'
+             ELSE 'OTHER'
+         END
+       , T."LABEL_SOURCE" = NVL(T."LABEL_SOURCE", 'LEGACY_UNKNOWN')
+       , T."CONFIRMED_YN" = NVL(T."CONFIRMED_YN", 'N')
+ WHERE NVL(T."FINAL_TYPE_CODE", '~') <> S.TYPE_CODE
+    OR NVL(T."TYPE_GROUP_CODE", '~') <> CASE
+           WHEN S.TYPE_CODE IN ('NUM_CONTINUOUS', 'NUM_DISCRETE') THEN 'CONTINUOUS'
+           WHEN S.TYPE_CODE IN ('CAT_GENERAL', 'CAT_CHAR', 'CAT_ORDINAL', 'CAT_NUMERIC') THEN 'CATEGORICAL'
+           ELSE 'OTHER'
+       END
+    OR T."LABEL_SOURCE" IS NULL
+    OR T."CONFIRMED_YN" IS NULL
+]');
         run_ddl('COMMENT INIT$_TB_COLTYPE_FINAL', q'[COMMENT ON TABLE "INIT$_TB_COLTYPE_FINAL" IS 'Effective column logical type master with label provenance']');
         run_ddl('COMMENT INIT$_TB_COLTYPE_FINAL.OWNER', q'[COMMENT ON COLUMN "INIT$_TB_COLTYPE_FINAL"."OWNER" IS 'Target table owner']');
         run_ddl('COMMENT INIT$_TB_COLTYPE_FINAL.TABLE_NAME', q'[COMMENT ON COLUMN "INIT$_TB_COLTYPE_FINAL"."TABLE_NAME" IS 'Target table name']');
