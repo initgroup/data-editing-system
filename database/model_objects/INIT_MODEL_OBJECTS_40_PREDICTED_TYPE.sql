@@ -357,6 +357,29 @@ BEGIN
     END;
     v_setlist('PREP_AUTO') := 'ON';
 
+    /*
+       The default Decision Tree termination values (20 records to split and
+       10 records per child) are too restrictive for the first grouped
+       training runs, where confirmed labels are intentionally distributed
+       across many detailed type classes.  Oracle can then build a valid
+       schema object whose signature contains only TARGET_TYPE_CODE.  Such a
+       root-only model cannot score the column profile predictors.
+
+       Keep the grouped holdout and minimum-label safeguards above, but allow
+       the tree to retain real profile predictors from the initial sample.
+       These settings are explicit instead of ODMS_DEEPTREE so the procedure
+       remains compatible with Target DB releases that predate that shortcut.
+    */
+    IF v_algorithm_code = 'DECISION_TREE' THEN
+        v_setlist('TREE_TERM_MAX_DEPTH') := '12';
+        v_setlist('TREE_TERM_MINREC_SPLIT') := '2';
+        v_setlist('TREE_TERM_MINREC_NODE') := '1';
+        v_setlist('TREE_TERM_MINPCT_SPLIT') := '0';
+        v_setlist('TREE_TERM_MINPCT_NODE') := '0';
+        v_setlist('TREE_PRUNING_METHOD') := 'TREE_PRUNING_NONE';
+        v_setlist('CLAS_MAX_SUP_BINS') := '254';
+    END IF;
+
     DBMS_DATA_MINING.CREATE_MODEL2(
         MODEL_NAME          => v_candidate_model_name,
         MINING_FUNCTION     => DBMS_DATA_MINING.CLASSIFICATION,
@@ -1318,7 +1341,8 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_COLUMN_TYPE_CONFIRM" (
     p_run_id           IN NUMBER   DEFAULT NULL,
     p_model_name       IN VARCHAR2 DEFAULT NULL,
     p_user_id          IN VARCHAR2 DEFAULT NULL,
-    p_label_source     IN VARCHAR2 DEFAULT 'USER_CONFIRMED'
+    p_label_source     IN VARCHAR2 DEFAULT 'USER_CONFIRMED',
+    p_confirmed_yn     IN VARCHAR2 DEFAULT 'Y'
 ) AUTHID CURRENT_USER IS
     v_owner              VARCHAR2(128);
     v_table_name         VARCHAR2(128);
@@ -1337,6 +1361,7 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_COLUMN_TYPE_CONFIRM" (
     v_prev_type_code     VARCHAR2(40);
     v_prev_group_code    VARCHAR2(20);
     v_prev_display_value VARCHAR2(4000);
+    v_confirmed_yn       VARCHAR2(1);
 
     FUNCTION normalize_identifier(p_value IN VARCHAR2, p_label IN VARCHAR2) RETURN VARCHAR2 IS
         v_value VARCHAR2(128) := UPPER(TRIM(BOTH '"' FROM TRIM(p_value)));
@@ -1359,6 +1384,11 @@ BEGIN
         WHEN UPPER(TRIM(p_run_source_type)) IN ('DATA_WORK', 'FLOW_WORK') THEN UPPER(TRIM(p_run_source_type))
         ELSE NULL
     END;
+    v_confirmed_yn := UPPER(TRIM(NVL(p_confirmed_yn, 'Y')));
+
+    IF v_confirmed_yn NOT IN ('Y', 'N') THEN
+        RAISE_APPLICATION_ERROR(-20706, 'confirmed_yn must be Y or N.');
+    END IF;
 
     IF NULLIF(TRIM(p_run_source_type), '') IS NOT NULL AND v_run_source_type IS NULL THEN
         RAISE_APPLICATION_ERROR(-20704, 'run_source_type must be DATA_WORK or FLOW_WORK.');
@@ -1386,6 +1416,57 @@ BEGIN
 
     IF v_label_source NOT IN ('USER_CONFIRMED', 'IMPORTED_GOLD') THEN
         RAISE_APPLICATION_ERROR(-20702, 'Explicit confirmation source must be USER_CONFIRMED or IMPORTED_GOLD.');
+    END IF;
+
+    -- Unconfirming excludes the label from training without erasing the
+    -- selected final type or its provenance.
+    IF v_confirmed_yn = 'N' THEN
+        UPDATE "INIT$_TB_COLTYPE_FINAL"
+           SET "CONFIRMED_YN" = 'N'
+             , "FINAL_UPDATE_DT" = SYSDATE
+             , "FINAL_UPDATE_USER" = v_confirmed_by
+         WHERE "OWNER" = v_owner
+           AND "TABLE_NAME" = v_table_name
+           AND "COLUMN_NAME" = v_column_name;
+
+        BEGIN
+            SELECT "LABEL_ID"
+                 , "TYPE_CODE"
+                 , "TYPE_GROUP_CODE"
+                 , "DISPLAY_TYPE_VALUE"
+              INTO v_label_id
+                 , v_prev_type_code
+                 , v_prev_group_code
+                 , v_prev_display_value
+              FROM "INIT$_TB_COLTYPE_LABEL"
+             WHERE "OWNER" = v_owner
+               AND "TABLE_NAME" = v_table_name
+               AND "COLUMN_NAME" = v_column_name
+             FOR UPDATE;
+
+            UPDATE "INIT$_TB_COLTYPE_LABEL"
+               SET "CONFIRMED_YN" = 'N'
+                 , "CONFIRMED_BY" = v_confirmed_by
+                 , "CONFIRMED_AT" = NULL
+                 , "UPDATED_AT" = SYSTIMESTAMP
+             WHERE "LABEL_ID" = v_label_id;
+
+            INSERT INTO "INIT$_TB_COLTYPE_LABEL_HIST" (
+                "LABEL_ID", "OWNER", "TABLE_NAME", "COLUMN_NAME", "PREVIOUS_TYPE_CODE", "NEW_TYPE_CODE",
+                "PREVIOUS_GROUP_CODE", "NEW_GROUP_CODE", "PREVIOUS_DISPLAY_VALUE", "NEW_DISPLAY_VALUE",
+                "LABEL_SOURCE", "CONFIRMED_YN", "CHANGE_REASON", "SOURCE_RUN_SOURCE_TYPE", "SOURCE_RUN_ID",
+                "SOURCE_MODEL_NAME", "CHANGED_BY", "CHANGED_AT"
+            ) VALUES (
+                v_label_id, v_owner, v_table_name, v_column_name, v_prev_type_code, v_prev_type_code,
+                v_prev_group_code, v_prev_group_code, v_prev_display_value, v_prev_display_value,
+                v_label_source, 'N', SUBSTR(COALESCE(p_reason, 'User confirmation removed.'), 1, 1000),
+                v_run_source_type, p_run_id, p_model_name, v_confirmed_by, SYSTIMESTAMP
+            );
+        EXCEPTION
+            WHEN NO_DATA_FOUND THEN
+                NULL;
+        END;
+        RETURN;
     END IF;
 
     -- An empty final type is an explicit user action to remove a prior

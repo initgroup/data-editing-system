@@ -69,6 +69,7 @@
         runDetailsById: new Map(),
         loadedTabs: new Set(),
         loading: new Set(),
+        datasetGridFrameId: null,
 
         async init() {
             if (this.isInit) return;
@@ -97,6 +98,9 @@
             if (container && this.keydownHandler) container.removeEventListener("keydown", this.keydownHandler);
             const form = getContainerEl("#trainForm-M90003");
             if (form && this.submitHandler) form.removeEventListener("submit", this.submitHandler);
+            if (this.datasetGridFrameId !== null) {
+                window.cancelAnimationFrame?.(this.datasetGridFrameId);
+            }
             this.isInit = false;
             this.generation += 1;
             this.clickHandler = null;
@@ -120,6 +124,7 @@
             this.runDetailsById = new Map();
             this.loadedTabs = new Set();
             this.loading = new Set();
+            this.datasetGridFrameId = null;
         },
 
         bindEvents() {
@@ -189,6 +194,7 @@
             });
             this.updateTabNavigation();
             this.ensureActiveTabVisible(tab);
+            if (tab === "dataset") this.scheduleDatasetGridLayout();
             if (this.loadedTabs.has(tab)) return;
             if (tab === "dataset") await this.loadDataset();
             if (tab === "versions") await this.loadModels();
@@ -1001,11 +1007,13 @@
             if (errorMessage) {
                 body.innerHTML = this.tableMessage(errorMessage, 14, "error");
                 this.updateDatasetSelectionControls();
+                this.scheduleDatasetGridLayout();
                 return;
             }
             if (!this.datasetRows.length) {
                 body.innerHTML = this.tableMessage(t("noTrainingData", "No training data matches the current filters."), 14);
                 this.updateDatasetSelectionControls();
+                this.scheduleDatasetGridLayout();
                 return;
             }
             body.innerHTML = this.datasetRows.map((row, index) => {
@@ -1016,8 +1024,8 @@
                 const conflict = this.asBoolean(this.pick(row, "conflictYn", "CONFLICT_YN", "conflict", "CONFLICT"));
                 return `
                     <tr>
-                        <td class="select-column"><input type="checkbox" data-label-select="${this.escapeHtml(labelId)}" ${this.selectedLabelIds.has(labelId) ? "checked" : ""} aria-label="Select label"></td>
                         <td class="no-column">${this.formatInteger((this.datasetPage - 1) * this.datasetPageSize + index + 1)}</td>
+                        <td class="select-column"><input type="checkbox" data-label-select="${this.escapeHtml(labelId)}" ${this.selectedLabelIds.has(labelId) ? "checked" : ""} aria-label="Select label"></td>
                         <td>${this.cell(this.pick(row, "owner", "OWNER", "targetOwner", "TARGET_OWNER"))}</td>
                         <td>${this.cell(this.pick(row, "tableName", "TABLE_NAME", "targetTable", "TARGET_TABLE"))}</td>
                         <td><strong>${this.cell(this.pick(row, "columnName", "COLUMN_NAME"))}</strong></td>
@@ -1034,6 +1042,31 @@
                 `;
             }).join("");
             this.updateDatasetSelectionControls();
+            this.scheduleDatasetGridLayout();
+        },
+
+        scheduleDatasetGridLayout() {
+            if (this.datasetGridFrameId !== null) {
+                window.cancelAnimationFrame?.(this.datasetGridFrameId);
+            }
+            this.datasetGridFrameId = window.requestAnimationFrame(() => {
+                this.datasetGridFrameId = null;
+                this.initializeDatasetGrid();
+            });
+        },
+
+        initializeDatasetGrid() {
+            const table = getContainerEl(".type-model-data-table");
+            if (!table || table.offsetParent === null) return;
+            const refreshFrozenColumns = () => {
+                window.CommonUtils?.applyStandardGridFreeze?.(table, 1);
+                table.querySelectorAll("td.type-model-table-message").forEach((cell) => {
+                    cell.classList.remove("is-frozen-col", "is-frozen-edge");
+                    cell.style.left = "";
+                });
+            };
+            window.CommonUtils?.enableGridColumnResize?.(table, refreshFrozenColumns);
+            refreshFrozenColumns();
         },
 
         renderModels(errorMessage = "") {

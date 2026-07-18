@@ -732,8 +732,10 @@
 }
 
 #container-M90003 .type-model-table .select-column {
+    max-width: 48px;
+    min-width: 48px;
     text-align: center;
-    width: 38px;
+    width: 48px;
 }
 
 #container-M90003 .type-model-table .select-column input {
@@ -837,6 +839,11 @@
     white-space: nowrap;
 }
 
+#container-M90003 .type-model-data-table th,
+#container-M90003 .type-model-data-table td {
+    max-width: none;
+}
+
 #container-M90003 .type-model-table thead th {
     background: #f4f7fa;
     color: #3d4b61;
@@ -863,6 +870,27 @@
 
 #container-M90003 .type-model-table thead .no-column {
     z-index: 3;
+}
+
+#container-M90003 .type-model-data-table .is-frozen-col {
+    background: #fff;
+    background-clip: padding-box;
+    position: sticky;
+    z-index: 4;
+}
+
+#container-M90003 .type-model-data-table thead .is-frozen-col {
+    background: #f4f7fa;
+    top: 0;
+    z-index: 6;
+}
+
+#container-M90003 .type-model-data-table .is-frozen-edge {
+    box-shadow: 3px 0 4px rgba(15, 23, 42, 0.12);
+}
+
+#container-M90003 .type-model-data-table tbody tr:hover td.is-frozen-col {
+    background: #f8fbff;
 }
 
 #container-M90003 .type-model-table .is-number {

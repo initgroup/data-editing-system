@@ -2021,7 +2021,7 @@ def create_data_work_router(
 
     def get_editable_data_columns(table_name: str) -> set[str]:
         if MENU_CODE == "M03001" and (is_predicted_type_table(table_name) or is_predicted_type_final_table(table_name)):
-            return {"FINAL_PREDICTED_TYPE", "FINAL_REASON"}
+            return {"FINAL_PREDICTED_TYPE", "CONFIRMED_YN", "FINAL_REASON"}
         return set()
 
 
@@ -2125,6 +2125,10 @@ def create_data_work_router(
         columns = [desc[0] for desc in cursor.description]
         source = {col: row[index] for index, col in enumerate(columns)}
         is_final_type_change = column_name == "FINAL_PREDICTED_TYPE"
+        is_confirmed_change = column_name == "CONFIRMED_YN"
+        confirmed_yn = str(value or "").strip().upper() if is_confirmed_change else "Y"
+        if confirmed_yn not in {"Y", "N"}:
+            raise HTTPException(status_code=400, detail="CONFIRMED_YN must be Y or N.")
         final_type = value if is_final_type_change else (
             source.get("SAVED_FINAL_PREDICTED_TYPE") or source.get("FINAL_PREDICTED_TYPE")
         )
@@ -2145,7 +2149,8 @@ def create_data_work_router(
             "runSourceType": source.get("RUN_SOURCE_TYPE"),
             "runId": source.get("RUN_ID"),
             "modelName": source.get("MODEL_NAME"),
-            "userId": str(user_id or "")
+            "userId": str(user_id or ""),
+            "confirmedYn": confirmed_yn
         })
 
         # INIT$_TB_COLTYPE_RESULT is an execution snapshot, while the FINAL
@@ -2158,12 +2163,14 @@ def create_data_work_router(
                 '"FINAL_TYPE_CODE" = CASE WHEN NULLIF(TRIM(:final_predicted_type), \'\') IS NULL THEN NULL ELSE INIT$_FN_TYPE_CODE(:final_predicted_type) END',
                 '"TYPE_GROUP_CODE" = CASE WHEN NULLIF(TRIM(:final_predicted_type), \'\') IS NULL THEN NULL ELSE INIT$_FN_TYPE_GROUP_CODE(:final_predicted_type) END',
                 '"FINAL_REASON" = :final_reason',
+                '"CONFIRMED_YN" = :confirmed_yn',
                 '"FINAL_UPDATE_DT" = SYSDATE',
                 '"FINAL_UPDATE_USER" = :final_update_user'
             ]
             snapshot_params = {
                 "final_predicted_type": final_type,
                 "final_reason": final_reason,
+                "confirmed_yn": confirmed_yn,
                 "final_update_user": str(user_id or ""),
                 "row_id": row_id
             }

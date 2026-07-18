@@ -4470,7 +4470,7 @@ END;`;
                 return new Set(configured.map((column) => String(column).trim().toUpperCase()).filter(Boolean));
             }
             if (PAGE_CODE === "M03001" && (tableKey === "INIT$_TB_COLTYPE_RESULT" || tableKey === "INIT$_TB_COLTYPE_FINAL")) {
-                return new Set(["FINAL_PREDICTED_TYPE", "FINAL_REASON"]);
+                return new Set(["FINAL_PREDICTED_TYPE", "CONFIRMED_YN", "FINAL_REASON"]);
             }
             return new Set();
         },
@@ -4491,6 +4491,7 @@ END;`;
             const grid = getContainerEl(`#dataEditGrid-${PAGE_CODE}`);
             if (grid) grid.innerHTML = `<div class="table-empty">Loading data...</div>`;
             this.dataGridDirtyCells = new Map();
+            this.dataGridActiveCell = null;
             this.syncEditableDataSaveButton();
             this.renderDataEditMessage("Loading data...", "info");
             this.dataGridLoading = true;
@@ -4560,7 +4561,7 @@ END;`;
 
             // Keep the user-editable final type and the values derived from it together.
             // FINAL_REASON is editable too, so it belongs in the same compact group.
-            const group = ["FINAL_PREDICTED_TYPE", "FINAL_TYPE_CODE", "TYPE_GROUP_CODE", "FINAL_REASON"];
+            const group = ["FINAL_PREDICTED_TYPE", "CONFIRMED_YN", "FINAL_TYPE_CODE", "TYPE_GROUP_CODE", "FINAL_REASON"];
             const available = new Map(orderedColumns.map((column) => [String(column).toUpperCase(), column]));
             const grouped = group.map((name) => available.get(name)).filter(Boolean);
             if (!grouped.length) return orderedColumns;
@@ -4701,6 +4702,33 @@ END;`;
                     </td>
                 `;
             }
+            if (this.isConfirmedYnEditColumn(columnName)) {
+                const confirmedYn = String(value || "").toUpperCase() === "Y" ? "Y" : "N";
+                return `
+                    <td
+                        class="data-edit-cell is-editable is-select-edit"
+                        data-row-index="${rowIndex}"
+                        data-column-name="${this.escapeHtml(columnName)}"
+                        title="${confirmedYn}"
+                        tabindex="0"
+                        onfocus="${PAGE_CODE}.handleEditableDataCellFocus(event)"
+                        onkeydown="${PAGE_CODE}.handleEditableDataCellKeydown(event)"
+                        oncopy="${PAGE_CODE}.handleEditableDataCellCopy(event)"
+                        onpaste="${PAGE_CODE}.handleEditableDataCellPaste(event)"
+                    >
+                        <select class="data-edit-select"
+                            onfocus="${PAGE_CODE}.handleEditableDataCellFocus(event)"
+                            onchange="${PAGE_CODE}.handleEditableDataCellInput(event)"
+                            onkeydown="${PAGE_CODE}.handleEditableDataCellKeydown(event)"
+                            oncopy="${PAGE_CODE}.handleEditableDataCellCopy(event)"
+                            onpaste="${PAGE_CODE}.handleEditableDataCellPaste(event)"
+                        >
+                            <option value="Y"${confirmedYn === "Y" ? " selected" : ""}>Y</option>
+                            <option value="N"${confirmedYn === "N" ? " selected" : ""}>N</option>
+                        </select>
+                    </td>
+                `;
+            }
             return `
                 <td
                     class="data-edit-cell is-editable"
@@ -4721,6 +4749,10 @@ END;`;
 
         isPredictedTypeEditColumn(columnName) {
             return PAGE_CODE === "M03001" && String(columnName || "").toUpperCase() === "FINAL_PREDICTED_TYPE";
+        },
+
+        isConfirmedYnEditColumn(columnName) {
+            return PAGE_CODE === "M03001" && String(columnName || "").toUpperCase() === "CONFIRMED_YN";
         },
 
         getPredictedTypeOptions() {
@@ -4774,10 +4806,7 @@ END;`;
                 const cell = getContainerEl(`#dataEditGrid-${PAGE_CODE}`)?.querySelector(
                     `tbody tr:nth-child(${rowIndex + 1}) td:nth-child(${(this.dataGridColumns || []).findIndex((column) => String(column).toUpperCase() === columnName) + 2})`
                 );
-                if (cell) {
-                    cell.textContent = value;
-                    cell.title = value;
-                }
+                if (cell) this.setEditableDataCellDomValue(cell, value);
             });
         },
 

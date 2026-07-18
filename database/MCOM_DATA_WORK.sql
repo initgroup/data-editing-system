@@ -232,6 +232,7 @@ BEGIN
       , p_model_name      => :modelName
       , p_user_id         => :userId
       , p_label_source    => 'USER_CONFIRMED'
+      , p_confirmed_yn    => :confirmedYn
     );
 END;
 
