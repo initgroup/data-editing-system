@@ -8666,7 +8666,6 @@
             return [
                 { key: "P_TARGET_OWNER", comment: getMessage("paramDescTargetOwner", "Target table owner"), defaultValue: ":INIT$TargetOwner" },
                 { key: "P_TARGET_TABLE", comment: getMessage("paramDescTargetTable", "Target table name"), defaultValue: ":INIT$TargetTable" },
-                { key: "P_DYNAMIC_MODEL_NAME", comment: getMessage("paramDescDynamicModelName", "Classification/prediction model name"), defaultValue: "OML_DECISION_TREE_MODEL_01" },
                 { key: "P_PREDICTION_METHOD", comment: getMessage("paramDescPredictionMethod", "Prediction method (ONLY_RULE: BASE columns only, ONLY_MODEL: model columns only, ONLY_BOTH: BASE/MODEL columns, FINAL_RULE/MODEL/BOTH: apply FINAL automatically)"), defaultValue: "ONLY_BOTH" },
                 { key: "P_RUN_SOURCE_TYPE", comment: getMessage("paramDescRunSourceType", "Run source type (DATA_WORK/FLOW_WORK)"), defaultValue: ":INIT$RunSourceType" },
                 { key: "P_RUN_ID", comment: getMessage("paramDescRunId", "Execution history ID"), defaultValue: ":INIT$RunId" }

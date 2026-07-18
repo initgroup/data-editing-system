@@ -491,7 +491,8 @@
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/M91001/login`, {
                     method: "POST",
-                    body: payload
+                    body: payload,
+                    showLoading: false
                 });
 
                 const responseConnections = Array.isArray(json.connections) ? json.connections : [];
@@ -513,7 +514,8 @@
                 if (payload.connectionId && json.targetSelectionRequired && responseConnections.length === 1) {
                     const retryJson = await CommonUtils.request(`${API_BASE_URL}/M91001/login`, {
                         method: "POST",
-                        body: payload
+                        body: payload,
+                        showLoading: false
                     });
                     Object.assign(json, retryJson || {});
                     if (json.targetSelectionRequired) {

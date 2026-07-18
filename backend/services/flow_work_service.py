@@ -1100,7 +1100,7 @@ def resolve_upstream_expression(expression: Any, source: Dict[str, Any]) -> Any:
     return source.get(expression[6:])
 
 
-LEGACY_ASSOCIATION_MODEL_NAMES = {"OML_ASSOCIATION_MODEL_01", "OML_DECISION_TREE_MODEL_01"}
+LEGACY_ASSOCIATION_MODEL_NAMES = {"OML_ASSOCIATION_MODEL_01"}
 
 
 def is_apriori_association_job(job: Dict[str, Any]) -> bool:
@@ -1108,7 +1108,6 @@ def is_apriori_association_job(job: Dict[str, Any]) -> bool:
     method_name = str(job.get("EXEC_METHOD") or job.get("execMethod") or "").strip().upper()
     return object_name in {
         "INIT$_SP_APRIORI_ASSOC_MODEL",
-        "INIT$_SP_DECISION_TREE_RULE_MODEL",
         "INTEGRATED_RULE_DISCOVER",
     } or method_name == "INTEGRATED_RULE_DISCOVER"
 
@@ -1143,9 +1142,7 @@ def resolve_scoped_apriori_model_name(step: Dict[str, Any], job: Dict[str, Any],
         or normalized_base
     )
     run_id = runtime_values.get("INIT$RunId") or runtime_values.get("runId") or runtime_values.get("flowRunId")
-    object_name = str(job.get("EXEC_OBJECT_NAME") or job.get("execObjectName") or "").strip().upper()
-    prefix = "OML_DT_RULE" if object_name == "INIT$_SP_DECISION_TREE_RULE_MODEL" else "OML_ASSOC"
-    return create_scoped_model_name(prefix, str(target_table or normalized_base), int(run_id or 0))
+    return create_scoped_model_name("OML_ASSOC", str(target_table or normalized_base), int(run_id or 0))
 
 
 def apply_scoped_model_runtime_values(step: Dict[str, Any], job: Dict[str, Any], runtime_values: Dict[str, Any]):

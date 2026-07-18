@@ -90,16 +90,6 @@
         { "port": "cat-rules", "artifact": "ASSOC_RULE_SUMMARY", "objectName": "INIT$_TB_RULEDISC_ASSOC_SUM", "runScope": "SAME_RUN" }
       ]
     },
-    "INIT$_SP_DECISION_TREE_RULE_MODEL": {
-      "stage": 3,
-      "inputs": [
-        { "port": "target", "artifact": "TARGET_TABLE", "required": false, "runScope": "STATIC_OR_INDEPENDENT" }
-      ],
-      "outputs": [
-        { "port": "decision-model", "artifact": "ASSOCIATION_MODEL", "objectName": ":INIT$ResultModelName", "runScope": "SAME_RUN" },
-        { "port": "cat-rules", "artifact": "ASSOC_RULE_SUMMARY", "objectName": "INIT$_TB_RULEDISC_ASSOC_SUM", "runScope": "SAME_RUN" }
-      ]
-    },
     "LASSO_FEATURE_SELECT": {
       "stage": 3,
       "inputs": [

@@ -2447,7 +2447,7 @@
                         </section>
                         <section class="data-help-step">
                             <strong>2. Convert Parameter names to camelCase when Default has no <code>:</code></strong>
-                            <span><code>P_DYNAMIC_MODEL_NAME</code> -> <code>:pDynamicModelName</code></span>
+                            <span><code>P_PREDICTION_METHOD</code> -> <code>:pPredictionMethod</code></span>
                         </section>
                         <section class="data-help-step">
                             <strong>3. Bind runtime values during execution</strong>
@@ -2483,7 +2483,6 @@ P_TARGET_TABLE       =&gt; :INIT$TargetTable
 P_MODEL_NAME         =&gt; :INIT$ResultModelName
 P_RUN_SOURCE_TYPE    =&gt; :INIT$RunSourceType
 P_RUN_ID             =&gt; :INIT$RunId
-P_DYNAMIC_MODEL_NAME =&gt; :pDynamicModelName
 P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                 `;
             helpContent.innerHTML = isWebApi

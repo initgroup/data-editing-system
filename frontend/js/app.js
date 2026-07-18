@@ -374,12 +374,12 @@ const PageManager = {
         const cleanupTargetConnection = options.cleanupTargetConnection !== false;
         const activeRequests = CommonUtils.getActiveRequestCount?.() || 0;
         const actionKeys = {
-            logout: "actions.logout",
-            "change Target DB": "actions.changeTargetDb",
-            "change target DB": "actions.changeTargetDb",
-            "close current page": "actions.closeThisPage",
-            "close other pages": "actions.closeOtherPages",
-            "close all pages": "actions.closeAllPages"
+            logout: "messagePatterns.actions.logout",
+            "change Target DB": "messagePatterns.actions.changeTargetDb",
+            "change target DB": "messagePatterns.actions.changeTargetDb",
+            "close current page": "messagePatterns.actions.closeThisPage",
+            "close other pages": "messagePatterns.actions.closeOtherPages",
+            "close all pages": "messagePatterns.actions.closeAllPages"
         };
         const action = window.I18nManager?.t?.(actionKeys[actionText], actionText) || actionText;
         const requestWarning = activeRequests > 0

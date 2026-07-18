@@ -330,6 +330,49 @@
         "P_CONTINUE_ON_ERROR=Y may produce a partial integrated result, so report successful and failed subtasks separately."
       ]
     },
+    "M90003": {
+      "pageCode": "M90003",
+      "title": "Model Training Management",
+      "label": "Model Training Management",
+      "group": "Model Resources",
+      "status": "enabled",
+      "summary": "Manages shared OML model-family training data, candidate training, validation summaries, activation, and rollback as one Target DB workflow. The current column-type family reuses confirmed labels collected across projects.",
+      "purpose": [
+        "Build reusable models from user-confirmed labels collected across projects.",
+        "Train and compare candidate models without replacing the production model automatically.",
+        "Review detailed type codes together with the final categorical, continuous, and other type groups."
+      ],
+      "layout": [
+        { "name": "Model Family Selector", "description": "Selects the training family and Target DB, and displays the active physical model name." },
+        { "name": "Overview", "description": "Summarizes the active model, algorithm, version, quality metrics, and final type-group distribution." },
+        { "name": "Training Data & Label Quality", "description": "Reviews user-confirmed labels, duplicates, conflicts, and excluded labels." },
+        { "name": "Train & Compare", "description": "Configures a candidate run and compares its quality with the active model." },
+        { "name": "Model Versions / Run History", "description": "Reviews candidate, active, and archived versions, activation or rollback, and run history." }
+      ],
+      "workflow": [
+        "Select a model family and review its active model name and available training labels.",
+        "For a fresh installation with no active model or confirmed labels, run M03001 with P_PREDICTION_METHOD=ONLY_RULE, review the results, and save approved values as user-confirmed labels.",
+        "Review confirmed labels, duplicates, and conflicts in Training Data & Label Quality.",
+        "Configure algorithm, feature version, maximum input rows, and other bounded settings to train a candidate.",
+        "After candidate training, the same run automatically records accuracy, balanced accuracy, Macro F1, per-class metrics, group accuracy, and confusion metrics for comparison with the active model.",
+        "Activate only a validated candidate; roll back to a previous version when necessary.",
+        "Use Run History to review input counts, completion, and errors."
+      ],
+      "controls": [
+        "Model family: selects the shared model family to train or compare.",
+        "Current Target DB: refreshes model status for the Target DB in the current login session.",
+        "Training data search: filters labels by status, final type group, and keywords.",
+        "Train candidate: trains a new candidate without changing the production model.",
+        "Compare / Activate: compares quality and activates a selected validated version.",
+        "Rollback / Archive: restores an earlier version or archives an unused one."
+      ],
+      "aiGuidance": [
+        "Only labels explicitly confirmed by users are eligible for training; automatic, migrated, and unconfirmed values are excluded.",
+        "The active model name is the physical model recorded in the active-model registry. INIT$_SP_PREDICTED_TYPE reads it directly, so M03001 does not accept a model-name parameter or own a separate training job.",
+        "Column-type training uses profile features such as distinct ratio, entropy, data type, nullness, and length; it does not expose original business rows in this screen.",
+        "When quality is low or a type group lacks confirmed examples, improve label quality and sample size before training another candidate."
+      ]
+    },
     "M91001": {
       "pageCode": "M91001",
       "title": "My Account",

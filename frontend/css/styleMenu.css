@@ -7185,6 +7185,29 @@ body.intro-mode #container-intro .env-panel {
     min-height: 320px;
 }
 
+.home-chart-loading {
+    align-items: center;
+    background: rgba(255, 255, 255, 0.9);
+    color: #475569;
+    display: flex;
+    flex-direction: column;
+    font-size: 13px;
+    gap: 10px;
+    inset: 0;
+    justify-content: center;
+    position: absolute;
+    z-index: 2;
+}
+
+.home-chart-loading[hidden] {
+    display: none;
+}
+
+.home-chart-loading i {
+    color: #2563eb;
+    font-size: 22px;
+}
+
 .home-workflow-secondary-grid {
     border-top: 1px solid #e2e8f0;
     display: grid;

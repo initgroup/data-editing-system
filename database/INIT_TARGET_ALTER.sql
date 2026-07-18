@@ -2377,3 +2377,150 @@ CREATE INDEX "IX_INIT$_TB_RULEVIOL_ASSOC_03"
     DBMS_OUTPUT.PUT_LINE('=== INIT_TARGET ALTER END ===');
 END;
 /
+
+-- Column-type model training is owned exclusively by M90003 and
+-- INIT$_SP_TYPE_MODEL_TRAIN. Remove the former per-job training procedure so
+-- it cannot be registered again as an M03001/FLOW work item.
+DECLARE
+    v_count       NUMBER;
+    v_table_count NUMBER;
+BEGIN
+    SELECT COUNT(*)
+      INTO v_table_count
+      FROM USER_TABLES
+     WHERE TABLE_NAME = 'INIT$_TB_DATA_WORK_JOB';
+
+    IF v_table_count > 0 THEN
+        EXECUTE IMMEDIATE q'~
+UPDATE "INIT$_TB_DATA_WORK_JOB"
+   SET "EXEC_PLSQL" = REGEXP_REPLACE(
+           "EXEC_PLSQL",
+           '[[:space:]]*,[[:space:]]*P_DYNAMIC_MODEL_NAME[[:space:]]*=>[[:space:]]*[^,)]*',
+           ''
+       )
+     , "PARAM_JSON" = REGEXP_REPLACE(
+           REGEXP_REPLACE(
+               REGEXP_REPLACE(
+                   "PARAM_JSON",
+                   '[{][^{}]*"key"[[:space:]]*:[[:space:]]*"P_DYNAMIC_MODEL_NAME"[^{}]*[}][[:space:]]*,',
+                   ''
+               ),
+               ',[[:space:]]*[{][^{}]*"key"[[:space:]]*:[[:space:]]*"P_DYNAMIC_MODEL_NAME"[^{}]*[}]',
+               ''
+           ),
+           '[{][^{}]*"key"[[:space:]]*:[[:space:]]*"P_DYNAMIC_MODEL_NAME"[^{}]*[}]',
+           ''
+       )
+     , "UPDATED_AT" = SYSTIMESTAMP
+ WHERE "EXEC_OBJECT_NAME" = 'INIT$_SP_PREDICTED_TYPE'
+   AND DBMS_LOB.INSTR("EXEC_PLSQL", 'P_DYNAMIC_MODEL_NAME') > 0
+~';
+        DBMS_OUTPUT.PUT_LINE('[OK] MIGRATE INIT$_SP_PREDICTED_TYPE jobs to active-model lookup');
+
+        EXECUTE IMMEDIATE q'~
+UPDATE "INIT$_TB_DATA_WORK_JOB"
+   SET "USE_YN" = 'N'
+     , "UPDATED_AT" = SYSTIMESTAMP
+ WHERE "EXEC_OBJECT_NAME" = 'INIT$_SP_DECISION_TREE_RULE_MODEL'
+~';
+        DBMS_OUTPUT.PUT_LINE('[OK] DISABLE DEPRECATED INIT$_SP_DECISION_TREE_RULE_MODEL jobs');
+        COMMIT;
+    END IF;
+
+    SELECT COUNT(*)
+      INTO v_table_count
+      FROM USER_TABLES
+     WHERE TABLE_NAME IN ('INIT$_TB_DATA_WORK_JOB', 'INIT$_TB_FLOW_WORK_NODE');
+
+    IF v_table_count = 2 THEN
+        EXECUTE IMMEDIATE q'~
+UPDATE "INIT$_TB_FLOW_WORK_NODE" N
+   SET N."EXEC_PLSQL" = REGEXP_REPLACE(
+           N."EXEC_PLSQL",
+           '[[:space:]]*,[[:space:]]*P_DYNAMIC_MODEL_NAME[[:space:]]*=>[[:space:]]*[^,)]*',
+           ''
+       )
+     , N."PARAM_JSON" = REGEXP_REPLACE(
+           REGEXP_REPLACE(
+               REGEXP_REPLACE(
+                   N."PARAM_JSON",
+                   '[{][^{}]*"key"[[:space:]]*:[[:space:]]*"P_DYNAMIC_MODEL_NAME"[^{}]*[}][[:space:]]*,',
+                   ''
+               ),
+               ',[[:space:]]*[{][^{}]*"key"[[:space:]]*:[[:space:]]*"P_DYNAMIC_MODEL_NAME"[^{}]*[}]',
+               ''
+           ),
+           '[{][^{}]*"key"[[:space:]]*:[[:space:]]*"P_DYNAMIC_MODEL_NAME"[^{}]*[}]',
+           ''
+       )
+     , N."UPDATED_AT" = SYSTIMESTAMP
+ WHERE DBMS_LOB.INSTR(N."EXEC_PLSQL", 'P_DYNAMIC_MODEL_NAME') > 0
+   AND EXISTS (
+       SELECT 1
+         FROM "INIT$_TB_DATA_WORK_JOB" J
+        WHERE J."WORK_JOB_ID" = N."REF_WORK_JOB_ID"
+          AND J."EXEC_OBJECT_NAME" = 'INIT$_SP_PREDICTED_TYPE'
+   )
+~';
+        DBMS_OUTPUT.PUT_LINE('[OK] MIGRATE FLOW INIT$_SP_PREDICTED_TYPE nodes to active-model lookup');
+
+        EXECUTE IMMEDIATE q'~
+UPDATE "INIT$_TB_FLOW_WORK_NODE" N
+   SET N."USE_YN" = 'N'
+     , N."UPDATED_AT" = SYSTIMESTAMP
+ WHERE EXISTS (
+       SELECT 1
+         FROM "INIT$_TB_DATA_WORK_JOB" J
+        WHERE J."WORK_JOB_ID" = N."REF_WORK_JOB_ID"
+          AND J."EXEC_OBJECT_NAME" = 'INIT$_SP_DECISION_TREE_RULE_MODEL'
+   )
+~';
+        DBMS_OUTPUT.PUT_LINE('[OK] DISABLE FLOW nodes that reference deprecated training jobs');
+        COMMIT;
+    END IF;
+
+    SELECT COUNT(*)
+      INTO v_table_count
+      FROM USER_TABLES
+     WHERE TABLE_NAME = 'INIT$_TB_OBJECT_DETAIL';
+
+    IF v_table_count > 0 THEN
+        DELETE FROM "INIT$_TB_OBJECT_DETAIL"
+         WHERE "OBJECT_NAME" = 'INIT$_SP_PREDICTED_TYPE'
+           AND "ITEM_NAME" = 'P_DYNAMIC_MODEL_NAME';
+
+        DELETE FROM "INIT$_TB_OBJECT_DETAIL"
+         WHERE "OBJECT_NAME" = 'INIT$_SP_DECISION_TREE_RULE_MODEL';
+
+        DBMS_OUTPUT.PUT_LINE('[OK] REMOVE DEPRECATED model parameter/object details');
+        COMMIT;
+    END IF;
+
+    SELECT COUNT(*)
+      INTO v_table_count
+      FROM USER_TABLES
+     WHERE TABLE_NAME = 'INIT$_TB_OBJECT';
+
+    IF v_table_count > 0 THEN
+        DELETE FROM "INIT$_TB_OBJECT"
+         WHERE "OBJECT_NAME" = 'INIT$_SP_DECISION_TREE_RULE_MODEL'
+           AND "OBJECT_TYPE" = 'PROCEDURE';
+
+        DBMS_OUTPUT.PUT_LINE('[OK] REMOVE DEPRECATED registered training object');
+        COMMIT;
+    END IF;
+
+    SELECT COUNT(*)
+      INTO v_count
+      FROM USER_OBJECTS
+     WHERE OBJECT_NAME = 'INIT$_SP_DECISION_TREE_RULE_MODEL'
+       AND OBJECT_TYPE = 'PROCEDURE';
+
+    IF v_count > 0 THEN
+        EXECUTE IMMEDIATE 'DROP PROCEDURE "INIT$_SP_DECISION_TREE_RULE_MODEL"';
+        DBMS_OUTPUT.PUT_LINE('[OK] DROP DEPRECATED PROCEDURE INIT$_SP_DECISION_TREE_RULE_MODEL');
+    ELSE
+        DBMS_OUTPUT.PUT_LINE('[SKIP] DEPRECATED PROCEDURE INIT$_SP_DECISION_TREE_RULE_MODEL is missing.');
+    END IF;
+END;
+/

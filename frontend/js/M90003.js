@@ -53,6 +53,8 @@
         activeTab: "overview",
         summary: {},
         datasetStats: {},
+        modelFamilies: [],
+        selectedModelKey: "COLUMN_TYPE",
         models: [],
         datasetRows: [],
         runRows: [],
@@ -71,6 +73,8 @@
             this.generation += 1;
             this.bindEvents();
             this.renderLoadingState();
+            await this.loadModelFamilies();
+            if (!this.isInit) return;
             await Promise.allSettled([
                 this.loadSummary(),
                 this.loadDatasetStats(),
@@ -99,6 +103,8 @@
             this.activeTab = "overview";
             this.summary = {};
             this.datasetStats = {};
+            this.modelFamilies = [];
+            this.selectedModelKey = "COLUMN_TYPE";
             this.models = [];
             this.datasetRows = [];
             this.runRows = [];
@@ -123,13 +129,17 @@
                 this.handleAction(button.dataset.action, button);
             };
             this.changeHandler = (event) => {
-                if (event.target.matches("[data-filter='dataset']")) {
+                if (event.target.matches("#modelFamily-M90003")) {
+                    this.selectModelFamily(event.target.value);
+                } else if (event.target.matches("[data-filter='dataset']")) {
                     this.datasetPage = 1;
                     this.loadDataset();
                 } else if (event.target.matches("[data-page-size='dataset']")) {
                     this.datasetPageSize = this.boundInteger(event.target.value, 25, 100, 50);
                     this.datasetPage = 1;
                     this.loadDataset();
+                } else if (event.target.matches("#trainMinRows-M90003")) {
+                    this.renderTrainingReadiness();
                 }
             };
             this.keydownHandler = (event) => {
@@ -166,6 +176,8 @@
                 panel.classList.toggle("is-active", selected);
                 panel.hidden = !selected;
             });
+            this.updateTabNavigation();
+            this.ensureActiveTabVisible(tab);
             if (this.loadedTabs.has(tab)) return;
             if (tab === "dataset") await this.loadDataset();
             if (tab === "versions") await this.loadModels();
@@ -176,6 +188,8 @@
         async handleAction(action, button) {
             if (!action || button?.disabled) return;
             if (action === "refresh-all") return this.refreshAll();
+            if (action === "tab-prev") return this.moveTab(-1);
+            if (action === "tab-next") return this.moveTab(1);
             if (action === "refresh-dataset") return Promise.allSettled([this.loadDatasetStats(), this.loadDataset()]);
             if (action === "search-dataset") {
                 this.datasetPage = 1;
@@ -194,8 +208,33 @@
             if (action === "archive-model") return this.archiveModel(modelId);
         },
 
+        moveTab(direction) {
+            const tabs = Array.from(getPageContainer()?.querySelectorAll("[data-tab]") || [])
+                .filter((tab) => !tab.hidden && !tab.disabled);
+            const currentIndex = Math.max(0, tabs.findIndex((tab) => tab.dataset.tab === this.activeTab));
+            const next = tabs[currentIndex + direction];
+            if (next) this.openTab(next.dataset.tab);
+        },
+
+        updateTabNavigation() {
+            const tabs = Array.from(getPageContainer()?.querySelectorAll("[data-tab]") || [])
+                .filter((tab) => !tab.hidden && !tab.disabled);
+            const currentIndex = tabs.findIndex((tab) => tab.dataset.tab === this.activeTab);
+            const previous = getPageContainer()?.querySelector('[data-action="tab-prev"]');
+            const next = getPageContainer()?.querySelector('[data-action="tab-next"]');
+            if (previous) previous.disabled = currentIndex <= 0;
+            if (next) next.disabled = currentIndex < 0 || currentIndex >= tabs.length - 1;
+        },
+
+        ensureActiveTabVisible(tabName) {
+            const tab = getPageContainer()?.querySelector(`[data-tab="${tabName}"]`);
+            tab?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+        },
+
         async refreshAll() {
             this.loadedTabs.clear();
+            await this.loadModelFamilies();
+            if (!this.isInit) return;
             const tasks = [this.loadSummary(), this.loadDatasetStats(), this.loadModels()];
             if (this.activeTab === "dataset") tasks.push(this.loadDataset());
             if (this.activeTab === "runs") tasks.push(this.loadRuns());
@@ -206,10 +245,53 @@
             this.showMessage("success", t("refreshed", "Refreshed."), 1800);
         },
 
+        async loadModelFamilies() {
+            const generation = this.generation;
+            try {
+                const json = await this.request("/families");
+                if (!this.isCurrent(generation)) return;
+                const rows = this.unwrapRows(json).rows;
+                this.modelFamilies = rows.length ? rows : [this.defaultColumnTypeFamily()];
+            } catch (error) {
+                if (!this.isCurrent(generation)) return;
+                this.modelFamilies = [this.defaultColumnTypeFamily()];
+                this.showMessage("error", error.message || t("modelFamiliesLoadFailed", "Model families could not be loaded."));
+            }
+            if (!this.modelFamilies.some((family) => this.familyKey(family) === this.selectedModelKey)) {
+                this.selectedModelKey = this.familyKey(this.modelFamilies[0]) || "COLUMN_TYPE";
+            }
+            this.renderModelFamilies();
+            this.applyModelFamilyCapabilities();
+        },
+
+        async selectModelFamily(modelKey) {
+            const nextKey = String(modelKey || "").trim().toUpperCase();
+            if (!nextKey || nextKey === this.selectedModelKey) return;
+            this.selectedModelKey = nextKey;
+            this.summary = {};
+            this.datasetStats = {};
+            this.models = [];
+            this.runRows = [];
+            this.datasetRows = [];
+            this.datasetPage = 1;
+            this.runPage = 1;
+            this.loadedTabs.clear();
+            this.applyModelFamilyCapabilities();
+            this.renderLoadingState();
+            const tasks = [this.loadSummary(), this.loadModels()];
+            if (this.currentFamily()?.supportsDataset) tasks.push(this.loadDatasetStats());
+            if (this.activeTab === "runs") tasks.push(this.loadRuns());
+            await Promise.allSettled(tasks);
+            this.loadedTabs.add("overview");
+            this.loadedTabs.add("train");
+            this.renderOverview();
+            this.renderCandidateComparison();
+        },
+
         async loadSummary() {
             const generation = this.generation;
             try {
-                const json = await this.request("/summary");
+                const json = await this.request(`/summary?modelKey=${encodeURIComponent(this.selectedModelKey)}`);
                 if (!this.isCurrent(generation)) return;
                 this.summary = this.unwrapObject(json);
                 this.updateTargetDbLabel();
@@ -223,6 +305,10 @@
         },
 
         async loadDatasetStats() {
+            if (!this.currentFamily()?.supportsDataset) {
+                this.datasetStats = {};
+                return;
+            }
             const generation = this.generation;
             try {
                 const json = await this.requestWithGetFallback(["/dataset/stats", "/dataset/distribution"]);
@@ -278,7 +364,7 @@
             const generation = this.generation;
             this.renderTableLoading("#modelsBody-M90003", 11);
             try {
-                const json = await this.request("/models");
+                const json = await this.request(`/models?modelKey=${encodeURIComponent(this.selectedModelKey)}`);
                 if (!this.isCurrent(generation)) return;
                 this.models = this.unwrapRows(json).rows;
                 this.renderModels();
@@ -300,7 +386,11 @@
             const generation = this.generation;
             this.renderTableLoading("#runsBody-M90003", 14);
             try {
-                const params = new URLSearchParams({ page: String(this.runPage), pageSize: String(this.runPageSize) });
+                const params = new URLSearchParams({
+                    modelKey: this.selectedModelKey,
+                    page: String(this.runPage),
+                    pageSize: String(this.runPageSize)
+                });
                 const json = await this.request(`/runs?${params.toString()}`);
                 if (!this.isCurrent(generation)) return;
                 const result = this.unwrapRows(json);
@@ -322,11 +412,15 @@
 
         async startTraining() {
             const form = getContainerEl("#trainForm-M90003");
+            const button = getContainerEl("#startTrainingBtn-M90003");
+            if (button?.disabled) return;
             if (!form?.reportValidity()) return;
             const payload = {
+                modelKey: this.selectedModelKey,
                 algorithmCode: getContainerEl("#trainAlgorithm-M90003")?.value || "DECISION_TREE",
                 featureVersion: (getContainerEl("#trainFeatureVersion-M90003")?.value || "V2").trim(),
                 maxRows: this.boundInteger(getContainerEl("#trainMaxRows-M90003")?.value, 100, 1000000, 25000),
+                minConfirmedLabels: this.boundInteger(getContainerEl("#trainMinRows-M90003")?.value, 20, 100000, 30),
                 seed: this.boundInteger(getContainerEl("#trainSeed-M90003")?.value, 1, 2147483647, 42),
                 holdoutRatio: this.boundNumber(getContainerEl("#trainHoldout-M90003")?.value, 0.1, 0.4, 0.2),
                 confirmedGoldOnly: true
@@ -337,7 +431,6 @@
                 { algorithm: payload.algorithmCode, rows: this.formatInteger(payload.maxRows) }
             );
             if (!(await this.confirm(message))) return;
-            const button = getContainerEl("#startTrainingBtn-M90003");
             this.setButtonLoading(button, true, t("startingTraining", "Starting..."));
             try {
                 await this.request("/train", { method: "POST", body: payload });
@@ -349,6 +442,7 @@
                 this.showMessage("error", error.message || t("trainingStartFailed", "Training could not be started."));
             } finally {
                 this.setButtonLoading(button, false);
+                this.renderTrainingReadiness();
             }
         },
 
@@ -377,7 +471,7 @@
             try {
                 await this.request("/models/rollback", {
                     method: "POST",
-                    body: { modelKey: "COLUMN_TYPE", reason: "M90003 explicit rollback" }
+                    body: { modelKey: this.selectedModelKey, reason: "M90003 explicit rollback" }
                 });
                 this.showMessage("success", t("modelRolledBack", "The model was rolled back safely."));
                 await Promise.allSettled([this.loadSummary(), this.loadModels()]);
@@ -400,6 +494,130 @@
             }
         },
 
+        defaultColumnTypeFamily() {
+            return {
+                modelKey: "COLUMN_TYPE",
+                displayNameKey: "modelFamily_COLUMN_TYPE",
+                supportsTraining: true,
+                supportsDataset: true,
+                trainerCode: "COLTYPE_V2",
+                sourceProfileTable: "INIT$_TB_COLTYPE_PROFILE",
+                sourceLabelTable: "INIT$_TB_COLTYPE_LABEL",
+                consumerObject: "INIT$_SP_PREDICTED_TYPE",
+                algorithms: ["DECISION_TREE", "RANDOM_FOREST"],
+                featureVersions: ["V2"],
+                defaultMinTrainRows: 30,
+                modelCount: 0,
+                runCount: 0
+            };
+        },
+
+        familyKey(family) {
+            return String(this.pick(family, "modelKey", "MODEL_KEY") || "").trim().toUpperCase();
+        },
+
+        currentFamily() {
+            return this.modelFamilies.find((family) => this.familyKey(family) === this.selectedModelKey)
+                || this.defaultColumnTypeFamily();
+        },
+
+        familyLabel(family) {
+            const modelKey = this.familyKey(family);
+            const labelKey = this.pick(family, "displayNameKey", "DISPLAY_NAME_KEY");
+            return labelKey ? t(labelKey, modelKey) : modelKey.replaceAll("_", " ");
+        },
+
+        renderModelFamilies() {
+            const select = getContainerEl("#modelFamily-M90003");
+            if (select) {
+                select.innerHTML = this.modelFamilies.map((family) => {
+                    const modelKey = this.familyKey(family);
+                    return `<option value="${this.escapeHtml(modelKey)}" ${modelKey === this.selectedModelKey ? "selected" : ""}>${this.escapeHtml(this.familyLabel(family))} · ${this.escapeHtml(modelKey)}</option>`;
+                }).join("");
+            }
+            this.renderModelFamilyInfo();
+        },
+
+        renderModelFamilyInfo() {
+            const element = getContainerEl("#modelFamilyInfo-M90003");
+            if (!element) return;
+            const family = this.currentFamily();
+            const sourceProfile = this.pick(family, "sourceProfileTable", "SOURCE_PROFILE_TABLE");
+            const sourceLabel = this.pick(family, "sourceLabelTable", "SOURCE_LABEL_TABLE");
+            const consumer = this.pick(family, "consumerObject", "CONSUMER_OBJECT");
+            const trainer = this.pick(family, "trainerCode", "TRAINER_CODE");
+            const modelCount = this.pick(family, "modelCount", "MODEL_COUNT") || 0;
+            const runCount = this.pick(family, "runCount", "RUN_COUNT") || 0;
+            const sources = [sourceProfile, sourceLabel].filter(Boolean).map((value) => `<code>${this.escapeHtml(value)}</code>`).join(" · ") || "-";
+            element.innerHTML = `
+                <strong>${this.escapeHtml(this.familyLabel(family))}</strong>
+                <span>${this.escapeHtml(t("modelFamilyKey", "Model Key"))}: <code>${this.escapeHtml(this.selectedModelKey)}</code></span>
+                <span>${this.escapeHtml(t("trainingAdapter", "Training Adapter"))}: <code>${this.escapeHtml(trainer || t("notRegistered", "Not registered"))}</code></span>
+                <span>${this.escapeHtml(t("trainingSources", "Training Sources"))}: ${sources}</span>
+                <span>${this.escapeHtml(t("consumerObject", "Consumer"))}: <code>${this.escapeHtml(consumer || "-")}</code></span>
+                <span>${this.escapeHtml(t("modelAndRunCounts", "{models} models · {runs} runs", { models: this.formatInteger(modelCount), runs: this.formatInteger(runCount) }))}</span>
+            `;
+        },
+
+        applyModelFamilyCapabilities() {
+            const family = this.currentFamily();
+            const supportsDataset = this.asBoolean(this.pick(family, "supportsDataset", "SUPPORTS_DATASET"));
+            const supportsTraining = this.asBoolean(this.pick(family, "supportsTraining", "SUPPORTS_TRAINING"));
+            const datasetTab = getPageContainer()?.querySelector('[data-tab="dataset"]');
+            const trainTab = getPageContainer()?.querySelector('[data-tab="train"]');
+            if (datasetTab) datasetTab.hidden = !supportsDataset;
+            if (trainTab) trainTab.hidden = !supportsTraining;
+            getPageContainer()?.querySelectorAll("[data-column-type-only]").forEach((element) => {
+                element.hidden = this.selectedModelKey !== "COLUMN_TYPE";
+            });
+            if ((!supportsDataset && this.activeTab === "dataset") || (!supportsTraining && this.activeTab === "train")) {
+                this.openTab("overview");
+            }
+            this.configureTrainingForm(family, supportsTraining);
+            this.renderModelFamilyInfo();
+            this.updateTabNavigation();
+        },
+
+        configureTrainingForm(family, supportsTraining) {
+            const algorithms = this.asArray(this.pick(family, "algorithms", "ALGORITHMS"));
+            const featureVersions = this.asArray(this.pick(family, "featureVersions", "FEATURE_VERSIONS"));
+            const algorithmSelect = getContainerEl("#trainAlgorithm-M90003");
+            const featureSelect = getContainerEl("#trainFeatureVersion-M90003");
+            if (algorithmSelect && algorithms.length) {
+                algorithmSelect.innerHTML = algorithms.map((code) => `<option value="${this.escapeHtml(code)}">${this.escapeHtml(code)}</option>`).join("");
+            }
+            if (featureSelect && featureVersions.length) {
+                featureSelect.innerHTML = featureVersions.map((code) => `<option value="${this.escapeHtml(code)}">${this.escapeHtml(code)}</option>`).join("");
+            }
+            this.setValue("#trainMinRows-M90003", this.pick(family, "defaultMinTrainRows", "DEFAULT_MIN_TRAIN_ROWS") || 30);
+            const button = getContainerEl("#startTrainingBtn-M90003");
+            if (button) button.disabled = !supportsTraining;
+            this.renderTrainingReadiness();
+        },
+
+        renderTrainingReadiness() {
+            const note = getContainerEl("#trainingReadiness-M90003");
+            const button = getContainerEl("#startTrainingBtn-M90003");
+            if (!note || !button) return;
+            const family = this.currentFamily();
+            if (!this.asBoolean(this.pick(family, "supportsTraining", "SUPPORTS_TRAINING"))) {
+                note.className = "type-model-note is-warning";
+                note.querySelector("span").textContent = t("trainingAdapterUnavailable", "No training adapter is registered for this model family.");
+                button.disabled = true;
+                return;
+            }
+            const typeRows = this.normalizeTypeDistribution().filter((row) => Number(row.count) > 0);
+            const eligibleRows = typeRows.reduce((sum, row) => sum + Number(row.count || 0), 0);
+            const usableClasses = typeRows.filter((row) => Number(row.count) >= 2).length;
+            const minimumRows = this.boundInteger(getContainerEl("#trainMinRows-M90003")?.value, 20, 100000, 30);
+            const ready = eligibleRows >= minimumRows && usableClasses >= 2;
+            note.className = `type-model-note ${ready ? "is-info" : "is-warning"}`;
+            note.querySelector("span").textContent = ready
+                ? t("trainingReady", "Training is ready with {rows} confirmed rows across {classes} usable classes.", { rows: this.formatInteger(eligibleRows), classes: usableClasses })
+                : t("trainingNotReady", "Training requires at least {minimum} confirmed rows and two detailed type classes with two or more rows each. Current: {rows} rows, {classes} usable classes.", { minimum: minimumRows, rows: this.formatInteger(eligibleRows), classes: usableClasses });
+            button.disabled = !ready;
+        },
+
         renderLoadingState() {
             const cards = getContainerEl("#activeModelCards-M90003");
             if (cards) cards.innerHTML = this.loadingCards(6);
@@ -416,6 +634,7 @@
             this.renderLabelQuality();
             this.renderTypeDistribution();
             this.renderValidation();
+            this.renderTrainingReadiness();
         },
 
         renderActiveModel() {
@@ -426,6 +645,13 @@
             if (statusEl) {
                 statusEl.className = `type-model-status ${this.statusClass(status)}`;
                 statusEl.textContent = this.statusLabel(status);
+            }
+            const modelName = this.pick(active, "physicalModelName", "PHYSICAL_MODEL_NAME", "modelName", "MODEL_NAME");
+            const modelNameEl = getContainerEl("#activeModelName-M90003");
+            if (modelNameEl) {
+                const value = modelName || t("noActiveModelName", "No active model");
+                modelNameEl.textContent = value;
+                modelNameEl.title = value;
             }
             const metrics = [
                 [t("modelVersion", "Model Version"), this.pick(active, "modelVersion", "MODEL_VERSION", "version") || "-"],

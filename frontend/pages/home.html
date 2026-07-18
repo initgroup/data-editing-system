@@ -52,6 +52,10 @@
             <div class="home-workflow-kpi-grid" id="homeWorkflowKpiGrid" aria-label="Workflow execution summary"></div>
             <div class="home-chart-box home-rule-chart-box">
                 <canvas id="homeRuleTrendChart"></canvas>
+                <div id="homeRuleTrendLoading" class="home-chart-loading" role="status" aria-live="polite" hidden>
+                    <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+                    <span data-label-key="loadingScenarioChart">Loading scenario chart...</span>
+                </div>
             </div>
             <div class="home-flow-selection-bar" id="homeFlowRunStrip" aria-label="Selected integrated scenario run date"></div>
             <section class="home-flow-detail-panel" id="homeFlowDetailPanel" aria-label="Scenario run detail">

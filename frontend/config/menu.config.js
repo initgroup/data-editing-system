@@ -213,8 +213,8 @@ window.MENU_CONFIG = [
             },
             {
                 page: 'M90003',
-                title: 'Column Type Model Training',
-                label: 'Column Type Model Training',
+                title: 'Model Training Management',
+                label: 'Model Training Management',
                 iconClass: 'fas fa-graduation-cap text-pink-300',
                 roles: ['ADMIN'],
                 enabled: true

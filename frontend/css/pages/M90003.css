@@ -13,7 +13,8 @@
     gap: 12px;
     min-height: 100%;
     min-width: 0;
-    padding: 18px;
+    /* Keep the page edge aligned with the shared content shell (M90001/M90002). */
+    padding: 0;
 }
 
 #container-M90003 *,
@@ -83,6 +84,102 @@
     gap: 6px;
 }
 
+#container-M90003 .type-model-family-field {
+    display: grid;
+    gap: 4px;
+    min-width: 220px;
+}
+
+#container-M90003 .type-model-family-field > span {
+    color: var(--model-muted);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+#container-M90003 .type-model-family-field select {
+    background: #fff;
+    border: 1px solid #c7d3e4;
+    min-height: 34px;
+    padding: 5px 30px 5px 9px;
+}
+
+#container-M90003 .type-model-family-info {
+    align-items: center;
+    background: #f8fafc;
+    border: 1px solid var(--model-border);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px 18px;
+    min-height: 42px;
+    padding: 8px 12px;
+}
+
+#container-M90003 .type-model-family-info > strong {
+    color: var(--model-navy);
+}
+
+#container-M90003 .type-model-family-info > span {
+    color: var(--model-muted);
+    font-size: 12px;
+}
+
+#container-M90003 .type-model-family-info code {
+    color: #174ea6;
+    font-size: 11px;
+}
+
+#container-M90003 .type-model-guide {
+    background: #f8fbff;
+    border: 1px solid var(--model-border);
+    min-width: 0;
+}
+
+#container-M90003 .type-model-guide summary {
+    align-items: center;
+    color: #1f3f73;
+    cursor: pointer;
+    display: flex;
+    font-weight: 700;
+    gap: 8px;
+    min-height: 38px;
+    padding: 8px 12px;
+}
+
+#container-M90003 .type-model-guide summary::marker {
+    color: #4d6e9f;
+}
+
+#container-M90003 .type-model-guide-steps {
+    counter-reset: usage-step;
+    display: grid;
+    gap: 8px;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    list-style: none;
+    margin: 0;
+    padding: 0 12px 12px;
+}
+
+#container-M90003 .type-model-guide-steps li {
+    background: #fff;
+    border: 1px solid #dce5f1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    padding: 9px 10px;
+}
+
+#container-M90003 .type-model-guide-steps strong {
+    color: #1b385f;
+    font-size: 12px;
+}
+
+#container-M90003 .type-model-guide-steps span {
+    color: var(--model-muted);
+    font-size: 11px;
+    line-height: 1.45;
+}
+
 #container-M90003 .type-model-target-db {
     background: #fff;
     border: 1px solid #c7d3e4;
@@ -148,13 +245,47 @@
     color: #fff;
 }
 
+#container-M90003 .type-model-tabs-shell {
+    align-items: stretch;
+    display: flex;
+    min-width: 0;
+}
+
 #container-M90003 .type-model-tabs {
     border-bottom: 1px solid var(--model-border);
     display: flex;
+    flex: 1 1 auto;
     gap: 3px;
     min-width: 0;
     overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-behavior: smooth;
     scrollbar-width: thin;
+}
+
+#container-M90003 .type-model-tab-nav {
+    align-items: center;
+    align-self: flex-end;
+    background: #fff;
+    border: 1px solid var(--model-border);
+    color: #294765;
+    cursor: pointer;
+    display: none;
+    flex: 0 0 40px;
+    height: 40px;
+    justify-content: center;
+    margin-bottom: 1px;
+    width: 40px;
+}
+
+#container-M90003 .type-model-tab-nav:hover:not(:disabled) {
+    background: #eff6ff;
+    border-color: #7da7e9;
+}
+
+#container-M90003 .type-model-tab-nav:disabled {
+    cursor: default;
+    opacity: .45;
 }
 
 #container-M90003 .type-model-tab {
@@ -219,6 +350,34 @@
 #container-M90003 .type-model-section-head h2 {
     color: var(--model-navy);
     font-size: 19px;
+}
+
+#container-M90003 .type-model-active-model {
+    align-items: center;
+    display: flex;
+    flex: 0 1 auto;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: flex-end;
+    min-width: 0;
+}
+
+#container-M90003 .type-model-active-model > span:first-child {
+    color: var(--model-muted);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+#container-M90003 .type-model-active-model code {
+    background: #f6f8fb;
+    border: 1px solid #d6dee8;
+    color: #154c9b;
+    font-size: 11px;
+    max-width: min(360px, 42vw);
+    overflow: hidden;
+    padding: 4px 7px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 #container-M90003 .type-model-card {
@@ -787,11 +946,15 @@
     #container-M90003 .type-model-train-form {
         grid-template-columns: repeat(3, minmax(150px, 1fr));
     }
+
+    #container-M90003 .type-model-guide-steps {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 }
 
 @media (max-width: 860px) {
     #container-M90003.type-model-page {
-        padding: 10px;
+        padding: 0;
     }
 
     #container-M90003 .type-model-header {
@@ -801,7 +964,26 @@
     }
 
     #container-M90003 .type-model-header-actions {
+        align-items: stretch;
+        flex-wrap: wrap;
         justify-content: space-between;
+    }
+
+    #container-M90003 .type-model-family-field {
+        flex: 1 1 100%;
+        min-width: 0;
+    }
+
+    #container-M90003 .type-model-tabs {
+        scrollbar-width: none;
+    }
+
+    #container-M90003 .type-model-tabs::-webkit-scrollbar {
+        display: none;
+    }
+
+    #container-M90003 .type-model-tab-nav {
+        display: inline-flex;
     }
 
     #container-M90003 .type-model-target-db {
@@ -810,6 +992,14 @@
 
     #container-M90003 .type-model-overview-grid {
         grid-template-columns: minmax(0, 1fr);
+    }
+
+    #container-M90003 .type-model-section-head {
+        flex-wrap: wrap;
+    }
+
+    #container-M90003 .type-model-active-model {
+        justify-content: flex-start;
     }
 
     #container-M90003 .type-model-train-form {
@@ -829,7 +1019,7 @@
 @media (max-width: 600px) {
     #container-M90003.type-model-page {
         gap: 9px;
-        padding: 7px;
+        padding: 0;
     }
 
     #container-M90003 .type-model-heading p,
@@ -843,8 +1033,22 @@
         padding: 0 11px;
     }
 
+    #container-M90003 .type-model-tab-nav {
+        flex-basis: 36px;
+        width: 36px;
+    }
+
     #container-M90003 .type-model-card {
         padding: 11px;
+    }
+
+    #container-M90003 .type-model-guide-steps {
+        grid-template-columns: minmax(0, 1fr);
+        padding: 0 9px 9px;
+    }
+
+    #container-M90003 .type-model-active-model code {
+        max-width: calc(100vw - 82px);
     }
 
     #container-M90003 .type-model-section-head {

@@ -1312,7 +1312,6 @@ END;
 CREATE OR REPLACE PROCEDURE "INIT$_SP_PREDICTED_TYPE" (
     p_target_owner       IN VARCHAR2,
     p_target_table       IN VARCHAR2,
-    p_dynamic_model_name IN VARCHAR2 DEFAULT 'OML_DECISION_TREE_MODEL_01',
     p_prediction_method  IN VARCHAR2 DEFAULT 'ONLY_RULE',
     p_run_source_type    IN VARCHAR2 DEFAULT 'DATA_WORK',
     p_run_id             IN NUMBER   DEFAULT 0
@@ -1380,35 +1379,13 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_PREDICTED_TYPE" (
 BEGIN
     v_owner := UPPER(TRIM(p_target_owner));
     v_table_name := UPPER(TRIM(p_target_table));
-    v_model_name := DBMS_ASSERT.QUALIFIED_SQL_NAME(UPPER(NVL(NULLIF(TRIM(p_dynamic_model_name), ''), 'OML_DECISION_TREE_MODEL_01')));
-    v_scoring_model_name := v_model_name;
+    v_model_name := 'COLUMN_TYPE_RULE';
+    v_scoring_model_name := NULL;
     v_method := UPPER(TRIM(NVL(p_prediction_method, 'ONLY_RULE')));
     v_run_source_type := normalize_run_source_type(p_run_source_type);
     v_run_id := NVL(p_run_id, 0);
     v_model_auto_confidence := LEAST(1, GREATEST(0, "INIT$_FN_TARGET_SETTING_NUMBER"('DATA_PROFILING', 'MODEL_AUTO_CONFIDENCE', 0.85)));
     v_integer_tolerance := LEAST(0.1, GREATEST(0, "INIT$_FN_TARGET_SETTING_NUMBER"('DATA_PROFILING', 'INTEGER_TOLERANCE', 0.000000001)));
-
-    IF UPPER(NVL(NULLIF(TRIM(p_dynamic_model_name), ''), 'OML_DECISION_TREE_MODEL_01')) = 'OML_DECISION_TREE_MODEL_01' THEN
-        BEGIN
-            SELECT R."PHYSICAL_MODEL_NAME"
-                 , R."MODEL_VERSION_ID"
-                 , R."VERSION_NO"
-              INTO v_scoring_model_name
-                 , v_model_version_id
-                 , v_model_version
-              FROM "INIT$_TB_OML_ACTIVE_MODEL" A
-              JOIN "INIT$_TB_OML_MODEL_REGISTRY" R
-                ON R."MODEL_VERSION_ID" = A."MODEL_VERSION_ID"
-             WHERE A."MODEL_KEY" = 'COLUMN_TYPE'
-               AND R."STATUS_CODE" = 'ACTIVE'
-               AND ROWNUM = 1;
-            v_scoring_model_name := DBMS_ASSERT.SIMPLE_SQL_NAME(UPPER(v_scoring_model_name));
-        EXCEPTION
-            WHEN NO_DATA_FOUND THEN
-                v_model_version_id := NULL;
-                v_model_version := NULL;
-        END;
-    END IF;
 
     IF NOT REGEXP_LIKE(v_owner, '^[A-Z][A-Z0-9_$#]{0,127}$') THEN
         RAISE_APPLICATION_ERROR(-20001, 'Invalid owner parameter.');
@@ -1432,6 +1409,32 @@ BEGIN
 
     v_use_rule := v_method IN ('ONLY_RULE', 'ONLY_BOTH', 'FINAL_RULE', 'FINAL_BOTH');
     v_use_model := v_method IN ('ONLY_MODEL', 'ONLY_BOTH', 'FINAL_MODEL', 'FINAL_BOTH');
+
+    IF v_use_model THEN
+        BEGIN
+            SELECT R."PHYSICAL_MODEL_NAME"
+                 , R."MODEL_VERSION_ID"
+                 , R."VERSION_NO"
+              INTO v_scoring_model_name
+                 , v_model_version_id
+                 , v_model_version
+              FROM "INIT$_TB_OML_ACTIVE_MODEL" A
+              JOIN "INIT$_TB_OML_MODEL_REGISTRY" R
+                ON R."MODEL_VERSION_ID" = A."MODEL_VERSION_ID"
+             WHERE A."MODEL_KEY" = 'COLUMN_TYPE'
+               AND R."STATUS_CODE" = 'ACTIVE'
+               AND ROWNUM = 1;
+
+            v_scoring_model_name := DBMS_ASSERT.SIMPLE_SQL_NAME(UPPER(v_scoring_model_name));
+            v_model_name := v_scoring_model_name;
+        EXCEPTION
+            WHEN NO_DATA_FOUND THEN
+                RAISE_APPLICATION_ERROR(
+                    -20004,
+                    'No active COLUMN_TYPE model. Train, validate, and activate a model in M90003 first.'
+                );
+        END;
+    END IF;
 
     IF v_use_rule THEN
         v_update_rule_sql := q'[

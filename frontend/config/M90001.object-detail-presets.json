@@ -102,98 +102,6 @@
     {
       "owner": "*",
       "objectType": "PROCEDURE",
-      "objectName": "INIT$_SP_DECISION_TREE_RULE_MODEL",
-      "label": "DECISION_TREE_RULE_모델학습",
-      "description": "사용자가 확정했거나 검증 데이터로 가져온 컬럼 유형 라벨만 학습 데이터로 사용하여 의사결정트리 후보 모델과 규칙 요약을 생성합니다. 범용 모델의 학습·평가·활성화는 M90003을 사용하세요.",
-      "resultCreateYn": "M",
-      "resultOwner": "__CURRENT_OWNER__",
-      "resultTableName": "OML_DECISION_TREE_MODEL_01",
-      "items": [
-        {
-          "key": "P_MODEL_NAME",
-          "comment": "의사결정트리 규칙 모델명",
-          "defaultValue": ":INIT$ResultModelName"
-        },
-        {
-          "key": "P_DATA_QUERY",
-          "comment": "학습 입력 데이터 SELECT 문",
-          "defaultValue": "'SELECT CAST(R.OWNER || ''|'' || R.TABLE_NAME || ''|'' || R.COLUMN_NAME AS VARCHAR2(4000)) AS CASE_ID, R.DATA_TYPE, R.TOTAL_ROWS, R.NUM_DISTINCT, R.DIST_VAL_RT, R.LOG_DATA_TYPE, R.ENTROPY, R.NORM_ENTROPY, L.TYPE_CODE AS TARGET_TYPE FROM (SELECT R.*, ROW_NUMBER() OVER (PARTITION BY R.OWNER, R.TABLE_NAME, R.COLUMN_NAME ORDER BY R.CREATE_DT DESC NULLS LAST, R.RUN_ID DESC, R.MODEL_NAME DESC) AS RN FROM '||:INIT$TargetOwner||'.'||:INIT$TargetTable||' R WHERE R.RUN_SOURCE_TYPE = '''||:INIT$RunSourceType||''' AND ('''||:INIT$RunSourceType||''' <> ''FLOW_WORK'' OR R.RUN_ID = '||:INIT$RunId||')) R JOIN '||:INIT$TargetOwner||'.INIT$_TB_COLTYPE_LABEL L ON L.OWNER = R.OWNER AND L.TABLE_NAME = R.TABLE_NAME AND L.COLUMN_NAME = R.COLUMN_NAME AND L.CONFIRMED_YN = ''Y'' AND L.LABEL_SOURCE IN (''USER_CONFIRMED'', ''IMPORTED_GOLD'') WHERE R.RN = 1 AND L.TYPE_CODE IS NOT NULL'"
-        },
-        {
-          "key": "P_CASE_ID_COLUMN_NAME",
-          "comment": "행 식별 컬럼명",
-          "defaultValue": "CASE_ID"
-        },
-        {
-          "key": "P_TARGET_COLUMN_NAME",
-          "comment": "예측/분류 대상 컬럼명",
-          "defaultValue": "TARGET_TYPE"
-        },
-        {
-          "key": "P_CANDIDATE_COLUMNS",
-          "comment": "학습 후보 컬럼 목록",
-          "defaultValue": "(auto)"
-        },
-        {
-          "key": "P_MIN_SUPPORT_COUNT",
-          "comment": "규칙 생성 최소 건수",
-          "defaultValue": "30"
-        },
-        {
-          "key": "P_MIN_CONFIDENCE",
-          "comment": "규칙 생성 최소 신뢰도",
-          "defaultValue": "0.7"
-        },
-        {
-          "key": "P_MIN_LIFT",
-          "comment": "규칙 생성 최소 향상도",
-          "defaultValue": "1"
-        },
-        {
-          "key": "P_DROP_EXISTING_YN",
-          "comment": "기존 동일 모델 삭제 여부",
-          "defaultValue": "Y"
-        },
-        {
-          "key": "P_MAX_INPUT_ROWS",
-          "comment": "학습 입력 최대 행 수",
-          "defaultValue": "100000"
-        },
-        {
-          "key": "P_MAX_RULE_SUMMARY_COLUMNS",
-          "comment": "규칙 요약 최대 컬럼 수",
-          "defaultValue": "25"
-        },
-        {
-          "key": "P_MAX_RULE_SUMMARY_PER_PAIR",
-          "comment": "컬럼 쌍별 최대 요약 개수",
-          "defaultValue": "50"
-        },
-        {
-          "key": "P_TARGET_OWNER",
-          "comment": "대상 테이블 계정",
-          "defaultValue": ":INIT$TargetOwner"
-        },
-        {
-          "key": "P_TARGET_TABLE",
-          "comment": "대상 테이블명",
-          "defaultValue": ":INIT$TargetTable"
-        },
-        {
-          "key": "P_RUN_SOURCE_TYPE",
-          "comment": "실행 출처 구분(DATA_WORK/FLOW_WORK)",
-          "defaultValue": ":INIT$RunSourceType"
-        },
-        {
-          "key": "P_RUN_ID",
-          "comment": "같은 DATA_WORK/FLOW_WORK 실행 결과를 연결하는 Run ID",
-          "defaultValue": ":INIT$RunId"
-        }
-      ]
-    },
-    {
-      "owner": "*",
-      "objectType": "PROCEDURE",
       "objectName": "INIT$_SP_RULE_VIOLATION_DETECT",
       "label": "M05_규칙위반탐지결과생성",
       "description": "생성된 연관규칙 모델을 기준으로 대상 테이블의 행을 검사하여 규칙 위반 후보를 탐지하고, 위반 점수와 규칙 정보를 결과 테이블에 적재하는 프로시저입니다.",
@@ -1156,7 +1064,7 @@
       "objectType": "PROCEDURE",
       "objectName": "INIT$_SP_PREDICTED_TYPE",
       "label": "DECISION_TREE_범주형_연속형",
-      "description": "대상 테이블에 대해서 논리적데이터타입(LOG_DATA_TYPE), 고유값비율(DIST_VAL_RT), 정규화 엔트로피(NORM_ENTROPY)를 자동으로 계산한 후에 기본 분류모델인 \"OML_DECISION_TREE_MODEL_01\"을 사용하여 최종적으로 항목 분류결과(MODL_PREDICTED_TYPE)를 적재하는 프로시저입니다.",
+      "description": "대상 테이블의 컬럼 프로파일을 생성하고, M90003에서 검증 후 활성화한 COLUMN_TYPE 운영 모델을 조회하여 컬럼 유형을 판정합니다. 호출 화면에서는 물리 모델명을 전달하지 않습니다.",
       "resultCreateYn": "T",
       "resultOwner": "__CURRENT_OWNER__",
       "resultTableName": "INIT$_TB_COLTYPE_FINAL",
@@ -1170,11 +1078,6 @@
           "key": "P_TARGET_TABLE",
           "comment": "분석 대상 테이블명",
           "defaultValue": ":INIT$TargetTable"
-        },
-        {
-          "key": "P_DYNAMIC_MODEL_NAME",
-          "comment": "분류/예측 모델명",
-          "defaultValue": "OML_DECISION_TREE_MODEL_01"
         },
         {
           "key": "P_PREDICTION_METHOD",

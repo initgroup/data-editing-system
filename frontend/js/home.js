@@ -68,7 +68,10 @@
 
         renderRuleTrendChart() {
             const canvas = document.getElementById("homeRuleTrendChart");
-            if (!canvas || !window.Chart) return;
+            if (!canvas || !window.Chart) {
+                this.setRuleTrendLoading(false);
+                return;
+            }
             if (this.ruleTrendChart) this.ruleTrendChart.destroy();
             const trend = this.normalizeFlowTrend(this.dashboardData?.target?.flowTrend || []);
 
@@ -109,6 +112,9 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    animation: {
+                        onComplete: () => this.setRuleTrendLoading(false)
+                    },
                     interaction: { mode: "index", intersect: false },
                     plugins: {
                         legend: {
@@ -151,6 +157,14 @@
                     }
                 }
             });
+        },
+
+        setRuleTrendLoading(isLoading) {
+            const loading = document.getElementById("homeRuleTrendLoading");
+            if (!loading) return;
+            const text = loading.querySelector("span");
+            if (text) text.textContent = this.t("loadingScenarioChart", "Loading scenario chart...");
+            loading.hidden = !isLoading;
         },
 
         renderWorkflowKpis() {
@@ -1114,6 +1128,7 @@
             const renderAlerts = options.renderAlerts !== false;
             const renderLinks = options.renderLinks !== false;
             const showPopups = options.showPopups !== false;
+            if (renderChart) this.setRuleTrendLoading(true);
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/home/dashboard`, {
                     method: "GET",

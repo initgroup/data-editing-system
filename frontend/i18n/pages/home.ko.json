@@ -16,6 +16,7 @@
     "initHomepage": "인아이티 홈페이지",
     "chartSuccessLabel": "통합시나리오 성공",
     "chartFailedLabel": "통합시나리오 실패",
+    "loadingScenarioChart": "통합 시나리오 그래프를 불러오는 중입니다.",
     "statusSuccess": "성공",
     "statusFailed": "실패",
     "chartRunCount": "{status} {count}건",

@@ -1,10 +1,11 @@
 """
 @file           M90003.py
-@description    Column type model training and lifecycle management API
+@description    Oracle Machine Learning model training and lifecycle management API
 """
 
 import json
 import logging
+import re
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -24,7 +25,25 @@ logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(require_admin_role)])
 
 MODEL_KEY_COLUMN_TYPE = "COLUMN_TYPE"
-ALLOWED_ALGORITHMS = {"DECISION_TREE", "RANDOM_FOREST"}
+TRAINING_ADAPTERS = {
+    "COLTYPE_V2": {
+        "trainSqlId": "M90003_TYPE_MODEL_TRAIN_CALL",
+        "algorithms": ["DECISION_TREE", "RANDOM_FOREST"],
+        "featureVersions": ["V2"],
+        "defaultMinTrainRows": 30,
+    },
+}
+MODEL_FAMILY_CAPABILITIES = {
+    MODEL_KEY_COLUMN_TYPE: {
+        "displayNameKey": "modelFamily_COLUMN_TYPE",
+        "supportsTraining": True,
+        "supportsDataset": True,
+        "trainerCode": "COLTYPE_V2",
+        "sourceProfileTable": "INIT$_TB_COLTYPE_PROFILE",
+        "sourceLabelTable": "INIT$_TB_COLTYPE_LABEL",
+        "consumerObject": "INIT$_SP_PREDICTED_TYPE",
+    },
+}
 ALLOWED_LABEL_SCOPES = {
     "ALL",
     "ELIGIBLE",
@@ -77,9 +96,18 @@ def _normalize_choice(value: Any, allowed: set[str], field_name: str) -> str:
 
 def _normalize_model_key(value: Any) -> str:
     text = str(value or MODEL_KEY_COLUMN_TYPE).strip().upper()
-    if text != MODEL_KEY_COLUMN_TYPE:
+    if not re.fullmatch(r"[A-Z][A-Z0-9_$#.-]{0,99}", text):
         raise HTTPException(status_code=400, detail="Invalid modelKey.")
     return text
+
+
+def _require_training_adapter(value: Any) -> tuple[str, dict[str, Any]]:
+    model_key = _normalize_model_key(value)
+    family = MODEL_FAMILY_CAPABILITIES.get(model_key, {})
+    adapter = TRAINING_ADAPTERS.get(str(family.get("trainerCode") or ""))
+    if not family.get("supportsTraining") or not adapter:
+        raise HTTPException(status_code=400, detail="This model family does not have a registered training adapter.")
+    return model_key, adapter
 
 
 def _normalize_version(value: Any, field_name: str) -> str:
@@ -226,13 +254,18 @@ def _mark_training_submission_failed(
         logger.exception("M90003 failed to record queue submission failure. train_run_id=%s", train_run_id)
 
 
-def _run_training_background(train_run_id: int, connection_id: int, user_id: int) -> None:
+def _run_training_background(
+    train_run_id: int,
+    connection_id: int,
+    user_id: int,
+    train_sql_id: str,
+) -> None:
     conn = None
     try:
         conn = get_target_db_connection_by_id(connection_id, user_id)
         _execute_proc(
             conn,
-            "M90003_TYPE_MODEL_TRAIN_CALL",
+            train_sql_id,
             {"trainRunId": train_run_id, "requestedBy": user_id},
         )
     except Exception as error:
@@ -255,15 +288,64 @@ def _run_training_background(train_run_id: int, connection_id: int, user_id: int
             conn.close()
 
 
-@router.get("/summary")
-def get_summary(request: Request):
+@router.get("/families")
+def get_model_families(request: Request):
     conn = None
     try:
         conn = get_target_db_connection(request)
-        summary = _query(conn, "M90003_SUMMARY")
-        group_distribution = _query(conn, "M90003_DATASET_GROUP_DISTRIBUTION")
-        detail_distribution = _query(conn, "M90003_DATASET_DETAIL_DISTRIBUTION")
-        active_metric_result = _query(conn, "M90003_ACTIVE_MODEL_METRIC_LIST")
+        result = _query(conn, "M90003_MODEL_FAMILY_LIST")
+        rows = _normalize_rows(result.get("data") or [])
+        rows_by_model_key = {
+            _normalize_model_key(_value(row, "MODEL_KEY")): row
+            for row in rows
+        }
+        model_keys = list(MODEL_FAMILY_CAPABILITIES)
+        model_keys.extend(key for key in rows_by_model_key if key not in MODEL_FAMILY_CAPABILITIES)
+        families = []
+        for model_key in model_keys:
+            row = rows_by_model_key.get(model_key, {})
+            capabilities = MODEL_FAMILY_CAPABILITIES.get(model_key, {})
+            adapter = TRAINING_ADAPTERS.get(str(capabilities.get("trainerCode") or ""), {})
+            families.append({
+                "modelKey": model_key,
+                "displayNameKey": capabilities.get("displayNameKey", ""),
+                "supportsTraining": bool(capabilities.get("supportsTraining")),
+                "supportsDataset": bool(capabilities.get("supportsDataset")),
+                "trainerCode": capabilities.get("trainerCode", ""),
+                "sourceProfileTable": capabilities.get("sourceProfileTable", ""),
+                "sourceLabelTable": capabilities.get("sourceLabelTable", ""),
+                "consumerObject": capabilities.get("consumerObject", ""),
+                "algorithms": adapter.get("algorithms", []),
+                "featureVersions": adapter.get("featureVersions", []),
+                "defaultMinTrainRows": adapter.get("defaultMinTrainRows", 30),
+                "modelCount": int(_value(row, "MODEL_COUNT", default=0) or 0),
+                "runCount": int(_value(row, "RUN_COUNT", default=0) or 0),
+                "activeModelVersionId": _value(row, "ACTIVE_MODEL_VERSION_ID"),
+                "latestVersionNo": _value(row, "LATEST_VERSION_NO"),
+            })
+        return {"status": "success", "data": families, "total": len(families)}
+    except HTTPException:
+        raise
+    except Exception as error:
+        logger.exception("M90003 model family list load failed.")
+        raise HTTPException(status_code=500, detail=str(error))
+    finally:
+        if conn:
+            conn.close()
+
+
+@router.get("/summary")
+def get_summary(request: Request, modelKey: str = Query(MODEL_KEY_COLUMN_TYPE)):
+    model_key = _normalize_model_key(modelKey)
+    supports_dataset = bool(MODEL_FAMILY_CAPABILITIES.get(model_key, {}).get("supportsDataset"))
+    conn = None
+    try:
+        conn = get_target_db_connection(request)
+        summary_sql_id = "M90003_SUMMARY" if supports_dataset else "M90003_MODEL_SUMMARY"
+        summary = _query(conn, summary_sql_id, {"modelKey": model_key})
+        group_distribution = _query(conn, "M90003_DATASET_GROUP_DISTRIBUTION") if supports_dataset else {"data": []}
+        detail_distribution = _query(conn, "M90003_DATASET_DETAIL_DISTRIBUTION") if supports_dataset else {"data": []}
+        active_metric_result = _query(conn, "M90003_ACTIVE_MODEL_METRIC_LIST", {"modelKey": model_key})
         summary_row = (_normalize_rows(summary.get("data") or []) or [{}])[0]
         group_rows = _normalize_rows(group_distribution.get("data") or [])
         detail_rows = _normalize_rows(detail_distribution.get("data") or [])
@@ -285,6 +367,7 @@ def get_summary(request: Request):
             }
         payload = {
             "activeModel": active_model,
+            "modelKey": model_key,
             "counts": {
                 "confirmedEligible": int(_value(summary_row, "CONFIRMED_ELIGIBLE_COUNT", default=0) or 0),
                 "excludedAuto": int(_value(summary_row, "EXCLUDED_AUTO_COUNT", default=0) or 0),
@@ -379,17 +462,19 @@ def get_labels(
 @router.get("/models")
 def get_models(
     request: Request,
+    modelKey: str = Query(MODEL_KEY_COLUMN_TYPE),
     status: str = Query("ALL"),
     limit: int = Query(100, ge=1, le=500),
 ):
     normalized_status = _normalize_choice(status, ALLOWED_MODEL_STATUSES, "status")
+    model_key = _normalize_model_key(modelKey)
     conn = None
     try:
         conn = get_target_db_connection(request)
         result = _query(
             conn,
             "M90003_MODEL_VERSION_LIST",
-            {"modelKey": MODEL_KEY_COLUMN_TYPE, "statusCode": normalized_status, "limitRows": limit},
+            {"modelKey": model_key, "statusCode": normalized_status, "limitRows": limit},
         )
         rows = _normalize_rows(result.get("data") or [])
         return {"status": "success", "data": rows, "columns": result.get("columns", []), "total": len(rows)}
@@ -406,11 +491,13 @@ def get_models(
 @router.get("/runs")
 def get_runs(
     request: Request,
+    modelKey: str = Query(MODEL_KEY_COLUMN_TYPE),
     page: int = Query(1, ge=1),
     pageSize: int = Query(50, ge=1, le=200),
     status: str = Query("ALL"),
 ):
     normalized_status = _normalize_choice(status, ALLOWED_RUN_STATUSES, "status")
+    model_key = _normalize_model_key(modelKey)
     offset = (page - 1) * pageSize
     conn = None
     try:
@@ -419,7 +506,7 @@ def get_runs(
             conn,
             "M90003_TRAIN_RUN_LIST",
             {
-                "modelKey": MODEL_KEY_COLUMN_TYPE,
+                "modelKey": model_key,
                 "statusCode": normalized_status,
                 "offsetRows": offset,
                 "endRow": offset + pageSize,
@@ -468,11 +555,13 @@ def get_run_detail(train_run_id: int, request: Request):
 @router.post("/train")
 @router.post("/training/start", include_in_schema=False)
 def start_training(req: TrainingStartRequest, request: Request):
-    model_key = _normalize_model_key(req.modelKey)
-    algorithm_code = _normalize_choice(req.algorithmCode, ALLOWED_ALGORITHMS, "algorithmCode")
+    model_key, adapter = _require_training_adapter(req.modelKey)
+    algorithm_code = _normalize_choice(req.algorithmCode, set(adapter["algorithms"]), "algorithmCode")
     feature_version = _normalize_version(req.featureVersion, "featureVersion")
     if feature_version == "TYPE_FEATURE_V2":
         feature_version = "V2"
+    if feature_version not in set(adapter["featureVersions"]):
+        raise HTTPException(status_code=400, detail="Unsupported featureVersion for this training adapter.")
     label_version = _normalize_version(req.labelVersion, "labelVersion")
     max_rows_value = req.maxRows if req.maxRows is not None else req.maxTrainingRows
     seed_value = req.seed if req.seed is not None else req.randomSeed
@@ -511,7 +600,7 @@ def start_training(req: TrainingStartRequest, request: Request):
             _value((active_run_result.get("data") or [{}])[0], "ACTIVE_RUN_COUNT", default=0) or 0
         )
         if active_run_count > 0:
-            raise HTTPException(status_code=409, detail="A column type model training run is already active.")
+            raise HTTPException(status_code=409, detail="A training run for this model family is already active.")
         cursor = conn.cursor()
         train_run_id_var = cursor.var(int)
         cursor.execute(
@@ -550,6 +639,7 @@ def start_training(req: TrainingStartRequest, request: Request):
                 train_run_id,
                 connection_id,
                 user_id,
+                adapter["trainSqlId"],
             )
         except BackgroundJobQueueFull as error:
             _mark_training_submission_failed(conn, train_run_id, str(error))

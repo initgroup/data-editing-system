@@ -4,7 +4,7 @@
     const REGISTERED_ROUTER_PAGES = new Set([
         "home", "M01001", "M01002", "M02001", "M02002",
         "M03001", "M03002", "M03003", "M03004", "M04001", "M04002",
-        "M90001", "M90002", "M91001", "M91002", "M99001", "M99002", "M99003", "M99004"
+        "M90001", "M90002", "M90003", "M91001", "M91002", "M99001", "M99002", "M99003", "M99004"
     ]);
 
     const LOGICAL_DATA_DOMAINS = {
@@ -28,6 +28,7 @@
         M07003: ["에디팅 실행 이력", "변경 전후 로그", "사용자/시간 감사 정보"],
         M90001: ["Target DB 객체 메타데이터", "내부 모델 리소스", "파라미터/상세 정의", "객체 참조 관계"],
         M90002: ["외부 모델 리소스", "OML4Py Script Repository 메타", "리소스 파라미터", "공개 ML/AI 호출 방식"],
+        M90003: ["공통 모델 패밀리", "컬럼 프로파일 피처", "사용자 확정 라벨", "후보/활성 모델 버전", "학습 실행 이력"],
         M91001: ["내 계정 정보", "Target DB 연결 선택", "개인 Gemini API Key 상태", "세션 정리"],
         M91002: ["개인 시스템 설정", "계정 정보", "개인 Gemini API Key 상태", "설정 카테고리"],
         M99001: ["DB 연결 설정", "스키마 상태", "PL/SQL 객체 그룹 배포", "관리자 bootstrap 상태"],
@@ -50,6 +51,7 @@
         M04002: ["플로우 실행 목록", "노드 결과 조회", "모델 메타/상관/LASSO/Symbolic Rule 요약", "결과 샘플"],
         M90001: ["DB 객체 트리/검색", "객체 소스/메타 조회", "내부 모델 등록/삭제", "참조 관계 확인"],
         M90002: ["외부 모델 리소스 목록/상세", "파라미터 저장", "OML4Py wrapper/registered script 확인"],
+        M90003: ["모델 패밀리 및 활성 모델 조회", "학습 가능 확정 라벨·프로파일 피처 조회", "후보 모델 학습·검증 상태 기록", "모델 버전 활성화·롤백 이력 조회"],
         M91001: ["연결 목록/상세", "연결 설정 저장", "세션 정리", "설정 저장 일부 공용 SQL"],
         M91002: ["내 계정 조회", "개인 설정 조회/저장", "이름/이메일/비밀번호 변경", "Gemini Key 상태"],
         M99001: ["DB 연결 설정", "스키마 상태/초기화", "모델 객체 그룹/학습 작업", "bootstrap 로그"],
@@ -65,7 +67,8 @@
         M03004: ["공개 검증 개념: rule engine, constraint validation, anomaly score threshold, outlier detection 결과 해석을 설명할 수 있습니다."],
         M04001: ["DAG 공개 개념: directed acyclic graph, dependency planning, topological execution order, node input/output contract를 설명할 수 있습니다.", "워크플로우 공개 개념: batch execution, node-level retry, result materialization, read-only result SQL을 설명할 수 있습니다."],
         M04002: ["공개 모델 해석 개념: association rules의 support, confidence, lift와 모델 결과 요약을 상세히 설명할 수 있습니다.", "상관/LASSO 공개 개념: Pearson r, coefficient, R2 score, feature importance를 결과 해석 자료로 사용할 수 있습니다.", "Symbolic regression 공개 개념: f(x)=y 수식, 입력 feature 민감도, 허용 오차율 기반 이상 탐지를 설명할 수 있습니다.", "Oracle ML 공개 개념: 모델 상세 뷰, 규칙 조건/결과 분포, feature/target 해석 방식은 내부 객체명을 숨기고 개념 중심으로 설명할 수 있습니다."],
-        M90002: ["OML4Py 공개 API: Script Repository, pyqEval, pyqTableEval, table_apply 흐름을 설명할 수 있습니다.", "Gemini 공개 API: 사용자가 첨부한 텍스트/이미지 context와 질문을 함께 전달하는 멀티모달 응답 흐름을 설명할 수 있습니다."]
+        M90002: ["OML4Py 공개 API: Script Repository, pyqEval, pyqTableEval, table_apply 흐름을 설명할 수 있습니다.", "Gemini 공개 API: 사용자가 첨부한 텍스트/이미지 context와 질문을 함께 전달하는 멀티모달 응답 흐름을 설명할 수 있습니다."],
+        M90003: ["공개 모델 운영 개념: 후보 학습, holdout 검증, 정확도·균형 정확도·Macro F1 비교, 명시적 활성화와 롤백을 설명할 수 있습니다.", "공개 피처 개념: distinct ratio, entropy, data type, nullness, length 같은 컬럼 프로파일 피처 기반 분류를 설명할 수 있습니다."]
     };
 
     function normalizePageCode(pageCode) {

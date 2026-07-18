@@ -1,11 +1,15 @@
 <div class="page-container type-model-page" id="container-M90003">
     <header class="type-model-header">
         <div class="type-model-heading">
-            <span class="type-model-kicker" data-label-key="targetDbGlobalResource">Target DB Global Resource</span>
-            <h1 data-label-key="pageTitle">Column Type Model Training</h1>
-            <p data-label-key="pageDescription">Train, compare, activate, and roll back reusable column type models using confirmed gold labels collected across projects.</p>
+            <span class="type-model-kicker" data-label-key="targetDbGlobalResource">Target DB OML Model Resources</span>
+            <h1 data-label-key="pageTitle">Model Training Management</h1>
+            <p data-label-key="pageDescription">Manage reusable Oracle Machine Learning model families, training, validation, deployment, and rollback.</p>
         </div>
         <div class="type-model-header-actions">
+            <label class="type-model-family-field">
+                <span data-label-key="modelFamily">Model Family</span>
+                <select id="modelFamily-M90003" aria-label="Model family" data-aria-label-key="modelFamily"></select>
+            </label>
             <span id="targetDb-M90003" class="type-model-target-db" data-label-key="currentTargetDb">Current Target DB</span>
             <button type="button" class="type-model-icon-btn" data-action="refresh-all" title="Refresh all" data-title-key="refreshAllTitle">
                 <i class="fas fa-sync-alt" aria-hidden="true"></i>
@@ -15,43 +19,88 @@
 
     <div id="pageMessage-M90003" class="type-model-message" role="status" aria-live="polite" hidden></div>
 
-    <nav class="type-model-tabs" aria-label="Column type model training sections" data-aria-label-key="sectionTabsAriaLabel">
-        <button type="button" class="type-model-tab is-active" data-tab="overview" aria-selected="true">
-            <i class="fas fa-chart-pie" aria-hidden="true"></i>
-            <span data-label-key="overviewTab">Overview</span>
+    <section id="modelFamilyInfo-M90003" class="type-model-family-info" aria-live="polite"></section>
+
+    <section class="type-model-guide" aria-labelledby="usageGuideTitle-M90003">
+        <details open>
+            <summary id="usageGuideTitle-M90003">
+                <i class="fas fa-circle-question" aria-hidden="true"></i>
+                <span data-label-key="usageGuideTitle">How to use</span>
+            </summary>
+            <ol class="type-model-guide-steps">
+                <li>
+                    <strong data-label-key="usageGuideStepFamilyTitle">1. Select model family</strong>
+                    <span data-label-key="usageGuideStepFamilyDescription">Choose the reusable model family and review its training source and consumer.</span>
+                </li>
+                <li>
+                    <strong data-label-key="usageGuideStepDataTitle">2. Review confirmed labels</strong>
+                    <span data-label-key="usageGuideStepDataDescription">Use Training Data to check only user-confirmed labels, duplicates, and conflicts.</span>
+                </li>
+                <li>
+                    <strong data-label-key="usageGuideStepTrainTitle">3. Train a candidate</strong>
+                    <span data-label-key="usageGuideStepTrainDescription">Set bounded training options and create a candidate without replacing the active model.</span>
+                </li>
+                <li>
+                    <strong data-label-key="usageGuideStepMetricsTitle">4. Review validation summary</strong>
+                    <span data-label-key="usageGuideStepMetricsDescription">The same training run records holdout, class, group, and confusion metrics for comparison.</span>
+                </li>
+                <li>
+                    <strong data-label-key="usageGuideStepDeployTitle">5. Compare and activate</strong>
+                    <span data-label-key="usageGuideStepDeployDescription">Validate the candidate, then activate it only after comparison. Rollback remains available.</span>
+                </li>
+            </ol>
+        </details>
+    </section>
+
+    <div class="type-model-tabs-shell">
+        <button type="button" class="type-model-tab-nav" data-action="tab-prev" title="Previous section" data-title-key="previousTabTitle">
+            <i class="fas fa-chevron-left" aria-hidden="true"></i>
         </button>
-        <button type="button" class="type-model-tab" data-tab="dataset" aria-selected="false">
-            <i class="fas fa-database" aria-hidden="true"></i>
-            <span data-label-key="trainingDataTab">Training Data &amp; Label Quality</span>
+        <nav id="modelTabs-M90003" class="type-model-tabs" aria-label="Column type model training sections" data-aria-label-key="sectionTabsAriaLabel">
+            <button type="button" class="type-model-tab is-active" data-tab="overview" aria-selected="true">
+                <i class="fas fa-chart-pie" aria-hidden="true"></i>
+                <span data-label-key="overviewTab">Overview</span>
+            </button>
+            <button type="button" class="type-model-tab" data-tab="dataset" aria-selected="false">
+                <i class="fas fa-database" aria-hidden="true"></i>
+                <span data-label-key="trainingDataTab">Training Data &amp; Label Quality</span>
+            </button>
+            <button type="button" class="type-model-tab" data-tab="train" aria-selected="false">
+                <i class="fas fa-flask" aria-hidden="true"></i>
+                <span data-label-key="trainCompareTab">Train &amp; Compare</span>
+            </button>
+            <button type="button" class="type-model-tab" data-tab="versions" aria-selected="false">
+                <i class="fas fa-code-branch" aria-hidden="true"></i>
+                <span data-label-key="modelVersionsTab">Model Versions</span>
+            </button>
+            <button type="button" class="type-model-tab" data-tab="runs" aria-selected="false">
+                <i class="fas fa-history" aria-hidden="true"></i>
+                <span data-label-key="runHistoryTab">Run History</span>
+            </button>
+        </nav>
+        <button type="button" class="type-model-tab-nav" data-action="tab-next" title="Next section" data-title-key="nextTabTitle">
+            <i class="fas fa-chevron-right" aria-hidden="true"></i>
         </button>
-        <button type="button" class="type-model-tab" data-tab="train" aria-selected="false">
-            <i class="fas fa-flask" aria-hidden="true"></i>
-            <span data-label-key="trainCompareTab">Train &amp; Compare</span>
-        </button>
-        <button type="button" class="type-model-tab" data-tab="versions" aria-selected="false">
-            <i class="fas fa-code-branch" aria-hidden="true"></i>
-            <span data-label-key="modelVersionsTab">Model Versions</span>
-        </button>
-        <button type="button" class="type-model-tab" data-tab="runs" aria-selected="false">
-            <i class="fas fa-history" aria-hidden="true"></i>
-            <span data-label-key="runHistoryTab">Run History</span>
-        </button>
-    </nav>
+    </div>
 
     <main class="type-model-content">
         <section class="type-model-panel is-active" data-panel="overview">
             <div class="type-model-section-head">
                 <div>
                     <h2 data-label-key="activeModelTitle">Active Model</h2>
-                    <p data-label-key="activeModelDescription">The champion model currently used by INIT$_SP_PREDICTED_TYPE in this Target DB.</p>
+                    <p data-label-key="activeModelDescription">The active champion for the selected model family in this Target DB.</p>
                 </div>
-                <span id="activeStatus-M90003" class="type-model-status is-empty">-</span>
+                <div class="type-model-active-model">
+                    <span data-label-key="currentActiveModelName">Current active model</span>
+                    <code id="activeModelName-M90003">-</code>
+                    <span id="activeStatus-M90003" class="type-model-status is-empty">-</span>
+                </div>
             </div>
 
             <div id="activeModelCards-M90003" class="type-model-metric-grid" aria-live="polite"></div>
 
             <div class="type-model-overview-grid">
-                <section class="type-model-card type-model-group-card">
+                <section class="type-model-card type-model-group-card" data-column-type-only>
                     <header>
                         <div>
                             <h3 data-label-key="finalGroupDistributionTitle">Final Type Group Distribution</h3>
@@ -61,7 +110,7 @@
                     <div id="groupDistribution-M90003" class="type-group-distribution"></div>
                 </section>
 
-                <section class="type-model-card type-model-quality-card">
+                <section class="type-model-card type-model-quality-card" data-column-type-only>
                     <header>
                         <div>
                             <h3 data-label-key="labelQualityTitle">Confirmed Gold Label Quality</h3>
@@ -72,7 +121,7 @@
                 </section>
             </div>
 
-            <section class="type-model-card">
+            <section class="type-model-card" data-column-type-only>
                 <header>
                     <div>
                         <h3 data-label-key="detailedTypeDistributionTitle">Detailed Canonical Type Distribution</h3>
@@ -209,11 +258,17 @@
                 </label>
                 <label>
                     <span data-label-key="featureVersion">Feature Version</span>
-                    <input id="trainFeatureVersion-M90003" type="text" maxlength="40" value="V2" required>
+                    <select id="trainFeatureVersion-M90003" required>
+                        <option value="V2">V2</option>
+                    </select>
                 </label>
                 <label>
                     <span data-label-key="maximumRows">Maximum Rows</span>
                     <input id="trainMaxRows-M90003" type="number" min="100" max="1000000" step="100" value="25000" required>
+                </label>
+                <label>
+                    <span data-label-key="minimumConfirmedRows">Minimum Confirmed Rows</span>
+                    <input id="trainMinRows-M90003" type="number" min="20" max="100000" step="1" value="30" required>
                 </label>
                 <label>
                     <span data-label-key="randomSeed">Random Seed</span>
@@ -233,7 +288,7 @@
                 </button>
             </form>
 
-            <div class="type-model-note is-warning">
+            <div id="trainingReadiness-M90003" class="type-model-note is-warning">
                 <i class="fas fa-triangle-exclamation" aria-hidden="true"></i>
                 <span data-label-key="trainingSafetyNotice">Rows, seed, and holdout are bounded. Training runs in the Target DB and never replaces the champion automatically.</span>
             </div>
