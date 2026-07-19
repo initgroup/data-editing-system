@@ -230,6 +230,8 @@
             const CONTEXT_STORAGE_KEY = config.contextStorageKey || "DATA_EDITING_WORK_CONTEXT";
             const { getContainerEl } = PageManager.createHelper(PAGE_CODE);
             const COMMON = this.createPageHelper(PAGE_CODE);
+            const SQL_TRANSACTION_REGISTRY = window.__MCOM_DATA_WORK_SQL_TRANSACTION_REGISTRY__
+                || (window.__MCOM_DATA_WORK_SQL_TRANSACTION_REGISTRY__ = new Map());
 
             const page = {
         
@@ -305,8 +307,28 @@
         scriptWrapMode: false,
         executionConfigLoadCount: 0,
 
+        getSqlTransactionRegistryKey() {
+            const connectionId = sessionStorage.getItem("targetConnectionId") || "default";
+            return `${PAGE_CODE}:${connectionId}`;
+        },
+
+        restoreSqlTransaction() {
+            this.sqlTransactionId = String(
+                SQL_TRANSACTION_REGISTRY.get(this.getSqlTransactionRegistryKey()) || ""
+            );
+        },
+
+        rememberSqlTransaction(transactionId = this.sqlTransactionId) {
+            const key = this.getSqlTransactionRegistryKey();
+            const normalizedId = String(transactionId || "").trim();
+            this.sqlTransactionId = normalizedId;
+            if (normalizedId) SQL_TRANSACTION_REGISTRY.set(key, normalizedId);
+            else SQL_TRANSACTION_REGISTRY.delete(key);
+        },
+
         async init() {
             if (this.isInit) return;
+            this.restoreSqlTransaction();
             this.currentJob = this.createEmptyJob();
             this.applyUiLabels();
             this.syncScriptWrapMode();
@@ -339,27 +361,36 @@
             this.renderCurrentJob();
         },
 
-        async beforeClose() {
+        async releaseSqlTransaction(reason = "page hide") {
             const transactionId = this.sqlTransactionId;
             if (!transactionId) return true;
 
             try {
+                // This transaction belongs to the SQL worksheet, not to a server-side
+                // DATA_WORK/FLOW_WORK batch. Hiding or closing the page must return its
+                // pooled connection while background work continues independently.
                 await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/sql/transaction/rollback`, {
                     method: "POST",
                     body: { transactionId }
                 });
-                this.sqlTransactionId = "";
+                this.rememberSqlTransaction("");
                 this.renderSqlTransactionState();
                 return true;
             } catch (error) {
-                console.warn(`[${PAGE_CODE}] SQL transaction rollback during page close failed.`, error);
-                this.renderSqlMessage(
-                    "sql",
-                    error.message || this.getMessage("transactionFailed", "Transaction rollback failed."),
-                    "error"
-                );
-                return false;
+                console.warn(`[${PAGE_CODE}] SQL transaction rollback during ${reason} failed.`, error);
+                // Do not trap the user while navigating. The shortened server-side
+                // idle timeout remains the final safety net if this request cannot run.
+                this.rememberSqlTransaction("");
+                return true;
             }
+        },
+
+        async onHide() {
+            return this.releaseSqlTransaction("page hide");
+        },
+
+        async beforeClose(context = {}) {
+            return this.releaseSqlTransaction("page close");
         },
 
         destroy() {
@@ -5190,7 +5221,7 @@ END;`;
                     method: "POST",
                     body: { transactionId }
                 });
-                this.sqlTransactionId = "";
+                this.rememberSqlTransaction("");
                 this.renderSqlTransactionState();
                 this.renderSqlMessage("sql", json.message || this.getMessage("transactionCompleted", `Transaction ${action} completed.`, { action: actionLabel }), "success");
             } catch (error) {
@@ -5296,7 +5327,7 @@ END;`;
                     ? Number(json.elapsedMs)
                     : Math.round(performance.now() - startedAt);
                 if (gridKey === "sql" && json.transactionId && json.transactionId !== this.sqlTransactionId) {
-                    this.sqlTransactionId = json.transactionId;
+                    this.rememberSqlTransaction(json.transactionId);
                     this.renderSqlTransactionState();
                 }
                 this.renderSqlMessage(gridKey, `${json.message || "SQL executed."} (${elapsedMs.toLocaleString()} ms)`, "success");

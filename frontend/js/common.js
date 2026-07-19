@@ -582,6 +582,8 @@ const CommonUtils = {
         this.activeRequestCount += 1;
         let responseLogged = false;
         let timeoutId = null;
+        let timedOut = false;
+        let externalAbortHandler = null;
         try {
             const headers = { 'Content-Type': 'application/json', ...options.headers };
             const targetConnectionId = sessionStorage.getItem("targetConnectionId") || "";
@@ -592,16 +594,25 @@ const CommonUtils = {
             if (bootstrapToken && !headers["X-Bootstrap-Token"]) {
                 headers["X-Bootstrap-Token"] = bootstrapToken;
             }
-            const controller = options.timeoutMs ? new AbortController() : null;
-            if (controller) {
-                timeoutId = setTimeout(() => controller.abort(), Number(options.timeoutMs));
+            const externalSignal = options.signal || null;
+            const controller = (options.timeoutMs || externalSignal) ? new AbortController() : null;
+            if (controller && externalSignal) {
+                externalAbortHandler = () => controller.abort(externalSignal.reason);
+                if (externalSignal.aborted) externalAbortHandler();
+                else externalSignal.addEventListener("abort", externalAbortHandler, { once: true });
+            }
+            if (controller && options.timeoutMs) {
+                timeoutId = setTimeout(() => {
+                    timedOut = true;
+                    controller.abort();
+                }, Number(options.timeoutMs));
             }
             const response = await fetch(url, {
                 method: options.method || 'GET',
                 headers,
                 body: options.body ? JSON.stringify(options.body) : null,
                 credentials: 'include',
-                signal: options.signal || controller?.signal
+                signal: controller?.signal || externalSignal
             });
             
             if (!response.ok) {
@@ -621,8 +632,10 @@ const CommonUtils = {
             return json;
 
         } catch (err) {
-            if (err?.name === "AbortError") {
+            if (err?.name === "AbortError" && timedOut) {
                 err = new Error(options.timeoutMessage || CommonUI.t("commonUi.errors.requestTimeout", "The request timed out. Check the WAS server status or network connection."));
+            } else if (err?.name === "AbortError") {
+                throw err;
             } else if (!responseLogged) {
                 err = new Error(this.formatMainErrorMessage(err?.message || err || "Request failed.", { url }));
             }
@@ -632,6 +645,9 @@ const CommonUtils = {
             throw err;
         } finally {
             if (timeoutId) clearTimeout(timeoutId);
+            if (externalAbortHandler && options.signal) {
+                options.signal.removeEventListener("abort", externalAbortHandler);
+            }
             this.activeRequestCount = Math.max(0, this.activeRequestCount - 1);
         }
     },
@@ -962,36 +978,51 @@ const CommonUtils = {
         if (!table?.classList?.contains("table-grid")) return;
         if (table.classList.contains("data-edit-table") || table.classList.contains("data-sql-result-table")) return;
         const headerRow = table.tHead?.rows?.[0];
-        if (!headerRow || table.dataset.standardGridReady === "Y") return;
+        if (!headerRow) return;
 
-        const originalColumnCount = headerRow.children.length;
-        const hasRowNumber = headerRow.children[0]?.classList?.contains("grid-row-no");
-        if (!hasRowNumber) {
-            const rowOffset = Math.max(0, Number.parseInt(table.dataset.gridRowOffset || "0", 10) || 0);
-            const header = document.createElement("th");
-            header.className = "grid-row-no";
-            header.title = "No";
-            header.textContent = "No";
-            headerRow.insertBefore(header, headerRow.firstChild);
-            const colgroup = Array.from(table.children || []).find((child) => child.tagName === "COLGROUP");
-            if (colgroup && colgroup.children.length === originalColumnCount) {
-                const rowNumberColumn = document.createElement("col");
-                rowNumberColumn.style.width = "48px";
-                colgroup.insertBefore(rowNumberColumn, colgroup.firstChild);
+        if (table.dataset.standardGridReady !== "Y") {
+            const originalColumnCount = headerRow.children.length;
+            const hasRowNumber = headerRow.children[0]?.classList?.contains("grid-row-no");
+            if (!hasRowNumber) {
+                const rowOffset = Math.max(0, Number.parseInt(table.dataset.gridRowOffset || "0", 10) || 0);
+                const header = document.createElement("th");
+                header.className = "grid-row-no";
+                header.title = "No";
+                header.textContent = "No";
+                headerRow.insertBefore(header, headerRow.firstChild);
+                const colgroup = Array.from(table.children || []).find((child) => child.tagName === "COLGROUP");
+                if (colgroup && colgroup.children.length === originalColumnCount) {
+                    const rowNumberColumn = document.createElement("col");
+                    rowNumberColumn.style.width = "48px";
+                    colgroup.insertBefore(rowNumberColumn, colgroup.firstChild);
+                }
+                Array.from(table.tBodies?.[0]?.rows || []).forEach((row, index) => {
+                    if (row.children.length !== originalColumnCount) return;
+                    const cell = document.createElement("td");
+                    cell.className = "grid-row-no";
+                    cell.textContent = String(rowOffset + index + 1);
+                    row.insertBefore(cell, row.firstChild);
+                });
             }
-            Array.from(table.tBodies?.[0]?.rows || []).forEach((row, index) => {
-                if (row.children.length !== originalColumnCount) return;
-                const cell = document.createElement("td");
-                cell.className = "grid-row-no";
-                cell.textContent = String(rowOffset + index + 1);
-                row.insertBefore(cell, row.firstChild);
-            });
         }
 
         const freezeColumns = Math.max(0, Number.parseInt(table.dataset.standardGridFreezeColumns || "0", 10) || 0);
+        // A hidden tab has no usable header width.  Do not freeze the table at
+        // fallback widths; the owning page will initialize it after activation.
+        const measuredWidth = table.getBoundingClientRect?.().width || table.offsetWidth || 0;
+        if (!(measuredWidth > 0)) {
+            table.dataset.standardGridLayoutPending = "Y";
+            return;
+        }
+        if (table.dataset.standardGridReady === "Y") {
+            this.applyStandardGridFreeze(table, freezeColumns);
+            return;
+        }
+
         this.enableGridColumnResize(table, () => this.applyStandardGridFreeze(table, freezeColumns));
         this.applyStandardGridFreeze(table, freezeColumns);
         table.dataset.standardGridReady = "Y";
+        delete table.dataset.standardGridLayoutPending;
     },
 
     applyStandardGridFreeze(table, dataColumnCount = 0) {
@@ -1482,12 +1513,15 @@ CommonUI.hideScopedLoading = function(token) {
 const originalCommonRequest = CommonUtils.request.bind(CommonUtils);
 CommonUtils.request = async function(url, options = {}) {
     const useLoading = options.showLoading !== false;
+    const loadingTarget = useLoading
+        ? CommonUI.resolveLoadingTarget?.(options.loadingTarget)
+        : null;
     let loadingTimer = null;
     let loadingToken = null;
 
     if (useLoading) {
         loadingTimer = setTimeout(() => {
-            loadingToken = CommonUI.showScopedLoading?.(options.loadingTarget, options.loadingMessage) || { type: 'global' };
+            loadingToken = CommonUI.showScopedLoading?.(loadingTarget, options.loadingMessage) || { type: 'global' };
             if (loadingToken.type === 'global') CommonUI.showLoading();
         }, typeof LOADING_DELAY_MS === "number" ? LOADING_DELAY_MS : 300);
     }

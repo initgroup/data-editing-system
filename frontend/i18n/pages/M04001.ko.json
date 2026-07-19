@@ -12,10 +12,20 @@
     "paramDescTargetOwner": "분석 대상 테이블 계정",
     "paramDescTargetTable": "분석 대상 테이블명",
     "paramDescDynamicModelName": "분류/예측 모델명",
-    "paramDescPredictionMethod": "예측 방식(AUTO: 활성 모델이 있으면 규칙+모델로 FINAL 자동 반영, 없으면 규칙으로 안전하게 최초 수행)"
+    "paramDescPredictionMethod": "예측 방식(AUTO: 활성 모델이 있으면 규칙+모델로 FINAL 자동 반영, 없으면 규칙으로 안전하게 최초 수행)",
+    "refreshHistoryTitle": "실행 이력 새로고침",
+    "autoRefreshPauseTitle": "자동 새로고침 일시 중지",
+    "autoRefreshResumeTitle": "자동 새로고침 다시 시작"
   },
   "messages": {
     "flowEdgeStageBlocked": "단계 {fromStage} 노드는 단계 {toStage} 노드보다 앞에 연결할 수 없습니다.",
-    "flowEdgeArtifactBlocked": "{sourceArtifact} 출력은 {targetArtifact} 입력에 연결할 수 없습니다."
+    "flowEdgeArtifactBlocked": "{sourceArtifact} 출력은 {targetArtifact} 입력에 연결할 수 없습니다.",
+    "historyAutoRefreshActive": "자동 새로고침 중 · {seconds}초 간격",
+    "historyAutoRefreshRefreshing": "자동 새로고침 중…",
+    "historyAutoRefreshPaused": "자동 새로고침이 중지되었습니다.",
+    "historyContextRequired": "프로젝트와 시나리오를 선택하세요.",
+    "historyRefreshing": "실행 이력을 새로고침하는 중입니다.",
+    "historyRefreshed": "{time}에 새로고침했습니다.",
+    "historyRefreshFailed": "실행 이력 새로고침에 실패했습니다."
   }
 }

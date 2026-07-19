@@ -16,19 +16,24 @@ class PopulationItem(BaseModel):
 # 조회 (Read)
 @router.get("/population")
 def get_population():
-    conn = get_db_connection()
-    if not conn:
-        raise HTTPException(status_code=500, detail="DB Connection Failed")
-    
-    cursor = conn.cursor()
-    cursor.execute(SqlLoader.get_sql("POPULATION_LIST"))
-    columns = [col[0] for col in cursor.description]
-    cursor.rowfactory = lambda *args: dict(zip(columns, args))
-    data = cursor.fetchall()
-    
-    cursor.close()
-    conn.close()
-    return {"status": "success", "data": data}
+    conn = None
+    cursor = None
+    try:
+        conn = get_db_connection()
+        if not conn:
+            raise HTTPException(status_code=500, detail="DB Connection Failed")
+
+        cursor = conn.cursor()
+        cursor.execute(SqlLoader.get_sql("POPULATION_LIST"))
+        columns = [col[0] for col in cursor.description]
+        cursor.rowfactory = lambda *args: dict(zip(columns, args))
+        data = cursor.fetchall()
+        return {"status": "success", "data": data}
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 # 생성 (Create)
 @router.post("/population")

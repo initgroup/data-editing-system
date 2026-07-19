@@ -2928,6 +2928,25 @@
     max-width: none;
 }
 
+.anly-work-relation-network-popup.is-network-graph-maximized.is-network-edge-grid-collapsed .anly-work-relation-network-main {
+    grid-template-rows: minmax(320px, 1fr) 112px;
+}
+
+.anly-work-relation-network-popup.is-network-graph-maximized.is-network-edge-grid-collapsed [data-anly-network-edge-raw-data] {
+    gap: 4px;
+    padding: 8px 10px;
+}
+
+.anly-work-relation-network-popup.is-network-graph-maximized.is-network-edge-grid-collapsed .anly-work-network-edge-table-wrap {
+    height: 64px;
+    max-height: 64px;
+    overflow: hidden;
+}
+
+.anly-work-relation-network-popup.is-network-graph-maximized.is-network-edge-grid-collapsed .anly-work-network-edge-table tbody tr:not(.is-collapsed-preview) {
+    display: none;
+}
+
 .anly-work-network-graph-shell {
     background: #f8fafc;
     display: grid;
@@ -3310,6 +3329,33 @@
     color: #0f172a;
     font-size: 13px;
     font-weight: 850;
+}
+
+.anly-work-network-edge-raw-header {
+    align-items: center;
+    display: flex;
+    gap: 8px;
+    justify-content: space-between;
+    min-width: 0;
+}
+
+.anly-work-network-edge-raw-header > button {
+    align-items: center;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    color: #334155;
+    cursor: pointer;
+    display: inline-flex;
+    flex: 0 0 auto;
+    height: 28px;
+    justify-content: center;
+    width: 30px;
+}
+
+.anly-work-network-edge-raw-header > button.is-active {
+    background: #eff6ff;
+    border-color: #2563eb;
+    color: #1d4ed8;
 }
 
 .anly-work-network-node-list {
@@ -3844,9 +3890,38 @@
     background: #f8fafc;
     color: #334155;
     font-weight: 850;
-    position: sticky;
-    top: 0;
-    z-index: 1;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 40 !important;
+}
+
+.anly-work-symbolic-raw-table .grid-row-no.is-frozen-col {
+    background-clip: padding-box;
+    box-shadow: 1px 0 #cbd5e1;
+    left: 0 !important;
+    min-width: 48px;
+    position: sticky !important;
+    text-align: center;
+    width: 48px;
+}
+
+.anly-work-symbolic-raw-table thead .grid-row-no.is-frozen-col {
+    background: #f8fafc;
+    top: 0 !important;
+    z-index: 90 !important;
+}
+
+.anly-work-symbolic-raw-table tbody .grid-row-no.is-frozen-col {
+    background: #ffffff;
+    z-index: 45 !important;
+}
+
+.anly-work-symbolic-raw-table tbody tr:hover .grid-row-no.is-frozen-col {
+    background: #eff6ff;
+}
+
+.anly-work-symbolic-raw-table tbody tr.is-selected .grid-row-no.is-frozen-col {
+    background: #fef3c7;
 }
 
 .anly-work-symbolic-raw-table tbody tr {
@@ -5981,6 +6056,10 @@
     .anly-work-relation-network-popup.is-network-graph-maximized .anly-work-relation-network-main {
         grid-template-rows: minmax(280px, 1fr) minmax(190px, 34vh);
         overflow: hidden;
+    }
+
+    .anly-work-relation-network-popup.is-network-graph-maximized.is-network-edge-grid-collapsed .anly-work-relation-network-main {
+        grid-template-rows: minmax(280px, 1fr) 112px;
     }
 
     .anly-work-relation-network-popup.is-network-graph-maximized .anly-work-relation-network-graph-stage {

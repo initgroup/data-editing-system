@@ -86,7 +86,9 @@
             flowVariables: "Flow Variables",
             backToDesigner: "Back to designer",
             buildPlan: "Build execution plan",
-            refreshHistory: "Refresh history"
+            refreshHistoryTitle: "Refresh history",
+            autoRefreshPauseTitle: "Pause automatic refresh",
+            autoRefreshResumeTitle: "Resume automatic refresh"
         },
         messages: {}
     });

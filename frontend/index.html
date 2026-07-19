@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>INIT Data Editing System</title>
     <script>
-        window.APP_CACHE_VERSION = "1.1.227";
+        window.APP_CACHE_VERSION = "1.1.228";
         window.APP_ASSET_VERSION_OVERRIDES = {
             // 전체 캐시 갱신: APP_CACHE_VERSION만 올립니다.
             // 부분 캐시 갱신: "js/M90001.js": "1.0.1" 처럼 파일별 버전을 지정합니다.
@@ -505,14 +505,17 @@
             const activeSection = document.querySelector('.page-section.active');
             if (!activeSection) return;
             const pageCode = activeSection.id.replace('page-section-', '');
-            if (await PageManager.confirmAndCleanupBeforeClose?.([pageCode], "close current page")) {
-                PageManager.close(pageCode, true);
+            if (await PageManager.confirmAndCleanupBeforeClose?.([pageCode], "close current page", { cleanupTargetConnection: false })) {
+                PageManager.close(pageCode, true, {
+                    reason: "close current page",
+                    preserveServerWork: true
+                });
             }
         }
 
         async function handleAllPageClose() {
             const pageCodes = Object.keys(PageManager.containers || {});
-            if (await PageManager.confirmAndCleanupBeforeClose?.(pageCodes, "close all pages")) {
+            if (await PageManager.confirmAndCleanupBeforeClose?.(pageCodes, "close all pages", { cleanupTargetConnection: false })) {
                 PageManager.closeAll();
             }
         }
@@ -533,7 +536,7 @@
 
         async function handleLogout() {
             const pageCodes = Object.keys(PageManager.containers || {});
-            if (!(await PageManager.confirmAndCleanupBeforeClose?.(pageCodes, "logout"))) return;
+            if (!(await PageManager.confirmAndCleanupBeforeClose?.(pageCodes, "logout", { cleanupTargetConnection: true }))) return;
             await PageManager.revokeLoginSession?.();
             PageManager.clearLoginSession?.();
             PageManager.resetWorkspaceForLogout?.();

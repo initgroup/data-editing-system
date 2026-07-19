@@ -414,6 +414,23 @@ def list_node_runs(conn, flow_run_id: int) -> Dict[str, Any]:
     return response
 
 
+def get_run(conn, menu_code: str, project_id: int, scenario_id: int, flow_run_id: int) -> Optional[Dict[str, Any]]:
+    result = execute_query(conn, "FLOW_WORK_RUN_GET", {
+        "flowRunId": flow_run_id,
+        "menuCode": normalize_menu_code(menu_code),
+        "projectId": project_id,
+        "scenarioId": scenario_id,
+    })
+    response = data_work.require_success(result, "Flow run query failed.")
+    rows = response.get("data", [])
+    if not rows:
+        return None
+    row = rows[0]
+    row["MESSAGE"] = data_work.read_lob(row.get("MESSAGE"))
+    row["PLAN_JSON"] = data_work.read_lob(row.get("PLAN_JSON"))
+    return row
+
+
 def list_runs_by_flow(conn, flow_id: int) -> List[Dict[str, Any]]:
     result = execute_query(conn, "FLOW_WORK_RUN_LIST_BY_FLOW", {"flowId": flow_id})
     response = data_work.require_success(result, "Flow run query failed.")

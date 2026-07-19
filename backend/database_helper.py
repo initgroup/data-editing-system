@@ -157,7 +157,10 @@ def execute_query(conn, sql_id: str, params: dict = None, is_dml: bool = False, 
                 # 에러 발생 시에도 JS가 인식 가능한 구조를 반환하거나 명확한 HTTP 에러를 던져야 함
                 return {"data": [], "total": 0, "status": "error", "detail": str(db_err)}
     except Exception as e:
-        if conn and is_dml:
+        # Both DML and procedure execution are committed by this helper.
+        # Keep the matching rollback responsibility here as well so a failed
+        # procedure cannot leave an unfinished transaction on a pooled session.
+        if conn and (is_dml or is_proc):
             conn.rollback()
         logger.error(f"[DB ERROR] ID: {sql_id} | MSG: {str(e)}")
         # 에러 발생 시 공통 구조 반환

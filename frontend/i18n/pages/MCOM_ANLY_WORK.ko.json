@@ -452,6 +452,8 @@
     "Metric below threshold: {value} {operator} {threshold}": "관계 지표 기준 미달: {value} {operator} {threshold}",
     "P-value threshold not met: {value} >= {threshold}": "유의확률 기준 미달: {value} >= {threshold}",
     "Insufficient valid rows: {value} < {threshold}": "유효 행 수 부족: {value} < {threshold}",
-    "Stored as PASS_YN=N by the analysis procedure.": "분석 프로시저의 기타 통과 조건을 충족하지 못해 PASS_YN=N으로 저장됐습니다."
+    "Stored as PASS_YN=N by the analysis procedure.": "분석 프로시저의 기타 통과 조건을 충족하지 못해 PASS_YN=N으로 저장됐습니다.",
+    "Collapse row data grid": "로우 데이터 그리드 접기",
+    "Expand row data grid": "로우 데이터 그리드 펼치기"
   }
 }

@@ -857,6 +857,32 @@ def create_flow_work_router(
             if conn:
                 conn.close()
 
+    @router.get("/run/{flow_run_id}/snapshot")
+    def get_run_snapshot(
+        flow_run_id: int,
+        request: Request,
+        projectId: int,
+        scenarioId: int,
+    ):
+        """Return one run and its node results with a single pooled connection."""
+        conn = None
+        try:
+            conn = get_target_db_connection(request)
+            run_row = flow_work.get_run(conn, MENU_CODE, projectId, scenarioId, flow_run_id)
+            if run_row is None:
+                raise HTTPException(status_code=404, detail="Flow run was not found in the selected project and scenario.")
+            node_rows = flow_work.list_node_runs(conn, flow_run_id).get("data") or []
+            return {
+                "status": "success",
+                "data": {
+                    "run": run_row,
+                    "nodes": node_rows,
+                },
+            }
+        finally:
+            if conn:
+                conn.close()
+
     @router.get("/result-sql")
     def get_result_sql(
         request: Request,

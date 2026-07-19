@@ -65,7 +65,7 @@ def normalize_read_only_sql(sql: str) -> str:
     return text
 
 @router.post("/ai/ask")
-async def ask_ai(payload: Dict[str, Any] = Body(...)):
+def ask_ai(payload: Dict[str, Any] = Body(...)):
     """
     Select AI를 사용하여 자연어를 SQL로 변환하거나 결과를 조회합니다.
     payload: { "prompt": "질문내용", "mode": "sql" 또는 "data" }
@@ -81,6 +81,9 @@ async def ask_ai(payload: Dict[str, Any] = Body(...)):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
+
+        if os.getenv("DB_MODE", "local").lower() == "cloud":
+            cursor.execute(SqlLoader.get_sql("COMMON_AI_SET_PROFILE"))
 
         cursor.execute(SqlLoader.get_sql("COMMON_AI_SHOWSQL"), {"prompt": prompt})
         row = cursor.fetchone()

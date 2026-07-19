@@ -300,34 +300,13 @@ def cleanup_target_session(req: SessionCleanupRequest, request: Request):
         clear_gemini_api_key_cache(user_id, connection_id)
     else:
         clear_gemini_api_key_cache(user_id)
-    if not connection_id:
-        return {"status": "success", "message": "No target DB connection selected."}
-
-    system_conn = None
-    target_conn = None
-    try:
-        system_conn = get_db_connection()
-        row = _get_connection_detail(system_conn, connection_id, user_id)
-        if row.get("USE_YN") != "Y":
-            raise HTTPException(status_code=400, detail="Selected target DB connection is disabled.")
-        target_conn = _connect_target(_connection_row_to_params(row))
-        try:
-            target_conn.rollback()
-        except Exception as rollback_error:
-            logger.warning(f"M91001 cleanup rollback failed: {str(rollback_error)}")
-        return {
-            "status": "success",
-            "message": "Target DB cleanup completed.",
-            "connectionId": connection_id,
-            "reason": req.reason or "",
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"M91001 target cleanup failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        if target_conn:
-            target_conn.close()
-        if system_conn:
-            system_conn.close()
+    # A newly opened Target DB connection cannot roll back work performed on a
+    # different pooled/background connection.  Doing so during page or session
+    # transitions only consumes another pool slot and can starve a running batch.
+    # Connection ownership remains with each request/job and its finally block.
+    return {
+        "status": "success",
+        "message": "Client session cleanup completed.",
+        "connectionId": connection_id,
+        "reason": req.reason or "",
+    }

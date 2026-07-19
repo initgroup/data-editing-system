@@ -21,9 +21,12 @@
         const SCENARIO_TABLE_API = config.scenarioTableApi || "M02002";
         const FLOW_NODE_DEFAULT_WIDTH = 210;
         const FLOW_NODE_DEFAULT_HEIGHT = 164;
+        // Diagnostic switch: retain all polling code but temporarily prevent automatic
+        // server calls so batch execution and normal menu navigation can be isolated.
+        // Manual history/detail refresh remains available.
+        const ENABLE_AUTOMATIC_FLOW_RUN_POLLING = false;
         const { getContainerEl } = PageManager.createHelper(PAGE_CODE);
         const COMMON = MCOMMON.createPageHelper(PAGE_CODE);
-
         const page = {
             ...COMMON,
             isInit: false,
@@ -42,6 +45,21 @@
             flowVariables: [],
             flowRunHistoryRows: [],
             flowRunHistoryColumnWidths: {},
+            flowRunHistoryAutoRefreshTimer: null,
+            flowRunHistoryAutoRefreshInFlight: false,
+            flowRunHistoryAutoRefreshPromise: null,
+            flowRunHistoryManualRefreshPromise: null,
+            flowRunHistoryManualRefreshRunId: "",
+            flowRunHistoryAutoRefreshRunIds: new Set(),
+            flowRunHistoryAutoRefreshToken: 0,
+            flowRunHistorySnapshotController: null,
+            flowRunHistorySnapshotPromise: null,
+            flowRunHistorySnapshotRunId: "",
+            flowRunHistorySnapshotSequence: 0,
+            flowRunHistoryLoadPromise: null,
+            flowNodeRunLoadPromisesByFlowRunId: new Map(),
+            flowNodeRunLoadControllersByFlowRunId: new Map(),
+            flowRunFlowKeysByRunId: new Map(),
             flowNodeRunResultRows: [],
             expandedRunPlanFlowRunIds: new Set(),
             flowNodeRunResultsByFlowRunId: new Map(),
@@ -99,7 +117,10 @@
             activeCanvasRunId: "",
             activeCanvasRunFlowKey: "",
             activeCanvasRunPollTimer: null,
+            activeCanvasRunPollInFlight: false,
             activeCanvasRunPollFailures: 0,
+            isPageVisible: true,
+            lifecycleGeneration: 0,
             flowNodePointerMoveBound: null,
             flowNodePointerUpBound: null,
             flowCanvasPointerMoveBound: null,
@@ -122,10 +143,13 @@
 
             async init() {
                 if (this.isInit) return;
+                const lifecycleGeneration = ++this.lifecycleGeneration;
+                this.isPageVisible = true;
                 this.applyUiLabels();
                 this.removeFlowVersionCountLabel();
                 this.resetFlowResultSqlPlaceholder();
                 await this.loadWorkContext();
+                if (lifecycleGeneration !== this.lifecycleGeneration) return;
                 this.switchTab("designer");
                 this.setupFlowDesigner();
                 this.setFlowInspectorCollapsed(true);
@@ -134,7 +158,44 @@
                 this.isInit = true;
             },
 
+            onHide() {
+                this.isPageVisible = false;
+                // Stop only the timer. Aborting a browser fetch does not cancel the
+                // synchronous Oracle query already running on the server; replacing it
+                // would therefore overlap DB work and can exhaust the connection pool.
+                this.stopFlowRunHistoryAutoRefresh({ abortRequest: false });
+                // A fetch abort cannot interrupt the synchronous Oracle call that is
+                // already executing on the server. Keep that single request alive and
+                // only stop scheduling new polls while this page is hidden.
+                this.stopCanvasRunStatusPolling({ abortRequest: false });
+            },
+
+            onShow() {
+                this.isPageVisible = true;
+                if (this.activeCanvasRunId && !this.activeCanvasRunPollInFlight) {
+                    this.scheduleCanvasRunStatusPoll(250);
+                }
+                if (this.activeTab === "history") this.syncFlowRunHistoryAutoRefresh();
+            },
+
+            beforeClose() {
+                // A flow run is owned by the server background queue after submit.
+                // Closing this page only stops future UI polling/render work; it must
+                // never cancel, roll back, or replace the accepted batch request.
+                this.stopFlowRunHistoryAutoRefresh({ abortRequest: false });
+                this.stopCanvasRunStatusPolling({ abortRequest: false });
+                return true;
+            },
+
             destroy() {
+                // Invalidate every late callback before removing the page DOM.  Do not
+                // abort Oracle-backed reads here: aborting fetch does not stop the
+                // synchronous server query and a reopened page can then overlap it.
+                // Submitted flow runs are server-side jobs and must outlive this page.
+                this.lifecycleGeneration += 1;
+                this.isPageVisible = false;
+                this.stopFlowRunHistoryAutoRefresh({ abortRequest: false });
+                this.stopCanvasRunStatusPolling({ abortRequest: false });
                 this.closeNodeRunParamsLayer();
                 this.disposePaletteDragImage();
                 this.restoreSidebarsAfterCanvasMaximize();
@@ -154,6 +215,19 @@
                 this.flowVariables = [];
                 this.flowRunHistoryRows = [];
                 this.flowRunHistoryColumnWidths = {};
+                this.flowRunHistoryAutoRefreshInFlight = false;
+                this.flowRunHistoryAutoRefreshPromise = null;
+                this.flowRunHistoryManualRefreshPromise = null;
+                this.flowRunHistoryManualRefreshRunId = "";
+                this.flowRunHistoryAutoRefreshRunIds = new Set();
+                this.flowRunHistorySnapshotController = null;
+                this.flowRunHistorySnapshotPromise = null;
+                this.flowRunHistorySnapshotRunId = "";
+                this.flowRunHistorySnapshotSequence = 0;
+                this.flowRunHistoryLoadPromise = null;
+                this.flowNodeRunLoadPromisesByFlowRunId = new Map();
+                this.flowNodeRunLoadControllersByFlowRunId = new Map();
+                this.flowRunFlowKeysByRunId = new Map();
                 this.flowNodeRunResultRows = [];
                 this.expandedRunPlanFlowRunIds = new Set();
                 this.flowNodeRunResultsByFlowRunId = new Map();
@@ -167,6 +241,7 @@
                 this.flowResultSqlQuery = "";
                 this.activeRunPlanFlowRunId = "";
                 this.activeRunPlanLoadedId = "";
+                this.isPageVisible = false;
                 this.selectedProjectId = "";
                 this.selectedScenarioId = "";
                 this.selectedScenarioTableKey = "";
@@ -225,6 +300,7 @@
                     });
                     container.querySelectorAll(`[data-title-key="${key}"]`).forEach((element) => {
                         element.setAttribute("title", value);
+                        if (element.hasAttribute("aria-label")) element.setAttribute("aria-label", value);
                     });
                     container.querySelectorAll(`[data-placeholder-key="${key}"]`).forEach((element) => {
                         element.setAttribute("placeholder", value);
@@ -1744,6 +1820,15 @@
                 container.querySelectorAll(".table-tab-panel").forEach((panel) => {
                     panel.classList.toggle("is-active", panel.dataset.panel === this.activeTab);
                 });
+                if (this.activeTab === "history") {
+                    if (this.flowRunHistoryRows.length) {
+                        this.syncFlowRunHistoryAutoRefresh();
+                    } else {
+                        return this.loadFlowRunHistory({ showFeedback: false });
+                    }
+                } else {
+                    this.stopFlowRunHistoryAutoRefresh({ abortRequest: false });
+                }
             },
 
             setupFlowDesigner() {
@@ -5534,13 +5619,246 @@
                     throw error;
                 }
             },
-            async refreshFlowRunHistory() {
-                await this.loadFlowRunHistory({ showFeedback: true });
+            isFlowRunHistoryPanelActive() {
+                const container = document.getElementById(`container-${PAGE_CODE}`);
+                const panel = getContainerEl(`.flow-history-panel[data-panel="history"]`);
+                return Boolean(
+                    this.isInit
+                    && this.isPageVisible
+                    && window.PageManager?.activePageCode === PAGE_CODE
+                    && this.activeTab === "history"
+                    && container?.isConnected
+                    && panel?.classList.contains("is-active")
+                );
             },
-            setFlowRunHistoryLoading(isLoading, message = "") {
+            hasActiveFlowRun(rows = this.flowRunHistoryRows) {
+                const activeStatuses = new Set(["PENDING", "QUEUED", "STARTED", "RUNNING", "IN_PROGRESS", "SUBMITTED"]);
+                return (Array.isArray(rows) ? rows : []).some((row) => activeStatuses.has(String(row?.STATUS || "").trim().toUpperCase()));
+            },
+            isFlowRunAutoRefreshEligible(flowRunId) {
+                if (!ENABLE_AUTOMATIC_FLOW_RUN_POLLING) return false;
+                const targetId = String(flowRunId || "");
+                const row = this.flowRunHistoryRows.find((item) => String(item?.FLOW_RUN_ID || "") === targetId);
+                return Boolean(
+                    targetId
+                    && this.isFlowRunHistoryPanelActive()
+                    && this.hasActiveFlowRun(row ? [row] : [])
+                );
+            },
+            getFlowRunHistoryAutoRefreshMessage(flowRunId) {
+                if (!this.flowRunHistoryAutoRefreshRunIds.has(String(flowRunId || ""))) return "";
+                if (this.flowRunHistoryAutoRefreshInFlight) {
+                    return this.getMessage("historyAutoRefreshRefreshing", "Refreshing automatically...");
+                }
+                return this.getMessage("historyAutoRefreshActive", "Auto-refreshing every {seconds} seconds.", { seconds: 5 });
+            },
+            updateFlowRunHistoryAutoRefreshUi() {
+                getContainerEl(`#flowRunHistoryGrid-${PAGE_CODE}`)?.querySelectorAll("[data-flow-run-auto-refresh-toggle]").forEach((toggle) => {
+                    const flowRunId = String(toggle.dataset.flowRunId || "");
+                    const isEligible = this.isFlowRunAutoRefreshEligible(flowRunId);
+                    const isEnabled = isEligible && this.flowRunHistoryAutoRefreshRunIds.has(flowRunId);
+                    const titleKey = isEnabled ? "autoRefreshPauseTitle" : "autoRefreshResumeTitle";
+                    const title = this.getLabel(
+                        titleKey,
+                        isEnabled ? "Pause automatic refresh" : "Resume automatic refresh"
+                    );
+                    toggle.setAttribute("title", title);
+                    toggle.setAttribute("aria-label", title);
+                    toggle.setAttribute("aria-pressed", String(isEnabled));
+                    toggle.disabled = !isEligible;
+                    toggle.classList.toggle("is-active", isEnabled);
+                    const icon = toggle.querySelector("i");
+                    if (icon) {
+                        icon.classList.toggle("fa-pause", isEnabled);
+                        icon.classList.toggle("fa-play", !isEnabled);
+                    }
+                    const status = toggle.parentElement?.querySelector("[data-flow-run-auto-refresh-status]");
+                    if (status) {
+                        status.textContent = isEnabled ? this.getFlowRunHistoryAutoRefreshMessage(flowRunId) : "";
+                        status.classList.toggle("is-refreshing", isEnabled && this.flowRunHistoryAutoRefreshInFlight);
+                        status.setAttribute("aria-live", "polite");
+                    }
+                    const manualRefresh = toggle.parentElement?.querySelector("[data-flow-run-manual-refresh]");
+                    const manualRefreshIcon = manualRefresh?.querySelector("i");
+                    const isRefreshing = (
+                        (isEnabled && this.flowRunHistoryAutoRefreshInFlight)
+                        || this.flowRunHistoryManualRefreshRunId === flowRunId
+                    );
+                    manualRefresh?.classList.toggle("is-loading", isRefreshing);
+                    manualRefresh?.setAttribute("aria-busy", String(isRefreshing));
+                    manualRefreshIcon?.classList.toggle("fa-spin", isRefreshing);
+
+                    const detailPanel = getContainerEl(`#flowRunInlineDetail-${PAGE_CODE}-${flowRunId}`);
+                    const detailGrid = detailPanel?.querySelector(".flow-node-run-result-scroll");
+                    detailGrid?.classList.toggle("is-detail-refreshing", isRefreshing);
+                    detailGrid?.setAttribute("aria-busy", String(isRefreshing));
+                });
+            },
+            stopFlowRunHistoryAutoRefresh(options = {}) {
+                this.flowRunHistoryAutoRefreshToken += 1;
+                if (this.flowRunHistoryAutoRefreshTimer) {
+                    window.clearTimeout(this.flowRunHistoryAutoRefreshTimer);
+                    this.flowRunHistoryAutoRefreshTimer = null;
+                }
+                // A browser abort cannot cancel a synchronous Oracle call.  Releasing the
+                // client promise early would let the next refresh occupy another pooled
+                // connection while the first query is still running on the server.
+                this.updateFlowRunHistoryAutoRefreshUi();
+            },
+            scheduleFlowRunHistoryAutoRefresh() {
+                if (this.flowRunHistoryAutoRefreshTimer) {
+                    window.clearTimeout(this.flowRunHistoryAutoRefreshTimer);
+                    this.flowRunHistoryAutoRefreshTimer = null;
+                }
+                if (!ENABLE_AUTOMATIC_FLOW_RUN_POLLING) {
+                    this.updateFlowRunHistoryAutoRefreshUi();
+                    return;
+                }
+                // A history reload or a manual detail reload replaces the same DOM.  Keep
+                // one owner at a time instead of allowing a second timer to race it.
+                if (this.flowRunHistoryAutoRefreshInFlight || this.flowRunHistoryManualRefreshPromise) {
+                    this.updateFlowRunHistoryAutoRefreshUi();
+                    return;
+                }
+                // Leaving the History tab pauses polling, but retains the subscribed
+                // run IDs.  Returning to the tab resumes only IDs that still have a
+                // non-terminal status; closing/reopening a detail panel is unrelated.
+                if (!this.isFlowRunHistoryPanelActive()) return;
+                const activeRunIds = [...this.flowRunHistoryAutoRefreshRunIds]
+                    .filter((flowRunId) => this.isFlowRunAutoRefreshEligible(flowRunId));
+                this.flowRunHistoryAutoRefreshRunIds = new Set(activeRunIds);
+                if (!activeRunIds.length) return;
+                const token = this.flowRunHistoryAutoRefreshToken;
+                this.flowRunHistoryAutoRefreshTimer = window.setTimeout(async () => {
+                    if (
+                        token !== this.flowRunHistoryAutoRefreshToken
+                        || !this.flowRunHistoryAutoRefreshRunIds.size
+                        || !this.isFlowRunHistoryPanelActive()
+                    ) return;
+                    if (this.flowRunHistoryAutoRefreshInFlight) {
+                        this.scheduleFlowRunHistoryAutoRefresh();
+                        return;
+                    }
+                    this.flowRunHistoryAutoRefreshInFlight = true;
+                    this.updateFlowRunHistoryAutoRefreshUi();
+                    const targetFlowRunId = activeRunIds.find((flowRunId) => (
+                        this.expandedRunPlanFlowRunIds.has(String(flowRunId))
+                    )) || activeRunIds[0];
+                    const refreshPromise = this.loadFlowRunSnapshot(targetFlowRunId, {
+                        showError: false
+                    });
+                    this.flowRunHistoryAutoRefreshPromise = refreshPromise;
+                    try {
+                        await refreshPromise;
+                    } catch (_) {
+                        // Automatic refresh is best-effort. A failed/slow poll must not
+                        // block the next manual action or replace the current detail UI.
+                    } finally {
+                        if (this.flowRunHistoryAutoRefreshPromise === refreshPromise) {
+                            this.flowRunHistoryAutoRefreshPromise = null;
+                        }
+                        this.flowRunHistoryAutoRefreshInFlight = false;
+                        this.scheduleFlowRunHistoryAutoRefresh();
+                    }
+                }, 5000);
+                this.updateFlowRunHistoryAutoRefreshUi();
+            },
+            syncFlowRunHistoryAutoRefresh() {
+                if (!this.isFlowRunHistoryPanelActive()) {
+                    this.stopFlowRunHistoryAutoRefresh({ abortRequest: false });
+                    return;
+                }
+                this.scheduleFlowRunHistoryAutoRefresh();
+            },
+            async toggleFlowRunHistoryAutoRefresh(flowRunId) {
+                const targetId = String(flowRunId || "");
+                if (!targetId || !this.isFlowRunAutoRefreshEligible(targetId)) {
+                    this.updateFlowRunHistoryAutoRefreshUi();
+                    return;
+                }
+                if (this.flowRunHistoryAutoRefreshRunIds.has(targetId)) {
+                    this.flowRunHistoryAutoRefreshRunIds.delete(targetId);
+                    if (!this.flowRunHistoryAutoRefreshRunIds.size) {
+                        this.stopFlowRunHistoryAutoRefresh({ abortRequest: false });
+                    } else {
+                        this.syncFlowRunHistoryAutoRefresh();
+                    }
+                    return;
+                }
+                this.flowRunHistoryAutoRefreshRunIds.add(targetId);
+                this.updateFlowRunHistoryAutoRefreshUi();
+                await this.loadFlowRunSnapshot(targetId, { showError: true });
+                this.syncFlowRunHistoryAutoRefresh();
+            },
+            async refreshFlowRunHistory() {
+                if (this.flowRunHistoryManualRefreshPromise) {
+                    return this.flowRunHistoryManualRefreshPromise;
+                }
+                const manualRefreshPromise = (async () => {
+                    this.stopFlowRunHistoryAutoRefresh({ abortRequest: false });
+                    if (this.flowRunHistorySnapshotPromise) {
+                        try {
+                            await this.flowRunHistorySnapshotPromise;
+                        } catch (_) {
+                            // A completed/failed snapshot still releases the single-flight slot.
+                        }
+                    }
+                    await this.loadFlowRunHistory({ showFeedback: true });
+                })();
+                this.flowRunHistoryManualRefreshPromise = manualRefreshPromise;
+                try {
+                    await manualRefreshPromise;
+                } finally {
+                    if (this.flowRunHistoryManualRefreshPromise === manualRefreshPromise) {
+                        this.flowRunHistoryManualRefreshPromise = null;
+                    }
+                    this.syncFlowRunHistoryAutoRefresh();
+                }
+            },
+            async openSubmittedFlowRunHistory(flowRunId) {
+                const targetFlowRunId = String(flowRunId || "").trim();
+                if (!targetFlowRunId) return;
+
+                // This is intentionally used only by a successful Run/Queue request.
+                // Normal History-tab activation keeps its cached result and never opens
+                // a detail panel or starts automatic polling by itself.
+                const historyActivation = this.switchTab("history");
+                let historyLoadedByActivation = false;
+                if (historyActivation?.then) {
+                    try {
+                        await historyActivation;
+                        historyLoadedByActivation = true;
+                    } catch (_) {
+                        // loadFlowRunHistory renders an error when this first activation fails.
+                    }
+                }
+                if (!historyLoadedByActivation) {
+                    await this.loadFlowRunHistory({ showFeedback: false });
+                }
+                if (!this.flowRunHistoryRows.some((row) => String(row?.FLOW_RUN_ID || "") === targetFlowRunId)) {
+                    return;
+                }
+
+                // Start the run-level subscription immediately.  Detail loading is a
+                // separate request and must not delay polling the just-submitted run.
+                if (this.isFlowRunAutoRefreshEligible(targetFlowRunId)) {
+                    this.flowRunHistoryAutoRefreshRunIds.add(targetFlowRunId);
+                }
+                this.syncFlowRunHistoryAutoRefresh();
+
+                if (!this.expandedRunPlanFlowRunIds.has(targetFlowRunId)) {
+                    await this.openRunPlanLayer(targetFlowRunId, { refreshing: true });
+                } else {
+                    this.activeRunPlanFlowRunId = targetFlowRunId;
+                    await this.loadInlineRunPlan(targetFlowRunId);
+                }
+                // Polling belongs to the run, not to the transient detail DOM.  Closing
+                // and reopening the detail therefore cannot create a competing timer.
+                this.syncFlowRunHistoryAutoRefresh();
+            },
+            setFlowRunHistoryLoading(isLoading) {
                 const button = getContainerEl(`#flowRunHistoryRefresh-${PAGE_CODE}`);
                 const icon = button?.querySelector("i");
-                const status = getContainerEl(`#flowRunHistoryRefreshStatus-${PAGE_CODE}`);
                 if (button) {
                     button.disabled = Boolean(isLoading);
                     button.classList.toggle("is-loading", Boolean(isLoading));
@@ -5548,9 +5866,7 @@
                 if (icon) {
                     icon.classList.toggle("fa-spin", Boolean(isLoading));
                 }
-                if (status) {
-                    status.textContent = message;
-                }
+                this.updateFlowRunHistoryAutoRefreshUi();
             },
             setFlowRunHistoryCount(count = 0) {
                 const countEl = getContainerEl(`#flowRunHistoryCount-${PAGE_CODE}`);
@@ -5559,32 +5875,153 @@
                 const template = this.getMessage("historyTotal", "Total {count}");
                 countEl.textContent = this.formatText(template, { count: formattedCount });
             },
+            enqueueFlowRunRead(requestFactory) {
+                // History, snapshot and detail each have their own single-flight slot.
+                // Do not chain reads through a window-global Promise: a request owned by
+                // a closed page can otherwise block every later M04001 instance forever.
+                return Promise.resolve().then(() => requestFactory());
+            },
+            async loadFlowRunSnapshot(flowRunId, options = {}) {
+                const targetFlowRunId = String(flowRunId || "").trim();
+                if (!targetFlowRunId || !this.selectedProjectId || !this.selectedScenarioId) return false;
+                const lifecycleGeneration = this.lifecycleGeneration;
+                const projectId = String(this.selectedProjectId);
+                const scenarioId = String(this.selectedScenarioId);
+
+                // DB polling is strictly single-flight. Browser-side abort cannot cancel
+                // a synchronous Oracle query, so abort-and-replace creates hidden overlap
+                // and eventually DPY-4005 pool exhaustion. Reuse the same-run request;
+                // serialize a different run behind the current request.
+                while (this.flowRunHistorySnapshotPromise) {
+                    if (this.flowRunHistorySnapshotRunId === targetFlowRunId) {
+                        return this.flowRunHistorySnapshotPromise;
+                    }
+                    const activeSnapshotPromise = this.flowRunHistorySnapshotPromise;
+                    try {
+                        await activeSnapshotPromise;
+                    } catch (_) {
+                        // Continue after the previous slot is released.
+                    }
+                    if (
+                        lifecycleGeneration !== this.lifecycleGeneration
+                        || projectId !== String(this.selectedProjectId)
+                        || scenarioId !== String(this.selectedScenarioId)
+                    ) return false;
+                }
+
+                const requestSequence = ++this.flowRunHistorySnapshotSequence;
+                this.flowRunHistorySnapshotController = null;
+                this.flowRunHistorySnapshotRunId = targetFlowRunId;
+                const snapshotPromise = (async () => {
+                  try {
+                    const params = new URLSearchParams({
+                        projectId,
+                        scenarioId
+                    });
+                    const json = await this.enqueueFlowRunRead(() => CommonUtils.request(
+                        `${API_BASE_URL}/${PAGE_CODE}/run/${encodeURIComponent(targetFlowRunId)}/snapshot?${params.toString()}`,
+                        { method: "GET", showLoading: false }
+                    ));
+                    if (
+                        lifecycleGeneration !== this.lifecycleGeneration
+                        || projectId !== String(this.selectedProjectId)
+                        || scenarioId !== String(this.selectedScenarioId)
+                        || requestSequence !== this.flowRunHistorySnapshotSequence
+                    ) return false;
+
+                    const runRow = json.data?.run;
+                    const nodeRuns = Array.isArray(json.data?.nodes) ? json.data.nodes : [];
+                    if (!runRow) return false;
+                    const rowIndex = this.flowRunHistoryRows.findIndex((row) => (
+                        String(row?.FLOW_RUN_ID || "") === targetFlowRunId
+                    ));
+                    if (rowIndex >= 0) {
+                        this.flowRunHistoryRows.splice(rowIndex, 1, runRow);
+                    } else {
+                        this.flowRunHistoryRows.unshift(runRow);
+                    }
+                    this.flowNodeRunResultsByFlowRunId.set(targetFlowRunId, nodeRuns);
+                    if (this.expandedRunPlanFlowRunIds.has(targetFlowRunId)) {
+                        this.flowNodeRunResultRows = nodeRuns;
+                        this.activeRunPlanLoadedId = targetFlowRunId;
+                    }
+                    if (!this.hasActiveFlowRun([runRow])) {
+                        this.flowRunHistoryAutoRefreshRunIds.delete(targetFlowRunId);
+                    }
+                    this.renderFlowRunHistory(this.flowRunHistoryRows);
+                    return true;
+                } catch (error) {
+                    if (options.showError && lifecycleGeneration === this.lifecycleGeneration) {
+                        CommonMessage.error(error.message || "Run detail refresh failed.");
+                    }
+                    return false;
+                } finally {
+                    if (requestSequence === this.flowRunHistorySnapshotSequence) {
+                        this.flowRunHistorySnapshotController = null;
+                    }
+                    if (this.flowRunHistorySnapshotPromise === snapshotPromise) {
+                        this.flowRunHistorySnapshotPromise = null;
+                        this.flowRunHistorySnapshotRunId = "";
+                    }
+                }
+                })();
+                this.flowRunHistorySnapshotPromise = snapshotPromise;
+                return snapshotPromise;
+            },
             async loadFlowRunHistory(options = {}) {
                 const container = getContainerEl(`#flowRunHistoryGrid-${PAGE_CODE}`);
                 if (!container) return;
+                if (this.flowRunHistoryLoadPromise) return this.flowRunHistoryLoadPromise;
                 const showFeedback = Boolean(options.showFeedback);
+                const lifecycleGeneration = this.lifecycleGeneration;
+                const projectId = String(this.selectedProjectId || "");
+                const scenarioId = String(this.selectedScenarioId || "");
                 if (!this.selectedProjectId || !this.selectedScenarioId) {
                     this.setFlowRunHistoryCount(0);
                     container.innerHTML = `<div class="table-empty">Select project and scenario first.</div>`;
-                    if (showFeedback) this.setFlowRunHistoryLoading(false, "Project and scenario are required.");
+                    if (showFeedback) this.setFlowRunHistoryLoading(false, this.getMessage("historyContextRequired", "Project and scenario are required."));
+                    this.syncFlowRunHistoryAutoRefresh();
                     return;
                 }
-                try {
-                    if (showFeedback) this.setFlowRunHistoryLoading(true, "Refreshing history...");
+                const loadPromise = (async () => {
+                  try {
+                    if (showFeedback) this.setFlowRunHistoryLoading(true, this.getMessage("historyRefreshing", "Refreshing history..."));
                     const params = new URLSearchParams({
-                        projectId: this.selectedProjectId,
-                        scenarioId: this.selectedScenarioId
+                        projectId,
+                        scenarioId
                     });
-                    const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/runs?${params.toString()}`, { method: "GET", showLoading: false });
+                    const json = await this.enqueueFlowRunRead(() => CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/runs?${params.toString()}`, {
+                        method: "GET",
+                        showLoading: false
+                    }));
+                    if (
+                        lifecycleGeneration !== this.lifecycleGeneration
+                        || projectId !== String(this.selectedProjectId || "")
+                        || scenarioId !== String(this.selectedScenarioId || "")
+                    ) return;
                     this.renderFlowRunHistory(Array.isArray(json.data) ? json.data : []);
-                    if (showFeedback) {
-                        const refreshedAt = new Date().toLocaleTimeString("ko-KR", { hour12: false });
-                        this.setFlowRunHistoryLoading(false, `Refreshed ${refreshedAt}`);
-                    }
                 } catch (error) {
-                    this.setFlowRunHistoryCount(0);
-                    this.renderError(`#flowRunHistoryGrid-${PAGE_CODE}`, error.message || "Run history load failed.");
-                    if (showFeedback) this.setFlowRunHistoryLoading(false, "Refresh failed.");
+                    if (lifecycleGeneration !== this.lifecycleGeneration) return;
+                    if (!this.flowRunHistoryRows.length) {
+                        this.setFlowRunHistoryCount(0);
+                        this.renderError(`#flowRunHistoryGrid-${PAGE_CODE}`, error.message || "Run history load failed.");
+                    } else if (showFeedback) {
+                        CommonMessage.error(error.message || "Run history load failed.");
+                    }
+                } finally {
+                    if (lifecycleGeneration === this.lifecycleGeneration) {
+                        if (showFeedback) this.setFlowRunHistoryLoading(false);
+                        this.syncFlowRunHistoryAutoRefresh();
+                    }
+                }
+                })();
+                this.flowRunHistoryLoadPromise = loadPromise;
+                try {
+                    return await loadPromise;
+                } finally {
+                    if (this.flowRunHistoryLoadPromise === loadPromise) {
+                        this.flowRunHistoryLoadPromise = null;
+                    }
                 }
             },
             renderExecutionPlanTable(container, plan = []) {
@@ -5623,10 +6060,12 @@
                 const container = getContainerEl(`#flowRunHistoryGrid-${PAGE_CODE}`);
                 if (!container) return;
                 this.flowRunHistoryRows = Array.isArray(rows) ? rows : [];
+                this.reconcileSubmittedFlowRunStates();
                 const safeRows = this.flowRunHistoryRows;
                 this.setFlowRunHistoryCount(safeRows.length);
                 if (!safeRows.length) {
                     container.innerHTML = `<div class="table-empty">No run history.</div>`;
+                    this.syncFlowRunHistoryAutoRefresh();
                     return;
                 }
                 const availableRunIds = new Set(this.flowRunHistoryRows.map((row) => String(row.FLOW_RUN_ID || "")));
@@ -5697,6 +6136,20 @@
                 `;
                 this.enableFlowHistoryGridResize();
                 requestAnimationFrame(() => this.enableFlowHistoryGridResize());
+                this.syncFlowRunHistoryAutoRefresh();
+            },
+            reconcileSubmittedFlowRunStates() {
+                if (!this.flowRunFlowKeysByRunId?.size) return;
+                let changed = false;
+                this.flowRunFlowKeysByRunId.forEach((flowKey, flowRunId) => {
+                    const row = this.flowRunHistoryRows.find((item) => String(item?.FLOW_RUN_ID || "") === String(flowRunId));
+                    if (!row || this.hasActiveFlowRun([row])) return;
+                    this.flowRunFlowKeysByRunId.delete(flowRunId);
+                    if (this.activeFlowRuns.delete(String(flowKey || ""))) changed = true;
+                });
+                if (!changed) return;
+                this.isFlowRunning = this.isFlowRunActive();
+                this.updateFlowActionButtons();
             },
             getFlowHistoryColumnWidth(key, fallback) {
                 const saved = Number(this.flowRunHistoryColumnWidths?.[key] || 0);
@@ -5768,64 +6221,137 @@
             async openRunPlanLayer(flowRunId, options = {}) {
                 const nextFlowRunId = String(flowRunId || "");
                 if (!nextFlowRunId) return;
+                const lifecycleGeneration = this.lifecycleGeneration;
                 if (!options.refreshing && this.expandedRunPlanFlowRunIds.has(nextFlowRunId)) {
                     this.closeRunPlanLayer(nextFlowRunId);
                     return;
                 }
                 this.expandedRunPlanFlowRunIds.add(nextFlowRunId);
                 this.activeRunPlanFlowRunId = nextFlowRunId;
-                this.flowNodeRunResultRows = [];
-                this.activeRunPlanLoadedId = "";
-                this.flowNodeRunResultsByFlowRunId.delete(nextFlowRunId);
+                const cachedNodeRuns = this.flowNodeRunResultsByFlowRunId.get(nextFlowRunId);
+                this.flowNodeRunResultRows = Array.isArray(cachedNodeRuns) ? cachedNodeRuns : [];
+                this.activeRunPlanLoadedId = Array.isArray(cachedNodeRuns) ? nextFlowRunId : "";
                 this.renderFlowRunHistory(this.flowRunHistoryRows);
+                const pendingDetailLoad = this.flowNodeRunLoadPromisesByFlowRunId.get(nextFlowRunId);
+                if (pendingDetailLoad) {
+                    try {
+                        await pendingDetailLoad;
+                    } catch (_) {
+                        // The detail request owns its error presentation.
+                    }
+                }
+                if (lifecycleGeneration !== this.lifecycleGeneration) return;
+                if (!this.expandedRunPlanFlowRunIds.has(nextFlowRunId)) return;
+                if (Array.isArray(this.flowNodeRunResultsByFlowRunId.get(nextFlowRunId))) return;
                 await this.loadInlineRunPlan(nextFlowRunId);
             },
             async loadInlineRunPlan(flowRunId) {
-                const row = this.flowRunHistoryRows.find((item) => String(item.FLOW_RUN_ID || "") === String(flowRunId || ""));
-                if (!row) return;
-                try {
-                    const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/run/${encodeURIComponent(flowRunId)}/nodes`, {
-                        method: "GET",
-                        showLoading: false
-                    });
-                    if (!this.expandedRunPlanFlowRunIds.has(String(flowRunId || ""))) return;
-                    const nodeRuns = Array.isArray(json.data) ? json.data : [];
-                    this.flowNodeRunResultsByFlowRunId.set(String(flowRunId || ""), nodeRuns);
-                    this.flowNodeRunResultRows = nodeRuns;
-                    this.activeRunPlanLoadedId = String(flowRunId || "");
-                    this.renderFlowRunHistory(this.flowRunHistoryRows);
-                } catch (error) {
-                    if (!this.expandedRunPlanFlowRunIds.has(String(flowRunId || ""))) return;
-                    this.flowNodeRunResultsByFlowRunId.set(String(flowRunId || ""), []);
-                    this.flowNodeRunResultRows = [];
-                    this.activeRunPlanLoadedId = String(flowRunId || "");
-                    this.renderFlowRunHistory(this.flowRunHistoryRows);
-                    const panel = getContainerEl(`#flowRunInlineDetail-${PAGE_CODE}-${flowRunId}`);
-                    if (panel) {
-                        panel.innerHTML = `<div class="table-error">${this.escapeHtml(error.message || "Node run result load failed.")}</div>`;
+                const targetFlowRunId = String(flowRunId || "");
+                const lifecycleGeneration = this.lifecycleGeneration;
+                const pendingLoad = this.flowNodeRunLoadPromisesByFlowRunId.get(targetFlowRunId);
+                if (pendingLoad) return pendingLoad;
+                if (this.flowRunHistorySnapshotPromise) {
+                    try {
+                        await this.flowRunHistorySnapshotPromise;
+                    } catch (_) {
+                        // The snapshot owns its error presentation.
+                    }
+                    if (lifecycleGeneration !== this.lifecycleGeneration) return;
+                    const snapshotRows = this.flowNodeRunResultsByFlowRunId.get(targetFlowRunId);
+                    if (Array.isArray(snapshotRows)) {
+                        if (this.expandedRunPlanFlowRunIds.has(targetFlowRunId)) {
+                            this.flowNodeRunResultRows = snapshotRows;
+                            this.activeRunPlanLoadedId = targetFlowRunId;
+                            this.renderFlowRunHistory(this.flowRunHistoryRows);
+                        }
+                        return snapshotRows;
                     }
                 }
+                const row = this.flowRunHistoryRows.find((item) => String(item.FLOW_RUN_ID || "") === targetFlowRunId);
+                if (!row) return;
+                let loadPromise;
+                loadPromise = Promise.resolve().then(async () => {
+                    try {
+                        const json = await this.enqueueFlowRunRead(() => CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/run/${encodeURIComponent(targetFlowRunId)}/nodes`, {
+                            method: "GET",
+                            showLoading: false
+                        }));
+                        if (lifecycleGeneration !== this.lifecycleGeneration) return;
+                        const nodeRuns = Array.isArray(json.data) ? json.data : [];
+                        const stillExists = this.flowRunHistoryRows.some((item) => String(item?.FLOW_RUN_ID || "") === targetFlowRunId);
+                        if (!stillExists) return;
+                        this.flowNodeRunResultsByFlowRunId.set(targetFlowRunId, nodeRuns);
+                        // Detail visibility is only a presentation state.  Retain a
+                        // completed request for the run even if the user closed the
+                        // panel while it was loading, then render it on the next open.
+                        if (!this.expandedRunPlanFlowRunIds.has(targetFlowRunId)) return;
+                        this.flowNodeRunResultRows = nodeRuns;
+                        this.activeRunPlanLoadedId = targetFlowRunId;
+                        this.renderFlowRunHistory(this.flowRunHistoryRows);
+                    } catch (error) {
+                        if (lifecycleGeneration !== this.lifecycleGeneration) return;
+                        if (!this.expandedRunPlanFlowRunIds.has(targetFlowRunId)) return;
+                        this.flowNodeRunResultsByFlowRunId.set(targetFlowRunId, []);
+                        this.flowNodeRunResultRows = [];
+                        this.activeRunPlanLoadedId = targetFlowRunId;
+                        this.renderFlowRunHistory(this.flowRunHistoryRows);
+                        const panel = getContainerEl(`#flowRunInlineDetail-${PAGE_CODE}-${targetFlowRunId}`);
+                        if (panel) {
+                            panel.innerHTML = `<div class="table-error">${this.escapeHtml(error.message || "Node run result load failed.")}</div>`;
+                        }
+                    } finally {
+                        if (this.flowNodeRunLoadPromisesByFlowRunId.get(targetFlowRunId) === loadPromise) {
+                            this.flowNodeRunLoadPromisesByFlowRunId.delete(targetFlowRunId);
+                        }
+                    }
+                });
+                this.flowNodeRunLoadPromisesByFlowRunId.set(targetFlowRunId, loadPromise);
+                return loadPromise;
+            },
+            abortFlowNodeRunLoads() {
+                // Keep already submitted server reads alive.  Their lifecycle checks stop
+                // stale DOM updates after navigation without creating orphan Oracle calls.
+                this.flowNodeRunLoadControllersByFlowRunId.clear();
             },
             async refreshRunPlanLayer(flowRunId = "") {
                 const targetFlowRunId = String(flowRunId || this.activeRunPlanFlowRunId || "");
                 if (!targetFlowRunId) return;
                 if (!this.expandedRunPlanFlowRunIds.has(targetFlowRunId)) return;
-                this.flowNodeRunResultsByFlowRunId.delete(targetFlowRunId);
-                if (this.activeRunPlanFlowRunId === targetFlowRunId) {
-                    this.flowNodeRunResultRows = [];
-                    this.activeRunPlanLoadedId = "";
+                const lifecycleGeneration = this.lifecycleGeneration;
+                if (this.flowRunHistoryManualRefreshPromise) {
+                    return this.flowRunHistoryManualRefreshPromise;
                 }
-                this.renderFlowRunHistory(this.flowRunHistoryRows);
-                await this.loadFlowRunHistory({ silent: true });
-                if (this.expandedRunPlanFlowRunIds.has(targetFlowRunId)) {
-                    await this.loadInlineRunPlan(targetFlowRunId);
+                const manualRefreshPromise = (async () => {
+                    // Pause the timer but never abort-and-replace an Oracle-backed request.
+                    // The shared single-flight promise keeps manual and automatic refresh
+                    // on one server query while preserving the detail loading effect.
+                    this.stopFlowRunHistoryAutoRefresh({ abortRequest: false });
+                    this.flowRunHistoryManualRefreshRunId = targetFlowRunId;
+                    this.updateFlowRunHistoryAutoRefreshUi();
+                    await this.loadFlowRunSnapshot(targetFlowRunId, {
+                        showError: true
+                    });
+                })();
+                this.flowRunHistoryManualRefreshPromise = manualRefreshPromise;
+                try {
+                    await manualRefreshPromise;
+                } finally {
+                    if (this.flowRunHistoryManualRefreshPromise === manualRefreshPromise) {
+                        this.flowRunHistoryManualRefreshPromise = null;
+                    }
+                    if (this.flowRunHistoryManualRefreshRunId === targetFlowRunId) {
+                        this.flowRunHistoryManualRefreshRunId = "";
+                    }
+                    if (lifecycleGeneration !== this.lifecycleGeneration) return;
+                    this.updateFlowRunHistoryAutoRefreshUi();
+                    // Resume only when an eligible running run is still visible.
+                    this.syncFlowRunHistoryAutoRefresh();
                 }
             },
             closeRunPlanLayer(flowRunId = "") {
                 const targetFlowRunId = String(flowRunId || "");
                 if (targetFlowRunId) {
                     this.expandedRunPlanFlowRunIds.delete(targetFlowRunId);
-                    this.flowNodeRunResultsByFlowRunId.delete(targetFlowRunId);
                     if (this.activeRunPlanFlowRunId === targetFlowRunId) {
                         this.activeRunPlanFlowRunId = "";
                         this.flowNodeRunResultRows = [];
@@ -5833,7 +6359,6 @@
                     }
                 } else {
                     this.expandedRunPlanFlowRunIds.clear();
-                    this.flowNodeRunResultsByFlowRunId.clear();
                     this.activeRunPlanFlowRunId = "";
                     this.flowNodeRunResultRows = [];
                     this.activeRunPlanLoadedId = "";
@@ -5845,6 +6370,12 @@
                 const nodeRuns = this.flowNodeRunResultsByFlowRunId.get(flowRunId);
                 const hasLoaded = Array.isArray(nodeRuns);
                 const message = String(row?.MESSAGE || "").trim();
+                const isRunning = this.hasActiveFlowRun([row]);
+                const autoRefreshEnabled = isRunning && this.flowRunHistoryAutoRefreshRunIds.has(flowRunId);
+                const autoRefreshTitle = this.getLabel(
+                    autoRefreshEnabled ? "autoRefreshPauseTitle" : "autoRefreshResumeTitle",
+                    autoRefreshEnabled ? "Pause automatic refresh" : "Resume automatic refresh"
+                );
                 return `
                     <tr class="flow-run-inline-detail-row">
                         <td colspan="10">
@@ -5852,7 +6383,11 @@
                                 <header>
                                     <strong>Run #${this.escapeHtml(flowRunId)} details</strong>
                                     <span class="flow-run-plan-tools">
-                                        <button type="button" class="table-icon-btn" title="Refresh run details" onclick="${PAGE_CODE}.refreshRunPlanLayer('${this.escapeJs(flowRunId)}')">
+                                        <span class="flow-run-plan-auto-refresh-status" data-flow-run-auto-refresh-status>${autoRefreshEnabled ? this.escapeHtml(this.getFlowRunHistoryAutoRefreshMessage(flowRunId)) : ""}</span>
+                                        <button type="button" class="table-icon-btn ${autoRefreshEnabled ? "is-active" : ""}" data-flow-run-auto-refresh-toggle data-flow-run-id="${this.escapeHtml(flowRunId)}" title="${this.escapeHtml(autoRefreshTitle)}" aria-label="${this.escapeHtml(autoRefreshTitle)}" aria-pressed="${autoRefreshEnabled ? "true" : "false"}" ${isRunning ? "" : "disabled"} onclick="${PAGE_CODE}.toggleFlowRunHistoryAutoRefresh('${this.escapeJs(flowRunId)}')">
+                                            <i class="fas ${autoRefreshEnabled ? "fa-pause" : "fa-play"}"></i>
+                                        </button>
+                                        <button type="button" class="table-icon-btn" data-flow-run-manual-refresh data-flow-run-id="${this.escapeHtml(flowRunId)}" title="Refresh run details" aria-label="Refresh run details" onclick="${PAGE_CODE}.refreshRunPlanLayer('${this.escapeJs(flowRunId)}')">
                                             <i class="fas fa-sync-alt"></i>
                                         </button>
                                         <button type="button" class="table-icon-btn" title="Close" onclick="${PAGE_CODE}.closeRunPlanLayer('${this.escapeJs(flowRunId)}')">
@@ -6975,7 +7510,7 @@
                 if (saveLabel) saveLabel.textContent = this.isFlowSaving ? "Saving..." : (FLOW_UI_LABELS.saveFlow || "Save flow");
             },
 
-            stopCanvasRunStatusPolling() {
+            stopCanvasRunStatusPolling(options = {}) {
                 if (this.activeCanvasRunPollTimer) {
                     clearTimeout(this.activeCanvasRunPollTimer);
                     this.activeCanvasRunPollTimer = null;
@@ -7072,7 +7607,8 @@
 
             scheduleCanvasRunStatusPoll(delayMs = 1000) {
                 this.stopCanvasRunStatusPolling();
-                if (!this.activeCanvasRunId) return;
+                if (!ENABLE_AUTOMATIC_FLOW_RUN_POLLING) return;
+                if (!this.activeCanvasRunId || !this.isPageVisible) return;
                 this.activeCanvasRunPollTimer = setTimeout(() => {
                     this.pollCanvasRunStatus();
                 }, Math.max(150, delayMs));
@@ -7080,12 +7616,19 @@
 
             async pollCanvasRunStatus() {
                 const flowRunId = this.activeCanvasRunId;
-                if (!flowRunId) return;
+                if (!flowRunId || !this.isPageVisible || this.activeCanvasRunPollInFlight) return;
+                const lifecycleGeneration = this.lifecycleGeneration;
+                this.activeCanvasRunPollInFlight = true;
                 try {
-                    const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/run/${encodeURIComponent(flowRunId)}/nodes`, {
+                    const json = await this.enqueueFlowRunRead(() => CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/run/${encodeURIComponent(flowRunId)}/nodes`, {
                         method: "GET",
                         showLoading: false
-                    });
+                    }));
+                    if (
+                        lifecycleGeneration !== this.lifecycleGeneration
+                        || !this.isPageVisible
+                        || flowRunId !== this.activeCanvasRunId
+                    ) return;
                     const rows = Array.isArray(json.data) ? json.data : [];
                     this.activeCanvasRunPollFailures = 0;
                     rows.forEach((row) => {
@@ -7112,12 +7655,19 @@
                     }
                     this.scheduleCanvasRunStatusPoll(1000);
                 } catch (error) {
+                    if (
+                        lifecycleGeneration !== this.lifecycleGeneration
+                        || error?.name === "AbortError"
+                        || !this.isPageVisible
+                    ) return;
                     this.activeCanvasRunPollFailures += 1;
                     if (this.activeCanvasRunPollFailures >= 5) {
                         await this.finishCanvasRunStatusMonitor("POLL_FAILED", error.message || "Run status polling failed.");
                         return;
                     }
                     this.scheduleCanvasRunStatusPoll(1500);
+                } finally {
+                    this.activeCanvasRunPollInFlight = false;
                 }
             },
 
@@ -7271,14 +7821,22 @@
                     return;
                 }
                 if (manualRunId) payload.manualRunId = Number(manualRunId);
-                let keepCanvasRunActive = false;
+                const lifecycleGeneration = this.lifecycleGeneration;
                 let activeFlowKey = flowKey;
+                let submittedFlowRunId = "";
                 try {
                     const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/flow/run`, {
                         method: "POST",
                         body: payload,
                         showLoading: false
                     });
+                    // The server accepted the run independently of this page. If the
+                    // page was closed while the POST was in flight, do not start stale
+                    // history/version reads or touch removed DOM; the batch keeps running.
+                    if (lifecycleGeneration !== this.lifecycleGeneration || !this.isPageVisible) {
+                        submittedFlowRunId = String(json.data?.flowRunId || "");
+                        return;
+                    }
                     const stillSelected = this.getCurrentFlowRunKey() === flowKey;
                     if (json.data?.flowId) {
                         if (stillSelected || flowKey === "NEW") {
@@ -7293,22 +7851,27 @@
                         const selector = getContainerEl(`#flowVersion-${PAGE_CODE}`);
                         if (selector && (stillSelected || flowKey === "NEW")) selector.value = json.data.flowId;
                     }
-                    await this.loadFlowRunHistory();
-                    if (!batch && json.data?.flowRunId && (stillSelected || flowKey === "NEW")) {
-                        keepCanvasRunActive = true;
-                        this.switchTab("designer");
-                        this.startCanvasRunStatusMonitor(json.data.flowRunId, json.data.plan || [], activeFlowKey);
-                        CommonMessage.success(json.message || "Flow execution started.", { copyable: false });
+                    if (json.data?.flowRunId && (stillSelected || flowKey === "NEW")) {
+                        submittedFlowRunId = String(json.data.flowRunId);
+                        // Keep the existing duplicate-run protection until this exact
+                        // run reaches a terminal status in the history response.
+                        // Batch queueing has always been released immediately.
+                        if (!batch) this.flowRunFlowKeysByRunId.set(submittedFlowRunId, activeFlowKey);
+                        await this.openSubmittedFlowRunHistory(submittedFlowRunId);
+                        CommonMessage.success(json.message || (batch ? "Flow run queued." : "Flow execution started."), { copyable: false });
                     } else if (stillSelected || flowKey === "NEW") {
+                        await this.loadFlowRunHistory({ showFeedback: false });
                         this.switchTab("history");
-                        alert(json.message || "Flow run recorded.");
+                        CommonMessage.success(json.message || "Flow run recorded.", { copyable: false });
                     } else {
                         CommonMessage.success(json.message || "Flow run recorded.", { copyable: false });
                     }
                 } catch (error) {
                     alert(error.message || "Flow run failed.");
                 } finally {
-                    if (!keepCanvasRunActive) this.setFlowRunning(false, activeFlowKey);
+                    if (batch || !submittedFlowRunId) {
+                        this.setFlowRunning(false, activeFlowKey);
+                    }
                 }
             },
 
@@ -7361,6 +7924,7 @@
                     return;
                 }
                 if (manualRunId) payload.manualRunId = Number(manualRunId);
+                const lifecycleGeneration = this.lifecycleGeneration;
                 let keepCanvasRunActive = false;
                 let activeFlowKey = flowKey;
                 try {
@@ -7369,6 +7933,9 @@
                         body: payload,
                         showLoading: false
                     });
+                    if (lifecycleGeneration !== this.lifecycleGeneration || !this.isPageVisible) {
+                        return;
+                    }
                     const stillSelected = this.getCurrentFlowRunKey() === flowKey;
                     if (json.data?.flowId) {
                         if (stillSelected || flowKey === "NEW") {

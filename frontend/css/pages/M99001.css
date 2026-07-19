@@ -62,7 +62,6 @@ body.intro-mode #container-M99001 .env-workspace {
     min-width: 148px;
     height: 38px;
     border: 1px solid #cfd6e4;
-    border-bottom: 0;
     background: #f8fafc;
     color: #334155;
     font-weight: 600;
@@ -70,10 +69,14 @@ body.intro-mode #container-M99001 .env-workspace {
 }
 
 #container-M99001 .m99001-tab.is-active {
-    background: #2563eb;
-    border-color: #1d4ed8;
-    color: #ffffff;
-    box-shadow: inset 0 -3px 0 rgba(15, 23, 42, 0.22);
+    position: relative;
+    z-index: 1;
+    margin-bottom: -1px;
+    background: #ffffff;
+    border-color: #9bbcf4;
+    border-bottom-color: #ffffff;
+    color: #1d4ed8;
+    box-shadow: inset 0 3px 0 #2563eb;
 }
 
 #container-M99001 .m99001-tab.is-attention {
@@ -84,10 +87,11 @@ body.intro-mode #container-M99001 .env-workspace {
 }
 
 #container-M99001 .m99001-tab.is-active.is-attention {
-    background: #b45309;
-    border-color: #92400e;
-    color: #ffffff;
-    box-shadow: inset 0 -3px 0 rgba(120, 53, 15, 0.45);
+    background: #ffffff;
+    border-color: #f59e0b;
+    border-bottom-color: #ffffff;
+    color: #92400e;
+    box-shadow: inset 0 3px 0 #f59e0b;
 }
 
 #container-M99001 .m99001-tab-panel {
@@ -259,6 +263,7 @@ body.intro-mode #container-M99001 .env-workspace {
 
 #container-M99001 #schemaStatus-M99001 .table-grid {
     min-width: 720px;
+    width: 100%;
 }
 
 #container-M99001 #setupLog-M99001 {
@@ -299,8 +304,10 @@ body.intro-mode #container-M99001 .env-workspace {
     overflow: auto;
 }
 
-#container-M99001 #modelDeployStatus-M99001 .table-grid {
+#container-M99001 #modelDeployStatus-M99001 .table-grid,
+#container-M99001 #mlDeployStatus-M99001 .table-grid {
     min-width: 1120px;
+    width: 100%;
 }
 
 #container-M99001 .m99001-checksum-cell,

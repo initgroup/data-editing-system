@@ -182,6 +182,7 @@
         relationNetworkSelectedNodeId: "",
         relationNetworkSelectedEdgeId: "",
         relationNetworkWheelZoomEnabled: true,
+        relationNetworkEdgeGridCollapsed: false,
         relationNetworkEdgeFilter: { scope: "ALL", minWeightPercent: 0, aggregateClusters: false },
         relationNetworkPinnedNodeIds: new Set(),
         lassoSummaryFilter: { direction: "ALL", targetColumn: "" },
@@ -257,6 +258,7 @@
             this.relationNetworkPairFilter = { clusterId: "", colA: "", colB: "" };
             this.relationNetworkEdgeFilter = { scope: "ALL", minWeightPercent: 0, aggregateClusters: false };
             this.relationNetworkWheelZoomEnabled = true;
+            this.relationNetworkEdgeGridCollapsed = false;
             this.relationNetworkPinnedNodeIds = new Set();
             this.lassoSummaryFilter = { direction: "ALL", targetColumn: "" };
             this.lassoPairFilter = { targetColumn: "", featureName: "" };
@@ -2539,7 +2541,7 @@
             return `
                 <div class="anly-work-sample-table-wrap">
                     ${title ? `<strong>${this.escapeHtml(getText("{title} · {count} displayed", { title, count: this.formatNumber(safeRows.length) }))}</strong>` : `<strong>${this.escapeHtml(getText("{count} displayed", { count: this.formatNumber(safeRows.length) }))}</strong>`}
-                    <table class="table-grid anly-work-sample-table">
+                    <table class="table-grid anly-work-sample-table" data-standard-grid-freeze-columns="0">
                         <thead><tr>${safeColumns.map((column) => `<th>${this.escapeHtml(column)}</th>`).join("")}</tr></thead>
                         <tbody>
                             ${safeRows.map((row) => `<tr>${safeColumns.map((column) => `<td title="${this.escapeHtml(row?.[column] ?? "")}">${this.escapeHtml(row?.[column] ?? "")}</td>`).join("")}</tr>`).join("")}
@@ -4840,7 +4842,7 @@
                     <div class="anly-work-network-graph-tools">
                         <button type="button" onclick="${PAGE_CODE}.zoomRelationNetworkGraph(1.16)" title="${this.escapeHtml(getText("Zoom in"))}"><i class="fas fa-search-plus"></i></button>
                         <button type="button" onclick="${PAGE_CODE}.zoomRelationNetworkGraph(0.86)" title="${this.escapeHtml(getText("Zoom out"))}"><i class="fas fa-search-minus"></i></button>
-                        <button type="button" data-anly-network-wheel-btn onclick="${PAGE_CODE}.toggleRelationNetworkWheelZoom()" title="${this.escapeHtml(getText("Enable mouse wheel zoom"))}" aria-label="${this.escapeHtml(getText("Enable mouse wheel zoom"))}" aria-pressed="false"><i class="fas fa-ban"></i></button>
+                        <button type="button" class="is-active" data-anly-network-wheel-btn onclick="${PAGE_CODE}.toggleRelationNetworkWheelZoom()" title="${this.escapeHtml(getText("Disable mouse wheel zoom"))}" aria-label="${this.escapeHtml(getText("Disable mouse wheel zoom"))}" aria-pressed="true"><i class="fas fa-computer-mouse"></i></button>
                         <button type="button" onclick="${PAGE_CODE}.resetRelationNetworkGraphView()" title="${this.escapeHtml(getText("Reset view"))}"><i class="fas fa-compress-arrows-alt"></i></button>
                         <button type="button" data-anly-network-maximize-btn onclick="${PAGE_CODE}.toggleRelationNetworkGraphMaximize()" title="${this.escapeHtml(getText("Maximize graph"))}" aria-pressed="false"><i class="fas fa-expand"></i></button>
                         <span data-anly-network-zoom-label>100%</span>
@@ -4893,7 +4895,7 @@
                     <div class="anly-work-network-graph-tools">
                         <button type="button" onclick="${PAGE_CODE}.zoomRelationNetworkGraph(1.16)" title="${this.escapeHtml(getText("Zoom in"))}"><i class="fas fa-search-plus"></i></button>
                         <button type="button" onclick="${PAGE_CODE}.zoomRelationNetworkGraph(0.86)" title="${this.escapeHtml(getText("Zoom out"))}"><i class="fas fa-search-minus"></i></button>
-                        <button type="button" data-anly-network-wheel-btn onclick="${PAGE_CODE}.toggleRelationNetworkWheelZoom()" title="${this.escapeHtml(getText("Enable mouse wheel zoom"))}" aria-label="${this.escapeHtml(getText("Enable mouse wheel zoom"))}" aria-pressed="false"><i class="fas fa-ban"></i></button>
+                        <button type="button" class="is-active" data-anly-network-wheel-btn onclick="${PAGE_CODE}.toggleRelationNetworkWheelZoom()" title="${this.escapeHtml(getText("Disable mouse wheel zoom"))}" aria-label="${this.escapeHtml(getText("Disable mouse wheel zoom"))}" aria-pressed="true"><i class="fas fa-computer-mouse"></i></button>
                         <button type="button" onclick="${PAGE_CODE}.resetRelationNetworkGraphView()" title="${this.escapeHtml(getText("Reset view"))}"><i class="fas fa-compress-arrows-alt"></i></button>
                         <button type="button" data-anly-network-pin-btn onclick="${PAGE_CODE}.toggleSelectedRelationNetworkNodePin()" title="${this.escapeHtml(getText("Pin or unpin selected node"))}" aria-pressed="false" disabled><i class="fas fa-thumbtack"></i></button>
                         <button type="button" onclick="${PAGE_CODE}.clearRelationNetworkNodeSelection()" title="${this.escapeHtml(getText("Clear node selection"))}"><i class="fas fa-eye"></i></button>
@@ -5108,6 +5110,7 @@
             this.relationNetworkSelectedNodeId = "";
             this.relationNetworkSelectedEdgeId = "";
             this.relationNetworkWheelZoomEnabled = true;
+            this.relationNetworkEdgeGridCollapsed = false;
             this.relationNetworkEdgeFilter = { scope: "ALL", minWeightPercent: 0, aggregateClusters: false };
             this.relationNetworkPinnedNodeIds = new Set();
             const popup = document.createElement("div");
@@ -5133,6 +5136,7 @@
             this.relationNetworkGraphData = null;
             this.relationNetworkClusterBackdropData = [];
             this.relationNetworkSelectedNodeId = "";
+            this.relationNetworkEdgeGridCollapsed = false;
             this.relationNetworkSelectedEdgeId = "";
             this.relationNetworkGraphClusterIds = [];
             this.relationNetworkGraphVisibleClusters = null;
@@ -5369,6 +5373,42 @@
                 column.style.width = `${expandedWidths[index]}px`;
             });
             table.style.width = `${availableWidth}px`;
+        },
+
+        toggleRelationNetworkEdgeGridCollapse() {
+            const { popup } = this.getRelationNetworkGraphElements();
+            if (!popup) return;
+            this.relationNetworkEdgeGridCollapsed = !this.relationNetworkEdgeGridCollapsed;
+            popup.classList.toggle("is-network-edge-grid-collapsed", this.relationNetworkEdgeGridCollapsed);
+            this.updateRelationNetworkEdgeGridCollapseControl();
+            this.updateRelationNetworkEdgeGridPreview();
+            requestAnimationFrame(() => {
+                this.resizeRelationNetworkEdgeGrid(popup.classList.contains("is-network-graph-maximized"));
+                this.relationNetworkCy?.resize();
+            });
+        },
+
+        updateRelationNetworkEdgeGridCollapseControl() {
+            const { popup } = this.getRelationNetworkGraphElements();
+            const button = popup?.querySelector("[data-anly-network-edge-grid-toggle]");
+            if (!button) return;
+            const collapsed = this.relationNetworkEdgeGridCollapsed === true;
+            const label = getText(collapsed ? "Expand row data grid" : "Collapse row data grid");
+            button.classList.toggle("is-active", collapsed);
+            button.setAttribute("aria-pressed", collapsed ? "true" : "false");
+            button.title = label;
+            button.setAttribute("aria-label", label);
+            const icon = button.querySelector("i");
+            if (icon) icon.className = collapsed ? "fas fa-chevron-up" : "fas fa-chevron-down";
+        },
+
+        updateRelationNetworkEdgeGridPreview(edgeId = this.relationNetworkSelectedEdgeId) {
+            const { popup } = this.getRelationNetworkGraphElements();
+            if (!popup) return;
+            const rows = [...popup.querySelectorAll("[data-anly-network-edge-row]")];
+            if (!rows.length) return;
+            const preview = rows.find((row) => String(row.dataset.anlyNetworkEdgeRow || "") === String(edgeId || "")) || rows[0];
+            rows.forEach((row) => row.classList.toggle("is-collapsed-preview", row === preview));
         },
 
         initRelationNetworkGraphLegacyInteraction() {
@@ -5999,6 +6039,7 @@
             const row = this.getRelationNetworkGraphElements().popup?.querySelector(`[data-anly-network-edge-row="${edge.id()}"]`);
             if (row) {
                 row.classList.add("is-selected");
+                this.updateRelationNetworkEdgeGridPreview(edge.id());
                 if (source === "graph") row.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
             }
             if (source === "grid") cy.animate({ center: { eles: endpoints }, duration: 260 });
@@ -6122,7 +6163,10 @@
                                     ${this.renderRelationNetworkPopupNodeCards(summary, graph)}
                                 </section>
                                 <section data-anly-network-edge-raw-data>
-                                    <strong>${this.escapeHtml(getText("Edge raw data"))}</strong>
+                                    <div class="anly-work-network-edge-raw-header">
+                                        <strong>${this.escapeHtml(getText("Edge raw data"))}</strong>
+                                        <button type="button" data-anly-network-edge-grid-toggle onclick="${PAGE_CODE}.toggleRelationNetworkEdgeGridCollapse()" title="${this.escapeHtml(getText("Collapse row data grid"))}" aria-label="${this.escapeHtml(getText("Collapse row data grid"))}" aria-pressed="false"><i class="fas fa-chevron-down"></i></button>
+                                    </div>
                                     ${this.renderRelationNetworkPopupEdgeTable(summary, graph)}
                                 </section>
                             </div>
@@ -6941,7 +6985,7 @@
                                 <div class="anly-work-symbolic-chart-tools">
                                     <button type="button" onclick="${PAGE_CODE}.zoomSymbolicRuleChart(1.25)" title="${this.escapeHtml(getText("Zoom in"))}"><i class="fas fa-search-plus"></i></button>
                                     <button type="button" onclick="${PAGE_CODE}.zoomSymbolicRuleChart(0.8)" title="${this.escapeHtml(getText("Zoom out"))}"><i class="fas fa-search-minus"></i></button>
-                                    <button type="button" id="${PAGE_ID_PREFIX}SymbolicWheelZoomToggle" onclick="${PAGE_CODE}.toggleSymbolicRuleWheelZoom()" title="${this.escapeHtml(getText("Enable mouse wheel zoom"))}" aria-label="${this.escapeHtml(getText("Enable mouse wheel zoom"))}" aria-pressed="false"><i class="fas fa-ban"></i></button>
+                                    <button type="button" class="is-active" id="${PAGE_ID_PREFIX}SymbolicWheelZoomToggle" onclick="${PAGE_CODE}.toggleSymbolicRuleWheelZoom()" title="${this.escapeHtml(getText("Disable mouse wheel zoom"))}" aria-label="${this.escapeHtml(getText("Disable mouse wheel zoom"))}" aria-pressed="true"><i class="fas fa-mouse"></i></button>
                                     <button type="button" onclick="${PAGE_CODE}.resetSymbolicRuleChartZoom()" title="${this.escapeHtml(getText("Reset view"))}"><i class="fas fa-compress-arrows-alt"></i></button>
                                     <button type="button" data-anly-symbolic-maximize-btn onclick="${PAGE_CODE}.toggleSymbolicRuleChartMaximize()" title="${this.escapeHtml(getText("Maximize graph"))}" aria-pressed="false"><i class="fas fa-expand"></i></button>
                                     <em id="${PAGE_ID_PREFIX}SymbolicZoomLabel">100%</em>
@@ -7018,7 +7062,7 @@
                 chartPanEndAt: 0,
                 popupInlinePosition: null,
                 zoomPercent: 100,
-                wheelZoomEnabled: false,
+                wheelZoomEnabled: true,
                 loading: true,
                 error: ""
             };
@@ -7272,7 +7316,7 @@
                 return Number.isFinite(numeric) ? this.formatSymbolicDiagnosticNumber(numeric) : this.escapeHtml(value);
             };
             container.innerHTML = `
-                <table class="table-grid anly-work-symbolic-raw-table">
+                <table class="table-grid anly-work-symbolic-raw-table" data-standard-grid-freeze-columns="0">
                     <thead>
                         <tr>
                             ${columns.map((column) => `<th>${this.escapeHtml(column)}</th>`).join("")}
@@ -7294,6 +7338,16 @@
                     </tbody>
                 </table>
             `;
+            const table = container.querySelector(".anly-work-symbolic-raw-table");
+            const gridUtils = window.CommonUtils;
+            if (!table || !gridUtils) return;
+            // This table lives inside a dynamically created graph popup. Apply the
+            // shared No/header freeze synchronously rather than waiting for DOM observation.
+            gridUtils.applyStandardGridDefaults(table);
+            window.requestAnimationFrame(() => {
+                if (!table.isConnected) return;
+                gridUtils.applyStandardGridFreeze(table, 0);
+            });
         },
 
         selectSymbolicSampleRow(rowIndex, focusChart = true) {
@@ -7558,6 +7612,7 @@
             if (!state || !button) return;
             const enabled = state.wheelZoomEnabled === true;
             const label = getText(enabled ? "Disable mouse wheel zoom" : "Enable mouse wheel zoom");
+            button.classList.toggle("is-active", enabled);
             button.setAttribute("aria-pressed", enabled ? "true" : "false");
             button.setAttribute("aria-label", label);
             button.title = label;
@@ -9210,7 +9265,7 @@
             const rowOffset = (page - 1) * pageSize;
             return `
                 <div class="anly-work-grid-wrap">
-                    <table class="table-grid anly-work-grid" data-grid-row-offset="${rowOffset}">
+                    <table class="table-grid anly-work-grid" data-grid-row-offset="${rowOffset}" data-standard-grid-freeze-columns="0">
                         <thead>
                             <tr>
                                 ${safeColumns.map((column) => `<th>${this.renderColumnAwareCell(column, source)}</th>`).join("")}

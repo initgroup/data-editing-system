@@ -5,6 +5,7 @@ from pathlib import Path
 import logging
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 from backend.database import close_db_pool
 from backend.target_database import close_all_target_db_pools
 from backend.services.data_work_router import (
@@ -222,10 +223,13 @@ async def enforce_api_authentication(request, call_next):
                 if path.startswith("/api/mlAnalysis/") and authenticate_internal_api_request(request):
                     pass
                 else:
-                    authenticate_request(request)
+                    # Session verification uses the synchronous Oracle driver. Running
+                    # it on the ASGI event loop makes one pool wait stall every browser
+                    # request, including unrelated menu navigation and health checks.
+                    await run_in_threadpool(authenticate_request, request)
                     browser_session_authenticated = True
                 if _is_admin_api_path(path):
-                    require_admin_role(request)
+                    await run_in_threadpool(require_admin_role, request)
             except Exception as exc:
                 status_code = getattr(exc, "status_code", 401)
                 detail = getattr(exc, "detail", "Login session is required.")

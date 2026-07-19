@@ -122,16 +122,23 @@ def get_db_pool():
             return _pool
 
         db_mode, connect_args = _get_connect_args()
+        wait_timeout_ms = max(
+            1000,
+            min(30000, int(os.getenv("DB_POOL_WAIT_TIMEOUT_MS", "30000"))),
+        )
         pool_args = {
             **connect_args,
             "min": int(os.getenv("DB_POOL_MIN", "1")),
-            "max": int(os.getenv("DB_POOL_MAX", "5")),
+            "max": int(os.getenv("DB_POOL_MAX", "6")),
             "increment": int(os.getenv("DB_POOL_INCREMENT", "1")),
+            "getmode": oracledb.POOL_GETMODE_TIMEDWAIT,
+            "wait_timeout": wait_timeout_ms,
         }
 
         print(
             "[DB] Oracle connection pool initializing. "
-            f"mode={db_mode}, min={pool_args['min']}, max={pool_args['max']}"
+            f"mode={db_mode}, min={pool_args['min']}, max={pool_args['max']}, "
+            f"wait_timeout_ms={wait_timeout_ms}"
         )
         _pool = oracledb.create_pool(**pool_args)
         print("[DB] Oracle connection pool ready.")
@@ -143,7 +150,9 @@ def close_db_pool():
 
     with _pool_lock:
         if _pool is not None:
-            _pool.close()
+            # A leaked/unfinished checkout must not block process shutdown or
+            # leave the reload parent waiting indefinitely.
+            _pool.close(force=True)
             _pool = None
 
 
@@ -155,22 +164,21 @@ def get_db_connection():
     connections to the pool on close.
     """
     try:
-        db_mode = os.getenv("DB_MODE", "local").lower()
         pool = get_db_pool()
         started_at = time.monotonic()
         logger.info("[DB] acquire start. %s", _pool_snapshot(pool))
         connection = pool.acquire()
+        # A pooled connection keeps session attributes between checkouts. Reset
+        # the call timeout on every acquire so one stalled system-DB request
+        # cannot occupy a pool slot indefinitely.
+        connection.call_timeout = max(
+            0,
+            int(os.getenv("DB_CALL_TIMEOUT_MS", "60000")),
+        )
         elapsed = time.monotonic() - started_at
         warn_seconds = float(os.getenv("DB_POOL_ACQUIRE_WARN_SECONDS", "3"))
         log_method = logger.warning if elapsed >= warn_seconds else logger.info
         log_method("[DB] acquire done. elapsed=%.3fs, %s", elapsed, _pool_snapshot(pool))
-
-        if db_mode == "cloud":
-            with connection.cursor() as cursor:
-                try:
-                    cursor.execute("BEGIN DBMS_CLOUD_AI.set_profile('INITAI_PROFILE'); END;")
-                except oracledb.Error as ai_err:
-                    print(f"[DB] Select AI profile setup failed: {ai_err}")
 
         return connection
     except oracledb.Error as e:

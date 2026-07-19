@@ -24,6 +24,7 @@ const PageManager = {
     navigationEpoch: 0, // Changes only when the requested page changes.
     requestedPageCode: "",
     activePageCode: "",
+    hiddenPages: new Set(),
     navigationLoadingPageCode: "",
     navigationLoadingRequestId: 0,
     lastLoadedVersion: null, // Last loaded asset version.
@@ -360,18 +361,22 @@ const PageManager = {
         return { pageCode: "home", title: window.getShellHomeTitle?.() || "Data Editing System" };
     },
 
-    async runPageBeforeCloseHooks(pageCodes) {
+    async runPageBeforeCloseHooks(pageCodes, context = {}) {
         for (const pageCode of pageCodes) {
             const module = window[pageCode] || this.modules[pageCode];
             if (!module || typeof module.beforeClose !== "function") continue;
-            const result = await module.beforeClose();
+            const result = await module.beforeClose({
+                reason: String(context.reason || ""),
+                cleanupTargetConnection: context.cleanupTargetConnection === true,
+                preserveServerWork: context.preserveServerWork !== false
+            });
             if (result === false) return false;
         }
         return true;
     },
 
     buildTransitionWarning(actionText, options = {}) {
-        const cleanupTargetConnection = options.cleanupTargetConnection !== false;
+        const cleanupTargetConnection = options.cleanupTargetConnection === true;
         const activeRequests = CommonUtils.getActiveRequestCount?.() || 0;
         const actionKeys = {
             logout: "messagePatterns.actions.logout",
@@ -382,7 +387,7 @@ const PageManager = {
             "close all pages": "messagePatterns.actions.closeAllPages"
         };
         const action = window.I18nManager?.t?.(actionKeys[actionText], actionText) || actionText;
-        const requestWarning = activeRequests > 0
+        const requestWarning = cleanupTargetConnection && activeRequests > 0
             ? (window.I18nManager?.t?.(
                 "messagePatterns.pendingRequests",
                 "There are {count} request(s) still running. The app will wait briefly before cleanup."
@@ -406,12 +411,20 @@ const PageManager = {
         if (!connectionId || !this.isAuthenticated()) return true;
         const headers = { "Content-Type": "application/json" };
         if (connectionId) headers["X-Target-Connection-Id"] = connectionId;
-        const response = await fetch(`${API_BASE_URL}/M91001/session/cleanup`, {
-            method: "POST",
-            headers,
-            credentials: "include",
-            body: JSON.stringify({ connectionId, reason })
-        });
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
+        let response;
+        try {
+            response = await fetch(`${API_BASE_URL}/M91001/session/cleanup`, {
+                method: "POST",
+                headers,
+                credentials: "include",
+                body: JSON.stringify({ connectionId, reason }),
+                signal: controller.signal
+            });
+        } finally {
+            clearTimeout(timeoutId);
+        }
         if (response.status === 401 || response.status === 403) {
             console.warn("[System] Target cleanup skipped because the login session is already invalid.");
             return true;
@@ -437,13 +450,19 @@ const PageManager = {
     },
 
     async confirmAndCleanupBeforeClose(pageCodes = [], actionText = "continue", options = {}) {
-        const cleanupTargetConnection = options.cleanupTargetConnection !== false;
+        // Closing an SPA page only releases browser resources. Target DB session
+        // cleanup belongs to logout / Target DB changes and must be explicit.
+        const cleanupTargetConnection = options.cleanupTargetConnection === true;
         if (!(await CommonMessage.confirm(this.buildTransitionWarning(actionText, { cleanupTargetConnection })))) return false;
 
-        const canClose = await this.runPageBeforeCloseHooks(pageCodes);
+        const canClose = await this.runPageBeforeCloseHooks(pageCodes, {
+            reason: actionText,
+            cleanupTargetConnection,
+            preserveServerWork: true
+        });
         if (!canClose) return false;
 
-        if (CommonUtils.waitForIdle) {
+        if (cleanupTargetConnection && CommonUtils.waitForIdle) {
             const isIdle = await CommonUtils.waitForIdle(15000);
             if (!isIdle && !(await CommonMessage.confirm("Some requests are still running. Continue cleanup anyway?"))) {
                 return false;
@@ -470,6 +489,21 @@ const PageManager = {
         if (!pageCode || pageCode === DEFAULT_PAGE_CODE || pageCode === "home") return baseTitle;
         if (String(baseTitle).includes(`[${pageCode}]`)) return baseTitle;
         return `${baseTitle} [${pageCode}]`;
+    },
+
+    async notifyPageHidden(nextPageCode = "") {
+        const currentPageCode = String(this.activePageCode || "");
+        if (!currentPageCode || currentPageCode === String(nextPageCode || "")) return;
+        if (this.hiddenPages.has(currentPageCode)) return;
+
+        this.hiddenPages.add(currentPageCode);
+        const currentModule = window[currentPageCode] || this.modules[currentPageCode];
+        if (!currentModule || typeof currentModule.onHide !== "function") return;
+        try {
+            await currentModule.onHide({ nextPageCode: String(nextPageCode || "") });
+        } catch (error) {
+            console.warn(`[System] ${currentPageCode} onHide failed.`, error);
+        }
     },
 
     show(pageCode) {
@@ -516,7 +550,10 @@ const PageManager = {
         }
 
         openPages.forEach((pageCode, index) => {
-            this.close(pageCode, index === openPages.length - 1);
+            this.close(pageCode, index === openPages.length - 1, {
+                reason: "close all pages",
+                preserveServerWork: true
+            });
         });
         MenuRenderer?.collapseAll?.();
         LayoutManager?.collapseAllMenus?.();
@@ -534,7 +571,10 @@ const PageManager = {
     closeOthers(currentPageCode) {
         const openPages = this.getOtherOpenPageCodes(currentPageCode);
         openPages.forEach((pageCode) => {
-            this.close(pageCode, false);
+            this.close(pageCode, false, {
+                reason: "close other pages",
+                preserveServerWork: true
+            });
         });
     },
 
@@ -552,6 +592,7 @@ const PageManager = {
         this.modules = {};
         this.readyPages.clear();
         this.activePageCode = "";
+        this.hiddenPages.clear();
         this.hideNavigationLoading();
         document.querySelectorAll("#pageContainerHolder .page-section").forEach((section) => {
             window.I18nManager?.releasePageRoot?.(section);
@@ -580,9 +621,27 @@ const PageManager = {
         else this.readyPages.delete(pageCode);
 
         const targetModule = window[pageCode] || this.modules[pageCode];
+        // Closing an SPA page is a client-side lifecycle operation. It must never
+        // imply cancellation of a request/job that the server has already accepted.
+        // Page modules receive this context so they only release browser resources.
+        const closeContext = {
+            closing: true,
+            reason: String(options.reason || "page close"),
+            cleanupTargetConnection: options.cleanupTargetConnection === true,
+            preserveServerWork: options.preserveServerWork !== false
+        };
+        if (!this.hiddenPages.has(pageCode) && targetModule && typeof targetModule.onHide === "function") {
+            this.hiddenPages.add(pageCode);
+            try {
+                const result = targetModule.onHide(closeContext);
+                result?.catch?.((error) => console.warn(`[System] ${pageCode} onHide failed.`, error));
+            } catch (error) {
+                console.warn(`[System] ${pageCode} onHide failed.`, error);
+            }
+        }
         if (targetModule && typeof targetModule.destroy === 'function') {
             try {
-                targetModule.destroy();
+                targetModule.destroy(closeContext);
             } catch (error) {
                 console.warn(`[System] ${pageCode} destroy failed.`, error);
             }
@@ -595,6 +654,7 @@ const PageManager = {
             container.remove();
         }
         delete this.containers[pageCode];
+        this.hiddenPages.delete(pageCode);
         if (this.activePageCode === pageCode) this.activePageCode = "";
 
         const scriptTag = document.querySelector(`script[src*="${pageCode}.js"]`);
@@ -793,6 +853,7 @@ const PageManager = {
         }
 
         const module = window[pageCode] || this.modules[pageCode];
+        this.hiddenPages.delete(pageCode);
         if (options.reinitializeDefaultPage && pageCode === DEFAULT_PAGE_CODE && module && typeof module.init === 'function') {
             try {
                 await module.init();
@@ -865,6 +926,8 @@ const PageManager = {
     async load(pageCode, title, isRefresh = false) {
         const loadKey = String(pageCode || "");
         const navigation = this.beginNavigation(loadKey);
+        await this.notifyPageHidden(loadKey);
+        if (!this.isCurrentNavigation(navigation)) return null;
         const existingPromise = this.pageLoadPromises.get(loadKey);
         const existingMode = this.pageLoadModes.get(loadKey) || "load";
         const canPreview = !isRefresh
@@ -976,7 +1039,10 @@ const PageManager = {
         }
 
         if (isRefresh) {
-            const canClose = await this.runPageBeforeCloseHooks([pageCode]);
+            const canClose = await this.runPageBeforeCloseHooks([pageCode], {
+                reason: "refresh page",
+                cleanupTargetConnection: false
+            });
             if (!this.isPageLifecycleCurrent(pageCode, lifecycleVersion)) {
                 this.discardStalePageLoad(pageCode);
                 return emptyResult();
@@ -1693,7 +1759,7 @@ async function applyTargetDbChange() {
         }
 
         const pageCodes = Object.keys(PageManager.containers || {});
-        if (!(await PageManager.confirmAndCleanupBeforeClose(pageCodes, "change Target DB"))) return;
+        if (!(await PageManager.confirmAndCleanupBeforeClose(pageCodes, "change Target DB", { cleanupTargetConnection: true }))) return;
 
         const label = selected.closest(".target-db-change-option")?.querySelector("strong")?.textContent || `Connection #${newConnectionId}`;
         PageManager.resetWorkspaceForLogout?.(true);

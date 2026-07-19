@@ -283,7 +283,7 @@ def save_notice(req: NoticeSaveRequest, user_id: int = Depends(get_request_user_
 
 
 @router.post("/notices/{notice_id}/files")
-async def upload_notice_file(
+def upload_notice_file(
     notice_id: int,
     file: UploadFile = File(...),
     sortOrder: int = Form(0),
@@ -291,7 +291,9 @@ async def upload_notice_file(
 ):
     file_name = _safe_file_name(file.filename)
     content_type = str(file.content_type or "application/octet-stream")[:200]
-    content = await file.read()
+    # This endpoint performs synchronous Oracle work. Keep the complete route
+    # in FastAPI's worker thread instead of blocking the ASGI event loop.
+    content = file.file.read()
     max_bytes = _max_notice_file_bytes()
     if len(content) > max_bytes:
         raise HTTPException(status_code=413, detail=f"Attachment is too large. Max size is {max_bytes // 1024 // 1024} MB.")
@@ -338,7 +340,10 @@ async def upload_notice_file(
         logger.error("M99004 notice file upload failed: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
     finally:
-        await file.close()
+        try:
+            file.file.close()
+        except Exception:
+            pass
         if cursor:
             cursor.close()
         if conn:

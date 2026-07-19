@@ -36,6 +36,46 @@ _transaction_registries = []
 _transaction_registries_lock = threading.Lock()
 _transaction_cleanup_stop_event = threading.Event()
 _transaction_cleanup_thread = None
+_transaction_target_counts: Dict[tuple[int, int], int] = {}
+_transaction_target_counts_lock = threading.Lock()
+
+
+def _max_active_transactions_per_target() -> int:
+    try:
+        return max(1, int(os.getenv("DATA_WORK_MAX_ACTIVE_TRANSACTIONS_PER_TARGET", "1")))
+    except Exception:
+        return 1
+
+
+def _reserve_transaction_target_slot(user_id: int, connection_id: int) -> tuple[int, int]:
+    key = (int(user_id), int(connection_id))
+    limit = _max_active_transactions_per_target()
+    with _transaction_target_counts_lock:
+        active_count = _transaction_target_counts.get(key, 0)
+        if active_count >= limit:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Another SQL worksheet transaction is already open for this Target DB. "
+                    "Commit or rollback it before starting a new transaction."
+                ),
+            )
+        _transaction_target_counts[key] = active_count + 1
+    return key
+
+
+def _release_transaction_target_slot(session: Optional[Dict[str, Any]]) -> None:
+    if not session or session.get("slotReleased"):
+        return
+    key = session.get("targetSlotKey")
+    if key:
+        with _transaction_target_counts_lock:
+            active_count = _transaction_target_counts.get(key, 0)
+            if active_count <= 1:
+                _transaction_target_counts.pop(key, None)
+            else:
+                _transaction_target_counts[key] = active_count - 1
+    session["slotReleased"] = True
 
 
 def _transaction_cleanup_interval_seconds() -> int:
@@ -205,10 +245,10 @@ def create_data_work_router(
     try:
         transaction_timeout_seconds = max(
             60,
-            int(os.getenv("DATA_WORK_TRANSACTION_TIMEOUT_SECONDS", str(30 * 60))),
+            int(os.getenv("DATA_WORK_TRANSACTION_TIMEOUT_SECONDS", str(5 * 60))),
         )
     except Exception:
-        transaction_timeout_seconds = 30 * 60
+        transaction_timeout_seconds = 5 * 60
 
     def cleanup_expired_transactions():
         now = time.time()
@@ -223,6 +263,7 @@ def create_data_work_router(
         for transaction_id, session in expired_sessions:
             conn = session.get("conn") if session else None
             if not conn:
+                _release_transaction_target_slot(session)
                 continue
             try:
                 conn.rollback()
@@ -243,6 +284,8 @@ def create_data_work_router(
                         transaction_id,
                         close_error,
                     )
+                finally:
+                    _release_transaction_target_slot(session)
 
         if expired_sessions:
             logger.info(
@@ -259,6 +302,7 @@ def create_data_work_router(
         for transaction_id, session in sessions:
             conn = session.get("conn") if session else None
             if not conn:
+                _release_transaction_target_slot(session)
                 continue
             try:
                 conn.rollback()
@@ -279,6 +323,8 @@ def create_data_work_router(
                         transaction_id,
                         close_error,
                     )
+                finally:
+                    _release_transaction_target_slot(session)
 
     _register_transaction_registry(cleanup_expired_transactions, close_all_transactions)
 
@@ -331,16 +377,23 @@ def create_data_work_router(
         now = time.time()
         user_id = get_request_user_id(request)
         connection_id = get_target_connection_id(request)
+        target_slot_key = _reserve_transaction_target_slot(user_id, connection_id)
 
-        with transaction_lock:
-            active_transactions[transaction_id] = {
-                "conn": conn,
-                "userId": user_id,
-                "connectionId": connection_id,
-                "createdAt": now,
-                "lastAccessAt": now,
-                "inUse": False,
-            }
+        try:
+            with transaction_lock:
+                active_transactions[transaction_id] = {
+                    "conn": conn,
+                    "userId": user_id,
+                    "connectionId": connection_id,
+                    "createdAt": now,
+                    "lastAccessAt": now,
+                    "inUse": False,
+                    "targetSlotKey": target_slot_key,
+                    "slotReleased": False,
+                }
+        except Exception:
+            _release_transaction_target_slot({"targetSlotKey": target_slot_key})
+            raise
 
         return transaction_id
 
@@ -370,7 +423,10 @@ def create_data_work_router(
             else:
                 raise HTTPException(status_code=400, detail="Unsupported transaction action.")
         finally:
-            conn.close()
+            try:
+                conn.close()
+            finally:
+                _release_transaction_target_slot(session)
 
         return {
             "status": "success",

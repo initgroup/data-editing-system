@@ -79,6 +79,8 @@
     "Select all clusters": "Select all clusters",
     "Clear all clusters": "Clear all clusters",
     "{selected} / {total} selected": "{selected} / {total} selected",
-    "Select at least one cluster to display the graph.": "Select at least one cluster to display the graph."
+    "Select at least one cluster to display the graph.": "Select at least one cluster to display the graph.",
+    "Collapse row data grid": "Collapse row data grid",
+    "Expand row data grid": "Expand row data grid"
   }
 }

@@ -128,10 +128,26 @@
             getContainerEl(".env-panel")?.querySelectorAll(".m99001-tab-panel").forEach((panel) => {
                 panel.classList.toggle("is-active", panel.dataset.panel === tabName);
             });
+            this.refreshActiveTabGrids();
             if (tabName === "deploy" && !this.hasSelectedConnection()) {
                 this.renderDeployLog("Select a DB connection first.", "error");
             } else if (tabName === "ml" && !this.hasSelectedConnection()) {
                 this.renderMlLog("Select a DB connection first.", "error");
+            }
+        },
+
+        refreshActiveTabGrids() {
+            const panel = getContainerEl(".m99001-tab-panel.is-active");
+            if (!panel) return;
+            const apply = () => {
+                panel.querySelectorAll("table.table-grid").forEach((table) => {
+                    CommonUtils.applyStandardGridDefaults?.(table);
+                });
+            };
+            if (typeof window.requestAnimationFrame === "function") {
+                window.requestAnimationFrame(apply);
+            } else {
+                window.setTimeout(apply, 0);
             }
         },
 
@@ -828,6 +844,7 @@
                     </tbody>
                 </table>
             `;
+            this.refreshActiveTabGrids();
         },
 
         renderModelDeployStatus(rows) {
@@ -916,6 +933,7 @@
                     </tbody>
                 </table>
             `;
+            this.refreshActiveTabGrids();
         },
 
         renderStatusSummary(selector, rows, options = {}) {

@@ -230,6 +230,10 @@ def get_target_db_connection(request: Request):
         get_target_connection_id(request),
         get_request_user_id(request),
         resource_limits_out=resource_limits,
+        call_timeout_ms=max(
+            0,
+            int(os.getenv("TARGET_DB_INTERACTIVE_CALL_TIMEOUT_MS", "120000")),
+        ),
     )
     request.state.server_resource_limits = resource_limits
     return connection
@@ -239,6 +243,7 @@ def get_target_db_connection_by_id(
     connection_id: int,
     user_id: int,
     resource_limits_out: dict | None = None,
+    call_timeout_ms: int | None = None,
 ):
     system_conn = None
     try:
@@ -270,6 +275,12 @@ def get_target_db_connection_by_id(
             )
             try:
                 connection = pool.acquire()
+                # call_timeout is a connection attribute and therefore may be
+                # retained when a pooled session is reused. Interactive screen
+                # requests get a finite ceiling, while background DATA/FLOW/ML
+                # jobs that call this helper directly keep the default 0 (no
+                # client-side call timeout).
+                connection.call_timeout = max(0, int(call_timeout_ms or 0))
             except oracledb.Error as error:
                 error_detail = error.args[0] if error.args else error
                 error_code = getattr(error_detail, "code", None)

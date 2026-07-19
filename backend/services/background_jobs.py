@@ -7,7 +7,19 @@ from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 
-_max_workers = max(1, int(os.getenv("APP_BATCH_WORKERS", "1")))
+_configured_max_workers = max(1, int(os.getenv("APP_BATCH_WORKERS", "1")))
+_target_pool_max = max(1, int(os.getenv("TARGET_DB_POOL_MAX", "3")))
+_reserved_target_connections = max(
+    0,
+    int(os.getenv("APP_BATCH_TARGET_DB_RESERVED_CONNECTIONS", "1")),
+)
+# Background work and interactive APIs share each user's Target DB pool.  Keep
+# at least one connection available for status/navigation requests so a batch
+# cannot make the whole web application appear hung.
+_max_workers = min(
+    _configured_max_workers,
+    max(1, _target_pool_max - _reserved_target_connections),
+)
 _queue_capacity = max(0, int(os.getenv("APP_BATCH_QUEUE_CAPACITY", "4")))
 _submit_wait_seconds = max(0.0, float(os.getenv("APP_BATCH_SUBMIT_WAIT_SECONDS", "0")))
 _job_capacity = BoundedSemaphore(_max_workers + _queue_capacity)
@@ -15,6 +27,14 @@ _executor = ThreadPoolExecutor(max_workers=_max_workers, thread_name_prefix="ini
 _state_lock = Lock()
 _active_futures = set()
 _accepting_jobs = True
+
+if _max_workers != _configured_max_workers:
+    logger.info(
+        "[Batch] worker limit adjusted from %s to %s to reserve %s Target DB connection(s).",
+        _configured_max_workers,
+        _max_workers,
+        _reserved_target_connections,
+    )
 
 
 class BackgroundJobQueueFull(RuntimeError):

@@ -136,7 +136,7 @@ async def upload_file_chunk(
 
 
 @router.post("/preview-staged")
-async def preview_staged_upload(
+def preview_staged_upload(
     request: Request,
     uploadId: str = Form(...),
     fileType: str = Form("csv"),
@@ -148,11 +148,11 @@ async def preview_staged_upload(
     metadata, data_path = require_completed_staged_upload(request, uploadId)
     with data_path.open("rb") as staged_file:
         staged_upload = UploadFile(file=staged_file, filename=metadata.get("fileName") or "uploaded-file")
-        return await preview_upload(staged_upload, fileType, delimiter, fixedWidths, hasHeader, encoding)
+        return preview_upload(staged_upload, fileType, delimiter, fixedWidths, hasHeader, encoding)
 
 
 @router.post("/upload-staged")
-async def upload_staged_file_to_table(
+def upload_staged_file_to_table(
     request: Request,
     uploadId: str = Form(...),
     fileType: str = Form("csv"),
@@ -168,7 +168,7 @@ async def upload_staged_file_to_table(
     metadata, data_path = require_completed_staged_upload(request, uploadId)
     with data_path.open("rb") as staged_file:
         staged_upload = UploadFile(file=staged_file, filename=metadata.get("fileName") or "uploaded-file")
-        result = await upload_file_to_table(
+        result = upload_file_to_table(
             request,
             staged_upload,
             fileType,
@@ -186,7 +186,7 @@ async def upload_staged_file_to_table(
 
 
 @router.post("/preview")
-async def preview_upload(
+def preview_upload(
     file: UploadFile = File(...),
     fileType: str = Form("csv"),
     delimiter: str = Form(","),
@@ -215,7 +215,7 @@ async def preview_upload(
 
 
 @router.post("/upload")
-async def upload_file_to_table(
+def upload_file_to_table(
     request: Request,
     file: UploadFile = File(...),
     fileType: str = Form("csv"),
@@ -862,6 +862,12 @@ def resolve_project_owner_login_id(request, project_id="", project_code=""):
             raise HTTPException(status_code=409, detail="Project owner is not configured.")
         if project_owner_user_id != int(request_user_id) and get_request_role_code(request) != "ADMIN":
             raise HTTPException(status_code=403, detail="Project access denied.")
+
+        # Do not hold a Target DB connection while waiting for a system DB
+        # connection. Cross-pool nesting can deadlock otherwise independent
+        # menu requests when either pool is busy.
+        target_conn.close()
+        target_conn = None
 
         system_conn = get_db_connection()
         user_result = execute_query(system_conn, "M02001_PROJECT_OWNER_LOGIN", {
