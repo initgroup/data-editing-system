@@ -1058,7 +1058,13 @@
 }
 
 .flow-connection-mode-icon.is-dashed::before {
-    border-top-style: dashed;
+    background: repeating-linear-gradient(
+        to right,
+        currentColor 0 3px,
+        transparent 3px 6px
+    );
+    border-top: 0;
+    height: 2px;
 }
 
 .flow-work-page .flow-canvas-panel {
