@@ -1625,6 +1625,13 @@ def _fetch_predicted_type_summary(
     result_object = f"({result_sql})"
     rule_type_expr = "TRIM(BASE_PREDICTED_TYPE)"
     model_type_expr = "TRIM(MODL_PREDICTED_TYPE)"
+    # FINAL_PREDICTED_TYPE is the effective value consumed by downstream
+    # analysis.  MASTER_FINAL_PREDICTED_TYPE is deliberately kept separate
+    # here because it represents an explicit user-confirmed master label.
+    # Convert its detailed type code/label to the common group code before
+    # passing it to fetch_group_map(), which compares CATEGORICAL/CONTINUOUS.
+    final_type_expr = '"INIT$_FN_TYPE_GROUP_CODE"(TRIM(MASTER_FINAL_PREDICTED_TYPE))'
+    effective_type_expr = "TRIM(FINAL_PREDICTED_TYPE)"
     predicted_case_expr = _predicted_type_case_expr()
 
     def fetch_group_map(group_expr: str) -> dict[str, list[str]]:
