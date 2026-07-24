@@ -154,7 +154,7 @@
                     this.toggleCurrentPageLabels(event.target.checked);
                 } else if (event.target.matches("[data-label-select]")) {
                     this.toggleLabelSelection(event.target.dataset.labelSelect, event.target.checked);
-                } else if (event.target.matches("#trainMinRows-M90003")) {
+                } else if (event.target.matches("#trainMinRows-M90003, #trainHoldout-M90003")) {
                     this.renderTrainingReadiness();
                 }
             };
@@ -225,6 +225,8 @@
             if (action === "runs-next") return this.changePage("runs", 1);
             if (action === "toggle-run-detail") return this.toggleRunDetail(button?.dataset.runId);
             if (action === "copy-run-message") return this.copyRunMessage(button?.dataset.runId);
+            if (action === "show-training-feature") return this.showTrainingFeature(button?.dataset.featureIndex);
+            if (action === "close-training-feature") return this.closeTrainingFeature();
             const modelId = button?.dataset.modelId || "";
             if (action === "activate-model") return this.activateModel(modelId, false);
             if (action === "rollback-model") return this.rollbackCurrentModel();
@@ -825,10 +827,23 @@
             const usableClasses = typeRows.filter((row) => Number(row.count) >= 2).length;
             const minimumRows = this.boundInteger(getContainerEl("#trainMinRows-M90003")?.value, 20, 100000, 30);
             const ready = eligibleRows >= minimumRows && usableClasses >= 2;
-            note.className = `type-model-note ${ready ? "is-info" : "is-warning"}`;
-            note.querySelector("span").textContent = ready
-                ? t("trainingReady", "Training is ready with {rows} confirmed rows across {classes} usable classes.", { rows: this.formatInteger(eligibleRows), classes: usableClasses })
-                : t("trainingNotReady", "Training requires at least {minimum} confirmed rows and two detailed type classes with two or more rows each. Current: {rows} rows, {classes} usable classes.", { minimum: minimumRows, rows: this.formatInteger(eligibleRows), classes: usableClasses });
+            const holdoutRatio = this.boundNumber(getContainerEl("#trainHoldout-M90003")?.value, 0.1, 0.4, 0.2);
+            const smallestClassCount = typeRows.length ? Math.min(...typeRows.map((row) => Number(row.count || 0))) : 0;
+            const estimatedMinorityHoldout = Math.floor(smallestClassCount * holdoutRatio);
+            const limitedHoldout = ready && estimatedMinorityHoldout < 5;
+            note.className = `type-model-note ${ready && !limitedHoldout ? "is-info" : "is-warning"}`;
+            note.querySelector("span").textContent = !ready
+                ? t("trainingNotReady", "Training requires at least {minimum} confirmed rows and two detailed type classes with two or more rows each. Current: {rows} rows, {classes} usable classes.", { minimum: minimumRows, rows: this.formatInteger(eligibleRows), classes: usableClasses })
+                : (limitedHoldout
+                    ? t(
+                        "trainingReadyHoldoutWarning",
+                        "Training can start, but the smallest class has {minority} rows and contributes only about {holdout} holdout rows at the selected ratio. Class-level metrics may be unstable.",
+                        {
+                            minority: this.formatInteger(smallestClassCount),
+                            holdout: this.formatInteger(estimatedMinorityHoldout)
+                        }
+                    )
+                    : t("trainingReady", "Training is ready with {rows} confirmed rows across {classes} usable classes.", { rows: this.formatInteger(eligibleRows), classes: usableClasses }));
             button.disabled = !ready;
         },
 
@@ -957,43 +972,82 @@
             `;
         },
 
-        renderTrainingFeatures(row) {
+        getTrainingFeatureItems(row) {
+            const logicalType = this.pick(row, "logDataType", "LOG_DATA_TYPE") || "-";
+            const distinctRatio = this.formatMetric(this.pick(row, "distValRt", "DIST_VAL_RT"));
+            const normEntropy = this.formatMetric(this.pick(row, "normEntropy", "NORM_ENTROPY"));
+            return {
+                logicalType,
+                distinctRatio,
+                normEntropy,
+                items: [
+                    [t("caseId", "CASE_ID"), this.pick(row, "caseId", "CASE_ID")],
+                    [t("featureVersion", "Feature Version"), this.pick(row, "featureVersion", "FEATURE_VERSION")],
+                    [t("physicalDataType", "Physical Type"), this.pick(row, "dataType", "DATA_TYPE")],
+                    [t("logicalDataType", "Logical Type"), logicalType],
+                    [t("totalRows", "Total Rows"), this.formatInteger(this.pick(row, "totalRows", "TOTAL_ROWS"))],
+                    [t("nonNullRows", "Non-null Rows"), this.formatInteger(this.pick(row, "nonNullRows", "NON_NULL_ROWS"))],
+                    [t("sampleRows", "Sample Rows"), this.formatInteger(this.pick(row, "sampleRows", "SAMPLE_ROWS"))],
+                    [t("sampleNonNullRows", "Sample Non-null"), this.formatInteger(this.pick(row, "sampleNotNullRows", "SAMPLE_NOT_NULL_ROWS"))],
+                    [t("distinctCount", "Distinct Count"), this.formatInteger(this.pick(row, "numDistinct", "NUM_DISTINCT"))],
+                    [t("sampleDistinctCount", "Sample Distinct"), this.formatInteger(this.pick(row, "sampleDistinct", "SAMPLE_DISTINCT"))],
+                    [t("distinctRatio", "Distinct Ratio"), distinctRatio],
+                    [t("nullRatio", "Null Ratio"), this.formatMetric(this.pick(row, "nullRatio", "NULL_RATIO"))],
+                    [t("entropy", "Entropy"), this.formatMetric(this.pick(row, "entropy", "ENTROPY"))],
+                    [t("normalizedEntropy", "Normalized Entropy"), normEntropy],
+                    [t("numericRatio", "Numeric Ratio"), this.formatMetric(this.pick(row, "numericRatio", "NUMERIC_RATIO"))],
+                    [t("integerRatio", "Integer Ratio"), this.formatMetric(this.pick(row, "integerRatio", "INTEGER_RATIO"))],
+                    [t("numericRange", "Numeric Range"), `${this.formatMetric(this.pick(row, "minNumValue", "MIN_NUM_VALUE"))} ~ ${this.formatMetric(this.pick(row, "maxNumValue", "MAX_NUM_VALUE"))}`],
+                    [t("textLength", "Text Length (avg/max)"), `${this.formatMetric(this.pick(row, "avgTextLength", "AVG_TEXT_LENGTH"))} / ${this.formatInteger(this.pick(row, "maxTextLength", "MAX_TEXT_LENGTH"))}`]
+                ]
+            };
+        },
+
+        renderTrainingFeatures(row, rowIndex) {
             const profileId = this.pick(row, "profileId", "PROFILE_ID");
             const caseId = this.pick(row, "caseId", "CASE_ID");
             if (profileId === undefined || profileId === null || profileId === "") {
                 return `<span class="type-model-muted" title="${this.escapeHtml(String(caseId || ""))}">${this.escapeHtml(t("featureProfileMissing", "No feature profile"))}</span>`;
             }
-            const logicalType = this.pick(row, "logDataType", "LOG_DATA_TYPE") || "-";
-            const distinctRatio = this.formatMetric(this.pick(row, "distValRt", "DIST_VAL_RT"));
-            const normEntropy = this.formatMetric(this.pick(row, "normEntropy", "NORM_ENTROPY"));
-            const items = [
-                [t("caseId", "CASE_ID"), caseId],
-                [t("featureVersion", "Feature Version"), this.pick(row, "featureVersion", "FEATURE_VERSION")],
-                [t("physicalDataType", "Physical Type"), this.pick(row, "dataType", "DATA_TYPE")],
-                [t("logicalDataType", "Logical Type"), logicalType],
-                [t("totalRows", "Total Rows"), this.formatInteger(this.pick(row, "totalRows", "TOTAL_ROWS"))],
-                [t("nonNullRows", "Non-null Rows"), this.formatInteger(this.pick(row, "nonNullRows", "NON_NULL_ROWS"))],
-                [t("sampleRows", "Sample Rows"), this.formatInteger(this.pick(row, "sampleRows", "SAMPLE_ROWS"))],
-                [t("sampleNonNullRows", "Sample Non-null"), this.formatInteger(this.pick(row, "sampleNotNullRows", "SAMPLE_NOT_NULL_ROWS"))],
-                [t("distinctCount", "Distinct Count"), this.formatInteger(this.pick(row, "numDistinct", "NUM_DISTINCT"))],
-                [t("sampleDistinctCount", "Sample Distinct"), this.formatInteger(this.pick(row, "sampleDistinct", "SAMPLE_DISTINCT"))],
-                [t("distinctRatio", "Distinct Ratio"), distinctRatio],
-                [t("nullRatio", "Null Ratio"), this.formatMetric(this.pick(row, "nullRatio", "NULL_RATIO"))],
-                [t("entropy", "Entropy"), this.formatMetric(this.pick(row, "entropy", "ENTROPY"))],
-                [t("normalizedEntropy", "Normalized Entropy"), normEntropy],
-                [t("numericRatio", "Numeric Ratio"), this.formatMetric(this.pick(row, "numericRatio", "NUMERIC_RATIO"))],
-                [t("integerRatio", "Integer Ratio"), this.formatMetric(this.pick(row, "integerRatio", "INTEGER_RATIO"))],
-                [t("numericRange", "Numeric Range"), `${this.formatMetric(this.pick(row, "minNumValue", "MIN_NUM_VALUE"))} ~ ${this.formatMetric(this.pick(row, "maxNumValue", "MAX_NUM_VALUE"))}`],
-                [t("textLength", "Text Length (avg/max)"), `${this.formatMetric(this.pick(row, "avgTextLength", "AVG_TEXT_LENGTH"))} / ${this.formatInteger(this.pick(row, "maxTextLength", "MAX_TEXT_LENGTH"))}`]
-            ];
+            const feature = this.getTrainingFeatureItems(row);
             return `
-                <details class="type-model-feature-details">
-                    <summary><strong>${this.escapeHtml(String(logicalType))}</strong><span>DV ${this.escapeHtml(distinctRatio)} · Hn ${this.escapeHtml(normEntropy)}</span></summary>
-                    <dl>${items.map(([label, value]) => `
-                        <div><dt>${this.escapeHtml(label)}</dt><dd title="${this.escapeHtml(String(value ?? "-"))}">${this.escapeHtml(String(value ?? "-"))}</dd></div>
-                    `).join("")}</dl>
-                </details>
+                <button type="button" class="type-model-feature-trigger" data-action="show-training-feature" data-feature-index="${this.escapeHtml(String(rowIndex))}" aria-haspopup="dialog">
+                    <strong>${this.escapeHtml(String(feature.logicalType))}</strong>
+                    <span>DV ${this.escapeHtml(feature.distinctRatio)} · Hn ${this.escapeHtml(feature.normEntropy)}</span>
+                    <i class="fas fa-up-right-from-square" aria-hidden="true"></i>
+                </button>
             `;
+        },
+
+        showTrainingFeature(rowIndex) {
+            const row = this.datasetRows[Number(rowIndex)];
+            if (!row) return;
+            const container = getPageContainer();
+            if (!container) return;
+            let dialog = container.querySelector("#trainingFeatureDialog-M90003");
+            if (!dialog) {
+                container.insertAdjacentHTML("beforeend", `<dialog id="trainingFeatureDialog-M90003" class="type-model-feature-dialog"></dialog>`);
+                dialog = container.querySelector("#trainingFeatureDialog-M90003");
+            }
+            const feature = this.getTrainingFeatureItems(row);
+            dialog.innerHTML = `
+                <section class="type-model-feature-dialog-content">
+                    <header>
+                        <div>
+                            <h3>${this.escapeHtml(t("trainingFeatures", "Training X Features"))}</h3>
+                            <p>${this.escapeHtml(t("columnName", "Column"))}: <strong>${this.escapeHtml(String(this.pick(row, "columnName", "COLUMN_NAME") || "-"))}</strong></p>
+                        </div>
+                        <button type="button" class="type-model-icon-btn" data-action="close-training-feature" aria-label="${this.escapeHtml(t("close", "Close"))}" title="${this.escapeHtml(t("close", "Close"))}"><i class="fas fa-times" aria-hidden="true"></i></button>
+                    </header>
+                    <div class="type-model-feature-dialog-summary"><strong>${this.escapeHtml(String(feature.logicalType))}</strong><span>DV ${this.escapeHtml(feature.distinctRatio)} · Hn ${this.escapeHtml(feature.normEntropy)}</span></div>
+                    <dl>${feature.items.map(([label, value]) => `<div><dt>${this.escapeHtml(label)}</dt><dd>${this.escapeHtml(String(value ?? "-"))}</dd></div>`).join("")}</dl>
+                </section>
+            `;
+            if (!dialog.open) dialog.showModal();
+        },
+
+        closeTrainingFeature() {
+            getPageContainer()?.querySelector("#trainingFeatureDialog-M90003")?.close();
         },
 
         renderDataset(errorMessage = "") {
@@ -1030,7 +1084,7 @@
                         <td>${this.cell(this.pick(row, "tableName", "TABLE_NAME", "targetTable", "TARGET_TABLE"))}</td>
                         <td><strong>${this.cell(this.pick(row, "columnName", "COLUMN_NAME"))}</strong></td>
                         <td>${this.cell(this.pick(row, "columnComment", "COLUMN_COMMENT", "columnDesc", "COLUMN_DESC"))}</td>
-                        <td class="feature-column">${this.renderTrainingFeatures(row)}</td>
+                        <td class="feature-column">${this.renderTrainingFeatures(row, index)}</td>
                         <td><span title="${this.escapeHtml(typeCode)}">${this.escapeHtml(this.canonicalTypeLabel(typeCode))}</span><small class="type-model-code">${this.escapeHtml(typeCode)}</small></td>
                         <td><span class="type-group-pill is-${groupCode.toLowerCase()}">${this.escapeHtml(this.typeGroupLabel(groupCode))}</span></td>
                         <td>${this.cell(this.pick(row, "labelSource", "LABEL_SOURCE"))}</td>
@@ -1124,8 +1178,9 @@
                 <div class="type-model-compare-grid">
                     ${this.comparisonCard(champion, t("champion", "Champion"), "champion")}
                     <div class="type-model-compare-arrow"><i class="fas fa-arrow-right-arrow-left"></i></div>
-                    ${this.comparisonCard(candidate, t("latestCandidate", "Latest Candidate"), "candidate")}
+                    ${this.comparisonCard(candidate, t("latestCandidate", "Latest Candidate"), "candidate", champion)}
                 </div>
+                ${this.renderCandidateComparisonAssessment(champion, candidate)}
             `;
         },
 
@@ -1376,17 +1431,133 @@
             return { labels: [], values: [] };
         },
 
-        comparisonCard(model, title, kind) {
+        comparisonMetricValue(model, ...keys) {
+            const metrics = this.pick(model, "metrics", "METRICS") || {};
+            const value = this.pick(model, ...keys) ?? this.pick(metrics, ...keys);
+            if (value === undefined || value === null || String(value).trim() === "") return null;
+            const number = Number(value);
+            return Number.isFinite(number) ? number : null;
+        },
+
+        normalizedComparisonMetric(value) {
+            if (!Number.isFinite(value)) return null;
+            return Math.abs(value) > 1 && Math.abs(value) <= 100 ? value / 100 : value;
+        },
+
+        modelHoldoutRows(model) {
+            if (!model) return null;
+            const direct = this.comparisonMetricValue(model, "holdoutRows", "HOLDOUT_ROWS");
+            if (direct !== null) return direct;
+            const validation = this.comparisonMetricValue(model, "validationRows", "VALIDATION_ROWS", "validRowCount", "VALID_ROW_COUNT");
+            const test = this.comparisonMetricValue(model, "testRows", "TEST_ROWS", "testRowCount", "TEST_ROW_COUNT");
+            if (validation === null && test === null) return null;
+            return Number(validation || 0) + Number(test || 0);
+        },
+
+        formatOptionalInteger(value) {
+            return value === undefined || value === null || String(value).trim() === ""
+                ? "-"
+                : this.formatInteger(value);
+        },
+
+        comparisonDelta(value, baseline) {
+            const normalizedValue = this.normalizedComparisonMetric(value);
+            const normalizedBaseline = this.normalizedComparisonMetric(baseline);
+            if (normalizedValue === null || normalizedBaseline === null) return null;
+            return normalizedValue - normalizedBaseline;
+        },
+
+        renderComparisonDelta(value, baseline) {
+            const delta = this.comparisonDelta(value, baseline);
+            if (delta === null) return "";
+            const className = delta > 0.0005 ? "is-positive" : (delta < -0.0005 ? "is-negative" : "is-neutral");
+            const sign = delta > 0 ? "+" : "";
+            const language = window.I18nManager?.getCurrentLanguage?.() === "ko" ? "ko-KR" : "en-US";
+            return `<small class="type-model-metric-delta ${className}">${sign}${(delta * 100).toLocaleString(language, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} pp</small>`;
+        },
+
+        renderCandidateComparisonAssessment(champion, candidate) {
+            if (!champion || !candidate) {
+                return `
+                    <section class="type-model-comparison-assessment is-info">
+                        <i class="fas fa-circle-info" aria-hidden="true"></i>
+                        <div>
+                            <strong>${this.escapeHtml(t("comparisonIncompleteTitle", "Comparison is not yet available"))}</strong>
+                            <span>${this.escapeHtml(t("comparisonIncompleteDescription", "Both a champion and a candidate are required to calculate holdout metric deltas."))}</span>
+                        </div>
+                    </section>
+                `;
+            }
+            const championF1 = this.comparisonMetricValue(champion, "macroF1", "MACRO_F1");
+            const candidateF1 = this.comparisonMetricValue(candidate, "macroF1", "MACRO_F1");
+            const championBalanced = this.comparisonMetricValue(champion, "balancedAccuracy", "BALANCED_ACCURACY");
+            const candidateBalanced = this.comparisonMetricValue(candidate, "balancedAccuracy", "BALANCED_ACCURACY");
+            const f1Delta = this.comparisonDelta(candidateF1, championF1);
+            const balancedDelta = this.comparisonDelta(candidateBalanced, championBalanced);
+            const candidateHoldoutRows = this.modelHoldoutRows(candidate);
+            let level = "info";
+            let icon = "fa-scale-balanced";
+            let title = t("comparisonEvidenceIncompleteTitle", "More validation evidence is needed");
+            let description = t("comparisonEvidenceIncompleteDescription", "Macro F1 or balanced accuracy is missing, so the candidate cannot be compared reliably.");
+
+            if (f1Delta !== null && balancedDelta !== null) {
+                if (f1Delta >= 0.01 && (balancedDelta === null || balancedDelta >= -0.005)) {
+                    level = "positive";
+                    icon = "fa-arrow-trend-up";
+                    title = t("comparisonCandidateGainTitle", "Candidate shows a material holdout gain");
+                    description = t("comparisonCandidateGainDescription", "Macro F1 improved without a material balanced-accuracy decline. Review class-level recall and confusion before activation.");
+                } else if (f1Delta <= -0.01 || (balancedDelta !== null && balancedDelta <= -0.01)) {
+                    level = "warning";
+                    icon = "fa-triangle-exclamation";
+                    title = t("comparisonCandidateDeclineTitle", "Candidate trails the champion");
+                    description = t("comparisonCandidateDeclineDescription", "At least one holdout metric declined by 1 percentage point or more. Activate only for a documented class-level tradeoff.");
+                } else {
+                    title = t("comparisonCandidateTieTitle", "Candidate is effectively tied");
+                    description = t("comparisonCandidateTieDescription", "The primary holdout metrics are within 1 percentage point. Prefer the simpler operational choice unless class-level evidence justifies a change.");
+                }
+            }
+
+            const holdoutWarning = Number.isFinite(candidateHoldoutRows) && candidateHoldoutRows < 30
+                ? `<small><i class="fas fa-flask" aria-hidden="true"></i>${this.escapeHtml(t("comparisonSmallHoldoutWarning", "Candidate holdout has only {rows} rows; metric deltas may be unstable.", { rows: this.formatInteger(candidateHoldoutRows) }))}</small>`
+                : "";
+            return `
+                <section class="type-model-comparison-assessment is-${level}">
+                    <i class="fas ${icon}" aria-hidden="true"></i>
+                    <div>
+                        <strong>${this.escapeHtml(title)}</strong>
+                        <span>${this.escapeHtml(description)}</span>
+                        <div class="type-model-comparison-deltas">
+                            <span>Macro F1 ${this.renderComparisonDelta(candidateF1, championF1) || "-"}</span>
+                            <span>${this.escapeHtml(t("balancedAccuracy", "Balanced Accuracy"))} ${this.renderComparisonDelta(candidateBalanced, championBalanced) || "-"}</span>
+                            <span>${this.escapeHtml(t("holdoutRows", "Holdout Rows"))} <b>${this.escapeHtml(this.formatOptionalInteger(candidateHoldoutRows))}</b></span>
+                        </div>
+                        ${holdoutWarning}
+                        <small>${this.escapeHtml(t("comparisonThresholdNote", "Material-change guide: 1.0 percentage point. This is a review aid, not an automatic activation rule."))}</small>
+                    </div>
+                </section>
+            `;
+        },
+
+        comparisonCard(model, title, kind, baseline = null) {
             if (!model) return `<article class="type-model-compare-card is-${kind}"><h4>${this.escapeHtml(title)}</h4>${this.emptyBlock(t("notAvailable", "Not available"))}</article>`;
             const status = String(this.pick(model, "status", "STATUS", "statusCode", "STATUS_CODE") || kind).toUpperCase();
+            const macroF1 = this.comparisonMetricValue(model, "macroF1", "MACRO_F1");
+            const balancedAccuracy = this.comparisonMetricValue(model, "balancedAccuracy", "BALANCED_ACCURACY");
+            const accuracy = this.comparisonMetricValue(model, "accuracy", "ACCURACY");
+            const baselineMacroF1 = baseline ? this.comparisonMetricValue(baseline, "macroF1", "MACRO_F1") : null;
+            const baselineBalanced = baseline ? this.comparisonMetricValue(baseline, "balancedAccuracy", "BALANCED_ACCURACY") : null;
+            const baselineAccuracy = baseline ? this.comparisonMetricValue(baseline, "accuracy", "ACCURACY") : null;
             return `
                 <article class="type-model-compare-card is-${kind}">
                     <header><h4>${this.escapeHtml(title)}</h4><span class="type-model-status ${this.statusClass(status)}">${this.escapeHtml(this.statusLabel(status))}</span></header>
                     <strong>${this.cell(this.pick(model, "modelVersion", "MODEL_VERSION", "version"))}</strong>
                     <dl>
                         <div><dt>${this.escapeHtml(t("algorithm", "Algorithm"))}</dt><dd>${this.cell(this.pick(model, "algorithmCode", "ALGORITHM_CODE", "algorithm"))}</dd></div>
-                        <div><dt>Macro F1</dt><dd>${this.formatMetric(this.pick(model, "macroF1", "MACRO_F1"))}</dd></div>
-                        <div><dt>${this.escapeHtml(t("balancedAccuracy", "Balanced Accuracy"))}</dt><dd>${this.formatMetric(this.pick(model, "balancedAccuracy", "BALANCED_ACCURACY"))}</dd></div>
+                        <div><dt>Macro F1</dt><dd>${this.formatMetric(macroF1)}${baseline ? this.renderComparisonDelta(macroF1, baselineMacroF1) : ""}</dd></div>
+                        <div><dt>${this.escapeHtml(t("balancedAccuracy", "Balanced Accuracy"))}</dt><dd>${this.formatMetric(balancedAccuracy)}${baseline ? this.renderComparisonDelta(balancedAccuracy, baselineBalanced) : ""}</dd></div>
+                        <div><dt>${this.escapeHtml(t("accuracy", "Accuracy"))}</dt><dd>${this.formatMetric(accuracy)}${baseline ? this.renderComparisonDelta(accuracy, baselineAccuracy) : ""}</dd></div>
+                        <div><dt>${this.escapeHtml(t("holdoutRows", "Holdout Rows"))}</dt><dd>${this.formatOptionalInteger(this.modelHoldoutRows(model))}</dd></div>
+                        <div><dt>${this.escapeHtml(t("trainingRows", "Training Rows"))}</dt><dd>${this.formatOptionalInteger(this.pick(model, "trainedRows", "TRAINED_ROWS", "trainingRows", "TRAINING_ROWS"))}</dd></div>
                     </dl>
                 </article>
             `;

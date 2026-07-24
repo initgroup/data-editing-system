@@ -159,6 +159,7 @@
     "paramDescRunId": "같은 DATA_WORK/FLOW_WORK 실행 결과를 연결하는 Run ID",
     "paramDescSymbolicMaxFeatures": "Symbolic Regression 입력 독립변수 최대 수",
     "paramDescMaxIterations": "Symbolic 탐색 최대 반복 수",
+    "paramDescMaxSymbolicTerms": "다항식 fallback 수식에 유지할 최대 항 수",
     "paramDescUsePysr": "PySR 사용 여부(Y/N). N이면 polynomial LASSO fallback 사용",
     "paramDescMinR2Score": "Symbolic Regression에 사용할 LASSO 최소 R2 점수",
     "paramDescRuleParts": "실행 범위: ALL, CATEGORICAL 또는 CONTINUOUS",

@@ -86,6 +86,14 @@
     "classificationOverrideDeleteFailed": "재정의 값 삭제에 실패했습니다.",
     "confirmApplyClassificationDefaults": "프리셋의 모든 값을 Target DB 재정의 값으로 적용하시겠습니까? 기존 재정의 값이 덮어써질 수 있습니다.",
     "classificationDefaultsApplied": "프리셋 재정의 값을 적용했습니다. 생성 {created}건, 갱신 {updated}건.",
-    "classificationDefaultsApplyFailed": "프리셋 재정의 값 적용에 실패했습니다."
+    "classificationDefaultsApplyFailed": "프리셋 재정의 값 적용에 실패했습니다.",
+    "selectObjectForPreset": "먼저 프로시저, 함수, 패키지 멤버 또는 모델을 선택해 주세요.",
+    "noParameterRowsToInitialize": "초기화할 파라미터 행이 없습니다.",
+    "noDetailPresetRegistered": "이 객체에 등록된 설명/기본값 프리셋이 없습니다.",
+    "detailPresetApplied": "프리셋에서 설명/기본값 {count}건과 {metadata}를 적용했습니다. 검토 후 저장 버튼을 클릭해 주세요.",
+    "metadataApplied": "메타데이터",
+    "metadataNotApplied": "적용할 메타데이터 없음",
+    "detailPresetNoMatchingKeys": "프리셋을 찾았지만 일치하는 파라미터 키가 없어 변경된 항목이 없습니다.",
+    "detailPresetLoadFailed": "설명/기본값 프리셋을 불러오지 못했습니다."
   }
 }

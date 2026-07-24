@@ -353,53 +353,81 @@
               "order": 6
             },
             {
+              "key": "INPUT.P_MAX_SYMBOLIC_TERMS",
+              "value": "IN NUMBER",
+              "comment": "Maximum retained polynomial Symbolic Regression term count",
+              "defaultValue": "8",
+              "order": 7
+            },
+            {
+              "key": "INPUT.P_USE_PYSR",
+              "value": "IN VARCHAR2",
+              "comment": "Use PySR symbolic regression Y/N",
+              "defaultValue": "N",
+              "order": 8
+            },
+            {
+              "key": "INPUT.P_LINEAR_FIRST_YN",
+              "value": "IN VARCHAR2",
+              "comment": "Try a linear symbolic rule before nonlinear search",
+              "defaultValue": "Y",
+              "order": 9
+            },
+            {
+              "key": "INPUT.P_LINEAR_R2_THRESHOLD",
+              "value": "IN NUMBER",
+              "comment": "R2 threshold for accepting the linear symbolic rule",
+              "defaultValue": "0.995",
+              "order": 10
+            },
+            {
               "key": "INPUT.P_MIN_R2_SCORE",
               "value": "IN NUMBER",
               "comment": "Minimum LASSO R2 score used for selected symbolic regression features",
               "defaultValue": "0.7",
-              "order": 7
+              "order": 11
             },
             {
               "key": "INPUT.P_MAX_AUTO_TARGETS",
               "value": "IN NUMBER",
               "comment": "Maximum auto target columns when P_TARGET_COLUMN is (auto)",
               "defaultValue": "10",
-              "order": 8
+              "order": 12
             },
             {
               "key": "INPUT.P_CONTINUE_ON_ERROR",
               "value": "IN VARCHAR2",
               "comment": "Continue remaining auto targets when one target fails",
               "defaultValue": "Y",
-              "order": 9
+              "order": 13
             },
             {
               "key": "INPUT.P_RUN_SOURCE_TYPE",
               "value": "IN VARCHAR2",
               "comment": "DATA_WORK or FLOW_WORK",
               "defaultValue": ":INIT$RunSourceType",
-              "order": 10
+              "order": 14
             },
             {
               "key": "INPUT.P_RUN_ID",
               "value": "IN NUMBER",
               "comment": "Run ID linking results from the same DATA_WORK or FLOW_WORK execution",
               "defaultValue": ":INIT$RunId",
-              "order": 11
+              "order": 15
             },
             {
               "key": "OUTPUT.status",
               "value": "$.status",
               "comment": "API success status",
               "defaultValue": "",
-              "order": 12
+              "order": 16
             },
             {
               "key": "OUTPUT.resultTable",
               "value": "$.resultTable -> INIT$_TB_RULEDISC_SYMBOLIC",
               "comment": "Result table managed by the internal Python service",
               "defaultValue": "INIT$_TB_RULEDISC_SYMBOLIC",
-              "order": 13
+              "order": 17
             }
           ]
         },
@@ -584,74 +612,81 @@
               "order": 21
             },
             {
+              "key": "INPUT.P_MAX_SYMBOLIC_TERMS",
+              "value": "IN NUMBER",
+              "comment": "Maximum retained polynomial Symbolic Regression term count",
+              "defaultValue": "8",
+              "order": 22
+            },
+            {
               "key": "INPUT.P_USE_PYSR",
               "value": "IN VARCHAR2",
               "comment": "Use PySR symbolic regression Y/N",
               "defaultValue": "N",
-              "order": 22
+              "order": 23
             },
             {
               "key": "INPUT.P_LINEAR_FIRST_YN",
               "value": "IN VARCHAR2",
               "comment": "Try a linear symbolic rule before nonlinear search",
               "defaultValue": "Y",
-              "order": 23
+              "order": 24
             },
             {
               "key": "INPUT.P_LINEAR_R2_THRESHOLD",
               "value": "IN NUMBER",
               "comment": "R2 threshold for accepting the linear symbolic rule",
               "defaultValue": "0.995",
-              "order": 24
+              "order": 25
             },
             {
               "key": "INPUT.P_MIN_R2_SCORE",
               "value": "IN NUMBER",
               "comment": "Minimum LASSO R2 score for symbolic regression",
               "defaultValue": "0.7",
-              "order": 25
+              "order": 26
             },
             {
               "key": "INPUT.P_MAX_AUTO_TARGETS",
               "value": "IN NUMBER",
               "comment": "Maximum auto continuous target count",
               "defaultValue": "10",
-              "order": 26
+              "order": 27
             },
             {
               "key": "INPUT.P_CONTINUE_ON_ERROR",
               "value": "IN VARCHAR2",
               "comment": "Continue remaining subtasks when one fails. Y can return partial completion, so review failed-task details.",
               "defaultValue": "Y",
-              "order": 27
+              "order": 28
             },
             {
               "key": "INPUT.P_RUN_SOURCE_TYPE",
               "value": "IN VARCHAR2",
               "comment": "DATA_WORK or FLOW_WORK",
               "defaultValue": ":INIT$RunSourceType",
-              "order": 28
+              "order": 29
             },
             {
               "key": "INPUT.P_RUN_ID",
               "value": "IN NUMBER",
               "comment": "Run ID linking profiling, relationship-network, and rule results from the same DATA_WORK or FLOW_WORK execution",
               "defaultValue": ":INIT$RunId",
-              "order": 29
+              "order": 30
             },
             {
               "key": "OUTPUT.status",
               "value": "$.status",
               "comment": "API success status",
               "defaultValue": "",
-              "order": 30
+              "order": 31
             },
             {
               "key": "OUTPUT.resultTables",
               "value": "$.resultTables",
               "comment": "Service-managed result tables",
               "defaultValue": "INIT$_TB_RULEDISC_ASSOC_SUM,INIT$_TB_COLREL_LASSO_FEATURE,INIT$_TB_RULEDISC_SYMBOLIC",
-              "order": 31
+              "order": 32
             }
           ]
         },

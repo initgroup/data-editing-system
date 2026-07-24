@@ -450,7 +450,7 @@
         {
           "key": "P_ALPHA",
           "comment": "LASSO alpha. 비우면 교차검증으로 자동 선택",
-          "defaultValue": "(auto)"
+          "defaultValue": ""
         },
         {
           "key": "P_MAX_AUTO_TARGETS",
@@ -595,6 +595,11 @@
           "key": "P_MAX_ITERATIONS",
           "comment": "Symbolic 탐색 최대 반복 수",
           "defaultValue": "10000"
+        },
+        {
+          "key": "P_MAX_SYMBOLIC_TERMS",
+          "comment": "다항식 fallback 수식에 유지할 최대 항 수",
+          "defaultValue": "8"
         },
         {
           "key": "P_USE_PYSR",
@@ -752,6 +757,11 @@
           "key": "P_MAX_ITERATIONS",
           "comment": "Symbolic 탐색 최대 반복 수",
           "defaultValue": "10000"
+        },
+        {
+          "key": "P_MAX_SYMBOLIC_TERMS",
+          "comment": "다항식 fallback 수식에 유지할 최대 항 수",
+          "defaultValue": "8"
         },
         {
           "key": "P_USE_PYSR",

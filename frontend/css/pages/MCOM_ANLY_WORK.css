@@ -2723,6 +2723,7 @@
 
 .anly-work-symbolic-visual-popup.is-symbolic-chart-maximized .anly-work-symbolic-formula-banner,
 .anly-work-symbolic-visual-popup.is-symbolic-chart-maximized .anly-work-symbolic-diagnostic-metrics,
+.anly-work-symbolic-visual-popup.is-symbolic-chart-maximized .anly-work-symbolic-diagnostic-assessment,
 .anly-work-symbolic-visual-popup.is-symbolic-chart-maximized .anly-work-symbolic-expression-box {
     display: none;
 }
@@ -3604,6 +3605,60 @@
     font-weight: 850;
 }
 
+.anly-work-symbolic-diagnostic-assessment {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+}
+
+.anly-work-symbolic-diagnostic-assessment > div {
+    align-items: flex-start;
+    background: #f8fafc;
+    border: 1px solid #dbe3ef;
+    border-left-width: 4px;
+    color: #334155;
+    display: flex;
+    font-size: 12px;
+    gap: 8px;
+    line-height: 1.45;
+    min-width: 0;
+    padding: 8px 10px;
+}
+
+.anly-work-symbolic-diagnostic-assessment > div i {
+    flex: 0 0 auto;
+    margin-top: 2px;
+}
+
+.anly-work-symbolic-diagnostic-assessment > div span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.anly-work-symbolic-diagnostic-assessment > .is-ok {
+    background: #f0fdf4;
+    border-color: #86efac;
+    color: #166534;
+}
+
+.anly-work-symbolic-diagnostic-assessment > .is-info {
+    background: #eff6ff;
+    border-color: #93c5fd;
+    color: #1e40af;
+}
+
+.anly-work-symbolic-diagnostic-assessment > .is-warning {
+    background: #fffbeb;
+    border-color: #fcd34d;
+    color: #92400e;
+}
+
+.anly-work-symbolic-diagnostic-assessment > .is-danger {
+    background: #fef2f2;
+    border-color: #fca5a5;
+    color: #991b1b;
+}
+
 .anly-work-symbolic-expression-box,
 .anly-work-symbolic-chart-wrap {
     background: #f8fafc;
@@ -4366,6 +4421,35 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.anly-work-lasso-target-grid button {
+    align-content: start;
+    display: grid;
+    gap: 4px;
+    grid-template-rows: 18px 43px 16px 16px;
+    min-height: 123px;
+}
+
+.anly-work-lasso-target-grid button > b,
+.anly-work-lasso-target-grid button > small,
+.anly-work-lasso-target-grid button > em {
+    margin-top: 0;
+    min-width: 0;
+    width: 100%;
+}
+
+.anly-work-lasso-target-badges {
+    align-items: flex-start;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.anly-work-lasso-target-grid .anly-work-lasso-eligibility {
+    margin-top: 0;
 }
 
 .anly-work-model-tabs {

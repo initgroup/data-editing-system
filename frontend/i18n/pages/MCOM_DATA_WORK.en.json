@@ -30,7 +30,8 @@
     "historyMenuCode": "Menu code",
     "openHistoryDetailTitle": "View run details",
     "closeHistoryDetailTitle": "Close run details",
-    "copyMessageTitle": "Copy message"
+    "copyMessageTitle": "Copy message",
+    "paramDescMaxSymbolicTerms": "Maximum retained polynomial Symbolic Regression term count"
   },
   "messages": {
     "historyTotal": "Total {count}",

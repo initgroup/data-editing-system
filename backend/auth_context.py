@@ -29,10 +29,19 @@ _auth_db_gate = BoundedSemaphore(max(1, min(2, _system_pool_max - 1)))
 def get_session_verify_cache_seconds() -> int:
     """Return the short lifetime of a DB-verified server-side session cache."""
     try:
-        configured = int(os.getenv("INIT_SESSION_VERIFY_CACHE_SECONDS", "5"))
+        configured = int(os.getenv("INIT_SESSION_VERIFY_CACHE_SECONDS", "30"))
     except Exception:
-        configured = 5
+        configured = 30
     return max(0, min(configured, 30))
+
+
+def get_auth_query_timeout_ms() -> int:
+    """Bound login verification so a polling request cannot hold an auth slot for a minute."""
+    try:
+        configured = int(os.getenv("INIT_AUTH_QUERY_TIMEOUT_MS", "5000"))
+    except Exception:
+        configured = 5000
+    return max(1000, min(configured, 15000))
 
 
 def _get_cached_verified_user(token_hash: str) -> Optional[Dict[str, Any]]:
@@ -76,10 +85,13 @@ def _invalidate_verified_session(token_hash: str) -> None:
 
 def _is_pool_timeout_error(error: Exception) -> bool:
     detail = error.args[0] if getattr(error, "args", None) else error
+    full_code = str(getattr(detail, "full_code", "") or "").upper()
+    error_text = str(error).upper()
     return (
-        getattr(detail, "code", None) == 4005
-        or str(getattr(detail, "full_code", "") or "").upper() == "DPY-4005"
-        or "DPY-4005" in str(error).upper()
+        getattr(detail, "code", None) in {4005, 4024}
+        or full_code in {"DPY-4005", "DPY-4024"}
+        or "DPY-4005" in error_text
+        or "DPY-4024" in error_text
     )
 
 
@@ -276,6 +288,8 @@ def revoke_current_session(request: Request, response: Optional[Response] = None
     cursor = None
     try:
         conn = get_db_connection()
+        if hasattr(conn, "call_timeout"):
+            conn.call_timeout = get_auth_query_timeout_ms()
         ensure_auth_session_table(conn)
         cursor = conn.cursor()
         cursor.execute(SqlLoader.get_sql("AUTH_SESSION_REVOKE"), {
@@ -338,6 +352,8 @@ def authenticate_request(request: Request, *, touch: bool = True) -> Dict[str, A
             return verified_user
 
         conn = get_db_connection()
+        if hasattr(conn, "call_timeout"):
+            conn.call_timeout = get_auth_query_timeout_ms()
         ensure_auth_session_table(conn)
         cursor = conn.cursor()
         cursor.execute(SqlLoader.get_sql("AUTH_SESSION_SELECT"), {
@@ -383,12 +399,17 @@ def authenticate_request(request: Request, *, touch: bool = True) -> Dict[str, A
     except HTTPException:
         raise
     except Exception as error:
-        logger.exception("Login session verification failed. path=%s", request.url.path)
         if _is_pool_timeout_error(error):
+            logger.warning(
+                "Login session verification temporarily unavailable. path=%s error=%s",
+                request.url.path,
+                str(error),
+            )
             raise HTTPException(
                 status_code=503,
-                detail="The system DB connection pool is busy. Please try again shortly.",
+                detail="Login session verification is temporarily unavailable. Please try again shortly.",
             ) from error
+        logger.exception("Login session verification failed. path=%s", request.url.path)
         raise HTTPException(status_code=401, detail="Login session could not be verified.")
     finally:
         if cursor:

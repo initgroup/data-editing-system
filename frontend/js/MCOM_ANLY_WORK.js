@@ -232,7 +232,7 @@
             if (this.pendingRunId) {
                 await this.openPendingRunPage();
             } else {
-                await this.loadRuns(1);
+                await this.loadRuns(1, { initialEmptyRetries: 2 });
             }
         },
 
@@ -547,6 +547,17 @@
                 const rowTotal = Number(this.runs[0]?.TOTAL_COUNT || 0);
                 this.runTotal = Math.max(responseTotal, rowTotal);
                 if (!this.runs.length) {
+                    const initialEmptyRetries = Math.max(0, Number(options.initialEmptyRetries || 0));
+                    const emptyRetryAttempt = Math.max(0, Number(options.emptyRetryAttempt || 0));
+                    if (emptyRetryAttempt < initialEmptyRetries) {
+                        const retryDelayMs = emptyRetryAttempt === 0 ? 200 : 600;
+                        await new Promise((resolve) => window.setTimeout(resolve, retryDelayMs));
+                        return this.loadRuns(this.runPage, {
+                            ...options,
+                            preservePending: true,
+                            emptyRetryAttempt: emptyRetryAttempt + 1
+                        });
+                    }
                     this.selectedRun = null;
                     this.selectedNode = null;
                     this.nodes = [];
@@ -2408,6 +2419,15 @@
             await this.copyTextValue(formula, "Formula copied.");
         },
 
+        async copyActiveSymbolicFormula(event) {
+            const rule = this.symbolicRuleChartState?.rule || {};
+            const features = Array.isArray(rule.FEATURE_LIST) ? rule.FEATURE_LIST : this.parseFeatureList(rule.FEATURE_COLUMNS);
+            await this.copySymbolicFormula(
+                this.getSymbolicFormulaText(rule, features, rule.TARGET_COLUMN),
+                event
+            );
+        },
+
         async copyRunMessage(event) {
             event?.preventDefault?.();
             event?.stopPropagation?.();
@@ -3566,7 +3586,7 @@
                     <section class="anly-work-violation-rule-context is-symbolic-formula">
                         <header>
                             <strong>${this.escapeHtml(rule.RULE_ID || "")}</strong>
-                            <span>${this.escapeHtml(getText("{count} rows", { count: this.formatNumber(rule.VIOLATION_COUNT) }))} · max error ${this.formatPercentMetric(rule.MAX_ERROR_PCT)} · tolerance ${this.formatPercentMetric(rule.TOLERANCE_PCT)}</span>
+                            <span>${this.escapeHtml(getText("{count} rows", { count: this.formatNumber(rule.VIOLATION_COUNT) }))} · max error ${this.formatRelativeErrorMetric(rule.MAX_ERROR_PCT)} · tolerance ${this.formatRelativeErrorMetric(rule.TOLERANCE_PCT)}</span>
                         </header>
                         <p>
                             <b>F(X)</b>
@@ -6338,7 +6358,7 @@
                         ${targetEligibility.length ? `
                             <div>
                                 <strong>${this.escapeHtml(getText("Selection Result by Target"))}</strong>
-                                <div class="anly-work-type-case-grid">
+                                <div class="anly-work-type-case-grid anly-work-lasso-target-grid">
                                     ${targetEligibility.map((item) => {
                                         const targetColumn = String(item.TARGET_COLUMN || "").trim();
                                         const eligibility = this.getLassoTargetEligibility(item, minR2Score, maxAutoTargets);
@@ -6346,8 +6366,10 @@
                                         return `
                                             <button type="button" class="${selectedTarget === targetColumn ? "is-active" : ""} ${eligibility.className}" ${disabled ? "disabled" : ""} title="${this.escapeHtml(eligibility.description)}" onclick="${PAGE_CODE}.selectLassoTargetFilter('${this.escapeJs(targetColumn)}')">
                                                 <b>${this.renderColumnAwareCell(targetColumn, summary)}</b>
-                                                ${this.renderColumnClusterBadge(item.TARGET_CLUSTER_ID)}
-                                                <span class="anly-work-lasso-eligibility">${this.escapeHtml(eligibility.label)}</span>
+                                                <span class="anly-work-lasso-target-badges">
+                                                    ${this.renderColumnClusterBadge(item.TARGET_CLUSTER_ID)}
+                                                    <span class="anly-work-lasso-eligibility">${this.escapeHtml(eligibility.label)}</span>
+                                                </span>
                                                 <small>${this.formatNumber(item.SELECTED_FEATURE_COUNT || 0)} selected · R2 ${item.R2_SCORE === undefined || item.R2_SCORE === null ? "-" : this.formatDecimal(item.R2_SCORE)}</small>
                                                 <em>${eligibility.description}</em>
                                             </button>
@@ -6525,7 +6547,7 @@
                         <div class="anly-work-corr-metrics">
                             <span><b>${this.formatNumber(overview.RULE_COUNT)}</b><small>rules</small></span>
                             <span><b>${this.formatNumber(overview.SELECTED_RULE_COUNT)}</b><small>selected</small></span>
-                            <span><b>${this.formatDecimal(overview.MAX_SCORE)}</b><small>max score</small></span>
+                            <span><b>${this.formatDecimal(overview.MAX_SCORE)}</b><small>${this.escapeHtml(getText("max R²"))}</small></span>
                             <span><b>${this.formatDecimal(overview.AVG_COMPLEXITY)}</b><small>avg complexity</small></span>
                         </div>
                     </header>
@@ -6545,7 +6567,7 @@
                                     return `
                                         <button type="button" class="${methodFilter === method ? "is-active" : ""}" onclick="${PAGE_CODE}.selectSymbolicRuleFilter('method', '${this.escapeJs(method)}')">
                                             <span>${this.escapeHtml(method)}</span>
-                                            <b>${this.formatNumber(item.RULE_COUNT)} rules · score ${this.formatDecimal(item.AVG_SCORE)}</b>
+                                            <b>${this.formatNumber(item.RULE_COUNT)} rules · R² ${this.formatDecimal(item.AVG_SCORE)}</b>
                                         </button>
                                     `;
                                 }).join("")}
@@ -6635,7 +6657,7 @@
                         </div>
                     </div>
                     <footer>
-                        <span><small>score</small><b>${this.formatDecimal(rule.SCORE)}</b></span>
+                        <span><small>R²</small><b>${this.formatDecimal(rule.SCORE)}</b></span>
                         <span><small>complexity</small><b>${this.formatNumber(rule.COMPLEXITY)}</b></span>
                         <span><small>rank</small><b>${this.formatNumber(rule.RANK_NO)}</b></span>
                         <span class="anly-work-symbolic-rule-method"><small>method</small><b>${this.escapeHtml(rule.METHOD || "-")}</b></span>
@@ -6669,13 +6691,13 @@
                             <span><b>${this.formatNumber(overview.VIOLATION_COUNT)}</b><small>violations</small></span>
                             <span><b>${this.formatNumber(overview.VIOLATED_RULE_COUNT)}</b><small>hit rules</small></span>
                             <span><b>${this.formatNumber(overview.NO_VIOLATION_RULE_COUNT)}</b><small>clean rules</small></span>
-                            <span><b>${this.formatPercentMetric(overview.TOLERANCE_PCT)}</b><small>tolerance</small></span>
+                            <span><b>${this.formatRelativeErrorMetric(overview.TOLERANCE_PCT)}</b><small>tolerance</small></span>
                         </div>
                     </header>
                     <div class="anly-work-violation-reason-strip">
                         <span><small>${this.escapeHtml(getText("Violation rows"))}</small><b>${this.formatNumber(overview.VIOLATED_ROW_COUNT)}</b></span>
-                        <span><small>${this.escapeHtml(getText("Average error rate"))}</small><b>${this.formatPercentMetric(overview.AVG_ERROR_PCT)}</b></span>
-                        <span><small>${this.escapeHtml(getText("Max error rate"))}</small><b>${this.formatPercentMetric(overview.MAX_ERROR_PCT)}</b></span>
+                        <span><small>${this.escapeHtml(getText("Average error rate"))}</small><b>${this.formatRelativeErrorMetric(overview.AVG_ERROR_PCT)}</b></span>
+                        <span><small>${this.escapeHtml(getText("Max error rate"))}</small><b>${this.formatRelativeErrorMetric(overview.MAX_ERROR_PCT)}</b></span>
                         <span><small>${this.escapeHtml(getText("Average absolute error"))}</small><b>${this.formatDecimal(overview.AVG_ABS_ERROR)}</b></span>
                         <span><small>${this.escapeHtml(getText("Max absolute error"))}</small><b>${this.formatDecimal(overview.MAX_ABS_ERROR)}</b></span>
                         ${ruleFilterDisplay ? `<b>${this.escapeHtml(getText("RULE ID search: {ruleId}", { ruleId: ruleFilterDisplay }))}</b>` : ""}
@@ -6778,8 +6800,8 @@
                                     </div>
                                     <footer>
                                         <span><small>${this.escapeHtml(getText("Violation rows"))}</small><b>${this.formatNumber(rule.VIOLATED_ROW_COUNT)}</b></span>
-                                        <span><small>${this.escapeHtml(getText("Max error rate"))}</small><b>${this.formatPercentMetric(rule.MAX_ERROR_PCT)}</b></span>
-                                        <span><small>${this.escapeHtml(getText("Average error rate"))}</small><b>${this.formatPercentMetric(rule.AVG_ERROR_PCT)}</b></span>
+                                        <span><small>${this.escapeHtml(getText("Max error rate"))}</small><b>${this.formatRelativeErrorMetric(rule.MAX_ERROR_PCT)}</b></span>
+                                        <span><small>${this.escapeHtml(getText("Average error rate"))}</small><b>${this.formatRelativeErrorMetric(rule.AVG_ERROR_PCT)}</b></span>
                                         <span><small>score</small><b>${this.formatDecimal(rule.RULE_SCORE)}</b></span>
                                         <span><small>method</small><b>${this.escapeHtml(rule.RULE_METHOD || "-")}</b></span>
                                     </footer>
@@ -6925,19 +6947,25 @@
                     </header>
                     <div class="anly-work-symbolic-formula-banner">
                         <span>F(X) = Y</span>
-                        <div class="anly-work-symbolic-formula-text"><strong>f(${featureLabel}) = ${this.escapeHtml(rule.EXPRESSION || "")} = ${targetCell}</strong></div>
-                        <button type="button" class="anly-work-symbolic-formula-copy" title="${this.escapeHtml(getText("Copy formula"))}" onclick="${PAGE_CODE}.copySymbolicFormula('${this.escapeJs(formulaText)}', event)"><i class="far fa-copy"></i></button>
+                        <div class="anly-work-symbolic-formula-text"><strong id="${PAGE_ID_PREFIX}SymbolicFormulaText" title="${this.escapeHtml(formulaText)}">f(${featureLabel}) = ${this.escapeHtml(rule.EXPRESSION || "")} = ${targetCell}</strong></div>
+                        <button type="button" class="anly-work-symbolic-formula-copy" title="${this.escapeHtml(getText("Copy formula"))}" onclick="${PAGE_CODE}.copyActiveSymbolicFormula(event)"><i class="far fa-copy"></i></button>
                     </div>
                     <div class="anly-work-symbolic-popup-body">
                         <div class="anly-work-symbolic-diagnostic-metrics">
-                            <span><small>method</small><b>${this.escapeHtml(method)}</b></span>
-                            <span><small>${this.escapeHtml(getText("Model R²"))}</small><b>${this.formatSymbolicDiagnosticNumber(score)}</b></span>
-                            <span><small>${this.escapeHtml(getText("Sample R²"))}</small><b id="${PAGE_ID_PREFIX}SymbolicSampleR2">-</b></span>
-                            <span><small>MAE</small><b id="${PAGE_ID_PREFIX}SymbolicSampleMae">-</b></span>
-                            <span><small>RMSE</small><b id="${PAGE_ID_PREFIX}SymbolicSampleRmse">-</b></span>
-                            <span><small>complexity</small><b>${this.formatNumber(complexity)}</b></span>
-                            <span><small>${this.escapeHtml(getText("Sample rows"))}</small><b id="${PAGE_ID_PREFIX}SymbolicSampleCount">${this.escapeHtml(getText("Loading..."))}</b></span>
+                            <span><small>${this.escapeHtml(getText("Method"))}</small><b>${this.escapeHtml(method)}</b></span>
+                            <span><small>${this.escapeHtml(getText("Rule model R²"))}</small><b>${this.formatSymbolicDiagnosticNumber(score)}</b></span>
+                            <span><small>${this.escapeHtml(getText("Current sample R²"))}</small><b id="${PAGE_ID_PREFIX}SymbolicSampleR2">-</b></span>
+                            <span><small>${this.escapeHtml(getText("Sample MAE"))}</small><b id="${PAGE_ID_PREFIX}SymbolicSampleMae">-</b></span>
+                            <span><small>${this.escapeHtml(getText("Sample RMSE"))}</small><b id="${PAGE_ID_PREFIX}SymbolicSampleRmse">-</b></span>
+                            <span><small>${this.escapeHtml(getText("Mean residual (bias)"))}</small><b id="${PAGE_ID_PREFIX}SymbolicSampleBias">-</b></span>
+                            <span><small>${this.escapeHtml(getText("Sample max absolute residual"))}</small><b id="${PAGE_ID_PREFIX}SymbolicSampleMaxError">-</b></span>
+                            <span><small>${this.escapeHtml(getText("Allowed relative error"))}</small><b>${rule.TOLERANCE_PCT === undefined || rule.TOLERANCE_PCT === null || String(rule.TOLERANCE_PCT).trim() === "" ? "-" : this.formatRelativeErrorMetric(rule.TOLERANCE_PCT)}</b></span>
+                            <span><small>${this.escapeHtml(getText("Formula term count"))}</small><b>${this.formatNumber(complexity)}</b></span>
+                            <span><small>${this.escapeHtml(getText("Diagnostic sample rows"))}</small><b id="${PAGE_ID_PREFIX}SymbolicSampleCount">${this.escapeHtml(getText("Loading..."))}</b></span>
                         </div>
+                        <section id="${PAGE_ID_PREFIX}SymbolicDiagnosticAssessment" class="anly-work-symbolic-diagnostic-assessment" aria-live="polite">
+                            ${this.renderSymbolicDiagnosticAssessment(rule, null, true)}
+                        </section>
                         <div class="anly-work-symbolic-expression-box">
                             <strong>${this.escapeHtml(getText("Column details"))}</strong>
                             <div class="anly-work-symbolic-column-details">
@@ -7050,7 +7078,14 @@
                 summary,
                 rows: [],
                 evaluatedRows: [],
-                sampleMetrics: { r2: null, mae: null, rmse: null },
+                sampleMetrics: {
+                    r2: null,
+                    mae: null,
+                    rmse: null,
+                    bias: null,
+                    maxAbsoluteError: null,
+                    residualStdDev: null
+                },
                 sampleCount: 0,
                 hasMore: false,
                 sampleLimit: 300,
@@ -7108,6 +7143,7 @@
                     ? mergedRule.FEATURE_LIST.map((feature) => String(feature || "").trim()).filter(Boolean)
                     : this.parseFeatureList(mergedRule.FEATURE_COLUMNS);
                 state.rule = { ...mergedRule, FEATURE_LIST: features };
+                this.updateSymbolicRuleFormulaDisplay();
                 state.rows = Array.isArray(payload.rows) ? payload.rows : [];
                 state.sampleCount = Number(payload.sampleCount ?? state.rows.length) || state.rows.length;
                 state.sampleLimit = Number(payload.sampleLimit ?? 300) || 300;
@@ -7165,6 +7201,18 @@
             return comment ? [firstLine, comment] : firstLine;
         },
 
+        updateSymbolicRuleFormulaDisplay() {
+            const state = this.symbolicRuleChartState;
+            const formula = document.getElementById(`${PAGE_ID_PREFIX}SymbolicFormulaText`);
+            if (!state || !formula) return;
+            const rule = state.rule || {};
+            const features = Array.isArray(rule.FEATURE_LIST) ? rule.FEATURE_LIST : this.parseFeatureList(rule.FEATURE_COLUMNS);
+            const targetColumn = String(rule.TARGET_COLUMN || "Y").trim() || "Y";
+            const featureLabel = features.length ? features.map((item) => this.escapeHtml(item)).join(", ") : "x";
+            formula.innerHTML = `f(${featureLabel}) = ${this.escapeHtml(rule.EXPRESSION || "")} = ${this.renderColumnAwareCell(targetColumn, state.summary || {})}`;
+            formula.title = this.getSymbolicFormulaText(rule, features, targetColumn);
+        },
+
         updateSymbolicRuleVisualizationControls() {
             const state = this.symbolicRuleChartState;
             if (!state) return;
@@ -7175,6 +7223,9 @@
             const sampleR2 = document.getElementById(`${PAGE_ID_PREFIX}SymbolicSampleR2`);
             const sampleMae = document.getElementById(`${PAGE_ID_PREFIX}SymbolicSampleMae`);
             const sampleRmse = document.getElementById(`${PAGE_ID_PREFIX}SymbolicSampleRmse`);
+            const sampleBias = document.getElementById(`${PAGE_ID_PREFIX}SymbolicSampleBias`);
+            const sampleMaxError = document.getElementById(`${PAGE_ID_PREFIX}SymbolicSampleMaxError`);
+            const assessment = document.getElementById(`${PAGE_ID_PREFIX}SymbolicDiagnosticAssessment`);
             if (modeSelect) {
                 [
                     SYMBOLIC_CHART_MODES.ACTUAL_PREDICTED,
@@ -7201,6 +7252,15 @@
             if (sampleR2) sampleR2.textContent = Number.isFinite(state.sampleMetrics?.r2) ? this.formatSymbolicDiagnosticNumber(state.sampleMetrics.r2) : "-";
             if (sampleMae) sampleMae.textContent = Number.isFinite(state.sampleMetrics?.mae) ? this.formatSymbolicDiagnosticNumber(state.sampleMetrics.mae) : "-";
             if (sampleRmse) sampleRmse.textContent = Number.isFinite(state.sampleMetrics?.rmse) ? this.formatSymbolicDiagnosticNumber(state.sampleMetrics.rmse) : "-";
+            if (sampleBias) sampleBias.textContent = Number.isFinite(state.sampleMetrics?.bias) ? this.formatSymbolicDiagnosticNumber(state.sampleMetrics.bias) : "-";
+            if (sampleMaxError) sampleMaxError.textContent = Number.isFinite(state.sampleMetrics?.maxAbsoluteError) ? this.formatSymbolicDiagnosticNumber(state.sampleMetrics.maxAbsoluteError) : "-";
+            if (assessment) {
+                assessment.innerHTML = this.renderSymbolicDiagnosticAssessment(
+                    state.rule,
+                    state.sampleMetrics,
+                    state.loading
+                );
+            }
             this.updateSymbolicRuleWheelZoomControl();
         },
 
@@ -7254,18 +7314,129 @@
         },
 
         calculateSymbolicSampleMetrics(evaluatedRows = []) {
-            if (!evaluatedRows.length) return { r2: null, mae: null, rmse: null };
+            if (!evaluatedRows.length) {
+                return {
+                    r2: null,
+                    mae: null,
+                    rmse: null,
+                    bias: null,
+                    maxAbsoluteError: null,
+                    residualStdDev: null
+                };
+            }
             const actualAverage = evaluatedRows.reduce((sum, item) => sum + item.actual, 0) / evaluatedRows.length;
             const absoluteErrorSum = evaluatedRows.reduce((sum, item) => sum + Math.abs(item.residual), 0);
             const squaredErrorSum = evaluatedRows.reduce((sum, item) => sum + (item.residual ** 2), 0);
             const totalSquaredSum = evaluatedRows.reduce((sum, item) => sum + ((item.actual - actualAverage) ** 2), 0);
             const actualMagnitude = evaluatedRows.reduce((sum, item) => sum + (item.actual ** 2), 0);
             const varianceTolerance = Number.EPSILON * Math.max(1, actualMagnitude);
+            const bias = evaluatedRows.reduce((sum, item) => sum + item.residual, 0) / evaluatedRows.length;
+            const residualVariance = evaluatedRows.reduce((sum, item) => sum + ((item.residual - bias) ** 2), 0) / evaluatedRows.length;
             return {
                 r2: totalSquaredSum > varianceTolerance ? 1 - (squaredErrorSum / totalSquaredSum) : null,
                 mae: absoluteErrorSum / evaluatedRows.length,
-                rmse: Math.sqrt(squaredErrorSum / evaluatedRows.length)
+                rmse: Math.sqrt(squaredErrorSum / evaluatedRows.length),
+                bias,
+                maxAbsoluteError: Math.max(...evaluatedRows.map((item) => Math.abs(item.residual))),
+                residualStdDev: Math.sqrt(residualVariance)
             };
+        },
+
+        renderSymbolicDiagnosticAssessment(rule = {}, metrics = null, loading = false) {
+            if (loading) {
+                return `<div class="is-info"><i class="fas fa-spinner fa-spin"></i><span>${this.escapeHtml(getText("Loading sample diagnostics..."))}</span></div>`;
+            }
+            const diagnostics = [];
+            const optionalNumber = (value) => {
+                if (value === undefined || value === null || String(value).trim() === "") return null;
+                const numeric = Number(value);
+                return Number.isFinite(numeric) ? numeric : null;
+            };
+            const modelScore = optionalNumber(rule.SCORE ?? rule.RULE_SCORE);
+            const sampleR2 = optionalNumber(metrics?.r2);
+            const complexity = optionalNumber(rule.COMPLEXITY ?? rule.RULE_COMPLEXITY);
+            const method = String(rule.METHOD || rule.RULE_METHOD || "").trim().toUpperCase();
+            const toleranceValue = optionalNumber(rule.TOLERANCE_PCT);
+            const maxErrorRateValue = optionalNumber(rule.MAX_ERROR_PCT);
+            const tolerance = toleranceValue;
+            const maxErrorRate = maxErrorRateValue;
+            const violationCount = optionalNumber(rule.VIOLATION_COUNT);
+
+            if (Number.isFinite(modelScore) && modelScore < 0.7) {
+                diagnostics.push({
+                    level: modelScore < 0 ? "danger" : "warning",
+                    icon: "fa-chart-line",
+                    text: getText("Rule model R² is below 0.70. Treat this formula as an exploratory pattern, not a stable operating rule.")
+                });
+            }
+            if (Number.isFinite(modelScore) && Number.isFinite(sampleR2) && Math.abs(modelScore - sampleR2) >= 0.1) {
+                diagnostics.push({
+                    level: "warning",
+                    icon: "fa-code-branch",
+                    text: getText("Rule model and current sample R² differ by {gap}. Check sampling, distribution shift, and overfitting.", {
+                        gap: this.formatSymbolicDiagnosticNumber(Math.abs(modelScore - sampleR2))
+                    })
+                });
+            }
+            if (Number.isFinite(complexity) && complexity >= 10) {
+                diagnostics.push({
+                    level: "warning",
+                    icon: "fa-diagram-project",
+                    text: getText("Formula term count is high ({complexity}). Prefer a simpler rule unless independent validation shows a material gain.", {
+                        complexity: this.formatNumber(complexity)
+                    })
+                });
+            } else if (method.includes("POLYNOMIAL") && Number.isFinite(complexity) && complexity >= 6) {
+                diagnostics.push({
+                    level: "info",
+                    icon: "fa-bezier-curve",
+                    text: getText("This polynomial fallback formula contains {complexity} terms. Review its validation gain before operational use.", {
+                        complexity: this.formatNumber(complexity)
+                    })
+                });
+            }
+            if (Number.isFinite(metrics?.bias) && Number.isFinite(metrics?.mae) && metrics.mae > 0
+                && Math.abs(metrics.bias) / metrics.mae >= 0.4) {
+                diagnostics.push({
+                    level: "warning",
+                    icon: "fa-scale-balanced",
+                    text: getText("The current sample shows directional bias: mean residual is {bias}, or {ratio} of MAE.", {
+                        bias: this.formatSymbolicDiagnosticNumber(metrics.bias),
+                        ratio: this.formatRelativeErrorMetric(Math.min(1, Math.abs(metrics.bias) / metrics.mae))
+                    })
+                });
+            }
+            if (Number.isFinite(tolerance) && Number.isFinite(maxErrorRate) && maxErrorRate > tolerance) {
+                diagnostics.push({
+                    level: "danger",
+                    icon: "fa-triangle-exclamation",
+                    text: getText("Observed maximum relative error {error} exceeds the allowed relative error {tolerance}.", {
+                        error: this.formatRelativeErrorMetric(maxErrorRate),
+                        tolerance: this.formatRelativeErrorMetric(tolerance)
+                    })
+                });
+            } else if (Number.isFinite(violationCount) && violationCount > 0) {
+                diagnostics.push({
+                    level: "warning",
+                    icon: "fa-triangle-exclamation",
+                    text: getText("{count} rows exceed the allowed relative error for this rule.", {
+                        count: this.formatNumber(violationCount)
+                    })
+                });
+            }
+            if (!diagnostics.length) {
+                diagnostics.push({
+                    level: "ok",
+                    icon: "fa-circle-check",
+                    text: getText("No immediate warning was found in the available diagnostics. Confirm the formula with independent validation data before operational use.")
+                });
+            }
+            return diagnostics.slice(0, 4).map((item) => `
+                <div class="is-${item.level}">
+                    <i class="fas ${item.icon}" aria-hidden="true"></i>
+                    <span>${this.escapeHtml(item.text)}</span>
+                </div>
+            `).join("");
         },
 
         changeSymbolicRuleChartMode(mode) {
@@ -9221,6 +9392,13 @@
             if (!Number.isFinite(number)) return "-";
             const percent = number <= 1 ? number * 100 : number;
             return `${percent.toLocaleString("ko-KR", { maximumFractionDigits: 1 })}%`;
+        },
+
+        formatRelativeErrorMetric(value) {
+            if (value === undefined || value === null || String(value).trim() === "") return "-";
+            const number = Number(value);
+            if (!Number.isFinite(number)) return "-";
+            return `${(number * 100).toLocaleString("ko-KR", { maximumFractionDigits: 1 })}%`;
         },
 
         normalizeProbability(value) {

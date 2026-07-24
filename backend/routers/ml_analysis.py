@@ -23,6 +23,7 @@ class MlAnalysisRequest(BaseModel):
     metricNames: Optional[Any] = None
     sampleRows: Optional[int] = None
     maxIterations: Optional[int] = None
+    maxSymbolicTerms: Optional[int] = None
     alpha: Optional[float] = None
     runSourceType: Optional[str] = "DATA_WORK"
     runId: Optional[int] = 0

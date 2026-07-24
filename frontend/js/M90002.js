@@ -108,10 +108,17 @@
         async createDefaultApiObjects() {
             const presets = await this.loadPresets();
             const defaultApis = [];
+            const savedByName = new Map(
+                this.savedObjects.map((item) => [this.normalizeKey(item.objectName), item])
+            );
             (presets.groups || []).forEach((group) => {
                 (group.resources || []).forEach((resource) => {
                     const apiObject = this.createApiObjectFromPreset(resource, group.groupName);
                     if (apiObject.objectType === "INTERNAL_API") {
+                        const savedObject = savedByName.get(this.normalizeKey(apiObject.objectName));
+                        if (savedObject?.objectId) {
+                            apiObject.objectId = savedObject.objectId;
+                        }
                         defaultApis.push({ groupName: group.groupName, resource, apiObject });
                     }
                 });
@@ -589,6 +596,10 @@
 
         async resetApiObject() {
             if (this.selectedNodeKey.startsWith("SAVED:")) {
+                if (this.findPresetByName(this.apiObject?.objectName || "")) {
+                    await this.applySelectedPreset();
+                    return;
+                }
                 await this.loadApiObject(this.selectedNodeKey.replace("SAVED:", ""));
                 return;
             }

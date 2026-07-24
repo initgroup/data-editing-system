@@ -1346,18 +1346,27 @@
 
         async applyDetailPresets() {
             if (!this.selectedObject) {
-                alert("Select a procedure, function, package member, or model first.");
+                alert(getPageMessage(
+                    "selectObjectForPreset",
+                    "Select a procedure, function, package member, or model first."
+                ));
                 return;
             }
             if (!this.rows.length) {
-                alert("No parameter rows to initialize.");
+                alert(getPageMessage(
+                    "noParameterRowsToInitialize",
+                    "No parameter rows to initialize."
+                ));
                 return;
             }
 
             try {
                 const preset = await this.findDetailPresetForSelectedObject();
                 if (!preset) {
-                    alert("No comment/default preset is registered for this object.");
+                    alert(getPageMessage(
+                        "noDetailPresetRegistered",
+                        "No comment/default preset is registered for this object."
+                    ));
                     return;
                 }
 
@@ -1369,11 +1378,26 @@
                 this.detailSource = changedCount > 0 || metaChanged ? "Preset applied" : this.detailSource;
                 this.renderDetailSource();
                 alert(changedCount > 0 || metaChanged
-                    ? `${changedCount} comment/default value(s) and ${metaChanged ? "metadata" : "no metadata"} applied from preset. Review and click Save to store.`
-                    : "Preset found, but no matching parameter keys were changed.");
+                    ? getPageMessage(
+                        "detailPresetApplied",
+                        "{count} comment/default value(s) and {metadata} applied from preset. Review and click Save to store.",
+                        {
+                            count: changedCount,
+                            metadata: metaChanged
+                                ? getPageMessage("metadataApplied", "metadata")
+                                : getPageMessage("metadataNotApplied", "no metadata")
+                        }
+                    )
+                    : getPageMessage(
+                        "detailPresetNoMatchingKeys",
+                        "Preset found, but no matching parameter keys were changed."
+                    ));
             } catch (error) {
                 console.error("[M90001] detail preset apply failed", error);
-                alert(error.message || "Comment/default preset load failed.");
+                alert(error.message || getPageMessage(
+                    "detailPresetLoadFailed",
+                    "Comment/default preset load failed."
+                ));
             }
         },
 

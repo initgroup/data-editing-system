@@ -571,6 +571,11 @@ def run_symbolic_regression_rule(conn, payload: Dict[str, Any]) -> Dict[str, Any
     max_features = clamp(parse_int(get_value(payload, "P_MAX_FEATURES", "maxFeatures"), 10), 1, 10)
     sample_rows = parse_optional_positive_int(get_value(payload, "P_SAMPLE_ROWS", "sampleRows"), 50000)
     max_iterations = clamp(parse_int(get_value(payload, "P_MAX_ITERATIONS", "maxIterations"), 10000), 100, 100000)
+    max_symbolic_terms = clamp(
+        parse_int(get_value(payload, "P_MAX_SYMBOLIC_TERMS", "maxSymbolicTerms"), 8),
+        1,
+        50,
+    )
     min_r2_score = clamp_float(parse_optional_float(get_value(payload, "P_MIN_R2_SCORE", "minR2Score")), 0.7, 0.0, 1.0)
     use_pysr = parse_yes_no(get_value(payload, "P_USE_PYSR", "usePysr"), "N") == "Y"
     linear_first = parse_yes_no(get_value(payload, "P_LINEAR_FIRST_YN", "linearFirstYn"), "Y") == "Y"
@@ -636,11 +641,13 @@ def run_symbolic_regression_rule(conn, payload: Dict[str, Any]) -> Dict[str, Any
         use_pysr,
         linear_first,
         linear_r2_threshold,
+        max_symbolic_terms,
     )
     message = (
         f"{message} requestedRows={matrix_limits['requestedSampleRows']}, "
         f"effectiveRowLimit={matrix_limits['effectiveSampleRows']}, "
         f"inputFeatures={matrix_limits['effectiveFeatureCount']}/{matrix_limits['requestedFeatureCount']}, "
+        f"maxSymbolicTerms={max_symbolic_terms}, "
         f"clusterMode={cluster_usage.get('effectiveMode')}, "
         f"targetCluster={cluster_usage.get('targetClusterId')}, "
         f"sameClusterFeatures={cluster_usage.get('sameClusterFeatureCount')}, "
@@ -727,6 +734,8 @@ def run_symbolic_regression_rule(conn, payload: Dict[str, Any]) -> Dict[str, Any
         "featureCount": len(used_features),
         "method": method,
         "score": score,
+        "complexity": complexity,
+        "message": message,
         "ruleId": rule_id,
         "clusterUsage": cluster_usage,
         "memoryLimits": matrix_limits,
@@ -1461,26 +1470,80 @@ def fit_symbolic_expression(
     use_pysr: bool = False,
     linear_first: bool = True,
     linear_r2_threshold: float = 0.995,
+    max_symbolic_terms: int = 8,
 ) -> Tuple[str, float, int, str, str]:
+    require_sklearn()
+    holdout_indexes = build_symbolic_holdout_indexes(len(y_values))
+    linear_candidate = None
     if linear_first:
         linear_expression, linear_score, linear_complexity, linear_method, linear_message = fit_linear_expression(
             x_values,
             y_values,
             feature_names,
         )
-        if linear_score >= linear_r2_threshold:
-            return linear_expression, linear_score, linear_complexity, linear_method, linear_message
+        linear_validation = None
+        if holdout_indexes is not None:
+            train_mask, validation_mask = holdout_indexes
+            linear_validation = evaluate_linear_holdout(x_values, y_values, train_mask, validation_mask)
+        linear_selection_score = get_symbolic_selection_score(linear_score, linear_validation)
+        linear_candidate = {
+            "expression": linear_expression,
+            "fitScore": linear_score,
+            "score": linear_selection_score,
+            "complexity": linear_complexity,
+            "method": linear_method,
+            "message": append_symbolic_validation_diagnostics(
+                linear_message,
+                linear_score,
+                linear_validation,
+            ),
+            "validation": linear_validation,
+        }
+        if linear_selection_score >= linear_r2_threshold:
+            linear_candidate["message"] = (
+                f"{linear_candidate['message']} "
+                f"selection=LINEAR; reason=R2_THRESHOLD_{linear_r2_threshold:.6g}."
+            )
+            return symbolic_candidate_tuple(linear_candidate)
 
     if not use_pysr:
-        return fit_polynomial_fallback(
+        fallback_expression, fallback_score, fallback_complexity, fallback_method, fallback_message = fit_polynomial_fallback(
             x_values,
             y_values,
             feature_names,
             "PySR disabled by P_USE_PYSR=N.",
+            max_symbolic_terms,
+        )
+        return choose_symbolic_candidate(
+            x_values,
+            y_values,
+            feature_names,
+            linear_candidate,
+            {
+                "expression": fallback_expression,
+                "fitScore": fallback_score,
+                "complexity": fallback_complexity,
+                "method": fallback_method,
+                "message": fallback_message,
+            },
+            holdout_indexes,
+            "POLYNOMIAL_FALLBACK",
+            max_symbolic_terms,
         )
     try:
         from pysr import PySRRegressor
 
+        if holdout_indexes is None:
+            x_train = x_values
+            y_train = y_values
+            x_validation = None
+            y_validation = None
+        else:
+            train_mask, validation_mask = holdout_indexes
+            x_train = x_values[train_mask]
+            y_train = y_values[train_mask]
+            x_validation = x_values[validation_mask]
+            y_validation = y_values[validation_mask]
         model = PySRRegressor(
             niterations=max_iterations,
             binary_operators=["+", "-", "*", "/"],
@@ -1489,17 +1552,260 @@ def fit_symbolic_expression(
             verbosity=0,
             random_state=42,
         )
-        model.fit(x_values, y_values, variable_names=list(feature_names))
+        model.fit(x_train, y_train, variable_names=list(feature_names))
         best = model.get_best()
         expression = normalize_oracle_symbolic_expression(
             str(best.get("sympy_format") or best.get("equation") or model),
             feature_names,
         )
-        score = float(best.get("score") or 0)
+        train_prediction = model.predict(x_train)
+        fit_score = safe_regression_r2(y_train, train_prediction)
+        validation_metrics = (
+            calculate_regression_metrics(y_validation, model.predict(x_validation))
+            if x_validation is not None and y_validation is not None
+            else None
+        )
+        score = get_symbolic_selection_score(fit_score, validation_metrics)
         complexity = int(best.get("complexity") or len(expression))
-        return expression, score, complexity, "PYSR", "PySR symbolic regression completed."
+        pysr_candidate = {
+            "expression": expression,
+            "fitScore": fit_score,
+            "score": score,
+            "complexity": complexity,
+            "method": "PYSR",
+            "message": append_symbolic_validation_diagnostics(
+                "PySR symbolic regression completed.",
+                fit_score,
+                validation_metrics,
+            ),
+            "validation": validation_metrics,
+        }
+        if score <= 0 and (
+            linear_candidate is None
+            or float(linear_candidate.get("score") or 0.0) <= 0
+        ):
+            return symbolic_candidate_tuple(
+                build_constant_baseline_candidate(
+                    y_values,
+                    holdout_indexes,
+                    "Neither the linear nor PySR candidate achieved positive validation R2.",
+                )
+            )
+        if linear_candidate and should_keep_linear_expression(
+            x_values,
+            y_values,
+            feature_names,
+            linear_candidate["fitScore"],
+            fit_score,
+            complexity,
+            linear_metrics=linear_candidate.get("validation"),
+            fallback_metrics=validation_metrics,
+            max_symbolic_terms=max_symbolic_terms,
+        ):
+            linear_candidate["message"] = (
+                f"{linear_candidate['message']} selection=LINEAR; reason=PARSIMONY; "
+                f"candidateMethod=PYSR; candidateR2={score:.6g}; candidateComplexity={complexity}."
+            )
+            return symbolic_candidate_tuple(linear_candidate)
+        pysr_selection_reason = (
+            "VALIDATION_GAIN"
+            if validation_metrics
+            else "EXPLICIT_NONLINEAR_WITHOUT_HOLDOUT"
+        )
+        pysr_candidate["message"] = (
+            f"{pysr_candidate['message']} selection=PYSR; reason={pysr_selection_reason}."
+        )
+        return symbolic_candidate_tuple(pysr_candidate)
     except Exception as exc:
-        return fit_polynomial_fallback(x_values, y_values, feature_names, str(exc))
+        fallback_expression, fallback_score, fallback_complexity, fallback_method, fallback_message = fit_polynomial_fallback(
+            x_values,
+            y_values,
+            feature_names,
+            str(exc),
+            max_symbolic_terms,
+        )
+        return choose_symbolic_candidate(
+            x_values,
+            y_values,
+            feature_names,
+            linear_candidate,
+            {
+                "expression": fallback_expression,
+                "fitScore": fallback_score,
+                "complexity": fallback_complexity,
+                "method": fallback_method,
+                "message": fallback_message,
+            },
+            holdout_indexes,
+            "PYSR_ERROR_FALLBACK",
+            max_symbolic_terms,
+        )
+
+
+def symbolic_candidate_tuple(candidate: Dict[str, Any]) -> Tuple[str, float, int, str, str]:
+    return (
+        str(candidate.get("expression") or ""),
+        float(candidate.get("score") or 0.0),
+        int(candidate.get("complexity") or 0),
+        str(candidate.get("method") or ""),
+        str(candidate.get("message") or ""),
+    )
+
+
+def get_symbolic_selection_score(fit_score: float, validation_metrics: Optional[Dict[str, float]]) -> float:
+    if validation_metrics and math.isfinite(float(validation_metrics.get("r2", float("nan")))):
+        return float(validation_metrics["r2"])
+    return float(fit_score)
+
+
+def append_symbolic_validation_diagnostics(
+    message: str,
+    fit_score: float,
+    validation_metrics: Optional[Dict[str, float]],
+) -> str:
+    prefix = str(message or "").strip()
+    if validation_metrics:
+        return (
+            f"{prefix} fitR2={fit_score:.6g}; "
+            f"validationR2={validation_metrics['r2']:.6g}; "
+            f"validationRMSE={validation_metrics['rmse']:.6g}; "
+            f"validationMAE={validation_metrics['mae']:.6g}; "
+            f"validationBias={validation_metrics['bias']:.6g}; "
+            f"validationRows={int(validation_metrics['rowCount'])}; "
+            "validationSource=DETERMINISTIC_20PCT_HOLDOUT."
+        )
+    return (
+        f"{prefix} fitR2={fit_score:.6g}; validationR2=UNAVAILABLE; "
+        "validationSource=IN_SAMPLE_ONLY; warning=HOLDOUT_UNAVAILABLE_OR_TOO_SMALL."
+    )
+
+
+def build_constant_baseline_candidate(
+    y_values,
+    holdout_indexes,
+    reason: str,
+) -> Dict[str, Any]:
+    intercept = float(np.mean(np.asarray(y_values, dtype=float)))
+    fit_prediction = np.full(len(y_values), intercept, dtype=float)
+    fit_score = safe_regression_r2(y_values, fit_prediction)
+    validation_metrics = None
+    if holdout_indexes is not None:
+        train_mask, validation_mask = holdout_indexes
+        training_mean = float(np.mean(np.asarray(y_values[train_mask], dtype=float)))
+        validation_prediction = np.full(int(validation_mask.sum()), training_mean, dtype=float)
+        validation_metrics = calculate_regression_metrics(
+            y_values[validation_mask],
+            validation_prediction,
+        )
+    message = append_symbolic_validation_diagnostics(
+        "An intercept-only baseline was retained instead of forcing an unstable formula.",
+        fit_score,
+        validation_metrics,
+    )
+    return {
+        "expression": format_linear_expression(intercept, []),
+        "fitScore": fit_score,
+        "score": get_symbolic_selection_score(fit_score, validation_metrics),
+        "complexity": 1,
+        "method": "CONSTANT_BASELINE",
+        "message": f"{message} selection=CONSTANT_BASELINE; reason={reason}",
+        "validation": validation_metrics,
+    }
+
+
+def choose_symbolic_candidate(
+    x_values,
+    y_values,
+    feature_names: Sequence[str],
+    linear_candidate: Optional[Dict[str, Any]],
+    fallback_candidate: Dict[str, Any],
+    holdout_indexes,
+    selection_reason: str,
+    max_symbolic_terms: int = 8,
+) -> Tuple[str, float, int, str, str]:
+    min_meaningful_r2 = 0.05
+    fallback_validation = None
+    if holdout_indexes is not None:
+        train_mask, validation_mask = holdout_indexes
+        try:
+            fallback_validation = evaluate_polynomial_holdout(
+                x_values,
+                y_values,
+                train_mask,
+                validation_mask,
+                max_symbolic_terms,
+            )
+        except Exception as exc:
+            fallback_candidate["message"] = (
+                f"{fallback_candidate.get('message') or ''} "
+                f"Holdout evaluation failed: {str(exc)[:300]}"
+            ).strip()
+    fallback_fit_score = float(fallback_candidate.get("fitScore") or 0.0)
+    fallback_score = get_symbolic_selection_score(fallback_fit_score, fallback_validation)
+    fallback_candidate["score"] = fallback_score
+    fallback_candidate["validation"] = fallback_validation
+    fallback_candidate["message"] = append_symbolic_validation_diagnostics(
+        str(fallback_candidate.get("message") or ""),
+        fallback_fit_score,
+        fallback_validation,
+    )
+
+    linear_selection_score = (
+        float(linear_candidate.get("score") or 0.0)
+        if linear_candidate
+        else float("-inf")
+    )
+    if max(linear_selection_score, fallback_score) < min_meaningful_r2:
+        return symbolic_candidate_tuple(
+            build_constant_baseline_candidate(
+                y_values,
+                holdout_indexes,
+                f"No candidate reached the minimum meaningful validation R2 ({min_meaningful_r2:.3g}).",
+            )
+        )
+    if (
+        str(fallback_candidate.get("method") or "") != "CONSTANT_BASELINE"
+        and fallback_score <= 0
+        and linear_selection_score <= 0
+    ):
+        return symbolic_candidate_tuple(
+            build_constant_baseline_candidate(
+                y_values,
+                holdout_indexes,
+                "No fitted candidate achieved positive validation R2.",
+            )
+        )
+
+    if linear_candidate and should_keep_linear_expression(
+        x_values,
+        y_values,
+        feature_names,
+        float(linear_candidate.get("fitScore") or 0.0),
+        fallback_fit_score,
+        int(fallback_candidate.get("complexity") or 0),
+        linear_metrics=linear_candidate.get("validation"),
+        fallback_metrics=fallback_validation,
+        max_symbolic_terms=max_symbolic_terms,
+    ):
+        linear_candidate["message"] = (
+            f"{linear_candidate['message']} selection=LINEAR; reason=PARSIMONY; "
+            f"candidateMethod={fallback_candidate.get('method')}; "
+            f"candidateR2={fallback_score:.6g}; "
+            f"candidateComplexity={int(fallback_candidate.get('complexity') or 0)}."
+        )
+        return symbolic_candidate_tuple(linear_candidate)
+
+    if str(fallback_candidate.get("method") or "") == "CONSTANT_BASELINE":
+        fallback_selection_reason = "REGULARIZED_CONSTANT_BASELINE"
+    elif fallback_validation:
+        fallback_selection_reason = f"{selection_reason}_VALIDATION_GAIN"
+    else:
+        fallback_selection_reason = f"{selection_reason}_IN_SAMPLE_ONLY"
+    fallback_candidate["message"] = (
+        f"{fallback_candidate['message']} selection={fallback_candidate.get('method')}; "
+        f"reason={fallback_selection_reason}."
+    )
+    return symbolic_candidate_tuple(fallback_candidate)
 
 
 def fit_linear_expression(x_values, y_values, feature_names: Sequence[str]) -> Tuple[str, float, int, str, str]:
@@ -1516,13 +1822,193 @@ def fit_linear_expression(x_values, y_values, feature_names: Sequence[str]) -> T
     intercept = float(model.intercept_)
     expression = format_linear_expression(intercept, terms)
     complexity = len(terms) + 1
-    message = "Simple linear regression matched the target well enough before symbolic/polynomial fallback."
+    message = "Simple linear regression was evaluated as the parsimony baseline."
     return expression, score, complexity, "LINEAR_REGRESSION", message
 
 
-def fit_polynomial_fallback(x_values, y_values, feature_names: Sequence[str], reason: str) -> Tuple[str, float, int, str, str]:
-    x_scaler = StandardScaler(copy=False)
-    y_scaler = StandardScaler(copy=False)
+def safe_regression_rmse(actual, predicted) -> float:
+    actual_arr = np.asarray(actual, dtype=float)
+    predicted_arr = np.asarray(predicted, dtype=float)
+    if actual_arr.size == 0:
+        return float("inf")
+    return float(np.sqrt(np.mean(np.square(actual_arr - predicted_arr))))
+
+
+def safe_regression_mae(actual, predicted) -> float:
+    actual_arr = np.asarray(actual, dtype=float)
+    predicted_arr = np.asarray(predicted, dtype=float)
+    if actual_arr.size == 0:
+        return float("inf")
+    return float(np.mean(np.abs(actual_arr - predicted_arr)))
+
+
+def safe_regression_r2(actual, predicted) -> float:
+    try:
+        score = float(r2_score(actual, predicted))
+        if math.isnan(score) or math.isinf(score):
+            return 0.0
+        return score
+    except Exception:
+        return 0.0
+
+
+def calculate_regression_metrics(actual, predicted) -> Dict[str, float]:
+    actual_arr = np.asarray(actual, dtype=float)
+    predicted_arr = np.asarray(predicted, dtype=float)
+    residual = actual_arr - predicted_arr
+    return {
+        "r2": safe_regression_r2(actual_arr, predicted_arr),
+        "rmse": safe_regression_rmse(actual_arr, predicted_arr),
+        "mae": safe_regression_mae(actual_arr, predicted_arr),
+        "bias": float(np.mean(residual)) if residual.size else 0.0,
+        "rowCount": int(actual_arr.size),
+    }
+
+
+def build_symbolic_holdout_indexes(row_count: int):
+    if row_count < 30:
+        return None
+    validation_count = max(6, min(row_count - 20, int(round(row_count * 0.2))))
+    if validation_count < 6 or row_count - validation_count < 20:
+        return None
+    shuffled_indexes = np.random.default_rng(42).permutation(row_count)
+    validation_mask = np.zeros(row_count, dtype=bool)
+    validation_mask[shuffled_indexes[:validation_count]] = True
+    return ~validation_mask, validation_mask
+
+
+def evaluate_linear_holdout(x_values, y_values, train_mask, validation_mask) -> Dict[str, float]:
+    model = LinearRegression()
+    model.fit(x_values[train_mask], y_values[train_mask])
+    prediction = model.predict(x_values[validation_mask])
+    return calculate_regression_metrics(y_values[validation_mask], prediction)
+
+
+def select_polynomial_term_indexes(coefficients, max_terms: int = 8) -> List[int]:
+    ranked = sorted(
+        (
+            (index, abs(float(coefficient)))
+            for index, coefficient in enumerate(coefficients)
+            if abs(float(coefficient)) > 1.0e-8
+        ),
+        key=lambda item: (-item[1], item[0]),
+    )
+    return [index for index, _ in ranked[:max_terms]]
+
+
+def predict_selected_polynomial_terms(model, x_poly, selected_indexes: Sequence[int]):
+    prediction = np.full(x_poly.shape[0], float(model.intercept_), dtype=float)
+    if selected_indexes:
+        prediction += x_poly[:, list(selected_indexes)] @ np.asarray(model.coef_)[list(selected_indexes)]
+    return prediction
+
+
+def evaluate_polynomial_holdout(
+    x_values,
+    y_values,
+    train_mask,
+    validation_mask,
+    max_symbolic_terms: int = 8,
+) -> Dict[str, float]:
+    x_scaler = StandardScaler(copy=True)
+    y_scaler = StandardScaler(copy=True)
+    x_train = x_scaler.fit_transform(x_values[train_mask])
+    y_train = y_scaler.fit_transform(y_values[train_mask].reshape(-1, 1)).ravel()
+    x_validation = x_scaler.transform(x_values[validation_mask])
+    poly = PolynomialFeatures(degree=2, include_bias=False)
+    x_train_poly = poly.fit_transform(x_train)
+    cv = min(5, max(2, len(y_train) // 5))
+    model = LassoCV(cv=cv, max_iter=10000, random_state=42)
+    model.fit(x_train_poly, y_train)
+    selected_indexes = select_polynomial_term_indexes(model.coef_, max_symbolic_terms)
+    prediction_scaled = predict_selected_polynomial_terms(
+        model,
+        poly.transform(x_validation),
+        selected_indexes,
+    )
+    prediction = y_scaler.inverse_transform(prediction_scaled.reshape(-1, 1)).ravel()
+    metrics = calculate_regression_metrics(y_values[validation_mask], prediction)
+    metrics["complexity"] = len(selected_indexes) + 1
+    return metrics
+
+
+def should_keep_linear_expression(
+    x_values,
+    y_values,
+    feature_names: Sequence[str],
+    linear_score: float,
+    fallback_score: float,
+    fallback_complexity: int,
+    linear_metrics: Optional[Dict[str, float]] = None,
+    fallback_metrics: Optional[Dict[str, float]] = None,
+    max_symbolic_terms: int = 8,
+) -> bool:
+    if linear_metrics is None or fallback_metrics is None:
+        holdout_indexes = build_symbolic_holdout_indexes(len(y_values))
+        if holdout_indexes is not None:
+            train_mask, validation_mask = holdout_indexes
+            try:
+                linear_metrics = linear_metrics or evaluate_linear_holdout(
+                    x_values,
+                    y_values,
+                    train_mask,
+                    validation_mask,
+                )
+                fallback_metrics = fallback_metrics or evaluate_polynomial_holdout(
+                    x_values,
+                    y_values,
+                    train_mask,
+                    validation_mask,
+                    max_symbolic_terms,
+                )
+            except Exception:
+                linear_metrics = None
+                fallback_metrics = None
+
+    if linear_metrics and fallback_metrics:
+        linear_rmse = float(linear_metrics.get("rmse", float("inf")))
+        fallback_rmse = float(fallback_metrics.get("rmse", float("inf")))
+        linear_r2 = float(linear_metrics.get("r2", 0.0))
+        fallback_r2 = float(fallback_metrics.get("r2", 0.0))
+        if not math.isfinite(fallback_rmse) or not math.isfinite(fallback_r2):
+            return True
+        if not math.isfinite(linear_rmse) or linear_rmse <= 0:
+            return False
+        if fallback_complexity <= 3 and fallback_r2 >= linear_r2 - 0.005:
+            return False
+
+        rmse_improvement = (linear_rmse - fallback_rmse) / max(linear_rmse, 1.0e-12)
+        r2_improvement = fallback_r2 - linear_r2
+        if fallback_complexity >= 10:
+            required_r2_gain, required_rmse_gain = 0.03, 0.12
+        elif fallback_complexity >= 6:
+            required_r2_gain, required_rmse_gain = 0.02, 0.08
+        else:
+            required_r2_gain, required_rmse_gain = 0.01, 0.05
+        candidate_overfit_gap = fallback_score - fallback_r2
+        linear_overfit_gap = linear_score - linear_r2
+        if candidate_overfit_gap > max(0.15, linear_overfit_gap + 0.10):
+            return True
+        return r2_improvement < required_r2_gain and rmse_improvement < required_rmse_gain
+
+    if fallback_complexity <= 3:
+        return False
+    if fallback_score <= linear_score:
+        return True
+    if linear_score >= 0.98 and (fallback_score - linear_score) < 0.01:
+        return True
+    return linear_score >= 0.95 and fallback_complexity >= 8 and (fallback_score - linear_score) < 0.03
+
+
+def fit_polynomial_fallback(
+    x_values,
+    y_values,
+    feature_names: Sequence[str],
+    reason: str,
+    max_symbolic_terms: int = 8,
+) -> Tuple[str, float, int, str, str]:
+    x_scaler = StandardScaler(copy=True)
+    y_scaler = StandardScaler(copy=True)
     x_scaled = x_scaler.fit_transform(x_values)
     y_scaled = y_scaler.fit_transform(y_values.reshape(-1, 1)).ravel()
     poly = PolynomialFeatures(degree=2, include_bias=False)
@@ -1530,28 +2016,41 @@ def fit_polynomial_fallback(x_values, y_values, feature_names: Sequence[str], re
     cv = min(5, max(2, len(y_scaled) // 5))
     model = LassoCV(cv=cv, max_iter=10000, random_state=42)
     model.fit(x_poly, y_scaled)
-    prediction = model.predict(x_poly)
-    score = float(r2_score(y_scaled, prediction))
+    selected_indexes = select_polynomial_term_indexes(model.coef_, max_symbolic_terms)
+    prediction_scaled = predict_selected_polynomial_terms(model, x_poly, selected_indexes)
+    prediction = y_scaler.inverse_transform(prediction_scaled.reshape(-1, 1)).ravel()
+    score = safe_regression_r2(y_values, prediction)
     y_mean = float(y_scaler.mean_[0])
     y_scale = float(y_scaler.scale_[0]) if abs(float(y_scaler.scale_[0])) > 1.0e-12 else 1.0
     x_means = [float(value) for value in x_scaler.mean_]
     x_scales = [float(value) if abs(float(value)) > 1.0e-12 else 1.0 for value in x_scaler.scale_]
     terms = []
-    for coef, powers in zip(model.coef_, poly.powers_):
+    for index in selected_indexes:
+        coef = model.coef_[index]
+        powers = poly.powers_[index]
         raw_coef = float(coef) * y_scale
-        if abs(raw_coef) <= 1.0e-8:
-            continue
         term_expr = format_polynomial_raw_term(powers, feature_names, x_means, x_scales)
         if term_expr:
             terms.append((raw_coef, term_expr))
-    terms = sorted(terms, key=lambda item: -abs(item[0]))[:12]
     intercept = y_mean + y_scale * float(model.intercept_)
     expression = format_polynomial_expression(intercept, terms)
     complexity = len(terms) + 1
-    message = "PySR was unavailable or failed; polynomial LASSO fallback was used with an original-scale expression."
+    method = "CONSTANT_BASELINE" if complexity == 1 else "POLYNOMIAL_LASSO_FALLBACK"
+    if complexity == 1:
+        message = "Regularization removed all polynomial terms, so an intercept-only baseline was retained instead of forcing a formula."
+    elif "P_USE_PYSR=N" in str(reason or ""):
+        message = "Polynomial LASSO fallback was evaluated because PySR was disabled."
+    else:
+        message = "PySR was unavailable or failed; polynomial LASSO fallback was evaluated."
+    if complexity > 1:
+        message = (
+            f"{message} The original-scale expression is capped at {max_symbolic_terms} terms, "
+            "and its score is calculated from the same retained terms."
+        )
     if reason:
-        message = f"{message} First PySR error: {reason[:500]}"
-    return expression, score, complexity, "POLYNOMIAL_LASSO_FALLBACK", message
+        reason_label = "Configuration note" if "P_USE_PYSR=N" in str(reason) else "First PySR error"
+        message = f"{message} {reason_label}: {reason[:500]}"
+    return expression, score, complexity, method, message
 
 
 def build_payload(job: Dict[str, Any], runtime_values: Dict[str, Any], run_id: Optional[int]) -> Dict[str, Any]:
@@ -2082,32 +2581,15 @@ def build_relation_network(edge_rows: Sequence[Dict[str, Any]]) -> Tuple[Dict[st
         weighted_degree[col_a] = weighted_degree.get(col_a, 0.0) + weight
         weighted_degree[col_b] = weighted_degree.get(col_b, 0.0) + weight
 
-    networkx_module = _load_networkx_dependency()
-    if networkx_module is not None:
-        graph = networkx_module.Graph()
-        for node, column_type in node_types.items():
-            graph.add_node(node, columnType=column_type)
-        for row in edge_rows:
-            graph.add_edge(
-                str(row.get("COL_A") or "").upper(),
-                str(row.get("COL_B") or "").upper(),
-                weight=float(row.get("ABS_METRIC_VALUE") or 0),
-            )
-        try:
-            communities = list(networkx_module.community.louvain_communities(graph, weight="weight", seed=42))
-            algorithm = "LOUVAIN"
-        except Exception:
-            communities = [set(component) for component in networkx_module.connected_components(graph)]
-            algorithm = "CONNECTED_COMPONENT"
-        centrality = networkx_module.degree_centrality(graph) if graph.number_of_nodes() else {}
-        degree_count = dict(graph.degree())
-        weighted_degree = dict(graph.degree(weight="weight"))
-    else:
-        communities = fallback_connected_components(adjacency)
-        algorithm = "CONNECTED_COMPONENT_FALLBACK"
-        node_total = max(1, len(node_types) - 1)
-        degree_count = {node: len(adjacency.get(node, set())) for node in node_types}
-        centrality = {node: degree_count.get(node, 0) / node_total for node in node_types}
+    # Do not vary the partition by optional Python packages.  The previous fallback
+    # used connected components when NetworkX/Louvain was unavailable, which turns a
+    # connected graph into one cluster even when the same edges form multiple Louvain
+    # communities on another server.
+    communities = deterministic_weighted_communities(node_types, edge_rows)
+    algorithm = "DETERMINISTIC_WEIGHTED_COMMUNITY"
+    node_total = max(1, len(node_types) - 1)
+    degree_count = {node: len(adjacency.get(node, set())) for node in node_types}
+    centrality = {node: degree_count.get(node, 0) / node_total for node in node_types}
 
     sorted_communities = sorted(
         [set(item) for item in communities],
@@ -2129,6 +2611,82 @@ def build_relation_network(edge_rows: Sequence[Dict[str, Any]]) -> Tuple[Dict[st
         for node in sorted(node_types)
     }
     return cluster_map, node_metrics, algorithm
+
+
+def deterministic_weighted_communities(
+    node_types: Dict[str, str],
+    edge_rows: Sequence[Dict[str, Any]],
+) -> List[Set[str]]:
+    """Build a stable, weighted community partition without optional dependencies."""
+    nodes = sorted(node_types)
+    if not nodes:
+        return []
+
+    weighted_adjacency: Dict[str, Dict[str, float]] = {node: {} for node in nodes}
+    for row in edge_rows:
+        col_a = str(row.get("COL_A") or "").upper()
+        col_b = str(row.get("COL_B") or "").upper()
+        if not col_a or not col_b or col_a == col_b or col_a not in weighted_adjacency or col_b not in weighted_adjacency:
+            continue
+        weight = max(0.0, float(row.get("ABS_METRIC_VALUE") or 0.0))
+        if weight <= 0:
+            continue
+        weighted_adjacency[col_a][col_b] = weighted_adjacency[col_a].get(col_b, 0.0) + weight
+        weighted_adjacency[col_b][col_a] = weighted_adjacency[col_b].get(col_a, 0.0) + weight
+
+    weighted_degree = {
+        node: sum(weighted_adjacency[node].values())
+        for node in nodes
+    }
+    total_weight = sum(weighted_degree.values()) / 2.0
+    if total_weight <= 0:
+        return [{node} for node in nodes]
+
+    # This is the local-move phase of weighted modularity optimization.  Sorting both
+    # nodes and candidate communities makes ties deterministic across Python processes.
+    community_by_node = {node: node for node in nodes}
+    community_weight = dict(weighted_degree)
+    for _ in range(max(1, len(nodes) * 4)):
+        moved = False
+        for node in nodes:
+            current_community = community_by_node[node]
+            node_weight = weighted_degree[node]
+            community_weight[current_community] -= node_weight
+            neighbor_community_weight: Dict[str, float] = {}
+            for neighbor in sorted(weighted_adjacency[node]):
+                community = community_by_node[neighbor]
+                neighbor_community_weight[community] = (
+                    neighbor_community_weight.get(community, 0.0)
+                    + weighted_adjacency[node][neighbor]
+                )
+
+            candidate_communities = sorted(set(neighbor_community_weight) | {current_community})
+
+            def modularity_score(community: str) -> float:
+                return (
+                    neighbor_community_weight.get(community, 0.0)
+                    - (community_weight.get(community, 0.0) * node_weight) / (2.0 * total_weight)
+                )
+
+            current_score = modularity_score(current_community)
+            best_community = current_community
+            best_score = current_score
+            for community in candidate_communities:
+                score = modularity_score(community)
+                if score > best_score + 1.0e-12:
+                    best_community = community
+                    best_score = score
+
+            community_by_node[node] = best_community
+            community_weight[best_community] = community_weight.get(best_community, 0.0) + node_weight
+            moved = moved or best_community != current_community
+        if not moved:
+            break
+
+    grouped: Dict[str, Set[str]] = {}
+    for node in nodes:
+        grouped.setdefault(community_by_node[node], set()).add(node)
+    return list(grouped.values())
 
 
 def fallback_connected_components(adjacency: Dict[str, Set[str]]) -> List[Set[str]]:

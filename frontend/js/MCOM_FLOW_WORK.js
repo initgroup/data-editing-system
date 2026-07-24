@@ -21,10 +21,9 @@
         const SCENARIO_TABLE_API = config.scenarioTableApi || "M02002";
         const FLOW_NODE_DEFAULT_WIDTH = 210;
         const FLOW_NODE_DEFAULT_HEIGHT = 164;
-        // Diagnostic switch: retain all polling code but temporarily prevent automatic
-        // server calls so batch execution and normal menu navigation can be isolated.
-        // Manual history/detail refresh remains available.
-        const ENABLE_AUTOMATIC_FLOW_RUN_POLLING = false;
+        // Keep run-history and canvas polling single-flight so concurrent menu reads
+        // never overlap the same flow-run query.
+        const ENABLE_AUTOMATIC_FLOW_RUN_POLLING = true;
         const { getContainerEl } = PageManager.createHelper(PAGE_CODE);
         const COMMON = MCOMMON.createPageHelper(PAGE_CODE);
         const page = {
@@ -48,6 +47,7 @@
             flowRunHistoryAutoRefreshTimer: null,
             flowRunHistoryAutoRefreshInFlight: false,
             flowRunHistoryAutoRefreshPromise: null,
+            flowRunHistoryAutoRefreshFailures: 0,
             flowRunHistoryManualRefreshPromise: null,
             flowRunHistoryManualRefreshRunId: "",
             flowRunHistoryAutoRefreshRunIds: new Set(),
@@ -172,7 +172,11 @@
 
             onShow() {
                 this.isPageVisible = true;
-                if (this.activeCanvasRunId && !this.activeCanvasRunPollInFlight) {
+                if (
+                    this.activeTab === "designer"
+                    && this.activeCanvasRunId
+                    && !this.activeCanvasRunPollInFlight
+                ) {
                     this.scheduleCanvasRunStatusPoll(250);
                 }
                 if (this.activeTab === "history") this.syncFlowRunHistoryAutoRefresh();
@@ -217,6 +221,7 @@
                 this.flowRunHistoryColumnWidths = {};
                 this.flowRunHistoryAutoRefreshInFlight = false;
                 this.flowRunHistoryAutoRefreshPromise = null;
+                this.flowRunHistoryAutoRefreshFailures = 0;
                 this.flowRunHistoryManualRefreshPromise = null;
                 this.flowRunHistoryManualRefreshRunId = "";
                 this.flowRunHistoryAutoRefreshRunIds = new Set();
@@ -1821,6 +1826,7 @@
                     panel.classList.toggle("is-active", panel.dataset.panel === this.activeTab);
                 });
                 if (this.activeTab === "history") {
+                    this.stopCanvasRunStatusPolling({ abortRequest: false });
                     if (this.flowRunHistoryRows.length) {
                         this.syncFlowRunHistoryAutoRefresh();
                     } else {
@@ -1828,6 +1834,15 @@
                     }
                 } else {
                     this.stopFlowRunHistoryAutoRefresh({ abortRequest: false });
+                    if (
+                        this.activeTab === "designer"
+                        && this.activeCanvasRunId
+                        && !this.activeCanvasRunPollInFlight
+                    ) {
+                        this.scheduleCanvasRunStatusPoll(250);
+                    } else if (this.activeTab !== "designer") {
+                        this.stopCanvasRunStatusPolling({ abortRequest: false });
+                    }
                 }
             },
 
@@ -5650,7 +5665,13 @@
                 if (this.flowRunHistoryAutoRefreshInFlight) {
                     return this.getMessage("historyAutoRefreshRefreshing", "Refreshing automatically...");
                 }
-                return this.getMessage("historyAutoRefreshActive", "Auto-refreshing every {seconds} seconds.", { seconds: 5 });
+                return this.getMessage("historyAutoRefreshActive", "Auto-refreshing every {seconds} seconds.", {
+                    seconds: Math.round(this.getFlowRunHistoryAutoRefreshDelay() / 1000)
+                });
+            },
+            getFlowRunHistoryAutoRefreshDelay() {
+                const failures = Math.max(0, Number(this.flowRunHistoryAutoRefreshFailures || 0));
+                return [5000, 15000, 30000, 60000][Math.min(failures, 3)];
             },
             updateFlowRunHistoryAutoRefreshUi() {
                 getContainerEl(`#flowRunHistoryGrid-${PAGE_CODE}`)?.querySelectorAll("[data-flow-run-auto-refresh-toggle]").forEach((toggle) => {
@@ -5749,10 +5770,17 @@
                     });
                     this.flowRunHistoryAutoRefreshPromise = refreshPromise;
                     try {
-                        await refreshPromise;
+                        const refreshed = await refreshPromise;
+                        this.flowRunHistoryAutoRefreshFailures = refreshed
+                            ? 0
+                            : Math.min(3, this.flowRunHistoryAutoRefreshFailures + 1);
                     } catch (_) {
                         // Automatic refresh is best-effort. A failed/slow poll must not
                         // block the next manual action or replace the current detail UI.
+                        this.flowRunHistoryAutoRefreshFailures = Math.min(
+                            3,
+                            this.flowRunHistoryAutoRefreshFailures + 1
+                        );
                     } finally {
                         if (this.flowRunHistoryAutoRefreshPromise === refreshPromise) {
                             this.flowRunHistoryAutoRefreshPromise = null;
@@ -5760,7 +5788,7 @@
                         this.flowRunHistoryAutoRefreshInFlight = false;
                         this.scheduleFlowRunHistoryAutoRefresh();
                     }
-                }, 5000);
+                }, this.getFlowRunHistoryAutoRefreshDelay());
                 this.updateFlowRunHistoryAutoRefreshUi();
             },
             syncFlowRunHistoryAutoRefresh() {
@@ -5787,7 +5815,8 @@
                 }
                 this.flowRunHistoryAutoRefreshRunIds.add(targetId);
                 this.updateFlowRunHistoryAutoRefreshUi();
-                await this.loadFlowRunSnapshot(targetId, { showError: true });
+                const refreshed = await this.loadFlowRunSnapshot(targetId, { showError: true });
+                if (refreshed) this.flowRunHistoryAutoRefreshFailures = 0;
                 this.syncFlowRunHistoryAutoRefresh();
             },
             async refreshFlowRunHistory() {
@@ -7608,7 +7637,7 @@
             scheduleCanvasRunStatusPoll(delayMs = 1000) {
                 this.stopCanvasRunStatusPolling();
                 if (!ENABLE_AUTOMATIC_FLOW_RUN_POLLING) return;
-                if (!this.activeCanvasRunId || !this.isPageVisible) return;
+                if (!this.activeCanvasRunId || !this.isPageVisible || this.activeTab !== "designer") return;
                 this.activeCanvasRunPollTimer = setTimeout(() => {
                     this.pollCanvasRunStatus();
                 }, Math.max(150, delayMs));
@@ -7616,7 +7645,12 @@
 
             async pollCanvasRunStatus() {
                 const flowRunId = this.activeCanvasRunId;
-                if (!flowRunId || !this.isPageVisible || this.activeCanvasRunPollInFlight) return;
+                if (
+                    !flowRunId
+                    || !this.isPageVisible
+                    || this.activeTab !== "designer"
+                    || this.activeCanvasRunPollInFlight
+                ) return;
                 const lifecycleGeneration = this.lifecycleGeneration;
                 this.activeCanvasRunPollInFlight = true;
                 try {

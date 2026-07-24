@@ -81,6 +81,25 @@
     "{selected} / {total} selected": "{selected} / {total} selected",
     "Select at least one cluster to display the graph.": "Select at least one cluster to display the graph.",
     "Collapse row data grid": "Collapse row data grid",
-    "Expand row data grid": "Expand row data grid"
+    "Expand row data grid": "Expand row data grid",
+    "Method": "Method",
+    "Rule model R²": "Rule model R²",
+    "Current sample R²": "Current sample R²",
+    "Sample MAE": "Sample mean absolute error",
+    "Sample RMSE": "Sample RMSE",
+    "Mean residual (bias)": "Mean residual (bias)",
+    "Sample max absolute residual": "Sample max absolute residual",
+    "Allowed relative error": "Allowed relative error",
+    "Formula term count": "Formula term count",
+    "Diagnostic sample rows": "Diagnostic sample rows",
+    "Loading sample diagnostics...": "Loading sample diagnostics...",
+    "Rule model R² is below 0.70. Treat this formula as an exploratory pattern, not a stable operating rule.": "Rule model R² is below 0.70. Treat this formula as an exploratory pattern, not a stable operating rule.",
+    "Rule model and current sample R² differ by {gap}. Check sampling, distribution shift, and overfitting.": "Rule model and current sample R² differ by {gap}. Check sampling, distribution shift, and overfitting.",
+    "Formula term count is high ({complexity}). Prefer a simpler rule unless independent validation shows a material gain.": "Formula term count is high ({complexity}). Prefer a simpler rule unless independent validation shows a material gain.",
+    "This polynomial fallback formula contains {complexity} terms. Review its validation gain before operational use.": "This polynomial fallback formula contains {complexity} terms. Review its validation gain before operational use.",
+    "The current sample shows directional bias: mean residual is {bias}, or {ratio} of MAE.": "The current sample shows directional bias: mean residual is {bias}, or {ratio} of MAE.",
+    "Observed maximum relative error {error} exceeds the allowed relative error {tolerance}.": "Observed maximum relative error {error} exceeds the allowed relative error {tolerance}.",
+    "{count} rows exceed the allowed relative error for this rule.": "{count} rows exceed the allowed relative error for this rule.",
+    "No immediate warning was found in the available diagnostics. Confirm the formula with independent validation data before operational use.": "No immediate warning was found in the available diagnostics. Confirm the formula with independent validation data before operational use."
   }
 }
