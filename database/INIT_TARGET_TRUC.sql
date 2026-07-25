@@ -28,6 +28,12 @@ BEGIN
     DBMS_OUTPUT.PUT_LINE('=== INIT_TARGET TRUNCATE START ===');
 
     truncate_table_if_exists('INIT$_TB_OBJECT_DEPLOY');
+    truncate_table_if_exists('INIT$_TB_EDIT_EVENT');
+    truncate_table_if_exists('INIT$_TB_EDIT_DML');
+    truncate_table_if_exists('INIT$_TB_EDIT_CHANGE');
+    truncate_table_if_exists('INIT$_TB_EDIT_SESSION_RULE');
+    truncate_table_if_exists('INIT$_TB_EDIT_SESSION');
+    truncate_table_if_exists('INIT$_TB_EDIT_RULE');
     truncate_table_if_exists('INIT$_TB_FLOW_WORK_NODE_RUN');
     truncate_table_if_exists('INIT$_TB_FLOW_WORK_RUN');
     truncate_table_if_exists('INIT$_TB_FLOW_WORK_EDGE');

@@ -16,6 +16,7 @@ from backend.database_helper import execute_query
 from backend.auth_context import get_request_role_code, get_request_user_id
 from backend.target_database import get_target_connection_id, get_target_db_connection, get_target_db_connection_by_id
 from backend.services import data_work_service as data_work
+from backend.services import edit_work_service as edit_work
 from backend.services import flow_work_service as flow_work
 from backend.services.background_jobs import BackgroundJobQueueFull, submit_background_job
 from backend.services.flow_work_service import FlowNodeRunRequest, FlowRunRequest, FlowWorkRequest
@@ -561,6 +562,16 @@ def create_flow_work_router(
             validation = flow_work.validate_graph(nodes, edges)
             if validation["status"] != "success":
                 raise HTTPException(status_code=400, detail=validation["message"])
+            runtime_overrides = flow_work.normalize_editing_runtime_overrides(req.runtimeOverrides)
+            if runtime_overrides:
+                edit_work.validate_flow_runtime_context(
+                    conn,
+                    request,
+                    runtime_overrides,
+                    project_id=req.projectId,
+                    scenario_id=req.scenarioId,
+                )
+                validation["runtimeOverrides"] = runtime_overrides
 
             run_type = "BATCH" if req.batch else "MANUAL"
             run_status = "QUEUED" if req.batch else "STARTED"
@@ -583,6 +594,7 @@ def create_flow_work_router(
                     target_connection_id,
                     user_id,
                     validation.get("plan", []),
+                    runtime_overrides,
                     "Flow batch execution started." if req.batch else "Flow execution started.",
                 )
             except BackgroundJobQueueFull as queue_error:
@@ -614,7 +626,8 @@ def create_flow_work_router(
                     "flowRunId": run_id,
                     "runType": run_type,
                     "runStatus": run_status,
-                    "plan": validation.get("plan", [])
+                    "plan": validation.get("plan", []),
+                    "runtimeOverrides": runtime_overrides
                 }
             }
         except HTTPException:
@@ -647,7 +660,14 @@ def create_flow_work_router(
             if save_lock:
                 save_lock.release()
 
-    def run_flow_background(flow_run_id: int, connection_id: int, user_id: int, plan: list[dict], start_message: str = "Flow execution started."):
+    def run_flow_background(
+        flow_run_id: int,
+        connection_id: int,
+        user_id: int,
+        plan: list[dict],
+        runtime_overrides: dict | None = None,
+        start_message: str = "Flow execution started.",
+    ):
         conn = None
         try:
             resource_limits = {}
@@ -658,11 +678,13 @@ def create_flow_work_router(
             )
             flow_work.start_run(conn, flow_run_id, start_message)
             conn.commit()
+            runtime_defaults = apply_server_resource_limits(None, resource_limits)
+            runtime_defaults.update(runtime_overrides or {})
             flow_work.execute_flow_plan(
                 conn,
                 flow_run_id,
                 plan or [],
-                runtime_defaults=apply_server_resource_limits(None, resource_limits),
+                runtime_defaults=runtime_defaults,
             )
         except Exception as e:
             if conn:
@@ -700,6 +722,15 @@ def create_flow_work_router(
             validation = flow_work.validate_graph(nodes, edges)
             if validation["status"] != "success":
                 raise HTTPException(status_code=400, detail=validation["message"])
+            runtime_overrides = flow_work.normalize_editing_runtime_overrides(req.runtimeOverrides)
+            if runtime_overrides:
+                edit_work.validate_flow_runtime_context(
+                    conn,
+                    request,
+                    runtime_overrides,
+                    project_id=req.projectId,
+                    scenario_id=req.scenarioId,
+                )
 
             selected_node_key = str(req.nodeKey or "")
             selected_step = next(
@@ -720,6 +751,8 @@ def create_flow_work_router(
                 else f"Node execution started: {selected_step.get('nodeName') or selected_node_key}"
             )
             run_plan = {**validation, "selectedNodeKey": selected_node_key, "downstream": bool(req.downstream), "plan": selected_plan}
+            if runtime_overrides:
+                run_plan["runtimeOverrides"] = runtime_overrides
             payload_manual_run_id = flow_work.parse_manual_run_id(req.manualRunId)
             plan_manual_run_id = flow_work.extract_manual_run_id_from_plan(selected_plan)
             if payload_manual_run_id and plan_manual_run_id and payload_manual_run_id != plan_manual_run_id:
@@ -730,6 +763,11 @@ def create_flow_work_router(
                 raise HTTPException(status_code=400, detail="Continue flow run id and manual flow run id values must match.")
 
             external_requirements = flow_work.get_external_dependency_requirements(validation.get("plan", []), selected_plan)
+            if runtime_overrides and req.downstream and external_requirements:
+                raise HTTPException(
+                    status_code=400,
+                    detail="INITDN$ reanalysis cannot reuse upstream results from another run. Use Run now from the beginning.",
+                )
             continuing = False
             if req.downstream and external_requirements:
                 run_id = continue_run_id or manual_run_id or flow_work.find_latest_compatible_run_id(
@@ -774,6 +812,7 @@ def create_flow_work_router(
                     target_connection_id,
                     user_id,
                     selected_plan,
+                    runtime_overrides,
                     message,
                 )
             except BackgroundJobQueueFull as queue_error:
@@ -804,7 +843,8 @@ def create_flow_work_router(
                     "runType": run_type,
                     "runStatus": "STARTED",
                     "continuedFromExistingRun": continuing,
-                    "plan": selected_plan
+                    "plan": selected_plan,
+                    "runtimeOverrides": runtime_overrides
                 }
             }
         except HTTPException:

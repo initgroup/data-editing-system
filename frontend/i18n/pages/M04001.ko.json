@@ -4,7 +4,7 @@
   "pageCode": "M04001",
   "description": "Korean labels for integrated editing scenario flow page.",
   "labels": {
-    "menuName": "통합 에디팅 시나리오",
+    "menuName": "규칙 발굴 실행",
     "nodeTypeM03001": "컬럼 유형 분석",
     "nodeTypeM03002": "컬럼 상관 분석",
     "nodeTypeM03003": "자동 규칙 발굴",

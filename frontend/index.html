@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>INIT Data Editing System</title>
     <script>
-        window.APP_CACHE_VERSION = "1.1.228";
+        window.APP_CACHE_VERSION = "1.1.267";
         window.APP_ASSET_VERSION_OVERRIDES = {
             // 전체 캐시 갱신: APP_CACHE_VERSION만 올립니다.
             // 부분 캐시 갱신: "js/M90001.js": "1.0.1" 처럼 파일별 버전을 지정합니다.
@@ -22,6 +22,7 @@
             "./css/pages/MCOM_DATA_WORK.css",
             "./css/pages/MCOM_FLOW_WORK.css",
             "./css/pages/MCOM_ANLY_WORK.css",
+            "./css/pages/MCOM_EDIT_WORK.css",
             "./css/pages/M90001.css",
             "./css/pages/M90002.css",
             "./css/pages/M90003.css",
@@ -1446,8 +1447,9 @@
             const isDataTemplate = PageManager.dataWorkTemplatePages?.includes(pageCode);
             const isFlowTemplate = PageManager.flowWorkTemplatePages?.includes(pageCode);
             const isAnlyTemplate = PageManager.anlyWorkTemplatePages?.includes(pageCode);
-            const htmlFileName = isDataTemplate ? "MCOM_DATA_WORK" : (isFlowTemplate ? "MCOM_FLOW_WORK" : (isAnlyTemplate ? "MCOM_ANLY_WORK" : pageCode));
-            const scriptFileName = isDataTemplate ? "MCOM_DATA_WORK" : (isFlowTemplate ? "MCOM_FLOW_WORK" : (isAnlyTemplate ? "MCOM_ANLY_WORK" : pageCode));
+            const isEditTemplate = PageManager.editWorkTemplatePages?.includes(pageCode);
+            const htmlFileName = isDataTemplate ? "MCOM_DATA_WORK" : (isFlowTemplate ? "MCOM_FLOW_WORK" : (isAnlyTemplate ? "MCOM_ANLY_WORK" : (isEditTemplate ? "MCOM_EDIT_WORK" : pageCode)));
+            const scriptFileName = isDataTemplate ? "MCOM_DATA_WORK" : (isFlowTemplate ? "MCOM_FLOW_WORK" : (isAnlyTemplate ? "MCOM_ANLY_WORK" : (isEditTemplate ? "MCOM_EDIT_WORK" : pageCode)));
 
             const sourceAssets = [
                 [`./pages/${htmlFileName}.html`, `${htmlFileName}.html`, "Original page HTML template", 30],

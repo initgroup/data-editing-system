@@ -89,6 +89,9 @@ BEGIN
     drop_package_if_exists('INIT$_PKG_OML_SCRIPT');
 
     DBMS_OUTPUT.PUT_LINE('[INIT_TARGET] Drop functions');
+    drop_function_if_exists('INIT$_FN_IS_EDIT_TABLE_PAIR');
+    drop_function_if_exists('INIT$_FN_SOURCE_TABLE_NAME');
+    drop_function_if_exists('INIT$_FN_EDIT_TABLE_NAME');
     drop_function_if_exists('INIT$_FN_PREDICT_BASE_REASON');
     drop_function_if_exists('INIT$_FN_PREDICT_BASE_TYPE');
     drop_function_if_exists('INIT$_FN_TYPE_GROUP_LABEL');
@@ -113,6 +116,12 @@ BEGIN
 
     DBMS_OUTPUT.PUT_LINE('[INIT_TARGET] Drop tables');
     drop_table_if_exists('INIT$_TB_OBJECT_DEPLOY');
+    drop_table_if_exists('INIT$_TB_EDIT_EVENT');
+    drop_table_if_exists('INIT$_TB_EDIT_DML');
+    drop_table_if_exists('INIT$_TB_EDIT_CHANGE');
+    drop_table_if_exists('INIT$_TB_EDIT_SESSION_RULE');
+    drop_table_if_exists('INIT$_TB_EDIT_SESSION');
+    drop_table_if_exists('INIT$_TB_EDIT_RULE');
     drop_table_if_exists('INIT$_TB_FLOW_WORK_NODE_RUN');
     drop_table_if_exists('INIT$_TB_FLOW_WORK_RUN');
     drop_table_if_exists('INIT$_TB_FLOW_WORK_EDGE');

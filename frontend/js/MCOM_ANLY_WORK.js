@@ -504,6 +504,20 @@
             }
         },
 
+        openEditingRuleDecision(targetPage = "M05001") {
+            const context = {
+                projectId: this.selectedRun?.PROJECT_ID || getContainerEl("#projectId-${PAGE_CODE}")?.value || "",
+                scenarioId: this.selectedRun?.SCENARIO_ID || getContainerEl("#scenarioId-${PAGE_CODE}")?.value || "",
+                runSourceType: "FLOW_WORK",
+                runId: this.selectedRun?.FLOW_RUN_ID || "",
+                targetOwner: "",
+                targetTable: ""
+            };
+            sessionStorage.setItem(`${targetPage}:editContext`, JSON.stringify(context));
+            const menu = window.MENU_PAGE_MAP?.[targetPage];
+            PageManager.load(targetPage, menu?.title || menu?.label || "Rule Review & Decision", true);
+        },
+
         async loadRuns(page = this.runPage, options = {}) {
             if (page === 1 && !options.preservePending) this.pendingRunId = "";
             const projectId = getContainerEl("#projectId-${PAGE_CODE}")?.value || "";
@@ -1908,6 +1922,10 @@
                         <span>${this.escapeHtml(getText("{basis} Select a condition count or result column to update the detail rules below.", { basis: this.describeRuleSummaryBasis(overview) }))}</span>
                     </div>
                     <div class="anly-work-sample-controls">
+                        <button type="button" class="table-btn" onclick="${PAGE_CODE}.openEditingRuleDecision('M05001')">
+                            <i class="fas fa-list-check"></i>
+                            ${this.escapeHtml(getText("Review editing rules"))}
+                        </button>
                         <button type="button" class="table-btn" onclick="${PAGE_CODE}.exportCurrent()">
                             <i class="fas fa-file-export"></i>
                             Export
@@ -6544,6 +6562,10 @@
                             <span>${this.escapeHtml(getText("Target {target} · f(x)=y formula rules", { target: `${summary.targetOwner}.${summary.targetTable}` }))}</span>
                             ${this.renderClusterUsageBadge()}
                         </div>
+                        <button type="button" class="table-btn" onclick="${PAGE_CODE}.openEditingRuleDecision('M05001')">
+                            <i class="fas fa-list-check"></i>
+                            ${this.escapeHtml(getText("Review editing rules"))}
+                        </button>
                         <div class="anly-work-corr-metrics">
                             <span><b>${this.formatNumber(overview.RULE_COUNT)}</b><small>rules</small></span>
                             <span><b>${this.formatNumber(overview.SELECTED_RULE_COUNT)}</b><small>selected</small></span>

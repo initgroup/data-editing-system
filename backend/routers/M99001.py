@@ -56,6 +56,11 @@ MODEL_OBJECT_SCRIPT_GROUPS = [
         "label": "Predicted type analysis",
         "filename": "model_objects/INIT_MODEL_OBJECTS_40_PREDICTED_TYPE.sql",
     },
+    {
+        "code": "EDITING",
+        "label": "Editing table and apply helpers",
+        "filename": "model_objects/INIT_MODEL_OBJECTS_50_EDITING.sql",
+    },
 ]
 
 
@@ -783,7 +788,12 @@ def _split_sqlcl_script(script: str) -> list[str]:
     statement = "\n".join(buffer).strip()
     if statement:
         statements.append(statement)
-    return [_strip_trailing_sqlcl_slash(statement) for statement in statements if _strip_trailing_sqlcl_slash(statement)]
+    normalized_statements = []
+    for statement in statements:
+        normalized = _normalize_sqlcl_statement(statement)
+        if normalized:
+            normalized_statements.append(normalized)
+    return normalized_statements
 
 
 def _buffer_has_executable_sql(lines: list[str]) -> bool:
@@ -795,11 +805,31 @@ def _buffer_has_executable_sql(lines: list[str]) -> bool:
     return False
 
 
-def _strip_trailing_sqlcl_slash(statement: str) -> str:
+def _normalize_sqlcl_statement(statement: str) -> str:
     lines = statement.strip().splitlines()
     while lines and lines[-1].strip() == "/":
         lines.pop()
-    return "\n".join(lines).strip()
+    normalized = "\n".join(lines).strip()
+    if not normalized or _is_plsql_statement(normalized):
+        return normalized
+    return re.sub(r";\s*$", "", normalized).rstrip()
+
+
+def _is_plsql_statement(statement: str) -> bool:
+    executable_lines = []
+    for line in statement.splitlines():
+        stripped = line.strip()
+        if not executable_lines and (not stripped or stripped.startswith("--")):
+            continue
+        executable_lines.append(line)
+    executable = "\n".join(executable_lines).lstrip()
+    return bool(re.match(
+        r"(?is)^(?:DECLARE|BEGIN)\b"
+        r"|^CREATE\s+(?:OR\s+REPLACE\s+)?"
+        r"(?:(?:NON)?EDITIONABLE\s+)?"
+        r"(?:PACKAGE(?:\s+BODY)?|PROCEDURE|FUNCTION|TRIGGER|TYPE(?:\s+BODY)?)\b",
+        executable,
+    ))
 
 
 def _extract_created_objects(script: str, object_group: str = "INIT_MODEL_OBJECTS") -> list[dict]:

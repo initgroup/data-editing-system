@@ -5,7 +5,7 @@
         defaultFlowGroup: "M04001",
         scenarioTableApi: "M04001",
         labels: {
-            menuName: "Integrated Editing Scenario",
+            menuName: "Rule Discovery Execution",
             contextHeader: "Project Scenario",
             contextHeaderDesc: "Select the project and scenario for this flow.",
             flowHeader: "Data Editing Flow",

@@ -22,6 +22,7 @@ from backend.auth_context import (
 )
 from backend.routers import common_router, googleGenai, home, M01001, M01002, M02001, M02002, M03001, M03002, M03003, M03004, M04001, M90001, M90002, M90003, M91001, M91002, M91003, M99001, M99002, M99003, M99004, metadata, ml_analysis, population_api
 from backend.services.anly_work_router import create_anly_work_router
+from backend.services.edit_work_router import create_edit_work_router
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -273,6 +274,14 @@ routers = [
     (M03004.router, "M03004"),
     (M04001.router, "M04001"),
     (create_anly_work_router(menu_code="M04002", flow_menu_code="M04001"), "M04002"),
+    (create_edit_work_router(menu_code="M05001"), "M05001"),
+    (create_edit_work_router(menu_code="M05002"), "M05002"),
+    (create_edit_work_router(menu_code="M05003"), "M05003"),
+    (create_edit_work_router(menu_code="M06001"), "M06001"),
+    (create_edit_work_router(menu_code="M06002"), "M06002"),
+    (create_edit_work_router(menu_code="M07001"), "M07001"),
+    (create_edit_work_router(menu_code="M07002"), "M07002"),
+    (create_edit_work_router(menu_code="M07003"), "M07003"),
     (M90001.router, "M90001"),
     (M90002.router, "M90002"),
     (M90003.router, "M90003"),

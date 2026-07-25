@@ -3501,3 +3501,37 @@
     overflow-x: auto;
     overflow-y: visible;
 }
+.flow-editing-runtime-banner {
+    align-items: center;
+    background: #f5f3ff;
+    border: 1px solid #c4b5fd;
+    color: #5b21b6;
+    display: flex;
+    font-size: 11px;
+    font-weight: 750;
+    gap: 8px;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    padding: 8px 10px;
+}
+
+.flow-editing-runtime-banner[hidden] {
+    display: none;
+}
+
+.flow-editing-runtime-banner b {
+    color: #4c1d95;
+    font-family: Consolas, "Cascadia Mono", monospace;
+}
+
+.flow-editing-runtime-banner button {
+    background: #ffffff;
+    border: 1px solid #a78bfa;
+    color: #5b21b6;
+    cursor: pointer;
+    font-size: 10px;
+    font-weight: 800;
+    margin-left: auto;
+    min-height: 28px;
+    padding: 4px 9px;
+}

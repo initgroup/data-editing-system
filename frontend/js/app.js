@@ -31,6 +31,7 @@ const PageManager = {
     dataWorkTemplatePages: ['M03001', 'M03002', 'M03003', 'M03004'],
     flowWorkTemplatePages: ['M04001'],
     anlyWorkTemplatePages: ['M04002'],
+    editWorkTemplatePages: ['M05001', 'M05002', 'M05003', 'M06001', 'M06002', 'M07001', 'M07002', 'M07003'],
     sessionTimerId: null,
     isSessionExpiredHandling: false,
 
@@ -705,10 +706,15 @@ const PageManager = {
             const isDataTemplate = this.dataWorkTemplatePages.includes(pageCode);
             const isFlowTemplate = this.flowWorkTemplatePages.includes(pageCode);
             const isAnlyTemplate = this.anlyWorkTemplatePages.includes(pageCode);
-            const useCommonTemplate = isDataTemplate || isFlowTemplate || isAnlyTemplate;
+            const isEditTemplate = this.editWorkTemplatePages.includes(pageCode);
+            const useCommonTemplate = isDataTemplate || isFlowTemplate || isAnlyTemplate || isEditTemplate;
             const htmlFileName = this.dataWorkTemplatePages.includes(pageCode)
                 ? 'MCOM_DATA_WORK'
-                : (this.flowWorkTemplatePages.includes(pageCode) ? 'MCOM_FLOW_WORK' : (isAnlyTemplate ? 'MCOM_ANLY_WORK' : pageCode));
+                : (
+                    this.flowWorkTemplatePages.includes(pageCode)
+                        ? 'MCOM_FLOW_WORK'
+                        : (isAnlyTemplate ? 'MCOM_ANLY_WORK' : (isEditTemplate ? 'MCOM_EDIT_WORK' : pageCode))
+                );
             const htmlUrl = this.getAssetUrl(`./pages/${htmlFileName}.html`);
             const response = await fetch(htmlUrl);
             if (!response.ok) {
@@ -779,11 +785,13 @@ const PageManager = {
      */
     async injectScript(pageCode, force = false) {
         const isAnlyTemplate = this.anlyWorkTemplatePages.includes(pageCode);
-        const scriptFileName = isAnlyTemplate ? 'MCOM_ANLY_WORK' : pageCode;
+        const isEditTemplate = this.editWorkTemplatePages.includes(pageCode);
+        const scriptFileName = isAnlyTemplate ? 'MCOM_ANLY_WORK' : (isEditTemplate ? 'MCOM_EDIT_WORK' : pageCode);
 
         const existingScript = document.querySelector(`script[src*="${scriptFileName}.js"]`);
-        if (existingScript && (!force || isAnlyTemplate)) {
+        if (existingScript && (!force || isAnlyTemplate || isEditTemplate)) {
             if (isAnlyTemplate) this.ensureAnlyWorkPage(pageCode);
+            if (isEditTemplate) this.ensureEditWorkPage(pageCode);
             return true;
         }
 
@@ -810,6 +818,7 @@ const PageManager = {
             script.onload = () => {
                 console.log(`[Script Loaded] ${scriptFileName}.js`);
                 if (isAnlyTemplate) this.ensureAnlyWorkPage(pageCode);
+                if (isEditTemplate) this.ensureEditWorkPage(pageCode);
                 resolve(true);
             };
 
@@ -825,6 +834,14 @@ const PageManager = {
         if (window[pageCode]) return window[pageCode];
         if (window.MCOMMON && typeof window.MCOMMON.initAnlyWorkPage === 'function') {
             return window.MCOMMON.initAnlyWorkPage(pageCode);
+        }
+        return null;
+    },
+
+    ensureEditWorkPage(pageCode) {
+        if (window[pageCode]) return window[pageCode];
+        if (window.MCOMMON && typeof window.MCOMMON.initEditWorkPage === 'function') {
+            return window.MCOMMON.initEditWorkPage(pageCode);
         }
         return null;
     },

@@ -642,6 +642,10 @@ const CommonUtils = {
             if (!responseLogged) {
                 window.ConsoleLogger?.requestError?.(requestLog, err);
             }
+            if (err && typeof err === "object") {
+                err.isCommonRequestError = true;
+                err.requestUrl = String(url || "");
+            }
             throw err;
         } finally {
             if (timeoutId) clearTimeout(timeoutId);
@@ -1019,7 +1023,13 @@ const CommonUtils = {
             return;
         }
 
-        this.enableGridColumnResize(table, () => this.applyStandardGridFreeze(table, freezeColumns));
+        this.enableGridColumnResize(table, () => {
+            const currentFreezeColumns = Math.max(
+                0,
+                Number.parseInt(table.dataset.standardGridFreezeColumns || "0", 10) || 0
+            );
+            this.applyStandardGridFreeze(table, currentFreezeColumns);
+        });
         this.applyStandardGridFreeze(table, freezeColumns);
         table.dataset.standardGridReady = "Y";
         delete table.dataset.standardGridLayoutPending;
@@ -2001,6 +2011,15 @@ if (document.readyState === "loading") {
 window.CommonMessage = CommonMessage;
 window.DialogFocusManager = DialogFocusManager;
 DialogFocusManager.init();
+window.addEventListener("unhandledrejection", (event) => {
+    const error = event.reason;
+    if (!error?.isCommonRequestError) return;
+    event.preventDefault();
+    CommonMessage.error(
+        error.message
+        || CommonUI.t("commonUi.errors.requestFailed", "The request could not be processed.")
+    );
+});
 window.alert = (message) => {
     CommonMessage.alert(message, { type: CommonMessage.inferType(message) });
 };

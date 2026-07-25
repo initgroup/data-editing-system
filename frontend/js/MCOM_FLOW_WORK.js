@@ -140,12 +140,15 @@
             flowDocumentKeydownBound: null,
             flowEdgeLayerClickBound: null,
             flowEdges: [],
+            editingRuntimeContext: null,
 
             async init() {
                 if (this.isInit) return;
                 const lifecycleGeneration = ++this.lifecycleGeneration;
                 this.isPageVisible = true;
+                this.editingRuntimeContext = this.readEditingRuntimeContext();
                 this.applyUiLabels();
+                this.renderEditingRuntimeBanner();
                 this.removeFlowVersionCountLabel();
                 this.resetFlowResultSqlPlaceholder();
                 await this.loadWorkContext();
@@ -172,6 +175,11 @@
 
             onShow() {
                 this.isPageVisible = true;
+                const pendingEditingContext = this.readEditingRuntimeContext();
+                if (pendingEditingContext?.editSessionId) {
+                    this.editingRuntimeContext = pendingEditingContext;
+                    this.renderEditingRuntimeBanner();
+                }
                 if (
                     this.activeTab === "designer"
                     && this.activeCanvasRunId
@@ -250,6 +258,7 @@
                 this.selectedProjectId = "";
                 this.selectedScenarioId = "";
                 this.selectedScenarioTableKey = "";
+                this.editingRuntimeContext = null;
                 this.workContextCollapsed = false;
                 this.activeTab = "designer";
                 this.contextLoadFailed = false;
@@ -4804,6 +4813,68 @@
                 };
             },
 
+            readEditingRuntimeContext() {
+                try {
+                    const raw = sessionStorage.getItem(`${PAGE_CODE}:editingRuntimeContext`);
+                    return raw ? JSON.parse(raw) : null;
+                } catch (error) {
+                    sessionStorage.removeItem(`${PAGE_CODE}:editingRuntimeContext`);
+                    return null;
+                }
+            },
+
+            renderEditingRuntimeBanner() {
+                const banner = getContainerEl(`#editingRuntimeBanner-${PAGE_CODE}`);
+                if (!banner) return;
+                const context = this.editingRuntimeContext;
+                if (!context?.editSessionId || !context?.targetOwner || !context?.targetTable) {
+                    banner.hidden = true;
+                    banner.innerHTML = "";
+                    return;
+                }
+                banner.hidden = false;
+                banner.innerHTML = `
+                    <span>
+                        <i class="fas fa-flask"></i>
+                        편집본 재검증 모드 · Session #${this.escapeHtml(context.editSessionId)}
+                        · <b>${this.escapeHtml(context.targetOwner)}.${this.escapeHtml(context.targetTable)}</b>
+                    </span>
+                    <span>저장된 Flow는 변경하지 않고 실행 파라미터만 INITDN$로 오버라이드합니다.</span>
+                    <button type="button" onclick="${PAGE_CODE}.clearEditingRuntimeContext()">편집본 모드 종료</button>
+                `;
+            },
+
+            clearEditingRuntimeContext() {
+                this.editingRuntimeContext = null;
+                sessionStorage.removeItem(`${PAGE_CODE}:editingRuntimeContext`);
+                this.renderEditingRuntimeBanner();
+                CommonMessage.success("INITDN$ 편집본 재검증 모드를 종료했습니다.");
+            },
+
+            getEditingRuntimeOverrides() {
+                const context = this.editingRuntimeContext;
+                if (!context?.editSessionId || !context?.targetOwner || !context?.targetTable) return null;
+                return {
+                    editSessionId: Number(context.editSessionId),
+                    targetOwner: String(context.targetOwner),
+                    targetTable: String(context.targetTable)
+                };
+            },
+
+            async linkEditingReanalysisRun(flowRunId) {
+                const context = this.editingRuntimeContext;
+                if (!context?.editSessionId || !flowRunId) return;
+                try {
+                    await CommonUtils.request(`${API_BASE_URL}/M07001/sessions/${encodeURIComponent(context.editSessionId)}/reanalysis`, {
+                        method: "POST",
+                        body: { flowRunId: Number(flowRunId), reanalysisStatus: "QUEUED" },
+                        showLoading: false
+                    });
+                } catch (error) {
+                    console.warn(`[${PAGE_CODE}] editing reanalysis link failed`, error);
+                }
+            },
+
             getFlowNameForSave() {
                 const value = this.getValue(`#flowName-${PAGE_CODE}`).trim();
                 if (value) return value;
@@ -7849,6 +7920,8 @@
                     ...this.buildFlowPayload(),
                     batch: Boolean(batch)
                 };
+                const editingRuntimeOverrides = this.getEditingRuntimeOverrides();
+                if (editingRuntimeOverrides) payload.runtimeOverrides = editingRuntimeOverrides;
                 const manualRunId = await this.confirmManualFlowRunIdOverwrite(payload);
                 if (manualRunId === null) {
                     this.setFlowRunning(false, flowKey);
@@ -7864,11 +7937,14 @@
                         body: payload,
                         showLoading: false
                     });
+                    submittedFlowRunId = String(json.data?.flowRunId || "");
+                    if (submittedFlowRunId && editingRuntimeOverrides) {
+                        await this.linkEditingReanalysisRun(submittedFlowRunId);
+                    }
                     // The server accepted the run independently of this page. If the
                     // page was closed while the POST was in flight, do not start stale
                     // history/version reads or touch removed DOM; the batch keeps running.
                     if (lifecycleGeneration !== this.lifecycleGeneration || !this.isPageVisible) {
-                        submittedFlowRunId = String(json.data?.flowRunId || "");
                         return;
                     }
                     const stillSelected = this.getCurrentFlowRunKey() === flowKey;
@@ -7886,7 +7962,6 @@
                         if (selector && (stillSelected || flowKey === "NEW")) selector.value = json.data.flowId;
                     }
                     if (json.data?.flowRunId && (stillSelected || flowKey === "NEW")) {
-                        submittedFlowRunId = String(json.data.flowRunId);
                         // Keep the existing duplicate-run protection until this exact
                         // run reaches a terminal status in the history response.
                         // Batch queueing has always been released immediately.
@@ -7952,6 +8027,8 @@
                     nodeKey: nodeId,
                     downstream: runDownstream
                 };
+                const editingRuntimeOverrides = this.getEditingRuntimeOverrides();
+                if (editingRuntimeOverrides) payload.runtimeOverrides = editingRuntimeOverrides;
                 const manualRunId = await this.confirmManualFlowRunIdOverwrite(payload, nodeId);
                 if (manualRunId === null) {
                     this.setFlowRunning(false, flowKey);
@@ -7967,6 +8044,9 @@
                         body: payload,
                         showLoading: false
                     });
+                    if (json.data?.flowRunId && editingRuntimeOverrides) {
+                        await this.linkEditingReanalysisRun(json.data.flowRunId);
+                    }
                     if (lifecycleGeneration !== this.lifecycleGeneration || !this.isPageVisible) {
                         return;
                     }

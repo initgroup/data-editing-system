@@ -78,7 +78,7 @@
       "pageCode": "M03001",
       "title": "Column Type Analysis",
       "label": "Column Type Analysis",
-      "group": "Data Rule Discovery",
+      "group": "Editing Model Setup",
       "status": "enabled",
       "summary": "Classifies columns as categorical or continuous and compares the run-time classification with the finalized column type used by downstream analysis.",
       "purpose": [
@@ -104,7 +104,7 @@
       "pageCode": "M03002",
       "title": "Column Correlation Analysis",
       "label": "Column Correlation Analysis",
-      "group": "Data Rule Discovery",
+      "group": "Editing Model Setup",
       "status": "enabled",
       "summary": "Builds one integrated relationship matrix for categorical-categorical, continuous-continuous, and categorical-continuous pairs, then derives a relationship network and clusters.",
       "purpose": [
@@ -127,7 +127,7 @@
       "pageCode": "M03003",
       "title": "Automatic Rule Discovery",
       "label": "Automatic Rule Discovery",
-      "group": "Data Rule Discovery",
+      "group": "Editing Model Setup",
       "status": "enabled",
       "summary": "Runs categorical Apriori discovery and continuous LASSO plus symbolic formula discovery as one integrated job, while keeping individual models available when needed.",
       "purpose": [
@@ -153,7 +153,7 @@
       "pageCode": "M03004",
       "title": "Rule Violation Detection",
       "label": "Rule Violation Detection",
-      "group": "Data Rule Discovery",
+      "group": "Editing Model Setup",
       "status": "enabled",
       "summary": "Runs categorical association-rule checks and continuous symbolic-formula checks as one integrated job and opens the violating source rows by rule.",
       "purpose": [
@@ -176,9 +176,9 @@
     },
     "M04001": {
       "pageCode": "M04001",
-      "title": "Editing Scenario Design",
-      "label": "Editing Scenario Design",
-      "group": "Editing Scenario",
+      "title": "Rule Discovery Execution",
+      "label": "Rule Discovery Execution",
+      "group": "Editing Rule Discovery",
       "status": "enabled",
       "summary": "Designs, validates, and runs a reusable four-stage DAG from saved data jobs, with artifact compatibility and same-run dependencies enforced at connection time.",
       "purpose": [
@@ -202,9 +202,9 @@
     },
     "M04002": {
       "pageCode": "M04002",
-      "title": "Editing Scenario Analysis",
-      "label": "Editing Scenario Analysis",
-      "group": "Editing Scenario",
+      "title": "Rule Discovery Analysis",
+      "label": "Rule Discovery Analysis",
+      "group": "Editing Rule Discovery",
       "status": "enabled",
       "summary": "Analyzes a selected flow run through stage-specific integrated result tabs for column types, relationships and clusters, automatic rules, and rule violations.",
       "layout": [
@@ -224,19 +224,27 @@
     },
     "M05001": {
       "pageCode": "M05001",
-      "title": "Discovered Rule Selection",
-      "label": "Discovered Rule Selection",
-      "group": "Editing Rule Master",
-      "status": "planned",
-      "summary": "A planned screen for reviewing automatically discovered rule candidates and selecting rules for actual use."
+      "title": "Editing Rule Management",
+      "label": "Rule Decision & Master",
+      "group": "Editing Execution Management",
+      "status": "active",
+      "summary": "Reviews discovered rules and manages selected and user-defined rules in two cached tabs."
     },
     "M05002": {
       "pageCode": "M05002",
-      "title": "User Rule Registration",
-      "label": "User Rule Registration",
-      "group": "Editing Rule Master",
-      "status": "planned",
-      "summary": "A planned screen for registering manual data-quality rules or adjusting discovered rule candidates."
+      "title": "Editing Error Correction",
+      "label": "Editing Error Correction",
+      "group": "Editing Execution Management",
+      "status": "active",
+      "summary": "Checks the live INITUP$ table with final selected and active rule-master rules, then corrects error data in INITDN$ editing tables through two cached tabs."
+    },
+    "M05003": {
+      "pageCode": "M05003",
+      "title": "Editing Production Deployment",
+      "label": "Editing Production Deployment",
+      "group": "Editing Execution Management",
+      "status": "active",
+      "summary": "Validates editing effects, manages approved production DML, and reviews the complete editing audit trail in three cached tabs."
     },
     "M06001": {
       "pageCode": "M06001",

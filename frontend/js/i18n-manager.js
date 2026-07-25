@@ -83,6 +83,7 @@
         if (window.PageManager?.dataWorkTemplatePages?.includes?.(code)) return ["MCOM_DATA_WORK"];
         if (window.PageManager?.flowWorkTemplatePages?.includes?.(code)) return ["MCOM_FLOW_WORK"];
         if (window.PageManager?.anlyWorkTemplatePages?.includes?.(code)) return ["MCOM_ANLY_WORK"];
+        if (window.PageManager?.editWorkTemplatePages?.includes?.(code)) return ["MCOM_EDIT_WORK"];
         return [];
     }
 

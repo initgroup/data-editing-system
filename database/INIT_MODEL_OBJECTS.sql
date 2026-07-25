@@ -11,9 +11,11 @@ SET SERVEROUTPUT ON;
 --   @@model_objects/INIT_MODEL_OBJECTS_20_RULE_MODELS.sql
 --   @@model_objects/INIT_MODEL_OBJECTS_30_CORRELATION.sql
 --   @@model_objects/INIT_MODEL_OBJECTS_40_PREDICTED_TYPE.sql
+--   @@model_objects/INIT_MODEL_OBJECTS_50_EDITING.sql
 
 @@model_objects/INIT_MODEL_OBJECTS_00_CORE.sql
 @@model_objects/INIT_MODEL_OBJECTS_10_RULE_SUMMARY.sql
 @@model_objects/INIT_MODEL_OBJECTS_20_RULE_MODELS.sql
 @@model_objects/INIT_MODEL_OBJECTS_30_CORRELATION.sql
 @@model_objects/INIT_MODEL_OBJECTS_40_PREDICTED_TYPE.sql
+@@model_objects/INIT_MODEL_OBJECTS_50_EDITING.sql

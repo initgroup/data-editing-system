@@ -1,0 +1,148 @@
+<div class="page-container table-page edit-work-page" id="container-__PAGE_CODE__">
+    <section class="work-context-card" aria-label="프로젝트 및 시나리오">
+        <header class="work-context-header" onclick="__PAGE_CODE__.toggleWorkContextFromHeader(event)" role="button" tabindex="0" onkeydown="__PAGE_CODE__.handleWorkContextHeaderKeydown(event)">
+            <div class="work-context-title-row">
+                <span><strong>프로젝트 / 시나리오</strong> 모든 에디팅 단계에 적용할 공통 작업 범위입니다.</span>
+                <span id="workContextSummary-__PAGE_CODE__" class="work-context-summary">프로젝트와 시나리오를 선택하세요.</span>
+            </div>
+            <div class="scenario-table-actions">
+                <button type="button" id="workContextToggle-__PAGE_CODE__" class="table-btn work-context-toggle" onclick="__PAGE_CODE__.toggleWorkContext(event)" aria-expanded="true">
+                    <i class="fas fa-chevron-up"></i>
+                    <span>접기</span>
+                </button>
+                <button type="button" class="table-icon-btn" title="프로젝트 및 시나리오 새로고침" onclick="__PAGE_CODE__.refreshWorkContext(event)">
+                    <i class="fas fa-sync-alt"></i>
+                </button>
+            </div>
+        </header>
+        <div class="work-context-bar">
+            <label>
+                <span>프로젝트</span>
+                <select id="projectId-__PAGE_CODE__" class="work-context-select" onchange="__PAGE_CODE__.handleProjectChange()">
+                    <option value="">프로젝트 로딩 중...</option>
+                </select>
+            </label>
+            <label>
+                <span>시나리오</span>
+                <select id="scenarioId-__PAGE_CODE__" class="work-context-select" onchange="__PAGE_CODE__.handleScenarioChange()">
+                    <option value="">전체 시나리오</option>
+                </select>
+            </label>
+        </div>
+    </section>
+
+    <nav id="editWorkspaceTabs-__PAGE_CODE__" class="table-tabs edit-work-workspace-tabs" aria-label="에디팅 작업 탭" hidden></nav>
+
+    <section id="stageContext-__PAGE_CODE__" class="edit-work-context edit-work-stage-context" aria-label="Current editing stage context">
+        <label class="edit-work-session-context">
+            <span>편집 작업</span>
+            <select id="editSessionId-__PAGE_CODE__" onchange="__PAGE_CODE__.handleSessionChange()">
+                <option value="">편집 작업 선택</option>
+            </select>
+        </label>
+        <div class="edit-work-context-source" id="sourceContext-__PAGE_CODE__"></div>
+        <div id="stageFilterTools-__PAGE_CODE__" class="edit-work-stage-filter-tools"></div>
+        <button type="button" id="stageQueryButton-__PAGE_CODE__" class="table-btn edit-work-stage-query-button" title="현재 조건으로 실시간 조회를 실행합니다." onclick="__PAGE_CODE__.applyStageFilters()">조회</button>
+    </section>
+
+    <section id="ruleQueryBar-__PAGE_CODE__" class="edit-work-rule-query-bar" hidden>
+        <div id="ruleQueryTools-__PAGE_CODE__" class="edit-work-rule-query-tools">
+            <label>
+                <span>RUN 기준</span>
+                <select id="ruleRunSource-__PAGE_CODE__" onchange="__PAGE_CODE__.handleRuleRunSourceChange()">
+                    <option value="">최신 RUN 자동</option>
+                    <option value="FLOW_WORK">FLOW RUN</option>
+                    <option value="DATA_WORK">DATA RUN</option>
+                </select>
+            </label>
+            <label>
+                <span>RUN ID</span>
+                <input id="ruleRunId-__PAGE_CODE__" type="number" min="1" placeholder="RUN ID" disabled onkeydown="__PAGE_CODE__.handleRuleFilterKeydown(event)">
+            </label>
+            <label>
+                <span>규칙 유형</span>
+                <select id="ruleGroup-__PAGE_CODE__" onchange="__PAGE_CODE__.applyDiscoveredRuleFilters()">
+                    <option value="ALL">전체(범주형/연속형)</option>
+                    <option value="CATEGORICAL">범주형</option>
+                    <option value="CONTINUOUS">연속형</option>
+                </select>
+            </label>
+            <label>
+                <span>판단 상태</span>
+                <select id="ruleDecisionStatus-__PAGE_CODE__" onchange="__PAGE_CODE__.applyDiscoveredRuleFilters()">
+                    <option value="ALL">전체</option>
+                    <option value="PENDING">대기</option>
+                    <option value="SELECTED">선정</option>
+                    <option value="REJECTED">제외</option>
+                </select>
+            </label>
+            <button type="button" class="table-btn" onclick="__PAGE_CODE__.applyDiscoveredRuleFilters()">조회</button>
+        </div>
+        <div id="ruleQueryProgress-__PAGE_CODE__" class="edit-work-rule-query-progress" role="status" aria-live="polite" hidden>
+            <div class="edit-work-rule-query-progress-track" aria-hidden="true">
+                <span></span>
+            </div>
+        </div>
+    </section>
+
+    <section class="edit-work-panel">
+        <header class="edit-work-panel-toolbar">
+            <div class="edit-work-panel-title">
+                <strong id="panelTitle-__PAGE_CODE__">작업 목록</strong>
+                <span id="panelSourceContext-__PAGE_CODE__" class="edit-work-panel-source-context" hidden></span>
+            </div>
+            <div class="edit-work-panel-controls">
+                <div class="edit-work-grid-tools">
+                    <label>
+                        <span>검색</span>
+                        <input id="gridKeyword-__PAGE_CODE__" type="search" placeholder="현재 목록 검색" oninput="__PAGE_CODE__.handleGridKeyword()">
+                    </label>
+                    <button type="button" class="table-icon-btn" title="현재 조건 새로고침" onclick="__PAGE_CODE__.refreshGrid()">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+                <span id="modeActions-__PAGE_CODE__" class="edit-work-mode-actions"></span>
+            </div>
+        </header>
+
+        <div class="grid-command-area">
+            <div class="grid-command-toolbar">
+                <div class="data-grid-topbar">
+                    <div class="data-grid-status">
+                        <div id="gridPager-__PAGE_CODE__" class="grid-pager-host"></div>
+                        <div id="gridMessage-__PAGE_CODE__" class="table-empty data-grid-message" aria-live="polite"></div>
+                    </div>
+                    <span class="grid-export-actions">
+                        <button type="button" class="table-icon-btn" title="Export Excel" onclick="__PAGE_CODE__.exportCurrentGrid('excel')">
+                            <i class="fas fa-file-excel"></i>
+                        </button>
+                        <button type="button" class="table-icon-btn" title="Export CSV" onclick="__PAGE_CODE__.exportCurrentGrid('csv')">
+                            <i class="fas fa-file-csv"></i>
+                        </button>
+                        <button type="button" class="table-icon-btn" title="Export JSON" onclick="__PAGE_CODE__.exportCurrentGrid('json')">
+                            <i class="fas fa-file-code"></i>
+                        </button>
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <div id="modeForm-__PAGE_CODE__" class="edit-work-mode-form"></div>
+        <div id="workContent-__PAGE_CODE__" class="edit-work-content"></div>
+    </section>
+
+    <div id="detailLayer-__PAGE_CODE__" class="edit-work-detail-layer" hidden onclick="__PAGE_CODE__.closeDetailLayer(event)">
+        <section class="edit-work-detail-dialog" role="dialog" aria-modal="true" aria-labelledby="detailLayerTitle-__PAGE_CODE__" tabindex="-1" onclick="event.stopPropagation()" onkeydown="__PAGE_CODE__.handleDetailLayerKeydown(event)">
+            <header onpointerdown="__PAGE_CODE__.startDetailLayerDrag(event)">
+                <div>
+                    <small id="detailLayerEyebrow-__PAGE_CODE__">RULE DETAIL</small>
+                    <strong id="detailLayerTitle-__PAGE_CODE__">규칙 상세</strong>
+                </div>
+                <button type="button" class="table-icon-btn" title="닫기" onclick="__PAGE_CODE__.closeDetailLayer()">
+                    <i class="fas fa-xmark"></i>
+                </button>
+            </header>
+            <div id="detailLayerBody-__PAGE_CODE__" class="edit-work-detail-body"></div>
+        </section>
+    </div>
+</div>

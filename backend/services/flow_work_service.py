@@ -96,6 +96,7 @@ class FlowWorkRequest(BaseModel):
 class FlowRunRequest(FlowWorkRequest):
     batch: Optional[bool] = False
     manualRunId: Optional[int] = None
+    runtimeOverrides: Optional[Dict[str, Any]] = Field(default_factory=dict)
 
 
 class FlowNodeRunRequest(FlowWorkRequest):
@@ -103,6 +104,7 @@ class FlowNodeRunRequest(FlowWorkRequest):
     downstream: Optional[bool] = False
     manualRunId: Optional[int] = None
     continueRunId: Optional[int] = None
+    runtimeOverrides: Optional[Dict[str, Any]] = Field(default_factory=dict)
 
 
 def list_flows(conn, menu_code: str, project_id: int, scenario_id: int) -> Dict[str, Any]:
@@ -1029,6 +1031,27 @@ def create_runtime_values(
     apply_upstream_result_mappings(values, step, node_outputs or {})
     values.update(build_step_system_bind_values(step, node_outputs or {}, flow_run_id))
     return values
+
+
+def normalize_editing_runtime_overrides(overrides: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    raw = overrides if isinstance(overrides, dict) else {}
+    if not raw:
+        return {}
+    owner = str(raw.get("targetOwner") or raw.get("P_TARGET_OWNER") or "").strip().upper()
+    table = str(raw.get("targetTable") or raw.get("P_TARGET_TABLE") or "").strip().upper()
+    if not re.fullmatch(r"[A-Z][A-Z0-9_$#]{0,127}", owner):
+        raise HTTPException(status_code=400, detail="Editing runtime target owner is invalid.")
+    if not re.fullmatch(r"INITDN\$[A-Z0-9_$#]{1,121}", table):
+        raise HTTPException(status_code=400, detail="Editing runtime target table must be a valid INITDN$ table.")
+    session_id = data_work.require_int(raw.get("editSessionId"), "editSessionId")
+    return {
+        "INIT$TargetOwner": owner,
+        "INIT$TargetTable": table,
+        "P_TARGET_OWNER": owner,
+        "P_TARGET_TABLE": table,
+        "INIT$EditingSessionId": session_id,
+        "editingSessionId": session_id,
+    }
 
 
 def get_flow_param_runtime_value(item: Dict[str, Any]) -> Any:
