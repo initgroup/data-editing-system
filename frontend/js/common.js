@@ -545,6 +545,13 @@ const CommonUtils = {
             return CommonUI.t("commonUi.errors.serverUnavailable", "The WAS server is not responding. Check the server status or network connection.");
         }
 
+        if (status === 422) {
+            return CommonUI.t(
+                "commonUi.errors.invalidRequestParameters",
+                "One or more request values have an invalid format. Refresh the screen and try again."
+            );
+        }
+
         if (
             lower.includes("failed to fetch")
             || lower.includes("networkerror")

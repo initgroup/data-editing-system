@@ -1924,7 +1924,7 @@
                     <div class="anly-work-sample-controls">
                         <button type="button" class="table-btn" onclick="${PAGE_CODE}.openEditingRuleDecision('M05001')">
                             <i class="fas fa-list-check"></i>
-                            ${this.escapeHtml(getText("Review editing rules"))}
+                            ${this.escapeHtml(getLabel("reviewEditingRules", "Review editing rules"))}
                         </button>
                         <button type="button" class="table-btn" onclick="${PAGE_CODE}.exportCurrent()">
                             <i class="fas fa-file-export"></i>
@@ -6564,7 +6564,7 @@
                         </div>
                         <button type="button" class="table-btn" onclick="${PAGE_CODE}.openEditingRuleDecision('M05001')">
                             <i class="fas fa-list-check"></i>
-                            ${this.escapeHtml(getText("Review editing rules"))}
+                            ${this.escapeHtml(getLabel("reviewEditingRules", "Review editing rules"))}
                         </button>
                         <div class="anly-work-corr-metrics">
                             <span><b>${this.formatNumber(overview.RULE_COUNT)}</b><small>rules</small></span>

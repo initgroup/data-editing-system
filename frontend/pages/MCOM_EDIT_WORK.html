@@ -34,15 +34,28 @@
     <nav id="editWorkspaceTabs-__PAGE_CODE__" class="table-tabs edit-work-workspace-tabs" aria-label="에디팅 작업 탭" hidden></nav>
 
     <section id="stageContext-__PAGE_CODE__" class="edit-work-context edit-work-stage-context" aria-label="Current editing stage context">
-        <label class="edit-work-session-context">
-            <span>편집 작업</span>
-            <select id="editSessionId-__PAGE_CODE__" onchange="__PAGE_CODE__.handleSessionChange()">
-                <option value="">편집 작업 선택</option>
-            </select>
-        </label>
-        <div class="edit-work-context-source" id="sourceContext-__PAGE_CODE__"></div>
-        <div id="stageFilterTools-__PAGE_CODE__" class="edit-work-stage-filter-tools"></div>
-        <button type="button" id="stageQueryButton-__PAGE_CODE__" class="table-btn edit-work-stage-query-button" title="현재 조건으로 실시간 조회를 실행합니다." onclick="__PAGE_CODE__.applyStageFilters()">조회</button>
+        <div class="edit-work-stage-context-row edit-work-stage-primary-row">
+            <label class="edit-work-session-context">
+                <span>편집 작업</span>
+                <select id="editSessionId-__PAGE_CODE__" onchange="__PAGE_CODE__.handleSessionChange()">
+                    <option value="">편집 작업 선택</option>
+                </select>
+            </label>
+            <div class="edit-work-source-context-field">
+                <span>작업 테이블</span>
+                <div class="edit-work-context-source" id="sourceContext-__PAGE_CODE__"></div>
+            </div>
+            <div id="editingTableGrid-__PAGE_CODE__" class="edit-work-table-map" hidden></div>
+        </div>
+        <div class="edit-work-stage-context-row edit-work-stage-query-row">
+            <div id="stageFilterTools-__PAGE_CODE__" class="edit-work-stage-filter-tools"></div>
+            <button type="button" id="stageQueryButton-__PAGE_CODE__" class="table-btn edit-work-stage-query-button" title="현재 조건으로 실시간 조회를 실행합니다." onclick="__PAGE_CODE__.applyStageFilters()">조회</button>
+        </div>
+        <div id="stageQueryProgress-__PAGE_CODE__" class="edit-work-rule-query-progress" role="status" aria-live="polite" hidden>
+            <div class="edit-work-rule-query-progress-track" aria-hidden="true">
+                <span></span>
+            </div>
+        </div>
     </section>
 
     <section id="ruleQueryBar-__PAGE_CODE__" class="edit-work-rule-query-bar" hidden>

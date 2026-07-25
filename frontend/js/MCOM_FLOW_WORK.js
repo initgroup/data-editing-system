@@ -346,15 +346,15 @@
             },
 
             getLabel(key, fallback = "") {
-                const labels = window[`${PAGE_CODE}_FLOW_UI_LABELS`]
-                    || window[`${PAGE_CODE}_PAGE_I18N`]?.labels
-                    || FLOW_UI_LABELS
-                    || {};
-                if (Object.prototype.hasOwnProperty.call(labels, key)) {
-                    return String(labels[key] ?? "");
-                }
-                if (Object.prototype.hasOwnProperty.call(FLOW_UI_LABELS, key)) {
-                    return String(FLOW_UI_LABELS[key] ?? "");
+                const labelSources = [
+                    window[`${PAGE_CODE}_FLOW_UI_LABELS`],
+                    window[`${PAGE_CODE}_PAGE_I18N`]?.labels,
+                    FLOW_UI_LABELS
+                ];
+                for (const labels of labelSources) {
+                    if (labels && Object.prototype.hasOwnProperty.call(labels, key)) {
+                        return String(labels[key] ?? "");
+                    }
                 }
                 return String(fallback ?? "");
             },
@@ -6187,6 +6187,7 @@
                             <col style="width: ${this.getFlowHistoryColumnWidth("RUN_ID", 92)}px;">
                             <col style="width: ${this.getFlowHistoryColumnWidth("FLOW", 200)}px;">
                             <col style="width: ${this.getFlowHistoryColumnWidth("TYPE", 128)}px;">
+                            <col style="width: ${this.getFlowHistoryColumnWidth("MODE", 132)}px;">
                             <col style="width: ${this.getFlowHistoryColumnWidth("STATUS", 108)}px;">
                             <col style="width: ${this.getFlowHistoryColumnWidth("MESSAGE", 320)}px;">
                             <col style="width: ${this.getFlowHistoryColumnWidth("STARTED", 172)}px;">
@@ -6200,6 +6201,7 @@
                                 <th data-flow-history-column-key="RUN_ID">${this.escapeHtml(this.getLabel("historyRunId", "Run ID"))}</th>
                                 <th data-flow-history-column-key="FLOW">${this.escapeHtml(this.getLabel("historyFlow", "Flow"))}</th>
                                 <th data-flow-history-column-key="TYPE">${this.escapeHtml(this.getLabel("historyRunType", "Type"))}</th>
+                                <th data-flow-history-column-key="MODE">${this.escapeHtml(this.getLabel("historyRunMode", "Run mode"))}</th>
                                 <th data-flow-history-column-key="STATUS">${this.escapeHtml(this.getLabel("historyStatus", "Status"))}</th>
                                 <th data-flow-history-column-key="MESSAGE">${this.escapeHtml(this.getLabel("historyMessage", "Message"))}</th>
                                 <th data-flow-history-column-key="STARTED">${this.escapeHtml(this.getLabel("historyStarted", "Started"))}</th>
@@ -6211,8 +6213,9 @@
                             ${safeRows.map((row, rowIndex) => {
                                 const flowRunId = String(row.FLOW_RUN_ID || "");
                                 const expanded = flowRunId && this.expandedRunPlanFlowRunIds.has(flowRunId);
+                                const editingRevalidation = this.isEditingRevalidationRun(row);
                                 return `
-                                <tr class="${expanded ? "is-expanded" : ""}">
+                                <tr class="${expanded ? "is-expanded" : ""} ${editingRevalidation ? "is-editing-revalidation-run" : ""}">
                                     <td class="grid-row-no">${rowIndex + 1}</td>
                                     <td>
                                         <button type="button" class="table-icon-btn" title="${expanded ? "Close execution details" : "View execution details"}" onclick="event.stopPropagation(); ${PAGE_CODE}.openRunPlanLayer('${this.escapeJs(flowRunId)}')">
@@ -6222,6 +6225,7 @@
                                     <td>${this.escapeHtml(flowRunId)}</td>
                                     <td>${this.escapeHtml(row.FLOW_NAME || "")}</td>
                                     <td>${this.escapeHtml(row.RUN_TYPE || "")}</td>
+                                    <td>${this.renderFlowRunMode(editingRevalidation)}</td>
                                     <td>${this.escapeHtml(row.STATUS || "")}</td>
                                     <td>${this.renderRunHistoryMessageCell(row)}</td>
                                     <td title="${this.escapeHtml(row.STARTED_AT || "")}">${this.escapeHtml(this.formatKstDateTime(row.STARTED_AT))}</td>
@@ -6237,6 +6241,18 @@
                 this.enableFlowHistoryGridResize();
                 requestAnimationFrame(() => this.enableFlowHistoryGridResize());
                 this.syncFlowRunHistoryAutoRefresh();
+            },
+            isEditingRevalidationRun(row) {
+                if (String(row?.EDITING_REVALIDATION_YN || "").toUpperCase() === "Y") return true;
+                const plan = this.parseNodeJson(row?.PLAN_JSON, {});
+                const runtimeOverrides = plan?.runtimeOverrides || {};
+                return Boolean(runtimeOverrides.editingSessionId || runtimeOverrides["INIT$EditingSessionId"]);
+            },
+            renderFlowRunMode(editingRevalidation) {
+                const label = editingRevalidation
+                    ? this.getLabel("historyEditingRevalidationMode", "Editing copy revalidation")
+                    : this.getLabel("historyStandardMode", "Standard");
+                return `<span class="flow-run-mode-badge ${editingRevalidation ? "is-editing-revalidation" : "is-standard"}">${this.escapeHtml(label)}</span>`;
             },
             reconcileSubmittedFlowRunStates() {
                 if (!this.flowRunFlowKeysByRunId?.size) return;
@@ -6478,7 +6494,7 @@
                 );
                 return `
                     <tr class="flow-run-inline-detail-row">
-                        <td colspan="10">
+                        <td colspan="11">
                             <section id="flowRunInlineDetail-${PAGE_CODE}-${this.escapeHtml(flowRunId)}" class="flow-run-inline-detail">
                                 <header>
                                     <strong>Run #${this.escapeHtml(flowRunId)} details</strong>
@@ -6844,14 +6860,45 @@
             getNodeResultInfo(row) {
                 const payload = this.parseNodeJson(row?.NODE_PAYLOAD_JSON, {});
                 const runtimeParams = this.parseNodeJson(row?.RUNTIME_PARAM_JSON, {});
+                const runOutput = this.parseNodeJson(row?.RUN_OUTPUT_JSON, {});
+                const runtimeParamMap = this.buildRuntimeParamValueMap(runtimeParams);
+                const resolveFilterValue = (value) => {
+                    const resolved = this.resolveRuntimeParamDisplayValue(value, runtimeParamMap);
+                    const text = String(resolved ?? "").trim();
+                    if (
+                        /^:[A-Za-z][A-Za-z0-9_$#]*$/.test(text)
+                        || /^\/\*\s*--\s*[A-Za-z][A-Za-z0-9_$#]*\s*--\s*\*\/$/.test(text)
+                        || /^\$\{[^{}]+\}$/.test(text)
+                        || /^\{\{[^{}]+\}\}$/.test(text)
+                    ) {
+                        return "";
+                    }
+                    return text;
+                };
                 const mode = this.normalizeResultCreateMode(payload.resultCreateYn || payload.RESULT_CREATE_YN || "N");
                 const owner = payload.resultOwner || payload.RESULT_OWNER || "";
                 const objectName = payload.resultTableName || payload.RESULT_TABLE_NAME || "";
                 const targetOwner = runtimeParams["INIT$TargetOwner"] || runtimeParams.targetOwner || payload.targetOwner || payload.ownerName || "";
                 const targetTable = runtimeParams["INIT$TargetTable"] || runtimeParams.targetTable || payload.targetTable || payload.tableName || "";
+                const editSessionId = runtimeParams["INIT$EditingSessionId"] || runtimeParams.editingSessionId || "";
+                const modelName = [
+                    runtimeParams.P_MODEL_NAME,
+                    runtimeParams.P_ASSOC_MODEL_NAME,
+                    runtimeParams.P_RULE_MODEL_NAME,
+                    runtimeParams.modelName,
+                    payload.modelName,
+                    payload.MODEL_NAME
+                ].map(resolveFilterValue).find(Boolean) || "";
+                const apiObjectName = [
+                    runOutput.apiObjectName,
+                    runOutput.API_OBJECT_NAME,
+                    payload.apiObjectName,
+                    payload.API_OBJECT_NAME
+                ].map(resolveFilterValue).find(Boolean) || "";
                 return {
                     flowNodeRunId: row?.FLOW_NODE_RUN_ID || "",
                     flowRunId: row?.FLOW_RUN_ID || "",
+                    nodeKey: row?.NODE_KEY || "",
                     nodeName: row?.NODE_NAME || row?.NODE_KEY || "",
                     status: String(row?.STATUS || "").toUpperCase(),
                     mode,
@@ -6861,7 +6908,10 @@
                     owner,
                     objectName,
                     targetOwner,
-                    targetTable
+                    targetTable,
+                    editSessionId,
+                    modelName,
+                    apiObjectName
                 };
             },
             async openFlowNodeResultSql(flowNodeRunId) {
@@ -6875,10 +6925,21 @@
                 const params = new URLSearchParams({
                     resultCreateYn: info.mode,
                     owner: info.owner,
-                    objectName: info.objectName,
-                    targetOwner: info.targetOwner || "",
-                    targetTable: info.targetTable || "",
-                    flowRunId: info.flowRunId || ""
+                    objectName: info.objectName
+                });
+                [
+                    ["targetOwner", info.targetOwner],
+                    ["targetTable", info.targetTable],
+                    ["flowRunId", info.flowRunId],
+                    ["flowNodeRunId", info.flowNodeRunId],
+                    ["editSessionId", info.editSessionId],
+                    ["nodeKey", info.nodeKey],
+                    ["modelName", info.modelName],
+                    ["apiObjectName", info.apiObjectName]
+                ].forEach(([name, value]) => {
+                    if (value !== null && value !== undefined && String(value).trim() !== "") {
+                        params.set(name, String(value).trim());
+                    }
                 });
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/result-sql?${params.toString()}`, {
                     method: "GET",

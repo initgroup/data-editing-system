@@ -14,6 +14,9 @@
     "paramDescDynamicModelName": "분류/예측 모델명",
     "paramDescPredictionMethod": "예측 방식(AUTO: 활성 모델이 있으면 규칙+모델로 FINAL 자동 반영, 없으면 규칙으로 안전하게 최초 수행)",
     "refreshHistoryTitle": "실행 이력 새로고침",
+    "historyRunMode": "실행 모드",
+    "historyEditingRevalidationMode": "편집본 재검증",
+    "historyStandardMode": "일반 실행",
     "autoRefreshPauseTitle": "자동 새로고침 일시 중지",
     "autoRefreshResumeTitle": "자동 새로고침 다시 시작"
   },

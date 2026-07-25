@@ -1,10 +1,14 @@
 (function() {
     const DATA_WORK_PAGES = new Set(["M03001", "M03002", "M03003", "M03004"]);
     const FLOW_WORK_PAGES = new Set(["M04001"]);
+    const EDIT_WORK_PAGES = new Set([
+        "M05001", "M05002", "M05003",
+        "M06001", "M06002", "M07001", "M07002", "M07003"
+    ]);
     const REGISTERED_ROUTER_PAGES = new Set([
         "home", "M01001", "M01002", "M02001", "M02002",
         "M03001", "M03002", "M03003", "M03004", "M04001", "M04002",
-        "M05001", "M05002", "M05003",
+        "M05001", "M05002", "M05003", "M06001", "M06002", "M07001", "M07002", "M07003",
         "M90001", "M90002", "M90003", "M91001", "M91002", "M99001", "M99002", "M99003", "M99004"
     ]);
 
@@ -23,11 +27,11 @@
         M05001: ["규칙 후보", "규칙 선정 상태", "사용자 정의 규칙", "규칙 마스터"],
         M05002: ["규칙 위반 데이터", "편집 세션", "INITUP$ 원본", "INITDN$ 수정 데이터"],
         M05003: ["에디팅 효과 검증", "운영 반영 DML", "승인/실행 상태", "에디팅 감사 이력"],
-        M06001: ["규칙 위반 데이터", "위반 사유/근거", "정제 대상 목록"],
-        M06002: ["정제 대상 데이터", "수정 전후 값", "정제 트랜잭션/검증 결과"],
-        M07001: ["정제 전후 품질 지표", "검증 실행 결과", "규칙별 효과 비교"],
-        M07002: ["최종 반영 대상", "반영 승인 상태", "commit/rollback 계획"],
-        M07003: ["에디팅 실행 이력", "변경 전후 로그", "사용자/시간 감사 정보"],
+        M06001: ["규칙 마스터", "실시간 규칙 위반 데이터", "INITUP$ 원본", "INITDN$ 수정 데이터"],
+        M06002: ["편집 작업", "수정 전후 값", "셀 수정 감사 이력"],
+        M07001: ["INITUP$/INITDN$ 실행 컨텍스트", "에디팅 효과 검증", "규칙 위반 변화"],
+        M07002: ["운영 반영 DML 버전", "DML 검증/실행 상태", "영향 행"],
+        M07003: ["규칙 판단/수정/검증/반영 감사 이벤트", "사용자/시간/엔터티 정보"],
         M90001: ["Target DB 객체 메타데이터", "내부 모델 리소스", "파라미터/상세 정의", "객체 참조 관계"],
         M90002: ["외부 모델 리소스", "OML4Py Script Repository 메타", "리소스 파라미터", "공개 ML/AI 호출 방식"],
         M90003: ["공통 모델 패밀리", "컬럼 프로파일 피처", "사용자 확정 라벨", "후보/활성 모델 버전", "학습 실행 이력"],
@@ -51,6 +55,14 @@
         M03004: ["시나리오 대상 테이블 조회", "실행 객체 조회", "컬럼/데이터 조회", "사용자 SQL wrapper"],
         M04001: ["노드 유형/기본 변수 조회", "공통 플로우 저장/실행 SQL 템플릿"],
         M04002: ["플로우 실행 목록", "노드 결과 조회", "모델 메타/상관/LASSO/Symbolic Rule 요약", "결과 샘플"],
+        M05001: ["발굴 규칙 서버 페이징 조회", "규칙 선정/제외", "규칙 마스터 및 사용자 규칙 검증/저장"],
+        M05002: ["편집 작업 테이블 조회/생성", "최종 규칙 실시간 위반 SQL", "INITDN$ 셀 수정 저장", "수정 이력"],
+        M05003: ["효과 검증 및 재분석 연결", "운영 반영 DML 생성/검증/저장/실행", "에디팅 감사 이력"],
+        M06001: ["M05002 오류 수정 탭과 동일한 공통 SQL"],
+        M06002: ["M05002 수정 이력 탭과 동일한 공통 SQL"],
+        M07001: ["M05003 효과 검증 탭과 동일한 공통 SQL"],
+        M07002: ["M05003 운영 반영 탭과 동일한 공통 SQL"],
+        M07003: ["M05003 전체 이력 탭과 동일한 공통 SQL"],
         M90001: ["DB 객체 트리/검색", "객체 소스/메타 조회", "내부 모델 등록/삭제", "참조 관계 확인"],
         M90002: ["외부 모델 리소스 목록/상세", "파라미터 저장", "OML4Py wrapper/registered script 확인"],
         M90003: ["모델 패밀리 및 활성 모델 조회", "학습 가능 확정 라벨·프로파일 피처 조회", "후보 모델 학습·검증 상태 기록", "모델 버전 활성화·롤백 이력 조회"],
@@ -80,23 +92,27 @@
     function getFrontendHtml(pageCode) {
         if (DATA_WORK_PAGES.has(pageCode)) return "frontend/pages/MCOM_DATA_WORK.html";
         if (FLOW_WORK_PAGES.has(pageCode)) return "frontend/pages/MCOM_FLOW_WORK.html";
+        if (EDIT_WORK_PAGES.has(pageCode)) return "frontend/pages/MCOM_EDIT_WORK.html";
         return `frontend/pages/${pageCode}.html`;
     }
 
     function getFrontendJs(pageCode) {
         if (DATA_WORK_PAGES.has(pageCode)) return "frontend/js/MCOM_DATA_WORK.js";
         if (FLOW_WORK_PAGES.has(pageCode)) return "frontend/js/MCOM_FLOW_WORK.js";
+        if (EDIT_WORK_PAGES.has(pageCode)) return "frontend/js/MCOM_EDIT_WORK.js";
         return `frontend/js/${pageCode}.js`;
     }
 
     function getRouterPath(pageCode) {
         if (!REGISTERED_ROUTER_PAGES.has(pageCode)) return "";
+        if (EDIT_WORK_PAGES.has(pageCode)) return "backend/services/edit_work_router.py";
         return `backend/routers/${pageCode}.py`;
     }
 
     function getSqlFiles(pageCode) {
         if (DATA_WORK_PAGES.has(pageCode)) return [`database/${pageCode}.sql`, "database/MCOM_DATA_WORK.sql"];
         if (FLOW_WORK_PAGES.has(pageCode)) return [`database/${pageCode}.sql`, "database/MCOM_FLOW_WORK.sql"];
+        if (EDIT_WORK_PAGES.has(pageCode)) return ["database/MCOM_EDIT_WORK.sql"];
         if (pageCode === "home") return ["database/home.sql"];
         return [`database/${pageCode}.sql`];
     }
@@ -104,6 +120,7 @@
     function getServiceFiles(pageCode) {
         if (DATA_WORK_PAGES.has(pageCode)) return ["backend/services/data_work_router.py"];
         if (FLOW_WORK_PAGES.has(pageCode)) return ["backend/services/flow_work_router.py"];
+        if (EDIT_WORK_PAGES.has(pageCode)) return ["backend/services/edit_work_service.py"];
         return [];
     }
 

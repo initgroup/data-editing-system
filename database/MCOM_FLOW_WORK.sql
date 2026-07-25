@@ -439,6 +439,17 @@ SELECT FLOW_RUN_ID
      , STARTED_AT
      , FINISHED_AT
      , CREATED_AT
+     , CASE
+           WHEN DBMS_LOB.INSTR(PLAN_JSON, '"editingSessionId"') > 0
+             OR EXISTS (
+                    SELECT 1
+                      FROM INIT$_TB_FLOW_WORK_NODE_RUN NR
+                     WHERE NR.FLOW_RUN_ID = INIT$_TB_FLOW_WORK_RUN.FLOW_RUN_ID
+                       AND DBMS_LOB.INSTR(NR.RUNTIME_PARAM_JSON, '"INIT$EditingSessionId"') > 0
+                )
+           THEN 'Y'
+           ELSE 'N'
+       END AS EDITING_REVALIDATION_YN
   FROM INIT$_TB_FLOW_WORK_RUN
  WHERE FLOW_ID = :flowId
  ORDER BY FLOW_RUN_ID DESC
@@ -634,6 +645,17 @@ SELECT R.FLOW_RUN_ID
      , R.STARTED_AT
      , R.FINISHED_AT
      , R.CREATED_AT
+     , CASE
+           WHEN DBMS_LOB.INSTR(R.PLAN_JSON, '"editingSessionId"') > 0
+             OR EXISTS (
+                    SELECT 1
+                      FROM INIT$_TB_FLOW_WORK_NODE_RUN NR
+                     WHERE NR.FLOW_RUN_ID = R.FLOW_RUN_ID
+                       AND DBMS_LOB.INSTR(NR.RUNTIME_PARAM_JSON, '"INIT$EditingSessionId"') > 0
+                )
+           THEN 'Y'
+           ELSE 'N'
+       END AS EDITING_REVALIDATION_YN
   FROM INIT$_TB_FLOW_WORK_RUN R
   JOIN INIT$_TB_FLOW_WORK F
     ON F.FLOW_ID = R.FLOW_ID
@@ -662,6 +684,17 @@ SELECT R.FLOW_RUN_ID
      , R.STARTED_AT
      , R.FINISHED_AT
      , R.CREATED_AT
+     , CASE
+           WHEN DBMS_LOB.INSTR(R.PLAN_JSON, '"editingSessionId"') > 0
+             OR EXISTS (
+                    SELECT 1
+                      FROM INIT$_TB_FLOW_WORK_NODE_RUN NR
+                     WHERE NR.FLOW_RUN_ID = R.FLOW_RUN_ID
+                       AND DBMS_LOB.INSTR(NR.RUNTIME_PARAM_JSON, '"INIT$EditingSessionId"') > 0
+                )
+           THEN 'Y'
+           ELSE 'N'
+       END AS EDITING_REVALIDATION_YN
   FROM INIT$_TB_FLOW_WORK_RUN R
   JOIN INIT$_TB_FLOW_WORK F
     ON F.FLOW_ID = R.FLOW_ID
@@ -670,6 +703,14 @@ SELECT R.FLOW_RUN_ID
    AND F.MENU_CODE = :menuCode
    AND F.PROJECT_ID = :projectId
    AND F.SCENARIO_ID = :scenarioId
+;
+
+-- [FLOW_WORK_RESULT_COLUMN_LIST]
+SELECT COLUMN_NAME
+  FROM ALL_TAB_COLUMNS
+ WHERE OWNER = :owner
+   AND TABLE_NAME = :tableName
+ ORDER BY COLUMN_ID
 ;
 
 -- [FLOW_WORK_RESULT_SQL_COUNT]

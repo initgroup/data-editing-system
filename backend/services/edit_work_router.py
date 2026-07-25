@@ -1,6 +1,6 @@
 """Reusable router for M05001-M07003 editing workflow pages."""
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 
 from backend.services import edit_work_service as editing
 
@@ -86,6 +86,13 @@ def create_edit_work_router(menu_code: str) -> APIRouter:
             project_id=projectId,
         )
 
+    @router.post("/rules/exclude")
+    def exclude_discovered_rules(
+        payload: editing.RuleBulkExcludeRequest,
+        request: Request,
+    ):
+        return editing.exclude_discovered_rules(request, payload)
+
     @router.get("/source-tables")
     def list_source_tables(
         request: Request,
@@ -97,6 +104,25 @@ def create_edit_work_router(menu_code: str) -> APIRouter:
             project_id=projectId,
             scenario_id=scenarioId,
         )
+
+    @router.get("/editing-tables")
+    def list_editing_tables(
+        request: Request,
+        projectId: int | None = None,
+        scenarioId: int | None = None,
+    ):
+        return editing.list_editing_tables(
+            request,
+            project_id=projectId,
+            scenario_id=scenarioId,
+        )
+
+    @router.post("/editing-tables")
+    def create_editing_table(
+        payload: editing.EditingTableCreateRequest,
+        request: Request,
+    ):
+        return editing.create_editing_table(request, payload)
 
     @router.get("/source-columns")
     def list_source_columns(
@@ -119,21 +145,58 @@ def create_edit_work_router(menu_code: str) -> APIRouter:
         request: Request,
         projectId: int | None = None,
         scenarioId: int | None = None,
+        targetOwner: str | None = None,
+        targetTable: str | None = None,
         editSessionId: int | None = None,
         editRuleId: int | None = None,
+        editRuleIds: str | None = None,
+        changeStatus: str = "ALL",
         keyword: str | None = None,
         page: int = 1,
         pageSize: int = 100,
     ):
+        selected_rule_ids: list[int] | None = None
+        if editRuleIds is not None:
+            try:
+                selected_rule_ids = sorted({
+                    int(value.strip())
+                    for value in editRuleIds.split(",")
+                    if value.strip() and int(value.strip()) > 0
+                })
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=400,
+                    detail="최종 규칙 ID 목록 형식이 올바르지 않습니다.",
+                ) from exc
         return editing.list_violations(
             request,
             project_id=projectId,
             scenario_id=scenarioId,
+            target_owner=targetOwner,
+            target_table=targetTable,
             edit_session_id=editSessionId,
             edit_rule_id=editRuleId,
+            edit_rule_ids=selected_rule_ids,
+            change_status=changeStatus,
             keyword=keyword,
             page=page,
             page_size=pageSize,
+        )
+
+    @router.get("/editing-table-status")
+    def editing_table_status(
+        request: Request,
+        projectId: int | None = None,
+        scenarioId: int | None = None,
+        targetOwner: str = "",
+        targetTable: str = "",
+    ):
+        return editing.editing_table_status(
+            request,
+            project_id=projectId,
+            scenario_id=scenarioId,
+            target_owner=targetOwner,
+            target_table=targetTable,
         )
 
     @router.get("/sessions")
@@ -170,6 +233,14 @@ def create_edit_work_router(menu_code: str) -> APIRouter:
     ):
         return editing.save_change(request, edit_session_id, payload)
 
+    @router.post("/sessions/{edit_session_id}/changes/bulk")
+    def save_changes(
+        edit_session_id: int,
+        payload: editing.EditChangeBulkRequest,
+        request: Request,
+    ):
+        return editing.save_changes(request, edit_session_id, payload)
+
     @router.get("/sessions/{edit_session_id}/changes")
     def list_changes(edit_session_id: int, request: Request):
         return editing.list_changes(request, edit_session_id)
@@ -201,6 +272,14 @@ def create_edit_work_router(menu_code: str) -> APIRouter:
     @router.post("/dml")
     def save_dml(payload: editing.EditDmlRequest, request: Request):
         return editing.save_dml(request, payload)
+
+    @router.post("/dml/validate")
+    def validate_dml(payload: editing.EditDmlValidateRequest, request: Request):
+        return editing.validate_dml(request, payload)
+
+    @router.delete("/dml/{edit_dml_id}")
+    def delete_dml(edit_dml_id: int, request: Request):
+        return editing.delete_dml(request, edit_dml_id)
 
     @router.post("/dml/{edit_dml_id}/approve")
     def approve_dml(edit_dml_id: int, request: Request):

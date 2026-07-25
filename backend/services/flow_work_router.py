@@ -41,20 +41,6 @@ MODEL_DETAIL_VIEW_TYPES = [
     ("VR", "Rule/detail view"),
     ("VT", "Transformation/detail view")
 ]
-TARGET_FILTER_RESULT_COLUMNS = {
-    "INIT$_TB_COLTYPE_RESULT": ("OWNER", "TABLE_NAME"),
-    "INIT$_TB_COLREL_CAT_PAIR": ("OWNER", "TABLE_NAME"),
-    "INIT$_TB_COLREL_CAT_SUMMARY": ("OWNER", "TABLE_NAME"),
-    "INIT$_TB_COLREL_NUM_PAIR": ("OWNER", "TABLE_NAME"),
-    "INIT$_TB_COLREL_NUM_SUMMARY": ("OWNER", "TABLE_NAME"),
-    "INIT$_TB_COLREL_LASSO_FEATURE": ("OWNER", "TABLE_NAME"),
-    "INIT$_TB_RULEDISC_SYMBOLIC": ("OWNER", "TABLE_NAME"),
-    "INIT$_TB_RULEDISC_ASSOC_SUM": ("TARGET_OWNER", "TARGET_TABLE"),
-    "INIT$_TB_RULEVIOL_ASSOC": ("TARGET_OWNER", "TARGET_TABLE"),
-    "INIT$_TB_RULEVIOL_SYMBOLIC": ("TARGET_OWNER", "TARGET_TABLE"),
-}
-
-
 def quote_identifier(value: str) -> str:
     return '"' + str(value).replace('"', '""') + '"'
 
@@ -79,25 +65,61 @@ def normalize_select_sql(sql: str) -> str:
 def build_table_result_sql(
     owner: str,
     table_name: str,
+    available_columns: set[str] | None = None,
     target_owner: str = "",
     target_table: str = "",
     run_source_type: str = "",
-    run_id: Optional[int] = None
+    run_id: Optional[int] = None,
+    flow_node_run_id: Optional[int] = None,
+    edit_session_id: Optional[int] = None,
+    node_key: str = "",
+    model_name: str = "",
+    api_object_name: str = "",
 ) -> str:
     sql = f"SELECT *\n  FROM {quote_identifier(owner)}.{quote_identifier(table_name)}"
-    clauses = []
-    target_columns = TARGET_FILTER_RESULT_COLUMNS.get(table_name.upper())
-    if target_columns and target_owner and target_table:
-        owner_column, table_column = target_columns
-        clauses.extend([
-            f"{owner_column} = {quote_sql_literal(target_owner.upper())}",
-            f"{table_column} = {quote_sql_literal(target_table.upper())}"
-        ])
-    if target_columns and run_source_type and run_id is not None:
-        clauses.extend([
-            f"RUN_SOURCE_TYPE = {quote_sql_literal(run_source_type.upper())}",
-            f"RUN_ID = {int(run_id)}"
-        ])
+    columns = {str(column or "").strip().upper() for column in (available_columns or set())}
+    clauses: list[str] = []
+
+    def add_text(column: str, value: str, uppercase: bool = True) -> None:
+        text_value = str(value or "").strip()
+        is_unresolved_runtime_value = bool(
+            re.fullmatch(r":[A-Za-z][A-Za-z0-9_$#]*", text_value)
+            or re.fullmatch(r"/\*\s*--\s*[A-Za-z][A-Za-z0-9_$#]*\s*--\s*\*/", text_value)
+            or re.fullmatch(r"\$\{[^{}]+\}", text_value)
+            or re.fullmatch(r"\{\{[^{}]+\}\}", text_value)
+        )
+        if column in columns and text_value and not is_unresolved_runtime_value:
+            normalized_value = text_value.upper() if uppercase else text_value
+            clauses.append(
+                f"{quote_identifier(column)} = {quote_sql_literal(normalized_value)}"
+            )
+
+    def add_number(column: str, value: Optional[int]) -> None:
+        if column in columns and value is not None:
+            clauses.append(f"{quote_identifier(column)} = {int(value)}")
+
+    if "TARGET_OWNER" in columns:
+        add_text("TARGET_OWNER", target_owner)
+    else:
+        add_text("OWNER", target_owner)
+        add_text("OWNER_NAME", target_owner)
+    if "TARGET_TABLE" in columns:
+        add_text("TARGET_TABLE", target_table)
+    else:
+        add_text("TABLE_NAME", target_table)
+    add_text("RUN_SOURCE_TYPE", run_source_type)
+    add_text("SOURCE_RUN_SOURCE_TYPE", run_source_type)
+    add_number("RUN_ID", run_id)
+    add_number("SOURCE_RUN_ID", run_id)
+    add_number("FLOW_RUN_ID", run_id)
+    add_number("FLOW_NODE_RUN_ID", flow_node_run_id)
+    add_number("EDIT_SESSION_ID", edit_session_id)
+    add_text("NODE_KEY", node_key, uppercase=False)
+    add_text("MODEL_NAME", model_name)
+    add_text("API_OBJECT_NAME", api_object_name)
+    add_text("RESULT_OWNER", owner)
+    add_text("RESULT_TABLE", table_name)
+    add_text("RESULT_TABLE_NAME", table_name)
     if clauses:
         sql += "\n WHERE " + "\n   AND ".join(clauses)
     return sql
@@ -690,12 +712,19 @@ def create_flow_work_router(
             if conn:
                 conn.rollback()
                 try:
+                    failed_plan = {"plan": plan or []}
+                    if runtime_overrides:
+                        failed_plan["runtimeOverrides"] = {
+                            "targetOwner": runtime_overrides.get("INIT$TargetOwner") or "",
+                            "targetTable": runtime_overrides.get("INIT$TargetTable") or "",
+                            "editSessionId": runtime_overrides.get("INIT$EditingSessionId"),
+                        }
                     flow_work.update_run(
                         conn,
                         flow_run_id,
                         "FAILED",
                         f"Flow execution failed: {str(e)}",
-                        {"plan": plan or []}
+                        failed_plan,
                     )
                     conn.commit()
                 except Exception:
@@ -932,6 +961,11 @@ def create_flow_work_router(
         targetOwner: Optional[str] = None,
         targetTable: Optional[str] = None,
         flowRunId: Optional[int] = None,
+        flowNodeRunId: Optional[int] = None,
+        editSessionId: Optional[str] = None,
+        nodeKey: Optional[str] = None,
+        modelName: Optional[str] = None,
+        apiObjectName: Optional[str] = None,
     ):
         conn = None
         try:
@@ -940,12 +974,48 @@ def create_flow_work_router(
             result_object = data_work.require_identifier(objectName, "objectName")
             target_owner = data_work.require_identifier(targetOwner, "targetOwner") if targetOwner else ""
             target_table = data_work.require_identifier(targetTable, "targetTable") if targetTable else ""
+            edit_session_text = str(editSessionId or "").strip()
+            if edit_session_text and not edit_session_text.isdigit():
+                raise HTTPException(status_code=400, detail="editSessionId must be an integer.")
+            edit_session_id = int(edit_session_text) if edit_session_text else None
             if mode == "T":
+                conn = get_target_db_connection(request)
+                column_result = execute_query(
+                    conn,
+                    "FLOW_WORK_RESULT_COLUMN_LIST",
+                    {
+                        "owner": result_owner,
+                        "tableName": result_object,
+                    },
+                )
+                column_rows = data_work.require_success(
+                    column_result,
+                    "Result table column query failed.",
+                ).get("data", [])
+                available_columns = {
+                    str(row.get("COLUMN_NAME") or "").strip().upper()
+                    for row in column_rows
+                    if row.get("COLUMN_NAME")
+                }
                 return {
                     "status": "success",
                     "data": {
                         "mode": mode,
-                        "sql": build_table_result_sql(result_owner, result_object, target_owner, target_table, "FLOW_WORK" if flowRunId else "", flowRunId),
+                        "sql": build_table_result_sql(
+                            result_owner,
+                            result_object,
+                            available_columns,
+                            target_owner,
+                            target_table,
+                            "FLOW_WORK" if flowRunId else "",
+                            flowRunId,
+                            flowNodeRunId,
+                            edit_session_id,
+                            nodeKey or "",
+                            modelName or "",
+                            apiObjectName or "",
+                        ),
+                        "filterColumns": sorted(available_columns),
                         "views": []
                     }
                 }

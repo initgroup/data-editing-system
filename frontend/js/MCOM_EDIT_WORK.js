@@ -5,10 +5,10 @@
     const STAGES = Object.freeze([
         { pageCode: "M05001", step: "01", title: "발굴 규칙 판단", shortTitle: "규칙 판단", icon: "fa-list-check", mode: "DISCOVERED_RULES", description: "발굴된 규칙을 검토하고 편집 규칙으로 최종 선정하거나 제외합니다." },
         { pageCode: "M05001_RULE_MASTER", step: "02", title: "편집 규칙 마스터", shortTitle: "규칙 마스터", icon: "fa-clipboard-check", mode: "RULE_MASTER", description: "선정 규칙과 사용자 정의 규칙을 통합 관리합니다." },
-        { pageCode: "M05002", step: "03", title: "위반 데이터 워크벤치", shortTitle: "위반 조회", icon: "fa-triangle-exclamation", mode: "VIOLATIONS", description: "선정된 규칙의 위반 행을 조회하고 편집 대상으로 묶습니다." },
-        { pageCode: "M05002_CLEANSING", step: "04", title: "INITDN 편집 배치", shortTitle: "오류 수정", icon: "fa-eraser", mode: "CLEANSING", description: "INITUP$ 원본을 보존하고 INITDN$ 편집본에서 오류 값을 수정합니다." },
+        { pageCode: "M05002", step: "03", title: "오류 수정", shortTitle: "오류 수정", icon: "fa-eraser", mode: "VIOLATIONS", description: "최종 규칙의 위반 행을 조회하고 INITDN$ 편집본에서 바로 수정합니다." },
+        { pageCode: "M05002_CLEANSING", step: "04", title: "오류 수정 이력", shortTitle: "수정 이력", icon: "fa-clock-rotate-left", mode: "CHANGE_HISTORY", description: "편집 작업별 오류 수정값과 처리 이력을 조회합니다." },
         { pageCode: "M05003", step: "05", title: "에디팅 효과 검증", shortTitle: "효과 검증", icon: "fa-chart-column", mode: "VALIDATION", description: "변경 효과를 확인하고 INITDN$ 기준 Flow 재분석 결과를 연결합니다." },
-        { pageCode: "M05003_FINAL_APPLY", step: "06", title: "운영 반영 DML", shortTitle: "운영 반영", icon: "fa-database", mode: "FINAL_APPLY", description: "검증된 변경으로 DML을 생성·승인하고 최종 운영 데이터에 반영합니다." },
+        { pageCode: "M05003_FINAL_APPLY", step: "06", title: "운영 반영 DML", shortTitle: "운영 반영", icon: "fa-database", mode: "FINAL_APPLY", description: "DML을 생성·검증·저장한 후 실행하여 최종 운영 데이터에 반영합니다." },
         { pageCode: "M05003_HISTORY", step: "07", title: "에디팅 감사 이력", shortTitle: "전체 이력", icon: "fa-clock-rotate-left", mode: "HISTORY", description: "규칙 판단부터 최종 반영까지 모든 에디팅 이벤트를 조회합니다." }
     ]);
     const STAGE_MAP = Object.freeze({
@@ -25,8 +25,8 @@
             { stageCode: "M05001_RULE_MASTER", labelKey: "ruleMasterTab", label: "규칙 마스터", icon: "fa-clipboard-check" }
         ]),
         M05002: Object.freeze([
-            { stageCode: "M05002", labelKey: "violationQueryTab", label: "위반 조회", icon: "fa-triangle-exclamation" },
-            { stageCode: "M05002_CLEANSING", labelKey: "dataCleansingTab", label: "오류 수정", icon: "fa-eraser" }
+            { stageCode: "M05002", labelKey: "violationEditTab", label: "오류 수정", icon: "fa-eraser" },
+            { stageCode: "M05002_CLEANSING", labelKey: "changeHistoryTab", label: "수정 이력", icon: "fa-clock-rotate-left" }
         ]),
         M05003: Object.freeze([
             { stageCode: "M05003", labelKey: "effectValidationTab", label: "효과 검증", icon: "fa-chart-column" },
@@ -34,6 +34,13 @@
             { stageCode: "M05003_HISTORY", labelKey: "editingHistoryTab", label: "전체 이력", icon: "fa-clock-rotate-left" }
         ])
     });
+    const TABLE_SELECTION_MODES = Object.freeze([
+        "VIOLATIONS",
+        "CHANGE_HISTORY",
+        "VALIDATION",
+        "FINAL_APPLY",
+        "HISTORY"
+    ]);
 
     window.MCOMMON.createEditWorkPage = function(config = {}) {
         const PAGE_CODE = config.pageCode || "M05001";
@@ -52,14 +59,19 @@
             rows: [],
             gridColumns: [],
             selectedRuleIds: new Set(),
+            selectedViolationRowKeys: new Set(),
             selectedSessionId: "",
             selectedDmlId: "",
             selectedDml: null,
+            dmlSavedName: "",
+            dmlSavedSql: "",
+            dmlValidatedSql: "",
             currentValidation: null,
             page: 1,
             pageSize: 100,
             keyword: "",
             freezeColumns: 0,
+            freezeColumnsInitialized: false,
             ruleRunSource: "",
             ruleRunId: "",
             ruleGroup: "ALL",
@@ -69,6 +81,7 @@
             serverTotalRows: 0,
             keywordTimer: null,
             ruleRequestId: 0,
+            ruleDecisionSaving: false,
             refreshPromise: null,
             workspaceSwitching: false,
             editWorkspaceCache: new Map(),
@@ -87,8 +100,13 @@
             masterSelectionRequestId: 0,
             detailDrag: null,
             violationRules: [],
-            selectedViolationRuleId: "",
+            violationSourceTables: [],
+            violationSourceTablesLoaded: false,
+            editingTableStatus: null,
+            selectedViolationRuleId: "ALL",
             selectedViolationRule: null,
+            selectedViolationRules: [],
+            violationRuleScopeIds: new Set(),
             generatedViolationSql: "",
             editingWorkStarting: false,
 
@@ -170,9 +188,15 @@
                 this.rows = [];
                 this.sessions = [];
                 this.selectedRuleIds = new Set();
+                this.selectedViolationRowKeys = new Set();
                 this.violationRules = [];
-                this.selectedViolationRuleId = "";
+                this.violationSourceTables = [];
+                this.violationSourceTablesLoaded = false;
+                this.editingTableStatus = null;
+                this.selectedViolationRuleId = "ALL";
                 this.selectedViolationRule = null;
+                this.selectedViolationRules = [];
+                this.violationRuleScopeIds = new Set();
                 this.generatedViolationSql = "";
                 this.editingWorkStarting = false;
                 this.currentValidation = null;
@@ -189,6 +213,7 @@
                 this.pageSize = 100;
                 this.keyword = "";
                 this.freezeColumns = 0;
+                this.freezeColumnsInitialized = false;
                 this.ruleRunSource = "";
                 this.ruleRunId = "";
                 this.ruleGroup = "ALL";
@@ -197,16 +222,25 @@
                 this.serverPaging = false;
                 this.serverTotalRows = 0;
                 this.selectedRuleIds = new Set();
+                this.selectedViolationRowKeys = new Set();
                 this.selectedDml = null;
                 this.selectedDmlId = "";
+                this.dmlSavedName = "";
+                this.dmlSavedSql = "";
+                this.dmlValidatedSql = "";
                 this.userRuleValidation = null;
                 this.selectedMasterRule = null;
                 this.selectedMasterRuleId = "";
                 this.editingUserRuleId = null;
                 this.userRuleCopyMode = false;
                 this.violationRules = [];
-                this.selectedViolationRuleId = "";
+                this.violationSourceTables = [];
+                this.violationSourceTablesLoaded = false;
+                this.editingTableStatus = null;
+                this.selectedViolationRuleId = "ALL";
                 this.selectedViolationRule = null;
+                this.selectedViolationRules = [];
+                this.violationRuleScopeIds = new Set();
                 this.generatedViolationSql = "";
                 this.editingWorkStarting = false;
                 this.masterSelectionRequestId += 1;
@@ -268,6 +302,8 @@
                 const container = document.getElementById(`container-${PAGE_CODE}`);
                 container?.classList.toggle("is-discovered-rules", this.stage.mode === "DISCOVERED_RULES");
                 container?.classList.toggle("is-rule-master", this.stage.mode === "RULE_MASTER");
+                container?.classList.toggle("is-final-apply", this.stage.mode === "FINAL_APPLY");
+                container?.classList.toggle("is-error-editing-page", ["M05002", "M05003"].includes(PAGE_CODE));
                 const workspaceTabs = getContainerEl(`#editWorkspaceTabs-${PAGE_CODE}`);
                 if (workspaceTabs) {
                     const tabs = WORKSPACE_TABS[PAGE_CODE] || [];
@@ -298,10 +334,12 @@
                 const keyword = getContainerEl(`#gridKeyword-${PAGE_CODE}`);
                 if (keyword) {
                     keyword.value = "";
-                    const liveViolationMode = ["VIOLATIONS", "CLEANSING"].includes(this.stage.mode);
+                    const liveViolationMode = this.stage.mode === "VIOLATIONS";
                     keyword.placeholder = this.stage.mode === "DISCOVERED_RULES"
                         ? "컬럼 ID·규칙 ID·IF·THEN 검색"
-                        : (liveViolationMode ? "행 식별값·실제값 검색" : "현재 목록 검색");
+                        : (liveViolationMode
+                            ? "행 식별값·실제값 검색"
+                            : (this.stage.mode === "CHANGE_HISTORY" ? "규칙명·행 식별값·변경값 검색" : "현재 목록 검색"));
                     keyword.title = this.stage.mode === "DISCOVERED_RULES"
                         ? "전체 발굴 규칙을 서버 SQL로 검색합니다."
                         : (liveViolationMode
@@ -310,10 +348,22 @@
                 }
                 const sessionContext = getContainerEl(".edit-work-session-context");
                 if (sessionContext) {
-                    sessionContext.hidden = !this.usesEditSession();
+                    sessionContext.hidden = !this.usesEditSession()
+                        || this.usesEditingTableSelection();
                 }
                 const sourceContext = getContainerEl(`#sourceContext-${PAGE_CODE}`);
-                if (sourceContext) sourceContext.hidden = !this.usesEditSession();
+                const sourceContextField = sourceContext?.closest?.(".edit-work-source-context-field");
+                if (sourceContextField) {
+                    sourceContextField.hidden = !this.usesEditSession()
+                        || this.usesEditingTableSelection();
+                }
+                const editingTableGrid = getContainerEl(`#editingTableGrid-${PAGE_CODE}`);
+                if (editingTableGrid) {
+                    editingTableGrid.hidden = !this.usesEditingTableSelection();
+                    if (this.usesEditingTableSelection()) {
+                        this.renderEditingTableGrid();
+                    }
+                }
                 const stageContext = getContainerEl(`#stageContext-${PAGE_CODE}`);
                 if (stageContext) stageContext.hidden = this.stage.mode === "DISCOVERED_RULES";
                 const ruleQueryBar = getContainerEl(`#ruleQueryBar-${PAGE_CODE}`);
@@ -395,6 +445,7 @@
                     pageSize: this.pageSize,
                     keyword: this.keyword,
                     freezeColumns: this.freezeColumns,
+                    freezeColumnsInitialized: this.freezeColumnsInitialized,
                     ruleRunSource: this.ruleRunSource,
                     ruleRunId: this.ruleRunId,
                     ruleGroup: this.ruleGroup,
@@ -403,9 +454,15 @@
                     serverPaging: this.serverPaging,
                     serverTotalRows: this.serverTotalRows,
                     selectedRuleIds: new Set(this.selectedRuleIds),
+                    selectedViolationRowKeys: new Set(this.selectedViolationRowKeys),
                     violationRules: this.violationRules,
+                    violationSourceTables: this.violationSourceTables,
+                    violationSourceTablesLoaded: this.violationSourceTablesLoaded,
+                    editingTableStatus: this.editingTableStatus,
                     selectedViolationRuleId: this.selectedViolationRuleId,
                     selectedViolationRule: this.selectedViolationRule,
+                    selectedViolationRules: this.selectedViolationRules,
+                    violationRuleScopeIds: new Set(this.violationRuleScopeIds),
                     generatedViolationSql: this.generatedViolationSql,
                     currentExport: this.currentExport,
                     userRuleTables: this.userRuleTables,
@@ -418,6 +475,9 @@
                     currentValidation: this.currentValidation,
                     selectedDmlId: this.selectedDmlId,
                     selectedDml: this.selectedDml,
+                    dmlSavedName: this.dmlSavedName,
+                    dmlSavedSql: this.dmlSavedSql,
+                    dmlValidatedSql: this.dmlValidatedSql,
                     panelTitle: panelTitle?.textContent || "",
                     modeActionsHtml: modeActions?.innerHTML || "",
                     modeFormClassName: modeForm?.className || "edit-work-mode-form",
@@ -450,6 +510,7 @@
                 this.pageSize = snapshot.pageSize || 100;
                 this.keyword = snapshot.keyword || "";
                 this.freezeColumns = snapshot.freezeColumns || 0;
+                this.freezeColumnsInitialized = Boolean(snapshot.freezeColumnsInitialized);
                 this.ruleRunSource = snapshot.ruleRunSource || "";
                 this.ruleRunId = snapshot.ruleRunId || "";
                 this.ruleGroup = snapshot.ruleGroup || "ALL";
@@ -458,9 +519,15 @@
                 this.serverPaging = Boolean(snapshot.serverPaging);
                 this.serverTotalRows = Number(snapshot.serverTotalRows || 0);
                 this.selectedRuleIds = new Set(snapshot.selectedRuleIds || []);
+                this.selectedViolationRowKeys = new Set(snapshot.selectedViolationRowKeys || []);
                 this.violationRules = snapshot.violationRules || [];
-                this.selectedViolationRuleId = snapshot.selectedViolationRuleId || "";
+                this.violationSourceTables = snapshot.violationSourceTables || [];
+                this.violationSourceTablesLoaded = Boolean(snapshot.violationSourceTablesLoaded);
+                this.editingTableStatus = snapshot.editingTableStatus || null;
+                this.selectedViolationRuleId = snapshot.selectedViolationRuleId || "ALL";
                 this.selectedViolationRule = snapshot.selectedViolationRule || null;
+                this.selectedViolationRules = snapshot.selectedViolationRules || [];
+                this.violationRuleScopeIds = new Set(snapshot.violationRuleScopeIds || []);
                 this.generatedViolationSql = snapshot.generatedViolationSql || "";
                 this.currentExport = snapshot.currentExport || { filename: "editing-data.csv", columns: [], rows: [] };
                 this.userRuleTables = snapshot.userRuleTables || [];
@@ -473,6 +540,9 @@
                 this.currentValidation = snapshot.currentValidation || null;
                 this.selectedDmlId = snapshot.selectedDmlId || "";
                 this.selectedDml = snapshot.selectedDml || null;
+                this.dmlSavedName = snapshot.dmlSavedName || "";
+                this.dmlSavedSql = snapshot.dmlSavedSql || "";
+                this.dmlValidatedSql = snapshot.dmlValidatedSql || "";
 
                 this.renderShell();
                 const keyword = getContainerEl(`#gridKeyword-${PAGE_CODE}`);
@@ -536,15 +606,22 @@
                     this.page = 1;
                     this.keyword = "";
                     this.freezeColumns = 0;
+                    this.freezeColumnsInitialized = false;
                     this.stageFilters = {};
                     this.serverPaging = false;
                     this.serverTotalRows = 0;
                     this.rows = [];
                     this.gridColumns = [];
                     this.selectedRuleIds.clear();
+                    this.selectedViolationRowKeys.clear();
                     this.violationRules = [];
-                    this.selectedViolationRuleId = "";
+                    this.violationSourceTables = [];
+                    this.violationSourceTablesLoaded = false;
+                    this.editingTableStatus = null;
+                    this.selectedViolationRuleId = "ALL";
                     this.selectedViolationRule = null;
+                    this.selectedViolationRules = [];
+                    this.violationRuleScopeIds = new Set();
                     this.generatedViolationSql = "";
                     this.selectedMasterRule = null;
                     this.selectedMasterRuleId = "";
@@ -553,6 +630,9 @@
                     this.currentValidation = null;
                     this.selectedDmlId = "";
                     this.selectedDml = null;
+                    this.dmlSavedName = "";
+                    this.dmlSavedSql = "";
+                    this.dmlValidatedSql = "";
                     this.masterSelectionRequestId += 1;
                     this.renderShell();
                     this.persistContext();
@@ -662,6 +742,19 @@
                     el.innerHTML = `<b>${this.escapeHtml(session.TARGET_OWNER)}.${this.escapeHtml(session.SOURCE_TABLE)}</b> → <b>${this.escapeHtml(session.TARGET_OWNER)}.${this.escapeHtml(session.EDIT_TABLE)}</b>`;
                     return;
                 }
+                if (PAGE_CODE === "M05002") {
+                    const source = this.getSelectedViolationSource();
+                    if (source) {
+                        const editTable = String(source.TABLE_NAME || "").replace(/^INITUP\$/, "INITDN$");
+                        el.innerHTML = `
+                            <b>${this.escapeHtml(source.OWNER_NAME)}.${this.escapeHtml(source.TABLE_NAME)}</b>
+                            →
+                            <b>${this.escapeHtml(source.OWNER_NAME)}.${this.escapeHtml(editTable)}</b>
+                            <span>(${this.escapeHtml(this.pageLabel("readOnlyUntilEditingTable", "수정테이블 생성 전 조회 전용"))})</span>
+                        `;
+                        return;
+                    }
+                }
                 const owner = this.pendingContext.targetOwner || "";
                 const table = this.pendingContext.targetTable || "";
                 const runId = this.pendingContext.runId || "";
@@ -693,7 +786,21 @@
             async handleSessionChange() {
                 this.invalidateEditWorkspaceCache();
                 this.selectedSessionId = getContainerEl(`#editSessionId-${PAGE_CODE}`)?.value || "";
-                this.stageFilters = {};
+                const selectedSession = this.getSelectedSession();
+                this.stageFilters = this.stage.mode === "VIOLATIONS"
+                    ? {
+                        VIOLATION_TARGET_TABLE: selectedSession
+                            ? `${selectedSession.TARGET_OWNER}.${selectedSession.SOURCE_TABLE}`.toUpperCase()
+                            : String(this.stageFilters.VIOLATION_TARGET_TABLE || "")
+                    }
+                    : {};
+                this.violationRules = [];
+                this.editingTableStatus = null;
+                this.selectedViolationRules = [];
+                this.selectedViolationRule = null;
+                this.selectedViolationRuleId = "ALL";
+                this.violationRuleScopeIds.clear();
+                this.selectedViolationRowKeys.clear();
                 this.page = 1;
                 this.renderSourceContext();
                 this.persistContext();
@@ -722,15 +829,25 @@
 
             clearViolationContext() {
                 this.violationRules = [];
-                this.selectedViolationRuleId = "";
+                this.violationSourceTables = [];
+                this.violationSourceTablesLoaded = false;
+                this.editingTableStatus = null;
+                this.selectedViolationRuleId = "ALL";
                 this.selectedViolationRule = null;
+                this.selectedViolationRules = [];
+                this.violationRuleScopeIds = new Set();
                 this.generatedViolationSql = "";
                 this.selectedRuleIds.clear();
+                this.selectedViolationRowKeys.clear();
                 this.page = 1;
             },
 
             usesEditSession() {
                 return !["DISCOVERED_RULES", "RULE_MASTER"].includes(this.stage.mode);
+            },
+
+            usesEditingTableSelection() {
+                return TABLE_SELECTION_MODES.includes(this.stage.mode);
             },
 
             toggleWorkContext(event) {
@@ -836,7 +953,11 @@
             async refresh() {
                 if (this.refreshPromise) return this.refreshPromise;
                 const refreshTask = (async () => {
-                    this.setLoading();
+                    const usesCommonQueryProgress = ["RULE_MASTER", "CHANGE_HISTORY", "VALIDATION", "FINAL_APPLY", "HISTORY"].includes(this.stage.mode);
+                    if (usesCommonQueryProgress) this.setRuleQueryLoading(true);
+                    if (this.stage.mode !== "VIOLATIONS") {
+                        this.setLoading();
+                    }
                     try {
                         switch (this.stage.mode) {
                             case "DISCOVERED_RULES":
@@ -846,10 +967,10 @@
                                 await this.loadRuleMaster();
                                 break;
                             case "VIOLATIONS":
-                                await this.loadViolations(false);
+                                await this.loadViolations();
                                 break;
-                            case "CLEANSING":
-                                await this.loadViolations(true);
+                            case "CHANGE_HISTORY":
+                                await this.loadChangeHistory();
                                 break;
                             case "VALIDATION":
                                 await this.loadValidation();
@@ -863,6 +984,8 @@
                         }
                     } catch (error) {
                         this.renderError(error);
+                    } finally {
+                        if (usesCommonQueryProgress) this.setRuleQueryLoading(false);
                     }
                 })();
                 this.refreshPromise = refreshTask;
@@ -891,22 +1014,27 @@
             },
 
             setRuleQueryLoading(loading) {
-                const progress = getContainerEl(`#ruleQueryProgress-${PAGE_CODE}`);
-                if (!progress) return;
-                progress.hidden = !loading;
+                [
+                    getContainerEl(`#ruleQueryProgress-${PAGE_CODE}`),
+                    getContainerEl(`#stageQueryProgress-${PAGE_CODE}`)
+                ].filter(Boolean).forEach((progress) => {
+                    progress.hidden = !loading;
+                });
             },
 
-            setWorkActionLoading(loading, message = "") {
+            setWorkActionLoading(loading, message = "", showStatus = true) {
                 this.setRuleQueryLoading(loading);
-                const progress = getContainerEl(`#ruleQueryProgress-${PAGE_CODE}`);
-                if (progress) {
+                [
+                    getContainerEl(`#ruleQueryProgress-${PAGE_CODE}`),
+                    getContainerEl(`#stageQueryProgress-${PAGE_CODE}`)
+                ].filter(Boolean).forEach((progress) => {
                     progress.title = loading ? message : "";
                     progress.setAttribute("aria-label", loading ? message : "");
                     progress.classList.toggle("is-work-action", Boolean(loading));
-                }
+                });
                 const actions = getContainerEl(`#modeActions-${PAGE_CODE}`);
                 actions?.querySelector(".edit-work-action-status")?.remove();
-                if (loading && actions) {
+                if (loading && showStatus && actions) {
                     actions.insertAdjacentHTML(
                         "afterbegin",
                         `<span class="edit-work-action-status"><i class="fas fa-spinner fa-spin"></i>${this.escapeHtml(message)}</span>`
@@ -1020,6 +1148,7 @@
 
             async loadRuleMaster() {
                 this.masterSelectionRequestId += 1;
+                this.selectedRuleIds.clear();
                 this.selectedMasterRule = null;
                 this.selectedMasterRuleId = "";
                 this.editingUserRuleId = null;
@@ -1049,10 +1178,26 @@
                     { value: counts.SYMBOLIC || 0, label: "수식 규칙", hint: "연속형 수식 규칙" },
                     { value: userRuleCount, label: "사용자 규칙", hint: "직접 등록 규칙" }
                 ]);
-                this.setPanel("편집 규칙 마스터", `<button type="button" class="is-primary" onclick="${PAGE_CODE}.startNewUserRule()"><i class="fas fa-plus"></i>사용자 규칙 등록</button>`);
+                this.setPanel("편집 규칙 마스터", `
+                    <button type="button" class="is-danger" onclick="${PAGE_CODE}.excludeCheckedMasterRules()"><i class="fas fa-ban"></i>${this.escapeHtml(this.pageLabel("buttonBulkExcludeRules", "선정 제외"))}</button>
+                    <button type="button" class="is-primary" onclick="${PAGE_CODE}.startNewUserRule()"><i class="fas fa-plus"></i>사용자 규칙 등록</button>
+                `);
                 this.renderUserRuleForm();
                 const sourceType = String(this.stageFilters.SOURCE_RULE_TYPE || "ALL").toUpperCase();
+                const selectionColumn = {
+                    key: "_SELECT",
+                    label: "",
+                    headerHtml: `<input type="checkbox" title="${this.escapeHtml(this.pageLabel("selectVisibleMasterRules", "현재 페이지의 기존 발굴 규칙 전체 선택"))}" onclick="event.stopPropagation()" onchange="${PAGE_CODE}.toggleVisibleMasterRules(this.checked)">`,
+                    width: 34,
+                    className: "is-select-column",
+                    headerClassName: "is-select-column",
+                    render: (_value, row, index) => {
+                        const eligible = this.isMasterRuleBulkExcludable(row);
+                        return `<input type="checkbox" ${this.selectedRuleIds.has(this.ruleRowKey(row)) ? "checked" : ""} ${eligible ? "" : "disabled"} onclick="event.stopPropagation()" onchange="${PAGE_CODE}.toggleMasterRuleRow(${index}, this.checked)">`;
+                    }
+                };
                 const commonColumns = [
+                    selectionColumn,
                     { key: "EDIT_RULE_ID", label: "ID", width: 60, className: "is-number" },
                     { key: "SOURCE_RULE_TYPE", label: "유형", width: 82, render: (value) => this.renderRuleTypeBadge(value) },
                     {
@@ -1731,6 +1876,83 @@
                 await this.refresh();
             },
 
+            isMasterRuleBulkExcludable(row) {
+                return Boolean(
+                    row?.EDIT_RULE_ID
+                    && row?.SOURCE_RULE_ID
+                    && row?.SOURCE_RUN_SOURCE_TYPE
+                    && row?.SOURCE_RUN_ID !== null
+                    && row?.SOURCE_RUN_ID !== undefined
+                    && String(row.USER_RULE_YN || "N").toUpperCase() === "N"
+                    && String(row.DECISION_STATUS || "").toUpperCase() !== "REJECTED"
+                );
+            },
+
+            toggleMasterRuleRow(index, checked) {
+                const row = this.getVisibleRows()[index];
+                if (!this.isMasterRuleBulkExcludable(row)) return;
+                const key = this.ruleRowKey(row);
+                if (checked) this.selectedRuleIds.add(key);
+                else this.selectedRuleIds.delete(key);
+            },
+
+            toggleVisibleMasterRules(checked) {
+                const visible = this.getVisibleRows().filter((row) => this.isMasterRuleBulkExcludable(row));
+                visible.forEach((row) => {
+                    const key = this.ruleRowKey(row);
+                    if (checked) this.selectedRuleIds.add(key);
+                    else this.selectedRuleIds.delete(key);
+                });
+                getContainerEl(`#workContent-${PAGE_CODE}`)
+                    ?.querySelectorAll("tbody .is-select-column input[type='checkbox']:not(:disabled)")
+                    .forEach((input) => {
+                        input.checked = Boolean(checked);
+                    });
+            },
+
+            async excludeCheckedMasterRules() {
+                const selected = this.rows.filter((row) => (
+                    this.selectedRuleIds.has(this.ruleRowKey(row))
+                    && this.isMasterRuleBulkExcludable(row)
+                ));
+                if (!selected.length) {
+                    CommonMessage.warn(this.pageLabel("bulkExcludeNoSelection", "선정 제외할 기존 발굴 규칙을 체크하세요."));
+                    return;
+                }
+                const template = this.pageLabel(
+                    "bulkExcludeConfirm",
+                    "선택한 기존 발굴 규칙 {count}개를 선정 제외할까요?\n규칙판단 탭에서도 제외 상태로 표시됩니다."
+                );
+                if (!(await CommonMessage.confirm(template.replaceAll("{count}", String(selected.length))))) return;
+                const projectId = this.optionalNumber(getContainerEl(`#projectId-${PAGE_CODE}`)?.value);
+                this.setWorkActionLoading(true, this.pageLabel("bulkExcludeLoading", "선택한 규칙을 선정 제외하고 있습니다."));
+                let result;
+                try {
+                    result = await CommonUtils.request(apiUrl("/rules/exclude"), {
+                        method: "POST",
+                        body: {
+                            projectId,
+                            editRuleIds: selected.map((row) => Number(row.EDIT_RULE_ID))
+                        },
+                        showLoading: false
+                    });
+                } finally {
+                    this.setWorkActionLoading(false);
+                }
+                const excludedCount = Number(result.excludedCount || selected.length);
+                CommonMessage.success(
+                    this.pageLabel("bulkExcludeSuccess", "기존 발굴 규칙 {count}개를 선정 제외했습니다.")
+                        .replaceAll("{count}", excludedCount.toLocaleString())
+                );
+                this.selectedRuleIds.clear();
+                this.selectedMasterRule = null;
+                this.selectedMasterRuleId = "";
+                this.editingUserRuleId = null;
+                this.userRuleCopyMode = false;
+                this.invalidateEditWorkspaceCache("M05001");
+                await this.refresh();
+            },
+
             async excludeDiscoveredRule(row) {
                 if (!row?.EDIT_RULE_ID || !row.SOURCE_RULE_ID) {
                     throw new Error("선정 제외할 기존 발굴 규칙 정보가 올바르지 않습니다.");
@@ -1784,22 +2006,44 @@
             },
 
             async saveCheckedDecision(status) {
+                if (this.ruleDecisionSaving) return;
                 const selected = this.rows.filter((row) => this.selectedRuleIds.has(this.ruleRowKey(row)));
                 if (!selected.length) {
                     CommonMessage.warn("처리할 규칙을 선택하세요.");
                     return;
                 }
                 if (!(await CommonMessage.confirm(`${selected.length}개 규칙을 ${status === "SELECTED" ? "선정" : "제외"} 처리할까요?`))) return;
-                for (const row of selected) {
-                    await this.submitRuleDecision(row, status);
+                const selecting = String(status || "").toUpperCase() === "SELECTED";
+                const loadingMessage = this.pageLabel(
+                    selecting ? "bulkRuleSelecting" : "bulkRuleRejecting",
+                    selecting ? "선택한 규칙을 일괄 선정하고 있습니다." : "선택한 규칙을 일괄 제외하고 있습니다."
+                );
+                this.ruleDecisionSaving = true;
+                this.setWorkActionLoading(true, loadingMessage, false);
+                const workContent = getContainerEl(`#workContent-${PAGE_CODE}`);
+                workContent?.setAttribute("aria-busy", "true");
+                workContent?.classList.add("is-rule-decision-saving");
+                try {
+                    for (const row of selected) {
+                        await this.submitRuleDecision(row, status);
+                    }
+                    this.invalidateEditWorkspaceCache("M05001_RULE_MASTER");
+                    this.selectedRuleIds.clear();
+                    CommonMessage.success(`${selected.length}개 규칙을 ${selecting ? "선정" : "제외"} 처리했습니다.`);
+                    await this.refresh();
+                } catch (error) {
+                    await this.refresh();
+                    throw error;
+                } finally {
+                    this.ruleDecisionSaving = false;
+                    this.setWorkActionLoading(false);
+                    workContent?.removeAttribute("aria-busy");
+                    workContent?.classList.remove("is-rule-decision-saving");
                 }
-                this.invalidateEditWorkspaceCache("M05001_RULE_MASTER");
-                this.selectedRuleIds.clear();
-                CommonMessage.success(`${selected.length}개 규칙을 ${status === "SELECTED" ? "선정" : "제외"} 처리했습니다.`);
-                await this.refresh();
             },
 
             async saveRuleDecision(index, status) {
+                if (this.ruleDecisionSaving) return;
                 const row = this.getVisibleRows()[index];
                 if (!row) return;
                 await this.submitRuleDecision(row, status);
@@ -1818,8 +2062,8 @@
                 }
                 const payload = {
                     editRuleId: this.optionalNumber(row.EDIT_RULE_ID),
-                    projectId: this.optionalNumber(getContainerEl(`#projectId-${PAGE_CODE}`)?.value),
-                    scenarioId: this.optionalNumber(getContainerEl(`#scenarioId-${PAGE_CODE}`)?.value),
+                    projectId: this.optionalNumber(row.PROJECT_ID),
+                    scenarioId: this.optionalNumber(row.SCENARIO_ID),
                     sourceRuleType: row.SOURCE_RULE_TYPE,
                     runSourceType: row.RUN_SOURCE_TYPE,
                     runId: this.optionalNumber(row.RUN_ID),
@@ -1840,20 +2084,324 @@
                     decisionStatus,
                     ruleStatus: "ACTIVE"
                 };
+                if (!payload.projectId || !payload.scenarioId) {
+                    throw new Error(this.pageLabel(
+                        "ruleContextMissing",
+                        "규칙 원본 행의 프로젝트 또는 시나리오를 확인할 수 없습니다. 다시 조회하세요."
+                    ));
+                }
                 await CommonUtils.request(apiUrl("/rules"), { method: "POST", body: payload, showLoading: false });
             },
 
-            async loadViolations(forEditing) {
+            async loadViolationSourceTables(force = false) {
+                if (this.violationSourceTablesLoaded && !force) {
+                    this.renderEditingTableGrid();
+                    return;
+                }
                 const params = this.contextParams();
+                const json = await CommonUtils.request(
+                    apiUrl(`/editing-tables?${params}`),
+                    { method: "GET", showLoading: false }
+                );
+                this.violationSourceTables = Array.isArray(json.data) ? json.data : [];
+                this.violationSourceTablesLoaded = true;
+                const selected = this.getSelectedViolationSource();
+                if (!selected && this.stageFilters.VIOLATION_TARGET_TABLE) {
+                    this.stageFilters.VIOLATION_TARGET_TABLE = "";
+                    this.editingTableStatus = null;
+                }
+                this.renderEditingTableGrid();
+            },
+
+            getSelectedViolationSource() {
+                const selected = String(this.stageFilters.VIOLATION_TARGET_TABLE || "");
+                if (!selected || selected === "ALL") return null;
+                return this.violationSourceTables.find(
+                    (row) => `${row.OWNER_NAME || ""}.${row.TABLE_NAME || ""}`.toUpperCase() === selected.toUpperCase()
+                ) || null;
+            },
+
+            resolveEditingTableSelection() {
+                let source = this.getSelectedViolationSource();
+                let session = this.getSelectedSession();
+                if (!source && session) {
+                    const sourceValue = `${session.TARGET_OWNER || ""}.${session.SOURCE_TABLE || ""}`.toUpperCase();
+                    if (this.violationSourceTables.some(
+                        (row) => `${row.OWNER_NAME || ""}.${row.TABLE_NAME || ""}`.toUpperCase() === sourceValue
+                    )) {
+                        this.stageFilters.VIOLATION_TARGET_TABLE = sourceValue;
+                        source = this.getSelectedViolationSource();
+                    }
+                }
+                if (source) {
+                    const mappedSessionId = String(
+                        this.stage.mode === "VIOLATIONS"
+                            ? source.EDIT_SESSION_ID || ""
+                            : source.LATEST_EDIT_SESSION_ID || ""
+                    );
+                    const sessionExists = this.sessions.some(
+                        (row) => String(row.EDIT_SESSION_ID) === mappedSessionId
+                    );
+                    this.selectedSessionId = sessionExists ? mappedSessionId : "";
+                    const sessionSelect = getContainerEl(`#editSessionId-${PAGE_CODE}`);
+                    if (sessionSelect) sessionSelect.value = this.selectedSessionId;
+                    session = this.getSelectedSession();
+                }
+                this.renderEditingTableGrid();
+                this.renderSourceContext();
+                return { source, session };
+            },
+
+            editingTableRowStatus(row) {
+                if (row?.EDIT_TABLE_EXISTS && !row?.STRUCTURE_MATCHES) {
+                    return {
+                        className: "is-invalid",
+                        label: this.pageLabel("editingTableStatusMismatch", "구조 불일치")
+                    };
+                }
+                if (row?.EDITABLE) {
+                    return {
+                        className: "is-ready",
+                        label: this.pageLabel("editingTableStatusReady", "수정 가능")
+                    };
+                }
+                if (row?.EDIT_TABLE_EXISTS) {
+                    return {
+                        className: "is-pending",
+                        label: this.pageLabel("editingTableStatusPending", "작업 연결 필요")
+                    };
+                }
+                return {
+                    className: "is-missing",
+                    label: this.pageLabel("editingTableStatusMissing", "미생성")
+                };
+            },
+
+            renderEditingTableGrid() {
+                const host = getContainerEl(`#editingTableGrid-${PAGE_CODE}`);
+                if (!host || !this.usesEditingTableSelection()) return;
+                host.hidden = false;
+                const correctionMode = this.stage.mode === "VIOLATIONS";
+                const historyMode = this.stage.mode === "CHANGE_HISTORY";
+                const workflowMode = ["VALIDATION", "FINAL_APPLY", "HISTORY"].includes(this.stage.mode);
+                const selectedValue = String(this.stageFilters.VIOLATION_TARGET_TABLE || "").toUpperCase();
+                host.innerHTML = `
+                    <div class="edit-work-table-map-heading">
+                        <strong>${this.escapeHtml(this.pageLabel("editingTableMapTitle", "편집 작업 테이블"))}</strong>
+                        <span>${this.escapeHtml(workflowMode
+                            ? this.pageLabel("editingWorkflowTableMapHelp", "효과 검증·운영 반영·전체 이력을 조회할 INITUP$/INITDN$ 작업 테이블 한 행을 선택합니다.")
+                            : (historyMode
+                                ? this.pageLabel("editingHistoryTableMapHelp", "수정 이력을 조회할 INITUP$/INITDN$ 테이블 한 행을 선택합니다.")
+                                : this.pageLabel("editingTableMapHelp", "규칙 마스터의 최종 규칙이 등록된 INITUP$를 한 행만 선택합니다.")))}</span>
+                    </div>
+                    <div class="edit-work-table-map-scroll">
+                        <table class="table-grid edit-work-table-map-grid">
+                            <colgroup>
+                                <col style="width:42px">
+                                <col style="width:140px">
+                                <col style="width:360px">
+                                <col style="width:360px">
+                                <col style="width:90px">
+                                <col style="width:110px">
+                                <col style="width:138px">
+                            </colgroup>
+                            <thead>
+                                <tr>
+                                    <th>${this.escapeHtml(this.pageLabel("editingTableColumnSelect", "선택"))}</th>
+                                    <th>OWNER</th>
+                                    <th>${this.escapeHtml(this.pageLabel("editingTableColumnSource", "INITUP$ 원본 테이블"))}</th>
+                                    <th>${this.escapeHtml(this.pageLabel("editingTableColumnEdit", "INITDN$ 수정 테이블"))}</th>
+                                    <th>${this.escapeHtml(this.pageLabel("editingTableColumnRules", "최종 규칙"))}</th>
+                                    <th>${this.escapeHtml(this.pageLabel("editingTableColumnStatus", "상태"))}</th>
+                                    <th>${this.escapeHtml(correctionMode
+                                        ? this.pageLabel("editingTableColumnAction", "처리")
+                                        : this.pageLabel("editingTableColumnSession", "편집 작업"))}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${this.violationSourceTables.length ? this.violationSourceTables.map((row) => {
+                                    const value = `${row.OWNER_NAME || ""}.${row.TABLE_NAME || ""}`.toUpperCase();
+                                    const selected = value === selectedValue;
+                                    const tableStatus = this.editingTableRowStatus(row);
+                                    const latestSessionStatus = String(row.LATEST_SESSION_STATUS || "").toUpperCase();
+                                    const status = !correctionMode && latestSessionStatus
+                                        ? {
+                                            className: ["VALIDATED", "APPLY_READY", "APPLIED"].includes(latestSessionStatus)
+                                                ? "is-ready"
+                                                : ["FAILED", "CANCELLED"].includes(latestSessionStatus)
+                                                    ? "is-invalid"
+                                                    : "is-pending",
+                                            label: this.stageFilterOptionLabel(latestSessionStatus)
+                                        }
+                                        : tableStatus;
+                                    const actionDisabled = Boolean(row.EDIT_TABLE_EXISTS && !row.STRUCTURE_MATCHES);
+                                    const displayedSessionId = correctionMode
+                                        ? row.EDIT_SESSION_ID
+                                        : row.LATEST_EDIT_SESSION_ID;
+                                    return `
+                                        <tr class="${selected ? "is-selected-row" : ""}"
+                                            onclick="${PAGE_CODE}.selectEditingTableRow('${this.escapeHtml(value)}')">
+                                            <td class="is-select-column">
+                                                <input type="radio"
+                                                       name="editingTable-${PAGE_CODE}"
+                                                       aria-label="${this.escapeHtml(this.pageLabel("editingTableColumnSelect", "선택"))}"
+                                                       ${selected ? "checked" : ""}
+                                                       onclick="event.stopPropagation()"
+                                                       onchange="${PAGE_CODE}.selectEditingTableRow('${this.escapeHtml(value)}')">
+                                            </td>
+                                            <td class="is-code">${this.escapeHtml(row.OWNER_NAME || "-")}</td>
+                                            <td class="is-code">
+                                                <b>${this.escapeHtml(row.TABLE_NAME || "-")}</b>
+                                                ${row.TABLE_COMMENT ? `<small>${this.escapeHtml(row.TABLE_COMMENT)}</small>` : ""}
+                                            </td>
+                                            <td class="is-code">${this.escapeHtml(row.EDIT_TABLE || "-")}</td>
+                                            <td class="is-number">${Number(row.FINAL_RULE_COUNT || 0).toLocaleString()}</td>
+                                            <td><span class="edit-work-table-status ${status.className}">${this.escapeHtml(status.label)}</span></td>
+                                            <td>
+                                                ${!correctionMode ? `
+                                                    <span class="edit-work-table-session">${displayedSessionId
+                                                        ? `#${this.escapeHtml(displayedSessionId)}`
+                                                        : this.escapeHtml(historyMode
+                                                            ? this.pageLabel("noEditingHistory", "이력 없음")
+                                                            : this.pageLabel("noEditingWork", "편집 작업 없음"))}</span>
+                                                ` : row.EDITABLE ? `
+                                                    <span class="edit-work-table-session">#${this.escapeHtml(displayedSessionId || "-")}</span>
+                                                ` : `
+                                                    <button type="button"
+                                                            class="table-btn is-primary"
+                                                            ${actionDisabled ? "disabled" : ""}
+                                                            title="${this.escapeHtml(actionDisabled
+                                                                ? this.pageLabel("editingTableStructureMismatch", "INITUP$와 INITDN$ 컬럼 구조가 일치하지 않아 수정테이블을 사용할 수 없습니다.")
+                                                                : this.pageLabel("buttonCreateEditingTableHelp", "선택한 INITUP$와 1:1인 INITDN$ 수정테이블을 생성하고 자동 선택합니다."))}"
+                                                            onclick="event.stopPropagation(); ${PAGE_CODE}.createEditingTableForSelectedSource('${this.escapeHtml(value)}')">
+                                                        ${this.escapeHtml(row.EDIT_TABLE_EXISTS
+                                                            ? this.pageLabel("buttonConnectEditingTable", "편집 작업 연결")
+                                                            : this.pageLabel("buttonCreateEditingTable", "수정테이블 생성"))}
+                                                    </button>
+                                                `}
+                                            </td>
+                                        </tr>
+                                    `;
+                                }).join("") : `
+                                    <tr>
+                                        <td colspan="7" class="edit-work-table-map-empty">
+                                            ${this.escapeHtml(this.pageLabel("noEditingRuleTables", "규칙 마스터에 등록된 최종 규칙의 INITUP$ 테이블이 없습니다."))}
+                                        </td>
+                                    </tr>
+                                `}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            },
+
+            async loadEditingTableStatus(source = this.getSelectedViolationSource(), force = false) {
+                if (!source) return null;
+                if (
+                    !force
+                    && this.editingTableStatus
+                    && String(this.editingTableStatus.targetOwner || "") === String(source.OWNER_NAME || "")
+                    && String(this.editingTableStatus.sourceTable || "") === String(source.TABLE_NAME || "")
+                ) {
+                    return this.editingTableStatus;
+                }
+                this.editingTableStatus = null;
+                const params = this.contextParams();
+                params.set("targetOwner", source.OWNER_NAME);
+                params.set("targetTable", source.TABLE_NAME);
+                const json = await CommonUtils.request(
+                    apiUrl(`/editing-table-status?${params}`),
+                    { method: "GET", showLoading: false }
+                );
+                this.editingTableStatus = json.data || null;
+                const sessionSelect = getContainerEl(`#editSessionId-${PAGE_CODE}`);
+                const sessionId = String(this.editingTableStatus?.editSessionId || "");
+                const sessionExists = this.sessions.some(
+                    (row) => String(row.EDIT_SESSION_ID) === sessionId
+                );
+                if (sessionSelect) sessionSelect.value = sessionExists ? sessionId : "";
+                this.selectedSessionId = sessionExists ? sessionId : "";
+                this.renderSourceContext();
+                return this.editingTableStatus;
+            },
+
+            isViolationEditingEnabled() {
                 const session = this.getSelectedSession();
-                if (forEditing && session) params.set("editSessionId", session.EDIT_SESSION_ID);
-                if (this.selectedViolationRuleId) params.set("editRuleId", this.selectedViolationRuleId);
+                const status = String(session?.SESSION_STATUS || "").toUpperCase();
+                return Boolean(
+                    this.editingTableStatus?.exists
+                    && this.editingTableStatus?.structureMatches
+                    && this.editingTableStatus?.editable
+                    && session
+                    && ["EDITING", "VALIDATED"].includes(status)
+                    && String(session.EDIT_SESSION_ID) === String(this.editingTableStatus.editSessionId)
+                );
+            },
+
+            async loadViolations() {
+                await this.loadViolationSourceTables();
+                let source = this.getSelectedViolationSource();
+                const preselectedSession = this.getSelectedSession();
+                if (!source && preselectedSession) {
+                    const sourceValue = `${preselectedSession.TARGET_OWNER || ""}.${preselectedSession.SOURCE_TABLE || ""}`.toUpperCase();
+                    const sourceExists = this.violationSourceTables.some(
+                        (row) => `${row.OWNER_NAME || ""}.${row.TABLE_NAME || ""}`.toUpperCase() === sourceValue
+                    );
+                    if (sourceExists) {
+                        this.stageFilters.VIOLATION_TARGET_TABLE = sourceValue;
+                        source = this.getSelectedViolationSource();
+                    }
+                }
+                if (!source) {
+                    this.editingTableStatus = null;
+                    this.serverPaging = false;
+                    this.serverTotalRows = 0;
+                    this.rows = [];
+                    this.violationRules = [];
+                    this.selectedViolationRules = [];
+                    this.gridColumns = [];
+                    this.setPanel(this.pageLabel("violationEditPanel", "최종 규칙 실시간 위반 조회 및 수정"), "");
+                    this.setKpis([
+                        {
+                            value: "-",
+                            label: this.pageLabel("filterSourceTable", "원본 테이블"),
+                            hint: this.pageLabel("sourceTableRequired", "조회할 INITUP$ 원본 테이블을 반드시 선택하세요.")
+                        }
+                    ]);
+                    this.hideModeForm();
+                    this.renderEmpty(this.pageLabel("sourceTableRequired", "조회할 INITUP$ 원본 테이블을 반드시 선택하세요."));
+                    return;
+                }
+                await this.loadEditingTableStatus(source);
+                const params = this.contextParams();
+                params.set("targetOwner", source.OWNER_NAME);
+                params.set("targetTable", source.TABLE_NAME);
+                const session = this.getSelectedSession();
+                if (session) params.set("editSessionId", session.EDIT_SESSION_ID);
+                params.set(
+                    "changeStatus",
+                    String(this.stageFilters.VIOLATION_CHANGE_STATUS || "ALL").toUpperCase()
+                );
+                const scopedRules = this.getViolationRuleOptions();
+                const availableRuleIds = new Set(
+                    scopedRules.map((rule) => String(rule.EDIT_RULE_ID))
+                );
+                const explicitlySelectedIds = [...this.violationRuleScopeIds]
+                    .filter((value) => availableRuleIds.has(String(value)));
+                const scopedRuleIds = explicitlySelectedIds.length
+                    ? explicitlySelectedIds
+                    : scopedRules
+                        .map((rule) => String(rule.EDIT_RULE_ID))
+                        .filter(Boolean);
+                if (scopedRuleIds.length) params.set("editRuleIds", scopedRuleIds.join(","));
+                else if (this.violationRules.length) params.set("editRuleIds", "0");
                 if (this.keyword) params.set("keyword", this.keyword);
                 params.set("page", String(this.page));
                 params.set("pageSize", String(this.pageSize));
                 this.setWorkActionLoading(
                     true,
-                    this.pageLabel("liveViolationLoading", "실시간 위반 데이터를 조회하고 있습니다.")
+                    this.pageLabel("liveViolationLoading", "실시간 위반 데이터를 조회하고 있습니다."),
+                    false
                 );
                 let json;
                 try {
@@ -1870,66 +2418,112 @@
                 this.pageSize = Math.max(1, Number(json.pageSize || this.pageSize));
                 this.violationRules = Array.isArray(json.rules) ? json.rules : [];
                 this.selectedViolationRule = json.selectedRule || null;
-                this.selectedViolationRuleId = String(this.selectedViolationRule?.EDIT_RULE_ID || "");
+                this.selectedViolationRules = Array.isArray(json.selectedRules)
+                    ? json.selectedRules
+                    : (this.selectedViolationRule ? [this.selectedViolationRule] : []);
+                this.selectedViolationRuleId = this.selectedViolationRules.length === 1
+                    ? String(this.selectedViolationRules[0].EDIT_RULE_ID)
+                    : "ALL";
                 this.generatedViolationSql = String(json.generatedSql || "");
                 this.selectedRuleIds.clear();
-                if (this.selectedViolationRuleId) this.selectedRuleIds.add(this.selectedViolationRuleId);
-                this.rows = (Array.isArray(json.data) ? json.data : []).map((row) => ({
-                    ...(this.selectedViolationRule || {}),
-                    ...row,
-                    TARGET_COLUMN_COMMENT: row.TARGET_COLUMN_COMMENT
-                        || row.COLUMN_COMMENTS?.[row.TARGET_COLUMN]
-                        || ""
-                }));
+                this.selectedViolationRules.forEach((rule) => {
+                    if (rule?.EDIT_RULE_ID) this.selectedRuleIds.add(String(rule.EDIT_RULE_ID));
+                });
+                const violationRuleMap = new Map(
+                    this.violationRules.map((rule) => [Number(rule.EDIT_RULE_ID), rule])
+                );
+                this.rows = (Array.isArray(json.data) ? json.data : []).map((row) => {
+                    const rule = violationRuleMap.get(Number(row.EDIT_RULE_ID)) || {};
+                    return {
+                        ...row,
+                        RULE_DESCRIPTION: rule.RULE_DESCRIPTION || "",
+                        SOURCE_RUN_ID: rule.SOURCE_RUN_ID,
+                        FEATURE_COLUMNS: rule.FEATURE_COLUMNS,
+                        METHOD: rule.METHOD,
+                        RULE_SUPPORT: rule.RULE_SUPPORT,
+                        RULE_CONFIDENCE: rule.RULE_CONFIDENCE,
+                        RULE_LIFT: rule.RULE_LIFT,
+                        RULE_TOLERANCE_PCT: rule.RULE_TOLERANCE_PCT,
+                        TARGET_COLUMN_COMMENT: row.TARGET_COLUMN_COMMENT
+                            || row.COLUMN_COMMENTS?.[row.TARGET_COLUMN]
+                            || ""
+                    };
+                });
+                this.selectedViolationRowKeys.clear();
                 const changed = this.rows.filter((row) => row.CHANGE_STATUS && row.CHANGE_STATUS !== "UNEDITED").length;
-                const selectedRuleType = String(this.selectedViolationRule?.SOURCE_RULE_TYPE || "").toUpperCase();
-                const selectedRuleLabel = selectedRuleType === "SYMBOLIC" ? "수식 규칙" : "연관 규칙";
+                const selectedRuleTypes = new Set(
+                    this.selectedViolationRules.map(
+                        (rule) => String(rule.SOURCE_RULE_TYPE || "").toUpperCase()
+                    )
+                );
+                const hasSymbolicRule = selectedRuleTypes.has("SYMBOLIC");
+                const editingEnabled = this.isViolationEditingEnabled();
+                const selectedRuleLabel = this.selectedViolationRules.length === 1
+                    ? (hasSymbolicRule ? "수식 규칙" : "연관 규칙")
+                    : `${this.selectedViolationRules.length}개 규칙`;
                 this.setKpis([
                     { value: this.serverTotalRows, label: "실시간 위반 행", hint: "INITUP$ 실제 테이블 DB 페이징" },
                     { value: this.violationRules.length, label: "최종 활성 규칙", hint: "M05001 규칙 마스터 SELECTED · ACTIVE" },
-                    { value: this.selectedViolationRule ? selectedRuleLabel : "-", label: "조회 규칙", hint: this.selectedViolationRule?.RULE_NAME || "최종 규칙을 선택하세요." },
-                    { value: changed, label: "수정된 행", hint: session ? `Session #${session.EDIT_SESSION_ID}` : "편집 세션 미선택" },
-                    { value: session?.SESSION_STATUS || "LIVE", label: "조회 상태", hint: session ? `${session.EDIT_TABLE}` : "실제 원본 테이블 실시간 조회" }
+                    {
+                        value: this.selectedViolationRules.length ? selectedRuleLabel : "-",
+                        label: "조회 규칙",
+                        hint: this.selectedViolationRules.length === 1
+                            ? this.selectedViolationRules[0]?.RULE_NAME
+                            : "선택한 범위의 최종 규칙을 통합 조회합니다."
+                    },
+                    { value: changed, label: "수정된 행", hint: editingEnabled ? `Session #${session.EDIT_SESSION_ID}` : "수정테이블 생성 전 조회 전용" },
+                    {
+                        value: editingEnabled ? "수정 가능" : "조회 전용",
+                        label: "작업 모드",
+                        hint: editingEnabled
+                            ? `${session.TARGET_OWNER}.${session.EDIT_TABLE}`
+                            : `${source.OWNER_NAME}.${this.editingTableStatus?.editTable || "-"}`
+                    }
                 ]);
-                if (forEditing) {
-                    const retryAction = session?.SESSION_STATUS === "DRAFT"
-                        ? `<button type="button" onclick="${PAGE_CODE}.retryPrepareCurrentSession()"><i class="fas fa-rotate"></i>${this.escapeHtml(this.pageLabel("buttonRetryEditingWork", "편집 작업 준비 재시도"))}</button>`
-                        : "";
-                    const deleteAction = session && ["DRAFT", "EDITING"].includes(String(session.SESSION_STATUS || "").toUpperCase())
-                        ? `<button type="button" class="is-danger" onclick="${PAGE_CODE}.deleteCurrentEditingWork()"><i class="fas fa-trash"></i>${this.escapeHtml(this.pageLabel("buttonDeleteEditingWork", "편집 작업 삭제"))}</button>`
-                        : "";
-                    this.setPanel("최종 규칙 실시간 위반 데이터 · INITDN$ 오류 수정", `
-                        <button type="button" title="${this.escapeHtml(this.pageLabel("liveSqlHelp", "조회에 사용되는 서버 생성 SQL을 확인합니다. 이 버튼은 SQL을 다시 실행하지 않습니다."))}" onclick="${PAGE_CODE}.openGeneratedViolationSql()" ${this.generatedViolationSql ? "" : "disabled"}><i class="fas fa-code"></i>실시간 SQL</button>
-                        ${retryAction}
-                        ${deleteAction}
-                        <button type="button" class="is-primary" onclick="${PAGE_CODE}.navigateStage('M05003')"><i class="fas fa-chart-column"></i>효과 검증</button>
-                    `);
-                } else {
-                    this.setPanel("최종 규칙 실시간 위반 데이터", `
-                        <button type="button" title="${this.escapeHtml(this.pageLabel("liveSqlHelp", "조회에 사용되는 서버 생성 SQL을 확인합니다. 이 버튼은 SQL을 다시 실행하지 않습니다."))}" onclick="${PAGE_CODE}.openGeneratedViolationSql()" ${this.generatedViolationSql ? "" : "disabled"}><i class="fas fa-code"></i>실시간 SQL</button>
-                        <button type="button" class="is-primary" onclick="${PAGE_CODE}.createSessionFromSelectedRules()"><i class="fas fa-layer-group"></i>${this.escapeHtml(this.pageLabel("buttonStartEditingWork", "편집 작업 시작"))}</button>
-                    `);
-                }
+                this.setPanel(this.pageLabel("violationEditPanel", "최종 규칙 실시간 위반 조회 및 수정"), `
+                    <button type="button" title="${this.escapeHtml(this.pageLabel("liveSqlHelp", "조회에 사용되는 서버 생성 SQL을 확인합니다. 이 버튼은 SQL을 다시 실행하지 않습니다."))}" onclick="${PAGE_CODE}.openGeneratedViolationSql()" ${this.generatedViolationSql ? "" : "disabled"}><i class="fas fa-code"></i>실시간 SQL</button>
+                    ${editingEnabled ? `<button type="button" class="is-primary" onclick="${PAGE_CODE}.saveSelectedViolationChanges()"><i class="fas fa-floppy-disk"></i>${this.escapeHtml(this.pageLabel("buttonSaveSelectedChanges", "선택 수정 저장"))}</button>` : ""}
+                `);
                 this.hideModeForm();
-                const expectedValueLabel = selectedRuleType === "SYMBOLIC"
-                    ? "예측값"
-                    : "THEN 결과";
+                const expectedValueLabel = selectedRuleTypes.size === 1
+                    ? (hasSymbolicRule ? "예측값" : "THEN 결과")
+                    : "결과 / 예측값";
+                const previouslyEditableGrid = this.gridColumns.some((column) => column.key === "_SELECT");
+                if (editingEnabled !== previouslyEditableGrid) {
+                    this.freezeColumns = editingEnabled ? 1 : 0;
+                    this.freezeColumnsInitialized = true;
+                }
                 this.gridColumns = [
+                    ...(editingEnabled ? [{
+                        key: "_SELECT",
+                        label: "",
+                        headerHtml: `<input type="checkbox" title="${this.escapeHtml(this.pageLabel("selectVisibleViolations", "현재 페이지 위반 행 전체 선택"))}" onchange="${PAGE_CODE}.toggleVisibleViolationRows(this.checked)">`,
+                        width: 34,
+                        className: "is-select-column",
+                        headerClassName: "is-select-column",
+                        render: (_value, row, index) => `<input type="checkbox" ${this.selectedViolationRowKeys.has(this.violationRowKey(row)) ? "checked" : ""} onchange="${PAGE_CODE}.toggleViolationRow(${index}, this.checked)">`
+                    }] : []),
+                    { key: "EDIT_RULE_ID", label: "규칙 ID", width: 66, className: "is-number", render: (value) => `#${this.escapeHtml(value || "-")}` },
                     { key: "SOURCE_RULE_TYPE", label: "규칙 유형", width: 82, render: (value) => this.renderRuleTypeBadge(value) },
-                    { key: "RULE_NAME", label: "최종 규칙명", width: 180, render: (value, _row, index) => this.renderTextPreview(value, index, "RULE_NAME", "최종 규칙") },
+                    { key: "USER_RULE_YN", label: "출처", width: 62, render: (value) => this.badge(String(value || "N").toUpperCase() === "Y" ? "사용자" : "발굴") },
+                    { key: "RULE_NAME", label: "최종 규칙명", width: 180, render: (value, row, index) => this.renderViolationRulePreview(value, row, index) },
+                    { key: "RULE_DESCRIPTION", label: "규칙 설명", width: 180, className: "is-rule-detail", render: (value, row, index) => this.renderViolationRulePreview(value || "-", row, index) },
+                    { key: "TARGET_OWNER", label: "Owner", width: 110, className: "is-code" },
+                    { key: "TARGET_TABLE", label: "원본 테이블", width: 160, className: "is-code", render: (value, _row, index) => this.renderTextPreview(value, index, "TARGET_TABLE", "원본 테이블") },
                     { key: "CASE_ID", label: "행 식별값", width: 130, className: "is-code" },
                     { key: "TARGET_COLUMN", label: "오류 컬럼", width: 135, className: "is-code", render: (value, row) => this.renderColumnSummary(value, row.TARGET_COLUMN_COMMENT) },
-                    { key: "CONDITION_TEXT", label: "최종 규칙 (IF / f(X))", width: 300, className: "is-rule-detail", render: (value, row, index) => this.renderColumnAwarePreview(value, row, index, "CONDITION_TEXT", "최종 규칙") },
+                    { key: "CONDITION_TEXT", label: "최종 규칙 (IF / f(X))", width: 300, className: "is-rule-detail", render: (value, row, index) => this.renderViolationRulePreview(value, row, index) },
                     { key: "EXPECTED_VALUE", label: expectedValueLabel, width: 120 },
                     { key: "ACTUAL_VALUE", label: "실제값", width: 120 },
-                    ...(selectedRuleType === "SYMBOLIC" ? [
+                    ...(hasSymbolicRule ? [
                         { key: "ABS_ERROR", label: "절대 오차", width: 105, className: "is-number", render: (value) => this.formatMetric(value) },
                         { key: "ERROR_PCT", label: "오차율", width: 92, className: "is-number", render: (value) => this.formatPercent(value) }
                     ] : []),
                     { key: "VIOLATION_SCORE", label: "위반 점수", width: 88, className: "is-number", render: (value) => this.formatMetric(value) },
                     { key: "VIOLATION_REASON", label: "위반 사유", width: 280, className: "is-rule-detail", render: (value, _row, index) => this.renderTextPreview(value, index, "VIOLATION_REASON", "위반 사유") },
+                    { key: "CURRENT_VALUE", label: "현재 편집값", width: 120 },
                     { key: "CHANGE_STATUS", label: "수정 상태", width: 90, render: (value) => this.badge(value || "UNEDITED") },
-                    ...(forEditing ? [{
+                    ...(editingEnabled ? [{
                         key: "_EDITOR",
                         label: "INITDN$ 수정값",
                         width: 240,
@@ -1942,9 +2536,12 @@
             },
 
             getViolationRuleOptions() {
+                const targetTable = String(this.stageFilters.VIOLATION_TARGET_TABLE || "ALL").toUpperCase();
                 const ruleType = String(this.stageFilters.VIOLATION_RULE_TYPE || "ALL").toUpperCase();
                 const targetColumn = String(this.stageFilters.VIOLATION_TARGET_COLUMN || "ALL").toUpperCase();
                 return this.violationRules.filter((rule) => {
+                    const qualifiedTable = `${rule.TARGET_OWNER || ""}.${rule.TARGET_TABLE || ""}`.toUpperCase();
+                    if (targetTable !== "ALL" && qualifiedTable !== targetTable) return false;
                     if (ruleType !== "ALL" && String(rule.SOURCE_RULE_TYPE || "").toUpperCase() !== ruleType) return false;
                     if (targetColumn !== "ALL" && String(rule.TARGET_COLUMN || "").toUpperCase() !== targetColumn) return false;
                     return true;
@@ -1960,18 +2557,137 @@
                 return `[${type}/${source}] ${rule?.RULE_NAME || `#${rule?.EDIT_RULE_ID || "-"}`} · ${target}`;
             },
 
+            async handleViolationSourceTableChange(value, autoQuery = false) {
+                this.stageFilters.VIOLATION_TARGET_TABLE = String(value || "");
+                this.stageFilters.VIOLATION_RULE_TYPE = "ALL";
+                this.stageFilters.VIOLATION_TARGET_COLUMN = "ALL";
+                this.editingTableStatus = null;
+                this.violationRules = [];
+                this.selectedViolationRules = [];
+                this.violationRuleScopeIds.clear();
+                this.selectedViolationRowKeys.clear();
+                this.rows = [];
+                this.gridColumns = [];
+                this.serverPaging = false;
+                this.serverTotalRows = 0;
+                this.page = 1;
+                const sessionSelect = getContainerEl(`#editSessionId-${PAGE_CODE}`);
+                const selectedSource = this.getSelectedViolationSource();
+                const mappedSessionId = String(
+                    this.stage.mode === "VIOLATIONS"
+                        ? selectedSource?.EDIT_SESSION_ID || ""
+                        : selectedSource?.LATEST_EDIT_SESSION_ID || ""
+                );
+                const mappedSessionExists = this.sessions.some(
+                    (row) => String(row.EDIT_SESSION_ID) === mappedSessionId
+                );
+                if (sessionSelect) sessionSelect.value = mappedSessionExists ? mappedSessionId : "";
+                this.selectedSessionId = mappedSessionExists ? mappedSessionId : "";
+                if (selectedSource && this.stage.mode === "VIOLATIONS") {
+                    this.editingTableStatus = {
+                        targetOwner: selectedSource.OWNER_NAME,
+                        sourceTable: selectedSource.TABLE_NAME,
+                        editTable: selectedSource.EDIT_TABLE,
+                        exists: Boolean(selectedSource.EDIT_TABLE_EXISTS),
+                        structureMatches: Boolean(selectedSource.STRUCTURE_MATCHES),
+                        editable: Boolean(selectedSource.EDITABLE),
+                        editSessionId: selectedSource.EDIT_SESSION_ID,
+                        sessionStatus: selectedSource.SESSION_STATUS
+                    };
+                }
+                this.renderSourceContext();
+                this.renderEditingTableGrid();
+                this.persistContext();
+                this.setPanel(this.pageLabel("violationEditPanel", "최종 규칙 실시간 위반 조회 및 수정"), "");
+                this.setKpis([
+                    {
+                        value: value ? "선택 완료" : "-",
+                        label: this.pageLabel("filterSourceTable", "원본 테이블"),
+                        hint: value
+                            ? this.pageLabel("queryAfterSourceSelection", "조회 버튼을 눌러 위반 데이터와 수정테이블 상태를 확인하세요.")
+                            : this.pageLabel("sourceTableRequired", "조회할 INITUP$ 원본 테이블을 반드시 선택하세요.")
+                    }
+                ]);
+                this.renderEmpty(
+                    value
+                        ? this.pageLabel("queryAfterSourceSelection", "조회 버튼을 눌러 위반 데이터와 수정테이블 상태를 확인하세요.")
+                        : this.pageLabel("sourceTableRequired", "조회할 INITUP$ 원본 테이블을 반드시 선택하세요.")
+                );
+                if (autoQuery && selectedSource) {
+                    if (this.stage.mode === "VIOLATIONS") await this.loadViolations();
+                    else await this.refresh();
+                }
+            },
+
+            selectEditingTableRow(value) {
+                if (String(this.stageFilters.VIOLATION_TARGET_TABLE || "").toUpperCase() === String(value || "").toUpperCase()) {
+                    this.renderEditingTableGrid();
+                    const query = this.stage.mode === "VIOLATIONS"
+                        ? this.loadViolations()
+                        : this.refresh();
+                    query.catch((error) => this.renderError(error));
+                    return;
+                }
+                this.handleViolationSourceTableChange(value, true)
+                    .catch((error) => this.renderError(error));
+            },
+
             handleViolationScopeFilter(key, value) {
                 this.stageFilters[key] = String(value || "ALL");
                 const options = this.getViolationRuleOptions();
-                if (!options.some((rule) => String(rule.EDIT_RULE_ID) === this.selectedViolationRuleId)) {
-                    this.selectedViolationRuleId = String(options[0]?.EDIT_RULE_ID || "");
-                }
+                const availableIds = new Set(options.map((rule) => String(rule.EDIT_RULE_ID)));
+                this.violationRuleScopeIds = new Set(
+                    [...this.violationRuleScopeIds].filter((id) => availableIds.has(String(id)))
+                );
+                this.selectedViolationRuleId = this.violationRuleScopeIds.size === 1
+                    ? [...this.violationRuleScopeIds][0]
+                    : "ALL";
                 this.renderStageFilters();
             },
 
             selectViolationRule(value) {
-                this.selectedViolationRuleId = String(value || "");
+                this.violationRuleScopeIds = String(value || "ALL") === "ALL"
+                    ? new Set()
+                    : new Set([String(value)]);
+                this.selectedViolationRuleId = this.violationRuleScopeIds.size === 1
+                    ? [...this.violationRuleScopeIds][0]
+                    : "ALL";
                 this.page = 1;
+            },
+
+            toggleViolationRuleScope(value, checked, input = null) {
+                const normalized = String(value || "ALL");
+                if (normalized === "ALL") {
+                    if (checked) this.violationRuleScopeIds.clear();
+                } else if (checked) {
+                    this.violationRuleScopeIds.add(normalized);
+                } else {
+                    this.violationRuleScopeIds.delete(normalized);
+                }
+                this.selectedViolationRuleId = this.violationRuleScopeIds.size === 1
+                    ? [...this.violationRuleScopeIds][0]
+                    : "ALL";
+                this.page = 1;
+                const details = input?.closest?.(".edit-work-rule-multi-select");
+                if (!details) {
+                    this.renderStageFilters();
+                    return;
+                }
+                const allInput = details.querySelector("input[data-rule-scope='ALL']");
+                if (allInput) allInput.checked = this.violationRuleScopeIds.size === 0;
+                if (normalized === "ALL" && checked) {
+                    details.querySelectorAll("input[data-rule-scope]:not([data-rule-scope='ALL'])")
+                        .forEach((element) => {
+                            element.checked = false;
+                        });
+                }
+                const summary = details.querySelector("summary");
+                if (summary) {
+                    summary.textContent = this.violationRuleScopeIds.size
+                        ? this.pageLabel("selectedFinalRules", "최종 규칙 {count}개 선택")
+                            .replaceAll("{count}", this.violationRuleScopeIds.size.toLocaleString())
+                        : `${this.pageLabel("allFinalRules", "전체 최종 규칙")} (${this.getViolationRuleOptions().length.toLocaleString()}개)`;
+                }
             },
 
             openGeneratedViolationSql() {
@@ -1982,26 +2698,36 @@
                 if (!layer || !body || !this.generatedViolationSql) return;
                 this.resetDetailDialogPosition();
                 if (eyebrow) eyebrow.textContent = "FINAL RULE · LIVE SQL";
-                if (title) title.textContent = this.selectedViolationRule?.RULE_NAME || "실시간 위반 조회 SQL";
-                const selectedType = String(this.selectedViolationRule?.SOURCE_RULE_TYPE || "").toUpperCase();
+                const selectedRules = this.selectedViolationRules || [];
+                const singleRule = selectedRules.length === 1 ? selectedRules[0] : null;
+                if (title) {
+                    title.textContent = singleRule?.RULE_NAME
+                        || `${selectedRules.length.toLocaleString()}개 최종 규칙 실시간 위반 조회 SQL`;
+                }
+                const selectedType = String(singleRule?.SOURCE_RULE_TYPE || "").toUpperCase();
                 const ruleResult = selectedType === "SYMBOLIC"
-                    ? `예측 대상 ${this.selectedViolationRule?.TARGET_COLUMN || "-"}`
-                    : `${this.selectedViolationRule?.TARGET_COLUMN || "-"} = ${this.selectedViolationRule?.EXPECTED_VALUE ?? "-"}`;
+                    ? `예측 대상 ${singleRule?.TARGET_COLUMN || "-"}`
+                    : `${singleRule?.TARGET_COLUMN || "-"} = ${singleRule?.EXPECTED_VALUE ?? "-"}`;
+                const tableNames = [...new Set(
+                    selectedRules.map(
+                        (rule) => `${rule.TARGET_OWNER || "-"}.${rule.TARGET_TABLE || "-"}`
+                    )
+                )];
                 body.innerHTML = `
                     <dl class="edit-work-detail-meta">
                         <div><dt>조회 방식</dt><dd>실제 INITUP$ 테이블 실시간 조회</dd></div>
-                        <div><dt>최종 규칙 ID</dt><dd>#${this.escapeHtml(this.selectedViolationRuleId || "-")}</dd></div>
-                        <div><dt>대상 테이블</dt><dd>${this.escapeHtml(this.selectedViolationRule?.TARGET_OWNER || "-")}.${this.escapeHtml(this.selectedViolationRule?.TARGET_TABLE || "-")}</dd></div>
-                        <div><dt>규칙 유형</dt><dd>${this.escapeHtml(this.stageFilterOptionLabel(this.selectedViolationRule?.SOURCE_RULE_TYPE || "-"))}</dd></div>
+                        <div><dt>최종 규칙</dt><dd>${selectedRules.length.toLocaleString()}개</dd></div>
+                        <div><dt>대상 테이블</dt><dd>${this.escapeHtml(tableNames.join(", ") || "-")}</dd></div>
+                        <div><dt>통합 방식</dt><dd>규칙별 실시간 SQL UNION ALL · 전체 DB 페이징</dd></div>
                     </dl>
-                    <section class="edit-work-detail-rule">
+                    ${singleRule ? `<section class="edit-work-detail-rule">
                         <strong>${selectedType === "SYMBOLIC" ? "f(X) 수식" : "IF 조건"}</strong>
-                        <pre>${this.renderColumnAwareText(this.selectedViolationRule?.RULE_EXPRESSION || "-", this.selectedViolationRule?.COLUMN_COMMENTS || {})}</pre>
+                        <pre>${this.renderColumnAwareText(singleRule.RULE_EXPRESSION || "-", singleRule.COLUMN_COMMENTS || {})}</pre>
                     </section>
                     <section class="edit-work-detail-rule">
                         <strong>${selectedType === "SYMBOLIC" ? "예측 대상" : "THEN 결과"}</strong>
-                        <pre>${this.renderColumnAwareText(ruleResult, this.selectedViolationRule?.COLUMN_COMMENTS || {})}</pre>
-                    </section>
+                        <pre>${this.renderColumnAwareText(ruleResult, singleRule.COLUMN_COMMENTS || {})}</pre>
+                    </section>` : ""}
                     <section class="edit-work-detail-rule is-focus">
                         <strong>서버 자동 생성 읽기 전용 SQL</strong>
                         <pre>${this.escapeHtml(this.generatedViolationSql)}</pre>
@@ -2012,101 +2738,110 @@
                 layer.querySelector(".edit-work-detail-dialog")?.focus();
             },
 
-            toggleVisibleViolationRules(checked) {
+            violationRowKey(row) {
+                return [
+                    row?.EDIT_RULE_ID || "",
+                    row?.CASE_ROWID || "",
+                    row?.TARGET_COLUMN || "",
+                    row?.VIOLATION_ID || ""
+                ].join("|");
+            },
+
+            toggleVisibleViolationRows(checked) {
                 this.getVisibleRows().forEach((row) => {
-                    if (!row?.EDIT_RULE_ID) return;
-                    const id = String(row.EDIT_RULE_ID);
-                    if (checked) this.selectedRuleIds.add(id);
-                    else this.selectedRuleIds.delete(id);
+                    const key = this.violationRowKey(row);
+                    if (checked) this.selectedViolationRowKeys.add(key);
+                    else this.selectedViolationRowKeys.delete(key);
                 });
-                this.renderGrid();
+                getContainerEl(`#workContent-${PAGE_CODE}`)
+                    ?.querySelectorAll("tbody .is-select-column input[type='checkbox']")
+                    .forEach((input) => {
+                        input.checked = Boolean(checked);
+                    });
             },
 
-            toggleViolationRule(index, checked) {
+            toggleViolationRow(index, checked) {
                 const row = this.getVisibleRows()[index];
-                if (!row?.EDIT_RULE_ID) return;
-                const id = String(row.EDIT_RULE_ID);
-                if (checked) this.selectedRuleIds.add(id);
-                else this.selectedRuleIds.delete(id);
-                this.renderGrid();
+                if (!row) return;
+                const key = this.violationRowKey(row);
+                if (checked) this.selectedViolationRowKeys.add(key);
+                else this.selectedViolationRowKeys.delete(key);
             },
 
-            async createSessionFromSelectedRules() {
+            async createEditingTableForSelectedSource(selectedValue = "") {
                 if (this.editingWorkStarting) return;
-                const ids = [
-                    ...new Set([
-                        ...this.selectedRuleIds,
-                        this.selectedViolationRuleId
-                    ].filter(Boolean))
-                ].map(Number).filter((value) => Number.isFinite(value));
-                if (!ids.length) {
-                    CommonMessage.warn("위반 목록에서 편집할 규칙을 선택하세요.");
+                if (
+                    selectedValue
+                    && String(this.stageFilters.VIOLATION_TARGET_TABLE || "").toUpperCase() !== String(selectedValue).toUpperCase()
+                ) {
+                    await this.handleViolationSourceTableChange(selectedValue, false);
+                }
+                const source = this.getSelectedViolationSource();
+                if (!source) {
+                    CommonMessage.warn(
+                        this.pageLabel("sourceTableRequired", "조회할 INITUP$ 원본 테이블을 반드시 선택하세요.")
+                    );
                     return;
                 }
-                const first = this.selectedViolationRule
-                    || this.rows.find((row) => ids.includes(Number(row.EDIT_RULE_ID)))
-                    || {};
-                const sourceTable = String(first.TARGET_TABLE || "INITUP$");
-                const editTable = sourceTable.startsWith("INITUP$")
-                    ? `INITDN$${sourceTable.slice("INITUP$".length)}`
-                    : "INITDN$ 편집 테이블";
+                if (source?.EDIT_TABLE_EXISTS && !source?.STRUCTURE_MATCHES) {
+                    CommonMessage.error(
+                        this.pageLabel(
+                            "editingTableStructureMismatch",
+                            "INITUP$와 INITDN$ 컬럼 구조가 일치하지 않아 수정테이블을 사용할 수 없습니다."
+                        )
+                    );
+                    return;
+                }
+                const editTable = source.EDIT_TABLE
+                    || String(source.TABLE_NAME || "").replace(/^INITUP\$/, "INITDN$");
                 const confirmed = await CommonMessage.confirm(
-                    `편집 작업을 시작하면 선택한 최종 규칙을 작업 범위로 등록하고 ` +
-                    `${first.TARGET_OWNER || "-"}.${editTable}을 준비합니다.\n` +
-                    `편집 테이블이 없으면 INITUP$ 원본으로 생성하며, 이미 있으면 삭제하지 않고 기존 테이블을 검증해 사용합니다.\n` +
-                    `기존 INITUP$ 원본 데이터는 변경하지 않습니다.`
+                    this.pageLabel(
+                        "editingTableCreateConfirm",
+                        "{source}와 1:1 구조인 {edit} 수정테이블을 생성할까요?\nINITUP$ 원본 데이터는 변경하지 않습니다."
+                    )
+                        .replaceAll("{source}", `${source.OWNER_NAME}.${source.TABLE_NAME}`)
+                        .replaceAll("{edit}", `${source.OWNER_NAME}.${editTable}`)
                 );
                 if (!confirmed) return;
                 this.editingWorkStarting = true;
-                this.setWorkActionLoading(true, this.pageLabel("editingWorkStarting", "편집 작업과 INITDN$ 편집 테이블을 준비하고 있습니다."));
+                this.setWorkActionLoading(
+                    true,
+                    this.pageLabel("editingTableCreating", "INITDN$ 수정테이블을 생성하고 있습니다.")
+                );
                 try {
-                    const payload = {
-                        projectId: this.optionalNumber(getContainerEl(`#projectId-${PAGE_CODE}`)?.value),
-                        scenarioId: this.optionalNumber(getContainerEl(`#scenarioId-${PAGE_CODE}`)?.value),
-                        sessionName: `${first.TARGET_TABLE || "INITUP"} 편집 ${new Date().toLocaleString()}`,
-                        editRuleIds: ids,
-                        baselineFlowRunId: this.optionalNumber(
-                            first.SOURCE_RUN_SOURCE_TYPE === "FLOW_WORK"
-                                ? first.SOURCE_RUN_ID
-                                : null
-                        )
-                    };
-                    const created = await CommonUtils.request(apiUrl("/sessions"), { method: "POST", body: payload, showLoading: false });
-                    const context = { ...this.readContext(), editSessionId: created.editSessionId };
+                    const prepared = await CommonUtils.request(
+                        apiUrl("/editing-tables"),
+                        {
+                            method: "POST",
+                            body: {
+                                projectId: this.optionalNumber(getContainerEl(`#projectId-${PAGE_CODE}`)?.value),
+                                scenarioId: this.optionalNumber(getContainerEl(`#scenarioId-${PAGE_CODE}`)?.value),
+                                targetOwner: source.OWNER_NAME,
+                                targetTable: source.TABLE_NAME
+                            },
+                            showLoading: false
+                        }
+                    );
+                    const editSessionId = prepared.editSessionId;
+                    const context = { ...this.readContext(), editSessionId };
                     localStorage.setItem(EDIT_CONTEXT_KEY, JSON.stringify(context));
-                    let prepared = null;
-                    let prepareError = null;
-                    try {
-                        prepared = await CommonUtils.request(
-                            apiUrl(`/sessions/${created.editSessionId}/prepare`),
-                            { method: "POST", showLoading: false }
-                        );
-                    } catch (error) {
-                        prepareError = error;
-                    }
-                    if (PAGE_CODE === "M05002") {
-                        this.invalidateEditWorkspaceCache("M05002_CLEANSING");
-                        await this.loadSessions(String(created.editSessionId));
-                        this.persistContext();
-                        await this.switchEditWorkspaceTab("M05002_CLEANSING");
-                    } else {
-                        sessionStorage.setItem("M06002:editContext", JSON.stringify(context));
-                        this.navigateStage("M06002");
-                    }
-                    if (prepareError) {
-                        CommonMessage.error(
-                            `편집 작업 #${created.editSessionId}은 등록했지만 편집 테이블을 준비하지 못했습니다. ` +
-                            `오류 수정 화면의 ‘${this.pageLabel("buttonRetryEditingWork", "편집 작업 준비 재시도")}’를 실행해 주세요.\n` +
-                            `${prepareError.message || ""}`
-                        );
-                        return;
-                    }
+                    this.invalidateEditWorkspaceCache("M05002_CLEANSING");
+                    await this.loadSessions(String(editSessionId));
+                    this.violationSourceTablesLoaded = false;
+                    await this.loadViolationSourceTables(true);
+                    await this.loadEditingTableStatus(this.getSelectedViolationSource(), true);
+                    this.persistContext();
                     const tableAction = prepared.editTableCreated ? "새로 생성" : "기존 테이블 확인";
                     CommonMessage.success(
-                        `편집 작업 #${created.editSessionId}을 시작했습니다.\n` +
-                        `${created.sourceTable} → ${prepared.editTable} · ${tableAction} · ` +
-                        `${Number(prepared.sourceRowCount || 0).toLocaleString()}행`
+                        this.pageLabel(
+                            "editingTableCreated",
+                            "수정테이블 준비를 완료했습니다. {edit} · {action} · {count}행"
+                        )
+                            .replaceAll("{edit}", `${source.OWNER_NAME}.${prepared.editTable}`)
+                            .replaceAll("{action}", tableAction)
+                            .replaceAll("{count}", Number(prepared.sourceRowCount || 0).toLocaleString())
                     );
+                    await this.loadViolations();
                 } finally {
                     this.editingWorkStarting = false;
                     this.setWorkActionLoading(false);
@@ -2114,13 +2849,18 @@
             },
 
             renderInlineEditor(row, index, session) {
-                const disabled = !session
-                    || !row.CASE_ROWID
-                    || !["EDITING", "VALIDATED"].includes(String(session.SESSION_STATUS || ""));
+                const sessionStatus = String(session?.SESSION_STATUS || "").toUpperCase();
+                const disabled = !row.CASE_ROWID
+                    || (session && !["DRAFT", "EDITING", "VALIDATED"].includes(sessionStatus));
+                const hasSavedChange = Boolean(row.EDIT_CHANGE_ID)
+                    || !["", "UNEDITED"].includes(String(row.CHANGE_STATUS || "").toUpperCase());
+                const suggestedValue = hasSavedChange
+                    ? row.CURRENT_VALUE
+                    : (row.EXPECTED_VALUE ?? row.CURRENT_VALUE ?? row.ACTUAL_VALUE ?? "");
                 return `
                     <span class="edit-work-inline-editor">
-                        <input id="editValue-${PAGE_CODE}-${index}" value="${this.escapeHtml(row.CURRENT_VALUE ?? row.EXPECTED_VALUE ?? "")}" ${disabled ? "disabled" : ""} title="${row.CASE_ROWID ? "" : "원본 ROWID가 없어 수정할 수 없습니다."}">
-                        <button type="button" class="is-primary" onclick="${PAGE_CODE}.saveViolationChange(${index})" ${disabled ? "disabled" : ""}>저장</button>
+                        <input id="editValue-${PAGE_CODE}-${index}" value="${this.escapeHtml(suggestedValue ?? "")}" ${disabled ? "disabled" : ""} title="${row.CASE_ROWID ? "INITDN$에 저장할 수정값" : "원본 ROWID가 없어 수정할 수 없습니다."}">
+                        <button type="button" class="is-primary" onclick="${PAGE_CODE}.saveViolationChange(${index})" ${disabled ? "disabled" : ""}>수정 저장</button>
                     </span>
                 `;
             },
@@ -2172,6 +2912,9 @@
                     const context = { ...this.readContext(), editSessionId: "" };
                     localStorage.setItem(EDIT_CONTEXT_KEY, JSON.stringify(context));
                     this.selectedSessionId = "";
+                    this.editingTableStatus = null;
+                    this.violationSourceTables = [];
+                    this.violationSourceTablesLoaded = false;
                     this.invalidateEditWorkspaceCache();
                     await this.loadSessions("");
                     this.persistContext();
@@ -2188,39 +2931,244 @@
 
             async saveViolationChange(index) {
                 const row = this.getVisibleRows()[index];
+                if (!row) return;
+                await this.saveViolationEntries([{ row, index }], false);
+            },
+
+            async saveSelectedViolationChanges() {
+                const entries = this.getVisibleRows()
+                    .map((row, index) => ({ row, index }))
+                    .filter(({ row }) => this.selectedViolationRowKeys.has(this.violationRowKey(row)));
+                if (!entries.length) {
+                    CommonMessage.warn(this.pageLabel("selectViolationsToSave", "수정 저장할 위반 행을 체크하세요."));
+                    return;
+                }
+                if (this.getSelectedSession()) {
+                    const confirmed = await CommonMessage.confirm(
+                        this.pageLabel("bulkChangeConfirm", "선택한 위반 행 {count}건의 수정값을 INITDN$에 저장할까요?")
+                            .replaceAll("{count}", entries.length.toLocaleString())
+                    );
+                    if (!confirmed) return;
+                }
+                await this.saveViolationEntries(entries, true);
+            },
+
+            buildViolationChangePayload(row, index) {
+                return {
+                    editRuleId: this.optionalNumber(row.EDIT_RULE_ID),
+                    sourceViolationType: row.SOURCE_VIOLATION_TYPE,
+                    sourceViolationId: Number(row.VIOLATION_ID),
+                    sourceRowid: row.CASE_ROWID,
+                    caseId: row.CASE_ID || null,
+                    columnName: row.TARGET_COLUMN,
+                    newValue: getContainerEl(`#editValue-${PAGE_CODE}-${index}`)?.value ?? "",
+                    expectedValue: row.EXPECTED_VALUE ?? null
+                };
+            },
+
+            async saveViolationEntries(entries, bulk) {
+                const uniqueChanges = new Map();
+                for (const entry of entries) {
+                    const payload = this.buildViolationChangePayload(entry.row, entry.index);
+                    const cellKey = `${payload.sourceRowid || ""}|${payload.columnName || ""}`;
+                    const existing = uniqueChanges.get(cellKey);
+                    if (existing && String(existing.newValue ?? "") !== String(payload.newValue ?? "")) {
+                        CommonMessage.warn(
+                            `동일한 행·컬럼(${payload.caseId || payload.sourceRowid} / ${payload.columnName})에 서로 다른 수정값이 입력되었습니다.`
+                        );
+                        return;
+                    }
+                    if (!existing) uniqueChanges.set(cellKey, payload);
+                }
+                const changes = [...uniqueChanges.values()];
                 const session = this.getSelectedSession();
-                if (!row || !session) return;
-                const newValue = getContainerEl(`#editValue-${PAGE_CODE}-${index}`)?.value ?? "";
-                await CommonUtils.request(apiUrl(`/sessions/${session.EDIT_SESSION_ID}/changes`), {
-                    method: "POST",
-                    body: {
-                        editRuleId: this.optionalNumber(row.EDIT_RULE_ID),
-                        sourceViolationType: row.SOURCE_VIOLATION_TYPE,
-                        sourceViolationId: Number(row.VIOLATION_ID),
-                        sourceRowid: row.CASE_ROWID,
-                        caseId: row.CASE_ID || null,
-                        columnName: row.TARGET_COLUMN,
-                        newValue,
-                        expectedValue: row.EXPECTED_VALUE ?? null
-                    },
-                    showLoading: false
-                });
-                CommonMessage.success("INITDN$ 편집본에 수정값을 저장했습니다.");
-                this.invalidateEditWorkspaceCache("M05002");
-                await this.refresh();
+                if (!session || !this.isViolationEditingEnabled()) {
+                    CommonMessage.warn(
+                        this.pageLabel(
+                            "editingTableRequiredForSave",
+                            "수정값을 저장하려면 먼저 INITDN$ 수정테이블을 생성하세요."
+                        )
+                    );
+                    return;
+                }
+                this.setWorkActionLoading(
+                    true,
+                    this.pageLabel("savingViolationChanges", "선택한 오류 수정값을 INITDN$에 저장하고 있습니다.")
+                );
+                try {
+                    const result = await CommonUtils.request(
+                        apiUrl(`/sessions/${session.EDIT_SESSION_ID}/changes/bulk`),
+                        {
+                            method: "POST",
+                            body: { changes },
+                            showLoading: false
+                        }
+                    );
+                    this.selectedViolationRowKeys.clear();
+                    this.invalidateEditWorkspaceCache();
+                    await this.loadSessions(String(session.EDIT_SESSION_ID));
+                    this.persistContext();
+                    await this.refresh();
+                    const savedCount = Number(result.savedCount || changes.length);
+                    CommonMessage.success(
+                        bulk
+                            ? this.pageLabel("bulkChangeSaved", "선택한 오류 수정값 {count}건을 저장했습니다.")
+                                .replaceAll("{count}", savedCount.toLocaleString())
+                            : this.pageLabel("singleChangeSaved", "INITDN$ 편집본에 수정값을 저장했습니다.")
+                    );
+                } finally {
+                    this.setWorkActionLoading(false);
+                }
+            },
+
+            parseChangeEventDetail(row, changeMap = new Map()) {
+                let detail = row?.EVENT_DETAIL_JSON;
+                if (detail && typeof detail === "string") {
+                    try {
+                        detail = JSON.parse(detail);
+                    } catch (_error) {
+                        detail = {};
+                    }
+                }
+                detail = detail && typeof detail === "object" ? detail : {};
+                const summary = String(row?.EVENT_SUMMARY || "");
+                const summaryMatch = summary.match(/^([A-Z][A-Z0-9_$#]*) updated for source ROWID (.+)\.$/i);
+                const sourceRowid = detail.sourceRowid ?? summaryMatch?.[2] ?? "";
+                const columnName = detail.columnName ?? summaryMatch?.[1] ?? "";
+                const currentChange = changeMap.get(`${sourceRowid}|${columnName}`) || {};
+                const session = this.getSelectedSession() || {};
+                return {
+                    ...row,
+                    EDIT_RULE_ID: detail.editRuleId ?? "",
+                    TARGET_OWNER: detail.targetOwner ?? session.TARGET_OWNER ?? "",
+                    SOURCE_TABLE: detail.sourceTable ?? session.SOURCE_TABLE ?? "",
+                    EDIT_TABLE: detail.editTable ?? session.EDIT_TABLE ?? "",
+                    CASE_ID: detail.caseId ?? currentChange.CASE_ID ?? "",
+                    SOURCE_ROWID: sourceRowid,
+                    COLUMN_NAME: columnName,
+                    ORIGINAL_VALUE: currentChange.OLD_VALUE ?? detail.oldValue ?? "",
+                    OLD_VALUE: detail.oldValue ?? "",
+                    NEW_VALUE: detail.newValue ?? "",
+                    EXPECTED_VALUE: detail.expectedValue ?? "",
+                    SOURCE_VIOLATION_ID: detail.violationId ?? "",
+                    EDITED_BY: row?.EVENT_USER || "",
+                    EDITED_AT: row?.CREATED_AT || ""
+                };
+            },
+
+            async loadChangeHistory() {
+                await this.loadViolationSourceTables();
+                let source = this.getSelectedViolationSource();
+                let session = this.getSelectedSession();
+                if (!source && session) {
+                    const sourceValue = `${session.TARGET_OWNER || ""}.${session.SOURCE_TABLE || ""}`.toUpperCase();
+                    if (this.violationSourceTables.some(
+                        (row) => `${row.OWNER_NAME || ""}.${row.TABLE_NAME || ""}`.toUpperCase() === sourceValue
+                    )) {
+                        this.stageFilters.VIOLATION_TARGET_TABLE = sourceValue;
+                        source = this.getSelectedViolationSource();
+                    }
+                }
+                if (source) {
+                    const mappedSessionId = String(source.LATEST_EDIT_SESSION_ID || "");
+                    const sessionSelect = getContainerEl(`#editSessionId-${PAGE_CODE}`);
+                    const sessionExists = this.sessions.some(
+                        (row) => String(row.EDIT_SESSION_ID) === mappedSessionId
+                    );
+                    this.selectedSessionId = sessionExists ? mappedSessionId : "";
+                    if (sessionSelect) sessionSelect.value = this.selectedSessionId;
+                    session = this.getSelectedSession();
+                }
+                this.renderEditingTableGrid();
+                this.setPanel(this.pageLabel("changeHistoryPanel", "오류 수정 이력"), "");
+                this.hideModeForm();
+                this.serverPaging = false;
+                if (!session) {
+                    this.rows = [];
+                    this.setKpis([
+                        {
+                            value: "-",
+                            label: this.pageLabel("editingWork", "편집 작업"),
+                            hint: this.pageLabel("selectEditingTableForHistory", "수정 이력을 조회할 테이블을 선택하세요.")
+                        }
+                    ]);
+                    this.renderChangeHistoryContent();
+                    return;
+                }
+                const params = this.contextParams();
+                params.set("editSessionId", session.EDIT_SESSION_ID);
+                params.set("eventType", "CELL_EDITED");
+                const [json, changesJson] = await Promise.all([
+                    CommonUtils.request(apiUrl(`/history?${params}`), { method: "GET", showLoading: false }),
+                    CommonUtils.request(apiUrl(`/sessions/${session.EDIT_SESSION_ID}/changes`), { method: "GET", showLoading: false })
+                ]);
+                const changeMap = new Map(
+                    (Array.isArray(changesJson.data) ? changesJson.data : []).map(
+                        (change) => [`${change.SOURCE_ROWID || ""}|${change.COLUMN_NAME || ""}`, change]
+                    )
+                );
+                this.rows = (Array.isArray(json.data) ? json.data : []).map(
+                    (row) => this.parseChangeEventDetail(row, changeMap)
+                );
+                const changedRows = new Set(this.rows.map((row) => row.SOURCE_ROWID).filter(Boolean)).size;
+                const changedColumns = new Set(this.rows.map((row) => row.COLUMN_NAME).filter(Boolean)).size;
+                this.setKpis([
+                    { value: this.rows.length, label: this.pageLabel("changeHistoryCount", "수정 이력"), hint: json.limited ? "최근 5,000건 표시" : `편집 작업 #${session.EDIT_SESSION_ID}` },
+                    { value: changedRows, label: this.pageLabel("changedRows", "수정 행"), hint: this.pageLabel("distinctSourceRows", "중복 제외 원본 행") },
+                    { value: changedColumns, label: this.pageLabel("changedColumns", "수정 컬럼"), hint: this.pageLabel("distinctChangedColumns", "중복 제외 컬럼") },
+                    { value: session.SESSION_STATUS || "-", label: this.pageLabel("editingWorkStatus", "편집 상태"), hint: session.EDIT_TABLE || "" }
+                ]);
+                this.renderChangeHistoryContent();
+            },
+
+            renderChangeHistoryContent() {
+                const content = getContainerEl(`#workContent-${PAGE_CODE}`);
+                if (!content) return;
+                const { filtered, visible } = this.getPagedRows(this.rows);
+                const historyColumns = [
+                    { key: "EDIT_EVENT_ID", label: "이력 ID", width: 72, className: "is-number" },
+                    { key: "EDIT_SESSION_ID", label: "편집 작업", width: 82, className: "is-number", render: (value) => value ? `#${this.escapeHtml(value)}` : "-" },
+                    { key: "EDIT_RULE_ID", label: "규칙 ID", width: 72, className: "is-number", render: (value) => value ? `#${this.escapeHtml(value)}` : "-" },
+                    { key: "SOURCE_TABLE", label: "INITUP$ 원본 테이블", width: 210, className: "is-code", render: (value, row) => this.escapeHtml(`${row.TARGET_OWNER || "-"}.${value || "-"}`) },
+                    { key: "EDIT_TABLE", label: "INITDN$ 편집 테이블", width: 210, className: "is-code", render: (value, row) => this.escapeHtml(`${row.TARGET_OWNER || "-"}.${value || "-"}`) },
+                    { key: "SOURCE_ROWID", label: "원본 ROWID", width: 145, className: "is-code" },
+                    { key: "CASE_ID", label: "업무 행키", width: 130, className: "is-code" },
+                    { key: "COLUMN_NAME", label: "수정 컬럼", width: 130, className: "is-code" },
+                    { key: "ORIGINAL_VALUE", label: "INITUP$ 원본값", width: 170, className: "is-rule-detail", render: (value, _row, index) => this.renderTextPreview(value, index, "ORIGINAL_VALUE", "INITUP$ 원본값") },
+                    { key: "OLD_VALUE", label: "INITDN$ 수정 전", width: 170, className: "is-rule-detail", render: (value, _row, index) => this.renderTextPreview(value, index, "OLD_VALUE", "INITDN$ 수정 전 값") },
+                    { key: "NEW_VALUE", label: "INITDN$ 수정 후", width: 170, className: "is-rule-detail", render: (value, _row, index) => this.renderTextPreview(value, index, "NEW_VALUE", "INITDN$ 수정 후 값") },
+                    { key: "EXPECTED_VALUE", label: "기대값 / 예측값", width: 150, className: "is-rule-detail", render: (value, _row, index) => this.renderTextPreview(value, index, "EXPECTED_VALUE", "기대값 / 예측값") },
+                    { key: "SOURCE_VIOLATION_ID", label: "위반 ID", width: 82, className: "is-number" },
+                    { key: "EVENT_SUMMARY", label: "수정 내용", width: 300, className: "is-rule-detail", render: (value, _row, index) => this.renderTextPreview(value, index, "EVENT_SUMMARY", "수정 내용") },
+                    { key: "EDITED_BY", label: "작업자", width: 110 },
+                    { key: "EDITED_AT", label: "수정 일시", width: 155, render: (value) => this.formatDate(value) }
+                ];
+                content.innerHTML = `
+                    ${this.buildGridHtml(visible, historyColumns, true)}
+                    ${visible.length ? "" : `<div class="edit-work-empty is-grid-empty">${this.escapeHtml(this.pageLabel("noChangeHistory", "조회할 오류 수정 이력이 없습니다."))}</div>`}
+                `;
+                this.updateGridMeta(filtered);
+                this.currentExport = {
+                    filename: "editing-change-history.csv",
+                    columns: historyColumns.map((column) => column.key),
+                    rows: filtered
+                };
+                this.renderStageFilters();
+                this.renderPanelSourceContext();
             },
 
             async loadValidation() {
-                const session = this.getSelectedSession();
+                await this.loadViolationSourceTables();
+                const { session } = this.resolveEditingTableSelection();
                 this.setPanel("에디팅 효과 검증", session ? `
-                    <button type="button" onclick="${PAGE_CODE}.openReanalysisFlow()"><i class="fas fa-wave-square"></i>INITDN$ Flow 재분석</button>
+                    <button type="button" title="${this.escapeHtml(this.pageLabel("buttonRerunRuleDiscoveryHelp", "INITDN$ 수정테이블을 대상으로 저장된 Flow의 규칙 발굴을 다시 실행합니다."))}" onclick="${PAGE_CODE}.openReanalysisFlow()"><i class="fas fa-wave-square"></i>${this.escapeHtml(this.pageLabel("buttonRerunRuleDiscovery", "규칙발굴재실행"))}</button>
                     <button type="button" class="is-primary" onclick="${PAGE_CODE}.markValidated()"><i class="fas fa-check-double"></i>효과 검증 완료</button>
                 ` : "");
                 this.hideModeForm();
                 if (!session) {
                     this.rows = [];
-                    this.setKpis([{ value: "-", label: "편집 세션", hint: "검증할 세션을 선택하세요." }]);
-                    this.renderEmpty("효과를 검증할 편집 세션을 선택하세요.");
+                    this.setKpis([{ value: "-", label: "작업 테이블", hint: this.pageLabel("selectEditingTableForValidation", "효과를 검증할 INITUP$/INITDN$ 작업 테이블을 선택하세요.") }]);
+                    this.renderEmpty(this.pageLabel("selectEditingTableForValidation", "효과를 검증할 INITUP$/INITDN$ 작업 테이블을 선택하세요."));
                     return;
                 }
                 const [validation, changes] = await Promise.all([
@@ -2342,27 +3290,34 @@
             },
 
             async loadDml() {
-                const session = this.getSelectedSession();
-                this.setPanel("운영 반영 DML", session ? `<button type="button" class="is-primary" onclick="${PAGE_CODE}.generateDml()"><i class="fas fa-wand-magic-sparkles"></i>DML 생성</button>` : "");
+                await this.loadViolationSourceTables();
+                const { session } = this.resolveEditingTableSelection();
+                this.setPanel("운영 반영 DML", "");
                 this.hideModeForm();
                 if (!session) {
                     this.rows = [];
-                    this.setKpis([{ value: "-", label: "편집 세션", hint: "운영 반영할 세션을 선택하세요." }]);
-                    this.renderEmpty("운영 반영 DML을 관리할 편집 세션을 선택하세요.");
+                    this.setKpis([{ value: "-", label: "작업 테이블", hint: this.pageLabel("selectEditingTableForApply", "운영 반영할 INITUP$/INITDN$ 작업 테이블을 선택하세요.") }]);
+                    this.renderEmpty(this.pageLabel("selectEditingTableForApply", "운영 반영할 INITUP$/INITDN$ 작업 테이블을 선택하세요."));
                     return;
                 }
                 const params = new URLSearchParams({ editSessionId: session.EDIT_SESSION_ID });
                 const json = await CommonUtils.request(apiUrl(`/dml?${params}`), { method: "GET", showLoading: false });
-                this.rows = Array.isArray(json.data) ? json.data : [];
+                this.rows = (Array.isArray(json.data) ? json.data : [])
+                    .sort((left, right) => Number(right.EDIT_DML_ID || 0) - Number(left.EDIT_DML_ID || 0));
                 if (!this.selectedDmlId || !this.rows.some((item) => String(item.EDIT_DML_ID) === String(this.selectedDmlId))) {
                     this.selectedDmlId = String(this.rows[0]?.EDIT_DML_ID || "");
                 }
                 this.selectedDml = this.rows.find((item) => String(item.EDIT_DML_ID) === String(this.selectedDmlId)) || null;
+                this.dmlSavedName = String(this.selectedDml?.DML_NAME || "");
+                this.dmlSavedSql = String(this.selectedDml?.DML_SQL || "");
+                this.dmlValidatedSql = ["APPROVED", "EXECUTED"].includes(String(this.selectedDml?.DML_STATUS || ""))
+                    ? this.dmlSavedSql
+                    : "";
                 const counts = this.countBy(this.rows, "DML_STATUS");
                 this.setKpis([
                     { value: this.rows.length, label: "등록 DML", hint: `Session #${session.EDIT_SESSION_ID}` },
-                    { value: counts.DRAFT || 0, label: "작성 중", hint: "검증·승인 전" },
-                    { value: counts.APPROVED || 0, label: "승인", hint: "운영 반영 가능" },
+                    { value: counts.DRAFT || 0, label: "작성 중", hint: "DML 검증 전" },
+                    { value: counts.APPROVED || 0, label: "검증·저장", hint: "DML 실행 가능" },
                     { value: counts.EXECUTED || 0, label: "실행 완료", hint: "커밋된 DML" }
                 ]);
                 this.renderDmlContent();
@@ -2372,31 +3327,67 @@
                 const content = getContainerEl(`#workContent-${PAGE_CODE}`);
                 if (!content) return;
                 const dml = this.selectedDml || {};
-                const { filtered, visible } = this.getPagedRows(this.rows);
+                this.renderDmlPanelActions();
+                const { filtered, visible } = this.getPagedRows(this.getDmlDisplayRows());
                 const dmlColumns = [
                     { key: "EDIT_DML_ID", label: "DML ID", width: 70, className: "is-number" },
                     { key: "DML_NAME", label: "DML 명", width: 220 },
-                    { key: "DML_STATUS", label: "상태", width: 90, render: (value) => this.badge(value) },
+                    { key: "DML_STATUS", label: "상태", width: 90, render: (value) => this.dmlStatusBadge(value) },
                     { key: "VALIDATION_MESSAGE", label: "검증 결과", width: 300, className: "is-rule-detail", render: (value, _row, index) => this.renderTextPreview(value, index, "VALIDATION_MESSAGE", "DML 검증 결과") },
                     { key: "AFFECTED_ROW_COUNT", label: "영향 행", width: 80, className: "is-number" },
                     { key: "EXECUTED_AT", label: "실행 일시", width: 150, render: (value) => this.formatDate(value) },
-                    { key: "_ACTION", label: "선택", width: 70, className: "is-action-column", headerClassName: "is-action-column", render: (_value, _row, index) => `<span class="edit-work-row-actions"><button onclick="${PAGE_CODE}.selectDml(${index})">열기</button></span>` }
+                    {
+                        key: "_ACTION",
+                        label: this.pageLabel("columnEditDml", "편집"),
+                        width: 124,
+                        className: "is-action-column",
+                        headerClassName: "is-action-column",
+                        render: (_value, row, index) => `
+                            <span class="edit-work-row-actions">
+                                <button title="${this.escapeHtml(this.pageLabel("buttonEditDmlHelp", "선택한 DML을 하단 편집창에 불러옵니다."))}"
+                                        onclick="event.stopPropagation(); ${PAGE_CODE}.selectDml(${index})">
+                                    ${this.escapeHtml(this.pageLabel("buttonEditDml", "편집"))}
+                                </button>
+                                <button class="is-danger"
+                                        title="${this.escapeHtml(
+                                            String(row.DML_STATUS || "").toUpperCase() === "EXECUTED"
+                                                ? this.pageLabel("executedDmlDeleteBlocked", "실행 완료 DML은 감사 이력 보존을 위해 삭제할 수 없습니다.")
+                                                : this.pageLabel("buttonDeleteDmlHelp", "선택한 저장 DML을 삭제합니다.")
+                                        )}"
+                                        onclick="event.stopPropagation(); ${PAGE_CODE}.deleteDml(${index})">
+                                    ${this.escapeHtml(this.pageLabel("buttonDeleteDml", "삭제"))}
+                                </button>
+                            </span>
+                        `
+                    }
                 ];
                 content.innerHTML = `
-                    ${this.buildGridHtml(visible, dmlColumns, true)}
+                    <div class="edit-work-dml-history-grid">
+                        ${this.buildGridHtml(visible, dmlColumns, true)}
+                    </div>
                     <section class="edit-work-dml-panel">
                         <div class="edit-work-form-grid">
-                            <label class="edit-work-field is-wide"><span>DML 명</span><input id="dmlName-${PAGE_CODE}" value="${this.escapeHtml(dml.DML_NAME || "")}" ${dml.DML_STATUS === "DRAFT" ? "" : "disabled"}></label>
-                            <label class="edit-work-field"><span>상태</span><input value="${this.escapeHtml(dml.DML_STATUS || "DRAFT")}" disabled></label>
+                            <label class="edit-work-field is-wide">
+                                <span class="edit-work-dml-name-label">
+                                    <span>DML 명</span>
+                                    <em>${this.escapeHtml(
+                                        dml.EDIT_DML_ID
+                                            ? (
+                                                String(dml.DML_STATUS || "").toUpperCase() === "EXECUTED"
+                                                    ? this.pageLabel("dmlIdExecutedNewVersion", "DML ID #{id} · 저장 시 신규 버전")
+                                                        .replaceAll("{id}", String(dml.EDIT_DML_ID))
+                                                    : `DML ID #${dml.EDIT_DML_ID}`
+                                            )
+                                            : this.pageLabel("dmlIdUnsaved", "신규 · 미저장")
+                                    )}</em>
+                                </span>
+                                <input id="dmlName-${PAGE_CODE}" value="${this.escapeHtml(dml.DML_NAME || "")}" oninput="${PAGE_CODE}.handleDmlNameInput()">
+                            </label>
+                            <label class="edit-work-field"><span>상태</span><input value="${this.escapeHtml(this.dmlStatusLabel(dml.DML_STATUS))}" disabled></label>
                             <label class="edit-work-field"><span>영향 행</span><input value="${this.escapeHtml(dml.AFFECTED_ROW_COUNT ?? "-")}" disabled></label>
                         </div>
-                        <p class="edit-work-dml-notice">운영 반영 SQL은 현재 편집 세션의 INITDN$ 변경 이력으로 서버가 생성합니다. 생성된 SQL이 달라지면 승인과 실행이 차단됩니다.</p>
-                        <textarea id="dmlSql-${PAGE_CODE}" class="edit-work-dml-editor" spellcheck="false" readonly>${this.escapeHtml(dml.DML_SQL || "")}</textarea>
-                        <div class="edit-work-form-actions">
-                            <button type="button" onclick="${PAGE_CODE}.saveDmlDraft()" ${dml.DML_STATUS === "DRAFT" ? "" : "disabled"}>명칭 저장</button>
-                            <button type="button" class="is-primary" onclick="${PAGE_CODE}.approveDml()" ${dml.DML_STATUS === "DRAFT" ? "" : "disabled"}>검증·승인</button>
-                            <button type="button" class="is-primary" onclick="${PAGE_CODE}.executeDml()" ${dml.DML_STATUS === "APPROVED" ? "" : "disabled"}>최종 실행</button>
-                        </div>
+                        <p class="edit-work-dml-notice">${this.escapeHtml(this.pageLabel("dmlEditNotice", "그리드의 각 행은 DML 버전입니다. 신규 생성한 미저장 DML도 즉시 표시되며, DML 저장 시 현재 SQL을 자동 검증합니다."))}</p>
+                        <textarea id="dmlSql-${PAGE_CODE}" class="edit-work-dml-editor" spellcheck="false" oninput="${PAGE_CODE}.handleDmlSqlInput()">${this.escapeHtml(dml.DML_SQL || "")}</textarea>
                     </section>
                 `;
                 this.updateGridMeta(filtered);
@@ -2407,56 +3398,320 @@
                 };
             },
 
+            getDmlDisplayRows() {
+                const unsaved = this.selectedDml
+                    && !this.selectedDml.EDIT_DML_ID
+                    && String(this.selectedDml.DML_STATUS || "").toUpperCase() === "UNSAVED"
+                    ? [{ ...this.selectedDml }]
+                    : [];
+                return [...unsaved, ...this.rows];
+            },
+
+            getVisibleDmlRows() {
+                const filtered = this.getFilteredRows(this.getDmlDisplayRows());
+                const start = (this.page - 1) * this.pageSize;
+                return filtered.slice(start, start + this.pageSize);
+            },
+
+            renderDmlPanelActions() {
+                const actions = getContainerEl(`#modeActions-${PAGE_CODE}`);
+                if (!actions) return;
+                const session = this.getSelectedSession();
+                if (!session) {
+                    actions.innerHTML = "";
+                    return;
+                }
+                const dml = this.selectedDml || {};
+                const currentSql = String(dml.DML_SQL || "");
+                const currentName = String(dml.DML_NAME || "");
+                const isValidated = Boolean(currentSql) && currentSql === this.dmlValidatedSql;
+                const isSaved = Boolean(dml.EDIT_DML_ID)
+                    && currentSql === this.dmlSavedSql
+                    && currentName === this.dmlSavedName;
+                const canValidate = Boolean(currentSql);
+                const canSave = Boolean(currentSql);
+                const canExecute = isValidated && isSaved && dml.DML_STATUS === "APPROVED";
+                const saveLabel = String(dml.DML_STATUS || "").toUpperCase() === "EXECUTED"
+                    ? this.pageLabel("buttonSaveAsNewDmlVersion", "새 버전 저장")
+                    : this.pageLabel("buttonSaveDml", "DML 저장");
+                actions.innerHTML = `
+                    <button type="button" onclick="${PAGE_CODE}.generateDml()"><i class="fas fa-plus"></i>${this.escapeHtml(this.pageLabel("buttonGenerateDml", "신규 DML 생성"))}</button>
+                    <button type="button" onclick="${PAGE_CODE}.regenerateDml()" ${currentSql ? "" : "disabled"}><i class="fas fa-rotate"></i>${this.escapeHtml(this.pageLabel("buttonRegenerateDml", "초기구문 재생성"))}</button>
+                    <button type="button" onclick="${PAGE_CODE}.validateDml()" ${canValidate ? "" : "disabled"}><i class="fas fa-check-double"></i>${this.escapeHtml(this.pageLabel("buttonValidateDml", "DML 검증"))}</button>
+                    <button type="button" class="is-primary" onclick="${PAGE_CODE}.saveDmlDraft()" ${canSave ? "" : "disabled"}><i class="fas fa-floppy-disk"></i>${this.escapeHtml(saveLabel)}</button>
+                    <button type="button" class="is-primary" onclick="${PAGE_CODE}.executeDml()" ${canExecute ? "" : "disabled"}><i class="fas fa-play"></i>${this.escapeHtml(this.pageLabel("buttonExecuteDml", "DML 실행"))}</button>
+                `;
+            },
+
             selectDml(index) {
-                const row = this.getVisibleRows()[index];
+                const row = this.getVisibleDmlRows()[index];
                 if (!row) return;
-                this.selectedDmlId = String(row.EDIT_DML_ID);
-                this.selectedDml = row;
+                const content = getContainerEl(`#workContent-${PAGE_CODE}`);
+                const historyGrid = content?.querySelector(".edit-work-dml-history-grid");
+                const scrollPosition = {
+                    contentTop: content?.scrollTop || 0,
+                    contentLeft: content?.scrollLeft || 0,
+                    gridTop: historyGrid?.scrollTop || 0,
+                    gridLeft: historyGrid?.scrollLeft || 0
+                };
+                this.selectedDmlId = row.EDIT_DML_ID ? String(row.EDIT_DML_ID) : "";
+                this.selectedDml = { ...row };
+                this.dmlSavedName = String(row.DML_NAME || "");
+                this.dmlSavedSql = String(row.DML_SQL || "");
+                this.dmlValidatedSql = ["APPROVED", "EXECUTED"].includes(String(row.DML_STATUS || ""))
+                    ? this.dmlSavedSql
+                    : "";
                 this.renderDmlContent();
+                window.requestAnimationFrame?.(() => {
+                    const nextContent = getContainerEl(`#workContent-${PAGE_CODE}`);
+                    const nextHistoryGrid = nextContent?.querySelector(".edit-work-dml-history-grid");
+                    if (nextContent) {
+                        nextContent.scrollTop = scrollPosition.contentTop;
+                        nextContent.scrollLeft = scrollPosition.contentLeft;
+                    }
+                    if (nextHistoryGrid) {
+                        nextHistoryGrid.scrollTop = scrollPosition.gridTop;
+                        nextHistoryGrid.scrollLeft = scrollPosition.gridLeft;
+                    }
+                });
+            },
+
+            async deleteDml(index) {
+                const row = this.getVisibleDmlRows()[index];
+                if (!row) {
+                    CommonMessage.warn(
+                        this.pageLabel("dmlDeleteTargetMissing", "삭제할 DML을 찾을 수 없습니다. 목록을 새로고침한 후 다시 시도하세요.")
+                    );
+                    return;
+                }
+                if (!row.EDIT_DML_ID) {
+                    CommonMessage.warn(
+                        this.pageLabel("unsavedDmlDeleteBlocked", "아직 저장되지 않은 DML입니다. 신규 DML 생성 또는 다른 저장 DML 편집으로 화면을 전환하세요.")
+                    );
+                    return;
+                }
+                if (String(row.DML_STATUS || "").toUpperCase() === "EXECUTED") {
+                    CommonMessage.warn(
+                        this.pageLabel("executedDmlDeleteBlocked", "실행 완료 DML은 감사 이력 보존을 위해 삭제할 수 없습니다.")
+                    );
+                    return;
+                }
+                const message = this.pageLabel(
+                    "confirmDeleteDml",
+                    "DML #{id} · {name}을 삭제하시겠습니까?\n삭제한 저장 DML은 복구할 수 없습니다."
+                )
+                    .replaceAll("{id}", String(row.EDIT_DML_ID))
+                    .replaceAll("{name}", String(row.DML_NAME || "-"));
+                if (!(await CommonMessage.confirm(message))) return;
+                try {
+                    await CommonUtils.request(apiUrl(`/dml/${row.EDIT_DML_ID}`), {
+                        method: "DELETE",
+                        showLoading: true
+                    });
+                    if (String(this.selectedDmlId) === String(row.EDIT_DML_ID)) {
+                        this.selectedDmlId = "";
+                        this.selectedDml = null;
+                        this.dmlSavedName = "";
+                        this.dmlSavedSql = "";
+                        this.dmlValidatedSql = "";
+                    }
+                    CommonMessage.success(this.pageLabel("dmlDeleted", "DML을 삭제했습니다."));
+                    this.invalidateEditWorkspaceCache("M05003_HISTORY");
+                    await this.refresh();
+                } catch (error) {
+                    CommonMessage.error(
+                        error?.message || this.pageLabel("dmlDeleteFailed", "DML 삭제에 실패했습니다."),
+                        { copyable: true }
+                    );
+                }
+            },
+
+            handleDmlNameInput() {
+                const name = getContainerEl(`#dmlName-${PAGE_CODE}`)?.value || "";
+                if (!this.selectedDml) this.selectedDml = {};
+                this.selectedDml.DML_NAME = name;
+                this.renderDmlPanelActions();
+            },
+
+            handleDmlSqlInput() {
+                const sql = getContainerEl(`#dmlSql-${PAGE_CODE}`)?.value || "";
+                if (!this.selectedDml) this.selectedDml = {};
+                this.selectedDml.DML_SQL = sql;
+                if (sql !== this.dmlValidatedSql) this.dmlValidatedSql = "";
+                this.renderDmlPanelActions();
             },
 
             async generateDml() {
                 const session = this.getSelectedSession();
                 if (!session) return;
                 const json = await CommonUtils.request(apiUrl(`/sessions/${session.EDIT_SESSION_ID}/dml/generate`), { method: "POST", showLoading: false });
-                this.selectedDmlId = String(json.editDmlId);
-                CommonMessage.success("검증된 변경으로 운영 반영 DML을 생성했습니다.");
-                this.invalidateEditWorkspaceCache("M05003_HISTORY");
-                await this.loadSessions(session.EDIT_SESSION_ID);
-                await this.refresh();
+                this.selectedDmlId = "";
+                this.selectedDml = {
+                    EDIT_DML_ID: null,
+                    DML_NAME: json.dmlName || `${session.SOURCE_TABLE} final apply`,
+                    DML_SQL: json.dmlSql || "",
+                    DML_STATUS: "UNSAVED",
+                    AFFECTED_ROW_COUNT: null
+                };
+                this.dmlSavedName = "";
+                this.dmlSavedSql = "";
+                this.dmlValidatedSql = "";
+                this.page = 1;
+                this.keyword = "";
+                const keywordInput = getContainerEl(`#gridKeyword-${PAGE_CODE}`);
+                if (keywordInput) keywordInput.value = "";
+                this.renderDmlContent();
+                CommonMessage.success(this.pageLabel("dmlGeneratedPreview", "신규 운영 반영 DML을 생성했습니다. 미저장 행을 확인한 후 검증하거나 바로 저장할 수 있습니다."));
+            },
+
+            async regenerateDml() {
+                const session = this.getSelectedSession();
+                if (!session || !this.selectedDml) return;
+                const content = getContainerEl(`#workContent-${PAGE_CODE}`);
+                const historyGrid = content?.querySelector(".edit-work-dml-history-grid");
+                const scrollPosition = {
+                    contentTop: content?.scrollTop || 0,
+                    contentLeft: content?.scrollLeft || 0,
+                    gridTop: historyGrid?.scrollTop || 0,
+                    gridLeft: historyGrid?.scrollLeft || 0
+                };
+                const json = await CommonUtils.request(
+                    apiUrl(`/sessions/${session.EDIT_SESSION_ID}/dml/generate`),
+                    { method: "POST", showLoading: false }
+                );
+                this.selectedDml = {
+                    ...this.selectedDml,
+                    DML_SQL: json.dmlSql || ""
+                };
+                this.dmlValidatedSql = "";
+                this.renderDmlContent();
+                window.requestAnimationFrame?.(() => {
+                    const nextContent = getContainerEl(`#workContent-${PAGE_CODE}`);
+                    const nextHistoryGrid = nextContent?.querySelector(".edit-work-dml-history-grid");
+                    if (nextContent) {
+                        nextContent.scrollTop = scrollPosition.contentTop;
+                        nextContent.scrollLeft = scrollPosition.contentLeft;
+                    }
+                    if (nextHistoryGrid) {
+                        nextHistoryGrid.scrollTop = scrollPosition.gridTop;
+                        nextHistoryGrid.scrollLeft = scrollPosition.gridLeft;
+                    }
+                });
+                CommonMessage.success(
+                    this.pageLabel(
+                        "dmlRegenerated",
+                        "선택한 DML을 현재 편집 변경 내역의 초기 생성 구문으로 다시 만들었습니다. 검증 후 저장하세요."
+                    )
+                );
             },
 
             async saveDmlDraft() {
                 const session = this.getSelectedSession();
                 if (!session) return;
+                const currentSql = getContainerEl(`#dmlSql-${PAGE_CODE}`)?.value || "";
+                if (!currentSql.trim()) {
+                    CommonMessage.warn(this.pageLabel("dmlSqlRequired", "저장할 DML SQL을 입력하세요."));
+                    return;
+                }
+                const currentStatus = String(this.selectedDml?.DML_STATUS || "");
+                const currentName = getContainerEl(`#dmlName-${PAGE_CODE}`)?.value?.trim?.()
+                    || `${session.SOURCE_TABLE} final apply`;
+                const hasChanges = (
+                    currentSql !== this.dmlSavedSql
+                    || currentName !== this.dmlSavedName
+                );
+                if (
+                    this.selectedDml?.EDIT_DML_ID
+                    && ["APPROVED", "EXECUTED"].includes(currentStatus)
+                    && !hasChanges
+                ) {
+                    CommonMessage.info(
+                        this.pageLabel("dmlNoChanges", "저장할 변경사항이 없습니다.")
+                    );
+                    return;
+                }
+                if (
+                    currentStatus === "EXECUTED"
+                    && !(await CommonMessage.confirm(
+                        this.pageLabel(
+                            "confirmExecutedDmlNewVersion",
+                            "실행 완료 DML은 감사 이력 보호를 위해 덮어쓸 수 없습니다. 현재 내용을 신규 DML 버전으로 저장하시겠습니까?"
+                        ),
+                        { defaultAction: "cancel" }
+                    ))
+                ) {
+                    return;
+                }
                 const payload = {
-                    editDmlId: this.optionalNumber(this.selectedDml?.EDIT_DML_ID),
+                    editDmlId: ["DRAFT", "APPROVED", "FAILED"].includes(currentStatus)
+                        ? this.optionalNumber(this.selectedDml?.EDIT_DML_ID)
+                        : null,
                     editSessionId: Number(session.EDIT_SESSION_ID),
-                    dmlName: getContainerEl(`#dmlName-${PAGE_CODE}`)?.value?.trim?.() || `${session.SOURCE_TABLE} final apply`,
-                    dmlSql: getContainerEl(`#dmlSql-${PAGE_CODE}`)?.value || ""
+                    dmlName: currentName,
+                    dmlSql: currentSql
                 };
-                const json = await CommonUtils.request(apiUrl("/dml"), { method: "POST", body: payload, showLoading: false });
-                this.selectedDmlId = String(json.editDmlId);
-                CommonMessage.success("DML을 임시 저장했습니다.");
-                this.invalidateEditWorkspaceCache("M05003_HISTORY");
-                await this.refresh();
+                try {
+                    const json = await CommonUtils.request(apiUrl("/dml"), {
+                        method: "POST",
+                        body: payload,
+                        showLoading: true
+                    });
+                    this.selectedDmlId = String(json.editDmlId);
+                    this.dmlValidatedSql = currentSql;
+                    CommonMessage.success(this.pageLabel("dmlSavedAfterValidation", "DML 검증과 저장을 완료했습니다."));
+                    this.invalidateEditWorkspaceCache("M05003_HISTORY");
+                    await this.loadSessions(session.EDIT_SESSION_ID);
+                    await this.refresh();
+                } catch (error) {
+                    this.dmlValidatedSql = "";
+                    this.renderDmlPanelActions();
+                    this.showDmlValidationFailure(error);
+                }
             },
 
-            async approveDml() {
-                if (!this.selectedDml?.EDIT_DML_ID) return;
-                await this.saveDmlDraft();
-                const dmlId = Number(this.selectedDmlId);
-                const json = await CommonUtils.request(apiUrl(`/dml/${dmlId}/approve`), { method: "POST", showLoading: false });
-                CommonMessage.success(json.validationMessage || "DML 검증과 승인이 완료되었습니다.");
-                this.invalidateEditWorkspaceCache("M05003_HISTORY");
-                await this.refresh();
+            async validateDml() {
+                const session = this.getSelectedSession();
+                if (!session) return;
+                const sql = getContainerEl(`#dmlSql-${PAGE_CODE}`)?.value || "";
+                if (!sql.trim()) return;
+                try {
+                    const json = await CommonUtils.request(apiUrl("/dml/validate"), {
+                        method: "POST",
+                        body: {
+                            editSessionId: Number(session.EDIT_SESSION_ID),
+                            dmlSql: sql
+                        },
+                        showLoading: true
+                    });
+                    if (!this.selectedDml) this.selectedDml = {};
+                    this.selectedDml.DML_SQL = sql;
+                    this.dmlValidatedSql = sql;
+                    this.renderDmlPanelActions();
+                    CommonMessage.success(json.validationMessage || this.pageLabel("dmlValidationSuccess", "DML 검증이 완료되었습니다."));
+                } catch (error) {
+                    this.dmlValidatedSql = "";
+                    this.renderDmlPanelActions();
+                    this.showDmlValidationFailure(error);
+                }
+            },
+
+            showDmlValidationFailure(error) {
+                const rawMessage = String(error?.message || "");
+                let detail = rawMessage;
+                if (/must match the server-generated INITDN\\$ apply statement/i.test(rawMessage)) {
+                    detail = this.pageLabel("dmlRegenerateRequired", "저장된 DML이 최신 서버 생성 SQL과 다릅니다. DML을 다시 생성하세요.");
+                } else if (/not valid Oracle SQL/i.test(rawMessage)) {
+                    detail = this.pageLabel("dmlOracleSyntaxInvalid", "생성된 운영 반영 DML의 Oracle 문법이 올바르지 않습니다.");
+                }
+                const title = this.pageLabel("dmlValidationFailed", "DML 검증에 실패했습니다.");
+                CommonMessage.error(detail ? `${title}\n${detail}` : title, { copyable: true });
             },
 
             async executeDml() {
                 if (!this.selectedDml?.EDIT_DML_ID || this.selectedDml.DML_STATUS !== "APPROVED") return;
                 const session = this.getSelectedSession();
                 const message = [
-                    `승인된 DML #${this.selectedDml.EDIT_DML_ID}을 최종 실행합니다.`,
+                    `검증·저장된 DML #${this.selectedDml.EDIT_DML_ID}을 실행합니다.`,
                     `${session.TARGET_OWNER}.${session.SOURCE_TABLE} 운영 원본이 변경되고 커밋됩니다.`,
                     "계속할까요?"
                 ].join("\n\n");
@@ -2470,10 +3725,23 @@
             },
 
             async loadHistory() {
-                const session = this.getSelectedSession();
+                await this.loadViolationSourceTables();
+                const { session } = this.resolveEditingTableSelection();
+                this.setPanel("에디팅 감사 이력", "");
+                this.hideModeForm();
+                if (!session) {
+                    this.rows = [];
+                    this.setKpis([{
+                        value: "-",
+                        label: "작업 테이블",
+                        hint: this.pageLabel("selectEditingTableForAudit", "전체 이력을 조회할 INITUP$/INITDN$ 작업 테이블을 선택하세요.")
+                    }]);
+                    this.renderEmpty(this.pageLabel("selectEditingTableForAudit", "전체 이력을 조회할 INITUP$/INITDN$ 작업 테이블을 선택하세요."));
+                    return;
+                }
                 const params = this.contextParams();
                 params.set("eventType", this.stageFilters.EVENT_TYPE || "ALL");
-                if (session) params.set("editSessionId", session.EDIT_SESSION_ID);
+                params.set("editSessionId", session.EDIT_SESSION_ID);
                 const json = await CommonUtils.request(apiUrl(`/history?${params}`), { method: "GET", showLoading: false });
                 this.rows = Array.isArray(json.data) ? json.data : [];
                 const counts = this.countBy(this.rows, "EVENT_TYPE");
@@ -2483,8 +3751,6 @@
                     { value: counts.CELL_EDITED || 0, label: "데이터 수정", hint: "INITDN$ 셀 변경" },
                     { value: counts.DML_EXECUTED || 0, label: "운영 반영", hint: "커밋 완료 이벤트" }
                 ]);
-                this.setPanel("에디팅 감사 이력", "");
-                this.hideModeForm();
                 this.renderHistoryContent();
             },
 
@@ -2537,12 +3803,18 @@
                     return;
                 }
                 if (
-                    ["VIOLATIONS", "CLEANSING"].includes(this.stage.mode)
-                    && this.selectedViolationRule?.TARGET_OWNER
-                    && this.selectedViolationRule?.TARGET_TABLE
+                    this.stage.mode === "VIOLATIONS"
+                    && this.selectedViolationRules.length
                 ) {
-                    context.textContent = `OWNER ${this.selectedViolationRule.TARGET_OWNER} · TABLE ${this.selectedViolationRule.TARGET_TABLE}`;
-                    context.title = `최종 규칙 #${this.selectedViolationRule.EDIT_RULE_ID || "-"} · ${this.selectedViolationRule.TARGET_OWNER}.${this.selectedViolationRule.TARGET_TABLE}`;
+                    const objects = [...new Set(
+                        this.selectedViolationRules.map(
+                            (rule) => `${rule.TARGET_OWNER || "-"}.${rule.TARGET_TABLE || "-"}`
+                        )
+                    )];
+                    context.textContent = objects.length === 1
+                        ? `OWNER · TABLE ${objects[0]} · RULE ${this.selectedViolationRules.length.toLocaleString()}개`
+                        : `OWNER · TABLE ${objects.length.toLocaleString()}개 · RULE ${this.selectedViolationRules.length.toLocaleString()}개`;
+                    context.title = objects.join(", ");
                     context.hidden = false;
                     return;
                 }
@@ -2585,11 +3857,10 @@
                             definition("SOURCE_RULE_TYPE", "filterRuleType", "규칙 유형", ["ASSOCIATION", "SYMBOLIC"]),
                             definition("TARGET_COLUMN", "filterErrorColumn", "오류 컬럼", values("TARGET_COLUMN"))
                         ];
-                    case "CLEANSING":
+                    case "CHANGE_HISTORY":
                         return [
-                            definition("SOURCE_RULE_TYPE", "filterRuleType", "규칙 유형", ["ASSOCIATION", "SYMBOLIC"]),
-                            definition("TARGET_COLUMN", "filterErrorColumn", "오류 컬럼", values("TARGET_COLUMN")),
-                            definition("CHANGE_STATUS", "filterEditStatus", "수정 상태", ["UNEDITED", "EDITED", "APPLIED", "FAILED"])
+                            definition("COLUMN_NAME", "filterChangedColumn", "수정 컬럼", values("COLUMN_NAME")),
+                            definition("EDITED_BY", "filterEditedBy", "작업자", values("EDITED_BY"))
                         ];
                     case "VALIDATION":
                         return [
@@ -2611,7 +3882,8 @@
                                 "DML_SAVED",
                                 "DML_APPROVED",
                                 "DML_EXECUTED",
-                                "DML_FAILED"
+                                "DML_FAILED",
+                                "DML_DELETED"
                             ]),
                             definition("ENTITY_TYPE", "filterEntityType", "대상 유형", ["EDIT_RULE", "EDIT_SESSION", "EDIT_CHANGE", "EDIT_DML"])
                         ];
@@ -2623,16 +3895,25 @@
             renderStageFilters() {
                 const host = getContainerEl(`#stageFilterTools-${PAGE_CODE}`);
                 if (!host) return;
-                if (["VIOLATIONS", "CLEANSING"].includes(this.stage.mode)) {
+                if (this.stage.mode === "VIOLATIONS") {
+                    this.renderEditingTableGrid();
                     const targetColumns = [...new Set(
                         this.violationRules
                             .map((rule) => String(rule.TARGET_COLUMN || "").trim().toUpperCase())
                             .filter(Boolean)
                     )].sort((left, right) => left.localeCompare(right, undefined, { numeric: true }));
                     const ruleOptions = this.getViolationRuleOptions();
-                    if (!ruleOptions.some((rule) => String(rule.EDIT_RULE_ID) === this.selectedViolationRuleId)) {
-                        this.selectedViolationRuleId = String(ruleOptions[0]?.EDIT_RULE_ID || "");
-                    }
+                    const availableRuleIds = new Set(
+                        ruleOptions.map((rule) => String(rule.EDIT_RULE_ID))
+                    );
+                    this.violationRuleScopeIds = new Set(
+                        [...this.violationRuleScopeIds].filter((id) => availableRuleIds.has(String(id)))
+                    );
+                    const selectedScopeCount = this.violationRuleScopeIds.size;
+                    const finalRuleSummary = selectedScopeCount
+                        ? this.pageLabel("selectedFinalRules", "최종 규칙 {count}개 선택")
+                            .replaceAll("{count}", selectedScopeCount.toLocaleString())
+                        : `${this.pageLabel("allFinalRules", "전체 최종 규칙")} (${ruleOptions.length.toLocaleString()}개)`;
                     host.innerHTML = `
                         <label>
                             <span>${this.escapeHtml(this.pageLabel("filterRuleType", "규칙 유형"))}</span>
@@ -2653,21 +3934,50 @@
                                 `).join("")}
                             </select>
                         </label>
-                        <label class="edit-work-final-rule-filter">
-                            <span>${this.escapeHtml(this.pageLabel("filterFinalRule", "최종 규칙"))}</span>
-                            <select onchange="${PAGE_CODE}.selectViolationRule(this.value)">
-                                ${ruleOptions.length
-                                    ? ruleOptions.map((rule) => `
-                                        <option value="${this.escapeHtml(rule.EDIT_RULE_ID)}" ${String(rule.EDIT_RULE_ID) === this.selectedViolationRuleId ? "selected" : ""}>
-                                            ${this.escapeHtml(this.violationRuleOptionLabel(rule))}
-                                        </option>
-                                    `).join("")
-                                    : `<option value="">${this.escapeHtml(this.pageLabel("noFinalRules", "조회 가능한 최종 규칙이 없습니다."))}</option>`}
+                        <label>
+                            <span>${this.escapeHtml(this.pageLabel("filterEditStatus", "수정 상태"))}</span>
+                            <select onchange="${PAGE_CODE}.handleViolationScopeFilter('VIOLATION_CHANGE_STATUS', this.value)">
+                                <option value="ALL" ${String(this.stageFilters.VIOLATION_CHANGE_STATUS || "ALL") === "ALL" ? "selected" : ""}>${this.escapeHtml(this.pageLabel("filterAll", "전체"))}</option>
+                                <option value="UNEDITED" ${this.stageFilters.VIOLATION_CHANGE_STATUS === "UNEDITED" ? "selected" : ""}>${this.escapeHtml(this.stageFilterOptionLabel("UNEDITED"))}</option>
+                                <option value="APPLIED" ${this.stageFilters.VIOLATION_CHANGE_STATUS === "APPLIED" ? "selected" : ""}>${this.escapeHtml(this.stageFilterOptionLabel("APPLIED"))}</option>
                             </select>
                         </label>
+                        <div class="edit-work-final-rule-filter">
+                            <span>${this.escapeHtml(this.pageLabel("filterFinalRule", "최종 규칙"))}</span>
+                            ${ruleOptions.length ? `
+                                <details class="edit-work-rule-multi-select">
+                                    <summary>${this.escapeHtml(finalRuleSummary)}</summary>
+                                    <div class="edit-work-rule-multi-options">
+                                        <label class="is-all-option">
+                                            <input type="checkbox"
+                                                   data-rule-scope="ALL"
+                                                   ${selectedScopeCount ? "" : "checked"}
+                                                   onchange="${PAGE_CODE}.toggleViolationRuleScope('ALL', this.checked, this)">
+                                            <span>${this.escapeHtml(this.pageLabel("allFinalRules", "전체 최종 규칙"))} (${ruleOptions.length.toLocaleString()}개)</span>
+                                        </label>
+                                        ${ruleOptions.map((rule) => `
+                                            <label>
+                                                <input type="checkbox"
+                                                       data-rule-scope="${this.escapeHtml(rule.EDIT_RULE_ID)}"
+                                                       ${this.violationRuleScopeIds.has(String(rule.EDIT_RULE_ID)) ? "checked" : ""}
+                                                       onchange="${PAGE_CODE}.toggleViolationRuleScope('${this.escapeHtml(rule.EDIT_RULE_ID)}', this.checked, this)">
+                                                <span>${this.escapeHtml(this.violationRuleOptionLabel(rule))}</span>
+                                            </label>
+                                        `).join("")}
+                                    </div>
+                                </details>
+                            ` : `
+                                <div class="edit-work-final-rule-empty">
+                                    ${this.escapeHtml(this.pageLabel("noFinalRules", "조회 가능한 최종 규칙이 없습니다."))}
+                                </div>
+                            `}
+                        </div>
                     `;
                     host.hidden = false;
                     return;
+                }
+                if (this.usesEditingTableSelection()) {
+                    this.renderEditingTableGrid();
                 }
                 const definitions = this.getStageFilterDefinitions();
                 host.innerHTML = definitions.map((item) => `
@@ -2677,7 +3987,7 @@
                             <option value="ALL">${this.escapeHtml(this.pageLabel("filterAll", "전체"))}</option>
                             ${item.options.map((value) => `
                                 <option value="${this.escapeHtml(value)}" ${String(this.stageFilters[item.key] || "ALL") === value ? "selected" : ""}>
-                                    ${this.escapeHtml(this.stageFilterOptionLabel(value))}
+                                    ${this.escapeHtml(this.stageFilterOptionLabel(value, item.key))}
                                 </option>
                             `).join("")}
                         </select>
@@ -2690,8 +4000,9 @@
                 return window.I18nManager?.tPage?.(PAGE_CODE, key, fallback) || fallback;
             },
 
-            stageFilterOptionLabel(value) {
+            stageFilterOptionLabel(value, filterKey = "") {
                 const normalized = String(value || "").toUpperCase();
+                if (filterKey === "DML_STATUS") return this.dmlStatusLabel(normalized);
                 const labels = {
                     ASSOCIATION: ["filterOptionAssociation", "연관 규칙"],
                     SYMBOLIC: ["filterOptionSymbolic", "수식 규칙"],
@@ -2702,6 +4013,8 @@
                     UNEDITED: ["filterOptionUnedited", "미수정"],
                     EDITED: ["filterOptionEdited", "수정"],
                     APPLIED: ["filterOptionApplied", "적용"],
+                    VALIDATED: ["filterOptionValidated", "검증 완료"],
+                    APPLY_READY: ["filterOptionApplyReady", "운영 반영 준비"],
                     FAILED: ["filterOptionFailed", "실패"],
                     CANCELLED: ["filterOptionCancelled", "취소"],
                     DRAFT: ["filterOptionDraft", "작성 중"],
@@ -2718,13 +4031,19 @@
 
             applyStageFilters() {
                 this.page = 1;
-                if (["RULE_MASTER", "HISTORY"].includes(this.stage.mode)) {
+                if (this.usesEditingTableSelection() && !this.getSelectedViolationSource()) {
+                    CommonMessage.warn(
+                        this.pageLabel("sourceTableRequired", "조회할 INITUP$ 원본 테이블을 반드시 선택하세요.")
+                    );
+                    return;
+                }
+                if (["RULE_MASTER", "CHANGE_HISTORY", "VALIDATION", "FINAL_APPLY", "HISTORY"].includes(this.stage.mode)) {
                     this.refresh();
-                } else if (["VIOLATIONS", "CLEANSING"].includes(this.stage.mode)) {
-                    this.loadViolations(this.stage.mode === "CLEANSING").catch((error) => this.renderError(error));
-                } else if (this.stage.mode === "VALIDATION") this.renderValidationContent(this.currentValidation || {});
-                else if (this.stage.mode === "FINAL_APPLY") this.renderDmlContent();
-                else this.renderGrid();
+                } else if (this.stage.mode === "VIOLATIONS") {
+                    this.loadViolations().catch((error) => this.renderError(error));
+                } else {
+                    this.renderGrid();
+                }
             },
 
             setKpis(items) {
@@ -2760,9 +4079,14 @@
             },
 
             buildGridHtml(rows, columns, paged = true) {
+                if (!this.freezeColumnsInitialized) {
+                    this.freezeColumns = columns.some((column) => column.key === "_SELECT") ? 1 : 0;
+                    this.freezeColumnsInitialized = true;
+                }
                 const freezeCount = Math.max(0, Math.min(Number(this.freezeColumns || 0), columns.length));
                 const rowOffset = paged ? Math.max(0, (this.page - 1) * this.pageSize) : 0;
                 const masterSelectable = this.stage.mode === "RULE_MASTER";
+                const dmlSelectable = this.stage.mode === "FINAL_APPLY";
                 return `
                     <table class="table-grid edit-work-grid"
                            data-grid-row-offset="${rowOffset}"
@@ -2773,8 +4097,10 @@
                         </tr></thead>
                         <tbody>
                             ${rows.map((row, rowIndex) => `
-                                <tr class="${masterSelectable ? "is-master-selectable" : ""} ${masterSelectable && String(row.USER_RULE_YN || "N").toUpperCase() === "Y" ? "is-user-rule-row" : ""} ${masterSelectable && String(row.EDIT_RULE_ID || "") === this.selectedMasterRuleId ? "is-selected-row" : ""}"
-                                    ${masterSelectable ? `data-edit-rule-id="${this.escapeHtml(row.EDIT_RULE_ID || "")}" onclick="${PAGE_CODE}.selectMasterRule(${Number(row.EDIT_RULE_ID || 0)})"` : ""}>
+                                <tr class="${masterSelectable ? "is-master-selectable" : ""} ${dmlSelectable ? "is-dml-selectable" : ""} ${dmlSelectable && !row.EDIT_DML_ID ? "is-unsaved-dml-row" : ""} ${masterSelectable && String(row.USER_RULE_YN || "N").toUpperCase() === "Y" ? "is-user-rule-row" : ""} ${masterSelectable && String(row.EDIT_RULE_ID || "") === this.selectedMasterRuleId ? "is-selected-row" : ""} ${dmlSelectable && String(row.EDIT_DML_ID || "") === String(this.selectedDmlId || "") ? "is-selected-row" : ""} ${this.stage.mode === "DISCOVERED_RULES" && String(row.DECISION_STATUS || "").toUpperCase() === "SELECTED" ? "is-decision-selected-row" : ""} ${this.stage.mode === "VIOLATIONS" && String(row.CHANGE_STATUS || "").toUpperCase() === "APPLIED" ? "is-applied-row" : ""}"
+                                    ${masterSelectable
+                                        ? `data-edit-rule-id="${this.escapeHtml(row.EDIT_RULE_ID || "")}" onclick="${PAGE_CODE}.selectMasterRule(${Number(row.EDIT_RULE_ID || 0)})"`
+                                        : (dmlSelectable ? `onclick="${PAGE_CODE}.selectDml(${rowIndex})"` : "")}>
                                     ${columns.map((column) => {
                                         const value = row[column.key];
                                         const html = typeof column.render === "function"
@@ -2791,8 +4117,16 @@
 
             getFilteredRows(rows = this.rows) {
                 const keyword = String(this.keyword || "").trim().toUpperCase();
+                const gridFilterKeys = new Set(
+                    this.getStageFilterDefinitions().map((definition) => definition.key)
+                );
                 const filters = Object.entries(this.stageFilters || {})
-                    .filter(([, value]) => value && value !== "ALL");
+                    .filter(([key, value]) => (
+                        gridFilterKeys.has(key)
+                        &&
+                        value
+                        && value !== "ALL"
+                    ));
                 return rows.filter((row) => {
                     if (filters.some(([key, value]) => String(row?.[key] ?? "") !== String(value))) return false;
                     if (!keyword) return true;
@@ -2820,7 +4154,9 @@
                 const total = this.serverPaging ? this.serverTotalRows : filteredRows.length;
                 const totalPages = Math.max(1, Math.ceil(total / this.pageSize));
                 const safePage = Math.min(this.page, totalPages);
-                const visibleCount = this.serverPaging ? this.rows.length : this.getVisibleRows().length;
+                const visibleCount = this.serverPaging
+                    ? this.rows.length
+                    : Math.min(this.pageSize, Math.max(0, filteredRows.length - ((safePage - 1) * this.pageSize)));
                 const message = getContainerEl(`#gridMessage-${PAGE_CODE}`);
                 if (message) {
                     message.textContent = total
@@ -2875,14 +4211,15 @@
                     }, 250);
                     return;
                 }
-                if (["VIOLATIONS", "CLEANSING"].includes(this.stage.mode)) {
+                if (this.stage.mode === "VIOLATIONS") {
                     if (this.keywordTimer) clearTimeout(this.keywordTimer);
                     this.keywordTimer = setTimeout(() => {
-                        this.loadViolations(this.stage.mode === "CLEANSING").catch((error) => this.renderError(error));
+                        this.loadViolations().catch((error) => this.renderError(error));
                     }, 250);
                     return;
                 }
-                if (this.stage.mode === "HISTORY") this.renderHistoryContent();
+                if (this.stage.mode === "CHANGE_HISTORY") this.renderChangeHistoryContent();
+                else if (this.stage.mode === "HISTORY") this.renderHistoryContent();
                 else if (this.stage.mode === "VALIDATION") this.renderValidationContent(this.currentValidation || {});
                 else if (this.stage.mode === "FINAL_APPLY") this.renderDmlContent();
                 else this.renderGrid();
@@ -2891,6 +4228,7 @@
             handleFreezeChange(value) {
                 const parsed = Number.parseInt(value, 10);
                 this.freezeColumns = Math.max(0, Math.min(50, Number.isFinite(parsed) ? parsed : 0));
+                this.freezeColumnsInitialized = true;
                 getContainerEl(`#workContent-${PAGE_CODE}`)
                     ?.querySelectorAll("table.table-grid")
                     .forEach((table) => {
@@ -2906,11 +4244,12 @@
                     this.loadDiscoveredRules().catch((error) => this.renderError(error));
                     return;
                 }
-                if (["VIOLATIONS", "CLEANSING"].includes(this.stage.mode)) {
-                    this.loadViolations(this.stage.mode === "CLEANSING").catch((error) => this.renderError(error));
+                if (this.stage.mode === "VIOLATIONS") {
+                    this.loadViolations().catch((error) => this.renderError(error));
                     return;
                 }
-                if (this.stage.mode === "VALIDATION") this.renderValidationContent(this.currentValidation || {});
+                if (this.stage.mode === "CHANGE_HISTORY") this.renderChangeHistoryContent();
+                else if (this.stage.mode === "VALIDATION") this.renderValidationContent(this.currentValidation || {});
                 else if (this.stage.mode === "FINAL_APPLY") this.renderDmlContent();
                 else if (this.stage.mode === "HISTORY") this.renderHistoryContent();
                 else this.renderGrid();
@@ -2925,11 +4264,12 @@
                     this.loadDiscoveredRules().catch((error) => this.renderError(error));
                     return;
                 }
-                if (["VIOLATIONS", "CLEANSING"].includes(this.stage.mode)) {
-                    this.loadViolations(this.stage.mode === "CLEANSING").catch((error) => this.renderError(error));
+                if (this.stage.mode === "VIOLATIONS") {
+                    this.loadViolations().catch((error) => this.renderError(error));
                     return;
                 }
-                if (this.stage.mode === "VALIDATION") this.renderValidationContent(this.currentValidation || {});
+                if (this.stage.mode === "CHANGE_HISTORY") this.renderChangeHistoryContent();
+                else if (this.stage.mode === "VALIDATION") this.renderValidationContent(this.currentValidation || {});
                 else if (this.stage.mode === "FINAL_APPLY") this.renderDmlContent();
                 else if (this.stage.mode === "HISTORY") this.renderHistoryContent();
                 else this.renderGrid();
@@ -2943,11 +4283,12 @@
                     this.loadDiscoveredRules().catch((error) => this.renderError(error));
                     return;
                 }
-                if (["VIOLATIONS", "CLEANSING"].includes(this.stage.mode)) {
-                    this.loadViolations(this.stage.mode === "CLEANSING").catch((error) => this.renderError(error));
+                if (this.stage.mode === "VIOLATIONS") {
+                    this.loadViolations().catch((error) => this.renderError(error));
                     return;
                 }
-                if (this.stage.mode === "VALIDATION") this.renderValidationContent(this.currentValidation || {});
+                if (this.stage.mode === "CHANGE_HISTORY") this.renderChangeHistoryContent();
+                else if (this.stage.mode === "VALIDATION") this.renderValidationContent(this.currentValidation || {});
                 else if (this.stage.mode === "FINAL_APPLY") this.renderDmlContent();
                 else if (this.stage.mode === "HISTORY") this.renderHistoryContent();
                 else this.renderGrid();
@@ -3114,8 +4455,54 @@
                 `;
             },
 
+            renderViolationRulePreview(value, row, index) {
+                const text = String(value ?? "").trim() || "-";
+                const comments = this.getViolationRuleDetailRow(row)?.COLUMN_COMMENTS || row?.COLUMN_COMMENTS || {};
+                return `
+                    <button type="button" class="edit-work-rule-preview" title="클릭하여 규칙 및 위반 결과 상세 보기" onclick="event.stopPropagation(); ${PAGE_CODE}.openViolationRuleDetail(${index})">
+                        ${this.renderColumnAwareText(text, comments)}
+                    </button>
+                `;
+            },
+
+            getViolationRuleDetailRow(violation) {
+                const masterRule = this.violationRules.find(
+                    (rule) => Number(rule.EDIT_RULE_ID) === Number(violation?.EDIT_RULE_ID)
+                ) || {};
+                const sourceType = String(
+                    masterRule.SOURCE_RULE_TYPE
+                    || violation?.SOURCE_RULE_TYPE
+                    || "ASSOCIATION"
+                ).toUpperCase();
+                return {
+                    ...masterRule,
+                    EDIT_RULE_ID: masterRule.EDIT_RULE_ID || violation?.EDIT_RULE_ID,
+                    RULE_NAME: masterRule.RULE_NAME || violation?.RULE_NAME,
+                    SOURCE_RULE_TYPE: sourceType,
+                    RULE_GROUP_CODE: sourceType === "SYMBOLIC" ? "CONTINUOUS" : "CATEGORICAL",
+                    RUN_ID: masterRule.SOURCE_RUN_ID ?? violation?.RUN_ID,
+                    RULE_EXPRESSION: masterRule.RULE_EXPRESSION || violation?.CONDITION_TEXT || "",
+                    TARGET_OWNER: masterRule.TARGET_OWNER || violation?.TARGET_OWNER,
+                    TARGET_TABLE: masterRule.TARGET_TABLE || violation?.TARGET_TABLE,
+                    TARGET_COLUMN: masterRule.TARGET_COLUMN || violation?.TARGET_COLUMN,
+                    TARGET_COLUMN_COMMENT: masterRule.TARGET_COLUMN_COMMENT
+                        || violation?.TARGET_COLUMN_COMMENT
+                        || "",
+                    COLUMN_COMMENTS: masterRule.COLUMN_COMMENTS || violation?.COLUMN_COMMENTS || {},
+                    EXPECTED_VALUE: masterRule.EXPECTED_VALUE ?? violation?.EXPECTED_VALUE,
+                    CONDITION_COUNT: masterRule.CONDITION_COUNT ?? masterRule.COMPLEXITY,
+                    SOURCE_OBJECT_NAME: masterRule.SOURCE_OBJECT_NAME
+                        || violation?.SOURCE_OBJECT_NAME
+                        || ""
+                };
+            },
+
             openRowTextDetail(index, key, detailTitle, columnAware = false) {
-                const row = this.getVisibleRows()[index];
+                const row = (
+                    this.stage.mode === "FINAL_APPLY"
+                        ? this.getVisibleDmlRows()
+                        : this.getVisibleRows()
+                )[index];
                 const layer = getContainerEl(`#detailLayer-${PAGE_CODE}`);
                 const title = getContainerEl(`#detailLayerTitle-${PAGE_CODE}`);
                 const eyebrow = getContainerEl(`#detailLayerEyebrow-${PAGE_CODE}`);
@@ -3165,25 +4552,12 @@
                 `;
             },
 
-            openRuleDetail(index, focusSection = "IF") {
-                const row = this.getVisibleRows()[index];
-                const layer = getContainerEl(`#detailLayer-${PAGE_CODE}`);
-                const title = getContainerEl(`#detailLayerTitle-${PAGE_CODE}`);
-                const eyebrow = getContainerEl(`#detailLayerEyebrow-${PAGE_CODE}`);
-                const body = getContainerEl(`#detailLayerBody-${PAGE_CODE}`);
-                if (!row || !layer || !body) return;
-                this.resetDetailDialogPosition();
-                if (this.isContinuousRule(row)) {
-                    this.openContinuousRuleDetail(row, focusSection, { layer, title, eyebrow, body });
-                    return;
-                }
+            buildAssociationRuleDetailContent(row, focusSection = "IF") {
                 const thenText = row.RESULT_EXPRESSION
                     || (row.EXPECTED_VALUE !== null && row.EXPECTED_VALUE !== undefined
                         ? `${row.TARGET_COLUMN} = ${row.EXPECTED_VALUE}`
                         : "-");
-                if (eyebrow) eyebrow.textContent = `${row.RULE_GROUP_CODE || row.SOURCE_RULE_TYPE || "RULE"} · RUN #${row.RUN_ID || "-"}`;
-                if (title) title.textContent = row.SOURCE_RULE_ID || row.RULE_NAME || "규칙 상세";
-                body.innerHTML = `
+                return `
                     <dl class="edit-work-detail-meta">
                         <div><dt>원본 테이블</dt><dd>${this.escapeHtml(row.TARGET_OWNER || "-")}.${this.escapeHtml(row.TARGET_TABLE || "-")}</dd></div>
                         <div><dt>결과 컬럼</dt><dd>${this.renderColumnRef(row.TARGET_COLUMN || "-", row.TARGET_COLUMN_COMMENT || "")}</dd></div>
@@ -3206,17 +4580,12 @@
                         <div><dt>판단</dt><dd>${this.badge(row.DECISION_STATUS)}</dd></div>
                     </dl>
                 `;
-                layer.hidden = false;
-                layer.querySelector(".edit-work-detail-dialog")?.focus();
             },
 
-            openContinuousRuleDetail(row, focusSection, elements) {
-                const { layer, title, eyebrow, body } = elements;
+            buildContinuousRuleDetailContent(row, focusSection = "FORMULA") {
                 const comments = row.COLUMN_COMMENTS || {};
                 const features = this.parseFeatureColumns(row);
-                if (eyebrow) eyebrow.textContent = `연속형 수식 규칙 · RUN #${row.RUN_ID || "-"}`;
-                if (title) title.textContent = row.SOURCE_RULE_ID || row.RULE_NAME || "수식 규칙 상세";
-                body.innerHTML = `
+                return `
                     <dl class="edit-work-detail-meta">
                         <div><dt>원본 테이블</dt><dd>${this.escapeHtml(row.TARGET_OWNER || "-")}.${this.escapeHtml(row.TARGET_TABLE || "-")}</dd></div>
                         <div><dt>예측 대상</dt><dd>${this.renderColumnRef(row.TARGET_COLUMN || "-", row.TARGET_COLUMN_COMMENT || "")}</dd></div>
@@ -3254,6 +4623,93 @@
                         <div><dt>판단</dt><dd>${this.badge(row.DECISION_STATUS)}</dd></div>
                     </dl>
                     <p class="edit-work-detail-note">연속형 규칙은 IF/THEN 연관 규칙이 아니라 입력 피처를 수식 f(X)에 적용해 대상 컬럼을 예측하는 규칙입니다.</p>
+                `;
+            },
+
+            openRuleDetail(index, focusSection = "IF") {
+                const row = this.getVisibleRows()[index];
+                const layer = getContainerEl(`#detailLayer-${PAGE_CODE}`);
+                const title = getContainerEl(`#detailLayerTitle-${PAGE_CODE}`);
+                const eyebrow = getContainerEl(`#detailLayerEyebrow-${PAGE_CODE}`);
+                const body = getContainerEl(`#detailLayerBody-${PAGE_CODE}`);
+                if (!row || !layer || !body) return;
+                this.resetDetailDialogPosition();
+                if (this.isContinuousRule(row)) {
+                    this.openContinuousRuleDetail(row, focusSection, { layer, title, eyebrow, body });
+                    return;
+                }
+                if (eyebrow) eyebrow.textContent = `${row.RULE_GROUP_CODE || row.SOURCE_RULE_TYPE || "RULE"} · RUN #${row.RUN_ID || "-"}`;
+                if (title) title.textContent = row.SOURCE_RULE_ID || row.RULE_NAME || "규칙 상세";
+                body.innerHTML = this.buildAssociationRuleDetailContent(row, focusSection);
+                layer.hidden = false;
+                layer.querySelector(".edit-work-detail-dialog")?.focus();
+            },
+
+            openContinuousRuleDetail(row, focusSection, elements) {
+                const { layer, title, eyebrow, body } = elements;
+                if (eyebrow) eyebrow.textContent = `연속형 수식 규칙 · RUN #${row.RUN_ID || "-"}`;
+                if (title) title.textContent = row.SOURCE_RULE_ID || row.RULE_NAME || "수식 규칙 상세";
+                body.innerHTML = this.buildContinuousRuleDetailContent(row, focusSection);
+                layer.hidden = false;
+                layer.querySelector(".edit-work-detail-dialog")?.focus();
+            },
+
+            buildViolationResultDetailContent(violation, rule) {
+                const isSymbolic = this.isContinuousRule(rule);
+                const expectedLabel = isSymbolic ? "예측값" : "THEN 기대값";
+                const expectedValue = isSymbolic
+                    ? (violation.PREDICTED_VALUE ?? violation.EXPECTED_VALUE)
+                    : violation.EXPECTED_VALUE;
+                const currentValue = violation.CURRENT_VALUE ?? violation.ACTUAL_VALUE;
+                return `
+                    <section class="edit-work-violation-detail">
+                        <header>
+                            <div>
+                                <small>LIVE VIOLATION RESULT</small>
+                                <strong>위반 조회 결과</strong>
+                            </div>
+                            ${this.badge(violation.CHANGE_STATUS || "UNEDITED")}
+                        </header>
+                        <dl class="edit-work-detail-meta">
+                            <div><dt>행 식별값</dt><dd>${this.escapeHtml(violation.CASE_ID || "-")}</dd></div>
+                            <div><dt>오류 컬럼</dt><dd>${this.renderColumnRef(violation.TARGET_COLUMN || "-", violation.TARGET_COLUMN_COMMENT || "")}</dd></div>
+                            <div><dt>${expectedLabel}</dt><dd>${this.escapeHtml(expectedValue ?? "-")}</dd></div>
+                            <div><dt>실제값</dt><dd class="is-violation-value">${this.escapeHtml(violation.ACTUAL_VALUE ?? "-")}</dd></div>
+                        </dl>
+                        <dl class="edit-work-detail-metrics is-violation">
+                            <div><dt>위반 점수</dt><dd>${this.escapeHtml(this.formatMetric(violation.VIOLATION_SCORE))}</dd></div>
+                            <div><dt>절대 오차</dt><dd>${isSymbolic ? this.escapeHtml(this.formatMetric(violation.ABS_ERROR)) : "-"}</dd></div>
+                            <div><dt>오차율</dt><dd>${isSymbolic ? this.escapeHtml(this.formatPercent(violation.ERROR_PCT)) : "-"}</dd></div>
+                            <div><dt>INITDN$ 수정값</dt><dd>${this.escapeHtml(currentValue ?? "-")}</dd></div>
+                            <div><dt>수정 상태</dt><dd>${this.badge(violation.CHANGE_STATUS || "UNEDITED")}</dd></div>
+                        </dl>
+                        <section class="edit-work-detail-rule is-violation-reason">
+                            <strong>위반 사유</strong>
+                            <pre>${this.escapeHtml(violation.VIOLATION_REASON || "-")}</pre>
+                        </section>
+                    </section>
+                `;
+            },
+
+            openViolationRuleDetail(index) {
+                const violation = this.getVisibleRows()[index];
+                const layer = getContainerEl(`#detailLayer-${PAGE_CODE}`);
+                const title = getContainerEl(`#detailLayerTitle-${PAGE_CODE}`);
+                const eyebrow = getContainerEl(`#detailLayerEyebrow-${PAGE_CODE}`);
+                const body = getContainerEl(`#detailLayerBody-${PAGE_CODE}`);
+                if (!violation || !layer || !body) return;
+                const rule = this.getViolationRuleDetailRow(violation);
+                const isSymbolic = this.isContinuousRule(rule);
+                this.resetDetailDialogPosition();
+                if (eyebrow) {
+                    eyebrow.textContent = `${isSymbolic ? "연속형 수식 규칙" : "범주형 연관 규칙"} · LIVE VIOLATION`;
+                }
+                if (title) title.textContent = rule.SOURCE_RULE_ID || rule.RULE_NAME || "규칙 및 위반 결과 상세";
+                body.innerHTML = `
+                    ${isSymbolic
+                        ? this.buildContinuousRuleDetailContent(rule, "FORMULA")
+                        : this.buildAssociationRuleDetailContent(rule, "IF")}
+                    ${this.buildViolationResultDetailContent(violation, rule)}
                 `;
                 layer.hidden = false;
                 layer.querySelector(".edit-work-detail-dialog")?.focus();
@@ -3331,6 +4787,24 @@
                 const text = String(value ?? "-");
                 const className = text.toLowerCase().replace(/[^a-z0-9_]+/g, "_");
                 return `<span class="edit-work-badge is-${className}">${this.escapeHtml(text)}</span>`;
+            },
+
+            dmlStatusLabel(value) {
+                const status = String(value || "").toUpperCase();
+                const labels = {
+                    UNSAVED: this.pageLabel("dmlStatusUnsaved", "미저장"),
+                    DRAFT: this.pageLabel("dmlStatusDraft", "검증 전"),
+                    APPROVED: this.pageLabel("dmlStatusValidatedSaved", "검증·저장"),
+                    EXECUTED: this.pageLabel("dmlStatusExecuted", "실행 완료"),
+                    FAILED: this.pageLabel("dmlStatusFailed", "실행 실패")
+                };
+                return labels[status] || value || "-";
+            },
+
+            dmlStatusBadge(value) {
+                const status = String(value || "").toUpperCase();
+                const className = status.toLowerCase().replace(/[^a-z0-9_]+/g, "_");
+                return `<span class="edit-work-badge is-${className}">${this.escapeHtml(this.dmlStatusLabel(status))}</span>`;
             },
 
             renderRuleTypeBadge(value) {

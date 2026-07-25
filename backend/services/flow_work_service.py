@@ -828,6 +828,14 @@ def execute_flow_plan(
     plan_node_keys = {str(step.get("nodeKey") or "") for step in plan_steps}
     node_status: Dict[str, str] = {}
     node_outputs: Dict[str, Dict[str, Any]] = {}
+    run_summary_context: Dict[str, Any] = {}
+    editing_session_id = (runtime_defaults or {}).get("INIT$EditingSessionId")
+    if editing_session_id:
+        run_summary_context["runtimeOverrides"] = {
+            "targetOwner": (runtime_defaults or {}).get("INIT$TargetOwner") or "",
+            "targetTable": (runtime_defaults or {}).get("INIT$TargetTable") or "",
+            "editSessionId": editing_session_id,
+        }
 
     for step in plan_steps:
         node_key = step.get("nodeKey") or ""
@@ -905,7 +913,7 @@ def execute_flow_plan(
             f"Flow execution completed with failures. {executed} node(s) succeeded, "
             f"{failed} failed, {skipped} skipped. First failed node: {failed_name}. {failed_message}"
         ).strip()
-        update_run(conn, flow_run_id, "FAILED", message, {"plan": enriched_plan})
+        update_run(conn, flow_run_id, "FAILED", message, {"plan": enriched_plan, **run_summary_context})
         conn.commit()
         return {
             "status": "FAILED",
@@ -913,7 +921,13 @@ def execute_flow_plan(
             "plan": enriched_plan
         }
 
-    update_run(conn, flow_run_id, "SUCCESS", f"Flow execution completed. {executed} node(s) executed, {skipped} skipped.", {"plan": enriched_plan})
+    update_run(
+        conn,
+        flow_run_id,
+        "SUCCESS",
+        f"Flow execution completed. {executed} node(s) executed, {skipped} skipped.",
+        {"plan": enriched_plan, **run_summary_context},
+    )
     conn.commit()
     return {
         "status": "SUCCESS",

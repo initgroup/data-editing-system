@@ -165,6 +165,36 @@
     gap: 4px;
 }
 
+.flow-run-mode-badge {
+    border: 1px solid #cbd5e1;
+    color: #475569;
+    display: inline-flex;
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1.2;
+    padding: 3px 6px;
+    white-space: nowrap;
+}
+
+.flow-run-mode-badge.is-editing-revalidation {
+    background: #f5f3ff;
+    border-color: #a78bfa;
+    color: #6d28d9;
+}
+
+.flow-run-history-grid tr.is-editing-revalidation-run > td {
+    background: #faf8ff;
+    border-bottom-color: #ddd6fe;
+}
+
+.flow-run-history-grid tr.is-editing-revalidation-run > td:first-child {
+    box-shadow: inset 4px 0 #8b5cf6;
+}
+
+.flow-run-history-grid tr.is-editing-revalidation-run:hover > td {
+    background: #f5f3ff;
+}
+
 .flow-run-id-link {
     background: transparent;
     border: 0;

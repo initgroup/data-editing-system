@@ -30,7 +30,8 @@
     "noNodeResults": "노드 실행 결과가 없습니다.",
     "deleteSelectedRunTitle": "선택한 Run 이력 삭제",
     "delete": "삭제",
-    "copyMessageTitle": "메시지 복사"
+    "copyMessageTitle": "메시지 복사",
+    "reviewEditingRules": "에디팅 규칙 검토"
   },
   "messages": {
     "Run #{runId} history, node history, and RUN ID based analysis result history will be deleted.": "Run #{runId} 실행 이력과 노드 이력, RUN ID 기준 분석 결과 이력을 삭제합니다.",

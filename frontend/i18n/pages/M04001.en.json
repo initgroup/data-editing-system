@@ -5,6 +5,9 @@
   "description": "English messages for integrated editing scenario flow page.",
   "labels": {
     "refreshHistoryTitle": "Refresh history",
+    "historyRunMode": "Run mode",
+    "historyEditingRevalidationMode": "Editing copy revalidation",
+    "historyStandardMode": "Standard",
     "autoRefreshPauseTitle": "Pause automatic refresh",
     "autoRefreshResumeTitle": "Resume automatic refresh"
   },

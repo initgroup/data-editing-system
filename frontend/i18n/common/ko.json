@@ -75,6 +75,7 @@
       "serverConnectionFailed": "WAS 서버에 연결할 수 없습니다. 서버가 실행 중인지와 접속 주소를 확인해 주세요.",
       "targetDbConnectionFailed": "Target DB에 접속할 수 없습니다. DB 서버 주소, 서비스명, 포트, 네트워크 상태를 확인해 주세요.",
       "serverProcessingFailed": "서버 처리 중 오류가 발생했습니다. 잠시 후 다시 시도하거나 관리자에게 문의해 주세요.",
+      "invalidRequestParameters": "입력값 또는 조회 조건의 형식이 올바르지 않습니다. 화면을 새로고침한 후 다시 시도해 주세요.",
       "requestFailed": "요청을 처리하지 못했습니다.",
       "requestTimeout": "요청 시간이 초과되었습니다. WAS 서버 상태 또는 네트워크 연결을 확인해 주세요."
     },

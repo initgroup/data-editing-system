@@ -1,5 +1,5 @@
 {
-  "version": "2026.07.05",
+  "version": "2026.07.25",
   "language": "en",
   "systemName": "INIT Data Editing System",
   "pages": {
@@ -40,7 +40,26 @@
       "label": "Main Home",
       "group": "Main",
       "status": "enabled",
-      "summary": "The start screen for checking the current user, role, Target DB, integrated scenario status, notices, and main shortcuts after login."
+      "summary": "The start screen for checking the current user, role, Target DB, integrated scenario status, notices, and main shortcuts after login.",
+      "purpose": [
+        "Confirm the current session and Target DB context.",
+        "Review integrated-flow readiness, recent results, and notices."
+      ],
+      "layout": [
+        { "name": "Session Summary", "description": "Shows the user, role, Target DB, and current work context." },
+        { "name": "Integrated Scenario", "description": "Summarizes the editing workflow and KPIs." },
+        { "name": "Notices and Shortcuts", "description": "Shows notices and links to major work areas." }
+      ],
+      "workflow": [
+        "Confirm that the intended Target DB is selected.",
+        "Review notices and open the required business menu."
+      ],
+      "controls": [
+        "Refresh Current Page, Open Integrated Flow, Open All Notices, and Current Menu Help."
+      ],
+      "aiGuidance": [
+        "Use the current session, Target DB, dashboard values, and notices when answering HOME questions."
+      ]
     },
     "M01001": {
       "pageCode": "M01001",
@@ -48,7 +67,23 @@
       "label": "Project Settings",
       "group": "Project Management",
       "status": "enabled",
-      "summary": "Registers, reviews, updates, and deletes projects, which are the top-level work units for data editing."
+      "summary": "Registers, reviews, updates, and deletes projects, which are the top-level work units for data editing.",
+      "purpose": [
+        "Manage the project code, name, description, enabled status, and ownership scope."
+      ],
+      "layout": [
+        { "name": "Project List", "description": "Searches and selects saved projects." },
+        { "name": "Project Detail", "description": "Creates or edits the selected project." }
+      ],
+      "workflow": [
+        "Search projects, select an existing row or start a new project, enter required values, and save."
+      ],
+      "controls": [
+        "Search, New, Save, and Delete."
+      ],
+      "aiGuidance": [
+        "A project is the parent scope for scenarios, target data, and editing work."
+      ]
     },
     "M01002": {
       "pageCode": "M01002",
@@ -56,7 +91,23 @@
       "label": "Scenario Definition",
       "group": "Project Management",
       "status": "enabled",
-      "summary": "Defines and manages data editing scenarios under a selected project."
+      "summary": "Defines and manages data editing scenarios under a selected project.",
+      "purpose": [
+        "Manage scenario names, descriptions, enabled status, and their project relationship."
+      ],
+      "layout": [
+        { "name": "Project Selector", "description": "Selects the parent project." },
+        { "name": "Scenario List and Detail", "description": "Searches, creates, and edits scenarios." }
+      ],
+      "workflow": [
+        "Select a project, select or create a scenario, save it, then assign target data in M02002."
+      ],
+      "controls": [
+        "Search, Save, Delete, and Delete All for the selected project."
+      ],
+      "aiGuidance": [
+        "Explain a scenario as a child work scope under one project."
+      ]
     },
     "M02001": {
       "pageCode": "M02001",
@@ -64,7 +115,25 @@
       "label": "File Upload",
       "group": "Data Preparation & Exploration",
       "status": "enabled",
-      "summary": "Uploads local files into Target DB work tables and supports preview, column review, and data lookup."
+      "summary": "Uploads local files into Target DB work tables and supports preview, column review, and data lookup.",
+      "purpose": [
+        "Inspect a local file before creating a Target DB upload table.",
+        "Review uploaded columns and data before assigning the table to a scenario."
+      ],
+      "layout": [
+        { "name": "File and Upload Options", "description": "Selects a file and upload settings." },
+        { "name": "Preview and Table Tree", "description": "Previews file rows and browses uploaded tables." },
+        { "name": "Columns / Data / SQL", "description": "Reviews the selected upload table." }
+      ],
+      "workflow": [
+        "Select a file, preview it, upload it, then review the created table and optionally assign it in M02002."
+      ],
+      "controls": [
+        "Preview, Upload, Drop Table, Columns, Data, and SQL."
+      ],
+      "aiGuidance": [
+        "Dropping an upload table is destructive and requires the selected table and confirmation."
+      ]
     },
     "M02002": {
       "pageCode": "M02002",
@@ -72,7 +141,25 @@
       "label": "Target Data",
       "group": "Data Preparation & Exploration",
       "status": "enabled",
-      "summary": "Browses Target DB tables and selects the target tables used by projects and scenarios."
+      "summary": "Browses Target DB tables and selects the target tables used by projects and scenarios.",
+      "purpose": [
+        "Inspect Target DB table metadata and sample data.",
+        "Register or remove scenario target-table mappings."
+      ],
+      "layout": [
+        { "name": "Table Tree", "description": "Browses schemas and tables." },
+        { "name": "Table Detail", "description": "Shows columns and sample data." },
+        { "name": "Scenario Tables", "description": "Manages tables assigned to the selected scenario." }
+      ],
+      "workflow": [
+        "Select a project and scenario, inspect a table, then save it as a scenario target table."
+      ],
+      "controls": [
+        "Table Tree, Columns, Data, Save Scenario Table, and Delete Mapping."
+      ],
+      "aiGuidance": [
+        "Deleting here removes the scenario mapping; do not describe it as dropping the Target DB table."
+      ]
     },
     "M03001": {
       "pageCode": "M03001",
@@ -98,6 +185,12 @@
       "aiGuidance": [
         "Explain results from the selected run and its actual parameters, not only from preset JSON defaults.",
         "Do not treat a categorical/continuous prediction as a business-approved final type without review."
+      ],
+      "controls": [
+        "Project / Scenario / Target Table: selects the shared data-work context.",
+        "Save Job / Run: stores the job definition or starts analysis.",
+        "Run History / Result tabs: opens run-based and final type details.",
+        "Grid tools: server paging, freeze columns, search, refresh, and export."
       ]
     },
     "M03002": {
@@ -121,6 +214,17 @@
       "deepDive": [
         "PASS_YN distinguishes pairs that passed the actual run thresholds from pairs retained for review.",
         "Clusters are optional guidance for rule discovery and are applied only when P_CLUSTER_USAGE_MODE enables them."
+      ],
+      "workflow": [
+        "Select the scenario, target table, and integrated or individual analysis resource.",
+        "Save and run the job, then review the integrated matrix, pair-type tabs, and relationship network."
+      ],
+      "controls": [
+        "Save Job / Run, Run History, result-tab filters, network controls, grid tools, and export."
+      ],
+      "aiGuidance": [
+        "Use the selected Run ID, PASS_YN, pair type, actual thresholds, and cluster method when interpreting results.",
+        "The network requires edge data; cluster metadata changes grouping but is not required merely to draw edges."
       ]
     },
     "M03003": {
@@ -147,6 +251,17 @@
       ],
       "troubleshooting": [
         "If only categorical results appear, check P_RULE_PARTS, continuous target eligibility, minimum R-squared, auto-target limits, and partial-completion messages."
+      ],
+      "workflow": [
+        "Select the scenario, table, and integrated or individual discovery resource.",
+        "Save and run the job, then inspect categorical rules and continuous LASSO/symbolic results."
+      ],
+      "controls": [
+        "Save Job / Run, Run History, rule-type tabs, detail and graph layers, grid tools, and export."
+      ],
+      "aiGuidance": [
+        "Show column labels with IDs and distinguish an association-rule result from a symbolic prediction target.",
+        "Explain target counts from the saved run parameters, not only from preset defaults."
       ]
     },
     "M03004": {
@@ -172,6 +287,17 @@
       ],
       "troubleshooting": [
         "A successful result with zero rows can mean no violation exceeded the current thresholds; distinguish it from missing rule inputs or a failed subtask."
+      ],
+      "workflow": [
+        "Select the scenario, table, and integrated or individual detection resource.",
+        "Save and run the job, review rule summaries, then open live or stored violating rows by rule."
+      ],
+      "controls": [
+        "Save Job / Run, Run History, rule-part tabs, violation-row detail, grid tools, and export."
+      ],
+      "aiGuidance": [
+        "Distinguish association IF/THEN violations from symbolic predicted/actual error violations.",
+        "Report partial success and failed subtasks separately when continue-on-error is enabled."
       ]
     },
     "M04001": {
@@ -198,6 +324,18 @@
       ],
       "troubleshooting": [
         "For a rejected connection, compare the output and input artifact names, stage shapes, REQUIRED/OPTIONAL setting, and SAME_RUN policy."
+      ],
+      "workflow": [
+        "Select a project, scenario, and saved Flow or create a new one.",
+        "Add saved jobs, connect compatible ports, validate and save the DAG, then execute it.",
+        "Use Run History for status, node results, retry, and automatic refresh."
+      ],
+      "controls": [
+        "Flow Design, Run History, Result SQL, Save Flow, Validate, Run, Refresh, Retry, and node parameter detail."
+      ],
+      "aiGuidance": [
+        "Delete Node removes the node from the current draft canvas; it does not directly delete saved jobs or run history.",
+        "In editing revalidation mode, saved Flow definitions stay unchanged and only runtime target owner/table parameters are overridden with INITDN$."
       ]
     },
     "M04002": {
@@ -220,6 +358,22 @@
       ],
       "troubleshooting": [
         "If one categorical or continuous section is missing, check P_RULE_PARTS, upstream same-run inputs, and failed-subtask details."
+      ],
+      "purpose": [
+        "Interpret a selected Flow Run without redesigning or rerunning the Flow.",
+        "Compare integrated stage results and open model, rule, graph, and violating-row details."
+      ],
+      "workflow": [
+        "Select a project, scenario, and Run.",
+        "Open stage or node tabs; each tab loads once for the selected Run and preserves its view state.",
+        "Use Review Editing Rules to continue with rule decisions when appropriate."
+      ],
+      "controls": [
+        "Run selection, stage/node tabs, result filters, detail/graph layers, grid tools, export, and Review Editing Rules."
+      ],
+      "aiGuidance": [
+        "Always state the selected Run ID and distinguish baseline runs from INITDN$ editing-revalidation runs.",
+        "Result SQL generated from a result table should include available Run ID, table, model, and source conditions but not placeholder literals as data filters."
       ]
     },
     "M05001": {
@@ -228,7 +382,35 @@
       "label": "Rule Decision & Master",
       "group": "Editing Execution Management",
       "status": "active",
-      "summary": "Reviews discovered rules and manages selected and user-defined rules in two cached tabs."
+      "summary": "Uses one shared project/scenario scope for a Rule Decision tab that contains discovered results only and a Rule Master tab that manages final selected and user-defined rules.",
+      "purpose": [
+        "Review categorical association rules and continuous symbolic rules from a Flow Run, then select or exclude them.",
+        "Validate, create, update, copy, or delete user-defined rules separately from discovered rules."
+      ],
+      "layout": [
+        { "name": "Project / Scenario", "description": "The collapsible work scope shared by both tabs." },
+        { "name": "Rule Decision", "description": "Uses server paging and Run source, Run ID, rule type, and decision-status filters for discovered rules." },
+        { "name": "Rule Master", "description": "Separates selected discovered rules from user rules and provides the user-rule editor below the fixed-height grid." },
+        { "name": "Rule Detail Layer", "description": "Shows column labels, IF/THEN or f(x), evidence counts, confidence, lift, and prediction target." }
+      ],
+      "workflow": [
+        "Select a project and scenario, then load the latest Run automatically or enter a Run ID.",
+        "Filter and inspect rule details, then select or exclude checked candidates.",
+        "Open Rule Master to review final rules or validate and save a user-defined association or formula rule."
+      ],
+      "controls": [
+        "Search: applies Run and rule filters through the server query.",
+        "Select / Exclude: processes checked discovered rules in bulk with an inline progress bar.",
+        "User Rule: validates and creates, updates, copies, or deletes a user-origin rule.",
+        "Exclude Selection: excludes checked discovered-origin master rules.",
+        "Grid tools: search, refresh, server paging, freeze columns, and export."
+      ],
+      "aiGuidance": [
+        "The Rule Decision tab contains discovered results only; user rules are stored and shown only in Rule Master.",
+        "Even when All Scenarios is selected, a selected rule is stored with the project and scenario IDs carried by that result row.",
+        "Do not describe association IF/THEN rules and continuous f(x)/prediction targets as the same rule format.",
+        "A discovered rule is copied to a user rule before editing; it is excluded rather than physically deleted."
+      ]
     },
     "M05002": {
       "pageCode": "M05002",
@@ -236,7 +418,35 @@
       "label": "Editing Error Correction",
       "group": "Editing Execution Management",
       "status": "active",
-      "summary": "Checks the live INITUP$ table with final selected and active rule-master rules, then corrects error data in INITDN$ editing tables through two cached tabs."
+      "summary": "Checks live INITUP$ data with final selected and active rules, edits values only in its one-to-one INITDN$ copy, and keeps correction history in a second cached tab.",
+      "purpose": [
+        "Run live violation SQL generated from final Rule Master rules against the selected INITUP$ table.",
+        "Preserve INITUP$ while saving single or multiple corrected values into INITDN$."
+      ],
+      "layout": [
+        { "name": "Editing Work Tables", "description": "Shows Rule Master INITUP$ tables and their matching INITDN$ tables as a single-select grid." },
+        { "name": "Error Correction", "description": "Filters live violations by rule type, error column, correction status, and final rule, then edits them in the same grid." },
+        { "name": "Correction History", "description": "Shows row key, column, before/after values, rule, operator, and edit time for the selected table mapping." }
+      ],
+      "workflow": [
+        "Select one INITUP$/INITDN$ mapping row.",
+        "If INITDN$ does not exist, create the one-to-one editing table from that row.",
+        "Run the live violation query and save one row or checked rows into INITDN$.",
+        "Use Correction History to review or export the stored cell-edit events."
+      ],
+      "controls": [
+        "Create Editing Table: prepares and selects the INITDN$ copy.",
+        "Search / Live SQL: executes the live query or displays its read-only SQL.",
+        "Save Selected Corrections / Save Correction: validates and stores values in INITDN$.",
+        "Rule Detail: combines the M05001 rule detail with the selected violation result.",
+        "Grid tools: search, refresh, server paging, freeze columns, and export."
+      ],
+      "aiGuidance": [
+        "INITUP$ is never edited by this screen; all corrections are written to INITDN$.",
+        "Search executes live SQL against the current table, while Live SQL only displays that statement.",
+        "Before INITDN$ exists, the result grid is read-only and edit controls are hidden.",
+        "Rows without a business key are linked through the stored INIT$_SOURCE_ROWID value."
+      ]
     },
     "M05003": {
       "pageCode": "M05003",
@@ -244,47 +454,168 @@
       "label": "Editing Production Deployment",
       "group": "Editing Execution Management",
       "status": "active",
-      "summary": "Validates editing effects, manages approved production DML, and reviews the complete editing audit trail in three cached tabs."
+      "summary": "Validates editing effects, manages versioned production DML, and reviews the complete editing audit trail in three cached tabs.",
+      "purpose": [
+        "Compare INITUP$ baseline analysis with the linked INITDN$ rule-discovery rerun.",
+        "Generate, validate, save, and execute a guarded PL/SQL apply block.",
+        "Trace events from rule decisions through final operational apply."
+      ],
+      "layout": [
+        { "name": "Effect Validation", "description": "Shows changed rows, expected/predicted matches, baseline Run, and INITDN$ reanalysis context." },
+        { "name": "Production Apply", "description": "Shows DML versions by descending DML ID and an always-editable SQL editor with the selected DML ID." },
+        { "name": "Full History", "description": "Filters and exports editing audit events for the selected work table." }
+      ],
+      "workflow": [
+        "Select one INITUP$/INITDN$ work-table row and validate the editing effect.",
+        "Create a new DML or regenerate the selected version's initial SQL, then edit its name or SQL if needed.",
+        "Validate explicitly or save directly; Save validates first and writes only when valid.",
+        "Execute a validated and saved DML, then review the audit event."
+      ],
+      "controls": [
+        "Rerun Rule Discovery / Complete Effect Validation: links and validates INITDN$ analysis.",
+        "Create New DML: adds a visible New · Unsaved row and server-generated PL/SQL.",
+        "Regenerate Initial SQL: resets the selected version to the current editing changes.",
+        "Validate DML / Save DML / Execute DML: validate, automatically validate-and-save, or commit the final apply.",
+        "Edit / Delete: opens a version in the editor or deletes a non-executed saved DML after confirmation.",
+        "Grid tools: DML ID descending order, search, refresh, paging, freeze columns, and export."
+      ],
+      "aiGuidance": [
+        "DML execution changes the operational INITUP$ source and commits, so confirm status and affected rows.",
+        "Executed DML cannot be deleted or overwritten; an edited copy is saved as a new version after confirmation.",
+        "Draft, validated/saved, and failed DML versions update the same DML ID when selected and saved.",
+        "New unsaved rows use an amber background; the selected saved row uses a stronger blue background."
+      ]
     },
     "M06001": {
       "pageCode": "M06001",
-      "title": "Rule Violation Data View",
-      "label": "Rule Violation Data View",
-      "group": "Data Editing & Cleansing",
-      "status": "planned",
-      "summary": "A planned screen for reviewing detected violation records and identifying data that may need cleansing."
+      "title": "Editing Error Correction",
+      "label": "Error Correction",
+      "group": "Editing Execution Management",
+      "status": "integrated",
+      "summary": "The legacy M06001 route now opens the same shared Error Correction tab and live INITUP$/INITDN$ workflow as M05002.",
+      "purpose": [
+        "Query current INITUP$ violations using final rules.",
+        "Correct values in INITDN$ after its one-to-one editing table is prepared."
+      ],
+      "layout": [
+        { "name": "Editing Work Tables", "description": "Selects one INITUP$/INITDN$ mapping or creates INITDN$." },
+        { "name": "Live Violations and Corrections", "description": "Pages live violations and saves single or checked corrections." }
+      ],
+      "workflow": [
+        "Open M05002 or the legacy M06001 route.",
+        "Select a source table, prepare INITDN$ if needed, query violations, and save corrections."
+      ],
+      "controls": [
+        "Create Editing Table, Search, Live SQL, Save Selected Corrections, Save Correction, and shared grid tools."
+      ],
+      "aiGuidance": [
+        "This is an integrated compatibility route, not a planned screen.",
+        "INITUP$ is the live query source and INITDN$ is the editable copy."
+      ]
     },
     "M06002": {
       "pageCode": "M06002",
-      "title": "Error Data Cleansing",
-      "label": "Error Data Cleansing",
-      "group": "Data Editing & Cleansing",
-      "status": "planned",
-      "summary": "A planned screen for cleansing, correcting, validating, and tracking changes to error or violation data."
+      "title": "Editing Error Correction",
+      "label": "Correction History",
+      "group": "Editing Execution Management",
+      "status": "integrated",
+      "summary": "The legacy M06002 route now opens the same Correction History tab as M05002.",
+      "purpose": [
+        "Review cell-edit events for the selected INITUP$/INITDN$ work table.",
+        "Trace row key, column, before/after values, rule, operator, and time."
+      ],
+      "layout": [
+        { "name": "Editing Work Tables", "description": "Selects the work-table mapping whose history will be queried." },
+        { "name": "Correction History Grid", "description": "Displays and exports the audit details." }
+      ],
+      "workflow": [
+        "Select a work table, apply history filters, and review or export the results."
+      ],
+      "controls": [
+        "Search, refresh, paging, freeze columns, and export."
+      ],
+      "aiGuidance": [
+        "This tab is read-only; corrections are made in the Error Correction tab.",
+        "INIT$_SOURCE_ROWID links rows when no business key exists."
+      ]
     },
     "M07001": {
       "pageCode": "M07001",
       "title": "Editing Effect Validation",
       "label": "Editing Effect Validation",
-      "group": "Validation & Apply",
-      "status": "planned",
-      "summary": "A planned screen for comparing data-quality indicators before and after cleansing to validate editing impact."
+      "group": "Editing Execution Management",
+      "status": "integrated",
+      "summary": "The legacy M07001 route now opens the same Effect Validation tab as M05003.",
+      "purpose": [
+        "Compare the INITUP$ baseline Run with the linked INITDN$ rule-discovery rerun.",
+        "Review saved changes, expected/predicted matches, and violation changes."
+      ],
+      "layout": [
+        { "name": "Editing Work Tables", "description": "Selects one work table to validate." },
+        { "name": "Validation Results", "description": "Shows row-level results and baseline/editing Run context." }
+      ],
+      "workflow": [
+        "Select a work table, link a rerun, review results, and complete effect validation."
+      ],
+      "controls": [
+        "Rerun Rule Discovery, Search, Complete Effect Validation, and export."
+      ],
+      "aiGuidance": [
+        "This is an integrated compatibility route, not a planned screen.",
+        "Distinguish the baseline Run from the INITDN$ reanalysis Run."
+      ]
     },
     "M07002": {
       "pageCode": "M07002",
-      "title": "Final DB Apply",
-      "label": "Final DB Apply",
-      "group": "Validation & Apply",
-      "status": "planned",
-      "summary": "A planned screen for applying validated cleansing results to the Target DB after impact and approval checks."
+      "title": "Editing Production Deployment",
+      "label": "Production Apply",
+      "group": "Editing Execution Management",
+      "status": "integrated",
+      "summary": "The legacy M07002 route now opens the same versioned Production Apply DML tab as M05003.",
+      "purpose": [
+        "Generate and validate guarded PL/SQL from INITDN$ changes.",
+        "Save a DML version and commit it to the operational INITUP$ source."
+      ],
+      "layout": [
+        { "name": "DML Version Grid", "description": "Lists versions by descending DML ID." },
+        { "name": "DML Editor", "description": "Shows the DML ID, name, status, affected rows, and editable SQL." }
+      ],
+      "workflow": [
+        "Create or select a DML, validate or save it directly, then execute a validated/saved version."
+      ],
+      "controls": [
+        "Create New DML, Regenerate Initial SQL, Validate DML, Save DML, Execute DML, Edit, and Delete."
+      ],
+      "aiGuidance": [
+        "Executed DML is immutable audit history and an edited copy becomes a new version.",
+        "Execute changes and commits the operational source."
+      ]
     },
     "M07003": {
       "pageCode": "M07003",
-      "title": "Editing History",
-      "label": "Editing History",
-      "group": "Validation & Apply",
-      "status": "planned",
-      "summary": "A planned screen for reviewing cleansing, validation, apply, and audit history."
+      "title": "Editing Production Deployment",
+      "label": "Full History",
+      "group": "Editing Execution Management",
+      "status": "integrated",
+      "summary": "The legacy M07003 route now opens the same Full History audit tab as M05003.",
+      "purpose": [
+        "Trace rule decisions, cell edits, validation, DML save, and DML execution events.",
+        "Review operator, time, entity, summary, and detail data."
+      ],
+      "layout": [
+        { "name": "Editing Work Tables", "description": "Selects the work-table scope." },
+        { "name": "Full History Grid", "description": "Shows filterable and exportable audit events." }
+      ],
+      "workflow": [
+        "Select a work table and event type, query history, and open or export details."
+      ],
+      "controls": [
+        "Search, refresh, detail, paging, freeze columns, and export."
+      ],
+      "aiGuidance": [
+        "This is an integrated compatibility route, not a planned screen.",
+        "Answer history questions by work session, operator, time, event type, and entity ID."
+      ]
     },
     "M90001": {
       "pageCode": "M90001",
@@ -298,11 +629,19 @@
         "Expose accurate parameter comments in Data Work and the Flow node inspector.",
         "Manage INIT$_SP_PREDICTED_TYPE model defaults and Target DB-specific overrides from the model resource itself."
       ],
+      "layout": [
+        { "name": "Object Tree", "description": "Browses Target DB procedure, package, and model objects." },
+        { "name": "Object Detail", "description": "Shows registration metadata, parameters, defaults, descriptions, and result contract." },
+        { "name": "Column Type Classification Settings", "description": "Manages model defaults and Target DB overrides for the column-type procedure." }
+      ],
       "workflow": [
         "Select a Target DB procedure or model object.",
         "Verify that its actual parameter names and types match the preset metadata.",
         "For INIT$_SP_PREDICTED_TYPE, review or edit Target DB overrides in Column Type Classification Settings.",
         "Review the result table/model contract and defaults, then register the resource."
+      ],
+      "controls": [
+        "Object search and refresh, Register / Save / Delete, parameter default management, preset overrides, and relationship refresh."
       ],
       "aiGuidance": [
         "P_RUN_ID and RUN_SOURCE_TYPE link results from the same Data Work or Flow run.",
@@ -331,6 +670,9 @@
         "Select a built-in Python API or an external/OML resource.",
         "Review method, endpoint, output mode, parameters, and default JSON.",
         "Register it, then select the resource in M03001-M03004 Data Work and use the saved job in a Flow."
+      ],
+      "controls": [
+        "Group and object search, refresh, load preset JSON, save/register, delete, and parameter input/output editors."
       ],
       "aiGuidance": [
         "Preset JSON initializes a new job; explain an executed result from that job's saved parameters and selected run.",
@@ -387,7 +729,25 @@
       "label": "My Account",
       "group": "My Environment Settings",
       "status": "enabled",
-      "summary": "Manages the current user's account information and personal Gemini API key status."
+      "summary": "Manages the current user's account information and personal Gemini API key status.",
+      "purpose": [
+        "Review and update the signed-in user's name, email, and password.",
+        "Store or delete a personal Gemini API key without exposing the saved secret."
+      ],
+      "layout": [
+        { "name": "Account Information", "description": "Shows login ID, name, email, and role." },
+        { "name": "Password", "description": "Changes the password after current-password verification." },
+        { "name": "Personal Gemini Key", "description": "Shows key registration status and save/delete actions." }
+      ],
+      "workflow": [
+        "Review account information, change only the required fields, and use the verification flow for sensitive changes."
+      ],
+      "controls": [
+        "Save Name / Email / Password, Save Gemini Key, and Delete Gemini Key."
+      ],
+      "aiGuidance": [
+        "Passwords and API keys are secrets and must never be repeated in help output or logs."
+      ]
     },
     "M91002": {
       "pageCode": "M91002",
@@ -396,6 +756,10 @@
       "group": "My Environment Settings",
       "status": "enabled",
       "summary": "Manages user-level UI language and display settings, the system logo, account details, email/password changes, and a personal Gemini API key.",
+      "purpose": [
+        "Manage personal language, display, logo, and account settings by category.",
+        "Apply protected account and personal Gemini-key changes through the required verification steps."
+      ],
       "layout": [
         { "name": "Setting Categories", "description": "Lists personal setting groups and values." },
         { "name": "Setting Detail", "description": "Edits key, value, description, enabled status, and order. SYSTEM_LANGUAGE provides a language selector." },
@@ -407,6 +771,9 @@
         "Save a language change, then log out and log in again to apply it.",
         "For a logo, upload the image and then save the setting.",
         "Use the account security checks when changing email or password."
+      ],
+      "controls": [
+        "Search Settings, Save Setting, Delete Setting, Create Defaults, Upload Logo, and Account / Gemini actions."
       ],
       "aiGuidance": [
         "Passwords and Gemini keys are secrets and must not be repeated in help text, responses, or logs.",
@@ -420,6 +787,21 @@
       "group": "Admin Settings",
       "status": "enabled",
       "summary": "Lets administrators register and test Target DB connections, inspect or initialize schemas, and deploy model-object groups.",
+      "purpose": [
+        "Manage encrypted Target DB connection profiles and test connectivity.",
+        "Inspect or initialize application schemas and deploy PL/SQL model-object groups."
+      ],
+      "layout": [
+        { "name": "Connection List and Detail", "description": "Manages host, port, service, user, wallet, and profile settings." },
+        { "name": "Schema Status", "description": "Checks application tables and model-object deployment status." },
+        { "name": "Bootstrap and Deployment", "description": "Runs explicitly confirmed initialization or group deployment actions." }
+      ],
+      "workflow": [
+        "Enter and test a connection, save it, inspect schema status, then run only the required initialization or deployment action."
+      ],
+      "controls": [
+        "Connection Test, Save Connection, Schema Check / Initialize, Deploy PL/SQL Objects, and confirmed target-data cleanup."
+      ],
       "aiGuidance": [
         "DB and wallet passwords are secrets managed through server-side encryption and must not be exposed in browser responses or help output.",
         "Administrative authorization is based on the server session and role check, not on whether a menu is visible.",
@@ -433,6 +815,21 @@
       "group": "Admin Settings",
       "status": "enabled",
       "summary": "Lets administrators browse Target DB objects and inspect table data, columns, source, and SQL results.",
+      "purpose": [
+        "Inspect Target DB object metadata, source, columns, and table data.",
+        "Run server-validated administrative diagnostic SQL within the permitted scope."
+      ],
+      "layout": [
+        { "name": "Object Tree", "description": "Browses schemas and database objects." },
+        { "name": "Object Detail / Source", "description": "Shows metadata and source text." },
+        { "name": "Columns / Data / SQL", "description": "Inspects table structure, rows, and diagnostic query results." }
+      ],
+      "workflow": [
+        "Select an object, inspect its details, then run a permitted read-only diagnostic query if needed."
+      ],
+      "controls": [
+        "Object Search, Detail, Source, Columns, Data, and SQL Run."
+      ],
       "aiGuidance": [
         "The regular worksheet path is read-only and the server revalidates the allowed SQL scope.",
         "Do not run data-changing SQL or DDL unless the user explicitly requests an authorized operation."
@@ -445,6 +842,21 @@
       "group": "Admin Settings",
       "status": "enabled",
       "summary": "Supports system initialization checks, system table review, user approval, password reset, and administrator operations.",
+      "purpose": [
+        "Review system initialization and application-table status.",
+        "Approve, reset, or deactivate users through server-side administrator authorization."
+      ],
+      "layout": [
+        { "name": "System Status", "description": "Shows initialization and application-table status." },
+        { "name": "System Tables", "description": "Inspects permitted system-table columns and data." },
+        { "name": "User Administration", "description": "Manages approval, password reset, and deactivation." }
+      ],
+      "workflow": [
+        "Review status first, inspect the required table or user, then confirm the intended administrative action."
+      ],
+      "controls": [
+        "Status, Initialize / Truncate, Approve User, Reset Password, and Deactivate."
+      ],
       "aiGuidance": [
         "Every administrator action requires server-session role validation; hiding or showing the front-end menu is not an authorization boundary.",
         "Treat temporary passwords as secrets and require explicit confirmation for initialization, truncation, or password-reset actions."
@@ -457,6 +869,24 @@
       "group": "Admin Settings",
       "status": "enabled",
       "summary": "Lets administrators create, update, delete, and attach files to notices shown on the HOME screen and related areas."
+      ,
+      "purpose": [
+        "Manage notice content, type, visibility, display period, and attachments."
+      ],
+      "layout": [
+        { "name": "Notice List", "description": "Searches and selects notices." },
+        { "name": "Notice Detail", "description": "Edits title, content, type, visibility, and display period." },
+        { "name": "Attachments", "description": "Uploads, downloads, or deletes notice files." }
+      ],
+      "workflow": [
+        "Search notices, create or select one, save its display settings, then manage attachments."
+      ],
+      "controls": [
+        "Search Notices, Save Notice, Upload Files, Delete Notice, and Delete File."
+      ],
+      "aiGuidance": [
+        "Deleting a notice or attachment requires the selected target and confirmation."
+      ]
     }
   }
 }

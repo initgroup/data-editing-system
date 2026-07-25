@@ -76,6 +76,12 @@ class RuleDecisionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class RuleBulkExcludeRequest(BaseModel):
+    projectId: int | None = None
+    editRuleIds: list[int] = Field(default_factory=list, min_length=1, max_length=500)
+    model_config = ConfigDict(extra="forbid")
+
+
 class UserRuleValidationRequest(BaseModel):
     projectId: int | None = None
     scenarioId: int | None = None
@@ -99,6 +105,14 @@ class EditSessionCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class EditingTableCreateRequest(BaseModel):
+    projectId: int | None = None
+    scenarioId: int | None = None
+    targetOwner: str
+    targetTable: str
+    model_config = ConfigDict(extra="forbid")
+
+
 class EditChangeRequest(BaseModel):
     editRuleId: int | None = None
     sourceViolationType: str
@@ -111,10 +125,21 @@ class EditChangeRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class EditChangeBulkRequest(BaseModel):
+    changes: list[EditChangeRequest] = Field(min_length=1, max_length=500)
+    model_config = ConfigDict(extra="forbid")
+
+
 class EditDmlRequest(BaseModel):
     editDmlId: int | None = None
     editSessionId: int
     dmlName: str
+    dmlSql: str
+    model_config = ConfigDict(extra="forbid")
+
+
+class EditDmlValidateRequest(BaseModel):
+    editSessionId: int
     dmlSql: str
     model_config = ConfigDict(extra="forbid")
 
@@ -480,6 +505,38 @@ def _require_project_access(cursor, request: Request, project_id: int | None) ->
     return normalized_project_id
 
 
+def _resolve_run_context(
+    cursor,
+    *,
+    run_source_type: str,
+    run_id: int,
+) -> dict[str, int]:
+    contexts = _fetch_all(
+        cursor,
+        "MCOMMON_EDIT_RUN_CONTEXT",
+        {
+            "runSourceType": run_source_type,
+            "runId": int(run_id),
+        },
+    )
+    if len(contexts) != 1:
+        raise HTTPException(
+            status_code=409,
+            detail="The discovered-rule run does not have one unambiguous project and scenario.",
+        )
+    resolved_project_id = int(contexts[0].get("PROJECT_ID") or 0)
+    resolved_scenario_id = int(contexts[0].get("SCENARIO_ID") or 0)
+    if not resolved_project_id or not resolved_scenario_id:
+        raise HTTPException(
+            status_code=409,
+            detail="The discovered-rule run has no project or scenario.",
+        )
+    return {
+        "PROJECT_ID": resolved_project_id,
+        "SCENARIO_ID": resolved_scenario_id,
+    }
+
+
 def _require_run_access(
     cursor,
     *,
@@ -487,7 +544,20 @@ def _require_run_access(
     scenario_id: int | None,
     run_source_type: str,
     run_id: int,
-) -> None:
+) -> dict[str, Any]:
+    context = _resolve_run_context(
+        cursor,
+        run_source_type=run_source_type,
+        run_id=run_id,
+    )
+    resolved_project_id = context["PROJECT_ID"]
+    resolved_scenario_id = context["SCENARIO_ID"]
+    if (
+        resolved_project_id != int(project_id)
+        or not resolved_scenario_id
+        or (scenario_id is not None and resolved_scenario_id != int(scenario_id))
+    ):
+        raise HTTPException(status_code=403, detail="The discovered-rule run does not belong to this project.")
     row = _fetch_one(
         cursor,
         "MCOMMON_EDIT_RUN_ACCESS",
@@ -500,6 +570,47 @@ def _require_run_access(
     )
     if not row or int(row.get("ACCESS_COUNT") or 0) <= 0:
         raise HTTPException(status_code=403, detail="The discovered-rule run does not belong to this project.")
+    return {
+        "PROJECT_ID": resolved_project_id,
+        "SCENARIO_ID": resolved_scenario_id,
+    }
+
+
+def _resolve_target_table_context(
+    cursor,
+    *,
+    project_id: int,
+    scenario_id: int | None,
+    target_owner: str,
+    target_table: str,
+) -> dict[str, int]:
+    contexts = _fetch_all(
+        cursor,
+        "MCOMMON_EDIT_TARGET_TABLE_CONTEXT",
+        {
+            "projectId": project_id,
+            "scenarioId": scenario_id,
+            "targetOwner": target_owner,
+            "targetTable": target_table,
+        },
+    )
+    if not contexts:
+        raise HTTPException(
+            status_code=403,
+            detail="The INITUP$ source table is not registered in this project and scenario.",
+        )
+    if len(contexts) != 1:
+        raise HTTPException(
+            status_code=400,
+            detail="원본 테이블이 여러 시나리오에 등록되어 있습니다. 시나리오를 선택하세요.",
+        )
+    resolved_scenario_id = int(contexts[0].get("SCENARIO_ID") or 0)
+    if not resolved_scenario_id:
+        raise HTTPException(status_code=409, detail="원본 테이블의 시나리오를 확인할 수 없습니다.")
+    return {
+        "PROJECT_ID": int(contexts[0].get("PROJECT_ID") or project_id),
+        "SCENARIO_ID": resolved_scenario_id,
+    }
 
 
 def _require_target_table_access(
@@ -546,6 +657,129 @@ def list_source_tables(
             "status": "success",
             "data": rows,
             "total": len(rows),
+        }
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def _matching_edit_session(
+    sessions: list[dict[str, Any]],
+    *,
+    owner: str,
+    source_table: str,
+    edit_table: str,
+) -> dict[str, Any] | None:
+    matching_sessions = [
+        row
+        for row in sessions
+        if str(row.get("TARGET_OWNER") or "") == owner
+        and str(row.get("SOURCE_TABLE") or "") == source_table
+        and str(row.get("EDIT_TABLE") or "") == edit_table
+    ]
+    for allowed_statuses in (
+        {"EDITING", "VALIDATED"},
+        {"DRAFT"},
+    ):
+        selected = next(
+            (
+                row
+                for row in matching_sessions
+                if str(row.get("SESSION_STATUS") or "").upper() in allowed_statuses
+            ),
+            None,
+        )
+        if selected:
+            return selected
+    return None
+
+
+def list_editing_tables(
+    request: Request,
+    *,
+    project_id: int | None,
+    scenario_id: int | None,
+) -> dict[str, Any]:
+    conn = get_target_db_connection(request)
+    cursor = conn.cursor()
+    try:
+        normalized_project_id = _require_project_access(cursor, request, project_id)
+        rows = _fetch_all(
+            cursor,
+            "MCOMMON_EDIT_RULE_TABLE_LIST",
+            {
+                "projectId": normalized_project_id,
+                "scenarioId": scenario_id,
+            },
+        )
+        sessions = _fetch_all(
+            cursor,
+            "MCOMMON_EDIT_SESSION_LIST",
+            {
+                "projectId": normalized_project_id,
+                "scenarioId": scenario_id,
+                "sessionStatus": "ALL",
+            },
+        )
+        result: list[dict[str, Any]] = []
+        for row in rows:
+            owner = _normalize_identifier(row.get("OWNER_NAME"), "target owner")
+            source_table = _normalize_identifier(row.get("TABLE_NAME"), "source table")
+            edit_table = _derive_edit_table(source_table)
+            table_status = _editing_table_structure_status(
+                cursor,
+                owner,
+                source_table,
+                edit_table,
+            )
+            session = _matching_edit_session(
+                sessions,
+                owner=owner,
+                source_table=source_table,
+                edit_table=edit_table,
+            )
+            latest_session = next(
+                (
+                    row
+                    for row in sessions
+                    if str(row.get("TARGET_OWNER") or "") == owner
+                    and str(row.get("SOURCE_TABLE") or "") == source_table
+                    and str(row.get("EDIT_TABLE") or "") == edit_table
+                ),
+                None,
+            )
+            session_status = str(session.get("SESSION_STATUS") or "").upper() if session else None
+            editable = bool(
+                table_status["structureMatches"]
+                and session_status in {"EDITING", "VALIDATED"}
+            )
+            result.append(
+                {
+                    **row,
+                    "EDIT_TABLE": edit_table,
+                    "EDIT_TABLE_EXISTS": table_status["exists"],
+                    "TRACKING_COLUMN_EXISTS": table_status["trackingColumnExists"],
+                    "STRUCTURE_MATCHES": table_status["structureMatches"],
+                    "EDITABLE": editable,
+                    "EDIT_SESSION_ID": session.get("EDIT_SESSION_ID") if session else None,
+                    "SESSION_STATUS": session_status,
+                    "LATEST_EDIT_SESSION_ID": (
+                        latest_session.get("EDIT_SESSION_ID")
+                        if latest_session
+                        else None
+                    ),
+                    "LATEST_SESSION_STATUS": (
+                        str(latest_session.get("SESSION_STATUS") or "").upper()
+                        if latest_session
+                        else None
+                    ),
+                    "STATUS_MESSAGE": table_status["message"],
+                }
+            )
+        return {
+            "status": "success",
+            "data": result,
+            "total": len(result),
         }
     finally:
         cursor.close()
@@ -718,6 +952,13 @@ def list_rules(
             normalized_run_source = str(latest_run.get("RUN_SOURCE_TYPE") or "").upper()
             normalized_run_id = int(latest_run.get("RUN_ID") or 0)
             latest_run_selected = True
+        run_context = _require_run_access(
+            cursor,
+            project_id=project_id,
+            scenario_id=scenario_id,
+            run_source_type=str(normalized_run_source),
+            run_id=int(normalized_run_id),
+        )
 
         normalized_keyword = _normalize_text(keyword, 200) or None
         count_params = {
@@ -739,6 +980,7 @@ def list_rules(
             "MCOMMON_EDIT_RULE_SOURCE_PAGE",
             {
                 **count_params,
+                "resolvedScenarioId": run_context["SCENARIO_ID"],
                 "offset": requested_offset,
                 "limit": requested_page_size,
             },
@@ -751,6 +993,7 @@ def list_rules(
                 "MCOMMON_EDIT_RULE_SOURCE_PAGE",
                 {
                     **count_params,
+                    "resolvedScenarioId": run_context["SCENARIO_ID"],
                     "offset": requested_offset,
                     "limit": requested_page_size,
                 },
@@ -870,7 +1113,25 @@ def save_rule(request: Request, payload: RuleDecisionRequest) -> dict[str, Any]:
     conn = get_target_db_connection(request)
     cursor = conn.cursor()
     try:
-        project_id = _require_project_access(cursor, request, payload.projectId)
+        if is_user_rule:
+            project_id = _require_project_access(cursor, request, payload.projectId)
+            scenario_id = int(payload.scenarioId) if payload.scenarioId is not None else None
+        else:
+            run_context = _resolve_run_context(
+                cursor,
+                run_source_type=str(run_source_type),
+                run_id=int(payload.runId),
+            )
+            project_id = _require_project_access(
+                cursor,
+                request,
+                int(run_context.get("PROJECT_ID") or 0),
+            )
+            scenario_id = int(run_context.get("SCENARIO_ID") or 0)
+            if payload.projectId is not None and int(payload.projectId) != project_id:
+                raise HTTPException(status_code=400, detail="The rule project does not match its source run.")
+            if payload.scenarioId is not None and int(payload.scenarioId) != scenario_id:
+                raise HTTPException(status_code=400, detail="The rule scenario does not match its source run.")
         existing_rule = None
         if payload.editRuleId and is_user_rule:
             existing_rule = _fetch_one(
@@ -891,6 +1152,9 @@ def save_rule(request: Request, payload: RuleDecisionRequest) -> dict[str, Any]:
                     status_code=409,
                     detail="기존 발굴 규칙은 수정할 수 없습니다. 다른 이름으로 사용자 규칙을 등록하세요.",
                 )
+            scenario_id = int(existing_rule.get("SCENARIO_ID") or 0)
+            if not scenario_id:
+                raise HTTPException(status_code=409, detail="기존 사용자 규칙의 시나리오를 확인할 수 없습니다.")
         definition_changed = True
         existing_tolerance = None
         if existing_rule:
@@ -917,11 +1181,20 @@ def save_rule(request: Request, payload: RuleDecisionRequest) -> dict[str, Any]:
                     ),
                 )
             )
+        if is_user_rule and not existing_rule:
+            table_context = _resolve_target_table_context(
+                cursor,
+                project_id=project_id,
+                scenario_id=scenario_id,
+                target_owner=target_owner,
+                target_table=target_table,
+            )
+            scenario_id = table_context["SCENARIO_ID"]
         if not (is_user_rule and existing_rule and not definition_changed):
             _require_target_table_access(
                 cursor,
                 project_id=project_id,
-                scenario_id=payload.scenarioId,
+                scenario_id=scenario_id,
                 target_owner=target_owner,
                 target_table=target_table,
             )
@@ -942,13 +1215,6 @@ def save_rule(request: Request, payload: RuleDecisionRequest) -> dict[str, Any]:
             elif existing_rule:
                 rule_tolerance_pct = existing_tolerance
         else:
-            _require_run_access(
-                cursor,
-                project_id=project_id,
-                scenario_id=payload.scenarioId,
-                run_source_type=str(run_source_type),
-                run_id=int(payload.runId),
-            )
             source_detail = _fetch_one(
                 cursor,
                 (
@@ -982,7 +1248,7 @@ def save_rule(request: Request, payload: RuleDecisionRequest) -> dict[str, Any]:
                 {
                     "sourceRuleType": source_rule_type,
                     "projectId": project_id,
-                    "scenarioId": payload.scenarioId,
+                    "scenarioId": scenario_id,
                     "runSourceType": run_source_type,
                     "runId": payload.runId,
                     "sourceOwner": source_owner,
@@ -997,7 +1263,7 @@ def save_rule(request: Request, payload: RuleDecisionRequest) -> dict[str, Any]:
 
         params = {
             "projectId": project_id,
-            "scenarioId": payload.scenarioId,
+            "scenarioId": scenario_id,
             "sourceRuleType": semantic_rule_type,
             "runSourceType": run_source_type,
             "runId": payload.runId,
@@ -1331,6 +1597,99 @@ def exclude_discovered_rule(
         conn.close()
 
 
+def exclude_discovered_rules(
+    request: Request,
+    payload: RuleBulkExcludeRequest,
+) -> dict[str, Any]:
+    rule_ids = sorted({int(value) for value in payload.editRuleIds if int(value) > 0})
+    if not rule_ids:
+        raise HTTPException(status_code=400, detail="Select at least one discovered rule to exclude.")
+    user_id = _get_user_text(request)
+    conn = get_target_db_connection(request)
+    cursor = conn.cursor()
+    try:
+        project_id = _require_project_access(cursor, request, payload.projectId)
+        rules: list[dict[str, Any]] = []
+        for edit_rule_id in rule_ids:
+            rule = _fetch_one(
+                cursor,
+                "MCOMMON_EDIT_RULE_SELECT",
+                {
+                    "editRuleId": edit_rule_id,
+                    "projectId": project_id,
+                },
+            )
+            if not rule:
+                raise HTTPException(status_code=404, detail=f"Editing rule #{edit_rule_id} was not found.")
+            if not (
+                rule.get("SOURCE_RUN_SOURCE_TYPE")
+                and rule.get("SOURCE_RUN_ID") is not None
+                and rule.get("SOURCE_RULE_ID")
+                and str(rule.get("USER_RULE_YN") or "N").upper() == "N"
+            ):
+                raise HTTPException(
+                    status_code=409,
+                    detail="User rules cannot be excluded in bulk. Delete user rules individually.",
+                )
+            if str(rule.get("DECISION_STATUS") or "").upper() == "REJECTED":
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Editing rule #{edit_rule_id} is already excluded.",
+                )
+            rules.append(rule)
+        for rule in rules:
+            edit_rule_id = int(rule["EDIT_RULE_ID"])
+            cursor.execute(
+                SqlLoader.get_sql("MCOMMON_EDIT_DISCOVERED_RULE_EXCLUDE"),
+                {
+                    "editRuleId": edit_rule_id,
+                    "projectId": project_id,
+                    "decidedBy": user_id,
+                },
+            )
+            if cursor.rowcount != 1:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Editing rule #{edit_rule_id} could not be excluded.",
+                )
+            _event(
+                cursor,
+                edit_session_id=None,
+                event_type="RULE_DECISION",
+                entity_type="EDIT_RULE",
+                entity_id=edit_rule_id,
+                summary=f"Rule rejected: {rule.get('RULE_NAME') or rule.get('SOURCE_RULE_ID')}",
+                user_id=user_id,
+                detail={
+                    "decisionStatus": "REJECTED",
+                    "sourceRuleId": rule.get("SOURCE_RULE_ID"),
+                    "targetTable": rule.get("TARGET_TABLE"),
+                    "targetColumn": rule.get("TARGET_COLUMN"),
+                    "bulk": True,
+                },
+            )
+        conn.commit()
+        return {
+            "status": "success",
+            "decisionStatus": "REJECTED",
+            "excludedCount": len(rules),
+            "editRuleIds": rule_ids,
+        }
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception as exc:
+        conn.rollback()
+        logger.exception("Bulk discovered-rule exclusion failed.")
+        raise HTTPException(
+            status_code=500,
+            detail=f"규칙 일괄 선정 제외 중 오류가 발생했습니다. 상세: {exc}",
+        ) from exc
+    finally:
+        cursor.close()
+        conn.close()
+
+
 def list_master_rules(
     request: Request,
     *,
@@ -1444,18 +1803,88 @@ def _build_live_rule_violation_sql(
     return _render_dynamic_sql(sql_id, replacements).strip().rstrip(";"), params
 
 
+def _build_live_rule_violation_union_sql(
+    cursor,
+    rules: list[dict[str, Any]],
+    keyword: str | None,
+) -> tuple[str, dict[str, Any]]:
+    if not rules:
+        raise HTTPException(status_code=400, detail="조회할 최종 규칙을 선택하세요.")
+
+    rule_queries: list[str] = []
+    union_params: dict[str, Any] = {}
+    for index, rule in enumerate(rules):
+        base_sql, base_params = _build_live_rule_violation_sql(cursor, rule, keyword)
+        suffix = f"_{index}"
+        renamed_sql = SQL_BIND_PATTERN.sub(
+            lambda match: f":{match.group(1)}{suffix}",
+            base_sql,
+        )
+        union_params.update(
+            {
+                f"{name}{suffix}": value
+                for name, value in base_params.items()
+            }
+        )
+        union_params.update(
+            {
+                f"editRuleId{suffix}": int(rule.get("EDIT_RULE_ID") or 0),
+                f"ruleName{suffix}": str(
+                    rule.get("RULE_NAME")
+                    or rule.get("SOURCE_RULE_ID")
+                    or rule.get("EDIT_RULE_ID")
+                    or ""
+                ),
+                f"sourceRuleType{suffix}": str(
+                    rule.get("SOURCE_RULE_TYPE") or "ASSOCIATION"
+                ).upper(),
+                f"userRuleYn{suffix}": (
+                    "Y"
+                    if str(rule.get("USER_RULE_YN") or "N").upper() == "Y"
+                    else "N"
+                ),
+            }
+        )
+        rule_queries.append(
+            "SELECT :editRuleId{suffix} AS EDIT_RULE_ID"
+            "     , :ruleName{suffix} AS RULE_NAME"
+            "     , :sourceRuleType{suffix} AS SOURCE_RULE_TYPE"
+            "     , :userRuleYn{suffix} AS USER_RULE_YN"
+            "     , V.*"
+            "  FROM ("
+            "{base_sql}"
+            "       ) V".format(
+                suffix=suffix,
+                base_sql=renamed_sql,
+            )
+        )
+    return "\nUNION ALL\n".join(rule_queries), union_params
+
+
 def _fetch_live_rule_violation_page(
     cursor,
-    rule: dict[str, Any],
+    rules: list[dict[str, Any]],
     *,
+    edit_session_id: int | None = None,
+    change_status: str = "ALL",
     keyword: str | None,
     page: int,
     page_size: int,
 ) -> tuple[list[dict[str, Any]], PageWindow, str]:
-    base_sql, params = _build_live_rule_violation_sql(cursor, rule, keyword)
+    base_sql, params = _build_live_rule_violation_union_sql(cursor, rules, keyword)
+    scoped_sql = _render_dynamic_sql(
+        "MCOMMON_EDIT_LIVE_VIOLATION_CHANGE_SCOPE",
+        {"baseSql": base_sql},
+    ).strip().rstrip(";")
+    params.update(
+        {
+            "editSessionId": edit_session_id,
+            "changeStatus": change_status,
+        }
+    )
     try:
         cursor.execute(
-            f"SELECT COUNT(*) AS TOTAL_COUNT FROM ({base_sql}) Q",
+            f"SELECT COUNT(*) AS TOTAL_COUNT FROM ({scoped_sql}) Q",
             params,
         )
         total_row = cursor.fetchone()
@@ -1467,10 +1896,11 @@ def _fetch_live_rule_violation_page(
             "        SELECT Q.* "
             "             , ROW_NUMBER() OVER ("
             "                   ORDER BY Q.VIOLATION_SCORE DESC NULLS LAST"
+            "                          , Q.EDIT_RULE_ID"
             "                          , Q.CASE_ID"
             "                          , Q.CASE_ROWID"
             "               ) AS RN__ "
-            f"          FROM ({base_sql}) Q"
+            f"          FROM ({scoped_sql}) Q"
             "       ) P "
             " WHERE P.RN__ > :offset "
             "   AND P.RN__ <= :endRow "
@@ -1488,14 +1918,20 @@ def _fetch_live_rule_violation_page(
         rows = [_row_to_dict(columns, row) for row in cursor.fetchall()]
         for row in rows:
             row.pop("RN__", None)
-        return rows, page_window, base_sql
+        return rows, page_window, scoped_sql
     except HTTPException:
         raise
     except Exception as exc:
+        rule_names = ", ".join(
+            str(rule.get("RULE_NAME") or rule.get("EDIT_RULE_ID") or "-")
+            for rule in rules[:5]
+        )
+        if len(rules) > 5:
+            rule_names = f"{rule_names} 외 {len(rules) - 5}개"
         raise HTTPException(
             status_code=409,
             detail=(
-                f"최종 규칙 '{rule.get('RULE_NAME') or rule.get('EDIT_RULE_ID')}'의 실시간 위반 SQL을 "
+                f"선택한 최종 규칙({rule_names})의 실시간 위반 SQL을 "
                 f"실행할 수 없습니다. 규칙 표현식과 실제 테이블 컬럼을 확인하세요. ({exc})"
             ),
         ) from exc
@@ -1506,8 +1942,12 @@ def list_violations(
     *,
     project_id: int | None,
     scenario_id: int | None,
+    target_owner: str | None = None,
+    target_table: str | None = None,
     edit_session_id: int | None = None,
     edit_rule_id: int | None = None,
+    edit_rule_ids: list[int] | None = None,
+    change_status: str = "ALL",
     keyword: str | None = None,
     page: int = 1,
     page_size: int = 100,
@@ -1516,11 +1956,49 @@ def list_violations(
     cursor = conn.cursor()
     try:
         project_id = _require_project_access(cursor, request, project_id)
+        normalized_owner = (
+            _normalize_identifier(target_owner, "target owner")
+            if target_owner
+            else None
+        )
+        normalized_table = (
+            _normalize_identifier(target_table, "target table")
+            if target_table
+            else None
+        )
+        if bool(normalized_owner) != bool(normalized_table):
+            raise HTTPException(
+                status_code=400,
+                detail="원본 테이블 Owner와 테이블명을 함께 입력해 주세요.",
+            )
+        normalized_change_status = _normalize_choice(
+            change_status,
+            {"ALL", "UNEDITED", "APPLIED"},
+            "change status",
+            "ALL",
+        )
+        if normalized_table:
+            _derive_edit_table(normalized_table)
+            _require_target_table_access(
+                cursor,
+                project_id=project_id,
+                scenario_id=scenario_id,
+                target_owner=normalized_owner,
+                target_table=normalized_table,
+            )
         session_rule_ids: set[int] | None = None
         if edit_session_id:
             session = _select_session(cursor, edit_session_id, request)
             if int(session.get("PROJECT_ID") or 0) != project_id:
                 raise HTTPException(status_code=400, detail="Editing session does not belong to the selected project.")
+            if normalized_table and (
+                str(session.get("TARGET_OWNER") or "") != normalized_owner
+                or str(session.get("SOURCE_TABLE") or "") != normalized_table
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail="선택한 수정 작업이 원본 테이블과 일치하지 않습니다.",
+                )
             session_rule_ids = {
                 int(row["EDIT_RULE_ID"])
                 for row in _fetch_all(
@@ -1535,8 +2013,8 @@ def list_violations(
             {
                 "projectId": project_id,
                 "scenarioId": scenario_id,
-                "targetOwner": None,
-                "targetTable": None,
+                "targetOwner": normalized_owner,
+                "targetTable": normalized_table,
             },
         )
         if session_rule_ids is not None:
@@ -1553,59 +2031,93 @@ def list_violations(
                 "data": [],
                 "rules": [],
                 "selectedRule": None,
+                "selectedRules": [],
                 "queryMode": "LIVE",
                 "generatedSql": "",
                 **page_window.response_metadata(),
             }
-        selected_rule = None
+        requested_rule_ids = {
+            int(value)
+            for value in (edit_rule_ids or [])
+            if int(value) > 0
+        }
+        has_explicit_rule_scope = edit_rule_ids is not None or edit_rule_id is not None
         if edit_rule_id is not None:
-            selected_rule = next(
-                (
-                    rule
-                    for rule in rules
-                    if int(rule.get("EDIT_RULE_ID") or 0) == int(edit_rule_id)
+            requested_rule_ids.add(int(edit_rule_id))
+        selected_rules = [
+            rule
+            for rule in rules
+            if not has_explicit_rule_scope
+            or int(rule.get("EDIT_RULE_ID") or 0) in requested_rule_ids
+        ]
+        selected_rule_ids = {
+            int(rule.get("EDIT_RULE_ID") or 0)
+            for rule in selected_rules
+        }
+        missing_rule_ids = requested_rule_ids - selected_rule_ids
+        if missing_rule_ids:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "선택한 규칙 중 현재 프로젝트·시나리오의 최종 활성 규칙이 아닌 항목이 있습니다. "
+                    f"규칙 ID: {', '.join(str(value) for value in sorted(missing_rule_ids))}"
                 ),
-                None,
             )
-            if selected_rule is None:
-                raise HTTPException(
-                    status_code=400,
-                    detail="선택한 규칙은 현재 프로젝트·시나리오의 최종 활성 규칙이 아닙니다.",
-                )
-        else:
-            selected_rule = rules[0]
-        changes: dict[tuple[str, str], dict[str, Any]] = {}
-        if edit_session_id:
-            for change in _fetch_all(
-                cursor,
-                "MCOMMON_EDIT_CHANGE_LIST",
-                {"editSessionId": edit_session_id, "changeStatus": "ALL"},
-            ):
-                changes[(str(change.get("SOURCE_ROWID") or ""), str(change.get("COLUMN_NAME") or ""))] = change
+        if not selected_rules:
+            page_window = create_page_window(page, page_size, 0)
+            return {
+                "status": "success",
+                "data": [],
+                "rules": rules,
+                "selectedRule": None,
+                "selectedRules": [],
+                "queryMode": "LIVE",
+                "generatedSql": "",
+                **page_window.response_metadata(),
+            }
+        selected_rule = selected_rules[0] if len(selected_rules) == 1 else None
         rows, page_window, generated_sql = _fetch_live_rule_violation_page(
             cursor,
-            selected_rule,
+            selected_rules,
+            edit_session_id=edit_session_id,
+            change_status=normalized_change_status,
             keyword=keyword,
             page=page,
             page_size=page_size,
         )
-        source_type = str(selected_rule.get("SOURCE_RULE_TYPE") or "ASSOCIATION").upper()
-        is_user_rule = str(selected_rule.get("USER_RULE_YN") or "N").upper() == "Y"
+        rule_map = {
+            int(rule.get("EDIT_RULE_ID") or 0): rule
+            for rule in selected_rules
+        }
         for violation in rows:
-            key = (str(violation.get("CASE_ROWID") or ""), str(violation.get("TARGET_COLUMN") or ""))
-            change = changes.get(key)
+            violation_rule = rule_map.get(int(violation.get("EDIT_RULE_ID") or 0), {})
+            source_type = str(
+                violation.get("SOURCE_RULE_TYPE")
+                or violation_rule.get("SOURCE_RULE_TYPE")
+                or "ASSOCIATION"
+            ).upper()
+            is_user_rule = str(
+                violation.get("USER_RULE_YN")
+                or violation_rule.get("USER_RULE_YN")
+                or "N"
+            ).upper() == "Y"
+            edit_change_id = violation.get("EDIT_CHANGE_ID")
+            edit_new_value = violation.pop("EDIT_NEW_VALUE", None)
             violation.update(
                 {
-                    "EDIT_RULE_ID": selected_rule.get("EDIT_RULE_ID"),
-                    "RULE_NAME": selected_rule.get("RULE_NAME"),
+                    "EDIT_RULE_ID": violation_rule.get("EDIT_RULE_ID"),
+                    "RULE_NAME": violation_rule.get("RULE_NAME"),
                     "SOURCE_RULE_TYPE": source_type,
                     "USER_RULE_YN": "Y" if is_user_rule else "N",
                     "SOURCE_VIOLATION_TYPE": f"LIVE_{source_type}",
-                    "CURRENT_VALUE": change.get("NEW_VALUE") if change else violation.get("ACTUAL_VALUE"),
-                    "CHANGE_STATUS": change.get("CHANGE_STATUS") if change else "UNEDITED",
-                    "EDIT_CHANGE_ID": change.get("EDIT_CHANGE_ID") if change else None,
-                    "TARGET_COLUMN_COMMENT": selected_rule.get("TARGET_COLUMN_COMMENT") or "",
-                    "COLUMN_COMMENTS": selected_rule.get("COLUMN_COMMENTS") or {},
+                    "CURRENT_VALUE": (
+                        edit_new_value
+                        if edit_change_id is not None
+                        else violation.get("ACTUAL_VALUE")
+                    ),
+                    "CHANGE_STATUS": violation.get("CHANGE_STATUS") or "UNEDITED",
+                    "TARGET_COLUMN_COMMENT": violation_rule.get("TARGET_COLUMN_COMMENT") or "",
+                    "COLUMN_COMMENTS": violation_rule.get("COLUMN_COMMENTS") or {},
                 }
             )
         return {
@@ -1613,6 +2125,7 @@ def list_violations(
             "data": rows,
             "rules": rules,
             "selectedRule": selected_rule,
+            "selectedRules": selected_rules,
             "queryMode": "LIVE",
             "generatedSql": generated_sql,
             **page_window.response_metadata(),
@@ -1809,6 +2322,224 @@ def _table_columns(cursor, owner: str, table: str) -> list[dict[str, Any]]:
     )
 
 
+def _editing_table_structure_status(
+    cursor,
+    owner: str,
+    source_table: str,
+    edit_table: str,
+) -> dict[str, Any]:
+    if not _table_exists(cursor, owner, edit_table):
+        return {
+            "exists": False,
+            "trackingColumnExists": False,
+            "structureMatches": False,
+            "message": "INITDN$ editing table does not exist.",
+        }
+    source_columns = _table_columns(cursor, owner, source_table)
+    edit_columns = _table_columns(cursor, owner, edit_table)
+    edit_column_map = {
+        str(row.get("COLUMN_NAME") or ""): row
+        for row in edit_columns
+    }
+    tracking_exists = TRACKING_COLUMN in edit_column_map
+    comparable_keys = ("DATA_TYPE", "DATA_LENGTH", "DATA_PRECISION", "DATA_SCALE")
+    source_signature = [
+        (
+            str(row.get("COLUMN_NAME") or ""),
+            tuple(row.get(key) for key in comparable_keys),
+        )
+        for row in source_columns
+    ]
+    edit_signature = [
+        (
+            str(row.get("COLUMN_NAME") or ""),
+            tuple(row.get(key) for key in comparable_keys),
+        )
+        for row in edit_columns
+        if str(row.get("COLUMN_NAME") or "") != TRACKING_COLUMN
+    ]
+    structure_matches = tracking_exists and source_signature == edit_signature
+    if not tracking_exists:
+        message = f"Existing editing table is missing {TRACKING_COLUMN}."
+    elif source_signature != edit_signature:
+        message = "INITUP$ and INITDN$ column structures do not match one-to-one."
+    else:
+        message = "INITDN$ editing table is ready."
+    return {
+        "exists": True,
+        "trackingColumnExists": tracking_exists,
+        "structureMatches": structure_matches,
+        "message": message,
+    }
+
+
+def editing_table_status(
+    request: Request,
+    *,
+    project_id: int | None,
+    scenario_id: int | None,
+    target_owner: str,
+    target_table: str,
+) -> dict[str, Any]:
+    owner = _normalize_identifier(target_owner, "target owner")
+    source_table = _normalize_identifier(target_table, "source table")
+    edit_table = _derive_edit_table(source_table)
+    conn = get_target_db_connection(request)
+    cursor = conn.cursor()
+    try:
+        normalized_project_id = _require_project_access(cursor, request, project_id)
+        _require_target_table_access(
+            cursor,
+            project_id=normalized_project_id,
+            scenario_id=scenario_id,
+            target_owner=owner,
+            target_table=source_table,
+        )
+        table_status = _editing_table_structure_status(
+            cursor,
+            owner,
+            source_table,
+            edit_table,
+        )
+        sessions = _fetch_all(
+            cursor,
+            "MCOMMON_EDIT_SESSION_LIST",
+            {
+                "projectId": normalized_project_id,
+                "scenarioId": scenario_id,
+                "sessionStatus": "ALL",
+            },
+        )
+        matching_session = _matching_edit_session(
+            sessions,
+            owner=owner,
+            source_table=source_table,
+            edit_table=edit_table,
+        )
+        session_status = (
+            str(matching_session.get("SESSION_STATUS") or "").upper()
+            if matching_session
+            else None
+        )
+        return {
+            "status": "success",
+            "data": {
+                "targetOwner": owner,
+                "sourceTable": source_table,
+                "editTable": edit_table,
+                **table_status,
+                "editable": bool(
+                    table_status["structureMatches"]
+                    and session_status in {"EDITING", "VALIDATED"}
+                ),
+                "editSessionId": (
+                    matching_session.get("EDIT_SESSION_ID")
+                    if matching_session
+                    else None
+                ),
+                "sessionStatus": session_status,
+            },
+        }
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def create_editing_table(
+    request: Request,
+    payload: EditingTableCreateRequest,
+) -> dict[str, Any]:
+    owner = _normalize_identifier(payload.targetOwner, "target owner")
+    source_table = _normalize_identifier(payload.targetTable, "source table")
+    _derive_edit_table(source_table)
+    status_response = editing_table_status(
+        request,
+        project_id=payload.projectId,
+        scenario_id=payload.scenarioId,
+        target_owner=owner,
+        target_table=source_table,
+    )
+    current_status = status_response.get("data") or {}
+    if current_status.get("exists") and not current_status.get("structureMatches"):
+        raise HTTPException(
+            status_code=409,
+            detail=current_status.get("message")
+            or "INITUP$ and INITDN$ column structures do not match one-to-one.",
+        )
+    edit_session_id = current_status.get("editSessionId")
+    session_status = str(current_status.get("sessionStatus") or "").upper()
+    if current_status.get("editable") and edit_session_id:
+        return {
+            "status": "success",
+            "editSessionId": int(edit_session_id),
+            "sourceTable": source_table,
+            "editTable": current_status.get("editTable"),
+            "alreadyPrepared": True,
+            "editTableCreated": False,
+        }
+    if edit_session_id and session_status not in {"DRAFT", "EDITING"}:
+        raise HTTPException(
+            status_code=409,
+            detail="The current editing work status cannot prepare the INITDN$ editing table.",
+        )
+    if not edit_session_id:
+        conn = get_target_db_connection(request)
+        cursor = conn.cursor()
+        try:
+            project_id = _require_project_access(cursor, request, payload.projectId)
+            rules = _list_master_rules(
+                cursor,
+                project_id,
+                payload.scenarioId,
+                "SELECTED",
+                "ALL",
+            )
+            selected_rules = [
+                row
+                for row in rules
+                if str(row.get("RULE_STATUS") or "").upper() == "ACTIVE"
+                and str(row.get("TARGET_OWNER") or "").upper() == owner
+                and str(row.get("TARGET_TABLE") or "").upper() == source_table
+            ]
+        finally:
+            cursor.close()
+            conn.close()
+        edit_rule_ids = sorted(
+            {
+                int(row.get("EDIT_RULE_ID") or 0)
+                for row in selected_rules
+                if int(row.get("EDIT_RULE_ID") or 0) > 0
+            }
+        )
+        if not edit_rule_ids:
+            raise HTTPException(
+                status_code=400,
+                detail="No active final rules are registered for the selected INITUP$ table.",
+            )
+        baseline_run_ids = {
+            int(row.get("SOURCE_RUN_ID") or 0)
+            for row in selected_rules
+            if str(row.get("SOURCE_RUN_SOURCE_TYPE") or "").upper() == "FLOW_WORK"
+            and int(row.get("SOURCE_RUN_ID") or 0) > 0
+        }
+        created = create_session(
+            request,
+            EditSessionCreateRequest(
+                projectId=payload.projectId,
+                scenarioId=payload.scenarioId,
+                sessionName=f"{source_table} 편집",
+                editRuleIds=edit_rule_ids,
+                baselineFlowRunId=(
+                    next(iter(baseline_run_ids))
+                    if len(baseline_run_ids) == 1
+                    else None
+                ),
+            ),
+        )
+        edit_session_id = created["editSessionId"]
+    return prepare_session(request, int(edit_session_id))
+
+
 def delete_session(request: Request, edit_session_id: int) -> dict[str, Any]:
     conn = get_target_db_connection(request)
     cursor = conn.cursor()
@@ -1889,18 +2620,8 @@ def prepare_session(request: Request, edit_session_id: int) -> dict[str, Any]:
     try:
         session = _select_session(cursor, edit_session_id, request)
         session_status = str(session.get("SESSION_STATUS") or "")
-        if session_status == "EDITING":
-            return {
-                "status": "success",
-                "editSessionId": edit_session_id,
-                "sourceTable": session.get("SOURCE_TABLE"),
-                "editTable": session.get("EDIT_TABLE"),
-                "sourceRowCount": int(session.get("SOURCE_ROW_COUNT") or 0),
-                "alreadyPrepared": True,
-                "editTableCreated": False,
-            }
-        if session_status != "DRAFT":
-            raise HTTPException(status_code=409, detail="Only a draft editing session can prepare its INITDN$ table.")
+        if session_status not in {"DRAFT", "EDITING"}:
+            raise HTTPException(status_code=409, detail="Only draft or editing work can prepare its INITDN$ table.")
         owner = _normalize_identifier(session["TARGET_OWNER"], "target owner")
         source_table = _normalize_identifier(session["SOURCE_TABLE"], "source table")
         edit_table = _normalize_identifier(session["EDIT_TABLE"], "edit table")
@@ -1908,6 +2629,25 @@ def prepare_session(request: Request, edit_session_id: int) -> dict[str, Any]:
             raise HTTPException(status_code=400, detail="INITUP$/INITDN$ table pair is invalid.")
         if not _table_exists(cursor, owner, source_table):
             raise HTTPException(status_code=404, detail=f"Source table {owner}.{source_table} was not found.")
+        if session_status == "EDITING":
+            current_status = _editing_table_structure_status(
+                cursor,
+                owner,
+                source_table,
+                edit_table,
+            )
+            if current_status["structureMatches"]:
+                return {
+                    "status": "success",
+                    "editSessionId": edit_session_id,
+                    "sourceTable": source_table,
+                    "editTable": edit_table,
+                    "sourceRowCount": int(session.get("SOURCE_ROW_COUNT") or 0),
+                    "alreadyPrepared": True,
+                    "editTableCreated": False,
+                }
+            if current_status["exists"]:
+                raise HTTPException(status_code=409, detail=current_status["message"])
         source_columns = {str(row.get("COLUMN_NAME") or "") for row in _table_columns(cursor, owner, source_table)}
         if TRACKING_COLUMN in source_columns:
             raise HTTPException(status_code=400, detail=f"Source table already contains reserved column {TRACKING_COLUMN}.")
@@ -1919,11 +2659,16 @@ def prepare_session(request: Request, edit_session_id: int) -> dict[str, Any]:
                 f"T.* FROM {_quote_identifier(owner)}.{_quote_identifier(source_table)} T"
             )
             cursor.execute(create_sql)
-        edit_columns = {str(row.get("COLUMN_NAME") or "") for row in _table_columns(cursor, owner, edit_table)}
-        if TRACKING_COLUMN not in edit_columns:
+        table_status = _editing_table_structure_status(
+            cursor,
+            owner,
+            source_table,
+            edit_table,
+        )
+        if not table_status["structureMatches"]:
             raise HTTPException(
                 status_code=409,
-                detail=f"Existing {owner}.{edit_table} is not an editing copy because {TRACKING_COLUMN} is missing.",
+                detail=table_status["message"],
             )
         cursor.execute(
             f"SELECT COUNT(*) FROM {_quote_identifier(owner)}.{_quote_identifier(edit_table)}"
@@ -1960,14 +2705,97 @@ def prepare_session(request: Request, edit_session_id: int) -> dict[str, Any]:
         conn.close()
 
 
-def save_change(request: Request, edit_session_id: int, payload: EditChangeRequest) -> dict[str, Any]:
-    user_id = _get_user_text(request)
+def _apply_edit_change(
+    cursor,
+    *,
+    edit_session_id: int,
+    session: dict[str, Any],
+    columns: dict[str, dict[str, Any]],
+    session_rules: dict[int, dict[str, Any]],
+    payload: EditChangeRequest,
+    user_id: str,
+) -> dict[str, Any]:
     source_rowid = _normalize_text(payload.sourceRowid, 30)
     if not source_rowid:
         raise HTTPException(status_code=400, detail="Source ROWID is required.")
     column_name = _normalize_identifier(payload.columnName, "column name")
     if column_name == TRACKING_COLUMN:
         raise HTTPException(status_code=400, detail="The editing tracking column cannot be changed.")
+    edit_rule_id = int(payload.editRuleId or 0)
+    session_rule = session_rules.get(edit_rule_id)
+    if not session_rule:
+        raise HTTPException(status_code=400, detail="Editing rule does not belong to this editing work.")
+    if column_name != str(session_rule.get("TARGET_COLUMN") or "").upper():
+        raise HTTPException(status_code=400, detail="Editing column does not match the selected rule target.")
+    owner = _normalize_identifier(session["TARGET_OWNER"], "target owner")
+    edit_table = _normalize_identifier(session["EDIT_TABLE"], "edit table")
+    if column_name not in columns:
+        raise HTTPException(status_code=400, detail="Column does not exist in the INITDN$ editing table.")
+    select_sql = (
+        f"SELECT {_quote_identifier(column_name)} "
+        f"FROM {_quote_identifier(owner)}.{_quote_identifier(edit_table)} "
+        f"WHERE {_quote_identifier(TRACKING_COLUMN)} = :sourceRowid"
+    )
+    cursor.execute(select_sql, {"sourceRowid": source_rowid})
+    row = cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Editing row was not found.")
+    old_value = _read_lob(row[0])
+    update_sql = (
+        f"UPDATE {_quote_identifier(owner)}.{_quote_identifier(edit_table)} "
+        f"SET {_quote_identifier(column_name)} = :newValue "
+        f"WHERE {_quote_identifier(TRACKING_COLUMN)} = :sourceRowid"
+    )
+    cursor.execute(update_sql, {"newValue": payload.newValue, "sourceRowid": source_rowid})
+    cursor.execute(
+        SqlLoader.get_sql("MCOMMON_EDIT_CHANGE_MERGE"),
+        {
+            "editSessionId": edit_session_id,
+            "editRuleId": edit_rule_id,
+            "sourceViolationType": _normalize_text(payload.sourceViolationType, 30).upper(),
+            "sourceViolationId": int(payload.sourceViolationId),
+            "sourceRowid": source_rowid,
+            "caseId": _normalize_text(payload.caseId, 4000),
+            "columnName": column_name,
+            "oldValue": None if old_value is None else str(old_value),
+            "newValue": None if payload.newValue is None else str(payload.newValue),
+            "expectedValue": None if payload.expectedValue is None else str(payload.expectedValue),
+            "editedBy": user_id,
+        },
+    )
+    _event(
+        cursor,
+        edit_session_id=edit_session_id,
+        event_type="CELL_EDITED",
+        entity_type="EDIT_CHANGE",
+        entity_id=None,
+        summary=f"{column_name} updated for source ROWID {source_rowid}.",
+        user_id=user_id,
+        detail={
+            "editRuleId": edit_rule_id,
+            "caseId": payload.caseId,
+            "targetOwner": session.get("TARGET_OWNER"),
+            "sourceTable": session.get("SOURCE_TABLE"),
+            "editTable": session.get("EDIT_TABLE"),
+            "sourceRowid": source_rowid,
+            "columnName": column_name,
+            "oldValue": old_value,
+            "newValue": payload.newValue,
+            "expectedValue": payload.expectedValue,
+            "violationId": payload.sourceViolationId,
+        },
+    )
+    return {
+        "editRuleId": edit_rule_id,
+        "sourceRowid": source_rowid,
+        "columnName": column_name,
+        "oldValue": old_value,
+        "newValue": payload.newValue,
+    }
+
+
+def save_change(request: Request, edit_session_id: int, payload: EditChangeRequest) -> dict[str, Any]:
+    user_id = _get_user_text(request)
     conn = get_target_db_connection(request)
     cursor = conn.cursor()
     try:
@@ -1977,56 +2805,96 @@ def save_change(request: Request, edit_session_id: int, payload: EditChangeReque
         owner = _normalize_identifier(session["TARGET_OWNER"], "target owner")
         edit_table = _normalize_identifier(session["EDIT_TABLE"], "edit table")
         columns = {str(row.get("COLUMN_NAME") or ""): row for row in _table_columns(cursor, owner, edit_table)}
-        if column_name not in columns:
-            raise HTTPException(status_code=400, detail="Column does not exist in the INITDN$ editing table.")
-        select_sql = (
-            f"SELECT {_quote_identifier(column_name)} "
-            f"FROM {_quote_identifier(owner)}.{_quote_identifier(edit_table)} "
-            f"WHERE {_quote_identifier(TRACKING_COLUMN)} = :sourceRowid"
-        )
-        cursor.execute(select_sql, {"sourceRowid": source_rowid})
-        row = cursor.fetchone()
-        if not row:
-            raise HTTPException(status_code=404, detail="Editing row was not found.")
-        old_value = _read_lob(row[0])
-        update_sql = (
-            f"UPDATE {_quote_identifier(owner)}.{_quote_identifier(edit_table)} "
-            f"SET {_quote_identifier(column_name)} = :newValue "
-            f"WHERE {_quote_identifier(TRACKING_COLUMN)} = :sourceRowid"
-        )
-        cursor.execute(update_sql, {"newValue": payload.newValue, "sourceRowid": source_rowid})
-        cursor.execute(
-            SqlLoader.get_sql("MCOMMON_EDIT_CHANGE_MERGE"),
-            {
-                "editSessionId": edit_session_id,
-                "editRuleId": payload.editRuleId,
-                "sourceViolationType": _normalize_text(payload.sourceViolationType, 30).upper(),
-                "sourceViolationId": int(payload.sourceViolationId),
-                "sourceRowid": source_rowid,
-                "caseId": _normalize_text(payload.caseId, 4000),
-                "columnName": column_name,
-                "oldValue": None if old_value is None else str(old_value),
-                "newValue": None if payload.newValue is None else str(payload.newValue),
-                "expectedValue": None if payload.expectedValue is None else str(payload.expectedValue),
-                "editedBy": user_id,
-            },
+        session_rules = {
+            int(row.get("EDIT_RULE_ID") or 0): row
+            for row in _fetch_all(
+                cursor,
+                "MCOMMON_EDIT_SESSION_RULE_LIST",
+                {"editSessionId": edit_session_id},
+            )
+        }
+        result = _apply_edit_change(
+            cursor,
+            edit_session_id=edit_session_id,
+            session=session,
+            columns=columns,
+            session_rules=session_rules,
+            payload=payload,
+            user_id=user_id,
         )
         cursor.execute(
             SqlLoader.get_sql("MCOMMON_EDIT_SESSION_STATUS"),
             {"sessionStatus": "EDITING", "editSessionId": edit_session_id},
         )
-        _event(
-            cursor,
-            edit_session_id=edit_session_id,
-            event_type="CELL_EDITED",
-            entity_type="EDIT_CHANGE",
-            entity_id=None,
-            summary=f"{column_name} updated for source ROWID {source_rowid}.",
-            user_id=user_id,
-            detail={"oldValue": old_value, "newValue": payload.newValue, "violationId": payload.sourceViolationId},
+        conn.commit()
+        return {"status": "success", **result}
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def save_changes(
+    request: Request,
+    edit_session_id: int,
+    payload: EditChangeBulkRequest,
+) -> dict[str, Any]:
+    user_id = _get_user_text(request)
+    conn = get_target_db_connection(request)
+    cursor = conn.cursor()
+    try:
+        session = _select_session(cursor, edit_session_id, request)
+        if str(session.get("SESSION_STATUS") or "") not in {"EDITING", "VALIDATED"}:
+            raise HTTPException(status_code=409, detail="Editing session must be prepared before data changes.")
+        owner = _normalize_identifier(session["TARGET_OWNER"], "target owner")
+        edit_table = _normalize_identifier(session["EDIT_TABLE"], "edit table")
+        columns = {
+            str(row.get("COLUMN_NAME") or ""): row
+            for row in _table_columns(cursor, owner, edit_table)
+        }
+        session_rules = {
+            int(row.get("EDIT_RULE_ID") or 0): row
+            for row in _fetch_all(
+                cursor,
+                "MCOMMON_EDIT_SESSION_RULE_LIST",
+                {"editSessionId": edit_session_id},
+            )
+        }
+        seen_cells: set[tuple[str, str]] = set()
+        results: list[dict[str, Any]] = []
+        for change in payload.changes:
+            source_rowid = _normalize_text(change.sourceRowid, 30)
+            column_name = _normalize_identifier(change.columnName, "column name")
+            cell_key = (source_rowid, column_name)
+            if cell_key in seen_cells:
+                raise HTTPException(
+                    status_code=400,
+                    detail="The same editing cell is included more than once.",
+                )
+            seen_cells.add(cell_key)
+            results.append(
+                _apply_edit_change(
+                    cursor,
+                    edit_session_id=edit_session_id,
+                    session=session,
+                    columns=columns,
+                    session_rules=session_rules,
+                    payload=change,
+                    user_id=user_id,
+                )
+            )
+        cursor.execute(
+            SqlLoader.get_sql("MCOMMON_EDIT_SESSION_STATUS"),
+            {"sessionStatus": "EDITING", "editSessionId": edit_session_id},
         )
         conn.commit()
-        return {"status": "success", "oldValue": old_value, "newValue": payload.newValue}
+        return {
+            "status": "success",
+            "savedCount": len(results),
+            "data": results,
+        }
     except Exception:
         conn.rollback()
         raise
@@ -2281,9 +3149,16 @@ def _generate_merge_dml(cursor, session: dict[str, Any], edit_session_id: int) -
     source_columns = {str(row.get("COLUMN_NAME") or "") for row in _table_columns(cursor, owner, source_table)}
     if any(column not in source_columns for column in columns):
         raise HTTPException(status_code=400, detail="A changed column is missing from the INITUP$ source table.")
+    expected_rows = len({
+        str(row.get("SOURCE_ROWID") or "").strip()
+        for row in changes
+        if str(row.get("SOURCE_ROWID") or "").strip()
+    })
+    if expected_rows <= 0:
+        raise HTTPException(status_code=409, detail="No applied source rows are available for DML generation.")
     assignments = "\n".join(
         (
-            "         , " if index else "       SET "
+            "         , " if index else "         SET "
         )
         + f'S.{_quote_identifier(column)} = CASE\n'
         + "             WHEN EXISTS (\n"
@@ -2299,7 +3174,7 @@ def _generate_merge_dml(cursor, session: dict[str, Any], edit_session_id: int) -
         + "         END"
         for index, column in enumerate(columns)
     )
-    return (
+    merge_sql = (
         f"MERGE INTO {_quote_identifier(owner)}.{_quote_identifier(source_table)} S\n"
         "USING (\n"
         f"      SELECT E.*\n"
@@ -2314,50 +3189,61 @@ def _generate_merge_dml(cursor, session: dict[str, Any], edit_session_id: int) -
         "     ) E\n"
         f"   ON (ROWIDTOCHAR(S.ROWID) = E.{_quote_identifier(TRACKING_COLUMN)})\n"
         " WHEN MATCHED THEN\n"
+        "      UPDATE\n"
         f"{assignments}"
+    )
+    indented_merge_sql = "\n".join(f"    {line}" for line in merge_sql.splitlines())
+    return (
+        "BEGIN\n"
+        f"{indented_merge_sql}\n"
+        "    ;\n"
+        f"    IF SQL%ROWCOUNT <> {expected_rows} THEN\n"
+        "        RAISE_APPLICATION_ERROR(\n"
+        "            -20001,\n"
+        f"            'Final apply row-count mismatch. expected={expected_rows}'\n"
+        "        );\n"
+        "    END IF;\n"
+        "    COMMIT;\n"
+        "END;"
     )
 
 
 def generate_dml(request: Request, edit_session_id: int) -> dict[str, Any]:
-    user_id = _get_user_text(request)
     conn = get_target_db_connection(request)
     cursor = conn.cursor()
     try:
         session = _select_session(cursor, edit_session_id, request)
-        if str(session.get("SESSION_STATUS") or "") not in {"VALIDATED", "APPLY_READY"}:
-            raise HTTPException(status_code=409, detail="Validate editing effects before generating final DML.")
+        if str(session.get("SESSION_STATUS") or "") not in {"EDITING", "VALIDATED", "APPLY_READY", "APPLIED"}:
+            raise HTTPException(status_code=409, detail="Editing session is not ready for final DML generation.")
         dml_sql = _generate_merge_dml(cursor, session, edit_session_id)
-        output_id = cursor.var(int)
-        cursor.execute(
-            SqlLoader.get_sql("MCOMMON_EDIT_DML_INSERT"),
-            {
-                "editSessionId": edit_session_id,
-                "dmlName": f"{session['SOURCE_TABLE']} final apply",
-                "dmlSql": dml_sql,
-                "createdBy": user_id,
-                "editDmlId": output_id,
-            },
-        )
-        value = output_id.getvalue()
-        edit_dml_id = int(value[0] if isinstance(value, list) else value)
-        cursor.execute(
-            SqlLoader.get_sql("MCOMMON_EDIT_SESSION_STATUS"),
-            {"sessionStatus": "APPLY_READY", "editSessionId": edit_session_id},
-        )
-        _event(
+        return {
+            "status": "success",
+            "dmlName": f"{session['SOURCE_TABLE']} final apply",
+            "dmlSql": dml_sql,
+        }
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def validate_dml(request: Request, payload: EditDmlValidateRequest) -> dict[str, Any]:
+    conn = get_target_db_connection(request)
+    cursor = conn.cursor()
+    try:
+        session = _select_session(cursor, payload.editSessionId, request)
+        if str(session.get("SESSION_STATUS") or "") not in {"VALIDATED", "APPLY_READY", "APPLIED"}:
+            raise HTTPException(status_code=409, detail="Validate the editing session before validating final DML.")
+        message = _validate_registered_dml(
             cursor,
-            edit_session_id=edit_session_id,
-            event_type="DML_GENERATED",
-            entity_type="EDIT_DML",
-            entity_id=edit_dml_id,
-            summary="Final apply DML generated.",
-            user_id=user_id,
+            payload.dmlSql,
+            session,
+            payload.editSessionId,
+            parse_oracle=True,
         )
-        conn.commit()
-        return {"status": "success", "editDmlId": edit_dml_id, "dmlSql": dml_sql}
-    except Exception:
-        conn.rollback()
-        raise
+        return {
+            "status": "success",
+            "validationMessage": message,
+        }
     finally:
         cursor.close()
         conn.close()
@@ -2368,33 +3254,130 @@ def _validate_registered_dml(
     dml_sql: str,
     session: dict[str, Any],
     edit_session_id: int,
+    *,
+    parse_oracle: bool = False,
 ) -> str:
     sql = str(dml_sql or "").strip()
     if not sql:
         raise HTTPException(status_code=400, detail="DML SQL is required.")
     if len(sql) > 200_000:
         raise HTTPException(status_code=400, detail="DML SQL is too large.")
-    if ";" in sql or re.search(r"(?s)(--|/\*)", sql):
-        raise HTTPException(status_code=400, detail="Comments and statement separators are not allowed.")
-    if re.search(r"(?is)\b(DROP|TRUNCATE|ALTER|CREATE|GRANT|REVOKE|EXECUTE\s+IMMEDIATE|DBMS_SQL|BEGIN|DECLARE|CALL)\b", sql):
-        raise HTTPException(status_code=400, detail="Only a single final-apply DML statement is allowed.")
+    if re.search(r"(?s)(--|/\*)", sql):
+        raise HTTPException(status_code=400, detail="Comments are not allowed in final DML.")
     owner = _normalize_identifier(session["TARGET_OWNER"], "target owner")
     source_table = _normalize_identifier(session["SOURCE_TABLE"], "source table")
-    _derive_edit_table(source_table)
-    expected_target = re.escape(f'"{owner}"."{source_table}"')
-    if not re.match(rf"(?is)^\s*(MERGE\s+INTO|UPDATE)\s+{expected_target}(?:\s|$)", sql):
-        raise HTTPException(
-            status_code=400,
-            detail=f'Final DML must start with MERGE INTO or UPDATE for "{owner}"."{source_table}".',
-        )
-    if re.search(r"(?is)\b(DELETE\s+FROM|INSERT\s+INTO)\b", sql):
-        raise HTTPException(status_code=400, detail="Final apply DML cannot contain INSERT or DELETE.")
+    edit_table = _derive_edit_table(source_table)
     canonical_sql = _generate_merge_dml(cursor, session, edit_session_id).strip()
-    if sql != canonical_sql:
+    canonical_merge, separator, canonical_tail = canonical_sql.partition(";")
+    edited_merge, edited_separator, edited_tail = sql.partition(";")
+    if not separator or not edited_separator:
         raise HTTPException(
             status_code=400,
-            detail="Final DML must match the server-generated INITDN$ apply statement. Regenerate it after editing changes.",
+            detail="Final DML must keep the server-generated PL/SQL structure.",
         )
+
+    normalize_space = lambda value: re.sub(r"\s+", " ", str(value or "")).strip().upper()
+    if normalize_space(edited_tail) != normalize_space(canonical_tail):
+        raise HTTPException(
+            status_code=400,
+            detail="The row-count validation and COMMIT section of final DML cannot be changed.",
+        )
+
+    normalized_merge = normalize_space(edited_merge)
+    expected_target = (
+        f'MERGE INTO "{owner}"."{source_table}" S'
+    )
+    expected_edit_source = (
+        f'FROM "{owner}"."{edit_table}" E'
+    )
+    required_fragments = (
+        expected_target,
+        expected_edit_source,
+        'FROM "INIT$_TB_EDIT_CHANGE" C',
+        "WHEN MATCHED THEN UPDATE SET",
+        "C.CHANGE_STATUS = 'APPLIED'",
+        f'C.EDIT_SESSION_ID = {int(edit_session_id)}',
+        f'C.SOURCE_ROWID = E."{TRACKING_COLUMN}"',
+    )
+    if any(normalize_space(fragment) not in normalized_merge for fragment in required_fragments):
+        raise HTTPException(
+            status_code=400,
+            detail="Final DML must keep the current INITUP$/INITDN$ target, editing history, and matched-row update structure.",
+        )
+
+    prohibited_patterns = (
+        r"\bEXECUTE\s+IMMEDIATE\b",
+        r"\bDBMS_SQL\b",
+        r"\bPRAGMA\b",
+        r"\bAUTONOMOUS_TRANSACTION\b",
+        r"\bCREATE\b",
+        r"\bALTER\b",
+        r"\bDROP\b",
+        r"\bTRUNCATE\b",
+        r"\bGRANT\b",
+        r"\bREVOKE\b",
+        r"\bDELETE\b",
+        r"\bINSERT\b",
+        r"\bWHEN\s+NOT\s+MATCHED\b",
+        r":[A-Z0-9_$#]+",
+    )
+    if any(re.search(pattern, edited_merge, re.IGNORECASE) for pattern in prohibited_patterns):
+        raise HTTPException(
+            status_code=400,
+            detail="Final DML contains a command that is not allowed for INITDN$ final apply.",
+        )
+    if len(re.findall(r"\bMERGE\s+INTO\b", edited_merge, re.IGNORECASE)) != 1:
+        raise HTTPException(status_code=400, detail="Final DML must contain exactly one MERGE statement.")
+    if len(re.findall(r"\bUPDATE\b", edited_merge, re.IGNORECASE)) != 1:
+        raise HTTPException(status_code=400, detail="Final DML must contain exactly one matched-row UPDATE.")
+
+    canonical_identifiers = {
+        value.upper()
+        for value in re.findall(r'"([^"]+)"', canonical_merge)
+    }
+    edited_identifiers = {
+        value.upper()
+        for value in re.findall(r'"([^"]+)"', edited_merge)
+    }
+    if not edited_identifiers.issubset(canonical_identifiers):
+        raise HTTPException(
+            status_code=400,
+            detail="Final DML references an owner, table, or column outside the generated editing scope.",
+        )
+
+    canonical_calls = {
+        value.upper()
+        for value in re.findall(r"\b([A-Z][A-Z0-9_$#]*)\s*\(", canonical_merge, re.IGNORECASE)
+    }
+    edited_calls = {
+        value.upper()
+        for value in re.findall(r"\b([A-Z][A-Z0-9_$#]*)\s*\(", edited_merge, re.IGNORECASE)
+    }
+    if not edited_calls.issubset(canonical_calls):
+        raise HTTPException(
+            status_code=400,
+            detail="Final DML contains a function or callable expression outside the generated editing scope.",
+        )
+
+    session_ids = {
+        int(value)
+        for value in re.findall(r"\bC\.EDIT_SESSION_ID\s*=\s*(\d+)\b", edited_merge, re.IGNORECASE)
+    }
+    if session_ids != {int(edit_session_id)}:
+        raise HTTPException(
+            status_code=400,
+            detail="Final DML can reference only the selected editing session.",
+        )
+
+    if parse_oracle:
+        try:
+            # Parse only: validate Oracle grammar and referenced objects without executing the DML.
+            cursor.parse(sql)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Generated final DML is not valid Oracle SQL. {exc}",
+            ) from exc
     return f'Validated final DML target: "{owner}"."{source_table}".'
 
 
@@ -2404,10 +3387,33 @@ def save_dml(request: Request, payload: EditDmlRequest) -> dict[str, Any]:
     cursor = conn.cursor()
     try:
         session = _select_session(cursor, payload.editSessionId, request)
-        if str(session.get("SESSION_STATUS") or "") not in {"VALIDATED", "APPLY_READY"}:
+        if str(session.get("SESSION_STATUS") or "") not in {"VALIDATED", "APPLY_READY", "APPLIED"}:
             raise HTTPException(status_code=409, detail="Validate the editing session before registering final DML.")
-        _validate_registered_dml(cursor, payload.dmlSql, session, payload.editSessionId)
+        validation_message = _validate_registered_dml(
+            cursor,
+            payload.dmlSql,
+            session,
+            payload.editSessionId,
+            parse_oracle=True,
+        )
         if payload.editDmlId:
+            existing_dml = _fetch_one(
+                cursor,
+                "MCOMMON_EDIT_DML_SELECT_FOR_UPDATE",
+                {"editDmlId": payload.editDmlId},
+            )
+            if (
+                not existing_dml
+                or int(existing_dml.get("EDIT_SESSION_ID") or 0) != int(payload.editSessionId)
+            ):
+                raise HTTPException(status_code=404, detail="Registered DML was not found in this editing session.")
+            if (
+                get_request_role_code(request) != "ADMIN"
+                and str(existing_dml.get("CREATED_BY") or "") != user_id
+            ):
+                raise HTTPException(status_code=403, detail="Only the DML author can update this DML.")
+            if str(existing_dml.get("DML_STATUS") or "").upper() == "EXECUTED":
+                raise HTTPException(status_code=409, detail="Executed DML cannot be overwritten.")
             cursor.execute(
                 SqlLoader.get_sql("MCOMMON_EDIT_DML_UPDATE"),
                 {
@@ -2434,17 +3440,34 @@ def save_dml(request: Request, payload: EditDmlRequest) -> dict[str, Any]:
             )
             value = output_id.getvalue()
             edit_dml_id = int(value[0] if isinstance(value, list) else value)
+        cursor.execute(
+            SqlLoader.get_sql("MCOMMON_EDIT_DML_APPROVE"),
+            {
+                "editDmlId": edit_dml_id,
+                "validationMessage": validation_message,
+                "approvedBy": user_id,
+            },
+        )
+        cursor.execute(
+            SqlLoader.get_sql("MCOMMON_EDIT_SESSION_STATUS"),
+            {"sessionStatus": "APPLY_READY", "editSessionId": payload.editSessionId},
+        )
         _event(
             cursor,
             edit_session_id=payload.editSessionId,
             event_type="DML_SAVED",
             entity_type="EDIT_DML",
             entity_id=edit_dml_id,
-            summary="Final apply DML saved as draft.",
+            summary="Validated final apply DML saved.",
             user_id=user_id,
         )
         conn.commit()
-        return {"status": "success", "editDmlId": edit_dml_id}
+        return {
+            "status": "success",
+            "editDmlId": edit_dml_id,
+            "dmlStatus": "APPROVED",
+            "validationMessage": validation_message,
+        }
     except Exception:
         conn.rollback()
         raise
@@ -2474,6 +3497,56 @@ def list_dml(request: Request, edit_session_id: int | None) -> dict[str, Any]:
         conn.close()
 
 
+def delete_dml(request: Request, edit_dml_id: int) -> dict[str, Any]:
+    user_id = _get_user_text(request)
+    conn = get_target_db_connection(request)
+    cursor = conn.cursor()
+    try:
+        dml = _fetch_one(
+            cursor,
+            "MCOMMON_EDIT_DML_SELECT_FOR_UPDATE",
+            {"editDmlId": edit_dml_id},
+        )
+        if not dml:
+            raise HTTPException(status_code=404, detail="Registered DML was not found.")
+        edit_session_id = int(dml["EDIT_SESSION_ID"])
+        _select_session(cursor, edit_session_id, request)
+        if (
+            get_request_role_code(request) != "ADMIN"
+            and str(dml.get("CREATED_BY") or "") != user_id
+        ):
+            raise HTTPException(status_code=403, detail="Only the DML author can delete this DML.")
+        if str(dml.get("DML_STATUS") or "").upper() == "EXECUTED":
+            raise HTTPException(status_code=409, detail="Executed DML cannot be deleted.")
+        cursor.execute(
+            SqlLoader.get_sql("MCOMMON_EDIT_DML_DELETE"),
+            {"editDmlId": edit_dml_id},
+        )
+        if cursor.rowcount != 1:
+            raise HTTPException(status_code=409, detail="DML could not be deleted in its current status.")
+        _event(
+            cursor,
+            edit_session_id=edit_session_id,
+            event_type="DML_DELETED",
+            entity_type="EDIT_DML",
+            entity_id=edit_dml_id,
+            summary=f"DML deleted: {dml.get('DML_NAME') or edit_dml_id}.",
+            user_id=user_id,
+            detail={
+                "dmlName": dml.get("DML_NAME"),
+                "dmlStatus": dml.get("DML_STATUS"),
+            },
+        )
+        conn.commit()
+        return {"status": "success", "editDmlId": edit_dml_id}
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cursor.close()
+        conn.close()
+
+
 def approve_dml(request: Request, edit_dml_id: int) -> dict[str, Any]:
     user_id = _get_user_text(request)
     conn = get_target_db_connection(request)
@@ -2492,6 +3565,7 @@ def approve_dml(request: Request, edit_dml_id: int) -> dict[str, Any]:
             str(dml.get("DML_SQL") or ""),
             session,
             int(dml["EDIT_SESSION_ID"]),
+            parse_oracle=True,
         )
         cursor.execute(
             SqlLoader.get_sql("MCOMMON_EDIT_DML_APPROVE"),
@@ -2530,20 +3604,23 @@ def execute_dml(request: Request, edit_dml_id: int) -> dict[str, Any]:
         if str(session.get("SESSION_STATUS") or "") != "APPLY_READY":
             raise HTTPException(status_code=409, detail="Editing session is not ready for final apply.")
         if str(dml.get("DML_STATUS") or "") != "APPROVED":
-            raise HTTPException(status_code=409, detail="Only approved DML can be executed.")
-        _validate_registered_dml(cursor, str(dml.get("DML_SQL") or ""), session, edit_session_id)
+            raise HTTPException(status_code=409, detail="Only validated and saved DML can be executed.")
+        _validate_registered_dml(
+            cursor,
+            str(dml.get("DML_SQL") or ""),
+            session,
+            edit_session_id,
+            parse_oracle=True,
+        )
         validation = _fetch_one(
             cursor,
             "MCOMMON_EDIT_VALIDATION_SUMMARY",
             {"editSessionId": edit_session_id},
         ) or {}
         expected_rows = int(validation.get("CHANGED_ROW_COUNT") or 0)
-        cursor.execute(str(dml["DML_SQL"]))
-        affected = max(0, int(cursor.rowcount or 0))
-        if affected != expected_rows:
-            raise RuntimeError(
-                f"Final apply row-count mismatch. expected={expected_rows}, affected={affected}"
-            )
+        if expected_rows <= 0:
+            raise HTTPException(status_code=409, detail="No validated editing rows are available for final apply.")
+        affected = expected_rows
         cursor.execute(
             SqlLoader.get_sql("MCOMMON_EDIT_DML_EXECUTION_RESULT"),
             {
@@ -2568,7 +3645,10 @@ def execute_dml(request: Request, edit_dml_id: int) -> dict[str, Any]:
             user_id=user_id,
             detail={"affectedRowCount": affected},
         )
-        conn.commit()
+        # The canonical PL/SQL block commits the operational MERGE together with
+        # the execution metadata prepared above. Its row-count guard raises
+        # before COMMIT when the target rows no longer match the editing history.
+        cursor.execute(str(dml["DML_SQL"]))
         return {"status": "success", "editDmlId": edit_dml_id, "affectedRowCount": affected}
     except HTTPException:
         conn.rollback()
