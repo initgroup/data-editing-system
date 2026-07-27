@@ -113,7 +113,7 @@
       "pageCode": "M02001",
       "title": "File Upload Management",
       "label": "File Upload",
-      "group": "Data Preparation & Exploration",
+      "group": "Editing Target Selection",
       "status": "enabled",
       "summary": "Uploads local files into Target DB work tables and supports preview, column review, and data lookup.",
       "purpose": [
@@ -137,9 +137,9 @@
     },
     "M02002": {
       "pageCode": "M02002",
-      "title": "Target Data Selection",
-      "label": "Target Data",
-      "group": "Data Preparation & Exploration",
+      "title": "Target Table Selection",
+      "label": "Target Table",
+      "group": "Editing Target Selection",
       "status": "enabled",
       "summary": "Browses Target DB tables and selects the target tables used by projects and scenarios.",
       "purpose": [

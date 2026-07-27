@@ -14,6 +14,7 @@
         selectedProjectId: "",
         selectedScenarioId: "",
         scenarioTables: [],
+        scenarioTableRequestVersion: 0,
         selectedScenarioTableKey: "",
         tables: [],
         displayedTables: [],
@@ -21,7 +22,9 @@
         tableTreeLoading: false,
         tableTreeHasMore: false,
         tableTreeNextOffset: 0,
+        tableTreeRequestVersion: 0,
         selectedTable: null,
+        analysisTable: null,
         focusedTableKey: "",
         activeTab: "columns",
         gridData: {
@@ -57,9 +60,10 @@
             document.addEventListener("mouseup", this.stopColumnResizeBound);
             getContainerEl("#sqlEditor-M02002")?.addEventListener("keydown", this.sqlKeydownBound);
             await this.loadWorkContext();
-            await this.loadTableTree();
             this.switchTab("columns");
             this.isInit = true;
+            Promise.all([this.loadScenarioTables(), this.loadTableTree()])
+                .catch((error) => console.error("[M02002] deferred initial data load failed", error));
         },
 
         destroy() {
@@ -68,6 +72,7 @@
             this.selectedProjectId = "";
             this.selectedScenarioId = "";
             this.scenarioTables = [];
+            this.scenarioTableRequestVersion = 0;
             this.selectedScenarioTableKey = "";
             this.tables = [];
             this.displayedTables = [];
@@ -75,7 +80,9 @@
             this.tableTreeLoading = false;
             this.tableTreeHasMore = false;
             this.tableTreeNextOffset = 0;
+            this.tableTreeRequestVersion = 0;
             this.selectedTable = null;
+            this.analysisTable = null;
             this.focusedTableKey = "";
             this.activeTab = "columns";
             this.gridData = { columns: [], data: [], sql: [] };
@@ -130,7 +137,6 @@
                 this.renderContextScenarios([]);
             }
             if (this.contextLoadFailed) return;
-            await this.loadScenarioTables();
         },
 
         async refreshWorkContext() {
@@ -165,7 +171,7 @@
                 this.selectedProjectId = "";
                 console.error("[M02002] project context load failed", error);
                 select.innerHTML = `<option value="">${this.escapeHtml(this.t("projectLoadFailed", "Project load failed"))}</option>`;
-                this.renderError("#scenarioTablesGrid-M02002", message);
+                console.error("[M02002] work context load failed", message);
             }
         },
 
@@ -192,9 +198,10 @@
             this.selectedProjectId = projectId || "";
             CommonUtils.applyOwnerScopeToSelect(getContainerEl("#contextProject-M02002"), this.contextProjects, this.selectedProjectId);
             this.selectedScenarioId = "";
+            this.resetTableAnalysis();
             this.saveStoredContext();
             await this.loadContextScenarios("");
-            await this.loadScenarioTables();
+            await Promise.all([this.loadScenarioTables(), this.loadTableTree()]);
         },
 
         async loadContextScenarios(preferredScenarioId = "") {
@@ -223,7 +230,7 @@
                 this.selectedScenarioId = "";
                 console.error("[M02002] scenario context load failed", error);
                 if (select) select.innerHTML = `<option value="">${this.escapeHtml(this.t("scenarioLoadFailed", "Scenario load failed"))}</option>`;
-                this.renderError("#scenarioTablesGrid-M02002", message);
+                console.error("[M02002] work context load failed", message);
             }
         },
 
@@ -232,7 +239,7 @@
             if (!select) return;
 
             select.innerHTML = `
-                <option value="">${this.escapeHtml(this.t("selectScenario", "-- Select scenario --"))}</option>
+                <option value="">${this.escapeHtml(this.t("selectScenario", "ALL"))}</option>
                 ${this.contextScenarios.map((scenario) => `
                     <option class="${this.escapeHtml(CommonUtils.getOwnerScopeClass(scenario))}" value="${this.escapeHtml(scenario.SCENARIO_ID ?? "")}">
                         ${this.escapeHtml(CommonUtils.formatOwnerScopedName(scenario, scenario.SCENARIO_NAME || scenario.SCENARIO_CODE || this.t("untitledScenario", "(Untitled scenario)")))}
@@ -241,8 +248,7 @@
             `;
 
             const exists = this.contextScenarios.some((scenario) => String(scenario.SCENARIO_ID) === String(preferredScenarioId));
-            const firstScenarioId = this.contextScenarios.length ? String(this.contextScenarios[0].SCENARIO_ID ?? "") : "";
-            this.selectedScenarioId = exists ? String(preferredScenarioId) : firstScenarioId;
+            this.selectedScenarioId = exists ? String(preferredScenarioId) : "";
             select.value = this.selectedScenarioId;
             CommonUtils.applyOwnerScopeToSelect(select, this.contextScenarios, this.selectedScenarioId, ["SCENARIO_ID", "scenarioId"]);
             this.saveStoredContext();
@@ -251,16 +257,13 @@
         async handleContextScenarioChange(scenarioId) {
             this.selectedScenarioId = scenarioId || "";
             CommonUtils.applyOwnerScopeToSelect(getContainerEl("#contextScenario-M02002"), this.contextScenarios, this.selectedScenarioId, ["SCENARIO_ID", "scenarioId"]);
+            this.resetTableAnalysis();
             this.saveStoredContext();
-            await this.loadScenarioTables();
+            await Promise.all([this.loadScenarioTables(), this.loadTableTree()]);
         },
 
         ensureWorkContextSelected() {
-            if (!this.selectedProjectId) {
-                alert("Project is required.");
-                getContainerEl("#contextProject-M02002")?.focus();
-                return false;
-            }
+            if (!this.ensureProjectSelected()) return false;
             if (!this.selectedScenarioId) {
                 alert("Scenario is required.");
                 getContainerEl("#contextScenario-M02002")?.focus();
@@ -270,30 +273,30 @@
         },
 
         async loadScenarioTables() {
-            const container = getContainerEl("#scenarioTablesGrid-M02002");
-            if (!container) return;
-
+            const requestVersion = ++this.scenarioTableRequestVersion;
             this.selectedScenarioTableKey = "";
-            if (!this.selectedProjectId || !this.selectedScenarioId) {
-                this.scenarioTables = [];
-                container.innerHTML = `
-                    <div class="table-empty">${this.escapeHtml(this.t("selectProjectScenarioFirst", "Select project and scenario first."))}</div>
-                    ${this.renderListFooter(0)}
-                `;
+            this.scenarioTables = [];
+            if (!this.selectedProjectId) {
+                this.updateActionButtons();
                 return;
             }
 
-            container.innerHTML = `<div class="table-empty">${this.escapeHtml(this.t("loadingScenarioTables", "Loading scenario tables..."))}</div>`;
             try {
                 const params = new URLSearchParams({
-                    projectId: this.selectedProjectId,
-                    scenarioId: this.selectedScenarioId
+                    projectId: this.selectedProjectId
                 });
+                if (this.selectedScenarioId) params.set("scenarioId", this.selectedScenarioId);
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/scenario-tables?${params.toString()}`, { method: "GET", showLoading: false });
+                if (requestVersion !== this.scenarioTableRequestVersion) return;
                 this.scenarioTables = Array.isArray(json.data) ? json.data : [];
-                this.renderScenarioTables();
             } catch (error) {
-                container.innerHTML = `<div class="table-error">${this.escapeHtml(error.message || "Scenario table load failed.")}</div>`;
+                if (requestVersion !== this.scenarioTableRequestVersion) return;
+                this.scenarioTables = [];
+                console.error("[M02002] scenario table load failed", error);
+            } finally {
+                if (requestVersion !== this.scenarioTableRequestVersion) return;
+                this.updateActionButtons();
+                if (this.selectedTable) this.updateSelectedMeta();
             }
         },
 
@@ -365,6 +368,317 @@
             return this.scenarioTables.find((row) => this.getScenarioTableKey(row) === this.selectedScenarioTableKey) || null;
         },
 
+        scenarioRowMatchesTable(row, table) {
+            if (!row || !table) return false;
+            return row.OWNER_NAME === table.OWNER && row.TABLE_NAME === table.TABLE_NAME;
+        },
+
+        getSelectedOriginalTableImport() {
+            if (!this.selectedTable) return null;
+            return this.scenarioTables.find((row) =>
+                row.ORIGINAL_OWNER_NAME === this.selectedTable.OWNER
+                && row.ORIGINAL_TABLE_NAME === this.selectedTable.TABLE_NAME
+                && !this.scenarioRowMatchesTable(row, this.selectedTable)
+            ) || null;
+        },
+
+        getSelectedRegistration() {
+            const registrations = this.getSelectedTableRegistrations();
+            if (this.selectedScenarioId) {
+                return registrations.find((row) =>
+                    String(row.SCENARIO_ID || "") === String(this.selectedScenarioId)
+                ) || null;
+            }
+            return registrations.length === 1 ? registrations[0] : null;
+        },
+
+        getSelectedTableRegistrations() {
+            if (!this.selectedTable) return [];
+            return this.scenarioTables.filter((row) => this.scenarioRowMatchesTable(row, this.selectedTable));
+        },
+
+        getScenarioDisplayName(scenarioId) {
+            const scenario = this.contextScenarios.find((row) => String(row.SCENARIO_ID || "") === String(scenarioId || ""));
+            return scenario?.SCENARIO_NAME || scenario?.SCENARIO_CODE || `시나리오 ID ${scenarioId}`;
+        },
+
+        async getSelectedRegistrationFromServer() {
+            if (!this.selectedTable || !this.selectedProjectId || !this.selectedScenarioId) return null;
+            const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/scenario-table/registration`, {
+                method: "POST",
+                showLoading: false,
+                body: {
+                    projectId: Number(this.selectedProjectId),
+                    scenarioId: Number(this.selectedScenarioId),
+                    owner: this.selectedTable.OWNER,
+                    tableName: this.selectedTable.TABLE_NAME
+                }
+            });
+            return json?.data ? { ...json.data, SCENARIO_ID: Number(this.selectedScenarioId) } : null;
+        },
+
+        isSelectedManagedTable() {
+            const tableName = String(this.selectedTable?.TABLE_NAME || "").toUpperCase();
+            return tableName.startsWith("INITUP$") || tableName.startsWith("INITDN$");
+        },
+
+        getSelectedManagedTableRegistration() {
+            if (!this.selectedTable) return null;
+            const matches = this.scenarioTables.filter((row) =>
+                (row.OWNER_NAME === this.selectedTable.OWNER && row.TABLE_NAME === this.selectedTable.TABLE_NAME)
+                || (row.EDIT_OWNER_NAME === this.selectedTable.OWNER && row.EDIT_TABLE_NAME === this.selectedTable.TABLE_NAME)
+            );
+            if (this.selectedScenarioId) {
+                return matches.find((row) => String(row.SCENARIO_ID || "") === String(this.selectedScenarioId)) || null;
+            }
+            // 전체 시나리오에서는 등록 해제 대상은 특정할 수 없지만, 동일 INITUP$의
+            // 원본/수정 테이블 페어 정보는 첫 유효 매핑으로 표시할 수 있습니다.
+            return matches[0] || null;
+        },
+
+        getSelectedTablePair() {
+            const registration = this.getSelectedManagedTableRegistration();
+            const selectedName = String(this.selectedTable?.TABLE_NAME || "").toUpperCase();
+            const selected = this.selectedTable
+                ? { owner: this.selectedTable.OWNER || "", tableName: this.selectedTable.TABLE_NAME || "" }
+                : null;
+            const source = registration
+                ? { owner: registration.OWNER_NAME || "", tableName: registration.TABLE_NAME || "" }
+                : (selectedName.startsWith("INITDN$") ? null : selected);
+            const edit = registration
+                ? { owner: registration.EDIT_OWNER_NAME || "", tableName: registration.EDIT_TABLE_NAME || "" }
+                : (selectedName.startsWith("INITDN$") ? selected : null);
+            const originalOwner = registration?.ORIGINAL_OWNER_NAME || this.selectedTable?.ORIGINAL_OWNER_NAME || "";
+            const originalTable = registration?.ORIGINAL_TABLE_NAME || this.selectedTable?.ORIGINAL_TABLE_NAME || "";
+            const originTableId = (registration?.DATA_ORIGIN_TYPE === "DB_TABLE_IMPORT" || originalTable) && originalTable
+                ? `${originalOwner ? `${originalOwner}.` : ""}${originalTable}`
+                : "";
+            const sourceComment = registration?.TABLE_COMMENT || this.selectedTable?.COMMENTS || "";
+            const sourceMeta = {
+                comment: registration?.SOURCE_TABLE_COMMENT || sourceComment,
+                createdAt: registration?.SOURCE_CREATED_AT || this.selectedTable?.CREATED_AT || ""
+            };
+            const editMeta = {
+                comment: registration?.EDIT_TABLE_COMMENT || "",
+                createdAt: registration?.EDIT_CREATED_AT || ""
+            };
+            const originalMeta = {
+                comment: registration?.ORIGINAL_TABLE_COMMENT || "",
+                createdAt: registration?.ORIGINAL_CREATED_AT || ""
+            };
+            const originalFile = {
+                extension: registration?.ORIGINAL_FILE_EXTENSION || "-",
+                name: registration?.ORIGINAL_FILE_NAME || sourceComment || "-",
+                size: registration?.ORIGINAL_FILE_SIZE
+            };
+            return {
+                source,
+                edit,
+                registration,
+                originalTarget: originTableId
+                    ? { owner: originalOwner, tableName: originalTable }
+                    : null,
+                isManagedSource: String(source?.tableName || "").toUpperCase().startsWith("INITUP$"),
+                sourceMeta,
+                editMeta,
+                originalMeta,
+                originalFile,
+                sourceOrigin: originTableId
+                    ? `원본 테이블: ${originTableId}`
+                    : `원본 파일: ${sourceComment || "-"}`
+            };
+        },
+
+        selectPairTable(role) {
+            const pair = this.getSelectedTablePair();
+            const target = role === "edit" ? pair.edit : pair.source;
+            if (!target?.owner || !target?.tableName) return;
+            this.selectAnalysisTable(target);
+        },
+
+        selectOriginalTable() {
+            const target = this.getSelectedTablePair().originalTarget;
+            if (!target?.owner || !target?.tableName) return;
+            this.selectAnalysisTable(target);
+        },
+
+        async selectAnalysisTable(target) {
+            const current = this.getAnalysisTable();
+            if (current?.OWNER === target.owner && current?.TABLE_NAME === target.tableName) return;
+            this.analysisTable = { OWNER: target.owner, TABLE_NAME: target.tableName, COMMENTS: "" };
+            this.dataGridStateKey = "";
+            this.setDefaultSql();
+            const exists = await this.loadTableInfo();
+            if (!exists) {
+                this.analysisTable = null;
+                this.setDefaultSql();
+                this.renderError(`#${this.activeTab}Grid-M02002`, "선택한 테이블은 아직 생성되지 않았습니다.");
+                return;
+            }
+            await this.loadColumns();
+            if (this.activeTab === "data") await this.loadTableData(1, { force: true });
+        },
+
+        renderTablePairMeta() {
+            const pair = this.getSelectedTablePair();
+            ["columns", "data"].forEach((panel) => {
+                const container = getContainerEl(`#tablePairMeta-${panel}-M02002`);
+                if (!container) return;
+                const sourceRow = this.createTablePairMetaRow("source", pair.source, pair.sourceMeta, true, pair.isManagedSource);
+                const editRow = this.createTablePairMetaRow("edit", pair.edit, pair.editMeta, false);
+                container.innerHTML = panel === "columns"
+                    ? [
+                        this.createOriginalTableMetaRow(pair.originalTarget, pair.sourceOrigin, pair.originalMeta, pair.originalFile),
+                        sourceRow,
+                        editRow
+                    ].join("")
+                    : [sourceRow, editRow].join("");
+            });
+        },
+
+        createOriginalTableMetaRow(originalTarget, sourceOrigin, originalMeta = {}, originalFile = {}) {
+            const isOriginalTable = Boolean(originalTarget?.owner && originalTarget?.tableName);
+            const tableButton = isOriginalTable
+                ? `<button type="button" class="table-pair-table-button" title="${this.escapeHtml(`${originalTarget.owner}.${originalTarget.tableName}`)}" onclick="M02002.selectOriginalTable()">${this.escapeHtml(originalTarget.tableName)}</button>`
+                : `<strong>-</strong>`;
+            if (isOriginalTable) return `
+                <div class="table-pair-row is-origin">
+                    <div class="table-pair-cell"><span>구분</span><strong class="table-pair-role">원본 테이블</strong></div>
+                    <div class="table-pair-cell"><span>Owner</span><strong>${this.escapeHtml(originalTarget.owner)}</strong></div>
+                    <div class="table-pair-cell"><span>테이블 ID</span>${tableButton}</div>
+                    <div class="table-pair-cell table-pair-origin">${this.createTableDetailMarkup(originalMeta)}</div>
+                </div>
+            `;
+            const fileName = String(sourceOrigin || "-").replace(/^원본 파일:\s*/, "") || "-";
+            return `
+                <div class="table-pair-row is-origin">
+                    <div class="table-pair-cell"><span>구분</span><strong class="table-pair-role">원본 파일</strong></div>
+                    <div class="table-pair-cell"><span>파일 타입</span><strong>${this.escapeHtml(originalFile.extension || "-")}</strong></div>
+                    <div class="table-pair-cell table-pair-origin"><span>파일명</span><strong>${this.escapeHtml(originalFile.name || fileName)}</strong></div>
+                    <div class="table-pair-cell"><span>파일 크기</span><strong>${this.escapeHtml(this.formatFileSize(originalFile.size))}</strong></div>
+                </div>
+            `;
+        },
+
+        createTablePairMetaRow(role, target, metadata = {}, isSource, isManagedSource = true) {
+            const owner = target?.owner || "-";
+            const tableName = target?.tableName || "-";
+            const clickable = Boolean(target?.owner && target?.tableName);
+            const button = clickable
+                ? `<button type="button" class="table-pair-table-button" title="${this.escapeHtml(`${owner}.${tableName}`)}" onclick="M02002.selectPairTable('${role}')">${this.escapeHtml(tableName)}</button>`
+                : `<button type="button" class="table-pair-table-button" disabled>-</button>`;
+            return `
+                <div class="table-pair-row ${isSource ? "is-source" : "is-edit"}">
+                    <div class="table-pair-cell"><span>구분</span><strong class="table-pair-role">${isSource ? (isManagedSource ? "기준 테이블 (INITUP$)" : "선택 테이블") : "수정 테이블 (INITDN$)"}</strong></div>
+                    <div class="table-pair-cell"><span>Owner</span><strong>${this.escapeHtml(owner)}</strong></div>
+                    <div class="table-pair-cell"><span>테이블 ID</span>${button}</div>
+                    <div class="table-pair-cell table-pair-origin">${this.createTableDetailMarkup(metadata)}</div>
+                </div>
+            `;
+        },
+
+        createTableDetailMarkup(metadata = {}) {
+            return `<strong>테이블명: ${this.escapeHtml(metadata.comment || "-")}<br>생성일시: ${this.escapeHtml(this.formatKstDateTime(metadata.createdAt))}</strong>`;
+        },
+
+        formatFileSize(value) {
+            const bytes = Number(value);
+            if (!Number.isFinite(bytes) || bytes < 0) return "-";
+            if (bytes < 1024) return `${bytes} B`;
+            const units = ["KB", "MB", "GB", "TB"];
+            let size = bytes / 1024;
+            let unitIndex = 0;
+            while (size >= 1024 && unitIndex < units.length - 1) {
+                size /= 1024;
+                unitIndex += 1;
+            }
+            return `${size.toFixed(size >= 10 ? 0 : 1)} ${units[unitIndex]}`;
+        },
+
+        updateActionButtons() {
+            const saveButton = getContainerEl("#saveTableAction-M02002");
+            const deleteButton = getContainerEl("#deleteTableAction-M02002");
+            const dropManagedButton = getContainerEl("#dropManagedTableAction-M02002");
+            const deleteAllButton = getContainerEl("#deleteAllTableAction-M02002");
+            const saveIcon = saveButton?.querySelector("i");
+            const saveLabel = saveButton?.querySelector("span");
+            const deleteLabel = deleteButton?.querySelector("span");
+            const dropManagedLabel = dropManagedButton?.querySelector("span");
+            const deleteAllLabel = deleteAllButton?.querySelector("span");
+            const hasProject = Boolean(this.selectedProjectId);
+            const registration = this.getSelectedRegistration();
+            const registrationCount = this.getSelectedTableRegistrations().length;
+            const isRegistered = registrationCount > 0 || String(this.selectedTable?.IS_REGISTERED || "").toUpperCase() === "Y";
+            const originalTableImport = this.getSelectedOriginalTableImport();
+            const hasMapping = Boolean(registration?.EDIT_OWNER_NAME && registration?.EDIT_TABLE_NAME);
+            const isSelectedManagedTable = this.isSelectedManagedTable();
+            const isManagedSource = String(this.selectedTable?.IS_MANAGED_SOURCE || "").toUpperCase() === "Y";
+
+            let primaryLabel = this.t("saveOrImport", "Save / Import");
+            let primaryIconClass = "fas fa-save";
+            let primaryTitle = this.t("selectTableAndScenario", "Select a table and scenario.");
+            let primaryEnabled = false;
+            if (this.selectedTable && hasProject) {
+                if (!this.selectedScenarioId) {
+                    primaryTitle = "저장할 시나리오를 선택하세요.";
+                    primaryEnabled = true;
+                } else if (registration && hasMapping) {
+                    primaryLabel = this.t("alreadySaved", "Saved");
+                    primaryIconClass = "fas fa-check";
+                    primaryTitle = this.t("alreadySavedTitle", "This table is already saved.");
+                } else if (registration) {
+                    primaryLabel = this.t("createSnapshotAndConvert", "Create snapshot and convert");
+                    primaryIconClass = "fas fa-arrows-rotate";
+                    primaryTitle = this.t("createSnapshotAndConvertTitle", "Convert the direct registration to a managed snapshot.");
+                    primaryEnabled = true;
+                } else if (originalTableImport) {
+                    primaryLabel = "가져오기 완료";
+                    primaryIconClass = "fas fa-check";
+                    primaryTitle = `이 원본 테이블은 ${originalTableImport.OWNER_NAME}.${originalTableImport.TABLE_NAME} 관리 테이블로 이미 가져왔습니다.`;
+                } else if (isManagedSource) {
+                    primaryLabel = this.t("saveTable", "Save");
+                    primaryTitle = this.t("saveManagedTableTitle", "Save this managed INITUP$ table to the scenario.");
+                    primaryEnabled = true;
+                } else {
+                    primaryLabel = this.t("createAndSave", "Create and save");
+                    primaryIconClass = "fas fa-database";
+                    primaryTitle = this.t("createAndSaveTitle", "Create an INITUP$ snapshot and save it to the scenario.");
+                    primaryEnabled = true;
+                }
+            }
+
+            if (saveLabel) saveLabel.textContent = primaryLabel;
+            if (saveIcon) saveIcon.className = primaryIconClass;
+            if (saveButton) {
+                saveButton.disabled = !primaryEnabled;
+                saveButton.title = primaryTitle;
+            }
+            if (deleteLabel) deleteLabel.textContent = this.t("unregister", "Unregister");
+            if (deleteButton) {
+                deleteButton.disabled = !(hasProject && isRegistered);
+                deleteButton.title = registration
+                    ? this.t("unregisterTitle", "Remove only the scenario registration. The DB table is not dropped.")
+                    : (originalTableImport
+                        ? "원본 테이블은 등록 대상이 아닙니다. 복제된 INITUP$ 관리 테이블을 선택하세요."
+                        : (!this.selectedScenarioId && registrationCount > 1
+                        ? "여러 시나리오에 등록되어 있습니다. 해제할 시나리오를 선택하세요."
+                        : this.t("unregisterTitle", "Remove only the scenario registration. The DB table is not dropped.")));
+            }
+            if (dropManagedLabel) dropManagedLabel.textContent = this.t("dropManagedTables", "Delete physical table");
+            if (dropManagedButton) {
+                dropManagedButton.hidden = !isSelectedManagedTable;
+                dropManagedButton.disabled = !hasProject;
+                dropManagedButton.title = "선택한 INITUP$ 또는 INITDN$ 물리 테이블만 영구 삭제합니다.";
+            }
+            if (deleteAllLabel) deleteAllLabel.textContent = this.t("unregisterAll", "Unregister all");
+            if (deleteAllButton) {
+                deleteAllButton.title = this.selectedScenarioId
+                    ? this.t("unregisterAllTitle", "Remove all table registrations from the scenario. DB tables are not dropped.")
+                    : "등록을 해제할 시나리오를 선택하세요.";
+                deleteAllButton.disabled = !hasProject;
+            }
+        },
+
         updateScenarioTableComment(key, value) {
             const row = this.scenarioTables.find((item) => this.getScenarioTableKey(item) === key);
             if (!row) return;
@@ -380,7 +694,7 @@
             }
 
             const exists = this.scenarioTables.find((row) =>
-                row.OWNER_NAME === this.selectedTable.OWNER && row.TABLE_NAME === this.selectedTable.TABLE_NAME
+                this.scenarioRowMatchesTable(row, this.selectedTable)
             );
             if (exists) {
                 this.selectedScenarioTableKey = this.getScenarioTableKey(exists);
@@ -407,9 +721,29 @@
         async saveScenarioTable() {
             if (!this.ensureWorkContextSelected()) return;
 
-            const row = this.getSelectedScenarioTable();
+            const selectedTable = this.selectedTable;
+            const row = this.getSelectedRegistration()
+                || (selectedTable ? {
+                    PROJECT_ID: Number(this.selectedProjectId),
+                    SCENARIO_ID: Number(this.selectedScenarioId),
+                    OWNER_NAME: selectedTable.OWNER,
+                    TABLE_NAME: selectedTable.TABLE_NAME,
+                    TABLE_COMMENT: selectedTable.COMMENTS || "",
+                    USE_YN: "Y",
+                    SORT_ORDER: this.scenarioTables.length + 1
+                } : null);
             if (!row) {
-                alert("Click Add selected first, then select a scenario table to save.");
+                alert("Select a table from Table Explorer first.");
+                return;
+            }
+            if (
+                (!row.SCENARIO_TABLE_ID || !row.EDIT_TABLE_NAME)
+                && !(await CommonMessage.confirm(
+                    `"${row.OWNER_NAME}.${row.TABLE_NAME}" 테이블을 대상 데이터로 저장하시겠습니까?\n`
+                    + "일반 DB 테이블은 FILE_ROW_NO가 추가된 관리 스냅샷으로 가져옵니다.\n"
+                    + "스냅샷 ID 규칙: INITUP$_{PROJECT_CODE}_DB_{TIME}"
+                ))
+            ) {
                 return;
             }
 
@@ -432,30 +766,58 @@
                 this.scenarioTables = Array.isArray(json.list) ? json.list : [];
                 const saved = json.data || {};
                 this.selectedScenarioTableKey = saved.SCENARIO_TABLE_ID ? `ID:${saved.SCENARIO_TABLE_ID}` : "";
-                this.renderScenarioTables();
-                alert("Scenario table saved.");
+                await this.loadTableTree();
+                alert(json.message || "Scenario table saved.");
             } catch (error) {
                 alert(error.message || "Scenario table save failed.");
             }
         },
 
         async deleteScenarioTable() {
-            if (!this.ensureWorkContextSelected()) return;
+            if (!this.ensureProjectSelected()) return;
 
-            const row = this.getSelectedScenarioTable();
+            let row = this.getSelectedRegistration()
+                || (!this.selectedScenarioId ? this.getSelectedManagedTableRegistration() : null);
+            if (!row && String(this.selectedTable?.IS_REGISTERED || "").toUpperCase() === "Y") {
+                await this.loadScenarioTables();
+                row = this.getSelectedRegistration()
+                    || (!this.selectedScenarioId ? this.getSelectedManagedTableRegistration() : null);
+            }
+            if (!row && this.selectedScenarioId && String(this.selectedTable?.IS_REGISTERED || "").toUpperCase() === "Y") {
+                try {
+                    row = await this.getSelectedRegistrationFromServer();
+                } catch (error) {
+                    console.warn("[M02002] registration lookup failed", error);
+                }
+            }
             if (!row) {
-                alert("Select a scenario table to delete.");
+                const registrationCount = this.getSelectedTableRegistrations().length;
+                if (!this.selectedTable) {
+                    alert("테이블 탐색에서 테이블을 먼저 선택하세요.");
+                } else if (!this.selectedScenarioId && registrationCount > 1) {
+                    alert("여러 시나리오에 등록되어 있습니다. 해제할 시나리오를 선택하세요.");
+                    getContainerEl("#contextScenario-M02002")?.focus();
+                } else if (!this.selectedScenarioId) {
+                    alert("등록 해제할 시나리오를 선택하세요.");
+                    getContainerEl("#contextScenario-M02002")?.focus();
+                } else {
+                    alert("선택한 테이블은 현재 시나리오에 등록되어 있지 않습니다.");
+                }
                 return;
             }
 
             if (row._PENDING || !row.SCENARIO_TABLE_ID) {
                 this.scenarioTables = this.scenarioTables.filter((item) => item !== row);
                 this.selectedScenarioTableKey = "";
-                this.renderScenarioTables();
                 return;
             }
 
-            if (!(await CommonMessage.confirm(`Delete table "${row.OWNER_NAME}.${row.TABLE_NAME}" from this scenario?`))) {
+            const selectedTableName = `${this.selectedTable?.OWNER || row.OWNER_NAME}.${this.selectedTable?.TABLE_NAME || row.TABLE_NAME}`;
+            if (!(await CommonMessage.confirm(
+                `"${selectedTableName}" 테이블의 시나리오 등록을 해제하시겠습니까?\n`
+                + `대상 시나리오: ${this.getScenarioDisplayName(row.SCENARIO_ID)}\n`
+                + "실제 DB 테이블은 삭제되지 않습니다."
+            ))) {
                 return;
             }
 
@@ -465,27 +827,35 @@
                     body: {
                         scenarioTableId: row.SCENARIO_TABLE_ID,
                         projectId: Number(this.selectedProjectId),
-                        scenarioId: Number(this.selectedScenarioId)
+                        scenarioId: Number(row.SCENARIO_ID)
                     }
                 });
                 this.scenarioTables = this.scenarioTables.filter((item) => item !== row);
                 this.selectedScenarioTableKey = "";
-                this.renderScenarioTables();
-                alert("Scenario table deleted.");
+                await this.loadTableTree();
+                alert("테이블 등록을 해제했습니다.");
             } catch (error) {
-                alert(error.message || "Scenario table delete failed.");
+                alert(error.message || "테이블 등록 해제에 실패했습니다.");
             }
         },
 
         async deleteAllScenarioTables() {
-            if (!this.ensureWorkContextSelected()) return;
-
-            if (!this.scenarioTables.length) {
-                alert("There are no scenario tables to delete.");
+            if (!this.ensureProjectSelected()) return;
+            if (!this.selectedScenarioId) {
+                alert("등록을 해제할 시나리오를 선택하세요.");
+                getContainerEl("#contextScenario-M02002")?.focus();
                 return;
             }
 
-            if (!(await CommonMessage.confirm("Delete all tables registered to this scenario?"))) {
+            if (!this.scenarioTables.length) {
+                alert("등록 해제할 테이블이 없습니다.");
+                return;
+            }
+
+            if (!(await CommonMessage.confirm(
+                "이 시나리오에 등록된 모든 테이블을 등록 해제하시겠습니까?\n"
+                + "실제 DB 테이블은 삭제되지 않습니다."
+            ))) {
                 return;
             }
 
@@ -499,20 +869,100 @@
                 });
                 this.scenarioTables = [];
                 this.selectedScenarioTableKey = "";
-                this.renderScenarioTables();
-                alert(`${result.deletedCount ?? 0} scenario tables deleted.`);
+                await this.loadTableTree();
+                alert(`${result.deletedCount ?? 0}건의 테이블 등록을 해제했습니다.`);
             } catch (error) {
-                alert(error.message || "Scenario table delete failed.");
+                alert(error.message || "테이블 전체 등록 해제에 실패했습니다.");
             }
+        },
+
+        async dropManagedScenarioTable() {
+            if (!this.ensureProjectSelected()) return;
+            if (!this.selectedScenarioId) {
+                alert("물리 테이블을 삭제할 시나리오를 선택하세요.");
+                getContainerEl("#contextScenario-M02002")?.focus();
+                return;
+            }
+            if (!this.isSelectedManagedTable()) {
+                alert("물리 테이블 삭제는 테이블 탐색에서 INITUP$ 또는 INITDN$ 테이블을 선택했을 때만 사용할 수 있습니다.");
+                return;
+            }
+
+            const pair = this.getSelectedTablePair();
+            const selectedName = `${this.selectedTable.OWNER}.${this.selectedTable.TABLE_NAME}`;
+            const hasManagedPair = Boolean(pair.registration && pair.source?.tableName && pair.edit?.tableName);
+
+            if (!(await CommonMessage.confirm(
+                hasManagedPair
+                    ? `물리 테이블 쌍을 완전히 삭제하시겠습니까?\n\nINITUP$: ${pair.source.owner}.${pair.source.tableName}\nINITDN$: ${pair.edit.owner}.${pair.edit.tableName}\n\n등록 정보도 함께 해제되며 복구할 수 없습니다.`
+                    : `물리 테이블을 완전히 삭제하시겠습니까?\n\n대상: ${selectedName}\n\n연결된 INITDN$ 정보를 찾을 수 없어 선택한 테이블만 삭제됩니다. 복구할 수 없습니다.`
+            ))) {
+                return;
+            }
+            const confirmationTableName = hasManagedPair ? pair.source.tableName : this.selectedTable.TABLE_NAME;
+            const confirmation = await CommonMessage.prompt(
+                `삭제하려면 물리 테이블 ID를 입력하세요.\n${confirmationTableName}`,
+                {
+                    title: this.t("dropManagedTables", "Delete physical table"),
+                    input: {
+                        ariaLabel: "물리 테이블 ID",
+                        placeholder: confirmationTableName
+                    }
+                }
+            );
+            if (String(confirmation || "").trim().toUpperCase() !== String(confirmationTableName || "").toUpperCase()) {
+                alert("테이블 ID가 일치하지 않아 삭제를 취소했습니다.");
+                return;
+            }
+
+            try {
+                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/scenario-table/drop-managed`, {
+                    method: "POST",
+                    body: {
+                        projectId: Number(this.selectedProjectId),
+                        scenarioId: Number(this.selectedScenarioId),
+                        ownerName: this.selectedTable.OWNER,
+                        tableName: this.selectedTable.TABLE_NAME
+                    }
+                });
+                this.applyDroppedTableResult(json);
+                this.resetTableAnalysis();
+                alert(this.t("physicalTableDeleted", "Physical table deleted."));
+            } catch (error) {
+                alert(error.message || "물리 테이블 삭제에 실패했습니다.");
+            }
+        },
+
+        applyDroppedTableResult(result = {}) {
+            const droppedKeys = new Set(
+                (Array.isArray(result.droppedTables) ? result.droppedTables : [])
+                    .map((value) => String(value || "").trim().toUpperCase())
+                    .filter(Boolean)
+            );
+            if (!droppedKeys.size) return;
+
+            const tableKey = (owner, tableName) => `${owner || ""}.${tableName || ""}`.toUpperCase();
+            this.tables = this.tables.filter((row) => !droppedKeys.has(tableKey(row.OWNER, row.TABLE_NAME)));
+            this.displayedTables = this.tables;
+            this.scenarioTables = this.scenarioTables.filter((row) =>
+                !droppedKeys.has(tableKey(row.OWNER_NAME, row.TABLE_NAME))
+                && !droppedKeys.has(tableKey(row.EDIT_OWNER_NAME, row.EDIT_TABLE_NAME))
+            );
+            this.selectedScenarioTableKey = "";
+            this.focusedTableKey = "";
+            this.renderTableTree();
+            this.updateActionButtons();
         },
 
         async loadTableTree(reset = true) {
             const container = getContainerEl("#tableTree-M02002");
             if (!container) return;
-            if (this.tableTreeLoading) return;
+            if (this.tableTreeLoading && !reset) return;
 
             const keyword = this.tableSearchMode ? (getContainerEl("#tableSearch-M02002")?.value || "").trim() : "";
+            const registeredOnly = this.isRegisteredOnly();
             const offset = reset ? 0 : this.tableTreeNextOffset;
+            const requestVersion = ++this.tableTreeRequestVersion;
             this.tableTreeLoading = true;
             if (reset) {
                 container.innerHTML = `<div class="table-empty">${this.escapeHtml(this.t("loadingTables", "Loading tables..."))}</div>`;
@@ -525,22 +975,36 @@
                 const params = new URLSearchParams({
                     keyword,
                     offset: String(offset),
-                    limit: String(TREE_PAGE_SIZE)
+                    limit: String(TREE_PAGE_SIZE),
+                    registeredOnly: registeredOnly ? "Y" : "N"
                 });
+                if (this.selectedProjectId) {
+                    params.set("projectId", this.selectedProjectId);
+                    if (this.selectedScenarioId) params.set("scenarioId", this.selectedScenarioId);
+                }
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/table-tree?${params.toString()}`, { method: "GET", showLoading: false });
+                if (requestVersion !== this.tableTreeRequestVersion) return;
                 if (json.status && json.status !== "success") {
                     throw new Error(json.message || json.detail || this.t("tableListLoadFailed", "Table list load failed."));
                 }
                 const rows = Array.isArray(json.data) ? json.data : [];
                 this.tables = reset ? rows : this.tables.concat(rows);
                 this.displayedTables = this.tables;
+                if (this.selectedTable) {
+                    const selectedKey = this.getSelectedTableKey();
+                    this.selectedTable = this.tables.find((row) =>
+                        `${row.OWNER}.${row.TABLE_NAME}` === selectedKey
+                    ) || this.selectedTable;
+                }
                 this.tableTreeHasMore = Boolean(json.hasMore);
                 this.tableTreeNextOffset = Number(json.nextOffset || this.tables.length);
                 this.renderTableTree();
+                this.updateActionButtons();
             } catch (error) {
+                if (requestVersion !== this.tableTreeRequestVersion) return;
                 container.innerHTML = `<div class="table-error">${this.escapeHtml(error.message)}</div>`;
             } finally {
-                this.tableTreeLoading = false;
+                if (requestVersion === this.tableTreeRequestVersion) this.tableTreeLoading = false;
             }
         },
 
@@ -577,11 +1041,13 @@
             const selectedKey = this.selectedTable ? `${this.selectedTable.OWNER}.${this.selectedTable.TABLE_NAME}` : "";
             const selectedClass = key === (this.focusedTableKey || selectedKey) ? "is-selected" : "";
             const comment = row.COMMENTS || "";
+            const registeredIcon = this.getRegisteredTableIcon(row);
             return `
                 <button type="button" class="table-tree-row ${selectedClass}" data-table-key="${this.escapeHtml(key)}" onclick="M02002.selectTable('${this.escapeJs(row.OWNER)}', '${this.escapeJs(row.TABLE_NAME)}')">
                     <span class="table-tree-name" title="${this.escapeHtml(comment || row.TABLE_NAME)}">
                         <span class="table-tree-physical">
                             <i class="fas fa-table"></i>
+                            ${registeredIcon}
                             <span>${this.escapeHtml(row.TABLE_NAME)}</span>
                         </span>
                         <span class="table-tree-comment">${this.escapeHtml(comment || "-")}</span>
@@ -589,6 +1055,11 @@
                     <span class="table-tree-muted">${this.escapeHtml(row.OWNER)}</span>
                 </button>
             `;
+        },
+
+        getRegisteredTableIcon(row) {
+            if (String(row?.IS_REGISTERED || "").toUpperCase() !== "Y") return "";
+            return `<i class="fas fa-circle-check table-tree-registered-icon" title="${this.escapeHtml(this.t("registeredTable", "Registered table"))}"></i>`;
         },
 
         createTableLoadMoreRow() {
@@ -679,6 +1150,27 @@
             }
         },
 
+        isRegisteredOnly() {
+            return Boolean(getContainerEl("#registeredOnly-M02002")?.checked);
+        },
+
+        ensureProjectSelected() {
+            if (this.selectedProjectId) return true;
+            alert("Project is required.");
+            getContainerEl("#contextProject-M02002")?.focus();
+            return false;
+        },
+
+        handleRegisteredOnlyChange() {
+            const checkbox = getContainerEl("#registeredOnly-M02002");
+            if (checkbox?.checked && !this.ensureProjectSelected()) {
+                checkbox.checked = false;
+                return;
+            }
+            this.focusedTableKey = "";
+            this.loadTableTree(true);
+        },
+
         handleTableSearchFilterChange() {
             this.focusedTableKey = "";
             this.renderTableTree();
@@ -708,10 +1200,12 @@
             const previousTableKey = this.getSelectedTableKey();
             const table = this.tables.find((row) => row.OWNER === owner && row.TABLE_NAME === tableName);
             this.selectedTable = table || { OWNER: owner, TABLE_NAME: tableName, COMMENTS: "" };
+            this.analysisTable = null;
             if (previousTableKey !== this.getSelectedTableKey()) this.dataGridStateKey = "";
             this.focusedTableKey = `${owner}.${tableName}`;
             this.renderTableTree();
             this.updateSelectedMeta();
+            this.updateActionButtons();
             this.setDefaultSql();
             await Promise.all([
                 this.loadTableInfo(),
@@ -723,14 +1217,42 @@
         },
 
         updateSelectedMeta() {
-            this.setText("#selectedOwner-M02002", this.selectedTable?.OWNER || "-");
-            this.setText("#selectedTable-M02002", this.selectedTable?.TABLE_NAME || "-");
-            this.setText("#selectedCreatedAt-M02002", this.formatKstDateTime(this.selectedTable?.CREATED_AT));
-            this.setText("#selectedComment-M02002", this.selectedTable?.COMMENTS || "-");
-            const desc = this.selectedTable
-                ? `${this.selectedTable.OWNER}.${this.selectedTable.TABLE_NAME}`
+            const pair = this.getSelectedTablePair();
+            this.renderTablePairMeta();
+            const desc = pair.source?.owner && pair.source?.tableName
+                ? `${pair.source.owner}.${pair.source.tableName}${pair.edit?.tableName ? ` ↔ ${pair.edit.owner}.${pair.edit.tableName}` : ""}`
                 : this.t("selectTableFromExplorer", "Select a table from the explorer.");
             this.setText("#tableDescription-M02002", desc);
+        },
+
+        resetTableAnalysis() {
+            this.selectedTable = null;
+            this.analysisTable = null;
+            this.focusedTableKey = "";
+            this.selectedCell = null;
+            this.gridData = { columns: [], data: [], sql: [] };
+            this.gridPages = { data: 1, sql: 1 };
+            this.gridTotals = { data: 0, sql: 0 };
+            this.gridTotalPages = { data: 1, sql: 1 };
+            this.dataGridStateKey = "";
+            this.sqlGridText = "";
+            this.updateSelectedMeta();
+            this.updateActionButtons();
+            const emptyMessage = this.escapeHtml(this.t("selectTableFirst", "Select a table first."));
+            ["columns", "data", "sql"].forEach((gridKey) => {
+                const grid = getContainerEl(`#${gridKey}Grid-M02002`);
+                if (grid) grid.innerHTML = `<div class="table-empty">${emptyMessage}</div>`;
+                const pager = getContainerEl(`#${gridKey}GridPager-M02002`);
+                if (pager) {
+                    pager.innerHTML = "";
+                    pager.hidden = true;
+                }
+            });
+            this.renderColumnsGridToolbar(0);
+            this.renderDataGridMessage("");
+            this.renderSqlMessage("");
+            const editor = getContainerEl("#sqlEditor-M02002");
+            if (editor) editor.value = "";
         },
 
         switchTab(tabName) {
@@ -752,7 +1274,7 @@
         },
 
         async loadTableInfo() {
-            if (!this.ensureSelectedTable()) return;
+            if (!this.ensureSelectedTable()) return false;
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/table-info`, {
                     method: "POST",
@@ -760,14 +1282,16 @@
                     body: this.getSelectedPayload()
                 });
                 if (json.data && Object.keys(json.data).length) {
-                    this.selectedTable = {
-                        ...this.selectedTable,
+                    this.analysisTable = {
+                        ...this.getAnalysisTable(),
                         ...json.data
                     };
-                    this.updateSelectedMeta();
+                    return true;
                 }
+                return false;
             } catch (error) {
                 console.warn("[M02002] table info load failed", error);
+                return false;
             }
         },
 
@@ -969,10 +1493,17 @@
         },
 
         setDefaultSql() {
-            if (!this.selectedTable) return;
             const editor = getContainerEl("#sqlEditor-M02002");
             if (!editor) return;
-            editor.value = `SELECT *\n  FROM ${this.quoteName(this.selectedTable.OWNER)}.${this.quoteName(this.selectedTable.TABLE_NAME)};`;
+            const pair = this.getSelectedTablePair();
+            const targets = [pair.originalTarget, pair.source, pair.edit]
+                .filter((target) => target?.owner && target?.tableName)
+                .filter((target, index, items) => items.findIndex((item) =>
+                    item.owner === target.owner && item.tableName === target.tableName
+                ) === index);
+            const statements = targets
+                .map((target) => `SELECT *\n  FROM ${this.quoteName(target.owner)}.${this.quoteName(target.tableName)};`);
+            editor.value = statements.join("\n\n");
         },
 
         validateSelectSql(sql) {
@@ -1078,6 +1609,11 @@
 
         enableSharedGridResize(gridKey) {
             const table = getContainerEl(`[data-grid-key="${gridKey}"]`);
+            const colgroup = table?.querySelector("colgroup");
+            // renderGrid already assigns the page's initial widths.  Preserve
+            // them before the shared resizer measures the newly inserted table:
+            // on the first layout pass its headers can still report 48px.
+            if (colgroup) colgroup.dataset.gridWidthsReady = "Y";
             CommonUtils.enableGridColumnResize(table, (width, header) => {
                 const index = Array.from(header.parentElement?.children || []).indexOf(header) - 1;
                 if (index >= 0) this.columnWidths[gridKey][index] = width;
@@ -1195,7 +1731,7 @@
                     Number(minute),
                     Number(second),
                     Number(String(fraction || "0").padEnd(3, "0").slice(0, 3))
-                ));
+                ) - (9 * 60 * 60 * 1000));
             }
             const parsed = new Date(text);
             return Number.isNaN(parsed.getTime()) ? null : parsed;
@@ -1353,9 +1889,12 @@
         },
 
         getSelectedPayload() {
+            const table = this.getAnalysisTable();
             return {
-                owner: this.selectedTable?.OWNER || "",
-                tableName: this.selectedTable?.TABLE_NAME || ""
+                owner: table?.OWNER || "",
+                tableName: table?.TABLE_NAME || "",
+                projectId: this.selectedProjectId || null,
+                scenarioId: this.selectedScenarioId || null
             };
         },
 
@@ -1363,8 +1902,13 @@
             return `${this.selectedTable?.OWNER || ""}.${this.selectedTable?.TABLE_NAME || ""}`;
         },
 
+        getAnalysisTable() {
+            return this.analysisTable || this.selectedTable;
+        },
+
         getDataGridStateKey(limit = this.gridPageSizes.data || 100) {
-            return `${this.getSelectedTableKey()}|${Number(limit || 100)}`;
+            const table = this.getAnalysisTable();
+            return `${table?.OWNER || ""}.${table?.TABLE_NAME || ""}|${Number(limit || 100)}`;
         },
 
         isDataGridCurrent() {

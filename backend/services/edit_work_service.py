@@ -19,8 +19,6 @@ from backend.target_database import get_target_db_connection
 logger = logging.getLogger(__name__)
 
 IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_$#]{0,127}$")
-SOURCE_TABLE_PREFIX = "INITUP$"
-EDIT_TABLE_PREFIX = "INITDN$"
 TRACKING_COLUMN = "INIT$_SOURCE_ROWID"
 RULE_TYPES = {"ASSOCIATION", "SYMBOLIC", "USER"}
 USER_RULE_TYPES = {"ASSOCIATION", "SYMBOLIC"}
@@ -282,19 +280,6 @@ def _normalize_optional_identifier(value: Any, field_name: str) -> str | None:
 
 def _quote_identifier(value: str) -> str:
     return f'"{_normalize_identifier(value, "identifier")}"'
-
-
-def _derive_edit_table(source_table: str) -> str:
-    normalized = _normalize_identifier(source_table, "source table")
-    if not normalized.startswith(SOURCE_TABLE_PREFIX):
-        raise HTTPException(
-            status_code=400,
-            detail=f"Editing source table must start with {SOURCE_TABLE_PREFIX}.",
-        )
-    edit_table = f"{EDIT_TABLE_PREFIX}{normalized[len(SOURCE_TABLE_PREFIX):]}"
-    if len(edit_table) > 128:
-        raise HTTPException(status_code=400, detail="Derived INITDN$ table name is too long.")
-    return edit_table
 
 
 def _normalize_text(value: Any, max_length: int, fallback: str = "") -> str:
@@ -620,10 +605,10 @@ def _require_target_table_access(
     scenario_id: int | None,
     target_owner: str,
     target_table: str,
-) -> None:
-    row = _fetch_one(
+) -> dict[str, Any]:
+    rows = _fetch_all(
         cursor,
-        "MCOMMON_EDIT_TARGET_TABLE_ACCESS",
+        "MCOMMON_EDIT_TABLE_MAPPING",
         {
             "projectId": project_id,
             "scenarioId": scenario_id,
@@ -631,8 +616,50 @@ def _require_target_table_access(
             "targetTable": target_table,
         },
     )
-    if not row or int(row.get("ACCESS_COUNT") or 0) <= 0:
-        raise HTTPException(status_code=403, detail="The INITUP$ source table is not registered in this project.")
+    if not rows:
+        raise HTTPException(
+            status_code=403,
+            detail="The managed source table mapping is not registered in this project.",
+        )
+    mappings = {
+        (
+            str(row.get("EDIT_OWNER") or "").upper(),
+            str(row.get("EDIT_TABLE") or "").upper(),
+        )
+        for row in rows
+    }
+    if len(mappings) != 1:
+        raise HTTPException(
+            status_code=400,
+            detail="The source table has multiple editing-table mappings. Select a scenario.",
+        )
+    edit_owner, edit_table = next(iter(mappings))
+    return {
+        **rows[0],
+        "SOURCE_OWNER": _normalize_identifier(target_owner, "source owner"),
+        "SOURCE_TABLE": _normalize_identifier(target_table, "source table"),
+        "EDIT_OWNER": _normalize_identifier(edit_owner, "edit owner"),
+        "EDIT_TABLE": _normalize_identifier(edit_table, "edit table"),
+    }
+
+
+def _require_session_table_mapping(cursor, session: dict[str, Any]) -> dict[str, Any]:
+    mapping = _require_target_table_access(
+        cursor,
+        project_id=int(session.get("PROJECT_ID") or 0),
+        scenario_id=int(session.get("SCENARIO_ID") or 0) or None,
+        target_owner=str(session.get("TARGET_OWNER") or ""),
+        target_table=str(session.get("SOURCE_TABLE") or ""),
+    )
+    if (
+        str(session.get("TARGET_OWNER") or "").upper() != mapping["EDIT_OWNER"]
+        or str(session.get("EDIT_TABLE") or "").upper() != mapping["EDIT_TABLE"]
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="The editing session does not match the saved source/edit table mapping.",
+        )
+    return mapping
 
 
 def list_source_tables(
@@ -725,7 +752,19 @@ def list_editing_tables(
         for row in rows:
             owner = _normalize_identifier(row.get("OWNER_NAME"), "target owner")
             source_table = _normalize_identifier(row.get("TABLE_NAME"), "source table")
-            edit_table = _derive_edit_table(source_table)
+            mapping = _require_target_table_access(
+                cursor,
+                project_id=normalized_project_id,
+                scenario_id=scenario_id,
+                target_owner=owner,
+                target_table=source_table,
+            )
+            if mapping["EDIT_OWNER"] != owner:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Cross-owner editing table mappings are not supported.",
+                )
+            edit_table = mapping["EDIT_TABLE"]
             table_status = _editing_table_structure_status(
                 cursor,
                 owner,
@@ -796,7 +835,6 @@ def list_source_columns(
 ) -> dict[str, Any]:
     normalized_owner = _normalize_identifier(target_owner, "target owner")
     normalized_table = _normalize_identifier(target_table, "target table")
-    _derive_edit_table(normalized_table)
     conn = get_target_db_connection(request)
     cursor = conn.cursor()
     try:
@@ -1046,7 +1084,6 @@ def list_rules(
 def validate_user_rule(request: Request, payload: UserRuleValidationRequest) -> dict[str, Any]:
     target_owner = _normalize_identifier(payload.targetOwner, "target owner")
     target_table = _normalize_identifier(payload.targetTable, "target table")
-    _derive_edit_table(target_table)
     target_column = _normalize_identifier(payload.targetColumn, "target column")
     case_id_column = _normalize_optional_identifier(payload.caseIdColumn, "case ID column")
     conn = get_target_db_connection(request)
@@ -1088,7 +1125,6 @@ def save_rule(request: Request, payload: RuleDecisionRequest) -> dict[str, Any]:
     rule_status = _normalize_choice(payload.ruleStatus, RULE_STATUSES, "rule status", "ACTIVE")
     target_owner = _normalize_identifier(payload.targetOwner, "target owner")
     target_table = _normalize_identifier(payload.targetTable, "target table")
-    _derive_edit_table(target_table)
     target_column = _normalize_identifier(payload.targetColumn, "target column")
     case_id_column = _normalize_optional_identifier(payload.caseIdColumn, "case ID column")
     source_owner = _normalize_optional_identifier(payload.sourceOwner, "source owner")
@@ -1978,7 +2014,6 @@ def list_violations(
             "ALL",
         )
         if normalized_table:
-            _derive_edit_table(normalized_table)
             _require_target_table_access(
                 cursor,
                 project_id=project_id,
@@ -2238,14 +2273,19 @@ def create_session(request: Request, payload: EditSessionCreateRequest) -> dict[
         target_owner, source_table = next(iter(pairs))
         target_owner = _normalize_identifier(target_owner, "target owner")
         source_table = _normalize_identifier(source_table, "source table")
-        _require_target_table_access(
+        mapping = _require_target_table_access(
             cursor,
             project_id=project_id,
             scenario_id=payload.scenarioId,
             target_owner=target_owner,
             target_table=source_table,
         )
-        edit_table = _derive_edit_table(source_table)
+        if mapping["EDIT_OWNER"] != target_owner:
+            raise HTTPException(
+                status_code=409,
+                detail="Cross-owner editing table mappings are not supported.",
+            )
+        edit_table = mapping["EDIT_TABLE"]
         run_pairs = {
             (str(row.get("SOURCE_RUN_SOURCE_TYPE") or ""), int(row.get("SOURCE_RUN_ID") or 0))
             for row in selected
@@ -2322,6 +2362,25 @@ def _table_columns(cursor, owner: str, table: str) -> list[dict[str, Any]]:
     )
 
 
+def _copy_table_comments(cursor, owner: str, source_table: str, edit_table: str) -> None:
+    """Synchronize INITDN$ comments with its INITUP$ source table."""
+    edit_table_ref = f"{_quote_identifier(owner)}.{_quote_identifier(edit_table)}"
+    params = {"ownerName": owner, "tableName": source_table}
+    table_comment_row = _fetch_one(cursor, "MCOMMON_EDIT_TABLE_COMMENT", params)
+    table_comment = str((table_comment_row or {}).get("TABLE_COMMENT") or "")
+    table_comment_sql = "''" if not table_comment else f"'{table_comment.replace("'", "''")}'"
+    cursor.execute(f"COMMENT ON TABLE {edit_table_ref} IS {table_comment_sql}")
+    for column in _table_columns(cursor, owner, source_table):
+        column_name = str(column.get("COLUMN_NAME") or "").strip()
+        column_comment = str(column.get("COLUMN_COMMENT") or "")
+        if column_name:
+            column_comment_sql = "''" if not column_comment else f"'{column_comment.replace("'", "''")}'"
+            cursor.execute(
+                f"COMMENT ON COLUMN {edit_table_ref}.{_quote_identifier(column_name)} "
+                f"IS {column_comment_sql}"
+            )
+
+
 def _editing_table_structure_status(
     cursor,
     owner: str,
@@ -2383,18 +2442,23 @@ def editing_table_status(
 ) -> dict[str, Any]:
     owner = _normalize_identifier(target_owner, "target owner")
     source_table = _normalize_identifier(target_table, "source table")
-    edit_table = _derive_edit_table(source_table)
     conn = get_target_db_connection(request)
     cursor = conn.cursor()
     try:
         normalized_project_id = _require_project_access(cursor, request, project_id)
-        _require_target_table_access(
+        mapping = _require_target_table_access(
             cursor,
             project_id=normalized_project_id,
             scenario_id=scenario_id,
             target_owner=owner,
             target_table=source_table,
         )
+        if mapping["EDIT_OWNER"] != owner:
+            raise HTTPException(
+                status_code=409,
+                detail="Cross-owner editing table mappings are not supported.",
+            )
+        edit_table = mapping["EDIT_TABLE"]
         table_status = _editing_table_structure_status(
             cursor,
             owner,
@@ -2451,7 +2515,6 @@ def create_editing_table(
 ) -> dict[str, Any]:
     owner = _normalize_identifier(payload.targetOwner, "target owner")
     source_table = _normalize_identifier(payload.targetTable, "source table")
-    _derive_edit_table(source_table)
     status_response = editing_table_status(
         request,
         project_id=payload.projectId,
@@ -2554,8 +2617,7 @@ def delete_session(request: Request, edit_session_id: int) -> dict[str, Any]:
         owner = _normalize_identifier(session.get("TARGET_OWNER"), "target owner")
         source_table = _normalize_identifier(session.get("SOURCE_TABLE"), "source table")
         edit_table = _normalize_identifier(session.get("EDIT_TABLE"), "edit table")
-        if edit_table != _derive_edit_table(source_table):
-            raise HTTPException(status_code=400, detail="INITUP$/INITDN$ table pair is invalid.")
+        _require_session_table_mapping(cursor, session)
         active_usage = _fetch_one(
             cursor,
             "MCOMMON_EDIT_SESSION_ACTIVE_TABLE_USAGE",
@@ -2625,8 +2687,7 @@ def prepare_session(request: Request, edit_session_id: int) -> dict[str, Any]:
         owner = _normalize_identifier(session["TARGET_OWNER"], "target owner")
         source_table = _normalize_identifier(session["SOURCE_TABLE"], "source table")
         edit_table = _normalize_identifier(session["EDIT_TABLE"], "edit table")
-        if edit_table != _derive_edit_table(source_table):
-            raise HTTPException(status_code=400, detail="INITUP$/INITDN$ table pair is invalid.")
+        _require_session_table_mapping(cursor, session)
         if not _table_exists(cursor, owner, source_table):
             raise HTTPException(status_code=404, detail=f"Source table {owner}.{source_table} was not found.")
         if session_status == "EDITING":
@@ -2637,6 +2698,7 @@ def prepare_session(request: Request, edit_session_id: int) -> dict[str, Any]:
                 edit_table,
             )
             if current_status["structureMatches"]:
+                _copy_table_comments(cursor, owner, source_table, edit_table)
                 return {
                     "status": "success",
                     "editSessionId": edit_session_id,
@@ -2659,6 +2721,7 @@ def prepare_session(request: Request, edit_session_id: int) -> dict[str, Any]:
                 f"T.* FROM {_quote_identifier(owner)}.{_quote_identifier(source_table)} T"
             )
             cursor.execute(create_sql)
+            _copy_table_comments(cursor, owner, source_table, edit_table)
         table_status = _editing_table_structure_status(
             cursor,
             owner,
@@ -3144,8 +3207,7 @@ def _generate_merge_dml(cursor, session: dict[str, Any], edit_session_id: int) -
     owner = _normalize_identifier(session["TARGET_OWNER"], "target owner")
     source_table = _normalize_identifier(session["SOURCE_TABLE"], "source table")
     edit_table = _normalize_identifier(session["EDIT_TABLE"], "edit table")
-    if edit_table != _derive_edit_table(source_table):
-        raise HTTPException(status_code=400, detail="INITUP$/INITDN$ table pair is invalid.")
+    _require_session_table_mapping(cursor, session)
     source_columns = {str(row.get("COLUMN_NAME") or "") for row in _table_columns(cursor, owner, source_table)}
     if any(column not in source_columns for column in columns):
         raise HTTPException(status_code=400, detail="A changed column is missing from the INITUP$ source table.")
@@ -3266,7 +3328,8 @@ def _validate_registered_dml(
         raise HTTPException(status_code=400, detail="Comments are not allowed in final DML.")
     owner = _normalize_identifier(session["TARGET_OWNER"], "target owner")
     source_table = _normalize_identifier(session["SOURCE_TABLE"], "source table")
-    edit_table = _derive_edit_table(source_table)
+    edit_table = _normalize_identifier(session["EDIT_TABLE"], "edit table")
+    _require_session_table_mapping(cursor, session)
     canonical_sql = _generate_merge_dml(cursor, session, edit_session_id).strip()
     canonical_merge, separator, canonical_tail = canonical_sql.partition(";")
     edited_merge, edited_separator, edited_tail = sql.partition(";")

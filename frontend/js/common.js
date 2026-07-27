@@ -1599,7 +1599,14 @@ const CommonMessage = {
             okText: options.okText || window.I18nManager?.t?.("commonMessage.ok", "OK") || "OK",
             cancelText: options.cancelText || window.I18nManager?.t?.("commonMessage.cancel", "Cancel") || "Cancel",
             defaultAction: options.defaultAction === "cancel" ? "cancel" : "ok",
-            message: normalizedMessage
+            message: normalizedMessage,
+            input: options.input
+                ? {
+                    value: String(options.input.value ?? ""),
+                    placeholder: String(options.input.placeholder ?? ""),
+                    ariaLabel: String(options.input.ariaLabel ?? options.input.placeholder ?? "")
+                }
+                : null
         };
     },
     defaultTitle(type) {
@@ -1638,11 +1645,20 @@ const CommonMessage = {
     confirm(message, options = {}) {
         return this.open(this.normalizeOptions(message, { ...options, type: "confirm", modal: true }));
     },
+    prompt(message, options = {}) {
+        return this.open(this.normalizeOptions(message, {
+            ...options,
+            type: "confirm",
+            modal: true,
+            input: options.input || {}
+        }));
+    },
     open(options) {
         const host = this.ensureHost();
         const overlay = options.modal ? document.createElement("div") : null;
         const popup = document.createElement("section");
         const bodyId = `common-message-body-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+        const inputId = options.input ? `common-message-input-${Date.now()}-${Math.floor(Math.random() * 10000)}` : "";
         if (overlay) {
             overlay.className = "common-message-overlay";
             overlay.style.zIndex = String(++this.zIndex);
@@ -1677,7 +1693,13 @@ const CommonMessage = {
                     <i class="fas fa-times"></i>
                 </button>
             </header>
-            <div id="${bodyId}" class="common-message-body" tabindex="0">${this.formatMessage(options.message)}</div>
+            <div id="${bodyId}" class="common-message-body" tabindex="0">
+                ${this.formatMessage(options.message)}
+                ${options.input ? `
+                    <label class="common-message-input-label" for="${inputId}">${this.escapeHtml(options.input.ariaLabel)}</label>
+                    <input id="${inputId}" class="common-message-input" type="text" value="${this.escapeHtml(options.input.value)}" placeholder="${this.escapeHtml(options.input.placeholder)}" autocomplete="off" spellcheck="false">
+                ` : ""}
+            </div>
             ${footerHtml}
         `;
         host.appendChild(popup);
@@ -1688,6 +1710,10 @@ const CommonMessage = {
             let autoCloseTimer = null;
             const handleKeydown = (event) => {
                 if (event.key === "Escape") cleanup(options.type !== "confirm");
+                if (options.input && event.key === "Enter") {
+                    event.preventDefault();
+                    cleanup(true);
+                }
                 if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) cleanup(true);
                 if (options.modal && event.key === "Tab") {
                     this.handleModalTabKey(event, popup);
@@ -1700,7 +1726,7 @@ const CommonMessage = {
                 document.removeEventListener("keydown", handleKeydown, true);
                 popup.remove();
                 overlay?.remove();
-                resolve(result);
+                resolve(options.input ? (result ? popup.querySelector(".common-message-input")?.value ?? "" : null) : result);
             };
             popup.querySelector('[data-common-message-action="ok"]')?.addEventListener("click", () => cleanup(true));
             popup.querySelector('[data-common-message-action="cancel"]')?.addEventListener("click", () => cleanup(false));
@@ -1730,7 +1756,9 @@ const CommonMessage = {
                 startAutoClose();
             } else {
                 window.setTimeout(() => {
-                    const focusTarget = options.type === "confirm"
+                    const focusTarget = options.input
+                        ? popup.querySelector(".common-message-input")
+                        : options.type === "confirm"
                         ? popup.querySelector(`[data-common-message-action="${options.defaultAction}"]`)
                         : popup.querySelector(".common-message-primary");
                     focusTarget?.focus({ preventScroll: true });

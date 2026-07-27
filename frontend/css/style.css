@@ -740,6 +740,32 @@ body {
   white-space: normal;
 }
 
+.common-message-input-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  margin-top: 14px;
+}
+
+.common-message-input {
+  border: 1px solid #94a3b8;
+  border-radius: 3px;
+  box-sizing: border-box;
+  color: #172033;
+  font: inherit;
+  margin-top: 6px;
+  min-height: 34px;
+  padding: 6px 9px;
+  width: 100%;
+}
+
+.common-message-input:focus,
+.common-message-input:focus-visible {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
+  outline: 2px solid transparent;
+}
+
 .common-message-popup.is-toast .common-message-body {
   max-height: min(32vh, 260px);
   padding: 14px 16px 16px;

@@ -1,11 +1,102 @@
 /* Split from styleMenu.css. Contains only selectors scoped to this menu code. */
-#container-M02002 .table-meta-strip {
-    grid-template-columns: minmax(110px, 150px) minmax(320px, 1.4fr) minmax(0, 1fr) minmax(170px, 220px);
+#container-M02002 .table-pair-meta {
+    border: 1px solid #d8e0eb;
+    margin-bottom: 6px;
+}
+
+#container-M02002 .table-pair-row {
+    align-items: stretch;
+    display: grid;
+    grid-template-columns: minmax(105px, 125px) minmax(120px, 0.8fr) minmax(220px, 1.65fr) minmax(290px, 1.8fr);
+    min-height: 38px;
+}
+
+#container-M02002 .table-pair-row + .table-pair-row {
+    border-top: 1px solid #d8e0eb;
+}
+
+#container-M02002 .table-pair-row.is-source {
+    min-height: 38px;
+}
+
+#container-M02002 .table-pair-cell {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-width: 0;
+    padding: 4px 10px;
+}
+
+#container-M02002 .table-pair-cell + .table-pair-cell {
+    border-left: 1px solid #d8e0eb;
+}
+
+#container-M02002 .table-pair-cell > span {
+    color: #59708f;
+    font-size: 10px;
+    line-height: 1.2;
+    margin-bottom: 1px;
+}
+
+#container-M02002 .table-pair-cell strong,
+#container-M02002 .table-pair-table-button {
+    color: #102a4c;
+    font-size: 12px;
+    font-weight: 700;
+    overflow: hidden;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#container-M02002 .table-pair-table-button {
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    padding: 0;
+}
+
+#container-M02002 .table-pair-table-button:hover:not(:disabled),
+#container-M02002 .table-pair-table-button:focus-visible:not(:disabled) {
+    color: #2563eb;
+    text-decoration: underline;
+}
+
+#container-M02002 .table-pair-table-button:disabled {
+    color: #64748b;
+    cursor: default;
+}
+
+#container-M02002 .table-pair-role {
+    color: #1e5a9b;
+    font-weight: 700;
+}
+
+#container-M02002 .table-pair-row.is-edit .table-pair-role {
+    color: #6b7280;
+}
+
+#container-M02002 .table-pair-row.is-origin .table-pair-role {
+    color: #5b4b9a;
+}
+
+#container-M02002 .table-pair-origin strong {
+    white-space: normal;
+    word-break: break-word;
+    line-height: 1.35;
+}
+
+#container-M02002 .table-pair-meta-compact .table-pair-row {
+    min-height: 36px;
+}
+
+#container-M02002 .table-pair-meta-compact .table-pair-row.is-source {
+    min-height: 36px;
 }
 
 #container-M02002 .table-workspace {
-    height: calc(100vh - 300px);
-    max-height: calc(100vh - 300px);
+    height: calc(100vh - 190px);
+    max-height: calc(100vh - 190px);
     min-height: 0;
     overflow: hidden;
 }
@@ -14,6 +105,39 @@
 #container-M02002 .table-panel {
     min-height: 0;
     overflow: hidden;
+}
+
+#container-M02002 .table-registered-filter {
+    align-items: center;
+    display: inline-flex;
+    flex: 0 0 auto;
+    font-size: 12px;
+    gap: 5px;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+#container-M02002 .table-registered-filter input {
+    height: 14px;
+    margin: 0;
+    min-width: 14px;
+    padding: 0;
+    width: 14px;
+}
+
+#container-M02002 .context-scenario-control {
+    align-items: center;
+    display: flex;
+    gap: 6px;
+}
+
+#container-M02002 .context-scenario-control .work-context-select {
+    min-width: 0;
+}
+
+#container-M02002 .table-tree-registered-icon {
+    color: #16a34a;
+    font-size: 12px;
 }
 
 #container-M02002 .table-tab-panel.is-active {
@@ -84,7 +208,6 @@
     min-width: 0;
 }
 
-#container-M02002 #scenarioTablesGrid-M02002,
 #container-M02002 #tableTree-M02002,
 #container-M02002 #columnsGrid-M02002,
 #container-M02002 #dataGrid-M02002,
@@ -103,29 +226,10 @@
     overflow: hidden;
 }
 
-#container-M02002 #scenarioTablesGrid-M02002 {
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-}
-
-#container-M02002 #scenarioTablesGrid-M02002 > .scenario-table-scroll-body {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow: auto;
-}
-
-#container-M02002 #scenarioTablesGrid-M02002 .scenario-table-head {
-    position: sticky;
-    top: 0;
-    z-index: 2;
-}
-
 #container-M02002 #sqlGrid-M02002 {
     padding-top: 22px;
 }
 
-#container-M02002 #scenarioTablesGrid-M02002 .list-count-footer,
 #container-M02002 #tableTree-M02002 .list-count-footer,
 #container-M02002 #columnsGrid-M02002 .list-count-footer,
 #container-M02002 #dataGrid-M02002 .list-count-footer,
@@ -142,8 +246,8 @@
 @media (min-width: 1025px) {
     #pageContainerHolder .page-section.active > #container-M02002.table-page > .table-workspace {
         flex: 1 1 auto;
-        height: max(520px, calc(100vh - 300px));
-        max-height: max(520px, calc(100vh - 300px));
+        height: max(520px, calc(100vh - 190px));
+        max-height: max(520px, calc(100vh - 190px));
         min-height: 520px;
         overflow: hidden;
     }}
@@ -213,36 +317,8 @@
         margin: 0 0 2px;
     }
 
-    #container-M02002 .scenario-table-actions {
-        display: flex;
-        flex-wrap: nowrap;
-        max-width: 100%;
-        overflow-x: auto;
-        padding-bottom: 2px;
-        width: 100%;
-    }
-
-    #container-M02002 .scenario-table-actions .table-btn,
-    #container-M02002 .scenario-table-actions .table-icon-btn {
-        flex: 0 0 auto;
-        white-space: nowrap;
-    }
-
     #container-M02002 .work-context-bar {
         grid-template-columns: minmax(0, 1fr);
-    }
-
-    #container-M02002 .work-context-card .scenario-table-grid {
-        flex: 0 0 190px;
-        height: 190px;
-        max-height: 190px;
-        min-height: 190px;
-        overflow: hidden;
-    }
-
-    #container-M02002 .scenario-table-head,
-    #container-M02002 .scenario-table-row {
-        min-width: 720px;
     }
 
     #container-M02002 .table-workspace {
@@ -294,20 +370,21 @@
         padding-bottom: 2px;
     }
 
-    #container-M02002 .table-meta-strip {
-        grid-template-columns: minmax(90px, 0.8fr) minmax(220px, 1.6fr) minmax(160px, 1fr) minmax(140px, 1fr);
-        min-width: 600px;
-        overflow-x: auto;
-        overflow-y: hidden;
+    #container-M02002 .table-pair-meta {
+        min-width: 0;
     }
 
-    #container-M02002 .table-meta-strip > div {
-        border-bottom: 0;
-        border-right: 1px solid #e5e7eb;
+    #container-M02002 .table-pair-row {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
-    #container-M02002 .table-meta-strip > div:last-child {
-        border-right: 0;
+    #container-M02002 .table-pair-cell:nth-child(3) {
+        border-left: 0;
+        border-top: 1px solid #d8e0eb;
+    }
+
+    #container-M02002 .table-pair-cell:nth-child(4) {
+        border-top: 1px solid #d8e0eb;
     }
 
     #container-M02002 .table-tab-panel.is-active {

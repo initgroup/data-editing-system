@@ -18,9 +18,8 @@ import time
 import uuid
 from pathlib import Path
 
-from backend.database import get_db_connection
-from backend.database_helper import execute_query
-from backend.auth_context import get_request_login_id, get_request_role_code, get_request_user_id
+from backend.database_helper import SqlLoader, execute_query
+from backend.auth_context import get_request_role_code, get_request_user_id
 from backend.target_database import get_target_db_connection
 from backend.paging import create_page_window, normalize_page_number, normalize_page_size
 
@@ -163,7 +162,7 @@ def upload_staged_file_to_table(
     projectId: str = Form(""),
     projectCode: str = Form(""),
     tableComment: str = Form(""),
-    tableNameRule: str = Form("INITUP$_{LOGIN_ID}_{PROJECT_CODE}_{TIME}"),
+    tableNameRule: str = Form("INITUP$_{PROJECT_CODE}_FT_{TIME}"),
 ):
     metadata, data_path = require_completed_staged_upload(request, uploadId)
     with data_path.open("rb") as staged_file:
@@ -226,10 +225,10 @@ def upload_file_to_table(
     projectId: str = Form(""),
     projectCode: str = Form(""),
     tableComment: str = Form(""),
-    tableNameRule: str = Form("INITUP$_{LOGIN_ID}_{PROJECT_CODE}_{TIME}")
+    tableNameRule: str = Form("INITUP$_{PROJECT_CODE}_FT_{TIME}")
 ):
     user_id = get_request_user_id(request)
-    login_id = resolve_project_owner_login_id(request, projectId, projectCode)
+    require_project_access(request, projectId, projectCode)
     stream = file.file
     filename = file.filename or ""
     resolved_encoding = resolve_upload_encoding(stream, fileType, encoding)
@@ -245,7 +244,8 @@ def upload_file_to_table(
     if not columns:
         raise HTTPException(status_code=400, detail="No columns were detected.")
 
-    table_name = create_upload_table_name(projectCode, tableNameRule, login_id, user_id)
+    table_name = create_upload_table_name(projectCode, tableNameRule, user_id=user_id)
+    file_size = get_upload_stream_size(stream)
     safe_columns = normalize_column_names(columns, reserved={UPLOAD_ROW_NO_COLUMN})
     upload_columns = [UPLOAD_ROW_NO_COLUMN, *safe_columns]
 
@@ -316,6 +316,18 @@ def upload_file_to_table(
         except Exception as stats_error:
             stats_message = f"Table uploaded, but statistics gather failed: {stats_error}"
             logger.warning("M02001 statistics gather failed for %s: %s", table_name, stats_error)
+        ensure_upload_table_metadata(cursor)
+        cursor.execute(
+            SqlLoader.get_sql("M02001_UPLOAD_TABLE_META_MERGE"),
+            {
+                "tableName": table_name,
+                "projectId": int(projectId),
+                "fileExtension": Path(filename).suffix.lstrip(".").upper() or None,
+                "fileName": filename or None,
+                "fileSize": file_size,
+            },
+        )
+        conn.commit()
         return {
             "status": "success",
             "message": "File uploaded.",
@@ -346,7 +358,9 @@ def drop_upload_table(req: DropTableRequest, request: Request):
     try:
         conn = get_target_db_connection(request)
         cursor = conn.cursor()
+        ensure_upload_table_metadata(cursor)
         cursor.execute(f'DROP TABLE "{table_name}" PURGE')
+        cursor.execute(SqlLoader.get_sql("M02001_UPLOAD_TABLE_META_DELETE"), {"tableName": table_name})
         conn.commit()
         return {
             "status": "success",
@@ -372,8 +386,8 @@ def get_upload_table_tree(
     projectCode: str = "",
     tablePrefix: str = "",
 ):
-    login_id = resolve_project_owner_login_id(request, projectId, projectCode)
-    base_prefix = create_upload_table_prefix(projectCode, login_id)
+    require_project_access(request, projectId, projectCode)
+    base_prefix = create_upload_table_prefix(projectCode)
     table_prefix = normalize_upload_table_search_prefix(tablePrefix, base_prefix)
     conn = None
     try:
@@ -525,6 +539,34 @@ def discard_staged_upload(upload_id: str):
             path.unlink(missing_ok=True)
         except OSError:
             logger.warning("M02001 staged upload cleanup failed for %s", path.name)
+
+
+def ensure_upload_table_metadata(cursor) -> None:
+    cursor.execute(SqlLoader.get_sql("M02001_UPLOAD_TABLE_META_EXISTS"))
+    if int((cursor.fetchone() or [0])[0] or 0) <= 0:
+        try:
+            cursor.execute(SqlLoader.get_sql("M02001_UPLOAD_TABLE_META_CREATE"))
+        except Exception as error:
+            if "ORA-00955" not in str(error):
+                raise
+    cursor.execute(SqlLoader.get_sql("M02001_UPLOAD_TABLE_META_PROJECT_EXISTS"))
+    if int((cursor.fetchone() or [0])[0] or 0) <= 0:
+        try:
+            cursor.execute(SqlLoader.get_sql("M02001_UPLOAD_TABLE_META_PROJECT_ADD"))
+        except Exception as error:
+            if "ORA-01430" not in str(error):
+                raise
+
+
+def get_upload_stream_size(stream: BinaryIO) -> int:
+    try:
+        position = stream.tell()
+        stream.seek(0, os.SEEK_END)
+        size = stream.tell()
+        stream.seek(position)
+        return max(0, int(size))
+    except Exception:
+        return 0
 
 
 def cleanup_stale_uploads():
@@ -836,17 +878,15 @@ def add_row_numbers_to_preview(columns, rows):
     return preview_columns, preview_rows
 
 
-def resolve_project_owner_login_id(request, project_id="", project_code=""):
-    """Resolve the selected project's owner without trusting browser identity fields."""
+def require_project_access(request, project_id="", project_code=""):
+    """Verify the selected project without using browser-provided identity values."""
     request_user_id = get_request_user_id(request)
-    current_login_id = get_request_login_id(request) or str(request_user_id)
     normalized_project_id = str(project_id or "").strip()
     normalized_project_code = str(project_code or "").strip()
     if not normalized_project_id:
-        return current_login_id
+        return
 
     target_conn = None
-    system_conn = None
     try:
         target_conn = get_target_db_connection(request)
         project_result = execute_query(target_conn, "M02001_PROJECT_OWNER_CONTEXT", {
@@ -862,43 +902,18 @@ def resolve_project_owner_login_id(request, project_id="", project_code=""):
             raise HTTPException(status_code=409, detail="Project owner is not configured.")
         if project_owner_user_id != int(request_user_id) and get_request_role_code(request) != "ADMIN":
             raise HTTPException(status_code=403, detail="Project access denied.")
-
-        # Do not hold a Target DB connection while waiting for a system DB
-        # connection. Cross-pool nesting can deadlock otherwise independent
-        # menu requests when either pool is busy.
-        target_conn.close()
-        target_conn = None
-
-        system_conn = get_db_connection()
-        user_result = execute_query(system_conn, "M02001_PROJECT_OWNER_LOGIN", {
-            "userId": project_owner_user_id,
-        })
-        user_rows = user_result.get("data", []) if user_result.get("status") == "success" else []
-        owner_login_id = str(user_rows[0].get("LOGIN_ID") or "").strip() if user_rows else ""
-        if not owner_login_id:
-            raise HTTPException(status_code=409, detail="Project owner login ID was not found.")
-        return owner_login_id
     finally:
         if target_conn:
             target_conn.close()
-        if system_conn:
-            system_conn.close()
 
 
 def create_upload_table_name(project_code="", table_name_rule="", login_id="", user_id=""):
     timestamp = str(int(time.time() * 1000))
     project_token = normalize_identifier_token(project_code or "PROJECT")[:40] or "PROJECT"
-    login_token = normalize_identifier_token(login_id or user_id or "LOGIN")[:30] or "LOGIN"
-    user_token = normalize_identifier_token(user_id or "USER")[:30] or "USER"
-    rule = (table_name_rule or "INITUP$_{LOGIN_ID}_{PROJECT_CODE}_{TIME}").strip()
+    rule = (table_name_rule or "INITUP$_{PROJECT_CODE}_FT_{TIME}").strip()
     if "{TIME}" not in rule.upper():
         rule = f"{rule}_{{TIME}}"
-    name = rule.replace("{LOGIN_ID}", login_token)
-    name = name.replace("{login_id}", login_token)
-    name = name.replace("{USER_ID}", user_token)
-    name = name.replace("{user_id}", user_token)
-    name = name.replace("{LOGIN_USER}", login_token)
-    name = name.replace("{login_user}", login_token)
+    name = rule
     name = name.replace("{PROJECT_CODE}", project_token)
     name = name.replace("{project_code}", project_token)
     name = name.replace("{TIME}", timestamp)
@@ -914,17 +929,16 @@ def create_upload_table_name(project_code="", table_name_rule="", login_id="", u
 
 
 def create_upload_table_prefix(project_code="", login_id=""):
-    login_token = normalize_identifier_token(login_id or "LOGIN")[:30] or "LOGIN"
     project_token = normalize_identifier_token(project_code or "PROJECT")[:40] or "PROJECT"
-    return f"INITUP$_{login_token}_{project_token}_"
+    return f"INITUP$_{project_token}_FT_"
 
 
 def normalize_upload_table_search_prefix(table_prefix="", base_prefix=""):
     requested = normalize_upload_prefix_token(table_prefix or "")
-    base = normalize_identifier_token(base_prefix or "INITUP$_LOGIN_PROJECT_")
+    base = normalize_identifier_token(base_prefix or "INITUP$_PROJECT_FT_")
     if not requested:
         return base
-    if not requested.startswith(base):
+    if not requested.startswith("INITUP$"):
         return base
     return requested
 

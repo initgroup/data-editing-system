@@ -19,6 +19,8 @@
         uploadedTableName: "",
         uploadTableTreeLoaded: false,
         uploadTableTreeKey: "",
+        uploadTableSearchInitialized: false,
+        uploadTableSearchUserModified: false,
         activeUploadView: "file",
         activeTab: "columns",
         gridData: { preview: [], columns: [], data: [], sql: [] },
@@ -61,6 +63,8 @@
             this.uploadedTableName = "";
             this.uploadTableTreeLoaded = false;
             this.uploadTableTreeKey = "";
+            this.uploadTableSearchInitialized = false;
+            this.uploadTableSearchUserModified = false;
             this.activeUploadView = "file";
             this.activeTab = "columns";
             this.gridData = { preview: [], columns: [], data: [], sql: [] };
@@ -152,7 +156,7 @@
             this.selectedProjectId = projectId || "";
             CommonUtils.applyOwnerScopeToSelect(getContainerEl("#contextProject-M02001"), this.contextProjects, this.selectedProjectId);
             this.saveStoredContext();
-            this.updateProjectMeta();
+            this.updateProjectMeta({ resetSearchDefault: true });
             this.uploadTables = [];
             this.displayedUploadTables = [];
             this.focusedUploadTableKey = "";
@@ -187,18 +191,16 @@
             return this.getSelectedProject()?.PROJECT_CODE || "";
         },
 
-        updateProjectMeta() {
+        updateProjectMeta(options = {}) {
             const project = this.getSelectedProject();
             this.setValue("#projectCode-M02001", project?.PROJECT_CODE || "");
             this.setValue("#projectType-M02001", project?.PROJECT_TYPE || "");
-            this.setUploadTableSearchPrefix();
+            this.setUploadTableSearchPrefix(options);
         },
 
         getUploadTableSearchPrefix() {
             const code = this.getSelectedProjectCode() || "PROJECT";
-            const loginUser = this.getLoginUser();
-            const loginToken = this.normalizeIdentifierToken(loginUser.loginId || loginUser.userId || "LOGIN");
-            return `INITUP$_${loginToken}_${this.normalizeIdentifierToken(code)}_`;
+            return `INITUP$_${this.normalizeIdentifierToken(code)}_FT_`;
         },
 
         getLoginUser() {
@@ -209,11 +211,14 @@
             }
         },
 
-        setUploadTableSearchPrefix(force = true) {
+        setUploadTableSearchPrefix({ resetSearchDefault = false } = {}) {
             const input = getContainerEl("#uploadTableSearch-M02001");
             if (!input) return;
             const prefix = this.getUploadTableSearchPrefix();
-            if (force || !input.value.trim()) input.value = prefix;
+            if (!this.uploadTableSearchInitialized || (resetSearchDefault && !this.uploadTableSearchUserModified)) {
+                input.value = prefix;
+                this.uploadTableSearchInitialized = true;
+            }
             input.placeholder = prefix;
         },
 
@@ -300,7 +305,7 @@
             formData.append("projectId", this.selectedProjectId || "");
             formData.append("projectCode", this.getSelectedProject()?.PROJECT_CODE || "");
             formData.append("tableComment", getContainerEl("#tableComment-M02001")?.value || "");
-            formData.append("tableNameRule", getContainerEl("#tableIdRule-M02001")?.value || "INITUP$_{LOGIN_ID}_{PROJECT_CODE}_{TIME}");
+            formData.append("tableNameRule", getContainerEl("#tableIdRule-M02001")?.value || "INITUP$_{PROJECT_CODE}_FT_{TIME}");
             return formData;
         },
 
@@ -720,7 +725,7 @@
 
             container.innerHTML = `<div class="table-empty">${this.escapeHtml(this.t("loadingUploadTables", "Loading uploaded tables..."))}</div>`;
             try {
-                this.setUploadTableSearchPrefix(false);
+                this.setUploadTableSearchPrefix();
                 const params = new URLSearchParams({
                     projectId: this.selectedProjectId,
                     projectCode: this.getSelectedProjectCode(),
@@ -731,13 +736,6 @@
                     throw new Error(json.message || json.detail || this.t("uploadTableListLoadFailed", "Upload table list load failed."));
                 }
                 this.uploadTables = Array.isArray(json.data) ? json.data : [];
-                if (json.tablePrefix) {
-                    const searchInput = getContainerEl("#uploadTableSearch-M02001");
-                    if (searchInput) {
-                        searchInput.value = json.tablePrefix;
-                        searchInput.placeholder = json.tablePrefix;
-                    }
-                }
                 this.displayedUploadTables = this.uploadTables;
                 this.uploadTableTreeLoaded = true;
                 this.uploadTableTreeKey = this.getUploadTableTreeKey();
@@ -864,6 +862,7 @@
         },
 
         handleUploadTableSearchInput() {
+            this.uploadTableSearchUserModified = true;
             if (this.isUploadTableSearchFilterEnabled()) {
                 this.focusedUploadTableKey = "";
                 this.renderUploadTableTree();
@@ -1250,9 +1249,27 @@
                 </table>
             `;
             container.innerHTML = `<div class="table-grid-scroll">${tableMarkup}</div>`;
-            const table = container.querySelector(".table-grid");
-            CommonUtils.enableGridColumnResize(table, () => this.applyGridFrozenColumns(gridKey));
-            this.applyGridFrozenColumns(gridKey);
+            this.scheduleGridColumnResize(gridKey);
+        },
+
+        scheduleGridColumnResize(gridKey, attempt = 0) {
+            const schedule = window.requestAnimationFrame || ((callback) => window.setTimeout(callback, 0));
+            schedule(() => {
+                const table = getContainerEl(`[data-grid-key="${gridKey}"]`);
+                const scrollHost = table?.closest(".table-grid-scroll");
+                if (!table || !scrollHost) return;
+
+                // The table-analysis panel becomes visible immediately before this
+                // render path. Wait for its flex layout to settle before the shared
+                // resizer captures header widths as fixed column widths.
+                if (attempt < 1 || (scrollHost.clientWidth < 80 && attempt < 4)) {
+                    this.scheduleGridColumnResize(gridKey, attempt + 1);
+                    return;
+                }
+
+                CommonUtils.enableGridColumnResize(table, () => this.applyGridFrozenColumns(gridKey));
+                this.applyGridFrozenColumns(gridKey);
+            });
         },
 
         getGridFreezeCount(gridKey) {

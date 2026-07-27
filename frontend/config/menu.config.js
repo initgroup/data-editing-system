@@ -34,7 +34,7 @@ window.MENU_CONFIG = [
     {
         type: 'folder',
         key: 'data-prep',
-        label: 'Data Preparation & Exploration',
+        label: 'Editing Target Selection',
         iconClass: 'fas fa-database text-emerald-400',
         enabled: true,
         children: [
@@ -47,8 +47,8 @@ window.MENU_CONFIG = [
             },
             {
                 page: 'M02002',
-                title: 'Target Data Selection',
-                label: 'Target Data',
+                title: 'Target Table Selection',
+                label: 'Target Table',
                 iconClass: 'fas fa-table text-emerald-300',
                 enabled: true
             }

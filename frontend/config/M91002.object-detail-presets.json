@@ -45,7 +45,7 @@
       "DEFAULTS": [
         {
           "SETTING_KEY": "EXCLUDE_TABLE_LIKE",
-          "SETTING_VALUE": "INIT$%\nBIN$%\nDM$%",
+          "SETTING_VALUE": "INIT$%\nINITDN$%\nBIN$%\nDM$%",
           "SETTING_DESC": "Exclude table LIKE patterns. Enter one pattern per line.",
           "SORT_ORDER": 10
         },

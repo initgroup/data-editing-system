@@ -401,6 +401,7 @@ def list_runs(conn, menu_code: str, project_id: int, scenario_id: int, flow_id: 
     for row in response.get("data", []):
         row["MESSAGE"] = data_work.read_lob(row.get("MESSAGE"))
         row["PLAN_JSON"] = data_work.read_lob(row.get("PLAN_JSON"))
+    response["total"] = len(response.get("data", []))
     return response
 
 

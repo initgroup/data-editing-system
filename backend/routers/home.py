@@ -483,7 +483,7 @@ def dashboard(request: Request):
             },
         ],
         "stages": [
-            {"code": "M02002", "name": "Target Data", "state": f"{counts.get('scenarioTables', 0)} tables", "value": counts.get("scenarioTables", 0), "icon": "fa-table"},
+            {"code": "M02002", "name": "Target Table", "state": f"{counts.get('scenarioTables', 0)} tables", "value": counts.get("scenarioTables", 0), "icon": "fa-table"},
             {"code": "M03003", "name": "Rule Discovery", "state": f"{counts.get('selectedCorrelations', 0)} selected", "value": counts.get("selectedCorrelations", 0), "icon": "fa-wand-magic-sparkles"},
             {"code": "M04001", "name": "Integrated Flow", "state": f"{counts.get('flows', 0)} flows", "value": counts.get("flows", 0), "icon": "fa-diagram-project"},
             {"code": "M07002", "name": "Final Apply", "state": f"{total_runs} runs", "value": total_runs, "icon": "fa-circle-check"},

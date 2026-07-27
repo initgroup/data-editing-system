@@ -559,7 +559,9 @@
                 this.runs = Array.isArray(json.data) ? json.data : [];
                 const responseTotal = Number(json.total || 0);
                 const rowTotal = Number(this.runs[0]?.TOTAL_COUNT || 0);
-                this.runTotal = Math.max(responseTotal, rowTotal);
+                // The run-list API can return rows without a separate total field.
+                // Keep the header count in sync with the rendered list in that case.
+                this.runTotal = Math.max(responseTotal, rowTotal, this.runs.length);
                 if (!this.runs.length) {
                     const initialEmptyRetries = Math.max(0, Number(options.initialEmptyRetries || 0));
                     const emptyRetryAttempt = Math.max(0, Number(options.emptyRetryAttempt || 0));

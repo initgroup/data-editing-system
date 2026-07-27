@@ -157,6 +157,8 @@ BEGIN
     drop_table_if_exists('INIT$_TB_OML_RESOURCE_PARAM');
     drop_table_if_exists('INIT$_TB_OML_RESOURCE');
     drop_table_if_exists('INIT$_TB_OBJECT_DETAIL');
+    drop_table_if_exists('INIT$_TB_TABLE_COLUMN_MAP');
+    drop_table_if_exists('INIT$_TB_UPLOAD_TABLE_META');
     drop_table_if_exists('INIT$_TB_TABLES');
     drop_table_if_exists('INIT$_TB_SCENARIO');
     drop_table_if_exists('INIT$_TB_OBJECT');

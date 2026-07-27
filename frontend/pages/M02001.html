@@ -83,7 +83,7 @@
                 </label>
                 <label class="upload-rule-control">
                     <span data-label-key="tableIdRule">Table ID Rule</span>
-                    <input id="tableIdRule-M02001" class="upload-input" type="text" readonly value="INITUP$_{LOGIN_ID}_{PROJECT_CODE}_{TIME}">
+                    <input id="tableIdRule-M02001" class="upload-input" type="text" readonly value="INITUP$_{PROJECT_CODE}_FT_{TIME}">
                 </label>
                 <div class="upload-actions">
                     <button type="button" class="table-btn" onclick="M02001.previewFile()">
@@ -157,7 +157,7 @@
                         <input
                             id="uploadTableSearch-M02001"
                             type="search"
-                            placeholder="INITUP$_LOGIN_PROJECT_"
+                            placeholder="INITUP$_PROJECT_FT_"
                             aria-label="Search uploaded table"
                             data-aria-label-key="searchUploadedTable"
                             oninput="M02001.handleUploadTableSearchInput()"

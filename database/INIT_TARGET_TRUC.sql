@@ -61,6 +61,8 @@ BEGIN
     truncate_table_if_exists('INIT$_TB_OML_RESOURCE_PARAM');
     truncate_table_if_exists('INIT$_TB_OML_RESOURCE');
     truncate_table_if_exists('INIT$_TB_OBJECT_DETAIL');
+    truncate_table_if_exists('INIT$_TB_TABLE_COLUMN_MAP');
+    truncate_table_if_exists('INIT$_TB_UPLOAD_TABLE_META');
     truncate_table_if_exists('INIT$_TB_TABLES');
     truncate_table_if_exists('INIT$_TB_SCENARIO');
     truncate_table_if_exists('INIT$_TB_OBJECT');
