@@ -3278,7 +3278,8 @@
                     scenarioId: session.SCENARIO_ID,
                     targetOwner: session.TARGET_OWNER,
                     targetTable: session.EDIT_TABLE,
-                    sourceTable: session.SOURCE_TABLE
+                    sourceTable: session.SOURCE_TABLE,
+                    preferredTargetMode: "EDIT"
                 };
                 sessionStorage.setItem("M04001:editingRuntimeContext", JSON.stringify(runtimeContext));
                 localStorage.setItem("DATA_EDITING_WORK_CONTEXT", JSON.stringify({

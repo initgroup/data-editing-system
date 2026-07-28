@@ -517,8 +517,9 @@
 }
 
 #container-M02002 #sqlGrid-M02002 {
-    flex: 1 0 250px;
-    height: 250px;
+    flex: 1 1 auto;
+    height: auto;
+    max-height: none;
     min-height: 250px;
     padding-bottom: 0;
     padding-top: 0;

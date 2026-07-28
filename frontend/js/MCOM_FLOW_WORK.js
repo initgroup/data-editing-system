@@ -141,12 +141,16 @@
             flowEdgeLayerClickBound: null,
             flowEdges: [],
             editingRuntimeContext: null,
+            flowRunTargetMode: "SOURCE",
 
             async init() {
                 if (this.isInit) return;
                 const lifecycleGeneration = ++this.lifecycleGeneration;
                 this.isPageVisible = true;
                 this.editingRuntimeContext = this.readEditingRuntimeContext();
+                this.flowRunTargetMode = this.editingRuntimeContext?.preferredTargetMode === "EDIT"
+                    ? "EDIT"
+                    : "SOURCE";
                 this.applyUiLabels();
                 this.renderEditingRuntimeBanner();
                 this.removeFlowVersionCountLabel();
@@ -178,6 +182,9 @@
                 const pendingEditingContext = this.readEditingRuntimeContext();
                 if (pendingEditingContext?.editSessionId) {
                     this.editingRuntimeContext = pendingEditingContext;
+                    this.flowRunTargetMode = pendingEditingContext.preferredTargetMode === "SOURCE"
+                        ? "SOURCE"
+                        : "EDIT";
                     this.renderEditingRuntimeBanner();
                 }
                 if (
@@ -259,6 +266,7 @@
                 this.selectedScenarioId = "";
                 this.selectedScenarioTableKey = "";
                 this.editingRuntimeContext = null;
+                this.flowRunTargetMode = "SOURCE";
                 this.workContextCollapsed = false;
                 this.activeTab = "designer";
                 this.contextLoadFailed = false;
@@ -407,8 +415,10 @@
                     this.renderContextScenarios("");
                 }
                 if (this.contextLoadFailed) return;
-                await this.loadScenarioTables();
-                await this.loadFlowAssets();
+                await Promise.all([
+                    this.loadScenarioTables(),
+                    this.loadFlowAssets()
+                ]);
                 await this.loadFlowVersions(true, { refreshHistory: true, preferredFlowId: stored.flowId || "" });
                 this.setWorkContextCollapsed(Boolean(this.selectedProjectId && this.selectedScenarioId));
             },
@@ -424,8 +434,10 @@
                     this.renderContextScenarios("");
                 }
                 if (this.contextLoadFailed) return;
-                await this.loadScenarioTables();
-                await this.loadFlowAssets();
+                await Promise.all([
+                    this.loadScenarioTables(),
+                    this.loadFlowAssets()
+                ]);
                 await this.loadFlowVersions(false, { refreshHistory: true });
                 this.setWorkContextCollapsed(Boolean(this.selectedProjectId && this.selectedScenarioId));
             },
@@ -473,13 +485,16 @@
 
             async handleContextProjectChange(projectId) {
                 this.selectedProjectId = projectId || "";
+                this.flowRunTargetMode = "SOURCE";
                 CommonUtils.applyOwnerScopeToSelect(getContainerEl(`#contextProject-${PAGE_CODE}`), this.contextProjects, this.selectedProjectId);
                 this.selectedScenarioId = "";
                 this.selectedScenarioTableKey = "";
                 this.saveStoredContext({ flowId: "" });
                 await this.loadContextScenarios("");
-                await this.loadScenarioTables();
-                await this.loadFlowAssets();
+                await Promise.all([
+                    this.loadScenarioTables(),
+                    this.loadFlowAssets()
+                ]);
                 await this.loadFlowVersions(true, { refreshHistory: true });
                 this.setWorkContextCollapsed(Boolean(this.selectedProjectId && this.selectedScenarioId));
             },
@@ -532,37 +547,43 @@
 
             async handleContextScenarioChange(scenarioId) {
                 this.selectedScenarioId = scenarioId || "";
+                const context = this.editingRuntimeContext;
+                this.flowRunTargetMode = (
+                    context?.preferredTargetMode === "EDIT"
+                    && String(context.projectId || "") === String(this.selectedProjectId || "")
+                    && String(context.scenarioId || "") === String(this.selectedScenarioId || "")
+                ) ? "EDIT" : "SOURCE";
                 CommonUtils.applyOwnerScopeToSelect(getContainerEl(`#contextScenario-${PAGE_CODE}`), this.contextScenarios, this.selectedScenarioId, ["SCENARIO_ID", "scenarioId"]);
                 this.selectedScenarioTableKey = "";
                 this.saveStoredContext({ flowId: "" });
-                await this.loadScenarioTables();
-                await this.loadFlowAssets();
+                await Promise.all([
+                    this.loadScenarioTables(),
+                    this.loadFlowAssets()
+                ]);
                 await this.loadFlowVersions(true, { refreshHistory: true });
                 this.setWorkContextCollapsed(Boolean(this.selectedProjectId && this.selectedScenarioId));
             },
 
             async loadScenarioTables() {
                 const container = getContainerEl(`#scenarioTablesGrid-${PAGE_CODE}`);
-                if (!container) {
-                    this.scenarioTables = [];
-                    this.selectedScenarioTableKey = "";
-                    this.updateWorkContextSummary();
-                    return;
-                }
-
                 const preferredTableKey = this.selectedScenarioTableKey || "";
                 this.selectedScenarioTableKey = "";
                 if (!this.selectedProjectId || !this.selectedScenarioId) {
                     this.scenarioTables = [];
-                    container.innerHTML = `
-                        <div class="table-empty">Select project and scenario first.</div>
-                        ${this.renderScenarioTableFooter(0)}
-                    `;
+                    if (container) {
+                        container.innerHTML = `
+                            <div class="table-empty">Select project and scenario first.</div>
+                            ${this.renderScenarioTableFooter(0)}
+                        `;
+                    }
                     this.updateWorkContextSummary();
+                    this.renderEditingRuntimeBanner();
                     return;
                 }
 
-                container.innerHTML = `<div class="table-empty">Loading scenario tables...</div>`;
+                if (container) {
+                    container.innerHTML = `<div class="table-empty">Loading scenario tables...</div>`;
+                }
                 try {
                     const params = new URLSearchParams({
                         projectId: this.selectedProjectId,
@@ -573,17 +594,24 @@
                     const exists = this.scenarioTables.some((row) => this.getScenarioTableKey(row) === preferredTableKey);
                     this.selectedScenarioTableKey = exists ? preferredTableKey : "";
                     this.renderScenarioTables();
+                    this.renderEditingRuntimeBanner();
                 } catch (error) {
                     const message = error.message || "Scenario table load failed.";
                     this.scenarioTables = [];
-                    container.innerHTML = `<div class="table-error">${this.escapeHtml(message)}</div>`;
+                    if (container) {
+                        container.innerHTML = `<div class="table-error">${this.escapeHtml(message)}</div>`;
+                    }
                     this.updateWorkContextSummary();
+                    this.renderEditingRuntimeBanner();
                 }
             },
 
             renderScenarioTables() {
                 const container = getContainerEl(`#scenarioTablesGrid-${PAGE_CODE}`);
-                if (!container) return;
+                if (!container) {
+                    this.updateWorkContextSummary();
+                    return;
+                }
 
                 if (!this.scenarioTables.length) {
                     container.innerHTML = `
@@ -1733,6 +1761,7 @@
                     row.classList.toggle("is-selected", row.dataset.scenarioTableKey === this.selectedScenarioTableKey);
                 });
                 this.updateWorkContextSummary();
+                this.renderEditingRuntimeBanner();
             },
 
             updateWorkContextSummary() {
@@ -2086,6 +2115,7 @@
                 this.resizeFlowViewportToNodes();
                 this.updateFlowEdges();
                 this.renderFlowEdgeGrid();
+                this.renderEditingRuntimeBanner();
             },
 
             clearNodeInspector() {
@@ -4826,44 +4856,169 @@
             renderEditingRuntimeBanner() {
                 const banner = getContainerEl(`#editingRuntimeBanner-${PAGE_CODE}`);
                 if (!banner) return;
-                const context = this.editingRuntimeContext;
-                if (!context?.editSessionId || !context?.targetOwner || !context?.targetTable) {
+                const pair = this.getFlowRunTargetPair();
+                if (!pair) {
+                    if (this.selectedProjectId && this.selectedScenarioId) {
+                        this.flowRunTargetMode = "SOURCE";
+                    }
                     banner.hidden = true;
                     banner.innerHTML = "";
                     return;
                 }
+                const sourceId = `${pair.sourceOwner}.${pair.sourceTable}`;
+                const editId = pair.editExists
+                    ? `${pair.editOwner}.${pair.editTable}`
+                    : "";
+                if (!pair.editExists && this.flowRunTargetMode === "EDIT") {
+                    this.flowRunTargetMode = "SOURCE";
+                }
+                const context = this.editingRuntimeContext;
+                const isReanalysisEntry = Boolean(
+                    pair.editExists
+                    && context?.editSessionId
+                    && String(context.projectId || "") === String(this.selectedProjectId || "")
+                    && String(context.scenarioId || "") === String(this.selectedScenarioId || "")
+                    && String(context.targetOwner || "").toUpperCase() === pair.editOwner
+                    && String(context.targetTable || "").toUpperCase() === pair.editTable
+                );
+                const reanalysisLabel = String(
+                    this.getLabel("flowRunReanalysisEntry") || "M05003 rerun · Session #{sessionId}"
+                ).replace("{sessionId}", String(context?.editSessionId || ""));
                 banner.hidden = false;
                 banner.innerHTML = `
-                    <span>
-                        <i class="fas fa-flask"></i>
-                        편집본 재검증 모드 · Session #${this.escapeHtml(context.editSessionId)}
-                        · <b>${this.escapeHtml(context.targetOwner)}.${this.escapeHtml(context.targetTable)}</b>
+                    <span class="flow-run-target-title">
+                        <i class="fas fa-database"></i>
+                        ${this.escapeHtml(this.getLabel("flowRunTargetTitle") || "Execution Target Table")}
+                        ${isReanalysisEntry ? `<em>${this.escapeHtml(reanalysisLabel)}</em>` : ""}
                     </span>
-                    <span>저장된 Flow는 변경하지 않고 실행 파라미터만 INITDN$로 오버라이드합니다.</span>
-                    <button type="button" onclick="${PAGE_CODE}.clearEditingRuntimeContext()">편집본 모드 종료</button>
+                    <span class="flow-run-target-options" role="radiogroup" aria-label="실행 대상 테이블">
+                        <label title="${this.escapeHtml(sourceId)}">
+                            <input type="radio" name="flowRunTarget-${PAGE_CODE}" value="SOURCE"
+                                ${this.flowRunTargetMode !== "EDIT" ? "checked" : ""}
+                                onchange="${PAGE_CODE}.changeFlowRunTargetMode(this.value)">
+                            <span>${this.escapeHtml(this.getLabel("flowRunTargetSource") || "Base Table")}</span>
+                            <b>${this.escapeHtml(sourceId)}</b>
+                        </label>
+                        ${pair.editExists ? `
+                            <label title="${this.escapeHtml(editId)}">
+                                <input type="radio" name="flowRunTarget-${PAGE_CODE}" value="EDIT"
+                                    ${this.flowRunTargetMode === "EDIT" ? "checked" : ""}
+                                    onchange="${PAGE_CODE}.changeFlowRunTargetMode(this.value)">
+                                <span>${this.escapeHtml(this.getLabel("flowRunTargetEdit") || "Editing Table")}</span>
+                                <b>${this.escapeHtml(editId)}</b>
+                            </label>
+                        ` : ""}
+                    </span>
+                    <small>${this.escapeHtml(this.getLabel("flowRunTargetHint") || "Run and Queue use the selected table as the target for the entire Flow.")}</small>
                 `;
+            },
+
+            getFlowRunTargetPair() {
+                const candidates = (this.scenarioTables || [])
+                    .filter((row) => {
+                        return Boolean(row.OWNER_NAME && row.TABLE_NAME);
+                    })
+                    .map((row) => {
+                        const editOwner = String(row.EDIT_OWNER_NAME || "").toUpperCase();
+                        const editTable = String(row.EDIT_TABLE_NAME || "").toUpperCase();
+                        let editExists = false;
+                        if (editOwner && editTable) {
+                            if (Object.prototype.hasOwnProperty.call(row, "EDIT_CREATED_AT")) {
+                                editExists = Boolean(row.EDIT_CREATED_AT);
+                            } else if (Object.prototype.hasOwnProperty.call(row, "EDIT_TABLE_EXISTS_YN")) {
+                                editExists = String(row.EDIT_TABLE_EXISTS_YN || "N").toUpperCase() === "Y";
+                            }
+                        }
+                        return {
+                            row,
+                            sourceOwner: String(row.OWNER_NAME || "").toUpperCase(),
+                            sourceTable: String(row.TABLE_NAME || "").toUpperCase(),
+                            editOwner,
+                            editTable,
+                            editExists
+                        };
+                    });
+                if (!candidates.length) return null;
+
+                const context = this.editingRuntimeContext;
+                const contextMatch = candidates.find((pair) => (
+                    pair.editExists
+                    && String(context?.projectId || "") === String(this.selectedProjectId || "")
+                    && String(context?.scenarioId || "") === String(this.selectedScenarioId || "")
+                    && String(context?.targetOwner || "").toUpperCase() === pair.editOwner
+                    && String(context?.targetTable || "").toUpperCase() === pair.editTable
+                ));
+                if (contextMatch) return contextMatch;
+
+                const flowTargetKeys = this.getFlowNodes()
+                    .map((node) => `${String(node.dataset.ownerName || "").toUpperCase()}.${String(node.dataset.tableName || "").toUpperCase()}`)
+                    .filter((key, index, values) => key !== "." && values.indexOf(key) === index);
+                for (const targetKey of flowTargetKeys) {
+                    const flowMatches = candidates.filter(
+                        (pair) => `${pair.sourceOwner}.${pair.sourceTable}` === targetKey
+                    );
+                    if (flowMatches.length) {
+                        return flowMatches.find((pair) => pair.editExists) || flowMatches[0];
+                    }
+                }
+
+                const selectedTable = this.getSelectedScenarioTable();
+                const selectedMatch = candidates.find((pair) => pair.row === selectedTable);
+                if (selectedMatch) return selectedMatch;
+                return flowTargetKeys.length === 0 && candidates.length === 1
+                    ? candidates[0]
+                    : null;
+            },
+
+            changeFlowRunTargetMode(value) {
+                const mode = String(value || "").toUpperCase() === "EDIT" ? "EDIT" : "SOURCE";
+                const pair = this.getFlowRunTargetPair();
+                if (mode === "EDIT" && !pair?.editExists) {
+                    this.flowRunTargetMode = "SOURCE";
+                    this.renderEditingRuntimeBanner();
+                    CommonMessage.warn(this.getMessage("flowRunTargetNotFound", "The INITDN$ editing table could not be found."));
+                    return;
+                }
+                this.flowRunTargetMode = mode;
+                this.renderEditingRuntimeBanner();
             },
 
             clearEditingRuntimeContext() {
                 this.editingRuntimeContext = null;
+                this.flowRunTargetMode = "SOURCE";
                 sessionStorage.removeItem(`${PAGE_CODE}:editingRuntimeContext`);
                 this.renderEditingRuntimeBanner();
                 CommonMessage.success("INITDN$ 편집본 재검증 모드를 종료했습니다.");
             },
 
             getEditingRuntimeOverrides() {
-                const context = this.editingRuntimeContext;
-                if (!context?.editSessionId || !context?.targetOwner || !context?.targetTable) return null;
-                return {
-                    editSessionId: Number(context.editSessionId),
-                    targetOwner: String(context.targetOwner),
-                    targetTable: String(context.targetTable)
+                if (this.flowRunTargetMode !== "EDIT") return null;
+                const pair = this.getFlowRunTargetPair();
+                if (!pair?.editExists) return null;
+                const overrides = {
+                    targetOwner: pair.editOwner,
+                    targetTable: pair.editTable
                 };
+                const context = this.editingRuntimeContext;
+                const matchesEditingSession = Boolean(
+                    context?.editSessionId
+                    && String(context.projectId || "") === String(this.selectedProjectId || "")
+                    && String(context.scenarioId || "") === String(this.selectedScenarioId || "")
+                    && String(context.targetOwner || "").toUpperCase() === pair.editOwner
+                    && String(context.targetTable || "").toUpperCase() === pair.editTable
+                );
+                if (matchesEditingSession) overrides.editSessionId = Number(context.editSessionId);
+                return overrides;
             },
 
             async linkEditingReanalysisRun(flowRunId) {
                 const context = this.editingRuntimeContext;
-                if (!context?.editSessionId || !flowRunId) return;
+                const overrides = this.getEditingRuntimeOverrides();
+                if (
+                    !context?.editSessionId
+                    || !flowRunId
+                    || Number(overrides?.editSessionId || 0) !== Number(context.editSessionId)
+                ) return;
                 try {
                     await CommonUtils.request(`${API_BASE_URL}/M07001/sessions/${encodeURIComponent(context.editSessionId)}/reanalysis`, {
                         method: "POST",
@@ -4963,6 +5118,10 @@
                 this.resizeFlowViewportToNodes();
                 this.updateFlowEdges();
                 this.renderFlowEdgeGrid();
+                // Scenario tables load before the saved Flow canvas. Re-evaluate the
+                // INITUP$/INITDN$ pair after nodes exist so the initial page load can
+                // resolve the table used by the current Flow without a manual refresh.
+                this.renderEditingRuntimeBanner();
             },
             handleNodeObjectChange() {},
 
@@ -7965,8 +8124,24 @@
                 const actionName = batch
                     ? this.getMessage("queueBatchAction", "Queue batch")
                     : this.getMessage("runNowAction", "Run now");
+                const targetPair = this.getFlowRunTargetPair();
+                const editingRuntimeOverrides = this.getEditingRuntimeOverrides();
+                if (this.flowRunTargetMode === "EDIT" && !editingRuntimeOverrides) {
+                    CommonMessage.warn(this.getMessage("flowRunTargetMissing", "The selected INITDN$ editing table could not be verified as the execution target."));
+                    return;
+                }
+                const targetTableId = targetPair
+                    ? (
+                        this.flowRunTargetMode === "EDIT"
+                            ? `${targetPair.editOwner}.${targetPair.editTable}`
+                            : `${targetPair.sourceOwner}.${targetPair.sourceTable}`
+                    )
+                    : "";
                 const confirmMessage = [
                     `${actionName}: "${flowName}"`,
+                    ...(targetTableId ? [
+                        this.getMessage("flowRunTargetConfirm", "Execution target: {tableId}", { tableId: targetTableId })
+                    ] : []),
                     "",
                     this.getMessage("confirmRunFlowBody", "This will save the current flow, validate the DAG, and create a run history record."),
                     "",
@@ -7981,7 +8156,6 @@
                     ...this.buildFlowPayload(),
                     batch: Boolean(batch)
                 };
-                const editingRuntimeOverrides = this.getEditingRuntimeOverrides();
                 if (editingRuntimeOverrides) payload.runtimeOverrides = editingRuntimeOverrides;
                 const manualRunId = await this.confirmManualFlowRunIdOverwrite(payload);
                 if (manualRunId === null) {

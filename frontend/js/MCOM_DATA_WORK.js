@@ -1842,6 +1842,7 @@
 
             if (!this.selectedProjectId || !this.selectedScenarioId) {
                 this.jobs = [];
+                this.newJob();
                 container.innerHTML = `<div class="table-empty">Select project and scenario first.</div>${this.renderListFooter(0)}`;
                 return;
             }
@@ -1858,6 +1859,10 @@
                 });
                 this.jobs = Array.isArray(json.data) ? json.data : [];
                 this.renderJobs();
+                if (!this.jobs.length) {
+                    this.newJob();
+                    return;
+                }
                 await this.selectFirstJobAfterLoad();
             } catch (error) {
                 container.innerHTML = `<div class="table-error">${this.escapeHtml(error.message || "Job load failed.")}</div>`;
@@ -2242,6 +2247,8 @@
             this.currentJob = this.createEmptyJob();
             this.savedJobSnapshot = null;
             this.parameters = [];
+            this.systemUserSqlValue = "";
+            this.userSqlDirty = false;
             this.resetEditableDataGrid();
             if (selectedTable) {
                 const jobNo = this.getNextJobNo();
@@ -2262,6 +2269,7 @@
             this.renderCurrentJob();
             this.renderParameters();
             this.setEditorValue(`#execPlsqlEditor-${PAGE_CODE}`, "");
+            this.setEditorValue(`#sqlEditor-${PAGE_CODE}`, "");
             this.setDefaultUserSql(true);
             this.setEditorValue(`#resultSqlEditor-${PAGE_CODE}`, "");
         },

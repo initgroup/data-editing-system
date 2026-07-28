@@ -1107,10 +1107,10 @@
 
         renderLinks() {
             const links = [
-                { page: "M03003", title: this.t("shortcutRuleDiscovery", "Rule Discovery"), icon: "fa-wand-magic-sparkles" },
-                { page: "M03004", title: this.t("shortcutRuleViolation", "Rule Violation"), icon: "fa-shield-halved" },
-                { page: "M04001", title: this.t("shortcutIntegratedEditing", "Integrated Editing Run"), icon: "fa-diagram-project" },
-                { page: "M90001", title: this.t("shortcutInternalModel", "Internal Model Registry"), icon: "fa-sliders" }
+                { page: "M03001", title: this.t("moduleProfiling", "Column Type Analysis"), icon: "fa-chart-column" },
+                { page: "M03002", title: this.t("moduleCorrelation", "Column Correlation Analysis"), icon: "fa-link" },
+                { page: "M03003", title: this.t("moduleRuleDiscovery", "Rule Discovery"), icon: "fa-wand-magic-sparkles" },
+                { page: "M03004", title: this.t("moduleRuleViolation", "Rule Violation"), icon: "fa-triangle-exclamation" }
             ];
             const container = document.getElementById("homeLinkBanner");
             if (!container) return;

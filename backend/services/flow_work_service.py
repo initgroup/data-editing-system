@@ -831,10 +831,11 @@ def execute_flow_plan(
     node_outputs: Dict[str, Dict[str, Any]] = {}
     run_summary_context: Dict[str, Any] = {}
     editing_session_id = (runtime_defaults or {}).get("INIT$EditingSessionId")
-    if editing_session_id:
+    editing_target_table = (runtime_defaults or {}).get("INIT$TargetTable")
+    if editing_target_table:
         run_summary_context["runtimeOverrides"] = {
             "targetOwner": (runtime_defaults or {}).get("INIT$TargetOwner") or "",
-            "targetTable": (runtime_defaults or {}).get("INIT$TargetTable") or "",
+            "targetTable": editing_target_table,
             "editSessionId": editing_session_id,
         }
 
@@ -1058,15 +1059,20 @@ def normalize_editing_runtime_overrides(overrides: Optional[Dict[str, Any]]) -> 
         raise HTTPException(status_code=400, detail="Editing runtime target owner is invalid.")
     if not re.fullmatch(r"INITDN\$[A-Z0-9_$#]{1,121}", table):
         raise HTTPException(status_code=400, detail="Editing runtime target table must be a valid INITDN$ table.")
-    session_id = data_work.require_int(raw.get("editSessionId"), "editSessionId")
-    return {
+    normalized = {
         "INIT$TargetOwner": owner,
         "INIT$TargetTable": table,
         "P_TARGET_OWNER": owner,
         "P_TARGET_TABLE": table,
-        "INIT$EditingSessionId": session_id,
-        "editingSessionId": session_id,
     }
+    session_value = raw.get("editSessionId")
+    if session_value not in (None, ""):
+        session_id = data_work.require_int(session_value, "editSessionId")
+        normalized.update({
+            "INIT$EditingSessionId": session_id,
+            "editingSessionId": session_id,
+        })
+    return normalized
 
 
 def get_flow_param_runtime_value(item: Dict[str, Any]) -> Any:

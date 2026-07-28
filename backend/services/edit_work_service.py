@@ -2229,19 +2229,40 @@ def validate_flow_runtime_context(
     cursor = conn.cursor()
     try:
         edit_session_id = int(runtime_overrides.get("INIT$EditingSessionId") or 0)
-        session = _select_session(cursor, edit_session_id, request)
-        if int(session.get("PROJECT_ID") or 0) != int(project_id or 0):
-            raise HTTPException(status_code=400, detail="Editing session and Flow project do not match.")
-        if session.get("SCENARIO_ID") is not None and int(session["SCENARIO_ID"]) != int(scenario_id or 0):
-            raise HTTPException(status_code=400, detail="Editing session and Flow scenario do not match.")
         target_owner = _normalize_identifier(runtime_overrides.get("INIT$TargetOwner"), "target owner")
         target_table = _normalize_identifier(runtime_overrides.get("INIT$TargetTable"), "target table")
-        if target_owner != str(session.get("TARGET_OWNER") or "").upper():
-            raise HTTPException(status_code=400, detail="Editing runtime owner does not match the editing session.")
-        if target_table != str(session.get("EDIT_TABLE") or "").upper():
-            raise HTTPException(status_code=400, detail="Editing runtime table does not match the editing session.")
-        if str(session.get("SESSION_STATUS") or "") not in {"EDITING", "VALIDATED", "APPLY_READY"}:
-            raise HTTPException(status_code=409, detail="Prepare the INITDN$ editing table before Flow reanalysis.")
+        project_id = _require_project_access(cursor, request, project_id)
+        if not scenario_id:
+            raise HTTPException(status_code=400, detail="Scenario is required.")
+
+        if edit_session_id:
+            session = _select_session(cursor, edit_session_id, request)
+            if int(session.get("PROJECT_ID") or 0) != int(project_id):
+                raise HTTPException(status_code=400, detail="Editing session and Flow project do not match.")
+            if session.get("SCENARIO_ID") is not None and int(session["SCENARIO_ID"]) != int(scenario_id):
+                raise HTTPException(status_code=400, detail="Editing session and Flow scenario do not match.")
+            if target_owner != str(session.get("TARGET_OWNER") or "").upper():
+                raise HTTPException(status_code=400, detail="Editing runtime owner does not match the editing session.")
+            if target_table != str(session.get("EDIT_TABLE") or "").upper():
+                raise HTTPException(status_code=400, detail="Editing runtime table does not match the editing session.")
+            if str(session.get("SESSION_STATUS") or "") not in {"EDITING", "VALIDATED", "APPLY_READY"}:
+                raise HTTPException(status_code=409, detail="Prepare the INITDN$ editing table before Flow reanalysis.")
+        else:
+            session = _fetch_one(
+                cursor,
+                "FLOW_WORK_RUNTIME_TABLE_PAIR",
+                {
+                    "projectId": project_id,
+                    "scenarioId": int(scenario_id),
+                    "editOwnerName": target_owner,
+                    "editTableName": target_table,
+                },
+            )
+            if not session:
+                raise HTTPException(
+                    status_code=400,
+                    detail="The selected INITDN$ table is not registered to this Flow project and scenario.",
+                )
         if not _table_exists(cursor, target_owner, target_table):
             raise HTTPException(status_code=404, detail="The INITDN$ editing table was not found.")
         return session
