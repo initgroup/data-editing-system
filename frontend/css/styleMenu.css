@@ -5030,6 +5030,12 @@ body.intro-mode #container-intro .env-panel {
     white-space: pre-wrap;
 }
 
+#container-login #loginMessage {
+    max-height: 84px;
+    overflow: auto;
+    overflow-wrap: anywhere;
+}
+
 #container-login .intro-step-msg.is-error {
     border-color: #fecaca;
     background: #fff1f2;
@@ -5542,7 +5548,7 @@ body.intro-mode #container-intro .env-panel {
     box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.18);
 }
 
-#container-login .login-target-db-field {
+#container-login .login-target-db-field:not([hidden]) {
     display: grid;
     gap: 6px;
 }

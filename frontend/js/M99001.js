@@ -104,7 +104,10 @@
             }
             if (bootstrap) {
                 this.switchTab("connection");
-                this.updateDescription("Initial system setup. Save/Delete are available after INIT_SYSTEM_DDL creates system tables.");
+                this.updateDescription(
+                    "bootstrapDescription",
+                    "Initial system setup. Save/Delete are available after INIT_SYSTEM_DDL creates system tables."
+                );
             }
             this.updateConnectionDependentActions();
         },
@@ -131,8 +134,6 @@
             this.refreshActiveTabGrids();
             if (tabName === "deploy" && !this.hasSelectedConnection()) {
                 this.renderDeployLog("Select a DB connection first.", "error");
-            } else if (tabName === "ml" && !this.hasSelectedConnection()) {
-                this.renderMlLog("Select a DB connection first.", "error");
             }
         },
 
@@ -267,7 +268,11 @@
                 };
                 this.clearAllMessages();
                 this.renderConnectionDetail();
-                this.updateDescription(`Selected connection: ${this.selectedConnection.connectionName}`);
+                this.updateDescription(
+                    "selectedConnectionDescription",
+                    "Selected connection: {name}",
+                    { name: this.selectedConnection.connectionName }
+                );
                 this.renderConnectionList();
                 this.updateConnectionDependentActions();
                 await this.refreshSelectedConnectionStatus(false);
@@ -279,7 +284,10 @@
         newConnection(clearLog = true) {
             this.selectedConnection = emptyConnection();
             this.renderConnectionDetail();
-            this.updateDescription("Create a new target database connection.");
+            this.updateDescription(
+                "newConnectionDescription",
+                "Create a new target database connection."
+            );
             this.updateConnectionDependentActions();
             if (clearLog) {
                 this.renderSchemaStatus([]);
@@ -358,8 +366,11 @@
             return false;
         },
 
-        updateDescription(message) {
-            this.setText("#connectionDescription-M99001", message || "");
+        updateDescription(key, fallback, values = {}) {
+            this.setText(
+                "#connectionDescription-M99001",
+                this.tl(key, fallback, values)
+            );
         },
 
         parseConnectOptions(rawOptions, fallbackAlias = "", walletPath = "") {
@@ -520,15 +531,14 @@
             if (!(await CommonMessage.confirm("Install INIT system tables and create the first administrator account?"))) return;
             this.renderLog("Installing INIT_SYSTEM_DDL and creating bootstrap administrator...", "info");
             try {
-                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/bootstrap/init-system`, {
+                await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/bootstrap/init-system`, {
                     method: "POST",
                     body: this.getPayload()
                 });
-                const logs = json.logs || [json.message || "Initial system setup completed."];
                 sessionStorage.removeItem("initBootstrapToken");
-                const loginId = json.adminLoginId || sessionStorage.getItem("initBootstrapAdminLoginId") || "";
                 sessionStorage.removeItem("initBootstrapAdminLoginId");
-                sessionStorage.setItem("loginNotice", `${logs.join("\n")}\n\nInitial administrator created. Login with ${loginId || "the administrator account"}.`);
+                sessionStorage.removeItem("loginNotice");
+                sessionStorage.setItem("loginNoticeKey", "initialSetupCompleted");
                 PageManager.clearLoginSession?.();
                 await PageManager.load("login", "Data Editing System Login");
             } catch (error) {
@@ -594,33 +604,6 @@
                 this.renderDeployLog(`${result.installedCount || 0}/${result.total || 0} application tables exist.`, "success");
             } else {
                 this.renderDeployLog("Application table status refresh failed.", "error");
-            }
-        },
-
-        async refreshMlDeployStatus() {
-            const connectionId = getContainerEl("#connectionId-M99001")?.value;
-            const container = getContainerEl("#mlDeployStatus-M99001");
-            if (!connectionId) {
-                this.renderMlDeployStatus([]);
-                this.renderMlLog("Select a DB connection first.", "error");
-                return;
-            }
-            if (container) {
-                container.innerHTML = `<div class="table-empty">Refreshing ML deploy status...</div>`;
-            }
-            try {
-                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/schema/model-status`, {
-                    method: "POST",
-                    showLoading: false,
-                    body: this.getPayload()
-                });
-                const rows = json.data || [];
-                this.renderModelDeployStatus(rows);
-                this.renderMlDeployStatus(rows);
-                this.renderMlLog(`ML deploy status refreshed. ${this.countMlRows(rows)} row(s) found.`, "success");
-            } catch (error) {
-                this.renderMlDeployStatus([]);
-                this.renderMlLog(error.message || "ML deploy status refresh failed.", "error");
             }
         },
 
@@ -737,47 +720,10 @@
             }
         },
 
-        async prepareMlSeed() {
-            if (!this.requireSelectedConnection(this.renderMlLog)) return;
-            if (!(await CommonMessage.confirm("Prepare machine learning seed data on the selected target database?"))) return;
-            this.renderMlLog("Preparing ML seed data...", "info");
-            try {
-                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/schema/ml-seed`, {
-                    method: "POST",
-                    body: this.getPayload()
-                });
-                const logs = json.logs || [json.message || "ML seed data preparation completed."];
-                const summary = json.checksum ? [`Checksum: ${json.checksum}`, ...logs] : logs;
-                this.renderMlLog(summary.join("\n"), "success");
-                await this.loadModelDeployStatus(false);
-            } catch (error) {
-                this.renderMlLog(error.message || "ML seed data preparation failed.", "error");
-            }
-        },
-
-        async trainMlModels() {
-            if (!this.requireSelectedConnection(this.renderMlLog)) return;
-            if (!(await CommonMessage.confirm("Train or install machine learning models on the selected target database?"))) return;
-            this.renderMlLog("Training ML models...", "info");
-            try {
-                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/schema/ml-train`, {
-                    method: "POST",
-                    body: this.getPayload()
-                });
-                const logs = json.logs || [json.message || "ML model training completed."];
-                const summary = json.checksum ? [`Checksum: ${json.checksum}`, ...logs] : logs;
-                this.renderMlLog(summary.join("\n"), "success");
-                await this.loadModelDeployStatus(false);
-            } catch (error) {
-                this.renderMlLog(error.message || "ML model training failed.", "error");
-            }
-        },
-
         async loadModelDeployStatus(showLoading = true) {
             const connectionId = getContainerEl("#connectionId-M99001")?.value;
             if (!connectionId) {
                 this.renderModelDeployStatus([]);
-                this.renderMlDeployStatus([]);
                 return;
             }
             const container = getContainerEl("#modelDeployStatus-M99001");
@@ -791,13 +737,11 @@
                     body: this.getPayload()
                 });
                 this.renderModelDeployStatus(json.data || []);
-                this.renderMlDeployStatus(json.data || []);
                 return json.data || [];
             } catch (error) {
                 if (container) {
                     container.innerHTML = `<div class="table-error">${this.escapeHtml(error.message || "Model object deploy status load failed.")}</div>`;
                 }
-                this.renderMlDeployStatus([]);
                 return [];
             }
         },
@@ -853,23 +797,6 @@
             this.renderDeployStatusTable(container, this.filterInitDeployRows(rows), "No INIT$ model object deploy status.", "#modelDeployStatusSummary-M99001");
         },
 
-        renderMlDeployStatus(rows) {
-            const container = getContainerEl("#mlDeployStatus-M99001");
-            if (!container) return;
-            const mlRows = this.filterMlDeployRows(rows);
-            this.renderDeployStatusTable(container, mlRows, "No ML deploy status.", "#mlDeployStatusSummary-M99001");
-        },
-
-        filterMlDeployRows(rows) {
-            return Array.isArray(rows)
-                ? rows.filter((row) => {
-                    const group = String(row.OBJECT_GROUP || "").toUpperCase();
-                    const type = String(row.OBJECT_TYPE || "").toUpperCase();
-                    return group.includes("ML") || group.includes("MODEL_SEED") || group.includes("MODEL_TRAIN") || ["ML_MODEL", "MODEL_SEED", "MODEL_TRAINING_DATA", "MODEL_SETTING"].includes(type);
-                })
-                : [];
-        },
-
         filterInitDeployRows(rows) {
             const objectTypes = new Set(["PACKAGE", "PACKAGE BODY", "PROCEDURE", "FUNCTION", "MODEL", "MINING MODEL"]);
             return Array.isArray(rows)
@@ -879,10 +806,6 @@
                     return name.startsWith("INIT$") && objectTypes.has(type);
                 })
                 : [];
-        },
-
-        countMlRows(rows) {
-            return this.filterMlDeployRows(rows).length;
         },
 
         renderDeployStatusTable(container, rows, emptyMessage, summarySelector = "") {
@@ -1018,14 +941,9 @@
             this.renderLog(message, type, "#deployLog-M99001");
         },
 
-        renderMlLog(message, type = "info") {
-            this.renderLog(message, type, "#mlLog-M99001");
-        },
-
         clearAllMessages() {
             this.renderLog("");
             this.renderDeployLog("");
-            this.renderMlLog("");
         }
     };
 

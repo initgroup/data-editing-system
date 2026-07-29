@@ -383,8 +383,6 @@
     "This cannot be undone. Continue target data reset?": "이 작업은 되돌릴 수 없습니다. 대상 데이터 초기화를 계속하시겠습니까?",
     "Deploy PL/SQL model objects on the selected target database?": "선택한 대상 데이터베이스에 PL/SQL 모델 객체를 배포하시겠습니까?",
     "Basic installation is complete. Move to the login screen?": "기본 설치가 완료되었습니다. 로그인 화면으로 이동하시겠습니까?",
-    "Prepare machine learning seed data on the selected target database?": "선택한 대상 데이터베이스에 머신러닝 seed 데이터를 준비하시겠습니까?",
-    "Train or install machine learning models on the selected target database?": "선택한 대상 데이터베이스에서 머신러닝 모델을 학습 또는 설치하시겠습니까?",
     "Change your email?": "이메일을 변경하시겠습니까?",
     "Change your login password?": "로그인 비밀번호를 변경하시겠습니까?",
     "Create missing INIT$_ system tables on the current system database?": "현재 시스템 데이터베이스에 누락된 INIT$_ 시스템 테이블을 생성하시겠습니까?",

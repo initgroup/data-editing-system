@@ -27,6 +27,7 @@
     "confirmPassword": "비밀번호 확인",
     "targetDb": "대상 DB",
     "messageEnterCredentials": "저장된 ID와 비밀번호를 입력하세요.",
+    "initialSetupCompleted": "초기 시스템 설정이 완료되었습니다. 방금 생성한 관리자 계정으로 로그인하세요.",
     "invalidLogin": "로그인 ID 또는 비밀번호가 올바르지 않습니다.",
     "targetDbDisabled": "선택한 대상 DB 연결은 사용할 수 없습니다.",
     "systemTablesNotInstalledSignup": "시스템 테이블이 설치되어 있지 않습니다. 첫 관리자 회원으로 가입해 초기 설정을 시작하세요.",

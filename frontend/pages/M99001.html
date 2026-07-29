@@ -42,31 +42,30 @@
             <div class="m99001-tabs" role="tablist" aria-label="DB setup tabs">
                 <button type="button" class="m99001-tab is-active" data-tab="connection" onclick="M99001.switchTab('connection')">Connection</button>
                 <button type="button" class="m99001-tab" data-tab="deploy" data-operational-only onclick="M99001.switchTab('deploy')">Target Install</button>
-                <button type="button" class="m99001-tab" data-tab="ml" data-operational-only onclick="M99001.switchTab('ml')">Machine Learning</button>
             </div>
 
             <section class="m99001-tab-panel is-active" data-panel="connection">
                 <section class="env-object-meta" aria-label="Connection detail">
                     <div class="env-meta-grid project-meta-grid">
                         <label>
-                            <span>Connection ID</span>
+                            <span data-label-key="fieldConnectionId">Connection ID</span>
                             <input id="connectionId-M99001" class="env-field env-meta-field" type="text" readonly>
                         </label>
                         <label>
-                            <span>DB Type</span>
+                            <span data-label-key="fieldDbType">DB Type</span>
                             <select id="dbType-M99001" class="env-field env-meta-field">
                                 <option value="ORACLE">Oracle</option>
                             </select>
                         </label>
                         <label>
-                            <span>Use</span>
+                            <span data-label-key="fieldUse">Use</span>
                             <select id="useYn-M99001" class="env-field env-meta-field">
                                 <option value="Y">Y</option>
                                 <option value="N">N</option>
                             </select>
                         </label>
                         <label>
-                            <span>Shared</span>
+                            <span data-label-key="fieldShared">Shared</span>
                             <select id="sharedYn-M99001" class="env-field env-meta-field">
                                 <option value="Y">Y</option>
                                 <option value="N">N</option>
@@ -74,19 +73,19 @@
                         </label>
                         <div class="m99001-inline-fields">
                             <label>
-                                <span>Default</span>
+                                <span data-label-key="fieldDefault">Default</span>
                                 <select id="defaultYn-M99001" class="env-field env-meta-field">
                                     <option value="N">N</option>
                                     <option value="Y">Y</option>
                                 </select>
                             </label>
                             <label>
-                                <span>Sort</span>
+                                <span data-label-key="fieldSort">Sort</span>
                                 <input id="sortOrder-M99001" class="env-field env-meta-field" type="number" value="0">
                             </label>
                         </div>
                         <label>
-                            <span>Connection Method</span>
+                            <span data-label-key="fieldConnectionMethod">Connection Method</span>
                             <select id="connectionMethod-M99001" class="env-field env-meta-field" onchange="M99001.applyConnectionMethod()">
                                 <option value="basic">Basic</option>
                                 <option value="tnsAlias">TNS Alias</option>
@@ -95,47 +94,47 @@
                             </select>
                         </label>
                         <label class="env-meta-wide">
-                            <span class="required-title">Connection Name</span>
+                            <span class="required-title" data-label-key="fieldConnectionName">Connection Name</span>
                             <input id="connectionName-M99001" class="env-field env-meta-field" type="text" placeholder="LOCAL_ORCL">
                         </label>
                         <label>
-                            <span class="required-title">Host</span>
+                            <span class="required-title" data-label-key="fieldHost">Host</span>
                             <input id="host-M99001" class="env-field env-meta-field" type="text" placeholder="127.0.0.1">
                         </label>
                         <label>
-                            <span>Port</span>
+                            <span data-label-key="fieldPort">Port</span>
                             <input id="port-M99001" class="env-field env-meta-field" type="number" value="1521">
                         </label>
                         <label>
-                            <span>Service Name</span>
+                            <span data-label-key="fieldServiceName">Service Name</span>
                             <input id="serviceName-M99001" class="env-field env-meta-field" type="text" placeholder="ORCLPDB1">
                         </label>
                         <label>
-                            <span>SID</span>
+                            <span data-label-key="fieldSid">SID</span>
                             <input id="sid-M99001" class="env-field env-meta-field" type="text" placeholder="ORCL">
                         </label>
                         <label>
-                            <span class="required-title">Username</span>
+                            <span class="required-title" data-label-key="fieldUsername">Username</span>
                             <input id="username-M99001" class="env-field env-meta-field" type="text">
                         </label>
                         <label>
-                            <span>Password</span>
+                            <span data-label-key="fieldPassword">Password</span>
                             <input id="password-M99001" class="env-field env-meta-field" type="password" autocomplete="new-password" placeholder="Leave blank to keep saved password">
                         </label>
                         <label class="env-meta-wide">
-                            <span>TNS Alias / JDBC URL</span>
+                            <span data-label-key="fieldDsnAlias">TNS Alias / JDBC URL</span>
                             <input id="dsnAlias-M99001" class="env-field env-meta-field" type="text" placeholder="initgroupediting_high">
                         </label>
                         <label class="env-meta-wide">
-                            <span>Wallet Path</span>
+                            <span data-label-key="fieldWalletPath">Wallet Path</span>
                             <input id="walletPath-M99001" class="env-field env-meta-field" type="text" placeholder="Optional Oracle wallet path">
                         </label>
                         <label>
-                            <span>Wallet Password</span>
+                            <span data-label-key="fieldWalletPassword">Wallet Password</span>
                             <input id="walletPassword-M99001" class="env-field env-meta-field" type="password" autocomplete="new-password" placeholder="Leave blank to keep saved wallet password">
                         </label>
                         <label class="env-meta-wide">
-                            <span>Connect Options</span>
+                            <span data-label-key="fieldConnectOptions">Connect Options</span>
                             <textarea id="connectOptions-M99001" class="env-field env-meta-textarea" rows="3" placeholder="{ }"></textarea>
                         </label>
                     </div>
@@ -201,28 +200,6 @@
                         <button type="button" class="env-btn env-save m99001-status-action" data-requires-connection disabled onclick="M99001.deployModelObjects()">Deploy PL/SQL Objects</button>
                     </div>
                     <div id="modelDeployStatus-M99001" class="table-result-grid"></div>
-                </section>
-            </section>
-
-            <section class="m99001-tab-panel" data-panel="ml">
-                <section class="env-object-meta m99001-action-panel" aria-label="Machine learning actions">
-                    <div class="data-panel-toolbar">
-                        <strong>Machine Learning Message</strong>
-                    </div>
-                    <pre id="mlLog-M99001" class="sql-editor data-script-editor" aria-live="polite"></pre>
-                </section>
-
-                <section class="env-object-meta m99001-model-status-panel" aria-label="Machine learning deploy status">
-                    <div class="data-panel-toolbar">
-                        <strong>ML Deploy Status</strong>
-                        <button type="button" class="env-icon-btn" title="Refresh ML deploy status" onclick="M99001.refreshMlDeployStatus()">
-                            <i class="fas fa-sync-alt"></i>
-                        </button>
-                        <span id="mlDeployStatusSummary-M99001" class="env-detail-hint m99001-status-summary"></span>
-                        <button type="button" class="env-btn env-save m99001-status-action" data-requires-connection disabled onclick="M99001.prepareMlSeed()">Prepare ML Seed Data</button>
-                        <button type="button" class="env-btn env-save m99001-status-action" data-requires-connection disabled onclick="M99001.trainMlModels()">Train ML Models</button>
-                    </div>
-                    <div id="mlDeployStatus-M99001" class="table-result-grid"></div>
                 </section>
             </section>
         </section>

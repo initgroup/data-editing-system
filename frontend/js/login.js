@@ -25,6 +25,7 @@
         confirmPassword: "Confirm Password",
         targetDb: "Target DB",
         messageEnterCredentials: "Enter your saved ID and password.",
+        initialSetupCompleted: "Initial system setup is complete. Log in with the administrator account you just created.",
         invalidLogin: "Invalid login ID or password.",
         targetDbDisabled: "Selected target DB connection is disabled.",
         systemTablesNotInstalledSignup: "System tables are not installed. Sign up as the first administrator to start initial setup.",
@@ -93,13 +94,16 @@
         "user name is required": "userNameRequired",
         "email is required": "emailRequired",
         "login password is required": "loginPasswordRequired",
+        "password confirmation does not match": "passwordConfirmMismatch",
+        "select a valid member type": "validMemberTypeRequired",
+        "admin key is required": "adminKeyRequired",
         "invalid signup role": "invalidSignupRole",
         "이미 등록된 로그인 id입니다": "duplicateLoginId",
         "이미 승인 대기 중인 로그인 id입니다": "pendingLoginId",
         "회원가입 신청이 승인 대기 중입니다. 관리자 승인 후 로그인할 수 있습니다": "signupPendingApproval",
         "관리자 인증키가 일치하지 않습니다": "adminKeyMismatch"
     };
-    const LOGIN_KOREAN_SERVER_MESSAGE_FALLBACKS = {
+    const LOGIN_KOREAN_FALLBACKS = {
         invalidLogin: "로그인 ID 또는 비밀번호가 올바르지 않습니다.",
         loginRequired: "로그인 ID와 비밀번호는 필수입니다.",
         targetDbDisabled: "선택한 대상 DB 연결은 사용할 수 없습니다.",
@@ -107,8 +111,13 @@
         adminSignupKeyNotConfigured: "관리자 회원가입 인증키가 설정되어 있지 않습니다.",
         loginIdRequired: "로그인 ID는 필수입니다.",
         userNameRequired: "사용자명은 필수입니다.",
+        loginIdUserNameRequired: "로그인 ID와 사용자명은 필수입니다.",
         emailRequired: "이메일은 필수입니다.",
+        validEmailRequired: "올바른 이메일 주소를 입력하세요.",
         loginPasswordRequired: "로그인 비밀번호는 필수입니다.",
+        passwordConfirmMismatch: "비밀번호 확인이 일치하지 않습니다.",
+        validMemberTypeRequired: "올바른 회원 유형을 선택하세요.",
+        adminKeyRequired: "관리자 인증키를 입력해 주세요.",
         invalidSignupRole: "올바른 회원 유형을 선택하세요.",
         duplicateLoginId: "이미 등록된 로그인 ID입니다.",
         pendingLoginId: "이미 승인 대기 중인 로그인 ID입니다.",
@@ -136,7 +145,9 @@
         t(key, fallback = "") {
             const pack = window[`${PAGE_CODE}_PAGE_I18N`] || {};
             const labels = pack && typeof pack.labels === "object" && !Array.isArray(pack.labels) ? pack.labels : {};
-            const defaultFallback = fallback || LOGIN_LABEL_FALLBACKS[key] || "";
+            const defaultFallback = this.loginLanguage === "ko"
+                ? (LOGIN_KOREAN_FALLBACKS[key] || fallback || LOGIN_LABEL_FALLBACKS[key] || "")
+                : (fallback || LOGIN_LABEL_FALLBACKS[key] || "");
             return Object.prototype.hasOwnProperty.call(labels, key)
                 ? String(labels[key] ?? "")
                 : (window.I18nManager?.tPage?.(PAGE_CODE, key, defaultFallback) || defaultFallback);
@@ -165,7 +176,7 @@
             const key = this.getServerMessageKey(messageText);
             if (key) {
                 const fallback = this.loginLanguage === "ko"
-                    ? (LOGIN_KOREAN_SERVER_MESSAGE_FALLBACKS[key] || LOGIN_LABEL_FALLBACKS[key] || "")
+                    ? (LOGIN_KOREAN_FALLBACKS[key] || LOGIN_LABEL_FALLBACKS[key] || "")
                     : (LOGIN_LABEL_FALLBACKS[key] || "");
                 return {
                     key,
@@ -393,11 +404,22 @@
             this.passwordVisible = false;
             this.syncPasswordVisibility();
             this.hideTargetSelection();
+            const noticeKey = sessionStorage.getItem("loginNoticeKey") || "";
             const notice = sessionStorage.getItem("loginNotice") || "";
-            if (notice) {
-                sessionStorage.removeItem("loginNotice");
-                this.messageKey = "";
-                this.setMessage(notice);
+            sessionStorage.removeItem("loginNoticeKey");
+            sessionStorage.removeItem("loginNotice");
+            if (noticeKey) {
+                this.messageKey = noticeKey;
+                this.setMessageByKey(noticeKey, "info");
+            } else if (notice) {
+                const isLegacyInstallLog = notice.length > 500 || notice.split(/\r?\n/).length > 8;
+                if (isLegacyInstallLog) {
+                    this.messageKey = "initialSetupCompleted";
+                    this.setMessageByKey("initialSetupCompleted", "info");
+                } else {
+                    this.messageKey = "";
+                    this.setMessage(notice);
+                }
             } else {
                 this.setMessageByKey("messageEnterCredentials", "info", "Enter your saved ID and password.");
             }
