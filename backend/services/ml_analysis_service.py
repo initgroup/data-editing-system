@@ -389,7 +389,18 @@ def run_lasso_feature_select(conn, payload: Dict[str, Any]) -> Dict[str, Any]:
         max_auto_targets = clamp(parse_int(get_value(payload, "P_MAX_AUTO_TARGETS", "maxAutoTargets"), 10), 1, 100)
         continue_on_error = parse_yes_no(get_value(payload, "P_CONTINUE_ON_ERROR", "continueOnError"), "Y") == "Y"
         continuous_columns = load_predicted_continuous_columns(conn, owner, table)
-        target_columns = continuous_columns[:max_auto_targets]
+        correlated_columns = load_auto_corr_target_columns(
+            conn,
+            owner,
+            table,
+            run_source_type,
+            run_id,
+            max(len(continuous_columns), max_auto_targets),
+        )
+        target_columns = prioritize_auto_lasso_target_columns(
+            continuous_columns,
+            correlated_columns,
+        )[:max_auto_targets]
         if not target_columns:
             raise HTTPException(status_code=400, detail="No FINAL_PREDICTED_TYPE continuous columns found for auto LASSO target selection.")
         return run_lasso_auto_targets(conn, payload, target_columns, continue_on_error, continuous_columns)
@@ -596,7 +607,21 @@ def run_symbolic_regression_rule(conn, payload: Dict[str, Any]) -> Dict[str, Any
         continue_on_error = parse_yes_no(get_value(payload, "P_CONTINUE_ON_ERROR", "continueOnError"), "Y") == "Y"
         target_columns = load_lasso_target_columns(conn, owner, table, run_source_type, run_id, min_r2_score, max_auto_targets)
         if not target_columns:
-            raise HTTPException(status_code=400, detail=f"No LASSO selected target columns found for auto symbolic regression. Required SELECTED_YN=Y and R2_SCORE >= {min_r2_score}.")
+            return {
+                "status": "success",
+                "skippedYn": "Y",
+                "skipReason": "NO_QUALIFIED_LASSO_TARGET",
+                "message": (
+                    "No continuous target met the LASSO qualification criteria. "
+                    f"Symbolic regression was safely skipped (SELECTED_YN=Y, R2_SCORE >= {min_r2_score})."
+                ),
+                "targetCount": 0,
+                "successCount": 0,
+                "failedCount": 0,
+                "featureCount": 0,
+                "ruleCount": 0,
+                "method": "NONE",
+            }
         return run_symbolic_auto_targets(conn, payload, target_columns, continue_on_error)
 
     target_column = require_identifier(target_column_value, "targetColumn")
@@ -971,7 +996,8 @@ def run_integrated_rule_discover(conn, payload: Dict[str, Any]) -> Dict[str, Any
                 symbolic_payload.setdefault("targetColumn", symbolic_payload["P_TARGET_COLUMN"])
                 symbolic_result = run_symbolic_regression_rule(conn, symbolic_payload)
                 results.append({"task": "CONTINUOUS_SYMBOLIC", "resultTable": "INIT$_TB_RULEDISC_SYMBOLIC", **symbolic_result})
-                result_tables.append("INIT$_TB_RULEDISC_SYMBOLIC")
+                if str(symbolic_result.get("skippedYn") or "N").upper() != "Y":
+                    result_tables.append("INIT$_TB_RULEDISC_SYMBOLIC")
                 if str(symbolic_result.get("status") or "").lower() == "partial_success":
                     failures.append({
                         "task": "CONTINUOUS_SYMBOLIC",
@@ -1470,6 +1496,25 @@ def run_lasso_auto_targets(
         },
         "targets": results,
     }
+
+
+def prioritize_auto_lasso_target_columns(
+    continuous_columns: Sequence[str],
+    correlated_columns: Sequence[str],
+) -> List[str]:
+    continuous = list(dict.fromkeys(
+        str(column).strip().upper()
+        for column in continuous_columns
+        if str(column).strip()
+    ))
+    continuous_set = set(continuous)
+    correlated = list(dict.fromkeys(
+        str(column).strip().upper()
+        for column in correlated_columns
+        if str(column).strip() and str(column).strip().upper() in continuous_set
+    ))
+    correlated_set = set(correlated)
+    return [*correlated, *(column for column in continuous if column not in correlated_set)]
 
 
 def run_symbolic_auto_targets(conn, payload: Dict[str, Any], target_columns: Sequence[str], continue_on_error: bool) -> Dict[str, Any]:
