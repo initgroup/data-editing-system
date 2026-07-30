@@ -30,6 +30,7 @@ router = APIRouter()
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 INIT_OBJECT_NAME_PATTERN = "INIT$%"
+MIN_TARGET_DB_MAJOR_VERSION = 21
 MODEL_OBJECT_SCRIPT_GROUPS = [
     {
         "code": "CORE",
@@ -134,6 +135,47 @@ def _encode_secret(value: Optional[str]) -> str:
 
 def _decode_secret(value: Optional[str]) -> str:
     return decrypt_secret(value)
+
+
+def _get_target_database_info(conn) -> dict:
+    raw_version = str(getattr(conn, "version", "") or "").strip()
+    version_parts = [int(part) for part in re.findall(r"\d+", raw_version)]
+    major_version = version_parts[0] if version_parts else None
+    release_version = version_parts[1] if len(version_parts) > 1 else None
+    supported = major_version is not None and major_version >= MIN_TARGET_DB_MAJOR_VERSION
+    return {
+        "product": "Oracle Database",
+        "version": raw_version,
+        "majorVersion": major_version,
+        "releaseVersion": release_version,
+        "minimumSupportedMajorVersion": MIN_TARGET_DB_MAJOR_VERSION,
+        "supported": supported,
+        "capabilities": {
+            "treePruningMethod": bool(major_version and major_version > 21),
+        },
+    }
+
+
+def _database_version_message(database_info: dict) -> str:
+    version = database_info.get("version") or "unknown"
+    support_label = "supported" if database_info.get("supported") else "unsupported"
+    return (
+        f"Oracle Database {version} "
+        f"({support_label}; required {MIN_TARGET_DB_MAJOR_VERSION}c or later)"
+    )
+
+
+def _require_supported_target_database(conn) -> dict:
+    database_info = _get_target_database_info(conn)
+    if not database_info["supported"]:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Unsupported Target DB version: {database_info.get('version') or 'unknown'}. "
+                f"Oracle Database {MIN_TARGET_DB_MAJOR_VERSION}c or later is required."
+            ),
+        )
+    return database_info
 
 
 def _hash_password(password: str) -> str:
@@ -1009,10 +1051,14 @@ def _run_target_admin_block(
         target_payload = {**params, "password": _decode_secret(params["passwordEnc"])}
 
         target_conn = _connect_target(target_payload)
+        database_info = _require_supported_target_database(target_conn)
         target_cursor = target_conn.cursor()
         target_cursor.callproc("DBMS_OUTPUT.ENABLE")
         target_cursor.execute(sql_block)
-        logs = _collect_dbms_output(target_cursor)
+        logs = [
+            f"[INFO] Target DB: {_database_version_message(database_info)}",
+            *_collect_dbms_output(target_cursor),
+        ]
         target_conn.commit()
 
         if params.get("connectionId"):
@@ -1022,7 +1068,14 @@ def _run_target_admin_block(
                 "status": "SUCCESS",
                 "message": "\n".join(logs),
             }, is_dml=True)
-        return {"status": "success", "message": success_message, "logs": logs}
+        return {
+            "status": "success",
+            "message": success_message,
+            "logs": logs,
+            "database": database_info,
+        }
+    except HTTPException:
+        raise
     except Exception as e:
         if target_conn:
             target_conn.rollback()
@@ -1454,7 +1507,8 @@ def test_connection(req: ConnectionRequest, request: Request):
         cursor = conn.cursor()
         cursor.execute("SELECT 1 AS OK FROM DUAL")
         cursor.fetchone()
-        message = "Connection succeeded."
+        database_info = _get_target_database_info(conn)
+        message = f"Connection succeeded. {_database_version_message(database_info)}."
         if params.get("connectionId") and user_id:
             execute_query(system_conn, "M91001_CONNECTION_TEST_UPDATE", {
                 "connectionId": params["connectionId"],
@@ -1462,7 +1516,11 @@ def test_connection(req: ConnectionRequest, request: Request):
                 "status": "SUCCESS",
                 "message": message,
             }, is_dml=True)
-        return {"status": "success", "message": message}
+        return {
+            "status": "success",
+            "message": message,
+            "database": database_info,
+        }
     except HTTPException:
         raise
     except Exception as e:
@@ -1498,12 +1556,14 @@ def check_schema(req: ConnectionRequest, request: Request):
         params = _normalize_connection(req, existing, user_id)
         target_payload = {**params, "password": _decode_secret(params["passwordEnc"])}
         target_conn = _connect_target(target_payload)
+        database_info = _get_target_database_info(target_conn)
         rows = _check_required_tables(target_conn)
         return {
             "status": "success",
             "data": rows,
             "installedCount": sum(1 for row in rows if row["EXISTS_YN"] == "Y"),
             "total": len(rows),
+            "database": database_info,
         }
     finally:
         if target_conn:
@@ -1523,11 +1583,13 @@ def get_model_deploy_status(req: ConnectionRequest, request: Request):
         params = _normalize_connection(req, existing, user_id)
         target_payload = {**params, "password": _decode_secret(params["passwordEnc"])}
         target_conn = _connect_target(target_payload)
+        database_info = _get_target_database_info(target_conn)
         rows = _fetch_model_deploy_status(target_conn)
         return {
             "status": "success",
             "data": rows,
             "total": len(rows),
+            "database": database_info,
         }
     finally:
         if target_conn:
@@ -1548,10 +1610,14 @@ def init_schema(req: ConnectionRequest, request: Request):
         params = _normalize_connection(req, existing, user_id)
         target_payload = {**params, "password": _decode_secret(params["passwordEnc"])}
         target_conn = _connect_target(target_payload)
+        database_info = _require_supported_target_database(target_conn)
         target_cursor = target_conn.cursor()
         target_cursor.callproc("DBMS_OUTPUT.ENABLE")
         target_cursor.execute(_read_init_ddl_block())
-        logs = _collect_dbms_output(target_cursor)
+        logs = [
+            f"[INFO] Target DB: {_database_version_message(database_info)}",
+            *_collect_dbms_output(target_cursor),
+        ]
         target_conn.commit()
 
         if params.get("connectionId"):
@@ -1561,7 +1627,14 @@ def init_schema(req: ConnectionRequest, request: Request):
                 "status": "SUCCESS",
                 "message": "\n".join(logs),
             }, is_dml=True)
-        return {"status": "success", "message": "Schema initialization completed.", "logs": logs}
+        return {
+            "status": "success",
+            "message": "Schema initialization completed.",
+            "logs": logs,
+            "database": database_info,
+        }
+    except HTTPException:
+        raise
     except Exception as e:
         if target_conn:
             target_conn.rollback()
@@ -1664,11 +1737,13 @@ def deploy_model_objects(req: ConnectionRequest, request: Request):
             created_objects.extend(_extract_created_objects(item["script"], item["code"]))
 
         target_conn = _connect_target(target_payload)
+        database_info = _require_supported_target_database(target_conn)
         target_cursor = target_conn.cursor()
         target_cursor.execute("ALTER SESSION DISABLE PARALLEL DML")
         target_cursor.execute("ALTER SESSION DISABLE PARALLEL QUERY")
         target_cursor.callproc("DBMS_OUTPUT.ENABLE")
         logs = [
+            f"[INFO] Target DB: {_database_version_message(database_info)}",
             f"Running INIT_MODEL_OBJECTS group: {requested_group if requested_group else 'ALL'}",
         ]
         for group_index, item in enumerate(script_parts, start=1):
@@ -1709,6 +1784,7 @@ def deploy_model_objects(req: ConnectionRequest, request: Request):
             "group": requested_group,
             "groups": [{"code": item["code"], "label": item["label"], "filename": item["filename"]} for item in script_parts],
             "createdObjects": created_objects,
+            "database": database_info,
         }
     except HTTPException as e:
         message = str(e.detail)

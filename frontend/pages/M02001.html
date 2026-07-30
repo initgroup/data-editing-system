@@ -86,6 +86,16 @@
                     <input id="tableIdRule-M02001" class="upload-input" type="text" readonly value="INITUP$_{PROJECT_CODE}_FT_{TIME}">
                 </label>
                 <div class="upload-actions">
+                    <a
+                        class="table-btn sample-file-download"
+                        href="/samples/national_household_living_survey_sample.csv"
+                        download="국가통계_가구생활조사_샘플.csv"
+                        title="Download a synthetic household survey CSV with sample rule violations"
+                        data-title-key="sampleFileDownloadTitle"
+                    >
+                        <i class="fas fa-file-csv"></i>
+                        <span data-label-key="sampleFileDownload">Download sample file</span>
+                    </a>
                     <button type="button" class="table-btn" onclick="M02001.previewFile()">
                         <i class="fas fa-eye"></i>
                         <span data-label-key="preview">Preview</span>
@@ -93,6 +103,10 @@
                     <button type="button" class="table-btn" onclick="M02001.uploadFile()">
                         <i class="fas fa-upload"></i>
                         <span data-label-key="upload">Upload</span>
+                    </button>
+                    <button type="button" class="table-btn" onclick="M02001.openReloadLayer()">
+                        <i class="fas fa-redo-alt"></i>
+                        <span data-label-key="reload">Reload</span>
                     </button>
                 </div>
                 <div id="uploadProgress-M02001" class="upload-progress" role="progressbar" aria-label="File upload progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-busy="false" hidden>
@@ -263,4 +277,48 @@
                 </section>
             </div>
     </section>
+
+    <div id="reloadLayerBackdrop-M02001" class="reload-layer-backdrop" hidden onclick="M02001.handleReloadBackdropClick(event)">
+        <section
+            id="reloadLayer-M02001"
+            class="reload-layer"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="reloadLayerTitle-M02001"
+            onclick="event.stopPropagation()"
+        >
+            <header id="reloadLayerHeader-M02001" class="reload-layer-header" onpointerdown="M02001.startReloadLayerDrag(event)">
+                <div>
+                    <h2 id="reloadLayerTitle-M02001" data-label-key="reloadLayerTitle">Select reload table</h2>
+                    <p data-label-key="reloadLayerDescription">The selected table data will be deleted and replaced with the current file.</p>
+                </div>
+                <button type="button" class="table-icon-btn" title="Close" data-title-key="closeReloadLayerTitle" onclick="M02001.closeReloadLayer()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </header>
+            <div class="reload-layer-body">
+                <label class="reload-layer-search">
+                    <i class="fas fa-search"></i>
+                    <input
+                        id="reloadTableSearch-M02001"
+                        type="search"
+                        data-placeholder-key="searchReloadTable"
+                        placeholder="Search table or comment"
+                        oninput="M02001.renderReloadTableList()"
+                    >
+                </label>
+                <div id="reloadTableList-M02001" class="reload-table-list" role="listbox"></div>
+            </div>
+            <footer class="reload-layer-footer">
+                <span id="reloadSelectedTable-M02001" class="reload-selected-table" data-label-key="selectReloadTablePrompt">Select a table.</span>
+                <div>
+                    <button type="button" class="table-btn" data-label-key="cancel" onclick="M02001.closeReloadLayer()">Cancel</button>
+                    <button id="reloadConfirmButton-M02001" type="button" class="table-btn table-primary-btn" onclick="M02001.reloadFile()" disabled>
+                        <i class="fas fa-redo-alt"></i>
+                        <span data-label-key="reloadSelectedTable">Reload selected table</span>
+                    </button>
+                </div>
+            </footer>
+        </section>
+    </div>
 </div>

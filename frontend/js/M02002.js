@@ -445,12 +445,21 @@
             const source = registration
                 ? { owner: registration.OWNER_NAME || "", tableName: registration.TABLE_NAME || "" }
                 : (selectedName.startsWith("INITDN$") ? null : selected);
-            const edit = registration
+            const physicalEditExists = registration
+                ? (
+                    String(registration.EDIT_TABLE_EXISTS || "").toUpperCase() === "Y"
+                    || Boolean(registration.EDIT_CREATED_AT)
+                )
+                : selectedName.startsWith("INITDN$");
+            const edit = registration && physicalEditExists
                 ? { owner: registration.EDIT_OWNER_NAME || "", tableName: registration.EDIT_TABLE_NAME || "" }
                 : (selectedName.startsWith("INITDN$") ? selected : null);
             const originalOwner = registration?.ORIGINAL_OWNER_NAME || this.selectedTable?.ORIGINAL_OWNER_NAME || "";
             const originalTable = registration?.ORIGINAL_TABLE_NAME || this.selectedTable?.ORIGINAL_TABLE_NAME || "";
-            const originTableId = (registration?.DATA_ORIGIN_TYPE === "DB_TABLE_IMPORT" || originalTable) && originalTable
+            const isDbTableImport = registration
+                ? registration.DATA_ORIGIN_TYPE === "DB_TABLE_IMPORT"
+                : Boolean(originalTable);
+            const originTableId = isDbTableImport && originalTable
                 ? `${originalOwner ? `${originalOwner}.` : ""}${originalTable}`
                 : "";
             const sourceComment = registration?.TABLE_COMMENT || this.selectedTable?.COMMENTS || "";
@@ -467,9 +476,15 @@
                 createdAt: registration?.ORIGINAL_CREATED_AT || ""
             };
             const originalFile = {
-                extension: registration?.ORIGINAL_FILE_EXTENSION || "-",
-                name: registration?.ORIGINAL_FILE_NAME || sourceComment || "-",
+                extension: registration?.ORIGINAL_FILE_EXTENSION
+                    || this.selectedTable?.ORIGINAL_FILE_EXTENSION
+                    || "-",
+                name: registration?.ORIGINAL_FILE_NAME
+                    || this.selectedTable?.ORIGINAL_FILE_NAME
+                    || sourceComment
+                    || "-",
                 size: registration?.ORIGINAL_FILE_SIZE
+                    ?? this.selectedTable?.ORIGINAL_FILE_SIZE
             };
             return {
                 source,
@@ -478,14 +493,13 @@
                 originalTarget: originTableId
                     ? { owner: originalOwner, tableName: originalTable }
                     : null,
-                isManagedSource: String(source?.tableName || "").toUpperCase().startsWith("INITUP$"),
                 sourceMeta,
                 editMeta,
                 originalMeta,
                 originalFile,
                 sourceOrigin: originTableId
                     ? `원본 테이블: ${originTableId}`
-                    : `원본 파일: ${sourceComment || "-"}`
+                    : `원본 파일: ${originalFile.name || sourceComment || "-"}`
             };
         },
 
@@ -524,7 +538,7 @@
             ["columns", "data"].forEach((panel) => {
                 const container = getContainerEl(`#tablePairMeta-${panel}-M02002`);
                 if (!container) return;
-                const sourceRow = this.createTablePairMetaRow("source", pair.source, pair.sourceMeta, true, pair.isManagedSource);
+                const sourceRow = this.createTablePairMetaRow("source", pair.source, pair.sourceMeta, true);
                 const editRow = this.createTablePairMetaRow("edit", pair.edit, pair.editMeta, false);
                 container.innerHTML = panel === "columns"
                     ? [
@@ -560,16 +574,19 @@
             `;
         },
 
-        createTablePairMetaRow(role, target, metadata = {}, isSource, isManagedSource = true) {
+        createTablePairMetaRow(role, target, metadata = {}, isSource) {
             const owner = target?.owner || "-";
             const tableName = target?.tableName || "-";
             const clickable = Boolean(target?.owner && target?.tableName);
+            const roleLabel = isSource
+                ? this.t("sourceTableRole", "Source table")
+                : this.t("editTableRole", "Edit table");
             const button = clickable
                 ? `<button type="button" class="table-pair-table-button" title="${this.escapeHtml(`${owner}.${tableName}`)}" onclick="M02002.selectPairTable('${role}')">${this.escapeHtml(tableName)}</button>`
                 : `<button type="button" class="table-pair-table-button" disabled>-</button>`;
             return `
                 <div class="table-pair-row ${isSource ? "is-source" : "is-edit"}">
-                    <div class="table-pair-cell"><span>구분</span><strong class="table-pair-role">${isSource ? (isManagedSource ? "기준 테이블 (INITUP$)" : "선택 테이블") : "수정 테이블 (INITDN$)"}</strong></div>
+                    <div class="table-pair-cell"><span>구분</span><strong class="table-pair-role">${this.escapeHtml(roleLabel)}</strong></div>
                     <div class="table-pair-cell"><span>Owner</span><strong>${this.escapeHtml(owner)}</strong></div>
                     <div class="table-pair-cell"><span>테이블 ID</span>${button}</div>
                     <div class="table-pair-cell table-pair-origin">${this.createTableDetailMarkup(metadata)}</div>
@@ -636,8 +653,8 @@
                     primaryIconClass = "fas fa-check";
                     primaryTitle = `이 원본 테이블은 ${originalTableImport.OWNER_NAME}.${originalTableImport.TABLE_NAME} 관리 테이블로 이미 가져왔습니다.`;
                 } else if (isManagedSource) {
-                    primaryLabel = this.t("saveTable", "Save");
-                    primaryTitle = this.t("saveManagedTableTitle", "Save this managed INITUP$ table to the scenario.");
+                    primaryLabel = this.t("saveTable", "Register");
+                    primaryTitle = this.t("saveManagedTableTitle", "Register this managed INITUP$ table to the scenario.");
                     primaryEnabled = true;
                 } else {
                     primaryLabel = this.t("createAndSave", "Create and save");

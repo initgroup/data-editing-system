@@ -1,4 +1,46 @@
 /* Split from styleMenu.css. Contains only selectors scoped to this menu code. */
+#container-M90001 .env-object-header {
+    align-items: start;
+    display: grid;
+    gap: 10px;
+    grid-template-columns: minmax(0, 1fr);
+}
+
+#container-M90001 .env-object-header > div:first-child {
+    min-width: 0;
+}
+
+#container-M90001 .env-section-title,
+#container-M90001 .env-section-desc {
+    overflow-wrap: anywhere;
+}
+
+#container-M90001 .env-object-actions {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: flex-start;
+    min-width: 0;
+    width: 100%;
+}
+
+#container-M90001 .env-object-actions .env-icon-btn {
+    flex: 0 0 32px;
+    margin: 0;
+}
+
+#container-M90001 .env-object-actions .env-registered-filter {
+    flex: 1 1 112px;
+    min-width: 0;
+}
+
+#container-M90001 .env-object-actions .env-registered-filter span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 #container-M90001 .env-detail-preset-btn {
     margin-left: auto;
 }

@@ -35,6 +35,9 @@
         contextLoadFailed: false,
         isUploading: false,
         stagedUpload: null,
+        reloadTables: [],
+        selectedReloadTableName: "",
+        reloadLayerDrag: null,
 
         async init() {
             if (this.isInit) return;
@@ -79,6 +82,10 @@
             this.contextLoadFailed = false;
             this.isUploading = false;
             this.stagedUpload = null;
+            this.reloadTables = [];
+            this.selectedReloadTableName = "";
+            this.stopReloadLayerDrag();
+            this.closeReloadLayer();
             this.updateSelectedMeta();
             this.isInit = false;
         },
@@ -457,6 +464,218 @@
             });
         },
 
+        async openReloadLayer() {
+            if (!this.ensureWorkContextSelected()) return;
+            if (!this.getSelectedUploadFile()) {
+                this.buildUploadFormData();
+                return;
+            }
+            const backdrop = getContainerEl("#reloadLayerBackdrop-M02001");
+            const layer = getContainerEl("#reloadLayer-M02001");
+            if (!backdrop || !layer) return;
+
+            this.selectedReloadTableName = "";
+            this.reloadTables = [];
+            this.setText("#reloadSelectedTable-M02001", this.t("selectReloadTablePrompt", "Select a table."));
+            this.setValue("#reloadTableSearch-M02001", "");
+            const confirmButton = getContainerEl("#reloadConfirmButton-M02001");
+            if (confirmButton) confirmButton.disabled = true;
+            layer.style.left = "";
+            layer.style.top = "";
+            layer.style.transform = "";
+            backdrop.hidden = false;
+            this.renderReloadTableList({ loading: true });
+            getContainerEl("#reloadTableSearch-M02001")?.focus();
+            await this.loadReloadTables();
+        },
+
+        closeReloadLayer() {
+            this.stopReloadLayerDrag();
+            const backdrop = getContainerEl("#reloadLayerBackdrop-M02001");
+            if (backdrop) backdrop.hidden = true;
+        },
+
+        handleReloadBackdropClick(event) {
+            if (event?.target?.id === "reloadLayerBackdrop-M02001" && !this.isUploading) {
+                this.closeReloadLayer();
+            }
+        },
+
+        async loadReloadTables() {
+            try {
+                const params = new URLSearchParams({
+                    projectId: this.selectedProjectId,
+                    projectCode: this.getSelectedProjectCode(),
+                    tablePrefix: this.getUploadTableSearchPrefix()
+                });
+                const json = await CommonUtils.request(
+                    `${API_BASE_URL}/${PAGE_CODE}/upload-table-tree?${params.toString()}`,
+                    { method: "GET", showLoading: false }
+                );
+                if (json.status && json.status !== "success") {
+                    throw new Error(json.message || json.detail || this.t("uploadTableListLoadFailed", "Upload table list load failed."));
+                }
+                this.reloadTables = Array.isArray(json.data) ? json.data : [];
+                this.renderReloadTableList();
+            } catch (error) {
+                this.reloadTables = [];
+                this.renderReloadTableList({ error: error.message || this.t("uploadTableListLoadFailed", "Upload table list load failed.") });
+            }
+        },
+
+        renderReloadTableList(options = {}) {
+            const container = getContainerEl("#reloadTableList-M02001");
+            if (!container) return;
+            if (options.loading) {
+                container.innerHTML = `<div class="table-empty">${this.escapeHtml(this.t("loadingUploadTables", "Loading uploaded tables..."))}</div>`;
+                return;
+            }
+            if (options.error) {
+                container.innerHTML = `<div class="table-error">${this.escapeHtml(options.error)}</div>`;
+                return;
+            }
+
+            const keyword = String(getContainerEl("#reloadTableSearch-M02001")?.value || "").trim().toLowerCase();
+            const rows = keyword
+                ? this.reloadTables.filter((row) => this.isUploadTableSearchMatch(row, keyword))
+                : this.reloadTables;
+            if (!rows.length) {
+                container.innerHTML = `<div class="table-empty">${this.escapeHtml(this.t("noUploadedTablesFound", "No uploaded tables found."))}</div>`;
+                return;
+            }
+            container.innerHTML = rows.map((row) => {
+                const tableName = String(row.TABLE_NAME || "");
+                const selected = tableName === this.selectedReloadTableName;
+                return `
+                    <button
+                        type="button"
+                        class="reload-table-option${selected ? " is-selected" : ""}"
+                        role="option"
+                        aria-selected="${selected ? "true" : "false"}"
+                        onclick="M02001.selectReloadTable('${tableName}')"
+                    >
+                        <span class="reload-table-option-main">
+                            <strong>${this.escapeHtml(tableName)}</strong>
+                            <small>${this.escapeHtml(row.COMMENTS || this.t("noComment", "No comment"))}</small>
+                        </span>
+                        <span class="reload-table-option-owner">${this.escapeHtml(row.OWNER || "")}</span>
+                    </button>
+                `;
+            }).join("");
+        },
+
+        selectReloadTable(tableName) {
+            const normalized = String(tableName || "").trim().toUpperCase();
+            if (!this.reloadTables.some((row) => String(row.TABLE_NAME || "").toUpperCase() === normalized)) return;
+            this.selectedReloadTableName = normalized;
+            this.setText("#reloadSelectedTable-M02001", normalized);
+            const confirmButton = getContainerEl("#reloadConfirmButton-M02001");
+            if (confirmButton) confirmButton.disabled = false;
+            this.renderReloadTableList();
+        },
+
+        startReloadLayerDrag(event) {
+            if (event?.button !== 0 || event.target?.closest("button") || window.matchMedia("(max-width: 640px)").matches) return;
+            const layer = getContainerEl("#reloadLayer-M02001");
+            if (!layer) return;
+            const rect = layer.getBoundingClientRect();
+            layer.style.left = `${rect.left}px`;
+            layer.style.top = `${rect.top}px`;
+            layer.style.transform = "none";
+            this.reloadLayerDrag = {
+                pointerId: event.pointerId,
+                offsetX: event.clientX - rect.left,
+                offsetY: event.clientY - rect.top
+            };
+            this.reloadLayerPointerMoveBound = this.handleReloadLayerDrag.bind(this);
+            this.reloadLayerPointerUpBound = this.stopReloadLayerDrag.bind(this);
+            document.addEventListener("pointermove", this.reloadLayerPointerMoveBound);
+            document.addEventListener("pointerup", this.reloadLayerPointerUpBound, { once: true });
+            event.preventDefault();
+        },
+
+        handleReloadLayerDrag(event) {
+            const drag = this.reloadLayerDrag;
+            const layer = getContainerEl("#reloadLayer-M02001");
+            if (!drag || !layer || event.pointerId !== drag.pointerId) return;
+            const maxLeft = Math.max(8, window.innerWidth - layer.offsetWidth - 8);
+            const maxTop = Math.max(8, window.innerHeight - layer.offsetHeight - 8);
+            const left = Math.max(8, Math.min(maxLeft, event.clientX - drag.offsetX));
+            const top = Math.max(8, Math.min(maxTop, event.clientY - drag.offsetY));
+            layer.style.left = `${left}px`;
+            layer.style.top = `${top}px`;
+        },
+
+        stopReloadLayerDrag() {
+            if (this.reloadLayerPointerMoveBound) {
+                document.removeEventListener("pointermove", this.reloadLayerPointerMoveBound);
+            }
+            if (this.reloadLayerPointerUpBound) {
+                document.removeEventListener("pointerup", this.reloadLayerPointerUpBound);
+            }
+            this.reloadLayerDrag = null;
+            this.reloadLayerPointerMoveBound = null;
+            this.reloadLayerPointerUpBound = null;
+        },
+
+        async reloadFile() {
+            if (!this.ensureWorkContextSelected()) return;
+            const tableName = this.selectedReloadTableName;
+            if (!tableName) {
+                alert(this.t("selectReloadTablePrompt", "Select a table."));
+                return;
+            }
+            const confirmMessage = this.tl(
+                "reloadConfirmMessage",
+                "{tableName} data will be deleted and replaced with the selected file. Continue?",
+                { tableName }
+            );
+            if (!(await CommonMessage.confirm(confirmMessage))) return;
+
+            this.setUploading(true);
+            this.showUploadProgress(this.t("preparingReload", "Preparing reload..."), 0);
+            try {
+                const file = this.getSelectedUploadFile();
+                if (!file) {
+                    this.buildUploadFormData();
+                    return;
+                }
+                const useStagedUpload = this.isLargeUpload(file);
+                const formData = this.buildUploadFormData({ includeFile: !useStagedUpload });
+                if (!formData) return;
+                formData.append("targetTableName", tableName);
+                let reloadUrl = `${API_BASE_URL}/${PAGE_CODE}/reload`;
+                if (useStagedUpload) {
+                    const uploadId = await this.ensureStagedUpload(file);
+                    formData.append("uploadId", uploadId);
+                    reloadUrl = `${API_BASE_URL}/${PAGE_CODE}/reload-staged`;
+                }
+                const json = await this.requestFormWithProgress(reloadUrl, formData);
+                this.applyDetectedEncoding(json?.detectedEncoding);
+                if (useStagedUpload) this.stagedUpload = null;
+                this.uploadedTableName = json.tableName || tableName;
+                this.setValue("#uploadedTableId-M02001", this.uploadedTableName);
+                const statsText = json.statsGathered ? this.t("statisticsGathered", " Statistics gathered.") : (json.statsMessage ? ` ${json.statsMessage}` : "");
+                this.showUploadProgress(
+                    this.tl("reloadCompleted", "Reload completed. Rows: {count}.{suffix}", { count: json.rowCount ?? 0, suffix: statsText }),
+                    100
+                );
+                this.markGridStale();
+                this.setDefaultSql(true);
+                this.closeReloadLayer();
+                this.setUploading(false);
+                this.switchUploadView("table", { skipAutoLoad: true });
+                await this.loadUploadTableTree(this.uploadedTableName);
+                await this.selectUploadTable(this.uploadedTableName);
+                alert(this.t("reloadSucceeded", "File reloaded."));
+            } catch (error) {
+                this.showUploadProgress(error.message || this.t("reloadFailed", "Reload failed."), 100);
+                alert(error.message || this.t("reloadFailed", "Reload failed."));
+            } finally {
+                this.setUploading(false);
+            }
+        },
+
         async uploadFile() {
             if (!this.ensureWorkContextSelected()) return;
             this.setUploading(true);
@@ -489,6 +708,9 @@
                 this.showUploadProgress(this.tl("uploadCompleted", "Upload completed. Rows: {count}.{suffix}", { count: json.rowCount ?? 0, suffix: statsText }), 100);
                 this.markGridStale();
                 this.setDefaultSql(true);
+                // The server upload has finished. Enable and reveal the table view
+                // before loading its grids so column widths are measured while visible.
+                this.setUploading(false);
                 this.switchUploadView("table", { skipAutoLoad: true });
                 await this.loadUploadTableTree(this.uploadedTableName);
                 await this.selectUploadTable(this.uploadedTableName);

@@ -378,10 +378,10 @@ SELECT MAX(WORK_JOB_ID) AS PROFILE_JOB_ID
    AND TABLE_NAME = :tableName
 ;
 
+-- [DATA_WORK_RUN_DELETE_BY_JOB]
 -- Free-tier/Autonomous DB safeguard: keep job delete cleanup serial to avoid
 -- ORA-12839 in parent/child delete transactions. Review before changing for
 -- production DB parallel DML policy.
--- [DATA_WORK_RUN_DELETE_BY_JOB]
 DELETE /*+ NO_PARALLEL */
   FROM INIT$_TB_DATA_WORK_RUN
  WHERE WORK_JOB_ID = :profileJobId

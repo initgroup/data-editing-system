@@ -7,6 +7,12 @@
     "reviewEditingRules": "Review editing rules"
   },
   "messages": {
+    "Sampled": "Sampled",
+    "Not evaluated by the saved detection run because rule rank {rank} exceeded max rules {maxRules}.": "Not evaluated by the saved detection run because rule rank {rank} exceeded max rules {maxRules}.",
+    "Not evaluated by the saved detection run because it did not meet the confidence or lift criteria.": "Not evaluated by the saved detection run because it did not meet the confidence or lift criteria.",
+    "No violation rows were stored by the sampled detection result. Use Realtime to check the full current target table.": "No violation rows were stored by the sampled detection result. Use Realtime to check the full current target table.",
+    "These are violation rows stored by the sampled detection result.": "These are violation rows stored by the sampled detection result.",
+    "Rule condition or Target Table information required for realtime lookup is missing.": "Rule condition or Target Table information required for realtime lookup is missing.",
     "Enable mouse wheel zoom": "Enable mouse wheel zoom",
     "Disable mouse wheel zoom": "Disable mouse wheel zoom",
     "Connections": "Connections",

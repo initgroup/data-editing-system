@@ -182,6 +182,99 @@
             }
         },
 
+        async createDefaultInternalModel() {
+            const presets = await this.loadDetailPresets();
+            const preset = (presets.objects || []).find((item) =>
+                this.normalizePresetKey(item?.objectType) === "PROCEDURE"
+                && this.normalizePresetObjectName(item?.objectName) === CLASSIFICATION_OBJECT_NAME
+            );
+            if (!preset) {
+                alert(getPageMessage(
+                    "defaultInternalModelPresetNotFound",
+                    "The INIT$_SP_PREDICTED_TYPE default preset was not found."
+                ));
+                return;
+            }
+
+            const params = new URLSearchParams({
+                offset: "0",
+                limit: String(this.treeFetchLimit),
+                keyword: CLASSIFICATION_OBJECT_NAME,
+                registeredOnly: "N",
+                categoryFilter: "PLSQL"
+            });
+            let objectRow;
+            try {
+                const json = await CommonUtils.request(
+                    `${API_BASE_URL}/${PAGE_CODE}/object-tree?${params.toString()}`,
+                    { method: "GET", showLoading: false }
+                );
+                objectRow = (Array.isArray(json.data) ? json.data : []).find((row) =>
+                    this.normalizePresetKey(row?.OBJECT_TYPE) === "PROCEDURE"
+                    && this.normalizePresetObjectName(row?.OBJECT_NAME) === CLASSIFICATION_OBJECT_NAME
+                );
+            } catch (error) {
+                alert(error.message || getPageMessage(
+                    "defaultInternalModelObjectNotFound",
+                    "The INIT$_SP_PREDICTED_TYPE procedure was not found in the current owner."
+                ));
+                return;
+            }
+            if (!objectRow) {
+                alert(getPageMessage(
+                    "defaultInternalModelObjectNotFound",
+                    "The INIT$_SP_PREDICTED_TYPE procedure was not found in the current owner."
+                ));
+                return;
+            }
+
+            if (!(await CommonMessage.confirm(getPageMessage(
+                "confirmCreateDefaultInternalModel",
+                "Register or update the default internal model INIT$_SP_PREDICTED_TYPE?"
+            ), { defaultAction: "cancel" }))) return;
+
+            const button = getContainerEl("#createDefaultInternalModelBtn-M90001");
+            const originalHtml = button?.innerHTML || "";
+            if (button) {
+                button.disabled = true;
+                button.innerHTML = `<i class="fas fa-circle-notch fa-spin"></i>`;
+            }
+            try {
+                await this.selectObject(objectRow);
+                this.applyPresetRows(preset);
+                this.applyPresetMetadata(preset);
+                this.renderRows();
+                this.renderObjectMeta();
+
+                const result = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/object-detail/save`, {
+                    method: "POST",
+                    showLoading: false,
+                    body: this.buildObjectDetailSavePayload()
+                });
+                this.originalRows = this.rows.map((row) => ({ ...row }));
+                this.objectMeta = this.normalizeObjectMeta(result?.data?.metadata, this.selectedObject);
+                this.detailSource = "Saved data";
+                this.markSelectedObjectRegistered();
+                this.renderObjectMeta();
+                await this.loadObjectTree();
+                alert(getPageMessage(
+                    "defaultInternalModelSaved",
+                    "The default internal model INIT$_SP_PREDICTED_TYPE was registered."
+                ));
+            } catch (error) {
+                console.error("[M90001] default internal model setup failed", error);
+                alert(error.message || getPageMessage(
+                    "defaultInternalModelSaveFailed",
+                    "Default internal model registration failed."
+                ));
+            } finally {
+                if (button) {
+                    button.disabled = false;
+                    button.innerHTML = originalHtml || `<i class="fas fa-wand-magic-sparkles"></i>`;
+                }
+            }
+        },
+
         showObjectTreeLoading() {
             const container = getContainerEl("#gridContainer");
             if (!container) return;
@@ -1874,19 +1967,7 @@
                 return;
             }
 
-            const payload = {
-                object: this.selectedObject,
-                metadata: this.objectMeta || this.createDefaultObjectMeta(this.selectedObject),
-                items: this.rows
-                    .map((row) => ({
-                        key: row.key.trim(),
-                        value: row.value,
-                        desc: row.desc,
-                        defaultValue: row.defaultValue,
-                        order: row.order
-                    }))
-                    .filter((row) => row.key || row.value || row.desc || row.defaultValue)
-            };
+            const payload = this.buildObjectDetailSavePayload();
 
             try {
                 const result = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/object-detail/save`, {
@@ -1905,6 +1986,22 @@
                 console.error("[M90001] save failed", error);
                 alert("Save failed. Check the console for details.");
             }
+        },
+
+        buildObjectDetailSavePayload() {
+            return {
+                object: this.selectedObject,
+                metadata: this.objectMeta || this.createDefaultObjectMeta(this.selectedObject),
+                items: this.rows
+                    .map((row) => ({
+                        key: row.key.trim(),
+                        value: row.value,
+                        desc: row.desc,
+                        defaultValue: row.defaultValue,
+                        order: row.order
+                    }))
+                    .filter((row) => row.key || row.value || row.desc || row.defaultValue)
+            };
         },
 
         async deleteObjectRegistration() {

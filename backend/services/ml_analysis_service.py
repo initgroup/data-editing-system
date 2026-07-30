@@ -9,6 +9,7 @@ still execute feature selection and symbolic rule discovery.
 from fastapi import HTTPException
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 from functools import wraps
+from itertools import combinations
 import hashlib
 import json
 import math
@@ -631,7 +632,6 @@ def run_symbolic_regression_rule(conn, payload: Dict[str, Any]) -> Dict[str, Any
         raise HTTPException(status_code=400, detail="Symbolic regression requires at least 10 complete numeric rows.")
 
     cluster_nodes = load_relation_cluster_nodes(conn, owner, table, run_source_type, run_id) if cluster_usage_mode != "NONE" else {}
-    cluster_usage = build_feature_cluster_usage(target_column, used_features, cluster_nodes, cluster_usage_mode)
 
     expression, score, complexity, method, message = fit_symbolic_expression(
         x_values,
@@ -643,18 +643,21 @@ def run_symbolic_regression_rule(conn, payload: Dict[str, Any]) -> Dict[str, Any
         linear_r2_threshold,
         max_symbolic_terms,
     )
+    expression = normalize_oracle_symbolic_expression(expression, used_features)
+    rule_features = extract_expression_feature_names(expression, used_features)
+    cluster_usage = build_feature_cluster_usage(target_column, rule_features, cluster_nodes, cluster_usage_mode)
     message = (
         f"{message} requestedRows={matrix_limits['requestedSampleRows']}, "
         f"effectiveRowLimit={matrix_limits['effectiveSampleRows']}, "
         f"inputFeatures={matrix_limits['effectiveFeatureCount']}/{matrix_limits['requestedFeatureCount']}, "
+        f"selectedExpressionFeatures={len(rule_features)}, "
         f"maxSymbolicTerms={max_symbolic_terms}, "
         f"clusterMode={cluster_usage.get('effectiveMode')}, "
         f"targetCluster={cluster_usage.get('targetClusterId')}, "
         f"sameClusterFeatures={cluster_usage.get('sameClusterFeatureCount')}, "
         f"crossClusterFeatures={cluster_usage.get('crossClusterFeatureCount')}."
     )
-    expression = normalize_oracle_symbolic_expression(expression, used_features)
-    rule_id = build_symbolic_rule_id(run_source_type, run_id, owner, table, target_column, expression, used_features)
+    rule_id = build_symbolic_rule_id(run_source_type, run_id, owner, table, target_column, expression, rule_features)
     cursor = conn.cursor()
     try:
         cursor.execute(
@@ -721,7 +724,7 @@ def run_symbolic_regression_rule(conn, payload: Dict[str, Any]) -> Dict[str, Any
                 "score": score,
                 "complexity": complexity,
                 "rankNo": 1,
-                "featureColumns": ",".join(used_features),
+                "featureColumns": ",".join(rule_features),
                 "method": method,
                 "message": message,
             },
@@ -731,7 +734,7 @@ def run_symbolic_regression_rule(conn, payload: Dict[str, Any]) -> Dict[str, Any
 
     return {
         "status": "success",
-        "featureCount": len(used_features),
+        "featureCount": len(rule_features),
         "method": method,
         "score": score,
         "complexity": complexity,
@@ -1143,6 +1146,12 @@ def run_integrated_apriori_assoc_model(
         get_value(payload, "P_CASE_ID_COLUMN_NAME", "caseIdColumnName") or "FILE_ROW_NO",
         "caseIdColumnName",
     )
+    max_rule_summary_columns = parse_int(
+        get_value(payload, "P_MAX_RULE_SUMMARY_COLUMNS", "maxRuleSummaryColumns"),
+        9,
+    )
+    if max_rule_summary_columns == 50:
+        max_rule_summary_columns = 9
     cursor = conn.cursor()
     try:
         cursor.callproc(
@@ -1159,7 +1168,7 @@ def run_integrated_apriori_assoc_model(
                 clean_optional_text(get_value(payload, "P_CATEGORICAL_COLUMNS", "P_CANDIDATE_COLUMNS", "candidateColumns")),
                 parse_int(get_value(payload, "P_MIN_RULE_SUPPORT_COUNT", "minRuleSupportCount"), 30),
                 clamp_float(parse_optional_float(get_value(payload, "P_MIN_RULE_LIFT", "minRuleLift")), 1.0, 0.0, 999999.0),
-                clamp(parse_int(get_value(payload, "P_MAX_RULE_SUMMARY_COLUMNS", "maxRuleSummaryColumns"), 50), 1, 500),
+                clamp(max_rule_summary_columns, 1, 500),
                 clamp(parse_int(get_value(payload, "P_MAX_RULE_SUMMARY_PER_PAIR", "maxRuleSummaryPerPair"), 50), 1, 1000),
                 owner,
                 table,
@@ -1201,12 +1210,8 @@ def run_integrated_assoc_rule_violation(
         default_if_runtime_reference(get_value(payload, "P_RULE_OWNER_NAME", "ruleOwnerName"), owner),
         "ruleOwnerName",
     )
-    rule_model = require_identifier(
-        default_if_runtime_reference(
-            get_value(payload, "P_RULE_MODEL_NAME", "P_ASSOC_MODEL_NAME", "P_MODEL_NAME", "ruleModelName"),
-            "OML_ASSOCIATION_MODEL_01",
-        ),
-        "ruleModelName",
+    requested_rule_model = clean_optional_text(
+        get_value(payload, "P_RULE_MODEL_NAME", "P_ASSOC_MODEL_NAME", "P_MODEL_NAME", "ruleModelName")
     )
     result_owner = require_identifier(
         default_if_runtime_reference(get_value(payload, "P_CAT_RESULT_OWNER", "P_RESULT_OWNER", "resultOwner"), owner),
@@ -1225,6 +1230,15 @@ def run_integrated_assoc_rule_violation(
     )
     cursor = conn.cursor()
     try:
+        rule_model = resolve_integrated_assoc_rule_model(
+            cursor,
+            requested_rule_model,
+            rule_owner,
+            owner,
+            table,
+            run_source_type,
+            run_id,
+        )
         cursor.callproc(
             "INIT$_SP_RULE_VIOLATION_DETECT",
             [
@@ -1260,11 +1274,56 @@ def run_integrated_assoc_rule_violation(
         return {
             "task": "CATEGORICAL_RULE_VIOLATION",
             "status": "success",
+            "modelName": rule_model,
             "resultTable": result_table,
             "violationCount": violation_count,
         }
     finally:
         cursor.close()
+
+
+def resolve_integrated_assoc_rule_model(
+    cursor,
+    requested_rule_model: Optional[str],
+    rule_owner: str,
+    target_owner: str,
+    target_table: str,
+    run_source_type: str,
+    run_id: int,
+) -> str:
+    requested_text = str(requested_rule_model or "").strip()
+    normalized_requested = requested_text.upper()
+    auto_requested = (
+        not requested_text
+        or requested_text.startswith(":")
+        or normalized_requested in {"(AUTO)", "AUTO", "OML_ASSOCIATION_MODEL_01"}
+    )
+    if auto_requested:
+        cursor.execute(
+            SqlLoader.get_sql("ML_ANALYSIS_ASSOC_RULE_MODEL_FOR_RUN"),
+            {
+                "runSourceType": run_source_type,
+                "runId": run_id,
+                "ruleOwner": rule_owner,
+                "targetOwner": target_owner,
+                "targetTable": target_table,
+            },
+        )
+        row = cursor.fetchone()
+        if row and row[0]:
+            return require_identifier(row[0], "ruleModelName")
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "No association rule model was found for the same run. "
+                "Run automatic rule discovery first, then retry rule-violation detection."
+            ),
+        )
+
+    return require_identifier(
+        default_if_runtime_reference(requested_text, "OML_ASSOCIATION_MODEL_01"),
+        "ruleModelName",
+    )
 
 
 def run_integrated_symbolic_rule_violation(
@@ -1476,6 +1535,23 @@ def fit_symbolic_expression(
     holdout_indexes = build_symbolic_holdout_indexes(len(y_values))
     linear_candidate = None
     if linear_first:
+        sparse_linear_candidate = fit_sparse_linear_candidate(
+            x_values,
+            y_values,
+            feature_names,
+            holdout_indexes,
+            linear_r2_threshold,
+        )
+        if (
+            sparse_linear_candidate is not None
+            and float(sparse_linear_candidate.get("score") or 0.0) >= linear_r2_threshold
+        ):
+            sparse_linear_candidate["message"] = (
+                f"{sparse_linear_candidate['message']} "
+                f"selection=SPARSE_LINEAR; reason=R2_THRESHOLD_{linear_r2_threshold:.6g}."
+            )
+            return symbolic_candidate_tuple(sparse_linear_candidate)
+
         linear_expression, linear_score, linear_complexity, linear_method, linear_message = fit_linear_expression(
             x_values,
             y_values,
@@ -1824,6 +1900,165 @@ def fit_linear_expression(x_values, y_values, feature_names: Sequence[str]) -> T
     complexity = len(terms) + 1
     message = "Simple linear regression was evaluated as the parsimony baseline."
     return expression, score, complexity, "LINEAR_REGRESSION", message
+
+
+def fit_sparse_linear_candidate(
+    x_values,
+    y_values,
+    feature_names: Sequence[str],
+    holdout_indexes,
+    acceptance_threshold: float,
+    max_candidate_features: int = 6,
+    min_terms: int = 2,
+    max_terms: int = 3,
+) -> Optional[Dict[str, Any]]:
+    candidate_count = min(len(feature_names), max_candidate_features)
+    if candidate_count < min_terms:
+        return None
+
+    best_candidate = None
+    for term_count in range(min_terms, min(max_terms, candidate_count) + 1):
+        term_candidates = []
+        for indexes in combinations(range(candidate_count), term_count):
+            subset_features = [str(feature_names[index]).upper() for index in indexes]
+            subset_values = x_values[:, list(indexes)]
+            expression, fit_score, complexity, _, message = fit_linear_expression(
+                subset_values,
+                y_values,
+                subset_features,
+            )
+            validation_metrics = None
+            if holdout_indexes is not None:
+                train_mask, validation_mask = holdout_indexes
+                validation_metrics = evaluate_linear_holdout(
+                    subset_values,
+                    y_values,
+                    train_mask,
+                    validation_mask,
+                )
+            selection_score = get_symbolic_selection_score(fit_score, validation_metrics)
+            candidate = {
+                "expression": expression,
+                "fitScore": fit_score,
+                "score": selection_score,
+                "complexity": complexity,
+                "method": "SPARSE_LINEAR_REGRESSION",
+                "message": append_symbolic_validation_diagnostics(
+                    f"{message} selectedFeatures={','.join(subset_features)};",
+                    fit_score,
+                    validation_metrics,
+                ),
+                "validation": validation_metrics,
+                "featureNames": subset_features,
+                "unitCoefficientYn": "N",
+            }
+            unit_candidate = fit_unit_coefficient_linear_candidate(
+                subset_values,
+                y_values,
+                subset_features,
+                holdout_indexes,
+            )
+            if (
+                unit_candidate is not None
+                and float(unit_candidate.get("score") or 0.0) >= acceptance_threshold
+            ):
+                candidate = unit_candidate
+            term_candidates.append(candidate)
+            if (
+                best_candidate is None
+                or float(candidate["score"]) > float(best_candidate["score"])
+                or (
+                    math.isclose(float(candidate["score"]), float(best_candidate["score"]), abs_tol=1.0e-12)
+                    and int(candidate["complexity"]) < int(best_candidate["complexity"])
+                )
+            ):
+                best_candidate = candidate
+
+        accepted = [
+            candidate
+            for candidate in term_candidates
+            if float(candidate.get("score") or 0.0) >= acceptance_threshold
+        ]
+        if accepted:
+            unit_accepted = [
+                candidate
+                for candidate in accepted
+                if candidate.get("unitCoefficientYn") == "Y"
+            ]
+            return max(
+                unit_accepted or accepted,
+                key=lambda candidate: (
+                    float(candidate.get("score") or 0.0),
+                    float(candidate.get("fitScore") or 0.0),
+                    tuple(candidate.get("featureNames") or []),
+                ),
+            )
+
+    return best_candidate
+
+
+def fit_unit_coefficient_linear_candidate(
+    x_values,
+    y_values,
+    feature_names: Sequence[str],
+    holdout_indexes,
+) -> Optional[Dict[str, Any]]:
+    model = LinearRegression()
+    model.fit(x_values, y_values)
+    coefficients = np.asarray(model.coef_, dtype=float)
+    intercept = float(model.intercept_)
+    target_scale = float(np.std(np.asarray(y_values, dtype=float)))
+    intercept_tolerance = max(1.0, target_scale * 0.02)
+    if (
+        coefficients.size == 0
+        or not np.all(np.isfinite(coefficients))
+        or np.any(np.abs(np.abs(coefficients) - 1.0) > 0.02)
+        or not math.isfinite(intercept)
+        or abs(intercept) > intercept_tolerance
+    ):
+        return None
+
+    unit_coefficients = np.where(coefficients < 0, -1.0, 1.0)
+    fit_prediction = np.asarray(x_values, dtype=float) @ unit_coefficients
+    fit_score = safe_regression_r2(y_values, fit_prediction)
+    validation_metrics = None
+    if holdout_indexes is not None:
+        _, validation_mask = holdout_indexes
+        validation_prediction = np.asarray(x_values[validation_mask], dtype=float) @ unit_coefficients
+        validation_metrics = calculate_regression_metrics(
+            y_values[validation_mask],
+            validation_prediction,
+        )
+    selection_score = get_symbolic_selection_score(fit_score, validation_metrics)
+    expression = format_linear_expression(
+        0.0,
+        sorted(
+            [
+                (float(coefficient), str(feature_name).upper())
+                for coefficient, feature_name in zip(unit_coefficients, feature_names)
+            ],
+            key=lambda item: item[1],
+        ),
+    )
+    message = append_symbolic_validation_diagnostics(
+        (
+            "A validated sparse linear rule was simplified to unit coefficients "
+            f"for an additive/subtractive equation. selectedFeatures={','.join(feature_names)};"
+        ),
+        fit_score,
+        validation_metrics,
+    )
+    return {
+        "expression": expression,
+        "fitScore": fit_score,
+        "score": selection_score,
+        "complexity": len(feature_names),
+        "method": "SPARSE_LINEAR_REGRESSION",
+        "message": message,
+        "validation": validation_metrics,
+        "featureNames": list(feature_names),
+        "unitCoefficientYn": "Y",
+    }
 
 
 def safe_regression_rmse(actual, predicted) -> float:
@@ -3140,6 +3375,19 @@ def normalize_expression_feature_names(expression: str, feature_names: Sequence[
     for feature in sorted({str(name).upper() for name in feature_names}, key=len, reverse=True):
         text = re.sub(rf"\b{re.escape(feature)}\b", feature, text, flags=re.IGNORECASE)
     return text
+
+
+def extract_expression_feature_names(expression: str, feature_names: Sequence[str]) -> List[str]:
+    text = str(expression or "").upper()
+    selected = []
+    for feature_name in feature_names:
+        feature = str(feature_name).upper()
+        if re.search(
+            rf"(?<![A-Z0-9_$#]){re.escape(feature)}(?![A-Z0-9_$#])",
+            text,
+        ):
+            selected.append(feature)
+    return selected
 
 
 def format_model_number(value: float) -> str:

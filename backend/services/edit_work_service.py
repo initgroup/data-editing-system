@@ -20,6 +20,8 @@ logger = logging.getLogger(__name__)
 
 IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_$#]{0,127}$")
 TRACKING_COLUMN = "INIT$_SOURCE_ROWID"
+SOURCE_TABLE_PREFIX = "INITUP$"
+EDIT_TABLE_PREFIX = "INITDN$"
 RULE_TYPES = {"ASSOCIATION", "SYMBOLIC", "USER"}
 USER_RULE_TYPES = {"ASSOCIATION", "SYMBOLIC"}
 DECISION_STATUSES = {"PENDING", "SELECTED", "REJECTED"}
@@ -282,6 +284,16 @@ def _quote_identifier(value: str) -> str:
     return f'"{_normalize_identifier(value, "identifier")}"'
 
 
+def _derive_edit_table_name(source_table: Any) -> str:
+    normalized_source = _normalize_identifier(source_table, "source table")
+    if not normalized_source.startswith(SOURCE_TABLE_PREFIX):
+        raise HTTPException(
+            status_code=400,
+            detail="The editing table name can only be derived from an INITUP$ source table.",
+        )
+    return EDIT_TABLE_PREFIX + normalized_source[len(SOURCE_TABLE_PREFIX):]
+
+
 def _normalize_text(value: Any, max_length: int, fallback: str = "") -> str:
     text = str(value or "").strip()
     return (text or fallback)[:max_length]
@@ -377,6 +389,59 @@ def _compile_user_rule_expression(
     if not referenced:
         raise HTTPException(status_code=400, detail="규칙 표현식에 원본 테이블 컬럼을 하나 이상 사용하세요.")
     return " ".join(rendered), referenced
+
+
+def _compile_discovered_association_expression(
+    expression: Any,
+    *,
+    columns: dict[str, dict[str, Any]],
+) -> tuple[str, list[str]]:
+    text = str(expression or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="발굴 연관 규칙의 조건식이 비어 있습니다.")
+
+    condition_parts = re.split(
+        r"\s+AND\s+(?=[A-Za-z][A-Za-z0-9_$#]{0,127}\s*=)",
+        text,
+        flags=re.IGNORECASE,
+    )
+    rendered: list[str] = []
+    referenced: list[str] = []
+    for condition in condition_parts:
+        match = re.fullmatch(
+            r"\s*([A-Za-z][A-Za-z0-9_$#]{0,127})\s*=\s*(.*?)\s*",
+            condition,
+            flags=re.DOTALL,
+        )
+        if not match:
+            raise HTTPException(
+                status_code=400,
+                detail=f"발굴 연관 규칙의 조건 형식을 해석할 수 없습니다: {condition[:200]}",
+            )
+        column_name = match.group(1).upper()
+        condition_value = match.group(2)
+        if column_name not in columns:
+            raise HTTPException(
+                status_code=400,
+                detail=f"원본 테이블에 없는 컬럼입니다: {column_name}",
+            )
+        if not condition_value:
+            raise HTTPException(
+                status_code=400,
+                detail=f"발굴 연관 규칙의 조건값이 비어 있습니다: {column_name}",
+            )
+        value_literal = (
+            condition_value
+            if re.fullmatch(r"'(?:''|[^'])*'", condition_value)
+            else "'" + condition_value.replace("'", "''") + "'"
+        )
+        rendered.append(
+            f'TO_CHAR(T.{_quote_identifier(column_name)}) = {value_literal}'
+        )
+        if column_name not in referenced:
+            referenced.append(column_name)
+
+    return " AND ".join(rendered), referenced
 
 
 def _normalize_tolerance(value: Any) -> float:
@@ -634,12 +699,23 @@ def _require_target_table_access(
             detail="The source table has multiple editing-table mappings. Select a scenario.",
         )
     edit_owner, edit_table = next(iter(mappings))
+    normalized_source_table = _normalize_identifier(target_table, "source table")
+    expected_edit_table = _derive_edit_table_name(normalized_source_table)
+    normalized_edit_table = _normalize_identifier(edit_table, "edit table")
+    if normalized_edit_table != expected_edit_table:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "The saved INITUP$/INITDN$ mapping does not follow the required naming rule. "
+                f"Expected {expected_edit_table}, but found {normalized_edit_table}."
+            ),
+        )
     return {
         **rows[0],
         "SOURCE_OWNER": _normalize_identifier(target_owner, "source owner"),
-        "SOURCE_TABLE": _normalize_identifier(target_table, "source table"),
+        "SOURCE_TABLE": normalized_source_table,
         "EDIT_OWNER": _normalize_identifier(edit_owner, "edit owner"),
-        "EDIT_TABLE": _normalize_identifier(edit_table, "edit table"),
+        "EDIT_TABLE": normalized_edit_table,
     }
 
 
@@ -1792,12 +1868,23 @@ def _build_live_rule_violation_sql(
         expected_value is None or not str(expected_value).strip()
     ):
         raise HTTPException(status_code=409, detail="최종 연관 규칙에 THEN 결과값이 없습니다.")
-    compiled_expression, referenced_columns = _compile_user_rule_expression(
-        rule.get("RULE_EXPRESSION"),
-        rule_type=source_type,
-        columns=columns,
-        target_column=target_column,
+    discovered_association = bool(
+        source_type == "ASSOCIATION"
+        and str(rule.get("USER_RULE_YN") or "N").upper() != "Y"
+        and rule.get("SOURCE_RULE_ID")
     )
+    if discovered_association:
+        compiled_expression, referenced_columns = _compile_discovered_association_expression(
+            rule.get("RULE_EXPRESSION"),
+            columns=columns,
+        )
+    else:
+        compiled_expression, referenced_columns = _compile_user_rule_expression(
+            rule.get("RULE_EXPRESSION"),
+            rule_type=source_type,
+            columns=columns,
+            target_column=target_column,
+        )
     target_object = f"{_quote_identifier(target_owner)}.{_quote_identifier(target_table)}"
     case_id_expression = (
         f'TO_CHAR(T.{_quote_identifier(case_id_column)})'
@@ -2021,11 +2108,22 @@ def list_violations(
                 target_owner=normalized_owner,
                 target_table=normalized_table,
             )
-        session_rule_ids: set[int] | None = None
+        rule_scenario_id = scenario_id
         if edit_session_id:
             session = _select_session(cursor, edit_session_id, request)
             if int(session.get("PROJECT_ID") or 0) != project_id:
                 raise HTTPException(status_code=400, detail="Editing session does not belong to the selected project.")
+            session_scenario_id = session.get("SCENARIO_ID")
+            if (
+                scenario_id is not None
+                and session_scenario_id is not None
+                and int(session_scenario_id) != int(scenario_id)
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail="선택한 수정 작업이 현재 시나리오와 일치하지 않습니다.",
+                )
+            rule_scenario_id = session_scenario_id
             if normalized_table and (
                 str(session.get("TARGET_OWNER") or "") != normalized_owner
                 or str(session.get("SOURCE_TABLE") or "") != normalized_table
@@ -2034,26 +2132,16 @@ def list_violations(
                     status_code=400,
                     detail="선택한 수정 작업이 원본 테이블과 일치하지 않습니다.",
                 )
-            session_rule_ids = {
-                int(row["EDIT_RULE_ID"])
-                for row in _fetch_all(
-                    cursor,
-                    "MCOMMON_EDIT_SESSION_RULE_LIST",
-                    {"editSessionId": edit_session_id},
-                )
-            }
         rules = _fetch_all(
             cursor,
             "MCOMMON_EDIT_RULE_SELECTED_LIST",
             {
                 "projectId": project_id,
-                "scenarioId": scenario_id,
+                "scenarioId": rule_scenario_id,
                 "targetOwner": normalized_owner,
                 "targetTable": normalized_table,
             },
         )
-        if session_rule_ids is not None:
-            rules = [row for row in rules if int(row.get("EDIT_RULE_ID") or 0) in session_rule_ids]
         _attach_column_metadata(
             cursor,
             rules,
@@ -2878,6 +2966,50 @@ def _apply_edit_change(
     }
 
 
+def _session_rules_for_changes(
+    cursor,
+    *,
+    session: dict[str, Any],
+    edit_session_id: int,
+    requested_rule_ids: set[int],
+) -> dict[int, dict[str, Any]]:
+    linked_rules = {
+        int(row.get("EDIT_RULE_ID") or 0): row
+        for row in _fetch_all(
+            cursor,
+            "MCOMMON_EDIT_SESSION_RULE_LIST",
+            {"editSessionId": edit_session_id},
+        )
+    }
+    project_id = session.get("PROJECT_ID")
+    target_owner = session.get("TARGET_OWNER")
+    source_table = session.get("SOURCE_TABLE")
+    if project_id is None or not target_owner or not source_table:
+        return linked_rules
+
+    active_rules = {
+        int(row.get("EDIT_RULE_ID") or 0): row
+        for row in _fetch_all(
+            cursor,
+            "MCOMMON_EDIT_RULE_SELECTED_LIST",
+            {
+                "projectId": int(project_id),
+                "scenarioId": session.get("SCENARIO_ID"),
+                "targetOwner": target_owner,
+                "targetTable": source_table,
+            },
+        )
+    }
+    for edit_rule_id in sorted(requested_rule_ids):
+        if edit_rule_id not in active_rules or edit_rule_id in linked_rules:
+            continue
+        cursor.execute(
+            SqlLoader.get_sql("MCOMMON_EDIT_SESSION_RULE_MERGE"),
+            {"editSessionId": edit_session_id, "editRuleId": edit_rule_id},
+        )
+    return active_rules
+
+
 def save_change(request: Request, edit_session_id: int, payload: EditChangeRequest) -> dict[str, Any]:
     user_id = _get_user_text(request)
     conn = get_target_db_connection(request)
@@ -2889,14 +3021,12 @@ def save_change(request: Request, edit_session_id: int, payload: EditChangeReque
         owner = _normalize_identifier(session["TARGET_OWNER"], "target owner")
         edit_table = _normalize_identifier(session["EDIT_TABLE"], "edit table")
         columns = {str(row.get("COLUMN_NAME") or ""): row for row in _table_columns(cursor, owner, edit_table)}
-        session_rules = {
-            int(row.get("EDIT_RULE_ID") or 0): row
-            for row in _fetch_all(
-                cursor,
-                "MCOMMON_EDIT_SESSION_RULE_LIST",
-                {"editSessionId": edit_session_id},
-            )
-        }
+        session_rules = _session_rules_for_changes(
+            cursor,
+            session=session,
+            edit_session_id=edit_session_id,
+            requested_rule_ids={int(payload.editRuleId or 0)},
+        )
         result = _apply_edit_change(
             cursor,
             edit_session_id=edit_session_id,
@@ -2938,14 +3068,16 @@ def save_changes(
             str(row.get("COLUMN_NAME") or ""): row
             for row in _table_columns(cursor, owner, edit_table)
         }
-        session_rules = {
-            int(row.get("EDIT_RULE_ID") or 0): row
-            for row in _fetch_all(
-                cursor,
-                "MCOMMON_EDIT_SESSION_RULE_LIST",
-                {"editSessionId": edit_session_id},
-            )
-        }
+        session_rules = _session_rules_for_changes(
+            cursor,
+            session=session,
+            edit_session_id=edit_session_id,
+            requested_rule_ids={
+                int(change.editRuleId or 0)
+                for change in payload.changes
+                if int(change.editRuleId or 0) > 0
+            },
+        )
         seen_cells: set[tuple[str, str]] = set()
         results: list[dict[str, Any]] = []
         for change in payload.changes:

@@ -3549,6 +3549,23 @@
     display: none;
 }
 
+.flow-editing-runtime-banner.is-warning {
+    background: #fffbeb;
+    border-color: #f59e0b;
+    color: #92400e;
+}
+
+.flow-editing-runtime-banner.is-error {
+    background: #fef2f2;
+    border-color: #ef4444;
+    color: #991b1b;
+}
+
+.flow-run-target-message {
+    font-size: 11px;
+    font-weight: 700;
+}
+
 .flow-editing-runtime-banner b {
     color: #4c1d95;
     font-family: Consolas, "Cascadia Mono", monospace;

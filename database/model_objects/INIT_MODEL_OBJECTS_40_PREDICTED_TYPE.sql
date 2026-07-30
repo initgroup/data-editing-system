@@ -129,6 +129,7 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_TYPE_MODEL_TRAIN" (
     v_feature_projection   VARCHAR2(32767);
     v_data_query           VARCHAR2(32767);
     v_holdout_query        VARCHAR2(32767);
+    v_grouped_query        VARCHAR2(32767);
     v_model_data_query     VARCHAR2(32767);
     v_model_holdout_query  VARCHAR2(32767);
     v_score_expr           VARCHAR2(32767);
@@ -177,6 +178,74 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_TYPE_MODEL_TRAIN" (
             || '     , CAST(NVL(Q."MAX_TEXT_LENGTH", 0) AS NUMBER) AS "MAX_TEXT_LENGTH"'
             || '     , CAST(Q."TARGET_TYPE_CODE" AS VARCHAR2(40)) AS "TARGET_TYPE_CODE"'
             || '  FROM (' || p_query || ') Q';
+    END;
+
+    /*
+       Oracle 26ai adds TREE_PRUNING_METHOD, which Oracle 21c rejects.  The
+       normal setting list below therefore uses the common subset and adds
+       that setting only on post-21c releases.  A database RU can still reject
+       an optional tuning key with ORA-40205.  In that case, remove only the
+       named optional key and retry; algorithm, ADP and all other settings
+       remain unchanged.  This is intentionally not a generic fallback that
+       could hide an invalid mandatory setting.
+    */
+    PROCEDURE create_model_compat IS
+        v_invalid_setting VARCHAR2(30);
+        v_retry_count     PLS_INTEGER := 0;
+    BEGIN
+        LOOP
+            BEGIN
+                DBMS_DATA_MINING.CREATE_MODEL2(
+                    MODEL_NAME          => v_candidate_model_name,
+                    MINING_FUNCTION     => DBMS_DATA_MINING.CLASSIFICATION,
+                    DATA_QUERY          => v_model_data_query,
+                    SET_LIST            => v_setlist,
+                    CASE_ID_COLUMN_NAME => 'CASE_ID',
+                    TARGET_COLUMN_NAME  => 'TARGET_TYPE_CODE'
+                );
+                EXIT;
+            EXCEPTION
+                WHEN OTHERS THEN
+                    IF SQLCODE <> -40205 OR v_retry_count >= 7 THEN
+                        RAISE;
+                    END IF;
+
+                    v_invalid_setting := NULL;
+                    IF v_setlist.EXISTS('TREE_TERM_MAX_DEPTH')
+                       AND INSTR(UPPER(SQLERRM), 'TREE_TERM_MAX_DEPTH') > 0 THEN
+                        v_invalid_setting := 'TREE_TERM_MAX_DEPTH';
+                    ELSIF v_setlist.EXISTS('TREE_TERM_MINREC_SPLIT')
+                          AND INSTR(UPPER(SQLERRM), 'TREE_TERM_MINREC_SPLIT') > 0 THEN
+                        v_invalid_setting := 'TREE_TERM_MINREC_SPLIT';
+                    ELSIF v_setlist.EXISTS('TREE_TERM_MINREC_NODE')
+                          AND INSTR(UPPER(SQLERRM), 'TREE_TERM_MINREC_NODE') > 0 THEN
+                        v_invalid_setting := 'TREE_TERM_MINREC_NODE';
+                    ELSIF v_setlist.EXISTS('TREE_TERM_MINPCT_SPLIT')
+                          AND INSTR(UPPER(SQLERRM), 'TREE_TERM_MINPCT_SPLIT') > 0 THEN
+                        v_invalid_setting := 'TREE_TERM_MINPCT_SPLIT';
+                    ELSIF v_setlist.EXISTS('TREE_TERM_MINPCT_NODE')
+                          AND INSTR(UPPER(SQLERRM), 'TREE_TERM_MINPCT_NODE') > 0 THEN
+                        v_invalid_setting := 'TREE_TERM_MINPCT_NODE';
+                    ELSIF v_setlist.EXISTS('CLAS_MAX_SUP_BINS')
+                          AND INSTR(UPPER(SQLERRM), 'CLAS_MAX_SUP_BINS') > 0 THEN
+                        v_invalid_setting := 'CLAS_MAX_SUP_BINS';
+                    ELSIF v_setlist.EXISTS('TREE_PRUNING_METHOD')
+                          AND INSTR(UPPER(SQLERRM), 'TREE_PRUNING_METHOD') > 0 THEN
+                        v_invalid_setting := 'TREE_PRUNING_METHOD';
+                    END IF;
+
+                    IF v_invalid_setting IS NULL THEN
+                        RAISE;
+                    END IF;
+
+                    v_setlist.DELETE(v_invalid_setting);
+                    v_retry_count := v_retry_count + 1;
+                    DBMS_OUTPUT.PUT_LINE(
+                        '[WARN] CREATE_MODEL2 retry without unsupported optional setting '
+                        || v_invalid_setting
+                    );
+            END;
+        END LOOP;
     END;
 BEGIN
     IF p_train_run_id IS NULL THEN
@@ -322,35 +391,30 @@ BEGIN
             GREATEST(1, ROUND(v_source_group_count * v_holdout_percent / 100))
         );
 
+        /*
+           Keep the table-level split in one inline view.  The previous E/G
+           CTE was later embedded in the metric query's WITH E clause, which
+           produced ORA-32034 on Oracle 21c (WITH nested inside WITH).
+           DENSE_RANK assigns one stable rank to every source table without
+           the DISTINCT-and-join CTE and remains valid when wrapped by model
+           input, scoring and metric queries on both 21c and 26ai.
+        */
+        v_grouped_query :=
+              'SELECT E.*'
+            || '     , DENSE_RANK() OVER ('
+            || '           ORDER BY ORA_HASH(E."SOURCE_OWNER" || ''|'' || E."SOURCE_TABLE", 4294967295, ' || number_literal(v_random_seed) || ')'
+            || '                  , E."SOURCE_OWNER", E."SOURCE_TABLE") AS "GROUP_RN"'
+            || '  FROM (' || v_eligible_query || ') E';
+
         v_data_query :=
-              'WITH E AS (' || v_eligible_query || ') '
-            || ', G AS ('
-            || 'SELECT "SOURCE_OWNER", "SOURCE_TABLE"'
-            || '     , ROW_NUMBER() OVER ('
-            || '           ORDER BY ORA_HASH("SOURCE_OWNER" || ''|'' || "SOURCE_TABLE", 4294967295, ' || number_literal(v_random_seed) || ')'
-            || '                  , "SOURCE_OWNER", "SOURCE_TABLE") AS "GROUP_RN"'
-            || '  FROM (SELECT DISTINCT "SOURCE_OWNER", "SOURCE_TABLE" FROM E)'
-            || ') '
-            || 'SELECT ' || v_feature_projection
-            || '  FROM E JOIN G'
-            || '    ON G."SOURCE_OWNER" = E."SOURCE_OWNER"'
-            || '   AND G."SOURCE_TABLE" = E."SOURCE_TABLE"'
-            || ' WHERE G."GROUP_RN" > ' || number_literal(v_holdout_group_count);
+              'SELECT ' || v_feature_projection
+            || '  FROM (' || v_grouped_query || ') S'
+            || ' WHERE S."GROUP_RN" > ' || number_literal(v_holdout_group_count);
 
         v_holdout_query :=
-              'WITH E AS (' || v_eligible_query || ') '
-            || ', G AS ('
-            || 'SELECT "SOURCE_OWNER", "SOURCE_TABLE"'
-            || '     , ROW_NUMBER() OVER ('
-            || '           ORDER BY ORA_HASH("SOURCE_OWNER" || ''|'' || "SOURCE_TABLE", 4294967295, ' || number_literal(v_random_seed) || ')'
-            || '                  , "SOURCE_OWNER", "SOURCE_TABLE") AS "GROUP_RN"'
-            || '  FROM (SELECT DISTINCT "SOURCE_OWNER", "SOURCE_TABLE" FROM E)'
-            || ') '
-            || 'SELECT ' || v_feature_projection
-            || '  FROM E JOIN G'
-            || '    ON G."SOURCE_OWNER" = E."SOURCE_OWNER"'
-            || '   AND G."SOURCE_TABLE" = E."SOURCE_TABLE"'
-            || ' WHERE G."GROUP_RN" <= ' || number_literal(v_holdout_group_count);
+              'SELECT ' || v_feature_projection
+            || '  FROM (' || v_grouped_query || ') S'
+            || ' WHERE S."GROUP_RN" <= ' || number_literal(v_holdout_group_count);
     ELSE
         v_data_query := 'SELECT ' || v_feature_projection || ' FROM (' || v_eligible_query || ') E';
         v_holdout_query := 'SELECT ' || v_feature_projection || ' FROM (' || v_eligible_query || ') E WHERE 1 = 0';
@@ -467,25 +531,25 @@ BEGIN
        the tree to retain real profile predictors from the initial sample.
        These settings are explicit instead of ODMS_DEEPTREE so the procedure
        remains compatible with Target DB releases that predate that shortcut.
+       TREE_PRUNING_METHOD is available in 26ai but not 21c.  Keep 21c on its
+       automatic pruning behavior and disable pruning only where the setting
+       is available, preserving predictors in the small initial data set.
     */
     IF v_algorithm_code = 'DECISION_TREE' THEN
         v_setlist('TREE_TERM_MAX_DEPTH') := '12';
         v_setlist('TREE_TERM_MINREC_SPLIT') := '2';
         v_setlist('TREE_TERM_MINREC_NODE') := '1';
-        v_setlist('TREE_TERM_MINPCT_SPLIT') := '0';
+        -- Both releases document this value as strictly greater than zero.
+        -- Keep it effectively disabled without relying on the undocumented 0.
+        v_setlist('TREE_TERM_MINPCT_SPLIT') := '0.0001';
         v_setlist('TREE_TERM_MINPCT_NODE') := '0';
-        v_setlist('TREE_PRUNING_METHOD') := 'TREE_PRUNING_NONE';
         v_setlist('CLAS_MAX_SUP_BINS') := '254';
+        IF DBMS_DB_VERSION.VERSION > 21 THEN
+            v_setlist('TREE_PRUNING_METHOD') := 'TREE_PRUNING_NONE';
+        END IF;
     END IF;
 
-    DBMS_DATA_MINING.CREATE_MODEL2(
-        MODEL_NAME          => v_candidate_model_name,
-        MINING_FUNCTION     => DBMS_DATA_MINING.CLASSIFICATION,
-        DATA_QUERY          => v_model_data_query,
-        SET_LIST            => v_setlist,
-        CASE_ID_COLUMN_NAME => 'CASE_ID',
-        TARGET_COLUMN_NAME  => 'TARGET_TYPE_CODE'
-    );
+    create_model_compat;
     v_model_created := TRUE;
 
     SELECT COUNT(*)
@@ -1994,6 +2058,9 @@ BEGIN
     EXECUTE IMMEDIATE 'ALTER SESSION DISABLE PARALLEL DML';
     EXECUTE IMMEDIATE 'ALTER SESSION DISABLE PARALLEL QUERY';
 
+    -- DBMS_XMLGEN receives the per-column profiling query as an SQL text
+    -- literal. Keep that inner query compact and below 4000 bytes so it works
+    -- with MAX_STRING_SIZE=STANDARD on both Oracle 21c and 26ai.
     v_sql := q'~
 MERGE /*+ NO_PARALLEL */ INTO "INIT$_TB_COLTYPE_RESULT" T
 USING (
@@ -2072,11 +2139,10 @@ USING (
                CROSS APPLY XMLTABLE(
                    '/ROWSET/ROW'
                    PASSING DBMS_XMLGEN.GETXMLTYPE(
-                        'WITH S AS (
-                             SELECT ' ||
-                                 CASE
-                                     WHEN B.DATA_TYPE IN ('CHAR', 'VARCHAR2', 'NCHAR', 'NVARCHAR2') THEN
-                                         'SUBSTR("' || REPLACE(B.COLUMN_NAME, '"', '""') || '", 1, 4000)'
+                         'WITH S0 AS (SELECT ' ||
+                                  CASE
+                                      WHEN B.DATA_TYPE IN ('CHAR', 'VARCHAR2', 'NCHAR', 'NVARCHAR2') THEN
+                                          'SUBSTR("' || REPLACE(B.COLUMN_NAME, '"', '""') || '", 1, 4000)'
                                      WHEN B.DATA_TYPE IN ('NUMBER', 'FLOAT', 'BINARY_FLOAT', 'BINARY_DOUBLE') THEN
                                          'TO_CHAR("' || REPLACE(B.COLUMN_NAME, '"', '""') || '", ''TM9'', ''NLS_NUMERIC_CHARACTERS=.,'')'
                                      WHEN B.DATA_TYPE = 'DATE' THEN
@@ -2089,11 +2155,9 @@ USING (
                                          'RAWTOHEX(SUBSTR("' || REPLACE(B.COLUMN_NAME, '"', '""') || '", 1, 2000))'
                                      WHEN B.DATA_TYPE IN ('ROWID', 'UROWID') THEN
                                          'ROWIDTOCHAR("' || REPLACE(B.COLUMN_NAME, '"', '""') || '")'
-                                     ELSE
-                                         'CAST(NULL AS VARCHAR2(4000))'
-                                 END || ' AS COL_VALUE
-                               FROM "' || REPLACE(B.OWNER, '"', '""') || '"."' || REPLACE(B.TABLE_NAME, '"', '""') || '"
-                              WHERE ' ||
+                                      ELSE
+                                          'CAST(NULL AS VARCHAR2(4000))'
+                                  END || ' V FROM "' || REPLACE(B.OWNER, '"', '""') || '"."' || REPLACE(B.TABLE_NAME, '"', '""') || '" WHERE ' ||
                                   CASE
                                       WHEN B.DATA_TYPE IN (
                                           'CHAR', 'VARCHAR2', 'NCHAR', 'NVARCHAR2',
@@ -2112,112 +2176,92 @@ USING (
                                           ) || ' AND ROWNUM <= 10000'
                                       ELSE
                                           '1 = 0'
-                                  END || '
-                         ),
-                        FREQ AS (
-                            SELECT COL_VALUE,
-                                   COUNT(*) AS CNT
-                              FROM S
-                             WHERE COL_VALUE IS NOT NULL
-                             GROUP BY COL_VALUE
-                        ),
-                        TOTAL AS (
-                            SELECT SUM(CNT) AS TOTAL_CNT,
-                                   COUNT(*) AS DIST_CNT
-                              FROM FREQ
-                        ),
-                        STAT AS (
-                            SELECT COUNT(*) AS SAMPLE_ROWS,
-                                   COUNT(COL_VALUE) AS SAMPLE_NOT_NULL_COUNT,
-                                   NVL(SUM(
-                                       CASE
-                                           WHEN VALIDATE_CONVERSION(TRIM(COL_VALUE) AS NUMBER) = 1
-                                            AND NOT (
-                                                REGEXP_LIKE(TRIM(COL_VALUE), ''^0[0-9]'')
-                                                AND NOT REGEXP_LIKE(TRIM(COL_VALUE), ''^0$|^0\.'')
-                                            )
-                                           THEN 1 ELSE 0
-                                       END
-                                   ), 0) AS NUMERIC_CONVERTIBLE_COUNT,
-                                   NVL(SUM(
-                                       CASE
-                                           WHEN VALIDATE_CONVERSION(TRIM(COL_VALUE) AS NUMBER) = 1
-                                            AND NOT (
-                                                REGEXP_LIKE(TRIM(COL_VALUE), ''^0[0-9]'')
-                                                AND NOT REGEXP_LIKE(TRIM(COL_VALUE), ''^0$|^0\.'')
-                                            )
-                                             AND ABS(
-                                                     TO_NUMBER(TRIM(COL_VALUE))
-                                                   - ROUND(TO_NUMBER(TRIM(COL_VALUE)))
-                                                 ) <= ~' || TO_CHAR(v_integer_tolerance, 'TM9', 'NLS_NUMERIC_CHARACTERS=.,') || q'~
-                                                     * GREATEST(1, ABS(TO_NUMBER(TRIM(COL_VALUE))))
-                                           THEN 1 ELSE 0
-                                       END
-                                   ), 0) AS INTEGER_CONVERTIBLE_COUNT,
-                                   MIN(
-                                       CASE
-                                           WHEN VALIDATE_CONVERSION(TRIM(COL_VALUE) AS NUMBER) = 1
-                                            AND NOT (
-                                                REGEXP_LIKE(TRIM(COL_VALUE), ''^0[0-9]'')
-                                                AND NOT REGEXP_LIKE(TRIM(COL_VALUE), ''^0$|^0\.'')
-                                            )
-                                           THEN TO_NUMBER(TRIM(COL_VALUE))
-                                       END
-                                   ) AS MIN_NUM_VALUE,
-                                   MAX(
-                                       CASE
-                                           WHEN VALIDATE_CONVERSION(TRIM(COL_VALUE) AS NUMBER) = 1
-                                            AND NOT (
-                                                REGEXP_LIKE(TRIM(COL_VALUE), ''^0[0-9]'')
-                                                AND NOT REGEXP_LIKE(TRIM(COL_VALUE), ''^0$|^0\.'')
-                                            )
-                                           THEN TO_NUMBER(TRIM(COL_VALUE))
-                                       END
-                                    ) AS MAX_NUM_VALUE,
-                                   AVG(LENGTH(COL_VALUE)) AS AVG_TEXT_LENGTH,
-                                   MAX(LENGTH(COL_VALUE)) AS MAX_TEXT_LENGTH
-                              FROM S
-                        ),
-                        ENT AS (
-                            SELECT CASE
-                                       WHEN NVL(T.TOTAL_CNT, 0) = 0 THEN 0
-                                       ELSE -NVL(SUM((F.CNT / T.TOTAL_CNT) * LN(F.CNT / T.TOTAL_CNT)), 0)
-                                   END AS ENTROPY,
-                                   CASE
-                                       WHEN NVL(T.TOTAL_CNT, 0) = 0 OR T.DIST_CNT <= 1 THEN 0
-                                       ELSE -NVL(SUM((F.CNT / T.TOTAL_CNT) * LN(F.CNT / T.TOTAL_CNT)), 0) / LN(T.DIST_CNT)
-                                   END AS NORM_ENTROPY
-                              FROM TOTAL T
-                                   LEFT JOIN FREQ F ON 1 = 1
-                             GROUP BY T.TOTAL_CNT, T.DIST_CNT
-                        )
-                        SELECT STAT.SAMPLE_ROWS,
-                               STAT.SAMPLE_NOT_NULL_COUNT,
-                               STAT.NUMERIC_CONVERTIBLE_COUNT,
-                               STAT.INTEGER_CONVERTIBLE_COUNT,
-                               TOTAL.DIST_CNT,
-                               ROUND(NVL(ENT.ENTROPY, 0), 6) AS ENTROPY,
-                               ROUND(NVL(ENT.NORM_ENTROPY, 0), 6) AS NORM_ENTROPY,
-                               STAT.MIN_NUM_VALUE,
-                               STAT.MAX_NUM_VALUE,
-                               ROUND(STAT.AVG_TEXT_LENGTH, 6) AS AVG_TEXT_LENGTH,
-                               STAT.MAX_TEXT_LENGTH
-                          FROM STAT
-                               CROSS JOIN TOTAL
-                               CROSS JOIN ENT'
+                                  END || '),
+S AS (
+    SELECT V
+         , CASE
+               WHEN VALIDATE_CONVERSION(TRIM(V) AS NUMBER) = 1
+                AND NOT (
+                    REGEXP_LIKE(TRIM(V), ''^0[0-9]'')
+                    AND NOT REGEXP_LIKE(TRIM(V), ''^0$|^0\.'')
+                )
+               THEN 1 ELSE 0
+           END N
+      FROM S0
+),
+F AS (
+    SELECT V
+         , COUNT(*) N
+      FROM S
+     WHERE V IS NOT NULL
+     GROUP BY V
+),
+T AS (
+    SELECT SUM(N) N
+         , COUNT(*) D
+      FROM F
+),
+A AS (
+    SELECT COUNT(*) R
+         , COUNT(V) NN
+         , NVL(SUM(N), 0) NC
+         , NVL(SUM(
+               CASE
+                   WHEN N = 1
+                    AND ABS(TO_NUMBER(TRIM(V)) - ROUND(TO_NUMBER(TRIM(V))))
+                        <= ~' || TO_CHAR(v_integer_tolerance, 'TM9', 'NLS_NUMERIC_CHARACTERS=.,') || q'~
+                           * GREATEST(1, ABS(TO_NUMBER(TRIM(V))))
+                   THEN 1 ELSE 0
+               END
+           ), 0) IC
+         , MIN(CASE WHEN N = 1 THEN TO_NUMBER(TRIM(V)) END) MN
+         , MAX(CASE WHEN N = 1 THEN TO_NUMBER(TRIM(V)) END) MX
+         , AVG(LENGTH(V)) AL
+         , MAX(LENGTH(V)) ML
+      FROM S
+),
+E AS (
+    SELECT CASE
+               WHEN NVL(T.N, 0) = 0 THEN 0
+               ELSE -NVL(SUM((F.N / T.N) * LN(F.N / T.N)), 0)
+           END E
+         , CASE
+               WHEN NVL(T.N, 0) = 0 OR T.D <= 1 THEN 0
+               ELSE -NVL(SUM((F.N / T.N) * LN(F.N / T.N)), 0) / LN(T.D)
+           END NE
+      FROM T
+      LEFT JOIN F
+        ON 1 = 1
+     GROUP BY T.N
+            , T.D
+)
+SELECT A.R
+     , A.NN
+     , A.NC
+     , A.IC
+     , T.D
+     , ROUND(NVL(E.E, 0), 6) E
+     , ROUND(NVL(E.NE, 0), 6) NE
+     , A.MN
+     , A.MX
+     , ROUND(A.AL, 6) AL
+     , A.ML
+  FROM A
+ CROSS JOIN T
+ CROSS JOIN E'
                    )
                    COLUMNS
-                       SAMPLE_ROWS                NUMBER PATH 'SAMPLE_ROWS',
-                       SAMPLE_NOT_NULL_COUNT      NUMBER PATH 'SAMPLE_NOT_NULL_COUNT',
-                       NUMERIC_CONVERTIBLE_COUNT  NUMBER PATH 'NUMERIC_CONVERTIBLE_COUNT',
-                       INTEGER_CONVERTIBLE_COUNT  NUMBER PATH 'INTEGER_CONVERTIBLE_COUNT',
-                       DIST_CNT                   NUMBER PATH 'DIST_CNT',
-                       ENTROPY                    NUMBER PATH 'ENTROPY',
-                       NORM_ENTROPY               NUMBER PATH 'NORM_ENTROPY',
-                       MIN_NUM_VALUE              NUMBER PATH 'MIN_NUM_VALUE',
-                       MAX_NUM_VALUE              NUMBER PATH 'MAX_NUM_VALUE',
-                       AVG_TEXT_LENGTH            NUMBER PATH 'AVG_TEXT_LENGTH',
-                       MAX_TEXT_LENGTH            NUMBER PATH 'MAX_TEXT_LENGTH'
+                       SAMPLE_ROWS                NUMBER PATH 'R',
+                       SAMPLE_NOT_NULL_COUNT      NUMBER PATH 'NN',
+                       NUMERIC_CONVERTIBLE_COUNT  NUMBER PATH 'NC',
+                       INTEGER_CONVERTIBLE_COUNT  NUMBER PATH 'IC',
+                       DIST_CNT                   NUMBER PATH 'D',
+                       ENTROPY                    NUMBER PATH 'E',
+                       NORM_ENTROPY               NUMBER PATH 'NE',
+                       MIN_NUM_VALUE              NUMBER PATH 'MN',
+                       MAX_NUM_VALUE              NUMBER PATH 'MX',
+                       AVG_TEXT_LENGTH            NUMBER PATH 'AL',
+                       MAX_TEXT_LENGTH            NUMBER PATH 'ML'
                ) X
     ),
     SCORE_INPUT AS (

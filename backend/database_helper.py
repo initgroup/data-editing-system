@@ -19,6 +19,10 @@ class SqlLoader:
         text = (query or "").strip()
         if re.match(r"(?is)^\s*(declare|begin)\b", text):
             return re.sub(r"(?m)^\s*/\s*$", "", text).strip()
+        # SQL files use a standalone semicolon as a SQL*Plus-style statement
+        # terminator. Remove it even when explanatory comments follow it in the
+        # same SQL-ID section; database drivers must receive the SQL without it.
+        text = re.sub(r"(?m)^[ \t]*;[ \t]*(?:\r?\n|$)", "", text).strip()
         return text.rstrip(';')
 
     @classmethod

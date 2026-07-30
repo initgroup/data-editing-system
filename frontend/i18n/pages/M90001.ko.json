@@ -4,6 +4,10 @@
   "description": "Korean labels for Internal Model Registration.",
   "labels": {
     "classificationSettingsButton": "컬럼 유형 판정 기준",
+    "createDefaultInternalModelTitle": "기본 내부 모델 등록",
+    "expandAllGroupsTitle": "모든 그룹 펼치기",
+    "collapseAllGroupsTitle": "모든 그룹 접기",
+    "refreshObjectsTitle": "객체 새로고침",
     "classificationSettingsTitle": "컬럼 유형 판정 설정",
     "classificationSettingsDescription": "INIT$_SP_PREDICTED_TYPE 모델 기본값을 재정의할 Target DB 판정 기준을 관리합니다.",
     "applyDefaultOverrides": "프리셋 재정의 값 적용",
@@ -57,9 +61,6 @@
     },
     "title": {
       ".env-registered-filter": "등록된 객체만 불러오기",
-      ".env-object-actions .env-icon-btn:nth-of-type(1)": "모든 그룹 펼치기",
-      ".env-object-actions .env-icon-btn:nth-of-type(2)": "모든 그룹 접기",
-      ".env-object-actions .env-icon-btn:nth-of-type(3)": "객체 새로고침",
       ".env-detail-preset-btn": "등록된 설명/기본값 프리셋 적용",
       ".env-source-copy-btn": "스크립트 복사"
     },
@@ -94,6 +95,11 @@
     "metadataApplied": "메타데이터",
     "metadataNotApplied": "적용할 메타데이터 없음",
     "detailPresetNoMatchingKeys": "프리셋을 찾았지만 일치하는 파라미터 키가 없어 변경된 항목이 없습니다.",
-    "detailPresetLoadFailed": "설명/기본값 프리셋을 불러오지 못했습니다."
+    "detailPresetLoadFailed": "설명/기본값 프리셋을 불러오지 못했습니다.",
+    "confirmCreateDefaultInternalModel": "기본 내부 모델 INIT$_SP_PREDICTED_TYPE을 등록하거나 갱신할까요?",
+    "defaultInternalModelObjectNotFound": "현재 Owner에서 INIT$_SP_PREDICTED_TYPE 프로시저를 찾지 못했습니다.",
+    "defaultInternalModelPresetNotFound": "INIT$_SP_PREDICTED_TYPE 기본 프리셋을 찾지 못했습니다.",
+    "defaultInternalModelSaved": "기본 내부 모델 INIT$_SP_PREDICTED_TYPE이 등록되었습니다.",
+    "defaultInternalModelSaveFailed": "기본 내부 모델 등록에 실패했습니다."
   }
 }

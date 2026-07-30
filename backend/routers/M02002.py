@@ -17,7 +17,6 @@ from typing import Optional
 import logging
 import re
 import time
-import uuid
 
 from backend.database_helper import execute_query, SqlLoader
 from backend.database import get_db_connection
@@ -715,7 +714,6 @@ def prepare_table_mapping(
         for column_name in source_columns
     )
     has_managed_case_id_column = CASE_ID_COLUMN in source_columns
-    edit_table = create_mapped_table_name(EDIT_TABLE_PREFIX)
     if (
         source_table.startswith(MANAGED_SOURCE_PREFIX)
         and source_owner == managed_owner
@@ -724,10 +722,10 @@ def prepare_table_mapping(
         return {
             "ownerName": source_owner,
             "tableName": source_table,
-            "originalOwnerName": source_owner,
-            "originalTableName": source_table,
+            "originalOwnerName": None,
+            "originalTableName": None,
             "editOwnerName": source_owner,
-            "editTableName": edit_table,
+            "editTableName": create_edit_table_name(source_table),
             "dataOriginType": "MANAGED_TABLE",
             "caseIdColumn": CASE_ID_COLUMN,
             "importedAt": None,
@@ -758,6 +756,7 @@ def prepare_table_mapping(
             )
 
     managed_table = create_managed_snapshot_table_name(project_code)
+    edit_table = create_edit_table_name(managed_table)
     managed_ref = f"{quote_identifier(managed_owner)}.{quote_identifier(managed_table)}"
     source_ref = f"{quote_identifier(source_owner)}.{quote_identifier(source_table)}"
     cursor.execute(SqlLoader.get_sql("M02002_DISABLE_PARALLEL_DML"))
@@ -916,8 +915,17 @@ def mapping_params(mapping: dict) -> dict:
     }
 
 
-def create_mapped_table_name(prefix: str) -> str:
-    return f"{prefix}{uuid.uuid4().hex.upper()}"
+def create_edit_table_name(source_table: str) -> str:
+    normalized_source = str(source_table or "").strip().upper()
+    if not normalized_source.startswith(MANAGED_SOURCE_PREFIX):
+        raise HTTPException(
+            status_code=400,
+            detail="The editing table name can only be derived from an INITUP$ source table.",
+        )
+    edit_table = EDIT_TABLE_PREFIX + normalized_source[len(MANAGED_SOURCE_PREFIX):]
+    if not is_identifier(edit_table):
+        raise HTTPException(status_code=400, detail="The derived INITDN$ table name is invalid.")
+    return edit_table
 
 
 def create_managed_snapshot_table_name(project_code: str) -> str:

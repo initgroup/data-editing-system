@@ -27,7 +27,7 @@
     "selectTableFirst": "테이블을 먼저 선택하세요.",
     "registeredTable": "등록된 테이블"
     , "saveOrImport": "저장 / 가져오기"
-    , "saveTable": "저장"
+    , "saveTable": "등록"
     , "createAndSave": "생성 및 저장"
     , "alreadySaved": "저장됨"
     , "createSnapshotAndConvert": "스냅샷 생성 및 전환"
@@ -38,7 +38,7 @@
     , "selectTableAndScenario": "테이블과 시나리오를 선택하세요."
     , "alreadySavedTitle": "이미 저장된 테이블입니다."
     , "createSnapshotAndConvertTitle": "직접 등록된 테이블을 관리 스냅샷 방식으로 전환합니다."
-    , "saveManagedTableTitle": "관리 INITUP$ 테이블을 시나리오에 저장합니다."
+    , "saveManagedTableTitle": "관리 INITUP$ 테이블을 시나리오에 등록합니다."
     , "createAndSaveTitle": "INITUP$ 스냅샷을 생성하고 시나리오에 저장합니다."
     , "unregisterTitle": "시나리오 등록만 해제합니다. 실제 DB 테이블은 삭제하지 않습니다."
     , "dropManagedTablesTitle": "연결된 INITUP$와 INITDN$ 물리 테이블을 영구 삭제합니다."
@@ -49,6 +49,8 @@
     , "exportExcelTitle": "현재 그리드 페이지를 Excel로 내보냅니다."
     , "exportCsvTitle": "현재 그리드 페이지를 CSV로 내보냅니다."
     , "exportJsonTitle": "현재 그리드 페이지를 JSON으로 내보냅니다."
+    , "sourceTableRole": "기준 테이블"
+    , "editTableRole": "수정 테이블"
   },
   "selectors": {
     "text": {

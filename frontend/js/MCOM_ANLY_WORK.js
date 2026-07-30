@@ -3254,18 +3254,27 @@
             }
             if (kind === "column" && value) filters.push(`V.RESULT_COLUMN = ${this.sqlLiteral(value)}`);
             if (kind === "rule" && value) filters.push(`V.RULE_ID = ${this.sqlLiteral(value)}`);
+            const summaryTable = `${this.quoteSqlName(resultOwner)}.${this.quoteSqlName("INIT$_TB_RULEDISC_ASSOC_SUM")}`;
             return [
                 "SELECT V.VIOLATION_ID AS V_VIOLATION_ID",
-                "     , V.RULE_ID AS V_RULE_ID",
-                "     , V.RESULT_COLUMN AS V_RESULT_COLUMN",
-                "     , V.EXPECTED_VALUE AS V_EXPECTED_VALUE",
+                "     , S.RULE_ID AS V_RULE_ID",
+                "     , S.RESULT_COLUMN AS V_RESULT_COLUMN",
+                "     , S.RESULT_VALUE AS V_EXPECTED_VALUE",
                 "     , V.ACTUAL_VALUE AS V_ACTUAL_VALUE",
                 "     , V.VIOLATION_SCORE AS V_VIOLATION_SCORE",
-                "     , V.RULE_CONFIDENCE AS V_RULE_CONFIDENCE",
-                "     , V.RULE_LIFT AS V_RULE_LIFT",
+                "     , S.RULE_CONFIDENCE AS V_RULE_CONFIDENCE",
+                "     , S.RULE_LIFT AS V_RULE_LIFT",
                 "     , V.CASE_ID AS V_CASE_ID",
                 "     , T.*",
                 `  FROM ${this.quoteSqlName(resultOwner)}.${this.quoteSqlName(resultTable)} V`,
+                `  JOIN ${summaryTable} S`,
+                "    ON S.OWNER = V.RULE_OWNER",
+                "   AND S.RUN_SOURCE_TYPE = V.RUN_SOURCE_TYPE",
+                "   AND S.RUN_ID = V.RUN_ID",
+                "   AND S.TARGET_OWNER = V.TARGET_OWNER",
+                "   AND S.TARGET_TABLE = V.TARGET_TABLE",
+                "   AND S.MODEL_NAME = V.MODEL_NAME",
+                "   AND S.RULE_ID = V.RULE_ID",
                 `  JOIN ${this.quoteSqlName(targetOwner)}.${this.quoteSqlName(targetTable)} T`,
                 "    ON ROWIDTOCHAR(T.ROWID) = V.CASE_ROWID",
                 " WHERE 1=1",
@@ -3351,33 +3360,66 @@
 
         createCategoricalRealtimeViolationSqlLookup(ruleId = "") {
             const node = this.selectedNode;
-            const resultOwner = this.normalizeIdentifierParam(node?.RESULT_OWNER) || this.normalizeIdentifierParam(node?.TARGET_OWNER);
             const targetOwner = this.normalizeIdentifierParam(node?.TARGET_OWNER);
             const targetTable = this.normalizeIdentifierParam(node?.TARGET_TABLE);
-            const ruleModelName = this.getSelectedNodeRuleModelName(node);
+            const ruleDetail = this.getViolationRuleDetail("rule", ruleId) || {};
+            const conditions = this.parseCategoricalRuleConditions(ruleDetail.CONDITION_TEXT);
+            const resultColumn = this.normalizeIdentifierParam(ruleDetail.RESULT_COLUMN);
+            const expectedValue = String(ruleDetail.EXPECTED_VALUE ?? "");
             const caseIdColumn = this.normalizeIdentifierParam(this.getNodeParamValue(node, [
                 "P_CASE_ID_COLUMN_NAME",
                 "pCaseIdColumnName",
                 "caseIdColumnName"
             ], "FILE_ROW_NO")) || "FILE_ROW_NO";
-            const flowRunId = Number(this.selectedRun?.FLOW_RUN_ID || 0);
-            if (!resultOwner || !targetOwner || !targetTable || !ruleModelName) {
-                alert(getText("Rule Model or Target Table information required for realtime lookup is missing."));
+            if (!targetOwner || !targetTable || !resultColumn || !conditions.length) {
+                alert(getText("Rule condition or Target Table information required for realtime lookup is missing."));
                 return "";
             }
+            const confidence = Number(ruleDetail.RULE_CONFIDENCE || 0);
+            const lift = Number(ruleDetail.RULE_LIFT || 0);
+            const violationScore = confidence * Math.max(lift || 1, 1);
             return [
-                "SELECT INIT$_FN_RULE_VIOLATION_SQL(",
-                `           p_rule_owner_name     => ${this.sqlLiteral(resultOwner)},`,
-                `           p_rule_model_name     => ${this.sqlLiteral(ruleModelName)},`,
-                `           p_rule_id             => ${this.sqlLiteral(ruleId)},`,
-                `           p_target_owner        => ${this.sqlLiteral(targetOwner)},`,
-                `           p_target_table        => ${this.sqlLiteral(targetTable)},`,
-                `           p_case_id_column_name => ${this.sqlLiteral(caseIdColumn)},`,
-                "           p_run_source_type     => 'FLOW_WORK',",
-                `           p_run_id              => ${flowRunId > 0 ? flowRunId : 0}`,
-                "       ) AS LIVE_SQL",
-                "  FROM DUAL"
+                "SELECT CAST(NULL AS NUMBER) AS V_VIOLATION_ID",
+                `     , ${this.sqlLiteral(ruleId)} AS V_RULE_ID`,
+                `     , ${this.sqlLiteral(resultColumn)} AS V_RESULT_COLUMN`,
+                `     , ${this.sqlLiteral(expectedValue)} AS V_EXPECTED_VALUE`,
+                `     , SUBSTR(TO_CHAR(T.${this.quoteSqlName(resultColumn)}), 1, 4000) AS V_ACTUAL_VALUE`,
+                `     , ${this.sqlNumberLiteral(violationScore, 0)} AS V_VIOLATION_SCORE`,
+                `     , ${this.sqlNumberLiteral(confidence, 0)} AS V_RULE_CONFIDENCE`,
+                `     , ${this.sqlNumberLiteral(lift, 0)} AS V_RULE_LIFT`,
+                `     , SUBSTR(TO_CHAR(T.${this.quoteSqlName(caseIdColumn)}), 1, 4000) AS V_CASE_ID`,
+                `     , ${this.sqlNumberLiteral(ruleDetail.CONDITION_COUNT, conditions.length)} AS V_CONDITION_COUNT`,
+                `     , ${this.sqlLiteral(ruleDetail.CONDITION_TEXT || "")} AS V_CONDITION_TEXT`,
+                `     , ${this.sqlNumberLiteral(ruleDetail.RULE_SUPPORT, 0)} AS V_RULE_SUPPORT`,
+                `     , ${this.sqlNumberLiteral(ruleDetail.SUPPORT_COUNT, 0)} AS V_SUPPORT_COUNT`,
+                `     , ${this.sqlNumberLiteral(ruleDetail.CONDITION_TOTAL_COUNT, 0)} AS V_CONDITION_TOTAL_COUNT`,
+                `     , ${this.sqlNumberLiteral(ruleDetail.RESULT_TOTAL_COUNT, 0)} AS V_RESULT_TOTAL_COUNT`,
+                `     , ${this.sqlNumberLiteral(ruleDetail.RULE_TOTAL_COUNT, 0)} AS V_TOTAL_COUNT`,
+                "     , T.*",
+                `  FROM ${this.quoteSqlName(targetOwner)}.${this.quoteSqlName(targetTable)} T`,
+                " WHERE 1=1",
+                ...conditions.map((condition) => (
+                    `   AND TO_CHAR(T.${this.quoteSqlName(condition.column)}) = ${this.sqlLiteral(condition.value)}`
+                )),
+                `   AND (T.${this.quoteSqlName(resultColumn)} IS NULL`,
+                `        OR TO_CHAR(T.${this.quoteSqlName(resultColumn)}) <> ${this.sqlLiteral(expectedValue)})`,
+                " ORDER BY V_VIOLATION_SCORE DESC NULLS LAST",
+                "        , V_RULE_CONFIDENCE DESC NULLS LAST",
+                "        , V_CASE_ID"
             ].join("\n");
+        },
+
+        parseCategoricalRuleConditions(conditionText = "") {
+            const tokens = String(conditionText || "").split(/\s+AND\s+/i);
+            const conditions = [];
+            for (const token of tokens) {
+                const match = token.match(/^\s*([A-Za-z][A-Za-z0-9_$#]{0,127})\s*=\s*(.*?)\s*$/s);
+                if (!match) return [];
+                const column = this.normalizeIdentifierParam(match[1]);
+                if (!column) return [];
+                conditions.push({ column, value: match[2] });
+            }
+            return conditions;
         },
 
         createSymbolicRealtimeViolationSqlLookup(ruleId = "") {
@@ -3409,7 +3451,7 @@
             const maxExpressionLength = this.readNumericParam([
                 this.getNodeParamValue(node, ["P_MAX_EXPRESSION_LENGTH", "pMaxExpressionLength", "maxExpressionLength"], "")
             ], 8000);
-            const flowRunId = Number(this.selectedRun?.FLOW_RUN_ID || 0);
+            const runContext = this.getViolationRuleRunContext(ruleDetail);
             if (!ruleOwner || !targetOwner || !targetTable || !ruleTable) {
                 alert(getText("Symbolic Rule or Target Table information required for realtime lookup is missing."));
                 return "";
@@ -3424,12 +3466,34 @@
                 `           p_case_id_column_name   => ${this.sqlLiteral(caseIdColumn)},`,
                 `           p_error_pct_threshold   => ${this.sqlNumberLiteral(errorThreshold, 0.05)},`,
                 `           p_abs_error_threshold   => ${Number.isFinite(absError) ? this.sqlNumberLiteral(absError) : "NULL"},`,
-                "           p_run_source_type       => 'FLOW_WORK',",
-                `           p_run_id                => ${flowRunId > 0 ? flowRunId : 0},`,
+                `           p_run_source_type       => ${this.sqlLiteral(runContext.runSourceType)},`,
+                `           p_run_id                => ${runContext.runId},`,
                 `           p_max_expression_length => ${this.sqlNumberLiteral(maxExpressionLength, 8000)}`,
                 "       ) AS LIVE_SQL",
                 "  FROM DUAL"
             ].join("\n");
+        },
+
+        getViolationRuleRunContext(ruleDetail = {}) {
+            const summary = this.isSymbolicViolationNode(this.selectedNode)
+                ? (this.lastSymbolicViolationSummary || {})
+                : (this.lastViolationSummary || {});
+            const runSourceType = String(
+                ruleDetail.RUN_SOURCE_TYPE
+                || summary.runSourceType
+                || this.selectedRun?.RUN_SOURCE_TYPE
+                || "FLOW_WORK"
+            ).trim().toUpperCase();
+            const rawRunId = ruleDetail.RUN_ID
+                ?? summary.runId
+                ?? this.selectedRun?.RUN_ID
+                ?? this.selectedRun?.FLOW_RUN_ID
+                ?? 0;
+            const runId = Math.max(0, Math.trunc(Number(rawRunId) || 0));
+            return {
+                runSourceType: ["DATA_WORK", "FLOW_WORK"].includes(runSourceType) ? runSourceType : "FLOW_WORK",
+                runId
+            };
         },
 
         async changeViolationSqlMode(mode = "SAVED") {
@@ -3469,6 +3533,20 @@
             };
             this.renderViolationSqlPopup();
             const message = document.getElementById(`${PAGE_ID_PREFIX}ViolationSqlMessage`);
+            if (this.isRuleViolationNode(this.selectedNode) && !this.isSymbolicViolationNode(this.selectedNode)) {
+                this.violationSql = {
+                    ...state,
+                    mode: "LIVE",
+                    sql: lookupSql,
+                    page: 1,
+                    total: 0,
+                    columns: [],
+                    rows: []
+                };
+                this.renderViolationSqlPopup();
+                window.setTimeout(() => this.executeViolationSql(1, requestId), 0);
+                return;
+            }
             if (message) message.textContent = getText("Generating realtime violation lookup SQL...");
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${API_PAGE_CODE}/sql`, {
@@ -3615,6 +3693,7 @@
                     </section>
                 `;
             }
+            const savedStatus = this.getSavedCategoricalViolationStatus(rule);
             return `
                 <section class="anly-work-violation-rule-context">
                     <header>
@@ -3627,8 +3706,29 @@
                         <b>THEN</b>
                         ${this.renderColumnAwareCell(rule.RESULT_COLUMN, this.lastViolationSummary || {})} = ${this.escapeHtml(rule.EXPECTED_VALUE || "")}
                     </p>
+                    ${savedStatus ? `<small>${this.escapeHtml(savedStatus)}</small>` : ""}
                 </section>
             `;
+        },
+
+        getSavedCategoricalViolationStatus(rule = {}) {
+            const scannedYn = String(rule.DETECTION_SCANNED_YN || "").trim().toUpperCase();
+            const violationCount = Number(rule.VIOLATION_COUNT || 0);
+            const detectionRank = Number(rule.DETECTION_RN || 0);
+            const maxRules = Number(this.lastViolationSummary?.detectionCriteria?.maxRules || 0);
+            if (scannedYn === "N") {
+                return getText("Not evaluated by the saved detection run because rule rank {rank} exceeded max rules {maxRules}.", {
+                    rank: this.formatNumber(detectionRank),
+                    maxRules: this.formatNumber(maxRules)
+                });
+            }
+            if (!scannedYn) {
+                return getText("Not evaluated by the saved detection run because it did not meet the confidence or lift criteria.");
+            }
+            if (violationCount === 0) {
+                return getText("No violation rows were stored by the sampled detection result. Use Realtime to check the full current target table.");
+            }
+            return getText("These are violation rows stored by the sampled detection result.");
         },
 
         renderViolationSqlGrid(columns, rows, ruleColumns = []) {
@@ -8708,7 +8808,19 @@
             if (!node) return "";
             const payload = this.normalizeObject(node.PAYLOAD);
             const params = this.normalizeObject(node.RUNTIME_PARAMS);
+            const runOutput = this.normalizeObject(node.RUN_OUTPUT);
+            const apiResult = this.normalizeObject(runOutput.apiResult);
+            const resultItems = Array.isArray(apiResult.results)
+                ? apiResult.results
+                : (Array.isArray(runOutput.results) ? runOutput.results : []);
+            const categoricalResult = resultItems
+                ? resultItems.find((item) => String(item?.task || "").toUpperCase() === "CATEGORICAL_RULE_VIOLATION")
+                : null;
             const candidates = [
+                this.lastViolationSummary?.ruleModelName,
+                categoricalResult?.modelName,
+                apiResult.modelName,
+                runOutput.modelName,
                 params.P_RULE_MODEL_NAME,
                 params.pRuleModelName,
                 params.ruleModelName,

@@ -8,6 +8,11 @@
     ":INIT$PreResultTable",
     ":INIT$ResultModelName"
   ],
+  "defaultObjectNames": [
+    "INTEGRATED_RELATION_CLUSTER",
+    "INTEGRATED_RULE_DISCOVER",
+    "INTEGRATED_RULE_VIOLATION_DETECT"
+  ],
   "groups": [
     {
       "groupName": "Python API Base JSON",
@@ -558,8 +563,8 @@
             {
               "key": "INPUT.P_MAX_RULE_SUMMARY_COLUMNS",
               "value": "IN NUMBER",
-              "comment": "Maximum columns included in association rule summary",
-              "defaultValue": "50",
+              "comment": "Maximum columns included in association rule summary; 9 enables rules with up to three conditions",
+              "defaultValue": "9",
               "order": 14
             },
             {
@@ -740,8 +745,8 @@
             {
               "key": "INPUT.P_RULE_MODEL_NAME",
               "value": "IN VARCHAR2",
-              "comment": "Association rule model produced by the upstream rule-discovery task in the same run",
-              "defaultValue": ":INIT$PreResultTable",
+              "comment": "Association rule model produced by rule discovery in the same run; (auto) resolves it by run ID",
+              "defaultValue": "(auto)",
               "order": 3
             },
             {

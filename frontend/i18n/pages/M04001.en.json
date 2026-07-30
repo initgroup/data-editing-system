@@ -18,6 +18,9 @@
     "historyAutoRefreshRefreshing": "Refreshing automatically...",
     "historyAutoRefreshPaused": "Automatic refresh is paused.",
     "historyContextRequired": "Project and scenario are required.",
+    "flowRunTargetLoadFailed": "Execution target table lookup failed. Detail: {detail}",
+    "flowRunTargetAmbiguous": "The base table for the current Flow could not be resolved. Check the Flow nodes and scenario table mappings.",
+    "flowRunTargetUnregistered": "No execution target table is registered for the current project and scenario.",
     "historyRefreshing": "Refreshing history...",
     "historyRefreshed": "Refreshed {time}",
     "historyRefreshFailed": "Refresh failed."

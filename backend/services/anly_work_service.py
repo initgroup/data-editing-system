@@ -1913,7 +1913,16 @@ def _fetch_rule_violation_summary(
         f"         WHERE {candidate_display_sql}"
         "     ), DETECTABLE_ALL AS ("
         "        SELECT C.*, "
-        "               ROW_NUMBER() OVER (ORDER BY C.\"RULE_CONFIDENCE\" DESC NULLS LAST, C.\"RULE_LIFT\" DESC NULLS LAST, C.\"SUPPORT_COUNT\" DESC NULLS LAST, C.\"RULE_ID\") AS DETECTION_RN "
+        "               ROW_NUMBER() OVER ("
+        "                   ORDER BY CASE "
+        "                                WHEN C.\"RULE_CONFIDENCE\" IS NOT NULL "
+        "                                 AND ((C.\"RULE_CONFIDENCE\" <= 1 AND C.\"RULE_CONFIDENCE\" < 0.999999) "
+        "                                   OR (C.\"RULE_CONFIDENCE\" > 1 AND C.\"RULE_CONFIDENCE\" < 99.9999)) "
+        "                                THEN 0 ELSE 1 "
+        "                            END, "
+        "                            C.\"RULE_CONFIDENCE\" DESC NULLS LAST, C.\"RULE_LIFT\" DESC NULLS LAST, "
+        "                            C.\"SUPPORT_COUNT\" DESC NULLS LAST, C.\"RULE_ID\""
+        "               ) AS DETECTION_RN "
         "          FROM BASE_CANDIDATES C "
         "         WHERE NVL(C.\"RULE_CONFIDENCE\", 0) >= :detectMinConfidence "
         "           AND NVL(C.\"RULE_LIFT\", 0) >= :detectMinLift"
@@ -1982,7 +1991,11 @@ def _fetch_rule_violation_summary(
         "               ROW_NUMBER() OVER (ORDER BY Q.RULE_CONFIDENCE DESC NULLS LAST, Q.RULE_LIFT DESC NULLS LAST, Q.RULE_SUPPORT DESC NULLS LAST, Q.RULE_ID) AS RN__, "
         "               COUNT(*) OVER () AS TOTAL_COUNT "
         "          FROM ("
-        '                SELECT S."RULE_ID" AS RULE_ID, '
+        '                SELECT S."OWNER" AS RULE_OWNER, '
+        '                       S."MODEL_NAME" AS MODEL_NAME, '
+        '                       S."RUN_SOURCE_TYPE" AS RUN_SOURCE_TYPE, '
+        '                       S."RUN_ID" AS RUN_ID, '
+        '                       S."RULE_ID" AS RULE_ID, '
         '                       S."CONDITION_COUNT" AS CONDITION_COUNT, '
         '                       DBMS_LOB.SUBSTR(S."CONDITION_TEXT", 4000, 1) AS CONDITION_TEXT, '
         '                       S."RESULT_COLUMN" AS RESULT_COLUMN, '
@@ -2001,7 +2014,16 @@ def _fetch_rule_violation_summary(
         '                  FROM "INIT$_TB_RULEDISC_ASSOC_SUM" S '
         "                  LEFT JOIN ("
         '                        SELECT A."RULE_ID", '
-        '                               ROW_NUMBER() OVER (ORDER BY A."RULE_CONFIDENCE" DESC NULLS LAST, A."RULE_LIFT" DESC NULLS LAST, A."SUPPORT_COUNT" DESC NULLS LAST, A."RULE_ID") AS DETECTION_RN '
+        '                               ROW_NUMBER() OVER ('
+        '                                   ORDER BY CASE '
+        '                                                WHEN A."RULE_CONFIDENCE" IS NOT NULL '
+        '                                                 AND ((A."RULE_CONFIDENCE" <= 1 AND A."RULE_CONFIDENCE" < 0.999999) '
+        '                                                   OR (A."RULE_CONFIDENCE" > 1 AND A."RULE_CONFIDENCE" < 99.9999)) '
+        '                                                THEN 0 ELSE 1 '
+        '                                            END, '
+        '                                            A."RULE_CONFIDENCE" DESC NULLS LAST, A."RULE_LIFT" DESC NULLS LAST, '
+        '                                            A."SUPPORT_COUNT" DESC NULLS LAST, A."RULE_ID"'
+        '                               ) AS DETECTION_RN '
         '                          FROM "INIT$_TB_RULEDISC_ASSOC_SUM" A '
         '                         WHERE A."OWNER" = :candidateOwner '
         '                           AND A."TARGET_OWNER" = :candidateTargetOwner '
@@ -2469,6 +2491,27 @@ def get_result_table(
     try:
         conn = get_target_db_connection(request)
         cursor = conn.cursor()
+        if (
+            object_name == "INIT$_TB_RULEVIOL_ASSOC"
+            and target_owner
+            and target_table
+            and run_source_type
+            and normalized_run_id is not None
+            and (not rule_model_name or rule_model_name == "OML_ASSOCIATION_MODEL_01")
+        ):
+            cursor.execute(
+                SqlLoader.get_sql("ML_ANALYSIS_ASSOC_RULE_MODEL_FOR_RUN"),
+                {
+                    "runSourceType": run_source_type,
+                    "runId": normalized_run_id,
+                    "ruleOwner": owner_name,
+                    "targetOwner": target_owner,
+                    "targetTable": target_table,
+                },
+            )
+            model_row = cursor.fetchone()
+            if model_row and model_row[0]:
+                rule_model_name = _validate_identifier(model_row[0], "rule model name")
         if _is_predicted_type_result_table(object_name):
             base_sql, bind_params = _build_predicted_type_result_sql(
                 owner_name,

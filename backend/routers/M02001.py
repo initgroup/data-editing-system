@@ -184,6 +184,40 @@ def upload_staged_file_to_table(
     return result
 
 
+@router.post("/reload-staged")
+def reload_staged_file_into_table(
+    request: Request,
+    uploadId: str = Form(...),
+    targetTableName: str = Form(...),
+    fileType: str = Form("csv"),
+    delimiter: str = Form(","),
+    fixedWidths: str = Form(""),
+    hasHeader: str = Form("Y"),
+    encoding: str = Form("auto"),
+    projectId: str = Form(""),
+    projectCode: str = Form(""),
+    tableComment: str = Form(""),
+):
+    metadata, data_path = require_completed_staged_upload(request, uploadId)
+    with data_path.open("rb") as staged_file:
+        staged_upload = UploadFile(file=staged_file, filename=metadata.get("fileName") or "uploaded-file")
+        result = reload_file_into_table(
+            request,
+            staged_upload,
+            targetTableName,
+            fileType,
+            delimiter,
+            fixedWidths,
+            hasHeader,
+            encoding,
+            projectId,
+            projectCode,
+            tableComment,
+        )
+    discard_staged_upload(uploadId)
+    return result
+
+
 @router.post("/preview")
 def preview_upload(
     file: UploadFile = File(...),
@@ -232,7 +266,7 @@ def upload_file_to_table(
     stream = file.file
     filename = file.filename or ""
     resolved_encoding = resolve_upload_encoding(stream, fileType, encoding)
-    columns, row_width = inspect_upload_stream(
+    columns, row_width, _header_width = inspect_upload_stream(
         stream,
         filename,
         fileType,
@@ -246,7 +280,8 @@ def upload_file_to_table(
 
     table_name = create_upload_table_name(projectCode, tableNameRule, user_id=user_id)
     file_size = get_upload_stream_size(stream)
-    safe_columns = normalize_column_names(columns, reserved={UPLOAD_ROW_NO_COLUMN})
+    column_specs = build_file_upload_column_specs(columns, hasHeader)
+    safe_columns = [column_name for column_name, _ in column_specs]
     upload_columns = [UPLOAD_ROW_NO_COLUMN, *safe_columns]
 
     conn = None
@@ -260,9 +295,8 @@ def upload_file_to_table(
         ])
         cursor.execute(f'CREATE TABLE "{table_name}" ({column_ddl})')
         cursor.execute(f'COMMENT ON COLUMN "{table_name}"."{UPLOAD_ROW_NO_COLUMN}" IS \'File row number\'')
-        for safe_column, original_column in zip(safe_columns, columns):
-            comment = str(original_column or "").strip()
-            if comment and comment.upper() != safe_column:
+        for safe_column, comment in column_specs:
+            if comment:
                 safe_comment = escape_and_truncate_oracle_comment(comment)
                 cursor.execute(
                     f'COMMENT ON COLUMN "{table_name}"."{safe_column}" IS \'{safe_comment}\''
@@ -343,6 +377,175 @@ def upload_file_to_table(
             conn.rollback()
         logger.error(f"M02001 upload failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+@router.post("/reload")
+def reload_file_into_table(
+    request: Request,
+    file: UploadFile = File(...),
+    targetTableName: str = Form(...),
+    fileType: str = Form("csv"),
+    delimiter: str = Form(","),
+    fixedWidths: str = Form(""),
+    hasHeader: str = Form("Y"),
+    encoding: str = Form("auto"),
+    projectId: str = Form(""),
+    projectCode: str = Form(""),
+    tableComment: str = Form(""),
+):
+    if not str(projectId or "").strip() or not str(projectCode or "").strip():
+        raise HTTPException(status_code=400, detail="Project ID and project code are required for reload.")
+    require_project_access(request, projectId, projectCode)
+    table_name = require_upload_table(targetTableName)
+    stream = file.file
+    filename = file.filename or ""
+    resolved_encoding = resolve_upload_encoding(stream, fileType, encoding)
+    columns, row_width, header_width = inspect_upload_stream(
+        stream,
+        filename,
+        fileType,
+        delimiter,
+        fixedWidths,
+        hasHeader,
+        resolved_encoding,
+    )
+    if not columns:
+        raise HTTPException(status_code=400, detail="No columns were detected.")
+
+    file_size = get_upload_stream_size(stream)
+    column_specs = build_file_upload_column_specs(columns, hasHeader)
+    conn = None
+    cursor = None
+    try:
+        conn = get_target_db_connection(request)
+        cursor = conn.cursor()
+        ensure_upload_table_metadata(cursor)
+
+        base_prefix = create_upload_table_prefix(projectCode)
+        table_result = execute_query(conn, "M02001_UPLOAD_TABLE_TREE", {"tablePrefix": base_prefix})
+        allowed_tables = {
+            str(row.get("TABLE_NAME") or "").upper()
+            for row in table_result.get("data", [])
+        } if table_result.get("status") == "success" else set()
+        if table_name not in allowed_tables:
+            raise HTTPException(
+                status_code=404,
+                detail="The selected reload table does not belong to the current project or no longer exists.",
+            )
+
+        column_result = execute_query(conn, "M02001_UPLOAD_TABLE_COLUMNS", {"tableName": table_name})
+        target_columns = column_result.get("data", []) if column_result.get("status") == "success" else []
+        if not target_columns:
+            raise HTTPException(status_code=404, detail="The selected reload table has no readable columns.")
+
+        source_width = header_width if str(hasHeader or "Y").upper() == "Y" else row_width
+        target_column_names = validate_reload_column_layout(target_columns, source_width)
+        data_column_names = target_column_names[1:]
+        if row_width > source_width:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"파일의 데이터 행에 헤더({source_width}개)보다 많은 컬럼({row_width}개)이 있습니다. "
+                    "데이터는 변경되지 않았습니다."
+                ),
+            )
+
+        quoted_table = f'"{table_name}"'
+        quoted_columns = ", ".join(f'"{column_name}"' for column_name in target_column_names)
+        bind_sql = ", ".join(f":{index + 1}" for index in range(len(target_column_names)))
+        insert_sql = f"INSERT INTO {quoted_table} ({quoted_columns}) VALUES ({bind_sql})"
+        insert_batch_size = max(
+            1,
+            min(UPLOAD_INSERT_BATCH_SIZE, UPLOAD_INSERT_BATCH_CELL_LIMIT // max(len(target_column_names), 1)),
+        )
+
+        cursor.execute(f"DELETE FROM {quoted_table}")
+        inserted_count = 0
+        batch_rows = []
+        rows = iter_upload_data_rows(
+            stream,
+            filename,
+            fileType,
+            delimiter,
+            fixedWidths,
+            hasHeader,
+            resolved_encoding,
+            row_width,
+        )
+        try:
+            for row_number, row in enumerate(rows, start=1):
+                batch_rows.append((row_number, *row))
+                if len(batch_rows) >= insert_batch_size:
+                    cursor.executemany(insert_sql, batch_rows)
+                    inserted_count += len(batch_rows)
+                    batch_rows.clear()
+            if batch_rows:
+                cursor.executemany(insert_sql, batch_rows)
+                inserted_count += len(batch_rows)
+        finally:
+            close_row_iterator(rows)
+
+        cursor.execute(
+            SqlLoader.get_sql("M02001_UPLOAD_TABLE_META_MERGE"),
+            {
+                "tableName": table_name,
+                "projectId": int(projectId),
+                "fileExtension": Path(filename).suffix.lstrip(".").upper() or None,
+                "fileName": filename or None,
+                "fileSize": file_size,
+            },
+        )
+        conn.commit()
+
+        metadata_messages = []
+        try:
+            for index, (unused_column_name, comment) in enumerate(column_specs):
+                if not comment:
+                    continue
+                target_column = data_column_names[index]
+                safe_comment = escape_and_truncate_oracle_comment(comment)
+                cursor.execute(
+                    f'COMMENT ON COLUMN "{table_name}"."{target_column}" IS \'{safe_comment}\''
+                )
+            if (tableComment or "").strip():
+                safe_table_comment = escape_and_truncate_oracle_comment(tableComment.strip())
+                cursor.execute(f'COMMENT ON TABLE "{table_name}" IS \'{safe_table_comment}\'')
+        except Exception as metadata_error:
+            metadata_messages.append(f"Comment update failed: {metadata_error}")
+            logger.warning("M02001 reload comment update failed for %s: %s", table_name, metadata_error)
+
+        stats_gathered = False
+        try:
+            gather_upload_table_stats(cursor, table_name)
+            stats_gathered = True
+        except Exception as stats_error:
+            metadata_messages.append(f"Statistics gather failed: {stats_error}")
+            logger.warning("M02001 reload statistics gather failed for %s: %s", table_name, stats_error)
+        conn.commit()
+        return {
+            "status": "success",
+            "message": "File reloaded.",
+            "tableName": table_name,
+            "columns": target_column_names,
+            "rowCount": inserted_count,
+            "detectedEncoding": resolved_encoding,
+            "statsGathered": stats_gathered,
+            "statsMessage": " ".join(metadata_messages),
+        }
+    except HTTPException:
+        if conn:
+            conn.rollback()
+        raise
+    except Exception as error:
+        if conn:
+            conn.rollback()
+        logger.error("M02001 reload failed for %s: %s", table_name, error)
+        raise HTTPException(status_code=500, detail=str(error)) from error
     finally:
         if cursor:
             cursor.close()
@@ -701,6 +904,7 @@ def inspect_upload_stream(
     use_header = str(has_header or "Y").upper() == "Y"
     columns = []
     width = 0
+    header_width = 0
     has_data = False
     raw_rows = iter_upload_raw_rows(
         stream,
@@ -717,17 +921,18 @@ def inspect_upload_stream(
             width = max(width, len(raw_row))
             if use_header and not columns:
                 columns = build_header_columns(raw_row)
+                header_width = len(raw_row)
                 continue
             has_data = True
     finally:
         close_row_iterator(raw_rows)
 
     if not columns and not has_data:
-        return [], 0
+        return [], 0, 0
     if not use_header:
         columns = build_default_columns(width)
     width = max(width, len(columns))
-    return extend_columns(columns, width), width
+    return extend_columns(columns, width), width, header_width
 
 
 def iter_upload_data_rows(
@@ -954,22 +1159,35 @@ def normalize_identifier_token(value):
     return name
 
 
-def normalize_column_names(columns, reserved=None):
-    used = set(reserved or [])
-    result = []
-    for index, column in enumerate(columns):
-        name = re.sub(r"[^A-Za-z0-9_$#]", "_", str(column or "").upper()).strip("_")
-        if not name or not re.match(r"^[A-Z]", name):
-            name = f"COL{index + 1:03d}"
-        name = name[:26]
-        base = name
-        suffix = 1
-        while name in used:
-            suffix += 1
-            name = f"{base[:24]}_{suffix}"
-        used.add(name)
-        result.append(name)
-    return result
+def build_file_upload_column_specs(columns, has_header):
+    use_header = str(has_header or "Y").upper() == "Y"
+    return [
+        (
+            f"COL{index + 1:03d}",
+            str(original_column or "").strip() if use_header else "",
+        )
+        for index, original_column in enumerate(columns)
+    ]
+
+
+def validate_reload_column_layout(target_columns, source_width):
+    target_column_names = [require_read_table(row.get("COLUMN_NAME")) for row in target_columns or []]
+    if not target_column_names or target_column_names[0] != UPLOAD_ROW_NO_COLUMN:
+        raise HTTPException(
+            status_code=409,
+            detail=f"선택한 테이블의 첫 번째 컬럼은 {UPLOAD_ROW_NO_COLUMN}여야 합니다. 데이터는 변경되지 않았습니다.",
+        )
+    target_width = len(target_column_names) - 1
+    if target_width != int(source_width or 0):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "파일 컬럼 수가 선택한 테이블과 일치하지 않습니다. "
+                f"파일: {int(source_width or 0)}개, 테이블(FILE_ROW_NO 제외): {target_width}개. "
+                "데이터는 변경되지 않았습니다."
+            ),
+        )
+    return target_column_names
 
 
 def stringify_cell(value):

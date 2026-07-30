@@ -78,6 +78,19 @@
             return Boolean(getContainerEl("#connectionId-M99001")?.value);
         },
 
+        renderDatabaseInfo(database) {
+            const field = getContainerEl("#detectedDbVersion-M99001");
+            if (!field) return;
+            if (!database?.version) {
+                field.value = "";
+                field.title = "";
+                return;
+            }
+            const supportLabel = database.supported ? "Supported" : "Unsupported";
+            field.value = `${database.version} (${supportLabel})`;
+            field.title = `Oracle Database ${database.version}; minimum supported version ${database.minimumSupportedMajorVersion || 21}c`;
+        },
+
         getContainer() {
             return document.getElementById("container-M99001");
         },
@@ -323,6 +336,7 @@
 
         renderConnectionDetail() {
             const item = this.selectedConnection;
+            this.renderDatabaseInfo(null);
             this.setValue("#connectionId-M99001", item.connectionId || "");
             this.setValue("#connectionName-M99001", item.connectionName || "");
             this.setValue("#dbType-M99001", item.dbType || "ORACLE");
@@ -509,12 +523,14 @@
         },
 
         async testConnection() {
+            this.renderDatabaseInfo(null);
             this.renderLog("Testing connection...", "info");
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/connection/test`, {
                     method: "POST",
                     body: this.getPayload()
                 });
+                this.renderDatabaseInfo(json.database);
                 this.renderLog(json.message || "Connection succeeded.", "success");
                 if (!this.isBootstrapMode()) await this.loadConnections();
             } catch (error) {
@@ -555,6 +571,7 @@
                     method: "POST",
                     body: this.getPayload()
                 });
+                this.renderDatabaseInfo(json.database);
                 this.renderSchemaStatus(json.data || []);
                 if (showLog) {
                     this.renderLog(`${json.installedCount || 0}/${json.total || 0} required tables exist. Created dates are shown in Table Status.`, "success");
@@ -736,6 +753,7 @@
                     showLoading: false,
                     body: this.getPayload()
                 });
+                this.renderDatabaseInfo(json.database);
                 this.renderModelDeployStatus(json.data || []);
                 return json.data || [];
             } catch (error) {

@@ -32,6 +32,7 @@
             contextProjects: [],
             contextScenarios: [],
             scenarioTables: [],
+            scenarioTableLoadError: "",
             flowList: [],
             flowDisplayName: "",
             importProjects: [],
@@ -182,9 +183,9 @@
                 const pendingEditingContext = this.readEditingRuntimeContext();
                 if (pendingEditingContext?.editSessionId) {
                     this.editingRuntimeContext = pendingEditingContext;
-                    this.flowRunTargetMode = pendingEditingContext.preferredTargetMode === "SOURCE"
-                        ? "SOURCE"
-                        : "EDIT";
+                    this.flowRunTargetMode = pendingEditingContext.preferredTargetMode === "EDIT"
+                        ? "EDIT"
+                        : "SOURCE";
                     this.renderEditingRuntimeBanner();
                 }
                 if (
@@ -222,6 +223,7 @@
                 this.contextProjects = [];
                 this.contextScenarios = [];
                 this.scenarioTables = [];
+                this.scenarioTableLoadError = "";
                 this.flowList = [];
                 this.flowDisplayName = "";
                 this.importProjects = [];
@@ -267,6 +269,7 @@
                 this.selectedScenarioTableKey = "";
                 this.editingRuntimeContext = null;
                 this.flowRunTargetMode = "SOURCE";
+                sessionStorage.removeItem(`${PAGE_CODE}:editingRuntimeContext`);
                 this.workContextCollapsed = false;
                 this.activeTab = "designer";
                 this.contextLoadFailed = false;
@@ -570,6 +573,7 @@
                 this.selectedScenarioTableKey = "";
                 if (!this.selectedProjectId || !this.selectedScenarioId) {
                     this.scenarioTables = [];
+                    this.scenarioTableLoadError = "";
                     if (container) {
                         container.innerHTML = `
                             <div class="table-empty">Select project and scenario first.</div>
@@ -585,6 +589,7 @@
                     container.innerHTML = `<div class="table-empty">Loading scenario tables...</div>`;
                 }
                 try {
+                    this.scenarioTableLoadError = "";
                     const params = new URLSearchParams({
                         projectId: this.selectedProjectId,
                         scenarioId: this.selectedScenarioId
@@ -598,6 +603,7 @@
                 } catch (error) {
                     const message = error.message || "Scenario table load failed.";
                     this.scenarioTables = [];
+                    this.scenarioTableLoadError = message;
                     if (container) {
                         container.innerHTML = `<div class="table-error">${this.escapeHtml(message)}</div>`;
                     }
@@ -4846,7 +4852,11 @@
             readEditingRuntimeContext() {
                 try {
                     const raw = sessionStorage.getItem(`${PAGE_CODE}:editingRuntimeContext`);
-                    return raw ? JSON.parse(raw) : null;
+                    if (!raw) return null;
+                    // M05003 hands this context to the next M04001 activation only.
+                    // Consume it so closing and reopening the menu returns to SOURCE.
+                    sessionStorage.removeItem(`${PAGE_CODE}:editingRuntimeContext`);
+                    return JSON.parse(raw);
                 } catch (error) {
                     sessionStorage.removeItem(`${PAGE_CODE}:editingRuntimeContext`);
                     return null;
@@ -4860,11 +4870,40 @@
                 if (!pair) {
                     if (this.selectedProjectId && this.selectedScenarioId) {
                         this.flowRunTargetMode = "SOURCE";
+                        const loadError = String(this.scenarioTableLoadError || "").trim();
+                        const message = loadError
+                            ? this.getMessage(
+                                "flowRunTargetLoadFailed",
+                                "실행 대상 테이블 조회에 실패했습니다. 상세: {detail}",
+                                { detail: loadError }
+                            )
+                            : this.scenarioTables.length
+                                ? this.getMessage(
+                                    "flowRunTargetAmbiguous",
+                                    "현재 Flow의 기준 테이블을 결정할 수 없습니다. Flow 노드와 시나리오 테이블 매핑을 확인하세요."
+                                )
+                                : this.getMessage(
+                                    "flowRunTargetUnregistered",
+                                    "현재 프로젝트·시나리오에 등록된 실행 대상 테이블이 없습니다."
+                                );
+                        banner.classList.add(loadError ? "is-error" : "is-warning");
+                        banner.classList.remove(loadError ? "is-warning" : "is-error");
+                        banner.hidden = false;
+                        banner.innerHTML = `
+                            <span class="flow-run-target-title">
+                                <i class="fas fa-triangle-exclamation"></i>
+                                ${this.escapeHtml(this.getLabel("flowRunTargetTitle") || "Execution Target Table")}
+                            </span>
+                            <strong class="flow-run-target-message">${this.escapeHtml(message)}</strong>
+                        `;
+                        return;
                     }
+                    banner.classList.remove("is-error", "is-warning");
                     banner.hidden = true;
                     banner.innerHTML = "";
                     return;
                 }
+                banner.classList.remove("is-error", "is-warning");
                 const sourceId = `${pair.sourceOwner}.${pair.sourceTable}`;
                 const editId = pair.editExists
                     ? `${pair.editOwner}.${pair.editTable}`

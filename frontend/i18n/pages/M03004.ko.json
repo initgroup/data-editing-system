@@ -25,5 +25,36 @@
     "exportCsvTitle": "현재 그리드 페이지를 CSV로 내보냅니다.",
     "exportJsonTitle": "현재 그리드 페이지를 JSON으로 내보냅니다."
   },
-  "messages": {}
+  "messages": {
+    "parameterTypeLabel": "유형",
+    "parameterDefaultLabel": "기본값",
+    "paramDescRuleParts": "탐지 범위입니다. ALL은 범주형과 연속형 규칙을 모두 실행하며, CATEGORICAL 또는 CONTINUOUS는 해당 규칙만 실행합니다.",
+    "paramDescRuleOwnerName": "동일 실행의 상위 규칙 발굴 작업에서 생성한 연관규칙 모델의 소유자입니다.",
+    "paramDescRuleModelName": "동일 실행의 규칙 발굴 작업에서 생성한 연관규칙 모델명입니다. (auto)는 실행 ID로 실제 모델명을 자동 연결합니다.",
+    "paramDescSymbolicRuleTableName": "연속형 규칙이 저장된 심볼릭 규칙 테이블명입니다.",
+    "paramDescRuleId": "선택적인 심볼릭 규칙 ID입니다. (auto)는 현재 실행에서 사용 가능한 전체 규칙을 평가합니다.",
+    "paramDescTargetOwner": "규칙 위반을 탐지할 대상 테이블의 소유자입니다.",
+    "paramDescTargetTable": "규칙 위반을 탐지할 대상 테이블명입니다.",
+    "paramDescCaseIdColumn": "원본 데이터 행을 식별하는 식별키 컬럼명입니다.",
+    "paramDescCatResultOwner": "범주형 규칙 위반 결과 테이블의 소유자입니다.",
+    "paramDescCatResultTable": "범주형 규칙 위반 결과를 저장할 테이블명입니다.",
+    "paramDescSymbolicResultOwner": "연속형 규칙 위반 결과 테이블의 소유자입니다.",
+    "paramDescSymbolicResultTable": "연속형 규칙 위반 결과를 저장할 테이블명입니다.",
+    "paramDescViolationMinConfidence": "범주형 위반 탐지에 사용할 규칙의 최소 신뢰도입니다.",
+    "paramDescViolationMinLift": "범주형 위반 탐지에 사용할 규칙의 최소 향상도입니다.",
+    "paramDescMaxRules": "평가할 범주형 규칙의 최대 개수입니다.",
+    "paramDescSymbolicMaxRules": "평가할 연속형 심볼릭 규칙의 최대 개수입니다.",
+    "paramDescMaxViolationsPerRule": "규칙별로 저장할 위반 데이터의 최대 건수입니다.",
+    "paramDescErrorPctThreshold": "연속형 규칙에 허용할 상대오차 기준입니다. 0.05는 5%를 의미합니다.",
+    "paramDescAbsErrorThreshold": "연속형 규칙에 적용할 선택적인 절대오차 기준입니다.",
+    "paramDescMaxScanRows": "연속형 규칙별로 검사할 원본 데이터의 최대 건수입니다.",
+    "paramDescMaxElapsedSeconds": "규칙 위반 탐지의 최대 실행 시간(초)입니다.",
+    "paramDescMaxExpressionLength": "허용할 심볼릭 규칙식의 최대 길이입니다.",
+    "paramDescClearExistingYn": "탐지 전에 동일 실행의 기존 위반 결과를 삭제할지 여부입니다(Y/N).",
+    "paramDescCommitYn": "하위 프로시저에서 커밋할지 여부입니다(Y/N). 통합 API가 트랜잭션을 관리할 때는 N을 사용합니다.",
+    "paramDescCommitInterval": "커밋을 사용할 때 커밋 사이에 처리할 행 수입니다.",
+    "paramDescContinueOnError": "일부 규칙 처리에 실패해도 나머지 규칙을 계속 실행할지 여부입니다.",
+    "paramDescRunSourceType": "실행 출처 구분입니다(DATA_WORK/FLOW_WORK).",
+    "paramDescRunId": "선택한 프로젝트와 시나리오가 공유하는 DATA_WORK 실행 ID입니다."
+  }
 }

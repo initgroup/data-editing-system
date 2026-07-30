@@ -108,13 +108,20 @@
         async createDefaultApiObjects() {
             const presets = await this.loadPresets();
             const defaultApis = [];
+            const defaultObjectNames = new Set(
+                (Array.isArray(presets.defaultObjectNames) ? presets.defaultObjectNames : [])
+                    .map((name) => this.normalizeKey(name))
+                    .filter(Boolean)
+            );
             const savedByName = new Map(
                 this.savedObjects.map((item) => [this.normalizeKey(item.objectName), item])
             );
             (presets.groups || []).forEach((group) => {
                 (group.resources || []).forEach((resource) => {
                     const apiObject = this.createApiObjectFromPreset(resource, group.groupName);
-                    if (apiObject.objectType === "INTERNAL_API") {
+                    const objectNameKey = this.normalizeKey(apiObject.objectName);
+                    const isDefaultTarget = !defaultObjectNames.size || defaultObjectNames.has(objectNameKey);
+                    if (apiObject.objectType === "INTERNAL_API" && isDefaultTarget) {
                         const savedObject = savedByName.get(this.normalizeKey(apiObject.objectName));
                         if (savedObject?.objectId) {
                             apiObject.objectId = savedObject.objectId;

@@ -232,6 +232,37 @@
             const COMMON = this.createPageHelper(PAGE_CODE);
             const SQL_TRANSACTION_REGISTRY = window.__MCOM_DATA_WORK_SQL_TRANSACTION_REGISTRY__
                 || (window.__MCOM_DATA_WORK_SQL_TRANSACTION_REGISTRY__ = new Map());
+            const PARAMETER_DESCRIPTION_MESSAGE_KEYS = {
+                P_RULE_PARTS: "paramDescRuleParts",
+                P_RULE_OWNER_NAME: "paramDescRuleOwnerName",
+                P_RULE_MODEL_NAME: "paramDescRuleModelName",
+                P_SYMBOLIC_RULE_TABLE_NAME: "paramDescSymbolicRuleTableName",
+                P_RULE_ID: "paramDescRuleId",
+                P_TARGET_OWNER: "paramDescTargetOwner",
+                P_TARGET_TABLE: "paramDescTargetTable",
+                P_CASE_ID_COLUMN_NAME: "paramDescCaseIdColumn",
+                P_CAT_RESULT_OWNER: "paramDescCatResultOwner",
+                P_CAT_RESULT_TABLE: "paramDescCatResultTable",
+                P_SYMBOLIC_RESULT_OWNER: "paramDescSymbolicResultOwner",
+                P_SYMBOLIC_RESULT_TABLE: "paramDescSymbolicResultTable",
+                P_MIN_CONFIDENCE: "paramDescViolationMinConfidence",
+                P_MIN_LIFT: "paramDescViolationMinLift",
+                P_MAX_RULE_SUMMARY_COLUMNS: "paramDescMaxRuleSummaryColumns",
+                P_MAX_RULES: "paramDescMaxRules",
+                P_SYMBOLIC_MAX_RULES: "paramDescSymbolicMaxRules",
+                P_MAX_VIOLATIONS_PER_RULE: "paramDescMaxViolationsPerRule",
+                P_ERROR_PCT_THRESHOLD: "paramDescErrorPctThreshold",
+                P_ABS_ERROR_THRESHOLD: "paramDescAbsErrorThreshold",
+                P_MAX_SCAN_ROWS: "paramDescMaxScanRows",
+                P_MAX_ELAPSED_SECONDS: "paramDescMaxElapsedSeconds",
+                P_MAX_EXPRESSION_LENGTH: "paramDescMaxExpressionLength",
+                P_CLEAR_EXISTING_YN: "paramDescClearExistingYn",
+                P_COMMIT_YN: "paramDescCommitYn",
+                P_COMMIT_INTERVAL: "paramDescCommitInterval",
+                P_CONTINUE_ON_ERROR: "paramDescContinueOnError",
+                P_RUN_SOURCE_TYPE: "paramDescRunSourceType",
+                P_RUN_ID: "paramDescRunId"
+            };
 
             const page = {
         
@@ -603,7 +634,7 @@
             if (!select) return;
 
             select.innerHTML = `
-                <option value="">-- Select project --</option>
+                <option value="" data-label-key="selectProject">${this.escapeHtml(this.getLabel("selectProject") || "-- Select project --")}</option>
                 ${this.contextProjects.map((project) => `
                     <option class="${this.escapeHtml(CommonUtils.getOwnerScopeClass(project))}" value="${this.escapeHtml(project.PROJECT_ID ?? "")}">
                         ${this.escapeHtml(CommonUtils.formatOwnerScopedName(project, project.PROJECT_NAME || project.PROJECT_CODE || "(Untitled project)"))}
@@ -668,7 +699,7 @@
             if (!select) return;
 
             select.innerHTML = `
-                <option value="">-- Select scenario --</option>
+                <option value="" data-label-key="selectScenario">${this.escapeHtml(this.getLabel("selectScenario") || "-- Select scenario --")}</option>
                 ${this.contextScenarios.map((scenario) => `
                     <option class="${this.escapeHtml(CommonUtils.getOwnerScopeClass(scenario))}" value="${this.escapeHtml(scenario.SCENARIO_ID ?? "")}">
                         ${this.escapeHtml(CommonUtils.formatOwnerScopedName(scenario, scenario.SCENARIO_NAME || scenario.SCENARIO_CODE || "(Untitled scenario)"))}
@@ -1371,7 +1402,7 @@
                         { itemName: "P_CATEGORICAL_COLUMNS", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescCategoricalColumns", "Comma-separated categorical columns; (auto) uses profiled columns"), itemDefault: "(auto)" },
                         { itemName: "P_MIN_RULE_SUPPORT_COUNT", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMinRuleSupportCount", "Minimum association rule support row count"), itemDefault: "30" },
                         { itemName: "P_MIN_RULE_LIFT", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMinRuleLift", "Minimum lift for stored association-rule summaries"), itemDefault: "1" },
-                        { itemName: "P_MAX_RULE_SUMMARY_COLUMNS", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMaxRuleSummaryColumns", "Maximum columns included in association rule summary"), itemDefault: "50" },
+                        { itemName: "P_MAX_RULE_SUMMARY_COLUMNS", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMaxRuleSummaryColumns", "Maximum columns included in association rule summary; 9 enables rules with up to three conditions"), itemDefault: "9" },
                         { itemName: "P_MAX_RULE_SUMMARY_PER_PAIR", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMaxRuleSummaryPerPair", "Maximum summarized rules per column pair"), itemDefault: "50" },
                         { itemName: "P_TARGET_COLUMN", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescTargetColumn", "Dependent variable column"), itemDefault: "(auto)" },
                         { itemName: "P_MAX_FEATURES", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMaxFeatures", "Maximum selected feature count"), itemDefault: "10" },
@@ -1400,7 +1431,7 @@
                     params: [
                         { itemName: "P_RULE_PARTS", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescRuleParts", "Execution scope: ALL, CATEGORICAL, or CONTINUOUS"), itemDefault: "ALL" },
                         { itemName: "P_RULE_OWNER_NAME", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescRuleOwnerName", "Owner of the association rule model from the upstream rule-discovery run"), itemDefault: targetOwner },
-                        { itemName: "P_RULE_MODEL_NAME", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescRuleModelName", "Association rule model name from the upstream rule-discovery run"), itemDefault: ":INIT$PreResultTable" },
+                        { itemName: "P_RULE_MODEL_NAME", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescRuleModelName", "Association rule model name from the same rule-discovery run; (auto) resolves it by run ID"), itemDefault: "(auto)" },
                         { itemName: "P_SYMBOLIC_RULE_TABLE_NAME", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescSymbolicRuleTableName", "Symbolic rule table from the upstream rule-discovery run"), itemDefault: "INIT$_TB_RULEDISC_SYMBOLIC" },
                         { itemName: "P_RULE_ID", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescRuleId", "Optional rule ID filter"), itemDefault: "(auto)" },
                         { itemName: "P_TARGET_OWNER", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescTargetOwner", "Target table owner"), itemDefault: targetOwner },
@@ -1598,7 +1629,10 @@
                     itemName: row.itemName || "",
                     itemValue: row.itemValue || "",
                     itemDesc: row.itemDesc || "",
-                    itemDefault: row.itemDefault || "",
+                    itemDefault: this.normalizeDataWorkParameterDefault(
+                        row.itemName,
+                        row.itemDefault
+                    ),
                     itemOrder: row.itemOrder ?? "",
                     bindName: row.bindName || ""
                 }));
@@ -1726,15 +1760,18 @@
                         </tr>
                     </thead>
                     <tbody>
-                        ${this.parameters.map((row, index) => `
+                        ${this.parameters.map((row, index) => {
+                            const localizedDescription = this.getLocalizedParameterDescription(row);
+                            return `
                             <tr>
                                 <td class="grid-row-no">${index + 1}</td>
                                 <td title="${this.escapeHtml(row.itemName)}">${this.escapeHtml(row.itemName)}</td>
                                 <td title="${this.escapeHtml(row.itemValue)}">${this.escapeHtml(row.itemValue)}</td>
-                                <td title="${this.escapeHtml(row.itemDesc)}">${this.escapeHtml(row.itemDesc || "-")}</td>
+                                <td title="${this.escapeHtml(localizedDescription)}">${this.escapeHtml(localizedDescription || "-")}</td>
                                 <td title="${this.escapeHtml(row.itemDefault)}">${this.escapeHtml(row.itemDefault || "-")}</td>
                             </tr>
-                        `).join("")}
+                        `;
+                        }).join("")}
                     </tbody>
                 </table>
             `;
@@ -2218,7 +2255,10 @@
                 itemName: row.itemName || row.ITEM_NAME || "",
                 itemValue: row.itemValue || row.ITEM_VALUE || "",
                 itemDesc: row.itemDesc || row.ITEM_DESC || "",
-                itemDefault: row.itemDefault || row.ITEM_DEFAULT || "",
+                itemDefault: this.normalizeDataWorkParameterDefault(
+                    row.itemName || row.ITEM_NAME,
+                    row.itemDefault || row.ITEM_DEFAULT
+                ),
                 itemOrder: row.itemOrder || row.ITEM_ORDER || "",
                 bindName: row.bindName || row.BIND_NAME || ""
             })) : [];
@@ -3790,14 +3830,14 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
 
         createWebApiRuntimeComment(row, rawDefault, resolvedDefault) {
             const parts = [];
-            const comment = String(row?.itemDesc || row?.ITEM_DESC || "").trim();
+            const comment = this.getLocalizedParameterDescription(row);
             const type = String(row?.itemValue || row?.ITEM_VALUE || "").trim();
             if (comment) parts.push(comment);
-            if (type) parts.push(`Type: ${type}`);
+            if (type) parts.push(`${this.getMessage("parameterTypeLabel", "Type")}: ${type}`);
             const rawText = String(rawDefault ?? "").trim();
             const resolvedText = String(resolvedDefault ?? "").trim();
             if (rawText && rawText !== resolvedText) {
-                parts.push(`Default: ${rawText}`);
+                parts.push(`${this.getMessage("parameterDefaultLabel", "Default")}: ${rawText}`);
             }
             return parts.join(" / ");
         },
@@ -3943,11 +3983,50 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                 "INIT$PreTargetOwner": "",
                 "INIT$PreTargetTable": "",
                 "INIT$PreResultOwner": "",
-                "INIT$PreResultTable": "",
+                "INIT$PreResultTable": this.getDataWorkPreviousResultTableFallback(job),
                 "INIT$RunSourceType": "DATA_WORK",
                 "INIT$RunId": options.dataRunId || this.getCurrentDataWorkRunId() || "(auto)"
             };
             return values[canonicalName] ?? "";
+        },
+
+        getDataWorkPreviousResultTableFallback(job = {}) {
+            const method = String(
+                job.execMethod
+                || job.EXEC_METHOD
+                || job.execObjectName
+                || job.EXEC_OBJECT_NAME
+                || ""
+            ).trim().toUpperCase();
+            return method === "INTEGRATED_RULE_VIOLATION_DETECT"
+                ? "(auto)"
+                : "";
+        },
+
+        normalizeDataWorkParameterDefault(itemName, itemDefault) {
+            const name = String(itemName || "").trim().toUpperCase().replace(/^INPUT\./, "");
+            const value = String(itemDefault ?? "").trim();
+            if (
+                name === "P_RULE_MODEL_NAME"
+                && [":INIT$PRERESULTTABLE", "OML_ASSOCIATION_MODEL_01"].includes(value.toUpperCase())
+                && this.getDataWorkPreviousResultTableFallback(this.currentJob)
+            ) {
+                return this.getDataWorkPreviousResultTableFallback(this.currentJob);
+            }
+            if (name === "P_MAX_RULE_SUMMARY_COLUMNS" && value === "50") {
+                return "9";
+            }
+            return value;
+        },
+
+        getLocalizedParameterDescription(row = {}) {
+            const rawDescription = String(row.itemDesc ?? row.ITEM_DESC ?? "").trim();
+            const itemName = String(row.itemName ?? row.ITEM_NAME ?? row.name ?? "")
+                .trim()
+                .toUpperCase()
+                .replace(/^INPUT\./, "");
+            const messageKey = PARAMETER_DESCRIPTION_MESSAGE_KEYS[itemName];
+            return messageKey ? this.getMessage(messageKey, rawDescription) : rawDescription;
         },
 
         extractDynamicTokens(sqlText) {
@@ -4153,7 +4232,7 @@ END;`;
         },
 
         createPlsqlParameterComment(row) {
-            const comment = String(row?.itemDesc || "").replace(/\s+/g, " ").trim();
+            const comment = this.getLocalizedParameterDescription(row).replace(/\s+/g, " ").trim();
             if (!comment) return "";
             return ` /* ${comment.replace(/\*\//g, "* /")} */`;
         },

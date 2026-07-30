@@ -10,7 +10,7 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_APRIORI_ASSOC_MODEL" (
     p_candidate_columns   IN VARCHAR2 DEFAULT NULL,
     p_min_rule_support_count IN NUMBER DEFAULT 30,
     p_min_rule_lift       IN NUMBER   DEFAULT 1,
-    p_max_rule_summary_columns IN NUMBER DEFAULT 50,
+    p_max_rule_summary_columns IN NUMBER DEFAULT 9,
     p_max_rule_summary_per_pair IN NUMBER DEFAULT 50,
     p_target_owner        IN VARCHAR2 DEFAULT NULL,
     p_target_table        IN VARCHAR2 DEFAULT NULL,
@@ -921,7 +921,16 @@ BEGIN
           FROM (
                 SELECT S.*
                      , ROW_NUMBER() OVER (
-                           ORDER BY S.RULE_CONFIDENCE DESC NULLS LAST,
+                           ORDER BY CASE
+                                        WHEN S.RULE_CONFIDENCE IS NOT NULL
+                                         AND (
+                                                (S.RULE_CONFIDENCE <= 1 AND S.RULE_CONFIDENCE < 0.999999)
+                                             OR (S.RULE_CONFIDENCE > 1 AND S.RULE_CONFIDENCE < 99.9999)
+                                         )
+                                        THEN 0
+                                        ELSE 1
+                                    END,
+                                    S.RULE_CONFIDENCE DESC NULLS LAST,
                                     S.RULE_LIFT DESC NULLS LAST,
                                     S.SUPPORT_COUNT DESC NULLS LAST,
                                     S.RULE_ID
@@ -929,7 +938,7 @@ BEGIN
                  FROM "INIT$_TB_RULEDISC_ASSOC_SUM" S
                  WHERE S."OWNER" = v_rule_owner
                    AND S."RUN_SOURCE_TYPE" = v_run_source_type
-                   AND (v_run_source_type = 'DATA_WORK' OR S."RUN_ID" = v_run_id)
+                   AND S."RUN_ID" = v_run_id
                    AND S."TARGET_OWNER" = v_target_owner
                    AND S."TARGET_TABLE" = v_target_table
                    AND S."MODEL_NAME" = v_rule_model
@@ -1247,7 +1256,7 @@ BEGIN
       FROM "INIT$_TB_RULEDISC_ASSOC_SUM" S
      WHERE S."OWNER" = v_rule_owner
        AND S."RUN_SOURCE_TYPE" = v_run_source_type
-       AND (v_run_source_type = 'DATA_WORK' OR S."RUN_ID" = v_run_id)
+       AND S."RUN_ID" = v_run_id
        AND S."TARGET_OWNER" = v_target_owner
        AND S."TARGET_TABLE" = v_target_table
        AND S."MODEL_NAME" = v_rule_model
@@ -1295,7 +1304,12 @@ BEGIN
     RETURN v_sql;
 EXCEPTION
     WHEN NO_DATA_FOUND THEN
-        RAISE_APPLICATION_ERROR(-20586, 'Rule summary row was not found for realtime violation query.');
+        RAISE_APPLICATION_ERROR(
+            -20586,
+            'Rule summary row was not found for realtime violation query. model='
+            || v_rule_model || ', rule=' || v_rule_id || ', run='
+            || v_run_source_type || ':' || v_run_id
+        );
 END;
 /
 
@@ -1905,7 +1919,7 @@ BEGIN
         'SELECT R."TARGET_COLUMN", R."EXPRESSION", R."FEATURE_COLUMNS", R."SCORE", R."COMPLEXITY", R."METHOD" ' ||
         '  FROM ' || v_rule_object || ' R ' ||
         ' WHERE R."RUN_SOURCE_TYPE" = :run_source_type ' ||
-        '   AND (:run_source_type = ''DATA_WORK'' OR R."RUN_ID" = :run_id) ' ||
+        '   AND R."RUN_ID" = :run_id ' ||
         '   AND R."OWNER" = :target_owner ' ||
         '   AND R."TABLE_NAME" = :target_table ' ||
         '   AND R."RULE_ID" = :rule_id ' ||
@@ -1913,7 +1927,7 @@ BEGIN
         '   AND R."FEATURE_COLUMNS" IS NOT NULL ' ||
         '   AND ROWNUM = 1'
         INTO v_target_col, v_rule_expression, v_rule_feature_columns, v_rule_score, v_rule_complexity, v_rule_method
-        USING v_run_source_type, v_run_source_type, v_run_id, v_target_owner, v_target_table, v_rule_id;
+        USING v_run_source_type, v_run_id, v_target_owner, v_target_table, v_rule_id;
 
     v_target_col := normalize_identifier(v_target_col, 'target_column');
     IF NOT column_exists(v_target_owner, v_target_table, v_target_col) THEN
@@ -2792,7 +2806,7 @@ BEGIN
     v_rule_filter_sql :=
         '          FROM ' || v_rule_object || ' R ' ||
         '         WHERE R."RUN_SOURCE_TYPE" = ' || sql_literal(v_run_source_type) ||
-        '           AND (' || sql_literal(v_run_source_type) || ' = ''DATA_WORK'' OR R."RUN_ID" = ' || number_literal(v_run_id) || ') ' ||
+        '           AND R."RUN_ID" = ' || number_literal(v_run_id) ||
         '           AND R."OWNER" = ' || sql_literal(v_target_owner) ||
         '           AND R."TABLE_NAME" = ' || sql_literal(v_target_table) ||
         '           AND R."SELECTED_YN" = ''Y'' ' ||
