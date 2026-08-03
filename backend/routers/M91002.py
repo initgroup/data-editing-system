@@ -143,8 +143,8 @@ def get_display_settings(request: Request):
     user_id = get_request_user_id(request)
     connection_id = get_target_connection_id(request)
     defaults = {
-        "systemDisplayName": "INIT Data Editing System",
-        "systemLogoImage": "./assets/init-logo.png",
+        "systemDisplayName": "INIT-Data Editing Platform System",
+        "systemLogoImage": "./assets/indeps_compact_en_white.png",
     }
     conn = None
     cursor = None
@@ -162,11 +162,17 @@ def get_display_settings(request: Request):
             })
             row = cursor.fetchone()
             values[key] = normalize_db_value(row[0]) if row and row[0] is not None else ""
+        display_name = values.get("SYSTEM_DISPLAY_NAME") or defaults["systemDisplayName"]
+        logo_image = values.get("SYSTEM_LOGO_IMAGE") or defaults["systemLogoImage"]
+        if display_name == "INIT Data Editing System":
+            display_name = defaults["systemDisplayName"]
+        if logo_image in ("./assets/init-logo.png", "./assets/indeps_compact_en.png"):
+            logo_image = defaults["systemLogoImage"]
         return {
             "status": "success",
             "data": {
-                "systemDisplayName": values.get("SYSTEM_DISPLAY_NAME") or defaults["systemDisplayName"],
-                "systemLogoImage": values.get("SYSTEM_LOGO_IMAGE") or defaults["systemLogoImage"],
+                "systemDisplayName": display_name,
+                "systemLogoImage": logo_image,
             }
         }
     except HTTPException:

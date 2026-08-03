@@ -5107,7 +5107,7 @@ body.intro-mode #container-intro .env-panel {
     right: 0;
 }
 
-#container-login .login-brand-mark,
+#container-login .login-brand-logos,
 #container-login .login-brand-eyebrow,
 #container-login .login-brand-panel h1,
 #container-login .login-brand-lead,
@@ -5118,23 +5118,47 @@ body.intro-mode #container-intro .env-panel {
     z-index: 1;
 }
 
-#container-login .login-brand-mark {
+#container-login .login-brand-logos {
+    align-items: center;
+    display: flex;
+    gap: 8px;
+    grid-row: 1;
+}
+
+#container-login .login-brand-mark,
+#container-login .login-brand-partner-mark {
     align-items: center;
     background: rgba(255, 255, 255, 0.94);
     border: 1px solid rgba(255, 255, 255, 0.72);
     display: inline-flex;
-    grid-row: 1;
     height: 38px;
     justify-content: center;
     padding: 0 10px;
+}
+
+#container-login .login-brand-mark {
     width: 108px;
 }
 
-#container-login .login-brand-mark img {
+#container-login .login-brand-mark img,
+#container-login .login-brand-partner-mark img {
     display: block;
+    object-fit: contain;
+}
+
+#container-login .login-brand-mark img {
     max-height: 22px;
     max-width: 76px;
-    object-fit: contain;
+}
+
+#container-login .login-brand-partner-mark {
+    padding: 0 6px;
+    width: 132px;
+}
+
+#container-login .login-brand-partner-mark img {
+    max-height: 30px;
+    max-width: 118px;
 }
 
 #container-login .login-brand-eyebrow {
@@ -5729,14 +5753,27 @@ body.intro-mode #container-intro .env-panel {
         padding: 22px;
     }
 
-    #container-login .login-brand-mark {
+    #container-login .login-brand-mark,
+    #container-login .login-brand-partner-mark {
         height: 34px;
+    }
+
+    #container-login .login-brand-mark {
         width: 100px;
     }
 
     #container-login .login-brand-mark img {
         max-height: 20px;
         max-width: 70px;
+    }
+
+    #container-login .login-brand-partner-mark {
+        width: 116px;
+    }
+
+    #container-login .login-brand-partner-mark img {
+        max-height: 26px;
+        max-width: 104px;
     }
 
     #container-login .login-brand-eyebrow {
@@ -9171,18 +9208,18 @@ body.intro-mode #container-intro .env-panel {
 
 #sidebar .app-brand {
     align-items: center;
-    background: rgba(255, 255, 255, 0.94);
-    border: 1px solid rgba(255, 255, 255, 0.7);
-    box-shadow: 0 12px 24px rgba(2, 6, 23, 0.18);
+    background: transparent;
+    border: 0;
+    box-shadow: none;
     height: 42px;
     justify-content: center;
     min-width: 122px;
-    padding: 0 12px;
+    padding: 0;
 }
 
 #sidebar .app-brand-logo {
-    max-height: 26px;
-    max-width: 98px;
+    max-height: 38px;
+    max-width: 118px;
 }
 
 #sidebar #btnExpandAllMenus,

@@ -19,13 +19,13 @@
       "DEFAULTS": [
         {
           "SETTING_KEY": "SYSTEM_DISPLAY_NAME",
-          "SETTING_VALUE": "INIT Data Editing System",
+          "SETTING_VALUE": "INIT-Data Editing Platform System",
           "SETTING_DESC": "System display name.",
           "SORT_ORDER": 10
         },
         {
           "SETTING_KEY": "SYSTEM_LOGO_IMAGE",
-          "SETTING_VALUE": "./assets/init-logo.png",
+          "SETTING_VALUE": "./assets/indeps_compact_en_white.png",
           "SETTING_DESC": "System logo image URL or data URL. Recommended 160x40px. It is displayed with automatic proportional scaling.",
           "SORT_ORDER": 20
         },
