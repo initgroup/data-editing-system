@@ -3446,7 +3446,7 @@ def validate_dml(request: Request, payload: EditDmlValidateRequest) -> dict[str,
     cursor = conn.cursor()
     try:
         session = _select_session(cursor, payload.editSessionId, request)
-        if str(session.get("SESSION_STATUS") or "") not in {"VALIDATED", "APPLY_READY", "APPLIED"}:
+        if str(session.get("SESSION_STATUS") or "") not in {"EDITING", "VALIDATED", "APPLY_READY", "APPLIED"}:
             raise HTTPException(status_code=409, detail="Validate the editing session before validating final DML.")
         message = _validate_registered_dml(
             cursor,
