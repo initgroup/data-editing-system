@@ -8,7 +8,7 @@
         { pageCode: "M05002", step: "03", title: "오류 수정", shortTitle: "오류 수정", icon: "fa-eraser", mode: "VIOLATIONS", description: "최종 규칙의 위반 행을 조회하고 INITDN$ 편집본에서 바로 수정합니다." },
         { pageCode: "M05002_CLEANSING", step: "04", title: "오류 수정 이력", shortTitle: "수정 이력", icon: "fa-clock-rotate-left", mode: "CHANGE_HISTORY", description: "편집 작업별 오류 수정값과 처리 이력을 조회합니다." },
         { pageCode: "M05003", step: "05", title: "에디팅 효과 검증", shortTitle: "효과 검증", icon: "fa-chart-column", mode: "VALIDATION", description: "변경 효과를 확인하고 INITDN$ 기준 Flow 재분석 결과를 연결합니다." },
-        { pageCode: "M05003_FINAL_APPLY", step: "06", title: "운영 반영 DML", shortTitle: "운영 반영", icon: "fa-database", mode: "FINAL_APPLY", description: "DML을 생성·검증·저장한 후 실행하여 최종 운영 데이터에 반영합니다." },
+        { pageCode: "M05003_FINAL_APPLY", step: "06", title: "운영 반영 DML", shortTitle: "운영 반영", icon: "fa-database", mode: "FINAL_APPLY", description: "DML을 생성하고 필요하면 별도로 검증한 뒤, 저장된 SQL을 실행하여 운영 데이터에 반영합니다." },
         { pageCode: "M05003_HISTORY", step: "07", title: "에디팅 감사 이력", shortTitle: "전체 이력", icon: "fa-clock-rotate-left", mode: "HISTORY", description: "규칙 판단부터 최종 반영까지 모든 에디팅 이벤트를 조회합니다." }
     ]);
     const STAGE_MAP = Object.freeze({
@@ -3317,8 +3317,8 @@
                 const counts = this.countBy(this.rows, "DML_STATUS");
                 this.setKpis([
                     { value: this.rows.length, label: "등록 DML", hint: `Session #${session.EDIT_SESSION_ID}` },
-                    { value: counts.DRAFT || 0, label: "작성 중", hint: "DML 검증 전" },
-                    { value: counts.APPROVED || 0, label: "검증·저장", hint: "DML 실행 가능" },
+                    { value: counts.DRAFT || 0, label: "저장", hint: "DML 실행 가능" },
+                    { value: counts.APPROVED || 0, label: "검증 완료", hint: "기존 검증 DML" },
                     { value: counts.EXECUTED || 0, label: "실행 완료", hint: "커밋된 DML" }
                 ]);
                 this.renderDmlContent();
@@ -3387,7 +3387,7 @@
                             <label class="edit-work-field"><span>상태</span><input value="${this.escapeHtml(this.dmlStatusLabel(dml.DML_STATUS))}" disabled></label>
                             <label class="edit-work-field"><span>영향 행</span><input value="${this.escapeHtml(dml.AFFECTED_ROW_COUNT ?? "-")}" disabled></label>
                         </div>
-                        <p class="edit-work-dml-notice">${this.escapeHtml(this.pageLabel("dmlEditNotice", "그리드의 각 행은 DML 버전입니다. 신규 생성한 미저장 DML도 즉시 표시되며, DML 저장 시 현재 SQL을 자동 검증합니다."))}</p>
+                        <p class="edit-work-dml-notice">${this.escapeHtml(this.pageLabel("dmlEditNotice", "DML 저장은 현재 SQL을 그대로 보관합니다. DML 검증은 필요할 때 별도로 실행할 수 있습니다."))}</p>
                         <textarea id="dmlSql-${PAGE_CODE}" class="edit-work-dml-editor" spellcheck="false" oninput="${PAGE_CODE}.handleDmlSqlInput()">${this.escapeHtml(dml.DML_SQL || "")}</textarea>
                     </section>
                 `;
@@ -3425,13 +3425,13 @@
                 const dml = this.selectedDml || {};
                 const currentSql = String(dml.DML_SQL || "");
                 const currentName = String(dml.DML_NAME || "");
-                const isValidated = Boolean(currentSql) && currentSql === this.dmlValidatedSql;
                 const isSaved = Boolean(dml.EDIT_DML_ID)
                     && currentSql === this.dmlSavedSql
                     && currentName === this.dmlSavedName;
                 const canValidate = Boolean(currentSql);
                 const canSave = Boolean(currentSql);
-                const canExecute = isValidated && isSaved && dml.DML_STATUS === "APPROVED";
+                const dmlStatus = String(dml.DML_STATUS || "").toUpperCase();
+                const canExecute = isSaved && ["DRAFT", "APPROVED", "FAILED"].includes(dmlStatus);
                 const saveLabel = String(dml.DML_STATUS || "").toUpperCase() === "EXECUTED"
                     ? this.pageLabel("buttonSaveAsNewDmlVersion", "새 버전 저장")
                     : this.pageLabel("buttonSaveDml", "DML 저장");
@@ -3601,7 +3601,7 @@
                 CommonMessage.success(
                     this.pageLabel(
                         "dmlRegenerated",
-                        "선택한 DML을 현재 편집 변경 내역의 초기 생성 구문으로 다시 만들었습니다. 검증 후 저장하세요."
+                        "선택한 DML을 현재 편집 변경 내역의 초기 생성 구문으로 다시 만들었습니다. 검증하거나 바로 저장할 수 있습니다."
                     )
                 );
             },
@@ -3623,7 +3623,6 @@
                 );
                 if (
                     this.selectedDml?.EDIT_DML_ID
-                    && ["APPROVED", "EXECUTED"].includes(currentStatus)
                     && !hasChanges
                 ) {
                     CommonMessage.info(
@@ -3658,15 +3657,17 @@
                         showLoading: true
                     });
                     this.selectedDmlId = String(json.editDmlId);
-                    this.dmlValidatedSql = currentSql;
-                    CommonMessage.success(this.pageLabel("dmlSavedAfterValidation", "DML 검증과 저장을 완료했습니다."));
+                    this.dmlValidatedSql = "";
+                    CommonMessage.success(this.pageLabel("dmlSaved", "DML 명과 SQL을 저장했습니다."));
                     this.invalidateEditWorkspaceCache("M05003_HISTORY");
                     await this.loadSessions(session.EDIT_SESSION_ID);
                     await this.refresh();
                 } catch (error) {
-                    this.dmlValidatedSql = "";
                     this.renderDmlPanelActions();
-                    this.showDmlValidationFailure(error);
+                    CommonMessage.error(
+                        `${this.pageLabel("dmlSaveFailed", "DML 저장에 실패했습니다.")}\n${String(error?.message || "")}`,
+                        { copyable: true }
+                    );
                 }
             },
 
@@ -3699,7 +3700,16 @@
             showDmlValidationFailure(error) {
                 const rawMessage = String(error?.message || "");
                 let detail = rawMessage;
-                if (/must match the server-generated INITDN\\$ apply statement/i.test(rawMessage)) {
+                if (/Final DML row mapping is stale or ambiguous/i.test(rawMessage)) {
+                    const diagnostics = rawMessage.match(
+                        /expected=\d+.*?caseKeyChecks=[^.]+/i
+                    )?.[0];
+                    detail = this.pageLabel(
+                        "dmlRowMappingStale",
+                        "편집 행과 현재 원본 행을 안전하게 연결할 수 없습니다. 현재 원본으로 새 편집 작업을 만들거나 업무 키 설정을 확인하세요."
+                    );
+                    if (diagnostics) detail += `\n${diagnostics}`;
+                } else if (/must match the server-generated INITDN\\$ apply statement/i.test(rawMessage)) {
                     detail = this.pageLabel("dmlRegenerateRequired", "저장된 DML이 최신 서버 생성 SQL과 다릅니다. DML을 다시 생성하세요.");
                 } else if (/not valid Oracle SQL/i.test(rawMessage)) {
                     detail = this.pageLabel("dmlOracleSyntaxInvalid", "생성된 운영 반영 DML의 Oracle 문법이 올바르지 않습니다.");
@@ -3709,17 +3719,18 @@
             },
 
             async executeDml() {
-                if (!this.selectedDml?.EDIT_DML_ID || this.selectedDml.DML_STATUS !== "APPROVED") return;
+                if (!this.selectedDml?.EDIT_DML_ID) return;
+                const dmlStatus = String(this.selectedDml.DML_STATUS || "").toUpperCase();
+                if (!["DRAFT", "APPROVED", "FAILED"].includes(dmlStatus)) return;
                 const session = this.getSelectedSession();
                 const message = [
-                    `검증·저장된 DML #${this.selectedDml.EDIT_DML_ID}을 실행합니다.`,
+                    `저장된 DML #${this.selectedDml.EDIT_DML_ID}의 SQL을 실행합니다.`,
                     `${session.TARGET_OWNER}.${session.SOURCE_TABLE} 운영 원본이 변경되고 커밋됩니다.`,
                     "계속할까요?"
                 ].join("\n\n");
                 if (!(await CommonMessage.confirm(message))) return;
-                const json = await CommonUtils.request(apiUrl(`/dml/${this.selectedDml.EDIT_DML_ID}/execute`), { method: "POST", showLoading: true });
-                CommonMessage.success(`최종 반영 완료: ${Number(json.affectedRowCount || 0).toLocaleString()}행`);
-                this.invalidateEditWorkspaceCache("M05003");
+                await CommonUtils.request(apiUrl(`/dml/${this.selectedDml.EDIT_DML_ID}/execute`), { method: "POST", showLoading: true });
+                CommonMessage.success(this.pageLabel("dmlExecutionCompleted", "저장된 DML 실행을 완료했습니다."));
                 this.invalidateEditWorkspaceCache("M05003_HISTORY");
                 await this.loadSessions(session.EDIT_SESSION_ID);
                 await this.refresh();
@@ -4794,7 +4805,7 @@
                 const status = String(value || "").toUpperCase();
                 const labels = {
                     UNSAVED: this.pageLabel("dmlStatusUnsaved", "미저장"),
-                    DRAFT: this.pageLabel("dmlStatusDraft", "검증 전"),
+                    DRAFT: this.pageLabel("dmlStatusDraft", "저장"),
                     APPROVED: this.pageLabel("dmlStatusValidatedSaved", "검증·저장"),
                     EXECUTED: this.pageLabel("dmlStatusExecuted", "실행 완료"),
                     FAILED: this.pageLabel("dmlStatusFailed", "실행 실패")

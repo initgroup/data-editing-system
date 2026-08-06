@@ -3348,6 +3348,132 @@ def link_reanalysis(
         conn.close()
 
 
+def _resolve_dml_match_column(
+    cursor,
+    *,
+    changes: list[dict[str, Any]],
+    owner: str,
+    source_table: str,
+    edit_table: str,
+    edit_session_id: int,
+    expected_rows: int,
+    registered_case_column: str | None,
+) -> str | None:
+    source_column_map = {
+        str(row.get("COLUMN_NAME") or ""): row
+        for row in _table_columns(cursor, owner, source_table)
+    }
+    edit_column_map = {
+        str(row.get("COLUMN_NAME") or ""): row
+        for row in _table_columns(cursor, owner, edit_table)
+    }
+    rule_case_columns = {
+        _normalize_identifier(row.get("CASE_ID_COLUMN"), "case ID column")
+        for row in changes
+        if str(row.get("CASE_ID_COLUMN") or "").strip()
+    }
+    all_changes_have_same_case_column = (
+        len(rule_case_columns) == 1
+        and all(str(row.get("CASE_ID_COLUMN") or "").strip() for row in changes)
+    )
+    case_columns: list[str] = []
+    if str(registered_case_column or "").strip():
+        case_columns.append(
+            _normalize_identifier(registered_case_column, "registered case ID column")
+        )
+    if all_changes_have_same_case_column:
+        rule_case_column = next(iter(rule_case_columns))
+        if rule_case_column not in case_columns:
+            case_columns.append(rule_case_column)
+    change_scope = (
+        "EXISTS (\n"
+        "             SELECT 1\n"
+        '               FROM "INIT$_TB_EDIT_CHANGE" C\n'
+        f"              WHERE C.EDIT_SESSION_ID = {int(edit_session_id)}\n"
+        "                AND C.CHANGE_STATUS = 'APPLIED'\n"
+        f"                AND C.SOURCE_ROWID = E.{_quote_identifier(TRACKING_COLUMN)}\n"
+        "             )"
+    )
+
+    case_match_diagnostics: list[str] = []
+    for case_column in case_columns:
+        source_metadata = source_column_map.get(case_column) or {}
+        edit_metadata = edit_column_map.get(case_column) or {}
+        source_type = str(source_metadata.get("DATA_TYPE") or "").upper()
+        edit_type = str(edit_metadata.get("DATA_TYPE") or "").upper()
+        unsupported_type = any(
+            marker in source_type or marker in edit_type
+            for marker in ("LOB", "LONG", "XMLTYPE")
+        )
+        if not source_metadata or not edit_metadata:
+            case_match_diagnostics.append(f"{case_column}:missing")
+            continue
+        if unsupported_type:
+            case_match_diagnostics.append(f"{case_column}:unsupportedType")
+            continue
+        quoted_case_column = _quote_identifier(case_column)
+        cursor.execute(
+            "SELECT COUNT(*) AS EDIT_ROW_COUNT\n"
+            f"     , COUNT(E.{quoted_case_column}) AS NON_NULL_KEY_COUNT\n"
+            f"     , COUNT(DISTINCT E.{quoted_case_column}) AS DISTINCT_KEY_COUNT\n"
+            f"  FROM {_quote_identifier(owner)}.{_quote_identifier(edit_table)} E\n"
+            " WHERE " + change_scope
+        )
+        edit_row_count, non_null_key_count, distinct_key_count = cursor.fetchone()
+        edit_row_count = int(edit_row_count or 0)
+        non_null_key_count = int(non_null_key_count or 0)
+        distinct_key_count = int(distinct_key_count or 0)
+        if (
+            edit_row_count != expected_rows
+            or non_null_key_count != expected_rows
+            or distinct_key_count != expected_rows
+        ):
+            case_match_diagnostics.append(
+                f"{case_column}:edit={edit_row_count},nonNull={non_null_key_count},distinct={distinct_key_count}"
+            )
+            continue
+        cursor.execute(
+            "SELECT COUNT(*) AS SOURCE_MATCH_COUNT\n"
+            f"  FROM {_quote_identifier(owner)}.{_quote_identifier(source_table)} S\n"
+            f"  JOIN {_quote_identifier(owner)}.{_quote_identifier(edit_table)} E\n"
+            f"    ON S.{quoted_case_column} = E.{quoted_case_column}\n"
+            " WHERE " + change_scope
+        )
+        source_match_count = int(cursor.fetchone()[0] or 0)
+        if source_match_count == expected_rows:
+            return case_column
+        case_match_diagnostics.append(
+            f"{case_column}:sourceMatched={source_match_count}"
+        )
+
+    cursor.execute(
+        "SELECT COUNT(*) AS EDIT_ROW_COUNT\n"
+        f"  FROM {_quote_identifier(owner)}.{_quote_identifier(edit_table)} E\n"
+        " WHERE " + change_scope
+    )
+    edit_row_count = int(cursor.fetchone()[0] or 0)
+    cursor.execute(
+        "SELECT COUNT(*) AS SOURCE_MATCH_COUNT\n"
+        f"  FROM {_quote_identifier(owner)}.{_quote_identifier(source_table)} S\n"
+        f"  JOIN {_quote_identifier(owner)}.{_quote_identifier(edit_table)} E\n"
+        f"    ON ROWIDTOCHAR(S.ROWID) = E.{_quote_identifier(TRACKING_COLUMN)}\n"
+        " WHERE " + change_scope
+    )
+    source_match_count = int(cursor.fetchone()[0] or 0)
+    if edit_row_count == expected_rows and source_match_count == expected_rows:
+        return None
+    raise HTTPException(
+        status_code=409,
+        detail=(
+            "Final DML row mapping is stale or ambiguous. "
+            f"expected={expected_rows}, editMatched={edit_row_count}, "
+            f"sourceMatched={source_match_count}. "
+            f"caseKeyChecks={';'.join(case_match_diagnostics) or 'none'}. "
+            "Create a new editing work from the current source table if no registered case key matches."
+        ),
+    )
+
+
 def _generate_merge_dml(cursor, session: dict[str, Any], edit_session_id: int) -> str:
     changes = _fetch_all(
         cursor,
@@ -3360,7 +3486,7 @@ def _generate_merge_dml(cursor, session: dict[str, Any], edit_session_id: int) -
     owner = _normalize_identifier(session["TARGET_OWNER"], "target owner")
     source_table = _normalize_identifier(session["SOURCE_TABLE"], "source table")
     edit_table = _normalize_identifier(session["EDIT_TABLE"], "edit table")
-    _require_session_table_mapping(cursor, session)
+    mapping = _require_session_table_mapping(cursor, session)
     source_columns = {str(row.get("COLUMN_NAME") or "") for row in _table_columns(cursor, owner, source_table)}
     if any(column not in source_columns for column in columns):
         raise HTTPException(status_code=400, detail="A changed column is missing from the INITUP$ source table.")
@@ -3371,6 +3497,16 @@ def _generate_merge_dml(cursor, session: dict[str, Any], edit_session_id: int) -
     })
     if expected_rows <= 0:
         raise HTTPException(status_code=409, detail="No applied source rows are available for DML generation.")
+    match_column = _resolve_dml_match_column(
+        cursor,
+        changes=changes,
+        owner=owner,
+        source_table=source_table,
+        edit_table=edit_table,
+        edit_session_id=edit_session_id,
+        expected_rows=expected_rows,
+        registered_case_column=str(mapping.get("CASE_ID_COLUMN") or "") or None,
+    )
     assignments = "\n".join(
         (
             "         , " if index else "         SET "
@@ -3389,6 +3525,11 @@ def _generate_merge_dml(cursor, session: dict[str, Any], edit_session_id: int) -
         + "         END"
         for index, column in enumerate(columns)
     )
+    match_condition = (
+        f"   ON (S.{_quote_identifier(match_column)} = E.{_quote_identifier(match_column)})\n"
+        if match_column
+        else f"   ON (ROWIDTOCHAR(S.ROWID) = E.{_quote_identifier(TRACKING_COLUMN)})\n"
+    )
     merge_sql = (
         f"MERGE INTO {_quote_identifier(owner)}.{_quote_identifier(source_table)} S\n"
         "USING (\n"
@@ -3402,7 +3543,7 @@ def _generate_merge_dml(cursor, session: dict[str, Any], edit_session_id: int) -
         f"                AND C.SOURCE_ROWID = E.{_quote_identifier(TRACKING_COLUMN)}\n"
         "             )\n"
         "     ) E\n"
-        f"   ON (ROWIDTOCHAR(S.ROWID) = E.{_quote_identifier(TRACKING_COLUMN)})\n"
+        f"{match_condition}"
         " WHEN MATCHED THEN\n"
         "      UPDATE\n"
         f"{assignments}"
@@ -3428,8 +3569,6 @@ def generate_dml(request: Request, edit_session_id: int) -> dict[str, Any]:
     cursor = conn.cursor()
     try:
         session = _select_session(cursor, edit_session_id, request)
-        if str(session.get("SESSION_STATUS") or "") not in {"EDITING", "VALIDATED", "APPLY_READY", "APPLIED"}:
-            raise HTTPException(status_code=409, detail="Editing session is not ready for final DML generation.")
         dml_sql = _generate_merge_dml(cursor, session, edit_session_id)
         return {
             "status": "success",
@@ -3446,8 +3585,6 @@ def validate_dml(request: Request, payload: EditDmlValidateRequest) -> dict[str,
     cursor = conn.cursor()
     try:
         session = _select_session(cursor, payload.editSessionId, request)
-        if str(session.get("SESSION_STATUS") or "") not in {"EDITING", "VALIDATED", "APPLY_READY", "APPLIED"}:
-            raise HTTPException(status_code=409, detail="Validate the editing session before validating final DML.")
         message = _validate_registered_dml(
             cursor,
             payload.dmlSql,
@@ -3519,6 +3656,16 @@ def _validate_registered_dml(
         raise HTTPException(
             status_code=400,
             detail="Final DML must keep the current INITUP$/INITDN$ target, editing history, and matched-row update structure.",
+        )
+    canonical_match = re.search(
+        r"\bON\s*\(([^()]*)\)\s*WHEN\s+MATCHED",
+        canonical_merge,
+        re.IGNORECASE,
+    )
+    if not canonical_match or normalize_space(canonical_match.group(0)) not in normalized_merge:
+        raise HTTPException(
+            status_code=400,
+            detail="The server-generated final DML row match condition cannot be changed.",
         )
 
     prohibited_patterns = (
@@ -3602,16 +3749,12 @@ def save_dml(request: Request, payload: EditDmlRequest) -> dict[str, Any]:
     conn = get_target_db_connection(request)
     cursor = conn.cursor()
     try:
-        session = _select_session(cursor, payload.editSessionId, request)
-        if str(session.get("SESSION_STATUS") or "") not in {"VALIDATED", "APPLY_READY", "APPLIED"}:
-            raise HTTPException(status_code=409, detail="Validate the editing session before registering final DML.")
-        validation_message = _validate_registered_dml(
-            cursor,
-            payload.dmlSql,
-            session,
-            payload.editSessionId,
-            parse_oracle=True,
-        )
+        _select_session(cursor, payload.editSessionId, request)
+        dml_sql = str(payload.dmlSql or "")
+        if not dml_sql.strip():
+            raise HTTPException(status_code=400, detail="DML SQL is required.")
+        if len(dml_sql) > 200_000:
+            raise HTTPException(status_code=400, detail="DML SQL is too large.")
         if payload.editDmlId:
             existing_dml = _fetch_one(
                 cursor,
@@ -3636,7 +3779,7 @@ def save_dml(request: Request, payload: EditDmlRequest) -> dict[str, Any]:
                     "editDmlId": payload.editDmlId,
                     "editSessionId": payload.editSessionId,
                     "dmlName": _normalize_text(payload.dmlName, 300, "Final apply DML"),
-                    "dmlSql": payload.dmlSql,
+                    "dmlSql": dml_sql,
                 },
             )
             if cursor.rowcount != 1:
@@ -3649,40 +3792,27 @@ def save_dml(request: Request, payload: EditDmlRequest) -> dict[str, Any]:
                 {
                     "editSessionId": payload.editSessionId,
                     "dmlName": _normalize_text(payload.dmlName, 300, "Final apply DML"),
-                    "dmlSql": payload.dmlSql,
+                    "dmlSql": dml_sql,
                     "createdBy": user_id,
                     "editDmlId": output_id,
                 },
             )
             value = output_id.getvalue()
             edit_dml_id = int(value[0] if isinstance(value, list) else value)
-        cursor.execute(
-            SqlLoader.get_sql("MCOMMON_EDIT_DML_APPROVE"),
-            {
-                "editDmlId": edit_dml_id,
-                "validationMessage": validation_message,
-                "approvedBy": user_id,
-            },
-        )
-        cursor.execute(
-            SqlLoader.get_sql("MCOMMON_EDIT_SESSION_STATUS"),
-            {"sessionStatus": "APPLY_READY", "editSessionId": payload.editSessionId},
-        )
         _event(
             cursor,
             edit_session_id=payload.editSessionId,
             event_type="DML_SAVED",
             entity_type="EDIT_DML",
             entity_id=edit_dml_id,
-            summary="Validated final apply DML saved.",
+            summary="Final apply DML saved.",
             user_id=user_id,
         )
         conn.commit()
         return {
             "status": "success",
             "editDmlId": edit_dml_id,
-            "dmlStatus": "APPROVED",
-            "validationMessage": validation_message,
+            "dmlStatus": "DRAFT",
         }
     except Exception:
         conn.rollback()
@@ -3772,8 +3902,6 @@ def approve_dml(request: Request, edit_dml_id: int) -> dict[str, Any]:
         if not dml:
             raise HTTPException(status_code=404, detail="Registered DML was not found.")
         session = _select_session(cursor, int(dml["EDIT_SESSION_ID"]), request)
-        if str(session.get("SESSION_STATUS") or "") != "APPLY_READY":
-            raise HTTPException(status_code=409, detail="Editing session is not ready for DML approval.")
         if str(dml.get("DML_STATUS") or "") != "DRAFT":
             raise HTTPException(status_code=409, detail="Only draft DML can be approved.")
         message = _validate_registered_dml(
@@ -3817,10 +3945,13 @@ def execute_dml(request: Request, edit_dml_id: int) -> dict[str, Any]:
             raise HTTPException(status_code=404, detail="Registered DML was not found.")
         edit_session_id = int(dml["EDIT_SESSION_ID"])
         session = _select_session(cursor, edit_session_id, request)
-        if str(session.get("SESSION_STATUS") or "") != "APPLY_READY":
-            raise HTTPException(status_code=409, detail="Editing session is not ready for final apply.")
-        if str(dml.get("DML_STATUS") or "") != "APPROVED":
-            raise HTTPException(status_code=409, detail="Only validated and saved DML can be executed.")
+        if (
+            get_request_role_code(request) != "ADMIN"
+            and str(dml.get("CREATED_BY") or "") != user_id
+        ):
+            raise HTTPException(status_code=403, detail="Only the DML author can execute this DML.")
+        if str(dml.get("DML_STATUS") or "").upper() == "EXECUTED":
+            raise HTTPException(status_code=409, detail="Executed DML cannot be executed again.")
         _validate_registered_dml(
             cursor,
             str(dml.get("DML_SQL") or ""),
@@ -3828,15 +3959,8 @@ def execute_dml(request: Request, edit_dml_id: int) -> dict[str, Any]:
             edit_session_id,
             parse_oracle=True,
         )
-        validation = _fetch_one(
-            cursor,
-            "MCOMMON_EDIT_VALIDATION_SUMMARY",
-            {"editSessionId": edit_session_id},
-        ) or {}
-        expected_rows = int(validation.get("CHANGED_ROW_COUNT") or 0)
-        if expected_rows <= 0:
-            raise HTTPException(status_code=409, detail="No validated editing rows are available for final apply.")
-        affected = expected_rows
+        cursor.execute(str(dml["DML_SQL"]))
+        affected = max(0, int(cursor.rowcount or 0))
         cursor.execute(
             SqlLoader.get_sql("MCOMMON_EDIT_DML_EXECUTION_RESULT"),
             {
@@ -3844,12 +3968,8 @@ def execute_dml(request: Request, edit_dml_id: int) -> dict[str, Any]:
                 "dmlStatus": "EXECUTED",
                 "executedBy": user_id,
                 "affectedRowCount": affected,
-                "executionMessage": f"Final apply committed. {affected} row(s) affected.",
+                "executionMessage": f"Saved DML executed. {affected} row(s) reported by the driver.",
             },
-        )
-        cursor.execute(
-            SqlLoader.get_sql("MCOMMON_EDIT_SESSION_STATUS"),
-            {"sessionStatus": "APPLIED", "editSessionId": edit_session_id},
         )
         _event(
             cursor,
@@ -3857,14 +3977,11 @@ def execute_dml(request: Request, edit_dml_id: int) -> dict[str, Any]:
             event_type="DML_EXECUTED",
             entity_type="EDIT_DML",
             entity_id=edit_dml_id,
-            summary=f"Final operational apply committed: {affected} row(s).",
+            summary=f"Saved DML executed: {affected} row(s) reported by the driver.",
             user_id=user_id,
             detail={"affectedRowCount": affected},
         )
-        # The canonical PL/SQL block commits the operational MERGE together with
-        # the execution metadata prepared above. Its row-count guard raises
-        # before COMMIT when the target rows no longer match the editing history.
-        cursor.execute(str(dml["DML_SQL"]))
+        conn.commit()
         return {"status": "success", "editDmlId": edit_dml_id, "affectedRowCount": affected}
     except HTTPException:
         conn.rollback()
