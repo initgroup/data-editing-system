@@ -6505,7 +6505,7 @@
             },
             renderRunHistoryMessageCell(row) {
                 const flowRunId = row?.FLOW_RUN_ID || "";
-                const message = String(row?.MESSAGE || "");
+                const message = this.localizeFlowRunMessage(row?.MESSAGE);
                 const preview = message.length > 140 ? `${message.slice(0, 140)}...` : message;
                 return `
                     <div class="flow-run-history-message">
@@ -6520,10 +6520,56 @@
                     </div>
                 `;
             },
+            localizeFlowRunMessage(value) {
+                const message = String(value || "").trim();
+                if (!message) return "";
+                const directMessages = new Map([
+                    ["Integrated editing flow queued for DAG execution.", ["flowRunQueuedMessage", "Flow run queued for DAG execution."]],
+                    ["Flow queued for DAG execution.", ["flowRunQueuedMessage", "Flow run queued for DAG execution."]],
+                    ["Flow run queued.", ["flowRunQueuedMessage", "Flow run queued for DAG execution."]],
+                    ["Flow batch execution started.", ["flowBatchStartedMessage", "Scheduled flow execution started."]],
+                    ["Flow execution started.", ["flowRunStartedMessage", "Flow execution started."]],
+                    ["Flow run recorded.", ["flowRunRecordedMessage", "Flow run recorded."]]
+                ]);
+                const direct = directMessages.get(message);
+                if (direct) return this.getMessage(direct[0], direct[1]);
+
+                let match = message.match(/^Flow execution completed\. (\d+) node\(s\) executed, (\d+) skipped\.$/i);
+                if (match) {
+                    return this.getMessage(
+                        "flowRunCompletedMessage",
+                        "Flow execution completed. {executed} node(s) executed, {skipped} skipped.",
+                        { executed: match[1], skipped: match[2] }
+                    );
+                }
+                match = message.match(/^Flow execution completed with failures\. (\d+) node\(s\) succeeded, (\d+) failed, (\d+) skipped\. First failed node: ([^.]+)\.\s*([\s\S]*)$/i);
+                if (match) {
+                    const summary = this.getMessage(
+                        "flowRunCompletedWithFailuresMessage",
+                        "Flow execution completed with failures. {succeeded} node(s) succeeded, {failed} failed, {skipped} skipped.",
+                        { succeeded: match[1], failed: match[2], skipped: match[3] }
+                    );
+                    const failedNode = this.getMessage(
+                        "flowRunFirstFailedNodeMessage",
+                        "First failed node: {node}.",
+                        { node: match[4] }
+                    );
+                    return [summary, failedNode, match[5]].filter(Boolean).join(" ");
+                }
+                match = message.match(/^Flow execution failed:\s*([\s\S]+)$/i);
+                if (match) {
+                    return this.getMessage(
+                        "flowRunFailedMessage",
+                        "Flow execution failed: {detail}",
+                        { detail: match[1] }
+                    );
+                }
+                return message;
+            },
             async copyRunHistoryMessage(flowRunId, event) {
                 event?.stopPropagation?.();
                 const row = this.flowRunHistoryRows.find((item) => String(item.FLOW_RUN_ID || "") === String(flowRunId || ""));
-                const message = row?.MESSAGE || "";
+                const message = this.localizeFlowRunMessage(row?.MESSAGE);
                 if (!message) return;
                 try {
                     await CommonMessage.copyText(message);
@@ -8241,13 +8287,16 @@
                         // Batch queueing has always been released immediately.
                         if (!batch) this.flowRunFlowKeysByRunId.set(submittedFlowRunId, activeFlowKey);
                         await this.openSubmittedFlowRunHistory(submittedFlowRunId);
-                        CommonMessage.success(json.message || (batch ? "Flow run queued." : "Flow execution started."), { copyable: false });
+                        CommonMessage.success(
+                            this.localizeFlowRunMessage(json.message || (batch ? "Flow run queued." : "Flow execution started.")),
+                            { copyable: false }
+                        );
                     } else if (stillSelected || flowKey === "NEW") {
                         await this.loadFlowRunHistory({ showFeedback: false });
                         this.switchTab("history");
-                        CommonMessage.success(json.message || "Flow run recorded.", { copyable: false });
+                        CommonMessage.success(this.localizeFlowRunMessage(json.message || "Flow run recorded."), { copyable: false });
                     } else {
-                        CommonMessage.success(json.message || "Flow run recorded.", { copyable: false });
+                        CommonMessage.success(this.localizeFlowRunMessage(json.message || "Flow run recorded."), { copyable: false });
                     }
                 } catch (error) {
                     alert(error.message || "Flow run failed.");

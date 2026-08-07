@@ -3133,5 +3133,51 @@ CREATE INDEX "IX_INIT$_TB_EDIT_DML_01"
 CREATE INDEX "IX_INIT$_TB_EDIT_EVENT_01"
     ON "INIT$_TB_EDIT_EVENT" ("EDIT_SESSION_ID", "EVENT_TYPE", "CREATED_AT")
 ]');
+    run_ddl('COMMENT INIT$_TB_EDIT_SESSION', q'[COMMENT ON TABLE "INIT$_TB_EDIT_SESSION" IS 'One immutable editing execution from INITDN correction through INITUP operational apply']');
+    run_ddl('COMMENT INIT$_TB_EDIT_SESSION.EDIT_SESSION_ID', q'[COMMENT ON COLUMN "INIT$_TB_EDIT_SESSION"."EDIT_SESSION_ID" IS 'Editing execution ID retained in the legacy session key column']');
+    run_ddl('COMMENT INIT$_TB_EDIT_SESSION_RULE', q'[COMMENT ON TABLE "INIT$_TB_EDIT_SESSION_RULE" IS 'Snapshot of editing rules assigned to an editing execution']');
+    run_ddl('COMMENT INIT$_TB_EDIT_CHANGE', q'[COMMENT ON TABLE "INIT$_TB_EDIT_CHANGE" IS 'Cell-level changes grouped by editing execution']');
+    run_ddl('COMMENT INIT$_TB_EDIT_DML', q'[COMMENT ON TABLE "INIT$_TB_EDIT_DML" IS 'Saved DML versions grouped by editing execution']');
+    run_ddl('COMMENT INIT$_TB_EDIT_EVENT', q'[COMMENT ON TABLE "INIT$_TB_EDIT_EVENT" IS 'Immutable audit timeline grouped by editing execution']');
+END;
+/
+
+DECLARE
+    v_updated_count NUMBER := 0;
+BEGIN
+    UPDATE "INIT$_TB_EDIT_SESSION" S
+       SET S.SESSION_STATUS = 'APPLIED'
+         , S.APPLIED_AT = NVL(
+               S.APPLIED_AT,
+               (
+                SELECT MAX(D.EXECUTED_AT)
+                  FROM "INIT$_TB_EDIT_DML" D
+                 WHERE D.EDIT_SESSION_ID = S.EDIT_SESSION_ID
+                   AND D.DML_STATUS = 'EXECUTED'
+               )
+           )
+         , S.UPDATED_AT = NVL(
+               (
+                SELECT MAX(D.EXECUTED_AT)
+                  FROM "INIT$_TB_EDIT_DML" D
+                 WHERE D.EDIT_SESSION_ID = S.EDIT_SESSION_ID
+                   AND D.DML_STATUS = 'EXECUTED'
+               ),
+               S.UPDATED_AT
+           )
+     WHERE S.SESSION_STATUS <> 'APPLIED'
+       AND EXISTS (
+           SELECT 1
+             FROM "INIT$_TB_EDIT_DML" D
+            WHERE D.EDIT_SESSION_ID = S.EDIT_SESSION_ID
+              AND D.DML_STATUS = 'EXECUTED'
+       );
+
+    v_updated_count := SQL%ROWCOUNT;
+    COMMIT;
+    DBMS_OUTPUT.PUT_LINE(
+        '[OK] Reconciled ' || v_updated_count
+            || ' legacy editing execution(s) to APPLIED.'
+    );
 END;
 /

@@ -1874,11 +1874,12 @@ CREATE INDEX "IX_INIT$_TB_EDIT_EVENT_01"
 
     IF object_exists('INIT$_TB_EDIT_RULE', 'TABLE') THEN
         run_ddl('COMMENT INIT$_TB_EDIT_RULE', q'[COMMENT ON TABLE "INIT$_TB_EDIT_RULE" IS 'User-reviewed editing rule master sourced from discovered or manually registered rules']');
-        run_ddl('COMMENT INIT$_TB_EDIT_SESSION', q'[COMMENT ON TABLE "INIT$_TB_EDIT_SESSION" IS 'Editing batch that copies INITUP source rows into an INITDN working table']');
-        run_ddl('COMMENT INIT$_TB_EDIT_SESSION_RULE', q'[COMMENT ON TABLE "INIT$_TB_EDIT_SESSION_RULE" IS 'Snapshot of editing rules selected for an editing session']');
-        run_ddl('COMMENT INIT$_TB_EDIT_CHANGE', q'[COMMENT ON TABLE "INIT$_TB_EDIT_CHANGE" IS 'Cell-level changes made in an INITDN editing table']');
-        run_ddl('COMMENT INIT$_TB_EDIT_DML', q'[COMMENT ON TABLE "INIT$_TB_EDIT_DML" IS 'Validated and saved DML registered for final operational data apply']');
-        run_ddl('COMMENT INIT$_TB_EDIT_EVENT', q'[COMMENT ON TABLE "INIT$_TB_EDIT_EVENT" IS 'Immutable editing workflow audit timeline']');
+        run_ddl('COMMENT INIT$_TB_EDIT_SESSION', q'[COMMENT ON TABLE "INIT$_TB_EDIT_SESSION" IS 'One immutable editing execution from INITDN correction through INITUP operational apply']');
+        run_ddl('COMMENT INIT$_TB_EDIT_SESSION.EDIT_SESSION_ID', q'[COMMENT ON COLUMN "INIT$_TB_EDIT_SESSION"."EDIT_SESSION_ID" IS 'Editing execution ID retained in the legacy session key column']');
+        run_ddl('COMMENT INIT$_TB_EDIT_SESSION_RULE', q'[COMMENT ON TABLE "INIT$_TB_EDIT_SESSION_RULE" IS 'Snapshot of editing rules assigned to an editing execution']');
+        run_ddl('COMMENT INIT$_TB_EDIT_CHANGE', q'[COMMENT ON TABLE "INIT$_TB_EDIT_CHANGE" IS 'Cell-level changes grouped by editing execution']');
+        run_ddl('COMMENT INIT$_TB_EDIT_DML', q'[COMMENT ON TABLE "INIT$_TB_EDIT_DML" IS 'Saved DML versions grouped by editing execution']');
+        run_ddl('COMMENT INIT$_TB_EDIT_EVENT', q'[COMMENT ON TABLE "INIT$_TB_EDIT_EVENT" IS 'Immutable audit timeline grouped by editing execution']');
     END IF;
 
     create_table_if_missing('INIT$_TB_OBJECT_DEPLOY', q'[

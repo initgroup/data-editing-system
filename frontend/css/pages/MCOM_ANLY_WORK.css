@@ -1134,6 +1134,33 @@
     white-space: nowrap;
 }
 
+.anly-work-violation-rule-id {
+    align-items: center;
+    display: inline-flex;
+    flex: 1 1 auto;
+    gap: 6px;
+    min-width: 0;
+}
+
+.anly-work-violation-rule-id strong {
+    flex: 1 1 auto;
+}
+
+.anly-work-violation-rule-id .anly-work-rule-copy-btn {
+    background: #ffffff;
+    border-color: #cbd5e1;
+    color: #334155;
+    flex: 0 0 auto;
+    height: 24px;
+    min-width: 26px;
+    padding: 0;
+}
+
+.anly-work-violation-rule-id .anly-work-rule-copy-btn:hover {
+    border-color: #2563eb;
+    color: #1d4ed8;
+}
+
 .anly-work-violation-rule-actions {
     align-items: center;
     display: inline-flex;

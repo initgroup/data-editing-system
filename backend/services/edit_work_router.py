@@ -217,9 +217,14 @@ def create_edit_work_router(menu_code: str) -> APIRouter:
     def create_session(payload: editing.EditSessionCreateRequest, request: Request):
         return editing.create_session(request, payload)
 
+    @router.post("/sessions/{edit_session_id}/cancel")
+    def cancel_session(edit_session_id: int, request: Request):
+        return editing.cancel_session(request, edit_session_id)
+
     @router.delete("/sessions/{edit_session_id}")
     def delete_session(edit_session_id: int, request: Request):
-        return editing.delete_session(request, edit_session_id)
+        # Legacy compatibility: the workflow no longer deletes execution history.
+        return editing.cancel_session(request, edit_session_id)
 
     @router.post("/sessions/{edit_session_id}/prepare")
     def prepare_session(edit_session_id: int, request: Request):

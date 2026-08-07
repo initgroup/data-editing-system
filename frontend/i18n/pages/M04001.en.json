@@ -23,6 +23,14 @@
     "flowRunTargetUnregistered": "No execution target table is registered for the current project and scenario.",
     "historyRefreshing": "Refreshing history...",
     "historyRefreshed": "Refreshed {time}",
-    "historyRefreshFailed": "Refresh failed."
+    "historyRefreshFailed": "Refresh failed.",
+    "flowRunQueuedMessage": "Flow run queued for DAG execution.",
+    "flowBatchStartedMessage": "Scheduled flow execution started.",
+    "flowRunStartedMessage": "Flow execution started.",
+    "flowRunRecordedMessage": "Flow run recorded.",
+    "flowRunCompletedMessage": "Flow execution completed. {executed} node(s) executed, {skipped} skipped.",
+    "flowRunCompletedWithFailuresMessage": "Flow execution completed with failures. {succeeded} node(s) succeeded, {failed} failed, {skipped} skipped.",
+    "flowRunFirstFailedNodeMessage": "First failed node: {node}.",
+    "flowRunFailedMessage": "Flow execution failed: {detail}"
   }
 }

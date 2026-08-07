@@ -2945,10 +2945,18 @@
                         <div class="anly-work-violation-rule-grid">
                             ${topRules.map((rule) => {
                                 const hasViolation = Number(rule.VIOLATION_COUNT || 0) > 0;
+                                const ruleId = String(rule.RULE_ID || "").trim();
                                 return `
                                 <article class="${hasViolation ? "" : "is-no-violation"}">
                                     <header>
-                                        <strong>${this.escapeHtml(rule.RULE_ID)}</strong>
+                                        <span class="anly-work-violation-rule-id">
+                                            <strong title="${this.escapeHtml(ruleId)}">${this.escapeHtml(ruleId || "-")}</strong>
+                                            ${ruleId ? `
+                                                <button type="button" class="anly-work-rule-copy-btn" title="${this.escapeHtml(getText("Copy RULE ID"))}" onclick="${PAGE_CODE}.copyRuleId('${this.escapeJs(ruleId)}', event)">
+                                                    <i class="far fa-copy"></i>
+                                                </button>
+                                            ` : ""}
+                                        </span>
                                         <button type="button" class="${hasViolation ? "" : "is-muted"}" onclick="${PAGE_CODE}.openViolationSqlPopup('rule', '${this.escapeJs(rule.RULE_ID)}')">
                                             ${hasViolation ? this.escapeHtml(getText("{count} rows", { count: this.formatNumber(rule.VIOLATION_COUNT) })) : (rule.DETECTION_SCANNED_YN === "N" ? this.escapeHtml(getText("Excluded by max rules")) : this.escapeHtml(getText("No violation")))}
                                         </button>
@@ -6901,6 +6909,7 @@
                         <div class="anly-work-violation-rule-grid">
                             ${topRules.map((rule) => {
                                 const hasViolation = Number(rule.VIOLATION_COUNT || 0) > 0;
+                                const ruleId = String(rule.RULE_ID || "").trim();
                                 const features = this.parseFeatureList(rule.FEATURE_COLUMNS);
                                 const featureLabel = features.join(", ") || "x";
                                 const targetColumn = String(rule.TARGET_COLUMN || "Y").trim() || "Y";
@@ -6908,7 +6917,14 @@
                                 return `
                                 <article class="${hasViolation ? "" : "is-no-violation"}">
                                     <header>
-                                        <strong>${this.escapeHtml(rule.RULE_ID || "-")}</strong>
+                                        <span class="anly-work-violation-rule-id">
+                                            <strong title="${this.escapeHtml(ruleId)}">${this.escapeHtml(ruleId || "-")}</strong>
+                                            ${ruleId ? `
+                                                <button type="button" class="anly-work-rule-copy-btn" title="${this.escapeHtml(getText("Copy RULE ID"))}" onclick="${PAGE_CODE}.copyRuleId('${this.escapeJs(ruleId)}', event)">
+                                                    <i class="far fa-copy"></i>
+                                                </button>
+                                            ` : ""}
+                                        </span>
                                         <span class="anly-work-violation-rule-actions">
                                             <button type="button" title="${this.escapeHtml(getText("View formula graph"))}" onclick="${PAGE_CODE}.openSymbolicViolationRulePopup('${this.escapeJs(rule.RULE_ID)}')">
                                                 <i class="fas fa-chart-line"></i>

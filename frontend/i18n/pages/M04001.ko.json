@@ -32,6 +32,14 @@
     "flowRunTargetUnregistered": "현재 프로젝트·시나리오에 등록된 실행 대상 테이블이 없습니다.",
     "historyRefreshing": "실행 이력을 새로고침하는 중입니다.",
     "historyRefreshed": "{time}에 새로고침했습니다.",
-    "historyRefreshFailed": "실행 이력 새로고침에 실패했습니다."
+    "historyRefreshFailed": "실행 이력 새로고침에 실패했습니다.",
+    "flowRunQueuedMessage": "Flow 예약 실행을 대기열에 등록했습니다.",
+    "flowBatchStartedMessage": "예약된 Flow 실행을 시작했습니다.",
+    "flowRunStartedMessage": "Flow 실행을 시작했습니다.",
+    "flowRunRecordedMessage": "Flow 실행 이력을 등록했습니다.",
+    "flowRunCompletedMessage": "Flow 실행을 완료했습니다. 실행 {executed}개, 건너뜀 {skipped}개입니다.",
+    "flowRunCompletedWithFailuresMessage": "Flow 실행이 일부 실패로 완료되었습니다. 성공 {succeeded}개, 실패 {failed}개, 건너뜀 {skipped}개입니다.",
+    "flowRunFirstFailedNodeMessage": "첫 실패 노드: {node}.",
+    "flowRunFailedMessage": "Flow 실행에 실패했습니다: {detail}"
   }
 }

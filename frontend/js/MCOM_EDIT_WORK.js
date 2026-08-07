@@ -6,7 +6,7 @@
         { pageCode: "M05001", step: "01", title: "발굴 규칙 판단", shortTitle: "규칙 판단", icon: "fa-list-check", mode: "DISCOVERED_RULES", description: "발굴된 규칙을 검토하고 편집 규칙으로 최종 선정하거나 제외합니다." },
         { pageCode: "M05001_RULE_MASTER", step: "02", title: "편집 규칙 마스터", shortTitle: "규칙 마스터", icon: "fa-clipboard-check", mode: "RULE_MASTER", description: "선정 규칙과 사용자 정의 규칙을 통합 관리합니다." },
         { pageCode: "M05002", step: "03", title: "오류 수정", shortTitle: "오류 수정", icon: "fa-eraser", mode: "VIOLATIONS", description: "최종 규칙의 위반 행을 조회하고 INITDN$ 편집본에서 바로 수정합니다." },
-        { pageCode: "M05002_CLEANSING", step: "04", title: "오류 수정 이력", shortTitle: "수정 이력", icon: "fa-clock-rotate-left", mode: "CHANGE_HISTORY", description: "편집 작업별 오류 수정값과 처리 이력을 조회합니다." },
+        { pageCode: "M05002_CLEANSING", step: "04", title: "오류 수정 이력", shortTitle: "수정 이력", icon: "fa-clock-rotate-left", mode: "CHANGE_HISTORY", description: "작업 이력별 오류 수정값과 처리 결과를 조회합니다." },
         { pageCode: "M05003", step: "05", title: "에디팅 효과 검증", shortTitle: "효과 검증", icon: "fa-chart-column", mode: "VALIDATION", description: "변경 효과를 확인하고 INITDN$ 기준 Flow 재분석 결과를 연결합니다." },
         { pageCode: "M05003_FINAL_APPLY", step: "06", title: "운영 반영 DML", shortTitle: "운영 반영", icon: "fa-database", mode: "FINAL_APPLY", description: "DML을 생성하고 필요하면 별도로 검증한 뒤, 저장된 SQL을 실행하여 운영 데이터에 반영합니다." },
         { pageCode: "M05003_HISTORY", step: "07", title: "에디팅 감사 이력", shortTitle: "전체 이력", icon: "fa-clock-rotate-left", mode: "HISTORY", description: "규칙 판단부터 최종 반영까지 모든 에디팅 이벤트를 조회합니다." }
@@ -152,7 +152,15 @@
                 const currentScenarioId = getContainerEl(`#scenarioId-${PAGE_CODE}`)?.value || "";
                 const nextProjectId = String(stored.projectId || "");
                 const nextScenarioId = String(stored.scenarioId || "");
-                if (currentProjectId === nextProjectId && currentScenarioId === nextScenarioId) return;
+                if (currentProjectId === nextProjectId && currentScenarioId === nextScenarioId) {
+                    if (this.usesEditSession()) {
+                        this.invalidateEditWorkspaceCache();
+                        this.violationSourceTablesLoaded = false;
+                        await this.loadSessions(stored.editSessionId || this.selectedSessionId || "");
+                        await this.refresh();
+                    }
+                    return;
+                }
 
                 this.contextSyncing = true;
                 try {
@@ -348,14 +356,12 @@
                 }
                 const sessionContext = getContainerEl(".edit-work-session-context");
                 if (sessionContext) {
-                    sessionContext.hidden = !this.usesEditSession()
-                        || this.usesEditingTableSelection();
+                    sessionContext.hidden = !this.showsExecutionHistorySelector();
                 }
                 const sourceContext = getContainerEl(`#sourceContext-${PAGE_CODE}`);
                 const sourceContextField = sourceContext?.closest?.(".edit-work-source-context-field");
                 if (sourceContextField) {
-                    sourceContextField.hidden = !this.usesEditSession()
-                        || this.usesEditingTableSelection();
+                    sourceContextField.hidden = !this.usesEditSession();
                 }
                 const editingTableGrid = getContainerEl(`#editingTableGrid-${PAGE_CODE}`);
                 if (editingTableGrid) {
@@ -707,10 +713,10 @@
                     if (!/does not exist|not found|ORA-00942/i.test(String(error.message || ""))) throw error;
                 }
                 select.innerHTML = `
-                    <option value="">편집 세션 선택</option>
+                    <option value="">작업 이력 선택</option>
                     ${this.sessions.map((session) => `
                         <option value="${this.escapeHtml(session.EDIT_SESSION_ID)}">
-                            #${this.escapeHtml(session.EDIT_SESSION_ID)} · [${this.escapeHtml(session.SESSION_STATUS || "-")}] ${this.escapeHtml(session.SESSION_NAME || session.EDIT_TABLE)}
+                            #${this.escapeHtml(session.EDIT_SESSION_ID)} · [${this.escapeHtml(this.executionStatusLabel(session.SESSION_STATUS || "-"))}] 규칙 ${Number(session.EXECUTION_RULE_COUNT || 0).toLocaleString()} · 변경 ${Number(session.CHANGED_ROW_COUNT || 0).toLocaleString()}행${Number(session.EXECUTED_DML_COUNT || 0) > 1 ? " · 기존 통합 실행" : ""} · 작업자 ${this.escapeHtml(session.CREATED_BY || "-")} · ${this.escapeHtml(session.SESSION_NAME || session.EDIT_TABLE)}
                         </option>
                     `).join("")}
                 `;
@@ -732,6 +738,52 @@
             getSelectedSession() {
                 const id = getContainerEl(`#editSessionId-${PAGE_CODE}`)?.value || this.selectedSessionId;
                 return this.sessions.find((item) => String(item.EDIT_SESSION_ID) === String(id)) || null;
+            },
+
+            sessionMatchesSource(session, source) {
+                if (!session || !source) return false;
+                const owner = String(source.OWNER_NAME ?? source.TARGET_OWNER ?? "").toUpperCase();
+                const table = String(source.TABLE_NAME ?? source.SOURCE_TABLE ?? "").toUpperCase();
+                return String(session.TARGET_OWNER || "").toUpperCase() === owner
+                    && String(session.SOURCE_TABLE || "").toUpperCase() === table;
+            },
+
+            preferredExecutionForSource(source, includeClosed = this.stage.mode !== "VIOLATIONS") {
+                if (!source) return null;
+                const selected = this.getSelectedSession();
+                const selectedStatus = String(selected?.SESSION_STATUS || "").toUpperCase();
+                const candidates = this.sessions.filter((session) => this.sessionMatchesSource(session, source));
+                if (this.showsExecutionHistorySelector() && this.sessionMatchesSource(selected, source)) {
+                    return selected;
+                }
+                const active = candidates.find((session) =>
+                    ["DRAFT", "EDITING", "VALIDATED", "APPLY_READY"].includes(
+                        String(session.SESSION_STATUS || "").toUpperCase()
+                    )
+                );
+                if (
+                    this.sessionMatchesSource(selected, source)
+                    && ["DRAFT", "EDITING", "VALIDATED", "APPLY_READY"].includes(selectedStatus)
+                ) return selected;
+                if (active) return active;
+                if (includeClosed && this.sessionMatchesSource(selected, source)) return selected;
+                return (includeClosed ? candidates[0] : null) || null;
+            },
+
+            latestAppliedExecutionForSource(source) {
+                if (!source) return null;
+                return this.sessions.find((session) =>
+                    this.sessionMatchesSource(session, source)
+                    && String(session.SESSION_STATUS || "").toUpperCase() === "APPLIED"
+                ) || null;
+            },
+
+            selectExecution(session) {
+                const id = String(session?.EDIT_SESSION_ID || "");
+                const select = getContainerEl(`#editSessionId-${PAGE_CODE}`);
+                if (select) select.value = id;
+                this.selectedSessionId = id;
+                return session || null;
             },
 
             renderSourceContext() {
@@ -758,7 +810,7 @@
                 const owner = this.pendingContext.targetOwner || "";
                 const table = this.pendingContext.targetTable || "";
                 const runId = this.pendingContext.runId || "";
-                el.textContent = owner && table ? `${owner}.${table}${runId ? ` · Run #${runId}` : ""}` : "규칙 또는 편집 세션을 선택하세요.";
+                el.textContent = owner && table ? `${owner}.${table}${runId ? ` · Run #${runId}` : ""}` : "규칙 또는 작업 테이블을 선택하세요.";
             },
 
             async handleProjectChange() {
@@ -844,6 +896,10 @@
 
             usesEditSession() {
                 return !["DISCOVERED_RULES", "RULE_MASTER"].includes(this.stage.mode);
+            },
+
+            showsExecutionHistorySelector() {
+                return ["CHANGE_HISTORY", "HISTORY"].includes(this.stage.mode);
             },
 
             usesEditingTableSelection() {
@@ -2134,18 +2190,8 @@
                     }
                 }
                 if (source) {
-                    const mappedSessionId = String(
-                        this.stage.mode === "VIOLATIONS"
-                            ? source.EDIT_SESSION_ID || ""
-                            : source.LATEST_EDIT_SESSION_ID || ""
-                    );
-                    const sessionExists = this.sessions.some(
-                        (row) => String(row.EDIT_SESSION_ID) === mappedSessionId
-                    );
-                    this.selectedSessionId = sessionExists ? mappedSessionId : "";
-                    const sessionSelect = getContainerEl(`#editSessionId-${PAGE_CODE}`);
-                    if (sessionSelect) sessionSelect.value = this.selectedSessionId;
-                    session = this.getSelectedSession();
+                    session = this.preferredExecutionForSource(source);
+                    this.selectExecution(session);
                 }
                 this.renderEditingTableGrid();
                 this.renderSourceContext();
@@ -2168,7 +2214,7 @@
                 if (row?.EDIT_TABLE_EXISTS) {
                     return {
                         className: "is-pending",
-                        label: this.pageLabel("editingTableStatusPending", "작업 연결 필요")
+                        label: this.pageLabel("editingTableStatusPending", "오류 수정 시작 필요")
                     };
                 }
                 return {
@@ -2184,10 +2230,11 @@
                 const correctionMode = this.stage.mode === "VIOLATIONS";
                 const historyMode = this.stage.mode === "CHANGE_HISTORY";
                 const workflowMode = ["VALIDATION", "FINAL_APPLY", "HISTORY"].includes(this.stage.mode);
+                const executionHistoryMode = ["CHANGE_HISTORY", "HISTORY"].includes(this.stage.mode);
                 const selectedValue = String(this.stageFilters.VIOLATION_TARGET_TABLE || "").toUpperCase();
                 host.innerHTML = `
                     <div class="edit-work-table-map-heading">
-                        <strong>${this.escapeHtml(this.pageLabel("editingTableMapTitle", "편집 작업 테이블"))}</strong>
+                        <strong>${this.escapeHtml(this.pageLabel("editingTableMapTitle", "오류 수정 작업 테이블"))}</strong>
                         <span>${this.escapeHtml(workflowMode
                             ? this.pageLabel("editingWorkflowTableMapHelp", "효과 검증·운영 반영·전체 이력을 조회할 INITUP$/INITDN$ 작업 테이블 한 행을 선택합니다.")
                             : (historyMode
@@ -2203,7 +2250,7 @@
                                 <col style="width:360px">
                                 <col style="width:90px">
                                 <col style="width:110px">
-                                <col style="width:138px">
+                                <col style="width:210px">
                             </colgroup>
                             <thead>
                                 <tr>
@@ -2214,8 +2261,10 @@
                                     <th>${this.escapeHtml(this.pageLabel("editingTableColumnRules", "최종 규칙"))}</th>
                                     <th>${this.escapeHtml(this.pageLabel("editingTableColumnStatus", "상태"))}</th>
                                     <th>${this.escapeHtml(correctionMode
-                                        ? this.pageLabel("editingTableColumnAction", "처리")
-                                        : this.pageLabel("editingTableColumnSession", "편집 작업"))}</th>
+                                        ? this.pageLabel("editingTableColumnAction", "현재 작업")
+                                        : (executionHistoryMode
+                                            ? this.pageLabel("editingTableColumnSession", "반영 이력 ID")
+                                            : this.pageLabel("editingTableColumnCurrentWork", "현재 작업")))}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -2223,21 +2272,32 @@
                                     const value = `${row.OWNER_NAME || ""}.${row.TABLE_NAME || ""}`.toUpperCase();
                                     const selected = value === selectedValue;
                                     const tableStatus = this.editingTableRowStatus(row);
-                                    const latestSessionStatus = String(row.LATEST_SESSION_STATUS || "").toUpperCase();
-                                    const status = !correctionMode && latestSessionStatus
+                                    const displayExecution = this.preferredExecutionForSource(row);
+                                    const latestAppliedExecution = correctionMode
+                                        ? this.latestAppliedExecutionForSource(row)
+                                        : null;
+                                    const displayExecutionStatus = String(displayExecution?.SESSION_STATUS || "").toUpperCase();
+                                    const status = correctionMode && !displayExecution && latestAppliedExecution
                                         ? {
-                                            className: ["VALIDATED", "APPLY_READY", "APPLIED"].includes(latestSessionStatus)
+                                            className: "is-ready",
+                                            label: this.pageLabel("editingTableStatusApplied", "운영 반영 완료")
+                                        }
+                                        : !correctionMode && displayExecutionStatus
+                                        ? {
+                                            className: ["VALIDATED", "APPLY_READY", "APPLIED"].includes(displayExecutionStatus)
                                                 ? "is-ready"
-                                                : ["FAILED", "CANCELLED"].includes(latestSessionStatus)
+                                                : ["FAILED", "CANCELLED"].includes(displayExecutionStatus)
                                                     ? "is-invalid"
                                                     : "is-pending",
-                                            label: this.stageFilterOptionLabel(latestSessionStatus)
+                                            label: this.executionStatusLabel(displayExecutionStatus)
                                         }
                                         : tableStatus;
                                     const actionDisabled = Boolean(row.EDIT_TABLE_EXISTS && !row.STRUCTURE_MATCHES);
                                     const displayedSessionId = correctionMode
                                         ? row.EDIT_SESSION_ID
-                                        : row.LATEST_EDIT_SESSION_ID;
+                                        : displayExecution?.EDIT_SESSION_ID;
+                                    const masterRuleCount = Number(row.FINAL_RULE_COUNT || 0);
+                                    const hasActiveExecution = correctionMode && Boolean(displayedSessionId);
                                     return `
                                         <tr class="${selected ? "is-selected-row" : ""}"
                                             onclick="${PAGE_CODE}.selectEditingTableRow('${this.escapeHtml(value)}')">
@@ -2255,28 +2315,43 @@
                                                 ${row.TABLE_COMMENT ? `<small>${this.escapeHtml(row.TABLE_COMMENT)}</small>` : ""}
                                             </td>
                                             <td class="is-code">${this.escapeHtml(row.EDIT_TABLE || "-")}</td>
-                                            <td class="is-number">${Number(row.FINAL_RULE_COUNT || 0).toLocaleString()}</td>
-                                            <td><span class="edit-work-table-status ${status.className}">${this.escapeHtml(status.label)}</span></td>
+                                            <td class="is-number">
+                                                ${masterRuleCount.toLocaleString()}
+                                            </td>
+                                            <td>
+                                                <span class="edit-work-table-status ${status.className}">${this.escapeHtml(status.label)}</span>
+                                            </td>
                                             <td>
                                                 ${!correctionMode ? `
-                                                    <span class="edit-work-table-session">${displayedSessionId
-                                                        ? `#${this.escapeHtml(displayedSessionId)}`
-                                                        : this.escapeHtml(historyMode
-                                                            ? this.pageLabel("noEditingHistory", "이력 없음")
-                                                            : this.pageLabel("noEditingWork", "편집 작업 없음"))}</span>
-                                                ` : row.EDITABLE ? `
-                                                    <span class="edit-work-table-session">#${this.escapeHtml(displayedSessionId || "-")}</span>
+                                                    <span class="edit-work-table-session">${executionHistoryMode
+                                                        ? (displayedSessionId
+                                                            ? `#${this.escapeHtml(displayedSessionId)}`
+                                                            : this.escapeHtml(this.pageLabel("noEditingHistory", "이력 없음")))
+                                                        : this.escapeHtml(displayExecution
+                                                            ? this.executionStatusLabel(displayExecutionStatus)
+                                                            : this.pageLabel("noCurrentEditingWork", "현재 작업 없음"))}</span>
+                                                ` : hasActiveExecution ? `
+                                                    <button type="button"
+                                                            class="table-btn"
+                                                            title="${this.escapeHtml(this.pageLabel("buttonResetCurrentEditingHelp", "현재 수정값과 미실행 DML을 초기화하고 INITUP$ 기준으로 다시 시작합니다."))}"
+                                                            onclick="event.stopPropagation(); ${PAGE_CODE}.resetCurrentEditingWork('${this.escapeHtml(displayedSessionId || "")}', '${this.escapeHtml(value)}')">
+                                                        ${this.escapeHtml(this.pageLabel("buttonResetCurrentEditing", "현재 수정 초기화"))}
+                                                    </button>
                                                 ` : `
                                                     <button type="button"
                                                             class="table-btn is-primary"
                                                             ${actionDisabled ? "disabled" : ""}
                                                             title="${this.escapeHtml(actionDisabled
                                                                 ? this.pageLabel("editingTableStructureMismatch", "INITUP$와 INITDN$ 컬럼 구조가 일치하지 않아 수정테이블을 사용할 수 없습니다.")
-                                                                : this.pageLabel("buttonCreateEditingTableHelp", "선택한 INITUP$와 1:1인 INITDN$ 수정테이블을 생성하고 자동 선택합니다."))}"
+                                                                : (latestAppliedExecution
+                                                                    ? this.pageLabel("buttonStartNextCorrectionHelp", "현재 운영 반영된 INITUP$ 데이터와 활성 규칙으로 새 오류 수정 작업을 시작합니다.")
+                                                                    : this.pageLabel("buttonCreateEditingTableHelp", "선택한 INITUP$와 1:1인 INITDN$ 수정테이블을 생성하고 자동 선택합니다.")))}"
                                                             onclick="event.stopPropagation(); ${PAGE_CODE}.createEditingTableForSelectedSource('${this.escapeHtml(value)}')">
-                                                        ${this.escapeHtml(row.EDIT_TABLE_EXISTS
-                                                            ? this.pageLabel("buttonConnectEditingTable", "편집 작업 연결")
-                                                            : this.pageLabel("buttonCreateEditingTable", "수정테이블 생성"))}
+                                                        ${this.escapeHtml(latestAppliedExecution
+                                                            ? this.pageLabel("buttonStartNextCorrection", "새 오류 수정 시작")
+                                                            : (row.EDIT_TABLE_EXISTS
+                                                                ? this.pageLabel("buttonConnectEditingTable", "오류 수정 시작")
+                                                                : this.pageLabel("buttonCreateEditingTable", "수정테이블 준비·오류 수정 시작")))}
                                                     </button>
                                                 `}
                                             </td>
@@ -2314,13 +2389,14 @@
                     { method: "GET", showLoading: false }
                 );
                 this.editingTableStatus = json.data || null;
-                const sessionSelect = getContainerEl(`#editSessionId-${PAGE_CODE}`);
-                const sessionId = String(this.editingTableStatus?.editSessionId || "");
-                const sessionExists = this.sessions.some(
-                    (row) => String(row.EDIT_SESSION_ID) === sessionId
-                );
-                if (sessionSelect) sessionSelect.value = sessionExists ? sessionId : "";
-                this.selectedSessionId = sessionExists ? sessionId : "";
+                const selected = this.getSelectedSession();
+                if (!this.sessionMatchesSource(selected, source)) {
+                    const activeSessionId = String(this.editingTableStatus?.editSessionId || "");
+                    const activeSession = this.sessions.find(
+                        (row) => String(row.EDIT_SESSION_ID) === activeSessionId
+                    ) || this.preferredExecutionForSource(source);
+                    this.selectExecution(activeSession);
+                }
                 this.renderSourceContext();
                 return this.editingTableStatus;
             },
@@ -2388,13 +2464,19 @@
                 );
                 const explicitlySelectedIds = [...this.violationRuleScopeIds]
                     .filter((value) => availableRuleIds.has(String(value)));
+                const hasRuleOptionFilter = [
+                    this.stageFilters.VIOLATION_RULE_TYPE,
+                    this.stageFilters.VIOLATION_TARGET_COLUMN
+                ].some((value) => value && String(value).toUpperCase() !== "ALL");
                 const scopedRuleIds = explicitlySelectedIds.length
                     ? explicitlySelectedIds
-                    : scopedRules
-                        .map((rule) => String(rule.EDIT_RULE_ID))
-                        .filter(Boolean);
+                    : (hasRuleOptionFilter
+                        ? scopedRules
+                            .map((rule) => String(rule.EDIT_RULE_ID))
+                            .filter(Boolean)
+                        : []);
                 if (scopedRuleIds.length) params.set("editRuleIds", scopedRuleIds.join(","));
-                else if (this.violationRules.length) params.set("editRuleIds", "0");
+                else if (hasRuleOptionFilter && this.violationRules.length) params.set("editRuleIds", "0");
                 if (this.keyword) params.set("keyword", this.keyword);
                 params.set("page", String(this.page));
                 params.set("pageSize", String(this.pageSize));
@@ -2450,7 +2532,6 @@
                     };
                 });
                 this.selectedViolationRowKeys.clear();
-                const changed = this.rows.filter((row) => row.CHANGE_STATUS && row.CHANGE_STATUS !== "UNEDITED").length;
                 const selectedRuleTypes = new Set(
                     this.selectedViolationRules.map(
                         (rule) => String(rule.SOURCE_RULE_TYPE || "").toUpperCase()
@@ -2458,20 +2539,14 @@
                 );
                 const hasSymbolicRule = selectedRuleTypes.has("SYMBOLIC");
                 const editingEnabled = this.isViolationEditingEnabled();
-                const selectedRuleLabel = this.selectedViolationRules.length === 1
-                    ? (hasSymbolicRule ? "수식 규칙" : "연관 규칙")
-                    : `${this.selectedViolationRules.length}개 규칙`;
+                const changedRowCount = Number(session?.CHANGED_ROW_COUNT || 0);
+                const changedCellCount = Number(session?.CHANGED_CELL_COUNT || 0);
+                const dmlCount = Number(session?.DML_COUNT || 0);
                 this.setKpis([
                     { value: this.serverTotalRows, label: "실시간 위반 행", hint: "INITUP$ 실제 테이블 DB 페이징" },
-                    { value: this.violationRules.length, label: "최종 활성 규칙", hint: "M05001 규칙 마스터 SELECTED · ACTIVE" },
-                    {
-                        value: this.selectedViolationRules.length ? selectedRuleLabel : "-",
-                        label: "조회 규칙",
-                        hint: this.selectedViolationRules.length === 1
-                            ? this.selectedViolationRules[0]?.RULE_NAME
-                            : "선택한 범위의 최종 규칙을 통합 조회합니다."
-                    },
-                    { value: changed, label: "수정된 행", hint: editingEnabled ? `Session #${session.EDIT_SESSION_ID}` : "수정테이블 생성 전 조회 전용" },
+                    { value: this.violationRules.length, label: "현재 적용 규칙", hint: "규칙 마스터의 활성 규칙을 자동 반영" },
+                    { value: changedRowCount, label: "수정한 행", hint: `${changedCellCount.toLocaleString()}개 셀 변경` },
+                    { value: dmlCount, label: "저장 DML", hint: dmlCount ? "운영 반영 전 저장된 DML" : "저장된 DML 없음" },
                     {
                         value: editingEnabled ? "수정 가능" : "조회 전용",
                         label: "작업 모드",
@@ -2571,18 +2646,9 @@
                 this.serverPaging = false;
                 this.serverTotalRows = 0;
                 this.page = 1;
-                const sessionSelect = getContainerEl(`#editSessionId-${PAGE_CODE}`);
                 const selectedSource = this.getSelectedViolationSource();
-                const mappedSessionId = String(
-                    this.stage.mode === "VIOLATIONS"
-                        ? selectedSource?.EDIT_SESSION_ID || ""
-                        : selectedSource?.LATEST_EDIT_SESSION_ID || ""
-                );
-                const mappedSessionExists = this.sessions.some(
-                    (row) => String(row.EDIT_SESSION_ID) === mappedSessionId
-                );
-                if (sessionSelect) sessionSelect.value = mappedSessionExists ? mappedSessionId : "";
-                this.selectedSessionId = mappedSessionExists ? mappedSessionId : "";
+                const selectedExecution = this.preferredExecutionForSource(selectedSource);
+                this.selectExecution(selectedExecution);
                 if (selectedSource && this.stage.mode === "VIOLATIONS") {
                     this.editingTableStatus = {
                         targetOwner: selectedSource.OWNER_NAME,
@@ -2768,6 +2834,30 @@
                 else this.selectedViolationRowKeys.delete(key);
             },
 
+            currentEditingCreatePayload(source) {
+                return {
+                    projectId: this.optionalNumber(getContainerEl(`#projectId-${PAGE_CODE}`)?.value),
+                    scenarioId: this.optionalNumber(getContainerEl(`#scenarioId-${PAGE_CODE}`)?.value),
+                    targetOwner: source.OWNER_NAME,
+                    targetTable: source.TABLE_NAME,
+                    editRuleIds: []
+                };
+            },
+
+            async selectPreparedEditingWork(prepared, source) {
+                const editSessionId = prepared.editSessionId;
+                const context = { ...this.readContext(), editSessionId };
+                localStorage.setItem(EDIT_CONTEXT_KEY, JSON.stringify(context));
+                this.selectedSessionId = String(editSessionId || "");
+                this.stageFilters.VIOLATION_TARGET_TABLE = `${source.OWNER_NAME || ""}.${source.TABLE_NAME || ""}`.toUpperCase();
+                this.invalidateEditWorkspaceCache("M05002_CLEANSING");
+                await this.loadSessions(String(editSessionId));
+                this.violationSourceTablesLoaded = false;
+                await this.loadViolationSourceTables(true);
+                await this.loadEditingTableStatus(this.getSelectedViolationSource(), true);
+                this.persistContext();
+            },
+
             async createEditingTableForSelectedSource(selectedValue = "") {
                 if (this.editingWorkStarting) return;
                 if (
@@ -2794,10 +2884,13 @@
                 }
                 const editTable = source.EDIT_TABLE
                     || String(source.TABLE_NAME || "").replace(/^INITUP\$/, "INITDN$");
+                const restartingAfterApply = Boolean(this.latestAppliedExecutionForSource(source));
                 const confirmed = await CommonMessage.confirm(
                     this.pageLabel(
-                        "editingTableCreateConfirm",
-                        "{source}와 1:1 구조인 {edit} 수정테이블을 생성할까요?\nINITUP$ 원본 데이터는 변경하지 않습니다."
+                        restartingAfterApply ? "nextCorrectionConfirm" : "editingTableCreateConfirm",
+                        restartingAfterApply
+                            ? "이전 운영 반영이 완료된 테이블입니다.\n현재 {source} 데이터로 {edit}을 다시 준비하고 새 오류 수정을 시작할까요?\n이전 작업의 수정 이력과 실행 DML은 전체 이력에 그대로 보존됩니다."
+                            : "{source}의 현재 활성 규칙으로 오류 수정을 시작할까요?\n{edit} 수정테이블을 준비하며 INITUP$ 원본 데이터는 변경하지 않습니다."
                     )
                         .replaceAll("{source}", `${source.OWNER_NAME}.${source.TABLE_NAME}`)
                         .replaceAll("{edit}", `${source.OWNER_NAME}.${editTable}`)
@@ -2813,25 +2906,14 @@
                         apiUrl("/editing-tables"),
                         {
                             method: "POST",
-                            body: {
-                                projectId: this.optionalNumber(getContainerEl(`#projectId-${PAGE_CODE}`)?.value),
-                                scenarioId: this.optionalNumber(getContainerEl(`#scenarioId-${PAGE_CODE}`)?.value),
-                                targetOwner: source.OWNER_NAME,
-                                targetTable: source.TABLE_NAME
-                            },
+                            body: this.currentEditingCreatePayload(source),
                             showLoading: false
                         }
                     );
-                    const editSessionId = prepared.editSessionId;
-                    const context = { ...this.readContext(), editSessionId };
-                    localStorage.setItem(EDIT_CONTEXT_KEY, JSON.stringify(context));
-                    this.invalidateEditWorkspaceCache("M05002_CLEANSING");
-                    await this.loadSessions(String(editSessionId));
-                    this.violationSourceTablesLoaded = false;
-                    await this.loadViolationSourceTables(true);
-                    await this.loadEditingTableStatus(this.getSelectedViolationSource(), true);
-                    this.persistContext();
-                    const tableAction = prepared.editTableCreated ? "새로 생성" : "기존 테이블 확인";
+                    await this.selectPreparedEditingWork(prepared, source);
+                    const tableAction = prepared.editTableCreated
+                        ? "새로 생성"
+                        : (restartingAfterApply ? "현재 INITUP$ 기준 재준비" : "기존 테이블 확인");
                     CommonMessage.success(
                         this.pageLabel(
                             "editingTableCreated",
@@ -2842,6 +2924,92 @@
                             .replaceAll("{count}", Number(prepared.sourceRowCount || 0).toLocaleString())
                     );
                     await this.loadViolations();
+                } finally {
+                    this.editingWorkStarting = false;
+                    this.setWorkActionLoading(false);
+                }
+            },
+
+            async resetCurrentEditingWork(editExecutionId = "", selectedValue = "") {
+                if (this.editingWorkStarting) return;
+                const session = this.sessions.find(
+                    (row) => String(row.EDIT_SESSION_ID) === String(editExecutionId || "")
+                );
+                const normalizedValue = String(selectedValue || "").toUpperCase();
+                const source = this.violationSourceTables.find(
+                    (row) => `${row.OWNER_NAME || ""}.${row.TABLE_NAME || ""}`.toUpperCase() === normalizedValue
+                ) || this.getSelectedViolationSource();
+                if (!session || !source) {
+                    CommonMessage.warn(this.pageLabel("selectCurrentEditingWorkToReset", "초기화할 현재 작업 테이블을 선택하세요."));
+                    return;
+                }
+                const changedRowCount = Number(source.CHANGED_ROW_COUNT || 0);
+                const dmlCount = Number(source.DML_COUNT || 0);
+                const currentRuleCount = Number(source.FINAL_RULE_COUNT || 0);
+                const confirmed = await CommonMessage.confirm(
+                    this.pageLabel(
+                        "resetCurrentEditingConfirm",
+                        "현재 수정 작업을 초기화할까요?\n수정 행 {changes}건과 미실행 DML {dml}건은 현재 작업에서 제외되고, 현재 규칙 {rules}개와 INITUP$ 데이터로 다시 시작합니다."
+                    )
+                        .replaceAll("{changes}", changedRowCount.toLocaleString())
+                        .replaceAll("{dml}", dmlCount.toLocaleString())
+                        .replaceAll("{rules}", currentRuleCount.toLocaleString())
+                );
+                if (!confirmed) return;
+
+                let previousExecutionCancelled = false;
+                this.editingWorkStarting = true;
+                this.setWorkActionLoading(
+                    true,
+                    this.pageLabel("resettingCurrentEditingWork", "현재 수정 작업을 초기화하고 있습니다.")
+                );
+                try {
+                    await CommonUtils.request(
+                        apiUrl(`/sessions/${session.EDIT_SESSION_ID}/cancel`),
+                        { method: "POST", showLoading: false }
+                    );
+                    previousExecutionCancelled = true;
+                    this.selectedSessionId = "";
+                    this.violationRuleScopeIds.clear();
+                    const prepared = await CommonUtils.request(
+                        apiUrl("/editing-tables"),
+                        {
+                            method: "POST",
+                            body: this.currentEditingCreatePayload(source),
+                            showLoading: false
+                        }
+                    );
+                    await this.selectPreparedEditingWork(prepared, source);
+                    CommonMessage.success(
+                        this.pageLabel(
+                            "currentEditingWorkReset",
+                            "현재 수정을 초기화하고 활성 규칙 {count}개로 다시 시작했습니다."
+                        )
+                            .replaceAll("{count}", currentRuleCount.toLocaleString())
+                    );
+                    await this.loadViolations();
+                } catch (error) {
+                    if (previousExecutionCancelled) {
+                        const context = { ...this.readContext(), editSessionId: "" };
+                        localStorage.setItem(EDIT_CONTEXT_KEY, JSON.stringify(context));
+                        this.selectedSessionId = "";
+                        this.editingTableStatus = null;
+                        this.violationSourceTablesLoaded = false;
+                        this.invalidateEditWorkspaceCache();
+                        await this.loadSessions("");
+                        await this.loadViolationSourceTables(true);
+                        this.persistContext();
+                        this.renderEditingTableGrid();
+                        CommonMessage.error(
+                            `${this.pageLabel(
+                                "currentEditingResetPartialFailure",
+                                "기존 수정 작업은 초기화했지만 새 작업 준비에 실패했습니다. 오류 수정 시작을 다시 눌러 주세요."
+                            )}\n${String(error?.message || "")}`,
+                            { copyable: true }
+                        );
+                        return;
+                    }
+                    throw error;
                 } finally {
                     this.editingWorkStarting = false;
                     this.setWorkActionLoading(false);
@@ -2868,63 +3036,19 @@
             async retryPrepareCurrentSession() {
                 const session = this.getSelectedSession();
                 if (!session) {
-                    CommonMessage.warn("편집 작업을 선택하세요.");
+                    CommonMessage.warn("현재 오류 수정 작업을 선택하세요.");
                     return;
                 }
-                if (!(await CommonMessage.confirm(`편집 작업 #${session.EDIT_SESSION_ID}의 편집 테이블 준비를 다시 시도할까요?\n기존 INITUP$ 원본은 변경하지 않습니다.`))) return;
-                this.setWorkActionLoading(true, this.pageLabel("editingWorkStarting", "편집 작업과 INITDN$ 편집 테이블을 준비하고 있습니다."));
+                if (!(await CommonMessage.confirm("현재 작업의 INITDN$ 준비를 다시 시도할까요?\n기존 INITUP$ 원본은 변경하지 않습니다."))) return;
+                this.setWorkActionLoading(true, this.pageLabel("editingWorkStarting", "현재 오류 수정 작업과 INITDN$ 수정테이블을 준비하고 있습니다."));
                 try {
                     const json = await CommonUtils.request(apiUrl(`/sessions/${session.EDIT_SESSION_ID}/prepare`), { method: "POST", showLoading: false });
                     const tableAction = json.editTableCreated ? "새로 생성" : "기존 테이블 확인";
-                    CommonMessage.success(`편집 작업 #${session.EDIT_SESSION_ID} 준비를 완료했습니다. ${json.editTable} · ${tableAction} · ${Number(json.sourceRowCount || 0).toLocaleString()}행`);
+                    CommonMessage.success(`현재 오류 수정 작업 준비를 완료했습니다. ${json.editTable} · ${tableAction} · ${Number(json.sourceRowCount || 0).toLocaleString()}행`);
                     this.invalidateEditWorkspaceCache("M05002");
                     await this.loadSessions(session.EDIT_SESSION_ID);
                     await this.refresh();
                 } finally {
-                    this.setWorkActionLoading(false);
-                }
-            },
-
-            async deleteCurrentEditingWork() {
-                const session = this.getSelectedSession();
-                if (!session || this.editingWorkStarting) {
-                    if (!session) CommonMessage.warn(this.pageLabel("selectEditingWork", "삭제할 편집 작업을 선택하세요."));
-                    return;
-                }
-                const confirmTemplate = this.pageLabel(
-                    "editingWorkDeleteConfirm",
-                    "편집 작업 #{id}을 삭제할까요?\n{owner}.{table} 테이블과 이 작업의 수정·DML·이력이 함께 삭제됩니다.\n삭제 후 되돌릴 수 없습니다."
-                );
-                const confirmed = await CommonMessage.confirm(
-                    confirmTemplate
-                        .replaceAll("{id}", String(session.EDIT_SESSION_ID))
-                        .replaceAll("{owner}", String(session.TARGET_OWNER || "-"))
-                        .replaceAll("{table}", String(session.EDIT_TABLE || "-"))
-                );
-                if (!confirmed) return;
-                this.editingWorkStarting = true;
-                this.setWorkActionLoading(true, this.pageLabel("editingWorkDeleting", "편집 작업과 INITDN$ 편집 테이블을 삭제하고 있습니다."));
-                try {
-                    const json = await CommonUtils.request(
-                        apiUrl(`/sessions/${session.EDIT_SESSION_ID}`),
-                        { method: "DELETE", showLoading: false }
-                    );
-                    const context = { ...this.readContext(), editSessionId: "" };
-                    localStorage.setItem(EDIT_CONTEXT_KEY, JSON.stringify(context));
-                    this.selectedSessionId = "";
-                    this.editingTableStatus = null;
-                    this.violationSourceTables = [];
-                    this.violationSourceTablesLoaded = false;
-                    this.invalidateEditWorkspaceCache();
-                    await this.loadSessions("");
-                    this.persistContext();
-                    await this.refresh();
-                    CommonMessage.success(
-                        this.pageLabel("editingWorkDeleted", "편집 작업과 INITDN$ 편집 테이블을 삭제했습니다.") +
-                        (json.editTableDropped ? ` ${json.editTable}` : "")
-                    );
-                } finally {
-                    this.editingWorkStarting = false;
                     this.setWorkActionLoading(false);
                 }
             },
@@ -3070,14 +3194,8 @@
                     }
                 }
                 if (source) {
-                    const mappedSessionId = String(source.LATEST_EDIT_SESSION_ID || "");
-                    const sessionSelect = getContainerEl(`#editSessionId-${PAGE_CODE}`);
-                    const sessionExists = this.sessions.some(
-                        (row) => String(row.EDIT_SESSION_ID) === mappedSessionId
-                    );
-                    this.selectedSessionId = sessionExists ? mappedSessionId : "";
-                    if (sessionSelect) sessionSelect.value = this.selectedSessionId;
-                    session = this.getSelectedSession();
+                    session = this.preferredExecutionForSource(source);
+                    this.selectExecution(session);
                 }
                 this.renderEditingTableGrid();
                 this.setPanel(this.pageLabel("changeHistoryPanel", "오류 수정 이력"), "");
@@ -3088,7 +3206,7 @@
                     this.setKpis([
                         {
                             value: "-",
-                            label: this.pageLabel("editingWork", "편집 작업"),
+                            label: this.pageLabel("editingWork", "작업 이력"),
                             hint: this.pageLabel("selectEditingTableForHistory", "수정 이력을 조회할 테이블을 선택하세요.")
                         }
                     ]);
@@ -3113,7 +3231,7 @@
                 const changedRows = new Set(this.rows.map((row) => row.SOURCE_ROWID).filter(Boolean)).size;
                 const changedColumns = new Set(this.rows.map((row) => row.COLUMN_NAME).filter(Boolean)).size;
                 this.setKpis([
-                    { value: this.rows.length, label: this.pageLabel("changeHistoryCount", "수정 이력"), hint: json.limited ? "최근 5,000건 표시" : `편집 작업 #${session.EDIT_SESSION_ID}` },
+                    { value: this.rows.length, label: this.pageLabel("changeHistoryCount", "수정 이력"), hint: json.limited ? "최근 5,000건 표시" : `작업 이력 #${session.EDIT_SESSION_ID}` },
                     { value: changedRows, label: this.pageLabel("changedRows", "수정 행"), hint: this.pageLabel("distinctSourceRows", "중복 제외 원본 행") },
                     { value: changedColumns, label: this.pageLabel("changedColumns", "수정 컬럼"), hint: this.pageLabel("distinctChangedColumns", "중복 제외 컬럼") },
                     { value: session.SESSION_STATUS || "-", label: this.pageLabel("editingWorkStatus", "편집 상태"), hint: session.EDIT_TABLE || "" }
@@ -3127,7 +3245,7 @@
                 const { filtered, visible } = this.getPagedRows(this.rows);
                 const historyColumns = [
                     { key: "EDIT_EVENT_ID", label: "이력 ID", width: 72, className: "is-number" },
-                    { key: "EDIT_SESSION_ID", label: "편집 작업", width: 82, className: "is-number", render: (value) => value ? `#${this.escapeHtml(value)}` : "-" },
+                    { key: "EDIT_SESSION_ID", label: "작업 이력 ID", width: 96, className: "is-number", render: (value) => value ? `#${this.escapeHtml(value)}` : "-" },
                     { key: "EDIT_RULE_ID", label: "규칙 ID", width: 72, className: "is-number", render: (value) => value ? `#${this.escapeHtml(value)}` : "-" },
                     { key: "SOURCE_TABLE", label: "INITUP$ 원본 테이블", width: 210, className: "is-code", render: (value, row) => this.escapeHtml(`${row.TARGET_OWNER || "-"}.${value || "-"}`) },
                     { key: "EDIT_TABLE", label: "INITDN$ 편집 테이블", width: 210, className: "is-code", render: (value, row) => this.escapeHtml(`${row.TARGET_OWNER || "-"}.${value || "-"}`) },
@@ -3160,9 +3278,12 @@
             async loadValidation() {
                 await this.loadViolationSourceTables();
                 const { session } = this.resolveEditingTableSelection();
+                const executionOpen = ["DRAFT", "EDITING", "VALIDATED", "APPLY_READY"].includes(
+                    String(session?.SESSION_STATUS || "").toUpperCase()
+                );
                 this.setPanel("에디팅 효과 검증", session ? `
-                    <button type="button" title="${this.escapeHtml(this.pageLabel("buttonRerunRuleDiscoveryHelp", "INITDN$ 수정테이블을 대상으로 저장된 Flow의 규칙 발굴을 다시 실행합니다."))}" onclick="${PAGE_CODE}.openReanalysisFlow()"><i class="fas fa-wave-square"></i>${this.escapeHtml(this.pageLabel("buttonRerunRuleDiscovery", "규칙발굴재실행"))}</button>
-                    <button type="button" class="is-primary" onclick="${PAGE_CODE}.markValidated()"><i class="fas fa-check-double"></i>효과 검증 완료</button>
+                    <button type="button" title="${this.escapeHtml(this.pageLabel("buttonRerunRuleDiscoveryHelp", "INITDN$ 수정테이블을 대상으로 저장된 Flow의 규칙 발굴을 다시 실행합니다."))}" onclick="${PAGE_CODE}.openReanalysisFlow()" ${executionOpen ? "" : "disabled"}><i class="fas fa-wave-square"></i>${this.escapeHtml(this.pageLabel("buttonRerunRuleDiscovery", "규칙발굴재실행"))}</button>
+                    <button type="button" class="is-primary" onclick="${PAGE_CODE}.markValidated()" ${executionOpen ? "" : "disabled"}><i class="fas fa-check-double"></i>효과 검증 완료</button>
                 ` : "");
                 this.hideModeForm();
                 if (!session) {
@@ -3269,7 +3390,7 @@
             openReanalysisFlow() {
                 const session = this.getSelectedSession();
                 if (!session) {
-                    CommonMessage.warn("편집 세션을 선택하세요.");
+                    CommonMessage.warn("현재 오류 수정 작업을 선택하세요.");
                     return;
                 }
                 const runtimeContext = {
@@ -3304,6 +3425,10 @@
                 const params = new URLSearchParams({ editSessionId: session.EDIT_SESSION_ID });
                 const json = await CommonUtils.request(apiUrl(`/dml?${params}`), { method: "GET", showLoading: false });
                 this.rows = (Array.isArray(json.data) ? json.data : [])
+                    .map((item) => ({
+                        ...item,
+                        VALIDATION_MESSAGE_DISPLAY: this.localizeDmlValidationMessage(item.VALIDATION_MESSAGE)
+                    }))
                     .sort((left, right) => Number(right.EDIT_DML_ID || 0) - Number(left.EDIT_DML_ID || 0));
                 if (!this.selectedDmlId || !this.rows.some((item) => String(item.EDIT_DML_ID) === String(this.selectedDmlId))) {
                     this.selectedDmlId = String(this.rows[0]?.EDIT_DML_ID || "");
@@ -3316,7 +3441,7 @@
                     : "";
                 const counts = this.countBy(this.rows, "DML_STATUS");
                 this.setKpis([
-                    { value: this.rows.length, label: "등록 DML", hint: `Session #${session.EDIT_SESSION_ID}` },
+                    { value: this.rows.length, label: "등록 DML", hint: `${session.TARGET_OWNER}.${session.EDIT_TABLE} 현재 작업` },
                     { value: counts.DRAFT || 0, label: "저장", hint: "DML 실행 가능" },
                     { value: counts.APPROVED || 0, label: "검증 완료", hint: "기존 검증 DML" },
                     { value: counts.EXECUTED || 0, label: "실행 완료", hint: "커밋된 DML" }
@@ -3328,18 +3453,24 @@
                 const content = getContainerEl(`#workContent-${PAGE_CODE}`);
                 if (!content) return;
                 const dml = this.selectedDml || {};
+                const session = this.getSelectedSession();
+                const executionOpen = ["DRAFT", "EDITING", "VALIDATED", "APPLY_READY"].includes(
+                    String(session?.SESSION_STATUS || "").toUpperCase()
+                );
                 this.renderDmlPanelActions();
                 const { filtered, visible } = this.getPagedRows(this.getDmlDisplayRows());
                 const dmlColumns = [
                     { key: "EDIT_DML_ID", label: "DML ID", width: 70, className: "is-number" },
                     { key: "DML_NAME", label: "DML 명", width: 220 },
                     { key: "DML_STATUS", label: "상태", width: 90, render: (value) => this.dmlStatusBadge(value) },
-                    { key: "VALIDATION_MESSAGE", label: "검증 결과", width: 300, className: "is-rule-detail", render: (value, _row, index) => this.renderTextPreview(value, index, "VALIDATION_MESSAGE", "DML 검증 결과") },
+                    { key: "VALIDATION_MESSAGE_DISPLAY", label: "검증 결과", width: 300, className: "is-rule-detail", render: (value, _row, index) => this.renderTextPreview(value, index, "VALIDATION_MESSAGE_DISPLAY", "DML 검증 결과") },
                     { key: "AFFECTED_ROW_COUNT", label: "영향 행", width: 80, className: "is-number" },
                     { key: "EXECUTED_AT", label: "실행 일시", width: 150, render: (value) => this.formatDate(value) },
                     {
                         key: "_ACTION",
-                        label: this.pageLabel("columnEditDml", "편집"),
+                        label: executionOpen
+                            ? this.pageLabel("columnEditDml", "편집")
+                            : this.pageLabel("columnViewDml", "보기"),
                         width: 124,
                         className: "is-action-column",
                         headerClassName: "is-action-column",
@@ -3347,7 +3478,11 @@
                             <span class="edit-work-row-actions">
                                 <button title="${this.escapeHtml(this.pageLabel("buttonEditDmlHelp", "선택한 DML을 하단 편집창에 불러옵니다."))}"
                                         onclick="event.stopPropagation(); ${PAGE_CODE}.selectDml(${index})">
-                                    ${this.escapeHtml(this.pageLabel("buttonEditDml", "편집"))}
+                                    ${this.escapeHtml(
+                                        executionOpen
+                                            ? this.pageLabel("buttonEditDml", "편집")
+                                            : this.pageLabel("buttonViewDml", "보기")
+                                    )}
                                 </button>
                                 <button class="is-danger"
                                         title="${this.escapeHtml(
@@ -3355,7 +3490,8 @@
                                                 ? this.pageLabel("executedDmlDeleteBlocked", "실행 완료 DML은 감사 이력 보존을 위해 삭제할 수 없습니다.")
                                                 : this.pageLabel("buttonDeleteDmlHelp", "선택한 저장 DML을 삭제합니다.")
                                         )}"
-                                        onclick="event.stopPropagation(); ${PAGE_CODE}.deleteDml(${index})">
+                                        onclick="event.stopPropagation(); ${PAGE_CODE}.deleteDml(${index})"
+                                        ${executionOpen && String(row.DML_STATUS || "").toUpperCase() !== "EXECUTED" ? "" : "disabled"}>
                                     ${this.escapeHtml(this.pageLabel("buttonDeleteDml", "삭제"))}
                                 </button>
                             </span>
@@ -3373,28 +3509,23 @@
                                     <span>DML 명</span>
                                     <em>${this.escapeHtml(
                                         dml.EDIT_DML_ID
-                                            ? (
-                                                String(dml.DML_STATUS || "").toUpperCase() === "EXECUTED"
-                                                    ? this.pageLabel("dmlIdExecutedNewVersion", "DML ID #{id} · 저장 시 신규 버전")
-                                                        .replaceAll("{id}", String(dml.EDIT_DML_ID))
-                                                    : `DML ID #${dml.EDIT_DML_ID}`
-                                            )
+                                            ? `DML ID #${dml.EDIT_DML_ID}`
                                             : this.pageLabel("dmlIdUnsaved", "신규 · 미저장")
                                     )}</em>
                                 </span>
-                                <input id="dmlName-${PAGE_CODE}" value="${this.escapeHtml(dml.DML_NAME || "")}" oninput="${PAGE_CODE}.handleDmlNameInput()">
+                                <input id="dmlName-${PAGE_CODE}" value="${this.escapeHtml(dml.DML_NAME || "")}" oninput="${PAGE_CODE}.handleDmlNameInput()" ${executionOpen ? "" : "disabled"}>
                             </label>
                             <label class="edit-work-field"><span>상태</span><input value="${this.escapeHtml(this.dmlStatusLabel(dml.DML_STATUS))}" disabled></label>
                             <label class="edit-work-field"><span>영향 행</span><input value="${this.escapeHtml(dml.AFFECTED_ROW_COUNT ?? "-")}" disabled></label>
                         </div>
                         <p class="edit-work-dml-notice">${this.escapeHtml(this.pageLabel("dmlEditNotice", "DML 저장은 현재 SQL을 그대로 보관합니다. DML 검증은 필요할 때 별도로 실행할 수 있습니다."))}</p>
-                        <textarea id="dmlSql-${PAGE_CODE}" class="edit-work-dml-editor" spellcheck="false" oninput="${PAGE_CODE}.handleDmlSqlInput()">${this.escapeHtml(dml.DML_SQL || "")}</textarea>
+                        <textarea id="dmlSql-${PAGE_CODE}" class="edit-work-dml-editor" spellcheck="false" oninput="${PAGE_CODE}.handleDmlSqlInput()" ${executionOpen ? "" : "disabled"}>${this.escapeHtml(dml.DML_SQL || "")}</textarea>
                     </section>
                 `;
                 this.updateGridMeta(filtered);
                 this.currentExport = {
                     filename: "editing-apply-dml.csv",
-                    columns: ["EDIT_DML_ID", "DML_NAME", "DML_STATUS", "VALIDATION_MESSAGE", "AFFECTED_ROW_COUNT", "EXECUTED_AT"],
+                    columns: ["EDIT_DML_ID", "DML_NAME", "DML_STATUS", "VALIDATION_MESSAGE_DISPLAY", "AFFECTED_ROW_COUNT", "EXECUTED_AT"],
                     rows: filtered
                 };
             },
@@ -3428,18 +3559,18 @@
                 const isSaved = Boolean(dml.EDIT_DML_ID)
                     && currentSql === this.dmlSavedSql
                     && currentName === this.dmlSavedName;
-                const canValidate = Boolean(currentSql);
-                const canSave = Boolean(currentSql);
+                const executionOpen = ["DRAFT", "EDITING", "VALIDATED", "APPLY_READY"].includes(
+                    String(session.SESSION_STATUS || "").toUpperCase()
+                );
+                const canValidate = executionOpen && Boolean(currentSql);
+                const canSave = executionOpen && Boolean(currentSql);
                 const dmlStatus = String(dml.DML_STATUS || "").toUpperCase();
-                const canExecute = isSaved && ["DRAFT", "APPROVED", "FAILED"].includes(dmlStatus);
-                const saveLabel = String(dml.DML_STATUS || "").toUpperCase() === "EXECUTED"
-                    ? this.pageLabel("buttonSaveAsNewDmlVersion", "새 버전 저장")
-                    : this.pageLabel("buttonSaveDml", "DML 저장");
+                const canExecute = executionOpen && isSaved && ["DRAFT", "APPROVED", "FAILED"].includes(dmlStatus);
                 actions.innerHTML = `
-                    <button type="button" onclick="${PAGE_CODE}.generateDml()"><i class="fas fa-plus"></i>${this.escapeHtml(this.pageLabel("buttonGenerateDml", "신규 DML 생성"))}</button>
-                    <button type="button" onclick="${PAGE_CODE}.regenerateDml()" ${currentSql ? "" : "disabled"}><i class="fas fa-rotate"></i>${this.escapeHtml(this.pageLabel("buttonRegenerateDml", "초기구문 재생성"))}</button>
+                    <button type="button" onclick="${PAGE_CODE}.generateDml()" ${executionOpen ? "" : "disabled"}><i class="fas fa-plus"></i>${this.escapeHtml(this.pageLabel("buttonGenerateDml", "신규 DML 생성"))}</button>
+                    <button type="button" onclick="${PAGE_CODE}.regenerateDml()" ${executionOpen && currentSql ? "" : "disabled"}><i class="fas fa-rotate"></i>${this.escapeHtml(this.pageLabel("buttonRegenerateDml", "초기구문 재생성"))}</button>
                     <button type="button" onclick="${PAGE_CODE}.validateDml()" ${canValidate ? "" : "disabled"}><i class="fas fa-check-double"></i>${this.escapeHtml(this.pageLabel("buttonValidateDml", "DML 검증"))}</button>
-                    <button type="button" class="is-primary" onclick="${PAGE_CODE}.saveDmlDraft()" ${canSave ? "" : "disabled"}><i class="fas fa-floppy-disk"></i>${this.escapeHtml(saveLabel)}</button>
+                    <button type="button" class="is-primary" onclick="${PAGE_CODE}.saveDmlDraft()" ${canSave ? "" : "disabled"}><i class="fas fa-floppy-disk"></i>${this.escapeHtml(this.pageLabel("buttonSaveDml", "DML 저장"))}</button>
                     <button type="button" class="is-primary" onclick="${PAGE_CODE}.executeDml()" ${canExecute ? "" : "disabled"}><i class="fas fa-play"></i>${this.escapeHtml(this.pageLabel("buttonExecuteDml", "DML 실행"))}</button>
                 `;
             },
@@ -3609,6 +3740,10 @@
             async saveDmlDraft() {
                 const session = this.getSelectedSession();
                 if (!session) return;
+                if (!["DRAFT", "EDITING", "VALIDATED", "APPLY_READY"].includes(String(session.SESSION_STATUS || "").toUpperCase())) {
+                    CommonMessage.warn(this.pageLabel("closedExecutionReadOnly", "운영 반영 완료 또는 초기화된 작업은 이력 조회만 할 수 있습니다."));
+                    return;
+                }
                 const currentSql = getContainerEl(`#dmlSql-${PAGE_CODE}`)?.value || "";
                 if (!currentSql.trim()) {
                     CommonMessage.warn(this.pageLabel("dmlSqlRequired", "저장할 DML SQL을 입력하세요."));
@@ -3628,18 +3763,6 @@
                     CommonMessage.info(
                         this.pageLabel("dmlNoChanges", "저장할 변경사항이 없습니다.")
                     );
-                    return;
-                }
-                if (
-                    currentStatus === "EXECUTED"
-                    && !(await CommonMessage.confirm(
-                        this.pageLabel(
-                            "confirmExecutedDmlNewVersion",
-                            "실행 완료 DML은 감사 이력 보호를 위해 덮어쓸 수 없습니다. 현재 내용을 신규 DML 버전으로 저장하시겠습니까?"
-                        ),
-                        { defaultAction: "cancel" }
-                    ))
-                ) {
                     return;
                 }
                 const payload = {
@@ -3689,7 +3812,10 @@
                     this.selectedDml.DML_SQL = sql;
                     this.dmlValidatedSql = sql;
                     this.renderDmlPanelActions();
-                    CommonMessage.success(json.validationMessage || this.pageLabel("dmlValidationSuccess", "DML 검증이 완료되었습니다."));
+                    CommonMessage.success(
+                        this.localizeDmlValidationMessage(json.validationMessage, session)
+                        || this.pageLabel("dmlValidationSuccess", "DML 검증이 완료되었습니다.")
+                    );
                 } catch (error) {
                     this.dmlValidatedSql = "";
                     this.renderDmlPanelActions();
@@ -3697,16 +3823,54 @@
                 }
             },
 
+            localizeDmlValidationMessage(value, session = null) {
+                const message = String(value || "").trim();
+                if (!message) return "";
+                const validatedTarget = message.match(/^Validated final DML target:\s*"([^"]+)"\."([^"]+)"\.$/i);
+                if (validatedTarget) {
+                    const target = `${validatedTarget[1]}.${validatedTarget[2]}`;
+                    return this.pageLabel(
+                        "dmlValidationTargetSuccess",
+                        "운영 반영 DML 대상을 검증했습니다: {target}"
+                    ).replaceAll("{target}", target);
+                }
+                if (/^Validated final DML target:/i.test(message) && session) {
+                    const target = `${session.TARGET_OWNER || "-"}.${session.SOURCE_TABLE || "-"}`;
+                    return this.pageLabel(
+                        "dmlValidationTargetSuccess",
+                        "운영 반영 DML 대상을 검증했습니다: {target}"
+                    ).replaceAll("{target}", target);
+                }
+                const rules = [
+                    [/DML SQL is required\./i, "dmlValidationSqlRequired", "검증할 DML SQL을 입력하세요."],
+                    [/DML SQL is too large\./i, "dmlValidationSqlTooLarge", "DML SQL이 검증 가능한 최대 크기를 초과했습니다."],
+                    [/Comments are not allowed in final DML\./i, "dmlValidationCommentsNotAllowed", "운영 반영 DML에는 주석을 사용할 수 없습니다."],
+                    [/Final DML must keep the server-generated PL\/SQL structure\./i, "dmlValidationStructureRequired", "서버가 생성한 운영 반영 PL/SQL 구조를 유지해야 합니다."],
+                    [/The row-count validation section of final DML cannot be changed\./i, "dmlValidationRowCountLocked", "운영 반영 DML의 변경 건수 검증 구문은 수정할 수 없습니다."],
+                    [/Final DML must keep the current INITUP\$\/INITDN\$ target, editing history, and matched-row update structure\./i, "dmlValidationScopeRequired", "현재 INITUP$/INITDN$ 대상, 수정 이력 및 일치 행 갱신 구조를 유지해야 합니다."],
+                    [/The server-generated final DML row match condition cannot be changed\./i, "dmlValidationMatchLocked", "서버가 생성한 행 연결 조건은 수정할 수 없습니다."],
+                    [/Final DML contains a command that is not allowed for INITDN\$ final apply\./i, "dmlValidationCommandNotAllowed", "INITDN$ 운영 반영에서 허용되지 않는 명령이 포함되어 있습니다."],
+                    [/Final DML must contain exactly one MERGE statement\./i, "dmlValidationSingleMerge", "운영 반영 DML에는 MERGE 문이 정확히 하나만 있어야 합니다."],
+                    [/Final DML must contain exactly one matched-row UPDATE\./i, "dmlValidationSingleUpdate", "운영 반영 DML에는 일치 행 UPDATE가 정확히 하나만 있어야 합니다."],
+                    [/Final DML references an owner, table, or column outside the generated editing scope\./i, "dmlValidationIdentifierScope", "생성된 편집 범위 밖의 Owner, 테이블 또는 컬럼을 참조할 수 없습니다."],
+                    [/Final DML contains a function or callable expression outside the generated editing scope\./i, "dmlValidationFunctionScope", "생성된 편집 범위 밖의 함수 또는 호출식을 사용할 수 없습니다."],
+                    [/Final DML can reference only the selected editing execution\./i, "dmlValidationExecutionScope", "선택한 에디팅 작업 이력만 참조할 수 있습니다."],
+                    [/Generated final DML is not valid Oracle SQL/i, "dmlOracleSyntaxInvalid", "생성된 운영 반영 DML의 Oracle 문법이 올바르지 않습니다."]
+                ];
+                const translated = rules.find(([pattern]) => pattern.test(message));
+                return translated ? this.pageLabel(translated[1], translated[2]) : message;
+            },
+
             showDmlValidationFailure(error) {
                 const rawMessage = String(error?.message || "");
-                let detail = rawMessage;
+                let detail = this.localizeDmlValidationMessage(rawMessage);
                 if (/Final DML row mapping is stale or ambiguous/i.test(rawMessage)) {
                     const diagnostics = rawMessage.match(
                         /expected=\d+.*?caseKeyChecks=[^.]+/i
                     )?.[0];
                     detail = this.pageLabel(
                         "dmlRowMappingStale",
-                        "편집 행과 현재 원본 행을 안전하게 연결할 수 없습니다. 현재 원본으로 새 편집 작업을 만들거나 업무 키 설정을 확인하세요."
+                        "편집 행과 현재 원본 행을 안전하게 연결할 수 없습니다. 현재 수정을 초기화하거나 업무 키 설정을 확인하세요."
                     );
                     if (diagnostics) detail += `\n${diagnostics}`;
                 } else if (/must match the server-generated INITDN\\$ apply statement/i.test(rawMessage)) {
@@ -3729,8 +3893,12 @@
                     "계속할까요?"
                 ].join("\n\n");
                 if (!(await CommonMessage.confirm(message))) return;
-                await CommonUtils.request(apiUrl(`/dml/${this.selectedDml.EDIT_DML_ID}/execute`), { method: "POST", showLoading: true });
-                CommonMessage.success(this.pageLabel("dmlExecutionCompleted", "저장된 DML 실행을 완료했습니다."));
+                const json = await CommonUtils.request(apiUrl(`/dml/${this.selectedDml.EDIT_DML_ID}/execute`), { method: "POST", showLoading: true });
+                CommonMessage.success(
+                    `운영 반영을 완료했습니다. 작업 이력 #${session.EDIT_SESSION_ID} · ${Number(json.affectedRowCount || 0).toLocaleString()}행 반영`
+                );
+                this.invalidateEditWorkspaceCache("M05002");
+                this.invalidateEditWorkspaceCache("M05003");
                 this.invalidateEditWorkspaceCache("M05003_HISTORY");
                 await this.loadSessions(session.EDIT_SESSION_ID);
                 await this.refresh();
@@ -3758,7 +3926,7 @@
                 this.rows = Array.isArray(json.data) ? json.data : [];
                 const counts = this.countBy(this.rows, "EVENT_TYPE");
                 this.setKpis([
-                    { value: this.rows.length, label: "감사 이벤트", hint: json.limited ? "최근 5,000건 표시" : (session ? `Session #${session.EDIT_SESSION_ID}` : "전체 세션") },
+                    { value: this.rows.length, label: "감사 이벤트", hint: json.limited ? "최근 5,000건 표시" : (session ? `작업 이력 #${session.EDIT_SESSION_ID}` : "전체 이력") },
                     { value: counts.RULE_DECISION || 0, label: "규칙 판단", hint: "선정·제외·등록" },
                     { value: counts.CELL_EDITED || 0, label: "데이터 수정", hint: "INITDN$ 셀 변경" },
                     { value: counts.DML_EXECUTED || 0, label: "운영 반영", hint: "커밋 완료 이벤트" }
@@ -3773,11 +3941,18 @@
                 const historyColumns = [
                     { key: "EDIT_EVENT_ID", label: "이력 ID", width: 72, className: "is-number" },
                     { key: "EVENT_TYPE", label: "이벤트", width: 120, render: (value) => this.badge(value) },
-                    { key: "EDIT_SESSION_ID", label: "세션", width: 72, className: "is-number", render: (value) => value ? `#${this.escapeHtml(value)}` : "-" },
+                    { key: "EDIT_SESSION_ID", label: "작업 이력 ID", width: 96, className: "is-number", render: (value) => value ? `#${this.escapeHtml(value)}` : "-" },
                     { key: "ENTITY_TYPE", label: "대상 유형", width: 105 },
                     { key: "ENTITY_ID", label: "대상 ID", width: 86, className: "is-number" },
                     { key: "EVENT_SUMMARY", label: "이력 내용", width: 330, className: "is-rule-detail", render: (value, _row, index) => this.renderTextPreview(value, index, "EVENT_SUMMARY", "이력 내용") },
                     { key: "EVENT_DETAIL_JSON", label: "상세", width: 260, className: "is-rule-detail", render: (value, _row, index) => this.renderTextPreview(value, index, "EVENT_DETAIL_JSON", "이력 상세") },
+                    { key: "DML_NAME", label: "DML 명", width: 180 },
+                    { key: "DML_STATUS", label: "DML 상태", width: 105, render: (value) => value ? this.badge(value) : "-" },
+                    { key: "DML_SQL", label: "저장·실행 DML SQL", width: 420, className: "is-rule-detail is-code", render: (value, _row, index) => this.renderTextPreview(value, index, "DML_SQL", "저장·실행 DML SQL") },
+                    { key: "AFFECTED_ROW_COUNT", label: "반영 행", width: 90, className: "is-number", render: (value) => value === null || value === undefined ? "-" : Number(value).toLocaleString() },
+                    { key: "DML_EXECUTION_MESSAGE", label: "DML 실행 결과", width: 260, className: "is-rule-detail", render: (value, _row, index) => this.renderTextPreview(value, index, "DML_EXECUTION_MESSAGE", "DML 실행 결과") },
+                    { key: "EXECUTED_BY", label: "반영 작업자", width: 110 },
+                    { key: "EXECUTED_AT", label: "반영 일시", width: 155, render: (value) => this.formatDate(value) },
                     { key: "EVENT_USER", label: "작업자", width: 110 },
                     { key: "CREATED_AT", label: "작업 일시", width: 155, render: (value) => this.formatDate(value) }
                 ];
@@ -3810,7 +3985,9 @@
                     const source = `${session.TARGET_OWNER || "-"}.${session.SOURCE_TABLE || "-"}`;
                     const edit = `${session.TARGET_OWNER || "-"}.${session.EDIT_TABLE || "-"}`;
                     context.textContent = `SOURCE ${source} → EDIT ${edit}`;
-                    context.title = `편집 세션 #${session.EDIT_SESSION_ID} · ${source} → ${edit}`;
+                    context.title = this.showsExecutionHistorySelector()
+                        ? `반영 이력 #${session.EDIT_SESSION_ID} · ${source} → ${edit}`
+                        : `현재 작업 · ${source} → ${edit}`;
                     context.hidden = false;
                     return;
                 }
@@ -3895,7 +4072,8 @@
                                 "DML_APPROVED",
                                 "DML_EXECUTED",
                                 "DML_FAILED",
-                                "DML_DELETED"
+                                "DML_DELETED",
+                                "EXECUTION_CANCELLED"
                             ]),
                             definition("ENTITY_TYPE", "filterEntityType", "대상 유형", ["EDIT_RULE", "EDIT_SESSION", "EDIT_CHANGE", "EDIT_DML"])
                         ];
@@ -4010,6 +4188,19 @@
 
             pageLabel(key, fallback) {
                 return window.I18nManager?.tPage?.(PAGE_CODE, key, fallback) || fallback;
+            },
+
+            executionStatusLabel(value) {
+                const labels = {
+                    DRAFT: "준비 중",
+                    EDITING: "오류 수정 중",
+                    VALIDATED: "효과 검증 완료",
+                    APPLY_READY: "운영 반영 준비",
+                    APPLIED: "운영 반영 완료",
+                    CANCELLED: "실행 취소"
+                };
+                const normalized = String(value || "").toUpperCase();
+                return labels[normalized] || value || "-";
             },
 
             stageFilterOptionLabel(value, filterKey = "") {
@@ -4533,7 +4724,7 @@
                 body.innerHTML = `
                     <dl class="edit-work-detail-meta">
                         <div><dt>프로젝트</dt><dd>${this.escapeHtml(getContainerEl(`#projectId-${PAGE_CODE}`)?.selectedOptions?.[0]?.textContent?.trim?.() || "-")}</dd></div>
-                        <div><dt>편집 세션</dt><dd>${this.escapeHtml(row.EDIT_SESSION_ID ? `#${row.EDIT_SESSION_ID}` : (this.selectedSessionId ? `#${this.selectedSessionId}` : "-"))}</dd></div>
+                        <div><dt>작업 이력 ID</dt><dd>${this.escapeHtml(row.EDIT_SESSION_ID ? `#${row.EDIT_SESSION_ID}` : (this.selectedSessionId ? `#${this.selectedSessionId}` : "-"))}</dd></div>
                         <div><dt>대상</dt><dd>${this.escapeHtml(row.RULE_NAME || row.DML_NAME || row.EVENT_TYPE || row.TARGET_COLUMN || "-")}</dd></div>
                         <div><dt>ID</dt><dd>${this.escapeHtml(row.EDIT_RULE_ID || row.EDIT_DML_ID || row.EDIT_EVENT_ID || row.VIOLATION_ID || "-")}</dd></div>
                     </dl>
