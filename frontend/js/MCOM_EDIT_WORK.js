@@ -99,6 +99,7 @@
             userRuleCopyMode: false,
             masterSelectionRequestId: 0,
             detailDrag: null,
+            detailLayerOpener: null,
             violationRules: [],
             violationSourceTables: [],
             violationSourceTablesLoaded: false,
@@ -208,6 +209,7 @@
                 this.generatedViolationSql = "";
                 this.editingWorkStarting = false;
                 this.currentValidation = null;
+                this.detailLayerOpener = null;
                 if (this.keywordTimer) clearTimeout(this.keywordTimer);
                 this.keywordTimer = null;
                 this.ruleRequestId += 1;
@@ -251,6 +253,7 @@
                 this.violationRuleScopeIds = new Set();
                 this.generatedViolationSql = "";
                 this.editingWorkStarting = false;
+                this.detailLayerOpener = null;
                 this.masterSelectionRequestId += 1;
                 this.refreshPromise = null;
                 this.workspaceSwitching = false;
@@ -2801,7 +2804,7 @@
                     <p class="edit-work-detail-note">SQL의 바인드 값과 식별자는 서버에서 최종 규칙 및 허용된 실제 테이블 기준으로 검증합니다.</p>
                 `;
                 layer.hidden = false;
-                layer.querySelector(".edit-work-detail-dialog")?.focus();
+                layer.querySelector(".edit-work-detail-dialog > header button")?.focus();
             },
 
             violationRowKey(row) {
@@ -3283,7 +3286,7 @@
                 );
                 this.setPanel("에디팅 효과 검증", session ? `
                     <button type="button" title="${this.escapeHtml(this.pageLabel("buttonRerunRuleDiscoveryHelp", "INITDN$ 수정테이블을 대상으로 저장된 Flow의 규칙 발굴을 다시 실행합니다."))}" onclick="${PAGE_CODE}.openReanalysisFlow()" ${executionOpen ? "" : "disabled"}><i class="fas fa-wave-square"></i>${this.escapeHtml(this.pageLabel("buttonRerunRuleDiscovery", "규칙발굴재실행"))}</button>
-                    <button type="button" class="is-primary" onclick="${PAGE_CODE}.markValidated()" ${executionOpen ? "" : "disabled"}><i class="fas fa-check-double"></i>효과 검증 완료</button>
+                    <button type="button" class="is-primary" onclick="${PAGE_CODE}.markValidated()" ${executionOpen ? "" : "disabled"}><i class="fas fa-check-double"></i>${this.escapeHtml(this.pageLabel("buttonCompleteEffectValidation", "효과 검증 완료"))}</button>
                 ` : "");
                 this.hideModeForm();
                 if (!session) {
@@ -3292,12 +3295,14 @@
                     this.renderEmpty(this.pageLabel("selectEditingTableForValidation", "효과를 검증할 INITUP$/INITDN$ 작업 테이블을 선택하세요."));
                     return;
                 }
-                const [validation, changes] = await Promise.all([
-                    CommonUtils.request(apiUrl(`/sessions/${session.EDIT_SESSION_ID}/validation`), { method: "GET", showLoading: false }),
-                    CommonUtils.request(apiUrl(`/sessions/${session.EDIT_SESSION_ID}/changes`), { method: "GET", showLoading: false })
-                ]);
+                const validation = await CommonUtils.request(
+                    apiUrl(`/sessions/${session.EDIT_SESSION_ID}/validation`),
+                    { method: "GET", showLoading: false }
+                );
                 this.currentValidation = validation.data || {};
-                this.rows = Array.isArray(changes.data) ? changes.data : [];
+                this.rows = Array.isArray(this.currentValidation.CHANGE_ROWS)
+                    ? this.currentValidation.CHANGE_ROWS
+                    : [];
                 const data = this.currentValidation;
                 this.setKpis([
                     { value: Number(data.CHANGED_ROW_COUNT || 0).toLocaleString(), label: "변경 행", hint: `${Number(data.TOTAL_CHANGE_COUNT || 0).toLocaleString()}개 셀 변경` },
@@ -3355,6 +3360,7 @@
                             <p><b>선정 컬럼 위반</b> ${this.escapeHtml(data.BASELINE_VIOLATION_COUNT ?? "-")} → ${this.escapeHtml(data.REANALYSIS_VIOLATION_COUNT ?? "-")} · Run 상태 ${this.escapeHtml(data.REANALYSIS_RUN_STATUS || data.REANALYSIS_STATUS || "-")}</p>
                             <p>Flow 재분석은 저장된 노드 정의를 변경하지 않고 실행 시점의 P_TARGET_OWNER/P_TARGET_TABLE만 INITDN$로 오버라이드합니다.</p>
                         </section>
+                        ${this.renderEditAnalysisSummary(data.EDIT_ANALYSIS || {}, data)}
                     </div>
                 `;
                 this.updateGridMeta(filtered);
@@ -3367,20 +3373,472 @@
 
             validationBar(label, value, total) {
                 const percent = Math.max(0, Math.min(100, (Number(value || 0) / Math.max(1, Number(total || 0))) * 100));
+                const currentValue = Math.max(0, Number(value || 0));
+                const maximumValue = Math.max(1, Number(total || 0));
                 return `
                     <div class="edit-work-validation-bar">
                         <span>${this.escapeHtml(label)}</span>
-                        <span class="edit-work-validation-track"><i style="width:${percent.toFixed(1)}%"></i></span>
+                        <span class="edit-work-validation-track"
+                              role="progressbar"
+                              aria-label="${this.escapeHtml(label)}"
+                              aria-valuemin="0"
+                              aria-valuemax="${maximumValue}"
+                              aria-valuenow="${Math.min(currentValue, maximumValue)}"
+                              aria-valuetext="${currentValue.toLocaleString()} / ${maximumValue.toLocaleString()}">
+                            <i style="width:${percent.toFixed(1)}%"></i>
+                        </span>
                         <b>${Number(value || 0).toLocaleString()}</b>
                     </div>
                 `;
             },
 
+            analysisStatusMeta(status) {
+                const normalized = String(status || "PENDING").toUpperCase();
+                const labels = {
+                    READY: ["analysisStatusReady", "반영 검토 가능"],
+                    GOOD: ["analysisStatusGood", "양호"],
+                    REVIEW: ["analysisStatusReview", "확인 필요"],
+                    PENDING: ["analysisStatusPending", "대기"],
+                    UNAVAILABLE: ["analysisStatusUnavailable", "계산 불가"],
+                    NOT_APPLICABLE: ["analysisStatusNotApplicable", "대상 없음"]
+                };
+                const [key, fallback] = labels[normalized] || labels.PENDING;
+                return {
+                    code: normalized,
+                    className: ["READY", "GOOD"].includes(normalized)
+                        ? "is-good"
+                        : (normalized === "REVIEW" ? "is-review" : (["UNAVAILABLE"].includes(normalized) ? "is-unavailable" : "is-pending")),
+                    label: this.pageLabel(key, fallback)
+                };
+            },
+
+            analysisNumber(value, maximumFractionDigits = 2) {
+                if (value === null || value === undefined || value === "" || !Number.isFinite(Number(value))) return "-";
+                return Number(value).toLocaleString(undefined, { maximumFractionDigits });
+            },
+
+            analysisPercent(value, digits = 1) {
+                if (value === null || value === undefined || value === "" || !Number.isFinite(Number(value))) return "-";
+                return `${(Number(value) * 100).toFixed(digits)}%`;
+            },
+
+            analysisCount(value) {
+                return this.pageLabel("analysisCountValue", "{count}건")
+                    .replaceAll("{count}", this.analysisNumber(value, 0));
+            },
+
+            analysisRunStatus(value) {
+                const normalized = String(value || "").toUpperCase();
+                const labels = {
+                    SUCCESS: ["analysisRunStatusSuccess", "성공"],
+                    COMPLETED: ["analysisRunStatusSuccess", "성공"],
+                    RUNNING: ["analysisRunStatusRunning", "실행 중"],
+                    STARTED: ["analysisRunStatusRunning", "실행 중"],
+                    QUEUED: ["analysisRunStatusQueued", "대기열"],
+                    REQUESTED: ["analysisRunStatusQueued", "대기열"],
+                    PENDING: ["analysisRunStatusPending", "대기"],
+                    FAILED: ["analysisRunStatusFailed", "실패"],
+                    ERROR: ["analysisRunStatusFailed", "실패"],
+                    CANCELLED: ["analysisRunStatusCancelled", "취소"]
+                };
+                const [key, fallback] = labels[normalized] || ["analysisRunStatusUnknown", "-"];
+                return this.pageLabel(key, fallback);
+            },
+
+            analysisDirection(value) {
+                const normalized = String(value || "").toUpperCase();
+                const labels = {
+                    IMPROVED: ["analysisDirectionImproved", "개선"],
+                    WORSENED: ["analysisDirectionWorsened", "악화"],
+                    UNCHANGED: ["analysisDirectionUnchanged", "동일"]
+                };
+                const [key, fallback] = labels[normalized] || ["analysisDirectionUnknown", "-"];
+                return this.pageLabel(key, fallback);
+            },
+
+            analysisYesNo(value) {
+                return String(value || "N").toUpperCase() === "Y"
+                    ? this.pageLabel("analysisYes", "예")
+                    : this.pageLabel("analysisNo", "아니요");
+            },
+
+            analysisRuleIdentifier(row) {
+                if (row?.SOURCE_RULE_ID) return String(row.SOURCE_RULE_ID);
+                if (row?.EDIT_RULE_ID !== null && row?.EDIT_RULE_ID !== undefined && row?.EDIT_RULE_ID !== "") {
+                    return `#${row.EDIT_RULE_ID}`;
+                }
+                return "-";
+            },
+
+            renderAnalysisMetric(label, value, hint = "") {
+                return `
+                    <span>
+                        <small>${this.escapeHtml(label)}</small>
+                        <b>${this.escapeHtml(value)}</b>
+                        ${hint ? `<em>${this.escapeHtml(hint)}</em>` : ""}
+                    </span>
+                `;
+            },
+
+            renderAnalysisCard(kind, title, status, metrics, description) {
+                const statusMeta = this.analysisStatusMeta(status);
+                const detailLabel = this.pageLabel("analysisDetailButton", `${title} 상세 보기`)
+                    .replaceAll("{title}", title);
+                return `
+                    <article class="edit-work-analysis-card ${statusMeta.className}">
+                        <header>
+                            <div>
+                                <h4>${this.escapeHtml(title)}</h4>
+                                <span class="edit-work-analysis-status ${statusMeta.className}">${this.escapeHtml(statusMeta.label)}</span>
+                            </div>
+                            <button type="button"
+                                    class="edit-work-analysis-detail-button"
+                                    title="${this.escapeHtml(detailLabel)}"
+                                    aria-label="${this.escapeHtml(detailLabel)}"
+                                    aria-haspopup="dialog"
+                                    aria-controls="detailDialog-${PAGE_CODE}"
+                                    onclick="${PAGE_CODE}.openValidationAnalysisDetail('${this.escapeHtml(kind)}', event)">
+                                <i class="fas fa-ellipsis" aria-hidden="true"></i>
+                            </button>
+                        </header>
+                        <div class="edit-work-analysis-metrics">${metrics.join("")}</div>
+                        <p>${this.escapeHtml(description)}</p>
+                    </article>
+                `;
+            },
+
+            renderEditAnalysisSummary(analysis, validation = {}) {
+                const overall = analysis?.OVERALL || {};
+                const categorical = analysis?.CATEGORICAL || {};
+                const continuous = analysis?.CONTINUOUS || {};
+                const reanalysis = analysis?.REANALYSIS || {};
+                const sourceToEdit = (sourceValue, editValue) => `${this.analysisNumber(sourceValue, 0)} → ${this.analysisNumber(editValue, 0)}`;
+                const snapshotNotice = validation.ANALYSIS_SOURCE === "VALIDATION_SNAPSHOT"
+                    ? this.pageLabel("analysisSnapshotNotice", "검증 완료 시점 결과 · {date}")
+                        .replaceAll("{date}", this.formatDate(validation.VALIDATION_SNAPSHOT_AT) || "-")
+                    : "";
+                return `
+                    <section class="edit-work-validation-analysis" aria-labelledby="validationAnalysisTitle-${PAGE_CODE}">
+                        <header class="edit-work-validation-analysis-heading">
+                            <div>
+                                <h3 id="validationAnalysisTitle-${PAGE_CODE}">${this.escapeHtml(this.pageLabel("validationAnalysisTitle", "운영 반영 전 에디팅 분석"))}</h3>
+                                <span>${this.escapeHtml(this.pageLabel("validationAnalysisHelp", "수정에 사용한 동일 최종 규칙을 INITUP$과 INITDN$에 적용해 변경 영향과 규칙 적합도를 비교합니다."))}${snapshotNotice ? ` · ${this.escapeHtml(snapshotNotice)}` : ""}</span>
+                            </div>
+                        </header>
+                        <div class="edit-work-validation-analysis-grid">
+                            ${this.renderAnalysisCard(
+                                "IMPACT",
+                                this.pageLabel("analysisImpactTitle", "변경 영향·최소 수정"),
+                                overall.STATUS,
+                                [
+                                    this.renderAnalysisMetric(this.pageLabel("analysisChangedRows", "변경 행"), this.analysisNumber(overall.CHANGED_ROW_COUNT, 0), this.analysisPercent(overall.CHANGED_ROW_RATE)),
+                                    this.renderAnalysisMetric(this.pageLabel("analysisChangedColumns", "변경 컬럼"), this.analysisNumber(overall.DISTINCT_COLUMN_COUNT, 0)),
+                                    this.renderAnalysisMetric(this.pageLabel("analysisExpectedAgreement", "기대값 일치"), this.analysisPercent(overall.EXPECTED_MATCH_RATE), this.analysisCount(overall.EXPECTED_MATCH_COUNT))
+                                ],
+                                this.pageLabel("analysisImpactDescription", "원본 데이터 보존 관점에서 변경 범위와 기대값 일치를 확인합니다.")
+                            )}
+                            ${this.renderAnalysisCard(
+                                "CATEGORICAL",
+                                this.pageLabel("analysisCategoricalTitle", "범주형 규칙 효과"),
+                                categorical.STATUS,
+                                [
+                                    this.renderAnalysisMetric(this.pageLabel("analysisRuleCount", "규칙"), this.analysisNumber(categorical.RULE_COUNT, 0)),
+                                    this.renderAnalysisMetric(this.pageLabel("analysisRuleViolations", "동일 규칙 위반"), sourceToEdit(categorical.SOURCE_VIOLATION_COUNT, categorical.EDIT_VIOLATION_COUNT)),
+                                    this.renderAnalysisMetric(this.pageLabel("analysisExpectedAgreement", "기대값 일치"), this.analysisPercent(categorical.EXPECTED_MATCH_RATE))
+                                ],
+                                this.pageLabel("analysisCategoricalDescription", "정답 라벨이 없으므로 분류 정확도 대신 규칙 위반 감소와 기대값 일치를 평가합니다.")
+                            )}
+                            ${this.renderAnalysisCard(
+                                "CONTINUOUS",
+                                this.pageLabel("analysisContinuousTitle", "연속형 규칙 효과"),
+                                continuous.STATUS,
+                                [
+                                    this.renderAnalysisMetric(this.pageLabel("analysisEvaluatedRows", "숫자 평가"), this.analysisNumber(continuous.EVALUATED_COUNT, 0)),
+                                    this.renderAnalysisMetric("RMSE", `${this.analysisNumber(continuous.BEFORE_RMSE)} → ${this.analysisNumber(continuous.AFTER_RMSE)}`),
+                                    this.renderAnalysisMetric(this.pageLabel("analysisTolerancePass", "허용오차 충족"), this.analysisPercent(continuous.WITHIN_TOLERANCE_RATE))
+                                ],
+                                this.pageLabel("analysisContinuousDescription", "수정 전·후 값과 수식 예측값의 잔차를 비교해 MAE/RMSE와 허용오차 충족을 평가합니다.")
+                            )}
+                            ${this.renderAnalysisCard(
+                                "REANALYSIS",
+                                this.pageLabel("analysisReanalysisTitle", "재분석·운영 준비"),
+                                reanalysis.STATUS,
+                                [
+                                    this.renderAnalysisMetric("Flow Run", reanalysis.FLOW_RUN_ID ? `#${reanalysis.FLOW_RUN_ID}` : "-"),
+                                    this.renderAnalysisMetric(this.pageLabel("analysisRunStatus", "Run 상태"), this.analysisRunStatus(reanalysis.RUN_STATUS)),
+                                    this.renderAnalysisMetric(this.pageLabel("analysisSavedViolations", "저장 위반 결과"), sourceToEdit(reanalysis.BASELINE_VIOLATION_COUNT, reanalysis.REANALYSIS_VIOLATION_COUNT))
+                                ],
+                                this.pageLabel("analysisReanalysisDescription", "동일 규칙 직접 비교와 별도로 INITDN$ Flow 재분석 완료 여부를 확인합니다.")
+                            )}
+                        </div>
+                    </section>
+                `;
+            },
+
+            renderAnalysisDetailMetrics(items) {
+                return `
+                    <dl class="edit-work-analysis-detail-metrics">
+                        ${items.map((item) => `
+                            <div>
+                                <dt>${this.escapeHtml(item.label)}</dt>
+                                <dd>
+                                    ${this.escapeHtml(item.value)}
+                                    ${item.hint ? `<small>${this.escapeHtml(item.hint)}</small>` : ""}
+                                </dd>
+                            </div>
+                        `).join("")}
+                    </dl>
+                `;
+            },
+
+            renderAnalysisDetailTable(title, columns, rows, emptyMessage = "") {
+                const resolvedEmptyMessage = emptyMessage || this.pageLabel("analysisNoData", "표시할 데이터가 없습니다.");
+                return `
+                    <section class="edit-work-analysis-detail-section">
+                        <h4>${this.escapeHtml(title)}</h4>
+                        ${rows.length ? `
+                            <div class="edit-work-analysis-table-wrap" role="region" aria-label="${this.escapeHtml(title)}" tabindex="0">
+                                <table>
+                                    <thead><tr>${columns.map((column) => `<th scope="col">${this.escapeHtml(column.label)}</th>`).join("")}</tr></thead>
+                                    <tbody>
+                                        ${rows.map((row) => `
+                                            <tr>${columns.map((column) => `<td>${this.escapeHtml(column.value(row))}</td>`).join("")}</tr>
+                                        `).join("")}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ` : `<p class="edit-work-analysis-empty">${this.escapeHtml(resolvedEmptyMessage)}</p>`}
+                    </section>
+                `;
+            },
+
+            buildImpactAnalysisDetail(analysis) {
+                const overall = analysis?.OVERALL || {};
+                return `
+                    ${this.renderAnalysisDetailMetrics([
+                        { label: this.pageLabel("analysisSourceRows", "원본 전체 행"), value: this.analysisNumber(overall.SOURCE_ROW_COUNT, 0) },
+                        { label: this.pageLabel("analysisAppliedCells", "적용 변경 셀"), value: this.analysisNumber(overall.APPLIED_CHANGE_COUNT, 0) },
+                        { label: this.pageLabel("analysisChangedRows", "변경 행"), value: this.analysisNumber(overall.CHANGED_ROW_COUNT, 0), hint: this.analysisPercent(overall.CHANGED_ROW_RATE) },
+                        { label: this.pageLabel("analysisChangedColumns", "변경 컬럼"), value: this.analysisNumber(overall.DISTINCT_COLUMN_COUNT, 0) },
+                        { label: this.pageLabel("analysisChangedRules", "변경 관련 규칙"), value: this.analysisNumber(overall.DISTINCT_RULE_COUNT, 0) },
+                        { label: this.pageLabel("analysisExpectedAgreement", "기대값 일치"), value: this.analysisPercent(overall.EXPECTED_MATCH_RATE), hint: this.analysisCount(overall.EXPECTED_MATCH_COUNT) }
+                    ])}
+                    <section class="edit-work-analysis-method-note">
+                        <strong>${this.escapeHtml(this.pageLabel("analysisInterpretationTitle", "해석 기준"))}</strong>
+                        <p>${this.escapeHtml(this.pageLabel("analysisImpactMethod", "통계 데이터 편집에서는 오류를 해소하면서 원본 변경 범위를 최소화했는지 함께 확인합니다. 변경률은 변경 행 수를 원본 전체 행 수로 나눈 값입니다."))}</p>
+                    </section>
+                    ${overall.EVALUATION_ERROR ? `
+                        <section class="edit-work-analysis-method-note is-warning">
+                            <strong>${this.escapeHtml(this.pageLabel("analysisCalculationUnavailable", "동일 규칙 비교 계산 불가"))}</strong>
+                            <p>${this.escapeHtml(
+                                overall.EVALUATION_ERROR === "VALIDATION_SNAPSHOT_UNAVAILABLE"
+                                    ? this.pageLabel("analysisSnapshotUnavailable", "이 작업은 검증 결과 저장 기능 적용 전에 운영 반영되어 당시 동일 규칙 비교 결과를 복원할 수 없습니다. 변경 이력 지표만 확인할 수 있습니다.")
+                                    : this.pageLabel("analysisSameRuleEvaluationUnavailable", "현재 테이블에 동일 규칙을 다시 적용하지 못했습니다. 규칙 식과 INITDN$ 구조를 확인한 후 다시 조회하세요.")
+                            )}</p>
+                        </section>
+                    ` : ""}
+                    <section class="edit-work-analysis-method-note is-info">
+                        <strong>${this.escapeHtml(this.pageLabel("analysisLimitationsTitle", "평가 범위"))}</strong>
+                        <p>${this.escapeHtml(this.pageLabel("analysisGroundTruthLimitation", "독립적인 정답 라벨이 없으므로 Accuracy, Precision, Recall, F1, AUC는 계산하지 않습니다."))}</p>
+                        <p>${this.escapeHtml(this.pageLabel("analysisFullModelLimitation", "이 지표는 변경 행의 에디팅 효과이며 전체 데이터 모델의 R² 또는 교차검증 성능을 의미하지 않습니다."))}</p>
+                    </section>
+                `;
+            },
+
+            buildCategoricalAnalysisDetail(analysis) {
+                const data = analysis?.CATEGORICAL || {};
+                const rules = Array.isArray(data.RULES) ? data.RULES : [];
+                const transitions = Array.isArray(data.TRANSITIONS) ? data.TRANSITIONS : [];
+                const samples = Array.isArray(data.SAMPLES) ? data.SAMPLES : [];
+                return `
+                    ${this.renderAnalysisDetailMetrics([
+                        { label: this.pageLabel("analysisRuleCount", "규칙"), value: this.analysisNumber(data.RULE_COUNT, 0) },
+                        { label: this.pageLabel("analysisAppliedCells", "적용 변경 셀"), value: this.analysisNumber(data.CHANGE_COUNT, 0) },
+                        { label: this.pageLabel("analysisChangedRows", "변경 행"), value: this.analysisNumber(data.CHANGED_ROW_COUNT, 0) },
+                        { label: this.pageLabel("analysisExpectedAgreement", "기대값 일치"), value: this.analysisPercent(data.EXPECTED_MATCH_RATE), hint: this.analysisCount(data.EXPECTED_MATCH_COUNT) },
+                        { label: this.pageLabel("analysisSourceViolations", "INITUP$ 동일 규칙 위반"), value: this.analysisNumber(data.SOURCE_VIOLATION_COUNT, 0) },
+                        { label: this.pageLabel("analysisEditViolations", "INITDN$ 동일 규칙 위반"), value: this.analysisNumber(data.EDIT_VIOLATION_COUNT, 0), hint: `${this.analysisNumber(data.VIOLATION_REDUCTION_COUNT, 0)} · ${this.analysisPercent(data.VIOLATION_REDUCTION_RATE)}` }
+                    ])}
+                    <section class="edit-work-analysis-method-note">
+                        <strong>${this.escapeHtml(this.pageLabel("analysisInterpretationTitle", "해석 기준"))}</strong>
+                        <p>${this.escapeHtml(this.pageLabel("analysisCategoricalMethod", "수정에 사용한 동일 범주형 규칙을 INITUP$과 INITDN$에 다시 적용해 위반 발생 건수를 비교합니다. 기대값 일치율은 수정값이 THEN 기대값과 일치한 비율이며 분류 정확도가 아닙니다."))}</p>
+                    </section>
+                    ${this.renderAnalysisDetailTable(
+                        this.pageLabel("analysisRuleBreakdown", "규칙별 평가"),
+                        [
+                            { label: this.pageLabel("analysisRuleId", "규칙 ID"), value: (row) => this.analysisRuleIdentifier(row) },
+                            { label: this.pageLabel("analysisRuleName", "규칙명"), value: (row) => row.RULE_NAME || "-" },
+                            { label: this.pageLabel("analysisTargetColumn", "대상 컬럼"), value: (row) => row.TARGET_COLUMN || "-" },
+                            { label: this.pageLabel("analysisRuleExpression", "IF 조건"), value: (row) => row.RULE_EXPRESSION || "-" },
+                            { label: this.pageLabel("analysisExpected", "기대값"), value: (row) => row.EXPECTED_VALUE ?? "-" },
+                            { label: this.pageLabel("analysisChanges", "변경"), value: (row) => this.analysisNumber(row.CHANGE_COUNT, 0) },
+                            { label: this.pageLabel("analysisExpectedAgreement", "기대값 일치"), value: (row) => this.analysisPercent(row.EXPECTED_MATCH_RATE) },
+                            { label: "INITUP$", value: (row) => this.analysisNumber(row.SOURCE_VIOLATION_COUNT, 0) },
+                            { label: "INITDN$", value: (row) => this.analysisNumber(row.EDIT_VIOLATION_COUNT, 0) },
+                            { label: this.pageLabel("analysisReduction", "감소"), value: (row) => this.analysisNumber(row.VIOLATION_REDUCTION_COUNT, 0) }
+                        ],
+                        rules,
+                        this.pageLabel("analysisNoCategoricalRules", "적용된 범주형 규칙이 없습니다.")
+                    )}
+                    ${this.renderAnalysisDetailTable(
+                        this.pageLabel("analysisTopTransitions", "주요 값 변경"),
+                        [
+                            { label: this.pageLabel("analysisBefore", "수정 전"), value: (row) => row.OLD_VALUE ?? "-" },
+                            { label: this.pageLabel("analysisAfter", "수정 후"), value: (row) => row.NEW_VALUE ?? "-" },
+                            { label: this.pageLabel("analysisCount", "건수"), value: (row) => this.analysisNumber(row.CHANGE_COUNT, 0) },
+                            { label: this.pageLabel("analysisShare", "비중"), value: (row) => this.analysisPercent(row.CHANGE_RATE) }
+                        ],
+                        transitions
+                    )}
+                    ${this.renderAnalysisDetailTable(
+                        this.pageLabel("analysisChangeSamples", "변경 행 표본"),
+                        [
+                            { label: this.pageLabel("analysisCaseId", "행 식별값"), value: (row) => row.CASE_ID || "-" },
+                            { label: this.pageLabel("analysisTargetColumn", "대상 컬럼"), value: (row) => row.COLUMN_NAME || "-" },
+                            { label: this.pageLabel("analysisBefore", "수정 전"), value: (row) => row.OLD_VALUE ?? "-" },
+                            { label: this.pageLabel("analysisAfter", "수정 후"), value: (row) => row.NEW_VALUE ?? "-" },
+                            { label: this.pageLabel("analysisExpected", "기대값"), value: (row) => row.EXPECTED_VALUE ?? "-" },
+                            { label: this.pageLabel("analysisMatch", "일치"), value: (row) => this.analysisYesNo(row.EXPECTED_MATCH_YN) }
+                        ],
+                        samples
+                    )}
+                `;
+            },
+
+            buildContinuousAnalysisDetail(analysis) {
+                const data = analysis?.CONTINUOUS || {};
+                const rules = Array.isArray(data.RULES) ? data.RULES : [];
+                const samples = Array.isArray(data.SAMPLES) ? data.SAMPLES : [];
+                return `
+                    ${this.renderAnalysisDetailMetrics([
+                        { label: this.pageLabel("analysisRuleCount", "규칙"), value: this.analysisNumber(data.RULE_COUNT, 0) },
+                        { label: this.pageLabel("analysisEvaluatedRows", "숫자 평가"), value: this.analysisNumber(data.EVALUATED_COUNT, 0), hint: `${this.pageLabel("analysisNonNumeric", "비숫자")} ${this.analysisNumber(data.NON_NUMERIC_COUNT, 0)}` },
+                        { label: "MAE", value: `${this.analysisNumber(data.BEFORE_MAE)} → ${this.analysisNumber(data.AFTER_MAE)}`, hint: this.analysisPercent(data.MAE_REDUCTION_RATE) },
+                        { label: "RMSE", value: `${this.analysisNumber(data.BEFORE_RMSE)} → ${this.analysisNumber(data.AFTER_RMSE)}`, hint: this.analysisPercent(data.RMSE_REDUCTION_RATE) },
+                        { label: this.pageLabel("analysisTolerancePass", "허용오차 충족"), value: this.analysisPercent(data.WITHIN_TOLERANCE_RATE), hint: this.analysisCount(data.WITHIN_TOLERANCE_COUNT) },
+                        { label: this.pageLabel("analysisImprovedWorsened", "개선 / 악화"), value: `${this.analysisNumber(data.IMPROVED_COUNT, 0)} / ${this.analysisNumber(data.WORSENED_COUNT, 0)}` },
+                        { label: this.pageLabel("analysisP95Error", "수정 후 P95 절대오차"), value: this.analysisNumber(data.AFTER_P95_ABS_ERROR) },
+                        { label: this.pageLabel("analysisCvError", "수정 후 정규화 RMSE"), value: data.AFTER_NRMSE_PCT === null || data.AFTER_NRMSE_PCT === undefined ? "-" : `${this.analysisNumber(data.AFTER_NRMSE_PCT)}%` },
+                        { label: this.pageLabel("analysisResidualMean", "수정 후 잔차 평균"), value: this.analysisNumber(data.AFTER_RESIDUAL_MEAN) },
+                        { label: this.pageLabel("analysisResidualStddev", "수정 후 잔차 표준편차"), value: this.analysisNumber(data.AFTER_RESIDUAL_STDDEV) },
+                        { label: this.pageLabel("analysisThreeSigmaOutliers", "3σ 초과"), value: this.analysisNumber(data.AFTER_3SIGMA_COUNT, 0) }
+                    ])}
+                    <section class="edit-work-analysis-method-note">
+                        <strong>${this.escapeHtml(this.pageLabel("analysisInterpretationTitle", "해석 기준"))}</strong>
+                        <p>${this.escapeHtml(this.pageLabel("analysisContinuousMethod", "변경된 숫자 행에서 수식 예측값에 대한 수정 전·후 잔차를 비교합니다. MAE/RMSE가 작아지고 허용오차 충족률이 높을수록 규칙 적합도가 개선된 것입니다."))}</p>
+                        <p>${this.escapeHtml(this.pageLabel("analysisNrmseDefinition", "정규화 RMSE는 수정 후 RMSE를 수정 당시 예측값 절대값의 평균으로 나눈 비율입니다."))}</p>
+                        <p>${this.escapeHtml(this.pageLabel("analysisFullModelLimitation", "이 지표는 변경 행의 에디팅 효과이며 전체 데이터 모델의 R² 또는 교차검증 성능을 의미하지 않습니다."))}</p>
+                    </section>
+                    ${this.renderAnalysisDetailTable(
+                        this.pageLabel("analysisRuleBreakdown", "규칙별 평가"),
+                        [
+                            { label: this.pageLabel("analysisRuleId", "규칙 ID"), value: (row) => this.analysisRuleIdentifier(row) },
+                            { label: this.pageLabel("analysisTargetColumn", "대상 컬럼"), value: (row) => row.TARGET_COLUMN || "-" },
+                            { label: this.pageLabel("analysisRuleExpression", "수식"), value: (row) => row.RULE_EXPRESSION || "-" },
+                            { label: this.pageLabel("analysisTolerance", "허용오차"), value: (row) => {
+                                const value = row.EFFECTIVE_TOLERANCE_PCT ?? row.RULE_TOLERANCE_PCT;
+                                const suffix = row.TOLERANCE_DEFAULTED
+                                    ? ` (${this.pageLabel("analysisDefaultTolerance", "기본값")})`
+                                    : "";
+                                return value === null || value === undefined ? "-" : `${this.analysisNumber(value)}%${suffix}`;
+                            } },
+                            { label: "n", value: (row) => this.analysisNumber(row.EVALUATED_COUNT, 0) },
+                            { label: "MAE", value: (row) => `${this.analysisNumber(row.BEFORE_MAE)} → ${this.analysisNumber(row.AFTER_MAE)}` },
+                            { label: "RMSE", value: (row) => `${this.analysisNumber(row.BEFORE_RMSE)} → ${this.analysisNumber(row.AFTER_RMSE)}` },
+                            { label: this.pageLabel("analysisTolerancePass", "허용오차 충족"), value: (row) => this.analysisPercent(row.WITHIN_TOLERANCE_RATE) },
+                            { label: this.pageLabel("analysisRuleViolations", "동일 규칙 위반"), value: (row) => `${this.analysisNumber(row.SOURCE_VIOLATION_COUNT, 0)} → ${this.analysisNumber(row.EDIT_VIOLATION_COUNT, 0)}` }
+                        ],
+                        rules,
+                        this.pageLabel("analysisNoContinuousRules", "적용된 연속형 규칙이 없습니다.")
+                    )}
+                    ${this.renderAnalysisDetailTable(
+                        this.pageLabel("analysisLargestResiduals", "수정 후 잔차 상위 행"),
+                        [
+                            { label: this.pageLabel("analysisCaseId", "행 식별값"), value: (row) => row.CASE_ID || "-" },
+                            { label: this.pageLabel("analysisTargetColumn", "대상 컬럼"), value: (row) => row.COLUMN_NAME || "-" },
+                            { label: this.pageLabel("analysisBefore", "수정 전"), value: (row) => this.analysisNumber(row.OLD_VALUE_NUMERIC) },
+                            { label: this.pageLabel("analysisAfter", "수정 후"), value: (row) => this.analysisNumber(row.NEW_VALUE_NUMERIC) },
+                            { label: this.pageLabel("analysisPrediction", "예측값"), value: (row) => this.analysisNumber(row.EXPECTED_VALUE_NUMERIC) },
+                            { label: this.pageLabel("analysisBeforeError", "수정 전 오차"), value: (row) => this.analysisNumber(row.BEFORE_ABS_ERROR) },
+                            { label: this.pageLabel("analysisAfterError", "수정 후 오차"), value: (row) => this.analysisNumber(row.AFTER_ABS_ERROR) },
+                            { label: this.pageLabel("analysisDirection", "방향"), value: (row) => this.analysisDirection(row.ERROR_DIRECTION) }
+                        ],
+                        samples
+                    )}
+                `;
+            },
+
+            buildReanalysisAnalysisDetail(analysis) {
+                const data = analysis?.REANALYSIS || {};
+                return `
+                    ${this.renderAnalysisDetailMetrics([
+                        { label: "Flow Run", value: data.FLOW_RUN_ID ? `#${data.FLOW_RUN_ID}` : "-" },
+                        { label: this.pageLabel("analysisRunStatus", "Run 상태"), value: this.analysisRunStatus(data.RUN_STATUS) },
+                        { label: this.pageLabel("analysisBaselineViolations", "Baseline 저장 위반"), value: this.analysisNumber(data.BASELINE_VIOLATION_COUNT, 0) },
+                        { label: this.pageLabel("analysisReanalysisViolations", "재분석 저장 위반"), value: this.analysisNumber(data.REANALYSIS_VIOLATION_COUNT, 0) },
+                        { label: this.pageLabel("analysisReduction", "감소"), value: this.analysisNumber(data.VIOLATION_REDUCTION_COUNT, 0), hint: this.analysisPercent(data.VIOLATION_REDUCTION_RATE) }
+                    ])}
+                    <section class="edit-work-analysis-method-note">
+                        <strong>${this.escapeHtml(this.pageLabel("analysisInterpretationTitle", "해석 기준"))}</strong>
+                        <p>${this.escapeHtml(this.pageLabel("analysisReanalysisMethod", "Flow 재분석 결과는 저장된 Run의 선정 대상 컬럼 위반 건수를 비교합니다. 규칙 ID나 수식이 재발굴 과정에서 달라질 수 있으므로 동일 규칙 직접 비교 카드와 함께 판단하세요."))}</p>
+                    </section>
+                `;
+            },
+
+            openValidationAnalysisDetail(kind, event = null) {
+                const analysis = this.currentValidation?.EDIT_ANALYSIS || {};
+                const normalized = String(kind || "IMPACT").toUpperCase();
+                const titles = {
+                    IMPACT: this.pageLabel("analysisImpactTitle", "변경 영향·최소 수정"),
+                    CATEGORICAL: this.pageLabel("analysisCategoricalTitle", "범주형 규칙 효과"),
+                    CONTINUOUS: this.pageLabel("analysisContinuousTitle", "연속형 규칙 효과"),
+                    REANALYSIS: this.pageLabel("analysisReanalysisTitle", "재분석·운영 준비")
+                };
+                const builders = {
+                    IMPACT: () => this.buildImpactAnalysisDetail(analysis),
+                    CATEGORICAL: () => this.buildCategoricalAnalysisDetail(analysis),
+                    CONTINUOUS: () => this.buildContinuousAnalysisDetail(analysis),
+                    REANALYSIS: () => this.buildReanalysisAnalysisDetail(analysis)
+                };
+                const layer = getContainerEl(`#detailLayer-${PAGE_CODE}`);
+                const title = getContainerEl(`#detailLayerTitle-${PAGE_CODE}`);
+                const eyebrow = getContainerEl(`#detailLayerEyebrow-${PAGE_CODE}`);
+                const body = getContainerEl(`#detailLayerBody-${PAGE_CODE}`);
+                if (!layer || !body || !builders[normalized]) return;
+                this.detailLayerOpener = event?.currentTarget || document.activeElement;
+                this.resetDetailDialogPosition();
+                if (eyebrow) eyebrow.textContent = this.pageLabel("validationAnalysisEyebrow", "PRE-APPLY EDIT ANALYSIS");
+                if (title) title.textContent = titles[normalized];
+                body.innerHTML = builders[normalized]();
+                layer.hidden = false;
+                layer.querySelector(".edit-work-detail-dialog > header button")?.focus();
+            },
+
             async markValidated() {
                 const session = this.getSelectedSession();
                 if (!session) return;
-                await CommonUtils.request(apiUrl(`/sessions/${session.EDIT_SESSION_ID}/validate`), { method: "POST", showLoading: false });
-                CommonMessage.success("에디팅 효과 검증을 완료했습니다.");
+                const overall = this.currentValidation?.EDIT_ANALYSIS?.OVERALL || {};
+                const reviewRequired = (
+                    String(overall.STATUS || "").toUpperCase() === "REVIEW"
+                    && !overall.EVALUATION_ERROR
+                );
+                if (reviewRequired) {
+                    const confirmed = await CommonMessage.confirm(
+                        this.pageLabel(
+                            "analysisReviewConfirm",
+                            "일부 검증 지표가 검토 필요 상태입니다. 상세 결과를 확인했으며 이 상태로 효과 검증을 완료할까요?"
+                        )
+                    );
+                    if (!confirmed) return;
+                }
+                await CommonUtils.request(apiUrl(`/sessions/${session.EDIT_SESSION_ID}/validate`), {
+                    method: "POST",
+                    body: { acknowledgeReview: reviewRequired },
+                    showLoading: false
+                });
+                CommonMessage.success(
+                    this.pageLabel("effectValidationCompleted", "에디팅 효과 검증을 완료했습니다.")
+                );
                 this.invalidateEditWorkspaceCache("M05003_FINAL_APPLY");
                 this.invalidateEditWorkspaceCache("M05003_HISTORY");
                 await this.loadSessions(session.EDIT_SESSION_ID);
@@ -3449,14 +3907,20 @@
                 this.renderDmlContent();
             },
 
+            isDmlWorkspaceAvailable(session = this.getSelectedSession()) {
+                return ["DRAFT", "EDITING", "VALIDATED", "APPLY_READY", "APPLIED"].includes(
+                    String(session?.SESSION_STATUS || "").toUpperCase()
+                );
+            },
+
             renderDmlContent() {
                 const content = getContainerEl(`#workContent-${PAGE_CODE}`);
                 if (!content) return;
                 const dml = this.selectedDml || {};
                 const session = this.getSelectedSession();
-                const executionOpen = ["DRAFT", "EDITING", "VALIDATED", "APPLY_READY"].includes(
-                    String(session?.SESSION_STATUS || "").toUpperCase()
-                );
+                const executionOpen = this.isDmlWorkspaceAvailable(session);
+                const selectedDmlExecuted = String(dml.DML_STATUS || "").toUpperCase() === "EXECUTED";
+                const selectedDmlEditable = executionOpen && !selectedDmlExecuted;
                 this.renderDmlPanelActions();
                 const { filtered, visible } = this.getPagedRows(this.getDmlDisplayRows());
                 const dmlColumns = [
@@ -3474,28 +3938,32 @@
                         width: 124,
                         className: "is-action-column",
                         headerClassName: "is-action-column",
-                        render: (_value, row, index) => `
-                            <span class="edit-work-row-actions">
-                                <button title="${this.escapeHtml(this.pageLabel("buttonEditDmlHelp", "선택한 DML을 하단 편집창에 불러옵니다."))}"
-                                        onclick="event.stopPropagation(); ${PAGE_CODE}.selectDml(${index})">
-                                    ${this.escapeHtml(
-                                        executionOpen
-                                            ? this.pageLabel("buttonEditDml", "편집")
-                                            : this.pageLabel("buttonViewDml", "보기")
-                                    )}
-                                </button>
-                                <button class="is-danger"
-                                        title="${this.escapeHtml(
-                                            String(row.DML_STATUS || "").toUpperCase() === "EXECUTED"
-                                                ? this.pageLabel("executedDmlDeleteBlocked", "실행 완료 DML은 감사 이력 보존을 위해 삭제할 수 없습니다.")
-                                                : this.pageLabel("buttonDeleteDmlHelp", "선택한 저장 DML을 삭제합니다.")
-                                        )}"
-                                        onclick="event.stopPropagation(); ${PAGE_CODE}.deleteDml(${index})"
-                                        ${executionOpen && String(row.DML_STATUS || "").toUpperCase() !== "EXECUTED" ? "" : "disabled"}>
-                                    ${this.escapeHtml(this.pageLabel("buttonDeleteDml", "삭제"))}
-                                </button>
-                            </span>
-                        `
+                        render: (_value, row, index) => {
+                            const dmlStatus = String(row.DML_STATUS || "").toUpperCase();
+                            const rowEditable = executionOpen && dmlStatus !== "EXECUTED";
+                            const deleteTitle = dmlStatus === "EXECUTED"
+                                ? this.pageLabel("executedDmlDeleteBlocked", "실행 완료 DML은 감사 이력 보존을 위해 삭제할 수 없습니다.")
+                                : executionOpen
+                                    ? this.pageLabel("buttonDeleteDmlHelp", "선택한 저장 DML을 삭제합니다.")
+                                    : this.pageLabel("closedExecutionReadOnly", "운영 반영 완료 또는 초기화된 작업은 이력 조회만 할 수 있습니다.");
+                            return `
+                                <span class="edit-work-row-actions">
+                                    <button title="${this.escapeHtml(this.pageLabel("buttonEditDmlHelp", "선택한 DML을 하단 편집창에 불러옵니다."))}"
+                                            onclick="event.stopPropagation(); ${PAGE_CODE}.selectDml(${index})">
+                                        ${this.escapeHtml(
+                                            rowEditable
+                                                ? this.pageLabel("buttonEditDml", "편집")
+                                                : this.pageLabel("buttonViewDml", "보기")
+                                        )}
+                                    </button>
+                                    <button class="is-danger"
+                                            title="${this.escapeHtml(deleteTitle)}"
+                                            onclick="event.stopPropagation(); ${PAGE_CODE}.deleteDml(${index})">
+                                        ${this.escapeHtml(this.pageLabel("buttonDeleteDml", "삭제"))}
+                                    </button>
+                                </span>
+                            `;
+                        }
                     }
                 ];
                 content.innerHTML = `
@@ -3513,13 +3981,13 @@
                                             : this.pageLabel("dmlIdUnsaved", "신규 · 미저장")
                                     )}</em>
                                 </span>
-                                <input id="dmlName-${PAGE_CODE}" value="${this.escapeHtml(dml.DML_NAME || "")}" oninput="${PAGE_CODE}.handleDmlNameInput()" ${executionOpen ? "" : "disabled"}>
+                                <input id="dmlName-${PAGE_CODE}" value="${this.escapeHtml(dml.DML_NAME || "")}" oninput="${PAGE_CODE}.handleDmlNameInput()" ${selectedDmlEditable ? "" : "disabled"}>
                             </label>
                             <label class="edit-work-field"><span>상태</span><input value="${this.escapeHtml(this.dmlStatusLabel(dml.DML_STATUS))}" disabled></label>
                             <label class="edit-work-field"><span>영향 행</span><input value="${this.escapeHtml(dml.AFFECTED_ROW_COUNT ?? "-")}" disabled></label>
                         </div>
                         <p class="edit-work-dml-notice">${this.escapeHtml(this.pageLabel("dmlEditNotice", "DML 저장은 현재 SQL을 그대로 보관합니다. DML 검증은 필요할 때 별도로 실행할 수 있습니다."))}</p>
-                        <textarea id="dmlSql-${PAGE_CODE}" class="edit-work-dml-editor" spellcheck="false" oninput="${PAGE_CODE}.handleDmlSqlInput()" ${executionOpen ? "" : "disabled"}>${this.escapeHtml(dml.DML_SQL || "")}</textarea>
+                        <textarea id="dmlSql-${PAGE_CODE}" class="edit-work-dml-editor" spellcheck="false" oninput="${PAGE_CODE}.handleDmlSqlInput()" ${selectedDmlEditable ? "" : "disabled"}>${this.escapeHtml(dml.DML_SQL || "")}</textarea>
                     </section>
                 `;
                 this.updateGridMeta(filtered);
@@ -3559,16 +4027,16 @@
                 const isSaved = Boolean(dml.EDIT_DML_ID)
                     && currentSql === this.dmlSavedSql
                     && currentName === this.dmlSavedName;
-                const executionOpen = ["DRAFT", "EDITING", "VALIDATED", "APPLY_READY"].includes(
-                    String(session.SESSION_STATUS || "").toUpperCase()
-                );
-                const canValidate = executionOpen && Boolean(currentSql);
-                const canSave = executionOpen && Boolean(currentSql);
                 const dmlStatus = String(dml.DML_STATUS || "").toUpperCase();
+                const executionOpen = this.isDmlWorkspaceAvailable(session);
+                const dmlEditable = executionOpen && dmlStatus !== "EXECUTED";
+                const canValidate = dmlEditable && Boolean(currentSql);
+                const canSave = dmlEditable && Boolean(currentSql);
                 const canExecute = executionOpen && isSaved && ["DRAFT", "APPROVED", "FAILED"].includes(dmlStatus);
                 actions.innerHTML = `
-                    <button type="button" onclick="${PAGE_CODE}.generateDml()" ${executionOpen ? "" : "disabled"}><i class="fas fa-plus"></i>${this.escapeHtml(this.pageLabel("buttonGenerateDml", "신규 DML 생성"))}</button>
-                    <button type="button" onclick="${PAGE_CODE}.regenerateDml()" ${executionOpen && currentSql ? "" : "disabled"}><i class="fas fa-rotate"></i>${this.escapeHtml(this.pageLabel("buttonRegenerateDml", "초기구문 재생성"))}</button>
+                    <button type="button" onclick="${PAGE_CODE}.addDml()" ${executionOpen ? "" : "disabled"}><i class="fas fa-plus"></i>${this.escapeHtml(this.pageLabel("buttonAddDml", "빈 DML 추가"))}</button>
+                    <button type="button" onclick="${PAGE_CODE}.generateDml()" ${executionOpen ? "" : "disabled"}><i class="fas fa-wand-magic-sparkles"></i>${this.escapeHtml(this.pageLabel("buttonGenerateDml", "규칙 DML 자동 생성"))}</button>
+                    <button type="button" onclick="${PAGE_CODE}.regenerateDml()" ${dmlEditable && currentSql ? "" : "disabled"}><i class="fas fa-rotate"></i>${this.escapeHtml(this.pageLabel("buttonRegenerateDml", "초기구문 재생성"))}</button>
                     <button type="button" onclick="${PAGE_CODE}.validateDml()" ${canValidate ? "" : "disabled"}><i class="fas fa-check-double"></i>${this.escapeHtml(this.pageLabel("buttonValidateDml", "DML 검증"))}</button>
                     <button type="button" class="is-primary" onclick="${PAGE_CODE}.saveDmlDraft()" ${canSave ? "" : "disabled"}><i class="fas fa-floppy-disk"></i>${this.escapeHtml(this.pageLabel("buttonSaveDml", "DML 저장"))}</button>
                     <button type="button" class="is-primary" onclick="${PAGE_CODE}.executeDml()" ${canExecute ? "" : "disabled"}><i class="fas fa-play"></i>${this.escapeHtml(this.pageLabel("buttonExecuteDml", "DML 실행"))}</button>
@@ -3617,14 +4085,27 @@
                     return;
                 }
                 if (!row.EDIT_DML_ID) {
-                    CommonMessage.warn(
-                        this.pageLabel("unsavedDmlDeleteBlocked", "아직 저장되지 않은 DML입니다. 신규 DML 생성 또는 다른 저장 DML 편집으로 화면을 전환하세요.")
+                    this.selectedDmlId = "";
+                    this.selectedDml = null;
+                    this.dmlSavedName = "";
+                    this.dmlSavedSql = "";
+                    this.dmlValidatedSql = "";
+                    this.renderDmlContent();
+                    CommonMessage.success(
+                        this.pageLabel("unsavedDmlRemoved", "미저장 DML을 목록에서 제거했습니다.")
                     );
                     return;
                 }
                 if (String(row.DML_STATUS || "").toUpperCase() === "EXECUTED") {
                     CommonMessage.warn(
                         this.pageLabel("executedDmlDeleteBlocked", "실행 완료 DML은 감사 이력 보존을 위해 삭제할 수 없습니다.")
+                    );
+                    return;
+                }
+                const session = this.getSelectedSession();
+                if (!this.isDmlWorkspaceAvailable(session)) {
+                    CommonMessage.warn(
+                        this.pageLabel("closedExecutionReadOnly", "운영 반영 완료 또는 초기화된 작업은 이력 조회만 할 수 있습니다.")
                     );
                     return;
                 }
@@ -3673,15 +4154,12 @@
                 this.renderDmlPanelActions();
             },
 
-            async generateDml() {
-                const session = this.getSelectedSession();
-                if (!session) return;
-                const json = await CommonUtils.request(apiUrl(`/sessions/${session.EDIT_SESSION_ID}/dml/generate`), { method: "POST", showLoading: false });
+            prepareUnsavedDml(session, dmlName, dmlSql = "") {
                 this.selectedDmlId = "";
                 this.selectedDml = {
                     EDIT_DML_ID: null,
-                    DML_NAME: json.dmlName || `${session.SOURCE_TABLE} final apply`,
-                    DML_SQL: json.dmlSql || "",
+                    DML_NAME: dmlName,
+                    DML_SQL: dmlSql,
                     DML_STATUS: "UNSAVED",
                     AFFECTED_ROW_COUNT: null
                 };
@@ -3693,6 +4171,28 @@
                 const keywordInput = getContainerEl(`#gridKeyword-${PAGE_CODE}`);
                 if (keywordInput) keywordInput.value = "";
                 this.renderDmlContent();
+            },
+
+            addDml() {
+                const session = this.getSelectedSession();
+                if (!session || !this.isDmlWorkspaceAvailable(session)) return;
+                const dmlName = this.pageLabel("defaultCustomDmlName", "{table} 사용자 DML")
+                    .replaceAll("{table}", String(session.SOURCE_TABLE || "INITUP$"));
+                this.prepareUnsavedDml(session, dmlName, "");
+                CommonMessage.success(
+                    this.pageLabel("dmlBlankAdded", "빈 DML을 추가했습니다. 현재 INITUP$ 대상 UPDATE 문을 입력한 후 저장하세요.")
+                );
+            },
+
+            async generateDml() {
+                const session = this.getSelectedSession();
+                if (!session) return;
+                const json = await CommonUtils.request(apiUrl(`/sessions/${session.EDIT_SESSION_ID}/dml/generate`), { method: "POST", showLoading: false });
+                this.prepareUnsavedDml(
+                    session,
+                    json.dmlName || `${session.SOURCE_TABLE} final apply`,
+                    json.dmlSql || ""
+                );
                 CommonMessage.success(this.pageLabel("dmlGeneratedPreview", "신규 운영 반영 DML을 생성했습니다. 미저장 행을 확인한 후 검증하거나 바로 저장할 수 있습니다."));
             },
 
@@ -3740,7 +4240,7 @@
             async saveDmlDraft() {
                 const session = this.getSelectedSession();
                 if (!session) return;
-                if (!["DRAFT", "EDITING", "VALIDATED", "APPLY_READY"].includes(String(session.SESSION_STATUS || "").toUpperCase())) {
+                if (!this.isDmlWorkspaceAvailable(session)) {
                     CommonMessage.warn(this.pageLabel("closedExecutionReadOnly", "운영 반영 완료 또는 초기화된 작업은 이력 조회만 할 수 있습니다."));
                     return;
                 }
@@ -3834,6 +4334,14 @@
                         "운영 반영 DML 대상을 검증했습니다: {target}"
                     ).replaceAll("{target}", target);
                 }
+                const customTarget = message.match(/^Validated custom UPDATE target:\s*"([^"]+)"\."([^"]+)"\.$/i);
+                if (customTarget) {
+                    const target = `${customTarget[1]}.${customTarget[2]}`;
+                    return this.pageLabel(
+                        "dmlValidationCustomTargetSuccess",
+                        "사용자 UPDATE 대상을 검증했습니다: {target}"
+                    ).replaceAll("{target}", target);
+                }
                 if (/^Validated final DML target:/i.test(message) && session) {
                     const target = `${session.TARGET_OWNER || "-"}.${session.SOURCE_TABLE || "-"}`;
                     return this.pageLabel(
@@ -3876,7 +4384,9 @@
                 } else if (/must match the server-generated INITDN\\$ apply statement/i.test(rawMessage)) {
                     detail = this.pageLabel("dmlRegenerateRequired", "저장된 DML이 최신 서버 생성 SQL과 다릅니다. DML을 다시 생성하세요.");
                 } else if (/not valid Oracle SQL/i.test(rawMessage)) {
-                    detail = this.pageLabel("dmlOracleSyntaxInvalid", "생성된 운영 반영 DML의 Oracle 문법이 올바르지 않습니다.");
+                    detail = /Custom UPDATE DML/i.test(rawMessage)
+                        ? this.pageLabel("dmlCustomOracleSyntaxInvalid", "사용자 UPDATE DML의 Oracle 문법이 올바르지 않습니다.")
+                        : this.pageLabel("dmlOracleSyntaxInvalid", "생성된 운영 반영 DML의 Oracle 문법이 올바르지 않습니다.");
                 }
                 const title = this.pageLabel("dmlValidationFailed", "DML 검증에 실패했습니다.");
                 CommonMessage.error(detail ? `${title}\n${detail}` : title, { copyable: true });
@@ -4734,7 +5244,7 @@
                     </section>
                 `;
                 layer.hidden = false;
-                layer.querySelector(".edit-work-detail-dialog")?.focus();
+                layer.querySelector(".edit-work-detail-dialog > header button")?.focus();
             },
 
             renderRulePreview(value, row, index, section) {
@@ -4845,7 +5355,7 @@
                 if (title) title.textContent = row.SOURCE_RULE_ID || row.RULE_NAME || "규칙 상세";
                 body.innerHTML = this.buildAssociationRuleDetailContent(row, focusSection);
                 layer.hidden = false;
-                layer.querySelector(".edit-work-detail-dialog")?.focus();
+                layer.querySelector(".edit-work-detail-dialog > header button")?.focus();
             },
 
             openContinuousRuleDetail(row, focusSection, elements) {
@@ -4854,7 +5364,7 @@
                 if (title) title.textContent = row.SOURCE_RULE_ID || row.RULE_NAME || "수식 규칙 상세";
                 body.innerHTML = this.buildContinuousRuleDetailContent(row, focusSection);
                 layer.hidden = false;
-                layer.querySelector(".edit-work-detail-dialog")?.focus();
+                layer.querySelector(".edit-work-detail-dialog > header button")?.focus();
             },
 
             buildViolationResultDetailContent(violation, rule) {
@@ -4915,15 +5425,20 @@
                     ${this.buildViolationResultDetailContent(violation, rule)}
                 `;
                 layer.hidden = false;
-                layer.querySelector(".edit-work-detail-dialog")?.focus();
+                layer.querySelector(".edit-work-detail-dialog > header button")?.focus();
             },
 
             closeDetailLayer(event) {
                 if (event && event.target !== event.currentTarget) return;
                 const layer = getContainerEl(`#detailLayer-${PAGE_CODE}`);
+                const opener = this.detailLayerOpener;
+                this.detailLayerOpener = null;
                 this.endDetailLayerDrag();
                 if (layer) layer.hidden = true;
                 this.resetDetailDialogPosition();
+                if (this.initialized && opener?.isConnected) {
+                    window.requestAnimationFrame(() => opener.focus());
+                }
             },
 
             handleDetailLayerKeydown(event) {

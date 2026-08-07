@@ -255,8 +255,12 @@ def create_edit_work_router(menu_code: str) -> APIRouter:
         return editing.validation_summary(request, edit_session_id)
 
     @router.post("/sessions/{edit_session_id}/validate")
-    def mark_validated(edit_session_id: int, request: Request):
-        return editing.mark_validated(request, edit_session_id)
+    def mark_validated(
+        edit_session_id: int,
+        request: Request,
+        payload: editing.EffectValidationRequest | None = None,
+    ):
+        return editing.mark_validated(request, edit_session_id, payload)
 
     @router.post("/sessions/{edit_session_id}/reanalysis")
     def link_reanalysis(

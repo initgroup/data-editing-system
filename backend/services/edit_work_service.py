@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import re
 from typing import Any, Iterable
 
@@ -28,6 +29,7 @@ DECISION_STATUSES = {"PENDING", "SELECTED", "REJECTED"}
 RULE_STATUSES = {"ACTIVE", "INACTIVE"}
 SESSION_STATUSES = {"DRAFT", "EDITING", "VALIDATED", "APPLY_READY", "APPLIED", "CANCELLED"}
 ACTIVE_EXECUTION_STATUSES = {"DRAFT", "EDITING", "VALIDATED", "APPLY_READY"}
+DML_WORK_SESSION_STATUSES = ACTIVE_EXECUTION_STATUSES | {"APPLIED"}
 RULE_TOKEN_PATTERN = re.compile(
     r"""
     (?P<SPACE>\s+)
@@ -149,6 +151,11 @@ class EditDmlValidateRequest(BaseModel):
 class ReanalysisLinkRequest(BaseModel):
     flowRunId: int
     reanalysisStatus: str = "QUEUED"
+    model_config = ConfigDict(extra="forbid")
+
+
+class EffectValidationRequest(BaseModel):
+    acknowledgeReview: bool = False
     model_config = ConfigDict(extra="forbid")
 
 
@@ -545,6 +552,15 @@ def _require_open_execution(session: dict[str, Any], _action: str) -> None:
         raise HTTPException(
             status_code=409,
             detail="The editing execution is completed or cancelled and is read-only.",
+        )
+
+
+def _require_dml_work_execution(session: dict[str, Any]) -> None:
+    status = str(session.get("SESSION_STATUS") or "").upper()
+    if status not in DML_WORK_SESSION_STATUSES:
+        raise HTTPException(
+            status_code=409,
+            detail="Cancelled editing execution is read-only for DML work.",
         )
 
 
@@ -1840,6 +1856,11 @@ def _build_live_rule_violation_sql(
     cursor,
     rule: dict[str, Any],
     keyword: str | None,
+    *,
+    target_owner_override: str | None = None,
+    target_table_override: str | None = None,
+    source_rowid_column: str | None = None,
+    table_columns_override: dict[str, dict[str, Any]] | None = None,
 ) -> tuple[str, dict[str, Any]]:
     source_type = str(rule.get("SOURCE_RULE_TYPE") or "ASSOCIATION").upper()
     if source_type == "USER":
@@ -1850,15 +1871,27 @@ def _build_live_rule_violation_sql(
         "rule type",
         "ASSOCIATION",
     )
-    target_owner = _normalize_identifier(rule.get("TARGET_OWNER"), "target owner")
-    target_table = _normalize_identifier(rule.get("TARGET_TABLE"), "target table")
+    target_owner = _normalize_identifier(
+        target_owner_override or rule.get("TARGET_OWNER"),
+        "target owner",
+    )
+    target_table = _normalize_identifier(
+        target_table_override or rule.get("TARGET_TABLE"),
+        "target table",
+    )
     target_column = _normalize_identifier(rule.get("TARGET_COLUMN"), "target column")
     case_id_column = _normalize_optional_identifier(rule.get("CASE_ID_COLUMN"), "case ID column")
-    columns = _table_column_map(cursor, target_owner, target_table)
+    columns = (
+        table_columns_override
+        if table_columns_override is not None
+        else _table_column_map(cursor, target_owner, target_table)
+    )
     if target_column not in columns:
         raise HTTPException(status_code=409, detail="최종 규칙의 대상 컬럼이 INITUP$ 실제 테이블에 없습니다.")
     if case_id_column and case_id_column not in columns:
         raise HTTPException(status_code=409, detail="최종 규칙의 행 식별 컬럼이 INITUP$ 실제 테이블에 없습니다.")
+    if source_rowid_column and source_rowid_column not in columns:
+        raise HTTPException(status_code=409, detail="INITDN$ 수정테이블의 원본 행 추적 컬럼을 찾을 수 없습니다.")
     expected_value = rule.get("EXPECTED_VALUE")
     if source_type == "ASSOCIATION" and (
         expected_value is None or not str(expected_value).strip()
@@ -1882,15 +1915,21 @@ def _build_live_rule_violation_sql(
             target_column=target_column,
         )
     target_object = f"{_quote_identifier(target_owner)}.{_quote_identifier(target_table)}"
+    case_rowid_expression = (
+        f'T.{_quote_identifier(source_rowid_column)}'
+        if source_rowid_column
+        else "ROWIDTOCHAR(T.ROWID)"
+    )
     case_id_expression = (
         f'TO_CHAR(T.{_quote_identifier(case_id_column)})'
         if case_id_column
-        else "ROWIDTOCHAR(T.ROWID)"
+        else case_rowid_expression
     )
     replacements = {
         "targetObject": target_object,
         "targetColumn": _quote_identifier(target_column),
         "caseIdExpression": case_id_expression,
+        "caseRowidExpression": case_rowid_expression,
     }
     params: dict[str, Any] = {
         "targetOwner": target_owner,
@@ -1926,6 +1965,11 @@ def _build_live_rule_violation_union_sql(
     cursor,
     rules: list[dict[str, Any]],
     keyword: str | None,
+    *,
+    target_owner_override: str | None = None,
+    target_table_override: str | None = None,
+    source_rowid_column: str | None = None,
+    table_columns_override: dict[str, dict[str, Any]] | None = None,
 ) -> tuple[str, dict[str, Any]]:
     if not rules:
         raise HTTPException(status_code=400, detail="조회할 최종 규칙을 선택하세요.")
@@ -1933,7 +1977,15 @@ def _build_live_rule_violation_union_sql(
     rule_queries: list[str] = []
     union_params: dict[str, Any] = {}
     for index, rule in enumerate(rules):
-        base_sql, base_params = _build_live_rule_violation_sql(cursor, rule, keyword)
+        base_sql, base_params = _build_live_rule_violation_sql(
+            cursor,
+            rule,
+            keyword,
+            target_owner_override=target_owner_override,
+            target_table_override=target_table_override,
+            source_rowid_column=source_rowid_column,
+            table_columns_override=table_columns_override,
+        )
         suffix = f"_{index}"
         renamed_sql = SQL_BIND_PATTERN.sub(
             lambda match: f":{match.group(1)}{suffix}",
@@ -2129,14 +2181,15 @@ def list_violations(
                     status_code=400,
                     detail="선택한 수정 작업이 원본 테이블과 일치하지 않습니다.",
                 )
-            execution_rule_ids = {
-                int(row.get("EDIT_RULE_ID") or 0)
-                for row in _fetch_all(
-                    cursor,
-                    "MCOMMON_EDIT_SESSION_RULE_LIST",
-                    {"editSessionId": int(edit_session_id)},
-                )
-            }
+            if str(session.get("SESSION_STATUS") or "").upper() in {"APPLIED", "CANCELLED"}:
+                execution_rule_ids = {
+                    int(row.get("EDIT_RULE_ID") or 0)
+                    for row in _fetch_all(
+                        cursor,
+                        "MCOMMON_EDIT_SESSION_RULE_LIST",
+                        {"editSessionId": int(edit_session_id)},
+                    )
+                }
         rules = _fetch_all(
             cursor,
             "MCOMMON_EDIT_RULE_SELECTED_LIST",
@@ -2147,10 +2200,7 @@ def list_violations(
                 "targetTable": normalized_table,
             },
         )
-        if (
-            execution_rule_ids is not None
-            and str(session.get("SESSION_STATUS") or "").upper() in {"APPLIED", "CANCELLED"}
-        ):
+        if execution_rule_ids is not None:
             rules = [
                 rule
                 for rule in rules
@@ -3225,6 +3275,470 @@ def list_changes(request: Request, edit_session_id: int) -> dict[str, Any]:
         conn.close()
 
 
+def _evaluate_rules_on_table(
+    cursor,
+    rules: list[dict[str, Any]],
+    *,
+    target_owner: str,
+    target_table: str,
+    source_rowid_column: str | None = None,
+) -> list[dict[str, Any]]:
+    if not rules:
+        return []
+    table_columns = _table_column_map(cursor, target_owner, target_table)
+    base_sql, params = _build_live_rule_violation_union_sql(
+        cursor,
+        rules,
+        None,
+        target_owner_override=target_owner,
+        target_table_override=target_table,
+        source_rowid_column=source_rowid_column,
+        table_columns_override=table_columns,
+    )
+    cursor.execute(
+        (
+            "SELECT V.EDIT_RULE_ID"
+            "     , V.RULE_NAME"
+            "     , V.SOURCE_RULE_TYPE"
+            "     , V.TARGET_COLUMN"
+            "     , COUNT(*) AS VIOLATION_COUNT"
+            "     , COUNT(DISTINCT V.CASE_ROWID) AS VIOLATED_ROW_COUNT"
+            f"  FROM ({base_sql}) V"
+            " GROUP BY V.EDIT_RULE_ID"
+            "        , V.RULE_NAME"
+            "        , V.SOURCE_RULE_TYPE"
+            "        , V.TARGET_COLUMN"
+            " ORDER BY V.SOURCE_RULE_TYPE"
+            "        , V.EDIT_RULE_ID"
+        ),
+        params,
+    )
+    columns = [item[0] for item in cursor.description or []]
+    return [_row_to_dict(columns, row) for row in cursor.fetchall()]
+
+
+def _finite_number(value: Any) -> float | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        number = float(str(_read_lob(value)).strip())
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def _ratio(numerator: float | int | None, denominator: float | int | None) -> float | None:
+    if numerator is None or denominator is None or float(denominator) == 0:
+        return None
+    return float(numerator) / float(denominator)
+
+
+def _percentile(values: list[float], percentile: float) -> float | None:
+    if not values:
+        return None
+    ordered = sorted(values)
+    position = (len(ordered) - 1) * max(0.0, min(1.0, percentile))
+    lower = int(math.floor(position))
+    upper = int(math.ceil(position))
+    if lower == upper:
+        return ordered[lower]
+    weight = position - lower
+    return ordered[lower] * (1 - weight) + ordered[upper] * weight
+
+
+def _continuous_error_metrics(records: list[dict[str, Any]]) -> dict[str, Any]:
+    if not records:
+        return {
+            "EVALUATED_COUNT": 0,
+            "BEFORE_MAE": None,
+            "AFTER_MAE": None,
+            "BEFORE_RMSE": None,
+            "AFTER_RMSE": None,
+            "MAE_REDUCTION_RATE": None,
+            "RMSE_REDUCTION_RATE": None,
+            "WITHIN_TOLERANCE_COUNT": 0,
+            "WITHIN_TOLERANCE_RATE": None,
+            "IMPROVED_COUNT": 0,
+            "WORSENED_COUNT": 0,
+            "UNCHANGED_COUNT": 0,
+            "AFTER_RESIDUAL_MEAN": None,
+            "AFTER_RESIDUAL_STDDEV": None,
+            "AFTER_P95_ABS_ERROR": None,
+            "AFTER_NRMSE_PCT": None,
+            "AFTER_3SIGMA_COUNT": None,
+        }
+    before_abs = [float(row["BEFORE_ABS_ERROR"]) for row in records]
+    after_abs = [float(row["AFTER_ABS_ERROR"]) for row in records]
+    before_squared = [value * value for value in before_abs]
+    after_squared = [value * value for value in after_abs]
+    after_residuals = [float(row["AFTER_RESIDUAL"]) for row in records]
+    expected_abs = [abs(float(row["EXPECTED_VALUE_NUMERIC"])) for row in records]
+    count = len(records)
+    before_mae = sum(before_abs) / count
+    after_mae = sum(after_abs) / count
+    before_rmse = math.sqrt(sum(before_squared) / count)
+    after_rmse = math.sqrt(sum(after_squared) / count)
+    residual_mean = sum(after_residuals) / count
+    residual_variance = sum((value - residual_mean) ** 2 for value in after_residuals) / count
+    residual_stddev = math.sqrt(residual_variance)
+    mean_expected_abs = sum(expected_abs) / count
+    sigma_count = (
+        sum(1 for value in after_residuals if abs(value - residual_mean) > 3 * residual_stddev)
+        if count >= 3 and residual_stddev > 0
+        else None
+    )
+    return {
+        "EVALUATED_COUNT": count,
+        "BEFORE_MAE": before_mae,
+        "AFTER_MAE": after_mae,
+        "BEFORE_RMSE": before_rmse,
+        "AFTER_RMSE": after_rmse,
+        "MAE_REDUCTION_RATE": _ratio(before_mae - after_mae, before_mae),
+        "RMSE_REDUCTION_RATE": _ratio(before_rmse - after_rmse, before_rmse),
+        "WITHIN_TOLERANCE_COUNT": sum(1 for row in records if row["WITHIN_TOLERANCE"]),
+        "WITHIN_TOLERANCE_RATE": _ratio(
+            sum(1 for row in records if row["WITHIN_TOLERANCE"]),
+            count,
+        ),
+        "IMPROVED_COUNT": sum(1 for row in records if row["ERROR_DIRECTION"] == "IMPROVED"),
+        "WORSENED_COUNT": sum(1 for row in records if row["ERROR_DIRECTION"] == "WORSENED"),
+        "UNCHANGED_COUNT": sum(1 for row in records if row["ERROR_DIRECTION"] == "UNCHANGED"),
+        "AFTER_RESIDUAL_MEAN": residual_mean,
+        "AFTER_RESIDUAL_STDDEV": residual_stddev,
+        "AFTER_P95_ABS_ERROR": _percentile(after_abs, 0.95),
+        "AFTER_NRMSE_PCT": _ratio(after_rmse, mean_expected_abs) * 100 if mean_expected_abs else None,
+        "AFTER_3SIGMA_COUNT": sigma_count,
+    }
+
+
+def _build_edit_analysis(
+    *,
+    session: dict[str, Any],
+    summary: dict[str, Any],
+    changes: list[dict[str, Any]],
+    rules: list[dict[str, Any]],
+    source_evaluation: list[dict[str, Any]] | None,
+    edit_evaluation: list[dict[str, Any]] | None,
+    evaluation_error: str | None,
+) -> dict[str, Any]:
+    applied_changes = [
+        row
+        for row in changes
+        if str(row.get("CHANGE_STATUS") or "").upper() == "APPLIED"
+    ]
+    rule_map = {
+        int(row.get("EDIT_RULE_ID") or 0): row
+        for row in rules
+        if int(row.get("EDIT_RULE_ID") or 0) > 0
+    }
+    source_eval_map = {
+        int(row.get("EDIT_RULE_ID") or 0): row
+        for row in (source_evaluation or [])
+    }
+    edit_eval_map = {
+        int(row.get("EDIT_RULE_ID") or 0): row
+        for row in (edit_evaluation or [])
+    }
+
+    def normalized_rule_type(row: dict[str, Any]) -> str:
+        rule = rule_map.get(int(row.get("EDIT_RULE_ID") or 0), {})
+        value = str(row.get("SOURCE_RULE_TYPE") or rule.get("SOURCE_RULE_TYPE") or "ASSOCIATION").upper()
+        return "SYMBOLIC" if value == "SYMBOLIC" else "ASSOCIATION"
+
+    def value_matches(row: dict[str, Any]) -> bool:
+        return str(_read_lob(row.get("NEW_VALUE")) or "") == str(_read_lob(row.get("EXPECTED_VALUE")) or "")
+
+    def row_identity(row: dict[str, Any]) -> str:
+        return str(row.get("SOURCE_ROWID") or row.get("CASE_ID") or row.get("EDIT_CHANGE_ID") or "")
+
+    categorical_changes = [row for row in applied_changes if normalized_rule_type(row) == "ASSOCIATION"]
+    symbolic_changes = [row for row in applied_changes if normalized_rule_type(row) == "SYMBOLIC"]
+    categorical_rules = [row for row in rules if normalized_rule_type(row) == "ASSOCIATION"]
+    symbolic_rules = [row for row in rules if normalized_rule_type(row) == "SYMBOLIC"]
+
+    def evaluation_totals(rule_rows: list[dict[str, Any]], evaluation_map: dict[int, dict[str, Any]]) -> tuple[int | None, int | None]:
+        if source_evaluation is None or edit_evaluation is None:
+            return None, None
+        violation_count = sum(
+            int(evaluation_map.get(int(rule.get("EDIT_RULE_ID") or 0), {}).get("VIOLATION_COUNT") or 0)
+            for rule in rule_rows
+        )
+        row_count = sum(
+            int(evaluation_map.get(int(rule.get("EDIT_RULE_ID") or 0), {}).get("VIOLATED_ROW_COUNT") or 0)
+            for rule in rule_rows
+        )
+        return violation_count, row_count
+
+    categorical_source_violations, categorical_source_rows = evaluation_totals(categorical_rules, source_eval_map)
+    categorical_edit_violations, categorical_edit_rows = evaluation_totals(categorical_rules, edit_eval_map)
+    symbolic_source_violations, symbolic_source_rows = evaluation_totals(symbolic_rules, source_eval_map)
+    symbolic_edit_violations, symbolic_edit_rows = evaluation_totals(symbolic_rules, edit_eval_map)
+
+    transition_counts: dict[tuple[str, str], int] = {}
+    for row in categorical_changes:
+        transition = (
+            str(_read_lob(row.get("OLD_VALUE")) or "(NULL)"),
+            str(_read_lob(row.get("NEW_VALUE")) or "(NULL)"),
+        )
+        transition_counts[transition] = transition_counts.get(transition, 0) + 1
+    categorical_match_count = sum(1 for row in categorical_changes if value_matches(row))
+
+    categorical_rule_details: list[dict[str, Any]] = []
+    for rule in categorical_rules:
+        edit_rule_id = int(rule.get("EDIT_RULE_ID") or 0)
+        rule_changes = [row for row in categorical_changes if int(row.get("EDIT_RULE_ID") or 0) == edit_rule_id]
+        source_result = source_eval_map.get(edit_rule_id, {})
+        edit_result = edit_eval_map.get(edit_rule_id, {})
+        source_count = int(source_result.get("VIOLATION_COUNT") or 0) if source_evaluation is not None else None
+        edit_count = int(edit_result.get("VIOLATION_COUNT") or 0) if edit_evaluation is not None else None
+        categorical_rule_details.append(
+            {
+                "EDIT_RULE_ID": edit_rule_id,
+                "RULE_NAME": rule.get("RULE_NAME"),
+                "SOURCE_RULE_ID": rule.get("SOURCE_RULE_ID"),
+                "TARGET_COLUMN": rule.get("TARGET_COLUMN"),
+                "CHANGE_COUNT": len(rule_changes),
+                "CHANGED_ROW_COUNT": len({row_identity(row) for row in rule_changes}),
+                "EXPECTED_MATCH_COUNT": sum(1 for row in rule_changes if value_matches(row)),
+                "EXPECTED_MATCH_RATE": _ratio(sum(1 for row in rule_changes if value_matches(row)), len(rule_changes)),
+                "SOURCE_VIOLATION_COUNT": source_count,
+                "EDIT_VIOLATION_COUNT": edit_count,
+                "VIOLATION_REDUCTION_COUNT": source_count - edit_count if source_count is not None and edit_count is not None else None,
+                "RULE_CONFIDENCE": rule.get("RULE_CONFIDENCE"),
+                "RULE_LIFT": rule.get("RULE_LIFT"),
+                "RULE_EXPRESSION": _read_lob(rule.get("RULE_EXPRESSION")),
+                "EXPECTED_VALUE": _read_lob(rule.get("EXPECTED_VALUE")),
+            }
+        )
+
+    continuous_records: list[dict[str, Any]] = []
+    continuous_non_numeric_count = 0
+    for row in symbolic_changes:
+        old_value = _finite_number(row.get("OLD_VALUE"))
+        new_value = _finite_number(row.get("NEW_VALUE"))
+        expected_value = _finite_number(row.get("EXPECTED_VALUE"))
+        if old_value is None or new_value is None or expected_value is None:
+            continuous_non_numeric_count += 1
+            continue
+        rule = rule_map.get(int(row.get("EDIT_RULE_ID") or 0), {})
+        tolerance_pct = _finite_number(rule.get("RULE_TOLERANCE_PCT"))
+        if tolerance_pct is None:
+            tolerance_pct = _finite_number(rule.get("RULE_LIFT"))
+        if tolerance_pct is None:
+            tolerance_pct = 5.0
+        before_residual = old_value - expected_value
+        after_residual = new_value - expected_value
+        before_abs_error = abs(before_residual)
+        after_abs_error = abs(after_residual)
+        epsilon = 0.000000001
+        allowed_error = max(abs(new_value) * tolerance_pct / 100, epsilon)
+        difference = after_abs_error - before_abs_error
+        continuous_records.append(
+            {
+                "EDIT_CHANGE_ID": row.get("EDIT_CHANGE_ID"),
+                "EDIT_RULE_ID": row.get("EDIT_RULE_ID"),
+                "RULE_NAME": row.get("RULE_NAME") or rule.get("RULE_NAME"),
+                "SOURCE_RULE_ID": row.get("SOURCE_RULE_ID") or rule.get("SOURCE_RULE_ID"),
+                "CASE_ID": row.get("CASE_ID"),
+                "COLUMN_NAME": row.get("COLUMN_NAME"),
+                "OLD_VALUE_NUMERIC": old_value,
+                "NEW_VALUE_NUMERIC": new_value,
+                "EXPECTED_VALUE_NUMERIC": expected_value,
+                "BEFORE_RESIDUAL": before_residual,
+                "AFTER_RESIDUAL": after_residual,
+                "BEFORE_ABS_ERROR": before_abs_error,
+                "AFTER_ABS_ERROR": after_abs_error,
+                "ERROR_REDUCTION": before_abs_error - after_abs_error,
+                "TOLERANCE_PCT": tolerance_pct,
+                "WITHIN_TOLERANCE": after_abs_error <= allowed_error,
+                "ERROR_DIRECTION": "IMPROVED" if difference < -epsilon else ("WORSENED" if difference > epsilon else "UNCHANGED"),
+            }
+        )
+    continuous_metrics = _continuous_error_metrics(continuous_records)
+
+    continuous_rule_details: list[dict[str, Any]] = []
+    for rule in symbolic_rules:
+        edit_rule_id = int(rule.get("EDIT_RULE_ID") or 0)
+        rule_records = [row for row in continuous_records if int(row.get("EDIT_RULE_ID") or 0) == edit_rule_id]
+        effective_tolerance_pct = _finite_number(rule.get("RULE_TOLERANCE_PCT"))
+        tolerance_defaulted = False
+        if effective_tolerance_pct is None:
+            effective_tolerance_pct = _finite_number(rule.get("RULE_LIFT"))
+        if effective_tolerance_pct is None:
+            effective_tolerance_pct = 5.0
+            tolerance_defaulted = True
+        source_result = source_eval_map.get(edit_rule_id, {})
+        edit_result = edit_eval_map.get(edit_rule_id, {})
+        source_count = int(source_result.get("VIOLATION_COUNT") or 0) if source_evaluation is not None else None
+        edit_count = int(edit_result.get("VIOLATION_COUNT") or 0) if edit_evaluation is not None else None
+        continuous_rule_details.append(
+            {
+                "EDIT_RULE_ID": edit_rule_id,
+                "RULE_NAME": rule.get("RULE_NAME"),
+                "SOURCE_RULE_ID": rule.get("SOURCE_RULE_ID"),
+                "TARGET_COLUMN": rule.get("TARGET_COLUMN"),
+                "RULE_TOLERANCE_PCT": rule.get("RULE_TOLERANCE_PCT"),
+                "EFFECTIVE_TOLERANCE_PCT": effective_tolerance_pct,
+                "TOLERANCE_DEFAULTED": tolerance_defaulted,
+                "RULE_EXPRESSION": _read_lob(rule.get("RULE_EXPRESSION")),
+                "SOURCE_VIOLATION_COUNT": source_count,
+                "EDIT_VIOLATION_COUNT": edit_count,
+                "VIOLATION_REDUCTION_COUNT": source_count - edit_count if source_count is not None and edit_count is not None else None,
+                **_continuous_error_metrics(rule_records),
+            }
+        )
+
+    categorical_reduction = (
+        categorical_source_violations - categorical_edit_violations
+        if categorical_source_violations is not None and categorical_edit_violations is not None
+        else None
+    )
+    symbolic_reduction = (
+        symbolic_source_violations - symbolic_edit_violations
+        if symbolic_source_violations is not None and symbolic_edit_violations is not None
+        else None
+    )
+    categorical_status = "NOT_APPLICABLE" if not categorical_rules else (
+        "UNAVAILABLE" if evaluation_error else (
+            "REVIEW" if (
+                categorical_edit_violations is None
+                or categorical_edit_violations > 0
+                or categorical_reduction is None
+                or categorical_reduction <= 0
+                or categorical_match_count < len(categorical_changes)
+            )
+            else "GOOD"
+        )
+    )
+    continuous_status = "NOT_APPLICABLE" if not symbolic_rules else (
+        "UNAVAILABLE" if evaluation_error else (
+            "REVIEW" if (
+                symbolic_edit_violations is None
+                or symbolic_edit_violations > 0
+                or symbolic_reduction is None
+                or symbolic_reduction <= 0
+                or continuous_non_numeric_count > 0
+                or continuous_metrics["WORSENED_COUNT"] > 0
+            )
+            else "GOOD"
+        )
+    )
+    reanalysis_flow_run_id = summary.get("REANALYSIS_FLOW_RUN_ID")
+    reanalysis_run_status = (
+        str(summary.get("REANALYSIS_RUN_STATUS") or "").upper()
+        if reanalysis_flow_run_id
+        else ""
+    )
+    if not reanalysis_flow_run_id:
+        reanalysis_status = "PENDING"
+    elif reanalysis_run_status == "SUCCESS":
+        reanalysis_status = "GOOD"
+    elif reanalysis_run_status in {"FAILED", "ERROR", "CANCELLED"}:
+        reanalysis_status = "REVIEW"
+    else:
+        reanalysis_status = "PENDING"
+    overall_status = "PENDING" if not applied_changes else (
+        "PENDING" if reanalysis_flow_run_id and reanalysis_run_status != "SUCCESS"
+        else "REVIEW" if evaluation_error or {categorical_status, continuous_status} & {"REVIEW", "UNAVAILABLE"}
+        else "READY"
+    )
+
+    return {
+        "METHOD_VERSION": "EDIT_EFFECT_V1",
+        "OVERALL": {
+            "STATUS": overall_status,
+            "SOURCE_ROW_COUNT": int(session.get("SOURCE_ROW_COUNT") or 0),
+            "APPLIED_CHANGE_COUNT": len(applied_changes),
+            "CHANGED_ROW_COUNT": len({row_identity(row) for row in applied_changes}),
+            "CHANGED_ROW_RATE": _ratio(
+                len({row_identity(row) for row in applied_changes}),
+                int(session.get("SOURCE_ROW_COUNT") or 0),
+            ),
+            "DISTINCT_COLUMN_COUNT": len({str(row.get("COLUMN_NAME") or "") for row in applied_changes}),
+            "DISTINCT_RULE_COUNT": len({int(row.get("EDIT_RULE_ID") or 0) for row in applied_changes}),
+            "EXPECTED_MATCH_COUNT": sum(1 for row in applied_changes if value_matches(row)),
+            "EXPECTED_MATCH_RATE": _ratio(sum(1 for row in applied_changes if value_matches(row)), len(applied_changes)),
+            "EVALUATION_ERROR": evaluation_error,
+        },
+        "CATEGORICAL": {
+            "STATUS": categorical_status,
+            "AVAILABLE": bool(categorical_rules),
+            "RULE_COUNT": len(categorical_rules),
+            "CHANGE_COUNT": len(categorical_changes),
+            "CHANGED_ROW_COUNT": len({row_identity(row) for row in categorical_changes}),
+            "EXPECTED_MATCH_COUNT": categorical_match_count,
+            "EXPECTED_MATCH_RATE": _ratio(categorical_match_count, len(categorical_changes)),
+            "SOURCE_VIOLATION_COUNT": categorical_source_violations,
+            "EDIT_VIOLATION_COUNT": categorical_edit_violations,
+            "SOURCE_VIOLATED_ROW_COUNT": categorical_source_rows,
+            "EDIT_VIOLATED_ROW_COUNT": categorical_edit_rows,
+            "VIOLATION_REDUCTION_COUNT": categorical_reduction,
+            "VIOLATION_REDUCTION_RATE": _ratio(categorical_reduction, categorical_source_violations),
+            "RULES": categorical_rule_details,
+            "TRANSITIONS": [
+                {
+                    "OLD_VALUE": old_value,
+                    "NEW_VALUE": new_value,
+                    "CHANGE_COUNT": count,
+                    "CHANGE_RATE": _ratio(count, len(categorical_changes)),
+                }
+                for (old_value, new_value), count in sorted(
+                    transition_counts.items(),
+                    key=lambda item: (-item[1], item[0]),
+                )[:30]
+            ],
+            "SAMPLES": [
+                {
+                    "EDIT_CHANGE_ID": row.get("EDIT_CHANGE_ID"),
+                    "EDIT_RULE_ID": row.get("EDIT_RULE_ID"),
+                    "RULE_NAME": row.get("RULE_NAME"),
+                    "CASE_ID": row.get("CASE_ID"),
+                    "COLUMN_NAME": row.get("COLUMN_NAME"),
+                    "OLD_VALUE": _read_lob(row.get("OLD_VALUE")),
+                    "NEW_VALUE": _read_lob(row.get("NEW_VALUE")),
+                    "EXPECTED_VALUE": _read_lob(row.get("EXPECTED_VALUE")),
+                    "EXPECTED_MATCH_YN": "Y" if value_matches(row) else "N",
+                }
+                for row in categorical_changes[:50]
+            ],
+        },
+        "CONTINUOUS": {
+            "STATUS": continuous_status,
+            "AVAILABLE": bool(symbolic_rules),
+            "RULE_COUNT": len(symbolic_rules),
+            "CHANGE_COUNT": len(symbolic_changes),
+            "NON_NUMERIC_COUNT": continuous_non_numeric_count,
+            "SOURCE_VIOLATION_COUNT": symbolic_source_violations,
+            "EDIT_VIOLATION_COUNT": symbolic_edit_violations,
+            "SOURCE_VIOLATED_ROW_COUNT": symbolic_source_rows,
+            "EDIT_VIOLATED_ROW_COUNT": symbolic_edit_rows,
+            "VIOLATION_REDUCTION_COUNT": symbolic_reduction,
+            "VIOLATION_REDUCTION_RATE": _ratio(symbolic_reduction, symbolic_source_violations),
+            **continuous_metrics,
+            "RULES": continuous_rule_details,
+            "SAMPLES": sorted(
+                continuous_records,
+                key=lambda row: float(row.get("AFTER_ABS_ERROR") or 0),
+                reverse=True,
+            )[:50],
+        },
+        "REANALYSIS": {
+            "STATUS": reanalysis_status,
+            "FLOW_RUN_ID": reanalysis_flow_run_id,
+            "RUN_STATUS": summary.get("REANALYSIS_RUN_STATUS") if reanalysis_flow_run_id else None,
+            "BASELINE_VIOLATION_COUNT": summary.get("BASELINE_VIOLATION_COUNT"),
+            "REANALYSIS_VIOLATION_COUNT": summary.get("REANALYSIS_VIOLATION_COUNT"),
+            "VIOLATION_REDUCTION_COUNT": summary.get("VIOLATION_REDUCTION_COUNT"),
+            "VIOLATION_REDUCTION_RATE": summary.get("VIOLATION_REDUCTION_RATE"),
+        },
+        "LIMITATIONS": {
+            "CLASSIFICATION_GROUND_TRUTH_AVAILABLE": False,
+            "FULL_MODEL_FIT_AVAILABLE": False,
+            "NOTE": "Rule agreement and edit impact are reported; classification accuracy/F1/AUC and full-table R-squared require independent labels or full model evaluation data.",
+        },
+    }
+
+
 def _count_session_violations(
     cursor,
     edit_session_id: int,
@@ -3264,7 +3778,62 @@ def _count_session_violations(
     )
 
 
-def _build_validation_data(cursor, session: dict[str, Any], edit_session_id: int) -> dict[str, Any]:
+def _load_effect_validation_snapshot(cursor, edit_session_id: int) -> dict[str, Any] | None:
+    row = _fetch_one(
+        cursor,
+        "MCOMMON_EDIT_VALIDATION_SNAPSHOT",
+        {"editSessionId": edit_session_id},
+    )
+    if not row or not row.get("EVENT_DETAIL_JSON"):
+        return None
+    try:
+        snapshot = json.loads(str(_read_lob(row.get("EVENT_DETAIL_JSON")) or "{}"))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        logger.warning(
+            "Editing effect snapshot JSON was invalid. edit_session_id=%s",
+            edit_session_id,
+        )
+        return None
+    if not isinstance(snapshot, dict) or not isinstance(snapshot.get("EDIT_ANALYSIS"), dict):
+        return None
+    return {
+        **snapshot,
+        "ANALYSIS_SOURCE": "VALIDATION_SNAPSHOT",
+        "VALIDATION_SNAPSHOT_AT": row.get("VALIDATION_SNAPSHOT_AT"),
+    }
+
+
+def _build_validation_data(
+    cursor,
+    session: dict[str, Any],
+    edit_session_id: int,
+    *,
+    include_changes: bool = False,
+) -> dict[str, Any]:
+    session_status = str(session.get("SESSION_STATUS") or "").upper()
+    post_apply_snapshot_missing = False
+    if session_status == "APPLIED":
+        snapshot = _load_effect_validation_snapshot(cursor, edit_session_id)
+        if snapshot:
+            snapshot_data = {
+                **snapshot,
+                **session,
+                "ANALYSIS_SOURCE": "VALIDATION_SNAPSHOT",
+                "VALIDATION_SNAPSHOT_AT": snapshot.get("VALIDATION_SNAPSHOT_AT"),
+            }
+            if include_changes:
+                snapshot_changes = _fetch_all(
+                    cursor,
+                    "MCOMMON_EDIT_CHANGE_LIST",
+                    {"editSessionId": edit_session_id, "changeStatus": "ALL"},
+                )
+                for row in snapshot_changes:
+                    row["TARGET_OWNER"] = row.get("TARGET_OWNER") or session.get("TARGET_OWNER")
+                    row["TARGET_TABLE"] = row.get("TARGET_TABLE") or session.get("SOURCE_TABLE")
+                _attach_column_metadata(cursor, snapshot_changes, column_keys=("COLUMN_NAME",))
+                snapshot_data["CHANGE_ROWS"] = snapshot_changes
+            return snapshot_data
+        post_apply_snapshot_missing = True
     summary = _fetch_one(
         cursor,
         "MCOMMON_EDIT_VALIDATION_SUMMARY",
@@ -3309,7 +3878,7 @@ def _build_validation_data(cursor, session: dict[str, Any], edit_session_id: int
         if reduction_count is not None and baseline_count
         else None
     )
-    return {
+    validation_data = {
         **session,
         **summary,
         "BASELINE_VIOLATION_COUNT": baseline_count,
@@ -3321,6 +3890,106 @@ def _build_validation_data(cursor, session: dict[str, Any], edit_session_id: int
         "REANALYSIS_RUN_STARTED_AT": (reanalysis_run or {}).get("STARTED_AT"),
         "REANALYSIS_RUN_FINISHED_AT": (reanalysis_run or {}).get("FINISHED_AT"),
     }
+    changes = _fetch_all(
+        cursor,
+        "MCOMMON_EDIT_CHANGE_LIST",
+        {"editSessionId": edit_session_id, "changeStatus": "ALL"},
+    )
+    rules = _fetch_all(
+        cursor,
+        "MCOMMON_EDIT_SESSION_RULE_LIST",
+        {"editSessionId": edit_session_id},
+    )
+    if _edit_rule_tolerance_column_exists(cursor):
+        tolerance_map = {
+            int(row.get("EDIT_RULE_ID") or 0): row.get("RULE_TOLERANCE_PCT")
+            for row in _fetch_all(
+                cursor,
+                "MCOMMON_EDIT_SESSION_RULE_TOLERANCE_LIST",
+                {"editSessionId": edit_session_id},
+            )
+        }
+        for rule in rules:
+            rule["RULE_TOLERANCE_PCT"] = tolerance_map.get(int(rule.get("EDIT_RULE_ID") or 0))
+    applied_rule_ids = {
+        int(row.get("EDIT_RULE_ID") or 0)
+        for row in changes
+        if str(row.get("CHANGE_STATUS") or "").upper() == "APPLIED"
+        and int(row.get("EDIT_RULE_ID") or 0) > 0
+    }
+    analysis_rules = [
+        rule
+        for rule in rules
+        if int(rule.get("EDIT_RULE_ID") or 0) in applied_rule_ids
+    ]
+    linked_analysis_rule_ids = {
+        int(rule.get("EDIT_RULE_ID") or 0)
+        for rule in analysis_rules
+    }
+    has_applied_changes = any(
+        str(row.get("CHANGE_STATUS") or "").upper() == "APPLIED"
+        for row in changes
+    )
+    has_unlinked_applied_change = any(
+        str(row.get("CHANGE_STATUS") or "").upper() == "APPLIED"
+        and int(row.get("EDIT_RULE_ID") or 0) <= 0
+        for row in changes
+    )
+    source_evaluation: list[dict[str, Any]] | None = None
+    edit_evaluation: list[dict[str, Any]] | None = None
+    if post_apply_snapshot_missing:
+        evaluation_error: str | None = "VALIDATION_SNAPSHOT_UNAVAILABLE"
+    elif has_applied_changes and (
+        has_unlinked_applied_change
+        or not applied_rule_ids
+        or applied_rule_ids != linked_analysis_rule_ids
+    ):
+        evaluation_error = "SAME_RULE_EVALUATION_UNAVAILABLE"
+    else:
+        evaluation_error = None
+    if not evaluation_error:
+        try:
+            source_evaluation = _evaluate_rules_on_table(
+                cursor,
+                analysis_rules,
+                target_owner=str(session.get("TARGET_OWNER") or ""),
+                target_table=str(session.get("SOURCE_TABLE") or ""),
+            )
+            edit_evaluation = _evaluate_rules_on_table(
+                cursor,
+                analysis_rules,
+                target_owner=str(session.get("TARGET_OWNER") or ""),
+                target_table=str(session.get("EDIT_TABLE") or ""),
+                source_rowid_column=TRACKING_COLUMN,
+            )
+        except Exception as exc:
+            evaluation_error = "SAME_RULE_EVALUATION_UNAVAILABLE"
+            logger.warning(
+                "Editing effect rule evaluation was unavailable. edit_session_id=%s error=%s",
+                edit_session_id,
+                str(exc.detail if isinstance(exc, HTTPException) else exc),
+            )
+    validation_data["EDIT_ANALYSIS"] = _build_edit_analysis(
+        session=session,
+        summary=validation_data,
+        changes=changes,
+        rules=analysis_rules,
+        source_evaluation=source_evaluation,
+        edit_evaluation=edit_evaluation,
+        evaluation_error=evaluation_error,
+    )
+    validation_data["ANALYSIS_SOURCE"] = (
+        "POST_APPLY_HISTORY_WITHOUT_SNAPSHOT"
+        if post_apply_snapshot_missing
+        else "LIVE"
+    )
+    if include_changes:
+        for row in changes:
+            row["TARGET_OWNER"] = row.get("TARGET_OWNER") or session.get("TARGET_OWNER")
+            row["TARGET_TABLE"] = row.get("TARGET_TABLE") or session.get("SOURCE_TABLE")
+        _attach_column_metadata(cursor, changes, column_keys=("COLUMN_NAME",))
+        validation_data["CHANGE_ROWS"] = changes
+    return validation_data
 
 
 def validation_summary(request: Request, edit_session_id: int) -> dict[str, Any]:
@@ -3328,13 +3997,25 @@ def validation_summary(request: Request, edit_session_id: int) -> dict[str, Any]
     cursor = conn.cursor()
     try:
         session = _select_session(cursor, edit_session_id, request)
-        return {"status": "success", "data": _build_validation_data(cursor, session, edit_session_id)}
+        return {
+            "status": "success",
+            "data": _build_validation_data(
+                cursor,
+                session,
+                edit_session_id,
+                include_changes=True,
+            ),
+        }
     finally:
         cursor.close()
         conn.close()
 
 
-def mark_validated(request: Request, edit_session_id: int) -> dict[str, Any]:
+def mark_validated(
+    request: Request,
+    edit_session_id: int,
+    payload: EffectValidationRequest | None = None,
+) -> dict[str, Any]:
     user_id = _get_user_text(request)
     conn = get_target_db_connection(request)
     cursor = conn.cursor()
@@ -3351,8 +4032,22 @@ def mark_validated(request: Request, edit_session_id: int) -> dict[str, Any]:
         summary = _build_validation_data(cursor, session, edit_session_id)
         if int(summary.get("APPLIED_CHANGE_COUNT") or 0) <= 0:
             raise HTTPException(status_code=409, detail="At least one applied editing change is required.")
+        if (summary.get("EDIT_ANALYSIS") or {}).get("OVERALL", {}).get("EVALUATION_ERROR"):
+            raise HTTPException(
+                status_code=409,
+                detail="The same-rule effect analysis must complete before validation.",
+            )
+        overall_analysis = (summary.get("EDIT_ANALYSIS") or {}).get("OVERALL", {})
+        review_required = str(overall_analysis.get("STATUS") or "").upper() == "REVIEW"
+        review_acknowledged = review_required and bool(payload and payload.acknowledgeReview)
+        if review_required and not review_acknowledged:
+            raise HTTPException(
+                status_code=409,
+                detail="A review-status effect analysis must be explicitly acknowledged.",
+            )
         if summary.get("REANALYSIS_FLOW_RUN_ID") and str(summary.get("REANALYSIS_RUN_STATUS") or "") != "SUCCESS":
             raise HTTPException(status_code=409, detail="The linked INITDN$ Flow reanalysis must finish successfully.")
+        overall_analysis["REVIEW_ACKNOWLEDGED"] = review_acknowledged
         cursor.execute(
             SqlLoader.get_sql("MCOMMON_EDIT_SESSION_STATUS"),
             {"sessionStatus": "VALIDATED", "editSessionId": edit_session_id},
@@ -3657,7 +4352,7 @@ def generate_dml(request: Request, edit_session_id: int) -> dict[str, Any]:
     cursor = conn.cursor()
     try:
         session = _select_session(cursor, edit_session_id, request)
-        _require_open_execution(session, "generate operational DML")
+        _require_dml_work_execution(session)
         dml_sql = _generate_merge_dml(cursor, session, edit_session_id)
         return {
             "status": "success",
@@ -3674,7 +4369,7 @@ def validate_dml(request: Request, payload: EditDmlValidateRequest) -> dict[str,
     cursor = conn.cursor()
     try:
         session = _select_session(cursor, payload.editSessionId, request)
-        _require_open_execution(session, "validate operational DML")
+        _require_dml_work_execution(session)
         message = _validate_registered_dml(
             cursor,
             payload.dmlSql,
@@ -3704,12 +4399,100 @@ def _validate_registered_dml(
         raise HTTPException(status_code=400, detail="DML SQL is required.")
     if len(sql) > 200_000:
         raise HTTPException(status_code=400, detail="DML SQL is too large.")
-    if re.search(r"(?s)(--|/\*)", sql):
+    sql_structure = re.sub(r"'(?:''|[^'])*'", "''", sql)
+    if re.search(r"(?s)(--|/\*)", sql_structure):
         raise HTTPException(status_code=400, detail="Comments are not allowed in final DML.")
     owner = _normalize_identifier(session["TARGET_OWNER"], "target owner")
     source_table = _normalize_identifier(session["SOURCE_TABLE"], "source table")
     edit_table = _normalize_identifier(session["EDIT_TABLE"], "edit table")
     _require_session_table_mapping(cursor, session)
+    if re.match(r"^\s*UPDATE\b", sql, re.IGNORECASE):
+        if ";" in sql_structure:
+            raise HTTPException(
+                status_code=400,
+                detail="Custom UPDATE DML must contain exactly one statement without a semicolon.",
+            )
+        prohibited_patterns = (
+            r"\bSELECT\b",
+            r"\bFROM\b",
+            r"\bJOIN\b",
+            r"\bWITH\b",
+            r"\bINSERT\b",
+            r"\bDELETE\b",
+            r"\bMERGE\b",
+            r"\bBEGIN\b",
+            r"\bDECLARE\b",
+            r"\bEXECUTE\s+IMMEDIATE\b",
+            r"\bDBMS_SQL\b",
+            r"\bPRAGMA\b",
+            r"\bCOMMIT\b",
+            r"\bROLLBACK\b",
+            r"\bRETURNING\b",
+            r"\bCREATE\b",
+            r"\bALTER\b",
+            r"\bDROP\b",
+            r"\bTRUNCATE\b",
+            r"\bGRANT\b",
+            r"\bREVOKE\b",
+            r":[A-Z0-9_$#]+",
+        )
+        if any(re.search(pattern, sql_structure, re.IGNORECASE) for pattern in prohibited_patterns):
+            raise HTTPException(
+                status_code=400,
+                detail="Custom UPDATE DML contains a command or subquery that is not allowed.",
+            )
+        target_match = re.match(
+            r'^\s*UPDATE\s+(?P<TARGET>(?:"[^"]+"|[A-Z][A-Z0-9_$#]*)(?:\s*\.\s*(?:"[^"]+"|[A-Z][A-Z0-9_$#]*))?)(?=\s+(?:[A-Z][A-Z0-9_$#]*\s+)?SET\b)',
+            sql_structure,
+            re.IGNORECASE,
+        )
+        if not target_match:
+            raise HTTPException(status_code=400, detail="Custom UPDATE DML target could not be identified.")
+        target_parts = [
+            part.strip().strip('"').upper()
+            for part in re.split(r"\s*\.\s*", target_match.group("TARGET"))
+        ]
+        target_owner = owner if len(target_parts) == 1 else target_parts[0]
+        target_table = target_parts[-1]
+        if target_owner != owner or target_table != source_table:
+            raise HTTPException(
+                status_code=400,
+                detail="Custom DML can target only the current INITUP$ source table.",
+            )
+        if not re.search(r"\bSET\b", sql_structure, re.IGNORECASE) or not re.search(r"\bWHERE\b", sql_structure, re.IGNORECASE):
+            raise HTTPException(
+                status_code=400,
+                detail="Custom UPDATE DML must include both SET and WHERE clauses.",
+            )
+        allowed_calls = {
+            "ABS", "ADD_MONTHS", "COALESCE", "DECODE", "GREATEST", "IN", "LAST_DAY",
+            "LEAST", "LOWER", "LTRIM", "NULLIF", "NVL", "NVL2", "REPLACE",
+            "ROUND", "RTRIM", "SUBSTR", "TO_CHAR", "TO_DATE", "TO_NUMBER",
+            "TO_TIMESTAMP", "TRIM", "TRUNC", "UPPER",
+        }
+        custom_calls = {
+            value.upper()
+            for value in re.findall(r"\b([A-Z][A-Z0-9_$#]*)\s*\(", sql_structure, re.IGNORECASE)
+        }
+        if custom_calls - allowed_calls:
+            raise HTTPException(
+                status_code=400,
+                detail="Custom UPDATE DML contains a function outside the allowed list.",
+            )
+        if parse_oracle:
+            try:
+                cursor.parse(sql)
+            except Exception as exc:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Custom UPDATE DML is not valid Oracle SQL. {exc}",
+                ) from exc
+        return f'Validated custom UPDATE target: "{owner}"."{source_table}".'
+    if not re.match(r"^\s*BEGIN\b", sql, re.IGNORECASE):
+        raise HTTPException(
+            status_code=400,
+            detail="DML must be a single custom UPDATE or the server-generated editing MERGE block.",
+        )
     canonical_sql = _generate_merge_dml(cursor, session, edit_session_id).strip()
     canonical_merge, separator, canonical_tail = canonical_sql.partition(";")
     edited_merge, edited_separator, edited_tail = sql.partition(";")
@@ -3840,13 +4623,14 @@ def save_dml(request: Request, payload: EditDmlRequest) -> dict[str, Any]:
     cursor = conn.cursor()
     try:
         session = _select_session(cursor, payload.editSessionId, request)
-        _require_open_execution(session, "save operational DML")
-        _session_rules_for_changes(
-            cursor,
-            session=session,
-            edit_session_id=int(payload.editSessionId),
-            requested_rule_ids=set(),
-        )
+        _require_dml_work_execution(session)
+        if str(session.get("SESSION_STATUS") or "").upper() != "APPLIED":
+            _session_rules_for_changes(
+                cursor,
+                session=session,
+                edit_session_id=int(payload.editSessionId),
+                requested_rule_ids=set(),
+            )
         dml_sql = str(payload.dmlSql or "")
         if not dml_sql.strip():
             raise HTTPException(status_code=400, detail="DML SQL is required.")
@@ -3958,7 +4742,7 @@ def delete_dml(request: Request, edit_dml_id: int) -> dict[str, Any]:
             raise HTTPException(status_code=404, detail="Registered DML was not found.")
         edit_session_id = int(dml["EDIT_SESSION_ID"])
         session = _select_session(cursor, edit_session_id, request)
-        _require_open_execution(session, "delete operational DML")
+        _require_dml_work_execution(session)
         if (
             get_request_role_code(request) != "ADMIN"
             and str(dml.get("CREATED_BY") or "") != user_id
@@ -4004,7 +4788,7 @@ def approve_dml(request: Request, edit_dml_id: int) -> dict[str, Any]:
         if not dml:
             raise HTTPException(status_code=404, detail="Registered DML was not found.")
         session = _select_session(cursor, int(dml["EDIT_SESSION_ID"]), request)
-        _require_open_execution(session, "approve operational DML")
+        _require_dml_work_execution(session)
         if (
             get_request_role_code(request) != "ADMIN"
             and str(dml.get("CREATED_BY") or "") != user_id
@@ -4053,7 +4837,12 @@ def execute_dml(request: Request, edit_dml_id: int) -> dict[str, Any]:
             raise HTTPException(status_code=404, detail="Registered DML was not found.")
         edit_session_id = int(dml["EDIT_SESSION_ID"])
         session = _select_session(cursor, edit_session_id, request)
-        _require_open_execution(session, "execute operational DML")
+        _require_dml_work_execution(session)
+        if str(session.get("SESSION_STATUS") or "").upper() not in {"VALIDATED", "APPLY_READY", "APPLIED"}:
+            raise HTTPException(
+                status_code=409,
+                detail="Complete effect validation before operational DML execution.",
+            )
         if (
             get_request_role_code(request) != "ADMIN"
             and str(dml.get("CREATED_BY") or "") != user_id
@@ -4061,25 +4850,30 @@ def execute_dml(request: Request, edit_dml_id: int) -> dict[str, Any]:
             raise HTTPException(status_code=403, detail="Only the DML author can execute this DML.")
         if str(dml.get("DML_STATUS") or "").upper() == "EXECUTED":
             raise HTTPException(status_code=409, detail="Executed DML cannot be executed again.")
+        dml_sql = str(dml.get("DML_SQL") or "")
+        generated_edit_merge = bool(re.match(r"^\s*BEGIN\b", dml_sql, re.IGNORECASE))
         _validate_registered_dml(
             cursor,
-            str(dml.get("DML_SQL") or ""),
+            dml_sql,
             session,
             edit_session_id,
             parse_oracle=True,
         )
-        validation = _fetch_one(
-            cursor,
-            "MCOMMON_EDIT_VALIDATION_SUMMARY",
-            {"editSessionId": edit_session_id},
-        ) or {}
-        affected = int(validation.get("CHANGED_ROW_COUNT") or 0)
-        if affected <= 0:
-            raise HTTPException(
-                status_code=409,
-                detail="No applied editing rows are available for operational DML execution.",
-            )
-        cursor.execute(str(dml["DML_SQL"]))
+        if generated_edit_merge:
+            validation = _fetch_one(
+                cursor,
+                "MCOMMON_EDIT_VALIDATION_SUMMARY",
+                {"editSessionId": edit_session_id},
+            ) or {}
+            affected = int(validation.get("CHANGED_ROW_COUNT") or 0)
+            if affected <= 0:
+                raise HTTPException(
+                    status_code=409,
+                    detail="No applied editing rows are available for operational DML execution.",
+                )
+        cursor.execute(dml_sql)
+        if not generated_edit_merge:
+            affected = max(int(cursor.rowcount or 0), 0)
         cursor.execute(
             SqlLoader.get_sql("MCOMMON_EDIT_DML_EXECUTION_RESULT"),
             {
@@ -4087,7 +4881,7 @@ def execute_dml(request: Request, edit_dml_id: int) -> dict[str, Any]:
                 "dmlStatus": "EXECUTED",
                 "executedBy": user_id,
                 "affectedRowCount": affected,
-                "executionMessage": f"Operational DML committed for {affected} editing row(s).",
+                "executionMessage": f"Operational DML committed for {affected} row(s).",
             },
         )
         cursor.execute(
@@ -4095,16 +4889,19 @@ def execute_dml(request: Request, edit_dml_id: int) -> dict[str, Any]:
             {"sessionStatus": "APPLIED", "editSessionId": edit_session_id},
         )
         if cursor.rowcount != 1:
-            raise RuntimeError("Editing execution status could not be closed after DML execution.")
+            raise RuntimeError("Editing execution status could not be updated after DML execution.")
         _event(
             cursor,
             edit_session_id=edit_session_id,
             event_type="DML_EXECUTED",
             entity_type="EDIT_DML",
             entity_id=edit_dml_id,
-            summary=f"Operational DML committed and editing execution closed: {affected} row(s).",
+            summary=f"Operational DML committed: {affected} row(s).",
             user_id=user_id,
-            detail={"affectedRowCount": affected},
+            detail={
+                "affectedRowCount": affected,
+                "dmlType": "GENERATED_EDIT_MERGE" if generated_edit_merge else "CUSTOM_UPDATE",
+            },
         )
         conn.commit()
         return {

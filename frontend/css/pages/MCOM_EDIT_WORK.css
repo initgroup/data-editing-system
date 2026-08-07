@@ -1248,6 +1248,7 @@
     justify-content: center;
     padding: 24px;
     position: fixed;
+    overscroll-behavior: contain;
     z-index: 13000;
 }
 
@@ -1273,6 +1274,7 @@
     border-bottom: 1px solid #dbe4f0;
     cursor: move;
     display: flex;
+    gap: 12px;
     justify-content: space-between;
     padding: 12px 14px;
     position: sticky;
@@ -1280,6 +1282,10 @@
     top: 0;
     user-select: none;
     z-index: 2;
+}
+
+.edit-work-detail-dialog > header > div {
+    min-width: 0;
 }
 
 .edit-work-detail-dialog > header button {
@@ -1301,6 +1307,7 @@
 .edit-work-detail-dialog > header strong {
     color: #0f172a;
     font-size: 15px;
+    overflow-wrap: anywhere;
 }
 
 .edit-work-detail-body {
@@ -1534,6 +1541,300 @@
     height: 100%;
 }
 
+.edit-work-validation-analysis {
+    border-top: 1px solid var(--edit-border);
+    grid-column: 1 / -1;
+    min-width: 0;
+    padding-top: 12px;
+}
+
+.edit-work-validation-analysis-heading {
+    align-items: end;
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 9px;
+}
+
+.edit-work-validation-analysis-heading h3,
+.edit-work-validation-analysis-heading span {
+    display: block;
+}
+
+.edit-work-validation-analysis-heading h3 {
+    color: #172033;
+    font-size: 12px;
+    margin: 0;
+}
+
+.edit-work-validation-analysis-heading span {
+    color: #64748b;
+    font-size: 10px;
+    line-height: 1.5;
+    margin-top: 3px;
+}
+
+.edit-work-validation-analysis-grid {
+    display: grid;
+    gap: 8px;
+    grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr));
+}
+
+.edit-work-analysis-card {
+    background: #ffffff;
+    border: 1px solid #dbe4f0;
+    border-top: 3px solid #94a3b8;
+    display: grid;
+    gap: 9px;
+    min-width: 0;
+    padding: 10px;
+}
+
+.edit-work-analysis-card.is-good {
+    border-top-color: #16a34a;
+}
+
+.edit-work-analysis-card.is-review {
+    border-top-color: #f59e0b;
+}
+
+.edit-work-analysis-card.is-unavailable {
+    border-top-color: #dc2626;
+}
+
+.edit-work-analysis-card > header {
+    align-items: start;
+    display: flex;
+    gap: 8px;
+    justify-content: space-between;
+}
+
+.edit-work-analysis-card > header > div {
+    min-width: 0;
+}
+
+.edit-work-analysis-card > header h4,
+.edit-work-analysis-status {
+    display: block;
+}
+
+.edit-work-analysis-card > header h4 {
+    color: #172033;
+    font-size: 11px;
+    line-height: 1.4;
+    margin: 0;
+}
+
+.edit-work-analysis-status {
+    color: #64748b;
+    font-size: 10px;
+    font-weight: 900;
+    margin-top: 3px;
+}
+
+.edit-work-analysis-status.is-good {
+    color: #15803d;
+}
+
+.edit-work-analysis-status.is-review {
+    color: #b45309;
+}
+
+.edit-work-analysis-status.is-unavailable {
+    color: #b91c1c;
+}
+
+.edit-work-analysis-detail-button {
+    align-items: center;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    color: #334155;
+    cursor: pointer;
+    display: inline-flex;
+    flex: 0 0 auto;
+    height: 28px;
+    justify-content: center;
+    padding: 0;
+    width: 32px;
+}
+
+.edit-work-analysis-detail-button:hover,
+.edit-work-analysis-detail-button:focus-visible {
+    border-color: #2563eb;
+    color: #1d4ed8;
+    outline: 2px solid rgba(37, 99, 235, 0.16);
+    outline-offset: 1px;
+}
+
+.edit-work-analysis-metrics {
+    display: grid;
+    gap: 6px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.edit-work-analysis-metrics > span {
+    background: #f8fafc;
+    border: 1px solid #eef2f7;
+    min-width: 0;
+    padding: 7px;
+}
+
+.edit-work-analysis-metrics small,
+.edit-work-analysis-metrics b,
+.edit-work-analysis-metrics em {
+    display: block;
+    overflow-wrap: anywhere;
+}
+
+.edit-work-analysis-metrics small {
+    color: #64748b;
+    font-size: 10px;
+    font-weight: 800;
+}
+
+.edit-work-analysis-metrics b {
+    color: #172033;
+    font-size: 11px;
+    margin-top: 4px;
+}
+
+.edit-work-analysis-metrics em {
+    color: #64748b;
+    font-size: 9px;
+    font-style: normal;
+    margin-top: 2px;
+}
+
+.edit-work-analysis-card > p {
+    color: #64748b;
+    font-size: 10px;
+    line-height: 1.5;
+    margin: 0;
+}
+
+.edit-work-analysis-detail-metrics {
+    display: grid;
+    gap: 8px;
+    grid-template-columns: repeat(auto-fit, minmax(min(135px, 100%), 1fr));
+    margin: 0;
+}
+
+.edit-work-analysis-detail-metrics > div {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    min-width: 0;
+    padding: 9px;
+}
+
+.edit-work-analysis-detail-metrics dt {
+    color: #64748b;
+    font-size: 9px;
+    font-weight: 800;
+}
+
+.edit-work-analysis-detail-metrics dd {
+    color: #172033;
+    font-size: 12px;
+    font-weight: 800;
+    margin: 4px 0 0;
+    overflow-wrap: anywhere;
+}
+
+.edit-work-analysis-detail-metrics small {
+    color: #64748b;
+    display: block;
+    font-size: 9px;
+    margin-top: 2px;
+}
+
+.edit-work-analysis-detail-section {
+    display: grid;
+    gap: 7px;
+    min-width: 0;
+}
+
+.edit-work-analysis-detail-section > h4,
+.edit-work-analysis-method-note > strong {
+    color: #334155;
+    font-size: 10px;
+}
+
+.edit-work-analysis-detail-section > h4 {
+    margin: 0;
+}
+
+.edit-work-analysis-table-wrap {
+    border: 1px solid #dbe4f0;
+    max-height: min(52vh, 420px);
+    max-width: 100%;
+    overflow: auto;
+}
+
+.edit-work-analysis-table-wrap:focus-visible {
+    outline: 2px solid rgba(37, 99, 235, 0.2);
+    outline-offset: 1px;
+}
+
+.edit-work-analysis-table-wrap table {
+    border-collapse: collapse;
+    font-size: 10px;
+    min-width: 680px;
+    width: 100%;
+}
+
+.edit-work-analysis-table-wrap th,
+.edit-work-analysis-table-wrap td {
+    border-bottom: 1px solid #e2e8f0;
+    padding: 7px 8px;
+    text-align: left;
+    vertical-align: top;
+}
+
+.edit-work-analysis-table-wrap th {
+    background: #f8fafc;
+    color: #475569;
+    font-weight: 900;
+    position: sticky;
+    top: 0;
+    white-space: nowrap;
+    z-index: 1;
+}
+
+.edit-work-analysis-table-wrap td {
+    color: #172033;
+    max-width: 360px;
+    overflow-wrap: anywhere;
+    white-space: normal;
+}
+
+.edit-work-analysis-table-wrap tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+.edit-work-analysis-method-note {
+    background: #f8fafc;
+    border-left: 3px solid #2563eb;
+    display: grid;
+    gap: 5px;
+    padding: 9px 10px;
+}
+
+.edit-work-analysis-method-note.is-warning {
+    background: #fffbeb;
+    border-left-color: #f59e0b;
+}
+
+.edit-work-analysis-method-note.is-info {
+    border-left-color: #64748b;
+}
+
+.edit-work-analysis-method-note p,
+.edit-work-analysis-empty {
+    color: #64748b;
+    font-size: 10px;
+    line-height: 1.55;
+    margin: 0;
+}
+
 .edit-work-dml-panel {
     margin: 12px;
 }
@@ -1642,6 +1943,11 @@
 }
 
 @media (max-width: 900px) {
+    .edit-work-validation-analysis-grid,
+    .edit-work-analysis-metrics {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
     .edit-work-page.is-error-editing-page .edit-work-stage-primary-row {
         align-items: stretch;
     }
@@ -1827,8 +2133,41 @@
 
     .edit-work-detail-dialog {
         max-height: calc(100vh - 16px);
+        max-height: calc(100dvh - 16px);
         min-width: 0;
+        overscroll-behavior: contain;
         width: calc(100vw - 16px);
+    }
+
+    .edit-work-validation {
+        padding: 8px;
+    }
+
+    .edit-work-validation-analysis-heading {
+        align-items: start;
+    }
+
+    .edit-work-validation-analysis-grid,
+    .edit-work-analysis-metrics {
+        grid-template-columns: 1fr;
+    }
+
+    .edit-work-validation-bar {
+        grid-template-columns: minmax(75px, 110px) minmax(0, 1fr) auto;
+    }
+
+    .edit-work-detail-dialog > header button {
+        height: 44px;
+        width: 44px;
+    }
+
+    .edit-work-analysis-detail-button {
+        height: 44px;
+        width: 44px;
+    }
+
+    .edit-work-analysis-detail-metrics {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .edit-work-detail-meta,
@@ -1843,5 +2182,11 @@
     .edit-work-symbolic-flow > i {
         justify-self: center;
         transform: rotate(90deg);
+    }
+}
+
+@media (max-width: 420px) {
+    .edit-work-analysis-detail-metrics {
+        grid-template-columns: 1fr;
     }
 }
