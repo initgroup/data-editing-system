@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light">
+    <title>IN-DEPS Basic Reports</title>
+    <link rel="stylesheet" href="./css/all.min.css">
+    <link rel="stylesheet" href="./css/report-viewer.css?v=1.1.0">
+    <script defer src="./js/report-viewer.js?v=1.1.2"></script>
+</head>
+<body>
+    <div class="report-viewer-shell">
+        <header class="report-viewer-header">
+            <div class="report-viewer-brand" aria-label="IN-DEPS">
+                <img src="./assets/indeps_compact_bilingual.png" alt="IN-DEPS">
+            </div>
+            <div class="report-viewer-heading">
+                <span id="reportViewerEyebrow">IN-DEPS Editing Report</span>
+                <h1 id="reportViewerTitle">Basic Reports</h1>
+                <p id="reportViewerProvider">This report is provided by the IN-DEPS system.</p>
+            </div>
+        </header>
+
+        <nav class="report-viewer-toolbar" aria-label="Report actions">
+            <div id="reportViewerBasis" class="report-viewer-basis" aria-live="polite"></div>
+            <div class="report-viewer-actions">
+                <button type="button" class="report-download-btn" data-format="html">
+                    <i class="fab fa-html5" aria-hidden="true"></i>
+                    <span>HTML</span>
+                </button>
+                <button type="button" class="report-download-btn" data-format="xlsx">
+                    <i class="fas fa-file-excel" aria-hidden="true"></i>
+                    <span>XLSX</span>
+                </button>
+                <button type="button" class="report-download-btn" data-format="pdf">
+                    <i class="fas fa-file-pdf" aria-hidden="true"></i>
+                    <span>PDF</span>
+                </button>
+                <button id="reportViewerClose" type="button" class="report-close-btn">
+                    <i class="fas fa-xmark" aria-hidden="true"></i>
+                    <span>Close</span>
+                </button>
+            </div>
+        </nav>
+
+        <main id="reportViewerMain" class="report-viewer-main">
+            <section id="reportViewerLoading" class="report-viewer-state" role="status" aria-live="polite">
+                <span class="report-loading-mark"><i class="fas fa-spinner fa-spin" aria-hidden="true"></i></span>
+                <h2>Preparing the report</h2>
+                <p>Collecting the selected project, scenario, run, and editing results.</p>
+            </section>
+
+            <section id="reportViewerError" class="report-viewer-state is-error" role="alert" hidden>
+                <span class="report-error-mark"><i class="fas fa-circle-exclamation" aria-hidden="true"></i></span>
+                <h2>Report unavailable</h2>
+                <p id="reportViewerErrorMessage">The report could not be loaded.</p>
+                <button id="reportViewerRetry" type="button">
+                    <i class="fas fa-rotate" aria-hidden="true"></i>
+                    <span>Retry</span>
+                </button>
+            </section>
+
+            <div id="reportViewerContent" hidden>
+                <div id="reportViewerSingleContent">
+                    <section id="reportViewerMeta" class="report-meta-panel" aria-label="Report metadata"></section>
+                    <section id="reportViewerKpis" class="report-kpi-grid" aria-label="Key indicators"></section>
+                    <div id="reportViewerSections" class="report-section-list"></div>
+                </div>
+
+                <div id="reportViewerBatchContent" class="batch-report-content" hidden>
+                    <section id="reportViewerBatchSummary" class="batch-summary-panel" aria-labelledby="batchSummaryTitle"></section>
+                    <nav id="reportViewerBatchToc" class="batch-toc-panel" aria-labelledby="batchTocTitle"></nav>
+                    <div id="reportViewerBatchReports" class="batch-report-list" aria-live="off"></div>
+                </div>
+            </div>
+        </main>
+
+        <footer class="report-viewer-footer">
+            <strong>IN-DEPS</strong>
+            <span id="reportViewerFooterText">Consistent editing reports for comparable data quality decisions.</span>
+        </footer>
+    </div>
+</body>
+</html>

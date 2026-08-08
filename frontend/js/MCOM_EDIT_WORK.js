@@ -13,8 +13,6 @@
     ]);
     const STAGE_MAP = Object.freeze({
         ...Object.fromEntries(STAGES.map((stage) => [stage.pageCode, stage])),
-        M06001: STAGES[2],
-        M06002: STAGES[3],
         M07001: STAGES[4],
         M07002: STAGES[5],
         M07003: STAGES[6]
@@ -262,7 +260,6 @@
 
             readPendingContext() {
                 const legacyContextKeys = {
-                    M05002: ["M06001:editContext", "M06002:editContext"],
                     M05003: ["M07001:editContext", "M07002:editContext", "M07003:editContext"]
                 };
                 const keys = [`${PAGE_CODE}:editContext`, ...(legacyContextKeys[PAGE_CODE] || [])];

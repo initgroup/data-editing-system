@@ -160,11 +160,15 @@ BEGIN
     drop_table_if_exists('INIT$_TB_TABLE_COLUMN_MAP');
     drop_table_if_exists('INIT$_TB_UPLOAD_TABLE_META');
     drop_table_if_exists('INIT$_TB_TABLES');
+    drop_table_if_exists('INIT$_TB_REPORT_TMPL_USE');
+    drop_table_if_exists('INIT$_TB_REPORT_TEMPLATE');
     drop_table_if_exists('INIT$_TB_SCENARIO');
     drop_table_if_exists('INIT$_TB_OBJECT');
     drop_table_if_exists('INIT$_TB_PROJECT');
 
     DBMS_OUTPUT.PUT_LINE('[INIT_TARGET] Drop remaining indexes, if any');
+    drop_index_if_exists('INIT$_IX_RPT_USE_PROJECT');
+    drop_index_if_exists('INIT$_IX_CUSTOM_REPORT_USER');
     drop_index_if_exists('IX_INIT$_TB_COLREL_CAT_SUMMARY_01');
     drop_index_if_exists('IX_INIT$_TB_COLREL_CAT_PAIR_01');
     drop_index_if_exists('IX_INIT$_TB_API_RESULT_01');

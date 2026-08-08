@@ -2,6 +2,7 @@
     const DEFAULT_LANGUAGE = "en";
     const LANGUAGE_STORAGE_KEY = "initLanguageCode";
     const SUPPORTED_LANGUAGES = new Set(["en", "ko"]);
+    const EXPLICIT_DEFAULT_PAGE_PACKS = new Set(["M06001", "M06002"]);
     const commonPackCache = new Map();
     const pagePackCache = new Map();
     const mergedPagePackCache = new Map();
@@ -329,7 +330,9 @@
             const normalizedPageCode = String(pageCode || "").trim();
             const normalizedLanguage = normalizeLanguageCode(languageCode);
             const requestedLanguageRevision = languageRevision;
-            if (!normalizedPageCode || normalizedLanguage === DEFAULT_LANGUAGE) {
+            const explicitDefaultPagePack = normalizedLanguage === DEFAULT_LANGUAGE
+                && EXPLICIT_DEFAULT_PAGE_PACKS.has(normalizedPageCode);
+            if (!normalizedPageCode || (normalizedLanguage === DEFAULT_LANGUAGE && !explicitDefaultPagePack)) {
                 delete window[`${normalizedPageCode}_WORK_UI_LABELS`];
                 delete window[`${normalizedPageCode}_FLOW_UI_LABELS`];
                 delete window[`${normalizedPageCode}_PAGE_I18N`];

@@ -488,55 +488,79 @@
     },
     "M06001": {
       "pageCode": "M06001",
-      "title": "Editing Error Correction",
-      "label": "Error Correction",
-      "group": "Editing Execution Management",
-      "status": "integrated",
-      "summary": "The legacy M06001 route now opens the same shared Error Correction tab and live INITUP$/INITDN$ workflow as M05002.",
+      "title": "Basic Reports",
+      "label": "Basic Reports",
+      "group": "Editing Reports",
+      "status": "active",
+      "summary": "Provides a fixed catalog of 20 reports that connects M04001 design and execution, M04002 analysis, and M05001-M05003 editing outcomes by project and scenario.",
       "purpose": [
-        "Query current INITUP$ violations using final rules.",
-        "Correct values in INITDN$ after its one-to-one editing table is prepared."
+        "Compare different datasets with the same report types and metric definitions.",
+        "Trace the full path from rule-discovery design through decisions, corrections, validation, and production deployment.",
+        "Review an individual report or the complete fixed catalog in a separate window and download HTML, XLSX, or PDF."
       ],
       "layout": [
-        { "name": "Editing Work Tables", "description": "Selects one INITUP$/INITDN$ mapping or creates INITDN$." },
-        { "name": "Live Violations and Corrections", "description": "Pages live violations and saves single or checked corrections." }
+        { "name": "Project Cards", "description": "A responsive, server-paged card grid shows project attributes and editing metrics." },
+        { "name": "Report Context", "description": "Project, scenario, Flow Run, and editing session fix the basis for every report." },
+        { "name": "Fixed Report Catalog", "description": "All 20 reports remain in a stable order with available, partial, no-data, or not-applicable states." },
+        { "name": "Individual Report Window", "description": "Shows the selected report's IN-DEPS statement, KPIs, tables, definitions, and HTML/XLSX/PDF downloads." },
+        { "name": "Combined Report Window", "description": "Shows a status summary, table of contents, and all 20 reports in sequence, with a single HTML/XLSX/PDF download." }
       ],
       "workflow": [
-        "Open M05002 or the legacy M06001 route.",
-        "Select a source table, prepare INITDN$ if needed, query violations, and save corrections."
+        "Search or scroll to select a project.",
+        "Select a scenario and review the automatically chosen Flow Run and editing session.",
+        "Adjust the Run or session if needed, then open a report card or select Generate Combined Report.",
+        "Review the individual or combined report window, then download the required format."
       ],
       "controls": [
-        "Create Editing Table, Search, Live SQL, Save Selected Corrections, Save Correction, and shared grid tools."
+        "Project search, load more, and back to project list.",
+        "Scenario, Flow Run, and editing session selectors.",
+        "Open an individual report, generate the combined report, and download HTML, XLSX, or PDF."
       ],
       "aiGuidance": [
-        "This is an integrated compatibility route, not a planned screen.",
-        "INITUP$ is the live query source and INITDN$ is the editable copy."
+        "Use numerator and denominator values when comparing rate metrics across different data volumes.",
+        "Only allowlisted M04001 parameters are exposed; passwords, tokens, API keys, wallets, and connection strings are excluded.",
+        "Raw DML SQL and original audit summaries or detail JSON that may contain row identifiers are excluded from Basic Reports.",
+        "On mobile, cards and context controls become a single column, and table rows become label-value cards without horizontal scrolling."
       ]
     },
     "M06002": {
       "pageCode": "M06002",
-      "title": "Editing Error Correction",
-      "label": "Correction History",
-      "group": "Editing Execution Management",
-      "status": "integrated",
-      "summary": "The legacy M06002 route now opens the same Correction History tab as M05002.",
+      "title": "Custom Reports",
+      "label": "Custom Reports",
+      "group": "Editing Reports",
+      "status": "active",
+      "summary": "Arrange the 20 Basic Reports in a chosen paper layout, select their detail blocks, and save the result as a reusable Custom Reports template.",
       "purpose": [
-        "Review cell-edit events for the selected INITUP$/INITDN$ work table.",
-        "Trace row key, column, before/after values, rule, operator, and time."
+        "Select only the editing reports needed for a project's specific reporting purpose.",
+        "Save paper size, orientation, report placement, and detail-block order as a template reusable across projects.",
+        "Preview a complete document with current data and download it as HTML or PDF."
       ],
       "layout": [
-        { "name": "Editing Work Tables", "description": "Selects the work-table mapping whose history will be queried." },
-        { "name": "Correction History Grid", "description": "Displays and exports the audit details." }
+        { "name": "Project Cards", "description": "Review each project's Custom Reports count, generation count, and recent report layouts, then select a project to design." },
+        { "name": "Report Context", "description": "Choose the scenario, rule-discovery Run, and editing session used by the preview." },
+        { "name": "Template and Paper", "description": "Load a saved template or name a new one, then choose A4/A3 and portrait/landscape." },
+        { "name": "Layout Designer", "description": "Add Basic Reports and reorder them on pages by dragging or using movement controls." },
+        { "name": "Detail Block Editor", "description": "Select and reorder the KPI, table, and description blocks shown for each report." },
+        { "name": "Full Preview", "description": "Review pages populated with live report data and download HTML or PDF." }
       ],
       "workflow": [
-        "Select a work table, apply history filters, and review or export the results."
+        "Select a project, then confirm its scenario, Flow Run, and editing session.",
+        "Load a saved template or set the name and paper options for a new template.",
+        "Add Basic Reports from the palette and configure their layout and detail blocks.",
+        "Save or apply the template, then review and download the full preview."
       ],
       "controls": [
-        "Search, refresh, paging, freeze columns, and export."
+        "Project search and scenario, Flow Run, and editing-session selectors.",
+        "Create, save, delete, and apply templates.",
+        "Add, remove, reorder, and configure report detail blocks.",
+        "A4/A3, portrait/landscape, full preview, and HTML/PDF downloads."
       ],
       "aiGuidance": [
-        "This tab is read-only; corrections are made in the Error Correction tab.",
-        "INIT$_SOURCE_ROWID links rows when no business key exists."
+        "Custom Reports do not change the definitions or calculations of Basic Reports; they only select reports, blocks, and display order.",
+        "Templates belong to the signed-in user within the current Target DB and do not store project source data or execution results in layout JSON.",
+        "Template saves and applications are summarized per project on the project cards.",
+        "Preview and download requests revalidate server access to the selected project, scenario, Run, and session.",
+        "On mobile, panels and report tables become a single column or label-value cards without horizontal scrolling."
       ]
     },
     "M07001": {

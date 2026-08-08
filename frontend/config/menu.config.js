@@ -146,6 +146,29 @@ window.MENU_CONFIG = [
     },
     {
         type: 'folder',
+        key: 'editing-report',
+        label: 'Editing Reports',
+        iconClass: 'fas fa-file-lines text-teal-400',
+        enabled: true,
+        children: [
+            {
+                page: 'M06001',
+                title: 'Basic Reports',
+                label: 'Basic Reports',
+                iconClass: 'fas fa-table-list text-teal-300',
+                enabled: true
+            },
+            {
+                page: 'M06002',
+                title: 'Custom Reports',
+                label: 'Custom Reports',
+                iconClass: 'fas fa-file-pen text-cyan-300',
+                enabled: true
+            }
+        ]
+    },
+    {
+        type: 'folder',
         key: 'model-resource',
         label: 'Model Resources',
         iconClass: 'fas fa-brain text-pink-400',

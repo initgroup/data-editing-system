@@ -1,0 +1,279 @@
+<div class="page-container m06002-page" id="container-M06002">
+    <section id="projectView-M06002" class="m06002-view" aria-labelledby="custom-report-title-M06002">
+        <header class="m06002-hero">
+            <div class="m06002-hero-copy">
+                <span class="m06002-eyebrow" data-label-key="providerEyebrow">IN-DEPS Editing Report</span>
+                <h1 id="custom-report-title-M06002" data-label-key="customReportTitle">Custom Reports</h1>
+                <p data-label-key="customReportDescription">
+                    프로젝트를 선택하고 20종 기본형 보고서를 자유롭게 배치해 재사용 가능한 보고서를 만듭니다.
+                </p>
+            </div>
+            <div class="m06002-provider-note">
+                <i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i>
+                <span data-label-key="customReportProviderNote">IN-DEPS에서 제공하는 보고서 구성 요소로 나만의 템플릿을 설계합니다.</span>
+            </div>
+        </header>
+
+        <form id="projectSearchForm-M06002" class="m06002-search-panel" role="search">
+            <label class="m06002-search-field" for="projectSearch-M06002">
+                <span data-label-key="projectSearchLabel">프로젝트 검색</span>
+                <span class="m06002-search-control">
+                    <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+                    <input
+                        id="projectSearch-M06002"
+                        type="search"
+                        autocomplete="off"
+                        placeholder="프로젝트명, 코드, 유형 또는 설명"
+                        data-placeholder-key="projectSearchPlaceholder"
+                    >
+                </span>
+            </label>
+            <div class="m06002-search-actions">
+                <button id="projectSearchReset-M06002" class="m06002-btn m06002-btn-secondary" type="button">
+                    <i class="fas fa-rotate-left" aria-hidden="true"></i>
+                    <span data-label-key="resetSearch">초기화</span>
+                </button>
+                <button class="m06002-btn m06002-btn-primary" type="submit">
+                    <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+                    <span data-label-key="search">검색</span>
+                </button>
+            </div>
+        </form>
+
+        <div class="m06002-list-heading">
+            <div>
+                <h2 data-label-key="projectListTitle">프로젝트</h2>
+                <p data-label-key="projectListDescription">프로젝트별 맞춤형 보고서 생성 현황과 최근 보고서를 확인할 수 있습니다.</p>
+            </div>
+            <p id="projectResultSummary-M06002" class="m06002-result-summary" role="status" aria-live="polite"></p>
+        </div>
+
+        <div id="projectGrid-M06002" class="m06002-card-grid m06002-project-grid" role="list" aria-busy="false"></div>
+
+        <div id="projectEmpty-M06002" class="m06002-empty-state" hidden>
+            <i class="far fa-folder-open" aria-hidden="true"></i>
+            <strong data-label-key="projectEmptyTitle">검색된 프로젝트가 없습니다</strong>
+            <span data-label-key="projectEmptyDescription">다른 검색어를 입력하거나 검색을 초기화해 주세요.</span>
+        </div>
+
+        <div id="projectLoadState-M06002" class="m06002-load-state" aria-live="polite">
+            <span id="projectLoadSpinner-M06002" class="m06002-inline-loading" hidden>
+                <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+                <span data-label-key="loadingMoreProjects">프로젝트를 불러오는 중입니다...</span>
+            </span>
+            <button id="projectLoadMore-M06002" class="m06002-btn m06002-btn-secondary" type="button" hidden>
+                <span data-label-key="loadMoreProjects">프로젝트 더 보기</span>
+                <i class="fas fa-chevron-down" aria-hidden="true"></i>
+            </button>
+            <div id="projectLoadSentinel-M06002" class="m06002-load-sentinel" aria-hidden="true"></div>
+        </div>
+    </section>
+
+    <section id="builderView-M06002" class="m06002-view" aria-labelledby="custom-builder-title-M06002" hidden>
+        <header class="m06002-detail-header">
+            <button id="backToProjects-M06002" class="m06002-back-btn" type="button">
+                <i class="fas fa-arrow-left" aria-hidden="true"></i>
+                <span data-label-key="backToProjects">프로젝트 목록</span>
+            </button>
+            <div>
+                <span class="m06002-eyebrow" data-label-key="builderEyebrow">Reusable Custom Reports Designer</span>
+                <h1 id="custom-builder-title-M06002" data-label-key="builderTitle">맞춤형 보고서 설계</h1>
+                <p data-label-key="builderDescription">
+                    기본형 보고서를 페이지에 배치하고 각 보고서의 세부 블록을 원하는 순서로 구성합니다.
+                </p>
+            </div>
+        </header>
+
+        <section id="contextPanel-M06002" class="m06002-context-panel" aria-labelledby="context-title-M06002" aria-busy="false">
+            <div class="m06002-project-context">
+                <span class="m06002-context-icon"><i class="fas fa-folder-tree" aria-hidden="true"></i></span>
+                <div>
+                    <span class="m06002-kicker" data-label-key="selectedProject">선택 프로젝트</span>
+                    <h2 id="context-title-M06002">-</h2>
+                    <p id="projectContextDescription-M06002">-</p>
+                </div>
+            </div>
+            <div class="m06002-context-fields">
+                <label>
+                    <span data-label-key="scenario">시나리오</span>
+                    <select id="scenarioId-M06002"></select>
+                </label>
+                <label>
+                    <span data-label-key="flowRun">규칙발굴 Run</span>
+                    <select id="flowRunId-M06002"></select>
+                </label>
+                <label>
+                    <span data-label-key="editSession">에디팅 세션</span>
+                    <select id="editSessionId-M06002"></select>
+                </label>
+            </div>
+            <p id="selectionHint-M06002" class="m06002-selection-hint" role="status" aria-live="polite"></p>
+        </section>
+
+        <section class="m06002-template-panel" aria-labelledby="template-settings-title-M06002">
+            <div class="m06002-panel-heading">
+                <span class="m06002-panel-icon"><i class="fas fa-file-signature" aria-hidden="true"></i></span>
+                <div>
+                    <span class="m06002-kicker" data-label-key="templateSettingsKicker">Template &amp; paper</span>
+                    <h2 id="template-settings-title-M06002" data-label-key="templateSettingsTitle">템플릿과 용지 설정</h2>
+                </div>
+            </div>
+            <div class="m06002-template-fields">
+                <label class="m06002-field m06002-template-select-field">
+                    <span data-label-key="savedTemplates">저장된 내 템플릿</span>
+                    <select id="templateId-M06002">
+                        <option value="">새 맞춤형 보고서</option>
+                    </select>
+                </label>
+                <button id="newTemplate-M06002" class="m06002-btn m06002-btn-secondary" type="button">
+                    <i class="fas fa-plus" aria-hidden="true"></i>
+                    <span data-label-key="newTemplate">새 템플릿</span>
+                </button>
+                <label class="m06002-field m06002-template-name-field">
+                    <span data-label-key="templateName">템플릿 이름</span>
+                    <input id="templateName-M06002" type="text" maxlength="120" autocomplete="off" value="새 맞춤형 보고서">
+                </label>
+                <label class="m06002-field">
+                    <span data-label-key="paperSize">용지</span>
+                    <select id="paperSize-M06002">
+                        <option value="A4">A4</option>
+                        <option value="A3">A3</option>
+                    </select>
+                </label>
+                <fieldset class="m06002-segment-field">
+                    <legend data-label-key="orientation">방향</legend>
+                    <div class="m06002-segments">
+                        <label>
+                            <input type="radio" name="orientation-M06002" value="PORTRAIT" checked>
+                            <span><i class="far fa-file" aria-hidden="true"></i><span data-label-key="portrait">세로</span></span>
+                        </label>
+                        <label>
+                            <input type="radio" name="orientation-M06002" value="LANDSCAPE">
+                            <span><i class="far fa-window-maximize" aria-hidden="true"></i><span data-label-key="landscape">가로</span></span>
+                        </label>
+                    </div>
+                </fieldset>
+            </div>
+            <div class="m06002-reuse-note">
+                <i class="fas fa-arrows-rotate" aria-hidden="true"></i>
+                <span data-label-key="templateReuseNote">저장한 템플릿은 현재 Target DB의 모든 프로젝트와 시나리오에서 다시 사용할 수 있습니다.</span>
+            </div>
+        </section>
+
+        <div class="m06002-workbench">
+            <main class="m06002-designer-column">
+                <section class="m06002-canvas-panel" aria-labelledby="layout-preview-title-M06002">
+                    <div class="m06002-section-heading">
+                        <div>
+                            <span class="m06002-kicker" data-label-key="layoutPreviewKicker">Live layout preview</span>
+                            <h2 id="layout-preview-title-M06002" data-label-key="layoutPreviewTitle">미리보기 레이아웃</h2>
+                            <p data-label-key="layoutPreviewDescription">보고서를 끌어 놓거나 추가 버튼을 누르세요. 용지별 페이지가 자동으로 나뉩니다.</p>
+                        </div>
+                        <div class="m06002-layout-summary" aria-live="polite">
+                            <span><strong id="placedReportCount-M06002">0</strong><span data-label-key="placedReportsUnit">개 보고서</span></span>
+                            <span><strong id="pageCount-M06002">1</strong><span data-label-key="pagesUnit">페이지</span></span>
+                        </div>
+                    </div>
+                    <div id="layoutCanvas-M06002" class="m06002-layout-canvas" role="list" aria-label="맞춤형 보고서 페이지 레이아웃" data-aria-label-key="layoutCanvasLabel" aria-dropeffect="move"></div>
+                    <div id="layoutEmpty-M06002" class="m06002-layout-empty">
+                        <i class="fas fa-hand-pointer" aria-hidden="true"></i>
+                        <strong data-label-key="layoutEmptyTitle">오른쪽 보고서를 이곳에 배치하세요</strong>
+                        <span data-label-key="layoutEmptyDescription">드래그하거나 각 보고서의 추가 버튼을 사용할 수 있습니다.</span>
+                    </div>
+                </section>
+
+                <section id="blockInspector-M06002" class="m06002-inspector-panel" aria-labelledby="block-inspector-title-M06002" hidden>
+                    <div class="m06002-section-heading">
+                        <div>
+                            <span class="m06002-kicker" data-label-key="blockInspectorKicker">Selected report details</span>
+                            <h2 id="block-inspector-title-M06002" data-label-key="blockInspectorTitle">세부 블록 구성</h2>
+                            <p id="blockInspectorHint-M06002">보고서의 표시할 블록과 순서를 조정합니다.</p>
+                        </div>
+                        <button id="closeInspector-M06002" class="m06002-icon-btn" type="button" aria-label="세부 블록 편집 닫기" data-aria-label-key="closeBlockInspector">
+                            <i class="fas fa-xmark" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                    <div id="blockList-M06002" class="m06002-block-list" role="list"></div>
+                    <p class="m06002-accessibility-note">
+                        <i class="fas fa-universal-access" aria-hidden="true"></i>
+                        <span data-label-key="blockAccessibilityNote">터치 또는 키보드에서는 위·아래 버튼으로 같은 순서 변경을 할 수 있습니다.</span>
+                    </p>
+                </section>
+            </main>
+
+            <aside class="m06002-palette-panel" aria-labelledby="report-palette-title-M06002">
+                <div class="m06002-section-heading">
+                    <div>
+                        <span class="m06002-kicker" data-label-key="reportPaletteKicker">20 Basic Reports</span>
+                        <h2 id="report-palette-title-M06002" data-label-key="reportPaletteTitle">기본형 보고서 20종</h2>
+                        <p data-label-key="reportPaletteDescription">보고서당 한 번씩 배치할 수 있습니다.</p>
+                    </div>
+                    <span id="paletteCount-M06002" class="m06002-count-badge">0 / 20</span>
+                </div>
+                <label class="m06002-palette-search" for="paletteSearch-M06002">
+                    <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+                    <input id="paletteSearch-M06002" type="search" autocomplete="off" placeholder="보고서명 또는 코드 검색" data-placeholder-key="paletteSearchPlaceholder">
+                </label>
+                <div id="reportPalette-M06002" class="m06002-report-palette" role="list" aria-busy="false"></div>
+                <div id="paletteEmpty-M06002" class="m06002-palette-empty" hidden>
+                    <i class="far fa-file-lines" aria-hidden="true"></i>
+                    <span data-label-key="paletteEmpty">표시할 기본형 보고서가 없습니다.</span>
+                </div>
+            </aside>
+        </div>
+
+        <footer class="m06002-action-bar">
+            <p id="builderStatus-M06002" role="status" aria-live="polite">
+                <i class="fas fa-circle-info" aria-hidden="true"></i>
+                <span data-label-key="builderInitialStatus">기본형 보고서를 추가해 맞춤형 보고서를 구성하세요.</span>
+            </p>
+            <div class="m06002-action-buttons">
+                <button id="deleteTemplate-M06002" class="m06002-btn m06002-btn-danger" type="button" disabled>
+                    <i class="far fa-trash-can" aria-hidden="true"></i>
+                    <span data-label-key="deleteTemplate">삭제</span>
+                </button>
+                <button id="applyTemplate-M06002" class="m06002-btn m06002-btn-secondary" type="button" disabled>
+                    <i class="fas fa-link" aria-hidden="true"></i>
+                    <span data-label-key="applyTemplate">현재 기준에 적용</span>
+                </button>
+                <button id="previewTemplate-M06002" class="m06002-btn m06002-btn-preview" type="button" disabled>
+                    <i class="far fa-eye" aria-hidden="true"></i>
+                    <span data-label-key="previewTemplate">전체 미리보기</span>
+                </button>
+                <button id="saveTemplate-M06002" class="m06002-btn m06002-btn-primary" type="button">
+                    <i class="far fa-floppy-disk" aria-hidden="true"></i>
+                    <span data-label-key="saveTemplate">템플릿 저장</span>
+                </button>
+            </div>
+        </footer>
+    </section>
+
+    <dialog id="previewDialog-M06002" class="m06002-preview-dialog" aria-labelledby="preview-dialog-title-M06002">
+        <div class="m06002-preview-shell">
+            <header class="m06002-preview-header">
+                <div>
+                    <span class="m06002-kicker" data-label-key="fullPreviewKicker">Custom Reports Preview</span>
+                    <h2 id="preview-dialog-title-M06002" data-label-key="fullPreviewTitle">맞춤형 보고서 전체 미리보기</h2>
+                    <p id="previewBasis-M06002">-</p>
+                </div>
+                <div class="m06002-preview-actions">
+                    <button id="downloadHtml-M06002" class="m06002-btn m06002-btn-secondary" type="button" data-format="html" disabled>
+                        <i class="fab fa-html5" aria-hidden="true"></i> HTML
+                    </button>
+                    <button id="downloadPdf-M06002" class="m06002-btn m06002-btn-secondary" type="button" data-format="pdf" disabled>
+                        <i class="fas fa-file-pdf" aria-hidden="true"></i> PDF
+                    </button>
+                    <button id="closePreview-M06002" class="m06002-btn m06002-btn-secondary" type="button">
+                        <i class="fas fa-xmark" aria-hidden="true"></i>
+                        <span data-label-key="closePreview">닫기</span>
+                    </button>
+                </div>
+            </header>
+            <div id="previewLoading-M06002" class="m06002-preview-loading" hidden>
+                <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+                <span data-label-key="loadingPreview">실제 보고서 데이터를 불러오는 중입니다...</span>
+            </div>
+            <div id="previewPages-M06002" class="m06002-preview-pages"></div>
+        </div>
+    </dialog>
+</div>

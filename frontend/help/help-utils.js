@@ -3,7 +3,7 @@
     const FLOW_WORK_PAGES = new Set(["M04001"]);
     const EDIT_WORK_PAGES = new Set([
         "M05001", "M05002", "M05003",
-        "M06001", "M06002", "M07001", "M07002", "M07003"
+        "M07001", "M07002", "M07003"
     ]);
     const REGISTERED_ROUTER_PAGES = new Set([
         "home", "M01001", "M01002", "M02001", "M02002",
@@ -27,8 +27,8 @@
         M05001: ["규칙 후보", "규칙 선정 상태", "사용자 정의 규칙", "규칙 마스터"],
         M05002: ["규칙 위반 데이터", "편집 세션", "INITUP$ 원본", "INITDN$ 수정 데이터"],
         M05003: ["에디팅 효과 검증", "운영 반영 DML", "승인/실행 상태", "에디팅 감사 이력"],
-        M06001: ["규칙 마스터", "실시간 규칙 위반 데이터", "INITUP$ 원본", "INITDN$ 수정 데이터"],
-        M06002: ["편집 작업", "수정 전후 값", "셀 수정 감사 이력"],
+        M06001: ["프로젝트·시나리오", "M04001 Flow 설계·실행 기준", "M04002 분석 결과", "M05001~M05003 에디팅 결과", "고정 20종 개별·통합 보고서"],
+        M06002: ["사용자 소유 맞춤형 보고서 템플릿", "용지·방향·레이아웃", "기본형 보고서 및 세부 블록 구성", "프로젝트·시나리오별 실제 미리보기"],
         M07001: ["INITUP$/INITDN$ 실행 컨텍스트", "에디팅 효과 검증", "규칙 위반 변화"],
         M07002: ["운영 반영 DML 버전", "DML 검증/실행 상태", "영향 행"],
         M07003: ["규칙 판단/수정/검증/반영 감사 이벤트", "사용자/시간/엔터티 정보"],
@@ -58,8 +58,8 @@
         M05001: ["발굴 규칙 서버 페이징 조회", "규칙 선정/제외", "규칙 마스터 및 사용자 규칙 검증/저장"],
         M05002: ["편집 작업 테이블 조회/생성", "최종 규칙 실시간 위반 SQL", "INITDN$ 셀 수정 저장", "수정 이력"],
         M05003: ["효과 검증 및 재분석 연결", "운영 반영 DML 생성/검증/저장/실행", "에디팅 감사 이력"],
-        M06001: ["M05002 오류 수정 탭과 동일한 공통 SQL"],
-        M06002: ["M05002 수정 이력 탭과 동일한 공통 SQL"],
+        M06001: ["프로젝트 카드 서버 페이징", "보고서 컨텍스트 접근 검증", "고정 보고서 가용성 집계", "개별·통합 기본형 보고서 상세·HTML/XLSX/PDF 생성"],
+        M06002: ["프로젝트 카드와 보고 기준 조회", "내 템플릿 목록·상세·저장·삭제", "기본형 보고서 카탈로그·블록 조회", "맞춤형 미리보기·HTML/PDF 생성"],
         M07001: ["M05003 효과 검증 탭과 동일한 공통 SQL"],
         M07002: ["M05003 운영 반영 탭과 동일한 공통 SQL"],
         M07003: ["M05003 전체 이력 탭과 동일한 공통 SQL"],
@@ -118,6 +118,8 @@
     }
 
     function getServiceFiles(pageCode) {
+        if (pageCode === "M06001") return ["backend/services/structured_report_service.py", "backend/services/structured_report_renderers.py"];
+        if (pageCode === "M06002") return ["backend/services/custom_report_service.py"];
         if (DATA_WORK_PAGES.has(pageCode)) return ["backend/services/data_work_router.py"];
         if (FLOW_WORK_PAGES.has(pageCode)) return ["backend/services/flow_work_router.py"];
         if (EDIT_WORK_PAGES.has(pageCode)) return ["backend/services/edit_work_service.py"];
@@ -163,7 +165,8 @@
                 commonService: "Common service",
                 sqlTemplate: "SQL template",
                 noRouter: "No registered API router or planned implementation",
-                noService: "None or handled by the screen router"
+                noService: "None or handled by the screen router",
+                noSql: "None (requirements pending)"
             },
             defaults: {
                 group: "Menu",
@@ -229,7 +232,8 @@
                 commonService: "공통 서비스",
                 sqlTemplate: "SQL 템플릿",
                 noRouter: "등록된 API 라우터 없음 또는 구현 예정",
-                noService: "없음 또는 화면 전용 라우터에서 직접 처리"
+                noService: "없음 또는 화면 전용 라우터에서 직접 처리",
+                noSql: "없음(요구사항 확정 후 추가 예정)"
             },
             defaults: {
                 group: "메뉴",
@@ -356,7 +360,7 @@
             `- ${text.implementation.frontendJs}: ${implementation.frontendJs}`,
             `- ${text.implementation.backendRouter}: ${implementation.backendRouter || text.implementation.noRouter}`,
             `- ${text.implementation.commonService}: ${serviceFiles.join(", ")}`,
-            `- ${text.implementation.sqlTemplate}: ${implementation.sqlFiles.join(", ")}`,
+            `- ${text.implementation.sqlTemplate}: ${implementation.sqlFiles.join(", ") || text.implementation.noSql}`,
             "",
             `## ${text.sections.sqlPurpose}`,
             toList(sqlPurposes),

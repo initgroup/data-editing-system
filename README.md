@@ -145,6 +145,28 @@ M91002의 `SERVER_RESOURCE_LIMITS` 카테고리에서는 같은 키를 사용자
 .\venv\Scripts\python.exe -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
+### Render 배포와 기본형·맞춤형 보고서 PDF
+
+`playwright.config.ts`의 `127.0.0.1:8000`은 UI 자동 테스트를 실행할 때만 사용하는 주소입니다. 기본형·맞춤형 보고서 PDF는 서버에서 HTML을 직접 Chromium에 전달하므로 Render 운영 URL을 이 파일에 설정하지 않습니다.
+
+Playwright 자체는 [Apache License 2.0](https://github.com/microsoft/playwright/blob/main/LICENSE)으로 제공되므로 상용 서비스에서도 사용할 수 있습니다. 제품 배포 시에는 Playwright와 함께 사용하는 Chromium 및 의존 패키지의 LICENSE/NOTICE 고지 의무도 릴리스 절차에서 함께 확인합니다.
+
+Render의 Python Web Service에서는 Dashboard의 **Build Command**를 다음과 같이 지정합니다.
+
+```bash
+bash scripts/render-build.sh
+```
+
+이 스크립트는 Python 및 Node 의존성을 설치하고, Playwright Chromium과 Linux 실행 의존성을 프로젝트 내부에 함께 설치합니다. **Start Command**는 기존 FastAPI 설정을 유지하되 외부 요청을 받을 수 있도록 `0.0.0.0`과 Render의 `PORT`를 사용해야 합니다.
+
+```bash
+uvicorn main:app --host 0.0.0.0 --port $PORT
+```
+
+기존 Target DB에는 배포 전에 `database/INIT_TARGET_ALTER.sql`을 적용해 M06002 사용자별 맞춤형 보고서 템플릿과 프로젝트 사용 이력 테이블을 생성합니다. 신규 Target DB는 `database/INIT_TARGET_DDL.sql`에 포함되어 있으며, 애플리케이션도 최초 사용 시 선택된 Target DB에서 두 테이블을 확인해 누락된 설치를 보완합니다.
+
+배포 후에는 M06001의 한국어 단건·통합 PDF와 M06002의 A4/A3 세로·가로 PDF를 각각 한 번 내려받아 Chromium 실행, 글꼴 표시, 페이지 방향과 메모리 사용량을 확인합니다. 운영 인스턴스의 메모리가 작다면 통합 PDF 동시 생성은 현재 설정처럼 한 번에 한 건으로 유지합니다.
+
 브라우저에서 `http://127.0.0.1:8000`을 엽니다. API 문서는 `http://127.0.0.1:8000/docs`에서 확인할 수 있습니다.
 
 Tailwind CSS를 수정할 때는 별도 터미널에서 빌드합니다.

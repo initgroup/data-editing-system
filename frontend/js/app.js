@@ -31,7 +31,7 @@ const PageManager = {
     dataWorkTemplatePages: ['M03001', 'M03002', 'M03003', 'M03004'],
     flowWorkTemplatePages: ['M04001'],
     anlyWorkTemplatePages: ['M04002'],
-    editWorkTemplatePages: ['M05001', 'M05002', 'M05003', 'M06001', 'M06002', 'M07001', 'M07002', 'M07003'],
+    editWorkTemplatePages: ['M05001', 'M05002', 'M05003', 'M07001', 'M07002', 'M07003'],
     sessionTimerId: null,
     isSessionExpiredHandling: false,
 

@@ -64,6 +64,8 @@ BEGIN
     truncate_table_if_exists('INIT$_TB_TABLE_COLUMN_MAP');
     truncate_table_if_exists('INIT$_TB_UPLOAD_TABLE_META');
     truncate_table_if_exists('INIT$_TB_TABLES');
+    truncate_table_if_exists('INIT$_TB_REPORT_TMPL_USE');
+    truncate_table_if_exists('INIT$_TB_REPORT_TEMPLATE');
     truncate_table_if_exists('INIT$_TB_SCENARIO');
     truncate_table_if_exists('INIT$_TB_OBJECT');
     truncate_table_if_exists('INIT$_TB_PROJECT');

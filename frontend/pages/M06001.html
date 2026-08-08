@@ -1,0 +1,184 @@
+<div class="page-container m06001-page" id="container-M06001">
+    <section id="projectView-M06001" class="m06001-view" aria-labelledby="structured-report-title-M06001">
+        <header class="m06001-hero">
+            <div class="m06001-hero-copy">
+                <span class="m06001-eyebrow" data-label-key="providerEyebrow">IN-DEPS Editing Report</span>
+                <h1 id="structured-report-title-M06001" data-label-key="structuredReportTitle">Basic Reports</h1>
+                <p data-label-key="structuredReportDescription">
+                    Select a project to review consistent editing reports across projects and scenarios.
+                </p>
+            </div>
+            <div class="m06001-provider-note">
+                <i class="fas fa-shield-halved" aria-hidden="true"></i>
+                <span data-label-key="providedByIndeps">Reports are provided by the IN-DEPS system.</span>
+            </div>
+        </header>
+
+        <form id="projectSearchForm-M06001" class="m06001-search-panel" role="search">
+            <label class="m06001-search-field" for="projectSearch-M06001">
+                <span data-label-key="projectSearchLabel">Search projects</span>
+                <span class="m06001-search-control">
+                    <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+                    <input
+                        id="projectSearch-M06001"
+                        type="search"
+                        autocomplete="off"
+                        placeholder="Project name, code, type, or description"
+                        data-placeholder-key="projectSearchPlaceholder"
+                    >
+                </span>
+            </label>
+            <div class="m06001-search-actions">
+                <button id="projectSearchReset-M06001" class="m06001-btn m06001-btn-secondary" type="button">
+                    <i class="fas fa-rotate-left" aria-hidden="true"></i>
+                    <span data-label-key="resetSearch">Reset</span>
+                </button>
+                <button class="m06001-btn m06001-btn-primary" type="submit">
+                    <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+                    <span data-label-key="search">Search</span>
+                </button>
+            </div>
+        </form>
+
+        <div class="m06001-list-heading">
+            <div>
+                <h2 data-label-key="projectListTitle">Projects</h2>
+                <p data-label-key="projectListDescription">Twenty projects are loaded at a time as you scroll.</p>
+            </div>
+            <p id="projectResultSummary-M06001" class="m06001-result-summary" role="status" aria-live="polite"></p>
+        </div>
+
+        <div id="projectGrid-M06001" class="m06001-card-grid m06001-project-grid" role="list" aria-busy="false"></div>
+
+        <div id="projectEmpty-M06001" class="m06001-empty-state" hidden>
+            <i class="far fa-folder-open" aria-hidden="true"></i>
+            <strong data-label-key="projectEmptyTitle">No projects found</strong>
+            <span data-label-key="projectEmptyDescription">Try another keyword or reset the search.</span>
+        </div>
+
+        <div id="projectLoadState-M06001" class="m06001-load-state" aria-live="polite">
+            <span id="projectLoadSpinner-M06001" class="m06001-inline-loading" hidden>
+                <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+                <span data-label-key="loadingMoreProjects">Loading more projects...</span>
+            </span>
+            <button id="projectLoadMore-M06001" class="m06001-btn m06001-btn-secondary" type="button" hidden>
+                <span data-label-key="loadMoreProjects">Load more projects</span>
+                <i class="fas fa-chevron-down" aria-hidden="true"></i>
+            </button>
+            <div id="projectLoadSentinel-M06001" class="m06001-load-sentinel" aria-hidden="true"></div>
+        </div>
+    </section>
+
+    <section id="reportView-M06001" class="m06001-view" aria-labelledby="report-catalog-title-M06001" hidden>
+        <header class="m06001-detail-header">
+            <button id="backToProjects-M06001" class="m06001-back-btn" type="button">
+                <i class="fas fa-arrow-left" aria-hidden="true"></i>
+                <span data-label-key="backToProjects">Back to projects</span>
+            </button>
+            <div>
+                <span class="m06001-eyebrow" data-label-key="reportCatalogEyebrow">Standard report catalog</span>
+                <h1 id="report-catalog-title-M06001" data-label-key="reportCatalogTitle">Basic Reports Catalog</h1>
+                <p data-label-key="reportCatalogDescription">
+                    The same report definitions and metrics are provided for every editing project.
+                </p>
+            </div>
+        </header>
+
+        <div id="contextGrid-M06001" class="m06001-context-grid" aria-busy="false">
+            <article class="m06001-context-card m06001-project-context" aria-labelledby="project-context-title-M06001">
+                <div class="m06001-context-card-heading">
+                    <span class="m06001-context-icon"><i class="fas fa-folder-tree" aria-hidden="true"></i></span>
+                    <div>
+                        <span class="m06001-context-kicker" data-label-key="projectContextLabel">Project</span>
+                        <h2 id="project-context-title-M06001">-</h2>
+                    </div>
+                </div>
+                <p id="projectContextDescription-M06001" class="m06001-context-description">-</p>
+                <dl id="projectContextMeta-M06001" class="m06001-context-meta"></dl>
+            </article>
+
+            <article class="m06001-context-card m06001-selection-context" aria-labelledby="scenario-context-title-M06001">
+                <div class="m06001-context-card-heading">
+                    <span class="m06001-context-icon"><i class="fas fa-route" aria-hidden="true"></i></span>
+                    <div>
+                        <span class="m06001-context-kicker" data-label-key="scenarioContextLabel">Scenario and report basis</span>
+                        <h2 id="scenario-context-title-M06001" data-label-key="scenarioContextTitle">Scenario / Run selection</h2>
+                    </div>
+                </div>
+                <div class="m06001-context-fields">
+                    <label>
+                        <span data-label-key="scenario">Scenario</span>
+                        <select id="scenarioId-M06001"></select>
+                    </label>
+                    <label>
+                        <span data-label-key="flowRun">Rule discovery run</span>
+                        <select id="flowRunId-M06001"></select>
+                    </label>
+                    <label>
+                        <span data-label-key="editSession">Editing session</span>
+                        <select id="editSessionId-M06001"></select>
+                    </label>
+                </div>
+                <p id="selectionHint-M06001" class="m06001-selection-hint" role="status" aria-live="polite"></p>
+            </article>
+        </div>
+
+        <section class="m06001-batch-panel" aria-labelledby="batch-report-title-M06001">
+            <span class="m06001-batch-icon" aria-hidden="true">
+                <i class="fas fa-layer-group"></i>
+            </span>
+            <div class="m06001-batch-copy">
+                <span class="m06001-context-kicker" data-label-key="batchReportKicker">All-in-one report</span>
+                <h2 id="batch-report-title-M06001" data-label-key="batchReportTitle">Create all reports</h2>
+                <p id="batch-report-description-M06001" data-label-key="batchReportDescription">
+                    Review all 20 reports in one continuous document and download them together as HTML, XLSX, or PDF.
+                </p>
+                <p id="batchReportStatus-M06001" class="m06001-batch-status" role="status" aria-live="polite"></p>
+            </div>
+            <div class="m06001-batch-actions">
+                <div class="m06001-format-list" aria-label="Available integrated report download formats" data-aria-label-key="batchAvailableFormats">
+                    <span>HTML</span>
+                    <span>XLSX</span>
+                    <span>PDF</span>
+                </div>
+                <button
+                    id="openBatchReport-M06001"
+                    class="m06001-btn m06001-btn-batch"
+                    type="button"
+                    aria-describedby="batch-report-description-M06001 batchReportStatus-M06001"
+                    disabled
+                >
+                    <i class="fas fa-file-circle-plus" aria-hidden="true"></i>
+                    <span data-label-key="openBatchReport">Create all reports</span>
+                    <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i>
+                </button>
+            </div>
+        </section>
+
+        <div class="m06001-list-heading m06001-report-heading">
+            <div>
+                <h2 data-label-key="fixedReportsTitle">Fixed Basic Reports</h2>
+                <p data-label-key="fixedReportsDescription">
+                    Reports remain in a fixed order, including no-data and not-applicable states.
+                </p>
+            </div>
+            <div class="m06001-format-list" aria-label="Available download formats" data-aria-label-key="availableFormats">
+                <span>HTML</span>
+                <span>XLSX</span>
+                <span>PDF</span>
+            </div>
+        </div>
+
+        <div id="reportGrid-M06001" class="m06001-card-grid m06001-report-grid" role="list" aria-busy="false"></div>
+
+        <div id="reportEmpty-M06001" class="m06001-empty-state" hidden>
+            <i class="far fa-file-lines" aria-hidden="true"></i>
+            <strong data-label-key="reportEmptyTitle">The report catalog is unavailable</strong>
+            <span data-label-key="reportEmptyDescription">Refresh the context or try again later.</span>
+            <button id="retryCatalog-M06001" class="m06001-btn m06001-btn-secondary" type="button">
+                <i class="fas fa-rotate" aria-hidden="true"></i>
+                <span data-label-key="retry">Retry</span>
+            </button>
+        </div>
+    </section>
+</div>
