@@ -1054,6 +1054,8 @@
         const timeoutId = window.setTimeout(() => state.downloadController?.abort(), state.isBatch ? 300000 : 180000);
         ui.downloadButtons.forEach((item) => { item.disabled = true; });
         button.setAttribute("aria-busy", "true");
+        ui.basis.classList.add("is-loading");
+        ui.basis.setAttribute("aria-busy", "true");
         ui.basis.textContent = t("downloading", { format: normalizedFormat.toUpperCase() });
 
         try {
@@ -1099,6 +1101,8 @@
             state.downloadController = null;
             ui.downloadButtons.forEach((item) => { item.disabled = false; });
             button.removeAttribute("aria-busy");
+            ui.basis.classList.remove("is-loading");
+            ui.basis.removeAttribute("aria-busy");
             if (!ui.basis.classList.contains("is-error")) ui.basis.textContent = originalBasis;
         }
     }
