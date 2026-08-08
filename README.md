@@ -161,6 +161,8 @@ Git 자동 배포는 새 커밋으로 기존 Build Command를 실행할 뿐, Das
 
 이 스크립트는 Python 및 Node 의존성을 설치하고, Playwright Chromium을 프로젝트 내부에 설치합니다. Render Native Python 빌드는 root/su 권한을 제공하지 않으므로 `playwright install --with-deps`는 사용하지 않습니다. 마지막에는 실제 Chromium으로 작은 PDF를 생성하며, Build 로그에 `Playwright Chromium PDF smoke test passed.`가 없으면 해당 배포를 정상 PDF 배포로 판단하지 않습니다. **Start Command**는 기존 FastAPI 설정을 유지하되 외부 요청을 받을 수 있도록 `0.0.0.0`과 Render의 `PORT`를 사용해야 합니다.
 
+PDF 한글은 운영체제 글꼴이나 외부 폰트 URL에 의존하지 않습니다. `npm ci`가 OFL-1.1 라이선스의 `@fontsource-variable/noto-sans-kr`를 설치하고, PDF 생성 시 필요한 Noto Sans KR 글꼴 데이터를 HTML에 직접 내장합니다. 한글이 포함된 PDF에서는 Chromium이 내장 글꼴을 확인하지 못하면 깨진 문서를 반환하지 않고 렌더링 오류로 중단합니다.
+
 ```bash
 uvicorn main:app --host 0.0.0.0 --port $PORT
 ```

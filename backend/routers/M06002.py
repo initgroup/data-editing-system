@@ -263,7 +263,7 @@ def download_saved_template(
             edit_session_id=editSessionId,
             language=lang,
         )
-        html_content = render_custom_preview_html(preview)
+        html_content = render_custom_preview_html(preview, embed_fonts=format == "pdf")
         content = html_content if format == "html" else render_report_pdf(html_content, batch=True)
         extension = "html" if format == "html" else "pdf"
         media_type = "text/html; charset=utf-8" if format == "html" else "application/pdf"

@@ -12,6 +12,11 @@ npm ci
 # OS package manager and fail with an authentication error.
 npx playwright install chromium
 
+if [[ ! -f "node_modules/@fontsource-variable/noto-sans-kr/index.css" ]]; then
+    echo "Bundled Noto Sans KR report font is missing." >&2
+    exit 1
+fi
+
 # Fail the deployment during the build, instead of discovering a missing
 # browser/runtime only after a user requests a PDF in production.
 pdf_smoke_file="$(mktemp)"

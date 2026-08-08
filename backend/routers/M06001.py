@@ -171,7 +171,7 @@ def download_batch_report(
             media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             extension = "xlsx"
         else:
-            html_content = render_report_bundle_html(document)
+            html_content = render_report_bundle_html(document, embed_fonts=True)
             content = render_report_pdf(html_content, batch=True)
             media_type = "application/pdf"
             extension = "pdf"
@@ -261,7 +261,7 @@ def download_report(
             media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             extension = "xlsx"
         else:
-            html_content = render_report_html(document)
+            html_content = render_report_html(document, embed_fonts=True)
             content = render_report_pdf(html_content)
             media_type = "application/pdf"
             extension = "pdf"

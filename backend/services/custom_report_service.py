@@ -15,6 +15,7 @@ from fastapi import HTTPException, Request
 from backend.auth_context import get_request_user_id
 from backend.database_helper import SqlLoader
 from backend.target_database import get_target_db_connection
+from backend.services.report_fonts import REPORT_FONT_FAMILY, embedded_korean_font_css
 from backend.services.report_i18n import normalize_report_language
 from backend.services.structured_report_service import (
     REPORT_BY_CODE,
@@ -968,9 +969,10 @@ def _render_compact_preview_block(block: dict[str, Any], labels: dict[str, str])
     )
 
 
-def render_custom_preview_html(preview: dict[str, Any]) -> bytes:
+def render_custom_preview_html(preview: dict[str, Any], *, embed_fonts: bool = False) -> bytes:
     language = normalize_report_language(preview.get("language"))
     labels = _custom_labels(language)
+    font_css = embedded_korean_font_css() if embed_fonts else ""
     template = preview.get("template") or {}
     page = preview.get("page") or {}
     provider = preview.get("provider") or REPORT_PROVIDER
@@ -1039,13 +1041,14 @@ def render_custom_preview_html(preview: dict[str, Any]) -> bytes:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; font-src data:; img-src data:">
   <title>{_escape(template.get("name") or labels["customReport"])}</title>
   <style>
+    {font_css}
     @page {{ size: {paper_size} {orientation}; margin: 9mm; }}
     :root {{ --ink:#172033; --muted:#64748b; --line:#d8e2ef; --brand:#174a87; --soft:#f4f7fb; }}
     * {{ box-sizing:border-box; min-width:0; }}
-    body {{ margin:0; color:var(--ink); background:#edf2f7; font-family:"Noto Sans KR","Malgun Gothic",sans-serif; line-height:1.45; overflow-x:hidden; }}
+    body {{ margin:0; color:var(--ink); background:#edf2f7; font-family:"{REPORT_FONT_FAMILY}","Noto Sans KR","Malgun Gothic",sans-serif; line-height:1.45; overflow-x:hidden; }}
     .document {{ width:min(1480px,calc(100% - 28px)); margin:20px auto; }}
     .cover {{ width:min(100%,{page_width_mm}mm); min-height:min(calc(100vh - 40px),{page_height_mm}mm); margin:0 auto 18px; padding:28px; background:#fff; }}
     .document-header {{ padding-bottom:18px; border-bottom:3px solid var(--brand); }}

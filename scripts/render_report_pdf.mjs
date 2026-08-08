@@ -82,6 +82,16 @@ try {
     await page.setContent(html, { waitUntil: "load", timeout: CONTENT_TIMEOUT_MS });
     await page.evaluate(async () => {
         if (document.fonts?.ready) await document.fonts.ready;
+        const containsKorean = /[\uac00-\ud7a3]/u.test(document.body?.textContent || "");
+        if (!containsKorean) return;
+        const bundledFamily = "IN-DEPS Noto Sans KR";
+        const hasBundledFace = Array.from(document.fonts || []).some((face) => (
+            String(face.family || "").replace(/["']/g, "") === bundledFamily
+        ));
+        const bundledFaceReady = document.fonts?.check?.(`16px "${bundledFamily}"`, "한글 보고서") === true;
+        if (!hasBundledFace || !bundledFaceReady) {
+            throw new Error("Bundled Korean PDF font is not available.");
+        }
     });
     const pdf = await page.pdf({
         format: "A4",

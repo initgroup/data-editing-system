@@ -19,6 +19,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
+from backend.services.report_fonts import REPORT_FONT_FAMILY, embedded_korean_font_css
 from backend.services.report_i18n import REPORT_UI_TEXT, normalize_report_language
 
 
@@ -101,7 +102,7 @@ def _context_name(document: dict[str, Any]) -> tuple[str, str]:
     return str(project_name), str(scenario_name)
 
 
-def render_report_html(document: dict[str, Any]) -> bytes:
+def render_report_html(document: dict[str, Any], *, embed_fonts: bool = False) -> bytes:
     report = document.get("report") or {}
     provider = document.get("provider") or {}
     context = document.get("context") or {}
@@ -113,6 +114,7 @@ def render_report_html(document: dict[str, Any]) -> bytes:
     definitions = document.get("definitions") or []
     language = _report_language(document)
     labels = _report_labels(document)
+    font_css = embedded_korean_font_css() if embed_fonts else ""
     max_table_columns = max(
         (len(section.get("columns") or []) for section in sections if section.get("type") != "text"),
         default=0,
@@ -184,13 +186,14 @@ def render_report_html(document: dict[str, Any]) -> bytes:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; font-src data:; img-src data:">
   <title>{_escape(provider.get('name'))} {_escape(report.get('code'))} {_escape(report.get('title'))}</title>
   <style>
+    {font_css}
     @page {{ size: {page_size}; margin: {page_margin}; }}
     :root {{ color-scheme: light; --ink:#172033; --muted:#64748b; --line:#dbe3ee; --brand:#0f766e; --soft:#f4f8fb; }}
     * {{ box-sizing:border-box; }}
-    body {{ margin:0; color:var(--ink); background:#eef3f7; font-family:"Noto Sans KR","Malgun Gothic","Apple SD Gothic Neo",sans-serif; line-height:1.55; }}
+    body {{ margin:0; color:var(--ink); background:#eef3f7; font-family:"{REPORT_FONT_FAMILY}","Noto Sans KR","Malgun Gothic","Apple SD Gothic Neo",sans-serif; line-height:1.55; }}
     .page {{ width:min(1180px, calc(100% - 32px)); margin:24px auto; padding:42px; background:#fff; border:1px solid var(--line); border-radius:18px; box-shadow:0 18px 50px rgba(15,23,42,.08); }}
     .brand {{ display:flex; justify-content:space-between; gap:18px; align-items:flex-start; padding-bottom:22px; border-bottom:3px solid var(--brand); }}
     .brand-name {{ color:var(--brand); font-size:14px; font-weight:900; letter-spacing:.12em; }}
@@ -363,7 +366,7 @@ def _render_bundle_sections(document: dict[str, Any]) -> str:
     return "".join(rendered)
 
 
-def render_report_bundle_html(document: dict[str, Any]) -> bytes:
+def render_report_bundle_html(document: dict[str, Any], *, embed_fonts: bool = False) -> bytes:
     provider = document.get("provider") or {}
     bundle = document.get("bundle") or {}
     context = document.get("context") or {}
@@ -373,6 +376,7 @@ def render_report_bundle_html(document: dict[str, Any]) -> bytes:
     project_name, scenario_name = _context_name(document)
     language = _report_language(document)
     labels = _report_labels(document)
+    font_css = embedded_korean_font_css() if embed_fonts else ""
 
     summary_items = [
         (labels["total"], summary.get("totalCount")),
@@ -431,14 +435,15 @@ def render_report_bundle_html(document: dict[str, Any]) -> bytes:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; font-src data:; img-src data:">
   <title>{_escape(provider.get('name'))} {_escape(bundle.get('title'))}</title>
   <style>
+    {font_css}
     @page {{ size:A4 landscape; margin:10mm 8mm 12mm; }}
     :root {{ color-scheme:light; --ink:#172033; --muted:#64748b; --line:#dbe3ee; --brand:#174a87; --soft:#f3f7fb; }}
     * {{ box-sizing:border-box; min-width:0; }}
     html,body {{ max-width:100%; overflow-x:hidden; }}
-    body {{ margin:0; color:var(--ink); background:#eef3f7; font-family:"Noto Sans KR","Malgun Gothic","Apple SD Gothic Neo",sans-serif; line-height:1.5; }}
+    body {{ margin:0; color:var(--ink); background:#eef3f7; font-family:"{REPORT_FONT_FAMILY}","Noto Sans KR","Malgun Gothic","Apple SD Gothic Neo",sans-serif; line-height:1.5; }}
     .page {{ width:min(1240px,calc(100% - 32px)); margin:24px auto; padding:40px; background:#fff; border:1px solid var(--line); border-radius:18px; box-shadow:0 18px 50px rgba(15,23,42,.08); }}
     .bundle-header {{ padding-bottom:24px; border-bottom:4px solid var(--brand); }}
     .brand-name {{ color:var(--brand); font-size:13px; font-weight:900; letter-spacing:.12em; }}
