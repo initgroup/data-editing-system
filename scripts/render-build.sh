@@ -8,3 +8,18 @@ export PLAYWRIGHT_BROWSERS_PATH=0
 python -m pip install -r requirements.txt
 npm ci
 npx playwright install --with-deps chromium
+
+# Fail the deployment during the build, instead of discovering a missing
+# browser/runtime only after a user requests a PDF in production.
+pdf_smoke_file="$(mktemp)"
+cleanup_pdf_smoke() {
+    rm -f "${pdf_smoke_file}"
+}
+trap cleanup_pdf_smoke EXIT
+printf '<!doctype html><html><body><h1>IN-DEPS PDF smoke test</h1></body></html>' \
+    | node scripts/render_report_pdf.mjs > "${pdf_smoke_file}"
+if [[ "$(head -c 5 "${pdf_smoke_file}")" != "%PDF-" ]]; then
+    echo "Playwright Chromium PDF smoke test failed." >&2
+    exit 1
+fi
+echo "Playwright Chromium PDF smoke test passed."

@@ -34,6 +34,8 @@
             invalidContext: "The report code and project context are required.",
             downloadFailed: "The {format} download failed.",
             downloadTimeout: "The report download timed out. Please try again.",
+            pdfRendererUnavailable: "The production PDF renderer is not ready. Verify the server deployment configuration.",
+            pdfRendererTimeout: "The production PDF renderer timed out. Please try again shortly.",
             downloading: "Preparing {format}...",
             noDataTitle: "No report data",
             noDataDescription: "There is no data for the selected report basis. The fixed report definition remains available for comparison.",
@@ -97,6 +99,8 @@
             invalidContext: "보고서 코드와 프로젝트 정보가 필요합니다.",
             downloadFailed: "{format} 다운로드에 실패했습니다.",
             downloadTimeout: "보고서 다운로드 시간이 초과되었습니다. 다시 시도해 주세요.",
+            pdfRendererUnavailable: "운영 PDF 렌더러가 준비되지 않았습니다. 서버 배포 설정을 확인해 주세요.",
+            pdfRendererTimeout: "운영 PDF 렌더러의 처리 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.",
             downloading: "{format} 파일을 준비하고 있습니다...",
             noDataTitle: "보고서 데이터가 없습니다",
             noDataDescription: "선택한 기준에 해당하는 데이터가 없습니다. 비교를 위해 고정 보고서 정의는 그대로 유지됩니다.",
@@ -316,6 +320,12 @@
         return text.trim() || `${response.status} ${response.statusText}`;
     }
 
+    async function responseError(response) {
+        const error = new Error(await parseErrorResponse(response));
+        error.status = response.status;
+        return error;
+    }
+
     async function loadReport() {
         if (!state.projectId || (!state.isBatch && !state.reportCode)) {
             showError(t(state.isBatch ? "batchInvalidContext" : "invalidContext"));
@@ -338,7 +348,7 @@
                 cache: "no-store",
                 signal: requestController.signal
             });
-            if (!response.ok) throw new Error(await parseErrorResponse(response));
+            if (!response.ok) throw await responseError(response);
             const json = await response.json();
             const payload = json?.data ?? json;
             state.model = payload?.document && typeof payload.document === "object" ? payload.document : payload;
@@ -1056,7 +1066,7 @@
                 cache: "no-store",
                 signal: state.downloadController.signal
             });
-            if (!response.ok) throw new Error(await parseErrorResponse(response));
+            if (!response.ok) throw await responseError(response);
             const blob = await response.blob();
             const filename = responseFilename(response.headers.get("content-disposition"), normalizedFormat);
             const objectUrl = URL.createObjectURL(blob);
@@ -1069,14 +1079,20 @@
             link.remove();
             window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
         } catch (error) {
-            ui.basis.textContent = error?.name === "AbortError"
-                ? t("downloadTimeout")
-                : localizedError(error, "downloadFailed", { format: normalizedFormat.toUpperCase() });
+            if (error?.name === "AbortError") {
+                ui.basis.textContent = t("downloadTimeout");
+            } else if (normalizedFormat === "pdf" && error?.status === 503) {
+                ui.basis.textContent = t("pdfRendererUnavailable");
+            } else if (normalizedFormat === "pdf" && error?.status === 504) {
+                ui.basis.textContent = t("pdfRendererTimeout");
+            } else {
+                ui.basis.textContent = localizedError(error, "downloadFailed", { format: normalizedFormat.toUpperCase() });
+            }
             ui.basis.classList.add("is-error");
             window.setTimeout(() => {
                 ui.basis.classList.remove("is-error");
                 renderBasis();
-            }, 4500);
+            }, 12000);
         } finally {
             window.clearTimeout(timeoutId);
             state.downloading = false;

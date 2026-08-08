@@ -157,7 +157,9 @@ Render의 Python Web Service에서는 Dashboard의 **Build Command**를 다음�
 bash scripts/render-build.sh
 ```
 
-이 스크립트는 Python 및 Node 의존성을 설치하고, Playwright Chromium과 Linux 실행 의존성을 프로젝트 내부에 함께 설치합니다. **Start Command**는 기존 FastAPI 설정을 유지하되 외부 요청을 받을 수 있도록 `0.0.0.0`과 Render의 `PORT`를 사용해야 합니다.
+Git 자동 배포는 새 커밋으로 기존 Build Command를 실행할 뿐, Dashboard에 저장된 Build Command 자체를 저장소 내용으로 변경하지 않습니다. 기존 서비스가 `pip install -r requirements.txt`만 실행하고 있다면 위 명령으로 직접 변경한 뒤 **Clear build cache & deploy**를 한 번 수행해야 합니다.
+
+이 스크립트는 Python 및 Node 의존성을 설치하고, Playwright Chromium과 Linux 실행 의존성을 프로젝트 내부에 함께 설치합니다. 마지막에는 실제 Chromium으로 작은 PDF를 생성하며, Build 로그에 `Playwright Chromium PDF smoke test passed.`가 없으면 해당 배포를 정상 PDF 배포로 판단하지 않습니다. **Start Command**는 기존 FastAPI 설정을 유지하되 외부 요청을 받을 수 있도록 `0.0.0.0`과 Render의 `PORT`를 사용해야 합니다.
 
 ```bash
 uvicorn main:app --host 0.0.0.0 --port $PORT

@@ -62,7 +62,10 @@ try {
         chunks.push(chunk);
     }
     const html = Buffer.concat(chunks).toString("utf8");
-    browser = await chromium.launch({ headless: true });
+    browser = await chromium.launch({
+        headless: true,
+        args: ["--disable-dev-shm-usage"]
+    });
     const context = await browser.newContext({
         javaScriptEnabled: false,
         serviceWorkers: "block"
