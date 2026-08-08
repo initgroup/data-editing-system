@@ -7,7 +7,10 @@ export PLAYWRIGHT_BROWSERS_PATH=0
 
 python -m pip install -r requirements.txt
 npm ci
-npx playwright install --with-deps chromium
+# Render native runtimes do not grant root/su during builds. Installing the
+# Playwright browser itself is user-scoped; `--with-deps` would try to use the
+# OS package manager and fail with an authentication error.
+npx playwright install chromium
 
 # Fail the deployment during the build, instead of discovering a missing
 # browser/runtime only after a user requests a PDF in production.
