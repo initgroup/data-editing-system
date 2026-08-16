@@ -122,6 +122,16 @@ _REPORT_KPI_CODES: dict[str, frozenset[str]] = {
     "R20": frozenset(
         {"SCENARIO_COUNT", "MATCHED_CONTEXT_COUNT", "TOTAL_RULE_COUNT", "FINAL_RULE_COUNT", "APPLIED_CHANGE_COUNT"}
     ),
+    "R21": frozenset(
+        {
+            "STATISTICS_COLUMN_COUNT",
+            "HIGH_PRIORITY_COLUMN_COUNT",
+            "VIOLATION_COLUMN_COUNT",
+            "TOTAL_VIOLATION_COUNT",
+            "DECREASED_VARIANCE_COLUMN_COUNT",
+            "INCREASED_VARIANCE_COLUMN_COUNT",
+        }
+    ),
 }
 
 def _read_lob(value: Any) -> Any:
@@ -237,7 +247,7 @@ def validate_layout(layout: Any) -> dict[str, Any]:
 
         report_code = str(item.get("reportCode") or "").strip().upper()
         if report_code not in _REPORT_CODES:
-            raise HTTPException(status_code=422, detail="Layout can only contain report codes R01 through R20.")
+            raise HTTPException(status_code=422, detail="Layout can only contain report codes R01 through R21.")
         if report_code in report_codes:
             raise HTTPException(status_code=422, detail="Each report code can be placed only once.")
 
@@ -717,6 +727,7 @@ def get_designer_catalog(
     reports = []
     for index, document in enumerate(bundle.get("reports") or []):
         report = document.get("report") or {}
+        report_code = str(report.get("code") or "").strip().upper()
         availability = json_compatible(document.get("availability") or {})
         reports.append(
             {
@@ -727,12 +738,12 @@ def get_designer_catalog(
                 "dataCount": availability.get("dataCount"),
                 "availabilityDetail": availability,
                 "blocks": _block_entries(document, include_data=False),
-                "allowedBlockKeys": sorted(_allowed_block_keys(str(report.get("code") or "").upper())),
+                "allowedBlockKeys": sorted(_allowed_block_keys(report_code)),
                 "defaultPlacement": {
-                    "x": (index % 2) * 6,
+                    "x": 0 if report_code == "R21" else (index % 2) * 6,
                     "y": (index // 2) * 8,
-                    "w": 6,
-                    "h": 8,
+                    "w": 12 if report_code == "R21" else 6,
+                    "h": 20 if report_code == "R21" else 8,
                 },
             }
         )

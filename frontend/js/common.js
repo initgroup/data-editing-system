@@ -536,9 +536,12 @@ const CommonUtils = {
         };
 
         if (status === 404) {
-            return isApiRequest
+            const friendly = isApiRequest
                 ? CommonUI.t("commonUi.errors.apiNotFound", "The requested feature (API) was not found. Check that the screen and server versions match.")
                 : CommonUI.t("commonUi.errors.pageNotFound", "The requested page file was not found. Check the page file connection.");
+            return lower === "not found" || lower === "request failed."
+                ? friendly
+                : appendDetail(friendly);
         }
 
         if ([502, 503, 504].includes(status)) {

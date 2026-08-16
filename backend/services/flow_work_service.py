@@ -405,6 +405,162 @@ def list_runs(conn, menu_code: str, project_id: int, scenario_id: int, flow_id: 
     return response
 
 
+def _quick_history_int(value: Any) -> Optional[int]:
+    try:
+        return int(value) if value is not None and str(value).strip() else None
+    except (TypeError, ValueError):
+        return None
+
+
+def list_quick_edit_history(
+    conn,
+    menu_code: str,
+    user_id: int,
+    include_all_users: bool,
+    page: int,
+    page_size: int,
+    flow_run_id: Optional[int] = None,
+) -> Dict[str, Any]:
+    offset = max(0, (page - 1) * page_size)
+    result = execute_query(conn, "FLOW_WORK_QUICK_EDIT_HISTORY", {
+        "menuCode": normalize_menu_code(menu_code),
+        "userId": user_id,
+        "includeAllUsers": "Y" if include_all_users else "N",
+        "flowRunId": flow_run_id,
+        "offset": offset,
+        "endRow": offset + page_size,
+    })
+    response = data_work.require_success(result, "Quick Editing history query failed.")
+    rows = response.get("data") or []
+    for row in rows:
+        row["MESSAGE"] = data_work.read_lob(row.get("MESSAGE"))
+    total = _quick_history_int(rows[0].get("TOTAL_COUNT")) if rows else 0
+    return {
+        "status": "success",
+        "data": rows,
+        "total": total or 0,
+        "page": page,
+        "pageSize": page_size,
+    }
+
+
+def build_quick_edit_history_detail(run_row: Dict[str, Any], node_rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+    run_status = normalize_status(run_row.get("STATUS"), "PENDING")
+    failed_statuses = {"FAILED", "ERROR", "CANCELLED"}
+    active_statuses = {"PENDING", "QUEUED", "SUBMITTED", "STARTED", "RUNNING", "IN_PROGRESS"}
+    plan_data = parse_json(run_row.get("PLAN_JSON"), {})
+    plan_steps = plan_data.get("plan") if isinstance(plan_data, dict) else []
+    job_ids = []
+    for step in plan_steps if isinstance(plan_steps, list) else []:
+        if not isinstance(step, dict):
+            continue
+        job_id = _quick_history_int(step.get("refWorkJobId") or step.get("REF_WORK_JOB_ID"))
+        if job_id and job_id not in job_ids:
+            job_ids.append(job_id)
+    for node in node_rows:
+        job_id = _quick_history_int(node.get("REF_WORK_JOB_ID"))
+        if job_id and job_id not in job_ids:
+            job_ids.append(job_id)
+
+    if run_status == "SUCCESS":
+        completed_steps = list(range(8))
+        current_step = 7
+        pipeline_status = "success"
+    elif run_status in failed_statuses:
+        completed_steps = list(range(6))
+        current_step = 6
+        pipeline_status = "failed"
+    else:
+        completed_steps = list(range(6))
+        current_step = 6
+        pipeline_status = "running" if run_status in active_statuses else "warning"
+
+    file_name = str(run_row.get("FILE_NAME") or "").strip()
+    file_size = _quick_history_int(run_row.get("FILE_SIZE")) or 0
+    node_count = _quick_history_int(run_row.get("NODE_COUNT")) or len(node_rows)
+    success_node_count = _quick_history_int(run_row.get("SUCCESS_NODE_COUNT")) or sum(
+        1 for node in node_rows if normalize_status(node.get("STATUS"), "PENDING") == "SUCCESS"
+    )
+    failed_node_count = _quick_history_int(run_row.get("FAILED_NODE_COUNT")) or sum(
+        1 for node in node_rows if normalize_status(node.get("STATUS"), "PENDING") in failed_statuses
+    )
+    project_id = _quick_history_int(run_row.get("PROJECT_ID"))
+    scenario_id = _quick_history_int(run_row.get("SCENARIO_ID"))
+    scenario_table_id = _quick_history_int(run_row.get("SCENARIO_TABLE_ID"))
+    flow_id = _quick_history_int(run_row.get("FLOW_ID"))
+    flow_run_id = _quick_history_int(run_row.get("FLOW_RUN_ID"))
+    row_count = _quick_history_int(run_row.get("ESTIMATED_ROW_COUNT"))
+    message = str(run_row.get("MESSAGE") or "").strip()
+    owner_name = str(run_row.get("OWNER_NAME") or "").strip()
+    table_name = str(run_row.get("TABLE_NAME") or "").strip()
+
+    step_statuses = ["SUCCESS"] * 6 + [run_status, "SUCCESS" if run_status == "SUCCESS" else "PENDING"]
+    step_messages = [
+        file_name or f"{owner_name}.{table_name} 원본 데이터",
+        str(run_row.get("PROJECT_NAME") or run_row.get("PROJECT_CODE") or "프로젝트"),
+        str(run_row.get("SCENARIO_NAME") or run_row.get("SCENARIO_CODE") or "시나리오"),
+        f"{owner_name}.{table_name}",
+        f"저장 모델 {len(job_ids) or (_quick_history_int(run_row.get('JOB_COUNT')) or 0)}개",
+        str(run_row.get("FLOW_NAME") or "자동 저장 FLOW"),
+        message or f"FLOW 실행 #{flow_run_id or '-'}",
+        "저장된 규칙 결과를 조회할 수 있습니다." if run_status == "SUCCESS" else "실행 완료 후 결과를 조회할 수 있습니다.",
+    ]
+    steps = [
+        {
+            "index": index,
+            "key": key,
+            "status": step_statuses[index],
+            "message": step_messages[index],
+        }
+        for index, key in enumerate(("upload", "project", "scenario", "table", "models", "flow", "run", "results"))
+    ]
+
+    public_run = {key: value for key, value in run_row.items() if key != "PLAN_JSON"}
+    return {
+        "run": public_run,
+        "nodes": node_rows,
+        "steps": steps,
+        "restoreState": {
+            "status": pipeline_status,
+            "currentStep": current_step,
+            "completedSteps": completed_steps,
+            "stepProgress": 0,
+            "workspaceMode": "existing",
+            "fileMeta": {"name": file_name, "size": file_size, "type": ""} if file_name else None,
+            "uploadId": None,
+            "projectId": project_id,
+            "projectCode": str(run_row.get("PROJECT_CODE") or ""),
+            "projectName": str(run_row.get("PROJECT_NAME") or ""),
+            "scenarioId": scenario_id,
+            "scenarioCode": str(run_row.get("SCENARIO_CODE") or ""),
+            "scenarioName": str(run_row.get("SCENARIO_NAME") or ""),
+            "tableOwner": owner_name,
+            "tableName": table_name,
+            "rowCount": row_count,
+            "scenarioTableId": scenario_table_id,
+            "jobIds": job_ids,
+            "flowId": flow_id,
+            "flowName": str(run_row.get("FLOW_NAME") or ""),
+            "flowRunId": flow_run_id,
+            "runRequestToken": "",
+            "previousFlowRunIds": [],
+            "lastRunStatus": run_status,
+            "lastRunMessage": message,
+            "resultArtifacts": None,
+            "resultWarning": "",
+            "error": message if pipeline_status == "failed" else "",
+            "historyView": True,
+            "historyViewedAt": None,
+        },
+        "summary": {
+            "nodeCount": node_count,
+            "successNodeCount": success_node_count,
+            "failedNodeCount": failed_node_count,
+            "jobCount": len(job_ids) or (_quick_history_int(run_row.get("JOB_COUNT")) or 0),
+        },
+    }
+
+
 def list_node_runs(conn, flow_run_id: int) -> Dict[str, Any]:
     result = execute_query(conn, "FLOW_WORK_NODE_RUN_LIST", {"flowRunId": flow_run_id})
     response = data_work.require_success(result, "Flow node run query failed.")

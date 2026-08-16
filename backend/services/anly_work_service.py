@@ -19,6 +19,7 @@ from backend.auth_context import get_request_role_code, get_request_user_id
 from backend.database_helper import SqlLoader, execute_query
 from backend.target_database import get_target_db_connection
 from backend.services import flow_contract_service as flow_contracts
+from backend.services import descriptive_statistics_service as descriptive_statistics
 
 
 logger = logging.getLogger(__name__)
@@ -2309,6 +2310,204 @@ def list_flow_run_nodes(flow_run_id: int, request: Request):
         columns = [desc[0] for desc in cursor.description]
         rows = [_normalize_node_result(_row_to_dict(columns, row)) for row in cursor.fetchall()]
         return {"status": "success", "data": rows, "columns": columns, "total": len(rows)}
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+def get_descriptive_statistics(
+    flow_run_id: int,
+    request: Request,
+    *,
+    node_run_id: int | None = None,
+    columns: str | None = None,
+):
+    try:
+        normalized_flow_run_id = int(flow_run_id)
+        normalized_node_run_id = int(node_run_id) if node_run_id is not None else None
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="Invalid Flow Run or node Run id.") from exc
+    if normalized_flow_run_id <= 0 or (
+        normalized_node_run_id is not None and normalized_node_run_id <= 0
+    ):
+        raise HTTPException(status_code=400, detail="Invalid Flow Run or node Run id.")
+
+    user_id = get_request_user_id(request)
+    include_all_users = get_request_role_code(request) == "ADMIN"
+    conn = None
+    cursor = None
+    try:
+        conn = get_target_db_connection(request)
+        cursor = conn.cursor()
+        cursor.execute(
+            SqlLoader.get_sql("HOME_FLOW_RUN_NODES"),
+            {
+                "flowRunId": normalized_flow_run_id,
+                "userId": user_id,
+                "includeAllUsers": "Y" if include_all_users else "N",
+            },
+        )
+        result_columns = [item[0] for item in cursor.description or []]
+        nodes = [
+            _normalize_node_result(_row_to_dict(result_columns, row))
+            for row in cursor.fetchall()
+        ]
+        if not nodes:
+            raise HTTPException(
+                status_code=404,
+                detail="The authorized Flow Run was not found.",
+            )
+        if normalized_node_run_id is not None:
+            node = next(
+                (
+                    row
+                    for row in nodes
+                    if int(row.get("FLOW_NODE_RUN_ID") or 0) == normalized_node_run_id
+                ),
+                None,
+            )
+            if not node:
+                raise HTTPException(
+                    status_code=404,
+                    detail="The selected node Run does not belong to the authorized Flow Run.",
+                )
+        else:
+            node = next(
+                (
+                    row
+                    for row in nodes
+                    if row.get("TARGET_OWNER") and row.get("TARGET_TABLE")
+                ),
+                None,
+            )
+        if not node or not node.get("TARGET_OWNER") or not node.get("TARGET_TABLE"):
+            raise HTTPException(
+                status_code=409,
+                detail="The selected node Run has no saved target-table lineage.",
+            )
+
+        cursor.execute(
+            SqlLoader.get_sql("MCOMMON_STATS_FLOW_CONTEXT"),
+            {
+                "flowRunId": normalized_flow_run_id,
+                "userId": user_id,
+                "includeAllUsers": "Y" if include_all_users else "N",
+            },
+        )
+        context_columns = [item[0] for item in cursor.description or []]
+        context_row = cursor.fetchone()
+        if not context_row:
+            raise HTTPException(
+                status_code=404,
+                detail="The authorized Flow Run context was not found.",
+            )
+        flow_context = _row_to_dict(context_columns, context_row)
+        registered_pair = descriptive_statistics.resolve_registered_pair(
+            cursor,
+            project_id=int(flow_context.get("PROJECT_ID") or 0),
+            scenario_id=(
+                int(flow_context.get("SCENARIO_ID"))
+                if flow_context.get("SCENARIO_ID")
+                else None
+            ),
+            target_owner=str(node.get("TARGET_OWNER") or ""),
+            target_table=str(node.get("TARGET_TABLE") or ""),
+        )
+        physical_pair = descriptive_statistics.resolve_physical_pair(
+            cursor,
+            target_owner=str(node.get("TARGET_OWNER") or ""),
+            target_table=str(node.get("TARGET_TABLE") or ""),
+        )
+        comparison_pair = physical_pair or registered_pair
+        statistics_source = (
+            "LIVE_PHYSICAL_SOURCE_EDIT_PAIR"
+            if physical_pair
+            else (
+                "LIVE_REGISTERED_SOURCE_EDIT_PAIR"
+                if registered_pair
+                else "LIVE_CURRENT_PHYSICAL_TABLE"
+            )
+        )
+        statistics_context = {
+            "flowRunId": normalized_flow_run_id,
+            "nodeRunId": int(node.get("FLOW_NODE_RUN_ID") or 0),
+            "projectId": flow_context.get("PROJECT_ID"),
+            "scenarioId": flow_context.get("SCENARIO_ID"),
+            "targetOwner": node.get("TARGET_OWNER"),
+            "targetTable": node.get("TARGET_TABLE"),
+            "statisticsSource": statistics_source,
+        }
+        source_owner = str(
+            (comparison_pair or {}).get("SOURCE_OWNER")
+            or node.get("TARGET_OWNER")
+            or ""
+        )
+        source_table = str(
+            (comparison_pair or {}).get("SOURCE_TABLE")
+            or node.get("TARGET_TABLE")
+            or ""
+        )
+        try:
+            data = descriptive_statistics.build_statistics(
+                cursor,
+                before_owner=source_owner,
+                before_table=source_table,
+                after_owner=(comparison_pair or {}).get("EDIT_OWNER"),
+                after_table=(comparison_pair or {}).get("EDIT_TABLE"),
+                requested_columns=columns,
+                basis="BEFORE_AFTER" if comparison_pair else "SINGLE",
+                context=statistics_context,
+            )
+        except HTTPException as exc:
+            if not comparison_pair or exc.status_code != 404:
+                raise
+            logger.info(
+                "M04002 descriptive statistics comparison fallback. flow_run_id=%s, "
+                "node_run_id=%s, detail=%s",
+                normalized_flow_run_id,
+                normalized_node_run_id,
+                exc.detail,
+            )
+            fallback_context = {
+                **statistics_context,
+                "statisticsSource": "LIVE_REGISTERED_SOURCE_ONLY",
+                "comparisonAvailable": False,
+            }
+            data = descriptive_statistics.build_statistics(
+                cursor,
+                before_owner=source_owner,
+                before_table=source_table,
+                requested_columns=columns,
+                basis="SINGLE",
+                context=fallback_context,
+            )
+            data["notice"] = (
+                "등록된 INITDN$ 비교 테이블을 조회할 수 없어 현재 INITUP$ 원본 데이터의 "
+                "기초통계량만 표시합니다."
+            )
+        data = descriptive_statistics.attach_column_insights(
+            data,
+            descriptive_statistics.load_violation_column_insights(
+                cursor,
+                target_owner=source_owner,
+                target_table=source_table,
+                run_source_type="FLOW_WORK",
+                run_id=normalized_flow_run_id,
+            ),
+        )
+        return {"status": "success", "data": data}
+    except HTTPException as exc:
+        logger.warning(
+            "M04002 descriptive statistics failed. flow_run_id=%s, node_run_id=%s, "
+            "status=%s, detail=%s",
+            flow_run_id,
+            node_run_id,
+            exc.status_code,
+            exc.detail,
+        )
+        raise
     finally:
         if cursor:
             cursor.close()

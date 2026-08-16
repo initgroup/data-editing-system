@@ -356,6 +356,8 @@
     letter-spacing: -0.025em;
     line-height: 1.35;
     margin-top: 15px;
+    max-height: 49px;
+    min-height: 49px;
     overflow: hidden;
     overflow-wrap: anywhere;
     -webkit-box-orient: vertical;
@@ -367,8 +369,13 @@
     font-family: Consolas, "SFMono-Regular", monospace;
     font-size: 11px;
     font-weight: 700;
+    line-height: 15px;
     margin-top: 4px;
-    overflow-wrap: anywhere;
+    min-height: 15px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    width: 100%;
 }
 
 #container-M06001 .m06001-project-description {
@@ -377,6 +384,7 @@
     font-size: 12px;
     line-height: 1.55;
     margin-top: 11px;
+    max-height: 38px;
     min-height: 38px;
     overflow: hidden;
     overflow-wrap: anywhere;

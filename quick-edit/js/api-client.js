@@ -264,8 +264,26 @@
             }));
         }
 
+        getQuickEditHistory(page = 1, pageSize = 20) {
+            return this.request(this.buildPath("/M04001/quick-edit/history", {
+                page,
+                pageSize
+            }));
+        }
+
+        getQuickEditHistoryDetail(flowRunId) {
+            return this.request(`/M04001/quick-edit/history/${encodeURIComponent(flowRunId)}`);
+        }
+
         getRunNodes(flowRunId) {
             return this.request(`/M04002/runs/${encodeURIComponent(flowRunId)}/nodes`);
+        }
+
+        getDescriptiveStatistics(flowRunId, nodeRunId) {
+            return this.request(this.buildPath(
+                `/M04002/runs/${encodeURIComponent(flowRunId)}/descriptive-statistics`,
+                { nodeRunId }
+            ));
         }
 
         getCategoricalRules(params) {

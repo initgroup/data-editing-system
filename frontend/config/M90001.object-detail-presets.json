@@ -453,6 +453,11 @@
           "defaultValue": ""
         },
         {
+          "key": "P_DIMENSION_REDUCTION_MODE",
+          "comment": "원본 독립변수 대표 선별 방식(AUTO/PCA/NONE). PCA를 사용해도 합성 PC 컬럼은 저장하지 않고 대표 원본 컬럼만 사용합니다.",
+          "defaultValue": "AUTO"
+        },
+        {
           "key": "P_MAX_AUTO_TARGETS",
           "comment": "P_TARGET_COLUMN이 (auto)일 때 자동 target 최대 개수",
           "defaultValue": "10"
@@ -622,6 +627,36 @@
           "defaultValue": "0.7"
         },
         {
+          "key": "P_DIMENSION_REDUCTION_MODE",
+          "comment": "원본 독립변수 대표 선별 방식(AUTO/PCA/NONE). PCA를 사용해도 합성 PC 컬럼은 저장하지 않습니다.",
+          "defaultValue": "AUTO"
+        },
+        {
+          "key": "P_ESTIMATION_MODE",
+          "comment": "선형식 추정 방식(AUTO/OLS/ROBUST_IRLS). ROBUST_IRLS는 Student-t 계열 강건 반복가중 최소제곱 추정입니다.",
+          "defaultValue": "AUTO"
+        },
+        {
+          "key": "P_MONTE_CARLO_MODE",
+          "comment": "고정 seed 안정성 검증 방식(OFF/AUTO/BOOTSTRAP/REPEATED_HOLDOUT). 수정 예측값 자체를 무작위화하지 않습니다.",
+          "defaultValue": "AUTO"
+        },
+        {
+          "key": "P_MONTE_CARLO_ITERATIONS",
+          "comment": "안정성 검증 반복 횟수(5~50)",
+          "defaultValue": "20"
+        },
+        {
+          "key": "P_MONTE_CARLO_MAX_ROWS",
+          "comment": "안정성 검증에만 사용할 최대 행 수(100~10000)",
+          "defaultValue": "5000"
+        },
+        {
+          "key": "P_BANFF_MODE",
+          "comment": "강한 단일 비율식 후보 사용 방식(AUTO/RATIO/OFF). Banff-inspired 단일 기능이며 전체 Banff 구현은 아닙니다.",
+          "defaultValue": "AUTO"
+        },
+        {
           "key": "P_MAX_AUTO_TARGETS",
           "comment": "P_TARGET_COLUMN이 (auto)일 때 자동 target 최대 개수",
           "defaultValue": "10"
@@ -782,6 +817,36 @@
           "key": "P_MIN_R2_SCORE",
           "comment": "Symbolic Regression에 사용할 LASSO 최소 R2 점수",
           "defaultValue": "0.7"
+        },
+        {
+          "key": "P_DIMENSION_REDUCTION_MODE",
+          "comment": "원본 독립변수 대표 선별 방식(AUTO/PCA/NONE). PCA를 사용해도 합성 PC 컬럼은 저장하지 않습니다.",
+          "defaultValue": "AUTO"
+        },
+        {
+          "key": "P_ESTIMATION_MODE",
+          "comment": "선형식 추정 방식(AUTO/OLS/ROBUST_IRLS). ROBUST_IRLS는 Student-t 계열 강건 반복가중 최소제곱 추정입니다.",
+          "defaultValue": "AUTO"
+        },
+        {
+          "key": "P_MONTE_CARLO_MODE",
+          "comment": "고정 seed 안정성 검증 방식(OFF/AUTO/BOOTSTRAP/REPEATED_HOLDOUT). 수정 예측값 자체를 무작위화하지 않습니다.",
+          "defaultValue": "AUTO"
+        },
+        {
+          "key": "P_MONTE_CARLO_ITERATIONS",
+          "comment": "안정성 검증 반복 횟수(5~50)",
+          "defaultValue": "20"
+        },
+        {
+          "key": "P_MONTE_CARLO_MAX_ROWS",
+          "comment": "안정성 검증에만 사용할 최대 행 수(100~10000)",
+          "defaultValue": "5000"
+        },
+        {
+          "key": "P_BANFF_MODE",
+          "comment": "강한 단일 비율식 후보 사용 방식(AUTO/RATIO/OFF). Banff-inspired 단일 기능이며 전체 Banff 구현은 아닙니다.",
+          "defaultValue": "AUTO"
         },
         {
           "key": "P_MAX_AUTO_TARGETS",

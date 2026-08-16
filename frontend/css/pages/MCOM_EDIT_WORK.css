@@ -1213,6 +1213,14 @@
     color: #b91c1c;
 }
 
+.edit-work-mode-actions button:disabled {
+    background: #f1f5f9;
+    border-color: #dbe4f0;
+    color: #94a3b8;
+    cursor: not-allowed;
+    opacity: 0.72;
+}
+
 .edit-work-inline-editor {
     display: grid;
     gap: 4px;
@@ -1837,6 +1845,58 @@
 
 .edit-work-dml-panel {
     margin: 12px;
+}
+
+.edit-work-dml-algorithm-guide {
+    margin-bottom: 12px;
+    color: #475569;
+    background: #f8fafc;
+    border: 1px solid #dbe5f1;
+    border-radius: 10px;
+    font-size: 11px;
+}
+
+.edit-work-dml-algorithm-guide > summary {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 9px 11px;
+    color: #25446f;
+    font-weight: 800;
+    cursor: pointer;
+    list-style: none;
+}
+
+.edit-work-dml-algorithm-guide > summary::-webkit-details-marker {
+    display: none;
+}
+
+.edit-work-dml-algorithm-guide > summary::after {
+    margin-left: auto;
+    color: #64748b;
+    content: "+";
+    font-size: 16px;
+    line-height: 1;
+}
+
+.edit-work-dml-algorithm-guide[open] > summary::after {
+    content: "−";
+}
+
+.edit-work-dml-algorithm-guide > div {
+    padding: 0 13px 11px 31px;
+    border-top: 1px solid #e5ebf3;
+}
+
+.edit-work-dml-algorithm-guide p {
+    margin: 10px 0 7px;
+    line-height: 1.55;
+}
+
+.edit-work-dml-algorithm-guide ol {
+    margin: 0;
+    padding-left: 18px;
+    line-height: 1.65;
 }
 
 .edit-work-dml-editor {

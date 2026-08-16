@@ -190,6 +190,7 @@
             },
 
             destroy() {
+                window.DescriptiveStatistics?.close?.();
                 this.initialized = false;
                 this.closeDetailLayer();
                 this.rows = [];
@@ -3281,10 +3282,16 @@
                 const executionOpen = ["DRAFT", "EDITING", "VALIDATED", "APPLY_READY"].includes(
                     String(session?.SESSION_STATUS || "").toUpperCase()
                 );
-                this.setPanel("에디팅 효과 검증", session ? `
-                    <button type="button" title="${this.escapeHtml(this.pageLabel("buttonRerunRuleDiscoveryHelp", "INITDN$ 수정테이블을 대상으로 저장된 Flow의 규칙 발굴을 다시 실행합니다."))}" onclick="${PAGE_CODE}.openReanalysisFlow()" ${executionOpen ? "" : "disabled"}><i class="fas fa-wave-square"></i>${this.escapeHtml(this.pageLabel("buttonRerunRuleDiscovery", "규칙발굴재실행"))}</button>
-                    <button type="button" class="is-primary" onclick="${PAGE_CODE}.markValidated()" ${executionOpen ? "" : "disabled"}><i class="fas fa-check-double"></i>${this.escapeHtml(this.pageLabel("buttonCompleteEffectValidation", "효과 검증 완료"))}</button>
-                ` : "");
+                const reanalysisAvailable = ["DRAFT", "EDITING", "VALIDATED", "APPLY_READY", "APPLIED"].includes(
+                    String(session?.SESSION_STATUS || "").toUpperCase()
+                );
+                this.setPanel("에디팅 효과 검증", `
+                    <button type="button" onclick="${PAGE_CODE}.openDescriptiveStatistics(event)" ${session ? "" : "disabled"} title="INITUP$ 원본과 INITDN$ 수정본의 분포를 비교합니다."><i class="fas fa-chart-simple"></i>기초통계량</button>
+                    ${session ? `
+                        <button type="button" title="${this.escapeHtml(this.pageLabel("buttonRerunRuleDiscoveryHelp", "INITDN$ 수정테이블을 대상으로 저장된 Flow의 규칙 발굴을 다시 실행합니다."))}" onclick="${PAGE_CODE}.openReanalysisFlow()" ${reanalysisAvailable ? "" : "disabled"}><i class="fas fa-wave-square"></i>${this.escapeHtml(this.pageLabel("buttonRerunRuleDiscovery", "규칙발굴재실행"))}</button>
+                        <button type="button" class="is-primary" onclick="${PAGE_CODE}.markValidated()" ${executionOpen ? "" : "disabled"}><i class="fas fa-check-double"></i>${this.escapeHtml(this.pageLabel("buttonCompleteEffectValidation", "효과 검증 완료"))}</button>
+                    ` : ""}
+                `);
                 this.hideModeForm();
                 if (!session) {
                     this.rows = [];
@@ -3317,6 +3324,17 @@
                     }
                 ]);
                 this.renderValidationContent(data);
+            },
+
+            async openDescriptiveStatistics(event) {
+                const session = this.getSelectedSession();
+                if (!session || !window.DescriptiveStatistics?.open) return;
+                await window.DescriptiveStatistics.open({
+                    opener: event?.currentTarget,
+                    title: "에디팅 전·후 기초통계량",
+                    subtitle: `작업 이력 #${session.EDIT_SESSION_ID} · INITUP$ 원본과 INITDN$ 수정본의 분포 변화를 비교합니다.`,
+                    url: `${API_BASE_URL}/M05003/sessions/${encodeURIComponent(session.EDIT_SESSION_ID)}/descriptive-statistics`
+                });
             },
 
             renderValidationContent(data) {
@@ -3842,10 +3860,19 @@
                 await this.refresh();
             },
 
-            openReanalysisFlow() {
+            async openReanalysisFlow() {
                 const session = this.getSelectedSession();
                 if (!session) {
                     CommonMessage.warn("현재 오류 수정 작업을 선택하세요.");
+                    return;
+                }
+                const sessionStatus = String(session.SESSION_STATUS || "").toUpperCase();
+                if (!["DRAFT", "EDITING", "VALIDATED", "APPLY_READY", "APPLIED"].includes(sessionStatus)) {
+                    CommonMessage.warn("초기화된 작업은 규칙 발굴을 다시 실행할 수 없습니다.");
+                    return;
+                }
+                if (!session.PROJECT_ID || !session.SCENARIO_ID || !session.TARGET_OWNER || !session.EDIT_TABLE) {
+                    CommonMessage.error("재실행에 필요한 프로젝트·시나리오·INITDN$ 수정테이블 정보를 확인할 수 없습니다.");
                     return;
                 }
                 const runtimeContext = {
@@ -3863,7 +3890,19 @@
                     scenarioId: session.SCENARIO_ID || ""
                 }));
                 const menu = window.MENU_PAGE_MAP?.M04001;
-                PageManager.load("M04001", menu?.title || menu?.label || "Rule Discovery Execution", true);
+                try {
+                    const result = await PageManager.load(
+                        "M04001",
+                        menu?.title || menu?.label || "Rule Discovery Execution",
+                        false
+                    );
+                    if (PageManager.activePageCode !== "M04001" || result?.committed === false) {
+                        throw new Error("규칙 발굴 실행 화면으로 이동하지 못했습니다.");
+                    }
+                } catch (error) {
+                    sessionStorage.removeItem("M04001:editingRuntimeContext");
+                    CommonMessage.error(error?.message || "규칙 발굴 재실행 화면을 열지 못했습니다.");
+                }
             },
 
             async loadDml() {
@@ -3968,6 +4007,17 @@
                         ${this.buildGridHtml(visible, dmlColumns, true)}
                     </div>
                     <section class="edit-work-dml-panel">
+                        <details class="edit-work-dml-algorithm-guide">
+                            <summary><i class="fas fa-circle-info" aria-hidden="true"></i>자동 생성 DML 동작 방식</summary>
+                            <div>
+                                <p>회귀식을 운영 원본에서 다시 계산하지 않고, 오류 수정에서 사용자가 확정하여 INITDN$와 <b>APPLIED</b> 변경 이력에 저장된 값만 INITUP$에 반영합니다.</p>
+                                <ol>
+                                    <li>행 연결은 검증된 업무키를 우선 사용하고, 업무키를 사용할 수 없으면 원본 ROWID 추적값을 사용합니다.</li>
+                                    <li>변경이 확정된 컬럼만 CASE 식으로 갱신하여 다른 컬럼 값은 유지합니다.</li>
+                                    <li>예상 변경 행수와 실제 MERGE 반영 행수가 다르면 실행 전체를 실패 처리하고 rollback 합니다.</li>
+                                </ol>
+                            </div>
+                        </details>
                         <div class="edit-work-form-grid">
                             <label class="edit-work-field is-wide">
                                 <span class="edit-work-dml-name-label">

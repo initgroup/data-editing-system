@@ -60,6 +60,20 @@ def create_anly_work_router(
     def list_flow_run_nodes(flow_run_id: int, request: Request):
         return anly_work.list_flow_run_nodes(flow_run_id, request)
 
+    @router.get("/runs/{flow_run_id}/descriptive-statistics")
+    def get_descriptive_statistics(
+        flow_run_id: int,
+        request: Request,
+        nodeRunId: int | None = None,
+        columns: str | None = None,
+    ):
+        return anly_work.get_descriptive_statistics(
+            flow_run_id,
+            request,
+            node_run_id=nodeRunId,
+            columns=columns,
+        )
+
     @router.delete("/runs/{flow_run_id}")
     def delete_flow_run(flow_run_id: int, request: Request, force: bool = False):
         return anly_work.delete_flow_run(flow_run_id, request, flow_menu_code=FLOW_MENU_CODE, force=force)

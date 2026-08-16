@@ -195,6 +195,10 @@ def get_method_from_spec(value: Any) -> str:
 
 
 CLUSTER_USAGE_MODES = {"NONE", "PREFER_SAME_CLUSTER", "WITHIN_CLUSTER_ONLY"}
+DIMENSION_REDUCTION_MODES = {"NONE", "AUTO", "PCA"}
+ESTIMATION_MODES = {"AUTO", "OLS", "ROBUST_IRLS"}
+MONTE_CARLO_MODES = {"OFF", "AUTO", "BOOTSTRAP", "REPEATED_HOLDOUT"}
+BANFF_MODES = {"OFF", "AUTO", "RATIO"}
 
 
 def normalize_cluster_usage_mode(value: Any, default: str = "NONE") -> str:
@@ -208,6 +212,43 @@ def normalize_cluster_usage_mode(value: Any, default: str = "NONE") -> str:
             ),
         )
     return normalized
+
+
+def normalize_analysis_mode(
+    value: Any,
+    allowed: Set[str],
+    default: str,
+    parameter_name: str,
+) -> str:
+    normalized = str(value or default).strip().upper()
+    if normalized not in allowed:
+        choices = ", ".join(sorted(allowed))
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported {parameter_name}: {normalized}. Use {choices}.",
+        )
+    return normalized
+
+
+def normalize_dimension_reduction_mode(value: Any, default: str = "AUTO") -> str:
+    return normalize_analysis_mode(
+        value,
+        DIMENSION_REDUCTION_MODES,
+        default,
+        "dimension reduction mode",
+    )
+
+
+def normalize_estimation_mode(value: Any, default: str = "AUTO") -> str:
+    return normalize_analysis_mode(value, ESTIMATION_MODES, default, "estimation mode")
+
+
+def normalize_monte_carlo_mode(value: Any, default: str = "AUTO") -> str:
+    return normalize_analysis_mode(value, MONTE_CARLO_MODES, default, "Monte Carlo mode")
+
+
+def normalize_banff_mode(value: Any, default: str = "AUTO") -> str:
+    return normalize_analysis_mode(value, BANFF_MODES, default, "Banff-inspired mode")
 
 
 def load_relation_cluster_nodes(
@@ -369,6 +410,154 @@ def build_feature_cluster_usage(
     }
 
 
+def apply_pca_representative_screening(
+    x_values,
+    feature_names: Sequence[str],
+    requested_mode: str,
+    max_representatives: int,
+    explained_variance_threshold: float = 0.90,
+):
+    """Reduce a collinear feature pool without leaking synthetic PC columns.
+
+    PCA is used only to identify representative *source* columns. The returned
+    matrix therefore remains executable by the Oracle expression/violation
+    pipeline, which only accepts physical target-table column names.
+    """
+    require_sklearn()
+    mode = normalize_dimension_reduction_mode(requested_mode)
+    names = [str(name).strip().upper() for name in feature_names]
+    matrix = np.asarray(x_values, dtype=float)
+    feature_count = len(names)
+    diagnostics: Dict[str, Any] = {
+        "requestedMode": mode,
+        "effectiveMode": "NONE",
+        "appliedYn": "N",
+        "reason": "DISABLED" if mode == "NONE" else "NOT_EVALUATED",
+        "inputFeatureCount": feature_count,
+        "representativeFeatureCount": feature_count,
+        "componentCount": feature_count,
+        "explainedVariance": 1.0 if feature_count else 0.0,
+        "representativeFeatures": list(names),
+        "syntheticFeatureYn": "N",
+    }
+    if mode == "NONE" or feature_count < 2 or matrix.ndim != 2:
+        if mode != "NONE":
+            diagnostics["reason"] = "TOO_FEW_FEATURES"
+        return matrix, names, diagnostics
+
+    variances = np.var(matrix, axis=0)
+    usable_indexes = [
+        index
+        for index, variance in enumerate(variances)
+        if math.isfinite(float(variance)) and float(variance) > 1.0e-12
+    ]
+    if len(usable_indexes) < 2:
+        diagnostics["reason"] = "TOO_FEW_NONCONSTANT_FEATURES"
+        return matrix, names, diagnostics
+
+    usable_matrix = matrix[:, usable_indexes]
+    means = np.mean(usable_matrix, axis=0)
+    scales = np.std(usable_matrix, axis=0)
+    scales = np.where(np.abs(scales) > 1.0e-12, scales, 1.0)
+    standardized = (usable_matrix - means) / scales
+    try:
+        _, singular_values, components = np.linalg.svd(
+            standardized,
+            full_matrices=False,
+        )
+    except Exception as exc:
+        diagnostics["reason"] = f"SVD_FAILED_{type(exc).__name__.upper()}"
+        return matrix, names, diagnostics
+
+    variance_weights = np.square(np.asarray(singular_values, dtype=float))
+    total_variance = float(np.sum(variance_weights))
+    if not math.isfinite(total_variance) or total_variance <= 1.0e-12:
+        diagnostics["reason"] = "NO_EXPLAINED_VARIANCE"
+        return matrix, names, diagnostics
+
+    explained_ratios = variance_weights / total_variance
+    cumulative = np.cumsum(explained_ratios)
+    component_count = int(
+        np.searchsorted(cumulative, float(explained_variance_threshold), side="left") + 1
+    )
+    component_count = max(1, min(component_count, len(usable_indexes)))
+    representative_limit = max(1, min(int(max_representatives), len(usable_indexes)))
+    representative_count = min(component_count, representative_limit)
+    if len(usable_indexes) >= 2:
+        representative_count = max(2, representative_count)
+    representative_count = min(representative_count, len(usable_indexes))
+
+    diagnostics.update({
+        "componentCount": component_count,
+        "explainedVariance": float(cumulative[component_count - 1]),
+    })
+
+    if mode == "AUTO":
+        conservative_component_limit = max(2, int(math.floor(len(usable_indexes) * 0.60)))
+        if feature_count < 12:
+            diagnostics["reason"] = "AUTO_MIN_FEATURES_NOT_MET"
+            return matrix, names, diagnostics
+        if component_count > conservative_component_limit:
+            diagnostics["reason"] = "AUTO_REDUCTION_NOT_MATERIAL"
+            return matrix, names, diagnostics
+
+    selected_usable_indexes: List[int] = []
+    for component_index in range(min(component_count, components.shape[0])):
+        ranked = np.argsort(-np.abs(components[component_index]))
+        for usable_index in ranked:
+            candidate_index = int(usable_index)
+            if candidate_index not in selected_usable_indexes:
+                selected_usable_indexes.append(candidate_index)
+                break
+        if len(selected_usable_indexes) >= representative_count:
+            break
+
+    if len(selected_usable_indexes) < representative_count:
+        loading_strength = np.max(
+            np.abs(components[:component_count]),
+            axis=0,
+        )
+        for usable_index in np.argsort(-loading_strength):
+            candidate_index = int(usable_index)
+            if candidate_index not in selected_usable_indexes:
+                selected_usable_indexes.append(candidate_index)
+            if len(selected_usable_indexes) >= representative_count:
+                break
+
+    selected_source_indexes = sorted(
+        usable_indexes[index]
+        for index in selected_usable_indexes[:representative_count]
+    )
+    if not selected_source_indexes or len(selected_source_indexes) >= feature_count:
+        diagnostics["reason"] = "NO_SOURCE_FEATURE_REDUCTION"
+        return matrix, names, diagnostics
+
+    representative_names = [names[index] for index in selected_source_indexes]
+    diagnostics.update({
+        "effectiveMode": "PCA_REPRESENTATIVE_SCREENING",
+        "appliedYn": "Y",
+        "reason": "FORCED" if mode == "PCA" else "AUTO_COLLINEAR_FEATURE_REDUCTION",
+        "representativeFeatureCount": len(representative_names),
+        "representativeFeatures": representative_names,
+    })
+    return matrix[:, selected_source_indexes], representative_names, diagnostics
+
+
+def format_pca_diagnostics(diagnostics: Optional[Dict[str, Any]]) -> str:
+    item = diagnostics or {}
+    explained = float(item.get("explainedVariance") or 0.0)
+    return (
+        f"pcaMode={item.get('requestedMode') or 'NONE'}; "
+        f"pcaApplied={item.get('appliedYn') or 'N'}; "
+        f"pcaReason={item.get('reason') or 'UNKNOWN'}; "
+        f"pcaInputFeatures={int(item.get('inputFeatureCount') or 0)}; "
+        f"pcaRepresentatives={int(item.get('representativeFeatureCount') or 0)}; "
+        f"pcaComponents={int(item.get('componentCount') or 0)}; "
+        f"pcaExplainedVariance={explained:.6g}; "
+        "pcaSyntheticFeatures=N."
+    )
+
+
 @_limit_ml_concurrency
 def run_lasso_feature_select(conn, payload: Dict[str, Any]) -> Dict[str, Any]:
     require_sklearn()
@@ -380,6 +569,14 @@ def run_lasso_feature_select(conn, payload: Dict[str, Any]) -> Dict[str, Any]:
     max_features = clamp(parse_int(get_value(payload, "P_MAX_FEATURES", "maxFeatures"), 10), 1, 50)
     sample_rows = parse_optional_positive_int(get_value(payload, "P_SAMPLE_ROWS", "sampleRows"), 100000)
     alpha = parse_optional_float(get_value(payload, "P_ALPHA", "alpha"))
+    dimension_reduction_mode = normalize_dimension_reduction_mode(
+        get_value(
+            payload,
+            "P_DIMENSION_REDUCTION_MODE",
+            "dimensionReductionMode",
+        ),
+        "AUTO",
+    )
     cluster_usage_mode = normalize_cluster_usage_mode(
         get_value(payload, "P_CLUSTER_USAGE_MODE", "clusterUsageMode"),
         "NONE",
@@ -450,6 +647,13 @@ def run_lasso_feature_select(conn, payload: Dict[str, Any]) -> Dict[str, Any]:
     if len(y_values) < 10:
         raise HTTPException(status_code=400, detail="LASSO requires at least 10 complete numeric rows.")
 
+    x_values, used_features, pca_diagnostics = apply_pca_representative_screening(
+        x_values,
+        used_features,
+        dimension_reduction_mode,
+        max_representatives=max(2, max_features * 2),
+    )
+
     x_scaler = StandardScaler(copy=False)
     y_scaler = StandardScaler(copy=False)
     x_scaled = x_scaler.fit_transform(x_values)
@@ -487,7 +691,8 @@ def run_lasso_feature_select(conn, payload: Dict[str, Any]) -> Dict[str, Any]:
         f"inputFeatures={matrix_limits['effectiveFeatureCount']}/{matrix_limits['requestedFeatureCount']}, "
         f"clusterMode={cluster_usage.get('effectiveMode')}, "
         f"targetCluster={cluster_usage.get('targetClusterId')}, "
-        f"clusterCandidates={cluster_usage.get('candidateCount')}"
+        f"clusterCandidates={cluster_usage.get('candidateCount')}; "
+        f"{format_pca_diagnostics(pca_diagnostics)}"
     )
 
     cursor = conn.cursor()
@@ -568,6 +773,7 @@ def run_lasso_feature_select(conn, payload: Dict[str, Any]) -> Dict[str, Any]:
         "r2Score": score,
         "alpha": model_alpha,
         "clusterUsage": cluster_usage,
+        "pcaScreening": pca_diagnostics,
         "memoryLimits": matrix_limits,
     }
 
@@ -596,6 +802,50 @@ def run_symbolic_regression_rule(conn, payload: Dict[str, Any]) -> Dict[str, Any
         0.995,
         0.0,
         1.0,
+    )
+    dimension_reduction_mode = normalize_dimension_reduction_mode(
+        get_value(
+            payload,
+            "P_DIMENSION_REDUCTION_MODE",
+            "dimensionReductionMode",
+        ),
+        "AUTO",
+    )
+    estimation_mode = normalize_estimation_mode(
+        get_value(payload, "P_ESTIMATION_MODE", "estimationMode"),
+        "AUTO",
+    )
+    monte_carlo_mode = normalize_monte_carlo_mode(
+        get_value(payload, "P_MONTE_CARLO_MODE", "monteCarloMode"),
+        "AUTO",
+    )
+    monte_carlo_iterations = clamp(
+        parse_int(
+            get_value(
+                payload,
+                "P_MONTE_CARLO_ITERATIONS",
+                "monteCarloIterations",
+            ),
+            20,
+        ),
+        5,
+        50,
+    )
+    monte_carlo_max_rows = clamp(
+        parse_int(
+            get_value(
+                payload,
+                "P_MONTE_CARLO_MAX_ROWS",
+                "monteCarloMaxRows",
+            ),
+            5000,
+        ),
+        100,
+        10000,
+    )
+    banff_mode = normalize_banff_mode(
+        get_value(payload, "P_BANFF_MODE", "banffMode"),
+        "AUTO",
     )
     cluster_usage_mode = normalize_cluster_usage_mode(
         get_value(payload, "P_CLUSTER_USAGE_MODE", "clusterUsageMode"),
@@ -656,6 +906,13 @@ def run_symbolic_regression_rule(conn, payload: Dict[str, Any]) -> Dict[str, Any
     if len(y_values) < 10:
         raise HTTPException(status_code=400, detail="Symbolic regression requires at least 10 complete numeric rows.")
 
+    x_values, used_features, pca_diagnostics = apply_pca_representative_screening(
+        x_values,
+        used_features,
+        dimension_reduction_mode,
+        max_representatives=max_features,
+    )
+
     cluster_nodes = load_relation_cluster_nodes(conn, owner, table, run_source_type, run_id) if cluster_usage_mode != "NONE" else {}
 
     expression, score, complexity, method, message = fit_symbolic_expression(
@@ -667,7 +924,17 @@ def run_symbolic_regression_rule(conn, payload: Dict[str, Any]) -> Dict[str, Any
         linear_first,
         linear_r2_threshold,
         max_symbolic_terms,
+        estimation_mode=estimation_mode,
+        monte_carlo_mode=monte_carlo_mode,
+        monte_carlo_iterations=monte_carlo_iterations,
+        monte_carlo_max_rows=monte_carlo_max_rows,
+        banff_mode=banff_mode,
     )
+    if (
+        str(pca_diagnostics.get("appliedYn") or "N").upper() == "Y"
+        and method != "BANFF_INSPIRED_RATIO"
+    ):
+        method = f"PCA_SCREENED_{method}"[:80]
     expression = normalize_oracle_symbolic_expression(expression, used_features)
     rule_features = extract_expression_feature_names(expression, used_features)
     cluster_usage = build_feature_cluster_usage(target_column, rule_features, cluster_nodes, cluster_usage_mode)
@@ -680,7 +947,8 @@ def run_symbolic_regression_rule(conn, payload: Dict[str, Any]) -> Dict[str, Any
         f"clusterMode={cluster_usage.get('effectiveMode')}, "
         f"targetCluster={cluster_usage.get('targetClusterId')}, "
         f"sameClusterFeatures={cluster_usage.get('sameClusterFeatureCount')}, "
-        f"crossClusterFeatures={cluster_usage.get('crossClusterFeatureCount')}."
+        f"crossClusterFeatures={cluster_usage.get('crossClusterFeatureCount')}; "
+        f"{format_pca_diagnostics(pca_diagnostics)}"
     )
     rule_id = build_symbolic_rule_id(run_source_type, run_id, owner, table, target_column, expression, rule_features)
     cursor = conn.cursor()
@@ -766,6 +1034,10 @@ def run_symbolic_regression_rule(conn, payload: Dict[str, Any]) -> Dict[str, Any
         "message": message,
         "ruleId": rule_id,
         "clusterUsage": cluster_usage,
+        "pcaScreening": pca_diagnostics,
+        "estimationMode": estimation_mode,
+        "monteCarloMode": monte_carlo_mode,
+        "banffMode": banff_mode,
         "memoryLimits": matrix_limits,
     }
 
@@ -941,6 +1213,50 @@ def run_integrated_rule_discover(conn, payload: Dict[str, Any]) -> Dict[str, Any
         "maxAutoTargets": clamp(parse_int(get_value(payload, "P_MAX_AUTO_TARGETS", "maxAutoTargets"), 10), 1, 100),
         "maxFeatures": clamp(parse_int(get_value(payload, "P_MAX_FEATURES", "maxFeatures"), 10), 1, 10),
         "clusterUsageMode": cluster_usage_mode,
+        "dimensionReductionMode": normalize_dimension_reduction_mode(
+            get_value(
+                payload,
+                "P_DIMENSION_REDUCTION_MODE",
+                "dimensionReductionMode",
+            ),
+            "AUTO",
+        ),
+        "estimationMode": normalize_estimation_mode(
+            get_value(payload, "P_ESTIMATION_MODE", "estimationMode"),
+            "AUTO",
+        ),
+        "monteCarloMode": normalize_monte_carlo_mode(
+            get_value(payload, "P_MONTE_CARLO_MODE", "monteCarloMode"),
+            "AUTO",
+        ),
+        "monteCarloIterations": clamp(
+            parse_int(
+                get_value(
+                    payload,
+                    "P_MONTE_CARLO_ITERATIONS",
+                    "monteCarloIterations",
+                ),
+                20,
+            ),
+            5,
+            50,
+        ),
+        "monteCarloMaxRows": clamp(
+            parse_int(
+                get_value(
+                    payload,
+                    "P_MONTE_CARLO_MAX_ROWS",
+                    "monteCarloMaxRows",
+                ),
+                5000,
+            ),
+            100,
+            10000,
+        ),
+        "banffMode": normalize_banff_mode(
+            get_value(payload, "P_BANFF_MODE", "banffMode"),
+            "AUTO",
+        ),
     }
 
     results: List[Dict[str, Any]] = []
@@ -1575,8 +1891,66 @@ def fit_symbolic_expression(
     linear_first: bool = True,
     linear_r2_threshold: float = 0.995,
     max_symbolic_terms: int = 8,
+    estimation_mode: str = "AUTO",
+    monte_carlo_mode: str = "AUTO",
+    monte_carlo_iterations: int = 20,
+    monte_carlo_max_rows: int = 5000,
+    banff_mode: str = "AUTO",
+) -> Tuple[str, float, int, str, str]:
+    normalized_estimation_mode = normalize_estimation_mode(estimation_mode)
+    normalized_monte_carlo_mode = normalize_monte_carlo_mode(monte_carlo_mode)
+    normalized_banff_mode = normalize_banff_mode(banff_mode)
+    base_candidate = _fit_symbolic_expression_base(
+        x_values,
+        y_values,
+        feature_names,
+        max_iterations,
+        use_pysr,
+        linear_first,
+        linear_r2_threshold,
+        max_symbolic_terms,
+        normalized_estimation_mode,
+    )
+    selected_candidate = select_banff_inspired_ratio_candidate(
+        base_candidate,
+        x_values,
+        y_values,
+        feature_names,
+        normalized_banff_mode,
+    )
+    expression, score, complexity, method, message = selected_candidate
+    monte_carlo_diagnostics = run_monte_carlo_stability_diagnostic(
+        x_values,
+        y_values,
+        feature_names,
+        expression,
+        method,
+        normalized_monte_carlo_mode,
+        clamp(parse_int(monte_carlo_iterations, 20), 5, 50),
+        clamp(parse_int(monte_carlo_max_rows, 5000), 100, 10000),
+    )
+    return (
+        expression,
+        score,
+        complexity,
+        method,
+        f"{message} {monte_carlo_diagnostics}".strip(),
+    )
+
+
+def _fit_symbolic_expression_base(
+    x_values,
+    y_values,
+    feature_names: Sequence[str],
+    max_iterations: int,
+    use_pysr: bool = False,
+    linear_first: bool = True,
+    linear_r2_threshold: float = 0.995,
+    max_symbolic_terms: int = 8,
+    estimation_mode: str = "AUTO",
 ) -> Tuple[str, float, int, str, str]:
     require_sklearn()
+    normalized_estimation_mode = normalize_estimation_mode(estimation_mode)
     holdout_indexes = build_symbolic_holdout_indexes(len(y_values))
     linear_candidate = None
     if linear_first:
@@ -1590,10 +1964,14 @@ def fit_symbolic_expression(
         if (
             sparse_linear_candidate is not None
             and float(sparse_linear_candidate.get("score") or 0.0) >= linear_r2_threshold
+            and normalized_estimation_mode != "ROBUST_IRLS"
         ):
             sparse_linear_candidate["message"] = (
                 f"{sparse_linear_candidate['message']} "
-                f"selection=SPARSE_LINEAR; reason=R2_THRESHOLD_{linear_r2_threshold:.6g}."
+                f"selection=SPARSE_LINEAR; reason=R2_THRESHOLD_{linear_r2_threshold:.6g}; "
+                f"estimationMode={normalized_estimation_mode}; "
+                "robustIrlsEvaluated=N; robustIrlsSelected=N; "
+                "robustIrlsReason=SPARSE_LINEAR_ALREADY_PASSED_STRICT_THRESHOLD."
             )
             return symbolic_candidate_tuple(sparse_linear_candidate)
 
@@ -1620,10 +1998,35 @@ def fit_symbolic_expression(
             ),
             "validation": linear_validation,
         }
+        linear_candidate = select_linear_estimation_candidate(
+            x_values,
+            y_values,
+            feature_names,
+            holdout_indexes,
+            linear_candidate,
+            normalized_estimation_mode,
+            min(max(20, int(max_iterations)), 200),
+        )
+        linear_selection_score = float(linear_candidate.get("score") or 0.0)
+        if (
+            normalized_estimation_mode == "ROBUST_IRLS"
+            and "ROBUST" in str(linear_candidate.get("method") or "").upper()
+        ):
+            linear_candidate["message"] = (
+                f"{linear_candidate['message']} selection=ROBUST_IRLS; "
+                "reason=FORCED_ESTIMATION_MODE."
+            )
+            return symbolic_candidate_tuple(linear_candidate)
         if linear_selection_score >= linear_r2_threshold:
+            selected_linear_label = (
+                "ROBUST_IRLS"
+                if "ROBUST" in str(linear_candidate.get("method") or "").upper()
+                else "LINEAR"
+            )
             linear_candidate["message"] = (
                 f"{linear_candidate['message']} "
-                f"selection=LINEAR; reason=R2_THRESHOLD_{linear_r2_threshold:.6g}."
+                f"selection={selected_linear_label}; "
+                f"reason=R2_THRESHOLD_{linear_r2_threshold:.6g}."
             )
             return symbolic_candidate_tuple(linear_candidate)
 
@@ -1945,6 +2348,654 @@ def fit_linear_expression(x_values, y_values, feature_names: Sequence[str]) -> T
     complexity = len(terms) + 1
     message = "Simple linear regression was evaluated as the parsimony baseline."
     return expression, score, complexity, "LINEAR_REGRESSION", message
+
+
+def fit_robust_student_t_parameters(
+    x_values,
+    y_values,
+    max_iterations: int = 100,
+    tolerance: float = 1.0e-7,
+    degrees_of_freedom: float = 4.0,
+) -> Dict[str, Any]:
+    """Fit deterministic Student-t-style IRLS on standardized values."""
+    require_sklearn()
+    x_matrix = np.asarray(x_values, dtype=float)
+    y_vector = np.asarray(y_values, dtype=float).reshape(-1)
+    if x_matrix.ndim != 2 or len(y_vector) != x_matrix.shape[0] or not len(y_vector):
+        raise ValueError("ROBUST_IRLS requires a non-empty numeric matrix.")
+
+    x_means = np.mean(x_matrix, axis=0)
+    x_scales = np.std(x_matrix, axis=0)
+    x_scales = np.where(np.abs(x_scales) > 1.0e-12, x_scales, 1.0)
+    y_mean = float(np.mean(y_vector))
+    y_scale = float(np.std(y_vector))
+    if not math.isfinite(y_scale) or y_scale <= 1.0e-12:
+        return {
+            "intercept": y_mean,
+            "coefficients": np.zeros(x_matrix.shape[1], dtype=float),
+            "iterations": 0,
+            "convergedYn": "Y",
+            "degreesOfFreedom": float(degrees_of_freedom),
+        }
+
+    x_scaled = (x_matrix - x_means) / x_scales
+    y_scaled = (y_vector - y_mean) / y_scale
+    design = np.column_stack([np.ones(len(y_scaled)), x_scaled])
+    coefficients, *_ = np.linalg.lstsq(design, y_scaled, rcond=None)
+    converged = False
+    iteration_count = 0
+    degrees = max(2.1, float(degrees_of_freedom))
+
+    for iteration_count in range(1, max(1, int(max_iterations)) + 1):
+        residual = y_scaled - design @ coefficients
+        residual_center = float(np.median(residual))
+        residual_mad = float(np.median(np.abs(residual - residual_center)))
+        robust_scale = max(1.4826 * residual_mad, 1.0e-8)
+        standardized_residual = (residual - residual_center) / robust_scale
+        weights = (degrees + 1.0) / (degrees + np.square(standardized_residual))
+        weights = np.clip(weights, 1.0e-4, 1.0)
+        sqrt_weights = np.sqrt(weights)
+        next_coefficients, *_ = np.linalg.lstsq(
+            design * sqrt_weights[:, None],
+            y_scaled * sqrt_weights,
+            rcond=None,
+        )
+        delta = float(np.linalg.norm(next_coefficients - coefficients))
+        baseline = 1.0 + float(np.linalg.norm(coefficients))
+        coefficients = next_coefficients
+        if delta <= float(tolerance) * baseline:
+            converged = True
+            break
+
+    raw_coefficients = y_scale * np.asarray(coefficients[1:], dtype=float) / x_scales
+    raw_intercept = (
+        y_mean
+        + y_scale * float(coefficients[0])
+        - float(np.dot(raw_coefficients, x_means))
+    )
+    return {
+        "intercept": raw_intercept,
+        "coefficients": raw_coefficients,
+        "iterations": iteration_count,
+        "convergedYn": "Y" if converged else "N",
+        "degreesOfFreedom": degrees,
+    }
+
+
+def predict_linear_parameters(parameters: Dict[str, Any], x_values):
+    coefficients = np.asarray(parameters.get("coefficients"), dtype=float)
+    return (
+        np.asarray(x_values, dtype=float) @ coefficients
+        + float(parameters.get("intercept") or 0.0)
+    )
+
+
+def build_robust_linear_candidate(
+    x_values,
+    y_values,
+    feature_names: Sequence[str],
+    holdout_indexes,
+    max_iterations: int,
+) -> Dict[str, Any]:
+    parameters = fit_robust_student_t_parameters(
+        x_values,
+        y_values,
+        max_iterations=max_iterations,
+    )
+    fit_prediction = predict_linear_parameters(parameters, x_values)
+    fit_score = safe_regression_r2(y_values, fit_prediction)
+    validation_metrics = None
+    if holdout_indexes is not None:
+        train_mask, validation_mask = holdout_indexes
+        validation_parameters = fit_robust_student_t_parameters(
+            np.asarray(x_values)[train_mask],
+            np.asarray(y_values)[train_mask],
+            max_iterations=max_iterations,
+        )
+        validation_prediction = predict_linear_parameters(
+            validation_parameters,
+            np.asarray(x_values)[validation_mask],
+        )
+        validation_metrics = calculate_regression_metrics(
+            np.asarray(y_values)[validation_mask],
+            validation_prediction,
+        )
+
+    terms = [
+        (float(coefficient), str(feature_name).upper())
+        for coefficient, feature_name in zip(
+            parameters["coefficients"],
+            feature_names,
+        )
+        if abs(float(coefficient)) > 1.0e-8
+    ]
+    expression = format_linear_expression(float(parameters["intercept"]), terms)
+    message = append_symbolic_validation_diagnostics(
+        (
+            "Student-t-style ROBUST_IRLS was evaluated through deterministic "
+            "iteratively reweighted least squares. This is a parametric robust "
+            "estimator, not a nonparametric maximum-likelihood method. "
+            f"iterations={int(parameters['iterations'])}; "
+            f"converged={parameters['convergedYn']}; "
+            f"degreesOfFreedom={float(parameters['degreesOfFreedom']):.6g}."
+        ),
+        fit_score,
+        validation_metrics,
+    )
+    return {
+        "expression": expression,
+        "fitScore": fit_score,
+        "score": get_symbolic_selection_score(fit_score, validation_metrics),
+        "complexity": len(terms) + 1,
+        "method": "ROBUST_STUDENT_T_IRLS",
+        "message": message,
+        "validation": validation_metrics,
+    }
+
+
+def calculate_ols_residual_outlier_ratio(x_values, y_values) -> float:
+    model = LinearRegression()
+    model.fit(x_values, y_values)
+    residual = np.asarray(y_values, dtype=float) - model.predict(x_values)
+    residual_center = float(np.median(residual))
+    residual_mad = float(np.median(np.abs(residual - residual_center)))
+    robust_scale = max(1.4826 * residual_mad, 1.0e-12)
+    return float(np.mean(np.abs(residual - residual_center) > 3.5 * robust_scale))
+
+
+def select_linear_estimation_candidate(
+    x_values,
+    y_values,
+    feature_names: Sequence[str],
+    holdout_indexes,
+    ols_candidate: Dict[str, Any],
+    estimation_mode: str,
+    max_iterations: int,
+) -> Dict[str, Any]:
+    mode = normalize_estimation_mode(estimation_mode)
+    if mode == "OLS":
+        ols_candidate["message"] = (
+            f"{ols_candidate['message']} estimationMode=OLS; "
+            "robustIrlsEvaluated=N; robustIrlsSelected=N."
+        )
+        return ols_candidate
+
+    try:
+        robust_candidate = build_robust_linear_candidate(
+            x_values,
+            y_values,
+            feature_names,
+            holdout_indexes,
+            max_iterations,
+        )
+        outlier_ratio = calculate_ols_residual_outlier_ratio(x_values, y_values)
+    except Exception as exc:
+        ols_candidate["message"] = (
+            f"{ols_candidate['message']} estimationMode={mode}; "
+            "robustIrlsEvaluated=Y; robustIrlsSelected=N; "
+            f"robustIrlsReason=FIT_FAILED_{type(exc).__name__.upper()}."
+        )
+        return ols_candidate
+
+    robust_candidate["message"] = (
+        f"{robust_candidate['message']} estimationMode={mode}; "
+        f"olsResidualOutlierRatio={outlier_ratio:.6g}."
+    )
+    if mode == "ROBUST_IRLS":
+        robust_candidate["message"] = (
+            f"{robust_candidate['message']} robustIrlsSelected=Y; "
+            "robustIrlsReason=FORCED_BY_OPTION."
+        )
+        return robust_candidate
+
+    ols_validation = ols_candidate.get("validation") or {}
+    robust_validation = robust_candidate.get("validation") or {}
+    if not ols_validation or not robust_validation:
+        ols_candidate["message"] = (
+            f"{ols_candidate['message']} estimationMode=AUTO; "
+            "robustIrlsEvaluated=Y; robustIrlsSelected=N; "
+            "robustIrlsReason=DETERMINISTIC_HOLDOUT_UNAVAILABLE."
+        )
+        return ols_candidate
+
+    ols_rmse = float(ols_validation.get("rmse", float("inf")))
+    robust_rmse = float(robust_validation.get("rmse", float("inf")))
+    ols_mae = float(ols_validation.get("mae", float("inf")))
+    robust_mae = float(robust_validation.get("mae", float("inf")))
+    ols_r2 = float(ols_validation.get("r2", 0.0))
+    robust_r2 = float(robust_validation.get("r2", 0.0))
+    rmse_gain = (ols_rmse - robust_rmse) / max(abs(ols_rmse), 1.0e-12)
+    mae_gain = (ols_mae - robust_mae) / max(abs(ols_mae), 1.0e-12)
+    robust_selected = (
+        outlier_ratio >= 0.08
+        and robust_r2 >= ols_r2 - 0.02
+        and (
+            rmse_gain >= 0.05
+            or mae_gain >= 0.05
+            or robust_r2 - ols_r2 >= 0.02
+        )
+    )
+    comparison = (
+        f"robustVsOlsRmseGain={rmse_gain:.6g}; "
+        f"robustVsOlsMaeGain={mae_gain:.6g}; "
+        f"robustVsOlsR2Gain={robust_r2 - ols_r2:.6g}."
+    )
+    if robust_selected:
+        robust_candidate["message"] = (
+            f"{robust_candidate['message']} robustIrlsSelected=Y; "
+            f"robustIrlsReason=HEAVY_TAIL_HOLDOUT_IMPROVEMENT; {comparison}"
+        )
+        return robust_candidate
+
+    ols_candidate["message"] = (
+        f"{ols_candidate['message']} estimationMode=AUTO; "
+        "robustIrlsEvaluated=Y; robustIrlsSelected=N; "
+        f"olsResidualOutlierRatio={outlier_ratio:.6g}; "
+        f"robustIrlsReason=CONSERVATIVE_AUTO_KEEP_OLS; {comparison}"
+    )
+    return ols_candidate
+
+
+def fit_single_ratio_candidate(
+    x_values,
+    y_values,
+    feature_names: Sequence[str],
+) -> Optional[Dict[str, Any]]:
+    """Return the strongest deterministic target=ratio*source candidate."""
+    matrix = np.asarray(x_values, dtype=float)
+    target = np.asarray(y_values, dtype=float).reshape(-1)
+    if matrix.ndim != 2 or matrix.shape[0] != len(target) or not len(target):
+        return None
+
+    holdout_indexes = build_symbolic_holdout_indexes(len(target))
+    best_candidate = None
+    for feature_index, feature_name in enumerate(feature_names):
+        source = matrix[:, feature_index]
+        source_scale = max(float(np.nanstd(source)), 1.0)
+        valid_mask = (
+            np.isfinite(source)
+            & np.isfinite(target)
+            & (np.abs(source) > source_scale * 1.0e-10)
+        )
+        valid_count = int(np.sum(valid_mask))
+        valid_fraction = valid_count / max(len(target), 1)
+        if valid_count < max(20, int(math.ceil(len(target) * 0.80))):
+            continue
+
+        ratios = target[valid_mask] / source[valid_mask]
+        ratio = float(np.median(ratios))
+        if not math.isfinite(ratio) or abs(ratio) <= 1.0e-12:
+            continue
+        ratio_mad = float(np.median(np.abs(ratios - ratio)))
+        relative_dispersion = ratio_mad / max(abs(ratio), 1.0e-12)
+        source_std = float(np.std(source[valid_mask]))
+        target_std = float(np.std(target[valid_mask]))
+        if source_std <= 1.0e-12 or target_std <= 1.0e-12:
+            continue
+        absolute_correlation = abs(
+            float(np.corrcoef(source[valid_mask], target[valid_mask])[0, 1])
+        )
+        if not math.isfinite(absolute_correlation):
+            continue
+
+        fit_prediction = ratio * source
+        fit_score = safe_regression_r2(target, fit_prediction)
+        validation_metrics = None
+        if holdout_indexes is not None:
+            train_mask, validation_mask = holdout_indexes
+            valid_train = train_mask & valid_mask
+            if int(np.sum(valid_train)) >= 20:
+                training_ratios = target[valid_train] / source[valid_train]
+                training_ratio = float(np.median(training_ratios))
+                validation_metrics = calculate_regression_metrics(
+                    target[validation_mask],
+                    training_ratio * source[validation_mask],
+                )
+
+        selection_score = get_symbolic_selection_score(fit_score, validation_metrics)
+        auto_eligible = (
+            valid_fraction >= 0.95
+            and absolute_correlation >= 0.999
+            and relative_dispersion <= 0.05
+            and selection_score >= 0.98
+        )
+        forced_eligible = (
+            valid_fraction >= 0.80
+            and absolute_correlation >= 0.90
+            and relative_dispersion <= 0.25
+            and selection_score >= 0.80
+        )
+        candidate = {
+            "expression": format_linear_expression(
+                0.0,
+                [(ratio, str(feature_name).upper())],
+            ),
+            "fitScore": fit_score,
+            "score": selection_score,
+            "complexity": 1,
+            "method": "BANFF_INSPIRED_RATIO",
+            "message": append_symbolic_validation_diagnostics(
+                (
+                    "A deterministic single-ratio candidate was evaluated for "
+                    f"target={ratio:.12g}*{str(feature_name).upper()}. "
+                    f"absoluteCorrelation={absolute_correlation:.6g}; "
+                    f"relativeRatioMad={relative_dispersion:.6g}; "
+                    f"validRatioFraction={valid_fraction:.6g};"
+                ),
+                fit_score,
+                validation_metrics,
+            ),
+            "validation": validation_metrics,
+            "featureName": str(feature_name).upper(),
+            "ratio": ratio,
+            "absoluteCorrelation": absolute_correlation,
+            "relativeDispersion": relative_dispersion,
+            "validFraction": valid_fraction,
+            "autoEligibleYn": "Y" if auto_eligible else "N",
+            "forcedEligibleYn": "Y" if forced_eligible else "N",
+        }
+        if (
+            best_candidate is None
+            or float(candidate["score"]) > float(best_candidate["score"])
+            or (
+                math.isclose(
+                    float(candidate["score"]),
+                    float(best_candidate["score"]),
+                    abs_tol=1.0e-12,
+                )
+                and float(candidate["relativeDispersion"])
+                < float(best_candidate["relativeDispersion"])
+            )
+        ):
+            best_candidate = candidate
+    return best_candidate
+
+
+def select_banff_inspired_ratio_candidate(
+    base_candidate: Tuple[str, float, int, str, str],
+    x_values,
+    y_values,
+    feature_names: Sequence[str],
+    banff_mode: str,
+) -> Tuple[str, float, int, str, str]:
+    mode = normalize_banff_mode(banff_mode)
+    expression, score, complexity, method, message = base_candidate
+    limitation = (
+        "banffScope=SINGLE_RATIO_ONLY; fullBanffImplementation=N; "
+        "donorImputation=N; missingValueImputation=N; "
+        "multivariateErrorLocalization=N; minimumChangeOptimization=N."
+    )
+    if mode == "OFF":
+        return (
+            expression,
+            score,
+            complexity,
+            method,
+            f"{message} banffMode=OFF; banffRatioEvaluated=N; {limitation}",
+        )
+
+    ratio_candidate = fit_single_ratio_candidate(
+        x_values,
+        y_values,
+        feature_names,
+    )
+    if ratio_candidate is None:
+        return (
+            expression,
+            score,
+            complexity,
+            method,
+            (
+                f"{message} banffMode={mode}; banffRatioEvaluated=Y; "
+                f"banffRatioSelected=N; banffRatioReason=NO_VALID_RATIO_CANDIDATE; "
+                f"{limitation}"
+            ),
+        )
+
+    ratio_score = float(ratio_candidate.get("score") or 0.0)
+    if mode == "RATIO":
+        selected = ratio_candidate.get("forcedEligibleYn") == "Y"
+        selection_reason = (
+            "FORCED_OPTION_QUALITY_GATE_PASSED"
+            if selected
+            else "FORCED_OPTION_QUALITY_GATE_FAILED"
+        )
+    else:
+        selected = (
+            ratio_candidate.get("autoEligibleYn") == "Y"
+            and ratio_score >= float(score) - 0.0005
+            and int(ratio_candidate.get("complexity") or 0) <= int(complexity)
+        )
+        selection_reason = (
+            "STRONG_SINGLE_RATIO_RELATION_AND_PARSIMONY"
+            if selected
+            else "CONSERVATIVE_AUTO_KEEP_BASELINE"
+        )
+
+    comparison = (
+        f"banffRatioFeature={ratio_candidate.get('featureName')}; "
+        f"banffRatioScore={ratio_score:.6g}; baselineMethod={method}; "
+        f"baselineScore={float(score):.6g};"
+    )
+    if selected:
+        return (
+            str(ratio_candidate["expression"]),
+            ratio_score,
+            int(ratio_candidate["complexity"]),
+            str(ratio_candidate["method"]),
+            (
+                f"{ratio_candidate['message']} banffMode={mode}; "
+                f"banffRatioSelected=Y; banffRatioReason={selection_reason}; "
+                f"{comparison} {limitation}"
+            ),
+        )
+    return (
+        expression,
+        score,
+        complexity,
+        method,
+        (
+            f"{message} banffMode={mode}; banffRatioEvaluated=Y; "
+            f"banffRatioSelected=N; banffRatioReason={selection_reason}; "
+            f"{comparison} {limitation}"
+        ),
+    )
+
+
+def get_monte_carlo_model_family(method: str) -> Optional[str]:
+    normalized = str(method or "").upper()
+    if normalized == "BANFF_INSPIRED_RATIO":
+        return "RATIO"
+    if "ROBUST" in normalized and "IRLS" in normalized:
+        return "ROBUST_IRLS"
+    if "LINEAR" in normalized:
+        return "OLS"
+    return None
+
+
+def fit_monte_carlo_parameters(model_family: str, x_values, y_values) -> Dict[str, Any]:
+    if model_family == "RATIO":
+        source = np.asarray(x_values, dtype=float)[:, 0]
+        target = np.asarray(y_values, dtype=float)
+        source_scale = max(float(np.std(source)), 1.0)
+        valid = np.isfinite(source) & np.isfinite(target) & (
+            np.abs(source) > source_scale * 1.0e-10
+        )
+        if int(np.sum(valid)) < 10:
+            raise ValueError("The ratio resample has too few nonzero source values.")
+        return {"ratio": float(np.median(target[valid] / source[valid]))}
+    if model_family == "ROBUST_IRLS":
+        return fit_robust_student_t_parameters(
+            x_values,
+            y_values,
+            max_iterations=100,
+        )
+
+    model = LinearRegression()
+    model.fit(x_values, y_values)
+    return {
+        "intercept": float(model.intercept_),
+        "coefficients": np.asarray(model.coef_, dtype=float),
+    }
+
+
+def predict_monte_carlo_parameters(model_family: str, parameters: Dict[str, Any], x_values):
+    if model_family == "RATIO":
+        return float(parameters["ratio"]) * np.asarray(x_values, dtype=float)[:, 0]
+    return predict_linear_parameters(parameters, x_values)
+
+
+def run_monte_carlo_stability_diagnostic(
+    x_values,
+    y_values,
+    feature_names: Sequence[str],
+    expression: str,
+    method: str,
+    monte_carlo_mode: str,
+    iterations: int,
+    max_rows: int,
+) -> str:
+    require_sklearn()
+    requested_mode = normalize_monte_carlo_mode(monte_carlo_mode)
+    fixed_note = "monteCarloSeed=42; scope=STABILITY_ONLY; randomizedPredictionOutput=N."
+    if requested_mode == "OFF":
+        return (
+            "monteCarloMode=OFF; monteCarloExecuted=N; "
+            f"monteCarloReason=DISABLED; {fixed_note}"
+        )
+
+    model_family = get_monte_carlo_model_family(method)
+    if model_family is None:
+        return (
+            f"monteCarloMode={requested_mode}; monteCarloExecuted=N; "
+            f"monteCarloReason=UNSUPPORTED_METHOD_{str(method or 'NONE').upper()}; "
+            f"{fixed_note}"
+        )
+
+    all_feature_names = [str(name).upper() for name in feature_names]
+    used_feature_names = extract_expression_feature_names(
+        expression,
+        all_feature_names,
+    )
+    if model_family == "RATIO" and len(used_feature_names) != 1:
+        return (
+            f"monteCarloMode={requested_mode}; monteCarloExecuted=N; "
+            "monteCarloReason=RATIO_FEATURE_UNRESOLVED; "
+            f"{fixed_note}"
+        )
+    if not used_feature_names:
+        return (
+            f"monteCarloMode={requested_mode}; monteCarloExecuted=N; "
+            "monteCarloReason=EXPRESSION_FEATURES_UNRESOLVED; "
+            f"{fixed_note}"
+        )
+
+    source_matrix = np.asarray(x_values, dtype=float)
+    target = np.asarray(y_values, dtype=float).reshape(-1)
+    feature_indexes = [all_feature_names.index(name) for name in used_feature_names]
+    matrix = source_matrix[:, feature_indexes]
+    row_count = len(target)
+    if requested_mode == "AUTO" and row_count < 200:
+        return (
+            "monteCarloMode=AUTO; monteCarloExecuted=N; "
+            f"monteCarloReason=AUTO_MIN_ROWS_NOT_MET; monteCarloRows={row_count}; "
+            f"{fixed_note}"
+        )
+    if row_count < 30:
+        return (
+            f"monteCarloMode={requested_mode}; monteCarloExecuted=N; "
+            f"monteCarloReason=MIN_ROWS_NOT_MET; monteCarloRows={row_count}; "
+            f"{fixed_note}"
+        )
+
+    rng = np.random.default_rng(42)
+    effective_row_count = min(row_count, max(100, int(max_rows)))
+    subsampled = effective_row_count < row_count
+    if subsampled:
+        sampled_indexes = np.sort(
+            rng.choice(row_count, size=effective_row_count, replace=False)
+        )
+        matrix = matrix[sampled_indexes]
+        target = target[sampled_indexes]
+
+    effective_mode = (
+        "REPEATED_HOLDOUT" if requested_mode == "AUTO" else requested_mode
+    )
+    requested_iterations = clamp(int(iterations), 5, 50)
+    metrics: List[Dict[str, float]] = []
+    all_indexes = np.arange(effective_row_count)
+    for _ in range(requested_iterations):
+        if effective_mode == "BOOTSTRAP":
+            train_indexes = rng.choice(
+                effective_row_count,
+                size=effective_row_count,
+                replace=True,
+            )
+            selected = np.zeros(effective_row_count, dtype=bool)
+            selected[np.unique(train_indexes)] = True
+            validation_indexes = all_indexes[~selected]
+            if len(validation_indexes) < 10:
+                continue
+        else:
+            shuffled = rng.permutation(effective_row_count)
+            validation_count = max(6, int(round(effective_row_count * 0.20)))
+            validation_indexes = shuffled[:validation_count]
+            train_indexes = shuffled[validation_count:]
+        try:
+            parameters = fit_monte_carlo_parameters(
+                model_family,
+                matrix[train_indexes],
+                target[train_indexes],
+            )
+            prediction = predict_monte_carlo_parameters(
+                model_family,
+                parameters,
+                matrix[validation_indexes],
+            )
+            next_metrics = calculate_regression_metrics(
+                target[validation_indexes],
+                prediction,
+            )
+            if all(
+                math.isfinite(float(next_metrics[key]))
+                for key in ("r2", "rmse", "mae")
+            ):
+                metrics.append(next_metrics)
+        except Exception:
+            continue
+
+    if len(metrics) < max(3, requested_iterations // 2):
+        return (
+            f"monteCarloMode={requested_mode}; "
+            f"monteCarloEffectiveMode={effective_mode}; monteCarloExecuted=N; "
+            "monteCarloReason=TOO_FEW_VALID_RESAMPLES; "
+            f"monteCarloIterations={len(metrics)}/{requested_iterations}; "
+            f"monteCarloRows={effective_row_count}; {fixed_note}"
+        )
+
+    r2_values = np.asarray([item["r2"] for item in metrics], dtype=float)
+    rmse_values = np.asarray([item["rmse"] for item in metrics], dtype=float)
+    mae_values = np.asarray([item["mae"] for item in metrics], dtype=float)
+    r2_mean = float(np.mean(r2_values))
+    r2_std = float(np.std(r2_values))
+    rmse_mean = float(np.mean(rmse_values))
+    rmse_std = float(np.std(rmse_values))
+    mae_mean = float(np.mean(mae_values))
+    mae_std = float(np.std(mae_values))
+    rmse_coefficient_variation = rmse_std / max(abs(rmse_mean), 1.0e-12)
+    stable = r2_std <= 0.05 and rmse_coefficient_variation <= 0.15
+    return (
+        f"monteCarloMode={requested_mode}; "
+        f"monteCarloEffectiveMode={effective_mode}; monteCarloExecuted=Y; "
+        f"monteCarloModelFamily={model_family}; "
+        f"monteCarloIterations={len(metrics)}/{requested_iterations}; "
+        f"monteCarloRows={effective_row_count}; "
+        f"monteCarloSubsampled={'Y' if subsampled else 'N'}; "
+        f"monteCarloR2Mean={r2_mean:.6g}; monteCarloR2Std={r2_std:.6g}; "
+        f"monteCarloRmseMean={rmse_mean:.6g}; monteCarloRmseStd={rmse_std:.6g}; "
+        f"monteCarloMaeMean={mae_mean:.6g}; monteCarloMaeStd={mae_std:.6g}; "
+        f"monteCarloStable={'Y' if stable else 'N'}; {fixed_note}"
+    )
 
 
 def fit_sparse_linear_candidate(

@@ -93,46 +93,53 @@
               "order": 6
             },
             {
+              "key": "INPUT.P_DIMENSION_REDUCTION_MODE",
+              "value": "IN VARCHAR2",
+              "comment": "Source-feature screening mode: AUTO, PCA, or NONE. PCA selects representative physical columns and never stores synthetic PC columns.",
+              "defaultValue": "AUTO",
+              "order": 7
+            },
+            {
               "key": "INPUT.P_MAX_AUTO_TARGETS",
               "value": "IN NUMBER",
               "comment": "Maximum auto target columns when P_TARGET_COLUMN is (auto)",
               "defaultValue": "10",
-              "order": 7
+              "order": 8
             },
             {
               "key": "INPUT.P_CONTINUE_ON_ERROR",
               "value": "IN VARCHAR2",
               "comment": "Continue remaining auto targets when one target fails",
               "defaultValue": "Y",
-              "order": 8
+              "order": 9
             },
             {
               "key": "INPUT.P_RUN_SOURCE_TYPE",
               "value": "IN VARCHAR2",
               "comment": "DATA_WORK or FLOW_WORK",
               "defaultValue": ":INIT$RunSourceType",
-              "order": 9
+              "order": 10
             },
             {
               "key": "INPUT.P_RUN_ID",
               "value": "IN NUMBER",
               "comment": "Run ID linking results from the same DATA_WORK or FLOW_WORK execution",
               "defaultValue": ":INIT$RunId",
-              "order": 10
+              "order": 11
             },
             {
               "key": "OUTPUT.status",
               "value": "$.status",
               "comment": "API success status",
               "defaultValue": "",
-              "order": 11
+              "order": 12
             },
             {
               "key": "OUTPUT.resultTable",
               "value": "$.resultTable -> INIT$_TB_COLREL_LASSO_FEATURE",
               "comment": "Result table managed by the internal Python service",
               "defaultValue": "INIT$_TB_COLREL_LASSO_FEATURE",
-              "order": 12
+              "order": 13
             }
           ]
         },
@@ -393,46 +400,88 @@
               "order": 11
             },
             {
+              "key": "INPUT.P_DIMENSION_REDUCTION_MODE",
+              "value": "IN VARCHAR2",
+              "comment": "Source-feature screening mode: AUTO, PCA, or NONE. PCA retains representative original columns only.",
+              "defaultValue": "AUTO",
+              "order": 12
+            },
+            {
+              "key": "INPUT.P_ESTIMATION_MODE",
+              "value": "IN VARCHAR2",
+              "comment": "Linear estimator: AUTO, OLS, or ROBUST_IRLS. Robust mode uses deterministic Student-t-style IRLS.",
+              "defaultValue": "AUTO",
+              "order": 13
+            },
+            {
+              "key": "INPUT.P_MONTE_CARLO_MODE",
+              "value": "IN VARCHAR2",
+              "comment": "Fixed-seed stability validation: OFF, AUTO, BOOTSTRAP, or REPEATED_HOLDOUT. It does not randomize correction predictions.",
+              "defaultValue": "AUTO",
+              "order": 14
+            },
+            {
+              "key": "INPUT.P_MONTE_CARLO_ITERATIONS",
+              "value": "IN NUMBER",
+              "comment": "Stability-validation resample count, clamped to 5-50",
+              "defaultValue": "20",
+              "order": 15
+            },
+            {
+              "key": "INPUT.P_MONTE_CARLO_MAX_ROWS",
+              "value": "IN NUMBER",
+              "comment": "Maximum rows used only for stability validation, clamped to 100-10000",
+              "defaultValue": "5000",
+              "order": 16
+            },
+            {
+              "key": "INPUT.P_BANFF_MODE",
+              "value": "IN VARCHAR2",
+              "comment": "Single-ratio candidate mode: AUTO, RATIO, or OFF. This is Banff-inspired and is not a full Banff implementation.",
+              "defaultValue": "AUTO",
+              "order": 17
+            },
+            {
               "key": "INPUT.P_MAX_AUTO_TARGETS",
               "value": "IN NUMBER",
               "comment": "Maximum auto target columns when P_TARGET_COLUMN is (auto)",
               "defaultValue": "10",
-              "order": 12
+              "order": 18
             },
             {
               "key": "INPUT.P_CONTINUE_ON_ERROR",
               "value": "IN VARCHAR2",
               "comment": "Continue remaining auto targets when one target fails",
               "defaultValue": "Y",
-              "order": 13
+              "order": 19
             },
             {
               "key": "INPUT.P_RUN_SOURCE_TYPE",
               "value": "IN VARCHAR2",
               "comment": "DATA_WORK or FLOW_WORK",
               "defaultValue": ":INIT$RunSourceType",
-              "order": 14
+              "order": 20
             },
             {
               "key": "INPUT.P_RUN_ID",
               "value": "IN NUMBER",
               "comment": "Run ID linking results from the same DATA_WORK or FLOW_WORK execution",
               "defaultValue": ":INIT$RunId",
-              "order": 15
+              "order": 21
             },
             {
               "key": "OUTPUT.status",
               "value": "$.status",
               "comment": "API success status",
               "defaultValue": "",
-              "order": 16
+              "order": 22
             },
             {
               "key": "OUTPUT.resultTable",
               "value": "$.resultTable -> INIT$_TB_RULEDISC_SYMBOLIC",
               "comment": "Result table managed by the internal Python service",
               "defaultValue": "INIT$_TB_RULEDISC_SYMBOLIC",
-              "order": 17
+              "order": 23
             }
           ]
         },
@@ -612,7 +661,7 @@
             {
               "key": "INPUT.P_MAX_ITERATIONS",
               "value": "IN NUMBER",
-              "comment": "Maximum LASSO iterations",
+              "comment": "Maximum Symbolic/robust estimator iterations",
               "defaultValue": "10000",
               "order": 21
             },
@@ -652,46 +701,88 @@
               "order": 26
             },
             {
+              "key": "INPUT.P_DIMENSION_REDUCTION_MODE",
+              "value": "IN VARCHAR2",
+              "comment": "Source-feature screening mode: AUTO, PCA, or NONE. PCA retains representative original columns only.",
+              "defaultValue": "AUTO",
+              "order": 27
+            },
+            {
+              "key": "INPUT.P_ESTIMATION_MODE",
+              "value": "IN VARCHAR2",
+              "comment": "Linear estimator: AUTO, OLS, or ROBUST_IRLS. Robust mode uses deterministic Student-t-style IRLS.",
+              "defaultValue": "AUTO",
+              "order": 28
+            },
+            {
+              "key": "INPUT.P_MONTE_CARLO_MODE",
+              "value": "IN VARCHAR2",
+              "comment": "Fixed-seed stability validation: OFF, AUTO, BOOTSTRAP, or REPEATED_HOLDOUT. It does not randomize correction predictions.",
+              "defaultValue": "AUTO",
+              "order": 29
+            },
+            {
+              "key": "INPUT.P_MONTE_CARLO_ITERATIONS",
+              "value": "IN NUMBER",
+              "comment": "Stability-validation resample count, clamped to 5-50",
+              "defaultValue": "20",
+              "order": 30
+            },
+            {
+              "key": "INPUT.P_MONTE_CARLO_MAX_ROWS",
+              "value": "IN NUMBER",
+              "comment": "Maximum rows used only for stability validation, clamped to 100-10000",
+              "defaultValue": "5000",
+              "order": 31
+            },
+            {
+              "key": "INPUT.P_BANFF_MODE",
+              "value": "IN VARCHAR2",
+              "comment": "Single-ratio candidate mode: AUTO, RATIO, or OFF. This is Banff-inspired and is not a full Banff implementation.",
+              "defaultValue": "AUTO",
+              "order": 32
+            },
+            {
               "key": "INPUT.P_MAX_AUTO_TARGETS",
               "value": "IN NUMBER",
               "comment": "Maximum auto continuous target count",
               "defaultValue": "10",
-              "order": 27
+              "order": 33
             },
             {
               "key": "INPUT.P_CONTINUE_ON_ERROR",
               "value": "IN VARCHAR2",
               "comment": "Continue remaining subtasks when one fails. Y can return partial completion, so review failed-task details.",
               "defaultValue": "Y",
-              "order": 28
+              "order": 34
             },
             {
               "key": "INPUT.P_RUN_SOURCE_TYPE",
               "value": "IN VARCHAR2",
               "comment": "DATA_WORK or FLOW_WORK",
               "defaultValue": ":INIT$RunSourceType",
-              "order": 29
+              "order": 35
             },
             {
               "key": "INPUT.P_RUN_ID",
               "value": "IN NUMBER",
               "comment": "Run ID linking profiling, relationship-network, and rule results from the same DATA_WORK or FLOW_WORK execution",
               "defaultValue": ":INIT$RunId",
-              "order": 30
+              "order": 36
             },
             {
               "key": "OUTPUT.status",
               "value": "$.status",
               "comment": "API success status",
               "defaultValue": "",
-              "order": 31
+              "order": 37
             },
             {
               "key": "OUTPUT.resultTables",
               "value": "$.resultTables",
               "comment": "Service-managed result tables",
               "defaultValue": "INIT$_TB_RULEDISC_ASSOC_SUM,INIT$_TB_COLREL_LASSO_FEATURE,INIT$_TB_RULEDISC_SYMBOLIC",
-              "order": 32
+              "order": 38
             }
           ]
         },

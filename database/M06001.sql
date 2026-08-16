@@ -382,6 +382,17 @@ SELECT (
        ) AS TARGET_TABLE_COUNT
      , (
         SELECT COUNT(*)
+          FROM INIT$_TB_TABLES T
+         WHERE T.PROJECT_ID = :projectId
+           AND (:scenarioId IS NULL OR T.SCENARIO_ID = :scenarioId)
+           AND T.USE_YN = 'Y'
+           AND T.OWNER_NAME IS NOT NULL
+           AND T.TABLE_NAME IS NOT NULL
+           AND T.EDIT_OWNER_NAME IS NOT NULL
+           AND T.EDIT_TABLE_NAME IS NOT NULL
+       ) AS EDIT_READY_TARGET_TABLE_COUNT
+     , (
+        SELECT COUNT(*)
           FROM INIT$_TB_FLOW_WORK F
          WHERE F.PROJECT_ID = :projectId
            AND (:scenarioId IS NULL OR F.SCENARIO_ID = :scenarioId)

@@ -891,7 +891,7 @@
                 palette.innerHTML = `
                     <div class="m06002-grid-error">
                         <i class="fas fa-circle-exclamation" aria-hidden="true"></i>
-                        <strong>${this.escapeHtml(this.t("catalogLoadFailed", "기본형 보고서 20종을 불러오지 못했습니다."))}</strong>
+                        <strong>${this.escapeHtml(this.t("catalogLoadFailed", "기본형 보고서 21종을 불러오지 못했습니다."))}</strong>
                         <span>${this.escapeHtml(this.localizedError(error, "tryAgainLater", "잠시 후 다시 시도해 주세요."))}</span>
                     </div>`;
             }

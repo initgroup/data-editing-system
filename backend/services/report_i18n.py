@@ -28,10 +28,11 @@ REPORT_CATALOG_EN: dict[str, tuple[str, str]] = {
     "R14": ("Editing work and table status", "Shows source/edit table mappings and preparation and progress by editing session."),
     "R15": ("Error correction results", "Calculates correction counts, application status, and expected-value match rate consistently."),
     "R16": ("Correction and match history", "Tracks corrected columns, change and expected-match status, rule, user, and time without exposing sensitive values."),
-    "R17": ("Before-and-after editing validation", "Compares violation changes, applied corrections, and validation status between baseline and reanalysis runs."),
+    "R17": ("Before-and-after editing validation", "Compares violation changes, applied corrections, validation-time descriptive statistics, and variance changes between baseline and reanalysis runs."),
     "R18": ("Production application and DML status", "Shows approval and execution status and affected rows for production DML."),
     "R19": ("Complete audit history", "Shows major audit events from rule decisions through production application in time order."),
     "R20": ("Project and scenario comparison scorecard", "Compares rule-selection and correction-application rates using the latest successful run and editing session per scenario."),
+    "R21": ("Data-profile comparison and descriptive statistics", "Provides a full printable change map, priority-ranked columns, before-and-after descriptive statistics, and same-bin distribution comparisons."),
 }
 
 SECTION_TITLES_EN = {
@@ -72,15 +73,25 @@ SECTION_TITLES_EN = {
     "연결 재분석 상태": "Linked reanalysis status",
     "재현 기준": "Reproduction basis",
     "효과 검증 데이터 한계": "Effect-validation data limitations",
+    "변경 전/후 기초통계량": "Before-and-after descriptive statistics",
+    "분산 변화 비교": "Variance change comparison",
+    "기초통계량 스냅샷 없음": "Descriptive-statistics snapshot unavailable",
     "최근 감사 이력 300개": "Latest 300 audit events",
     "시나리오 비교 스코어카드": "Scenario comparison scorecard",
+    "기초통계량 보고서 생성 안내": "Descriptive-statistics report notice",
+    "기초통계량 분석 요약": "Descriptive-statistics analysis summary",
+    "중요 컬럼 우선순위": "Priority-ranked columns",
+    "평균·분산·분포 범위 변화": "Mean, variance, and distribution-range changes",
+    "컬럼별 동일 구간 분포 비교": "Same-bin distribution comparison by column",
+    "범주·문자형 상위 값 분포": "Top-value distribution for categorical and text columns",
+    "컬럼별 상세 기초통계량": "Detailed descriptive statistics by column",
     "보고서 생성 안내": "Report generation notice",
 }
 
 TEXT_EN = {
     "본 보고서는 IN-DEPS 시스템에서 제공합니다.": "This report is provided by the IN-DEPS system.",
     "기본형 보고서 통합본": "All Basic Reports",
-    "선택한 동일 기준으로 생성한 고정 20종 기본형 보고서를 한 번에 제공합니다.": "Provides all 20 fixed Basic Reports generated from the same selected basis.",
+    "선택한 동일 기준으로 생성한 고정 21종 기본형 보고서를 한 번에 제공합니다.": "Provides all 21 fixed Basic Reports generated from the same selected basis.",
     "아직 실행·에디팅 이력이 없습니다.": "No execution or editing history is available yet.",
     "설계된 M04001 Flow가 없습니다.": "No M04001 Flow has been designed.",
     "실행 이력이 없어 Flow 설계 기준만 제공합니다.": "Only the Flow design basis is available because there is no execution history.",
@@ -92,9 +103,18 @@ TEXT_EN = {
     "효과 검증 기준 에디팅 세션을 선택해야 합니다.": "Select an editing session as the effect-validation basis.",
     "저장된 효과 검증 스냅샷이 없어 과거 효과 지표를 재산정하지 않습니다.": "Historical effect indicators are not recalculated because no saved validation snapshot exists.",
     "선택한 세션의 효과 검증이 완료되지 않았습니다.": "Effect validation for the selected session is not complete.",
+    "효과 검증이 완료된 수정 작업 이력이 없습니다.": "No edit operation with completed effect validation is available.",
+    "수정 전·후 효과검증 보고서는 수정 작업 이력을 선택하면 조회할 수 있습니다.": "Select an edit-history item to view the before-and-after effect-validation report.",
     "분석 기준 Flow Run을 선택해야 합니다.": "Select a Flow Run as the analysis basis.",
     "에디팅 세션을 선택해야 합니다.": "Select an editing session.",
+    "기초통계량을 계산할 에디팅 세션을 선택해야 합니다.": "Select an editing session for descriptive-statistics analysis.",
+    "INITUP$ 원본 프로파일을 제공하며 INITDN$가 없어 수정 비교값만 제외됩니다.": "The INITUP$ source profile is available; only revised comparison values are omitted because INITDN$ is absent.",
+    "수정(비교 대상 없음)": "Revised (comparison unavailable)",
     "선택한 기준에 생성된 데이터가 없습니다.": "No data was generated for the selected basis.",
+    "저장된 수정 작업 이력이 없습니다.": "No saved edit-operation history is available.",
+    "이 보고서는 상단에서 수정 작업 이력을 선택하면 조회할 수 있습니다.": "Select an edit-history item above to view this report.",
+    "등록된 INITUP$·INITDN$ 비교 쌍을 확인할 수 없습니다.": "No registered INITUP$ and INITDN$ comparison pair is available.",
+    "등록된 대상 테이블이 없습니다.": "No target table is registered.",
     "이 보고서 내용을 생성하지 못했습니다. 잠시 후 다시 시도해 주세요.": "This report could not be generated. Please try again later.",
     "다른 보고서는 정상적으로 생성되었으며 이 항목만 다시 확인할 수 있습니다.": "Other reports were generated successfully; retry this report separately.",
     "기준 시각": "Basis time",
@@ -103,13 +123,28 @@ TEXT_EN = {
     "Symbolic 점수": "Symbolic score",
     "비율 지표": "Rate indicator",
     "보고서를 생성한 시각이며 실행·세션 식별자와 함께 결과 기준을 고정합니다.": "The report generation time; together with run and session identifiers it fixes the result basis.",
+    "보고서를 생성한 시각이며 선택한 분석 Run·수정 작업 식별자와 함께 결과 기준을 고정합니다.": "The report generation time; together with the selected analysis run and edit-operation identifier it fixes the result basis.",
     "보고서 유형은 유지되지만 선택 기준에서 해당 결과가 생성되지 않은 상태입니다.": "The report type remains fixed, but no result was generated for the selected basis.",
-    "필요한 Flow Run 또는 에디팅 세션이 선택되지 않아 산정할 수 없는 상태입니다.": "The value cannot be calculated because a required Flow Run or editing session is not selected.",
+    "보고서 산정에 필요한 분석 기준이 없어 계산할 수 없는 상태입니다.": "The value cannot be calculated because the required analysis basis is unavailable.",
     "연관규칙 패턴이 전체 데이터에서 함께 관찰된 비율이며 0~1로 정규화합니다.": "The share of all data in which the association pattern is observed, normalized to 0–1.",
     "연관규칙 조건이 참일 때 결과도 참인 비율이며 0~1로 정규화합니다.": "The probability that the result is true when the association condition is true, normalized to 0–1.",
     "결과의 기본 발생률 대비 규칙의 결합 강도입니다.": "Association strength relative to the result's baseline occurrence rate.",
     "Symbolic 모델이 저장한 품질 점수이며 연관규칙 Confidence와 다른 척도로 구분합니다.": "A quality score stored by the Symbolic model, kept separate from association-rule Confidence.",
     "서로 다른 데이터 규모를 비교할 수 있도록 분자와 분모를 함께 제공합니다.": "Provides numerator and denominator so different data volumes can be compared.",
+    "모집단 분산": "Population variance",
+    "변경 전·후 전체 유효값을 모집단으로 보고 VAR_POP과 STDDEV_POP 기준으로 산정합니다.": "Treats all valid before-and-after values as the population and uses VAR_POP and STDDEV_POP.",
+    "초과첨도": "Excess kurtosis",
+    "정규분포의 첨도를 0으로 보는 기준이며 4차 중심적률을 분산 제곱으로 나눈 뒤 3을 뺍니다.": "Uses excess kurtosis, where a normal distribution is zero: the fourth central moment divided by squared variance, minus three.",
+    "숫자 변환 실패": "Numeric conversion failure",
+    "문자형 연속 컬럼에서 숫자로 변환할 수 없는 값은 NULL로 처리해 유효값 집계에서 제외하고 결측·변환실패 건수에 포함합니다.": "Non-numeric values in text-based continuous columns become NULL, are excluded from valid-value metrics, and are counted as missing or conversion failures.",
+    "컬럼 중요도 점수": "Column importance score",
+    "규칙 위반 55점, 결측 15점, 분산 변화 15점, 평균 이동 10점, 범위 이동 5점의 가중치를 합산한 확인 우선순위 지표입니다.": "A review-priority score combining rule violations (55), missingness (15), variance change (15), mean shift (10), and range shift (5).",
+    "효과 검증 완료 시 저장된 수치만 사용합니다. 문자형 숫자 변환 실패는 NULL로 처리하며 첨도는 초과첨도, 분산과 표준편차는 모집단 기준입니다.": "Uses only values saved at effect validation. Text conversion failures become NULL; kurtosis is excess kurtosis; variance and standard deviation use population formulas.",
+    "분산 감소율은 (변경 전 분산 - 변경 후 분산) / 변경 전 분산으로 산정합니다.": "Variance reduction rate is (before variance - after variance) / before variance.",
+    "이 효과 검증 이력에는 변경 전·후 기초통계량이 저장되지 않아 현재 테이블로 과거 분포를 재산정하지 않습니다.": "This validation history has no saved before-and-after statistics, so the historical distribution is not recalculated from current tables.",
+    "다음 효과 검증부터 검증 시점의 기초통계량과 분산 변화가 함께 저장됩니다.": "Future validations save descriptive statistics and variance changes at validation time.",
+    "변경 전": "Before",
+    "변경 후": "After",
 }
 
 REPORT_UI_TEXT = {
@@ -233,6 +268,9 @@ def localize_report_document(document: dict[str, Any], language: str) -> dict[st
         for column in section.get("columns") or []:
             if isinstance(column, dict):
                 column["label"] = _english_label(str(column.get("key") or column.get("label") or "Value"))
+        for row in section.get("rows") or []:
+            if isinstance(row, dict) and isinstance(row.get("DATA_STAGE"), str):
+                row["DATA_STAGE"] = TEXT_EN.get(row["DATA_STAGE"], row["DATA_STAGE"])
         paragraphs = section.get("paragraphs")
         if isinstance(paragraphs, list):
             section["paragraphs"] = [

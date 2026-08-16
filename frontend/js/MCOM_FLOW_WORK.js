@@ -178,14 +178,19 @@
                 this.stopCanvasRunStatusPolling({ abortRequest: false });
             },
 
-            onShow() {
+            async onShow() {
                 this.isPageVisible = true;
                 const pendingEditingContext = this.readEditingRuntimeContext();
                 if (pendingEditingContext?.editSessionId) {
+                    const contextChanged = (
+                        String(pendingEditingContext.projectId || "") !== String(this.selectedProjectId || "")
+                        || String(pendingEditingContext.scenarioId || "") !== String(this.selectedScenarioId || "")
+                    );
                     this.editingRuntimeContext = pendingEditingContext;
                     this.flowRunTargetMode = pendingEditingContext.preferredTargetMode === "EDIT"
                         ? "EDIT"
                         : "SOURCE";
+                    if (contextChanged) await this.loadWorkContext();
                     this.renderEditingRuntimeBanner();
                 }
                 if (

@@ -1244,6 +1244,30 @@
             };
         },
 
+        mergeAdvancedContinuousParameters(method, registeredRows = []) {
+            const compatibilityKeys = new Set([
+                "P_DIMENSION_REDUCTION_MODE",
+                "P_ESTIMATION_MODE",
+                "P_MONTE_CARLO_MODE",
+                "P_MONTE_CARLO_ITERATIONS",
+                "P_MONTE_CARLO_MAX_ROWS",
+                "P_BANFF_MODE"
+            ]);
+            const rows = Array.isArray(registeredRows) ? registeredRows : [];
+            const registeredKeys = new Set(
+                rows.map((row) => String(row.itemName || "").trim().toUpperCase()).filter(Boolean)
+            );
+            const builtin = this.getBuiltinWebApiDefinition(method);
+            const additions = (builtin?.params || []).filter((row) => {
+                const key = String(row.itemName || "").trim().toUpperCase();
+                return compatibilityKeys.has(key) && !registeredKeys.has(key);
+            });
+            return [...rows, ...additions].map((row, index) => ({
+                ...row,
+                itemOrder: index + 1
+            }));
+        },
+
         resolveWebApiResultOwner(value) {
             const text = String(value || "").trim();
             if (!text || text.startsWith(":")) return this.getDefaultResultOwner();
@@ -1352,6 +1376,7 @@
                         { itemName: "P_MAX_FEATURES", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMaxFeatures", "Maximum selected feature count"), itemDefault: "10" },
                         { itemName: "P_SAMPLE_ROWS", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescSampleRows", "Maximum analysis sample rows"), itemDefault: "100000" },
                         { itemName: "P_ALPHA", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescAlpha", "LASSO alpha. Leave blank for cross-validation."), itemDefault: "" },
+                        { itemName: "P_DIMENSION_REDUCTION_MODE", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescDimensionReductionMode", "Source-feature screening: AUTO, PCA, or NONE. PCA keeps representative original columns only."), itemDefault: "AUTO" },
                         { itemName: "P_MAX_AUTO_TARGETS", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMaxAutoTargets", "Maximum automatic target count"), itemDefault: "10" },
                         { itemName: "P_CONTINUE_ON_ERROR", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescContinueOnError", "Continue when some automatic targets fail"), itemDefault: "Y" },
                         { itemName: "P_RUN_SOURCE_TYPE", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescRunSourceType", "Run source type (DATA_WORK/FLOW_WORK)"), itemDefault: runSourceType },
@@ -1375,6 +1400,12 @@
                         { itemName: "P_LINEAR_FIRST_YN", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescLinearFirstYn", "Try a linear symbolic rule before nonlinear search"), itemDefault: "Y" },
                         { itemName: "P_LINEAR_R2_THRESHOLD", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescLinearR2Threshold", "R2 threshold for accepting the linear symbolic rule"), itemDefault: "0.995" },
                         { itemName: "P_MIN_R2_SCORE", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMinR2Score", "Minimum LASSO R2 score for Symbolic Regression"), itemDefault: "0.7" },
+                        { itemName: "P_DIMENSION_REDUCTION_MODE", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescDimensionReductionMode", "Source-feature screening: AUTO, PCA, or NONE. PCA keeps representative original columns only."), itemDefault: "AUTO" },
+                        { itemName: "P_ESTIMATION_MODE", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescEstimationMode", "Linear estimator: AUTO, OLS, or ROBUST_IRLS (Student-t-style robust iteration)."), itemDefault: "AUTO" },
+                        { itemName: "P_MONTE_CARLO_MODE", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescMonteCarloMode", "Stability validation: OFF, AUTO, BOOTSTRAP, or REPEATED_HOLDOUT."), itemDefault: "AUTO" },
+                        { itemName: "P_MONTE_CARLO_ITERATIONS", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMonteCarloIterations", "Fixed-seed stability resample count (5-50)."), itemDefault: "20" },
+                        { itemName: "P_MONTE_CARLO_MAX_ROWS", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMonteCarloMaxRows", "Maximum rows used only for stability validation (100-10000)."), itemDefault: "5000" },
+                        { itemName: "P_BANFF_MODE", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescBanffMode", "Single-ratio candidate: AUTO, RATIO, or OFF. This is Banff-inspired, not a full Banff implementation."), itemDefault: "AUTO" },
                         { itemName: "P_MAX_AUTO_TARGETS", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMaxAutoTargets", "Maximum automatic target count"), itemDefault: "10" },
                         { itemName: "P_CONTINUE_ON_ERROR", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescContinueOnError", "Continue when some automatic targets fail"), itemDefault: "Y" },
                         { itemName: "P_RUN_SOURCE_TYPE", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescRunSourceType", "Run source type (DATA_WORK/FLOW_WORK)"), itemDefault: runSourceType },
@@ -1409,12 +1440,18 @@
                         { itemName: "P_CLUSTER_USAGE_MODE", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescClusterUsageMode", "Cluster usage: NONE, PREFER_SAME_CLUSTER, or WITHIN_CLUSTER_ONLY; non-NONE requires the same run's relationship network"), itemDefault: "PREFER_SAME_CLUSTER" },
                         { itemName: "P_SAMPLE_ROWS", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescSampleRows", "Maximum analysis sample rows"), itemDefault: "50000" },
                         { itemName: "P_ALPHA", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescAlpha", "LASSO alpha. (auto) lets the service select it."), itemDefault: "(auto)" },
-                        { itemName: "P_MAX_ITERATIONS", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMaxIterations", "Maximum LASSO iterations"), itemDefault: "10000" },
+                        { itemName: "P_MAX_ITERATIONS", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMaxIterations", "Maximum Symbolic/robust estimator iterations"), itemDefault: "10000" },
                         { itemName: "P_MAX_SYMBOLIC_TERMS", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMaxSymbolicTerms", "Maximum retained polynomial Symbolic Regression term count"), itemDefault: "8" },
                         { itemName: "P_USE_PYSR", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescUsePysr", "Use PySR (Y/N). N uses polynomial LASSO fallback."), itemDefault: "N" },
                         { itemName: "P_LINEAR_FIRST_YN", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescLinearFirstYn", "Try a linear symbolic rule before nonlinear search"), itemDefault: "Y" },
                         { itemName: "P_LINEAR_R2_THRESHOLD", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescLinearR2Threshold", "R2 threshold for accepting the linear symbolic rule"), itemDefault: "0.995" },
                         { itemName: "P_MIN_R2_SCORE", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMinR2Score", "Minimum LASSO R2 score for Symbolic Regression"), itemDefault: "0.7" },
+                        { itemName: "P_DIMENSION_REDUCTION_MODE", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescDimensionReductionMode", "Source-feature screening: AUTO, PCA, or NONE. PCA keeps representative original columns only."), itemDefault: "AUTO" },
+                        { itemName: "P_ESTIMATION_MODE", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescEstimationMode", "Linear estimator: AUTO, OLS, or ROBUST_IRLS (Student-t-style robust iteration)."), itemDefault: "AUTO" },
+                        { itemName: "P_MONTE_CARLO_MODE", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescMonteCarloMode", "Stability validation: OFF, AUTO, BOOTSTRAP, or REPEATED_HOLDOUT."), itemDefault: "AUTO" },
+                        { itemName: "P_MONTE_CARLO_ITERATIONS", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMonteCarloIterations", "Fixed-seed stability resample count (5-50)."), itemDefault: "20" },
+                        { itemName: "P_MONTE_CARLO_MAX_ROWS", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMonteCarloMaxRows", "Maximum rows used only for stability validation (100-10000)."), itemDefault: "5000" },
+                        { itemName: "P_BANFF_MODE", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescBanffMode", "Single-ratio candidate: AUTO, RATIO, or OFF. This is Banff-inspired, not a full Banff implementation."), itemDefault: "AUTO" },
                         { itemName: "P_MAX_AUTO_TARGETS", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMaxAutoTargets", "Maximum automatic target count"), itemDefault: "10" },
                         { itemName: "P_CONTINUE_ON_ERROR", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescContinueOnError", "Continue when some automatic targets fail"), itemDefault: "Y" },
                         { itemName: "P_RUN_SOURCE_TYPE", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescRunSourceType", "Run source type (DATA_WORK/FLOW_WORK)"), itemDefault: runSourceType },
@@ -1625,7 +1662,7 @@
                         resultTableName: api.resultTable || this.currentJob?.resultTableName || ""
                     };
                 }
-                this.parameters = (Array.isArray(json.data) ? json.data : []).map((row) => ({
+                const registeredParameters = (Array.isArray(json.data) ? json.data : []).map((row) => ({
                     itemName: row.itemName || "",
                     itemValue: row.itemValue || "",
                     itemDesc: row.itemDesc || "",
@@ -1636,6 +1673,10 @@
                     itemOrder: row.itemOrder ?? "",
                     bindName: row.bindName || ""
                 }));
+                this.parameters = this.mergeAdvancedContinuousParameters(
+                    api?.method || this.currentJob?.execMethod,
+                    registeredParameters
+                );
                 this.renderParameters();
                 this.renderCurrentJob();
             } catch (error) {

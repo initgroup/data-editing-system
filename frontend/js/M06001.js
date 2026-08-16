@@ -578,12 +578,13 @@
                 ["EDIT_SESSION_ID", "editSessionId"],
                 (row) => this.editSessionOptionLabel(row),
                 this.selectedEditSessionId,
-                this.t("noEditSessions", "No editing sessions")
+                this.t("noEditSessions", "No edit history"),
+                this.t("editHistoryOptional", "Not selected (general reports)")
             );
             this.renderSelectionHint();
         },
 
-        renderSelect(selector, rows, idKeys, labelFactory, selectedValue, emptyLabel) {
+        renderSelect(selector, rows, idKeys, labelFactory, selectedValue, emptyLabel, optionalLabel = "") {
             const select = getContainerEl(selector);
             if (!select) return;
             if (!rows.length) {
@@ -592,7 +593,10 @@
                 return;
             }
             select.disabled = false;
-            select.innerHTML = rows.map((row) => {
+            const optionalOption = optionalLabel
+                ? `<option value=""${selectedValue ? "" : " selected"}>${this.escapeHtml(optionalLabel)}</option>`
+                : "";
+            select.innerHTML = optionalOption + rows.map((row) => {
                 const id = String(firstValue(row, idKeys));
                 const selected = id === String(selectedValue || "") ? " selected" : "";
                 return `<option value="${this.escapeAttr(id)}"${selected}>${this.escapeHtml(labelFactory(row))}</option>`;
@@ -615,7 +619,7 @@
 
         editSessionOptionLabel(row) {
             const id = firstValue(row, ["EDIT_SESSION_ID", "editSessionId"], "-");
-            const name = firstValue(row, ["SESSION_NAME", "sessionName"], this.t("editingSession", "Editing session"));
+            const name = firstValue(row, ["SESSION_NAME", "sessionName"], this.t("editingSession", "Edit operation"));
             const status = firstValue(row, ["SESSION_STATUS", "sessionStatus"], "-");
             const at = firstValue(row, ["UPDATED_AT", "updatedAt", "CREATED_AT", "createdAt"]);
             return `#${id} · ${name} · ${status}${at ? ` · ${this.formatDate(at)}` : ""}`;
@@ -630,7 +634,7 @@
             }
             const runText = this.selectedFlowRunId ? `#${this.selectedFlowRunId}` : this.t("notSelected", "not selected");
             const sessionText = this.selectedEditSessionId ? `#${this.selectedEditSessionId}` : this.t("notSelected", "not selected");
-            hint.textContent = this.tl("selectionBasisHint", "Report basis: rule discovery run {run}, editing session {session}", {
+            hint.textContent = this.tl("selectionBasisHint", "Report basis: rule discovery run {run} · edit history {session} (not required for discovery or descriptive-statistics reports)", {
                 run: runText,
                 session: sessionText
             });

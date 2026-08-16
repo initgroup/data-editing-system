@@ -367,6 +367,7 @@
     "Residual (actual - predicted)": "잔차 (실제값 - 예측값)",
     "Residual samples": "잔차 표본",
     "Residuals should be distributed around zero without a clear pattern. Curves or widening bands can indicate model bias or changing variance.": "잔차는 뚜렷한 패턴 없이 0 주변에 분포하는 것이 좋습니다. 곡선이나 벌어지는 띠 모양은 모델 편향 또는 분산 변화를 의미할 수 있습니다.",
+    "Red points have an absolute residual greater than twice the sample MAE. Select a point to move to its row in the detail grid.": "빨간 점은 절대 잔차가 표본 MAE의 2배를 넘는 관심 측정값입니다. 점을 선택하면 하단 상세 그리드의 해당 행으로 이동합니다.",
     "No numeric feature samples are available for the response graph.": "반응 그래프에 사용할 숫자 피처 표본이 없습니다.",
     "The selected feature does not contain numeric sample values.": "선택한 피처에 숫자 표본 값이 없습니다.",
     "The formula response could not be calculated for the selected feature range.": "선택한 피처 범위의 수식 반응을 계산하지 못했습니다.",

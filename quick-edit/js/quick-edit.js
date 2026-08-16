@@ -27,7 +27,8 @@
         categorical: null,
         continuous: null,
         categoricalViolation: null,
-        continuousViolation: null
+        continuousViolation: null,
+        descriptiveStatistics: null
     };
     let continuousDetail = {
         ruleId: "",
@@ -38,7 +39,9 @@
         metrics: null,
         sampleCount: 0,
         hasMore: false,
-        error: ""
+        error: "",
+        selectedRowIndex: null,
+        chartPoints: []
     };
     let continuousDetailRequestId = 0;
     let chartResizeTimer = null;
@@ -47,6 +50,11 @@
     let pollGeneration = 0;
     let toastTimer = null;
     let lastRenderedStep = -1;
+    let quickHistoryRows = [];
+    let quickHistoryPage = 1;
+    let quickHistoryTotal = 0;
+    let quickHistoryBusy = false;
+    let quickHistoryError = "";
 
     function initialState() {
         return {
@@ -79,6 +87,9 @@
             resultArtifacts: null,
             resultWarning: "",
             error: "",
+            historyView: false,
+            historyViewedAt: null,
+            historySteps: [],
             targetContextId: null,
             updatedAt: null
         };
@@ -95,7 +106,8 @@
                     ? [...new Set(parsed.completedSteps.map(Number).filter((value) => value >= 0 && value < STEP_COUNT))]
                     : [],
                 jobIds: Array.isArray(parsed.jobIds) ? parsed.jobIds : [],
-                previousFlowRunIds: Array.isArray(parsed.previousFlowRunIds) ? parsed.previousFlowRunIds : []
+                previousFlowRunIds: Array.isArray(parsed.previousFlowRunIds) ? parsed.previousFlowRunIds : [],
+                historySteps: Array.isArray(parsed.historySteps) ? parsed.historySteps : []
             };
         } catch (_error) {
             return initialState();
@@ -488,11 +500,41 @@
         });
     }
 
+    function renderHistoryView() {
+        const banner = byId("qeHistoryViewBanner");
+        const enabled = Boolean(state.historyView && state.flowRunId);
+        setHidden(banner, !enabled);
+        document.body.classList.toggle("qe-is-history-view", enabled);
+        if (!enabled) return;
+
+        setText(
+            banner?.querySelector("[data-history-view-label]"),
+            `실행 #${state.flowRunId} · ${state.projectName || state.projectCode || "프로젝트"} · 저장된 결과만 조회합니다.`
+        );
+        const target = byId("qeHistoryStepResultList");
+        if (!target) return;
+        const storedSteps = Array.isArray(state.historySteps) ? state.historySteps : [];
+        const steps = STEPS.map((step, index) => {
+            const stored = storedSteps.find((item) => Number(item?.index) === index || item?.key === step.key) || {};
+            const status = R.normalizeStatus(stored.status || (state.completedSteps.includes(index) ? "SUCCESS" : "PENDING"));
+            return {
+                title: step.title,
+                status,
+                message: stored.message || step.description
+            };
+        });
+        target.innerHTML = steps.map((step, index) => `<li class="qe-history-step-result ${R.statusClass(step.status)}">
+            <strong>${index + 1}단계 · ${R.escapeHtml(step.title)} · ${R.escapeHtml(R.statusLabel(step.status))}</strong>
+            <span title="${R.escapeHtml(step.message)}">${R.escapeHtml(step.message)}</span>
+        </li>`).join("");
+    }
+
     function renderState(message) {
         renderStepper();
         renderFile();
         renderUploadProgress();
         renderArtifacts();
+        renderHistoryView();
         const step = STEPS[state.currentStep] || STEPS[0];
         setText(byId("currentStage", "qeCurrentStepTitle"), step.title);
         const description = state.error || message || state.lastRunMessage || step.description;
@@ -531,45 +573,48 @@
         const startButton = byId("runButton", "qeStartButton");
         const retryButton = byId("retryButton", "qeRetryButton");
         const resetButton = byId("resetButton", "qeResetButton");
+        const historyButton = byId("qeRunHistoryButton");
         const form = byId("qeQuickForm");
         const workspaceFieldset = byId("workspaceFieldset") || form?.querySelector("[data-workspace-fieldset]");
+        const readOnlyHistory = Boolean(state.historyView);
         const projectLocked = Boolean(state.projectId);
         const scenarioLocked = Boolean(state.scenarioId);
         const hasInput = Boolean(selectedFile || state.uploadId || state.tableName);
         if (startButton) {
-            startButton.disabled = pipelineBusy || !hasInput || !client.targetConnectionId;
-            startButton.hidden = ["failed", "warning"].includes(state.status);
-            setText(startButton.querySelector("span:first-child") || startButton, state.status === "success" ? "새 작업 시작" : "전체 자동 실행");
+            startButton.disabled = readOnlyHistory ? false : (pipelineBusy || !hasInput || !client.targetConnectionId);
+            startButton.hidden = readOnlyHistory ? false : ["failed", "warning"].includes(state.status);
+            setText(startButton.querySelector("span:first-child") || startButton, readOnlyHistory || state.status === "success" ? "새 작업 시작" : "전체 자동 실행");
             startButton.classList.toggle("is-running", pipelineBusy);
         }
         if (retryButton) {
-            retryButton.hidden = !["failed", "warning"].includes(state.status);
+            retryButton.hidden = readOnlyHistory || !["failed", "warning"].includes(state.status);
             retryButton.disabled = pipelineBusy || !client.targetConnectionId;
         }
         if (resetButton) resetButton.disabled = pipelineBusy;
+        if (historyButton) historyButton.disabled = pipelineBusy;
         if (form) form.setAttribute("aria-busy", pipelineBusy ? "true" : "false");
         document.querySelectorAll("#qeQuickForm input, #qeQuickForm select, #qeQuickForm button").forEach((element) => {
             if ([startButton, retryButton, resetButton, byId("closeButton", "qeCloseButton")].includes(element)) return;
-            element.disabled = pipelineBusy;
+            element.disabled = pipelineBusy || readOnlyHistory;
         });
         if (workspaceFieldset) {
-            workspaceFieldset.disabled = pipelineBusy;
+            workspaceFieldset.disabled = pipelineBusy || readOnlyHistory;
             workspaceFieldset.dataset.state = projectLocked || scenarioLocked ? "locked" : "editable";
             workspaceFieldset.dataset.projectLocked = projectLocked ? "true" : "false";
             workspaceFieldset.dataset.scenarioLocked = scenarioLocked ? "true" : "false";
         }
         ["projectModeNew", "projectModeExisting", "projectName", "qeProjectName", "projectCode", "qeProjectCode", "existingProject", "qeProjectSelect"].forEach((id) => {
             const control = byId(id);
-            if (control) control.disabled = pipelineBusy || projectLocked;
+            if (control) control.disabled = pipelineBusy || readOnlyHistory || projectLocked;
         });
         ["scenarioName", "qeScenarioName", "scenarioCode", "qeScenarioCode"].forEach((id) => {
             const control = byId(id);
-            if (control) control.disabled = pipelineBusy || scenarioLocked;
+            if (control) control.disabled = pipelineBusy || readOnlyHistory || scenarioLocked;
         });
         const fileOptionsLocked = Boolean(state.tableName);
         ["hasHeader", "qeHasHeader", "fileEncoding", "qeEncoding", "fileDelimiter", "qeDelimiter"].forEach((id) => {
             const control = byId(id);
-            if (control) control.disabled = pipelineBusy || fileOptionsLocked;
+            if (control) control.disabled = pipelineBusy || readOnlyHistory || fileOptionsLocked;
         });
         const fileOptions = byId("fileOptions");
         if (fileOptions) fileOptions.dataset.state = fileOptionsLocked ? "locked" : "editable";
@@ -584,6 +629,7 @@
         const existingScenario = byId("existingScenario", "qeScenarioSelect");
         if (existingScenario) {
             existingScenario.disabled = pipelineBusy
+                || readOnlyHistory
                 || scenarioLocked
                 || (getWorkspaceMode() === "existing" && !valueOf("existingProject", "qeProjectSelect"));
         }
@@ -1069,11 +1115,30 @@
             }));
         }
 
+        const statisticsNode = nodes.find((node) => (
+            Number(node.FLOW_NODE_RUN_ID || 0) > 0
+            && node.TARGET_OWNER
+            && node.TARGET_TABLE
+            && String(node.REF_MENU_CODE || "").toUpperCase() === "M03001"
+        )) || nodes.find((node) => (
+            Number(node.FLOW_NODE_RUN_ID || 0) > 0
+            && node.TARGET_OWNER
+            && node.TARGET_TABLE
+        ));
+        if (statisticsNode) {
+            keys.push("descriptiveStatistics");
+            requests.push(client.getDescriptiveStatistics(
+                state.flowRunId,
+                Number(statisticsNode.FLOW_NODE_RUN_ID)
+            ));
+        }
+
         resultData = {
             categorical: null,
             continuous: null,
             categoricalViolation: null,
-            continuousViolation: null
+            continuousViolation: null,
+            descriptiveStatistics: null
         };
         const settled = await Promise.allSettled(requests);
         const errors = [];
@@ -1086,6 +1151,7 @@
         if (!artifacts.continuous) errors.push("연속형 수식 규칙 결과를 찾지 못했습니다.");
         if (!artifacts.categoricalViolation) errors.push("범주형 위반 결과 테이블을 찾지 못했습니다.");
         if (!artifacts.continuousViolation) errors.push("연속형 위반 결과 테이블을 찾지 못했습니다.");
+        if (!statisticsNode) errors.push("기초통계량을 계산할 대상 테이블 연결 정보를 찾지 못했습니다.");
         state.resultWarning = errors.join(" ");
         persistState();
         renderResults();
@@ -1119,6 +1185,232 @@
         if (!rule) return null;
         const value = getViolationCountMap(kind).get(String(rule.RULE_ID || ""));
         return Number.isFinite(value) ? value : null;
+    }
+
+    function getStatisticsPayload() {
+        const response = resultData.descriptiveStatistics;
+        const payload = response?.data && typeof response.data === "object" ? response.data : response;
+        return payload && typeof payload === "object" ? payload : null;
+    }
+
+    function finiteNumber(value) {
+        if (value === null || value === undefined || value === "") return null;
+        const number = Number(value);
+        return Number.isFinite(number) ? number : null;
+    }
+
+    function formatPercent(value, digits = 1) {
+        const number = finiteNumber(value);
+        return number === null ? "-" : `${(number * 100).toFixed(digits)}%`;
+    }
+
+    function formatStatistic(value, digits = 6) {
+        const number = finiteNumber(value);
+        return number === null ? "-" : R.formatNumber(number, digits);
+    }
+
+    function statisticsColumnLabel(column) {
+        const name = String(column?.columnName || column?.COLUMN_NAME || "");
+        const comment = String(column?.columnComment || column?.COLUMN_COMMENT || "");
+        return comment ? `${name} · ${comment}` : name;
+    }
+
+    function renderDescriptiveStatistics() {
+        const section = byId("qeStatisticsSummary");
+        const kpis = byId("qeStatisticsKpis");
+        const priority = byId("qeStatisticsPriority");
+        const notice = byId("qeStatisticsNotice");
+        const payload = getStatisticsPayload();
+        if (!section || !kpis || !priority || !notice) return;
+
+        if (!payload || payload.available === false) {
+            setHidden(section, false);
+            kpis.innerHTML = "";
+            priority.innerHTML = '<div class="qe-empty">등록된 INITUP$ 원본 테이블에서 분석 가능한 컬럼 통계를 계산할 수 없습니다.</div>';
+            notice.textContent = payload?.reason || payload?.notice || "대상 테이블 연결 정보를 확인해 주세요.";
+            notice.hidden = false;
+            byId("qeStatisticsDetailButton").disabled = true;
+            return;
+        }
+
+        const columns = Array.isArray(payload.columns) ? payload.columns : [];
+        const insights = payload.insights && typeof payload.insights === "object" ? payload.insights : {};
+        const ranked = Array.isArray(insights.rankedColumns)
+            ? insights.rankedColumns
+            : columns.map((column) => column.insight || { columnName: column.columnName });
+        const summary = insights.summary || {};
+        const distribution = payload.summary || {};
+        const totalViolations = finiteNumber(summary.totalViolationCount)
+            ?? ranked.reduce((sum, row) => sum + Number(row.violationCount || 0), 0);
+        kpis.innerHTML = R.renderKpis([
+            { label: "통계 분석 컬럼", value: R.formatNumber(columns.length, 0), tone: "primary" },
+            { label: "우선 확인 컬럼", value: R.formatNumber(summary.highPriorityColumnCount || 0, 0) },
+            { label: "위반 발생 컬럼", value: R.formatNumber(summary.violationColumnCount || 0, 0) },
+            { label: "전체 규칙 위반", value: R.formatNumber(totalViolations, 0) },
+            { label: "분산 감소", value: R.formatNumber(distribution.varianceDecreasedColumnCount || 0, 0), help: "수정 후 분산이 감소한 컬럼" },
+            { label: "분산 증가", value: R.formatNumber(distribution.varianceIncreasedColumnCount || 0, 0), help: "수정 후 분산이 증가한 컬럼" }
+        ]);
+
+        const topRows = ranked.slice(0, 50);
+        priority.innerHTML = topRows.length ? topRows.map((row, index) => {
+            const reasons = Array.isArray(row.priorityReasons)
+                ? row.priorityReasons.join(" · ")
+                : String(row.priorityReasons || "분포 변화 확인");
+            const score = finiteNumber(row.importanceScore) || 0;
+            const level = score >= 70 ? "high" : score >= 30 ? "medium" : "low";
+            return `<button type="button" class="qe-statistics-priority-card is-${R.escapeHtml(level)}"
+                    data-statistics-column="${R.escapeHtml(String(row.columnName || ""))}">
+                <span class="qe-statistics-rank">${index + 1}</span>
+                <span class="qe-statistics-priority-card__body">
+                    <strong>${R.escapeHtml(statisticsColumnLabel(row))}</strong>
+                    <small>${R.escapeHtml(reasons)}</small>
+                    <span>
+                        <em>중요도 ${R.escapeHtml(R.formatNumber(row.importanceScore || 0, 1))}</em>
+                        <em>위반 ${R.escapeHtml(R.formatNumber(row.violationCount || 0, 0))}</em>
+                        <em>결측 ${R.escapeHtml(formatPercent(row.missingRate || 0))}</em>
+                    </span>
+                </span>
+            </button>`;
+        }).join("") : '<div class="qe-empty">우선 확인할 컬럼 정보가 없습니다.</div>';
+        notice.textContent = payload.notice || "";
+        notice.hidden = !payload.notice;
+        byId("qeStatisticsDetailButton").disabled = columns.length === 0;
+        setHidden(section, false);
+    }
+
+    function renderStatisticsDetail(columnName) {
+        const payload = getStatisticsPayload();
+        const columns = Array.isArray(payload?.columns) ? payload.columns : [];
+        const select = byId("qeStatisticsColumnSelect");
+        const body = byId("qeStatisticsDetailBody");
+        const sources = byId("qeStatisticsSources");
+        if (!select || !body || !sources) return;
+        if (!columns.length) {
+            select.innerHTML = '<option value="">선택 가능한 컬럼 없음</option>';
+            select.disabled = true;
+            body.innerHTML = '<div class="qe-empty">표시할 기초통계량이 없습니다.</div>';
+            sources.innerHTML = "";
+            return;
+        }
+
+        select.disabled = false;
+        select.innerHTML = columns.map((column, index) => (
+            `<option value="${index}">${R.escapeHtml(statisticsColumnLabel(column))}</option>`
+        )).join("");
+        let index = columns.findIndex((column) => String(column.columnName || "") === String(columnName || ""));
+        if (index < 0) index = Math.max(0, Number(select.value || 0));
+        select.value = String(index);
+        const column = columns[index];
+        const before = column.before || {};
+        const after = column.after || null;
+        const beforeSource = payload.before || {};
+        const afterSource = payload.after || null;
+        sources.innerHTML = [
+            `<span><i></i><b>${R.escapeHtml(beforeSource.label || (after ? "수정 전" : "현재"))}</b><em>${R.escapeHtml([beforeSource.owner, beforeSource.table].filter(Boolean).join("."))}</em></span>`,
+            afterSource ? `<span class="is-after"><i></i><b>${R.escapeHtml(afterSource.label || "수정 후")}</b><em>${R.escapeHtml([afterSource.owner, afterSource.table].filter(Boolean).join("."))}</em></span>` : `<span class="is-after is-missing"><i></i><b>수정</b><em>INITDN$ 비교 대상 없음</em></span>`
+        ].join("");
+        const profileKind = String(column.profileKind || "NUMERIC").toUpperCase();
+        const metricRows = profileKind === "NUMERIC" ? [
+            ["건수", "valueCount", "number"], ["합계", "sum", "number"], ["평균", "mean", "number"], ["분산", "variance", "number"],
+            ["표준편차", "stddev", "number"], ["왜도", "skewness", "number"], ["첨도", "kurtosis", "number"], ["메디안(중앙값)", "median", "number"],
+            ["최소", "min", "number"], ["1사분위(Q1)", "q1", "number"], ["3사분위(Q3)", "q3", "number"], ["최대", "max", "number"]
+        ] : [
+            ["전체 건수", "totalRowCount", "number"], ["유효값 건수", "valueCount", "number"], ["결측 건수", "nullCount", "number"],
+            ["고유값 수", "distinctCount", "number"], ["고유값 비율", "distinctRate", "percent"], ["최빈값", "modeValue", "text"],
+            ["최빈값 빈도", "modeCount", "number"], ["최소 길이", "minLength", "number"], ["평균 길이", "avgLength", "number"],
+            ["최대 길이", "maxLength", "number"], ["최솟값/최초값", "minValueText", "text"], ["최댓값/최종값", "maxValueText", "text"]
+        ];
+        const metricText = (metrics, key, format) => {
+            const value = metrics?.[key];
+            if (format === "text") return value === null || value === undefined || value === "" ? "-" : String(value);
+            if (format === "percent") return formatPercent(value, 2);
+            return formatStatistic(value, ["totalRowCount", "valueCount", "nullCount", "distinctCount", "modeCount", "minLength", "maxLength"].includes(key) ? 0 : 6);
+        };
+        const rows = metricRows.map(([label, key, format]) => {
+            const beforeValue = format === "text" ? null : finiteNumber(before[key]);
+            const afterValue = format === "text" ? null : finiteNumber(after?.[key]);
+            const delta = beforeValue !== null && afterValue !== null ? afterValue - beforeValue : null;
+            return `<tr><th scope="row">${R.escapeHtml(label)}</th>
+                <td>${R.escapeHtml(metricText(before, key, format))}</td>
+                <td>${R.escapeHtml(after ? metricText(after, key, format) : "-")}</td>
+                <td class="${delta > 0 ? "is-increase" : delta < 0 ? "is-decrease" : ""}">${R.escapeHtml(format === "text" ? "-" : formatStatistic(delta, 6))}</td></tr>`;
+        }).join("");
+        const insight = column.insight || {};
+        const reasons = Array.isArray(insight.priorityReasons) ? insight.priorityReasons.join(" · ") : "";
+        const distribution = column.distribution && Array.isArray(column.distribution.bins)
+            ? column.distribution
+            : null;
+        const distributionChart = profileKind === "NUMERIC"
+            ? renderQuickStatisticsDistribution(column, distribution, Boolean(after))
+            : renderQuickStatisticsTopValues(column, Boolean(after));
+        const rankedNames = Array.isArray(payload?.insights?.rankedColumns)
+            ? payload.insights.rankedColumns.map((item) => String(item.columnName || ""))
+            : [];
+        const railColumns = [...columns].sort((left, right) => {
+            const leftIndex = rankedNames.indexOf(String(left.columnName || ""));
+            const rightIndex = rankedNames.indexOf(String(right.columnName || ""));
+            return (leftIndex < 0 ? 9999 : leftIndex) - (rightIndex < 0 ? 9999 : rightIndex);
+        });
+        const rail = `<aside class="qe-statistics-column-rail"><header><b>컬럼 · 변화 큰 순</b><small>${railColumns.length}개</small></header><div>${railColumns.map((item) => {
+            const score = finiteNumber(item.insight?.importanceScore) || 0;
+            const level = score >= 70 ? "high" : score >= 30 ? "medium" : "low";
+            return `<button type="button" class="is-${level} ${item === column ? "is-active" : ""}" data-qe-statistics-column="${R.escapeHtml(String(item.columnName || ""))}"><i></i><span><b>${R.escapeHtml(String(item.columnName || "-"))}</b><small>${R.escapeHtml(String(item.columnComment || item.dataType || "-"))}</small></span><em>${R.escapeHtml(R.formatNumber(score, 1))}</em></button>`;
+        }).join("")}</div></aside>`;
+        body.innerHTML = `<div class="qe-statistics-profile-layout">${rail}<main><div class="qe-statistics-detail__heading">
+                <div><span>${R.escapeHtml(`${column.typeGroupCode || column.profileKind || "OTHER"} · ${column.dataType || "-"}`)}</span><h3>${R.escapeHtml(column.columnName || "-")}</h3><p>${R.escapeHtml(column.columnComment || "컬럼 설명 없음")}</p></div>
+                <div><strong>중요도 ${R.escapeHtml(R.formatNumber(insight.importanceScore || 0, 1))}</strong><small>${R.escapeHtml(reasons || "기초 분포 비교")}</small></div>
+            </div>
+            ${distributionChart}
+            <div class="qe-detail-table-wrap"><table class="qe-detail-table qe-statistics-table">
+                <thead><tr><th>측정값</th><th>${R.escapeHtml(beforeSource.label || (after ? "수정 전" : "현재"))}</th><th>${R.escapeHtml(afterSource?.label || "수정 후")}</th><th>증감</th></tr></thead>
+                <tbody>${rows}</tbody>
+            </table></div>
+            <p class="qe-statistics-method">컬럼유형 분석 결과를 물리 데이터타입보다 우선합니다. ${profileKind === "NUMERIC" ? "원본과 수정 분포는 공통 최소·최대 범위를 12개 동일 구간으로 비교하며 분산·표준편차는 모집단 기준입니다." : "범주·문자형은 고유값·최빈값·길이·상위 빈도를, 일시형은 최초·최종 시점을 제공합니다."}</p></main></div>`;
+        body.querySelectorAll("[data-qe-statistics-column]").forEach((button) => {
+            button.addEventListener("click", () => renderStatisticsDetail(button.dataset.qeStatisticsColumn));
+        });
+    }
+
+    function renderQuickStatisticsTopValues(column, hasAfter) {
+        const rows = Array.isArray(column?.topValues) ? column.topValues : [];
+        return `<section class="qe-statistics-distribution ${rows.length ? "" : "is-empty"}"><header><div><span>TOP VALUES</span><h3>상위 값 분포</h3></div></header>
+            ${rows.length ? `<div class="qe-detail-table-wrap"><table class="qe-detail-table"><thead><tr><th>값</th><th>원본</th><th>수정</th></tr></thead><tbody>${rows.map((row) => `<tr><th>${R.escapeHtml(String(row.value || "(빈 값)"))}</th><td>${R.escapeHtml(R.formatNumber(row.beforeCount || 0, 0))}</td><td>${hasAfter ? R.escapeHtml(R.formatNumber(row.afterCount || 0, 0)) : "-"}</td></tr>`).join("")}</tbody></table></div>` : "<p>집계 가능한 유효값이 없습니다.</p>"}
+        </section>`;
+    }
+
+    function renderQuickStatisticsDistribution(column, distribution, hasAfter) {
+        if (!distribution?.bins?.length) {
+            return `<section class="qe-statistics-distribution is-empty"><h3>동일 구간 분포 비교</h3><p>이 실행에는 구간별 분포 집계가 없습니다.</p></section>`;
+        }
+        const width = 760;
+        const height = 220;
+        const padding = 30;
+        const beforeValues = distribution.bins.map((bin) => bin.beforeCount || 0);
+        const afterValues = distribution.bins.map((bin) => bin.afterCount || 0);
+        const sharedMaximum = Math.max(...beforeValues, ...afterValues, 1);
+        const path = (values) => {
+            const maximum = sharedMaximum;
+            return values.map((value, index) => {
+                const x = padding + index * (width - padding * 2) / Math.max(1, values.length - 1);
+                const y = height - padding - (Number(value || 0) / maximum) * (height - padding * 2);
+                return `${index ? "L" : "M"}${x.toFixed(2)},${y.toFixed(2)}`;
+            }).join(" ");
+        };
+        const beforePath = path(beforeValues);
+        const afterPath = path(afterValues);
+        const baseline = height - padding;
+        return `<section class="qe-statistics-distribution"><header><div><span>DISTRIBUTION OVERLAY</span><h3>동일 구간 분포 비교</h3></div><div><b class="is-before">원본</b>${hasAfter ? `<b class="is-after">수정</b>` : ""}</div></header>
+            <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${R.escapeHtml(String(column.columnName || ""))} 분포 비교">
+                <line x1="${padding}" y1="${baseline}" x2="${width - padding}" y2="${baseline}" class="is-axis"></line>
+                <path d="${beforePath} L${width - padding},${baseline} L${padding},${baseline} Z" class="is-before-area"></path><path d="${beforePath}" class="is-before-line"></path>
+                ${hasAfter ? `<path d="${afterPath} L${width - padding},${baseline} L${padding},${baseline} Z" class="is-after-area"></path><path d="${afterPath}" class="is-after-line"></path>` : ""}
+            </svg><div class="qe-statistics-distribution__axis"><span>${R.escapeHtml(formatStatistic(distribution.min))}</span><span>공통 12구간</span><span>${R.escapeHtml(formatStatistic(distribution.max))}</span></div></section>`;
+    }
+
+    function openStatisticsDialog(columnName) {
+        const dialog = byId("qeStatisticsDialog");
+        renderStatisticsDetail(columnName);
+        if (typeof dialog?.showModal === "function") dialog.showModal();
     }
 
     function renderResults() {
@@ -1198,6 +1490,8 @@
             setText(continuousRules.closest(".qe-result-block")?.querySelector("[data-rule-count]"), `${rules.length}개`);
             prepareContinuousDetail(rules);
         }
+
+        renderDescriptiveStatistics();
 
         const warningTarget = byId("resultsWarning", "qeResultsWarning");
         if (warningTarget) {
@@ -1414,7 +1708,9 @@
             metrics: null,
             sampleCount: 0,
             hasMore: false,
-            error: ""
+            error: "",
+            selectedRowIndex: null,
+            chartPoints: []
         };
         setText(byId("qeContinuousDetailMessage"), "규칙 샘플과 수식 계산 결과를 불러오는 중입니다.");
         const metrics = byId("qeContinuousDetailMetrics");
@@ -1440,7 +1736,9 @@
                 metrics: calculateContinuousMetrics(evaluation.rows),
                 sampleCount: Number(payload.sampleCount ?? rows.length) || rows.length,
                 hasMore: payload.hasMore === true || payload.isCapped === true,
-                error: evaluation.error
+                error: evaluation.error,
+                selectedRowIndex: null,
+                chartPoints: []
             };
         } catch (error) {
             if (requestId !== continuousDetailRequestId) return;
@@ -1492,11 +1790,90 @@
         ];
         target.innerHTML = `<table class="qe-detail-table">
             <thead><tr><th>No</th>${columns.map((column) => `<th>${R.escapeHtml(column.label)}</th>`).join("")}</tr></thead>
-            <tbody>${rows.slice(0, 20).map((item, index) => `<tr>
-                <td class="is-number">${index + 1}</td>
+            <tbody>${rows.map((item) => `<tr data-continuous-row-index="${item.rowIndex}" tabindex="-1"
+                    class="${continuousDetail.selectedRowIndex === item.rowIndex ? "is-selected" : ""}"
+                    aria-selected="${continuousDetail.selectedRowIndex === item.rowIndex ? "true" : "false"}">
+                <td class="is-number">${item.rowIndex + 1}</td>
                 ${columns.map((column) => `<td class="is-number">${R.escapeHtml(formatDiagnosticNumber(column.value(item), 6))}</td>`).join("")}
             </tr>`).join("")}</tbody>
         </table>`;
+    }
+
+    function focusContinuousSampleRow(row) {
+        const grid = byId("qeContinuousSampleTable");
+        if (!row || !grid) return;
+        grid.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+        window.requestAnimationFrame(() => {
+            const rowRect = row.getBoundingClientRect();
+            const gridRect = grid.getBoundingClientRect();
+            const nextTop = grid.scrollTop
+                + (rowRect.top - gridRect.top)
+                - Math.max(0, (grid.clientHeight - row.offsetHeight) / 2);
+            const nextLeft = grid.scrollLeft
+                + (rowRect.left - gridRect.left)
+                - Math.max(0, (grid.clientWidth - row.offsetWidth) / 2);
+            grid.scrollTo({
+                top: Math.max(0, nextTop),
+                left: Math.max(0, nextLeft),
+                behavior: "smooth"
+            });
+            row.focus({ preventScroll: true });
+        });
+    }
+
+    function selectContinuousSampleRow(rowIndex, options = {}) {
+        const normalizedIndex = Number(rowIndex);
+        const item = (continuousDetail.evaluatedRows || []).find((row) => row.rowIndex === normalizedIndex);
+        if (!item) return;
+        continuousDetail.selectedRowIndex = normalizedIndex;
+        const tableRows = byId("qeContinuousSampleTable")?.querySelectorAll("tr[data-continuous-row-index]") || [];
+        tableRows.forEach((row) => {
+            const selected = Number(row.dataset.continuousRowIndex) === normalizedIndex;
+            row.classList.toggle("is-selected", selected);
+            row.setAttribute("aria-selected", selected ? "true" : "false");
+            if (selected && options.scroll !== false) focusContinuousSampleRow(row);
+        });
+        drawContinuousDetailChart();
+    }
+
+    function findContinuousChartPoint(event, maxDistance = 12) {
+        const canvas = byId("qeContinuousDetailChart");
+        const points = continuousDetail.chartPoints || [];
+        if (!canvas || !points.length) return null;
+        const rect = canvas.getBoundingClientRect();
+        if (!rect.width || !rect.height) return null;
+        const x = (event.clientX - rect.left) * (Number(canvas.dataset.chartWidth || rect.width) / rect.width);
+        const y = (event.clientY - rect.top) * (Number(canvas.dataset.chartHeight || rect.height) / rect.height);
+        let nearest = null;
+        let nearestDistance = maxDistance;
+        points.forEach((point) => {
+            const distance = Math.hypot(point.screenX - x, point.screenY - y);
+            if (distance <= nearestDistance) {
+                nearest = point;
+                nearestDistance = distance;
+            }
+        });
+        return nearest;
+    }
+
+    function handleContinuousChartClick(event) {
+        const point = findContinuousChartPoint(event, 14);
+        if (!point) return;
+        selectContinuousSampleRow(point.rowIndex);
+    }
+
+    function handleContinuousChartKeydown(event) {
+        if (!["ArrowLeft", "ArrowRight", "Home", "End", "Enter", " "].includes(event.key)) return;
+        const rows = continuousDetail.evaluatedRows || [];
+        if (!rows.length) return;
+        const current = rows.findIndex((row) => row.rowIndex === continuousDetail.selectedRowIndex);
+        let next = current >= 0 ? current : 0;
+        if (event.key === "ArrowLeft") next = Math.max(0, next - 1);
+        else if (event.key === "ArrowRight") next = Math.min(rows.length - 1, next + 1);
+        else if (event.key === "Home") next = 0;
+        else if (event.key === "End") next = rows.length - 1;
+        event.preventDefault();
+        selectContinuousSampleRow(rows[next].rowIndex);
     }
 
     function drawContinuousDetailChart() {
@@ -1510,9 +1887,12 @@
         const ratio = Math.min(2, window.devicePixelRatio || 1);
         canvas.width = Math.round(cssWidth * ratio);
         canvas.height = Math.round(cssHeight * ratio);
+        canvas.dataset.chartWidth = String(cssWidth);
+        canvas.dataset.chartHeight = String(cssHeight);
         context.setTransform(ratio, 0, 0, ratio, 0, 0);
         context.clearRect(0, 0, cssWidth, cssHeight);
         if (!rows.length) {
+            continuousDetail.chartPoints = [];
             setText(message, continuousDetail.error || "그래프로 표시할 계산 샘플이 없습니다.");
             context.fillStyle = "#718096";
             context.font = "12px system-ui, sans-serif";
@@ -1522,8 +1902,8 @@
         }
         const mode = valueOf("qeContinuousChartMode") || "actual-predicted";
         const points = rows.map((item) => mode === "residual"
-            ? { x: item.predicted, y: item.residual, residual: item.residual }
-            : { x: item.actual, y: item.predicted, residual: item.residual });
+            ? { x: item.predicted, y: item.residual, residual: item.residual, rowIndex: item.rowIndex }
+            : { x: item.actual, y: item.predicted, residual: item.residual, rowIndex: item.rowIndex });
         const allX = points.map((item) => item.x);
         const allY = points.map((item) => item.y);
         let minX = Math.min(...allX);
@@ -1584,14 +1964,20 @@
         context.stroke();
         context.setLineDash([]);
         const mae = Math.max(Number(continuousDetail.metrics?.mae || 0), Number.EPSILON);
-        points.forEach((point) => {
+        continuousDetail.chartPoints = points.map((point) => ({
+            ...point,
+            screenX: mapX(point.x),
+            screenY: mapY(point.y)
+        }));
+        continuousDetail.chartPoints.forEach((point) => {
             const outlier = Math.abs(point.residual) > mae * 2;
+            const selected = point.rowIndex === continuousDetail.selectedRowIndex;
             context.beginPath();
-            context.arc(mapX(point.x), mapY(point.y), outlier ? 3.8 : 2.8, 0, Math.PI * 2);
-            context.fillStyle = outlier ? "rgba(207, 60, 79, 0.72)" : "rgba(36, 87, 214, 0.58)";
+            context.arc(point.screenX, point.screenY, selected ? 6 : outlier ? 3.8 : 2.8, 0, Math.PI * 2);
+            context.fillStyle = selected ? "rgba(245, 158, 11, 0.92)" : outlier ? "rgba(207, 60, 79, 0.72)" : "rgba(36, 87, 214, 0.58)";
             context.fill();
-            context.strokeStyle = outlier ? "#b72f43" : "#2457d6";
-            context.lineWidth = 0.7;
+            context.strokeStyle = selected ? "#b45309" : outlier ? "#b72f43" : "#2457d6";
+            context.lineWidth = selected ? 1.4 : 0.7;
             context.stroke();
         });
         const comments = getResultColumnComments("continuous");
@@ -1608,10 +1994,10 @@
         context.fillText(yLabel, 0, 0);
         context.restore();
         const detailMessage = mode === "residual"
-            ? "잔차가 0선을 중심으로 고르게 분포할수록 안정적입니다. 빨간 점은 MAE의 2배를 넘는 표본입니다."
-            : "점이 기준선(y=x)에 가까울수록 예측 오차가 작습니다. 빨간 점은 MAE의 2배를 넘는 표본입니다.";
+            ? "잔차가 0선을 중심으로 고르게 분포할수록 안정적입니다. 빨간 점은 MAE의 2배를 넘는 표본이며, 점을 누르면 하단 상세 행으로 이동합니다."
+            : "점이 기준선(y=x)에 가까울수록 예측 오차가 작습니다. 빨간 점은 MAE의 2배를 넘는 표본이며, 점을 누르면 하단 상세 행으로 이동합니다.";
         setText(message, detailMessage);
-        canvas.setAttribute("aria-label", `${targetLabel} ${mode === "residual" ? "예측값과 잔차" : "실제값과 예측값"} 비교 그래프, ${points.length}개 표본`);
+        canvas.setAttribute("aria-label", `${targetLabel} ${mode === "residual" ? "예측값과 잔차" : "실제값과 예측값"} 비교 그래프, ${points.length}개 표본. 점을 선택하면 하단 상세 행으로 이동합니다.`);
     }
 
     function selectResultTab(tabName) {
@@ -1808,6 +2194,193 @@
         else dialog.hidden = true;
     }
 
+    function renderQuickHistoryList() {
+        const target = byId("qeRunHistoryList");
+        const count = byId("qeRunHistoryCount");
+        const pageInfo = byId("qeRunHistoryPageInfo");
+        const moreButton = byId("qeRunHistoryMore");
+        if (!target) return;
+
+        setText(count, quickHistoryBusy
+            ? "최근 실행을 불러오는 중입니다."
+            : `최근 퀵 실행 ${quickHistoryTotal.toLocaleString("ko-KR")}건 중 ${quickHistoryRows.length.toLocaleString("ko-KR")}건`);
+        setText(pageInfo, quickHistoryTotal
+            ? `${quickHistoryRows.length.toLocaleString("ko-KR")} / ${quickHistoryTotal.toLocaleString("ko-KR")}건 표시`
+            : "표시할 실행 없음");
+        if (moreButton) {
+            moreButton.hidden = quickHistoryRows.length >= quickHistoryTotal || quickHistoryTotal === 0;
+            moreButton.disabled = quickHistoryBusy;
+        }
+        if (quickHistoryBusy && !quickHistoryRows.length) {
+            target.innerHTML = `<div class="qe-run-history-empty">
+                <span class="qe-run-history-empty__icon" aria-hidden="true">◷</span>
+                <strong>실행 이력을 불러오는 중입니다.</strong>
+                <span>저장된 퀵 실행만 안전하게 조회합니다.</span>
+            </div>`;
+            return;
+        }
+        if (quickHistoryError && !quickHistoryRows.length) {
+            target.innerHTML = `<div class="qe-run-history-empty is-error">
+                <span class="qe-run-history-empty__icon" aria-hidden="true">!</span>
+                <strong>실행 이력을 불러오지 못했습니다.</strong>
+                <span>${R.escapeHtml(quickHistoryError)}</span>
+            </div>`;
+            return;
+        }
+        if (!quickHistoryRows.length) {
+            target.innerHTML = `<div class="qe-run-history-empty">
+                <span class="qe-run-history-empty__icon" aria-hidden="true">◷</span>
+                <strong>저장된 퀵 실행이 없습니다.</strong>
+                <span>퀵 에디팅을 실행하면 이 목록에 자동으로 남습니다.</span>
+            </div>`;
+            return;
+        }
+
+        target.innerHTML = quickHistoryRows.map((row) => {
+            const runId = Number(row.FLOW_RUN_ID || 0);
+            const status = R.normalizeStatus(row.STATUS);
+            const project = row.PROJECT_NAME || row.PROJECT_CODE || "프로젝트";
+            const scenario = row.SCENARIO_NAME || row.SCENARIO_CODE || "시나리오";
+            const table = [row.OWNER_NAME, row.TABLE_NAME].filter(Boolean).join(".") || "대상 테이블";
+            const completed = Number(row.SUCCESS_NODE_COUNT || 0);
+            const total = Number(row.NODE_COUNT || row.JOB_COUNT || 4);
+            return `<button type="button" class="qe-run-history-item" data-history-run-id="${runId}"${quickHistoryBusy ? " disabled" : ""}>
+                <span class="qe-run-history-item__main">
+                    <small>실행 #${runId} · ${R.escapeHtml(R.formatDateTime(row.STARTED_AT || row.CREATED_AT))}</small>
+                    <strong>${R.escapeHtml(project)} · ${R.escapeHtml(scenario)}</strong>
+                    <span title="${R.escapeHtml(table)}">${R.escapeHtml(table)}</span>
+                </span>
+                <span class="qe-run-history-item__meta">
+                    ${R.renderStatus(status)}
+                    <span>모델 노드 ${completed}/${total || 4} 완료</span>
+                    <span>${R.escapeHtml(R.formatDuration(row.STARTED_AT || row.CREATED_AT, row.FINISHED_AT))}</span>
+                </span>
+                <span class="qe-run-history-item__action">
+                    <span>8단계 결과 보기</span><span aria-hidden="true">→</span>
+                </span>
+            </button>`;
+        }).join("");
+    }
+
+    async function loadQuickHistory(options = {}) {
+        if (quickHistoryBusy) return;
+        const reset = options.reset !== false;
+        if (reset) {
+            quickHistoryPage = 1;
+            quickHistoryRows = [];
+            quickHistoryTotal = 0;
+            quickHistoryError = "";
+        }
+        quickHistoryBusy = true;
+        renderQuickHistoryList();
+        try {
+            const response = await client.getQuickEditHistory(quickHistoryPage, 20);
+            const rows = Array.isArray(response.data) ? response.data : [];
+            const existing = new Set(quickHistoryRows.map((row) => Number(row.FLOW_RUN_ID || 0)));
+            rows.forEach((row) => {
+                const runId = Number(row.FLOW_RUN_ID || 0);
+                if (runId && !existing.has(runId)) {
+                    existing.add(runId);
+                    quickHistoryRows.push(row);
+                }
+            });
+            quickHistoryTotal = Number(response.total || quickHistoryRows.length);
+            quickHistoryError = "";
+        } catch (error) {
+            quickHistoryError = error.message;
+            throw error;
+        } finally {
+            quickHistoryBusy = false;
+            renderQuickHistoryList();
+        }
+    }
+
+    async function openQuickHistoryDialog() {
+        const dialog = byId("qeRunHistoryDialog");
+        if (!dialog) return;
+        if (typeof dialog.showModal === "function" && !dialog.open) dialog.showModal();
+        try {
+            await loadQuickHistory({ reset: true });
+        } catch (error) {
+            showToast(error.message, "error");
+        }
+    }
+
+    async function restoreQuickHistory(flowRunId) {
+        const runId = Number(flowRunId || 0);
+        if (!runId || quickHistoryBusy || pipelineBusy) return;
+        quickHistoryBusy = true;
+        renderQuickHistoryList();
+        try {
+            const response = await client.getQuickEditHistoryDetail(runId);
+            const detail = response.data || {};
+            const restored = detail.restoreState || {};
+            pollGeneration += 1;
+            selectedFile = null;
+            currentSnapshot = {
+                run: detail.run || {},
+                nodes: Array.isArray(detail.nodes) ? detail.nodes : []
+            };
+            resultData = {
+                categorical: null,
+                continuous: null,
+                categoricalViolation: null,
+                continuousViolation: null,
+                descriptiveStatistics: null
+            };
+            continuousDetailRequestId += 1;
+            continuousDetail = {
+                ruleId: "", ruleIndex: -1, rule: null, rows: [], evaluatedRows: [],
+                metrics: null, sampleCount: 0, hasMore: false, error: "",
+                selectedRowIndex: null, chartPoints: []
+            };
+            state = {
+                ...initialState(),
+                ...restored,
+                version: STATE_VERSION,
+                targetContextId: client.targetConnectionId,
+                historyView: true,
+                historyViewedAt: new Date().toISOString(),
+                historySteps: Array.isArray(detail.steps) ? detail.steps : [],
+                completedSteps: Array.isArray(restored.completedSteps) ? restored.completedSteps : [],
+                jobIds: Array.isArray(restored.jobIds) ? restored.jobIds : []
+            };
+            lastRenderedStep = -1;
+            persistState();
+            renderResultsEmpty();
+            renderHistory();
+            renderState(`실행 #${runId}의 저장된 8단계 결과를 복원했습니다.`);
+            byId("qeRunHistoryDialog")?.close();
+            window.scrollTo({ top: 0, behavior: "smooth" });
+
+            if (R.normalizeStatus(state.lastRunStatus) === "SUCCESS") {
+                pipelineBusy = true;
+                updateActionState();
+                try {
+                    await loadResults();
+                    state.status = state.resultWarning ? "warning" : "success";
+                    state.error = "";
+                    persistState();
+                    renderState(state.resultWarning || `실행 #${runId}의 저장된 분석 결과를 불러왔습니다.`);
+                } catch (error) {
+                    state.status = "warning";
+                    state.resultWarning = error.message;
+                    persistState();
+                    renderState("실행 단계는 복원했지만 일부 분석 결과를 불러오지 못했습니다.");
+                    showToast(error.message, "warning");
+                } finally {
+                    pipelineBusy = false;
+                    updateActionState();
+                }
+            }
+        } catch (error) {
+            showToast(error.message, "error");
+        } finally {
+            quickHistoryBusy = false;
+            renderQuickHistoryList();
+        }
+    }
+
     function showToast(message, type = "info") {
         const region = byId("toast", "qeToastRegion");
         if (!region || !message) return;
@@ -1851,12 +2424,14 @@
             categorical: null,
             continuous: null,
             categoricalViolation: null,
-            continuousViolation: null
+            continuousViolation: null,
+            descriptiveStatistics: null
         };
         continuousDetailRequestId += 1;
         continuousDetail = {
             ruleId: "", ruleIndex: -1, rule: null, rows: [], evaluatedRows: [],
-            metrics: null, sampleCount: 0, hasMore: false, error: ""
+            metrics: null, sampleCount: 0, hasMore: false, error: "",
+            selectedRowIndex: null, chartPoints: []
         };
         lastRenderedStep = -1;
         sessionStorage.removeItem(STORAGE_KEY);
@@ -1875,6 +2450,8 @@
     function renderResultsEmpty() {
         setHidden(byId("resultsSection", "qeResultsPanel"), true);
         setHidden(byId("qeContinuousDetail"), true);
+        setHidden(byId("qeStatisticsSummary"), true);
+        byId("qeStatisticsDialog")?.close();
         ["categoryKpis", "qeCategoricalKpis", "categoryRules", "qeCategoricalRules", "continuousKpis", "qeContinuousKpis", "continuousRules", "qeContinuousRules"].forEach((id) => {
             const target = byId(id);
             if (target) target.innerHTML = "";
@@ -1896,6 +2473,10 @@
     }
 
     async function handleRetry() {
+        if (state.historyView) {
+            resetPipelineState();
+            return;
+        }
         const failedRun = state.currentStep === 6 && ["FAILED", "ERROR", "CANCELLED"].includes(R.normalizeStatus(state.lastRunStatus));
         if (state.currentStep === 7 || state.status === "warning") {
             pipelineBusy = true;
@@ -1957,13 +2538,38 @@
         byId("existingScenario", "qeScenarioSelect")?.addEventListener("change", updateActionState);
         byId("qeQuickForm")?.addEventListener("submit", (event) => {
             event.preventDefault();
-            if (state.status === "success") {
+            if (state.historyView || state.status === "success") {
                 resetPipelineState();
                 return;
             }
             runPipeline();
         });
         byId("retryButton", "qeRetryButton")?.addEventListener("click", handleRetry);
+        byId("qeRunHistoryButton")?.addEventListener("click", openQuickHistoryDialog);
+        byId("qeHistoryExitButton")?.addEventListener("click", () => resetPipelineState());
+        byId("qeRunHistoryRefresh")?.addEventListener("click", async () => {
+            try {
+                await loadQuickHistory({ reset: true });
+            } catch (error) {
+                showToast(error.message, "error");
+            }
+        });
+        byId("qeRunHistoryMore")?.addEventListener("click", async () => {
+            quickHistoryPage += 1;
+            try {
+                await loadQuickHistory({ reset: false });
+            } catch (error) {
+                quickHistoryPage = Math.max(1, quickHistoryPage - 1);
+                showToast(error.message, "error");
+            }
+        });
+        byId("qeRunHistoryList")?.addEventListener("click", (event) => {
+            const button = event.target.closest("[data-history-run-id]");
+            if (button) restoreQuickHistory(button.dataset.historyRunId);
+        });
+        byId("qeRunHistoryDialog")?.addEventListener("click", (event) => {
+            if (event.target === event.currentTarget) event.currentTarget.close();
+        });
         byId("resetButton", "qeResetButton")?.addEventListener("click", () => {
             const hasRecoveryState = Boolean(selectedFile || state.fileMeta || state.projectId || state.tableName || state.flowRunId);
             const resetDialog = byId("qeResetDialog");
@@ -1995,13 +2601,52 @@
             button.addEventListener("keydown", handleResultTabKeydown);
         });
         byId("resultsSection", "qeResultsPanel")?.addEventListener("click", (event) => {
+            const statisticsCard = event.target.closest("[data-statistics-column]");
+            if (statisticsCard) {
+                openStatisticsDialog(statisticsCard.dataset.statisticsColumn);
+                return;
+            }
             const card = event.target.closest("[data-rule-kind][data-rule-index]");
             if (card) openRuleDialog(card.dataset.ruleKind, Number(card.dataset.ruleIndex));
+        });
+        byId("qeStatisticsDetailButton")?.addEventListener("click", () => openStatisticsDialog());
+        byId("qeStatisticsColumnSelect")?.addEventListener("change", (event) => {
+            const payload = getStatisticsPayload();
+            const column = (payload?.columns || [])[Number(event.target.value || 0)];
+            renderStatisticsDetail(column?.columnName);
+        });
+        byId("qeStatisticsDialogClose")?.addEventListener("click", () => byId("qeStatisticsDialog")?.close());
+        byId("qeStatisticsDialog")?.addEventListener("click", (event) => {
+            if (event.target === event.currentTarget) event.currentTarget.close();
         });
         byId("qeContinuousRuleSelect")?.addEventListener("change", (event) => {
             loadContinuousDetail(Number(event.target.value)).catch((error) => showToast(error.message, "error"));
         });
         byId("qeContinuousChartMode")?.addEventListener("change", drawContinuousDetailChart);
+        const continuousCanvas = byId("qeContinuousDetailChart");
+        continuousCanvas?.addEventListener("click", handleContinuousChartClick);
+        continuousCanvas?.addEventListener("keydown", handleContinuousChartKeydown);
+        continuousCanvas?.addEventListener("pointermove", (event) => {
+            const point = findContinuousChartPoint(event, 14);
+            continuousCanvas.style.cursor = point ? "pointer" : "default";
+            continuousCanvas.title = point
+                ? `표본 ${point.rowIndex + 1} · 클릭하면 상세 행으로 이동`
+                : "관심 점을 클릭하면 하단 상세 행으로 이동합니다.";
+        });
+        continuousCanvas?.addEventListener("pointerleave", () => {
+            continuousCanvas.style.cursor = "default";
+        });
+        byId("qeContinuousSampleTable")?.addEventListener("click", (event) => {
+            const row = event.target.closest("tr[data-continuous-row-index]");
+            if (row) selectContinuousSampleRow(Number(row.dataset.continuousRowIndex), { scroll: false });
+        });
+        byId("qeContinuousSampleTable")?.addEventListener("keydown", (event) => {
+            if (!["Enter", " "].includes(event.key)) return;
+            const row = event.target.closest("tr[data-continuous-row-index]");
+            if (!row) return;
+            event.preventDefault();
+            selectContinuousSampleRow(Number(row.dataset.continuousRowIndex), { scroll: false });
+        });
         byId("qeContinuousDetailReload")?.addEventListener("click", () => {
             const index = Number(valueOf("qeContinuousRuleSelect") || continuousDetail.ruleIndex || 0);
             loadContinuousDetail(index, true).catch((error) => showToast(error.message, "error"));
@@ -2048,7 +2693,7 @@
             chartResizeTimer = window.setTimeout(drawContinuousDetailChart, 120);
         });
         document.addEventListener("visibilitychange", () => {
-            if (!document.hidden && state.flowRunId && R.ACTIVE_STATUSES.has(R.normalizeStatus(state.lastRunStatus))) {
+            if (!document.hidden && !state.historyView && state.flowRunId && R.ACTIVE_STATUSES.has(R.normalizeStatus(state.lastRunStatus))) {
                 fetchSnapshot({ silent: true }).catch(() => {});
             }
         });
@@ -2071,12 +2716,14 @@
                     categorical: null,
                     continuous: null,
                     categoricalViolation: null,
-                    continuousViolation: null
+                    continuousViolation: null,
+                    descriptiveStatistics: null
                 };
                 continuousDetailRequestId += 1;
                 continuousDetail = {
                     ruleId: "", ruleIndex: -1, rule: null, rows: [], evaluatedRows: [],
-                    metrics: null, sampleCount: 0, hasMore: false, error: ""
+                    metrics: null, sampleCount: 0, hasMore: false, error: "",
+                    selectedRowIndex: null, chartPoints: []
                 };
                 sessionStorage.removeItem(STORAGE_KEY);
                 resetWorkspaceForm();
@@ -2094,7 +2741,22 @@
             await loadProjects();
             renderState();
 
-            if (state.flowRunId && ["running", "failed"].includes(state.status)) {
+            if (state.historyView && state.flowRunId) {
+                try {
+                    await fetchSnapshot({ silent: true });
+                    if (R.normalizeStatus(state.lastRunStatus) === "SUCCESS") {
+                        await loadResults();
+                        state.status = state.resultWarning ? "warning" : "success";
+                    }
+                    persistState();
+                    renderState(state.resultWarning || `실행 #${state.flowRunId}의 저장된 결과를 다시 불러왔습니다.`);
+                } catch (error) {
+                    state.status = "warning";
+                    state.resultWarning = error.message;
+                    persistState();
+                    renderState("과거 실행의 일부 결과를 불러오지 못했습니다.");
+                }
+            } else if (state.flowRunId && ["running", "failed"].includes(state.status)) {
                 pipelineBusy = true;
                 state.status = "running";
                 const generation = ++pollGeneration;

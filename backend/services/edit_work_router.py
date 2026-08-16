@@ -254,6 +254,19 @@ def create_edit_work_router(menu_code: str) -> APIRouter:
     def validation_summary(edit_session_id: int, request: Request):
         return editing.validation_summary(request, edit_session_id)
 
+    if menu_code == "M05003":
+        @router.get("/sessions/{edit_session_id}/descriptive-statistics")
+        def descriptive_statistics_summary(
+            edit_session_id: int,
+            request: Request,
+            columns: str | None = None,
+        ):
+            return editing.descriptive_statistics_summary(
+                request,
+                edit_session_id,
+                columns=columns,
+            )
+
     @router.post("/sessions/{edit_session_id}/validate")
     def mark_validated(
         edit_session_id: int,

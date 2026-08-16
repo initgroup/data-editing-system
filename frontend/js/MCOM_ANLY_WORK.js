@@ -237,6 +237,7 @@
         },
 
         destroy() {
+            window.DescriptiveStatistics?.close?.();
             this.runs = [];
             this.nodes = [];
             this.projects = [];
@@ -518,6 +519,37 @@
             PageManager.load(targetPage, menu?.title || menu?.label || "Rule Review & Decision", true);
         },
 
+        updateDescriptiveStatisticsButton() {
+            const button = getContainerEl("#descriptiveStatisticsButton-${PAGE_CODE}");
+            if (!button) return;
+            const nodeSelected = Boolean(this.selectedRun?.FLOW_RUN_ID && this.selectedNode?.FLOW_NODE_RUN_ID);
+            const hasTargetLineage = Boolean(this.selectedNode?.TARGET_OWNER && this.selectedNode?.TARGET_TABLE);
+            const available = nodeSelected && hasTargetLineage;
+            button.disabled = !available;
+            button.title = available
+                ? `Run #${this.selectedRun.FLOW_RUN_ID} · ${this.selectedNode.NODE_NAME || this.selectedNode.NODE_KEY || `Node #${this.selectedNode.FLOW_NODE_RUN_ID}`} 대상 기초통계량`
+                : (nodeSelected
+                    ? "선택한 실행 노드에 저장된 대상 테이블 정보가 없습니다."
+                    : "실행 노드를 선택하면 현재 대상의 기초통계량을 조회할 수 있습니다.");
+        },
+
+        async openDescriptiveStatistics(event) {
+            const flowRunId = this.selectedRun?.FLOW_RUN_ID;
+            const nodeRunId = this.selectedNode?.FLOW_NODE_RUN_ID;
+            if (!flowRunId
+                || !nodeRunId
+                || !this.selectedNode?.TARGET_OWNER
+                || !this.selectedNode?.TARGET_TABLE
+                || !window.DescriptiveStatistics?.open) return;
+            const params = new URLSearchParams({ nodeRunId: String(nodeRunId) });
+            await window.DescriptiveStatistics.open({
+                opener: event?.currentTarget,
+                title: "규칙 발굴 대상 기초통계량",
+                subtitle: `Run #${flowRunId} · ${this.selectedNode.NODE_NAME || this.selectedNode.NODE_KEY || `Node #${nodeRunId}`}의 현재 분포입니다. 등록된 INITUP$/INITDN$ 쌍이면 변경 전·후를 함께 비교합니다.`,
+                url: `${API_BASE_URL}/${API_PAGE_CODE}/runs/${encodeURIComponent(flowRunId)}/descriptive-statistics?${params.toString()}`
+            });
+        },
+
         async loadRuns(page = this.runPage, options = {}) {
             if (page === 1 && !options.preservePending) this.pendingRunId = "";
             const projectId = getContainerEl("#projectId-${PAGE_CODE}")?.value || "";
@@ -528,9 +560,10 @@
                 this.runTotal = 0;
                 this.selectedRun = null;
                 this.selectedNode = null;
-            this.currentModelDetail = null;
-            this.lastResultTableJson = null;
-            this.lastViolationSummary = null;
+                this.updateDescriptiveStatisticsButton();
+                this.currentModelDetail = null;
+                this.lastResultTableJson = null;
+                this.lastViolationSummary = null;
             this.lastSymbolicRuleSummary = null;
             this.nodeResultCache = new Map();
                 this.renderRuns();
@@ -576,6 +609,7 @@
                     }
                     this.selectedRun = null;
                     this.selectedNode = null;
+                    this.updateDescriptiveStatisticsButton();
                     this.nodes = [];
                     this.currentModelDetail = null;
                     this.lastResultTableJson = null;
@@ -738,6 +772,7 @@
         async selectRun(flowRunId) {
             this.selectedRun = this.runs.find((run) => Number(run.FLOW_RUN_ID) === Number(flowRunId)) || null;
             this.selectedNode = null;
+            this.updateDescriptiveStatisticsButton();
             this.currentModelDetail = null;
             this.lastResultTableJson = null;
             this.lastViolationSummary = null;
@@ -849,6 +884,7 @@
                 });
                 this.selectedRun = null;
                 this.selectedNode = null;
+                this.updateDescriptiveStatisticsButton();
                 this.nodes = [];
                 this.currentModelDetail = null;
                 this.lastResultTableJson = null;
@@ -1010,6 +1046,7 @@
 
         async selectNode(nodeRunId, page = 1, options = {}) {
             this.selectedNode = this.nodes.find((node) => Number(node.FLOW_NODE_RUN_ID) === Number(nodeRunId)) || null;
+            this.updateDescriptiveStatisticsButton();
             const restoredResult = this.applyRememberedNodeResult(this.selectedNode);
             if (!restoredResult) this.applyDefaultNodeResult(this.selectedNode);
             this.resultPage = Math.max(1, Number(page || 1));
@@ -7737,6 +7774,20 @@
                 : color;
         },
 
+        getSymbolicDiagnosticPointColor(context, normalColor, attentionColor) {
+            const selectedRowIndex = this.symbolicRuleChartState?.selectedRowIndex;
+            if (Number.isInteger(selectedRowIndex) && Number(context?.raw?.sampleIndex) === selectedRowIndex) {
+                return "#f59e0b";
+            }
+            return context?.raw?.isAttention ? attentionColor : normalColor;
+        },
+
+        getSymbolicDiagnosticPointRadius(context) {
+            const selectedRowIndex = this.symbolicRuleChartState?.selectedRowIndex;
+            if (Number.isInteger(selectedRowIndex) && Number(context?.raw?.sampleIndex) === selectedRowIndex) return 6;
+            return context?.raw?.isAttention ? 4 : 3;
+        },
+
         toggleSymbolicRuleChartMaximize(force = null) {
             const state = this.symbolicRuleChartState;
             const popup = document.getElementById(`${PAGE_ID_PREFIX}SymbolicRulePopup`);
@@ -7983,7 +8034,14 @@
         },
 
         buildSymbolicActualPredictedChartData(state = this.symbolicRuleChartState) {
-            const points = (state?.evaluatedRows || []).map((item) => ({ x: item.actual, y: item.predicted, sampleIndex: item.rowIndex }));
+            const attentionThreshold = Math.max(Number(state?.sampleMetrics?.mae || 0) * 2, Number.EPSILON);
+            const points = (state?.evaluatedRows || []).map((item) => ({
+                x: item.actual,
+                y: item.predicted,
+                residual: item.residual,
+                sampleIndex: item.rowIndex,
+                isAttention: Math.abs(item.residual) > attentionThreshold
+            }));
             if (!points.length) {
                 return { ok: false, message: getText("No numeric actual/predicted sample pairs are available.") };
             }
@@ -8004,28 +8062,35 @@
                     {
                         label: getText("Sample observations"),
                         data: points,
-                        backgroundColor: (context) => this.getSymbolicSamplePointColor(context, "rgba(37, 99, 235, 0.58)"),
-                        borderColor: (context) => this.getSymbolicSamplePointColor(context, "#2563eb"),
-                        pointRadius: (context) => this.getSymbolicSamplePointRadius(context, 3),
+                        backgroundColor: (context) => this.getSymbolicDiagnosticPointColor(context, "rgba(37, 99, 235, 0.58)", "rgba(220, 38, 38, 0.68)"),
+                        borderColor: (context) => this.getSymbolicDiagnosticPointColor(context, "#2563eb", "#b91c1c"),
+                        pointRadius: (context) => this.getSymbolicDiagnosticPointRadius(context),
                         pointHoverRadius: 5
                     },
                     {
                         type: "line",
                         label: "y = x",
                         data: [{ x: minValue, y: minValue }, { x: maxValue, y: maxValue }],
-                        borderColor: "#dc2626",
+                        borderColor: "#d97706",
                         borderDash: [6, 5],
                         borderWidth: 1.5,
                         pointRadius: 0,
                         showLine: true
                     }
                 ],
-                message: getText("Points close to the y=x line have smaller prediction errors. Large vertical gaps indicate rows that need review.")
+                message: `${getText("Points close to the y=x line have smaller prediction errors. Large vertical gaps indicate rows that need review.")} ${getText("Red points have an absolute residual greater than twice the sample MAE. Select a point to move to its row in the detail grid.")}`
             };
         },
 
         buildSymbolicResidualChartData(state = this.symbolicRuleChartState) {
-            const points = (state?.evaluatedRows || []).map((item) => ({ x: item.predicted, y: item.residual, sampleIndex: item.rowIndex }));
+            const attentionThreshold = Math.max(Number(state?.sampleMetrics?.mae || 0) * 2, Number.EPSILON);
+            const points = (state?.evaluatedRows || []).map((item) => ({
+                x: item.predicted,
+                y: item.residual,
+                residual: item.residual,
+                sampleIndex: item.rowIndex,
+                isAttention: Math.abs(item.residual) > attentionThreshold
+            }));
             if (!points.length) {
                 return { ok: false, message: getText("No numeric residual sample pairs are available.") };
             }
@@ -8046,23 +8111,23 @@
                     {
                         label: getText("Residual samples"),
                         data: points,
-                        backgroundColor: (context) => this.getSymbolicSamplePointColor(context, "rgba(124, 58, 237, 0.56)"),
-                        borderColor: (context) => this.getSymbolicSamplePointColor(context, "#7c3aed"),
-                        pointRadius: (context) => this.getSymbolicSamplePointRadius(context, 3),
+                        backgroundColor: (context) => this.getSymbolicDiagnosticPointColor(context, "rgba(124, 58, 237, 0.56)", "rgba(220, 38, 38, 0.68)"),
+                        borderColor: (context) => this.getSymbolicDiagnosticPointColor(context, "#7c3aed", "#b91c1c"),
+                        pointRadius: (context) => this.getSymbolicDiagnosticPointRadius(context),
                         pointHoverRadius: 5
                     },
                     {
                         type: "line",
                         label: "y = 0",
                         data: [{ x: minX, y: 0 }, { x: maxX, y: 0 }],
-                        borderColor: "#dc2626",
+                        borderColor: "#d97706",
                         borderDash: [6, 5],
                         borderWidth: 1.5,
                         pointRadius: 0,
                         showLine: true
                     }
                 ],
-                message: getText("Residuals should be distributed around zero without a clear pattern. Curves or widening bands can indicate model bias or changing variance.")
+                message: `${getText("Residuals should be distributed around zero without a clear pattern. Curves or widening bands can indicate model bias or changing variance.")} ${getText("Red points have an absolute residual greater than twice the sample MAE. Select a point to move to its row in the detail grid.")}`
             };
         },
 

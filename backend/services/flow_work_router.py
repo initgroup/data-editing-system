@@ -1132,6 +1132,67 @@ def create_flow_work_router(
             if conn:
                 conn.close()
 
+    @router.get("/quick-edit/history")
+    def get_quick_edit_history(
+        request: Request,
+        page: int = 1,
+        pageSize: int = 20,
+    ):
+        """Return recent Quick Editing executions visible to the signed-in user."""
+        conn = None
+        try:
+            normalized_page = normalize_page_number(page)
+            normalized_page_size = normalize_page_size(pageSize, default=20, maximum=100)
+            conn = get_target_db_connection(request)
+            return flow_work.list_quick_edit_history(
+                conn,
+                MENU_CODE,
+                get_request_user_id(request),
+                get_request_role_code(request) == "ADMIN",
+                normalized_page,
+                normalized_page_size,
+            )
+        finally:
+            if conn:
+                conn.close()
+
+    @router.get("/quick-edit/history/{flow_run_id}")
+    def get_quick_edit_history_detail(flow_run_id: int, request: Request):
+        """Restore one Quick Editing execution from persisted run and node results."""
+        conn = None
+        try:
+            conn = get_target_db_connection(request)
+            history = flow_work.list_quick_edit_history(
+                conn,
+                MENU_CODE,
+                get_request_user_id(request),
+                get_request_role_code(request) == "ADMIN",
+                1,
+                1,
+                flow_run_id=flow_run_id,
+            )
+            rows = history.get("data") or []
+            if not rows:
+                raise HTTPException(status_code=404, detail="Quick Editing execution history was not found.")
+            run_row = dict(rows[0])
+            stored_run = flow_work.get_run(
+                conn,
+                MENU_CODE,
+                int(run_row.get("PROJECT_ID") or 0),
+                int(run_row.get("SCENARIO_ID") or 0),
+                flow_run_id,
+            )
+            if stored_run:
+                run_row["PLAN_JSON"] = stored_run.get("PLAN_JSON")
+            node_rows = flow_work.list_node_runs(conn, flow_run_id).get("data") or []
+            return {
+                "status": "success",
+                "data": flow_work.build_quick_edit_history_detail(run_row, node_rows),
+            }
+        finally:
+            if conn:
+                conn.close()
+
     @router.get("/run/{flow_run_id}/nodes")
     def get_run_nodes(flow_run_id: int, request: Request):
         conn = None

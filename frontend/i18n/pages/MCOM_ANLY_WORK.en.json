@@ -7,6 +7,7 @@
     "reviewEditingRules": "Review editing rules"
   },
   "messages": {
+    "Red points have an absolute residual greater than twice the sample MAE. Select a point to move to its row in the detail grid.": "Red points have an absolute residual greater than twice the sample MAE. Select a point to move to its row in the detail grid.",
     "Sampled": "Sampled",
     "Not evaluated by the saved detection run because rule rank {rank} exceeded max rules {maxRules}.": "Not evaluated by the saved detection run because rule rank {rank} exceeded max rules {maxRules}.",
     "Not evaluated by the saved detection run because it did not meet the confidence or lift criteria.": "Not evaluated by the saved detection run because it did not meet the confidence or lift criteria.",

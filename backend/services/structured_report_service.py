@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import re
 from collections import Counter
 from contextvars import ContextVar
@@ -15,6 +16,7 @@ from fastapi import HTTPException, Request
 from backend.auth_context import get_request_role_code, get_request_user_id
 from backend.database_helper import execute_query
 from backend.target_database import get_target_db_connection
+from backend.services import descriptive_statistics_service as descriptive_statistics
 from backend.services.report_i18n import (
     localize_catalog_item,
     localize_report_document,
@@ -35,7 +37,7 @@ _BATCH_QUERY_CACHE: ContextVar[dict[tuple[str, str], list[dict[str, Any]]] | Non
 )
 
 REPORT_SCHEMA_VERSION = "1.0"
-REPORT_DEFINITION_VERSION = "M06001_STRUCTURED_REPORT_V1"
+REPORT_DEFINITION_VERSION = "M06001_STRUCTURED_REPORT_V4"
 REPORT_PROVIDER = {
     "name": "IN-DEPS",
     "statement": "본 보고서는 IN-DEPS 시스템에서 제공합니다.",
@@ -175,7 +177,7 @@ REPORT_CATALOG: tuple[dict[str, Any], ...] = (
         "code": "R17",
         "group": "M05003",
         "title": "에디팅 전후 효과 검증",
-        "description": "기준 Run과 재분석 Run의 위반 변화, 수정 적용과 검증 상태를 비교합니다.",
+        "description": "기준 Run과 재분석 Run의 위반 변화, 수정 적용, 검증 시점 기초통계량과 분산 변화를 비교합니다.",
         "icon": "fa-chart-line",
         "requirement": "VALIDATED_SESSION_COUNT",
     },
@@ -202,6 +204,14 @@ REPORT_CATALOG: tuple[dict[str, Any], ...] = (
         "description": "각 시나리오의 최신 성공 Run과 최신 에디팅 세션을 고정해 규칙 선정률과 수정 적용률을 비교합니다.",
         "icon": "fa-table-columns",
         "requirement": "SCENARIO_COUNT",
+    },
+    {
+        "code": "R21",
+        "group": "M05003",
+        "title": "데이터 프로파일 비교·기초통계량",
+        "description": "전체 변화 맵, 중요 컬럼 순위, 원본·수정 기초통계량과 동일 구간 분포를 인쇄 가능한 전체 펼침 형식으로 제공합니다.",
+        "icon": "fa-chart-column",
+        "requirement": "DESCRIPTIVE_STATISTICS",
     },
 )
 
@@ -352,6 +362,7 @@ COLUMN_LABELS = {
     "EVENT_SUMMARY": "이벤트 요약",
     "EVENT_USER": "작업자",
     "TARGET_TABLE_COUNT": "대상 테이블 수",
+    "EDIT_READY_TARGET_TABLE_COUNT": "INITUP$·INITDN$ 비교 쌍 수",
     "FLOW_RUN_COUNT": "Flow Run 수",
     "SUCCESS_FLOW_RUN_COUNT": "성공 Flow Run 수",
     "FLOW_SUCCESS_RATE": "Flow 성공률",
@@ -368,6 +379,72 @@ COLUMN_LABELS = {
     "LATEST_EDIT_SESSION_STATUS": "최신 세션 상태",
     "LATEST_EDIT_SESSION_AT": "최신 세션 시각",
     "SESSION_BASELINE_FLOW_RUN_ID": "세션 기준 Flow Run",
+    "DATA_STAGE": "데이터 구분",
+    "TOTAL_ROW_COUNT": "전체 건수",
+    "VALUE_COUNT": "유효값 건수",
+    "NULL_COUNT": "결측·변환실패 건수",
+    "DISTINCT_COUNT": "고유값 수",
+    "DISTINCT_RATE": "고유값 비율",
+    "MODE_VALUE": "최빈값",
+    "MODE_COUNT": "최빈값 빈도",
+    "MIN_LENGTH": "최소 길이",
+    "AVG_LENGTH": "평균 길이",
+    "MAX_LENGTH": "최대 길이",
+    "MIN_VALUE_TEXT": "최솟값·최초값",
+    "MAX_VALUE_TEXT": "최댓값·최종값",
+    "PROFILE_KIND": "통계 유형",
+    "SUM_VALUE": "합계",
+    "MEAN_VALUE": "평균",
+    "VARIANCE_VALUE": "분산",
+    "STDDEV_VALUE": "표준편차",
+    "SKEWNESS_VALUE": "왜도",
+    "KURTOSIS_VALUE": "첨도(초과첨도)",
+    "MEDIAN_VALUE": "메디안(중앙값)",
+    "MIN_VALUE": "최소값",
+    "Q1_VALUE": "1사분위수(Q1)",
+    "Q3_VALUE": "3사분위수(Q3)",
+    "MAX_VALUE": "최대값",
+    "BEFORE_VARIANCE": "변경 전 분산",
+    "AFTER_VARIANCE": "변경 후 분산",
+    "VARIANCE_DELTA": "분산 변화량",
+    "VARIANCE_REDUCTION_RATE": "분산 감소율",
+    "VARIANCE_DIRECTION": "분산 변화 방향",
+    "IMPORTANCE_RANK": "중요도 순위",
+    "IMPORTANCE_SCORE": "중요도 점수",
+    "PRIORITY_LEVEL": "확인 우선순위",
+    "PRIORITY_REASONS": "우선 확인 사유",
+    "HAS_STATISTICS": "기초통계 제공 여부",
+    "VIOLATED_ROW_COUNT": "위반 행 수",
+    "CATEGORICAL_VIOLATION_COUNT": "범주형 위반 건수",
+    "CONTINUOUS_VIOLATION_COUNT": "연속형 위반 건수",
+    "MISSING_RATE": "결측률",
+    "VARIANCE_CHANGE_RATE": "분산 변화율",
+    "MEAN_SHIFT_STD": "평균 이동(표준편차 배수)",
+    "RANGE_SHIFT_RATE": "분포 범위 이동률",
+    "STATISTICS_COLUMN_COUNT": "통계 분석 컬럼 수",
+    "STATISTICS_BASIS": "통계 산정 기준",
+    "BIN_NO": "분포 구간",
+    "RANGE_FROM": "구간 시작",
+    "RANGE_TO": "구간 끝",
+    "BEFORE_COUNT": "원본 건수",
+    "AFTER_COUNT": "수정 건수",
+    "VALUE_RANK": "값 순위",
+    "VALUE": "값",
+    "HIGH_PRIORITY_COLUMN_COUNT": "우선 확인 컬럼 수",
+    "MEDIUM_PRIORITY_COLUMN_COUNT": "관심 컬럼 수",
+    "VIOLATION_COLUMN_COUNT": "위반 발생 컬럼 수",
+    "TOTAL_VIOLATION_COUNT": "전체 위반 건수",
+    "DECREASED_VARIANCE_COLUMN_COUNT": "분산 감소 컬럼 수",
+    "INCREASED_VARIANCE_COLUMN_COUNT": "분산 증가 컬럼 수",
+    "BEFORE_MEAN": "변경 전 평균",
+    "AFTER_MEAN": "변경 후 평균",
+    "MEAN_DELTA": "평균 변화량",
+    "BEFORE_STDDEV": "변경 전 표준편차",
+    "AFTER_STDDEV": "변경 후 표준편차",
+    "BEFORE_MIN": "변경 전 최소값",
+    "AFTER_MIN": "변경 후 최소값",
+    "BEFORE_MAX": "변경 전 최대값",
+    "AFTER_MAX": "변경 후 최대값",
 }
 
 
@@ -397,12 +474,19 @@ _ALLOWED_PARAMETER_KEYS = {
     "refMenuCode",
     "ruleParts",
     "clusterUsageMode",
+    "dimensionReductionMode",
+    "estimationMode",
+    "monteCarloMode",
+    "monteCarloIterations",
+    "monteCarloMaxRows",
+    "banffMode",
     "editingSessionId",
 }
 _ALLOWED_P_PARAMETER_KEYS = {
     "P_ABS_ERROR_THRESHOLD",
     "P_ALPHA",
     "P_ASSOC_MODEL_NAME",
+    "P_BANFF_MODE",
     "P_CANDIDATE_COLUMNS",
     "P_CASE_ID_COLUMN_NAME",
     "P_CATEGORICAL_COLUMNS",
@@ -410,7 +494,9 @@ _ALLOWED_P_PARAMETER_KEYS = {
     "P_CLUSTER_USAGE_MODE",
     "P_COMMIT_INTERVAL",
     "P_CONTINUE_ON_ERROR",
+    "P_DIMENSION_REDUCTION_MODE",
     "P_ERROR_PCT_THRESHOLD",
+    "P_ESTIMATION_MODE",
     "P_INCLUDE_SPEARMAN",
     "P_LINEAR_FIRST_YN",
     "P_LINEAR_R2_THRESHOLD",
@@ -448,6 +534,9 @@ _ALLOWED_P_PARAMETER_KEYS = {
     "P_ML_MAX_IN_MEMORY_ROWS",
     "P_ML_MAX_INPUT_FEATURES",
     "P_MODEL_NAME",
+    "P_MONTE_CARLO_ITERATIONS",
+    "P_MONTE_CARLO_MAX_ROWS",
+    "P_MONTE_CARLO_MODE",
     "P_NETWORK_MIN_METRIC",
     "P_PREDICTED_TYPE",
     "P_PREDICTION_METHOD",
@@ -728,6 +817,419 @@ _VALIDATION_REANALYSIS_FIELDS = (
     "VIOLATION_REDUCTION_COUNT",
     "VIOLATION_REDUCTION_RATE",
 )
+_STATISTICS_METRIC_FIELDS = (
+    ("TOTAL_ROW_COUNT", "totalRowCount", True),
+    ("VALUE_COUNT", "valueCount", True),
+    ("NULL_COUNT", "nullCount", True),
+    ("DISTINCT_COUNT", "distinctCount", True),
+    ("DISTINCT_RATE", "distinctRate", False),
+    ("MODE_COUNT", "modeCount", True),
+    ("MIN_LENGTH", "minLength", True),
+    ("AVG_LENGTH", "avgLength", False),
+    ("MAX_LENGTH", "maxLength", True),
+    ("SUM_VALUE", "sum", False),
+    ("MEAN_VALUE", "mean", False),
+    ("VARIANCE_VALUE", "variance", False),
+    ("STDDEV_VALUE", "stddev", False),
+    ("SKEWNESS_VALUE", "skewness", False),
+    ("KURTOSIS_VALUE", "kurtosis", False),
+    ("MEDIAN_VALUE", "median", False),
+    ("MIN_VALUE", "min", False),
+    ("Q1_VALUE", "q1", False),
+    ("Q3_VALUE", "q3", False),
+    ("MAX_VALUE", "max", False),
+)
+_REPORT_IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_$#]{0,127}$")
+
+
+def _safe_stat_number(value: Any, *, integer: bool = False) -> int | float | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if not math.isfinite(numeric):
+        return None
+    return int(numeric) if integer else numeric
+
+
+def _safe_statistics_metrics(source: Any) -> dict[str, int | float | None] | None:
+    if not isinstance(source, dict):
+        return None
+    result = {
+        report_key: _safe_stat_number(source.get(api_key), integer=integer)
+        for report_key, api_key, integer in _STATISTICS_METRIC_FIELDS
+    }
+    for report_key, api_key in (
+        ("MODE_VALUE", "modeValue"),
+        ("MIN_VALUE_TEXT", "minValueText"),
+        ("MAX_VALUE_TEXT", "maxValueText"),
+    ):
+        raw_value = source.get(api_key)
+        result[report_key] = str(raw_value)[:500] if raw_value is not None else None
+    return result
+
+
+def _safe_statistics_source(source: Any, stage: str) -> dict[str, str] | None:
+    if not isinstance(source, dict):
+        return None
+    owner = str(source.get("owner") or "").strip().upper()
+    table = str(source.get("table") or "").strip().upper()
+    if not _REPORT_IDENTIFIER_PATTERN.fullmatch(owner) or not _REPORT_IDENTIFIER_PATTERN.fullmatch(table):
+        return None
+    return {
+        "OWNER": owner,
+        "TABLE": table,
+        "LABEL": (
+            "원본"
+            if stage == "BEFORE"
+            else "수정"
+        ),
+    }
+
+
+def _safe_statistics_distribution(value: Any, *, has_after: bool) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    minimum = _safe_stat_number(value.get("min"))
+    maximum = _safe_stat_number(value.get("max"))
+    raw_bins = value.get("bins") if isinstance(value.get("bins"), list) else []
+    if minimum is None or maximum is None or not raw_bins:
+        return None
+    bins = []
+    for index, raw_bin in enumerate(raw_bins[:12], start=1):
+        if not isinstance(raw_bin, dict):
+            continue
+        bins.append(
+            {
+                "BIN_NO": index,
+                "LOWER_VALUE": _safe_stat_number(raw_bin.get("lower")),
+                "UPPER_VALUE": _safe_stat_number(raw_bin.get("upper")),
+                "BEFORE_COUNT": _safe_stat_number(raw_bin.get("beforeCount"), integer=True) or 0,
+                "AFTER_COUNT": (
+                    _safe_stat_number(raw_bin.get("afterCount"), integer=True) or 0
+                    if has_after
+                    else None
+                ),
+            }
+        )
+    if not bins:
+        return None
+    return {
+        "BIN_COUNT": len(bins),
+        "MIN_VALUE": minimum,
+        "MAX_VALUE": maximum,
+        "BINS": bins,
+    }
+
+
+def _safe_statistics_insight(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    column_name = str(value.get("columnName") or "").strip().upper()
+    if not _REPORT_IDENTIFIER_PATTERN.fullmatch(column_name):
+        return None
+    importance_score = _safe_stat_number(value.get("importanceScore")) or 0
+    priority_level = "HIGH" if importance_score >= 70 else ("MEDIUM" if importance_score >= 30 else "LOW")
+    reasons = value.get("priorityReasons") if isinstance(value.get("priorityReasons"), list) else []
+    safe_reasons = [
+        str(reason).strip()[:200]
+        for reason in reasons[:5]
+        if reason is not None and str(reason).strip()
+    ]
+    data_type = str(value.get("dataType") or "").strip().upper()
+    if not re.fullmatch(r"[A-Z][A-Z0-9_ ]{0,99}", data_type):
+        data_type = ""
+    column_comment = value.get("columnComment")
+    return {
+        "COLUMN_NAME": column_name,
+        "COLUMN_DESC": column_comment[:500] if isinstance(column_comment, str) else "",
+        "DATA_TYPE": data_type,
+        "HAS_STATISTICS": "Y" if value.get("hasStatistics") is not False else "N",
+        "IMPORTANCE_RANK": _safe_stat_number(value.get("importanceRank"), integer=True),
+        "IMPORTANCE_SCORE": importance_score,
+        "PRIORITY_LEVEL": priority_level,
+        "PRIORITY_REASONS": " · ".join(safe_reasons),
+        "VIOLATION_COUNT": _safe_stat_number(value.get("violationCount"), integer=True) or 0,
+        "VIOLATED_ROW_COUNT": _safe_stat_number(value.get("violatedRowCount"), integer=True) or 0,
+        "RULE_COUNT": _safe_stat_number(value.get("ruleCount"), integer=True) or 0,
+        "CATEGORICAL_VIOLATION_COUNT": _safe_stat_number(value.get("categoricalViolationCount"), integer=True) or 0,
+        "CONTINUOUS_VIOLATION_COUNT": _safe_stat_number(value.get("continuousViolationCount"), integer=True) or 0,
+        "MISSING_RATE": _safe_stat_number(value.get("missingRate")),
+        "VARIANCE_CHANGE_RATE": _safe_stat_number(value.get("varianceChangeRate")),
+        "MEAN_SHIFT_STD": _safe_stat_number(value.get("meanShiftStd")),
+        "RANGE_SHIFT_RATE": _safe_stat_number(value.get("rangeShiftRate")),
+        "TOTAL_ROW_COUNT": _safe_stat_number(value.get("totalRowCount"), integer=True),
+    }
+
+
+def _safe_descriptive_statistics(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, dict) or value.get("available") is False:
+        return None
+    before_source = _safe_statistics_source(value.get("before"), "BEFORE")
+    after_source = _safe_statistics_source(value.get("after"), "AFTER")
+    if not before_source:
+        return None
+    raw_columns = value.get("columns") if isinstance(value.get("columns"), list) else []
+    columns: list[dict[str, Any]] = []
+    column_insights: list[dict[str, Any]] = []
+    for raw_column in raw_columns:
+        if not isinstance(raw_column, dict):
+            continue
+        column_name = str(raw_column.get("columnName") or "").strip().upper()
+        if not _REPORT_IDENTIFIER_PATTERN.fullmatch(column_name):
+            continue
+        before = _safe_statistics_metrics(raw_column.get("before"))
+        after = _safe_statistics_metrics(raw_column.get("after"))
+        if before is None:
+            continue
+        before_variance = before.get("VARIANCE_VALUE")
+        after_variance = after.get("VARIANCE_VALUE") if after else None
+        if before_variance is None or after_variance is None:
+            variance_delta = None
+            variance_reduction_rate = None
+            variance_direction = "UNAVAILABLE"
+        else:
+            before_value = float(before_variance)
+            after_value = float(after_variance)
+            variance_delta = after_value - before_value
+            tolerance = max(1e-12, abs(before_value) * 1e-9)
+            if abs(variance_delta) <= tolerance:
+                variance_direction = "UNCHANGED"
+            elif variance_delta < 0:
+                variance_direction = "DECREASED"
+            else:
+                variance_direction = "INCREASED"
+            variance_reduction_rate = (
+                0.0
+                if before_value == 0 and after_value == 0
+                else None
+                if before_value == 0
+                else (before_value - after_value) / abs(before_value)
+            )
+        column_comment = raw_column.get("columnComment")
+        data_type = str(raw_column.get("dataType") or "").strip().upper()
+        if not re.fullmatch(r"[A-Z][A-Z0-9_ ]{0,99}", data_type):
+            data_type = ""
+        profile_kind = str(raw_column.get("profileKind") or "NUMERIC").strip().upper()
+        if profile_kind not in {"NUMERIC", "CATEGORICAL", "TEMPORAL"}:
+            profile_kind = "CATEGORICAL"
+        top_values = []
+        for raw_top_value in raw_column.get("topValues") or []:
+            if not isinstance(raw_top_value, dict):
+                continue
+            top_values.append(
+                {
+                    "VALUE": str(raw_top_value.get("value") or "")[:500],
+                    "BEFORE_COUNT": _safe_stat_number(raw_top_value.get("beforeCount"), integer=True) or 0,
+                    "AFTER_COUNT": (
+                        _safe_stat_number(raw_top_value.get("afterCount"), integer=True)
+                        if after is not None
+                        else None
+                    ),
+                }
+            )
+            if len(top_values) >= 10:
+                break
+        columns.append(
+            {
+                "COLUMN_NAME": column_name,
+                "COLUMN_DESC": column_comment[:500] if isinstance(column_comment, str) else "",
+                "DATA_TYPE": data_type,
+                "PROFILE_KIND": profile_kind,
+                "BEFORE": before,
+                "AFTER": after,
+                "TOP_VALUES": top_values,
+                "DISTRIBUTION": _safe_statistics_distribution(
+                    raw_column.get("distribution"),
+                    has_after=after is not None,
+                ),
+                "VARIANCE_DELTA": variance_delta,
+                "VARIANCE_REDUCTION_RATE": variance_reduction_rate,
+                "VARIANCE_DIRECTION": variance_direction,
+            }
+        )
+        column_insight = _safe_statistics_insight(raw_column.get("insight"))
+        if column_insight:
+            column_insights.append(column_insight)
+        if len(columns) >= 100:
+            break
+    raw_insights = value.get("insights") if isinstance(value.get("insights"), dict) else {}
+    raw_ranked = raw_insights.get("rankedColumns") if isinstance(raw_insights.get("rankedColumns"), list) else []
+    ranked_insights = [
+        insight
+        for raw_insight in raw_ranked[:100]
+        if (insight := _safe_statistics_insight(raw_insight)) is not None
+    ]
+    if not ranked_insights:
+        ranked_insights = column_insights
+    ranked_insights.sort(
+        key=lambda item: (
+            item.get("IMPORTANCE_RANK") is None,
+            item.get("IMPORTANCE_RANK") or 0,
+            -(item.get("IMPORTANCE_SCORE") or 0),
+            item.get("COLUMN_NAME") or "",
+        )
+    )
+    for index, insight in enumerate(ranked_insights, start=1):
+        if insight.get("IMPORTANCE_RANK") is None:
+            insight["IMPORTANCE_RANK"] = index
+    basis = str(value.get("basis") or "VALIDATION_SNAPSHOT").strip().upper()
+    if basis not in {
+        "VALIDATION_SNAPSHOT",
+        "VALIDATION_SNAPSHOT_SOURCE",
+        "BEFORE_AFTER",
+        "LIVE_CURRENT_PHYSICAL_PAIR",
+        "SINGLE",
+        "LIVE_CURRENT_AFTER_APPLY",
+    }:
+        basis = "VALIDATION_SNAPSHOT"
+    return {
+        "AVAILABLE": True,
+        "BASIS": basis,
+        "BEFORE_SOURCE": before_source,
+        "AFTER_SOURCE": after_source,
+        "COLUMNS": columns,
+        "RANKED_INSIGHTS": ranked_insights,
+        "TRUNCATED": bool(value.get("truncated")) or len(raw_columns) > len(columns),
+    }
+
+
+def _statistics_stage_rows(statistics: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not statistics:
+        return []
+    rows: list[dict[str, Any]] = []
+    for column in statistics.get("COLUMNS") or []:
+        for stage, metrics_key in (("변경 전", "BEFORE"), ("변경 후", "AFTER")):
+            metrics = column.get(metrics_key)
+            rows.append(
+                {
+                    "DATA_STAGE": (
+                        stage
+                        if isinstance(metrics, dict)
+                        else "수정(비교 대상 없음)"
+                    ),
+                    "COLUMN_NAME": column.get("COLUMN_NAME"),
+                    "COLUMN_DESC": column.get("COLUMN_DESC"),
+                    "DATA_TYPE": column.get("DATA_TYPE"),
+                    **(metrics if isinstance(metrics, dict) else {}),
+                }
+            )
+    return rows
+
+
+def _statistics_variance_rows(statistics: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not statistics:
+        return []
+    return [
+        {
+            "COLUMN_NAME": column.get("COLUMN_NAME"),
+            "COLUMN_DESC": column.get("COLUMN_DESC"),
+            "BEFORE_VARIANCE": (column.get("BEFORE") or {}).get("VARIANCE_VALUE"),
+            "AFTER_VARIANCE": (column.get("AFTER") or {}).get("VARIANCE_VALUE"),
+            "VARIANCE_DELTA": column.get("VARIANCE_DELTA"),
+            "VARIANCE_REDUCTION_RATE": column.get("VARIANCE_REDUCTION_RATE"),
+            "VARIANCE_DIRECTION": column.get("VARIANCE_DIRECTION"),
+        }
+        for column in statistics.get("COLUMNS") or []
+        if isinstance(column, dict) and isinstance(column.get("AFTER"), dict)
+    ]
+
+
+def _statistics_priority_rows(statistics: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not statistics:
+        return []
+    return [
+        dict(row)
+        for row in statistics.get("RANKED_INSIGHTS") or []
+        if isinstance(row, dict)
+    ]
+
+
+def _statistics_distribution_rows(statistics: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not statistics:
+        return []
+    rows: list[dict[str, Any]] = []
+    for column in statistics.get("COLUMNS") or []:
+        if not isinstance(column, dict):
+            continue
+        before = column.get("BEFORE") or {}
+        after = column.get("AFTER") or {}
+        before_mean = before.get("MEAN_VALUE")
+        after_mean = after.get("MEAN_VALUE")
+        rows.append(
+            {
+                "COLUMN_NAME": column.get("COLUMN_NAME"),
+                "COLUMN_DESC": column.get("COLUMN_DESC"),
+                "BEFORE_MEAN": before_mean,
+                "AFTER_MEAN": after_mean,
+                "MEAN_DELTA": (
+                    float(after_mean) - float(before_mean)
+                    if before_mean is not None and after_mean is not None
+                    else None
+                ),
+                "BEFORE_VARIANCE": before.get("VARIANCE_VALUE"),
+                "AFTER_VARIANCE": after.get("VARIANCE_VALUE"),
+                "VARIANCE_REDUCTION_RATE": column.get("VARIANCE_REDUCTION_RATE"),
+                "BEFORE_STDDEV": before.get("STDDEV_VALUE"),
+                "AFTER_STDDEV": after.get("STDDEV_VALUE"),
+                "BEFORE_MIN": before.get("MIN_VALUE"),
+                "AFTER_MIN": after.get("MIN_VALUE"),
+                "BEFORE_MAX": before.get("MAX_VALUE"),
+                "AFTER_MAX": after.get("MAX_VALUE"),
+            }
+        )
+    return rows
+
+
+def _statistics_distribution_bin_rows(statistics: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not statistics:
+        return []
+    rows: list[dict[str, Any]] = []
+    for column in statistics.get("COLUMNS") or []:
+        if not isinstance(column, dict):
+            continue
+        distribution = column.get("DISTRIBUTION")
+        if not isinstance(distribution, dict):
+            continue
+        for raw_bin in distribution.get("BINS") or []:
+            if not isinstance(raw_bin, dict):
+                continue
+            rows.append(
+                {
+                    "COLUMN_NAME": column.get("COLUMN_NAME"),
+                    "COLUMN_DESC": column.get("COLUMN_DESC"),
+                    "BIN_NO": raw_bin.get("BIN_NO"),
+                    "RANGE_FROM": raw_bin.get("LOWER_VALUE"),
+                    "RANGE_TO": raw_bin.get("UPPER_VALUE"),
+                    "BEFORE_COUNT": raw_bin.get("BEFORE_COUNT"),
+                    "AFTER_COUNT": raw_bin.get("AFTER_COUNT"),
+                }
+            )
+    return rows
+
+
+def _statistics_top_value_rows(statistics: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not statistics:
+        return []
+    rows: list[dict[str, Any]] = []
+    for column in statistics.get("COLUMNS") or []:
+        if not isinstance(column, dict) or column.get("PROFILE_KIND") == "NUMERIC":
+            continue
+        for rank, value in enumerate(column.get("TOP_VALUES") or [], start=1):
+            rows.append(
+                {
+                    "COLUMN_NAME": column.get("COLUMN_NAME"),
+                    "COLUMN_DESC": column.get("COLUMN_DESC"),
+                    "PROFILE_KIND": column.get("PROFILE_KIND"),
+                    "VALUE_RANK": rank,
+                    "VALUE": value.get("VALUE"),
+                    "BEFORE_COUNT": value.get("BEFORE_COUNT"),
+                    "AFTER_COUNT": value.get("AFTER_COUNT"),
+                }
+            )
+    return rows
 
 
 def _allowlisted_fields(source: Any, fields: Iterable[str]) -> dict[str, Any]:
@@ -767,7 +1269,194 @@ def _safe_validation_snapshot(row: dict[str, Any] | None) -> dict[str, Any] | No
         "OVERALL": overall,
         "SCOPES": scopes,
         "REANALYSIS": _allowlisted_fields(analysis.get("REANALYSIS"), _VALIDATION_REANALYSIS_FIELDS),
+        "DESCRIPTIVE_STATISTICS": _safe_descriptive_statistics(value.get("DESCRIPTIVE_STATISTICS")),
     }
+
+
+def _load_descriptive_statistics_report_data(
+    conn,
+    context: dict[str, Any],
+) -> tuple[dict[str, Any] | None, str, str | None]:
+    session = context.get("editSession")
+    selection = context.get("selection") or {}
+    if isinstance(session, dict):
+        cursor = conn.cursor()
+        try:
+            live_value = descriptive_statistics.build_edit_session_statistics(
+                cursor,
+                session,
+                basis="LIVE_CURRENT_PHYSICAL_PAIR",
+            )
+            safe_live_value = _safe_descriptive_statistics(live_value)
+            if safe_live_value:
+                safe_live_value["BASIS"] = "LIVE_CURRENT_PHYSICAL_PAIR"
+                return safe_live_value, "CURRENT_PHYSICAL_PAIR", None
+        except Exception as exc:
+            logger.warning(
+                "M06001 live descriptive-statistics report fallback. edit_session_id=%s error_type=%s",
+                selection.get("editSessionId"),
+                type(exc).__name__,
+            )
+        finally:
+            cursor.close()
+
+    table_rows = _query(
+        conn,
+        "M06001_TARGET_TABLE_LIST",
+        {
+            "projectId": selection.get("projectId"),
+            "scenarioId": selection.get("scenarioId"),
+        },
+    )
+    run_plan = _safe_run_plan_snapshot((context.get("flowRun") or {}).get("PLAN_JSON"))
+    run_targets = {
+        (
+            str(node.get("OWNER_NAME") or "").strip().upper(),
+            str(node.get("TABLE_NAME") or "").strip().upper(),
+        )
+        for node in run_plan.get("nodes") or []
+        if node.get("OWNER_NAME") and node.get("TABLE_NAME")
+    }
+    pair_candidates = [
+        row
+        for row in table_rows
+        if row.get("OWNER_NAME") and row.get("TABLE_NAME")
+    ]
+    pair_candidates.sort(
+        key=lambda row: (
+            0
+            if (
+                str(row.get("OWNER_NAME") or "").strip().upper(),
+                str(row.get("TABLE_NAME") or "").strip().upper(),
+            ) in run_targets
+            else 1,
+            0 if str(row.get("TABLE_NAME") or "").strip().upper().startswith("INITUP$") else 1,
+            0 if row.get("EDIT_OWNER_NAME") and row.get("EDIT_TABLE_NAME") else 1,
+            _as_int(row.get("SCENARIO_TABLE_ID")),
+        )
+    )
+    if pair_candidates:
+        cursor = conn.cursor()
+        try:
+            for table_row in pair_candidates:
+                source_owner = str(table_row.get("OWNER_NAME") or "").strip().upper()
+                source_table = str(table_row.get("TABLE_NAME") or "").strip().upper()
+                physical_pair = descriptive_statistics.resolve_physical_pair(
+                    cursor,
+                    target_owner=source_owner,
+                    target_table=source_table,
+                )
+                registered_pair = (
+                    {
+                        "SOURCE_OWNER": source_owner,
+                        "SOURCE_TABLE": source_table,
+                        "EDIT_OWNER": str(table_row.get("EDIT_OWNER_NAME") or "").strip().upper(),
+                        "EDIT_TABLE": str(table_row.get("EDIT_TABLE_NAME") or "").strip().upper(),
+                    }
+                    if table_row.get("EDIT_OWNER_NAME") and table_row.get("EDIT_TABLE_NAME")
+                    else None
+                )
+                comparison_pair = physical_pair or registered_pair
+                try:
+                    common_context = {
+                        "projectId": selection.get("projectId"),
+                        "scenarioId": selection.get("scenarioId"),
+                        "flowRunId": selection.get("flowRunId"),
+                        "scenarioTableId": table_row.get("SCENARIO_TABLE_ID"),
+                        "statisticsSource": (
+                            "LIVE_PHYSICAL_SOURCE_EDIT_PAIR"
+                            if physical_pair
+                            else (
+                                "LIVE_REGISTERED_SOURCE_EDIT_PAIR"
+                                if registered_pair
+                                else "LIVE_SOURCE_ONLY"
+                            )
+                        ),
+                    }
+                    try:
+                        live_value = descriptive_statistics.build_statistics(
+                            cursor,
+                            before_owner=str((comparison_pair or {}).get("SOURCE_OWNER") or source_owner),
+                            before_table=str((comparison_pair or {}).get("SOURCE_TABLE") or source_table),
+                            after_owner=(comparison_pair or {}).get("EDIT_OWNER"),
+                            after_table=(comparison_pair or {}).get("EDIT_TABLE"),
+                            basis="LIVE_CURRENT_PHYSICAL_PAIR" if comparison_pair else "SINGLE",
+                            context=common_context,
+                        )
+                    except HTTPException as exc:
+                        if not comparison_pair or exc.status_code != 404:
+                            raise
+                        live_value = descriptive_statistics.build_statistics(
+                            cursor,
+                            before_owner=source_owner,
+                            before_table=source_table,
+                            basis="SINGLE",
+                            context={
+                                **common_context,
+                                "statisticsSource": "LIVE_SOURCE_ONLY",
+                                "comparisonAvailable": False,
+                            },
+                        )
+                        live_value["notice"] = (
+                            "INITDN$ 수정 테이블을 확인할 수 없어 INITUP$ 원본 통계만 제공합니다."
+                        )
+                    live_value = descriptive_statistics.attach_column_insights(
+                        live_value,
+                        descriptive_statistics.load_violation_column_insights(
+                            cursor,
+                            target_owner=str((comparison_pair or {}).get("SOURCE_OWNER") or source_owner),
+                            target_table=str((comparison_pair or {}).get("SOURCE_TABLE") or source_table),
+                            run_source_type="FLOW_WORK" if selection.get("flowRunId") else None,
+                            run_id=selection.get("flowRunId"),
+                        ),
+                    )
+                    safe_live_value = _safe_descriptive_statistics(live_value)
+                    if safe_live_value:
+                        safe_live_value["BASIS"] = (
+                            "LIVE_CURRENT_PHYSICAL_PAIR" if safe_live_value.get("AFTER_SOURCE") else "SINGLE"
+                        )
+                        return (
+                            safe_live_value,
+                            "CURRENT_PHYSICAL_PAIR" if safe_live_value.get("AFTER_SOURCE") else "CURRENT_SOURCE_ONLY",
+                            None,
+                        )
+                except HTTPException as exc:
+                    logger.info(
+                        "M06001 registered-pair descriptive statistics skipped. table=%s.%s status=%s",
+                        source_owner,
+                        source_table,
+                        exc.status_code,
+                    )
+        finally:
+            cursor.close()
+
+    edit_session_id = selection.get("editSessionId")
+    if not edit_session_id:
+        return (
+            None,
+            "UNAVAILABLE",
+            "등록된 INITUP$ 원본 테이블을 확인할 수 없습니다.",
+        )
+    snapshot_row = _first(
+        _query(
+            conn,
+            "M06001_VALIDATION_SNAPSHOT",
+            {
+                "projectId": selection.get("projectId"),
+                "scenarioId": selection.get("scenarioId"),
+                "editSessionId": edit_session_id,
+            },
+        )
+    )
+    snapshot = _safe_validation_snapshot(snapshot_row)
+    snapshot_statistics = (snapshot or {}).get("DESCRIPTIVE_STATISTICS")
+    if snapshot_statistics:
+        return snapshot_statistics, "VALIDATION_SNAPSHOT", snapshot.get("VALIDATION_SNAPSHOT_AT")
+    return (
+        None,
+        "UNAVAILABLE",
+        "선택한 기준의 INITUP$ 원본 테이블 또는 저장된 기초통계량 스냅샷을 확인할 수 없습니다.",
+    )
 
 
 def _first_present(source: dict[str, Any], *keys: str) -> Any:
@@ -946,13 +1635,32 @@ def _availability_status(
         return ("AVAILABLE" if count else "NO_DATA", None if count else "선택한 Run에 발굴 규칙이 없습니다.", count)
     if requirement == "VALIDATED_SESSION_COUNT":
         if not edit_session_id:
-            return ("NOT_APPLICABLE", "효과 검증 기준 에디팅 세션을 선택해야 합니다.", 0)
+            validated_count = _as_int(counts.get("VALIDATED_SESSION_COUNT"))
+            return (
+                ("NOT_APPLICABLE", "수정 전·후 효과검증 보고서는 수정 작업 이력을 선택하면 조회할 수 있습니다.", 0)
+                if validated_count
+                else ("NO_DATA", "효과 검증이 완료된 수정 작업 이력이 없습니다.", 0)
+            )
         snapshot_count = _as_int(counts.get("VALIDATION_SNAPSHOT_COUNT"))
         if snapshot_count:
             return ("AVAILABLE", None, snapshot_count)
         if _as_int(counts.get("VALIDATED_SESSION_COUNT")):
             return ("PARTIAL", "저장된 효과 검증 스냅샷이 없어 과거 효과 지표를 재산정하지 않습니다.", 0)
         return ("NO_DATA", "선택한 세션의 효과 검증이 완료되지 않았습니다.", 0)
+    if requirement == "DESCRIPTIVE_STATISTICS":
+        pair_count = _as_int(counts.get("EDIT_READY_TARGET_TABLE_COUNT"))
+        if pair_count:
+            return ("AVAILABLE", None, pair_count)
+        target_count = _as_int(counts.get("TARGET_TABLE_COUNT"))
+        return (
+            (
+                "PARTIAL",
+                "INITUP$ 원본 프로파일을 제공하며 INITDN$가 없어 수정 비교값만 제외됩니다.",
+                target_count,
+            )
+            if target_count
+            else ("NO_DATA", "등록된 대상 테이블이 없습니다.", 0)
+        )
     if requirement in {
         "COLUMN_TYPE_COUNT",
         "RELATION_COUNT",
@@ -968,8 +1676,11 @@ def _availability_status(
         "DML_COUNT",
     } and not edit_session_id:
         fallback_count = _as_int(counts.get(requirement))
-        if fallback_count <= 0:
-            return ("NOT_APPLICABLE", "에디팅 세션을 선택해야 합니다.", 0)
+        return (
+            ("NOT_APPLICABLE", "이 보고서는 상단에서 수정 작업 이력을 선택하면 조회할 수 있습니다.", 0)
+            if fallback_count > 0
+            else ("NO_DATA", "저장된 수정 작업 이력이 없습니다.", 0)
+        )
     count = _as_int(counts.get(requirement))
     return ("AVAILABLE" if count else "NO_DATA", None if count else "선택한 기준에 생성된 데이터가 없습니다.", count)
 
@@ -1056,9 +1767,6 @@ def _resolve_context(
         )
         if not selected_session:
             raise HTTPException(status_code=404, detail="Editing session not found in the selected context.")
-    elif sessions:
-        selected_session = sessions[0]
-        edit_session_id = _as_int(selected_session.get("EDIT_SESSION_ID")) or None
 
     preferred_flow_run_id = flow_run_id
     if not preferred_flow_run_id and selected_session:
@@ -1280,9 +1988,9 @@ def _report_context_payload(context: dict[str, Any], generated_at: str) -> dict[
 
 def _report_definitions(report_code: str) -> list[dict[str, str]]:
     common = [
-        {"term": "기준 시각", "definition": "보고서를 생성한 시각이며 실행·세션 식별자와 함께 결과 기준을 고정합니다."},
+        {"term": "기준 시각", "definition": "보고서를 생성한 시각이며 선택한 분석 Run·수정 작업 식별자와 함께 결과 기준을 고정합니다."},
         {"term": "데이터 없음", "definition": "보고서 유형은 유지되지만 선택 기준에서 해당 결과가 생성되지 않은 상태입니다."},
-        {"term": "해당 없음", "definition": "필요한 Flow Run 또는 에디팅 세션이 선택되지 않아 산정할 수 없는 상태입니다."},
+        {"term": "해당 없음", "definition": "보고서 산정에 필요한 분석 기준이 없어 계산할 수 없는 상태입니다."},
     ]
     if report_code in {"R08", "R12", "R13"}:
         common.extend(
@@ -1293,9 +2001,33 @@ def _report_definitions(report_code: str) -> list[dict[str, str]]:
                 {"term": "Symbolic 점수", "definition": "Symbolic 모델이 저장한 품질 점수이며 연관규칙 Confidence와 다른 척도로 구분합니다."},
             ]
         )
-    if report_code in {"R15", "R17", "R20"}:
+    if report_code in {"R15", "R17", "R20", "R21"}:
         common.append(
             {"term": "비율 지표", "definition": "서로 다른 데이터 규모를 비교할 수 있도록 분자와 분모를 함께 제공합니다."}
+        )
+    if report_code in {"R17", "R21"}:
+        common.extend(
+            [
+                {
+                    "term": "모집단 분산",
+                    "definition": "변경 전·후 전체 유효값을 모집단으로 보고 VAR_POP과 STDDEV_POP 기준으로 산정합니다.",
+                },
+                {
+                    "term": "초과첨도",
+                    "definition": "정규분포의 첨도를 0으로 보는 기준이며 4차 중심적률을 분산 제곱으로 나눈 뒤 3을 뺍니다.",
+                },
+                {
+                    "term": "숫자 변환 실패",
+                    "definition": "문자형 연속 컬럼에서 숫자로 변환할 수 없는 값은 NULL로 처리해 유효값 집계에서 제외하고 결측·변환실패 건수에 포함합니다.",
+                },
+            ]
+        )
+    if report_code == "R21":
+        common.append(
+            {
+                "term": "컬럼 중요도 점수",
+                "definition": "규칙 위반 55점, 결측 15점, 분산 변화 15점, 평균 이동 10점, 범위 이동 5점의 가중치를 합산한 확인 우선순위 지표입니다.",
+            }
         )
     return common
 
@@ -1823,6 +2555,10 @@ def _build_sections_and_kpis(
         if snapshot:
             overall = snapshot.get("OVERALL") or {}
             scopes = snapshot.get("SCOPES") or []
+            statistics = snapshot.get("DESCRIPTIVE_STATISTICS")
+            statistics_rows = _statistics_stage_rows(statistics)
+            variance_rows = _statistics_variance_rows(statistics)
+            top_value_rows = _statistics_top_value_rows(statistics)
 
             def optional_scope_sum(key: str) -> int | None:
                 values = [row.get(key) for row in scopes if row.get(key) is not None]
@@ -1873,6 +2609,87 @@ def _build_sections_and_kpis(
                     ),
                 ]
             )
+            if statistics_rows:
+                sections.extend(
+                    [
+                        _table_section(
+                            "변경 전/후 기초통계량",
+                            statistics_rows,
+                            columns=[
+                                "DATA_STAGE",
+                                "COLUMN_NAME",
+                                "COLUMN_DESC",
+                                "DATA_TYPE",
+                                "PROFILE_KIND",
+                                "TOTAL_ROW_COUNT",
+                                "VALUE_COUNT",
+                                "NULL_COUNT",
+                                "DISTINCT_COUNT",
+                                "DISTINCT_RATE",
+                                "MODE_VALUE",
+                                "MODE_COUNT",
+                                "MIN_LENGTH",
+                                "AVG_LENGTH",
+                                "MAX_LENGTH",
+                                "MIN_VALUE_TEXT",
+                                "MAX_VALUE_TEXT",
+                                "SUM_VALUE",
+                                "MEAN_VALUE",
+                                "VARIANCE_VALUE",
+                                "STDDEV_VALUE",
+                                "SKEWNESS_VALUE",
+                                "KURTOSIS_VALUE",
+                                "MEDIAN_VALUE",
+                                "MIN_VALUE",
+                                "Q1_VALUE",
+                                "Q3_VALUE",
+                                "MAX_VALUE",
+                            ],
+                            note=(
+                                "컬럼유형 분석 결과를 물리 데이터타입보다 우선합니다. 연속형은 수치 통계, "
+                                "범주·문자형은 고유값·최빈값·길이, 일시형은 최초·최종 시점을 제공합니다."
+                            ),
+                        ),
+                        _table_section(
+                            "범주·문자형 상위 값 분포",
+                            top_value_rows,
+                            columns=[
+                                "COLUMN_NAME",
+                                "COLUMN_DESC",
+                                "PROFILE_KIND",
+                                "VALUE_RANK",
+                                "VALUE",
+                                "BEFORE_COUNT",
+                                "AFTER_COUNT",
+                            ],
+                            note="컬럼별 상위 10개 값을 원본과 수정본 빈도로 비교합니다.",
+                        ),
+                        _table_section(
+                            "분산 변화 비교",
+                            variance_rows,
+                            columns=[
+                                "COLUMN_NAME",
+                                "COLUMN_DESC",
+                                "BEFORE_VARIANCE",
+                                "AFTER_VARIANCE",
+                                "VARIANCE_DELTA",
+                                "VARIANCE_REDUCTION_RATE",
+                                "VARIANCE_DIRECTION",
+                            ],
+                            note="분산 감소율은 (변경 전 분산 - 변경 후 분산) / 변경 전 분산으로 산정합니다.",
+                        ),
+                    ]
+                )
+            else:
+                sections.append(
+                    _text_section(
+                        "기초통계량 스냅샷 없음",
+                        [
+                            "이 효과 검증 이력에는 변경 전·후 기초통계량이 저장되지 않아 현재 테이블로 과거 분포를 재산정하지 않습니다.",
+                            "다음 효과 검증부터 검증 시점의 기초통계량과 분산 변화가 함께 저장됩니다.",
+                        ],
+                    )
+                )
         else:
             kpis = [
                 _kpi("APPLIED_CHANGE_COUNT", "적용 수정", applied),
@@ -1973,6 +2790,181 @@ def _build_sections_and_kpis(
                 note="재실행 누적량이 비교를 왜곡하지 않도록 시나리오별 최신 성공 Flow Run과 최신 에디팅 세션 1건만 사용합니다. Run·세션 기준 일치가 N이면 서로 다른 회차이므로 규칙 선정률과 수정 적용률을 독립 지표로 비교하십시오.",
             )
         )
+    elif report_code == "R21":
+        statistics, statistics_basis, fallback_reason = _load_descriptive_statistics_report_data(conn, context)
+        if not statistics:
+            kpis = [
+                _kpi("STATISTICS_COLUMN_COUNT", "통계 분석 컬럼", 0),
+                _kpi("HIGH_PRIORITY_COLUMN_COUNT", "우선 확인 컬럼", 0),
+                _kpi("TOTAL_VIOLATION_COUNT", "전체 규칙 위반", 0),
+            ]
+            sections.append(
+                _text_section(
+                    "기초통계량 보고서 생성 안내",
+                    [
+                        fallback_reason or "선택한 기준에서 기초통계량을 계산할 수 없습니다.",
+                        "시나리오에 INITUP$ 원본 테이블이 있으면 단독 프로파일을 제공하고, INITDN$ 수정 테이블도 있으면 자동으로 비교합니다. 별도의 수정 작업 이력은 필요하지 않습니다.",
+                    ],
+                )
+            )
+        else:
+            priority_rows = _statistics_priority_rows(statistics)
+            stage_rows = _statistics_stage_rows(statistics)
+            variance_rows = _statistics_variance_rows(statistics)
+            distribution_rows = _statistics_distribution_rows(statistics)
+            distribution_bin_rows = _statistics_distribution_bin_rows(statistics)
+            top_value_rows = _statistics_top_value_rows(statistics)
+            high_priority_count = sum(row.get("PRIORITY_LEVEL") == "HIGH" for row in priority_rows)
+            medium_priority_count = sum(row.get("PRIORITY_LEVEL") == "MEDIUM" for row in priority_rows)
+            violation_column_count = sum(_as_int(row.get("VIOLATION_COUNT")) > 0 for row in priority_rows)
+            total_violation_count = sum(_as_int(row.get("VIOLATION_COUNT")) for row in priority_rows)
+            decreased_variance_count = sum(
+                row.get("VARIANCE_DIRECTION") == "DECREASED"
+                for row in variance_rows
+            )
+            increased_variance_count = sum(
+                row.get("VARIANCE_DIRECTION") == "INCREASED"
+                for row in variance_rows
+            )
+            before_source = statistics.get("BEFORE_SOURCE") or {}
+            after_source = statistics.get("AFTER_SOURCE") or {}
+            summary_row = {
+                "STATISTICS_BASIS": statistics_basis,
+                "SOURCE_TABLE": f"{before_source.get('OWNER')}.{before_source.get('TABLE')}",
+                "EDIT_TABLE": (
+                    f"{after_source.get('OWNER')}.{after_source.get('TABLE')}"
+                    if after_source
+                    else "비교 대상 없음"
+                ),
+                "STATISTICS_COLUMN_COUNT": len(statistics.get("COLUMNS") or []),
+                "HIGH_PRIORITY_COLUMN_COUNT": high_priority_count,
+                "MEDIUM_PRIORITY_COLUMN_COUNT": medium_priority_count,
+                "VIOLATION_COLUMN_COUNT": violation_column_count,
+                "TOTAL_VIOLATION_COUNT": total_violation_count,
+                "DECREASED_VARIANCE_COLUMN_COUNT": decreased_variance_count,
+                "INCREASED_VARIANCE_COLUMN_COUNT": increased_variance_count,
+            }
+            kpis = [
+                _kpi("STATISTICS_COLUMN_COUNT", "통계 분석 컬럼", summary_row["STATISTICS_COLUMN_COUNT"]),
+                _kpi("HIGH_PRIORITY_COLUMN_COUNT", "우선 확인 컬럼", high_priority_count),
+                _kpi("VIOLATION_COLUMN_COUNT", "위반 발생 컬럼", violation_column_count),
+                _kpi("TOTAL_VIOLATION_COUNT", "전체 규칙 위반", total_violation_count),
+                _kpi("DECREASED_VARIANCE_COLUMN_COUNT", "분산 감소 컬럼", decreased_variance_count),
+                _kpi("INCREASED_VARIANCE_COLUMN_COUNT", "분산 증가 컬럼", increased_variance_count),
+            ]
+            sections.extend(
+                [
+                    _table_section("기초통계량 분석 요약", [summary_row]),
+                    _table_section(
+                        "중요 컬럼 우선순위",
+                        priority_rows,
+                        columns=[
+                            "IMPORTANCE_RANK",
+                            "COLUMN_NAME",
+                            "COLUMN_DESC",
+                            "DATA_TYPE",
+                            "PRIORITY_LEVEL",
+                            "IMPORTANCE_SCORE",
+                            "PRIORITY_REASONS",
+                            "VIOLATION_COUNT",
+                            "VIOLATED_ROW_COUNT",
+                            "RULE_COUNT",
+                            "CATEGORICAL_VIOLATION_COUNT",
+                            "CONTINUOUS_VIOLATION_COUNT",
+                            "MISSING_RATE",
+                            "VARIANCE_CHANGE_RATE",
+                            "MEAN_SHIFT_STD",
+                            "RANGE_SHIFT_RATE",
+                            "HAS_STATISTICS",
+                        ],
+                        note="규칙 위반, 결측률, 분산·평균·범위 변화를 함께 점수화해 분석자가 먼저 확인할 컬럼 순서로 정렬합니다.",
+                    ),
+                    _table_section(
+                        "평균·분산·분포 범위 변화",
+                        distribution_rows,
+                        columns=[
+                            "COLUMN_NAME",
+                            "COLUMN_DESC",
+                            "BEFORE_MEAN",
+                            "AFTER_MEAN",
+                            "MEAN_DELTA",
+                            "BEFORE_VARIANCE",
+                            "AFTER_VARIANCE",
+                            "VARIANCE_REDUCTION_RATE",
+                            "BEFORE_STDDEV",
+                            "AFTER_STDDEV",
+                            "BEFORE_MIN",
+                            "AFTER_MIN",
+                            "BEFORE_MAX",
+                            "AFTER_MAX",
+                        ],
+                        note="INITDN$가 있으면 원본·수정 값을 한 행에서 비교하고, 없으면 동일한 표 구조에서 수정 값만 비워 원본 프로파일을 제공합니다.",
+                    ),
+                    _table_section(
+                        "컬럼별 동일 구간 분포 비교",
+                        distribution_bin_rows,
+                        columns=[
+                            "COLUMN_NAME",
+                            "COLUMN_DESC",
+                            "BIN_NO",
+                            "RANGE_FROM",
+                            "RANGE_TO",
+                            "BEFORE_COUNT",
+                            "AFTER_COUNT",
+                        ],
+                        note="모든 컬럼을 클릭 없이 펼쳐 출력합니다. 각 컬럼은 원본과 수정 데이터의 공통 최소·최대 범위를 12개 동일 구간으로 나누므로 PDF와 XLSX에서도 같은 축으로 비교할 수 있습니다.",
+                    ),
+                    _table_section(
+                        "범주·문자형 상위 값 분포",
+                        top_value_rows,
+                        columns=[
+                            "COLUMN_NAME",
+                            "COLUMN_DESC",
+                            "PROFILE_KIND",
+                            "VALUE_RANK",
+                            "VALUE",
+                            "BEFORE_COUNT",
+                            "AFTER_COUNT",
+                        ],
+                        note="범주·문자·일시형 컬럼의 상위 10개 값을 클릭 없이 모두 펼쳐 원본과 수정 빈도로 비교합니다.",
+                    ),
+                    _table_section(
+                        "컬럼별 상세 기초통계량",
+                        stage_rows,
+                        columns=[
+                            "DATA_STAGE",
+                            "COLUMN_NAME",
+                            "COLUMN_DESC",
+                            "DATA_TYPE",
+                            "PROFILE_KIND",
+                            "TOTAL_ROW_COUNT",
+                            "VALUE_COUNT",
+                            "NULL_COUNT",
+                            "DISTINCT_COUNT",
+                            "DISTINCT_RATE",
+                            "MODE_VALUE",
+                            "MODE_COUNT",
+                            "MIN_LENGTH",
+                            "AVG_LENGTH",
+                            "MAX_LENGTH",
+                            "MIN_VALUE_TEXT",
+                            "MAX_VALUE_TEXT",
+                            "SUM_VALUE",
+                            "MEAN_VALUE",
+                            "VARIANCE_VALUE",
+                            "STDDEV_VALUE",
+                            "SKEWNESS_VALUE",
+                            "KURTOSIS_VALUE",
+                            "MEDIAN_VALUE",
+                            "MIN_VALUE",
+                            "Q1_VALUE",
+                            "Q3_VALUE",
+                            "MAX_VALUE",
+                        ],
+                        note="컬럼유형 분석 결과를 우선해 연속형은 수치 8개 지표와 5수치 요약을, 범주·문자형은 고유값·최빈값·길이를, 일시형은 최초·최종 시점을 변경 전·후로 제공합니다.",
+                    ),
+                ]
+            )
     else:
         raise HTTPException(status_code=404, detail="Unknown report code.")
     return sections, kpis
@@ -2088,7 +3080,7 @@ def build_batch_report_document(
     edit_session_id: int | None = None,
     language: str = "ko",
 ) -> dict[str, Any]:
-    """Build the fixed twenty-report bundle from one authorized context."""
+    """Build the fixed twenty-one-report bundle from one authorized context."""
     conn = get_target_db_connection(request)
     try:
         context = _resolve_context(
@@ -2168,7 +3160,7 @@ def build_batch_report_document(
             "bundle": {
                 "code": "ALL",
                 "title": "기본형 보고서 통합본",
-                "description": "선택한 동일 기준으로 생성한 고정 20종 기본형 보고서를 한 번에 제공합니다.",
+                "description": "선택한 동일 기준으로 생성한 고정 21종 기본형 보고서를 한 번에 제공합니다.",
                 "definitionVersion": REPORT_DEFINITION_VERSION,
                 "generatedAt": generated_at,
                 "reportCount": len(reports),

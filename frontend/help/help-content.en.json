@@ -492,7 +492,7 @@
       "label": "Basic Reports",
       "group": "Editing Reports",
       "status": "active",
-      "summary": "Provides a fixed catalog of 20 reports that connects M04001 design and execution, M04002 analysis, and M05001-M05003 editing outcomes by project and scenario.",
+      "summary": "Provides a fixed catalog of 21 reports that connects M04001 design and execution, M04002 analysis, and M05001-M05003 editing outcomes by project and scenario.",
       "purpose": [
         "Compare different datasets with the same report types and metric definitions.",
         "Trace the full path from rule-discovery design through decisions, corrections, validation, and production deployment.",
@@ -501,9 +501,9 @@
       "layout": [
         { "name": "Project Cards", "description": "A responsive, server-paged card grid shows project attributes and editing metrics." },
         { "name": "Report Context", "description": "Project, scenario, Flow Run, and editing session fix the basis for every report." },
-        { "name": "Fixed Report Catalog", "description": "All 20 reports remain in a stable order with available, partial, no-data, or not-applicable states." },
+        { "name": "Fixed Report Catalog", "description": "All 21 reports remain in a stable order with available, partial, no-data, or not-applicable states." },
         { "name": "Individual Report Window", "description": "Shows the selected report's IN-DEPS statement, KPIs, tables, definitions, and HTML/XLSX/PDF downloads." },
-        { "name": "Combined Report Window", "description": "Shows a status summary, table of contents, and all 20 reports in sequence, with a single HTML/XLSX/PDF download." }
+        { "name": "Combined Report Window", "description": "Shows a status summary, table of contents, and all 21 reports in sequence, with a single HTML/XLSX/PDF download." }
       ],
       "workflow": [
         "Search or scroll to select a project.",

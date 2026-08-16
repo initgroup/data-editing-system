@@ -31,7 +31,13 @@
     "openHistoryDetailTitle": "View run details",
     "closeHistoryDetailTitle": "Close run details",
     "copyMessageTitle": "Copy message",
-    "paramDescMaxSymbolicTerms": "Maximum retained polynomial Symbolic Regression term count"
+    "paramDescMaxSymbolicTerms": "Maximum retained polynomial Symbolic Regression term count",
+    "paramDescDimensionReductionMode": "Feature reduction: AUTO, PCA, or NONE. PCA keeps representative source columns and never stores synthetic PC columns.",
+    "paramDescEstimationMode": "Linear estimator: AUTO, OLS, or ROBUST_IRLS. AUTO selects robust iteration only after outlier and validation checks.",
+    "paramDescMonteCarloMode": "Stability validation: OFF, AUTO, BOOTSTRAP, or REPEATED_HOLDOUT. Final correction values are never randomized.",
+    "paramDescMonteCarloIterations": "Fixed-seed stability resample count (5-50)",
+    "paramDescMonteCarloMaxRows": "Maximum rows used only for stability validation (100-10000)",
+    "paramDescBanffMode": "Single-ratio candidate: AUTO, RATIO, or OFF. This is a limited Banff-inspired feature, not full Banff."
   },
   "messages": {
     "historyTotal": "Total {count}",

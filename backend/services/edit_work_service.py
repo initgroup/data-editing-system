@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from backend.auth_context import get_request_role_code, get_request_user_id
 from backend.database_helper import SqlLoader
 from backend.paging import PageWindow, create_page_window, normalize_page_number, normalize_page_size
+from backend.services import descriptive_statistics_service as descriptive_statistics
 from backend.target_database import get_target_db_connection
 
 
@@ -30,6 +31,7 @@ RULE_STATUSES = {"ACTIVE", "INACTIVE"}
 SESSION_STATUSES = {"DRAFT", "EDITING", "VALIDATED", "APPLY_READY", "APPLIED", "CANCELLED"}
 ACTIVE_EXECUTION_STATUSES = {"DRAFT", "EDITING", "VALIDATED", "APPLY_READY"}
 DML_WORK_SESSION_STATUSES = ACTIVE_EXECUTION_STATUSES | {"APPLIED"}
+REANALYSIS_SESSION_STATUSES = ACTIVE_EXECUTION_STATUSES | {"APPLIED"}
 RULE_TOKEN_PATTERN = re.compile(
     r"""
     (?P<SPACE>\s+)
@@ -561,6 +563,15 @@ def _require_dml_work_execution(session: dict[str, Any]) -> None:
         raise HTTPException(
             status_code=409,
             detail="Cancelled editing execution is read-only for DML work.",
+        )
+
+
+def _require_reanalysis_execution(session: dict[str, Any]) -> None:
+    status = str(session.get("SESSION_STATUS") or "").upper()
+    if status not in REANALYSIS_SESSION_STATUSES:
+        raise HTTPException(
+            status_code=409,
+            detail="Cancelled editing execution cannot be reanalyzed.",
         )
 
 
@@ -2397,7 +2408,7 @@ def validate_flow_runtime_context(
                 raise HTTPException(status_code=400, detail="Editing runtime owner does not match the editing execution.")
             if target_table != str(session.get("EDIT_TABLE") or "").upper():
                 raise HTTPException(status_code=400, detail="Editing runtime table does not match the editing execution.")
-            if str(session.get("SESSION_STATUS") or "") not in {"EDITING", "VALIDATED", "APPLY_READY"}:
+            if str(session.get("SESSION_STATUS") or "").upper() not in REANALYSIS_SESSION_STATUSES:
                 raise HTTPException(status_code=409, detail="Prepare the INITDN$ editing table before Flow reanalysis.")
         else:
             session = _fetch_one(
@@ -3133,13 +3144,12 @@ def _session_rules_for_changes(
                 f"Rule IDs: {', '.join(str(value) for value in sorted(unavailable_rule_ids))}"
             ),
         )
-    for edit_rule_id in sorted(set(current_rules) - set(linked_rules)):
+    for edit_rule_id in sorted(normalized_requested_rule_ids - set(linked_rules)):
         cursor.execute(
-            SqlLoader.get_sql("MCOMMON_EDIT_SESSION_RULE_INSERT"),
+            SqlLoader.get_sql("MCOMMON_EDIT_SESSION_RULE_MERGE"),
             {"editSessionId": edit_session_id, "editRuleId": edit_rule_id},
         )
-        linked_rules[edit_rule_id] = current_rules[edit_rule_id]
-    return linked_rules
+    return current_rules
 
 
 def save_change(request: Request, edit_session_id: int, payload: EditChangeRequest) -> dict[str, Any]:
@@ -4011,6 +4021,78 @@ def validation_summary(request: Request, edit_session_id: int) -> dict[str, Any]
         conn.close()
 
 
+def descriptive_statistics_summary(
+    request: Request,
+    edit_session_id: int,
+    *,
+    columns: str | None = None,
+) -> dict[str, Any]:
+    conn = get_target_db_connection(request)
+    cursor = conn.cursor()
+    try:
+        session = _select_session(cursor, edit_session_id, request)
+        session_status = str(session.get("SESSION_STATUS") or "").strip().upper()
+        if session_status == "APPLIED":
+            snapshot = _load_effect_validation_snapshot(cursor, edit_session_id)
+            snapshot_statistics = descriptive_statistics.sanitize_snapshot_statistics(
+                (snapshot or {}).get("DESCRIPTIVE_STATISTICS"),
+                requested_columns=columns,
+                basis="VALIDATION_SNAPSHOT",
+                snapshot_at=(snapshot or {}).get("VALIDATION_SNAPSHOT_AT"),
+            )
+            if snapshot_statistics:
+                return {
+                    "status": "success",
+                    "data": descriptive_statistics.attach_column_insights(
+                        snapshot_statistics,
+                        descriptive_statistics.load_violation_column_insights(
+                            cursor,
+                            target_owner=str(session.get("TARGET_OWNER") or ""),
+                            target_table=str(session.get("SOURCE_TABLE") or ""),
+                            run_source_type=session.get("SOURCE_RUN_SOURCE_TYPE"),
+                            run_id=session.get("SOURCE_RUN_ID"),
+                        ),
+                    ),
+                }
+            mapping = _require_session_table_mapping(cursor, session)
+            return {
+                "status": "success",
+                "data": descriptive_statistics.build_applied_session_current_statistics(
+                    cursor,
+                    session,
+                    mapping=mapping,
+                    requested_columns=columns,
+                ),
+            }
+        if session_status == "CANCELLED":
+            return {
+                "status": "success",
+                "data": descriptive_statistics.unavailable_statistics(
+                    "CANCELLED_SESSION_STATISTICS_UNAVAILABLE",
+                    "Cancelled editing executions are not recalculated from a reusable editing table.",
+                    context={
+                        "projectId": session.get("PROJECT_ID"),
+                        "scenarioId": session.get("SCENARIO_ID"),
+                        "editSessionId": edit_session_id,
+                        "sessionStatus": session_status,
+                    },
+                ),
+            }
+        mapping = _require_session_table_mapping(cursor, session)
+        return {
+            "status": "success",
+            "data": descriptive_statistics.build_edit_session_statistics(
+                cursor,
+                session,
+                mapping=mapping,
+                requested_columns=columns,
+            ),
+        }
+    finally:
+        cursor.close()
+        conn.close()
+
+
 def mark_validated(
     request: Request,
     edit_session_id: int,
@@ -4048,6 +4130,14 @@ def mark_validated(
         if summary.get("REANALYSIS_FLOW_RUN_ID") and str(summary.get("REANALYSIS_RUN_STATUS") or "") != "SUCCESS":
             raise HTTPException(status_code=409, detail="The linked INITDN$ Flow reanalysis must finish successfully.")
         overall_analysis["REVIEW_ACKNOWLEDGED"] = review_acknowledged
+        mapping = _require_session_table_mapping(cursor, session)
+        summary["DESCRIPTIVE_STATISTICS"] = descriptive_statistics.build_edit_session_statistics(
+            cursor,
+            session,
+            mapping=mapping,
+            basis="VALIDATION_SNAPSHOT_SOURCE",
+        )
+        summary["DESCRIPTIVE_STATISTICS"]["context"]["sessionStatus"] = "VALIDATED"
         cursor.execute(
             SqlLoader.get_sql("MCOMMON_EDIT_SESSION_STATUS"),
             {"sessionStatus": "VALIDATED", "editSessionId": edit_session_id},
@@ -4082,7 +4172,7 @@ def link_reanalysis(
     cursor = conn.cursor()
     try:
         session = _select_session(cursor, edit_session_id, request)
-        _require_open_execution(session, "link Flow reanalysis")
+        _require_reanalysis_execution(session)
         flow_run = _fetch_one(
             cursor,
             "MCOMMON_EDIT_FLOW_RUN_ACCESS",
