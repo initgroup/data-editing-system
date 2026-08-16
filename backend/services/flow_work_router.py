@@ -32,6 +32,14 @@ class FlowResultSqlRequest(BaseModel):
     page: Optional[int] = 1
 
 
+class SavedFlowRunRequest(BaseModel):
+    flowId: int
+    projectId: int
+    scenarioId: int
+    batch: Optional[bool] = False
+    requestToken: Optional[str] = None
+
+
 MODEL_DETAIL_VIEW_TYPES = [
     ("VA", "Attribute/detail view"),
     ("VG", "Global/detail view"),
@@ -228,7 +236,7 @@ def is_missing_flow_table_error(error: Exception) -> bool:
 
 def is_flow_lock_error(error: Exception) -> bool:
     text = str(error)
-    if any(code in text for code in ("ORA-00054", "ORA-00060", "ORA-12860")):
+    if any(code in text for code in ("ORA-00054", "ORA-00060", "ORA-12860", "ORA-30006")):
         return True
     original = getattr(error, "original", None)
     return bool(original and is_flow_lock_error(original))
@@ -287,7 +295,93 @@ def create_flow_work_router(
     save_locks_guard = threading.Lock()
     save_lock_wait_seconds = 15
 
-    def get_save_lock(req: FlowWorkRequest) -> threading.Lock:
+    def require_project_access_for_request(conn, request: Request, project_id: int) -> None:
+        if get_request_role_code(request) == "ADMIN":
+            return
+        access = execute_query(conn, "M01002_PROJECT_OWNER_CHECK", {
+            "projectId": project_id,
+            "userId": get_request_user_id(request),
+        })
+        access_rows = access.get("data") or []
+        if access.get("status") != "success" or not access_rows or int(access_rows[0].get("CNT") or 0) <= 0:
+            raise HTTPException(status_code=404, detail="Project was not found.")
+
+    def normalize_run_request_token(value: Optional[str]) -> str:
+        token = str(value or "").strip()
+        if not token:
+            return ""
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{7,127}", token):
+            raise HTTPException(
+                status_code=400,
+                detail="requestToken must be 8-128 characters using letters, numbers, dot, underscore, colon, or hyphen.",
+            )
+        return token
+
+    def lock_flow_run_request_scope(
+        conn,
+        flow_id: int,
+        project_id: int,
+        scenario_id: int,
+    ) -> None:
+        result = execute_query(conn, "FLOW_WORK_RUN_SCOPE_LOCK", {
+            "menuCode": MENU_CODE,
+            "flowId": flow_id,
+            "projectId": project_id,
+            "scenarioId": scenario_id,
+        })
+        if result.get("status") != "success":
+            detail = result.get("detail") or result.get("message") or "Flow run request lock failed."
+            if is_flow_lock_error(Exception(detail)):
+                raise HTTPException(
+                    status_code=409,
+                    detail="This flow is already being submitted. Retry with the same requestToken.",
+                )
+        rows = data_work.require_success(result, "Flow run request lock failed.").get("data") or []
+        if not rows:
+            raise HTTPException(status_code=404, detail="Flow was not found in the selected project and scenario.")
+
+    def find_flow_run_by_request_token(conn, flow_id: int, request_token: str) -> Optional[Dict[str, Any]]:
+        if not request_token:
+            return None
+        marker = f'"runRequestToken": "{request_token}"'
+        result = execute_query(conn, "FLOW_WORK_RUN_BY_REQUEST_TOKEN", {
+            "flowId": flow_id,
+            "requestTokenMarker": marker,
+        })
+        rows = data_work.require_success(result, "Flow run request lookup failed.").get("data") or []
+        if not rows:
+            return None
+        row = dict(rows[0])
+        row["MESSAGE"] = data_work.read_lob(row.get("MESSAGE"))
+        row["PLAN_JSON"] = data_work.read_lob(row.get("PLAN_JSON"))
+        return row
+
+    def build_idempotent_run_response(existing_run: Dict[str, Any], req: SavedFlowRunRequest) -> Dict[str, Any]:
+        existing_run_type = str(existing_run.get("RUN_TYPE") or "MANUAL").upper()
+        requested_run_type = "BATCH" if req.batch else "MANUAL"
+        if existing_run_type != requested_run_type:
+            raise HTTPException(
+                status_code=409,
+                detail="requestToken was already used with a different run mode.",
+            )
+        plan_data = flow_work.parse_json(existing_run.get("PLAN_JSON"), {})
+        plan = plan_data.get("plan") if isinstance(plan_data, dict) else []
+        runtime_overrides = plan_data.get("runtimeOverrides") if isinstance(plan_data, dict) else {}
+        return {
+            "status": "success",
+            "message": "The existing flow execution was returned for this request token.",
+            "data": {
+                "flowId": int(existing_run.get("FLOW_ID") or req.flowId),
+                "flowRunId": int(existing_run.get("FLOW_RUN_ID") or 0),
+                "runType": existing_run_type,
+                "runStatus": str(existing_run.get("STATUS") or "STARTED").upper(),
+                "plan": plan if isinstance(plan, list) else [],
+                "runtimeOverrides": runtime_overrides if isinstance(runtime_overrides, dict) else {},
+                "idempotentReplay": True,
+            },
+        }
+
+    def get_save_lock(req: FlowWorkRequest | SavedFlowRunRequest) -> threading.Lock:
         flow_key = f"FLOW:{req.flowId}" if req.flowId else "NEW"
         key = "|".join([
             MENU_CODE,
@@ -419,6 +513,7 @@ def create_flow_work_router(
         conn = None
         try:
             conn = get_target_db_connection(request)
+            require_project_access_for_request(conn, request, projectId)
             return flow_work.list_flows(conn, MENU_CODE, projectId, scenarioId)
         finally:
             if conn:
@@ -465,7 +560,9 @@ def create_flow_work_router(
         conn = None
         try:
             conn = get_target_db_connection(request)
-            return {"status": "success", "data": flow_work.load_flow(conn, MENU_CODE, flow_id)}
+            flow = flow_work.load_flow(conn, MENU_CODE, flow_id)
+            require_project_access_for_request(conn, request, int(flow.get("PROJECT_ID") or 0))
+            return {"status": "success", "data": flow}
         finally:
             if conn:
                 conn.close()
@@ -481,6 +578,7 @@ def create_flow_work_router(
             )
         try:
             conn = get_target_db_connection(request)
+            require_project_access_for_request(conn, request, data_work.require_int(req.projectId, "projectId"))
             flow_id = save_flow_with_retry(conn, req)
             conn.commit()
             save_lock.release()
@@ -528,6 +626,7 @@ def create_flow_work_router(
         conn = None
         try:
             conn = get_target_db_connection(request)
+            require_project_access_for_request(conn, request, projectId)
             flow_work.delete_flow(conn, MENU_CODE, flow_id, projectId, scenarioId)
             conn.commit()
             flows = flow_work.list_flows(conn, MENU_CODE, projectId, scenarioId).get("data", [])
@@ -567,6 +666,91 @@ def create_flow_work_router(
             "data": result
         }
 
+    def queue_flow_run(
+        conn,
+        req: FlowRunRequest,
+        request: Request,
+        flow_id: int,
+        nodes: list[dict],
+        edges: list[dict],
+        request_token: str = "",
+    ) -> Dict[str, Any]:
+        validation = flow_work.validate_graph(nodes, edges)
+        if validation["status"] != "success":
+            raise HTTPException(status_code=400, detail=validation["message"])
+        if request_token:
+            validation["runRequestToken"] = request_token
+            for step in validation.get("plan") or []:
+                if isinstance(step, dict):
+                    step["runRequestToken"] = request_token
+        runtime_overrides = flow_work.normalize_editing_runtime_overrides(req.runtimeOverrides)
+        if runtime_overrides:
+            edit_work.validate_flow_runtime_context(
+                conn,
+                request,
+                runtime_overrides,
+                project_id=req.projectId,
+                scenario_id=req.scenarioId,
+            )
+            validation["runtimeOverrides"] = runtime_overrides
+
+        run_type = "BATCH" if req.batch else "MANUAL"
+        run_status = "QUEUED" if req.batch else "STARTED"
+        message = ROUTER_MESSAGES["run_queued"] if req.batch else "Flow execution started."
+        payload_manual_run_id = flow_work.parse_manual_run_id(req.manualRunId)
+        plan_manual_run_id = flow_work.extract_manual_run_id_from_plan(validation.get("plan", []))
+        if payload_manual_run_id and plan_manual_run_id and payload_manual_run_id != plan_manual_run_id:
+            raise HTTPException(status_code=400, detail="Manual flow run id values must match.")
+        manual_run_id = payload_manual_run_id or plan_manual_run_id
+        run_id = flow_work.create_run(conn, flow_id, run_type, run_status, message, validation, manual_run_id)
+        flow_work.create_node_run_records(conn, run_id, flow_id, validation.get("plan", []))
+        target_connection_id = get_target_connection_id(request)
+        user_id = get_request_user_id(request)
+        conn.commit()
+        try:
+            submit_background_job(
+                f"{MENU_CODE} flow_run_id={run_id}",
+                run_flow_background,
+                run_id,
+                target_connection_id,
+                user_id,
+                validation.get("plan", []),
+                runtime_overrides,
+                "Flow batch execution started." if req.batch else "Flow execution started.",
+            )
+        except BackgroundJobQueueFull as queue_error:
+            mark_flow_submission_failed(
+                conn,
+                run_id,
+                validation.get("plan", []),
+                {"plan": validation.get("plan", [])},
+                str(queue_error),
+            )
+            raise HTTPException(status_code=503, detail=str(queue_error))
+        except Exception as submit_error:
+            mark_flow_submission_failed(
+                conn,
+                run_id,
+                validation.get("plan", []),
+                {"plan": validation.get("plan", [])},
+                f"Background flow submission failed: {submit_error}",
+            )
+            logger.exception("%s background flow submission failed.", MENU_CODE)
+            raise HTTPException(status_code=500, detail="Background flow submission failed.")
+        return {
+            "status": "success",
+            "message": message,
+            "data": {
+                "flowId": flow_id,
+                "flowRunId": run_id,
+                "runType": run_type,
+                "runStatus": run_status,
+                "plan": validation.get("plan", []),
+                "runtimeOverrides": runtime_overrides,
+                "idempotentReplay": False,
+            },
+        }
+
     @router.post("/flow/run")
     def run_flow(req: FlowRunRequest, request: Request):
         conn = None
@@ -578,80 +762,14 @@ def create_flow_work_router(
             )
         try:
             conn = get_target_db_connection(request)
+            require_project_access_for_request(conn, request, data_work.require_int(req.projectId, "projectId"))
             flow_id = save_flow_with_retry(conn, req)
 
             nodes, edges = flow_work.normalize_graph(req.nodes, req.edges)
-            validation = flow_work.validate_graph(nodes, edges)
-            if validation["status"] != "success":
-                raise HTTPException(status_code=400, detail=validation["message"])
-            runtime_overrides = flow_work.normalize_editing_runtime_overrides(req.runtimeOverrides)
-            if runtime_overrides:
-                edit_work.validate_flow_runtime_context(
-                    conn,
-                    request,
-                    runtime_overrides,
-                    project_id=req.projectId,
-                    scenario_id=req.scenarioId,
-                )
-                validation["runtimeOverrides"] = runtime_overrides
-
-            run_type = "BATCH" if req.batch else "MANUAL"
-            run_status = "QUEUED" if req.batch else "STARTED"
-            message = ROUTER_MESSAGES["run_queued"] if req.batch else "Flow execution started."
-            payload_manual_run_id = flow_work.parse_manual_run_id(req.manualRunId)
-            plan_manual_run_id = flow_work.extract_manual_run_id_from_plan(validation.get("plan", []))
-            if payload_manual_run_id and plan_manual_run_id and payload_manual_run_id != plan_manual_run_id:
-                raise HTTPException(status_code=400, detail="Manual flow run id values must match.")
-            manual_run_id = payload_manual_run_id or plan_manual_run_id
-            run_id = flow_work.create_run(conn, flow_id, run_type, run_status, message, validation, manual_run_id)
-            flow_work.create_node_run_records(conn, run_id, flow_id, validation.get("plan", []))
-            target_connection_id = get_target_connection_id(request)
-            user_id = get_request_user_id(request)
-            conn.commit()
-            try:
-                submit_background_job(
-                    f"{MENU_CODE} flow_run_id={run_id}",
-                    run_flow_background,
-                    run_id,
-                    target_connection_id,
-                    user_id,
-                    validation.get("plan", []),
-                    runtime_overrides,
-                    "Flow batch execution started." if req.batch else "Flow execution started.",
-                )
-            except BackgroundJobQueueFull as queue_error:
-                mark_flow_submission_failed(
-                    conn,
-                    run_id,
-                    validation.get("plan", []),
-                    {"plan": validation.get("plan", [])},
-                    str(queue_error),
-                )
-                raise HTTPException(status_code=503, detail=str(queue_error))
-            except Exception as submit_error:
-                mark_flow_submission_failed(
-                    conn,
-                    run_id,
-                    validation.get("plan", []),
-                    {"plan": validation.get("plan", [])},
-                    f"Background flow submission failed: {submit_error}",
-                )
-                logger.exception("%s background flow submission failed.", MENU_CODE)
-                raise HTTPException(status_code=500, detail="Background flow submission failed.")
+            response = queue_flow_run(conn, req, request, flow_id, nodes, edges)
             save_lock.release()
             save_lock = None
-            return {
-                "status": "success",
-                "message": message,
-                "data": {
-                    "flowId": flow_id,
-                    "flowRunId": run_id,
-                    "runType": run_type,
-                    "runStatus": run_status,
-                    "plan": validation.get("plan", []),
-                    "runtimeOverrides": runtime_overrides
-                }
-            }
+            return response
         except HTTPException:
             if conn:
                 conn.rollback()
@@ -681,6 +799,102 @@ def create_flow_work_router(
                 conn.close()
             if save_lock:
                 save_lock.release()
+
+    @router.post("/flow/run-saved")
+    def run_saved_flow(req: SavedFlowRunRequest, request: Request):
+        """Execute the server-side saved graph after verifying project ownership."""
+        conn = None
+        saved_lock = None
+        request_token = normalize_run_request_token(req.requestToken)
+        try:
+            conn = get_target_db_connection(request)
+            require_project_access_for_request(conn, request, req.projectId)
+            saved_lock = get_save_lock(req)
+            if not saved_lock.acquire(timeout=save_lock_wait_seconds):
+                raise HTTPException(
+                    status_code=409,
+                    detail="This flow is still being saved or queued. Please wait a moment and try again.",
+                )
+
+            if request_token:
+                lock_flow_run_request_scope(conn, req.flowId, req.projectId, req.scenarioId)
+                existing_run = find_flow_run_by_request_token(conn, req.flowId, request_token)
+                if existing_run:
+                    response = build_idempotent_run_response(existing_run, req)
+                    conn.rollback()
+                    saved_lock.release()
+                    saved_lock = None
+                    return response
+
+            saved_flow = flow_work.load_flow(conn, MENU_CODE, req.flowId)
+            if (
+                int(saved_flow.get("PROJECT_ID") or 0) != int(req.projectId)
+                or int(saved_flow.get("SCENARIO_ID") or 0) != int(req.scenarioId)
+            ):
+                raise HTTPException(status_code=404, detail="Flow was not found in the selected project and scenario.")
+
+            graph = saved_flow.get("GRAPH") if isinstance(saved_flow.get("GRAPH"), dict) else {}
+            if isinstance(graph.get("nodes"), list) and isinstance(graph.get("edges"), list):
+                nodes = graph["nodes"]
+                edges = graph["edges"]
+            else:
+                nodes = saved_flow.get("NODES") or []
+                edges = saved_flow.get("EDGES") or []
+            saved_request = FlowRunRequest(
+                flowId=int(saved_flow.get("FLOW_ID") or req.flowId),
+                projectId=int(saved_flow.get("PROJECT_ID") or req.projectId),
+                scenarioId=int(saved_flow.get("SCENARIO_ID") or req.scenarioId),
+                flowGroup=saved_flow.get("FLOW_GROUP") or DEFAULT_FLOW_GROUP,
+                flowName=saved_flow.get("FLOW_NAME") or "Saved flow",
+                flowDesc=saved_flow.get("FLOW_DESC") or "",
+                flowType=saved_flow.get("FLOW_TYPE") or DEFAULT_FLOW_TYPE,
+                executionMode="DAG",
+                useYn=saved_flow.get("USE_YN") or "Y",
+                status=saved_flow.get("STATUS") or "DRAFT",
+                nodes=nodes,
+                edges=edges,
+                batch=bool(req.batch),
+                runtimeOverrides={},
+            )
+            normalized_nodes, normalized_edges = flow_work.normalize_graph(saved_request.nodes, saved_request.edges)
+            response = queue_flow_run(
+                conn,
+                saved_request,
+                request,
+                int(saved_flow.get("FLOW_ID") or req.flowId),
+                normalized_nodes,
+                normalized_edges,
+                request_token,
+            )
+            saved_lock.release()
+            saved_lock = None
+            return response
+        except HTTPException:
+            if conn:
+                conn.rollback()
+            raise
+        except Exception as error:
+            if conn:
+                conn.rollback()
+            if is_missing_flow_table_error(error):
+                raise HTTPException(
+                    status_code=500,
+                    detail="Flow storage tables are not installed in the target DB. Run database/INIT_TARGET_DDL.sql first.",
+                )
+            if is_flow_lock_error(error):
+                step = get_flow_error_step(error)
+                logger.warning("%s saved flow run lock conflict at %s: %s", MENU_CODE, step, error)
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Flow run hit a database row lock at {step}. Please wait a moment and run again.",
+                )
+            logger.error("%s saved flow run failed: %s", MENU_CODE, error)
+            raise HTTPException(status_code=500, detail=str(error))
+        finally:
+            if conn:
+                conn.close()
+            if saved_lock:
+                saved_lock.release()
 
     def run_flow_background(
         flow_run_id: int,
@@ -745,6 +959,7 @@ def create_flow_work_router(
             )
         try:
             conn = get_target_db_connection(request)
+            require_project_access_for_request(conn, request, data_work.require_int(req.projectId, "projectId"))
             flow_id = save_flow_with_retry(conn, req)
 
             nodes, edges = flow_work.normalize_graph(req.nodes, req.edges)
@@ -911,6 +1126,7 @@ def create_flow_work_router(
         conn = None
         try:
             conn = get_target_db_connection(request)
+            require_project_access_for_request(conn, request, projectId)
             return flow_work.list_runs(conn, MENU_CODE, projectId, scenarioId, flowId)
         finally:
             if conn:
@@ -921,7 +1137,12 @@ def create_flow_work_router(
         conn = None
         try:
             conn = get_target_db_connection(request)
-            return flow_work.list_node_runs(conn, flow_run_id)
+            result = flow_work.list_node_runs(conn, flow_run_id)
+            rows = result.get("data") or []
+            if rows:
+                flow = flow_work.load_flow(conn, MENU_CODE, int(rows[0].get("FLOW_ID") or 0))
+                require_project_access_for_request(conn, request, int(flow.get("PROJECT_ID") or 0))
+            return result
         finally:
             if conn:
                 conn.close()
@@ -937,6 +1158,7 @@ def create_flow_work_router(
         conn = None
         try:
             conn = get_target_db_connection(request)
+            require_project_access_for_request(conn, request, projectId)
             run_row = flow_work.get_run(conn, MENU_CODE, projectId, scenarioId, flow_run_id)
             if run_row is None:
                 raise HTTPException(status_code=404, detail="Flow run was not found in the selected project and scenario.")

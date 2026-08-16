@@ -248,7 +248,7 @@ async def add_cache_headers(request, call_next):
     path = request.url.path
     no_cache_paths = (
         path in ("/", "/index.html")
-        or path.startswith(("/js/", "/css/", "/pages/", "/config/", "/i18n/"))
+        or path.startswith(("/js/", "/css/", "/pages/", "/config/", "/i18n/", "/quick-edit"))
         or path.endswith((".html", ".js", ".css"))
     )
     if no_cache_paths:
@@ -339,4 +339,6 @@ script_dir = os.path.dirname(__file__)
 # 수정 후 (현재 파일 위치 기준으로 frontend 폴더 지정)
 base_path = Path(__file__).resolve().parent
 frontend_path = base_path / "frontend"
+quick_edit_path = base_path / "quick-edit"
+app.mount("/quick-edit", StaticFiles(directory=quick_edit_path, html=True), name="quick-edit")
 app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")

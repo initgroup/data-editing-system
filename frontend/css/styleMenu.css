@@ -6330,6 +6330,76 @@ body.intro-mode #container-intro .env-panel {
     margin: 0 !important;
 }
 
+/* Quick Editing은 일반 툴바 작업과 성격이 달라 전용 진입 버튼으로 구분한다. */
+.header-actions .quick-edit-launcher {
+    position: relative;
+    overflow: visible;
+    border-color: #1d4ed8 !important;
+    border-radius: 10px !important;
+    background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 62%, #0f9f8b 100%) !important;
+    box-shadow:
+        0 5px 14px rgba(37, 99, 235, 0.32),
+        0 0 0 3px rgba(37, 99, 235, 0.12);
+    transition: transform 160ms ease, box-shadow 160ms ease, filter 160ms ease;
+}
+
+.header-actions .quick-edit-launcher i,
+.header-actions .quick-edit-launcher:hover i {
+    color: #ffffff !important;
+    font-size: 17px;
+    filter: drop-shadow(0 1px 2px rgba(15, 23, 42, 0.35));
+}
+
+.header-actions .quick-edit-launcher::after {
+    content: "";
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 7px;
+    height: 7px;
+    border: 2px solid #dbeafe;
+    border-radius: 999px;
+    background: #5eead4;
+    box-shadow: 0 0 0 2px rgba(94, 234, 212, 0.24);
+    animation: quickEditLauncherPulse 2.2s ease-in-out infinite;
+}
+
+.header-actions .quick-edit-launcher:hover {
+    border-color: #1e40af !important;
+    background: linear-gradient(135deg, #1e40af 0%, #2563eb 55%, #0d9488 100%) !important;
+    box-shadow:
+        0 7px 18px rgba(37, 99, 235, 0.42),
+        0 0 0 4px rgba(37, 99, 235, 0.16);
+    filter: saturate(1.12);
+    transform: translateY(-1px) scale(1.04);
+}
+
+.header-actions .quick-edit-launcher:active {
+    transform: translateY(0) scale(0.98);
+}
+
+.header-actions .quick-edit-launcher:focus-visible {
+    outline: 3px solid #facc15;
+    outline-offset: 3px;
+}
+
+@keyframes quickEditLauncherPulse {
+    0%, 100% {
+        box-shadow: 0 0 0 2px rgba(94, 234, 212, 0.2);
+    }
+    50% {
+        box-shadow: 0 0 0 5px rgba(94, 234, 212, 0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .header-actions .quick-edit-launcher,
+    .header-actions .quick-edit-launcher::after {
+        animation: none;
+        transition: none;
+    }
+}
+
 .mobile-top-toolbar-toggle,
 .mobile-gemini-toggle,
 .mobile-logout-toggle,

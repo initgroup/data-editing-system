@@ -38,7 +38,7 @@
             "pages/MCOM_FLOW_WORK.html": "1.1.4",
             "css/pages/MCOM_FLOW_WORK.css": "1.0.5",
             "css/style.css": "1.1.12",
-            "css/styleMenu.css": "1.1.84"
+            "css/styleMenu.css": "1.1.85"
         };
         window.APP_PAGE_CSS_FILES = [
             "./css/pages/M01002.css",
@@ -144,6 +144,9 @@
                             <i class="fas fa-ellipsis-h"></i>
                         </button>
                     </div>
+                    <button type="button" onclick="openQuickEditWindow()" class="btn-refresh-top quick-edit-launcher" title="퀵 데이터 에디팅 열기" aria-label="퀵 데이터 에디팅 열기">
+                        <i class="fas fa-bolt"></i>
+                    </button>
                     <button onclick="handlePageRefresh()" class="btn-refresh-top" title="Refresh current page">
                         <i id="refreshIcon" class="fas fa-sync-alt"></i>
                     </button>
@@ -398,6 +401,30 @@
             } finally {
                 if (button) button.disabled = false;
                 setTimeout(() => icon.classList.remove('fa-spin'), 500);
+            }
+        }
+
+        function openQuickEditWindow() {
+            const availableWidth = window.screen?.availWidth || window.innerWidth || 1280;
+            const availableHeight = window.screen?.availHeight || window.innerHeight || 820;
+            const width = Math.min(1440, availableWidth);
+            const height = Math.min(940, availableHeight);
+            const left = Math.max(0, Math.round((availableWidth - width) / 2));
+            const top = Math.max(0, Math.round((availableHeight - height) / 2));
+            const features = [
+                "popup=yes",
+                "resizable=yes",
+                "scrollbars=yes",
+                `width=${width}`,
+                `height=${height}`,
+                `left=${left}`,
+                `top=${top}`
+            ].join(",");
+            const quickWindow = window.open("/quick-edit/", "initQuickEdit", features);
+            if (quickWindow) {
+                quickWindow.focus();
+            } else {
+                window.open("/quick-edit/", "_blank");
             }
         }
 
