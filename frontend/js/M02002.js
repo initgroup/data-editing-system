@@ -50,6 +50,7 @@
         stopColumnResizeBound: null,
         sqlKeydownBound: null,
         contextLoadFailed: false,
+        scenarioTableSaveModeDialog: null,
 
         async init() {
             if (this.isInit) return;
@@ -109,6 +110,7 @@
             this.handleResizeMoveBound = null;
             this.stopColumnResizeBound = null;
             this.sqlKeydownBound = null;
+            this.resolveScenarioTableSaveMode(null);
             this.isInit = false;
         },
 
@@ -630,6 +632,7 @@
             const hasMapping = Boolean(registration?.EDIT_OWNER_NAME && registration?.EDIT_TABLE_NAME);
             const isSelectedManagedTable = this.isSelectedManagedTable();
             const isManagedSource = String(this.selectedTable?.IS_MANAGED_SOURCE || "").toUpperCase() === "Y";
+            const isEditTable = String(this.selectedTable?.TABLE_NAME || "").toUpperCase().startsWith("INITDN$");
 
             let primaryLabel = this.t("saveOrImport", "Save / Import");
             let primaryIconClass = "fas fa-save";
@@ -648,6 +651,10 @@
                     primaryIconClass = "fas fa-arrows-rotate";
                     primaryTitle = this.t("createSnapshotAndConvertTitle", "Convert the direct registration to a managed snapshot.");
                     primaryEnabled = true;
+                } else if (isEditTable) {
+                    primaryLabel = "수정 테이블";
+                    primaryIconClass = "fas fa-pen-to-square";
+                    primaryTitle = "INITDN$는 수정 테이블입니다. 대상 등록은 연결된 INITUP$ 원본 테이블에서 진행하세요.";
                 } else if (originalTableImport) {
                     primaryLabel = "가져오기 완료";
                     primaryIconClass = "fas fa-check";
@@ -684,15 +691,15 @@
             if (dropManagedLabel) dropManagedLabel.textContent = this.t("dropManagedTables", "Delete physical table");
             if (dropManagedButton) {
                 dropManagedButton.hidden = !isSelectedManagedTable;
-                dropManagedButton.disabled = !hasProject;
-                dropManagedButton.title = "선택한 INITUP$ 또는 INITDN$ 물리 테이블만 영구 삭제합니다.";
+                dropManagedButton.disabled = !(hasProject && this.selectedScenarioId);
+                dropManagedButton.title = "현재 프로젝트 소유로 확인된 INITUP$ 또는 INITDN$ 물리 테이블만 영구 삭제합니다.";
             }
-            if (deleteAllLabel) deleteAllLabel.textContent = this.t("unregisterAll", "Unregister all");
+            if (deleteAllLabel) deleteAllLabel.textContent = this.t("unregisterAll", "Unregister current scenario");
             if (deleteAllButton) {
                 deleteAllButton.title = this.selectedScenarioId
                     ? this.t("unregisterAllTitle", "Remove all table registrations from the scenario. DB tables are not dropped.")
                     : "등록을 해제할 시나리오를 선택하세요.";
-                deleteAllButton.disabled = !hasProject;
+                deleteAllButton.disabled = !(hasProject && this.selectedScenarioId);
             }
         },
 
@@ -753,16 +760,8 @@
                 alert("Select a table from Table Explorer first.");
                 return;
             }
-            if (
-                (!row.SCENARIO_TABLE_ID || !row.EDIT_TABLE_NAME)
-                && !(await CommonMessage.confirm(
-                    `"${row.OWNER_NAME}.${row.TABLE_NAME}" 테이블을 대상 데이터로 저장하시겠습니까?\n`
-                    + "일반 DB 테이블은 FILE_ROW_NO가 추가된 관리 스냅샷으로 가져옵니다.\n"
-                    + "스냅샷 ID 규칙: INITUP$_{PROJECT_CODE}_DB_{TIME}"
-                ))
-            ) {
-                return;
-            }
+            const saveMode = await this.chooseScenarioTableSaveMode(row);
+            if (!saveMode) return;
 
             const payload = {
                 scenarioTableId: row.SCENARIO_TABLE_ID || null,
@@ -772,7 +771,8 @@
                 tableName: row.TABLE_NAME,
                 tableComment: row.TABLE_COMMENT || "",
                 useYn: row.USE_YN || "Y",
-                sortOrder: row.SORT_ORDER ?? null
+                sortOrder: row.SORT_ORDER ?? null,
+                autoDesignYn: saveMode === "AUTO_DESIGN" ? "Y" : "N"
             };
 
             try {
@@ -784,10 +784,69 @@
                 const saved = json.data || {};
                 this.selectedScenarioTableKey = saved.SCENARIO_TABLE_ID ? `ID:${saved.SCENARIO_TABLE_ID}` : "";
                 await this.loadTableTree();
-                alert(json.message || "Scenario table saved.");
+                const automation = json.automation || {};
+                if (automation.status === "failed") {
+                    await CommonMessage.warn(
+                        `${json.message || "대상 테이블은 저장되었습니다."}\n\n자동 설계 실패: ${automation.message || "원인을 확인할 수 없습니다."}`,
+                        { title: "일부 저장 완료", modal: true, copyable: false }
+                    );
+                } else if (automation.status === "success") {
+                    const createdCount = Array.isArray(automation.createdJobIds) ? automation.createdJobIds.length : 0;
+                    const reusedCount = Array.isArray(automation.reusedJobIds) ? automation.reusedJobIds.length : 0;
+                    await CommonMessage.success(
+                        `${json.message || "기본 FLOW 설계가 저장되었습니다."}\n`
+                        + `작업 4개(신규 ${createdCount}, 기존 활용 ${reusedCount}), FLOW #${automation.flowId || "-"}\n`
+                        + "M03001~M03004 및 M04001 화면에서 수정할 수 있습니다.",
+                        { title: "자동 설계 완료", modal: true, copyable: false }
+                    );
+                } else {
+                    await CommonMessage.success(json.message || "Scenario table saved.", { copyable: false });
+                }
             } catch (error) {
                 alert(error.message || "Scenario table save failed.");
             }
+        },
+
+        chooseScenarioTableSaveMode(row) {
+            this.resolveScenarioTableSaveMode(null);
+            const layer = getContainerEl("#scenarioTableSaveModeLayer-M02002");
+            const target = getContainerEl("#scenarioTableSaveModeTarget-M02002");
+            const hint = getContainerEl("#scenarioTableSaveModeHint-M02002");
+            if (!layer) return Promise.resolve("TABLE_ONLY");
+
+            const ownerName = String(row?.OWNER_NAME || "").trim();
+            const tableName = String(row?.TABLE_NAME || "").trim();
+            const isManagedSource = tableName.toUpperCase().startsWith("INITUP$");
+            const isRegistered = Boolean(row?.SCENARIO_TABLE_ID);
+            if (target) target.textContent = `${ownerName}.${tableName}`;
+            if (hint) {
+                hint.textContent = isRegistered
+                    ? "이미 등록된 대상 테이블입니다. 기본 작업/FLOW가 없으면 자동 설계에서 생성하고, 있으면 기존 설계를 그대로 활용합니다."
+                    : (isManagedSource
+                        ? "관리 원본 INITUP$를 현재 시나리오에 등록합니다."
+                        : "일반 DB 테이블은 FILE_ROW_NO가 포함된 INITUP$ 관리 스냅샷을 만든 후 등록합니다.");
+            }
+            layer.hidden = false;
+            return new Promise((resolve) => {
+                this.scenarioTableSaveModeDialog = { resolve };
+                window.requestAnimationFrame(() => {
+                    getContainerEl("#scenarioTableAutoDesignOption-M02002")?.focus();
+                });
+            });
+        },
+
+        resolveScenarioTableSaveMode(mode) {
+            const layer = getContainerEl("#scenarioTableSaveModeLayer-M02002");
+            if (layer) layer.hidden = true;
+            const dialog = this.scenarioTableSaveModeDialog;
+            this.scenarioTableSaveModeDialog = null;
+            dialog?.resolve(mode || null);
+        },
+
+        handleScenarioTableSaveModeKeydown(event) {
+            if (event.key !== "Escape") return;
+            event.preventDefault();
+            this.resolveScenarioTableSaveMode(null);
         },
 
         async deleteScenarioTable() {

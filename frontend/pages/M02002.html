@@ -78,7 +78,7 @@
                     </button>
                     <button type="button" class="table-btn table-danger-btn" id="deleteAllTableAction-M02002" onclick="M02002.deleteAllScenarioTables()" disabled>
                         <i class="fas fa-trash-can"></i>
-                        <span>Unregister all</span>
+                        <span>Unregister current scenario</span>
                     </button>
                 </div>
             </header>
@@ -137,4 +137,42 @@
             </section>
         </section>
     </section>
+
+    <div id="scenarioTableSaveModeLayer-M02002" class="data-help-layer" hidden>
+        <section
+            class="data-help-dialog scenario-table-save-mode-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="scenarioTableSaveModeTitle-M02002"
+            tabindex="-1"
+            onkeydown="M02002.handleScenarioTableSaveModeKeydown(event)"
+        >
+            <header>
+                <h2 id="scenarioTableSaveModeTitle-M02002">대상 테이블 저장 방식</h2>
+                <button type="button" class="table-icon-btn" title="닫기" onclick="M02002.resolveScenarioTableSaveMode(null)">
+                    <i class="fas fa-times"></i>
+                </button>
+            </header>
+            <div class="data-help-content scenario-table-save-mode-content">
+                <p id="scenarioTableSaveModeTarget-M02002" class="scenario-table-save-mode-target"></p>
+                <p id="scenarioTableSaveModeHint-M02002" class="scenario-table-save-mode-hint"></p>
+                <div class="scenario-table-save-mode-options">
+                    <button type="button" class="scenario-table-save-mode-option" onclick="M02002.resolveScenarioTableSaveMode('TABLE_ONLY')">
+                        <span class="scenario-table-save-mode-icon"><i class="fas fa-database"></i></span>
+                        <strong>대상 테이블만 등록</strong>
+                        <small>기존 방식으로 대상 테이블 쌍만 저장합니다. 모델 작업과 FLOW는 사용자가 직접 설계합니다.</small>
+                    </button>
+                    <button id="scenarioTableAutoDesignOption-M02002" type="button" class="scenario-table-save-mode-option is-recommended" onclick="M02002.resolveScenarioTableSaveMode('AUTO_DESIGN')">
+                        <span class="scenario-table-save-mode-icon"><i class="fas fa-diagram-project"></i></span>
+                        <strong>기본 4단계와 FLOW 자동 설계</strong>
+                        <small>M03001~M03004 기본 작업과 M04001 샘플 FLOW를 저장합니다. 저장 후 각 화면에서 수정할 수 있습니다.</small>
+                    </button>
+                </div>
+            </div>
+            <footer>
+                <span class="scenario-table-save-mode-note">FLOW는 자동 실행하지 않고 설계 상태로 저장됩니다.</span>
+                <button type="button" class="env-btn" onclick="M02002.resolveScenarioTableSaveMode(null)">취소</button>
+            </footer>
+        </section>
+    </div>
 </div>

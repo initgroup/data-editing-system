@@ -23,6 +23,7 @@ from backend.database import get_db_connection
 from backend.target_database import get_target_connection_id, get_target_db_connection
 from backend.auth_context import get_request_role_code, get_request_user_id
 from backend.paging import create_page_window, normalize_page_number, normalize_page_size
+from backend.services import scenario_default_design_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -57,6 +58,7 @@ class ScenarioTableRequest(BaseModel):
     tableComment: Optional[str] = None
     useYn: Optional[str] = "Y"
     sortOrder: Optional[int] = None
+    autoDesignYn: Optional[str] = "N"
     model_config = ConfigDict(extra="allow")
 
 
@@ -98,8 +100,6 @@ def get_table_tree(
         conn = get_target_db_connection(request)
         cursor = conn.cursor()
         ensure_upload_table_metadata(cursor)
-        cursor.close()
-        cursor = None
         exclude_patterns = get_table_exclude_patterns(request)
         include_owner_patterns = get_table_include_owner_patterns(request, conn)
         safe_offset = max(0, int(offset or 0))
@@ -108,8 +108,22 @@ def get_table_tree(
         registered_only = str(registeredOnly or "N").strip().upper() == "Y"
         selected_project_id = require_int(projectId, "projectId") if projectId is not None else None
         selected_scenario_id = require_int(scenarioId, "scenarioId") if scenarioId is not None else None
+        if selected_scenario_id is not None and selected_project_id is None:
+            raise HTTPException(status_code=400, detail="projectId is required when scenarioId is provided.")
         if registered_only and selected_project_id is None:
             raise HTTPException(status_code=400, detail="projectId is required for registered table filtering.")
+        if selected_project_id is not None:
+            if selected_scenario_id is not None:
+                require_project_scenario_access(
+                    cursor,
+                    request,
+                    selected_project_id,
+                    selected_scenario_id,
+                )
+            else:
+                require_project_access(cursor, request, selected_project_id)
+        cursor.close()
+        cursor = None
         padded_excludes = (exclude_patterns + [None] * 5)[:5]
         result = execute_query(conn, "M02002_TABLE_TREE", {
             "keyword": f"%{keyword_text}%" if keyword_text else None,
@@ -298,6 +312,10 @@ def get_scenario_tables(request: Request, projectId: int, scenarioId: Optional[i
         conn = get_target_db_connection(request)
         cursor = conn.cursor()
         ensure_upload_table_metadata(cursor)
+        if scenarioId is not None:
+            require_project_scenario_access(cursor, request, projectId, scenarioId)
+        else:
+            require_project_access(cursor, request, projectId)
         cursor.close()
         cursor = None
         result = execute_query(conn, "M02002_SCENARIO_TABLE_LIST", {
@@ -329,6 +347,11 @@ def save_scenario_table(req: ScenarioTableRequest, request: Request):
         raise HTTPException(status_code=400, detail="ownerName and tableName are required.")
     if not is_identifier(owner_name) or not is_identifier(table_name):
         raise HTTPException(status_code=400, detail="Invalid owner or table name.")
+    if table_name.startswith(EDIT_TABLE_PREFIX):
+        raise HTTPException(
+            status_code=400,
+            detail="INITDN$ is an editing table. Register the paired INITUP$ source table instead.",
+        )
 
     params = {
         "scenarioTableId": req.scenarioTableId,
@@ -344,6 +367,7 @@ def save_scenario_table(req: ScenarioTableRequest, request: Request):
     conn = None
     cursor = None
     created_snapshot: Optional[tuple[str, str]] = None
+    snapshot_created = False
     pending_column_mappings: list[dict] = []
     try:
         conn = get_target_db_connection(request)
@@ -425,8 +449,47 @@ def save_scenario_table(req: ScenarioTableRequest, request: Request):
             if not row:
                 raise HTTPException(status_code=500, detail="Saved scenario table ID could not be found.")
             scenario_table_id = row[0]
+        backfill_managed_table_ownership(
+            cursor,
+            project_id=project_id,
+            scenario_id=scenario_id,
+            scenario_table_id=int(scenario_table_id),
+        )
         save_column_mappings(cursor, int(scenario_table_id), pending_column_mappings)
         conn.commit()
+        snapshot_created = bool(created_snapshot)
+        created_snapshot = None
+
+        automation = {
+            "requested": str(req.autoDesignYn or "N").strip().upper() == "Y",
+            "status": "skipped",
+        }
+        if automation["requested"]:
+            try:
+                automation = {
+                    "requested": True,
+                    **scenario_default_design_service.provision_default_design(
+                        conn,
+                        project_id=project_id,
+                        scenario_id=scenario_id,
+                        scenario_table_id=int(scenario_table_id),
+                    ),
+                }
+                conn.commit()
+            except Exception as automation_error:
+                conn.rollback()
+                logger.exception(
+                    "M02002 default four-stage job and flow provisioning failed. "
+                    "project_id=%s scenario_id=%s scenario_table_id=%s",
+                    project_id,
+                    scenario_id,
+                    scenario_table_id,
+                )
+                automation = {
+                    "requested": True,
+                    "status": "failed",
+                    "message": get_exception_detail(automation_error),
+                }
 
         result = execute_query(conn, "M02002_SCENARIO_TABLE_LIST", {
             "projectId": project_id,
@@ -434,16 +497,19 @@ def save_scenario_table(req: ScenarioTableRequest, request: Request):
         })
         data = result.get("data", [])
         saved = next((row for row in data if row.get("SCENARIO_TABLE_ID") == scenario_table_id), None)
+        if automation.get("status") == "success":
+            message = "Scenario table and default four-stage flow design saved."
+        elif automation.get("status") == "failed":
+            message = "Scenario table saved, but default flow design could not be created."
+        else:
+            message = "DB table snapshot imported and saved." if snapshot_created else "Scenario table saved."
         return {
             "status": "success",
-            "message": (
-                "DB table snapshot imported and saved."
-                if created_snapshot
-                else "Scenario table saved."
-            ),
+            "message": message,
             "data": saved or {},
             "list": data,
-            "snapshotCreated": bool(created_snapshot),
+            "snapshotCreated": snapshot_created,
+            "automation": automation,
         }
     except HTTPException:
         if conn:
@@ -468,21 +534,45 @@ def save_scenario_table(req: ScenarioTableRequest, request: Request):
 @router.post("/scenario-table/delete")
 def delete_scenario_table(req: ScenarioTableDeleteRequest, request: Request):
     conn = None
+    cursor = None
     try:
         conn = get_target_db_connection(request)
-        result = execute_query(conn, "M02002_SCENARIO_TABLE_DELETE", {
-            "scenarioTableId": req.scenarioTableId,
-            "projectId": req.projectId,
-            "scenarioId": req.scenarioId
-        }, is_dml=True)
-        if result.get("status") != "success":
-            raise HTTPException(status_code=500, detail=result.get("detail") or result.get("message") or "Scenario table delete failed.")
+        cursor = conn.cursor()
+        ensure_upload_table_metadata(cursor)
+        require_project_scenario_access(cursor, request, req.projectId, req.scenarioId)
+        backfill_managed_table_ownership(
+            cursor,
+            project_id=req.projectId,
+            scenario_id=req.scenarioId,
+            scenario_table_id=req.scenarioTableId,
+        )
+        cursor.execute(
+            SqlLoader.get_sql("M02002_SCENARIO_TABLE_DELETE"),
+            {
+                "scenarioTableId": req.scenarioTableId,
+                "projectId": req.projectId,
+                "scenarioId": req.scenarioId,
+            },
+        )
+        deleted_count = int(cursor.rowcount or 0)
+        conn.commit()
         return {
             "status": "success",
             "message": "Scenario table registration removed.",
-            "deletedCount": result.get("rowcount", 0)
+            "deletedCount": deleted_count,
         }
+    except HTTPException:
+        if conn:
+            conn.rollback()
+        raise
+    except Exception as error:
+        if conn:
+            conn.rollback()
+        logger.exception("M02002 scenario table registration delete failed.")
+        raise HTTPException(status_code=500, detail=str(error))
     finally:
+        if cursor:
+            cursor.close()
         if conn:
             conn.close()
 
@@ -525,20 +615,43 @@ def get_scenario_table_registration(req: TableRequest, request: Request):
 @router.post("/scenario-table/delete-all")
 def delete_all_scenario_tables(req: ScenarioTableDeleteAllRequest, request: Request):
     conn = None
+    cursor = None
     try:
         conn = get_target_db_connection(request)
-        result = execute_query(conn, "M02002_SCENARIO_TABLE_DELETE_ALL", {
-            "projectId": req.projectId,
-            "scenarioId": req.scenarioId
-        }, is_dml=True)
-        if result.get("status") != "success":
-            raise HTTPException(status_code=500, detail=result.get("detail") or result.get("message") or "Scenario table delete failed.")
+        cursor = conn.cursor()
+        ensure_upload_table_metadata(cursor)
+        require_project_scenario_access(cursor, request, req.projectId, req.scenarioId)
+        backfill_managed_table_ownership(
+            cursor,
+            project_id=req.projectId,
+            scenario_id=req.scenarioId,
+        )
+        cursor.execute(
+            SqlLoader.get_sql("M02002_SCENARIO_TABLE_DELETE_ALL"),
+            {
+                "projectId": req.projectId,
+                "scenarioId": req.scenarioId,
+            },
+        )
+        deleted_count = int(cursor.rowcount or 0)
+        conn.commit()
         return {
             "status": "success",
             "message": "Scenario table registrations removed.",
-            "deletedCount": result.get("rowcount", 0)
+            "deletedCount": deleted_count,
         }
+    except HTTPException:
+        if conn:
+            conn.rollback()
+        raise
+    except Exception as error:
+        if conn:
+            conn.rollback()
+        logger.exception("M02002 scenario table registration delete-all failed.")
+        raise HTTPException(status_code=500, detail=str(error))
     finally:
+        if cursor:
+            cursor.close()
         if conn:
             conn.close()
 
@@ -552,10 +665,17 @@ def drop_managed_scenario_table(req: ScenarioTableDropRequest, request: Request)
         cursor = conn.cursor()
         project_id = require_int(req.projectId, "projectId")
         scenario_id = require_int(req.scenarioId, "scenarioId")
+        ensure_upload_table_metadata(cursor)
         require_project_scenario_access(cursor, request, project_id, scenario_id)
         owner_name = str(req.ownerName or "").strip().upper()
         table_name = str(req.tableName or "").strip().upper()
         validate_unregistered_managed_drop_target(cursor, owner_name, table_name)
+        require_managed_table_project_ownership(
+            cursor,
+            project_id=project_id,
+            owner_name=owner_name,
+            table_name=table_name,
+        )
 
         cursor.execute(
             SqlLoader.get_sql("M02002_SCENARIO_TABLE_BY_PHYSICAL_TABLE"),
@@ -588,6 +708,12 @@ def drop_managed_scenario_table(req: ScenarioTableDropRequest, request: Request)
                 "editTableName": str(registration[4] or "").upper(),
             }
             validate_managed_drop_target(cursor, mapping)
+            backfill_managed_table_ownership(
+                cursor,
+                project_id=project_id,
+                scenario_id=scenario_id,
+                scenario_table_id=scenario_table_id,
+            )
             cursor.execute(
                 SqlLoader.get_sql("M02002_MANAGED_TABLE_REFERENCE_COUNT"),
                 {
@@ -642,6 +768,25 @@ def drop_managed_scenario_table(req: ScenarioTableDropRequest, request: Request)
                     "projectId": project_id,
                     "scenarioId": scenario_id,
                 },
+            )
+        if scenario_table_id is not None:
+            remove_managed_table_ownership_if_pair_absent(
+                cursor,
+                project_id=project_id,
+                source_owner=mapping["ownerName"],
+                source_table=mapping["tableName"],
+                edit_owner=mapping["editOwnerName"],
+                edit_table=mapping["editTableName"],
+            )
+        else:
+            source_table = create_source_table_name(table_name)
+            remove_managed_table_ownership_if_pair_absent(
+                cursor,
+                project_id=project_id,
+                source_owner=owner_name,
+                source_table=source_table,
+                edit_owner=owner_name,
+                edit_table=create_edit_table_name(source_table),
             )
         conn.commit()
         return {
@@ -719,6 +864,12 @@ def prepare_table_mapping(
         and source_owner == managed_owner
         and has_managed_case_id_column
     ):
+        require_managed_table_project_ownership(
+            cursor,
+            project_id=project_id,
+            owner_name=source_owner,
+            table_name=source_table,
+        )
         return {
             "ownerName": source_owner,
             "tableName": source_table,
@@ -879,6 +1030,26 @@ def ensure_upload_table_metadata(cursor) -> None:
                 raise
 
 
+def require_project_access(
+    cursor,
+    request: Request,
+    project_id: int,
+) -> None:
+    cursor.execute(
+        SqlLoader.get_sql("M02002_PROJECT_ACCESS"),
+        {
+            "projectId": project_id,
+            "includeAllUsers": "Y" if get_request_role_code(request) == "ADMIN" else "N",
+            "userId": get_request_user_id(request),
+        },
+    )
+    if int((cursor.fetchone() or [0])[0] or 0) <= 0:
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have access to the selected project.",
+        )
+
+
 def require_project_scenario_access(
     cursor,
     request: Request,
@@ -901,6 +1072,86 @@ def require_project_scenario_access(
         )
 
 
+def fetch_managed_table_project_ids(cursor, owner_name: str, table_name: str) -> set[int]:
+    cursor.execute(
+        SqlLoader.get_sql("M02002_MANAGED_TABLE_PROJECT_OWNERS"),
+        {
+            "ownerName": owner_name,
+            "tableName": table_name,
+        },
+    )
+    return {
+        int(row[0])
+        for row in cursor.fetchall()
+        if row and row[0] is not None
+    }
+
+
+def require_managed_table_project_ownership(
+    cursor,
+    *,
+    project_id: int,
+    owner_name: str,
+    table_name: str,
+) -> None:
+    project_ids = fetch_managed_table_project_ids(cursor, owner_name, table_name)
+    if project_ids == {project_id}:
+        return
+    if project_id in project_ids:
+        detail = "This managed table is associated with multiple projects and cannot be changed here."
+    elif project_ids:
+        detail = "This managed table belongs to another project."
+    else:
+        detail = "The project ownership of this managed table could not be verified."
+    raise HTTPException(status_code=409, detail=detail)
+
+
+def backfill_managed_table_ownership(
+    cursor,
+    *,
+    project_id: int,
+    scenario_id: int,
+    scenario_table_id: Optional[int] = None,
+) -> None:
+    cursor.execute(
+        SqlLoader.get_sql("M02002_MANAGED_TABLE_META_BACKFILL"),
+        {
+            "projectId": project_id,
+            "scenarioId": scenario_id,
+            "scenarioTableId": scenario_table_id,
+        },
+    )
+
+
+def remove_managed_table_ownership_if_pair_absent(
+    cursor,
+    *,
+    project_id: int,
+    source_owner: str,
+    source_table: str,
+    edit_owner: str,
+    edit_table: str,
+) -> None:
+    for owner_name, table_name in (
+        (source_owner, source_table),
+        (edit_owner, edit_table),
+    ):
+        cursor.execute(
+            SqlLoader.get_sql("M02002_SOURCE_TABLE_EXISTS"),
+            {"ownerName": owner_name, "tableName": table_name},
+        )
+        if int((cursor.fetchone() or [0])[0] or 0) > 0:
+            return
+    cursor.execute(
+        SqlLoader.get_sql("M02002_MANAGED_TABLE_META_DELETE"),
+        {
+            "projectId": project_id,
+            "ownerName": source_owner,
+            "tableName": source_table,
+        },
+    )
+
+
 def mapping_params(mapping: dict) -> dict:
     return {
         "ownerName": mapping["ownerName"],
@@ -915,6 +1166,12 @@ def mapping_params(mapping: dict) -> dict:
     }
 
 
+def get_exception_detail(error: Exception) -> str:
+    if isinstance(error, HTTPException):
+        return str(error.detail)
+    return str(error)
+
+
 def create_edit_table_name(source_table: str) -> str:
     normalized_source = str(source_table or "").strip().upper()
     if not normalized_source.startswith(MANAGED_SOURCE_PREFIX):
@@ -926,6 +1183,22 @@ def create_edit_table_name(source_table: str) -> str:
     if not is_identifier(edit_table):
         raise HTTPException(status_code=400, detail="The derived INITDN$ table name is invalid.")
     return edit_table
+
+
+def create_source_table_name(managed_table: str) -> str:
+    normalized_table = str(managed_table or "").strip().upper()
+    if normalized_table.startswith(MANAGED_SOURCE_PREFIX):
+        source_table = normalized_table
+    elif normalized_table.startswith(EDIT_TABLE_PREFIX):
+        source_table = MANAGED_SOURCE_PREFIX + normalized_table[len(EDIT_TABLE_PREFIX):]
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Only INITUP$ or INITDN$ managed table names are supported.",
+        )
+    if not is_identifier(source_table):
+        raise HTTPException(status_code=400, detail="The derived INITUP$ table name is invalid.")
+    return source_table
 
 
 def create_managed_snapshot_table_name(project_code: str) -> str:

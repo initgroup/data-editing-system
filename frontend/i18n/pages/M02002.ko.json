@@ -34,7 +34,7 @@
     , "unregister": "등록 해제"
     , "dropManagedTables": "물리 테이블 삭제"
     , "physicalTableDeleted": "물리 테이블을 삭제했습니다."
-    , "unregisterAll": "등록 전체 해제"
+    , "unregisterAll": "현재 시나리오 등록 전체 해제"
     , "selectTableAndScenario": "테이블과 시나리오를 선택하세요."
     , "alreadySavedTitle": "이미 저장된 테이블입니다."
     , "createSnapshotAndConvertTitle": "직접 등록된 테이블을 관리 스냅샷 방식으로 전환합니다."
@@ -42,7 +42,7 @@
     , "createAndSaveTitle": "INITUP$ 스냅샷을 생성하고 시나리오에 저장합니다."
     , "unregisterTitle": "시나리오 등록만 해제합니다. 실제 DB 테이블은 삭제하지 않습니다."
     , "dropManagedTablesTitle": "연결된 INITUP$와 INITDN$ 물리 테이블을 영구 삭제합니다."
-    , "unregisterAllTitle": "시나리오의 모든 테이블 등록을 해제합니다. 실제 DB 테이블은 삭제하지 않습니다."
+    , "unregisterAllTitle": "현재 프로젝트·시나리오의 모든 테이블 등록을 해제합니다. 실제 DB 테이블은 삭제하지 않습니다."
     , "gridTotal": "전체 {count}건"
     , "freezeColumns": "틀 고정"
     , "freezeColumnsTitle": "가로 스크롤 시 No 컬럼과 지정한 수만큼의 데이터 컬럼을 고정합니다."
@@ -66,7 +66,7 @@
       ".table-export-actions .table-btn:nth-child(1) span": "저장 / 가져오기",
       ".table-export-actions .table-btn:nth-child(2) span": "등록 해제",
       ".table-export-actions .table-btn:nth-child(3) span": "물리 테이블 삭제",
-      ".table-export-actions .table-btn:nth-child(4) span": "등록 전체 해제",
+      ".table-export-actions .table-btn:nth-child(4) span": "현재 시나리오 등록 전체 해제",
       ".table-tabs [data-tab=\"columns\"] span": "컬럼",
       ".table-tabs [data-tab=\"data\"] span": "데이터",
       ".table-tabs [data-tab=\"sql\"] span": "SQL",

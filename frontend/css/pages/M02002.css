@@ -1,4 +1,84 @@
 /* Split from styleMenu.css. Contains only selectors scoped to this menu code. */
+#container-M02002 .scenario-table-save-mode-dialog {
+    width: min(720px, 100%);
+}
+
+#container-M02002 .scenario-table-save-mode-content {
+    display: grid;
+    gap: 12px;
+}
+
+#container-M02002 .scenario-table-save-mode-target {
+    color: #0f2948;
+    font-size: 14px;
+    font-weight: 700;
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+#container-M02002 .scenario-table-save-mode-hint {
+    color: #52657d;
+    margin: 0;
+}
+
+#container-M02002 .scenario-table-save-mode-options {
+    display: grid;
+    gap: 10px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+#container-M02002 .scenario-table-save-mode-option {
+    align-content: start;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    color: #1f2937;
+    cursor: pointer;
+    display: grid;
+    gap: 7px;
+    min-height: 150px;
+    padding: 16px;
+    text-align: left;
+}
+
+#container-M02002 .scenario-table-save-mode-option:hover,
+#container-M02002 .scenario-table-save-mode-option:focus-visible {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.14);
+    outline: none;
+}
+
+#container-M02002 .scenario-table-save-mode-option.is-recommended {
+    background: #f5f9ff;
+    border-color: #8bb5ec;
+}
+
+#container-M02002 .scenario-table-save-mode-option strong {
+    color: #102a4c;
+    font-size: 14px;
+}
+
+#container-M02002 .scenario-table-save-mode-option small {
+    color: #52657d;
+    font-size: 12px;
+    line-height: 1.55;
+}
+
+#container-M02002 .scenario-table-save-mode-icon {
+    align-items: center;
+    background: #e8f1ff;
+    color: #1d4f91;
+    display: inline-flex;
+    font-size: 17px;
+    height: 34px;
+    justify-content: center;
+    width: 34px;
+}
+
+#container-M02002 .scenario-table-save-mode-note {
+    color: #64748b;
+    font-size: 12px;
+}
+
 #container-M02002 .table-pair-meta {
     border: 1px solid #d8e0eb;
     margin-bottom: 6px;
@@ -198,6 +278,21 @@
     position: sticky;
     top: 0;
     z-index: 2;
+}
+
+@media (max-width: 720px) {
+    #container-M02002 .scenario-table-save-mode-options {
+        grid-template-columns: 1fr;
+    }
+
+    #container-M02002 .scenario-table-save-mode-option {
+        min-height: 0;
+    }
+
+    #container-M02002 .scenario-table-save-mode-dialog footer {
+        align-items: stretch;
+        flex-direction: column;
+    }
 }
 
 /* M02002 responsive selection workspace. */
