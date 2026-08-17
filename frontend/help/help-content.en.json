@@ -389,19 +389,22 @@
       ],
       "layout": [
         { "name": "Project / Scenario", "description": "The collapsible work scope shared by both tabs." },
-        { "name": "Rule Decision", "description": "Uses server paging and Run source, Run ID, rule type, and decision-status filters for discovered rules." },
+        { "name": "Rule Decision", "description": "Uses server paging and Run source, Run ID, rule type, decision status, and violation-presence filters for discovered rules." },
         { "name": "Rule Master", "description": "Separates selected discovered rules from user rules and provides the user-rule editor below the fixed-height grid." },
-        { "name": "Rule Detail Layer", "description": "Shows column labels, IF/THEN or f(x), evidence counts, confidence, lift, and prediction target." }
+        { "name": "Rule Detail Layer", "description": "Shows IF/THEN or f(x) details plus live violation count, rows, and SQL from the current full INITUP$ table." }
       ],
       "workflow": [
         "Select a project and scenario, then load the latest Run automatically or enter a Run ID.",
-        "Filter and inspect rule details, then select or exclude checked candidates.",
-        "Open Rule Master to review final rules or validate and save a user-defined association or formula rule."
+        "The default Error Rules Only filter returns rules that have stored violation-detection rows for the selected Run; switch to All or Normal Rules Only when needed.",
+        "Use Realtime to inspect actual violations in the current full INITUP$ table before selecting a rule.",
+        "Filter and inspect rule details, then select or exclude checked candidates; bulk selection validates every selected rule live first.",
+        "Open Rule Master to review final rules or validate a user-defined association or formula rule against the current full table before saving it."
       ],
       "controls": [
-        "Search: applies Run and rule filters through the server query.",
-        "Select / Exclude: processes checked discovered rules in bulk with an inline progress bar.",
-        "User Rule: validates and creates, updates, copies, or deletes a user-origin rule.",
+        "Search: applies Run, rule, decision, and violation-presence filters through the server query.",
+        "Realtime: runs server-generated read-only SQL against the current full INITUP$ table and shows actual violation rows.",
+        "Select / Exclude: validates selected rules live before selection and processes checked discovered rules with an inline progress bar.",
+        "User Rule: validates live and creates, updates, copies, or deletes a user-origin rule.",
         "Exclude Selection: excludes checked discovered-origin master rules.",
         "Grid tools: search, refresh, server paging, freeze columns, and export."
       ],
@@ -461,18 +464,19 @@
         "Trace events from rule decisions through final operational apply."
       ],
       "layout": [
-        { "name": "Effect Validation", "description": "Shows changed rows, expected/predicted matches, baseline Run, and INITDN$ reanalysis context." },
+        { "name": "Effect Validation", "description": "Loads a fast stored summary first and runs the full INITUP$/INITDN$ rule comparison only on demand." },
         { "name": "Production Apply", "description": "Shows DML versions by descending DML ID and an always-editable SQL editor with the selected DML ID." },
         { "name": "Full History", "description": "Filters and exports editing audit events for the selected work table." }
       ],
       "workflow": [
-        "Select one INITUP$/INITDN$ work-table row and validate the editing effect.",
+        "Select one INITUP$/INITDN$ work-table row, review the fast summary, and run Detailed Effect Analysis only when a full same-rule comparison is needed.",
         "Create a new DML or regenerate the selected version's initial SQL, then edit its name or SQL if needed.",
         "Validate explicitly or save directly; Save validates first and writes only when valid.",
         "Execute a validated and saved DML, then review the audit event."
       ],
       "controls": [
-        "Rerun Rule Discovery / Complete Effect Validation: links and validates INITDN$ analysis.",
+        "Detailed Effect Analysis: evaluates rules in bounded conditional-aggregation batches to reduce table scans.",
+        "Rerun Rule Discovery / Complete Effect Validation: links reanalysis and saves validation only after Detailed Effect Analysis is complete.",
         "Create New DML: adds a visible New · Unsaved row and server-generated PL/SQL.",
         "Regenerate Initial SQL: resets the selected version to the current editing changes.",
         "Validate DML / Save DML / Execute DML: validate, automatically validate-and-save, or commit the final apply.",

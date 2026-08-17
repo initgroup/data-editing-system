@@ -50,6 +50,7 @@ SQL_BIND_PATTERN = re.compile(r"(?<!:):([A-Za-z][A-Za-z0-9_]*)")
 ASSOCIATION_KEYWORDS = {"AND", "OR", "NOT", "IS", "NULL", "IN", "LIKE", "BETWEEN"}
 ASSOCIATION_FUNCTIONS = {"ABS", "LENGTH", "LOWER", "NVL", "ROUND", "TRIM", "TRUNC", "UPPER"}
 SYMBOLIC_FUNCTIONS = {"ABS", "EXP", "LN", "NVL", "POWER", "ROUND", "SQRT", "TRUNC"}
+RULE_EVALUATION_BATCH_SIZE = 100
 
 
 class RuleDecisionRequest(BaseModel):
@@ -476,6 +477,7 @@ def _validate_user_rule_with_cursor(
     rule_expression: Any,
     expected_value: Any,
     rule_tolerance_pct: Any,
+    include_rows: bool = False,
 ) -> dict[str, Any]:
     normalized_type = _normalize_choice(rule_type, USER_RULE_TYPES, "user rule type", "ASSOCIATION")
     columns = _table_column_map(cursor, target_owner, target_table)
@@ -494,36 +496,27 @@ def _validate_user_rule_with_cursor(
         columns=columns,
         target_column=target_column,
     )
-    target_object = f"{_quote_identifier(target_owner)}.{_quote_identifier(target_table)}"
     tolerance = _normalize_tolerance(rule_tolerance_pct) if normalized_type == "SYMBOLIC" else None
     try:
-        if normalized_type == "ASSOCIATION":
-            sql = _render_dynamic_sql(
-                "MCOMMON_EDIT_USER_RULE_VALIDATE_ASSOC",
-                {
-                    "conditionExpression": compiled_expression,
-                    "targetObject": target_object,
-                },
-            )
-            cursor.execute(sql, {"sampleLimit": 200})
-        else:
-            not_null_filter = "".join(
-                f'\n           AND T.{_quote_identifier(column_name)} IS NOT NULL'
-                for column_name in referenced_columns
-            )
-            sql = _render_dynamic_sql(
-                "MCOMMON_EDIT_USER_RULE_VALIDATE_SYMBOLIC",
-                {
-                    "formulaExpression": compiled_expression,
-                    "targetObject": target_object,
-                    "targetColumn": _quote_identifier(target_column),
-                    "notNullFilter": not_null_filter,
-                },
-            )
-            cursor.execute(sql, {"sampleLimit": 200})
-        result_columns = [item[0] for item in cursor.description or []]
-        result_row = cursor.fetchone()
-        validation_result = _row_to_dict(result_columns, result_row) if result_row else {}
+        validation_result = _fetch_live_rule_validation_page(
+            cursor,
+            {
+                "SOURCE_RULE_TYPE": normalized_type,
+                "USER_RULE_YN": "Y",
+                "TARGET_OWNER": target_owner,
+                "TARGET_TABLE": target_table,
+                "TARGET_COLUMN": target_column,
+                "CASE_ID_COLUMN": case_id_column,
+                "RULE_NAME": "USER_RULE_PREVIEW",
+                "RULE_EXPRESSION": rule_expression,
+                "EXPECTED_VALUE": expected_value,
+                "RULE_TOLERANCE_PCT": tolerance,
+            },
+            page=1,
+            page_size=20,
+            include_rows=include_rows,
+            table_columns_override=columns,
+        )
     except HTTPException:
         raise
     except Exception as exc:
@@ -536,14 +529,10 @@ def _validate_user_rule_with_cursor(
         "compiledExpression": compiled_expression,
         "referencedColumns": referenced_columns,
         "ruleTolerancePct": tolerance,
-        "sampleCount": int(validation_result.get("SAMPLE_COUNT") or 0),
-        "matchCount": (
-            int(validation_result.get("MATCH_COUNT") or 0)
-            if normalized_type == "ASSOCIATION"
-            else None
-        ),
-        "minPredictedValue": validation_result.get("MIN_PREDICTED_VALUE"),
-        "maxPredictedValue": validation_result.get("MAX_PREDICTED_VALUE"),
+        "queryMode": "LIVE",
+        "violationCount": int(validation_result.get("violationCount") or 0),
+        "generatedSql": validation_result.get("generatedSql") or "",
+        "data": validation_result.get("data") or [],
     }
 
 
@@ -1013,12 +1002,28 @@ def list_editing_tables(
                     detail="Cross-owner editing table mappings are not supported.",
                 )
             edit_table = mapping["EDIT_TABLE"]
-            latest_rules, latest_source_run = _list_latest_selected_source_rules(
+            latest_source_run = _latest_rule_run_for_target(
                 cursor,
                 project_id=normalized_project_id,
                 scenario_id=scenario_id,
-                source_owner=mapping["SOURCE_OWNER"],
-                source_table=mapping["SOURCE_TABLE"],
+                target_owner=mapping["SOURCE_OWNER"],
+                target_table=mapping["SOURCE_TABLE"],
+            )
+            rule_count = _fetch_one(
+                cursor,
+                "MCOMMON_EDIT_RULE_SELECTED_COUNT",
+                {
+                    "projectId": normalized_project_id,
+                    "scenarioId": scenario_id,
+                    "targetOwner": mapping["SOURCE_OWNER"],
+                    "targetTable": mapping["SOURCE_TABLE"],
+                    "runSourceType": (
+                        str(latest_source_run.get("RUN_SOURCE_TYPE") or "").upper()
+                        if latest_source_run
+                        else None
+                    ),
+                    "runId": int(latest_source_run.get("RUN_ID") or 0) if latest_source_run else None,
+                },
             )
             table_status = _editing_table_structure_status(
                 cursor,
@@ -1033,7 +1038,15 @@ def list_editing_tables(
                 edit_table=edit_table,
             )
             session_status = str(session.get("SESSION_STATUS") or "").upper() if session else None
-            expected_run_pair = _selected_rule_run_pair(latest_rules)
+            discovered_rule_count = int((rule_count or {}).get("DISCOVERED_RULE_COUNT") or 0)
+            expected_run_pair = (
+                (
+                    str(latest_source_run.get("RUN_SOURCE_TYPE") or "").upper(),
+                    int(latest_source_run.get("RUN_ID") or 0),
+                )
+                if latest_source_run and discovered_rule_count > 0
+                else None
+            )
             session_run_pair = (
                 (
                     str(session.get("SOURCE_RUN_SOURCE_TYPE") or "").upper(),
@@ -1051,7 +1064,7 @@ def list_editing_tables(
             result.append(
                 {
                     **row,
-                    "FINAL_RULE_COUNT": len(latest_rules),
+                    "FINAL_RULE_COUNT": int((rule_count or {}).get("FINAL_RULE_COUNT") or 0),
                     "SOURCE_RUN_SOURCE_TYPE": (
                         (latest_source_run or {}).get("RUN_SOURCE_TYPE")
                     ),
@@ -1239,6 +1252,7 @@ def list_rules(
     target_table: str | None = None,
     rule_group: str = "ALL",
     decision_status: str = "ALL",
+    violation_scope: str = "ERROR_ONLY",
     keyword: str | None = None,
     page: int = 1,
     page_size: int = 100,
@@ -1283,6 +1297,12 @@ def list_rules(
             "rule group",
             "ALL",
         )
+        normalized_violation_scope = _normalize_choice(
+            violation_scope,
+            {"ALL", "ERROR_ONLY", "NORMAL_ONLY"},
+            "violation scope",
+            "ERROR_ONLY",
+        )
         normalized_run_source = None
         normalized_run_id = None
         run_context = None
@@ -1321,6 +1341,7 @@ def list_rules(
                     "runId": None,
                     "ruleGroup": normalized_rule_group,
                     "decisionStatus": normalized_decision,
+                    "violationScope": normalized_violation_scope,
                     "latestRunSelected": False,
                     "targetOwner": normalized_target_owner,
                     "targetTable": normalized_target_table,
@@ -1358,6 +1379,7 @@ def list_rules(
             "targetTable": normalized_target_table,
             "ruleGroup": normalized_rule_group,
             "decisionStatus": normalized_decision,
+            "violationScope": normalized_violation_scope,
             "projectId": project_id,
             "scenarioId": scenario_id,
             "keyword": normalized_keyword,
@@ -1423,6 +1445,7 @@ def list_rules(
             "runId": normalized_run_id,
             "ruleGroup": normalized_rule_group,
             "decisionStatus": normalized_decision,
+            "violationScope": normalized_violation_scope,
             "latestRunSelected": latest_run_selected,
             "targetOwner": normalized_target_owner,
             "targetTable": normalized_target_table,
@@ -1463,6 +1486,7 @@ def validate_user_rule(request: Request, payload: UserRuleValidationRequest) -> 
             rule_expression=payload.ruleExpression,
             expected_value=payload.expectedValue,
             rule_tolerance_pct=payload.ruleTolerancePct,
+            include_rows=True,
         )
         return {"status": "success", "data": result}
     finally:
@@ -2306,6 +2330,238 @@ def _build_live_rule_violation_sql(
         params["violationReason"] = "최종 수식 규칙의 예측값이 허용 오차를 벗어났습니다."
         sql_id = "MCOMMON_EDIT_LIVE_VIOLATION_SYMBOLIC"
     return _render_dynamic_sql(sql_id, replacements).strip().rstrip(";"), params
+
+
+def _fetch_live_rule_validation_page(
+    cursor,
+    rule: dict[str, Any],
+    *,
+    page: int,
+    page_size: int,
+    include_rows: bool = True,
+    table_columns_override: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    base_sql, params = _build_live_rule_violation_sql(
+        cursor,
+        rule,
+        None,
+        table_columns_override=table_columns_override,
+    )
+    try:
+        cursor.execute(
+            f"SELECT COUNT(*) AS TOTAL_COUNT FROM ({base_sql}) Q",
+            params,
+        )
+        total_row = cursor.fetchone()
+        total = int(total_row[0] or 0) if total_row else 0
+        page_window = create_page_window(page, page_size, total)
+        rows: list[dict[str, Any]] = []
+        if include_rows and total:
+            paged_sql = (
+                "SELECT P.* "
+                "  FROM ("
+                "        SELECT Q.* "
+                "             , ROW_NUMBER() OVER ("
+                "                   ORDER BY Q.VIOLATION_SCORE DESC NULLS LAST"
+                "                          , Q.CASE_ID"
+                "                          , Q.CASE_ROWID"
+                "               ) AS RN__ "
+                f"          FROM ({base_sql}) Q"
+                "       ) P "
+                " WHERE P.RN__ > :offset "
+                "   AND P.RN__ <= :endRow "
+                " ORDER BY P.RN__"
+            )
+            cursor.execute(
+                paged_sql,
+                {
+                    **params,
+                    "offset": page_window.offset,
+                    "endRow": page_window.offset + page_window.page_size,
+                },
+            )
+            columns = [item[0] for item in cursor.description or []]
+            rows = [_row_to_dict(columns, row) for row in cursor.fetchall()]
+            for row in rows:
+                row.pop("RN__", None)
+        return {
+            "queryMode": "LIVE",
+            "violationCount": total,
+            "generatedSql": base_sql,
+            "data": rows,
+            **page_window.response_metadata(),
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        rule_name = str(
+            rule.get("RULE_NAME")
+            or rule.get("SOURCE_RULE_ID")
+            or "미등록 규칙"
+        )
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"규칙 '{rule_name}'의 실시간 위반 SQL을 실행할 수 없습니다. "
+                f"규칙 표현식과 실제 INITUP$ 테이블 컬럼을 확인하세요. ({exc})"
+            ),
+        ) from exc
+
+
+def validate_discovered_rule_live(
+    request: Request,
+    payload: RuleDecisionRequest,
+    *,
+    page: int = 1,
+    page_size: int = 20,
+) -> dict[str, Any]:
+    source_rule_type = _normalize_choice(
+        payload.sourceRuleType,
+        USER_RULE_TYPES,
+        "source rule type",
+        "ASSOCIATION",
+    )
+    if payload.userRuleYn:
+        raise HTTPException(
+            status_code=400,
+            detail="사용자 규칙은 규칙 마스터의 실시간 규칙 검증을 사용하세요.",
+        )
+    run_source_type = (
+        _normalize_choice(
+            payload.runSourceType,
+            {"DATA_WORK", "FLOW_WORK"},
+            "run source type",
+            "FLOW_WORK",
+        )
+        if payload.runSourceType
+        else None
+    )
+    source_owner = _normalize_optional_identifier(payload.sourceOwner, "source owner")
+    source_object_name = _normalize_optional_identifier(
+        payload.sourceObjectName,
+        "source object name",
+    )
+    source_rule_id = _normalize_text(payload.sourceRuleId, 128) or None
+    if not all(
+        [
+            run_source_type,
+            payload.runId,
+            source_owner,
+            source_object_name,
+            source_rule_id,
+        ]
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="실시간 확인할 발굴 규칙의 원본 정보가 올바르지 않습니다.",
+        )
+    discovery_target_owner = _normalize_identifier(payload.targetOwner, "target owner")
+    discovery_target_table = _normalize_identifier(payload.targetTable, "target table")
+    target_column = _normalize_identifier(payload.targetColumn, "target column")
+    case_id_column = _normalize_optional_identifier(payload.caseIdColumn, "case ID column")
+
+    conn = get_target_db_connection(request)
+    cursor = conn.cursor()
+    try:
+        run_context = _resolve_run_context(
+            cursor,
+            run_source_type=str(run_source_type),
+            run_id=int(payload.runId),
+        )
+        project_id = _require_project_access(
+            cursor,
+            request,
+            int(run_context.get("PROJECT_ID") or 0),
+        )
+        scenario_id = int(run_context.get("SCENARIO_ID") or 0)
+        if payload.projectId is not None and int(payload.projectId) != project_id:
+            raise HTTPException(
+                status_code=400,
+                detail="실시간 확인 규칙의 프로젝트가 원본 Run과 일치하지 않습니다.",
+            )
+        if payload.scenarioId is not None and int(payload.scenarioId) != scenario_id:
+            raise HTTPException(
+                status_code=400,
+                detail="실시간 확인 규칙의 시나리오가 원본 Run과 일치하지 않습니다.",
+            )
+        target_mapping = _require_rule_target_table_access(
+            cursor,
+            project_id=project_id,
+            scenario_id=scenario_id,
+            target_owner=discovery_target_owner,
+            target_table=discovery_target_table,
+        )
+        source_detail = _fetch_one(
+            cursor,
+            (
+                "MCOMMON_EDIT_RULE_SOURCE_ASSOC_DETAIL"
+                if source_rule_type == "ASSOCIATION"
+                else "MCOMMON_EDIT_RULE_SOURCE_SYMBOLIC_DETAIL"
+            ),
+            {
+                "runSourceType": run_source_type,
+                "runId": int(payload.runId),
+                "sourceOwner": source_owner,
+                "sourceObjectName": source_object_name,
+                "sourceRuleId": source_rule_id,
+                "targetOwner": discovery_target_owner,
+                "targetTable": discovery_target_table,
+                "targetColumn": target_column,
+            },
+        )
+        if not source_detail:
+            raise HTTPException(
+                status_code=404,
+                detail="실시간 확인할 발굴 규칙 원본을 찾을 수 없습니다.",
+            )
+        rule = {
+            **source_detail,
+            "EDIT_RULE_ID": payload.editRuleId,
+            "SOURCE_RULE_TYPE": source_rule_type,
+            "USER_RULE_YN": "N",
+            "SOURCE_RULE_ID": source_rule_id,
+            "TARGET_OWNER": target_mapping["SOURCE_OWNER"],
+            "TARGET_TABLE": target_mapping["SOURCE_TABLE"],
+            "TARGET_COLUMN": target_column,
+            "CASE_ID_COLUMN": case_id_column,
+            "RULE_NAME": payload.ruleName or source_rule_id,
+            "RULE_TOLERANCE_PCT": payload.ruleTolerancePct,
+        }
+        validation = _fetch_live_rule_validation_page(
+            cursor,
+            rule,
+            page=page,
+            page_size=page_size,
+            include_rows=True,
+        )
+        return {
+            "status": "success",
+            "data": validation["data"],
+            "rule": rule,
+            "queryMode": validation["queryMode"],
+            "violationCount": validation["violationCount"],
+            "generatedSql": validation["generatedSql"],
+            "targetOwner": target_mapping["SOURCE_OWNER"],
+            "targetTable": target_mapping["SOURCE_TABLE"],
+            "runSourceType": run_source_type,
+            "runId": int(payload.runId),
+            **{
+                key: validation[key]
+                for key in ("page", "pageSize", "total", "totalPages")
+                if key in validation
+            },
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Discovered rule live validation failed.")
+        raise HTTPException(
+            status_code=500,
+            detail=f"발굴 규칙 실시간 확인 중 오류가 발생했습니다. 상세: {exc}",
+        ) from exc
+    finally:
+        cursor.close()
+        conn.close()
 
 
 def _build_live_rule_violation_union_sql(
@@ -3799,35 +4055,116 @@ def _evaluate_rules_on_table(
     if not rules:
         return []
     table_columns = _table_column_map(cursor, target_owner, target_table)
-    base_sql, params = _build_live_rule_violation_union_sql(
-        cursor,
-        rules,
-        None,
-        target_owner_override=target_owner,
-        target_table_override=target_table,
-        source_rowid_column=source_rowid_column,
-        table_columns_override=table_columns,
-    )
-    cursor.execute(
-        (
-            "SELECT V.EDIT_RULE_ID"
-            "     , V.RULE_NAME"
-            "     , V.SOURCE_RULE_TYPE"
-            "     , V.TARGET_COLUMN"
-            "     , COUNT(*) AS VIOLATION_COUNT"
-            "     , COUNT(DISTINCT V.CASE_ROWID) AS VIOLATED_ROW_COUNT"
-            f"  FROM ({base_sql}) V"
-            " GROUP BY V.EDIT_RULE_ID"
-            "        , V.RULE_NAME"
-            "        , V.SOURCE_RULE_TYPE"
-            "        , V.TARGET_COLUMN"
-            " ORDER BY V.SOURCE_RULE_TYPE"
-            "        , V.EDIT_RULE_ID"
-        ),
-        params,
-    )
-    columns = [item[0] for item in cursor.description or []]
-    return [_row_to_dict(columns, row) for row in cursor.fetchall()]
+    normalized_owner = _normalize_identifier(target_owner, "target owner")
+    normalized_table = _normalize_identifier(target_table, "target table")
+    target_object = f"{_quote_identifier(normalized_owner)}.{_quote_identifier(normalized_table)}"
+    evaluation_rows: list[dict[str, Any]] = []
+
+    for batch_start in range(0, len(rules), RULE_EVALUATION_BATCH_SIZE):
+        batch = rules[batch_start:batch_start + RULE_EVALUATION_BATCH_SIZE]
+        metric_expressions: list[str] = []
+        batch_params: dict[str, Any] = {}
+        batch_metadata: list[dict[str, Any]] = []
+        for index, rule in enumerate(batch):
+            source_type = str(rule.get("SOURCE_RULE_TYPE") or "ASSOCIATION").upper()
+            if source_type == "USER":
+                source_type = "ASSOCIATION"
+            source_type = _normalize_choice(
+                source_type,
+                USER_RULE_TYPES,
+                "rule type",
+                "ASSOCIATION",
+            )
+            target_column = _normalize_identifier(rule.get("TARGET_COLUMN"), "target column")
+            if target_column not in table_columns:
+                raise HTTPException(
+                    status_code=409,
+                    detail="최종 규칙의 대상 컬럼이 효과 검증 테이블에 없습니다.",
+                )
+            discovered_association = bool(
+                source_type == "ASSOCIATION"
+                and str(rule.get("USER_RULE_YN") or "N").upper() != "Y"
+                and rule.get("SOURCE_RULE_ID")
+            )
+            if discovered_association:
+                compiled_expression, referenced_columns = _compile_discovered_association_expression(
+                    rule.get("RULE_EXPRESSION"),
+                    columns=table_columns,
+                )
+            else:
+                compiled_expression, referenced_columns = _compile_user_rule_expression(
+                    rule.get("RULE_EXPRESSION"),
+                    rule_type=source_type,
+                    columns=table_columns,
+                    target_column=target_column,
+                )
+
+            suffix = f"_{index}"
+            target_expression = f'T.{_quote_identifier(target_column)}'
+            if source_type == "ASSOCIATION":
+                expected_value = rule.get("EXPECTED_VALUE")
+                if expected_value is None or not str(expected_value).strip():
+                    raise HTTPException(status_code=409, detail="최종 연관 규칙에 THEN 결과값이 없습니다.")
+                condition = (
+                    f"({compiled_expression}) "
+                    f"AND NVL(TO_CHAR({target_expression}), CHR(0)) "
+                    f"<> NVL(:expectedValue{suffix}, CHR(0))"
+                )
+                batch_params[f"expectedValue{suffix}"] = expected_value
+            else:
+                tolerance_value = (
+                    rule.get("RULE_TOLERANCE_PCT")
+                    if rule.get("RULE_TOLERANCE_PCT") is not None
+                    else rule.get("RULE_LIFT")
+                )
+                not_null_conditions = " ".join(
+                    f'AND T.{_quote_identifier(column_name)} IS NOT NULL'
+                    for column_name in referenced_columns
+                )
+                condition = (
+                    f"{target_expression} IS NOT NULL "
+                    f"{not_null_conditions} "
+                    f"AND ({compiled_expression}) IS NOT NULL "
+                    f"AND ABS({target_expression} - ({compiled_expression})) "
+                    f"> GREATEST(ABS({target_expression}) * (:tolerancePct{suffix} / 100), 0.000000001)"
+                )
+                batch_params[f"tolerancePct{suffix}"] = _normalize_tolerance(tolerance_value)
+
+            alias = f"RULE_{index}_COUNT"
+            metric_expressions.append(
+                f"SUM(CASE WHEN {condition} THEN 1 ELSE 0 END) AS {alias}"
+            )
+            batch_metadata.append(
+                {
+                    "alias": alias,
+                    "EDIT_RULE_ID": int(rule.get("EDIT_RULE_ID") or 0),
+                    "RULE_NAME": rule.get("RULE_NAME") or rule.get("SOURCE_RULE_ID"),
+                    "SOURCE_RULE_TYPE": source_type,
+                    "TARGET_COLUMN": target_column,
+                }
+            )
+
+        aggregate_sql = _render_dynamic_sql(
+            "MCOMMON_EDIT_RULE_AGGREGATE_EVALUATION",
+            {
+                "metricExpressions": "\n     , ".join(metric_expressions),
+                "targetObject": target_object,
+            },
+        )
+        cursor.execute(aggregate_sql, batch_params)
+        result_columns = [item[0] for item in cursor.description or []]
+        result_row = cursor.fetchone()
+        result = _row_to_dict(result_columns, result_row) if result_row else {}
+        for metadata in batch_metadata:
+            violation_count = int(result.get(metadata.pop("alias")) or 0)
+            evaluation_rows.append(
+                {
+                    **metadata,
+                    "VIOLATION_COUNT": violation_count,
+                    "VIOLATED_ROW_COUNT": violation_count,
+                }
+            )
+    return evaluation_rows
 
 
 def _finite_number(value: Any) -> float | None:
@@ -3968,6 +4305,9 @@ def _build_edit_analysis(
     symbolic_changes = [row for row in applied_changes if normalized_rule_type(row) == "SYMBOLIC"]
     categorical_rules = [row for row in rules if normalized_rule_type(row) == "ASSOCIATION"]
     symbolic_rules = [row for row in rules if normalized_rule_type(row) == "SYMBOLIC"]
+    categorical_changes_by_rule: dict[int, list[dict[str, Any]]] = {}
+    for row in categorical_changes:
+        categorical_changes_by_rule.setdefault(int(row.get("EDIT_RULE_ID") or 0), []).append(row)
 
     def evaluation_totals(rule_rows: list[dict[str, Any]], evaluation_map: dict[int, dict[str, Any]]) -> tuple[int | None, int | None]:
         if source_evaluation is None or edit_evaluation is None:
@@ -3999,7 +4339,7 @@ def _build_edit_analysis(
     categorical_rule_details: list[dict[str, Any]] = []
     for rule in categorical_rules:
         edit_rule_id = int(rule.get("EDIT_RULE_ID") or 0)
-        rule_changes = [row for row in categorical_changes if int(row.get("EDIT_RULE_ID") or 0) == edit_rule_id]
+        rule_changes = categorical_changes_by_rule.get(edit_rule_id, [])
         source_result = source_eval_map.get(edit_rule_id, {})
         edit_result = edit_eval_map.get(edit_rule_id, {})
         source_count = int(source_result.get("VIOLATION_COUNT") or 0) if source_evaluation is not None else None
@@ -4025,6 +4365,7 @@ def _build_edit_analysis(
         )
 
     continuous_records: list[dict[str, Any]] = []
+    continuous_records_by_rule: dict[int, list[dict[str, Any]]] = {}
     continuous_non_numeric_count = 0
     for row in symbolic_changes:
         old_value = _finite_number(row.get("OLD_VALUE"))
@@ -4046,8 +4387,7 @@ def _build_edit_analysis(
         epsilon = 0.000000001
         allowed_error = max(abs(new_value) * tolerance_pct / 100, epsilon)
         difference = after_abs_error - before_abs_error
-        continuous_records.append(
-            {
+        continuous_record = {
                 "EDIT_CHANGE_ID": row.get("EDIT_CHANGE_ID"),
                 "EDIT_RULE_ID": row.get("EDIT_RULE_ID"),
                 "RULE_NAME": row.get("RULE_NAME") or rule.get("RULE_NAME"),
@@ -4066,13 +4406,17 @@ def _build_edit_analysis(
                 "WITHIN_TOLERANCE": after_abs_error <= allowed_error,
                 "ERROR_DIRECTION": "IMPROVED" if difference < -epsilon else ("WORSENED" if difference > epsilon else "UNCHANGED"),
             }
-        )
+        continuous_records.append(continuous_record)
+        continuous_records_by_rule.setdefault(
+            int(row.get("EDIT_RULE_ID") or 0),
+            [],
+        ).append(continuous_record)
     continuous_metrics = _continuous_error_metrics(continuous_records)
 
     continuous_rule_details: list[dict[str, Any]] = []
     for rule in symbolic_rules:
         edit_rule_id = int(rule.get("EDIT_RULE_ID") or 0)
-        rule_records = [row for row in continuous_records if int(row.get("EDIT_RULE_ID") or 0) == edit_rule_id]
+        rule_records = continuous_records_by_rule.get(edit_rule_id, [])
         effective_tolerance_pct = _finite_number(rule.get("RULE_TOLERANCE_PCT"))
         tolerance_defaulted = False
         if effective_tolerance_pct is None:
@@ -4111,8 +4455,9 @@ def _build_edit_analysis(
         if symbolic_source_violations is not None and symbolic_edit_violations is not None
         else None
     )
+    evaluation_deferred = evaluation_error == "FULL_ANALYSIS_DEFERRED"
     categorical_status = "NOT_APPLICABLE" if not categorical_rules else (
-        "UNAVAILABLE" if evaluation_error else (
+        "PENDING" if evaluation_deferred else "UNAVAILABLE" if evaluation_error else (
             "REVIEW" if (
                 categorical_edit_violations is None
                 or categorical_edit_violations > 0
@@ -4124,7 +4469,7 @@ def _build_edit_analysis(
         )
     )
     continuous_status = "NOT_APPLICABLE" if not symbolic_rules else (
-        "UNAVAILABLE" if evaluation_error else (
+        "PENDING" if evaluation_deferred else "UNAVAILABLE" if evaluation_error else (
             "REVIEW" if (
                 symbolic_edit_violations is None
                 or symbolic_edit_violations > 0
@@ -4152,6 +4497,7 @@ def _build_edit_analysis(
         reanalysis_status = "PENDING"
     overall_status = "PENDING" if not applied_changes else (
         "PENDING" if reanalysis_flow_run_id and reanalysis_run_status != "SUCCESS"
+        else "PENDING" if evaluation_deferred
         else "REVIEW" if evaluation_error or {categorical_status, continuous_status} & {"REVIEW", "UNAVAILABLE"}
         else "READY"
     )
@@ -4259,14 +4605,17 @@ def _count_session_violations(
     run_id: int | None,
     target_owner: str | None,
     target_table: str | None,
+    *,
+    rules: list[dict[str, Any]] | None = None,
 ) -> int | None:
     if not run_source_type or not run_id or not target_owner or not target_table:
         return None
-    rules = _fetch_all(
-        cursor,
-        "MCOMMON_EDIT_SESSION_RULE_LIST",
-        {"editSessionId": edit_session_id},
-    )
+    if rules is None:
+        rules = _fetch_all(
+            cursor,
+            "MCOMMON_EDIT_SESSION_RULE_LIST",
+            {"editSessionId": edit_session_id},
+        )
     target_columns = {
         str(rule.get("TARGET_COLUMN") or "").upper()
         for rule in rules
@@ -4316,12 +4665,107 @@ def _load_effect_validation_snapshot(cursor, edit_session_id: int) -> dict[str, 
     }
 
 
+def _load_validation_change_page(
+    cursor,
+    session: dict[str, Any],
+    edit_session_id: int,
+    *,
+    keyword: str | None,
+    page: int,
+    page_size: int,
+    total_hint: Any = None,
+) -> dict[str, Any]:
+    normalized_keyword = _normalize_text(keyword, 200) or None
+    if normalized_keyword or total_hint is None:
+        count_row = _fetch_one(
+            cursor,
+            "MCOMMON_EDIT_VALIDATION_CHANGE_COUNT",
+            {
+                "editSessionId": edit_session_id,
+                "keyword": normalized_keyword,
+            },
+        ) or {}
+        total = int(count_row.get("TOTAL_COUNT") or 0)
+    else:
+        total = int(total_hint or 0)
+    page_window = create_page_window(page, page_size, total)
+    rows = (
+        _fetch_all(
+            cursor,
+            "MCOMMON_EDIT_VALIDATION_CHANGE_PAGE",
+            {
+                "editSessionId": edit_session_id,
+                "keyword": normalized_keyword,
+                "offset": page_window.offset,
+                "endRow": page_window.offset + page_window.page_size,
+            },
+        )
+        if total
+        else []
+    )
+    for row in rows:
+        row.pop("RN__", None)
+        row["TARGET_OWNER"] = row.get("TARGET_OWNER") or session.get("TARGET_OWNER")
+        row["TARGET_TABLE"] = row.get("TARGET_TABLE") or session.get("SOURCE_TABLE")
+    _attach_column_metadata(cursor, rows, column_keys=("COLUMN_NAME",))
+    return {
+        "CHANGE_ROWS": rows,
+        "CHANGE_TOTAL": page_window.total,
+        "CHANGE_PAGE": page_window.current_page,
+        "CHANGE_PAGE_SIZE": page_window.page_size,
+        "CHANGE_TOTAL_PAGES": page_window.total_pages,
+    }
+
+
+def _build_deferred_validation_analysis(
+    session: dict[str, Any],
+    summary: dict[str, Any],
+    *,
+    evaluation_error: str,
+) -> dict[str, Any]:
+    analysis = _build_edit_analysis(
+        session=session,
+        summary=summary,
+        changes=[],
+        rules=[],
+        source_evaluation=None,
+        edit_evaluation=None,
+        evaluation_error=evaluation_error,
+    )
+    applied_change_count = int(summary.get("APPLIED_CHANGE_COUNT") or 0)
+    changed_row_count = int(summary.get("CHANGED_ROW_COUNT") or 0)
+    expected_match_count = int(summary.get("EXPECTED_MATCH_COUNT") or 0)
+    overall = analysis["OVERALL"]
+    overall.update(
+        {
+            "APPLIED_CHANGE_COUNT": applied_change_count,
+            "CHANGED_ROW_COUNT": changed_row_count,
+            "CHANGED_ROW_RATE": _ratio(
+                changed_row_count,
+                int(session.get("SOURCE_ROW_COUNT") or 0),
+            ),
+            "EXPECTED_MATCH_COUNT": expected_match_count,
+            "EXPECTED_MATCH_RATE": _ratio(expected_match_count, applied_change_count),
+        }
+    )
+    if applied_change_count:
+        for key in ("CATEGORICAL", "CONTINUOUS"):
+            analysis[key]["STATUS"] = "PENDING"
+            analysis[key]["AVAILABLE"] = None
+    analysis["METHOD_VERSION"] = "EDIT_EFFECT_SUMMARY_V1"
+    return analysis
+
+
 def _build_validation_data(
     cursor,
     session: dict[str, Any],
     edit_session_id: int,
     *,
     include_changes: bool = False,
+    evaluate_rules: bool = True,
+    change_keyword: str | None = None,
+    change_page: int = 1,
+    change_page_size: int = 100,
 ) -> dict[str, Any]:
     session_status = str(session.get("SESSION_STATUS") or "").upper()
     post_apply_snapshot_missing = False
@@ -4333,18 +4777,20 @@ def _build_validation_data(
                 **session,
                 "ANALYSIS_SOURCE": "VALIDATION_SNAPSHOT",
                 "VALIDATION_SNAPSHOT_AT": snapshot.get("VALIDATION_SNAPSHOT_AT"),
+                "FULL_ANALYSIS_READY": True,
             }
             if include_changes:
-                snapshot_changes = _fetch_all(
-                    cursor,
-                    "MCOMMON_EDIT_CHANGE_LIST",
-                    {"editSessionId": edit_session_id, "changeStatus": "ALL"},
+                snapshot_data.update(
+                    _load_validation_change_page(
+                        cursor,
+                        session,
+                        edit_session_id,
+                        keyword=change_keyword,
+                        page=change_page,
+                        page_size=change_page_size,
+                        total_hint=snapshot_data.get("TOTAL_CHANGE_COUNT"),
+                    )
                 )
-                for row in snapshot_changes:
-                    row["TARGET_OWNER"] = row.get("TARGET_OWNER") or session.get("TARGET_OWNER")
-                    row["TARGET_TABLE"] = row.get("TARGET_TABLE") or session.get("SOURCE_TABLE")
-                _attach_column_metadata(cursor, snapshot_changes, column_keys=("COLUMN_NAME",))
-                snapshot_data["CHANGE_ROWS"] = snapshot_changes
             return snapshot_data
         post_apply_snapshot_missing = True
     summary = _fetch_one(
@@ -4356,22 +4802,6 @@ def _build_validation_data(
     baseline_run_type = "FLOW_WORK" if baseline_flow_run_id else session.get("SOURCE_RUN_SOURCE_TYPE")
     baseline_run_id = baseline_flow_run_id or session.get("SOURCE_RUN_ID")
     reanalysis_run_id = session.get("REANALYSIS_FLOW_RUN_ID")
-    baseline_count = _count_session_violations(
-        cursor,
-        edit_session_id,
-        str(baseline_run_type or "") or None,
-        int(baseline_run_id) if baseline_run_id else None,
-        session.get("TARGET_OWNER"),
-        session.get("SOURCE_TABLE"),
-    )
-    reanalysis_count = _count_session_violations(
-        cursor,
-        edit_session_id,
-        "FLOW_WORK" if reanalysis_run_id else None,
-        int(reanalysis_run_id) if reanalysis_run_id else None,
-        session.get("TARGET_OWNER"),
-        session.get("EDIT_TABLE"),
-    )
     reanalysis_run = (
         _fetch_one(
             cursor,
@@ -4380,6 +4810,76 @@ def _build_validation_data(
         )
         if reanalysis_run_id
         else None
+    )
+    if not evaluate_rules:
+        validation_data = {
+            **session,
+            **summary,
+            "BASELINE_VIOLATION_COUNT": None,
+            "REANALYSIS_VIOLATION_COUNT": None,
+            "VIOLATION_REDUCTION_COUNT": None,
+            "VIOLATION_REDUCTION_RATE": None,
+            "REANALYSIS_RUN_STATUS": (reanalysis_run or {}).get("STATUS"),
+            "REANALYSIS_RUN_MESSAGE": (reanalysis_run or {}).get("MESSAGE"),
+            "REANALYSIS_RUN_STARTED_AT": (reanalysis_run or {}).get("STARTED_AT"),
+            "REANALYSIS_RUN_FINISHED_AT": (reanalysis_run or {}).get("FINISHED_AT"),
+        }
+        validation_data["EDIT_ANALYSIS"] = _build_deferred_validation_analysis(
+            session,
+            validation_data,
+            evaluation_error=(
+                "VALIDATION_SNAPSHOT_UNAVAILABLE"
+                if post_apply_snapshot_missing
+                else "FULL_ANALYSIS_DEFERRED"
+            ),
+        )
+        validation_data["ANALYSIS_SOURCE"] = (
+            "POST_APPLY_HISTORY_WITHOUT_SNAPSHOT"
+            if post_apply_snapshot_missing
+            else "EDIT_EXECUTION_SUMMARY"
+        )
+        validation_data["FULL_ANALYSIS_READY"] = False
+        if include_changes:
+            validation_data.update(
+                _load_validation_change_page(
+                    cursor,
+                    session,
+                    edit_session_id,
+                    keyword=change_keyword,
+                    page=change_page,
+                    page_size=change_page_size,
+                    total_hint=summary.get("TOTAL_CHANGE_COUNT"),
+                )
+            )
+        return validation_data
+
+    changes = _fetch_all(
+        cursor,
+        "MCOMMON_EDIT_CHANGE_LIST",
+        {"editSessionId": edit_session_id, "changeStatus": "ALL"},
+    )
+    rules = _fetch_all(
+        cursor,
+        "MCOMMON_EDIT_SESSION_RULE_LIST",
+        {"editSessionId": edit_session_id},
+    )
+    baseline_count = _count_session_violations(
+        cursor,
+        edit_session_id,
+        str(baseline_run_type or "") or None,
+        int(baseline_run_id) if baseline_run_id else None,
+        session.get("TARGET_OWNER"),
+        session.get("SOURCE_TABLE"),
+        rules=rules,
+    )
+    reanalysis_count = _count_session_violations(
+        cursor,
+        edit_session_id,
+        "FLOW_WORK" if reanalysis_run_id else None,
+        int(reanalysis_run_id) if reanalysis_run_id else None,
+        session.get("TARGET_OWNER"),
+        session.get("EDIT_TABLE"),
+        rules=rules,
     )
     reduction_count = (
         baseline_count - reanalysis_count
@@ -4403,16 +4903,6 @@ def _build_validation_data(
         "REANALYSIS_RUN_STARTED_AT": (reanalysis_run or {}).get("STARTED_AT"),
         "REANALYSIS_RUN_FINISHED_AT": (reanalysis_run or {}).get("FINISHED_AT"),
     }
-    changes = _fetch_all(
-        cursor,
-        "MCOMMON_EDIT_CHANGE_LIST",
-        {"editSessionId": edit_session_id, "changeStatus": "ALL"},
-    )
-    rules = _fetch_all(
-        cursor,
-        "MCOMMON_EDIT_SESSION_RULE_LIST",
-        {"editSessionId": edit_session_id},
-    )
     if _edit_rule_tolerance_column_exists(cursor):
         tolerance_map = {
             int(row.get("EDIT_RULE_ID") or 0): row.get("RULE_TOLERANCE_PCT")
@@ -4460,7 +4950,7 @@ def _build_validation_data(
         evaluation_error = "SAME_RULE_EVALUATION_UNAVAILABLE"
     else:
         evaluation_error = None
-    if not evaluation_error:
+    if not evaluation_error and evaluate_rules:
         try:
             source_evaluation = _evaluate_rules_on_table(
                 cursor,
@@ -4482,6 +4972,11 @@ def _build_validation_data(
                 edit_session_id,
                 str(exc.detail if isinstance(exc, HTTPException) else exc),
             )
+    elif not evaluation_error and analysis_rules:
+        evaluation_error = "FULL_ANALYSIS_DEFERRED"
+    elif not evaluation_error:
+        source_evaluation = []
+        edit_evaluation = []
     validation_data["EDIT_ANALYSIS"] = _build_edit_analysis(
         session=session,
         summary=validation_data,
@@ -4494,18 +4989,39 @@ def _build_validation_data(
     validation_data["ANALYSIS_SOURCE"] = (
         "POST_APPLY_HISTORY_WITHOUT_SNAPSHOT"
         if post_apply_snapshot_missing
-        else "LIVE"
+        else ("LIVE" if evaluate_rules else "SUMMARY")
     )
+    validation_data["FULL_ANALYSIS_READY"] = bool(evaluate_rules and not evaluation_error)
     if include_changes:
-        for row in changes:
-            row["TARGET_OWNER"] = row.get("TARGET_OWNER") or session.get("TARGET_OWNER")
-            row["TARGET_TABLE"] = row.get("TARGET_TABLE") or session.get("SOURCE_TABLE")
-        _attach_column_metadata(cursor, changes, column_keys=("COLUMN_NAME",))
-        validation_data["CHANGE_ROWS"] = changes
+        validation_data.update(
+            _load_validation_change_page(
+                cursor,
+                session,
+                edit_session_id,
+                keyword=change_keyword,
+                page=change_page,
+                page_size=change_page_size,
+                total_hint=summary.get("TOTAL_CHANGE_COUNT"),
+            )
+        )
     return validation_data
 
 
-def validation_summary(request: Request, edit_session_id: int) -> dict[str, Any]:
+def validation_summary(
+    request: Request,
+    edit_session_id: int,
+    *,
+    analysis_mode: str = "SUMMARY",
+    keyword: str | None = None,
+    page: int = 1,
+    page_size: int = 100,
+) -> dict[str, Any]:
+    normalized_analysis_mode = _normalize_choice(
+        analysis_mode,
+        {"SUMMARY", "FULL"},
+        "analysis mode",
+        "SUMMARY",
+    )
     conn = get_target_db_connection(request)
     cursor = conn.cursor()
     try:
@@ -4517,7 +5033,12 @@ def validation_summary(request: Request, edit_session_id: int) -> dict[str, Any]
                 session,
                 edit_session_id,
                 include_changes=True,
+                evaluate_rules=normalized_analysis_mode == "FULL",
+                change_keyword=keyword,
+                change_page=page,
+                change_page_size=page_size,
             ),
+            "analysisMode": normalized_analysis_mode,
         }
     finally:
         cursor.close()

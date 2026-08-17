@@ -72,12 +72,14 @@
             freezeColumnsInitialized: false,
             ruleRunSource: "",
             ruleRunId: "",
+            latestRuleRunId: "",
             ruleTargetTables: [],
             ruleTargetOwner: "",
             ruleTargetTable: "",
             ruleTargetRole: "SOURCE",
             ruleGroup: "ALL",
             ruleDecisionStatus: "ALL",
+            ruleViolationScope: "ERROR_ONLY",
             stageFilters: {},
             serverPaging: false,
             serverTotalRows: 0,
@@ -112,9 +114,11 @@
             violationRuleScopeIds: new Set(),
             generatedViolationSql: "",
             editingWorkStarting: false,
+            skipNextOnShow: false,
 
             async init() {
                 this.initialized = false;
+                this.skipNextOnShow = true;
                 this.resetTransientState();
                 this.pendingContext = this.readPendingContext();
                 const stored = this.readContext();
@@ -132,6 +136,7 @@
                 this.ruleTargetTable = String(this.pendingContext.targetTable || stored.targetTable || "").toUpperCase();
                 this.ruleGroup = String(stored.ruleGroup || "ALL").toUpperCase();
                 this.ruleDecisionStatus = String(stored.ruleDecisionStatus || "ALL").toUpperCase();
+                this.ruleViolationScope = String(stored.ruleViolationScope || "ERROR_ONLY").toUpperCase();
                 this.renderShell();
                 await this.loadProjects(this.pendingContext.projectId || stored.projectId || "");
                 if (!getContainerEl(`#projectId-${PAGE_CODE}`)?.value) {
@@ -143,11 +148,19 @@
                 await this.loadScenarios(this.pendingContext.scenarioId || stored.scenarioId || "");
                 if (PAGE_CODE === "M05001") await this.loadRuleTargetTables();
                 if (this.usesEditSession()) {
-                    await this.loadSessions(this.pendingContext.editSessionId || stored.editSessionId || "");
+                    const preferredSessionId = this.pendingContext.editSessionId || stored.editSessionId || "";
+                    if (PAGE_CODE === "M05003") {
+                        await Promise.all([
+                            this.loadSessions(preferredSessionId),
+                            this.loadViolationSourceTables()
+                        ]);
+                    } else {
+                        await this.loadSessions(preferredSessionId);
+                    }
                 }
                 this.persistContext();
                 this.setWorkContextCollapsed(true);
-                if (PAGE_CODE === "M05001") {
+                if (["M05001", "M05003"].includes(PAGE_CODE)) {
                     this.initialized = true;
                     void this.refresh();
                     return;
@@ -158,6 +171,10 @@
 
             async onShow() {
                 if (!this.initialized || this.contextSyncing) return;
+                if (this.skipNextOnShow) {
+                    this.skipNextOnShow = false;
+                    return;
+                }
                 const stored = this.readContext();
                 const currentProjectId = getContainerEl(`#projectId-${PAGE_CODE}`)?.value || "";
                 const currentScenarioId = getContainerEl(`#scenarioId-${PAGE_CODE}`)?.value || "";
@@ -180,7 +197,15 @@
                     if (this.usesEditSession()) {
                         this.invalidateEditWorkspaceCache();
                         this.violationSourceTablesLoaded = false;
-                        await this.loadSessions(stored.editSessionId || this.selectedSessionId || "");
+                        const preferredSessionId = stored.editSessionId || this.selectedSessionId || "";
+                        if (PAGE_CODE === "M05003") {
+                            await Promise.all([
+                                this.loadSessions(preferredSessionId),
+                                this.loadViolationSourceTables()
+                            ]);
+                        } else {
+                            await this.loadSessions(preferredSessionId);
+                        }
                         await this.refresh();
                     }
                     return;
@@ -199,6 +224,7 @@
                     this.ruleTargetTable = String(stored.targetTable || "").toUpperCase();
                     this.ruleGroup = String(stored.ruleGroup || "ALL").toUpperCase();
                     this.ruleDecisionStatus = String(stored.ruleDecisionStatus || "ALL").toUpperCase();
+                    this.ruleViolationScope = String(stored.ruleViolationScope || "ERROR_ONLY").toUpperCase();
                     this.renderShell();
                     await this.loadProjects(nextProjectId);
                     if (!getContainerEl(`#projectId-${PAGE_CODE}`)?.value) {
@@ -208,7 +234,16 @@
                     }
                     await this.loadScenarios(nextScenarioId);
                     if (PAGE_CODE === "M05001") await this.loadRuleTargetTables();
-                    if (this.usesEditSession()) await this.loadSessions(stored.editSessionId || "");
+                    if (this.usesEditSession()) {
+                        if (PAGE_CODE === "M05003") {
+                            await Promise.all([
+                                this.loadSessions(stored.editSessionId || ""),
+                                this.loadViolationSourceTables()
+                            ]);
+                        } else {
+                            await this.loadSessions(stored.editSessionId || "");
+                        }
+                    }
                     this.persistContext();
                     this.setWorkContextCollapsed(true);
                     await this.refresh();
@@ -220,6 +255,7 @@
             destroy() {
                 window.DescriptiveStatistics?.close?.();
                 this.initialized = false;
+                this.skipNextOnShow = false;
                 this.closeDetailLayer();
                 this.rows = [];
                 this.sessions = [];
@@ -253,8 +289,10 @@
                 this.freezeColumnsInitialized = false;
                 this.ruleRunSource = "";
                 this.ruleRunId = "";
+                this.latestRuleRunId = "";
                 this.ruleGroup = "ALL";
                 this.ruleDecisionStatus = "ALL";
+                this.ruleViolationScope = "ERROR_ONLY";
                 this.stageFilters = {};
                 this.serverPaging = false;
                 this.serverTotalRows = 0;
@@ -325,6 +363,7 @@
                     ruleRunId: this.ruleRunId || "",
                     ruleGroup: this.ruleGroup || "ALL",
                     ruleDecisionStatus: this.ruleDecisionStatus || "ALL",
+                    ruleViolationScope: this.ruleViolationScope || "ERROR_ONLY",
                     targetOwner: this.ruleTargetOwner || this.pendingContext.targetOwner || "",
                     targetTable: this.ruleTargetTable || this.pendingContext.targetTable || "",
                     editWorkspaceTabs: {
@@ -413,16 +452,23 @@
                 const runId = getContainerEl(`#ruleRunId-${PAGE_CODE}`);
                 const ruleGroup = getContainerEl(`#ruleGroup-${PAGE_CODE}`);
                 const decisionStatus = getContainerEl(`#ruleDecisionStatus-${PAGE_CODE}`);
+                const violationScope = getContainerEl(`#ruleViolationScope-${PAGE_CODE}`);
                 if (runSource) runSource.value = ["FLOW_WORK", "DATA_WORK"].includes(this.ruleRunSource) ? this.ruleRunSource : "";
                 if (runId) {
-                    runId.value = this.ruleRunId;
-                    runId.disabled = !runSource?.value;
+                    const directInput = Boolean(runSource?.value);
+                    runId.value = directInput ? this.ruleRunId : this.latestRuleRunId;
+                    runId.disabled = !directInput;
                 }
                 if (ruleGroup) ruleGroup.value = ["ALL", "CATEGORICAL", "CONTINUOUS"].includes(this.ruleGroup) ? this.ruleGroup : "ALL";
                 if (decisionStatus) {
                     decisionStatus.value = ["ALL", "PENDING", "SELECTED", "REJECTED"].includes(this.ruleDecisionStatus)
                         ? this.ruleDecisionStatus
                         : "ALL";
+                }
+                if (violationScope) {
+                    violationScope.value = ["ALL", "ERROR_ONLY", "NORMAL_ONLY"].includes(this.ruleViolationScope)
+                        ? this.ruleViolationScope
+                        : "ERROR_ONLY";
                 }
                 this.updateGridMeta([]);
                 this.updateWorkContextSummary();
@@ -489,12 +535,14 @@
                     freezeColumnsInitialized: this.freezeColumnsInitialized,
                     ruleRunSource: this.ruleRunSource,
                     ruleRunId: this.ruleRunId,
+                    latestRuleRunId: this.latestRuleRunId,
                     ruleTargetTables: this.ruleTargetTables,
                     ruleTargetOwner: this.ruleTargetOwner,
                     ruleTargetTable: this.ruleTargetTable,
                     ruleTargetRole: this.ruleTargetRole,
                     ruleGroup: this.ruleGroup,
                     ruleDecisionStatus: this.ruleDecisionStatus,
+                    ruleViolationScope: this.ruleViolationScope,
                     stageFilters: { ...this.stageFilters },
                     serverPaging: this.serverPaging,
                     serverTotalRows: this.serverTotalRows,
@@ -558,12 +606,14 @@
                 this.freezeColumnsInitialized = Boolean(snapshot.freezeColumnsInitialized);
                 this.ruleRunSource = snapshot.ruleRunSource || "";
                 this.ruleRunId = snapshot.ruleRunId || "";
+                this.latestRuleRunId = snapshot.latestRuleRunId || "";
                 this.ruleTargetTables = snapshot.ruleTargetTables || [];
                 this.ruleTargetOwner = snapshot.ruleTargetOwner || "";
                 this.ruleTargetTable = snapshot.ruleTargetTable || "";
                 this.ruleTargetRole = snapshot.ruleTargetRole || "SOURCE";
                 this.ruleGroup = snapshot.ruleGroup || "ALL";
                 this.ruleDecisionStatus = snapshot.ruleDecisionStatus || "ALL";
+                this.ruleViolationScope = snapshot.ruleViolationScope || "ERROR_ONLY";
                 this.stageFilters = { ...(snapshot.stageFilters || {}) };
                 this.serverPaging = Boolean(snapshot.serverPaging);
                 this.serverTotalRows = Number(snapshot.serverTotalRows || 0);
@@ -843,6 +893,7 @@
                 this.ruleTargetRole = String(option?.dataset?.role || "SOURCE").toUpperCase();
                 this.ruleRunSource = "";
                 this.ruleRunId = "";
+                this.latestRuleRunId = "";
                 const runSource = getContainerEl(`#ruleRunSource-${PAGE_CODE}`);
                 const runId = getContainerEl(`#ruleRunId-${PAGE_CODE}`);
                 if (runSource) runSource.value = "";
@@ -983,7 +1034,14 @@
                 this.stageFilters = {};
                 await this.loadScenarios("");
                 if (PAGE_CODE === "M05001") await this.loadRuleTargetTables();
-                if (this.usesEditSession()) await this.loadSessions("");
+                if (this.usesEditSession()) {
+                    this.violationSourceTablesLoaded = false;
+                    if (PAGE_CODE === "M05003") {
+                        await Promise.all([this.loadSessions(""), this.loadViolationSourceTables()]);
+                    } else {
+                        await this.loadSessions("");
+                    }
+                }
                 this.persistContext();
                 this.updateWorkContextSummary();
                 await this.refresh();
@@ -994,7 +1052,14 @@
                 this.clearRunContext();
                 this.stageFilters = {};
                 if (PAGE_CODE === "M05001") await this.loadRuleTargetTables();
-                if (this.usesEditSession()) await this.loadSessions("");
+                if (this.usesEditSession()) {
+                    this.violationSourceTablesLoaded = false;
+                    if (PAGE_CODE === "M05003") {
+                        await Promise.all([this.loadSessions(""), this.loadViolationSourceTables()]);
+                    } else {
+                        await this.loadSessions("");
+                    }
+                }
                 this.persistContext();
                 this.updateWorkContextSummary();
                 this.setWorkContextCollapsed(true);
@@ -1035,6 +1100,7 @@
                 };
                 this.ruleRunSource = "";
                 this.ruleRunId = "";
+                this.latestRuleRunId = "";
                 this.ruleTargetOwner = "";
                 this.ruleTargetTable = "";
                 this.ruleTargetRole = "SOURCE";
@@ -1143,8 +1209,12 @@
                 const runId = getContainerEl(`#ruleRunId-${PAGE_CODE}`);
                 if (!runId) return;
                 runId.disabled = !runSource;
-                if (!runSource) runId.value = "";
-                else runId.focus();
+                if (!runSource) {
+                    runId.value = this.latestRuleRunId;
+                } else {
+                    runId.focus();
+                    runId.select();
+                }
             },
 
             handleRuleFilterKeydown(event) {
@@ -1164,6 +1234,7 @@
                 this.ruleRunId = runSource ? runId : "";
                 this.ruleGroup = getContainerEl(`#ruleGroup-${PAGE_CODE}`)?.value || "ALL";
                 this.ruleDecisionStatus = getContainerEl(`#ruleDecisionStatus-${PAGE_CODE}`)?.value || "ALL";
+                this.ruleViolationScope = getContainerEl(`#ruleViolationScope-${PAGE_CODE}`)?.value || "ERROR_ONLY";
                 this.page = 1;
                 this.selectedRuleIds.clear();
                 this.persistContext();
@@ -1296,6 +1367,7 @@
                 if (targetTable) params.set("targetTable", targetTable);
                 params.set("ruleGroup", this.ruleGroup || "ALL");
                 params.set("decisionStatus", this.ruleDecisionStatus || "ALL");
+                params.set("violationScope", this.ruleViolationScope || "ERROR_ONLY");
                 params.set("page", String(this.page));
                 params.set("pageSize", String(this.pageSize));
                 if (this.keyword) params.set("keyword", this.keyword);
@@ -1322,9 +1394,18 @@
                 this.pageSize = Math.max(1, Number(json.pageSize || this.pageSize));
                 this.ruleGroup = String(json.ruleGroup || this.ruleGroup || "ALL").toUpperCase();
                 this.ruleDecisionStatus = String(json.decisionStatus || this.ruleDecisionStatus || "ALL").toUpperCase();
+                this.ruleViolationScope = String(json.violationScope || this.ruleViolationScope || "ERROR_ONLY").toUpperCase();
                 this.ruleTargetOwner = String(json.targetOwner || targetOwner).toUpperCase();
                 this.ruleTargetTable = String(json.targetTable || targetTable).toUpperCase();
                 this.ruleTargetRole = String(json.targetRole || this.ruleTargetRole || "SOURCE").toUpperCase();
+                if (!runSourceType) {
+                    this.latestRuleRunId = String(json.runId ?? "");
+                    const latestRunInput = getContainerEl(`#ruleRunId-${PAGE_CODE}`);
+                    if (latestRunInput && !getContainerEl(`#ruleRunSource-${PAGE_CODE}`)?.value) {
+                        latestRunInput.value = this.latestRuleRunId;
+                        latestRunInput.disabled = true;
+                    }
+                }
                 this.pendingContext = {
                     ...this.pendingContext,
                     runSourceType: json.runSourceType || runSourceType || "",
@@ -1358,8 +1439,9 @@
                 const targetColumn = { key: "TARGET_COLUMN", label: targetColumnLabel, width: 132, className: "is-code", render: (value, row) => this.renderColumnSummary(value, row.TARGET_COLUMN_COMMENT) };
                 const ruleIdColumn = { key: "SOURCE_RULE_ID", label: "규칙 ID", width: 122, className: "is-code is-compact-ellipsis" };
                 const decisionColumn = { key: "DECISION_STATUS", label: "판단", width: 76, render: (value) => this.badge(value) };
-                const actionColumn = { key: "_ACTION", label: "처리", width: 100, className: "is-action-column", headerClassName: "is-action-column", render: (_value, _row, index) => `
+                const actionColumn = { key: "_ACTION", label: "처리", width: 164, className: "is-action-column", headerClassName: "is-action-column", render: (_value, _row, index) => `
                     <span class="edit-work-row-actions">
+                        <button title="현재 INITUP$ 전체 데이터에서 실제 위반을 확인합니다." onclick="${PAGE_CODE}.openDiscoveredRuleLiveValidation(${index})"><i class="fas fa-bolt"></i>실시간</button>
                         <button class="is-primary" onclick="${PAGE_CODE}.saveRuleDecision(${index}, 'SELECTED')">선정</button>
                         <button class="is-danger" onclick="${PAGE_CODE}.saveRuleDecision(${index}, 'REJECTED')">제외</button>
                     </span>
@@ -1983,19 +2065,21 @@
                         showLoading: false
                     });
                     this.userRuleValidation = json.data || {};
-                    const sampleCount = Number(this.userRuleValidation.sampleCount || 0).toLocaleString();
-                    const matchText = payload.sourceRuleType === "ASSOCIATION"
-                        ? ` · ${this.pageLabel("userRuleMatched", "조건 일치")} ${Number(this.userRuleValidation.matchCount || 0).toLocaleString()}`
-                        : ` · ${this.pageLabel("userRuleToleranceResult", "허용 오차")} ${this.formatMetric(this.userRuleValidation.ruleTolerancePct)}%`;
+                    const violationCount = Number(this.userRuleValidation.violationCount || 0);
+                    const toleranceText = payload.sourceRuleType === "SYMBOLIC"
+                        ? ` · ${this.pageLabel("userRuleToleranceResult", "허용 오차")} ${this.formatMetric(this.userRuleValidation.ruleTolerancePct)}%`
+                        : "";
                     if (status) {
                         status.className = showSuccess
                             ? "edit-work-rule-validation is-success"
                             : "edit-work-rule-validation";
-                        status.textContent = showSuccess
-                            ? `${this.pageLabel("userRuleValidationPassed", "검증 완료")} · ${this.pageLabel("userRuleSample", "샘플")} ${sampleCount}${matchText}`
+                        status.innerHTML = showSuccess
+                            ? `<span>${this.escapeHtml(`${this.pageLabel("userRuleValidationPassed", "검증 완료")} · 실시간 전체 조회 · 실제 위반 ${violationCount.toLocaleString()}건${toleranceText}`)}</span><button type="button" onclick="${PAGE_CODE}.openUserRuleLiveValidation()"><i class="fas fa-bolt"></i> 결과·SQL 보기</button>`
                             : "";
                     }
-                    if (showSuccess) CommonMessage.success(this.pageLabel("userRuleValidationPassedMessage", "규칙 검증을 완료했습니다."));
+                    if (showSuccess) {
+                        CommonMessage.success(`규칙 실시간 검증을 완료했습니다. 실제 위반 ${violationCount.toLocaleString()}건`);
+                    }
                     return this.userRuleValidation;
                 } catch (error) {
                     this.userRuleValidation = null;
@@ -2005,6 +2089,26 @@
                     }
                     throw error;
                 }
+            },
+
+            openUserRuleLiveValidation() {
+                const result = this.userRuleValidation;
+                if (!result || String(result.queryMode || "").toUpperCase() !== "LIVE") {
+                    CommonMessage.warn("먼저 실시간 규칙 검증을 실행하세요.");
+                    return;
+                }
+                const payload = this.collectUserRulePayload();
+                const layer = getContainerEl(`#detailLayer-${PAGE_CODE}`);
+                const title = getContainerEl(`#detailLayerTitle-${PAGE_CODE}`);
+                const eyebrow = getContainerEl(`#detailLayerEyebrow-${PAGE_CODE}`);
+                const body = getContainerEl(`#detailLayerBody-${PAGE_CODE}`);
+                if (!layer || !body) return;
+                this.detailLayerOpener = document.activeElement;
+                this.resetDetailDialogPosition();
+                if (eyebrow) eyebrow.textContent = `${payload.sourceRuleType || "USER"} · LIVE VALIDATION`;
+                if (title) title.textContent = payload.ruleName || "사용자 규칙 실시간 확인";
+                body.innerHTML = this.buildRuleLiveValidationContent(result);
+                layer.hidden = false;
             },
 
             isUserRuleDefinitionChanged(payload) {
@@ -2270,11 +2374,14 @@
                     CommonMessage.warn("처리할 규칙을 선택하세요.");
                     return;
                 }
-                if (!(await CommonMessage.confirm(`${selected.length}개 규칙을 ${status === "SELECTED" ? "선정" : "제외"} 처리할까요?`))) return;
                 const selecting = String(status || "").toUpperCase() === "SELECTED";
+                if (!selecting && !(await CommonMessage.confirm(`${selected.length}개 규칙을 제외 처리할까요?`))) return;
+                if (selecting && !(await CommonMessage.confirm(
+                    `${selected.length}개 규칙을 현재 INITUP$ 전체 데이터로 실시간 확인한 뒤 선정할까요?`
+                ))) return;
                 const loadingMessage = this.pageLabel(
                     selecting ? "bulkRuleSelecting" : "bulkRuleRejecting",
-                    selecting ? "선택한 규칙을 일괄 선정하고 있습니다." : "선택한 규칙을 일괄 제외하고 있습니다."
+                    selecting ? "선택한 규칙의 실제 위반을 실시간 확인하고 있습니다." : "선택한 규칙을 일괄 제외하고 있습니다."
                 );
                 this.ruleDecisionSaving = true;
                 this.setWorkActionLoading(true, loadingMessage, false);
@@ -2282,12 +2389,33 @@
                 workContent?.setAttribute("aria-busy", "true");
                 workContent?.classList.add("is-rule-decision-saving");
                 try {
+                    let liveViolationTotal = 0;
+                    if (selecting) {
+                        for (let index = 0; index < selected.length; index += 1) {
+                            this.setWorkActionLoading(
+                                true,
+                                `실시간 규칙 확인 ${index + 1}/${selected.length} · ${selected[index].SOURCE_RULE_ID || selected[index].RULE_NAME || "RULE"}`,
+                                false
+                            );
+                            const validation = await this.requestDiscoveredRuleLiveValidation(selected[index]);
+                            liveViolationTotal += Number(validation.violationCount || 0);
+                        }
+                        const confirmed = await CommonMessage.confirm(
+                            `실시간 확인이 완료되었습니다. 규칙별 실제 위반 합계는 ${liveViolationTotal.toLocaleString()}건입니다.\n선택한 ${selected.length}개 규칙을 규칙 마스터에 선정 등록할까요?`
+                        );
+                        if (!confirmed) return;
+                        this.setWorkActionLoading(true, "실시간 확인한 규칙을 일괄 선정하고 있습니다.", false);
+                    }
                     for (const row of selected) {
                         await this.submitRuleDecision(row, status);
                     }
                     this.invalidateEditWorkspaceCache("M05001_RULE_MASTER");
                     this.selectedRuleIds.clear();
-                    CommonMessage.success(`${selected.length}개 규칙을 ${selecting ? "선정" : "제외"} 처리했습니다.`);
+                    CommonMessage.success(
+                        selecting
+                            ? `${selected.length}개 규칙을 선정했습니다. 실시간 실제 위반 합계 ${liveViolationTotal.toLocaleString()}건을 확인했습니다.`
+                            : `${selected.length}개 규칙을 제외 처리했습니다.`
+                    );
                     await this.refresh();
                 } catch (error) {
                     await this.refresh();
@@ -2304,21 +2432,34 @@
                 if (this.ruleDecisionSaving) return;
                 const row = this.getVisibleRows()[index];
                 if (!row) return;
-                await this.submitRuleDecision(row, status);
-                this.invalidateEditWorkspaceCache("M05001_RULE_MASTER");
-                CommonMessage.success(`규칙을 ${status === "SELECTED" ? "선정" : "제외"} 처리했습니다.`);
-                await this.refresh();
+                const selecting = String(status || "").toUpperCase() === "SELECTED";
+                this.ruleDecisionSaving = true;
+                try {
+                    let validation = null;
+                    if (selecting) {
+                        this.setWorkActionLoading(true, "현재 INITUP$ 전체 데이터에서 실제 위반을 확인하고 있습니다.", false);
+                        validation = await this.requestDiscoveredRuleLiveValidation(row);
+                        const violationCount = Number(validation.violationCount || 0);
+                        if (!(await CommonMessage.confirm(
+                            `현재 INITUP$ 실시간 확인 결과 실제 위반은 ${violationCount.toLocaleString()}건입니다.\n이 규칙을 규칙 마스터에 선정 등록할까요?`
+                        ))) return;
+                    }
+                    await this.submitRuleDecision(row, status);
+                    this.invalidateEditWorkspaceCache("M05001_RULE_MASTER");
+                    CommonMessage.success(
+                        selecting
+                            ? `규칙을 선정했습니다. 실시간 실제 위반 ${Number(validation?.violationCount || 0).toLocaleString()}건을 확인했습니다.`
+                            : "규칙을 제외 처리했습니다."
+                    );
+                    await this.refresh();
+                } finally {
+                    this.ruleDecisionSaving = false;
+                    this.setWorkActionLoading(false);
+                }
             },
 
-            async submitRuleDecision(row, decisionStatus) {
-                if (
-                    String(decisionStatus || "").toUpperCase() === "REJECTED"
-                    && this.optionalNumber(row?.EDIT_RULE_ID)
-                    && row?.SOURCE_RULE_ID
-                ) {
-                    return this.excludeDiscoveredRule(row);
-                }
-                const payload = {
+            buildDiscoveredRulePayload(row, decisionStatus = "PENDING") {
+                return {
                     editRuleId: this.optionalNumber(row.EDIT_RULE_ID),
                     projectId: this.optionalNumber(row.PROJECT_ID),
                     scenarioId: this.optionalNumber(row.SCENARIO_ID),
@@ -2342,13 +2483,40 @@
                     decisionStatus,
                     ruleStatus: "ACTIVE"
                 };
+            },
+
+            async requestDiscoveredRuleLiveValidation(row, page = 1) {
+                const payload = this.buildDiscoveredRulePayload(row, row.DECISION_STATUS || "PENDING");
                 if (!payload.projectId || !payload.scenarioId) {
                     throw new Error(this.pageLabel(
                         "ruleContextMissing",
                         "규칙 원본 행의 프로젝트 또는 시나리오를 확인할 수 없습니다. 다시 조회하세요."
                     ));
                 }
-                await CommonUtils.request(apiUrl("/rules"), { method: "POST", body: payload, showLoading: false });
+                const params = new URLSearchParams({ page: String(page), pageSize: "20" });
+                return CommonUtils.request(apiUrl(`/rules/live-validation?${params}`), {
+                    method: "POST",
+                    body: payload,
+                    showLoading: false
+                });
+            },
+
+            async submitRuleDecision(row, decisionStatus) {
+                if (
+                    String(decisionStatus || "").toUpperCase() === "REJECTED"
+                    && this.optionalNumber(row?.EDIT_RULE_ID)
+                    && row?.SOURCE_RULE_ID
+                ) {
+                    return this.excludeDiscoveredRule(row);
+                }
+                const payload = this.buildDiscoveredRulePayload(row, decisionStatus);
+                if (!payload.projectId || !payload.scenarioId) {
+                    throw new Error(this.pageLabel(
+                        "ruleContextMissing",
+                        "규칙 원본 행의 프로젝트 또는 시나리오를 확인할 수 없습니다. 다시 조회하세요."
+                    ));
+                }
+                return CommonUtils.request(apiUrl("/rules"), { method: "POST", body: payload, showLoading: false });
             },
 
             async loadViolationSourceTables(force = false) {
@@ -3528,9 +3696,14 @@
                 this.renderPanelSourceContext();
             },
 
-            async loadValidation() {
+            async loadValidation(options = {}) {
                 await this.loadViolationSourceTables();
                 const { session } = this.resolveEditingTableSelection();
+                const preservedValidation = options.preserveAnalysis
+                    && Number(this.currentValidation?.EDIT_SESSION_ID || 0) === Number(session?.EDIT_SESSION_ID || 0)
+                    && this.currentValidation?.FULL_ANALYSIS_READY === true
+                    ? this.currentValidation
+                    : null;
                 const executionOpen = ["DRAFT", "EDITING", "VALIDATED", "APPLY_READY"].includes(
                     String(session?.SESSION_STATUS || "").toUpperCase()
                 );
@@ -3541,24 +3714,53 @@
                     <button type="button" onclick="${PAGE_CODE}.openDescriptiveStatistics(event)" ${session ? "" : "disabled"} title="INITUP$ 원본과 INITDN$ 수정본의 분포를 비교합니다."><i class="fas fa-chart-simple"></i>기초통계량</button>
                     ${session ? `
                         <button type="button" title="${this.escapeHtml(this.pageLabel("buttonRerunRuleDiscoveryHelp", "INITDN$ 수정테이블을 대상으로 저장된 Flow의 규칙 발굴을 다시 실행합니다."))}" onclick="${PAGE_CODE}.openReanalysisFlow()" ${reanalysisAvailable ? "" : "disabled"}><i class="fas fa-wave-square"></i>${this.escapeHtml(this.pageLabel("buttonRerunRuleDiscovery", "규칙발굴재실행"))}</button>
-                        <button type="button" class="is-primary" onclick="${PAGE_CODE}.markValidated()" ${executionOpen ? "" : "disabled"}><i class="fas fa-check-double"></i>${this.escapeHtml(this.pageLabel("buttonCompleteEffectValidation", "효과 검증 완료"))}</button>
+                        <button id="effectValidationCompleteButton-${PAGE_CODE}" type="button" class="is-primary" onclick="${PAGE_CODE}.markValidated()" ${executionOpen ? "" : "disabled"}><i class="fas fa-check-double"></i>${this.escapeHtml(this.pageLabel("buttonCompleteEffectValidation", "효과 검증 완료"))}</button>
                     ` : ""}
                 `);
                 this.hideModeForm();
                 if (!session) {
                     this.rows = [];
+                    this.serverPaging = false;
+                    this.serverTotalRows = 0;
                     this.setKpis([{ value: "-", label: "작업 테이블", hint: this.pageLabel("selectEditingTableForValidation", "효과를 검증할 INITUP$/INITDN$ 작업 테이블을 선택하세요.") }]);
                     this.renderEmpty(this.pageLabel("selectEditingTableForValidation", "효과를 검증할 INITUP$/INITDN$ 작업 테이블을 선택하세요."));
                     return;
                 }
+                const query = new URLSearchParams({
+                    analysisMode: "SUMMARY",
+                    page: String(this.page),
+                    pageSize: String(this.pageSize)
+                });
+                if (this.keyword) query.set("keyword", this.keyword);
                 const validation = await CommonUtils.request(
-                    apiUrl(`/sessions/${session.EDIT_SESSION_ID}/validation`),
+                    apiUrl(`/sessions/${session.EDIT_SESSION_ID}/validation?${query}`),
                     { method: "GET", showLoading: false }
                 );
-                this.currentValidation = validation.data || {};
+                const pageData = validation.data || {};
+                this.currentValidation = preservedValidation
+                    ? {
+                        ...pageData,
+                        ...preservedValidation,
+                        CHANGE_ROWS: pageData.CHANGE_ROWS || [],
+                        CHANGE_TOTAL: pageData.CHANGE_TOTAL || 0,
+                        CHANGE_PAGE: pageData.CHANGE_PAGE || 1,
+                        CHANGE_PAGE_SIZE: pageData.CHANGE_PAGE_SIZE || this.pageSize,
+                        CHANGE_TOTAL_PAGES: pageData.CHANGE_TOTAL_PAGES || 1
+                    }
+                    : pageData;
+                const completeButton = getContainerEl(`#effectValidationCompleteButton-${PAGE_CODE}`);
+                if (completeButton) {
+                    completeButton.disabled = !executionOpen || this.currentValidation.FULL_ANALYSIS_READY === false;
+                    completeButton.title = this.currentValidation.FULL_ANALYSIS_READY === false
+                        ? "정밀 효과 분석을 먼저 실행하세요."
+                        : "";
+                }
                 this.rows = Array.isArray(this.currentValidation.CHANGE_ROWS)
                     ? this.currentValidation.CHANGE_ROWS
                     : [];
+                this.serverPaging = true;
+                this.serverTotalRows = Number(this.currentValidation.CHANGE_TOTAL || 0);
+                this.page = Math.max(1, Number(this.currentValidation.CHANGE_PAGE || this.page));
                 const data = this.currentValidation;
                 this.setKpis([
                     { value: Number(data.CHANGED_ROW_COUNT || 0).toLocaleString(), label: "변경 행", hint: `${Number(data.TOTAL_CHANGE_COUNT || 0).toLocaleString()}개 셀 변경` },
@@ -3576,6 +3778,42 @@
                     }
                 ]);
                 this.renderValidationContent(data);
+            },
+
+            async loadFullValidationAnalysis() {
+                const session = this.getSelectedSession();
+                if (!session) return null;
+                this.setWorkActionLoading(true, "동일 규칙을 테이블 단일 스캔 방식으로 정밀 분석하고 있습니다.", false);
+                try {
+                    const query = new URLSearchParams({
+                        analysisMode: "FULL",
+                        page: String(this.page),
+                        pageSize: String(this.pageSize)
+                    });
+                    if (this.keyword) query.set("keyword", this.keyword);
+                    const json = await CommonUtils.request(
+                        apiUrl(`/sessions/${session.EDIT_SESSION_ID}/validation?${query}`),
+                        { method: "GET", showLoading: false }
+                    );
+                    this.currentValidation = json.data || {};
+                    const completeButton = getContainerEl(`#effectValidationCompleteButton-${PAGE_CODE}`);
+                    if (completeButton) {
+                        const sessionStatus = String(session.SESSION_STATUS || "").toUpperCase();
+                        completeButton.disabled = !["DRAFT", "EDITING", "VALIDATED", "APPLY_READY"].includes(sessionStatus)
+                            || this.currentValidation.FULL_ANALYSIS_READY === false;
+                        completeButton.title = completeButton.disabled ? "정밀 효과 분석 결과를 확인하세요." : "";
+                    }
+                    this.rows = Array.isArray(this.currentValidation.CHANGE_ROWS)
+                        ? this.currentValidation.CHANGE_ROWS
+                        : [];
+                    this.serverPaging = true;
+                    this.serverTotalRows = Number(this.currentValidation.CHANGE_TOTAL || 0);
+                    this.page = Math.max(1, Number(this.currentValidation.CHANGE_PAGE || this.page));
+                    this.renderValidationContent(this.currentValidation);
+                    return this.currentValidation;
+                } finally {
+                    this.setWorkActionLoading(false);
+                }
             },
 
             async openDescriptiveStatistics(event) {
@@ -3596,7 +3834,9 @@
                 const changedRows = Number(data.CHANGED_ROW_COUNT || 0);
                 const content = getContainerEl(`#workContent-${PAGE_CODE}`);
                 if (!content) return;
-                const { filtered, visible } = this.getPagedRows(this.rows);
+                const { filtered, visible } = this.serverPaging
+                    ? { filtered: this.rows, visible: this.rows }
+                    : this.getPagedRows(this.rows);
                 const changeColumns = [
                     { key: "EDIT_CHANGE_ID", label: "변경 ID", width: 72, className: "is-number" },
                     { key: "SOURCE_RULE_TYPE", label: "규칙 유형", width: 82, render: (value) => this.renderRuleTypeBadge(value) },
@@ -3784,6 +4024,7 @@
                     ? this.pageLabel("analysisSnapshotNotice", "검증 완료 시점 결과 · {date}")
                         .replaceAll("{date}", this.formatDate(validation.VALIDATION_SNAPSHOT_AT) || "-")
                     : "";
+                const fullAnalysisDeferred = validation.FULL_ANALYSIS_READY === false;
                 return `
                     <section class="edit-work-validation-analysis" aria-labelledby="validationAnalysisTitle-${PAGE_CODE}">
                         <header class="edit-work-validation-analysis-heading">
@@ -3791,7 +4032,13 @@
                                 <h3 id="validationAnalysisTitle-${PAGE_CODE}">${this.escapeHtml(this.pageLabel("validationAnalysisTitle", "운영 반영 전 에디팅 분석"))}</h3>
                                 <span>${this.escapeHtml(this.pageLabel("validationAnalysisHelp", "수정에 사용한 동일 최종 규칙을 INITUP$과 INITDN$에 적용해 변경 영향과 규칙 적합도를 비교합니다."))}${snapshotNotice ? ` · ${this.escapeHtml(snapshotNotice)}` : ""}</span>
                             </div>
+                            ${fullAnalysisDeferred ? `
+                                <button type="button" class="table-btn" onclick="${PAGE_CODE}.loadFullValidationAnalysis()" title="빠른 조회에서 제외한 전체 규칙 정밀 분석을 실행합니다.">
+                                    <i class="fas fa-gauge-high"></i> 정밀 효과 분석
+                                </button>
+                            ` : ""}
                         </header>
+                        ${fullAnalysisDeferred ? `<p class="edit-work-analysis-deferred-note">에디팅 실행 중 저장된 세션·변경 Summary를 사용한 빠른 조회입니다. 규칙별 INITUP$·INITDN$ 전체 검사는 정밀 효과 분석을 실행할 때만 수행합니다.</p>` : ""}
                         <div class="edit-work-validation-analysis-grid">
                             ${this.renderAnalysisCard(
                                 "IMPACT",
@@ -3895,10 +4142,16 @@
                         <p>${this.escapeHtml(this.pageLabel("analysisImpactMethod", "통계 데이터 편집에서는 오류를 해소하면서 원본 변경 범위를 최소화했는지 함께 확인합니다. 변경률은 변경 행 수를 원본 전체 행 수로 나눈 값입니다."))}</p>
                     </section>
                     ${overall.EVALUATION_ERROR ? `
-                        <section class="edit-work-analysis-method-note is-warning">
-                            <strong>${this.escapeHtml(this.pageLabel("analysisCalculationUnavailable", "동일 규칙 비교 계산 불가"))}</strong>
+                        <section class="edit-work-analysis-method-note ${overall.EVALUATION_ERROR === "FULL_ANALYSIS_DEFERRED" ? "is-info" : "is-warning"}">
+                            <strong>${this.escapeHtml(
+                                overall.EVALUATION_ERROR === "FULL_ANALYSIS_DEFERRED"
+                                    ? "정밀 분석 대기"
+                                    : this.pageLabel("analysisCalculationUnavailable", "동일 규칙 비교 계산 불가")
+                            )}</strong>
                             <p>${this.escapeHtml(
-                                overall.EVALUATION_ERROR === "VALIDATION_SNAPSHOT_UNAVAILABLE"
+                                overall.EVALUATION_ERROR === "FULL_ANALYSIS_DEFERRED"
+                                    ? "에디팅 실행 Summary를 바로 표시하기 위해 전체 규칙 검사를 보류했습니다. 정밀 효과 분석을 실행하면 현재 INITUP$·INITDN$ 전체 데이터로 계산합니다."
+                                    : overall.EVALUATION_ERROR === "VALIDATION_SNAPSHOT_UNAVAILABLE"
                                     ? this.pageLabel("analysisSnapshotUnavailable", "이 작업은 검증 결과 저장 기능 적용 전에 운영 반영되어 당시 동일 규칙 비교 결과를 복원할 수 없습니다. 변경 이력 지표만 확인할 수 있습니다.")
                                     : this.pageLabel("analysisSameRuleEvaluationUnavailable", "현재 테이블에 동일 규칙을 다시 적용하지 못했습니다. 규칙 식과 INITDN$ 구조를 확인한 후 다시 조회하세요.")
                             )}</p>
@@ -4098,18 +4351,23 @@
                     );
                     if (!confirmed) return;
                 }
-                await CommonUtils.request(apiUrl(`/sessions/${session.EDIT_SESSION_ID}/validate`), {
-                    method: "POST",
-                    body: { acknowledgeReview: reviewRequired },
-                    showLoading: false
-                });
-                CommonMessage.success(
-                    this.pageLabel("effectValidationCompleted", "에디팅 효과 검증을 완료했습니다.")
-                );
-                this.invalidateEditWorkspaceCache("M05003_FINAL_APPLY");
-                this.invalidateEditWorkspaceCache("M05003_HISTORY");
-                await this.loadSessions(session.EDIT_SESSION_ID);
-                await this.refresh();
+                this.setWorkActionLoading(true, "전체 규칙을 배치 집계하여 효과 검증을 완료하고 있습니다.", false);
+                try {
+                    await CommonUtils.request(apiUrl(`/sessions/${session.EDIT_SESSION_ID}/validate`), {
+                        method: "POST",
+                        body: { acknowledgeReview: reviewRequired },
+                        showLoading: false
+                    });
+                    CommonMessage.success(
+                        this.pageLabel("effectValidationCompleted", "에디팅 효과 검증을 완료했습니다.")
+                    );
+                    this.invalidateEditWorkspaceCache("M05003_FINAL_APPLY");
+                    this.invalidateEditWorkspaceCache("M05003_HISTORY");
+                    await this.loadSessions(session.EDIT_SESSION_ID);
+                    await this.refresh();
+                } finally {
+                    this.setWorkActionLoading(false);
+                }
             },
 
             async openReanalysisFlow() {
@@ -5232,7 +5490,12 @@
                 }
                 if (this.stage.mode === "CHANGE_HISTORY") this.renderChangeHistoryContent();
                 else if (this.stage.mode === "HISTORY") this.renderHistoryContent();
-                else if (this.stage.mode === "VALIDATION") this.renderValidationContent(this.currentValidation || {});
+                else if (this.stage.mode === "VALIDATION") {
+                    if (this.keywordTimer) clearTimeout(this.keywordTimer);
+                    this.keywordTimer = setTimeout(() => {
+                        this.loadValidation({ preserveAnalysis: true }).catch((error) => this.renderError(error));
+                    }, 250);
+                }
                 else if (this.stage.mode === "FINAL_APPLY") this.renderDmlContent();
                 else this.renderGrid();
             },
@@ -5261,7 +5524,7 @@
                     return;
                 }
                 if (this.stage.mode === "CHANGE_HISTORY") this.renderChangeHistoryContent();
-                else if (this.stage.mode === "VALIDATION") this.renderValidationContent(this.currentValidation || {});
+                else if (this.stage.mode === "VALIDATION") this.loadValidation({ preserveAnalysis: true }).catch((error) => this.renderError(error));
                 else if (this.stage.mode === "FINAL_APPLY") this.renderDmlContent();
                 else if (this.stage.mode === "HISTORY") this.renderHistoryContent();
                 else this.renderGrid();
@@ -5281,7 +5544,7 @@
                     return;
                 }
                 if (this.stage.mode === "CHANGE_HISTORY") this.renderChangeHistoryContent();
-                else if (this.stage.mode === "VALIDATION") this.renderValidationContent(this.currentValidation || {});
+                else if (this.stage.mode === "VALIDATION") this.loadValidation({ preserveAnalysis: true }).catch((error) => this.renderError(error));
                 else if (this.stage.mode === "FINAL_APPLY") this.renderDmlContent();
                 else if (this.stage.mode === "HISTORY") this.renderHistoryContent();
                 else this.renderGrid();
@@ -5300,7 +5563,7 @@
                     return;
                 }
                 if (this.stage.mode === "CHANGE_HISTORY") this.renderChangeHistoryContent();
-                else if (this.stage.mode === "VALIDATION") this.renderValidationContent(this.currentValidation || {});
+                else if (this.stage.mode === "VALIDATION") this.loadValidation({ preserveAnalysis: true }).catch((error) => this.renderError(error));
                 else if (this.stage.mode === "FINAL_APPLY") this.renderDmlContent();
                 else if (this.stage.mode === "HISTORY") this.renderHistoryContent();
                 else this.renderGrid();
@@ -5636,6 +5899,77 @@
                     </dl>
                     <p class="edit-work-detail-note">연속형 규칙은 IF/THEN 연관 규칙이 아니라 입력 피처를 수식 f(X)에 적용해 대상 컬럼을 예측하는 규칙입니다.</p>
                 `;
+            },
+
+            buildRuleLiveValidationContent(result = {}) {
+                const rows = Array.isArray(result.data) ? result.data : [];
+                const violationCount = Number(result.violationCount || 0);
+                const sampleRows = rows.map((item, index) => `
+                    <tr>
+                        <td>${(index + 1).toLocaleString()}</td>
+                        <td>${this.escapeHtml(item.CASE_ID || item.CASE_ROWID || "-")}</td>
+                        <td>${this.escapeHtml(item.TARGET_COLUMN || "-")}</td>
+                        <td>${this.escapeHtml(item.EXPECTED_VALUE ?? item.PREDICTED_VALUE ?? "-")}</td>
+                        <td class="is-violation-value">${this.escapeHtml(item.ACTUAL_VALUE ?? "-")}</td>
+                        <td>${this.escapeHtml(this.formatMetric(item.VIOLATION_SCORE))}</td>
+                    </tr>
+                `).join("");
+                return `
+                    <section class="edit-work-live-rule-validation ${violationCount ? "has-violations" : "is-clean"}">
+                        <header>
+                            <div>
+                                <small>LIVE INITUP$ VALIDATION</small>
+                                <strong>현재 원본 데이터 실시간 확인</strong>
+                            </div>
+                            <span class="edit-work-live-rule-count">실제 위반 ${violationCount.toLocaleString()}건</span>
+                        </header>
+                        <p>${this.escapeHtml(
+                            violationCount
+                                ? "샘플링 저장 결과가 아니라 현재 INITUP$ 전체 데이터를 직접 조회한 결과입니다."
+                                : "현재 INITUP$ 전체 데이터에서는 이 규칙의 실제 위반이 확인되지 않았습니다."
+                        )}</p>
+                        ${sampleRows ? `
+                            <div class="edit-work-live-rule-grid-wrap">
+                                <table class="edit-work-live-rule-grid">
+                                    <thead><tr><th>No</th><th>행 식별값</th><th>대상 컬럼</th><th>기대값/예측값</th><th>실제값</th><th>위반 점수</th></tr></thead>
+                                    <tbody>${sampleRows}</tbody>
+                                </table>
+                            </div>
+                            <small class="edit-work-live-rule-note">실제 위반 ${violationCount.toLocaleString()}건 중 현재 페이지 ${rows.length.toLocaleString()}건을 표시합니다.</small>
+                        ` : ""}
+                        <details class="edit-work-live-rule-sql">
+                            <summary>서버 생성 실시간 SQL 보기</summary>
+                            <pre>${this.escapeHtml(result.generatedSql || "-")}</pre>
+                        </details>
+                    </section>
+                `;
+            },
+
+            async openDiscoveredRuleLiveValidation(index) {
+                const row = this.getVisibleRows()[index];
+                const layer = getContainerEl(`#detailLayer-${PAGE_CODE}`);
+                const title = getContainerEl(`#detailLayerTitle-${PAGE_CODE}`);
+                const eyebrow = getContainerEl(`#detailLayerEyebrow-${PAGE_CODE}`);
+                const body = getContainerEl(`#detailLayerBody-${PAGE_CODE}`);
+                if (!row || !layer || !body) return;
+                this.detailLayerOpener = document.activeElement;
+                this.resetDetailDialogPosition();
+                if (eyebrow) eyebrow.textContent = `${row.RULE_GROUP_CODE || row.SOURCE_RULE_TYPE || "RULE"} · LIVE VALIDATION`;
+                if (title) title.textContent = row.SOURCE_RULE_ID || row.RULE_NAME || "규칙 실시간 확인";
+                body.innerHTML = `<div class="edit-work-detail-loading"><i class="fas fa-spinner fa-spin"></i> 현재 INITUP$ 전체 데이터에서 실제 위반을 확인하고 있습니다.</div>`;
+                layer.hidden = false;
+                try {
+                    const result = await this.requestDiscoveredRuleLiveValidation(row);
+                    body.innerHTML = `
+                        ${this.isContinuousRule(row)
+                            ? this.buildContinuousRuleDetailContent(row, "FORMULA")
+                            : this.buildAssociationRuleDetailContent(row, "IF")}
+                        ${this.buildRuleLiveValidationContent(result)}
+                    `;
+                } catch (error) {
+                    body.innerHTML = `<div class="edit-work-detail-error">${this.escapeHtml(error?.message || "실시간 규칙 확인에 실패했습니다.")}</div>`;
+                    CommonMessage.error(error?.message || "실시간 규칙 확인에 실패했습니다.");
+                }
             },
 
             openRuleDetail(index, focusSection = "IF") {

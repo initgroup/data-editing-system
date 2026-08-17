@@ -19,6 +19,7 @@ def create_edit_work_router(menu_code: str) -> APIRouter:
         targetTable: str | None = None,
         ruleGroup: str = "ALL",
         decisionStatus: str = "ALL",
+        violationScope: str = "ERROR_ONLY",
         keyword: str | None = None,
         page: int = 1,
         pageSize: int = 100,
@@ -33,6 +34,7 @@ def create_edit_work_router(menu_code: str) -> APIRouter:
             target_table=targetTable,
             rule_group=ruleGroup,
             decision_status=decisionStatus,
+            violation_scope=violationScope,
             keyword=keyword,
             page=page,
             page_size=pageSize,
@@ -65,6 +67,21 @@ def create_edit_work_router(menu_code: str) -> APIRouter:
     @router.post("/rules/validate")
     def validate_user_rule(payload: editing.UserRuleValidationRequest, request: Request):
         return editing.validate_user_rule(request, payload)
+
+    if menu_code == "M05001":
+        @router.post("/rules/live-validation")
+        def validate_discovered_rule_live(
+            payload: editing.RuleDecisionRequest,
+            request: Request,
+            page: int = 1,
+            pageSize: int = 20,
+        ):
+            return editing.validate_discovered_rule_live(
+                request,
+                payload,
+                page=page,
+                page_size=pageSize,
+            )
 
     @router.delete("/rules/{edit_rule_id}")
     def delete_user_rule(
@@ -255,8 +272,22 @@ def create_edit_work_router(menu_code: str) -> APIRouter:
         return editing.list_changes(request, edit_session_id)
 
     @router.get("/sessions/{edit_session_id}/validation")
-    def validation_summary(edit_session_id: int, request: Request):
-        return editing.validation_summary(request, edit_session_id)
+    def validation_summary(
+        edit_session_id: int,
+        request: Request,
+        analysisMode: str = "SUMMARY",
+        keyword: str | None = None,
+        page: int = 1,
+        pageSize: int = 100,
+    ):
+        return editing.validation_summary(
+            request,
+            edit_session_id,
+            analysis_mode=analysisMode,
+            keyword=keyword,
+            page=page,
+            page_size=pageSize,
+        )
 
     if menu_code == "M05003":
         @router.get("/sessions/{edit_session_id}/descriptive-statistics")

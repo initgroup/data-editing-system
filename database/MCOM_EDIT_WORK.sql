@@ -310,6 +310,43 @@ WITH SOURCE_RULES AS
        AND (:targetOwner IS NULL OR R.TARGET_OWNER = :targetOwner)
        AND (:targetTable IS NULL OR R.TARGET_TABLE = :targetTable)
        AND (
+              :violationScope = 'ALL'
+           OR (
+                  :violationScope = 'ERROR_ONLY'
+              AND EXISTS
+                  (
+                   SELECT 1
+                     FROM "INIT$_TB_RULEVIOL_ASSOC" V
+                    WHERE 1=1
+                      AND V.RUN_SOURCE_TYPE = R.RUN_SOURCE_TYPE
+                      AND V.RUN_ID = R.RUN_ID
+                      AND V.TARGET_OWNER = R.TARGET_OWNER
+                      AND V.TARGET_TABLE = R.TARGET_TABLE
+                      AND V.RULE_OWNER = R.OWNER
+                      AND V.MODEL_NAME = R.MODEL_NAME
+                      AND V.RULE_ID = R.RULE_ID
+                      AND V.RESULT_COLUMN = R.RESULT_COLUMN
+                  )
+              )
+           OR (
+                  :violationScope = 'NORMAL_ONLY'
+              AND NOT EXISTS
+                  (
+                   SELECT 1
+                     FROM "INIT$_TB_RULEVIOL_ASSOC" V
+                    WHERE 1=1
+                      AND V.RUN_SOURCE_TYPE = R.RUN_SOURCE_TYPE
+                      AND V.RUN_ID = R.RUN_ID
+                      AND V.TARGET_OWNER = R.TARGET_OWNER
+                      AND V.TARGET_TABLE = R.TARGET_TABLE
+                      AND V.RULE_OWNER = R.OWNER
+                      AND V.MODEL_NAME = R.MODEL_NAME
+                      AND V.RULE_ID = R.RULE_ID
+                      AND V.RESULT_COLUMN = R.RESULT_COLUMN
+                  )
+              )
+           )
+       AND (
               :keyword IS NULL
            OR UPPER(R.RULE_ID) LIKE '%' || UPPER(:keyword) || '%'
            OR UPPER(R.MODEL_NAME) LIKE '%' || UPPER(:keyword) || '%'
@@ -354,6 +391,41 @@ WITH SOURCE_RULES AS
        AND R.RUN_ID = :runId
        AND (:targetOwner IS NULL OR R.OWNER = :targetOwner)
        AND (:targetTable IS NULL OR R.TABLE_NAME = :targetTable)
+       AND (
+              :violationScope = 'ALL'
+           OR (
+                  :violationScope = 'ERROR_ONLY'
+              AND EXISTS
+                  (
+                   SELECT 1
+                     FROM "INIT$_TB_RULEVIOL_SYMBOLIC" V
+                    WHERE 1=1
+                      AND V.RUN_SOURCE_TYPE = R.RUN_SOURCE_TYPE
+                      AND V.RUN_ID = R.RUN_ID
+                      AND V.TARGET_OWNER = R.OWNER
+                      AND V.TARGET_TABLE = R.TABLE_NAME
+                      AND V.RULE_OWNER = R.OWNER
+                      AND V.RULE_ID = R.RULE_ID
+                      AND V.TARGET_COLUMN = R.TARGET_COLUMN
+                  )
+              )
+           OR (
+                  :violationScope = 'NORMAL_ONLY'
+              AND NOT EXISTS
+                  (
+                   SELECT 1
+                     FROM "INIT$_TB_RULEVIOL_SYMBOLIC" V
+                    WHERE 1=1
+                      AND V.RUN_SOURCE_TYPE = R.RUN_SOURCE_TYPE
+                      AND V.RUN_ID = R.RUN_ID
+                      AND V.TARGET_OWNER = R.OWNER
+                      AND V.TARGET_TABLE = R.TABLE_NAME
+                      AND V.RULE_OWNER = R.OWNER
+                      AND V.RULE_ID = R.RULE_ID
+                      AND V.TARGET_COLUMN = R.TARGET_COLUMN
+                  )
+              )
+           )
        AND (
               :keyword IS NULL
            OR UPPER(R.RULE_ID) LIKE '%' || UPPER(:keyword) || '%'
@@ -521,6 +593,38 @@ SELECT P.SOURCE_RULE_TYPE
         , P.RULE_LIFT DESC NULLS LAST
         , P.SOURCE_RULE_TYPE
         , P.SOURCE_RULE_ID
+;
+
+-- [MCOMMON_EDIT_RULE_SELECTED_COUNT]
+SELECT COUNT(*) AS FINAL_RULE_COUNT
+     , SUM(
+           CASE
+               WHEN R.USER_RULE_YN = 'N'
+                AND R.SOURCE_RUN_SOURCE_TYPE = :runSourceType
+                AND R.SOURCE_RUN_ID = :runId
+               THEN 1
+               ELSE 0
+           END
+       ) AS DISCOVERED_RULE_COUNT
+  FROM "INIT$_TB_EDIT_RULE" R
+ WHERE 1=1
+   AND R.PROJECT_ID = :projectId
+   AND (:scenarioId IS NULL OR R.SCENARIO_ID = :scenarioId)
+   AND R.TARGET_OWNER = :targetOwner
+   AND R.TARGET_TABLE = :targetTable
+   AND R.DECISION_STATUS = 'SELECTED'
+   AND R.RULE_STATUS = 'ACTIVE'
+   AND (
+          (
+              R.USER_RULE_YN = 'Y'
+          AND R.SOURCE_RULE_ID IS NULL
+          )
+       OR (
+              R.USER_RULE_YN = 'N'
+          AND R.SOURCE_RUN_SOURCE_TYPE = :runSourceType
+          AND R.SOURCE_RUN_ID = :runId
+          )
+       )
 ;
 
 -- [MCOMMON_EDIT_RULE_SOURCE_ASSOC_LIST]
@@ -1137,28 +1241,6 @@ SELECT R.*
         , R.EDIT_RULE_ID
 ;
 
--- [MCOMMON_EDIT_USER_RULE_VALIDATE_ASSOC]
-SELECT COUNT(*) AS SAMPLE_COUNT
-     , SUM(CASE WHEN ({conditionExpression}) THEN 1 ELSE 0 END) AS MATCH_COUNT
-  FROM {targetObject} T
- WHERE ROWNUM <= :sampleLimit
-;
-
--- [MCOMMON_EDIT_USER_RULE_VALIDATE_SYMBOLIC]
-SELECT COUNT(*) AS SAMPLE_COUNT
-     , MIN(Q.PREDICTED_VALUE) AS MIN_PREDICTED_VALUE
-     , MAX(Q.PREDICTED_VALUE) AS MAX_PREDICTED_VALUE
-     , MIN(ABS(Q.ACTUAL_VALUE - Q.PREDICTED_VALUE)) AS MIN_ABS_ERROR
-  FROM (
-        SELECT T.{targetColumn} AS ACTUAL_VALUE
-             , {formulaExpression} AS PREDICTED_VALUE
-          FROM {targetObject} T
-         WHERE T.{targetColumn} IS NOT NULL
-               {notNullFilter}
-           AND ROWNUM <= :sampleLimit
-       ) Q
-;
-
 -- [MCOMMON_EDIT_LIVE_VIOLATION_ASSOC]
 SELECT /*+ NO_PARALLEL(T) */ ORA_HASH(ROWIDTOCHAR(T.ROWID), 4294967295) AS VIOLATION_ID
      , CAST(NULL AS VARCHAR2(30)) AS RUN_SOURCE_TYPE
@@ -1258,35 +1340,54 @@ SELECT Q.*
 ;
 
 -- [MCOMMON_EDIT_SESSION_LIST]
+WITH SESSION_SCOPE AS (
+    SELECT /*+ MATERIALIZE */ S.*
+      FROM "INIT$_TB_EDIT_SESSION" S
+     WHERE 1=1
+       AND (:projectId IS NULL OR S.PROJECT_ID = :projectId)
+       AND (:scenarioId IS NULL OR S.SCENARIO_ID = :scenarioId)
+       AND (:sessionStatus = 'ALL' OR S.SESSION_STATUS = :sessionStatus)
+), CHANGE_SUMMARY AS (
+    SELECT C.EDIT_SESSION_ID
+         , COUNT(*) AS CHANGED_CELL_COUNT
+         , COUNT(DISTINCT C.SOURCE_ROWID) AS CHANGED_ROW_COUNT
+      FROM "INIT$_TB_EDIT_CHANGE" C
+      JOIN SESSION_SCOPE S
+        ON S.EDIT_SESSION_ID = C.EDIT_SESSION_ID
+     WHERE C.CHANGE_STATUS = 'APPLIED'
+     GROUP BY C.EDIT_SESSION_ID
+), DML_SUMMARY AS (
+    SELECT D.EDIT_SESSION_ID
+         , COUNT(*) AS DML_COUNT
+         , SUM(CASE WHEN D.DML_STATUS = 'EXECUTED' THEN 1 ELSE 0 END) AS EXECUTED_DML_COUNT
+         , MAX(CASE WHEN D.DML_STATUS = 'EXECUTED' THEN D.EXECUTED_AT END) AS LAST_EXECUTED_AT
+      FROM "INIT$_TB_EDIT_DML" D
+      JOIN SESSION_SCOPE S
+        ON S.EDIT_SESSION_ID = D.EDIT_SESSION_ID
+     GROUP BY D.EDIT_SESSION_ID
+), RULE_SUMMARY AS (
+    SELECT SR.EDIT_SESSION_ID
+         , COUNT(*) AS EXECUTION_RULE_COUNT
+      FROM "INIT$_TB_EDIT_SESSION_RULE" SR
+      JOIN SESSION_SCOPE S
+        ON S.EDIT_SESSION_ID = SR.EDIT_SESSION_ID
+     GROUP BY SR.EDIT_SESSION_ID
+)
 SELECT S.*
      , S.EDIT_SESSION_ID AS EDIT_EXECUTION_ID
-     , (SELECT COUNT(*)
-          FROM "INIT$_TB_EDIT_CHANGE" C
-         WHERE C.EDIT_SESSION_ID = S.EDIT_SESSION_ID
-           AND C.CHANGE_STATUS = 'APPLIED') AS CHANGED_CELL_COUNT
-     , (SELECT COUNT(DISTINCT C.SOURCE_ROWID)
-          FROM "INIT$_TB_EDIT_CHANGE" C
-         WHERE C.EDIT_SESSION_ID = S.EDIT_SESSION_ID
-           AND C.CHANGE_STATUS = 'APPLIED') AS CHANGED_ROW_COUNT
-     , (SELECT COUNT(*)
-          FROM "INIT$_TB_EDIT_SESSION_RULE" SR
-         WHERE SR.EDIT_SESSION_ID = S.EDIT_SESSION_ID) AS EXECUTION_RULE_COUNT
-     , (SELECT COUNT(*)
-          FROM "INIT$_TB_EDIT_DML" D
-         WHERE D.EDIT_SESSION_ID = S.EDIT_SESSION_ID) AS DML_COUNT
-     , (SELECT COUNT(*)
-          FROM "INIT$_TB_EDIT_DML" D
-         WHERE D.EDIT_SESSION_ID = S.EDIT_SESSION_ID
-           AND D.DML_STATUS = 'EXECUTED') AS EXECUTED_DML_COUNT
-     , (SELECT MAX(D.EXECUTED_AT)
-          FROM "INIT$_TB_EDIT_DML" D
-         WHERE D.EDIT_SESSION_ID = S.EDIT_SESSION_ID
-           AND D.DML_STATUS = 'EXECUTED') AS LAST_EXECUTED_AT
-  FROM "INIT$_TB_EDIT_SESSION" S
- WHERE 1=1
-   AND (:projectId IS NULL OR S.PROJECT_ID = :projectId)
-   AND (:scenarioId IS NULL OR S.SCENARIO_ID = :scenarioId)
-   AND (:sessionStatus = 'ALL' OR S.SESSION_STATUS = :sessionStatus)
+     , NVL(C.CHANGED_CELL_COUNT, 0) AS CHANGED_CELL_COUNT
+     , NVL(C.CHANGED_ROW_COUNT, 0) AS CHANGED_ROW_COUNT
+     , NVL(R.EXECUTION_RULE_COUNT, 0) AS EXECUTION_RULE_COUNT
+     , NVL(D.DML_COUNT, 0) AS DML_COUNT
+     , NVL(D.EXECUTED_DML_COUNT, 0) AS EXECUTED_DML_COUNT
+     , D.LAST_EXECUTED_AT
+  FROM SESSION_SCOPE S
+  LEFT JOIN CHANGE_SUMMARY C
+    ON C.EDIT_SESSION_ID = S.EDIT_SESSION_ID
+  LEFT JOIN DML_SUMMARY D
+    ON D.EDIT_SESSION_ID = S.EDIT_SESSION_ID
+  LEFT JOIN RULE_SUMMARY R
+    ON R.EDIT_SESSION_ID = S.EDIT_SESSION_ID
  ORDER BY S.UPDATED_AT DESC NULLS LAST
         , S.CREATED_AT DESC
         , S.EDIT_SESSION_ID DESC
@@ -1587,6 +1688,56 @@ SELECT C.*
         , C.EDIT_CHANGE_ID DESC
 ;
 
+-- [MCOMMON_EDIT_VALIDATION_CHANGE_COUNT]
+SELECT COUNT(*) AS TOTAL_COUNT
+  FROM "INIT$_TB_EDIT_CHANGE" C
+  LEFT JOIN "INIT$_TB_EDIT_RULE" R
+    ON R.EDIT_RULE_ID = C.EDIT_RULE_ID
+ WHERE C.EDIT_SESSION_ID = :editSessionId
+   AND (
+          :keyword IS NULL
+       OR UPPER(C.CASE_ID) LIKE '%' || UPPER(:keyword) || '%'
+       OR UPPER(C.COLUMN_NAME) LIKE '%' || UPPER(:keyword) || '%'
+       OR UPPER(R.RULE_NAME) LIKE '%' || UPPER(:keyword) || '%'
+       OR UPPER(DBMS_LOB.SUBSTR(C.OLD_VALUE, 4000, 1)) LIKE '%' || UPPER(:keyword) || '%'
+       OR UPPER(DBMS_LOB.SUBSTR(C.NEW_VALUE, 4000, 1)) LIKE '%' || UPPER(:keyword) || '%'
+       OR UPPER(DBMS_LOB.SUBSTR(C.EXPECTED_VALUE, 4000, 1)) LIKE '%' || UPPER(:keyword) || '%'
+       )
+;
+
+-- [MCOMMON_EDIT_VALIDATION_CHANGE_PAGE]
+SELECT P.*
+  FROM (
+        SELECT C.*
+             , R.RULE_NAME
+             , R.SOURCE_RULE_TYPE
+             , R.SOURCE_RULE_ID
+             , R.TARGET_OWNER
+             , R.TARGET_TABLE
+             , R.CASE_ID_COLUMN
+             , ROW_NUMBER() OVER (
+                   ORDER BY C.EDITED_AT DESC
+                          , C.EDIT_CHANGE_ID DESC
+               ) AS RN__
+          FROM "INIT$_TB_EDIT_CHANGE" C
+          LEFT JOIN "INIT$_TB_EDIT_RULE" R
+            ON R.EDIT_RULE_ID = C.EDIT_RULE_ID
+         WHERE C.EDIT_SESSION_ID = :editSessionId
+           AND (
+                  :keyword IS NULL
+               OR UPPER(C.CASE_ID) LIKE '%' || UPPER(:keyword) || '%'
+               OR UPPER(C.COLUMN_NAME) LIKE '%' || UPPER(:keyword) || '%'
+               OR UPPER(R.RULE_NAME) LIKE '%' || UPPER(:keyword) || '%'
+               OR UPPER(DBMS_LOB.SUBSTR(C.OLD_VALUE, 4000, 1)) LIKE '%' || UPPER(:keyword) || '%'
+               OR UPPER(DBMS_LOB.SUBSTR(C.NEW_VALUE, 4000, 1)) LIKE '%' || UPPER(:keyword) || '%'
+               OR UPPER(DBMS_LOB.SUBSTR(C.EXPECTED_VALUE, 4000, 1)) LIKE '%' || UPPER(:keyword) || '%'
+               )
+       ) P
+ WHERE P.RN__ > :offset
+   AND P.RN__ <= :endRow
+ ORDER BY P.RN__
+;
+
 -- [MCOMMON_EDIT_VALIDATION_SUMMARY]
 SELECT S.EDIT_SESSION_ID
      , S.SESSION_STATUS
@@ -1611,6 +1762,11 @@ SELECT S.EDIT_SESSION_ID
  GROUP BY S.EDIT_SESSION_ID
         , S.SESSION_STATUS
         , S.SOURCE_ROW_COUNT
+;
+
+-- [MCOMMON_EDIT_RULE_AGGREGATE_EVALUATION]
+SELECT /*+ NO_PARALLEL(T) */ {metricExpressions}
+  FROM {targetObject} T
 ;
 
 -- [MCOMMON_EDIT_DML_LIST]

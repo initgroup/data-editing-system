@@ -70,8 +70,8 @@
                 <span>RUN 기준</span>
                 <select id="ruleRunSource-__PAGE_CODE__" onchange="__PAGE_CODE__.handleRuleRunSourceChange()">
                     <option value="">최신 RUN 자동</option>
-                    <option value="FLOW_WORK">FLOW RUN</option>
-                    <option value="DATA_WORK">DATA RUN</option>
+                    <option value="FLOW_WORK">FLOW RUN 직접 입력</option>
+                    <option value="DATA_WORK">DATA RUN 직접 입력</option>
                 </select>
             </label>
             <label class="edit-work-discovered-rule-only">
@@ -93,6 +93,14 @@
                     <option value="PENDING">대기</option>
                     <option value="SELECTED">선정</option>
                     <option value="REJECTED">제외</option>
+                </select>
+            </label>
+            <label class="edit-work-discovered-rule-only" title="선택한 RUN의 규칙 위반 탐지 결과를 기준으로 구분합니다.">
+                <span>오류 포함 여부</span>
+                <select id="ruleViolationScope-__PAGE_CODE__" onchange="__PAGE_CODE__.applyDiscoveredRuleFilters()">
+                    <option value="ERROR_ONLY" selected>오류 규칙만</option>
+                    <option value="ALL">전체 규칙</option>
+                    <option value="NORMAL_ONLY">정상 규칙만</option>
                 </select>
             </label>
             <button type="button" class="table-btn edit-work-discovered-rule-only" onclick="__PAGE_CODE__.applyDiscoveredRuleFilters()">조회</button>

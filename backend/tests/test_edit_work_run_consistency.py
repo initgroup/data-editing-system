@@ -44,8 +44,9 @@ class EditWorkRunConsistencyTests(unittest.TestCase):
         ]
 
     @patch.object(edit_work_service, "_editing_table_structure_status")
-    @patch.object(edit_work_service, "_list_latest_selected_source_rules")
+    @patch.object(edit_work_service, "_latest_rule_run_for_target")
     @patch.object(edit_work_service, "_require_target_table_access")
+    @patch.object(edit_work_service, "_fetch_one")
     @patch.object(edit_work_service, "_fetch_all")
     @patch.object(edit_work_service, "_require_project_access", return_value=10)
     @patch.object(edit_work_service, "get_target_db_connection")
@@ -54,8 +55,9 @@ class EditWorkRunConsistencyTests(unittest.TestCase):
         get_connection,
         _require_project_access,
         fetch_all,
+        fetch_one,
         require_mapping,
-        latest_rules,
+        latest_run,
         table_status,
     ):
         get_connection.return_value = _Connection()
@@ -80,10 +82,8 @@ class EditWorkRunConsistencyTests(unittest.TestCase):
             ],
         ]
         require_mapping.return_value = self.mapping
-        latest_rules.return_value = (
-            self.latest_rules,
-            {"RUN_SOURCE_TYPE": "FLOW_WORK", "RUN_ID": 1081},
-        )
+        latest_run.return_value = {"RUN_SOURCE_TYPE": "FLOW_WORK", "RUN_ID": 1081}
+        fetch_one.return_value = {"FINAL_RULE_COUNT": 1, "DISCOVERED_RULE_COUNT": 1}
         table_status.return_value = {
             "exists": True,
             "trackingColumnExists": True,
