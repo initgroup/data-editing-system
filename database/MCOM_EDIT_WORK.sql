@@ -64,65 +64,74 @@ SELECT C.PROJECT_ID
 ;
 
 -- [MCOMMON_EDIT_LATEST_RULE_RUN]
+WITH TARGET_RUNS AS
+(
+    SELECT /*+ MATERIALIZE */ R.RUN_SOURCE_TYPE
+         , R.RUN_ID
+      FROM "INIT$_TB_RULEDISC_ASSOC_SUM" R
+     WHERE R.TARGET_OWNER = :targetOwner
+       AND R.TARGET_TABLE = :targetTable
+       AND R.RUN_SOURCE_TYPE IN ('FLOW_WORK', 'DATA_WORK')
+     GROUP BY R.RUN_SOURCE_TYPE
+            , R.RUN_ID
+    UNION
+    SELECT R.RUN_SOURCE_TYPE
+         , R.RUN_ID
+      FROM "INIT$_TB_RULEDISC_SYMBOLIC" R
+     WHERE R.OWNER = :targetOwner
+       AND R.TABLE_NAME = :targetTable
+       AND R.RUN_SOURCE_TYPE IN ('FLOW_WORK', 'DATA_WORK')
+     GROUP BY R.RUN_SOURCE_TYPE
+            , R.RUN_ID
+)
 SELECT RUN_SOURCE_TYPE
      , RUN_ID
      , RUN_AT
+     , PROJECT_ID
+     , SCENARIO_ID
   FROM (
         SELECT C.RUN_SOURCE_TYPE
              , C.RUN_ID
              , C.RUN_AT
+             , C.PROJECT_ID
+             , C.SCENARIO_ID
           FROM (
-                SELECT 'FLOW_WORK' AS RUN_SOURCE_TYPE
-                     , FR.FLOW_RUN_ID AS RUN_ID
+                SELECT TR.RUN_SOURCE_TYPE
+                     , TR.RUN_ID
                      , COALESCE(FR.FINISHED_AT, FR.STARTED_AT, FR.CREATED_AT) AS RUN_AT
-                  FROM "INIT$_TB_FLOW_WORK_RUN" FR
+                     , F.PROJECT_ID
+                     , F.SCENARIO_ID
+                  FROM TARGET_RUNS TR
+                  JOIN "INIT$_TB_FLOW_WORK_RUN" FR
+                    ON TR.RUN_SOURCE_TYPE = 'FLOW_WORK'
+                   AND FR.FLOW_RUN_ID = TR.RUN_ID
                   JOIN "INIT$_TB_FLOW_WORK" F
                     ON F.FLOW_ID = FR.FLOW_ID
                  WHERE F.MENU_CODE = 'M04001'
                    AND F.PROJECT_ID = :projectId
                    AND (:scenarioId IS NULL OR F.SCENARIO_ID = :scenarioId)
                    AND FR.STATUS IN ('SUCCESS', 'COMPLETED')
-                   AND (
-                          EXISTS (
-                              SELECT 1
-                                FROM "INIT$_TB_RULEDISC_ASSOC_SUM" A
-                               WHERE A.RUN_SOURCE_TYPE = 'FLOW_WORK'
-                                 AND A.RUN_ID = FR.FLOW_RUN_ID
-                          )
-                       OR EXISTS (
-                              SELECT 1
-                                FROM "INIT$_TB_RULEDISC_SYMBOLIC" S
-                               WHERE S.RUN_SOURCE_TYPE = 'FLOW_WORK'
-                                 AND S.RUN_ID = FR.FLOW_RUN_ID
-                          )
-                       )
                 UNION ALL
-                SELECT 'DATA_WORK' AS RUN_SOURCE_TYPE
-                     , DR.DATA_RUN_ID AS RUN_ID
+                SELECT TR.RUN_SOURCE_TYPE
+                     , TR.RUN_ID
                      , MAX(COALESCE(DR.FINISHED_AT, DR.STARTED_AT, DR.CREATED_AT)) AS RUN_AT
-                  FROM "INIT$_TB_DATA_WORK_RUN" DR
+                     , J.PROJECT_ID
+                     , J.SCENARIO_ID
+                  FROM TARGET_RUNS TR
+                  JOIN "INIT$_TB_DATA_WORK_RUN" DR
+                    ON TR.RUN_SOURCE_TYPE = 'DATA_WORK'
+                   AND DR.DATA_RUN_ID = TR.RUN_ID
                   JOIN "INIT$_TB_DATA_WORK_JOB" J
                     ON J.WORK_JOB_ID = DR.WORK_JOB_ID
                  WHERE J.PROJECT_ID = :projectId
                    AND (:scenarioId IS NULL OR J.SCENARIO_ID = :scenarioId)
                    AND DR.DATA_RUN_ID > 0
                    AND DR.STATUS IN ('SUCCESS', 'COMPLETED')
-                   AND (
-                          EXISTS (
-                              SELECT 1
-                                FROM "INIT$_TB_RULEDISC_ASSOC_SUM" A
-                               WHERE A.RUN_SOURCE_TYPE = 'DATA_WORK'
-                                 AND A.RUN_ID = DR.DATA_RUN_ID
-                          )
-                       OR EXISTS (
-                              SELECT 1
-                                FROM "INIT$_TB_RULEDISC_SYMBOLIC" S
-                               WHERE S.RUN_SOURCE_TYPE = 'DATA_WORK'
-                                 AND S.RUN_ID = DR.DATA_RUN_ID
-                          )
-                       )
-                 GROUP BY DR.DATA_RUN_ID
-               ) C
+                  GROUP BY TR.RUN_SOURCE_TYPE
+                         , TR.RUN_ID
+                         , J.PROJECT_ID
+                         , J.SCENARIO_ID
+                ) C
          ORDER BY C.RUN_AT DESC NULLS LAST
                 , C.RUN_ID DESC
        )
@@ -180,6 +189,28 @@ SELECT T.SCENARIO_TABLE_ID
    AND T.USE_YN = 'Y'
    AND T.EDIT_OWNER_NAME IS NOT NULL
    AND T.EDIT_TABLE_NAME IS NOT NULL
+ ORDER BY T.SCENARIO_ID
+;
+
+-- [MCOMMON_EDIT_RULE_TARGET_MAPPING]
+SELECT T.SCENARIO_TABLE_ID
+     , T.PROJECT_ID
+     , T.SCENARIO_ID
+     , T.OWNER_NAME AS SOURCE_OWNER
+     , T.TABLE_NAME AS SOURCE_TABLE
+     , T.EDIT_OWNER_NAME AS EDIT_OWNER
+     , T.EDIT_TABLE_NAME AS EDIT_TABLE
+     , NVL(T.CASE_ID_COLUMN, 'FILE_ROW_NO') AS CASE_ID_COLUMN
+  FROM "INIT$_TB_TABLES" T
+ WHERE T.PROJECT_ID = :projectId
+   AND (:scenarioId IS NULL OR T.SCENARIO_ID = :scenarioId)
+   AND T.USE_YN = 'Y'
+   AND T.EDIT_OWNER_NAME IS NOT NULL
+   AND T.EDIT_TABLE_NAME IS NOT NULL
+   AND (
+          (T.OWNER_NAME = :targetOwner AND T.TABLE_NAME = :targetTable)
+       OR (T.EDIT_OWNER_NAME = :targetOwner AND T.EDIT_TABLE_NAME = :targetTable)
+       )
  ORDER BY T.SCENARIO_ID
 ;
 
@@ -371,8 +402,6 @@ WITH SOURCE_RULES AS
                                   , E.SOURCE_OWNER
                                   , E.SOURCE_OBJECT_NAME
                                   , E.SOURCE_RULE_ID
-                                  , E.TARGET_OWNER
-                                  , E.TARGET_TABLE
                                   , E.TARGET_COLUMN
                            ORDER BY E.EDIT_RULE_ID DESC
                    ) AS RN__
@@ -430,8 +459,6 @@ WITH SOURCE_RULES AS
        AND E.SOURCE_OWNER = U.SOURCE_OWNER
        AND E.SOURCE_OBJECT_NAME = U.SOURCE_OBJECT_NAME
        AND E.SOURCE_RULE_ID = U.SOURCE_RULE_ID
-       AND E.TARGET_OWNER = U.TARGET_OWNER
-       AND E.TARGET_TABLE = U.TARGET_TABLE
        AND E.TARGET_COLUMN = U.TARGET_COLUMN
      WHERE 1=1
        AND (
@@ -451,27 +478,6 @@ WITH SOURCE_RULES AS
             , J.SOURCE_RULE_ID
     OFFSET :offset ROWS
      FETCH NEXT :limit ROWS ONLY
-)
-, TARGET_TABLES AS
-(
-    SELECT DISTINCT P.TARGET_OWNER
-         , P.TARGET_TABLE
-      FROM PAGED_RULES P
-)
-, COLUMN_COMMENT_MAP AS
-(
-    SELECT T.TARGET_OWNER
-         , T.TARGET_TABLE
-         , JSON_OBJECTAGG(
-               C.COLUMN_NAME VALUE NVL(C.COMMENTS, '')
-               RETURNING CLOB
-           ) AS COLUMN_COMMENTS_JSON
-      FROM TARGET_TABLES T
-      JOIN ALL_COL_COMMENTS C
-        ON C.OWNER = T.TARGET_OWNER
-       AND C.TABLE_NAME = T.TARGET_TABLE
-     GROUP BY T.TARGET_OWNER
-            , T.TARGET_TABLE
 )
 SELECT P.SOURCE_RULE_TYPE
      , P.RULE_GROUP_CODE
@@ -509,21 +515,7 @@ SELECT P.SOURCE_RULE_TYPE
      , P.CASE_ID_COLUMN
      , P.RULE_NAME
      , P.TOTAL_COUNT
-     , TC.COLUMN_ID AS TARGET_COLUMN_ID
-     , CC.COMMENTS AS TARGET_COLUMN_COMMENT
-     , CM.COLUMN_COMMENTS_JSON
   FROM PAGED_RULES P
-  LEFT OUTER JOIN ALL_TAB_COLUMNS TC
-    ON TC.OWNER = P.TARGET_OWNER
-   AND TC.TABLE_NAME = P.TARGET_TABLE
-   AND TC.COLUMN_NAME = P.TARGET_COLUMN
-  LEFT OUTER JOIN ALL_COL_COMMENTS CC
-    ON CC.OWNER = TC.OWNER
-   AND CC.TABLE_NAME = TC.TABLE_NAME
-   AND CC.COLUMN_NAME = TC.COLUMN_NAME
-  LEFT OUTER JOIN COLUMN_COMMENT_MAP CM
-    ON CM.TARGET_OWNER = P.TARGET_OWNER
-   AND CM.TARGET_TABLE = P.TARGET_TABLE
  ORDER BY P.RUN_ID DESC
         , P.RULE_CONFIDENCE DESC NULLS LAST
         , P.RULE_LIFT DESC NULLS LAST
@@ -653,8 +645,6 @@ SELECT (
                                 AND E.SOURCE_OWNER = R.OWNER
                                 AND E.SOURCE_OBJECT_NAME = R.MODEL_NAME
                                 AND E.SOURCE_RULE_ID = R.RULE_ID
-                                AND E.TARGET_OWNER = R.TARGET_OWNER
-                                AND E.TARGET_TABLE = R.TARGET_TABLE
                                 AND E.TARGET_COLUMN = R.RESULT_COLUMN
                                 AND E.DECISION_STATUS IN ('SELECTED', 'REJECTED')
                          )
@@ -672,8 +662,6 @@ SELECT (
                                 AND E.SOURCE_OWNER = R.OWNER
                                 AND E.SOURCE_OBJECT_NAME = R.MODEL_NAME
                                 AND E.SOURCE_RULE_ID = R.RULE_ID
-                                AND E.TARGET_OWNER = R.TARGET_OWNER
-                                AND E.TARGET_TABLE = R.TARGET_TABLE
                                 AND E.TARGET_COLUMN = R.RESULT_COLUMN
                                 AND E.DECISION_STATUS = :decisionStatus
                          )
@@ -712,8 +700,6 @@ SELECT (
                                 AND E.SOURCE_OWNER = R.OWNER
                                 AND E.SOURCE_OBJECT_NAME = R.TABLE_NAME
                                 AND E.SOURCE_RULE_ID = R.RULE_ID
-                                AND E.TARGET_OWNER = R.OWNER
-                                AND E.TARGET_TABLE = R.TABLE_NAME
                                 AND E.TARGET_COLUMN = R.TARGET_COLUMN
                                 AND E.DECISION_STATUS IN ('SELECTED', 'REJECTED')
                          )
@@ -731,8 +717,6 @@ SELECT (
                                 AND E.SOURCE_OWNER = R.OWNER
                                 AND E.SOURCE_OBJECT_NAME = R.TABLE_NAME
                                 AND E.SOURCE_RULE_ID = R.RULE_ID
-                                AND E.TARGET_OWNER = R.OWNER
-                                AND E.TARGET_TABLE = R.TABLE_NAME
                                 AND E.TARGET_COLUMN = R.TARGET_COLUMN
                                 AND E.DECISION_STATUS = :decisionStatus
                          )
@@ -777,6 +761,16 @@ SELECT R.EDIT_RULE_ID
      , S.METHOD
      , S.COMPLEXITY
      , S.RANK_NO
+     , CASE
+           WHEN R.USER_RULE_YN = 'Y' AND R.SOURCE_RULE_ID IS NULL THEN R.TARGET_OWNER
+           WHEN R.SOURCE_RULE_TYPE = 'ASSOCIATION' THEN A.TARGET_OWNER
+           WHEN R.SOURCE_RULE_TYPE = 'SYMBOLIC' THEN S.OWNER
+       END AS DISCOVERY_TARGET_OWNER
+     , CASE
+           WHEN R.USER_RULE_YN = 'Y' AND R.SOURCE_RULE_ID IS NULL THEN R.TARGET_TABLE
+           WHEN R.SOURCE_RULE_TYPE = 'ASSOCIATION' THEN A.TARGET_TABLE
+           WHEN R.SOURCE_RULE_TYPE = 'SYMBOLIC' THEN S.TABLE_NAME
+       END AS DISCOVERY_TARGET_TABLE
   FROM "INIT$_TB_EDIT_RULE" R
   LEFT JOIN "INIT$_TB_RULEDISC_SYMBOLIC" S
     ON R.SOURCE_RULE_TYPE = 'SYMBOLIC'
@@ -785,9 +779,15 @@ SELECT R.EDIT_RULE_ID
    AND S.OWNER = R.SOURCE_OWNER
    AND S.TABLE_NAME = R.SOURCE_OBJECT_NAME
    AND S.RULE_ID = R.SOURCE_RULE_ID
-   AND S.OWNER = R.TARGET_OWNER
-   AND S.TABLE_NAME = R.TARGET_TABLE
    AND S.TARGET_COLUMN = R.TARGET_COLUMN
+  LEFT JOIN "INIT$_TB_RULEDISC_ASSOC_SUM" A
+    ON R.SOURCE_RULE_TYPE = 'ASSOCIATION'
+   AND A.RUN_SOURCE_TYPE = R.SOURCE_RUN_SOURCE_TYPE
+   AND A.RUN_ID = R.SOURCE_RUN_ID
+   AND A.OWNER = R.SOURCE_OWNER
+   AND A.MODEL_NAME = R.SOURCE_OBJECT_NAME
+   AND A.RULE_ID = R.SOURCE_RULE_ID
+   AND A.RESULT_COLUMN = R.TARGET_COLUMN
  WHERE 1=1
    AND (:projectId IS NULL OR R.PROJECT_ID = :projectId)
    AND (:scenarioId IS NULL OR R.SCENARIO_ID = :scenarioId)
@@ -808,8 +808,39 @@ SELECT R.EDIT_RULE_ID
           AND R.SOURCE_RULE_TYPE = :sourceRuleType
           )
        )
-   AND (:runSourceType IS NULL OR R.SOURCE_RUN_SOURCE_TYPE = :runSourceType)
-   AND (:runId IS NULL OR R.SOURCE_RUN_ID = :runId)
+   AND (
+          :restrictRunYn = 'N'
+       OR (
+              :includeUserRulesYn = 'Y'
+          AND R.USER_RULE_YN = 'Y'
+          AND R.SOURCE_RULE_ID IS NULL
+          )
+       OR (
+              R.USER_RULE_YN = 'N'
+          AND R.SOURCE_RUN_SOURCE_TYPE = :runSourceType
+          AND R.SOURCE_RUN_ID = :runId
+          )
+       )
+   AND (
+          :discoveryTargetOwner IS NULL
+       OR (
+              :includeUserRulesYn = 'Y'
+          AND R.USER_RULE_YN = 'Y'
+          AND R.SOURCE_RULE_ID IS NULL
+          AND R.TARGET_OWNER = :sourceTargetOwner
+          AND R.TARGET_TABLE = :sourceTargetTable
+          )
+       OR (
+              R.SOURCE_RULE_TYPE = 'ASSOCIATION'
+          AND A.TARGET_OWNER = :discoveryTargetOwner
+          AND A.TARGET_TABLE = :discoveryTargetTable
+          )
+       OR (
+              R.SOURCE_RULE_TYPE = 'SYMBOLIC'
+          AND S.OWNER = :discoveryTargetOwner
+          AND S.TABLE_NAME = :discoveryTargetTable
+          )
+       )
  ORDER BY R.UPDATED_AT DESC NULLS LAST
         , R.CREATED_AT DESC
         , R.EDIT_RULE_ID DESC
@@ -1053,6 +1084,16 @@ SELECT R.*
      , A.CONDITION_TOTAL_COUNT
      , A.RESULT_TOTAL_COUNT
      , A.TOTAL_COUNT AS SOURCE_TOTAL_COUNT
+     , CASE
+           WHEN R.USER_RULE_YN = 'Y' AND R.SOURCE_RULE_ID IS NULL THEN R.TARGET_OWNER
+           WHEN R.SOURCE_RULE_TYPE = 'ASSOCIATION' THEN A.TARGET_OWNER
+           WHEN R.SOURCE_RULE_TYPE = 'SYMBOLIC' THEN S.OWNER
+       END AS DISCOVERY_TARGET_OWNER
+     , CASE
+           WHEN R.USER_RULE_YN = 'Y' AND R.SOURCE_RULE_ID IS NULL THEN R.TARGET_TABLE
+           WHEN R.SOURCE_RULE_TYPE = 'ASSOCIATION' THEN A.TARGET_TABLE
+           WHEN R.SOURCE_RULE_TYPE = 'SYMBOLIC' THEN S.TABLE_NAME
+       END AS DISCOVERY_TARGET_TABLE
   FROM "INIT$_TB_EDIT_RULE" R
   LEFT JOIN "INIT$_TB_RULEDISC_SYMBOLIC" S
     ON R.SOURCE_RULE_TYPE = 'SYMBOLIC'
@@ -1060,8 +1101,7 @@ SELECT R.*
    AND S.RUN_ID = R.SOURCE_RUN_ID
    AND S.OWNER = R.SOURCE_OWNER
    AND S.TABLE_NAME = R.SOURCE_OBJECT_NAME
-   AND S.OWNER = R.TARGET_OWNER
-   AND S.TABLE_NAME = R.TARGET_TABLE
+   AND S.RULE_ID = R.SOURCE_RULE_ID
    AND S.TARGET_COLUMN = R.TARGET_COLUMN
   LEFT JOIN "INIT$_TB_RULEDISC_ASSOC_SUM" A
     ON R.SOURCE_RULE_TYPE = 'ASSOCIATION'
@@ -1070,8 +1110,6 @@ SELECT R.*
    AND A.OWNER = R.SOURCE_OWNER
    AND A.MODEL_NAME = R.SOURCE_OBJECT_NAME
    AND A.RULE_ID = R.SOURCE_RULE_ID
-   AND A.TARGET_OWNER = R.TARGET_OWNER
-   AND A.TARGET_TABLE = R.TARGET_TABLE
    AND A.RESULT_COLUMN = R.TARGET_COLUMN
  WHERE 1=1
    AND R.DECISION_STATUS = 'SELECTED'
@@ -1080,6 +1118,19 @@ SELECT R.*
    AND (:scenarioId IS NULL OR R.SCENARIO_ID = :scenarioId)
    AND (:targetOwner IS NULL OR R.TARGET_OWNER = :targetOwner)
    AND (:targetTable IS NULL OR R.TARGET_TABLE = :targetTable)
+   AND (
+          :restrictRunYn = 'N'
+       OR (
+              :includeUserRulesYn = 'Y'
+          AND R.USER_RULE_YN = 'Y'
+          AND R.SOURCE_RULE_ID IS NULL
+          )
+       OR (
+              R.USER_RULE_YN = 'N'
+          AND R.SOURCE_RUN_SOURCE_TYPE = :runSourceType
+          AND R.SOURCE_RUN_ID = :runId
+          )
+       )
  ORDER BY R.TARGET_OWNER
         , R.TARGET_TABLE
         , R.SOURCE_RULE_TYPE

@@ -45,6 +45,8 @@ def create_edit_work_router(menu_code: str) -> APIRouter:
         scenarioId: int | None = None,
         decisionStatus: str = "ALL",
         sourceRuleType: str = "ALL",
+        targetOwner: str | None = None,
+        targetTable: str | None = None,
     ):
         return editing.list_master_rules(
             request,
@@ -52,6 +54,8 @@ def create_edit_work_router(menu_code: str) -> APIRouter:
             scenario_id=scenarioId,
             decision_status=decisionStatus,
             source_rule_type=sourceRuleType,
+            target_owner=targetOwner,
+            target_table=targetTable,
         )
 
     @router.post("/rules")

@@ -221,7 +221,7 @@
 .edit-work-table-map-grid td small {
     color: #64748b;
     display: block;
-    font-size: 9px;
+    font-size: 10px;
     overflow: hidden;
     text-overflow: ellipsis;
 }
@@ -582,6 +582,10 @@
     display: none;
 }
 
+.edit-work-discovered-rule-only[hidden] {
+    display: none;
+}
+
 .edit-work-rule-query-tools {
     align-items: end;
     display: flex;
@@ -615,18 +619,22 @@
 }
 
 .edit-work-rule-query-tools label:nth-child(1) {
-    width: 118px;
+    width: 310px;
 }
 
 .edit-work-rule-query-tools label:nth-child(2) {
-    width: 88px;
+    width: 118px;
 }
 
 .edit-work-rule-query-tools label:nth-child(3) {
-    width: 150px;
+    width: 88px;
 }
 
 .edit-work-rule-query-tools label:nth-child(4) {
+    width: 150px;
+}
+
+.edit-work-rule-query-tools label:nth-child(5) {
     width: 96px;
 }
 
@@ -2037,7 +2045,8 @@
     .edit-work-rule-query-tools label:nth-child(1),
     .edit-work-rule-query-tools label:nth-child(2),
     .edit-work-rule-query-tools label:nth-child(3),
-    .edit-work-rule-query-tools label:nth-child(4) {
+    .edit-work-rule-query-tools label:nth-child(4),
+    .edit-work-rule-query-tools label:nth-child(5) {
         width: auto;
     }
 

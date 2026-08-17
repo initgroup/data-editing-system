@@ -72,6 +72,10 @@
             freezeColumnsInitialized: false,
             ruleRunSource: "",
             ruleRunId: "",
+            ruleTargetTables: [],
+            ruleTargetOwner: "",
+            ruleTargetTable: "",
+            ruleTargetRole: "SOURCE",
             ruleGroup: "ALL",
             ruleDecisionStatus: "ALL",
             stageFilters: {},
@@ -124,6 +128,8 @@
                 this.setEditWorkspaceStage(hasPendingContext ? PAGE_CODE : storedWorkspaceTab);
                 this.ruleRunSource = String(this.pendingContext.runSourceType || stored.ruleRunSource || "").toUpperCase();
                 this.ruleRunId = String(this.pendingContext.runId || stored.ruleRunId || "");
+                this.ruleTargetOwner = String(this.pendingContext.targetOwner || stored.targetOwner || "").toUpperCase();
+                this.ruleTargetTable = String(this.pendingContext.targetTable || stored.targetTable || "").toUpperCase();
                 this.ruleGroup = String(stored.ruleGroup || "ALL").toUpperCase();
                 this.ruleDecisionStatus = String(stored.ruleDecisionStatus || "ALL").toUpperCase();
                 this.renderShell();
@@ -135,11 +141,17 @@
                     return;
                 }
                 await this.loadScenarios(this.pendingContext.scenarioId || stored.scenarioId || "");
+                if (PAGE_CODE === "M05001") await this.loadRuleTargetTables();
                 if (this.usesEditSession()) {
                     await this.loadSessions(this.pendingContext.editSessionId || stored.editSessionId || "");
                 }
                 this.persistContext();
                 this.setWorkContextCollapsed(true);
+                if (PAGE_CODE === "M05001") {
+                    this.initialized = true;
+                    void this.refresh();
+                    return;
+                }
                 await this.refresh();
                 this.initialized = true;
             },
@@ -152,6 +164,19 @@
                 const nextProjectId = String(stored.projectId || "");
                 const nextScenarioId = String(stored.scenarioId || "");
                 if (currentProjectId === nextProjectId && currentScenarioId === nextScenarioId) {
+                    if (PAGE_CODE === "M05001") {
+                        const storedTargetOwner = String(stored.targetOwner || "").toUpperCase();
+                        const storedTargetTable = String(stored.targetTable || "").toUpperCase();
+                        if (
+                            storedTargetOwner !== this.ruleTargetOwner
+                            || storedTargetTable !== this.ruleTargetTable
+                        ) {
+                            this.ruleTargetOwner = storedTargetOwner;
+                            this.ruleTargetTable = storedTargetTable;
+                            await this.loadRuleTargetTables();
+                            await this.refresh();
+                        }
+                    }
                     if (this.usesEditSession()) {
                         this.invalidateEditWorkspaceCache();
                         this.violationSourceTablesLoaded = false;
@@ -170,6 +195,8 @@
                     this.clearViolationContext();
                     this.ruleRunSource = String(stored.ruleRunSource || "").toUpperCase();
                     this.ruleRunId = String(stored.ruleRunId || "");
+                    this.ruleTargetOwner = String(stored.targetOwner || "").toUpperCase();
+                    this.ruleTargetTable = String(stored.targetTable || "").toUpperCase();
                     this.ruleGroup = String(stored.ruleGroup || "ALL").toUpperCase();
                     this.ruleDecisionStatus = String(stored.ruleDecisionStatus || "ALL").toUpperCase();
                     this.renderShell();
@@ -180,6 +207,7 @@
                         return;
                     }
                     await this.loadScenarios(nextScenarioId);
+                    if (PAGE_CODE === "M05001") await this.loadRuleTargetTables();
                     if (this.usesEditSession()) await this.loadSessions(stored.editSessionId || "");
                     this.persistContext();
                     this.setWorkContextCollapsed(true);
@@ -297,8 +325,8 @@
                     ruleRunId: this.ruleRunId || "",
                     ruleGroup: this.ruleGroup || "ALL",
                     ruleDecisionStatus: this.ruleDecisionStatus || "ALL",
-                    targetOwner: this.pendingContext.targetOwner || "",
-                    targetTable: this.pendingContext.targetTable || "",
+                    targetOwner: this.ruleTargetOwner || this.pendingContext.targetOwner || "",
+                    targetTable: this.ruleTargetTable || this.pendingContext.targetTable || "",
                     editWorkspaceTabs: {
                         ...(stored.editWorkspaceTabs || {}),
                         ...(WORKSPACE_TABS[PAGE_CODE] ? { [PAGE_CODE]: this.activeStagePageCode } : {})
@@ -374,7 +402,13 @@
                 const stageContext = getContainerEl(`#stageContext-${PAGE_CODE}`);
                 if (stageContext) stageContext.hidden = this.stage.mode === "DISCOVERED_RULES";
                 const ruleQueryBar = getContainerEl(`#ruleQueryBar-${PAGE_CODE}`);
-                if (ruleQueryBar) ruleQueryBar.hidden = this.stage.mode !== "DISCOVERED_RULES";
+                if (ruleQueryBar) {
+                    ruleQueryBar.hidden = !["DISCOVERED_RULES", "RULE_MASTER"].includes(this.stage.mode);
+                    ruleQueryBar.querySelectorAll(".edit-work-discovered-rule-only").forEach((element) => {
+                        element.hidden = this.stage.mode !== "DISCOVERED_RULES";
+                    });
+                }
+                this.renderRuleTargetOptions();
                 const runSource = getContainerEl(`#ruleRunSource-${PAGE_CODE}`);
                 const runId = getContainerEl(`#ruleRunId-${PAGE_CODE}`);
                 const ruleGroup = getContainerEl(`#ruleGroup-${PAGE_CODE}`);
@@ -455,6 +489,10 @@
                     freezeColumnsInitialized: this.freezeColumnsInitialized,
                     ruleRunSource: this.ruleRunSource,
                     ruleRunId: this.ruleRunId,
+                    ruleTargetTables: this.ruleTargetTables,
+                    ruleTargetOwner: this.ruleTargetOwner,
+                    ruleTargetTable: this.ruleTargetTable,
+                    ruleTargetRole: this.ruleTargetRole,
                     ruleGroup: this.ruleGroup,
                     ruleDecisionStatus: this.ruleDecisionStatus,
                     stageFilters: { ...this.stageFilters },
@@ -520,6 +558,10 @@
                 this.freezeColumnsInitialized = Boolean(snapshot.freezeColumnsInitialized);
                 this.ruleRunSource = snapshot.ruleRunSource || "";
                 this.ruleRunId = snapshot.ruleRunId || "";
+                this.ruleTargetTables = snapshot.ruleTargetTables || [];
+                this.ruleTargetOwner = snapshot.ruleTargetOwner || "";
+                this.ruleTargetTable = snapshot.ruleTargetTable || "";
+                this.ruleTargetRole = snapshot.ruleTargetRole || "SOURCE";
                 this.ruleGroup = snapshot.ruleGroup || "ALL";
                 this.ruleDecisionStatus = snapshot.ruleDecisionStatus || "ALL";
                 this.stageFilters = { ...(snapshot.stageFilters || {}) };
@@ -701,6 +743,127 @@
                 CommonUtils.applyOwnerScopeToSelect(select, this.scenarios, select.value, ["SCENARIO_ID", "scenarioId"]);
             },
 
+            renderRuleTargetOptions() {
+                const select = getContainerEl(`#ruleTargetTable-${PAGE_CODE}`);
+                if (!select) return;
+                if (!this.ruleTargetTables.length) {
+                    select.innerHTML = `<option value="">등록된 실행 대상이 없습니다.</option>`;
+                    select.disabled = true;
+                    return;
+                }
+                select.disabled = false;
+                select.innerHTML = this.ruleTargetTables.map((target) => {
+                    const value = `${target.ROLE}:${target.OWNER}.${target.TABLE}`;
+                    return `
+                        <option value="${this.escapeHtml(value)}"
+                                data-owner="${this.escapeHtml(target.OWNER)}"
+                                data-table="${this.escapeHtml(target.TABLE)}"
+                                data-role="${this.escapeHtml(target.ROLE)}">
+                            [원본 INITUP$] ${this.escapeHtml(target.OWNER)}.${this.escapeHtml(target.TABLE)}
+                        </option>
+                    `;
+                }).join("");
+                const selected = this.ruleTargetTables.find((target) => (
+                    target.OWNER === this.ruleTargetOwner
+                    && target.TABLE === this.ruleTargetTable
+                )) || this.ruleTargetTables.find((target) => target.ROLE === "SOURCE") || this.ruleTargetTables[0];
+                this.ruleTargetOwner = selected?.OWNER || "";
+                this.ruleTargetTable = selected?.TABLE || "";
+                this.ruleTargetRole = selected?.ROLE || "SOURCE";
+                select.value = selected
+                    ? `${selected.ROLE}:${selected.OWNER}.${selected.TABLE}`
+                    : "";
+            },
+
+            async loadRuleTargetTables() {
+                if (PAGE_CODE !== "M05001") return;
+                const params = this.contextParams();
+                const select = getContainerEl(`#ruleTargetTable-${PAGE_CODE}`);
+                if (select) {
+                    select.disabled = true;
+                    select.innerHTML = `<option value="">실행 대상 로딩 중...</option>`;
+                }
+                let json;
+                try {
+                    json = await CommonUtils.request(
+                        apiUrl(`/source-tables?${params}`),
+                        { method: "GET", showLoading: false }
+                    );
+                } catch (error) {
+                    this.ruleTargetTables = [];
+                    this.ruleTargetOwner = "";
+                    this.ruleTargetTable = "";
+                    this.ruleTargetRole = "SOURCE";
+                    if (select) {
+                        select.innerHTML = `<option value="">실행 대상 조회 실패</option>`;
+                        select.disabled = true;
+                    }
+                    throw error;
+                }
+                const pairs = Array.isArray(json.data) ? json.data : [];
+                const targets = [];
+                pairs.forEach((row) => {
+                    const sourceOwner = String(row.OWNER_NAME || "").toUpperCase();
+                    const sourceTable = String(row.TABLE_NAME || "").toUpperCase();
+                    if (sourceOwner && sourceTable) {
+                        targets.push({
+                            ROLE: "SOURCE",
+                            OWNER: sourceOwner,
+                            TABLE: sourceTable
+                        });
+                    }
+                });
+                this.ruleTargetTables = targets.filter((target, index, rows) => (
+                    rows.findIndex((item) => (
+                        item.ROLE === target.ROLE
+                        && item.OWNER === target.OWNER
+                        && item.TABLE === target.TABLE
+                    )) === index
+                ));
+                this.renderRuleTargetOptions();
+                this.pendingContext = {
+                    ...this.pendingContext,
+                    targetOwner: this.ruleTargetOwner,
+                    targetTable: this.ruleTargetTable
+                };
+            },
+
+            async ensureRuleTargetSelected() {
+                if (PAGE_CODE !== "M05001") return true;
+                if (!this.ruleTargetOwner || !this.ruleTargetTable) {
+                    await this.loadRuleTargetTables();
+                }
+                return Boolean(this.ruleTargetOwner && this.ruleTargetTable);
+            },
+
+            async handleRuleTargetChange() {
+                const option = getContainerEl(`#ruleTargetTable-${PAGE_CODE}`)?.selectedOptions?.[0];
+                this.ruleTargetOwner = String(option?.dataset?.owner || "").toUpperCase();
+                this.ruleTargetTable = String(option?.dataset?.table || "").toUpperCase();
+                this.ruleTargetRole = String(option?.dataset?.role || "SOURCE").toUpperCase();
+                this.ruleRunSource = "";
+                this.ruleRunId = "";
+                const runSource = getContainerEl(`#ruleRunSource-${PAGE_CODE}`);
+                const runId = getContainerEl(`#ruleRunId-${PAGE_CODE}`);
+                if (runSource) runSource.value = "";
+                if (runId) {
+                    runId.value = "";
+                    runId.disabled = true;
+                }
+                this.pendingContext = {
+                    ...this.pendingContext,
+                    runSourceType: "",
+                    runId: "",
+                    targetOwner: this.ruleTargetOwner,
+                    targetTable: this.ruleTargetTable
+                };
+                this.page = 1;
+                this.selectedRuleIds.clear();
+                this.invalidateEditWorkspaceCache();
+                this.persistContext();
+                await this.refresh();
+            },
+
             async loadSessions(preferredSessionId = "") {
                 const select = getContainerEl(`#editSessionId-${PAGE_CODE}`);
                 if (!select) return;
@@ -819,6 +982,7 @@
                 this.clearRunContext();
                 this.stageFilters = {};
                 await this.loadScenarios("");
+                if (PAGE_CODE === "M05001") await this.loadRuleTargetTables();
                 if (this.usesEditSession()) await this.loadSessions("");
                 this.persistContext();
                 this.updateWorkContextSummary();
@@ -829,6 +993,7 @@
                 this.invalidateEditWorkspaceCache();
                 this.clearRunContext();
                 this.stageFilters = {};
+                if (PAGE_CODE === "M05001") await this.loadRuleTargetTables();
                 if (this.usesEditSession()) await this.loadSessions("");
                 this.persistContext();
                 this.updateWorkContextSummary();
@@ -870,6 +1035,9 @@
                 };
                 this.ruleRunSource = "";
                 this.ruleRunId = "";
+                this.ruleTargetOwner = "";
+                this.ruleTargetTable = "";
+                this.ruleTargetRole = "SOURCE";
                 const runSource = getContainerEl(`#ruleRunSource-${PAGE_CODE}`);
                 const runId = getContainerEl(`#ruleRunId-${PAGE_CODE}`);
                 if (runSource) runSource.value = "";
@@ -961,6 +1129,7 @@
                 const scenarioId = getContainerEl(`#scenarioId-${PAGE_CODE}`)?.value || "";
                 await this.loadProjects(projectId);
                 await this.loadScenarios(scenarioId);
+                if (PAGE_CODE === "M05001") await this.loadRuleTargetTables();
                 if (this.usesEditSession()) {
                     await this.loadSessions(getContainerEl(`#editSessionId-${PAGE_CODE}`)?.value || "");
                 }
@@ -1106,13 +1275,21 @@
 
             async loadDiscoveredRules() {
                 const requestId = ++this.ruleRequestId;
+                const hasRuleTarget = await this.ensureRuleTargetSelected();
                 this.setRuleQueryLoading(true);
                 const params = this.contextParams();
-                const stored = this.readContext();
                 const runSourceType = this.ruleRunSource || "";
                 const runId = this.ruleRunId || "";
-                const targetOwner = this.pendingContext.targetOwner || stored.targetOwner || "";
-                const targetTable = this.pendingContext.targetTable || stored.targetTable || "";
+                const targetOwner = this.ruleTargetOwner || "";
+                const targetTable = this.ruleTargetTable || "";
+                if (!hasRuleTarget || !targetOwner || !targetTable) {
+                    this.rows = [];
+                    this.serverPaging = true;
+                    this.serverTotalRows = 0;
+                    this.renderEmpty("조회할 원본 INITUP$ 테이블을 선택하세요.");
+                    this.setRuleQueryLoading(false);
+                    return;
+                }
                 if (runSourceType) params.set("runSourceType", runSourceType);
                 if (runId) params.set("runId", runId);
                 if (targetOwner) params.set("targetOwner", targetOwner);
@@ -1129,13 +1306,25 @@
                     if (requestId === this.ruleRequestId) this.setRuleQueryLoading(false);
                 });
                 if (requestId !== this.ruleRequestId) return;
-                this.rows = Array.isArray(json.data) ? json.data : [];
+                const columnComments = json.columnComments && typeof json.columnComments === "object"
+                    ? json.columnComments
+                    : {};
+                this.rows = (Array.isArray(json.data) ? json.data : []).map((row) => ({
+                    ...row,
+                    COLUMN_COMMENTS: columnComments,
+                    TARGET_COLUMN_COMMENT: row.TARGET_COLUMN_COMMENT
+                        || columnComments[String(row.TARGET_COLUMN || "").toUpperCase()]
+                        || ""
+                }));
                 this.serverPaging = true;
                 this.serverTotalRows = Number(json.total || 0);
                 this.page = Math.max(1, Number(json.page || this.page));
                 this.pageSize = Math.max(1, Number(json.pageSize || this.pageSize));
                 this.ruleGroup = String(json.ruleGroup || this.ruleGroup || "ALL").toUpperCase();
                 this.ruleDecisionStatus = String(json.decisionStatus || this.ruleDecisionStatus || "ALL").toUpperCase();
+                this.ruleTargetOwner = String(json.targetOwner || targetOwner).toUpperCase();
+                this.ruleTargetTable = String(json.targetTable || targetTable).toUpperCase();
+                this.ruleTargetRole = String(json.targetRole || this.ruleTargetRole || "SOURCE").toUpperCase();
                 this.pendingContext = {
                     ...this.pendingContext,
                     runSourceType: json.runSourceType || runSourceType || "",
@@ -1210,10 +1399,19 @@
                 this.selectedMasterRuleId = "";
                 this.editingUserRuleId = null;
                 this.userRuleCopyMode = false;
+                const hasRuleTarget = await this.ensureRuleTargetSelected();
                 const params = this.contextParams();
                 params.set("decisionStatus", this.stageFilters.DECISION_STATUS || "ALL");
                 params.set("sourceRuleType", this.stageFilters.SOURCE_RULE_TYPE || "ALL");
+                if (!hasRuleTarget || !this.ruleTargetOwner || !this.ruleTargetTable) {
+                    this.rows = [];
+                    this.renderEmpty("조회할 원본 INITUP$ 테이블을 선택하세요.");
+                    return;
+                }
+                params.set("targetOwner", this.ruleTargetOwner);
+                params.set("targetTable", this.ruleTargetTable);
                 const json = await CommonUtils.request(apiUrl(`/rules?${params}`), { method: "GET", showLoading: false });
+                this.ruleTargetRole = String(json.targetRole || this.ruleTargetRole || "SOURCE").toUpperCase();
                 this.rows = (Array.isArray(json.data) ? json.data : []).map((row) => ({
                     ...row,
                     RUN_ID: row.RUN_ID ?? row.SOURCE_RUN_ID,
@@ -1229,8 +1427,11 @@
                     String(row.USER_RULE_YN || "N").toUpperCase() === "Y"
                     && !row.SOURCE_RULE_ID
                 )).length;
+                const masterRunHint = json.runId
+                    ? `원본 최신 ${json.runSourceType || "RUN"} #${json.runId}`
+                    : "원본 실행 결과 없음";
                 this.setKpis([
-                    { value: this.rows.length, label: "규칙 마스터", hint: "선정·사용자 규칙 전체" },
+                    { value: this.rows.length, label: "규칙 마스터", hint: masterRunHint },
                     { value: counts.ASSOCIATION || 0, label: "연관 규칙", hint: "조건-결과 규칙" },
                     { value: counts.SYMBOLIC || 0, label: "수식 규칙", hint: "연속형 수식 규칙" },
                     { value: userRuleCount, label: "사용자 규칙", hint: "직접 등록 규칙" }
@@ -2200,6 +2401,12 @@
             },
 
             editingTableRowStatus(row) {
+                if (String(row?.CURRENT_RUN_MATCHES_YN || "Y").toUpperCase() === "N") {
+                    return {
+                        className: "is-invalid",
+                        label: this.pageLabel("editingTableStatusStaleRun", "이전 Run 작업")
+                    };
+                }
                 if (row?.EDIT_TABLE_EXISTS && !row?.STRUCTURE_MATCHES) {
                     return {
                         className: "is-invalid",
@@ -2299,6 +2506,7 @@
                                         : displayExecution?.EDIT_SESSION_ID;
                                     const masterRuleCount = Number(row.FINAL_RULE_COUNT || 0);
                                     const hasActiveExecution = correctionMode && Boolean(displayedSessionId);
+                                    const staleRun = String(row.CURRENT_RUN_MATCHES_YN || "Y").toUpperCase() === "N";
                                     return `
                                         <tr class="${selected ? "is-selected-row" : ""}"
                                             onclick="${PAGE_CODE}.selectEditingTableRow('${this.escapeHtml(value)}')">
@@ -2318,6 +2526,7 @@
                                             <td class="is-code">${this.escapeHtml(row.EDIT_TABLE || "-")}</td>
                                             <td class="is-number">
                                                 ${masterRuleCount.toLocaleString()}
+                                                ${row.SOURCE_RUN_ID ? `<small title="원본 INITUP$ 실행 대상의 최신 성공 RUN">${this.escapeHtml(row.SOURCE_RUN_SOURCE_TYPE || "RUN")} #${this.escapeHtml(row.SOURCE_RUN_ID)}</small>` : ""}
                                             </td>
                                             <td>
                                                 <span class="edit-work-table-status ${status.className}">${this.escapeHtml(status.label)}</span>
@@ -2332,12 +2541,16 @@
                                                             ? this.executionStatusLabel(displayExecutionStatus)
                                                             : this.pageLabel("noCurrentEditingWork", "현재 작업 없음"))}</span>
                                                 ` : hasActiveExecution ? `
-                                                    <button type="button"
-                                                            class="table-btn"
-                                                            title="${this.escapeHtml(this.pageLabel("buttonResetCurrentEditingHelp", "현재 수정값과 미실행 DML을 초기화하고 INITUP$ 기준으로 다시 시작합니다."))}"
-                                                            onclick="event.stopPropagation(); ${PAGE_CODE}.resetCurrentEditingWork('${this.escapeHtml(displayedSessionId || "")}', '${this.escapeHtml(value)}')">
-                                                        ${this.escapeHtml(this.pageLabel("buttonResetCurrentEditing", "현재 수정 초기화"))}
-                                                    </button>
+                                                     <button type="button"
+                                                             class="table-btn"
+                                                             title="${this.escapeHtml(staleRun
+                                                                 ? this.pageLabel("buttonRestartLatestRunHelp", "이전 Run 작업을 종료하고 최신 원본 규칙 Run으로 새 오류 수정을 시작합니다.")
+                                                                 : this.pageLabel("buttonResetCurrentEditingHelp", "현재 수정값과 미실행 DML을 초기화하고 INITUP$ 기준으로 다시 시작합니다."))}"
+                                                             onclick="event.stopPropagation(); ${PAGE_CODE}.resetCurrentEditingWork('${this.escapeHtml(displayedSessionId || "")}', '${this.escapeHtml(value)}')">
+                                                         ${this.escapeHtml(staleRun
+                                                             ? this.pageLabel("buttonRestartLatestRun", "최신 규칙으로 다시 시작")
+                                                             : this.pageLabel("buttonResetCurrentEditing", "현재 수정 초기화"))}
+                                                     </button>
                                                 ` : `
                                                     <button type="button"
                                                             class="table-btn is-primary"
@@ -2415,6 +2628,40 @@
                 );
             },
 
+            renderStaleEditingRun(source) {
+                const currentRun = source.CURRENT_RUN_ID
+                    ? `${source.CURRENT_RUN_SOURCE_TYPE || "RUN"} #${source.CURRENT_RUN_ID}`
+                    : "사용자 규칙 전용";
+                const latestRun = source.SOURCE_RUN_ID
+                    ? `${source.SOURCE_RUN_SOURCE_TYPE || "RUN"} #${source.SOURCE_RUN_ID}`
+                    : "사용자 규칙 전용";
+                const sessionId = source.EDIT_SESSION_ID || "";
+                const sourceValue = `${source.OWNER_NAME || ""}.${source.TABLE_NAME || ""}`.toUpperCase();
+                this.serverPaging = false;
+                this.serverTotalRows = 0;
+                this.rows = [];
+                this.violationRules = [];
+                this.selectedViolationRules = [];
+                this.gridColumns = [];
+                this.setKpis([
+                    { value: currentRun, label: "현재 작업 Run", hint: `작업 #${sessionId || "-"}` },
+                    { value: latestRun, label: "최신 원본 Run", hint: "M05001 최종 규칙 기준" },
+                    { value: Number(source.FINAL_RULE_COUNT || 0), label: "최신 최종 규칙", hint: "새 작업에 적용할 규칙" },
+                    { value: "재시작 필요", label: "작업 상태", hint: "서로 다른 Run은 자동 혼합하지 않습니다." }
+                ]);
+                this.setPanel(this.pageLabel("violationEditPanel", "최종 규칙 실시간 위반 조회 및 수정"), `
+                    <button type="button" class="is-primary"
+                            onclick="${PAGE_CODE}.resetCurrentEditingWork('${this.escapeHtml(sessionId)}', '${this.escapeHtml(sourceValue)}')">
+                        <i class="fas fa-rotate"></i>${this.escapeHtml(this.pageLabel("buttonRestartLatestRun", "최신 규칙으로 다시 시작"))}
+                    </button>
+                `);
+                this.hideModeForm();
+                this.renderEmpty(
+                    `현재 오류 수정 작업은 ${currentRun}, 최신 원본 규칙은 ${latestRun} 기준입니다. `
+                    + "기존 작업을 초기화한 뒤 최신 규칙으로 새 오류 수정을 시작해 주세요."
+                );
+            },
+
             async loadViolations() {
                 await this.loadViolationSourceTables();
                 let source = this.getSelectedViolationSource();
@@ -2447,6 +2694,11 @@
                     ]);
                     this.hideModeForm();
                     this.renderEmpty(this.pageLabel("sourceTableRequired", "조회할 INITUP$ 원본 테이블을 반드시 선택하세요."));
+                    return;
+                }
+                if (String(source.CURRENT_RUN_MATCHES_YN || "Y").toUpperCase() === "N") {
+                    this.editingTableStatus = null;
+                    this.renderStaleEditingRun(source);
                     return;
                 }
                 await this.loadEditingTableStatus(source);

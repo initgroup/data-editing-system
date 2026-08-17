@@ -61,6 +61,12 @@
     <section id="ruleQueryBar-__PAGE_CODE__" class="edit-work-rule-query-bar" hidden>
         <div id="ruleQueryTools-__PAGE_CODE__" class="edit-work-rule-query-tools">
             <label>
+                <span>원본 테이블</span>
+                <select id="ruleTargetTable-__PAGE_CODE__" onchange="__PAGE_CODE__.handleRuleTargetChange()">
+                    <option value="">실행 대상 로딩 중...</option>
+                </select>
+            </label>
+            <label class="edit-work-discovered-rule-only">
                 <span>RUN 기준</span>
                 <select id="ruleRunSource-__PAGE_CODE__" onchange="__PAGE_CODE__.handleRuleRunSourceChange()">
                     <option value="">최신 RUN 자동</option>
@@ -68,11 +74,11 @@
                     <option value="DATA_WORK">DATA RUN</option>
                 </select>
             </label>
-            <label>
+            <label class="edit-work-discovered-rule-only">
                 <span>RUN ID</span>
                 <input id="ruleRunId-__PAGE_CODE__" type="number" min="1" placeholder="RUN ID" disabled onkeydown="__PAGE_CODE__.handleRuleFilterKeydown(event)">
             </label>
-            <label>
+            <label class="edit-work-discovered-rule-only">
                 <span>규칙 유형</span>
                 <select id="ruleGroup-__PAGE_CODE__" onchange="__PAGE_CODE__.applyDiscoveredRuleFilters()">
                     <option value="ALL">전체(범주형/연속형)</option>
@@ -80,7 +86,7 @@
                     <option value="CONTINUOUS">연속형</option>
                 </select>
             </label>
-            <label>
+            <label class="edit-work-discovered-rule-only">
                 <span>판단 상태</span>
                 <select id="ruleDecisionStatus-__PAGE_CODE__" onchange="__PAGE_CODE__.applyDiscoveredRuleFilters()">
                     <option value="ALL">전체</option>
@@ -89,7 +95,7 @@
                     <option value="REJECTED">제외</option>
                 </select>
             </label>
-            <button type="button" class="table-btn" onclick="__PAGE_CODE__.applyDiscoveredRuleFilters()">조회</button>
+            <button type="button" class="table-btn edit-work-discovered-rule-only" onclick="__PAGE_CODE__.applyDiscoveredRuleFilters()">조회</button>
         </div>
         <div id="ruleQueryProgress-__PAGE_CODE__" class="edit-work-rule-query-progress" role="status" aria-live="polite" hidden>
             <div class="edit-work-rule-query-progress-track" aria-hidden="true">

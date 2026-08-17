@@ -195,6 +195,23 @@ def _fetch_one(cursor, sql_id: str, params: dict[str, Any]) -> dict[str, Any] | 
     return _row_to_dict(columns, row) if row else None
 
 
+def _column_comments_for_table(cursor, owner: str, table: str) -> dict[str, str]:
+    return {
+        str(column.get("COLUMN_NAME") or "").strip().upper(): str(
+            column.get("COLUMN_COMMENT") or ""
+        )
+        for column in _fetch_all(
+            cursor,
+            "MCOMMON_EDIT_TABLE_COLUMNS",
+            {
+                "ownerName": owner,
+                "tableName": table,
+            },
+        )
+        if column.get("COLUMN_NAME")
+    }
+
+
 def _attach_column_metadata(
     cursor,
     rows: list[dict[str, Any]],
@@ -211,21 +228,7 @@ def _attach_column_metadata(
         table_key = (owner, table)
         if table_key in table_comment_maps:
             continue
-        column_rows = _fetch_all(
-            cursor,
-            "MCOMMON_EDIT_TABLE_COLUMNS",
-            {
-                "ownerName": owner,
-                "tableName": table,
-            },
-        )
-        table_comment_maps[table_key] = {
-            str(column.get("COLUMN_NAME") or "").strip().upper(): str(
-                column.get("COLUMN_COMMENT") or ""
-            )
-            for column in column_rows
-            if column.get("COLUMN_NAME")
-        }
+        table_comment_maps[table_key] = _column_comments_for_table(cursor, owner, table)
 
     for row in rows:
         owner = str(row.get("TARGET_OWNER") or "").strip().upper()
@@ -757,6 +760,137 @@ def _require_target_table_access(
     }
 
 
+def _require_rule_target_table_access(
+    cursor,
+    *,
+    project_id: int,
+    scenario_id: int | None,
+    target_owner: str,
+    target_table: str,
+) -> dict[str, Any]:
+    """Resolve a discovered rule target to its canonical INITUP$ mapping.
+
+    A normal discovery run records INITUP$ as its target, while a post-edit
+    reanalysis run records the paired INITDN$ table. Both are valid rule
+    provenance, but final editing rules must always target the managed INITUP$
+    source so that violation detection and editing sessions share one mapping.
+    """
+    rows = _fetch_all(
+        cursor,
+        "MCOMMON_EDIT_RULE_TARGET_MAPPING",
+        {
+            "projectId": project_id,
+            "scenarioId": scenario_id,
+            "targetOwner": target_owner,
+            "targetTable": target_table,
+        },
+    )
+    if not rows:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "The discovered rule target is not registered as an INITUP$/INITDN$ "
+                "mapping in this project and scenario."
+            ),
+        )
+
+    mapping_keys = {
+        (
+            str(row.get("SOURCE_OWNER") or "").upper(),
+            str(row.get("SOURCE_TABLE") or "").upper(),
+            str(row.get("EDIT_OWNER") or "").upper(),
+            str(row.get("EDIT_TABLE") or "").upper(),
+        )
+        for row in rows
+    }
+    if len(mapping_keys) != 1:
+        raise HTTPException(
+            status_code=400,
+            detail="The discovered rule target has multiple managed table mappings. Select a scenario.",
+        )
+
+    source_owner, source_table, edit_owner, edit_table = next(iter(mapping_keys))
+    normalized_source_owner = _normalize_identifier(source_owner, "source owner")
+    normalized_source_table = _normalize_identifier(source_table, "source table")
+    normalized_edit_owner = _normalize_identifier(edit_owner, "edit owner")
+    normalized_edit_table = _normalize_identifier(edit_table, "edit table")
+    expected_edit_table = _derive_edit_table_name(normalized_source_table)
+    if normalized_edit_table != expected_edit_table:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "The saved INITUP$/INITDN$ mapping does not follow the required naming rule. "
+                f"Expected {expected_edit_table}, but found {normalized_edit_table}."
+            ),
+        )
+
+    requested_pair = (
+        _normalize_identifier(target_owner, "rule target owner"),
+        _normalize_identifier(target_table, "rule target table"),
+    )
+    source_pair = (normalized_source_owner, normalized_source_table)
+    edit_pair = (normalized_edit_owner, normalized_edit_table)
+    if requested_pair not in {source_pair, edit_pair}:
+        raise HTTPException(
+            status_code=403,
+            detail="The discovered rule target does not match the resolved managed table pair.",
+        )
+
+    return {
+        **rows[0],
+        "SOURCE_OWNER": normalized_source_owner,
+        "SOURCE_TABLE": normalized_source_table,
+        "EDIT_OWNER": normalized_edit_owner,
+        "EDIT_TABLE": normalized_edit_table,
+        "DISCOVERY_TABLE_ROLE": "EDIT" if requested_pair == edit_pair else "SOURCE",
+    }
+
+
+def _latest_rule_run_for_target(
+    cursor,
+    *,
+    project_id: int,
+    scenario_id: int | None,
+    target_owner: str,
+    target_table: str,
+) -> dict[str, Any] | None:
+    """Return the latest successful rule run for one physical target table.
+
+    INITUP$ and INITDN$ are deliberately separate discovery tracks.  Callers
+    must pass the exact physical table that produced the rule results; a run
+    from the paired table must never win this lookup merely because it is newer.
+    """
+    return _fetch_one(
+        cursor,
+        "MCOMMON_EDIT_LATEST_RULE_RUN",
+        {
+            "projectId": project_id,
+            "scenarioId": scenario_id,
+            "targetOwner": target_owner,
+            "targetTable": target_table,
+        },
+    )
+
+
+def _selected_rule_run_pair(rules: list[dict[str, Any]]) -> tuple[str, int] | None:
+    pairs = {
+        (
+            str(rule.get("SOURCE_RUN_SOURCE_TYPE") or "").upper(),
+            int(rule.get("SOURCE_RUN_ID") or 0),
+        )
+        for rule in rules
+        if str(rule.get("USER_RULE_YN") or "N").upper() != "Y"
+        and rule.get("SOURCE_RUN_ID") is not None
+        and int(rule.get("SOURCE_RUN_ID") or 0) > 0
+    }
+    if len(pairs) > 1:
+        raise HTTPException(
+            status_code=409,
+            detail="The selected final rules reference more than one source run.",
+        )
+    return next(iter(pairs)) if pairs else None
+
+
 def _require_session_table_mapping(cursor, session: dict[str, Any]) -> dict[str, Any]:
     mapping = _require_target_table_access(
         cursor,
@@ -879,6 +1013,13 @@ def list_editing_tables(
                     detail="Cross-owner editing table mappings are not supported.",
                 )
             edit_table = mapping["EDIT_TABLE"]
+            latest_rules, latest_source_run = _list_latest_selected_source_rules(
+                cursor,
+                project_id=normalized_project_id,
+                scenario_id=scenario_id,
+                source_owner=mapping["SOURCE_OWNER"],
+                source_table=mapping["SOURCE_TABLE"],
+            )
             table_status = _editing_table_structure_status(
                 cursor,
                 owner,
@@ -892,13 +1033,32 @@ def list_editing_tables(
                 edit_table=edit_table,
             )
             session_status = str(session.get("SESSION_STATUS") or "").upper() if session else None
+            expected_run_pair = _selected_rule_run_pair(latest_rules)
+            session_run_pair = (
+                (
+                    str(session.get("SOURCE_RUN_SOURCE_TYPE") or "").upper(),
+                    int(session.get("SOURCE_RUN_ID") or 0),
+                )
+                if session and session.get("SOURCE_RUN_ID") is not None
+                else None
+            )
+            current_run_matches = session is None or session_run_pair == expected_run_pair
             editable = bool(
                 table_status["structureMatches"]
                 and session_status in {"EDITING", "VALIDATED"}
+                and current_run_matches
             )
             result.append(
                 {
                     **row,
+                    "FINAL_RULE_COUNT": len(latest_rules),
+                    "SOURCE_RUN_SOURCE_TYPE": (
+                        (latest_source_run or {}).get("RUN_SOURCE_TYPE")
+                    ),
+                    "SOURCE_RUN_ID": (latest_source_run or {}).get("RUN_ID"),
+                    "CURRENT_RUN_MATCHES_YN": "Y" if current_run_matches else "N",
+                    "CURRENT_RUN_SOURCE_TYPE": session_run_pair[0] if session_run_pair else None,
+                    "CURRENT_RUN_ID": session_run_pair[1] if session_run_pair else None,
                     "EDIT_TABLE": edit_table,
                     "EDIT_TABLE_EXISTS": table_status["exists"],
                     "TRACKING_COLUMN_EXISTS": table_status["trackingColumnExists"],
@@ -996,6 +1156,12 @@ def _list_master_rules(
     source_rule_type: str = "ALL",
     run_source_type: str | None = None,
     run_id: int | None = None,
+    restrict_run: bool = False,
+    include_user_rules: bool = True,
+    discovery_target_owner: str | None = None,
+    discovery_target_table: str | None = None,
+    source_target_owner: str | None = None,
+    source_target_table: str | None = None,
 ) -> list[dict[str, Any]]:
     sql, _ = _edit_rule_sql(cursor, "MCOMMON_EDIT_RULE_MASTER_LIST")
     cursor.execute(
@@ -1008,10 +1174,58 @@ def _list_master_rules(
             "sourceRuleType": source_rule_type,
             "runSourceType": run_source_type,
             "runId": run_id,
+            "restrictRunYn": "Y" if restrict_run else "N",
+            "includeUserRulesYn": "Y" if include_user_rules else "N",
+            "discoveryTargetOwner": discovery_target_owner,
+            "discoveryTargetTable": discovery_target_table,
+            "sourceTargetOwner": source_target_owner,
+            "sourceTargetTable": source_target_table,
         },
     )
     columns = [item[0] for item in cursor.description or []]
     return [_row_to_dict(columns, row) for row in cursor.fetchall()]
+
+
+def _list_latest_selected_source_rules(
+    cursor,
+    *,
+    project_id: int,
+    scenario_id: int | None,
+    source_owner: str,
+    source_table: str,
+) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+    """List active final rules from the INITUP$ track's latest run.
+
+    Standalone user rules belong to the source track and remain available even
+    when no discovery run exists.  INITDN$ reanalysis rules are never merged
+    into this list.
+    """
+    latest_run = _latest_rule_run_for_target(
+        cursor,
+        project_id=project_id,
+        scenario_id=scenario_id,
+        target_owner=source_owner,
+        target_table=source_table,
+    )
+    rows = _fetch_all(
+        cursor,
+        "MCOMMON_EDIT_RULE_SELECTED_LIST",
+        {
+            "projectId": project_id,
+            "scenarioId": scenario_id,
+            "targetOwner": source_owner,
+            "targetTable": source_table,
+            "restrictRunYn": "Y",
+            "includeUserRulesYn": "Y",
+            "runSourceType": (
+                str(latest_run.get("RUN_SOURCE_TYPE") or "").upper()
+                if latest_run
+                else None
+            ),
+            "runId": int(latest_run.get("RUN_ID") or 0) if latest_run else None,
+        },
+    )
+    return rows, latest_run
 
 
 def list_rules(
@@ -1033,6 +1247,30 @@ def list_rules(
     cursor = conn.cursor()
     try:
         project_id = _require_project_access(cursor, request, project_id)
+        normalized_target_owner = _normalize_optional_identifier(target_owner, "target owner")
+        normalized_target_table = _normalize_optional_identifier(target_table, "target table")
+        if bool(normalized_target_owner) != bool(normalized_target_table):
+            raise HTTPException(
+                status_code=400,
+                detail="Execution target Owner and physical table must be provided together.",
+            )
+        if not normalized_target_owner or not normalized_target_table:
+            raise HTTPException(
+                status_code=400,
+                detail="Select the INITUP$ source table first.",
+            )
+        target_mapping = _require_rule_target_table_access(
+            cursor,
+            project_id=project_id,
+            scenario_id=scenario_id,
+            target_owner=normalized_target_owner,
+            target_table=normalized_target_table,
+        )
+        if target_mapping["DISCOVERY_TABLE_ROLE"] != "SOURCE":
+            raise HTTPException(
+                status_code=400,
+                detail="M05001 규칙 관리는 INITUP$ 원본 테이블만 조회할 수 있습니다.",
+            )
         normalized_decision = _normalize_choice(
             decision_status,
             DECISION_STATUSES | {"ALL"},
@@ -1047,6 +1285,7 @@ def list_rules(
         )
         normalized_run_source = None
         normalized_run_id = None
+        run_context = None
         latest_run_selected = False
         if bool(run_source_type) != (run_id is not None):
             raise HTTPException(status_code=400, detail="Run source type and run ID must be provided together.")
@@ -1058,7 +1297,7 @@ def list_rules(
                 "FLOW_WORK",
             )
             normalized_run_id = int(run_id)
-            _require_run_access(
+            run_context = _require_run_access(
                 cursor,
                 project_id=project_id,
                 scenario_id=scenario_id,
@@ -1066,13 +1305,12 @@ def list_rules(
                 run_id=normalized_run_id,
             )
         else:
-            latest_run = _fetch_one(
+            latest_run = _latest_rule_run_for_target(
                 cursor,
-                "MCOMMON_EDIT_LATEST_RULE_RUN",
-                {
-                    "projectId": project_id,
-                    "scenarioId": scenario_id,
-                },
+                project_id=project_id,
+                scenario_id=scenario_id,
+                target_owner=normalized_target_owner,
+                target_table=normalized_target_table,
             )
             if not latest_run:
                 page_window = create_page_window(page, page_size, 0)
@@ -1084,25 +1322,40 @@ def list_rules(
                     "ruleGroup": normalized_rule_group,
                     "decisionStatus": normalized_decision,
                     "latestRunSelected": False,
+                    "targetOwner": normalized_target_owner,
+                    "targetTable": normalized_target_table,
+                    "targetRole": target_mapping["DISCOVERY_TABLE_ROLE"],
                     **page_window.response_metadata(),
                 }
             normalized_run_source = str(latest_run.get("RUN_SOURCE_TYPE") or "").upper()
             normalized_run_id = int(latest_run.get("RUN_ID") or 0)
+            latest_project_id = int(latest_run.get("PROJECT_ID") or 0)
+            latest_scenario_id = int(latest_run.get("SCENARIO_ID") or 0)
+            if (
+                latest_project_id == int(project_id)
+                and latest_scenario_id
+                and (scenario_id is None or latest_scenario_id == int(scenario_id))
+            ):
+                run_context = {
+                    "PROJECT_ID": latest_project_id,
+                    "SCENARIO_ID": latest_scenario_id,
+                }
             latest_run_selected = True
-        run_context = _require_run_access(
-            cursor,
-            project_id=project_id,
-            scenario_id=scenario_id,
-            run_source_type=str(normalized_run_source),
-            run_id=int(normalized_run_id),
-        )
+        if run_context is None:
+            run_context = _require_run_access(
+                cursor,
+                project_id=project_id,
+                scenario_id=scenario_id,
+                run_source_type=str(normalized_run_source),
+                run_id=int(normalized_run_id),
+            )
 
         normalized_keyword = _normalize_text(keyword, 200) or None
         count_params = {
             "runSourceType": normalized_run_source,
             "runId": normalized_run_id,
-            "targetOwner": _normalize_optional_identifier(target_owner, "target owner"),
-            "targetTable": _normalize_optional_identifier(target_table, "target table"),
+            "targetOwner": normalized_target_owner,
+            "targetTable": normalized_target_table,
             "ruleGroup": normalized_rule_group,
             "decisionStatus": normalized_decision,
             "projectId": project_id,
@@ -1137,22 +1390,20 @@ def list_rules(
             )
         total = int(source_rows[0].get("TOTAL_COUNT") or 0) if source_rows else 0
         page_window = create_page_window(requested_page, requested_page_size, total)
+        column_comments = (
+            _column_comments_for_table(
+                cursor,
+                str(normalized_target_owner),
+                str(normalized_target_table),
+            )
+            if source_rows
+            else {}
+        )
         rows: list[dict[str, Any]] = []
         for source in source_rows:
-            column_comments_raw = source.pop("COLUMN_COMMENTS_JSON", None)
             source.pop("TOTAL_COUNT", None)
-            try:
-                column_comments = (
-                    json.loads(column_comments_raw)
-                    if isinstance(column_comments_raw, str) and column_comments_raw
-                    else {}
-                )
-            except (TypeError, ValueError, json.JSONDecodeError):
-                column_comments = {}
-            source["COLUMN_COMMENTS"] = {
-                str(column_name).upper(): str(column_comment or "")
-                for column_name, column_comment in column_comments.items()
-            }
+            target_column = str(source.get("TARGET_COLUMN") or "").upper()
+            source["TARGET_COLUMN_COMMENT"] = column_comments.get(target_column, "")
             source["DECISION_STATUS"] = str(source.get("DECISION_STATUS") or "PENDING")
             source["RULE_STATUS"] = str(source.get("RULE_STATUS") or "ACTIVE")
             source["DECISION_NOTE"] = str(source.get("DECISION_NOTE") or "")
@@ -1167,11 +1418,17 @@ def list_rules(
         return {
             "status": "success",
             "data": rows,
+            "columnComments": column_comments,
             "runSourceType": normalized_run_source,
             "runId": normalized_run_id,
             "ruleGroup": normalized_rule_group,
             "decisionStatus": normalized_decision,
             "latestRunSelected": latest_run_selected,
+            "targetOwner": normalized_target_owner,
+            "targetTable": normalized_target_table,
+            "targetRole": target_mapping["DISCOVERY_TABLE_ROLE"],
+            "sourceTargetOwner": target_mapping["SOURCE_OWNER"],
+            "sourceTargetTable": target_mapping["SOURCE_TABLE"],
             "decisionCounts": page_decision_counts,
             **page_window.response_metadata(),
         }
@@ -1224,6 +1481,8 @@ def save_rule(request: Request, payload: RuleDecisionRequest) -> dict[str, Any]:
     rule_status = _normalize_choice(payload.ruleStatus, RULE_STATUSES, "rule status", "ACTIVE")
     target_owner = _normalize_identifier(payload.targetOwner, "target owner")
     target_table = _normalize_identifier(payload.targetTable, "target table")
+    discovery_target_owner = target_owner
+    discovery_target_table = target_table
     target_column = _normalize_identifier(payload.targetColumn, "target column")
     case_id_column = _normalize_optional_identifier(payload.caseIdColumn, "case ID column")
     source_owner = _normalize_optional_identifier(payload.sourceOwner, "source owner")
@@ -1267,6 +1526,15 @@ def save_rule(request: Request, payload: RuleDecisionRequest) -> dict[str, Any]:
                 raise HTTPException(status_code=400, detail="The rule project does not match its source run.")
             if payload.scenarioId is not None and int(payload.scenarioId) != scenario_id:
                 raise HTTPException(status_code=400, detail="The rule scenario does not match its source run.")
+            target_mapping = _require_rule_target_table_access(
+                cursor,
+                project_id=project_id,
+                scenario_id=scenario_id,
+                target_owner=discovery_target_owner,
+                target_table=discovery_target_table,
+            )
+            target_owner = target_mapping["SOURCE_OWNER"]
+            target_table = target_mapping["SOURCE_TABLE"]
         existing_rule = None
         if payload.editRuleId and is_user_rule:
             existing_rule = _fetch_one(
@@ -1325,7 +1593,7 @@ def save_rule(request: Request, payload: RuleDecisionRequest) -> dict[str, Any]:
                 target_table=target_table,
             )
             scenario_id = table_context["SCENARIO_ID"]
-        if not (is_user_rule and existing_rule and not definition_changed):
+        if is_user_rule and not (existing_rule and not definition_changed):
             _require_target_table_access(
                 cursor,
                 project_id=project_id,
@@ -1363,8 +1631,8 @@ def save_rule(request: Request, payload: RuleDecisionRequest) -> dict[str, Any]:
                     "sourceOwner": source_owner,
                     "sourceObjectName": source_object_name,
                     "sourceRuleId": source_rule_id,
-                    "targetOwner": target_owner,
-                    "targetTable": target_table,
+                    "targetOwner": discovery_target_owner,
+                    "targetTable": discovery_target_table,
                     "targetColumn": target_column,
                 },
             )
@@ -1832,6 +2100,8 @@ def list_master_rules(
     scenario_id: int | None,
     decision_status: str = "ALL",
     source_rule_type: str = "ALL",
+    target_owner: str | None = None,
+    target_table: str | None = None,
 ) -> dict[str, Any]:
     normalized_decision = str(decision_status or "ALL").upper()
     if normalized_decision not in DECISION_STATUSES | {"ALL"}:
@@ -1843,13 +2113,79 @@ def list_master_rules(
     cursor = conn.cursor()
     try:
         project_id = _require_project_access(cursor, request, project_id)
-        rows = _list_master_rules(cursor, project_id, scenario_id, normalized_decision, normalized_source)
+        normalized_target_owner = _normalize_optional_identifier(target_owner, "target owner")
+        normalized_target_table = _normalize_optional_identifier(target_table, "target table")
+        if bool(normalized_target_owner) != bool(normalized_target_table):
+            raise HTTPException(
+                status_code=400,
+                detail="Execution target Owner and physical table must be provided together.",
+            )
+        if not normalized_target_owner or not normalized_target_table:
+            raise HTTPException(
+                status_code=400,
+                detail="Select the INITUP$ source table first.",
+            )
+        target_mapping = _require_rule_target_table_access(
+            cursor,
+            project_id=project_id,
+            scenario_id=scenario_id,
+            target_owner=normalized_target_owner,
+            target_table=normalized_target_table,
+        )
+        if target_mapping["DISCOVERY_TABLE_ROLE"] != "SOURCE":
+            raise HTTPException(
+                status_code=400,
+                detail="M05001 규칙 마스터는 INITUP$ 원본 테이블만 조회할 수 있습니다.",
+            )
+        latest_run = _latest_rule_run_for_target(
+            cursor,
+            project_id=project_id,
+            scenario_id=scenario_id,
+            target_owner=normalized_target_owner,
+            target_table=normalized_target_table,
+        )
+        latest_run_source = (
+            str(latest_run.get("RUN_SOURCE_TYPE") or "").upper()
+            if latest_run
+            else None
+        )
+        latest_run_id = int(latest_run.get("RUN_ID") or 0) if latest_run else None
+        include_user_rules = target_mapping["DISCOVERY_TABLE_ROLE"] == "SOURCE"
+        rows = _list_master_rules(
+            cursor,
+            project_id,
+            scenario_id,
+            normalized_decision,
+            normalized_source,
+            latest_run_source,
+            latest_run_id,
+            restrict_run=True,
+            include_user_rules=include_user_rules,
+            discovery_target_owner=normalized_target_owner,
+            discovery_target_table=normalized_target_table,
+            source_target_owner=target_mapping["SOURCE_OWNER"],
+            source_target_table=target_mapping["SOURCE_TABLE"],
+        )
+        for row in rows:
+            row["DISCOVERY_TABLE_ROLE"] = target_mapping["DISCOVERY_TABLE_ROLE"]
         _attach_column_metadata(
             cursor,
             rows,
             column_keys=("TARGET_COLUMN", "CASE_ID_COLUMN"),
         )
-        return {"status": "success", "data": rows, "total": len(rows)}
+        return {
+            "status": "success",
+            "data": rows,
+            "total": len(rows),
+            "runSourceType": latest_run_source,
+            "runId": latest_run_id,
+            "latestRunSelected": bool(latest_run),
+            "targetOwner": normalized_target_owner,
+            "targetTable": normalized_target_table,
+            "targetRole": target_mapping["DISCOVERY_TABLE_ROLE"],
+            "sourceTargetOwner": target_mapping["SOURCE_OWNER"],
+            "sourceTargetTable": target_mapping["SOURCE_TABLE"],
+        }
     except HTTPException:
         raise
     except Exception as exc:
@@ -2159,8 +2495,9 @@ def list_violations(
             "change status",
             "ALL",
         )
+        source_mapping = None
         if normalized_table:
-            _require_target_table_access(
+            source_mapping = _require_target_table_access(
                 cursor,
                 project_id=project_id,
                 scenario_id=scenario_id,
@@ -2168,7 +2505,8 @@ def list_violations(
                 target_table=normalized_table,
             )
         rule_scenario_id = scenario_id
-        execution_rule_ids: set[int] | None = None
+        rules: list[dict[str, Any]]
+        source_run: dict[str, Any] | None = None
         if edit_session_id:
             session = _select_session(cursor, edit_session_id, request)
             if int(session.get("PROJECT_ID") or 0) != project_id:
@@ -2192,31 +2530,84 @@ def list_violations(
                     status_code=400,
                     detail="선택한 수정 작업이 원본 테이블과 일치하지 않습니다.",
                 )
-            if str(session.get("SESSION_STATUS") or "").upper() in {"APPLIED", "CANCELLED"}:
-                execution_rule_ids = {
-                    int(row.get("EDIT_RULE_ID") or 0)
-                    for row in _fetch_all(
-                        cursor,
-                        "MCOMMON_EDIT_SESSION_RULE_LIST",
-                        {"editSessionId": int(edit_session_id)},
+            session_status = str(session.get("SESSION_STATUS") or "").upper()
+            if session_status in {"APPLIED", "CANCELLED"}:
+                rules = _fetch_all(
+                    cursor,
+                    "MCOMMON_EDIT_SESSION_RULE_LIST",
+                    {"editSessionId": int(edit_session_id)},
+                )
+                if _edit_rule_tolerance_column_exists(cursor):
+                    tolerance_map = {
+                        int(row.get("EDIT_RULE_ID") or 0): row.get("RULE_TOLERANCE_PCT")
+                        for row in _fetch_all(
+                            cursor,
+                            "MCOMMON_EDIT_SESSION_RULE_TOLERANCE_LIST",
+                            {"editSessionId": int(edit_session_id)},
+                        )
+                    }
+                    for rule in rules:
+                        rule["RULE_TOLERANCE_PCT"] = tolerance_map.get(
+                            int(rule.get("EDIT_RULE_ID") or 0)
+                        )
+            else:
+                session_mapping = source_mapping or _require_target_table_access(
+                    cursor,
+                    project_id=project_id,
+                    scenario_id=rule_scenario_id,
+                    target_owner=str(session.get("TARGET_OWNER") or ""),
+                    target_table=str(session.get("SOURCE_TABLE") or ""),
+                )
+                rules, source_run = _list_latest_selected_source_rules(
+                    cursor,
+                    project_id=project_id,
+                    scenario_id=rule_scenario_id,
+                    source_owner=session_mapping["SOURCE_OWNER"],
+                    source_table=session_mapping["SOURCE_TABLE"],
+                )
+                expected_run_pair = _selected_rule_run_pair(rules)
+                session_run_pair = (
+                    (
+                        str(session.get("SOURCE_RUN_SOURCE_TYPE") or "").upper(),
+                        int(session.get("SOURCE_RUN_ID") or 0),
                     )
+                    if session.get("SOURCE_RUN_ID") is not None
+                    else None
+                )
+                if session_run_pair != expected_run_pair:
+                    latest_run_label = (
+                        f"{expected_run_pair[0]} #{expected_run_pair[1]}"
+                        if expected_run_pair
+                        else "사용자 규칙 전용"
+                    )
+                    current_run_label = (
+                        f"{session_run_pair[0]} #{session_run_pair[1]}"
+                        if session_run_pair
+                        else "사용자 규칙 전용"
+                    )
+                    raise HTTPException(
+                        status_code=409,
+                        detail=(
+                            "현재 오류 수정 작업의 규칙 Run이 최신 원본 규칙 Run과 다릅니다. "
+                            f"현재 작업: {current_run_label}, 최신 규칙: {latest_run_label}. "
+                            "기존 작업을 초기화하고 최신 규칙으로 새 오류 수정을 시작해 주세요."
+                        ),
+                    )
+            if source_run is None and session.get("SOURCE_RUN_ID") is not None:
+                source_run = {
+                    "RUN_SOURCE_TYPE": session.get("SOURCE_RUN_SOURCE_TYPE"),
+                    "RUN_ID": session.get("SOURCE_RUN_ID"),
                 }
-        rules = _fetch_all(
-            cursor,
-            "MCOMMON_EDIT_RULE_SELECTED_LIST",
-            {
-                "projectId": project_id,
-                "scenarioId": rule_scenario_id,
-                "targetOwner": normalized_owner,
-                "targetTable": normalized_table,
-            },
-        )
-        if execution_rule_ids is not None:
-            rules = [
-                rule
-                for rule in rules
-                if int(rule.get("EDIT_RULE_ID") or 0) in execution_rule_ids
-            ]
+        elif source_mapping:
+            rules, source_run = _list_latest_selected_source_rules(
+                cursor,
+                project_id=project_id,
+                scenario_id=rule_scenario_id,
+                source_owner=source_mapping["SOURCE_OWNER"],
+                source_table=source_mapping["SOURCE_TABLE"],
+            )
+        else:
+            rules = []
         _attach_column_metadata(
             cursor,
             rules,
@@ -2232,6 +2623,8 @@ def list_violations(
                 "selectedRules": [],
                 "queryMode": "LIVE",
                 "generatedSql": "",
+                "runSourceType": (source_run or {}).get("RUN_SOURCE_TYPE"),
+                "runId": (source_run or {}).get("RUN_ID"),
                 **page_window.response_metadata(),
             }
         requested_rule_ids = {
@@ -2271,6 +2664,8 @@ def list_violations(
                 "selectedRules": [],
                 "queryMode": "LIVE",
                 "generatedSql": "",
+                "runSourceType": (source_run or {}).get("RUN_SOURCE_TYPE"),
+                "runId": (source_run or {}).get("RUN_ID"),
                 **page_window.response_metadata(),
             }
         selected_rule = selected_rules[0] if len(selected_rules) == 1 else None
@@ -2326,6 +2721,8 @@ def list_violations(
             "selectedRules": selected_rules,
             "queryMode": "LIVE",
             "generatedSql": generated_sql,
+            "runSourceType": (source_run or {}).get("RUN_SOURCE_TYPE"),
+            "runId": (source_run or {}).get("RUN_ID"),
             **page_window.response_metadata(),
         }
     except HTTPException:
@@ -2468,6 +2865,51 @@ def create_session(request: Request, payload: EditSessionCreateRequest) -> dict[
             raise HTTPException(
                 status_code=409,
                 detail="Cross-owner editing table mappings are not supported.",
+            )
+        latest_source_run = _latest_rule_run_for_target(
+            cursor,
+            project_id=project_id,
+            scenario_id=payload.scenarioId,
+            target_owner=mapping["SOURCE_OWNER"],
+            target_table=mapping["SOURCE_TABLE"],
+        )
+        latest_source_run_pair = (
+            (
+                str(latest_source_run.get("RUN_SOURCE_TYPE") or "").upper(),
+                int(latest_source_run.get("RUN_ID") or 0),
+            )
+            if latest_source_run
+            else None
+        )
+        stale_rule_ids = []
+        for row in selected:
+            is_user_rule = (
+                str(row.get("USER_RULE_YN") or "N").upper() == "Y"
+                and not row.get("SOURCE_RULE_ID")
+            )
+            if is_user_rule:
+                continue
+            row_run_pair = (
+                str(row.get("SOURCE_RUN_SOURCE_TYPE") or "").upper(),
+                int(row.get("SOURCE_RUN_ID") or 0),
+            )
+            discovery_pair = (
+                str(row.get("DISCOVERY_TARGET_OWNER") or "").upper(),
+                str(row.get("DISCOVERY_TARGET_TABLE") or "").upper(),
+            )
+            if (
+                row_run_pair != latest_source_run_pair
+                or discovery_pair != (mapping["SOURCE_OWNER"], mapping["SOURCE_TABLE"])
+            ):
+                stale_rule_ids.append(int(row.get("EDIT_RULE_ID") or 0))
+        if stale_rule_ids:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "An editing execution can use only the latest INITUP$ source-run rules. "
+                    f"Re-select rules from the current source track. Rule IDs: "
+                    f"{', '.join(str(value) for value in sorted(stale_rule_ids))}"
+                ),
             )
         edit_table = mapping["EDIT_TABLE"]
         lock_row = _fetch_one(
@@ -2694,6 +3136,25 @@ def editing_table_status(
             source_table=source_table,
             edit_table=edit_table,
         )
+        latest_rules, latest_source_run = _list_latest_selected_source_rules(
+            cursor,
+            project_id=normalized_project_id,
+            scenario_id=scenario_id,
+            source_owner=mapping["SOURCE_OWNER"],
+            source_table=mapping["SOURCE_TABLE"],
+        )
+        expected_run_pair = _selected_rule_run_pair(latest_rules)
+        session_run_pair = (
+            (
+                str(matching_session.get("SOURCE_RUN_SOURCE_TYPE") or "").upper(),
+                int(matching_session.get("SOURCE_RUN_ID") or 0),
+            )
+            if matching_session and matching_session.get("SOURCE_RUN_ID") is not None
+            else None
+        )
+        current_run_matches = (
+            matching_session is None or session_run_pair == expected_run_pair
+        )
         session_status = (
             str(matching_session.get("SESSION_STATUS") or "").upper()
             if matching_session
@@ -2709,7 +3170,18 @@ def editing_table_status(
                 "editable": bool(
                     table_status["structureMatches"]
                     and session_status in {"EDITING", "VALIDATED"}
+                    and current_run_matches
                 ),
+                "currentRunMatches": current_run_matches,
+                "currentRunSourceType": (
+                    session_run_pair[0] if session_run_pair else None
+                ),
+                "currentRunId": session_run_pair[1] if session_run_pair else None,
+                "latestRunSourceType": (
+                    (latest_source_run or {}).get("RUN_SOURCE_TYPE")
+                ),
+                "latestRunId": (latest_source_run or {}).get("RUN_ID"),
+                "latestRuleCount": len(latest_rules),
                 "editSessionId": (
                     matching_session.get("EDIT_SESSION_ID")
                     if matching_session
@@ -2755,6 +3227,27 @@ def create_editing_table(
         )
     edit_session_id = current_status.get("editSessionId")
     session_status = str(current_status.get("sessionStatus") or "").upper()
+    if edit_session_id and current_status.get("currentRunMatches") is False:
+        current_run = (
+            f"{current_status.get('currentRunSourceType') or 'RUN'} "
+            f"#{current_status.get('currentRunId')}"
+            if current_status.get("currentRunId")
+            else "사용자 규칙 전용"
+        )
+        latest_run = (
+            f"{current_status.get('latestRunSourceType') or 'RUN'} "
+            f"#{current_status.get('latestRunId')}"
+            if current_status.get("latestRunId")
+            else "사용자 규칙 전용"
+        )
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "현재 오류 수정 작업의 규칙 Run이 최신 원본 규칙 Run과 다릅니다. "
+                f"현재 작업: {current_run}, 최신 규칙: {latest_run}. "
+                "기존 작업을 초기화한 뒤 최신 규칙으로 다시 시작해 주세요."
+            ),
+        )
     if current_status.get("editable") and edit_session_id:
         return {
             "status": "success",
@@ -2775,18 +3268,24 @@ def create_editing_table(
         cursor = conn.cursor()
         try:
             project_id = _require_project_access(cursor, request, payload.projectId)
-            rules = _list_master_rules(
+            mapping = _require_target_table_access(
                 cursor,
-                project_id,
-                payload.scenarioId,
-                "SELECTED",
-                "ALL",
+                project_id=project_id,
+                scenario_id=payload.scenarioId,
+                target_owner=owner,
+                target_table=source_table,
+            )
+            rules, _latest_source_run = _list_latest_selected_source_rules(
+                cursor,
+                project_id=project_id,
+                scenario_id=payload.scenarioId,
+                source_owner=mapping["SOURCE_OWNER"],
+                source_table=mapping["SOURCE_TABLE"],
             )
             selected_rules = [
                 row
                 for row in rules
-                if str(row.get("RULE_STATUS") or "").upper() == "ACTIVE"
-                and str(row.get("TARGET_OWNER") or "").upper() == owner
+                if str(row.get("TARGET_OWNER") or "").upper() == owner
                 and str(row.get("TARGET_TABLE") or "").upper() == source_table
                 and (
                     not requested_rule_ids
@@ -3127,6 +3626,10 @@ def _session_rules_for_changes(
                 "scenarioId": session.get("SCENARIO_ID"),
                 "targetOwner": session.get("TARGET_OWNER"),
                 "targetTable": session.get("SOURCE_TABLE"),
+                "restrictRunYn": "N",
+                "includeUserRulesYn": "Y",
+                "runSourceType": None,
+                "runId": None,
             },
         )
     }
