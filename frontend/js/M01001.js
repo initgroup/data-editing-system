@@ -10,7 +10,11 @@
         projectType: "EDITING",
         projectDesc: "",
         useYn: "Y",
-        sortOrder: 0
+        sortOrder: 0,
+        userId: null,
+        userEmail: "",
+        isOwnerYn: "Y",
+        ownerScope: "MY"
     });
 
     const M01001 = {
@@ -26,6 +30,7 @@
             if (this.isInit) return;
             this.newProject(false);
             await this.loadProjects();
+            this.updateAdminPurgeAction();
             this.isInit = true;
         },
 
@@ -86,16 +91,21 @@
         createProjectRow(project) {
             const projectId = project.PROJECT_ID ?? "";
             const selectedClass = String(projectId) === String(this.selectedProject.projectId) ? "is-selected" : "";
+            const ownerScopeClass = CommonUtils.getOwnerScopeClass(project);
             const name = project.PROJECT_NAME || "";
+            const displayName = CommonUtils.formatOwnerScopedName(project, name || this.t("untitledProject", "(Untitled project)"));
             const code = project.PROJECT_CODE || "";
             const type = project.PROJECT_TYPE || "";
             const useYn = project.USE_YN || "Y";
-            const title = name || this.t("untitledProject", "(Untitled project)");
+            const title = displayName;
             const codeLabel = code || this.t("noCode", "No code");
             const useLabel = this.tl("useValue", "Use {value}", { value: useYn });
+            const createdAtLabel = this.tl("createdAtValue", "Created {value}", {
+                value: this.formatDateTime(project.CREATED_AT)
+            });
 
             return `
-                <button type="button" class="project-row ${selectedClass}" data-project-id="${this.escapeAttr(projectId)}" onclick="M01001.selectProject('${this.escapeAttr(projectId)}')">
+                <button type="button" class="project-row ${selectedClass} ${this.escapeAttr(ownerScopeClass)}" data-project-id="${this.escapeAttr(projectId)}" onclick="M01001.selectProject('${this.escapeAttr(projectId)}')">
                     <span class="project-row-main">
                         <span class="project-row-title" title="${this.escapeHtml(title)}">${this.escapeHtml(title)}</span>
                         <span class="project-row-sub" title="${this.escapeHtml(codeLabel)}">${this.escapeHtml(codeLabel)}</span>
@@ -103,6 +113,7 @@
                     <span class="project-row-meta">
                         <span title="${this.escapeHtml(type)}">${this.escapeHtml(type || "-")}</span>
                         <span title="${this.escapeHtml(useLabel)}">${this.escapeHtml(useLabel)}</span>
+                        <span title="${this.escapeHtml(createdAtLabel)}">${this.escapeHtml(createdAtLabel)}</span>
                     </span>
                 </button>
             `;
@@ -134,7 +145,11 @@
                 projectType: row.PROJECT_TYPE ?? row.projectType ?? "EDITING",
                 projectDesc: row.PROJECT_DESC ?? row.projectDesc ?? "",
                 useYn: row.USE_YN ?? row.useYn ?? "Y",
-                sortOrder: row.SORT_ORDER ?? row.sortOrder ?? 0
+                sortOrder: row.SORT_ORDER ?? row.sortOrder ?? 0,
+                userId: row.USER_ID ?? row.userId ?? null,
+                userEmail: row.USER_EMAIL ?? row.userEmail ?? "",
+                isOwnerYn: row.IS_OWNER_YN ?? row.isOwnerYn ?? "Y",
+                ownerScope: row.OWNER_SCOPE ?? row.ownerScope ?? "MY"
             };
         },
 
@@ -171,7 +186,36 @@
             this.setValue("#projectDesc-M01001", project.projectDesc);
             this.setValue("#useYn-M01001", project.useYn || "Y");
             this.setValue("#sortOrder-M01001", project.sortOrder ?? 0);
+            this.updateProjectEditAccess();
+            this.updateAdminPurgeAction();
             this.hideProjectCodeHelp();
+        },
+
+        updateAdminPurgeAction() {
+            const button = getContainerEl("#purgeProject-M01001");
+            if (!button) return;
+            const isAdmin = Boolean(CommonUtils.isAdminUser?.());
+            button.hidden = !isAdmin;
+            button.disabled = !isAdmin || !this.selectedProject?.projectId;
+        },
+
+        updateProjectEditAccess() {
+            const isOwned = !this.selectedProject?.projectId || this.selectedProject.isOwnerYn !== "N";
+            [
+                "#projectCode-M01001",
+                "#projectName-M01001",
+                "#projectType-M01001",
+                "#projectDesc-M01001",
+                "#useYn-M01001",
+                "#sortOrder-M01001"
+            ].forEach((selector) => {
+                const element = getContainerEl(selector);
+                if (element) element.disabled = !isOwned;
+            });
+            ["#saveProject-M01001", "#resetProject-M01001", "#deleteProject-M01001"].forEach((selector) => {
+                const button = getContainerEl(selector);
+                if (button) button.disabled = !isOwned;
+            });
         },
 
         ensureProjectTypeOption(value) {
@@ -324,6 +368,69 @@
             } catch (error) {
                 console.error("[M01001] project delete failed", error);
                 CommonMessage.error(error.message || "Project delete failed.");
+            }
+        },
+
+        async purgeProject() {
+            if (!CommonUtils.isAdminUser?.()) {
+                CommonMessage.error("관리자 권한이 필요한 기능입니다.");
+                return;
+            }
+
+            const projectId = this.selectedProject?.projectId;
+            if (!projectId) {
+                CommonMessage.warn("완전 삭제할 저장된 프로젝트를 선택하세요.");
+                return;
+            }
+
+            let confirmation = null;
+            try {
+                const previewResult = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/project/purge-preview`, {
+                    method: "POST",
+                    body: { projectId }
+                });
+                const preview = previewResult.data || {};
+                if (!preview.canPurge) {
+                    const blockers = Array.isArray(preview.blockers) ? preview.blockers.join("\n- ") : "안전 조건을 확인할 수 없습니다.";
+                    CommonMessage.error(`프로젝트 완전 삭제가 차단되었습니다.\n\n- ${blockers}`);
+                    return;
+                }
+
+                confirmation = await this.confirmAdminPurge({
+                    scopeLabel: "프로젝트",
+                    scopeDescription: "선택 프로젝트와 소속 전체 시나리오",
+                    targetCode: preview.targetCode,
+                    targetName: preview.targetName,
+                    ownerLabel: preview.ownerEmail || `User #${preview.ownerUserId || "-"}`,
+                    counts: preview.counts,
+                    dropObjects: preview.dropObjects
+                });
+                if (!confirmation) return;
+
+                const finalConfirmed = await CommonMessage.confirm(
+                    `마지막 확인입니다.\n프로젝트 "${preview.targetName}"과 모든 소속 시나리오, 업무 데이터, 실행 이력 및 표시된 물리 테이블을 영구 삭제합니다.\n\n정말 실행하시겠습니까?`
+                );
+                if (!finalConfirmed) return;
+
+                const result = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/project/purge`, {
+                    method: "POST",
+                    body: {
+                        projectId,
+                        confirmationCode: confirmation.confirmationCode,
+                        adminKey: confirmation.adminKey
+                    }
+                });
+                confirmation.adminKey = "";
+                this.newProject(false);
+                this.renderProjectDetail();
+                await this.loadProjects();
+                this.updateDescription("관리자 프로젝트 완전 삭제가 완료되었습니다.");
+                CommonMessage.success(`프로젝트 완전 삭제 완료 · DROP 오브젝트 ${Number(result.droppedObjectCount || 0).toLocaleString()}개`);
+            } catch (error) {
+                console.error("[M01001] project purge failed", error);
+                CommonMessage.error(error.message || "프로젝트 완전 삭제에 실패했습니다.");
+            } finally {
+                if (confirmation) confirmation.adminKey = "";
             }
         }
     };

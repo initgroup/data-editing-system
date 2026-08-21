@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#102342">
     <meta name="color-scheme" content="light">
     <title>Quick Editing | IN-DEPS</title>
-    <link rel="stylesheet" href="./css/quick-edit.css?v=1.3.2">
+    <link rel="stylesheet" href="./css/quick-edit.css?v=1.3.6">
 </head>
 <body>
     <a class="qe-skip-link" href="#quickEditMain">본문 바로가기</a>
@@ -108,6 +108,20 @@
                     </li>
                     <li class="qe-step" data-step="7" data-step-key="analysis" data-state="waiting">
                         <span class="qe-step__index"><span>8</span></span>
+                        <button
+                            id="qeOpenDetailedAnalysis"
+                            type="button"
+                            class="qe-step-detail-button"
+                            title="M04002 결과 분석 상세로 이동"
+                            aria-label="결과상세: M04002 결과 분석 상세로 이동"
+                            hidden
+                            disabled
+                        >
+                            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                <path d="M14 4h6v6M20 4l-8 8M19 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h6" />
+                            </svg>
+                            <span>결과상세</span>
+                        </button>
                         <span class="qe-step__text">
                             <strong>결과 분석</strong>
                             <small>발견 규칙</small>
@@ -413,9 +427,6 @@
                             <span class="qe-glyph qe-glyph--check" aria-hidden="true">✓</span>
                             분석 완료
                         </span>
-                        <button id="qeOpenDetailedAnalysis" type="button" class="qe-primary-button qe-detail-analysis-button">
-                            상세보기 <span aria-hidden="true">→</span>
-                        </button>
                     </div>
                 </div>
 
@@ -488,6 +499,16 @@
                             </div>
                         </section>
                     </div>
+                    <section id="qeCategoricalDetail" class="qe-continuous-detail qe-rule-inline-detail" aria-labelledby="qeCategoricalDetailTitle" hidden>
+                        <div class="qe-continuous-detail__header">
+                            <div>
+                                <small>RULE DETAILS</small>
+                                <h3 id="qeCategoricalDetailTitle">범주형 규칙 상세</h3>
+                                <p>선택한 규칙의 조건과 결과를 확인하고 위반 데이터를 조회합니다.</p>
+                            </div>
+                        </div>
+                        <div id="qeCategoricalDetailBody" class="qe-rule-inline-detail__body"></div>
+                    </section>
                 </div>
 
                 <div id="continuousPanel" class="qe-result-panel" role="tabpanel" tabindex="0"
@@ -550,6 +571,7 @@
                                 <button id="qeContinuousDetailReload" type="button" class="qe-secondary-button">다시 조회</button>
                             </div>
                         </div>
+                        <div id="qeContinuousRuleSummary" class="qe-rule-inline-detail__body"></div>
                         <div id="qeContinuousDetailMetrics" class="qe-diagnostic-metrics" aria-label="연속형 규칙 진단 지표"></div>
                         <div class="qe-continuous-chart-wrap">
                             <canvas id="qeContinuousDetailChart" width="1100" height="380" tabindex="0"
@@ -598,6 +620,7 @@
                     <span class="qe-run-history-empty__icon" aria-hidden="true">◷</span>
                     <strong>실행 이력을 확인하고 있습니다.</strong>
                     <span>잠시만 기다려 주세요.</span>
+                    <span class="qe-run-history-loading-bar qe-run-history-loading-bar--dialog" aria-hidden="true"><i></i></span>
                 </div>
             </div>
             <div class="qe-run-history-footer">
@@ -617,23 +640,6 @@
             <div class="qe-dialog__actions">
                 <button class="qe-secondary-button" value="cancel">취소</button>
                 <button class="qe-danger-button" value="confirm">화면 초기화</button>
-            </div>
-        </form>
-    </dialog>
-
-    <dialog id="qeRuleDialog" class="qe-dialog qe-dialog--wide" aria-labelledby="qeRuleDialogTitle">
-        <form method="dialog">
-            <div class="qe-dialog__header">
-                <div>
-                    <p class="qe-card__kicker">RULE DETAILS</p>
-                    <h2 id="qeRuleDialogTitle">상세 규칙</h2>
-                </div>
-                <button id="qeRuleDialogClose" class="qe-icon-button" value="close" aria-label="상세 규칙 닫기">
-                    <span class="qe-glyph qe-glyph--close" aria-hidden="true">×</span>
-                </button>
-            </div>
-            <div id="qeRuleDialogBody" class="qe-rule-detail" data-rule-detail>
-                선택한 규칙의 상세 정보가 여기에 표시됩니다.
             </div>
         </form>
     </dialog>
@@ -667,8 +673,8 @@
         <button type="button" data-toast-close aria-label="알림 닫기">×</button>
     </div>
 
-    <script src="./js/api-client.js?v=1.3.0" defer></script>
-    <script src="./js/renderers.js?v=1.3.0" defer></script>
-    <script src="./js/quick-edit.js?v=1.4.0" defer></script>
+    <script src="./js/api-client.js?v=1.3.1" defer></script>
+    <script src="./js/renderers.js?v=1.3.3" defer></script>
+    <script src="./js/quick-edit.js?v=1.4.7" defer></script>
 </body>
 </html>

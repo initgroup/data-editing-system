@@ -131,14 +131,38 @@
         if (!safeItems.length) return '<p class="qe-empty">그래프로 표시할 데이터가 없습니다.</p>';
         const maxValue = Math.max(...safeItems.map((item) => Math.abs(Number(item.value))), 1);
         const accentClass = options.accent === "mint" ? "is-mint" : "";
-        return `<div class="qe-bar-chart ${accentClass}" role="img" aria-label="${escapeHtml(options.ariaLabel || "분포 그래프")}">${safeItems.map((item) => {
+        const interactive = Boolean(options.interactive && options.filterKind && options.filterType);
+        const activeFilter = options.activeFilter || {};
+        const selectedType = String(activeFilter.type || "ALL").toUpperCase();
+        const selectedValue = String(activeFilter.value || "").toUpperCase();
+        const filterKind = String(options.filterKind || "").toLowerCase();
+        const filterType = String(options.filterType || "").toUpperCase();
+        const clickIcon = `<svg class="qe-bar-click-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M14 4h6v6M20 4l-8 8M19 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h6" /></svg>`;
+        const allControl = interactive ? `<div class="qe-bar-filter-tools">
+            <button type="button" class="qe-bar-filter-all${selectedType === "ALL" ? " is-selected" : ""}"
+                    data-rule-filter-kind="${escapeHtml(filterKind)}" data-rule-filter-type="ALL" data-rule-filter-value=""
+                    data-rule-filter-label="전체" aria-pressed="${selectedType === "ALL" ? "true" : "false"}">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 7h16M7 12h10M10 17h4" /></svg>
+                <span>전체</span>
+            </button>
+            <span>${clickIcon} 범례를 눌러 상위 규칙 필터</span>
+        </div>` : "";
+        return `${allControl}<div class="qe-bar-chart ${accentClass}${interactive ? " is-interactive" : ""}" role="${interactive ? "group" : "img"}" aria-label="${escapeHtml(options.ariaLabel || "분포 그래프")}">${safeItems.map((item) => {
             const number = Number(item.value);
             const width = Math.max(number === 0 ? 0 : 3, Math.min(100, Math.abs(number) / maxValue * 100));
-            return `<div class="qe-bar-row">
+            const filterValue = String(item.key ?? item.label ?? "");
+            const selected = interactive && selectedType === filterType && selectedValue === filterValue.toUpperCase();
+            const rowContent = `
                 <span class="qe-bar-label" title="${escapeHtml(item.label)}">${escapeHtml(item.label)}</span>
                 <span class="qe-bar-track"><span class="qe-bar-fill" style="width:${width.toFixed(2)}%"></span></span>
                 <strong class="qe-bar-value">${escapeHtml(item.display ?? formatNumber(number))}</strong>
-            </div>`;
+                ${interactive ? clickIcon : ""}`;
+            return interactive
+                ? `<button type="button" class="qe-bar-row is-filterable${selected ? " is-selected" : ""}"
+                           data-rule-filter-kind="${escapeHtml(filterKind)}" data-rule-filter-type="${escapeHtml(filterType)}"
+                           data-rule-filter-value="${escapeHtml(filterValue)}" data-rule-filter-label="${escapeHtml(item.label)}"
+                           aria-pressed="${selected ? "true" : "false"}" title="${escapeHtml(item.label)} 상위 규칙 보기">${rowContent}</button>`
+                : `<div class="qe-bar-row">${rowContent}</div>`;
         }).join("")}</div>`;
     }
 
@@ -171,7 +195,8 @@
     function getViolationCount(rule, options = {}) {
         const key = String(rule?.RULE_ID || "");
         const counts = options.violationCounts;
-        const value = counts instanceof Map ? counts.get(key) : counts?.[key];
+        const mappedValue = counts instanceof Map ? counts.get(key) : counts?.[key];
+        const value = mappedValue ?? rule?.VIOLATION_COUNT;
         const number = Number(value);
         return Number.isFinite(number) ? number : null;
     }
@@ -184,6 +209,17 @@
 
     function compareText(left, right) {
         return String(left ?? "").localeCompare(String(right ?? ""), "ko");
+    }
+
+    function isSimpleLinearRule(rule) {
+        if (String(rule?.SIMPLE_LINEAR_YN || "").toUpperCase() === "Y") return true;
+        const method = String(rule?.METHOD || rule?.RULE_METHOD || "").trim().toUpperCase();
+        if (!/(^|_)LINEAR($|_)/.test(method)) return false;
+        const complexity = asNumber(rule?.COMPLEXITY ?? rule?.RULE_COMPLEXITY, Number.POSITIVE_INFINITY);
+        const features = Array.isArray(rule?.FEATURE_LIST)
+            ? rule.FEATURE_LIST.filter(Boolean)
+            : String(rule?.FEATURE_COLUMNS || "").split(",").map((item) => item.trim()).filter(Boolean);
+        return complexity <= 3 || (features.length >= 1 && features.length <= 2);
     }
 
     function prioritizeCategoricalRules(rules, violationRules, limit = 12) {
@@ -237,15 +273,99 @@
                     ?? String(featureColumns).split(",").map((item) => item.trim()).filter(Boolean)
             });
         });
-        const isLinear = (rule) => String(rule.METHOD || "").toUpperCase().includes("LINEAR");
+        const isLinear = (rule) => /(^|_)LINEAR($|_)/.test(String(rule.METHOD || "").toUpperCase());
         merged.sort((left, right) => (
             asNumber(right.VIOLATION_COUNT) - asNumber(left.VIOLATION_COUNT)
+            || Number(isSimpleLinearRule(right)) - Number(isSimpleLinearRule(left))
             || Number(isLinear(right)) - Number(isLinear(left))
             || asNumber(right.MAX_ERROR_PCT) - asNumber(left.MAX_ERROR_PCT)
             || asNumber(right.SCORE) - asNumber(left.SCORE)
             || compareText(left.RULE_ID, right.RULE_ID)
         ));
         return merged.slice(0, Math.max(1, asNumber(limit, 12)));
+    }
+
+    function getRuleGroupValue(rule, kind, filterType) {
+        const normalizedKind = String(kind || "").toLowerCase();
+        const normalizedType = String(filterType || "").toUpperCase();
+        if (normalizedKind === "categorical") {
+            if (normalizedType === "CONDITION_COUNT") return String(Math.max(0, asNumber(rule?.CONDITION_COUNT, 0)));
+            if (normalizedType === "RESULT_COLUMN") return String(rule?.RESULT_COLUMN || "").trim().toUpperCase();
+        }
+        if (normalizedKind === "continuous") {
+            if (normalizedType === "TARGET_COLUMN") return String(rule?.TARGET_COLUMN || "").trim().toUpperCase();
+            if (normalizedType === "METHOD") return String(rule?.METHOD || "").trim().toUpperCase();
+        }
+        return "";
+    }
+
+    function selectBalancedRules(rules, kind, activeFilter = {}, limit = 12) {
+        const rankedRules = Array.isArray(rules) ? rules : [];
+        const normalizedKind = String(kind || "").toLowerCase();
+        const dimensions = normalizedKind === "categorical"
+            ? ["CONDITION_COUNT", "RESULT_COLUMN"]
+            : (normalizedKind === "continuous" ? ["TARGET_COLUMN", "METHOD"] : []);
+        const filterType = String(activeFilter?.type || "ALL").toUpperCase();
+        const filterValue = String(activeFilter?.value || "").trim().toUpperCase();
+        const filtered = dimensions.includes(filterType) && filterValue
+            ? rankedRules.filter((rule) => getRuleGroupValue(rule, normalizedKind, filterType) === filterValue)
+            : rankedRules;
+        const boundedLimit = Math.max(1, asNumber(limit, 12));
+        if (!dimensions.length || filtered.length <= 1) return filtered.slice(0, boundedLimit);
+
+        const balanceDimensions = filterType === "ALL"
+            ? dimensions
+            : dimensions.filter((dimension) => dimension !== filterType);
+        const selected = [];
+        const selectedKeys = new Set();
+        const coveredValues = new Map(balanceDimensions.map((dimension) => [dimension, new Set()]));
+        const addRule = (rule) => {
+            const ruleKey = getRuleKey(rule);
+            if (!ruleKey || selectedKeys.has(ruleKey) || selected.length >= boundedLimit) return;
+            selected.push(rule);
+            selectedKeys.add(ruleKey);
+            balanceDimensions.forEach((dimension) => {
+                const value = getRuleGroupValue(rule, normalizedKind, dimension);
+                if (value) coveredValues.get(dimension).add(value);
+            });
+        };
+
+        if (normalizedKind === "continuous") {
+            const hasViolatedRule = filtered.some((rule) => asNumber(rule?.VIOLATION_COUNT) > 0);
+            const simpleLinearRule = filtered.find((rule) => (
+                isSimpleLinearRule(rule)
+                && (!hasViolatedRule || asNumber(rule?.VIOLATION_COUNT) > 0)
+            ));
+            if (simpleLinearRule) addRule(simpleLinearRule);
+        }
+
+        balanceDimensions.forEach((dimension) => {
+            filtered.forEach((rule) => {
+                const value = getRuleGroupValue(rule, normalizedKind, dimension);
+                if (!value || coveredValues.get(dimension).has(value)) return;
+                addRule(rule);
+            });
+        });
+        filtered.forEach((rule) => {
+            addRule(rule);
+        });
+        const rankByKey = new Map(filtered.map((rule, index) => [getRuleKey(rule), index]));
+        return selected.sort((left, right) => (
+            asNumber(rankByKey.get(getRuleKey(left)), Number.MAX_SAFE_INTEGER)
+            - asNumber(rankByKey.get(getRuleKey(right)), Number.MAX_SAFE_INTEGER)
+        ));
+    }
+
+    function filterLegendItems(items, rules, kind, filterType) {
+        const availableValues = new Set(
+            (Array.isArray(rules) ? rules : [])
+                .map((rule) => getRuleGroupValue(rule, kind, filterType))
+                .filter(Boolean)
+        );
+        return (Array.isArray(items) ? items : []).filter((item) => {
+            const itemValue = String(item?.key ?? "").trim().toUpperCase();
+            return itemValue && availableValues.has(itemValue);
+        });
     }
 
     function renderCategoricalRules(rules, options = {}) {
@@ -315,8 +435,11 @@
         formatRatio,
         getColumnLabel,
         annotateColumnText,
+        isSimpleLinearRule,
         prioritizeCategoricalRules,
         prioritizeContinuousRules,
+        selectBalancedRules,
+        filterLegendItems,
         normalizeStatus,
         renderBars,
         renderCategoricalRules,

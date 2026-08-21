@@ -165,9 +165,9 @@
                         <i class="far fa-trash-alt" aria-hidden="true"></i>
                         <span data-label-key="deleteScenarioButton">Delete scenario</span>
                     </button>
-                    <button type="button" class="env-btn env-danger" onclick="M01002.deleteAllScenarios()">
-                        <i class="fas fa-trash-can"></i>
-                        <span data-label-key="deleteAll">Delete all</span>
+                    <button type="button" id="purgeScenario-M01002" class="env-btn env-purge" onclick="M01002.purgeScenario()" hidden>
+                        <i class="fas fa-radiation" aria-hidden="true"></i>
+                        <span data-label-key="purgeScenarioButton">시나리오 완전 삭제</span>
                     </button>
                 </div>
             </footer>

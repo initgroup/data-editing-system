@@ -49,6 +49,235 @@ SELECT *
    AND RN__ <= :endRow
  ORDER BY RN__;
 
+-- [MCOMMON_ANLY_WORK_ASSOC_RULE_BALANCED_VIOLATIONS]
+WITH RULE_BASE AS
+     (
+      SELECT S.OWNER AS RULE_OWNER
+           , S.MODEL_NAME
+           , S.RUN_SOURCE_TYPE
+           , S.RUN_ID
+           , S.RULE_ID
+           , S.CONDITION_COUNT
+           , DBMS_LOB.SUBSTR(S.CONDITION_TEXT, 4000, 1) AS CONDITION_TEXT
+           , S.RESULT_COLUMN
+           , S.RESULT_VALUE
+           , DBMS_LOB.SUBSTR(S.RESULT_TEXT, 4000, 1) AS RESULT_TEXT
+           , S.RULE_SUPPORT
+           , S.RULE_CONFIDENCE
+           , S.RULE_LIFT
+        FROM "INIT$_TB_RULEDISC_ASSOC_SUM" S
+       WHERE 1=1
+         AND S.OWNER = :owner
+         AND S.TARGET_OWNER = :targetOwner
+         AND S.TARGET_TABLE = :targetTable
+         AND S.MODEL_NAME = :modelName
+         AND S.RESULT_HAS_VALUE_YN = 'Y'
+         AND S.RESULT_COLUMN IS NOT NULL
+         AND S.RESULT_VALUE IS NOT NULL
+         AND S.CONDITION_TEXT IS NOT NULL
+         AND (:runSourceType IS NULL OR S.RUN_SOURCE_TYPE = :runSourceType)
+         AND (:runId IS NULL OR S.RUN_ID = :runId)
+     )
+   , VIOLATION_BASE AS
+     (
+      SELECT V.RULE_ID
+           , COUNT(*) AS VIOLATION_COUNT
+           , COUNT(DISTINCT NVL(V.CASE_ID, V.CASE_ROWID)) AS VIOLATED_ROW_COUNT
+           , AVG(V.VIOLATION_SCORE) AS AVG_VIOLATION_SCORE
+        FROM "INIT$_TB_RULEVIOL_ASSOC" V
+       WHERE 1=1
+         AND V.TARGET_OWNER = :targetOwner
+         AND V.TARGET_TABLE = :targetTable
+         AND (:runSourceType IS NULL OR V.RUN_SOURCE_TYPE = :runSourceType)
+         AND (:runId IS NULL OR V.RUN_ID = :runId)
+       GROUP BY V.RULE_ID
+     )
+   , SCORED_RULE AS
+     (
+      SELECT R.*
+           , NVL(V.VIOLATION_COUNT, 0) AS VIOLATION_COUNT
+           , NVL(V.VIOLATED_ROW_COUNT, 0) AS VIOLATED_ROW_COUNT
+           , V.AVG_VIOLATION_SCORE
+        FROM RULE_BASE R
+        JOIN VIOLATION_BASE V
+          ON V.RULE_ID = R.RULE_ID
+       WHERE 1=1
+         AND NVL(V.VIOLATION_COUNT, 0) > 0
+     )
+   , RANKED_RULE AS
+     (
+      SELECT S.*
+           , ROW_NUMBER() OVER (
+                 PARTITION BY S.CONDITION_COUNT
+                     ORDER BY S.VIOLATION_COUNT DESC
+                            , S.AVG_VIOLATION_SCORE DESC NULLS LAST
+                            , S.RULE_CONFIDENCE DESC NULLS LAST
+                            , S.RULE_LIFT DESC NULLS LAST
+                            , S.RULE_ID
+             ) AS CONDITION_RN
+           , ROW_NUMBER() OVER (
+                 PARTITION BY S.RESULT_COLUMN
+                     ORDER BY S.VIOLATION_COUNT DESC
+                            , S.CONDITION_COUNT DESC NULLS LAST
+                            , S.AVG_VIOLATION_SCORE DESC NULLS LAST
+                            , S.RULE_CONFIDENCE DESC NULLS LAST
+                            , S.RULE_ID
+             ) AS RESULT_RN
+        FROM SCORED_RULE S
+     )
+SELECT RULE_OWNER
+     , MODEL_NAME
+     , RUN_SOURCE_TYPE
+     , RUN_ID
+     , RULE_ID
+     , CONDITION_COUNT
+     , CONDITION_TEXT
+     , RESULT_COLUMN
+     , RESULT_VALUE
+     , RESULT_TEXT
+     , RULE_SUPPORT
+     , RULE_CONFIDENCE
+     , RULE_LIFT
+     , VIOLATION_COUNT
+     , VIOLATED_ROW_COUNT
+     , AVG_VIOLATION_SCORE
+  FROM RANKED_RULE
+ WHERE 1=1
+   AND (CONDITION_RN <= :topPerGroup OR RESULT_RN <= :topPerGroup)
+ ORDER BY VIOLATION_COUNT DESC
+        , CONDITION_COUNT DESC NULLS LAST
+        , AVG_VIOLATION_SCORE DESC NULLS LAST
+        , RULE_CONFIDENCE DESC NULLS LAST
+        , RULE_ID;
+
+-- [MCOMMON_ANLY_WORK_SYMBOLIC_RULE_BALANCED_VIOLATIONS]
+WITH RULE_BASE AS
+     (
+      SELECT R.OWNER AS RULE_OWNER
+           , R.RUN_SOURCE_TYPE
+           , R.RUN_ID
+           , R.RULE_ID
+           , R.TARGET_COLUMN
+           , DBMS_LOB.SUBSTR(R.EXPRESSION, 4000, 1) AS EXPRESSION
+           , R.FEATURE_COLUMNS
+           , R.SCORE
+           , R.COMPLEXITY
+           , R.METHOD
+           , R.SELECTED_YN
+           , R.RANK_NO
+        FROM "INIT$_TB_RULEDISC_SYMBOLIC" R
+       WHERE 1=1
+         AND R.OWNER = :targetOwner
+         AND R.TABLE_NAME = :targetTable
+         AND (:runSourceType IS NULL OR R.RUN_SOURCE_TYPE = :runSourceType)
+         AND (:runId IS NULL OR R.RUN_ID = :runId)
+     )
+   , VIOLATION_BASE AS
+     (
+      SELECT V.RULE_ID
+           , V.TARGET_COLUMN
+           , COUNT(*) AS VIOLATION_COUNT
+           , COUNT(DISTINCT NVL(V.CASE_ID, V.CASE_ROWID)) AS VIOLATED_ROW_COUNT
+           , AVG(V.ERROR_PCT) AS AVG_ERROR_PCT
+           , MAX(V.ERROR_PCT) AS MAX_ERROR_PCT
+           , AVG(V.ABS_ERROR) AS AVG_ABS_ERROR
+           , MAX(V.VIOLATION_SCORE) AS MAX_VIOLATION_SCORE
+           , MAX(V.TOLERANCE_PCT) AS TOLERANCE_PCT
+        FROM "INIT$_TB_RULEVIOL_SYMBOLIC" V
+       WHERE 1=1
+         AND V.TARGET_OWNER = :targetOwner
+         AND V.TARGET_TABLE = :targetTable
+         AND (:runSourceType IS NULL OR V.RUN_SOURCE_TYPE = :runSourceType)
+         AND (:runId IS NULL OR V.RUN_ID = :runId)
+       GROUP BY V.RULE_ID
+              , V.TARGET_COLUMN
+     )
+   , SCORED_RULE AS
+     (
+      SELECT R.*
+           , V.VIOLATION_COUNT
+           , V.VIOLATED_ROW_COUNT
+           , V.AVG_ERROR_PCT
+           , V.MAX_ERROR_PCT
+           , V.AVG_ABS_ERROR
+           , V.MAX_VIOLATION_SCORE
+           , V.TOLERANCE_PCT
+           , CASE
+                 WHEN INSTR(UPPER(NVL(R.METHOD, '')), 'LINEAR') > 0
+                  AND (
+                      NVL(R.COMPLEXITY, 999999) <= 3
+                      OR REGEXP_COUNT(NVL(R.FEATURE_COLUMNS, ''), '[^,]+') BETWEEN 1 AND 2
+                  )
+                 THEN 'Y' ELSE 'N'
+             END AS SIMPLE_LINEAR_YN
+        FROM RULE_BASE R
+        JOIN VIOLATION_BASE V
+          ON V.RULE_ID = R.RULE_ID
+         AND V.TARGET_COLUMN = R.TARGET_COLUMN
+       WHERE 1=1
+         AND NVL(V.VIOLATION_COUNT, 0) > 0
+     )
+   , RANKED_RULE AS
+     (
+      SELECT S.*
+           , ROW_NUMBER() OVER (
+                 PARTITION BY S.TARGET_COLUMN
+                     ORDER BY S.VIOLATION_COUNT DESC
+                            , CASE WHEN S.SIMPLE_LINEAR_YN = 'Y' THEN 0 ELSE 1 END
+                            , S.MAX_ERROR_PCT DESC NULLS LAST
+                            , S.SCORE DESC NULLS LAST
+                            , S.RULE_ID
+             ) AS TARGET_RN
+           , ROW_NUMBER() OVER (
+                 PARTITION BY NVL(S.METHOD, '(UNKNOWN)')
+                     ORDER BY S.VIOLATION_COUNT DESC
+                            , CASE WHEN S.SIMPLE_LINEAR_YN = 'Y' THEN 0 ELSE 1 END
+                            , S.MAX_ERROR_PCT DESC NULLS LAST
+                            , S.SCORE DESC NULLS LAST
+                            , S.RULE_ID
+             ) AS METHOD_RN
+           , ROW_NUMBER() OVER (
+                 PARTITION BY S.SIMPLE_LINEAR_YN
+                     ORDER BY S.VIOLATION_COUNT DESC
+                            , S.MAX_ERROR_PCT DESC NULLS LAST
+                            , S.SCORE DESC NULLS LAST
+                            , S.RULE_ID
+             ) AS SIMPLE_LINEAR_RN
+        FROM SCORED_RULE S
+     )
+SELECT RULE_OWNER
+     , RUN_SOURCE_TYPE
+     , RUN_ID
+     , RULE_ID
+     , TARGET_COLUMN
+     , EXPRESSION
+     , FEATURE_COLUMNS
+     , SCORE
+     , COMPLEXITY
+     , METHOD
+     , SELECTED_YN
+     , RANK_NO
+     , VIOLATION_COUNT
+     , VIOLATED_ROW_COUNT
+     , AVG_ERROR_PCT
+     , MAX_ERROR_PCT
+     , AVG_ABS_ERROR
+     , MAX_VIOLATION_SCORE
+     , TOLERANCE_PCT
+     , SIMPLE_LINEAR_YN
+  FROM RANKED_RULE
+ WHERE 1=1
+   AND (
+       TARGET_RN <= :topPerGroup
+       OR METHOD_RN <= :topPerGroup
+       OR (SIMPLE_LINEAR_YN = 'Y' AND SIMPLE_LINEAR_RN <= :simpleLinearLimit)
+   )
+ ORDER BY VIOLATION_COUNT DESC
+        , CASE WHEN SIMPLE_LINEAR_YN = 'Y' THEN 0 ELSE 1 END
+        , MAX_ERROR_PCT DESC NULLS LAST
+        , SCORE DESC NULLS LAST
+        , RULE_ID;
+
 -- [MCOMMON_ANLY_WORK_FLOW_RUN_POSITION]
 SELECT RN__
   FROM (

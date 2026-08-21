@@ -340,6 +340,7 @@
                 violationConfidenceScope: "ALL",
                 violationResultScope: "HIT",
                 symbolicViolationResultScope: "HIT",
+                balancedRuleSummaryYn: params.balancedRuleSummaryYn ? "Y" : undefined,
                 runSourceType: "FLOW_WORK",
                 runId: params.flowRunId,
                 flowRunId: params.flowRunId,

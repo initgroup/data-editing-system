@@ -1934,7 +1934,6 @@ const CommonMessage = {
             ],
             [/^Delete project "(.+)"\?$/, (m) => this.translatePattern("deleteProject", "\"{name}\" project will be deleted. Continue?", { name: m[1] })],
             [/^Delete scenario "(.+)"\?$/, (m) => this.translatePattern("deleteScenario", "\"{name}\" scenario will be deleted. Continue?", { name: m[1] })],
-            [/^Delete all scenarios for "(.+)"\?$/, (m) => this.translatePattern("deleteAllScenarios", "Delete all scenarios for \"{name}\"?", { name: m[1] })],
             [/^(.+) table will be dropped\. Continue\?$/, (m) => this.translatePattern("tableDropContinue", "{name} table will be dropped. Continue?", { name: m[1] })],
             [/^Delete table "(.+)" from this scenario\?$/, (m) => this.translatePattern("deleteScenarioTable", "Delete table \"{name}\" from this scenario?", { name: m[1] })],
             [/^(.+) scenario tables deleted\.$/, (m) => this.translatePattern("scenarioTablesDeleted", "{count} scenario tables deleted.", { count: m[1] })],

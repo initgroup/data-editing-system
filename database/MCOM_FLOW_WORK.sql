@@ -473,6 +473,117 @@ SELECT FLOW_RUN_ID
  FETCH FIRST 1 ROW ONLY
 ;
 
+-- [FLOW_WORK_QUICK_EDIT_HISTORY_LIST]
+WITH ELIGIBLE_RUNS AS
+     (
+      SELECT R.FLOW_RUN_ID
+           , R.FLOW_ID
+           , F.PROJECT_ID
+           , P.PROJECT_CODE
+           , P.PROJECT_NAME
+           , F.SCENARIO_ID
+           , S.SCENARIO_CODE
+           , S.SCENARIO_NAME
+           , F.FLOW_NAME
+           , R.RUN_TYPE
+           , R.STATUS
+           , R.STARTED_AT
+           , R.FINISHED_AT
+           , R.CREATED_AT
+           , COUNT(*) OVER () AS TOTAL_COUNT
+           , ROW_NUMBER() OVER (
+                 ORDER BY COALESCE(R.STARTED_AT, R.CREATED_AT) DESC
+                        , R.FLOW_RUN_ID DESC
+             ) AS RN
+        FROM INIT$_TB_FLOW_WORK_RUN R
+        JOIN INIT$_TB_FLOW_WORK F
+          ON F.FLOW_ID = R.FLOW_ID
+        JOIN INIT$_TB_PROJECT P
+          ON P.PROJECT_ID = F.PROJECT_ID
+        LEFT JOIN INIT$_TB_SCENARIO S
+          ON S.SCENARIO_ID = F.SCENARIO_ID
+         AND S.PROJECT_ID = F.PROJECT_ID
+       WHERE 1=1
+         AND F.MENU_CODE = :menuCode
+         AND (
+              R.RUN_TYPE = 'QUICK_EDIT'
+           OR (
+                  NVL(R.RUN_TYPE, 'MANUAL') <> 'QUICK_EDIT'
+              AND (
+                   P.PROJECT_CODE LIKE 'QE\_%' ESCAPE '\'
+                OR P.PROJECT_CODE LIKE 'QEDIT\_%' ESCAPE '\'
+                  )
+              )
+             )
+         AND (:includeAllUsers = 'Y' OR P.USER_ID = :userId)
+     )
+   , PAGED_RUNS AS
+     (
+      SELECT /*+ MATERIALIZE */ *
+        FROM ELIGIBLE_RUNS
+       WHERE 1=1
+         AND RN > :offset
+         AND RN <= :endRow
+     )
+   , NODE_COUNTS AS
+     (
+      SELECT NR.FLOW_RUN_ID
+           , COUNT(*) AS NODE_COUNT
+           , SUM(CASE WHEN NR.STATUS = 'SUCCESS' THEN 1 ELSE 0 END) AS SUCCESS_NODE_COUNT
+           , SUM(CASE WHEN NR.STATUS IN ('FAILED', 'ERROR', 'CANCELLED') THEN 1 ELSE 0 END) AS FAILED_NODE_COUNT
+        FROM INIT$_TB_FLOW_WORK_NODE_RUN NR
+       WHERE 1=1
+         AND EXISTS (
+              SELECT 1
+                FROM PAGED_RUNS PR
+               WHERE PR.FLOW_RUN_ID = NR.FLOW_RUN_ID
+             )
+       GROUP BY NR.FLOW_RUN_ID
+     )
+SELECT PR.FLOW_RUN_ID
+     , PR.FLOW_ID
+     , PR.PROJECT_ID
+     , COALESCE(QS.PROJECT_CODE, PR.PROJECT_CODE) AS PROJECT_CODE
+     , COALESCE(QS.PROJECT_NAME, PR.PROJECT_NAME) AS PROJECT_NAME
+     , PR.SCENARIO_ID
+     , COALESCE(QS.SCENARIO_CODE, PR.SCENARIO_CODE) AS SCENARIO_CODE
+     , COALESCE(QS.SCENARIO_NAME, PR.SCENARIO_NAME) AS SCENARIO_NAME
+     , QS.OWNER_NAME
+     , QS.TABLE_NAME
+     , COALESCE(QS.FLOW_NAME, PR.FLOW_NAME) AS FLOW_NAME
+     , QS.JOB_COUNT
+     , PR.RUN_TYPE
+     , PR.STATUS
+     , PR.STARTED_AT
+     , PR.FINISHED_AT
+     , PR.CREATED_AT
+     , NVL(NC.NODE_COUNT, 0) AS NODE_COUNT
+     , NVL(NC.SUCCESS_NODE_COUNT, 0) AS SUCCESS_NODE_COUNT
+     , NVL(NC.FAILED_NODE_COUNT, 0) AS FAILED_NODE_COUNT
+     , PR.TOTAL_COUNT
+  FROM PAGED_RUNS PR
+  JOIN INIT$_TB_FLOW_WORK_RUN SR
+    ON SR.FLOW_RUN_ID = PR.FLOW_RUN_ID
+  LEFT JOIN JSON_TABLE(
+       SR.PLAN_JSON
+     , '$.quickEditSummary' NULL ON ERROR
+       COLUMNS (
+           PROJECT_CODE VARCHAR2(100) PATH '$.projectCode'
+         , PROJECT_NAME VARCHAR2(200) PATH '$.projectName'
+         , SCENARIO_CODE VARCHAR2(100) PATH '$.scenarioCode'
+         , SCENARIO_NAME VARCHAR2(200) PATH '$.scenarioName'
+         , OWNER_NAME VARCHAR2(128) PATH '$.ownerName'
+         , TABLE_NAME VARCHAR2(128) PATH '$.tableName'
+         , FLOW_NAME VARCHAR2(200) PATH '$.flowName'
+         , JOB_COUNT NUMBER PATH '$.jobCount'
+       )
+     ) QS
+    ON 1=1
+  LEFT JOIN NODE_COUNTS NC
+    ON NC.FLOW_RUN_ID = PR.FLOW_RUN_ID
+ ORDER BY PR.RN
+;
+
 -- [FLOW_WORK_QUICK_EDIT_HISTORY]
 WITH STORED_QUICK_RUNS AS (
     SELECT R.FLOW_RUN_ID

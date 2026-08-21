@@ -22,6 +22,152 @@
                     return this.formatText(this.t(key, fallback), values);
                 },
 
+                formatDateTime(value) {
+                    if (value === null || value === undefined || value === "") return "-";
+
+                    const date = value instanceof Date ? value : new Date(value);
+                    if (Number.isNaN(date.getTime())) return String(value);
+
+                    const pad = (number) => String(number).padStart(2, "0");
+                    return [
+                        date.getFullYear(),
+                        pad(date.getMonth() + 1),
+                        pad(date.getDate())
+                    ].join("-") + ` ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+                },
+
+                confirmAdminPurge(options = {}) {
+                    return new Promise((resolve) => {
+                        const dialog = document.createElement("dialog");
+                        dialog.className = "admin-purge-dialog";
+                        dialog.innerHTML = `
+                            <form method="dialog" class="admin-purge-panel">
+                                <header class="admin-purge-header">
+                                    <span class="admin-purge-icon" aria-hidden="true"><i class="fas fa-radiation"></i></span>
+                                    <div>
+                                        <p class="admin-purge-eyebrow">ADMINISTRATOR DESTRUCTIVE ACTION</p>
+                                        <h2 class="admin-purge-title"></h2>
+                                    </div>
+                                </header>
+                                <section class="admin-purge-warning" role="alert">
+                                    <strong>이 작업은 취소하거나 복구할 수 없습니다.</strong>
+                                    <span>업무 데이터와 실행 이력이 영구 삭제되고, 전용 INITDN$/INITUP$ 테이블은 Oracle DROP으로 즉시 제거됩니다.</span>
+                                    <span>Oracle DDL은 자동 커밋되므로 백업 또는 복구 지점이 없다면 되돌릴 수 없습니다.</span>
+                                </section>
+                                <dl class="admin-purge-target">
+                                    <div><dt>삭제 범위</dt><dd data-field="scope"></dd></div>
+                                    <div><dt>대상</dt><dd data-field="target"></dd></div>
+                                    <div><dt>소유자</dt><dd data-field="owner"></dd></div>
+                                </dl>
+                                <section class="admin-purge-impact">
+                                    <h3>영향 데이터</h3>
+                                    <ul data-field="counts"></ul>
+                                </section>
+                                <section class="admin-purge-impact">
+                                    <h3>DROP 대상 오브젝트</h3>
+                                    <pre data-field="objects"></pre>
+                                </section>
+                                <section class="admin-purge-confirm-fields">
+                                    <label class="admin-purge-check">
+                                        <input type="checkbox" data-field="acknowledge">
+                                        <span>위험성과 복구 불가능성을 이해했으며, 표시된 대상만 완전 삭제하겠습니다.</span>
+                                    </label>
+                                    <label>
+                                        <span>확인을 위해 대상 코드를 정확히 입력하세요: <b data-field="expected-code"></b></span>
+                                        <input type="text" data-field="confirmation-code" autocomplete="off" spellcheck="false">
+                                    </label>
+                                    <label>
+                                        <span>관리자 인증키를 다시 입력하세요.</span>
+                                        <input type="password" data-field="admin-key" autocomplete="new-password">
+                                    </label>
+                                </section>
+                                <footer class="admin-purge-actions">
+                                    <button type="button" class="env-btn env-cancel" data-action="cancel">취소</button>
+                                    <button type="submit" class="env-btn env-purge" data-action="confirm" disabled>
+                                        <i class="fas fa-radiation" aria-hidden="true"></i>
+                                        영구 완전 삭제
+                                    </button>
+                                </footer>
+                            </form>
+                        `;
+
+                        const targetCode = String(options.targetCode || "");
+                        const setText = (selector, value) => {
+                            const element = dialog.querySelector(selector);
+                            if (element) element.textContent = String(value ?? "");
+                        };
+                        setText(".admin-purge-title", `${options.scopeLabel || "대상"} 완전 삭제`);
+                        setText('[data-field="scope"]', options.scopeDescription || options.scopeLabel || "-");
+                        setText('[data-field="target"]', `${options.targetName || "-"} (${targetCode || "코드 없음"})`);
+                        setText('[data-field="owner"]', options.ownerLabel || "-");
+                        setText('[data-field="expected-code"]', targetCode);
+                        setText(
+                            '[data-field="objects"]',
+                            Array.isArray(options.dropObjects) && options.dropObjects.length
+                                ? options.dropObjects.join("\n")
+                                : "DROP 대상 물리 오브젝트 없음"
+                        );
+
+                        const countList = dialog.querySelector('[data-field="counts"]');
+                        Object.values(options.counts || {}).forEach((item) => {
+                            const listItem = document.createElement("li");
+                            const label = document.createElement("span");
+                            const count = document.createElement("strong");
+                            label.textContent = String(item?.label || "데이터");
+                            count.textContent = `${Number(item?.count || 0).toLocaleString()}건`;
+                            listItem.append(label, count);
+                            countList?.appendChild(listItem);
+                        });
+
+                        const acknowledge = dialog.querySelector('[data-field="acknowledge"]');
+                        const codeInput = dialog.querySelector('[data-field="confirmation-code"]');
+                        const keyInput = dialog.querySelector('[data-field="admin-key"]');
+                        const confirmButton = dialog.querySelector('[data-action="confirm"]');
+                        const updateSubmitState = () => {
+                            confirmButton.disabled = !(
+                                acknowledge.checked
+                                && codeInput.value.trim() === targetCode
+                                && keyInput.value.length > 0
+                            );
+                        };
+                        [acknowledge, codeInput, keyInput].forEach((element) => {
+                            element.addEventListener("input", updateSubmitState);
+                            element.addEventListener("change", updateSubmitState);
+                        });
+
+                        let submitted = false;
+                        const finish = (value) => {
+                            keyInput.value = "";
+                            dialog.remove();
+                            resolve(value);
+                        };
+                        dialog.querySelector('[data-action="cancel"]').addEventListener("click", () => dialog.close("cancel"));
+                        dialog.addEventListener("cancel", () => {
+                            submitted = false;
+                        });
+                        dialog.addEventListener("close", () => {
+                            if (!submitted) finish(null);
+                        }, { once: true });
+                        dialog.querySelector("form").addEventListener("submit", (event) => {
+                            event.preventDefault();
+                            updateSubmitState();
+                            if (confirmButton.disabled) return;
+                            submitted = true;
+                            const value = {
+                                confirmationCode: codeInput.value.trim(),
+                                adminKey: keyInput.value
+                            };
+                            keyInput.value = "";
+                            dialog.close("confirm");
+                            finish(value);
+                        });
+
+                        document.body.appendChild(dialog);
+                        dialog.showModal();
+                        codeInput.focus();
+                    });
+                },
+
                 getLimit(selector, defaultValue = 100, min = 1, max = 1000) {
                     const value = Number(getContainerEl(selector)?.value || defaultValue);
                     return Math.min(Math.max(Number.isFinite(value) ? value : defaultValue, min), max);

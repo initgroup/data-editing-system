@@ -10,7 +10,8 @@ import logging
 
 from backend.database_helper import execute_query, SqlLoader
 from backend.target_database import get_target_db_connection
-from backend.auth_context import get_request_user_email, get_request_user_id
+from backend.auth_context import get_request_role_code, get_request_user_email, get_request_user_id, require_admin_role
+from backend.services import admin_scope_purge_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -29,6 +30,13 @@ class ProjectSaveRequest(BaseModel):
 
 class ProjectDeleteRequest(BaseModel):
     projectId: int
+    model_config = ConfigDict(extra='allow')
+
+
+class ProjectPurgeRequest(BaseModel):
+    projectId: int
+    confirmationCode: Optional[str] = ""
+    adminKey: Optional[str] = ""
     model_config = ConfigDict(extra='allow')
 
 
@@ -51,12 +59,14 @@ def _to_int(value, default=0):
 @router.get("/projects")
 def get_projects(request: Request, keyword: str = Query("")):
     user_id = get_request_user_id(request)
+    include_all_users = get_request_role_code(request) == "ADMIN"
     conn = None
     try:
         conn = get_target_db_connection(request)
         result = execute_query(conn, "M01001_PROJECT_LIST", {
             "keyword": keyword or "",
             "userId": user_id,
+            "includeAllUsers": "Y" if include_all_users else "N",
         })
         if result.get("status") != "success":
             raise HTTPException(status_code=500, detail=result.get("message") or result.get("detail") or "Project list query failed.")
@@ -79,12 +89,14 @@ def get_projects(request: Request, keyword: str = Query("")):
 @router.get("/project")
 def get_project(request: Request, projectId: int = Query(...)):
     user_id = get_request_user_id(request)
+    include_all_users = get_request_role_code(request) == "ADMIN"
     conn = None
     try:
         conn = get_target_db_connection(request)
         result = execute_query(conn, "M01001_PROJECT_DETAIL", {
             "projectId": projectId,
             "userId": user_id,
+            "includeAllUsers": "Y" if include_all_users else "N",
         })
         if result.get("status") != "success":
             raise HTTPException(status_code=500, detail=result.get("message") or result.get("detail") or "Project detail query failed.")
@@ -154,6 +166,7 @@ def save_project(req: ProjectSaveRequest, request: Request):
         result = execute_query(conn, "M01001_PROJECT_DETAIL", {
             "projectId": project_id,
             "userId": user_id,
+            "includeAllUsers": "N",
         })
         data = result.get("data", [{}])[0] if result.get("data") else {}
         return {
@@ -255,5 +268,56 @@ def delete_project(req: ProjectDeleteRequest, request: Request):
     finally:
         if cursor:
             cursor.close()
+        if conn:
+            conn.close()
+
+
+@router.post("/project/purge-preview")
+def preview_project_purge(req: ProjectDeleteRequest, request: Request):
+    require_admin_role(request)
+    conn = None
+    try:
+        conn = get_target_db_connection(request)
+        return {
+            "status": "success",
+            "data": admin_scope_purge_service.build_purge_preview(
+                conn,
+                admin_scope_purge_service.SCOPE_PROJECT,
+                req.projectId,
+            ),
+        }
+    except HTTPException:
+        raise
+    except Exception as error:
+        logger.exception("M01001 project purge preview failed.")
+        raise HTTPException(status_code=500, detail=str(error))
+    finally:
+        if conn:
+            conn.close()
+
+
+@router.post("/project/purge")
+def purge_project(req: ProjectPurgeRequest, request: Request):
+    require_admin_role(request)
+    conn = None
+    try:
+        conn = get_target_db_connection(request)
+        return admin_scope_purge_service.purge_scope(
+            conn,
+            admin_scope_purge_service.SCOPE_PROJECT,
+            req.projectId,
+            confirmation_code=req.confirmationCode or "",
+            admin_key=req.adminKey or "",
+        )
+    except HTTPException:
+        if conn:
+            conn.rollback()
+        raise
+    except Exception as error:
+        if conn:
+            conn.rollback()
+        logger.exception("M01001 project purge failed.")
+        raise HTTPException(status_code=500, detail=str(error))
+    finally:
         if conn:
             conn.close()

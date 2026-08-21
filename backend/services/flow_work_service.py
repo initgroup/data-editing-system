@@ -422,14 +422,20 @@ def list_quick_edit_history(
     flow_run_id: Optional[int] = None,
 ) -> Dict[str, Any]:
     offset = max(0, (page - 1) * page_size)
-    result = execute_query(conn, "FLOW_WORK_QUICK_EDIT_HISTORY", {
+    params = {
         "menuCode": normalize_menu_code(menu_code),
         "userId": user_id,
         "includeAllUsers": "Y" if include_all_users else "N",
         "flowRunId": flow_run_id,
         "offset": offset,
         "endRow": offset + page_size,
-    })
+    }
+    list_only = flow_run_id is None
+    result = execute_query(
+        conn,
+        "FLOW_WORK_QUICK_EDIT_HISTORY_LIST" if list_only else "FLOW_WORK_QUICK_EDIT_HISTORY",
+        params,
+    )
     response = data_work.require_success(result, "Quick Editing history query failed.")
     rows = response.get("data") or []
     for row in rows:

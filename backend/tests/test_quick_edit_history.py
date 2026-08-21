@@ -1,3 +1,4 @@
+from pathlib import Path
 import unittest
 from unittest.mock import Mock, patch
 
@@ -7,6 +8,9 @@ from backend.routers import M04001
 from backend.database_helper import SqlLoader
 from backend.services.flow_work_router import normalize_quick_edit_summary
 from backend.services import flow_work_service
+
+
+ROOT_DIR = Path(__file__).resolve().parents[2]
 
 
 def get_route_endpoint(path: str, method: str):
@@ -64,6 +68,90 @@ class QuickEditHistoryTests(unittest.TestCase):
         self.assertIn("LEGACY_RUN_SCOPE", sql)
         self.assertIn("P.PROJECT_CODE LIKE 'QEDIT\\_%'", sql)
         self.assertIn("DBMS_LOB.INSTR", sql)
+
+    def test_history_list_sql_uses_only_saved_summary_rows(self):
+        sql = SqlLoader.get_sql("FLOW_WORK_QUICK_EDIT_HISTORY_LIST")
+
+        self.assertIn("R.RUN_TYPE = 'QUICK_EDIT'", sql)
+        self.assertIn("'$.quickEditSummary' NULL ON ERROR", sql)
+        self.assertIn("PAGED_RUNS", sql)
+        self.assertIn("P.PROJECT_CODE LIKE 'QE\\_%'", sql)
+        self.assertIn("P.PROJECT_CODE LIKE 'QEDIT\\_%'", sql)
+        self.assertNotIn("LEGACY_RUN_SCOPE", sql)
+        self.assertNotIn("DBMS_LOB.INSTR", sql)
+        self.assertNotIn("ALL_TABLES", sql)
+        self.assertNotIn("INIT$_TB_DATA_WORK_JOB", sql)
+
+    def test_history_list_uses_fast_query_without_loading_detail(self):
+        conn = Mock()
+        query_result = {
+            "status": "success",
+            "data": [{"FLOW_RUN_ID": 1041, "TOTAL_COUNT": 1}],
+        }
+
+        with patch(
+            "backend.services.flow_work_service.execute_query",
+            return_value=query_result,
+        ) as execute_query:
+            response = flow_work_service.list_quick_edit_history(
+                conn,
+                "M04001",
+                7,
+                False,
+                1,
+                20,
+            )
+
+        self.assertEqual(1, response["total"])
+        self.assertEqual(1, execute_query.call_count)
+        self.assertEqual("FLOW_WORK_QUICK_EDIT_HISTORY_LIST", execute_query.call_args.args[1])
+
+    def test_empty_history_list_does_not_trigger_expensive_fallback(self):
+        conn = Mock()
+
+        with patch(
+            "backend.services.flow_work_service.execute_query",
+            return_value={"status": "success", "data": []},
+        ) as execute_query:
+            response = flow_work_service.list_quick_edit_history(
+                conn,
+                "M04001",
+                7,
+                False,
+                1,
+                20,
+            )
+
+        self.assertEqual(0, response["total"])
+        self.assertEqual(1, execute_query.call_count)
+        self.assertEqual("FLOW_WORK_QUICK_EDIT_HISTORY_LIST", execute_query.call_args.args[1])
+
+    def test_history_dialog_has_animated_initial_loading_bar(self):
+        quick_html = (ROOT_DIR / "quick-edit" / "index.html").read_text(encoding="utf-8")
+        quick_js = (ROOT_DIR / "quick-edit" / "js" / "quick-edit.js").read_text(encoding="utf-8")
+        quick_css = (ROOT_DIR / "quick-edit" / "css" / "quick-edit.css").read_text(encoding="utf-8")
+
+        loading_class = "qe-run-history-loading-bar--dialog"
+        self.assertIn(loading_class, quick_html)
+        self.assertIn(loading_class, quick_js)
+        self.assertIn(f".{loading_class}", quick_css)
+        self.assertIn("@keyframes qe-history-loading", quick_css)
+
+    def test_rule_details_render_inline_with_readable_quick_messages(self):
+        quick_html = (ROOT_DIR / "quick-edit" / "index.html").read_text(encoding="utf-8")
+        quick_js = (ROOT_DIR / "quick-edit" / "js" / "quick-edit.js").read_text(encoding="utf-8")
+        quick_css = (ROOT_DIR / "quick-edit" / "css" / "quick-edit.css").read_text(encoding="utf-8")
+
+        self.assertIn('id="qeCategoricalDetail"', quick_html)
+        self.assertIn('id="qeContinuousRuleSummary"', quick_html)
+        self.assertNotIn('id="qeRuleDialog"', quick_html)
+        self.assertIn("function openInlineRuleDetail", quick_js)
+        self.assertIn('byId("qeCategoricalDetail")', quick_js)
+        self.assertIn('byId("qeContinuousDetail")', quick_js)
+        self.assertIn("핵심 안내", quick_js)
+        self.assertNotIn("rule.MESSAGE", quick_js)
+        self.assertIn(".qe-rule-fields--inline dd", quick_css)
+        self.assertIn("font-size: 14px", quick_css)
 
     def test_success_detail_restores_all_eight_steps_without_run_request(self):
         detail = flow_work_service.build_quick_edit_history_detail(
@@ -142,6 +230,67 @@ class QuickEditHistoryTests(unittest.TestCase):
         self.assertEqual(404, raised.exception.status_code)
         list_nodes.assert_not_called()
         conn.close.assert_called_once()
+
+    def test_completed_step_exposes_m04002_result_detail_handoff(self):
+        quick_html = (ROOT_DIR / "quick-edit" / "index.html").read_text(encoding="utf-8")
+        quick_js = (ROOT_DIR / "quick-edit" / "js" / "quick-edit.js").read_text(encoding="utf-8")
+        analysis_js = (ROOT_DIR / "frontend" / "js" / "MCOM_ANLY_WORK.js").read_text(encoding="utf-8")
+        analysis_css = (ROOT_DIR / "frontend" / "css" / "pages" / "MCOM_ANLY_WORK.css").read_text(encoding="utf-8")
+
+        analysis_step = quick_html.index('data-step="7" data-step-key="analysis"')
+        detail_button = quick_html.index('id="qeOpenDetailedAnalysis"')
+        self.assertGreater(detail_button, analysis_step)
+        self.assertEqual(1, quick_html.count('id="qeOpenDetailedAnalysis"'))
+        self.assertIn("결과상세", quick_html[detail_button:detail_button + 1000])
+        self.assertIn("state.completedSteps.includes(7)", quick_js)
+        action_state_section = quick_js.split("function updateActionState()", 1)[1].split("async function runPipeline", 1)[0]
+        self.assertIn("updateResultDetailAction();", action_state_section)
+        self.assertIn('sessionStorage.setItem("M04002:selectedProjectId"', quick_js)
+        self.assertIn('sessionStorage.setItem("M04002:selectedScenarioId"', quick_js)
+        self.assertIn('sessionStorage.setItem("M04002:selectedRunId"', quick_js)
+        self.assertIn('await appWindow.PageManager.load("M04002"', quick_js)
+        self.assertIn('sessionStorage.getItem(`${PAGE_CODE}:selectedRunId`)', analysis_js)
+        self.assertIn('params.set("preferredFlowRunId"', analysis_js)
+        bootstrap_section = analysis_js.split("async loadBootstrap", 1)[1].split("\n        applyProjectsResponse(", 1)[0]
+        self.assertLess(
+            bootstrap_section.index("this.selectedRun = this.runs.find"),
+            bootstrap_section.index("this.renderRuns();"),
+        )
+        self.assertIn('String(this.selectedRun?.FLOW_RUN_ID ?? "") === String(run.FLOW_RUN_ID ?? "")', analysis_js)
+        self.assertIn('aria-current="${isSelected ? "true" : "false"}"', analysis_js)
+        self.assertIn(".anly-work-run-card.is-selected", analysis_css)
+        self.assertIn("box-shadow: inset 0 0 0 1px #2563eb", analysis_css)
+
+    def test_quick_edit_uses_the_same_m04001_saved_flow_executor(self):
+        quick_js = (ROOT_DIR / "quick-edit" / "js" / "quick-edit.js").read_text(encoding="utf-8")
+        api_client_js = (ROOT_DIR / "quick-edit" / "js" / "api-client.js").read_text(encoding="utf-8")
+        flow_router = (ROOT_DIR / "backend" / "services" / "flow_work_router.py").read_text(encoding="utf-8")
+
+        self.assertIn("client.runSavedFlow(", quick_js)
+        self.assertIn('this.request("/M04001/flow/run-saved"', api_client_js)
+        saved_run_section = flow_router.split('@router.post("/flow/run-saved")', 1)[1].split("    @router.", 1)[0]
+        standard_run_section = flow_router.split('@router.post("/flow/run")', 1)[1].split("    @router.", 1)[0]
+        self.assertIn("response = queue_flow_run(", saved_run_section)
+        self.assertIn("response = queue_flow_run(", standard_run_section)
+        self.assertIn('run_status = "QUEUED" if req.batch else "STARTED"', flow_router)
+        self.assertIn("run_flow_background,", flow_router)
+        self.assertIn("flow_work.execute_flow_plan(", flow_router)
+
+    def test_quick_edit_requests_per_legend_violation_candidates(self):
+        quick_js = (ROOT_DIR / "quick-edit" / "js" / "quick-edit.js").read_text(encoding="utf-8")
+        api_client_js = (ROOT_DIR / "quick-edit" / "js" / "api-client.js").read_text(encoding="utf-8")
+        analysis_sql = (ROOT_DIR / "database" / "MCOM_ANLY_WORK.sql").read_text(encoding="utf-8")
+        analysis_service = (ROOT_DIR / "backend" / "services" / "anly_work_service.py").read_text(encoding="utf-8")
+
+        self.assertIn("balancedRuleSummaryYn: true", quick_js)
+        self.assertIn('balancedRuleSummaryYn: params.balancedRuleSummaryYn ? "Y" : undefined', api_client_js)
+        self.assertIn("summary.balancedTopRules", quick_js)
+        self.assertIn("PARTITION BY S.CONDITION_COUNT", analysis_sql)
+        self.assertIn("PARTITION BY S.RESULT_COLUMN", analysis_sql)
+        self.assertIn("PARTITION BY S.TARGET_COLUMN", analysis_sql)
+        self.assertIn("PARTITION BY NVL(S.METHOD, '(UNKNOWN)')", analysis_sql)
+        self.assertIn("MCOMMON_ANLY_WORK_ASSOC_RULE_BALANCED_VIOLATIONS", analysis_service)
+        self.assertIn("MCOMMON_ANLY_WORK_SYMBOLIC_RULE_BALANCED_VIOLATIONS", analysis_service)
 
 
 if __name__ == "__main__":

@@ -1411,6 +1411,7 @@ def _fetch_symbolic_violation_summary(
     method_filter: str = "",
     target_column_filter: str = "",
     result_scope: str = "ALL",
+    include_balanced_rules: bool = False,
 ) -> dict[str, Any] | None:
     if object_name != "INIT$_TB_RULEVIOL_SYMBOLIC" or not target_owner or not target_table:
         return None
@@ -1552,6 +1553,17 @@ def _fetch_symbolic_violation_summary(
         " WHERE ROWNUM <= 12",
         list_params,
     )
+    balanced_top_rules = fetch_many(
+        SqlLoader.get_sql("MCOMMON_ANLY_WORK_SYMBOLIC_RULE_BALANCED_VIOLATIONS"),
+        {
+            "targetOwner": target_owner,
+            "targetTable": target_table,
+            "runSourceType": run_source_type or None,
+            "runId": run_id,
+            "topPerGroup": 12,
+            "simpleLinearLimit": 3,
+        },
+    ) if include_balanced_rules else []
     top_targets = fetch_many(
         "SELECT * "
         "  FROM ("
@@ -1575,10 +1587,11 @@ def _fetch_symbolic_violation_summary(
         " WHERE ROWNUM <= 12"
     )
     range_columns: list[str] = []
-    for rule in top_rules:
+    summary_rules = [*top_rules, *balanced_top_rules]
+    for rule in summary_rules:
         range_columns.extend(_split_column_list(rule.get("FEATURE_COLUMNS"), 20))
     range_map = _fetch_numeric_feature_ranges(cursor, target_owner, target_table, range_columns)
-    for rule in top_rules:
+    for rule in summary_rules:
         features = _split_column_list(rule.get("FEATURE_COLUMNS"), 20)
         rule["RULE_OWNER"] = owner_name
         rule["FEATURE_LIST"] = features
@@ -1588,6 +1601,7 @@ def _fetch_symbolic_violation_summary(
         "targetTable": target_table,
         "overview": overview,
         "topRules": top_rules,
+        "balancedTopRules": balanced_top_rules,
         "topTargets": top_targets,
         "methodGroups": method_groups,
         "ruleIdFilter": rule_id_filter,
@@ -1766,6 +1780,7 @@ def _fetch_rule_violation_summary(
     rule_page_size: int = 8,
     run_source_type: str = "",
     run_id: int | None = None,
+    include_balanced_rules: bool = False,
 ) -> dict[str, Any] | None:
     if object_name != "INIT$_TB_RULEVIOL_ASSOC":
         return None
@@ -1866,6 +1881,13 @@ def _fetch_rule_violation_summary(
         SqlLoader.get_sql("MCOMMON_ANLY_WORK_ASSOC_RULE_CONDITION_DIST"),
         candidate_params,
     ) if rule_model_name else []
+    balanced_top_rules = fetch_many(
+        SqlLoader.get_sql("MCOMMON_ANLY_WORK_ASSOC_RULE_BALANCED_VIOLATIONS"),
+        {
+            **candidate_params,
+            "topPerGroup": 12,
+        },
+    ) if rule_model_name and include_balanced_rules else []
 
     candidate_filter_clauses = [
         'S."OWNER" = :owner',
@@ -2087,6 +2109,7 @@ def _fetch_rule_violation_summary(
         "ruleModelName": rule_model_name,
         "overview": overview,
         "topRules": top_rules,
+        "balancedTopRules": balanced_top_rules,
         "topRuleTotal": top_rule_total,
         "topRulePage": rule_page,
         "topRulePageSize": rule_page_size,
@@ -2854,6 +2877,7 @@ def get_result_table(
     symbolicViolationMethod: str | None = None,
     symbolicViolationTargetColumn: str | None = None,
     symbolicViolationResultScope: str | None = None,
+    balancedRuleSummaryYn: str | None = "N",
     predictedTypeCase: str | None = None,
     correlationColA: str | None = None,
     correlationColB: str | None = None,
@@ -2899,6 +2923,7 @@ def get_result_table(
     normalized_symbolic_violation_result_scope = str(symbolicViolationResultScope or "ALL").strip().upper()
     if normalized_symbolic_violation_result_scope not in {"ALL", "HIT", "CLEAN"}:
         normalized_symbolic_violation_result_scope = "ALL"
+    include_balanced_rule_summary = str(balancedRuleSummaryYn or "N").strip().upper() == "Y"
     normalized_predicted_type_case = _normalize_predicted_type_case(predictedTypeCase)
     normalized_correlation_col_a = _normalize_optional_identifier(correlationColA, "correlation column A")
     normalized_correlation_col_b = _normalize_optional_identifier(correlationColB, "correlation column B")
@@ -3168,6 +3193,7 @@ def get_result_table(
                 violationRulePageSize,
                 run_source_type,
                 normalized_run_id,
+                include_balanced_rule_summary,
             )
         elif result_layout.get("summary") == "lassoSummary":
             lasso_summary = _fetch_lasso_summary(
@@ -3207,6 +3233,7 @@ def get_result_table(
                 normalized_symbolic_violation_method,
                 normalized_symbolic_violation_target_column,
                 normalized_symbolic_violation_result_scope,
+                include_balanced_rule_summary,
             )
         column_comments = _fetch_column_comment_map(cursor, target_owner, target_table)
         return {

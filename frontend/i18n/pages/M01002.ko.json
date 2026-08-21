@@ -38,12 +38,13 @@
     "saveScenario": "저장",
     "cancel": "취소",
     "deleteScenarioButton": "삭제",
-    "deleteAll": "전체 삭제",
+    "purgeScenarioButton": "시나리오 완전 삭제",
     "loadingProjects": "프로젝트를 불러오는 중...",
     "projectListLoadFailed": "프로젝트 목록을 불러오지 못했습니다.",
     "noProjectsFound": "조회된 프로젝트가 없습니다.",
     "project": "프로젝트",
     "typeUse": "유형 / 사용",
+    "createdAtValue": "생성일시 {value}",
     "untitledProject": "(이름 없음)",
     "noCode": "코드 없음",
     "useValue": "사용 {value}",
@@ -58,8 +59,7 @@
     "selectedScenarioDescription": "선택 시나리오: {name}",
     "createScenarioDescription": "새 시나리오를 만듭니다.",
     "scenarioSavedDescription": "시나리오가 저장되었습니다.",
-    "scenarioDeletedDescription": "시나리오가 삭제되었습니다.",
-    "allScenariosDeletedDescription": "모든 시나리오가 삭제되었습니다."
+    "scenarioDeletedDescription": "시나리오가 삭제되었습니다."
   },
   "messages": {}
 }

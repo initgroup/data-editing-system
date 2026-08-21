@@ -32,6 +32,7 @@
             await this.loadProjects();
             this.renderProjectSummary();
             this.renderScenarioDetail();
+            this.updateAdminPurgeAction();
             this.isInit = true;
         },
 
@@ -106,6 +107,9 @@
                 : "";
             const codeLabel = code || this.t("noCode", "No code");
             const useLabel = this.tl("useValue", "Use {value}", { value: useYn });
+            const createdAtLabel = this.tl("createdAtValue", "Created {value}", {
+                value: this.formatDateTime(project.CREATED_AT)
+            });
 
             return `
                 <button type="button" class="project-row ${selectedClass} ${this.escapeAttr(ownerScopeClass)}" data-project-id="${this.escapeAttr(projectId)}" onclick="M01002.selectProject('${this.escapeAttr(projectId)}')">
@@ -119,6 +123,7 @@
                     <span class="project-row-meta">
                         <span title="${this.escapeHtml(type)}">${this.escapeHtml(type || "-")}</span>
                         <span title="${this.escapeHtml(useLabel)}">${this.escapeHtml(useLabel)}</span>
+                        <span title="${this.escapeHtml(createdAtLabel)}">${this.escapeHtml(createdAtLabel)}</span>
                     </span>
                 </button>
             `;
@@ -250,6 +255,9 @@
             const useYn = scenario.USE_YN || "Y";
             const codeLabel = code || this.t("noCode", "No code");
             const useLabel = this.tl("useValue", "Use {value}", { value: useYn });
+            const createdAtLabel = this.tl("createdAtValue", "Created {value}", {
+                value: this.formatDateTime(scenario.CREATED_AT)
+            });
 
             return `
                 <button type="button" class="scenario-row ${selectedClass} ${this.escapeAttr(ownerScopeClass)}" onclick="M01002.selectScenario('${this.escapeAttr(scenarioId)}')">
@@ -260,6 +268,7 @@
                     <span class="project-row-meta">
                         <span title="${this.escapeHtml(type)}">${this.escapeHtml(type || "-")}</span>
                         <span title="${this.escapeHtml(useLabel)}">${this.escapeHtml(useLabel)}</span>
+                        <span title="${this.escapeHtml(createdAtLabel)}">${this.escapeHtml(createdAtLabel)}</span>
                     </span>
                 </button>
             `;
@@ -324,7 +333,16 @@
             this.setValue("#scenarioDesc-M01002", scenario.scenarioDesc);
             this.setValue("#scenarioUseYn-M01002", scenario.useYn || "Y");
             this.setValue("#scenarioSortOrder-M01002", scenario.sortOrder ?? "");
+            this.updateAdminPurgeAction();
             this.hideScenarioCodeHelp();
+        },
+
+        updateAdminPurgeAction() {
+            const button = getContainerEl("#purgeScenario-M01002");
+            if (!button) return;
+            const isAdmin = Boolean(CommonUtils.isAdminUser?.());
+            button.hidden = !isAdmin;
+            button.disabled = !isAdmin || !this.selectedScenario?.scenarioId;
         },
 
         ensureScenarioTypeOption(value) {
@@ -475,38 +493,66 @@
             }
         },
 
-        async deleteAllScenarios() {
-            const projectId = this.selectedProject?.projectId;
-            if (!projectId) {
-                alert("Select a project first.");
+        async purgeScenario() {
+            if (!CommonUtils.isAdminUser?.()) {
+                CommonMessage.error("관리자 권한이 필요한 기능입니다.");
                 return;
             }
 
-            if (!this.scenarios.length) {
-                alert("There are no scenarios to delete.");
+            const scenarioId = this.selectedScenario?.scenarioId;
+            if (!scenarioId) {
+                CommonMessage.warn("완전 삭제할 저장된 시나리오를 선택하세요.");
                 return;
             }
 
-            const projectName = this.selectedProject.projectName || "selected project";
-            if (!(await CommonMessage.confirm(`Delete all scenarios for "${projectName}"?`))) {
-                return;
-            }
-
+            let confirmation = null;
             try {
-                const result = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/scenario/delete-all`, {
+                const previewResult = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/scenario/purge-preview`, {
                     method: "POST",
-                    body: { projectId }
+                    body: { scenarioId }
                 });
-                this.scenarios = [];
+                const preview = previewResult.data || {};
+                if (!preview.canPurge) {
+                    const blockers = Array.isArray(preview.blockers) ? preview.blockers.join("\n- ") : "안전 조건을 확인할 수 없습니다.";
+                    CommonMessage.error(`시나리오 완전 삭제가 차단되었습니다.\n\n- ${blockers}`);
+                    return;
+                }
+
+                confirmation = await this.confirmAdminPurge({
+                    scopeLabel: "시나리오",
+                    scopeDescription: `프로젝트 ${preview.projectName || "-"}의 선택 시나리오`,
+                    targetCode: preview.targetCode,
+                    targetName: preview.targetName,
+                    ownerLabel: preview.ownerEmail || `User #${preview.ownerUserId || "-"}`,
+                    counts: preview.counts,
+                    dropObjects: preview.dropObjects
+                });
+                if (!confirmation) return;
+
+                const finalConfirmed = await CommonMessage.confirm(
+                    `마지막 확인입니다.\n시나리오 "${preview.targetName}"의 업무 데이터, 실행 이력 및 표시된 물리 테이블을 영구 삭제합니다.\n프로젝트 자체는 유지됩니다.\n\n정말 실행하시겠습니까?`
+                );
+                if (!finalConfirmed) return;
+
+                const result = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/scenario/purge`, {
+                    method: "POST",
+                    body: {
+                        scenarioId,
+                        confirmationCode: confirmation.confirmationCode,
+                        adminKey: confirmation.adminKey
+                    }
+                });
+                confirmation.adminKey = "";
                 this.newScenario(false);
                 this.renderScenarioDetail();
-                this.renderScenarioList();
-                this.updateSelectedProjectScenarioStatus(0);
-                this.updateDescription(this.t("allScenariosDeletedDescription", "All scenarios were deleted."));
-                alert(`${result.deletedCount ?? 0} scenarios deleted.`);
+                await this.loadScenarios();
+                this.updateDescription("관리자 시나리오 완전 삭제가 완료되었습니다.");
+                CommonMessage.success(`시나리오 완전 삭제 완료 · DROP 오브젝트 ${Number(result.droppedObjectCount || 0).toLocaleString()}개`);
             } catch (error) {
-                console.error("[M01002] all scenario delete failed", error);
-                alert(error.message || "Scenario delete failed.");
+                console.error("[M01002] scenario purge failed", error);
+                CommonMessage.error(error.message || "시나리오 완전 삭제에 실패했습니다.");
+            } finally {
+                if (confirmation) confirmation.adminKey = "";
             }
         },
 

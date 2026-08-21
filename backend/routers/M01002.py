@@ -10,8 +10,9 @@ import logging
 
 from backend.database_helper import execute_query, SqlLoader
 from backend.target_database import get_target_db_connection
-from backend.auth_context import get_request_role_code, get_request_user_id
+from backend.auth_context import get_request_role_code, get_request_user_id, require_admin_role
 from backend.services import work_context_service
+from backend.services import admin_scope_purge_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -42,8 +43,10 @@ class ScenarioDeleteRequest(BaseModel):
     model_config = ConfigDict(extra='allow')
 
 
-class ScenarioDeleteAllRequest(BaseModel):
-    projectId: int
+class ScenarioPurgeRequest(BaseModel):
+    scenarioId: int
+    confirmationCode: Optional[str] = ""
+    adminKey: Optional[str] = ""
     model_config = ConfigDict(extra='allow')
 
 
@@ -302,64 +305,52 @@ def delete_scenario(req: ScenarioDeleteRequest, request: Request):
             conn.close()
 
 
-@router.post("/scenario/delete-all")
-def delete_all_scenarios(req: ScenarioDeleteAllRequest, request: Request):
-    user_id = get_request_user_id(request)
+@router.post("/scenario/purge-preview")
+def preview_scenario_purge(req: ScenarioDeleteRequest, request: Request):
+    require_admin_role(request)
     conn = None
-    cursor = None
     try:
         conn = get_target_db_connection(request)
-        cursor = conn.cursor()
-        cursor.execute(SqlLoader.get_sql("M01002_PROJECT_DELETE_SCOPE_LOCK"), {
-            "projectId": req.projectId,
-            "userId": user_id,
-        })
-        if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="Project not found.")
-
-        child_result = execute_query(conn, "M01002_SCENARIO_CHILD_COUNT_BY_PROJECT", {
-            "projectId": req.projectId,
-            "userId": user_id,
-        })
-        if child_result.get("status") != "success":
-            raise HTTPException(status_code=500, detail=child_result.get("message") or "Scenario dependency check failed.")
-
-        child = child_result.get("data", [{}])[0] if child_result.get("data") else {}
-        dependency_text = _active_dependency_text(child)
-        if dependency_text:
-            raise HTTPException(
-                status_code=409,
-                detail=(
-                    "전체 시나리오를 삭제할 수 없습니다. "
-                    "먼저 이 프로젝트에 연결된 업무 데이터를 정리하세요. "
-                    f"({dependency_text}) "
-                    "M02002의 '등록 해제'는 실제 DB 테이블을 삭제하지 않습니다."
-                )
-            )
-
-        cursor.execute(SqlLoader.get_sql("M01002_SCENARIO_DELETE_BY_PROJECT"), {
-            "projectId": req.projectId,
-            "userId": user_id,
-        })
-        deleted_count = int(cursor.rowcount or 0)
-        conn.commit()
         return {
             "status": "success",
-            "message": "All scenarios were deleted.",
-            "deletedCount": deleted_count,
-            "physicalTableAction": "NONE",
+            "data": admin_scope_purge_service.build_purge_preview(
+                conn,
+                admin_scope_purge_service.SCOPE_SCENARIO,
+                req.scenarioId,
+            ),
         }
+    except HTTPException:
+        raise
+    except Exception as error:
+        logger.exception("M01002 scenario purge preview failed.")
+        raise HTTPException(status_code=500, detail=str(error))
+    finally:
+        if conn:
+            conn.close()
+
+
+@router.post("/scenario/purge")
+def purge_scenario(req: ScenarioPurgeRequest, request: Request):
+    require_admin_role(request)
+    conn = None
+    try:
+        conn = get_target_db_connection(request)
+        return admin_scope_purge_service.purge_scope(
+            conn,
+            admin_scope_purge_service.SCOPE_SCENARIO,
+            req.scenarioId,
+            confirmation_code=req.confirmationCode or "",
+            admin_key=req.adminKey or "",
+        )
     except HTTPException:
         if conn:
             conn.rollback()
         raise
-    except Exception as e:
+    except Exception as error:
         if conn:
             conn.rollback()
-        logger.error(f"M01002 all scenario delete failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("M01002 scenario purge failed.")
+        raise HTTPException(status_code=500, detail=str(error))
     finally:
-        if cursor:
-            cursor.close()
         if conn:
             conn.close()

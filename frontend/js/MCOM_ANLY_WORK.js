@@ -696,7 +696,6 @@
             this.runTotal = Math.max(responseTotal, rowTotal, this.runs.length);
             this.nodes = Array.isArray(json.nodes?.data) ? json.nodes.data : [];
             this.nodeResultCache = new Map();
-            this.renderRuns();
 
             const selectedRunId = selection.flowRunId;
             this.selectedRun = this.runs.find((run) => String(run.FLOW_RUN_ID) === String(selectedRunId)) || null;
@@ -706,6 +705,7 @@
             this.lastViolationSummary = null;
             this.lastSymbolicRuleSummary = null;
             this.updateDescriptiveStatisticsButton();
+            this.renderRuns();
             this.renderRunSummary();
             this.clearSelectedNodeResults(this.nodes);
             this.renderNodes();
@@ -820,8 +820,12 @@
                 list.innerHTML = emptyState("noRunHistory", "No run history.");
                 return;
             }
-            list.innerHTML = this.runs.map((run) => `
-                <button type="button" class="anly-work-run-card ${this.selectedRun?.FLOW_RUN_ID === run.FLOW_RUN_ID ? "is-selected" : ""}" onclick="${PAGE_CODE}.selectRun(${Number(run.FLOW_RUN_ID)})">
+            list.innerHTML = this.runs.map((run) => {
+                const isSelected = String(this.selectedRun?.FLOW_RUN_ID ?? "") === String(run.FLOW_RUN_ID ?? "");
+                return `
+                <button type="button" class="anly-work-run-card ${isSelected ? "is-selected" : ""}"
+                        aria-current="${isSelected ? "true" : "false"}"
+                        onclick="${PAGE_CODE}.selectRun(${Number(run.FLOW_RUN_ID)})">
                     <span>
                         <strong>Run #${this.escapeHtml(run.FLOW_RUN_ID)}</strong>
                         <small>${this.escapeHtml(run.FLOW_NAME || "-")}</small>
@@ -829,7 +833,8 @@
                     </span>
                     <b class="${this.getStatusClass(run.STATUS)}">${this.escapeHtml(run.STATUS || "-")}</b>
                 </button>
-            `).join("");
+            `;
+            }).join("");
         },
 
         changeRunPage(delta) {

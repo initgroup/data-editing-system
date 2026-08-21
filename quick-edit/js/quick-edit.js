@@ -30,6 +30,8 @@
         continuousViolation: null,
         descriptiveStatistics: null
     };
+    let ruleDistributionFilters = createRuleDistributionFilters();
+    let categoricalDetail = { ruleId: "", ruleIndex: -1 };
     let continuousDetail = {
         ruleId: "",
         ruleIndex: -1,
@@ -56,6 +58,18 @@
     let quickHistoryBusy = false;
     let quickHistoryDetailRunId = null;
     let quickHistoryError = "";
+
+    function createRuleDistributionFilters() {
+        return {
+            categorical: { type: "ALL", value: "", label: "전체" },
+            continuous: { type: "ALL", value: "", label: "전체" }
+        };
+    }
+
+    function resetRuleDistributionFilters() {
+        ruleDistributionFilters = createRuleDistributionFilters();
+        categoricalDetail = { ruleId: "", ruleIndex: -1 };
+    }
 
     function initialState() {
         return {
@@ -446,6 +460,18 @@
         renderState(message);
     }
 
+    function updateResultDetailAction() {
+        const detailButton = byId("qeOpenDetailedAnalysis");
+        const canOpenDetail = Boolean(
+            state.completedSteps.includes(7)
+            && state.projectId
+            && state.scenarioId
+            && state.flowRunId
+        );
+        setHidden(detailButton, !canOpenDetail);
+        if (detailButton) detailButton.disabled = !canOpenDetail || pipelineBusy;
+    }
+
     function renderStepper() {
         const stepper = byId("qeStepper");
         const isRunning = state.status === "running";
@@ -470,6 +496,7 @@
             else element.removeAttribute("aria-current");
             if (index === state.currentStep) currentElement = element;
         });
+        updateResultDetailAction();
         if (currentElement && lastRenderedStep !== state.currentStep) {
             lastRenderedStep = state.currentStep;
             const viewport = currentElement.closest(".qe-stepper-wrap");
@@ -646,6 +673,7 @@
                 || scenarioLocked
                 || (getWorkspaceMode() === "existing" && !valueOf("existingProject", "qeProjectSelect"));
         }
+        updateResultDetailAction();
     }
 
     async function runPipeline(options = {}) {
@@ -1126,6 +1154,7 @@
                 targetTable: artifacts.categoricalViolation.targetTable || state.tableName,
                 ruleModelName: artifacts.categorical?.objectName,
                 flowRunId: state.flowRunId,
+                balancedRuleSummaryYn: true,
                 page: 1,
                 pageSize: 20
             }));
@@ -1138,6 +1167,7 @@
                 targetOwner: artifacts.continuousViolation.targetOwner || state.tableOwner,
                 targetTable: artifacts.continuousViolation.targetTable || state.tableName,
                 flowRunId: state.flowRunId,
+                balancedRuleSummaryYn: true,
                 page: 1,
                 pageSize: 20
             }));
@@ -1168,6 +1198,7 @@
             continuousViolation: null,
             descriptiveStatistics: null
         };
+        resetRuleDistributionFilters();
         const settled = await Promise.allSettled(requests);
         const errors = [];
         settled.forEach((result, index) => {
@@ -1205,25 +1236,60 @@
     }
 
     function getViolationCountMap(kind) {
-        const rows = getViolationSummary(kind).topRules || [];
+        const summary = getViolationSummary(kind);
+        const rows = [...(summary.balancedTopRules || []), ...(summary.topRules || [])];
         return new Map(rows.map((row) => [String(row.RULE_ID || ""), Number(row.VIOLATION_COUNT || 0)]));
     }
 
-    function getPrioritizedRules(kind, rules) {
-        const violationRules = getViolationSummary(kind).topRules || [];
+    function getPrioritizedRules(kind, rules, limit = 12) {
+        const summary = getViolationSummary(kind);
+        const violationRules = [...(summary.balancedTopRules || []), ...(summary.topRules || [])];
         return kind === "categorical"
-            ? R.prioritizeCategoricalRules(rules, violationRules, 12)
-            : R.prioritizeContinuousRules(rules, violationRules, 12);
+            ? R.prioritizeCategoricalRules(rules, violationRules, limit)
+            : R.prioritizeContinuousRules(rules, violationRules, limit);
     }
 
-    function getDisplayedRules(kind) {
+    function getDisplayedRules(kind, activeFilter = ruleDistributionFilters[kind]) {
         const rules = kind === "categorical"
             ? (resultData.categorical?.rules || [])
             : (resultData.continuous?.symbolicRuleSummary?.topRules || []);
-        return getPrioritizedRules(kind, rules);
+        const summary = getViolationSummary(kind);
+        const violationRules = [...(summary.balancedTopRules || []), ...(summary.topRules || [])];
+        const rankedLimit = Math.max(12, rules.length + violationRules.length);
+        const rankedRules = getPrioritizedRules(kind, rules, rankedLimit);
+        return R.selectBalancedRules(rankedRules, kind, activeFilter, 12);
     }
 
-    function openDetailedAnalysis() {
+    function reconcileRuleDistributionFilter(kind, legendRules) {
+        const activeFilter = ruleDistributionFilters[kind];
+        if (!activeFilter || activeFilter.type === "ALL") return;
+        const hasMatchingRule = legendRules.some((rule) => (
+            R.filterLegendItems(
+                [{ key: activeFilter.value }],
+                [rule],
+                kind,
+                activeFilter.type
+            ).length > 0
+        ));
+        if (!hasMatchingRule) {
+            ruleDistributionFilters[kind] = { type: "ALL", value: "", label: "전체" };
+        }
+    }
+
+    function setRuleDistributionFilter(kind, type, value, label) {
+        if (!Object.prototype.hasOwnProperty.call(ruleDistributionFilters, kind)) return;
+        const normalizedType = String(type || "ALL").toUpperCase();
+        ruleDistributionFilters[kind] = normalizedType === "ALL"
+            ? { type: "ALL", value: "", label: "전체" }
+            : {
+                type: normalizedType,
+                value: String(value || "").trim(),
+                label: String(label || value || "선택 범례").trim()
+            };
+        renderResults();
+    }
+
+    async function openDetailedAnalysis() {
         const projectId = Number(state.projectId || 0);
         const scenarioId = Number(state.scenarioId || 0);
         const flowRunId = Number(state.flowRunId || 0);
@@ -1240,8 +1306,7 @@
             appWindow.sessionStorage.setItem("M04002:selectedProjectId", String(projectId));
             appWindow.sessionStorage.setItem("M04002:selectedScenarioId", String(scenarioId));
             appWindow.sessionStorage.setItem("M04002:selectedRunId", String(flowRunId));
-            const navigation = appWindow.PageManager.load("M04002", "규칙 발굴 분석", true);
-            navigation?.catch?.((error) => appWindow.console.error("[Quick Editing] M04002 navigation failed", error));
+            await appWindow.PageManager.load("M04002", "규칙 발굴 분석", true);
             appWindow.focus();
             window.close();
         } catch (error) {
@@ -1491,6 +1556,10 @@
         const categoryRules = byId("categoryRules", "qeCategoricalRules");
         const categoricalViolationOverview = getViolationSummary("categorical").overview || {};
         const categoricalComments = getResultColumnComments("categorical");
+        const categoricalLegendRules = getDisplayedRules("categorical", { type: "ALL" });
+        reconcileRuleDistributionFilter("categorical", categoricalLegendRules);
+        const categoricalRules = getDisplayedRules("categorical");
+        const categoricalFilter = ruleDistributionFilters.categorical;
         if (categoryKpis) categoryKpis.innerHTML = R.renderKpis([
             { label: "전체 규칙", value: R.formatNumber(categoricalOverview.TOTAL_RULES, 0), tone: "primary" },
             { label: "매핑 규칙", value: R.formatNumber(categoricalOverview.MAPPED_RULES, 0) },
@@ -1500,31 +1569,51 @@
             { label: "위반 규칙", value: R.formatNumber(categoricalViolationOverview.VIOLATED_RULE_COUNT, 0), help: "위반이 발견된 규칙" }
         ]);
         if (categoryCharts) {
-            const conditionItems = (categorical?.conditionDist || []).map((row) => ({
+            const conditionItems = R.filterLegendItems((categorical?.conditionDist || []).map((row) => ({
+                key: String(Number(row.CONDITION_COUNT || 0)),
                 label: `${row.CONDITION_COUNT ?? 0}개 조건`, value: Number(row.RULE_COUNT || 0)
-            }));
-            const resultItems = (categorical?.resultTop || []).map((row) => ({
+            })), categoricalLegendRules, "categorical", "CONDITION_COUNT");
+            const resultItems = R.filterLegendItems((categorical?.resultTop || []).map((row) => ({
+                key: String(row.RESULT_COLUMN || "").trim().toUpperCase(),
                 label: R.getColumnLabel(row.RESULT_COLUMN || "결과 미지정", categoricalComments), value: Number(row.RULE_COUNT || 0)
-            }));
+            })), categoricalLegendRules, "categorical", "RESULT_COLUMN");
             const chartBody = categoryCharts.querySelector("[data-chart-body]") || categoryCharts;
             chartBody.innerHTML = `
-                <section><h4>조건 개수별 규칙</h4>${R.renderBars(conditionItems, { ariaLabel: "조건 개수별 범주형 규칙 수" })}</section>
-                <section><h4>결과 컬럼별 규칙</h4>${R.renderBars(resultItems, { accent: "mint", ariaLabel: "결과 컬럼별 범주형 규칙 수" })}</section>`;
-            setText(categoryCharts.querySelector("[data-chart-caption]"), `상위 ${Math.max(conditionItems.length, resultItems.length)}개 항목`);
+                <section><h4>조건 개수별 규칙</h4>${R.renderBars(conditionItems, {
+                    ariaLabel: "조건 개수별 범주형 규칙 수", interactive: true,
+                    filterKind: "categorical", filterType: "CONDITION_COUNT", activeFilter: categoricalFilter
+                })}</section>
+                <section><h4>결과 컬럼별 규칙</h4>${R.renderBars(resultItems, {
+                    accent: "mint", ariaLabel: "결과 컬럼별 범주형 규칙 수", interactive: true,
+                    filterKind: "categorical", filterType: "RESULT_COLUMN", activeFilter: categoricalFilter
+                })}</section>`;
+            setText(
+                categoryCharts.querySelector("[data-chart-caption]"),
+                categoricalFilter.type === "ALL" ? "전체 · 범례별 상위 규칙" : `${categoricalFilter.label} 선택`
+            );
         }
         if (categoryRules) {
-            const rules = getDisplayedRules("categorical");
-            categoryRules.innerHTML = R.renderCategoricalRules(rules, {
+            categoryRules.innerHTML = R.renderCategoricalRules(categoricalRules, {
                 columnComments: categoricalComments,
                 violationCounts: getViolationCountMap("categorical")
             });
-            setText(categoryRules.closest(".qe-result-block")?.querySelector("[data-rule-count]"), `${rules.length}개`);
+            setText(
+                categoryRules.closest(".qe-result-block")?.querySelector("[data-rule-count]"),
+                categoricalFilter.type === "ALL"
+                    ? `범례별 상위 ${categoricalRules.length}개`
+                    : `${categoricalFilter.label} · 상위 ${categoricalRules.length}개`
+            );
+            prepareCategoricalDetail(categoricalRules);
         }
 
         const continuous = resultData.continuous?.symbolicRuleSummary || {};
         const continuousOverview = continuous.overview || {};
         const continuousViolationOverview = getViolationSummary("continuous").overview || {};
         const continuousComments = getResultColumnComments("continuous");
+        const continuousLegendRules = getDisplayedRules("continuous", { type: "ALL" });
+        reconcileRuleDistributionFilter("continuous", continuousLegendRules);
+        const displayedContinuousRules = getDisplayedRules("continuous");
+        const continuousFilter = ruleDistributionFilters.continuous;
         const continuousKpis = byId("continuousKpis", "qeContinuousKpis");
         const continuousCharts = byId("continuousCharts", "qeContinuousCharts");
         const continuousRules = byId("continuousRules", "qeContinuousRules");
@@ -1537,26 +1626,41 @@
             { label: "평균 복잡도", value: R.formatNumber(continuousOverview.AVG_COMPLEXITY, 1), help: "수식 평균 항 수" }
         ]);
         if (continuousCharts) {
-            const targetItems = (continuous.targetGroups || []).map((row) => ({
+            const targetItems = R.filterLegendItems((continuous.targetGroups || []).map((row) => ({
+                key: String(row.TARGET_COLUMN || "").trim().toUpperCase(),
                 label: R.getColumnLabel(row.TARGET_COLUMN || "대상 미지정", continuousComments), value: Number(row.RULE_COUNT || 0)
-            }));
-            const methodItems = (continuous.methodGroups || []).map((row) => ({
+            })), continuousLegendRules, "continuous", "TARGET_COLUMN");
+            const methodItems = R.filterLegendItems((continuous.methodGroups || []).map((row) => ({
+                key: String(row.METHOD || "").trim().toUpperCase(),
                 label: row.METHOD || "방법 미지정", value: Number(row.RULE_COUNT || 0)
-            }));
+            })), continuousLegendRules, "continuous", "METHOD");
             const chartBody = continuousCharts.querySelector("[data-chart-body]") || continuousCharts;
             chartBody.innerHTML = `
-                <section><h4>대상 컬럼별 규칙</h4>${R.renderBars(targetItems, { ariaLabel: "대상 컬럼별 연속형 규칙 수" })}</section>
-                <section><h4>발굴 방법별 규칙</h4>${R.renderBars(methodItems, { accent: "mint", ariaLabel: "발굴 방법별 연속형 규칙 수" })}</section>`;
-            setText(continuousCharts.querySelector("[data-chart-caption]"), `상위 ${Math.max(targetItems.length, methodItems.length)}개 항목`);
+                <section><h4>대상 컬럼별 규칙</h4>${R.renderBars(targetItems, {
+                    ariaLabel: "대상 컬럼별 연속형 규칙 수", interactive: true,
+                    filterKind: "continuous", filterType: "TARGET_COLUMN", activeFilter: continuousFilter
+                })}</section>
+                <section><h4>발굴 방법별 규칙</h4>${R.renderBars(methodItems, {
+                    accent: "mint", ariaLabel: "발굴 방법별 연속형 규칙 수", interactive: true,
+                    filterKind: "continuous", filterType: "METHOD", activeFilter: continuousFilter
+                })}</section>`;
+            setText(
+                continuousCharts.querySelector("[data-chart-caption]"),
+                continuousFilter.type === "ALL" ? "전체 · 범례별 상위 규칙" : `${continuousFilter.label} 선택`
+            );
         }
         if (continuousRules) {
-            const rules = getDisplayedRules("continuous");
-            continuousRules.innerHTML = R.renderContinuousRules(rules, {
+            continuousRules.innerHTML = R.renderContinuousRules(displayedContinuousRules, {
                 columnComments: continuousComments,
                 violationCounts: getViolationCountMap("continuous")
             });
-            setText(continuousRules.closest(".qe-result-block")?.querySelector("[data-rule-count]"), `${rules.length}개`);
-            prepareContinuousDetail(rules);
+            setText(
+                continuousRules.closest(".qe-result-block")?.querySelector("[data-rule-count]"),
+                continuousFilter.type === "ALL"
+                    ? `범례별 상위 ${displayedContinuousRules.length}개`
+                    : `${continuousFilter.label} · 상위 ${displayedContinuousRules.length}개`
+            );
+            prepareContinuousDetail(displayedContinuousRules);
         }
 
         renderDescriptiveStatistics();
@@ -1566,6 +1670,22 @@
             warningTarget.textContent = state.resultWarning || "";
             warningTarget.hidden = !state.resultWarning;
         }
+    }
+
+    function prepareCategoricalDetail(rules) {
+        const panel = byId("qeCategoricalDetail");
+        const safeRules = Array.isArray(rules) ? rules : [];
+        if (!panel || !categoricalDetail.ruleId) {
+            setHidden(panel, true);
+            return;
+        }
+        const selectedIndex = safeRules.findIndex((rule) => String(rule.RULE_ID || "") === categoricalDetail.ruleId);
+        if (selectedIndex < 0) {
+            categoricalDetail = { ruleId: "", ruleIndex: -1 };
+            setHidden(panel, true);
+            return;
+        }
+        renderCategoricalDetail(selectedIndex, { scroll: false });
     }
 
     function prepareContinuousDetail(rules) {
@@ -1822,6 +1942,14 @@
         const rule = continuousDetail.rule;
         const metrics = continuousDetail.metrics;
         const violationCount = getRuleViolationCount("continuous", rule);
+        const summaryTarget = byId("qeContinuousRuleSummary");
+        if (summaryTarget) {
+            summaryTarget.innerHTML = renderInlineRuleContent(
+                "continuous",
+                continuousDetail.ruleIndex,
+                rule
+            );
+        }
         const metricTarget = byId("qeContinuousDetailMetrics");
         if (metricTarget) metricTarget.innerHTML = [
             ["샘플", R.formatNumber(continuousDetail.sampleCount, 0), continuousDetail.hasMore ? "일부 표본" : "조회 행"],
@@ -2099,59 +2227,86 @@
         nextTab.focus();
     }
 
-    function openRuleDialog(kind, index) {
-        const dialog = byId("qeRuleDialog");
-        if (!dialog) return;
-        const title = byId("qeRuleDialogTitle");
-        const body = byId("qeRuleDialogBody");
-        let rule;
+    function getQuickMethodLabel(method) {
+        const normalized = String(method || "").trim().toUpperCase();
+        if (!normalized) return "자동 수식 탐색";
+        if (normalized.includes("POLYNOMIAL")) return "다항 회귀";
+        if (normalized.includes("LASSO")) return "주요 변수 선형식";
+        if (normalized.includes("ROBUST")) return "이상치에 강한 회귀";
+        if (normalized.includes("LINEAR")) return "선형 회귀";
+        if (normalized.includes("SYMBOLIC")) return "수식 탐색";
+        return "자동 수식 탐색";
+    }
+
+    function renderInlineRuleContent(kind, index, rule) {
         const comments = getResultColumnComments(kind);
         if (kind === "categorical") {
-            rule = getDisplayedRules("categorical")[index];
-            const resultText = rule?.RESULT_TEXT
-                || [rule?.RESULT_COLUMN, rule?.RESULT_VALUE].filter((value) => value !== null && value !== undefined && value !== "").join(" = ")
+            const resultText = rule.RESULT_TEXT
+                || [rule.RESULT_COLUMN, rule.RESULT_VALUE].filter((value) => value !== null && value !== undefined && value !== "").join(" = ")
                 || "-";
-            setText(title, `범주형 규칙 ${rule?.RULE_ID || index + 1}`);
-            if (body && rule) body.innerHTML = `
-                <dl class="qe-rule-fields">
-                    <div><dt>조건</dt><dd>${R.escapeHtml(R.annotateColumnText(rule.CONDITION_TEXT || rule.CONDITION_COLUMN || "-", comments))}</dd></div>
-                    <div><dt>결과</dt><dd>${R.escapeHtml(R.annotateColumnText(resultText, comments))}</dd></div>
-                    <div><dt>결과 컬럼 라벨</dt><dd>${R.escapeHtml(R.getColumnLabel(rule.RESULT_COLUMN || "-", comments))}</dd></div>
+            return `<div class="qe-quick-insight">
+                    <strong>핵심 안내</strong>
+                    <span>IF 조건을 만족하지만 예상 결과와 다른 데이터를 위반으로 확인합니다.</span>
+                </div>
+                <dl class="qe-rule-fields qe-rule-fields--inline">
+                    <div class="is-wide"><dt>조건</dt><dd>${R.escapeHtml(R.annotateColumnText(rule.CONDITION_TEXT || rule.CONDITION_COLUMN || "-", comments))}</dd></div>
+                    <div class="is-wide"><dt>예상 결과</dt><dd>${R.escapeHtml(R.annotateColumnText(resultText, comments))}</dd></div>
+                    <div><dt>결과 컬럼</dt><dd>${R.escapeHtml(R.getColumnLabel(rule.RESULT_COLUMN || "-", comments))}</dd></div>
                     <div><dt>신뢰도</dt><dd>${R.escapeHtml(R.formatRatio(rule.RULE_CONFIDENCE))}</dd></div>
-                    <div><dt>지지도</dt><dd>${R.escapeHtml(R.formatRatio(rule.RULE_SUPPORT))}</dd></div>
                     <div><dt>향상도</dt><dd>${R.escapeHtml(R.formatNumber(rule.RULE_LIFT, 3))}</dd></div>
-                    <div><dt>조건 수 / 지지 건수</dt><dd>${R.escapeHtml(R.formatNumber(rule.CONDITION_COUNT, 0))} / ${R.escapeHtml(R.formatNumber(rule.SUPPORT_COUNT, 0))}</dd></div>
+                    <div><dt>조건 수</dt><dd>${R.escapeHtml(R.formatNumber(rule.CONDITION_COUNT, 0))}개</dd></div>
                 </dl>
                 ${renderRuleViolationAction(kind, index, rule)}`;
-        } else {
-            rule = getDisplayedRules("continuous")[index];
-            setText(title, `연속형 규칙 ${rule?.RULE_ID || index + 1}`);
-            const features = Array.isArray(rule?.FEATURE_LIST)
-                ? rule.FEATURE_LIST
-                : String(rule?.FEATURE_COLUMNS || "").split(",").map((item) => item.trim()).filter(Boolean);
-            const featureText = features.length
-                ? features.map((column) => R.getColumnLabel(column, comments)).join(", ")
-                : "-";
-            if (body && rule) body.innerHTML = `
-                <dl class="qe-rule-fields">
-                    <div><dt>대상 컬럼</dt><dd>${R.escapeHtml(R.getColumnLabel(rule.TARGET_COLUMN || "-", comments))}</dd></div>
-                    <div><dt>수식</dt><dd><code class="qe-rule-expression">${R.escapeHtml(rule.EXPRESSION || "-")}</code></dd></div>
-                    <div><dt>발굴 방법</dt><dd>${R.escapeHtml(rule.METHOD || "-")}</dd></div>
-                    <div><dt>사용 컬럼</dt><dd>${R.escapeHtml(featureText)}</dd></div>
-                    <div><dt>점수 / 복잡도</dt><dd>${R.escapeHtml(R.formatNumber(rule.SCORE, 3))} / ${R.escapeHtml(R.formatNumber(rule.COMPLEXITY, 0))}</dd></div>
-                    <div><dt>순위 / 선택 여부</dt><dd>${R.escapeHtml(R.formatNumber(rule.RANK_NO, 0))} / ${rule.SELECTED_YN === "Y" ? "대표 규칙" : "후보 규칙"}</dd></div>
-                    <div><dt>관계 클러스터</dt><dd>${R.escapeHtml(rule.CLUSTER_SCOPE || rule.TARGET_CLUSTER_ID || "-")}</dd></div>
-                    ${rule.MESSAGE ? `<div><dt>분석 메시지</dt><dd>${R.escapeHtml(rule.MESSAGE)}</dd></div>` : ""}
-                </dl>
-                ${renderRuleViolationAction(kind, index, rule)}
-                <div class="qe-rule-violation-actions">
-                    <span>아래 상세 그래프에서 실제값·예측값과 오차 지표를 확인할 수 있습니다.</span>
-                    <button type="button" class="qe-secondary-button" data-show-continuous-detail="${index}">상세 그래프로 이동</button>
-                </div>`;
         }
-        if (!rule) return;
-        if (typeof dialog.showModal === "function") dialog.showModal();
-        else dialog.hidden = false;
+
+        const features = Array.isArray(rule.FEATURE_LIST)
+                ? rule.FEATURE_LIST
+                : String(rule.FEATURE_COLUMNS || "").split(",").map((item) => item.trim()).filter(Boolean);
+        const featureText = features.length
+            ? features.map((column) => R.getColumnLabel(column, comments)).join(", ")
+            : "-";
+        const violationCount = getRuleViolationCount("continuous", rule);
+        const insight = violationCount === null
+            ? "실제값과 수식 예측값의 차이가 큰 데이터를 아래에서 확인할 수 있습니다."
+            : `허용 범위를 벗어난 데이터 ${R.formatNumber(violationCount, 0)}건이 발견되었습니다.`;
+        return `<div class="qe-quick-insight">
+                <strong>핵심 안내</strong>
+                <span>${R.escapeHtml(insight)}</span>
+            </div>
+            <dl class="qe-rule-fields qe-rule-fields--inline">
+                <div><dt>대상 컬럼</dt><dd>${R.escapeHtml(R.getColumnLabel(rule.TARGET_COLUMN || "-", comments))}</dd></div>
+                <div><dt>분석 방식</dt><dd>${R.escapeHtml(getQuickMethodLabel(rule.METHOD))}</dd></div>
+                <div class="is-wide"><dt>예측 수식</dt><dd><code class="qe-rule-expression">${R.escapeHtml(rule.EXPRESSION || "-")}</code></dd></div>
+                <div class="is-wide"><dt>사용 컬럼</dt><dd>${R.escapeHtml(featureText)}</dd></div>
+                <div><dt>점수</dt><dd>${R.escapeHtml(R.formatNumber(rule.SCORE, 3))}</dd></div>
+                <div><dt>수식 항 수</dt><dd>${R.escapeHtml(R.formatNumber(rule.COMPLEXITY, 0))}개</dd></div>
+            </dl>
+            ${renderRuleViolationAction(kind, index, rule)}`;
+    }
+
+    function renderCategoricalDetail(index, options = {}) {
+        const rules = getDisplayedRules("categorical");
+        const normalizedIndex = Math.max(0, Math.min(rules.length - 1, Number(index) || 0));
+        const rule = rules[normalizedIndex];
+        const panel = byId("qeCategoricalDetail");
+        const body = byId("qeCategoricalDetailBody");
+        if (!panel || !body || !rule) return;
+        categoricalDetail = { ruleId: String(rule.RULE_ID || ""), ruleIndex: normalizedIndex };
+        setText(byId("qeCategoricalDetailTitle"), `범주형 규칙 상세 · ${rule.RULE_ID || normalizedIndex + 1}`);
+        body.innerHTML = renderInlineRuleContent("categorical", normalizedIndex, rule);
+        panel.hidden = false;
+        if (options.scroll !== false) {
+            window.setTimeout(() => panel.scrollIntoView({ behavior: "smooth", block: "start" }), 30);
+        }
+    }
+
+    function openInlineRuleDetail(kind, index) {
+        if (kind === "categorical") {
+            renderCategoricalDetail(index);
+            return;
+        }
+        loadContinuousDetail(index).catch((error) => showToast(error.message, "error"));
+        window.setTimeout(() => byId("qeContinuousDetail")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
     }
 
     function renderRuleViolationAction(kind, index, rule) {
@@ -2162,7 +2317,7 @@
             <button type="button" class="qe-secondary-button" data-load-violations="true"
                     data-rule-kind="${R.escapeHtml(kind)}" data-rule-index="${index}">위반 데이터 조회</button>
         </div>
-        <div class="qe-rule-violation-result" data-violation-result hidden></div>`;
+        <div class="qe-rule-violation-result" data-violation-result data-rule-kind="${R.escapeHtml(kind)}" hidden></div>`;
     }
 
     function getRuleByKind(kind, index) {
@@ -2174,8 +2329,9 @@
         const artifact = kind === "categorical"
             ? state.resultArtifacts?.categoricalViolation
             : state.resultArtifacts?.continuousViolation;
-        const resultTarget = byId("qeRuleDialogBody")?.querySelector("[data-violation-result]");
-        const button = byId("qeRuleDialogBody")?.querySelector("[data-load-violations]");
+        const detailPanel = kind === "categorical" ? byId("qeCategoricalDetail") : byId("qeContinuousDetail");
+        const resultTarget = detailPanel?.querySelector(`[data-violation-result][data-rule-kind="${kind}"]`);
+        const button = detailPanel?.querySelector(`[data-load-violations][data-rule-kind="${kind}"]`);
         if (!resultTarget || !rule) return;
         resultTarget.hidden = false;
         resultTarget.innerHTML = "<p>위반 데이터를 조회하고 있습니다.</p>";
@@ -2256,13 +2412,6 @@
             </div>`;
     }
 
-    function closeRuleDialog() {
-        const dialog = byId("qeRuleDialog");
-        if (!dialog) return;
-        if (typeof dialog.close === "function" && dialog.open) dialog.close();
-        else dialog.hidden = true;
-    }
-
     function renderQuickHistoryList() {
         const target = byId("qeRunHistoryList");
         const count = byId("qeRunHistoryCount");
@@ -2287,6 +2436,7 @@
                 <span class="qe-run-history-empty__icon" aria-hidden="true">◷</span>
                 <strong>실행 이력을 불러오는 중입니다.</strong>
                 <span>저장된 퀵 실행만 안전하게 조회합니다.</span>
+                <span class="qe-run-history-loading-bar qe-run-history-loading-bar--dialog" aria-hidden="true"><i></i></span>
             </div>`;
             return;
         }
@@ -2507,6 +2657,7 @@
             continuousViolation: null,
             descriptiveStatistics: null
         };
+        resetRuleDistributionFilters();
         continuousDetailRequestId += 1;
         continuousDetail = {
             ruleId: "", ruleIndex: -1, rule: null, rows: [], evaluatedRows: [],
@@ -2529,6 +2680,7 @@
 
     function renderResultsEmpty() {
         setHidden(byId("resultsSection", "qeResultsPanel"), true);
+        setHidden(byId("qeCategoricalDetail"), true);
         setHidden(byId("qeContinuousDetail"), true);
         setHidden(byId("qeStatisticsSummary"), true);
         byId("qeStatisticsDialog")?.close();
@@ -2682,13 +2834,41 @@
             button.addEventListener("keydown", handleResultTabKeydown);
         });
         byId("resultsSection", "qeResultsPanel")?.addEventListener("click", (event) => {
+            const filterButton = event.target.closest("[data-rule-filter-kind][data-rule-filter-type]");
+            if (filterButton) {
+                setRuleDistributionFilter(
+                    String(filterButton.dataset.ruleFilterKind || "").toLowerCase(),
+                    filterButton.dataset.ruleFilterType,
+                    filterButton.dataset.ruleFilterValue,
+                    filterButton.dataset.ruleFilterLabel
+                );
+                return;
+            }
             const statisticsCard = event.target.closest("[data-statistics-column]");
             if (statisticsCard) {
                 openStatisticsDialog(statisticsCard.dataset.statisticsColumn);
                 return;
             }
-            const card = event.target.closest("[data-rule-kind][data-rule-index]");
-            if (card) openRuleDialog(card.dataset.ruleKind, Number(card.dataset.ruleIndex));
+            const violationButton = event.target.closest("[data-load-violations]");
+            if (violationButton) {
+                loadRuleViolations(
+                    violationButton.dataset.ruleKind,
+                    Number(violationButton.dataset.ruleIndex),
+                    1
+                );
+                return;
+            }
+            const pageButton = event.target.closest("[data-violation-page]");
+            if (pageButton && !pageButton.disabled) {
+                loadRuleViolations(
+                    pageButton.dataset.ruleKind,
+                    Number(pageButton.dataset.ruleIndex),
+                    Number(pageButton.dataset.violationPage)
+                );
+                return;
+            }
+            const card = event.target.closest(".qe-rule-card[data-rule-kind][data-rule-index]");
+            if (card) openInlineRuleDetail(card.dataset.ruleKind, Number(card.dataset.ruleIndex));
         });
         byId("qeStatisticsDetailButton")?.addEventListener("click", () => openStatisticsDialog());
         byId("qeStatisticsColumnSelect")?.addEventListener("change", (event) => {
@@ -2732,42 +2912,9 @@
             const index = Number(valueOf("qeContinuousRuleSelect") || continuousDetail.ruleIndex || 0);
             loadContinuousDetail(index, true).catch((error) => showToast(error.message, "error"));
         });
-        byId("qeRuleDialogClose")?.addEventListener("click", closeRuleDialog);
         byId("toast", "qeToastRegion")?.querySelector("[data-toast-close]")?.addEventListener("click", () => {
             const toast = byId("toast", "qeToastRegion");
             if (toast) toast.hidden = true;
-        });
-        byId("qeRuleDialog")?.addEventListener("click", (event) => {
-            if (event.target === event.currentTarget) {
-                closeRuleDialog();
-                return;
-            }
-            const violationButton = event.target.closest("[data-load-violations]");
-            if (violationButton) {
-                loadRuleViolations(
-                    violationButton.dataset.ruleKind,
-                    Number(violationButton.dataset.ruleIndex),
-                    1
-                );
-                return;
-            }
-            const pageButton = event.target.closest("[data-violation-page]");
-            if (pageButton && !pageButton.disabled) {
-                loadRuleViolations(
-                    pageButton.dataset.ruleKind,
-                    Number(pageButton.dataset.ruleIndex),
-                    Number(pageButton.dataset.violationPage)
-                );
-                return;
-            }
-            const detailButton = event.target.closest("[data-show-continuous-detail]");
-            if (detailButton) {
-                const index = Number(detailButton.dataset.showContinuousDetail || 0);
-                closeRuleDialog();
-                selectResultTab("continuous");
-                loadContinuousDetail(index).catch((error) => showToast(error.message, "error"));
-                window.setTimeout(() => byId("qeContinuousDetail")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
-            }
         });
         window.addEventListener("resize", () => {
             window.clearTimeout(chartResizeTimer);

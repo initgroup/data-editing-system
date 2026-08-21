@@ -2,6 +2,8 @@
 SELECT PROJECT_ID
      , USER_ID
      , USER_EMAIL
+     , CASE WHEN USER_ID = :userId THEN 'Y' ELSE 'N' END AS IS_OWNER_YN
+     , CASE WHEN USER_ID = :userId THEN 'MY' ELSE 'OTHER' END AS OWNER_SCOPE
      , PROJECT_CODE
      , PROJECT_NAME
      , PROJECT_TYPE
@@ -11,7 +13,7 @@ SELECT PROJECT_ID
      , CREATED_AT
      , UPDATED_AT
   FROM INIT$_TB_PROJECT
- WHERE USER_ID = :userId
+ WHERE (:includeAllUsers = 'Y' OR USER_ID = :userId)
    AND (
           :keyword IS NULL
        OR TRIM(:keyword) IS NULL
@@ -20,13 +22,19 @@ SELECT PROJECT_ID
        OR UPPER(NVL(PROJECT_TYPE, '')) LIKE '%' || UPPER(TRIM(:keyword)) || '%'
        OR UPPER(NVL(PROJECT_DESC, '')) LIKE '%' || UPPER(TRIM(:keyword)) || '%'
        )
- ORDER BY SORT_ORDER, PROJECT_NAME, PROJECT_ID
+ ORDER BY CASE WHEN USER_ID = :userId THEN 0 ELSE 1 END
+        , USER_EMAIL
+        , SORT_ORDER NULLS LAST
+        , PROJECT_NAME
+        , PROJECT_ID
 ;
 
 -- [M01001_PROJECT_DETAIL]
 SELECT PROJECT_ID
      , USER_ID
      , USER_EMAIL
+     , CASE WHEN USER_ID = :userId THEN 'Y' ELSE 'N' END AS IS_OWNER_YN
+     , CASE WHEN USER_ID = :userId THEN 'MY' ELSE 'OTHER' END AS OWNER_SCOPE
      , PROJECT_CODE
      , PROJECT_NAME
      , PROJECT_TYPE
@@ -37,7 +45,7 @@ SELECT PROJECT_ID
      , UPDATED_AT
   FROM INIT$_TB_PROJECT
  WHERE PROJECT_ID = :projectId
-   AND USER_ID = :userId
+   AND (:includeAllUsers = 'Y' OR USER_ID = :userId)
 ;
 
 -- [M01001_PROJECT_INSERT]

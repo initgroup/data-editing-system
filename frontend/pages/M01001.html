@@ -112,17 +112,21 @@
                     <span class="env-detail-hint" data-label-key="projectFooterHint">Required fields are marked. Project code is used as a unique key.</span>
                 </div>
                 <div class="env-footer-group">
-                    <button type="button" class="env-btn env-save" onclick="M01001.saveProject()">
+                    <button type="button" id="saveProject-M01001" class="env-btn env-save" onclick="M01001.saveProject()">
                         <i class="far fa-save" aria-hidden="true"></i>
                         <span data-label-key="saveProject">Save project</span>
                     </button>
-                    <button type="button" class="env-btn env-cancel" onclick="M01001.resetProject()">
+                    <button type="button" id="resetProject-M01001" class="env-btn env-cancel" onclick="M01001.resetProject()">
                         <i class="fas fa-undo-alt" aria-hidden="true"></i>
                         <span data-label-key="cancel">Cancel</span>
                     </button>
-                    <button type="button" class="env-btn env-danger" onclick="M01001.deleteProject()">
+                    <button type="button" id="deleteProject-M01001" class="env-btn env-danger" onclick="M01001.deleteProject()">
                         <i class="far fa-trash-alt" aria-hidden="true"></i>
                         <span data-label-key="deleteProjectButton">Delete project</span>
+                    </button>
+                    <button type="button" id="purgeProject-M01001" class="env-btn env-purge" onclick="M01001.purgeProject()" hidden>
+                        <i class="fas fa-radiation" aria-hidden="true"></i>
+                        <span data-label-key="purgeProjectButton">프로젝트 완전 삭제</span>
                     </button>
                 </div>
             </footer>
