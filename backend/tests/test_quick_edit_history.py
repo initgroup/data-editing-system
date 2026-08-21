@@ -4,6 +4,8 @@ from unittest.mock import Mock, patch
 from fastapi import HTTPException
 
 from backend.routers import M04001
+from backend.database_helper import SqlLoader
+from backend.services.flow_work_router import normalize_quick_edit_summary
 from backend.services import flow_work_service
 
 
@@ -15,6 +17,54 @@ def get_route_endpoint(path: str, method: str):
 
 
 class QuickEditHistoryTests(unittest.TestCase):
+    def test_quick_edit_summary_is_compact_and_normalized(self):
+        summary = normalize_quick_edit_summary({
+            "source": "quick_edit",
+            "projectCode": "QE_20260821",
+            "projectName": "퀵 에디팅 20260821-143000",
+            "ownerName": "init$edit01",
+            "tableName": "initup$qedit",
+            "fileSize": "2048",
+            "estimatedRowCount": -1,
+        })
+
+        self.assertEqual("QUICK_EDIT", summary["source"])
+        self.assertEqual(1, summary["version"])
+        self.assertEqual("INIT$EDIT01", summary["ownerName"])
+        self.assertEqual("INITUP$QEDIT", summary["tableName"])
+        self.assertEqual(2048, summary["fileSize"])
+        self.assertIsNone(summary["estimatedRowCount"])
+
+    def test_completed_run_keeps_quick_edit_summary(self):
+        conn = Mock()
+        summary = {"source": "QUICK_EDIT", "projectName": "Quick project"}
+
+        with (
+            patch("backend.services.flow_work_service.prepare_flow_run_session"),
+            patch("backend.services.flow_work_service.update_run") as update_run,
+        ):
+            flow_work_service.execute_flow_plan(
+                conn,
+                1044,
+                [],
+                run_context={"quickEditSummary": summary},
+            )
+
+        persisted_plan = update_run.call_args.args[4]
+        self.assertEqual(summary, persisted_plan["quickEditSummary"])
+
+    def test_history_sql_uses_summary_path_and_legacy_fallback(self):
+        sql = SqlLoader.get_sql("FLOW_WORK_QUICK_EDIT_HISTORY")
+
+        self.assertIn("STORED_QUICK_RUNS", sql)
+        self.assertIn("R.RUN_TYPE = 'QUICK_EDIT'", sql)
+        self.assertIn("'$.quickEditSummary' NULL ON ERROR", sql)
+        self.assertIn("PROJECT_NAME VARCHAR2(200) PATH '$.projectName'", sql)
+        self.assertIn("PR.SUMMARY_YN = 'Y'", sql)
+        self.assertIn("LEGACY_RUN_SCOPE", sql)
+        self.assertIn("P.PROJECT_CODE LIKE 'QEDIT\\_%'", sql)
+        self.assertIn("DBMS_LOB.INSTR", sql)
+
     def test_success_detail_restores_all_eight_steps_without_run_request(self):
         detail = flow_work_service.build_quick_edit_history_detail(
             {

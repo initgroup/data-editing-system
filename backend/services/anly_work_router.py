@@ -14,6 +14,27 @@ def create_anly_work_router(
     router = APIRouter()
     FLOW_MENU_CODE = flow_menu_code
 
+    @router.get("/bootstrap")
+    def get_bootstrap(
+        request: Request,
+        preferredProjectId: int | None = None,
+        preferredScenarioId: int | None = None,
+        preferredFlowRunId: int | None = None,
+        pageSize: int = 20,
+        status: str = "ALL",
+        keyword: str | None = None,
+    ):
+        return anly_work.get_analysis_bootstrap(
+            request=request,
+            preferred_project_id=preferredProjectId,
+            preferred_scenario_id=preferredScenarioId,
+            preferred_flow_run_id=preferredFlowRunId,
+            page_size=pageSize,
+            status=status,
+            keyword=keyword,
+            flow_menu_code=FLOW_MENU_CODE,
+        )
+
     @router.get("/runs")
     def list_flow_runs(
         request: Request,
@@ -260,6 +281,48 @@ def create_anly_work_router(
             runSourceType=runSourceType,
             runId=runId,
             flowRunId=flowRunId,
+        )
+
+    @router.get("/model-result-summary")
+    def get_model_result_summary(
+        request: Request,
+        owner: str,
+        modelName: str,
+        targetOwner: str | None = None,
+        targetTable: str | None = None,
+        limit: int = 120,
+        conditionCount: int | None = None,
+        resultColumn: str | None = None,
+        conditionColumn: str | None = None,
+        resultHasValueYn: str | None = None,
+        confidenceScope: str | None = None,
+        page: int = 1,
+        pageSize: int = 20,
+        resultColumnPage: int = 1,
+        resultColumnPageSize: int = 12,
+        runSourceType: str | None = None,
+        runId: int | None = None,
+        flowRunId: int | None = None,
+    ):
+        return anly_work.get_model_result_summary(
+            request=request,
+            owner=owner,
+            model_name=modelName,
+            target_owner=targetOwner,
+            target_table=targetTable,
+            limit=limit,
+            condition_count=conditionCount,
+            result_column=resultColumn,
+            condition_column=conditionColumn,
+            result_has_value_yn=resultHasValueYn,
+            confidence_scope=confidenceScope,
+            page=page,
+            page_size=pageSize,
+            result_column_page=resultColumnPage,
+            result_column_page_size=resultColumnPageSize,
+            run_source_type=runSourceType,
+            run_id=runId,
+            flow_run_id=flowRunId,
         )
 
     @router.get("/model-readable-summary")

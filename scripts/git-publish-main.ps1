@@ -1,12 +1,13 @@
 <#
 .SYNOPSIS
-Stages all changes, creates an auto-numbered daily commit, rebases from origin/main, and pushes.
+Stages all changes, creates an auto-numbered daily commit, rebases from origin/main, and pushes for Render deployment.
 
 .DESCRIPTION
 Commit message format:
 INIT Data Editing System - yyyy.MM.dd-N
 
 The sequence number is calculated as the largest existing commit number for today plus one.
+The deployed service URL is shown after a successful push.
 
 .EXAMPLE
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\git-publish-main.ps1
@@ -15,7 +16,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\git-publish-main.p
 param(
     [string]$Remote = "origin",
     [string]$Branch = "main",
-    [string]$MessagePrefix = "INIT Data Editing System"
+    [string]$MessagePrefix = "INIT Data Editing System",
+    [string]$DeployUrl = "https://data-editing-system.onrender.com"
 )
 
 $ErrorActionPreference = "Stop"
@@ -29,6 +31,15 @@ chcp.com 65001 | Out-Null
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Resolve-Path (Join-Path $scriptDir "..")
 Set-Location $repoRoot
+
+$deployUri = $null
+if (
+    -not [Uri]::TryCreate($DeployUrl, [UriKind]::Absolute, [ref]$deployUri) -or
+    $deployUri.Scheme -notin @("http", "https")
+) {
+    throw "DeployUrl must be an absolute HTTP(S) URL: $DeployUrl"
+}
+$normalizedDeployUrl = $deployUri.AbsoluteUri.TrimEnd("/")
 
 function Invoke-Git {
     param([Parameter(ValueFromRemainingArguments = $true)][string[]]$GitArgs)
@@ -100,3 +111,5 @@ Invoke-Git push $Remote $Branch
 
 Write-Host ""
 Write-Host "Publish complete." -ForegroundColor Green
+Write-Host "Render deployment URL: $normalizedDeployUrl" -ForegroundColor Green
+Write-Host "Health check URL: $normalizedDeployUrl/api/health" -ForegroundColor DarkGray

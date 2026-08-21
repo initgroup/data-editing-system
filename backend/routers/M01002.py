@@ -11,9 +11,18 @@ import logging
 from backend.database_helper import execute_query, SqlLoader
 from backend.target_database import get_target_db_connection
 from backend.auth_context import get_request_role_code, get_request_user_id
+from backend.services import work_context_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+SCENARIO_DEPENDENCY_LABELS = {
+    "SCENARIO_TABLE_COUNT": "시나리오 테이블 등록",
+    "DATA_WORK_JOB_COUNT": "데이터 작업",
+    "FLOW_WORK_COUNT": "FLOW",
+    "EDIT_RULE_COUNT": "편집 규칙",
+    "EDIT_SESSION_COUNT": "편집 실행",
+}
 
 
 class ScenarioSaveRequest(BaseModel):
@@ -65,6 +74,14 @@ def _ensure_project_owner(conn, project_id: int, user_id: int):
         raise HTTPException(status_code=404, detail="Project not found.")
 
 
+def _active_dependency_text(child: dict) -> str:
+    return ", ".join(
+        f"{label} {int(child.get(key) or 0)}건"
+        for key, label in SCENARIO_DEPENDENCY_LABELS.items()
+        if int(child.get(key) or 0) > 0
+    )
+
+
 @router.get("/projects")
 def get_projects(request: Request, keyword: str = Query("")):
     user_id = get_request_user_id(request)
@@ -72,19 +89,12 @@ def get_projects(request: Request, keyword: str = Query("")):
     conn = None
     try:
         conn = get_target_db_connection(request)
-        result = execute_query(conn, "M01002_PROJECT_LIST", {
-            "keyword": keyword or "",
-            "userId": user_id,
-            "includeAllUsers": "Y" if include_all_users else "N",
-        })
-        if result.get("status") != "success":
-            raise HTTPException(status_code=500, detail=result.get("message") or result.get("detail") or "Project list query failed.")
-        return {
-            "status": "success",
-            "data": result.get("data", []),
-            "columns": result.get("columns", []),
-            "total": result.get("total", 0)
-        }
+        return work_context_service.list_projects(
+            conn,
+            user_id=user_id,
+            include_all_users=include_all_users,
+            keyword=keyword,
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -102,20 +112,13 @@ def get_scenarios(request: Request, projectId: int = Query(...), keyword: str = 
     conn = None
     try:
         conn = get_target_db_connection(request)
-        result = execute_query(conn, "M01002_SCENARIO_LIST", {
-            "projectId": projectId,
-            "keyword": keyword or "",
-            "userId": user_id,
-            "includeAllUsers": "Y" if include_all_users else "N",
-        })
-        if result.get("status") != "success":
-            raise HTTPException(status_code=500, detail=result.get("message") or result.get("detail") or "Scenario list query failed.")
-        return {
-            "status": "success",
-            "data": result.get("data", []),
-            "columns": result.get("columns", []),
-            "total": result.get("total", 0)
-        }
+        return work_context_service.list_scenarios(
+            conn,
+            project_id=projectId,
+            user_id=user_id,
+            include_all_users=include_all_users,
+            keyword=keyword,
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -237,8 +240,17 @@ def save_scenario(req: ScenarioSaveRequest, request: Request):
 def delete_scenario(req: ScenarioDeleteRequest, request: Request):
     user_id = get_request_user_id(request)
     conn = None
+    cursor = None
     try:
         conn = get_target_db_connection(request)
+        cursor = conn.cursor()
+        cursor.execute(SqlLoader.get_sql("M01002_SCENARIO_DELETE_SCOPE_LOCK"), {
+            "scenarioId": req.scenarioId,
+            "userId": user_id,
+        })
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Scenario not found.")
+
         child_result = execute_query(conn, "M01002_SCENARIO_CHILD_COUNT", {
             "scenarioId": req.scenarioId,
             "userId": user_id,
@@ -247,34 +259,45 @@ def delete_scenario(req: ScenarioDeleteRequest, request: Request):
             raise HTTPException(status_code=500, detail=child_result.get("message") or "Scenario dependency check failed.")
 
         child = child_result.get("data", [{}])[0] if child_result.get("data") else {}
-        scenario_table_count = int(child.get("SCENARIO_TABLE_COUNT") or 0)
-        if scenario_table_count > 0:
+        dependency_text = _active_dependency_text(child)
+        if dependency_text:
             raise HTTPException(
                 status_code=409,
                 detail=(
                     "시나리오를 삭제할 수 없습니다. "
-                    f"먼저 M02002 화면에서 해당 시나리오에 등록된 테이블 데이터를 삭제하세요. "
-                    f"(시나리오 테이블 {scenario_table_count}건)"
+                    "먼저 연결된 업무 데이터를 정리하세요. "
+                    f"({dependency_text}) "
+                    "INITUP$/INITDN$까지 제거하려면 M02002의 '물리 테이블 삭제'를 사용해야 하며, "
+                    "'등록 해제'만 하면 실제 DB 테이블은 남습니다."
                 )
             )
 
-        result = execute_query(conn, "M01002_SCENARIO_DELETE", {
+        cursor.execute(SqlLoader.get_sql("M01002_SCENARIO_DELETE"), {
             "scenarioId": req.scenarioId,
             "userId": user_id,
-        }, is_dml=True)
-        if result.get("status") != "success":
-            raise HTTPException(status_code=500, detail=result.get("message") or "Scenario delete failed.")
+        })
+        deleted_count = int(cursor.rowcount or 0)
+        if deleted_count <= 0:
+            raise HTTPException(status_code=404, detail="Scenario not found.")
+        conn.commit()
         return {
             "status": "success",
             "message": "Scenario deleted.",
-            "deletedCount": result.get("rowcount", 0)
+            "deletedCount": deleted_count,
+            "physicalTableAction": "NONE",
         }
     except HTTPException:
+        if conn:
+            conn.rollback()
         raise
     except Exception as e:
+        if conn:
+            conn.rollback()
         logger.error(f"M01002 scenario delete failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
+        if cursor:
+            cursor.close()
         if conn:
             conn.close()
 
@@ -283,8 +306,17 @@ def delete_scenario(req: ScenarioDeleteRequest, request: Request):
 def delete_all_scenarios(req: ScenarioDeleteAllRequest, request: Request):
     user_id = get_request_user_id(request)
     conn = None
+    cursor = None
     try:
         conn = get_target_db_connection(request)
+        cursor = conn.cursor()
+        cursor.execute(SqlLoader.get_sql("M01002_PROJECT_DELETE_SCOPE_LOCK"), {
+            "projectId": req.projectId,
+            "userId": user_id,
+        })
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Project not found.")
+
         child_result = execute_query(conn, "M01002_SCENARIO_CHILD_COUNT_BY_PROJECT", {
             "projectId": req.projectId,
             "userId": user_id,
@@ -293,33 +325,41 @@ def delete_all_scenarios(req: ScenarioDeleteAllRequest, request: Request):
             raise HTTPException(status_code=500, detail=child_result.get("message") or "Scenario dependency check failed.")
 
         child = child_result.get("data", [{}])[0] if child_result.get("data") else {}
-        scenario_table_count = int(child.get("SCENARIO_TABLE_COUNT") or 0)
-        if scenario_table_count > 0:
+        dependency_text = _active_dependency_text(child)
+        if dependency_text:
             raise HTTPException(
                 status_code=409,
                 detail=(
                     "전체 시나리오를 삭제할 수 없습니다. "
-                    f"먼저 M02002 화면에서 이 프로젝트의 시나리오에 등록된 테이블 데이터를 삭제하세요. "
-                    f"(시나리오 테이블 {scenario_table_count}건)"
+                    "먼저 이 프로젝트에 연결된 업무 데이터를 정리하세요. "
+                    f"({dependency_text}) "
+                    "M02002의 '등록 해제'는 실제 DB 테이블을 삭제하지 않습니다."
                 )
             )
 
-        result = execute_query(conn, "M01002_SCENARIO_DELETE_BY_PROJECT", {
+        cursor.execute(SqlLoader.get_sql("M01002_SCENARIO_DELETE_BY_PROJECT"), {
             "projectId": req.projectId,
             "userId": user_id,
-        }, is_dml=True)
-        if result.get("status") != "success":
-            raise HTTPException(status_code=500, detail=result.get("message") or "Scenario delete failed.")
+        })
+        deleted_count = int(cursor.rowcount or 0)
+        conn.commit()
         return {
             "status": "success",
             "message": "All scenarios were deleted.",
-            "deletedCount": result.get("rowcount", 0)
+            "deletedCount": deleted_count,
+            "physicalTableAction": "NONE",
         }
     except HTTPException:
+        if conn:
+            conn.rollback()
         raise
     except Exception as e:
+        if conn:
+            conn.rollback()
         logger.error(f"M01002 all scenario delete failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
+        if cursor:
+            cursor.close()
         if conn:
             conn.close()

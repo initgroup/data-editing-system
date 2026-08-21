@@ -173,28 +173,144 @@ DELETE FROM INIT$_TB_SCENARIO
    )
 ;
 
+-- [M01002_SCENARIO_DELETE_SCOPE_LOCK]
+SELECT S.SCENARIO_ID
+  FROM INIT$_TB_SCENARIO S
+  JOIN INIT$_TB_PROJECT P
+    ON P.PROJECT_ID = S.PROJECT_ID
+ WHERE S.SCENARIO_ID = :scenarioId
+   AND P.USER_ID = :userId
+   FOR UPDATE
+;
+
 -- [M01002_SCENARIO_CHILD_COUNT]
-SELECT COUNT(*) AS SCENARIO_TABLE_COUNT
-  FROM INIT$_TB_TABLES
- WHERE SCENARIO_ID = :scenarioId
-   AND EXISTS (
-        SELECT 1
-          FROM INIT$_TB_PROJECT P
-         WHERE P.PROJECT_ID = INIT$_TB_TABLES.PROJECT_ID
-           AND P.USER_ID = :userId
-   )
+SELECT (
+        SELECT COUNT(*)
+          FROM INIT$_TB_TABLES T
+         WHERE T.SCENARIO_ID = :scenarioId
+           AND EXISTS (
+                SELECT 1
+                  FROM INIT$_TB_PROJECT P
+                 WHERE P.PROJECT_ID = T.PROJECT_ID
+                   AND P.USER_ID = :userId
+           )
+    ) AS SCENARIO_TABLE_COUNT
+     , (
+        SELECT COUNT(*)
+          FROM INIT$_TB_DATA_WORK_JOB J
+         WHERE J.SCENARIO_ID = :scenarioId
+           AND EXISTS (
+                SELECT 1
+                  FROM INIT$_TB_PROJECT P
+                 WHERE P.PROJECT_ID = J.PROJECT_ID
+                   AND P.USER_ID = :userId
+           )
+    ) AS DATA_WORK_JOB_COUNT
+     , (
+        SELECT COUNT(*)
+          FROM INIT$_TB_FLOW_WORK F
+         WHERE F.SCENARIO_ID = :scenarioId
+           AND EXISTS (
+                SELECT 1
+                  FROM INIT$_TB_PROJECT P
+                 WHERE P.PROJECT_ID = F.PROJECT_ID
+                   AND P.USER_ID = :userId
+           )
+    ) AS FLOW_WORK_COUNT
+     , (
+        SELECT COUNT(*)
+          FROM INIT$_TB_EDIT_RULE R
+         WHERE R.SCENARIO_ID = :scenarioId
+           AND EXISTS (
+                SELECT 1
+                  FROM INIT$_TB_SCENARIO S
+                  JOIN INIT$_TB_PROJECT P
+                    ON P.PROJECT_ID = S.PROJECT_ID
+                 WHERE S.SCENARIO_ID = :scenarioId
+                   AND P.USER_ID = :userId
+           )
+    ) AS EDIT_RULE_COUNT
+     , (
+        SELECT COUNT(*)
+          FROM INIT$_TB_EDIT_SESSION ES
+         WHERE ES.SCENARIO_ID = :scenarioId
+           AND EXISTS (
+                SELECT 1
+                  FROM INIT$_TB_SCENARIO S
+                  JOIN INIT$_TB_PROJECT P
+                    ON P.PROJECT_ID = S.PROJECT_ID
+                 WHERE S.SCENARIO_ID = :scenarioId
+                   AND P.USER_ID = :userId
+           )
+    ) AS EDIT_SESSION_COUNT
+  FROM DUAL
 ;
 
 -- [M01002_SCENARIO_CHILD_COUNT_BY_PROJECT]
-SELECT COUNT(*) AS SCENARIO_TABLE_COUNT
-  FROM INIT$_TB_TABLES
+SELECT (
+        SELECT COUNT(*)
+          FROM INIT$_TB_TABLES
+         WHERE PROJECT_ID = :projectId
+           AND EXISTS (
+                SELECT 1
+                  FROM INIT$_TB_PROJECT P
+                 WHERE P.PROJECT_ID = :projectId
+                   AND P.USER_ID = :userId
+           )
+    ) AS SCENARIO_TABLE_COUNT
+     , (
+        SELECT COUNT(*)
+          FROM INIT$_TB_DATA_WORK_JOB
+         WHERE PROJECT_ID = :projectId
+           AND EXISTS (
+                SELECT 1
+                  FROM INIT$_TB_PROJECT P
+                 WHERE P.PROJECT_ID = :projectId
+                   AND P.USER_ID = :userId
+           )
+    ) AS DATA_WORK_JOB_COUNT
+     , (
+        SELECT COUNT(*)
+          FROM INIT$_TB_FLOW_WORK
+         WHERE PROJECT_ID = :projectId
+           AND EXISTS (
+                SELECT 1
+                  FROM INIT$_TB_PROJECT P
+                 WHERE P.PROJECT_ID = :projectId
+                   AND P.USER_ID = :userId
+           )
+    ) AS FLOW_WORK_COUNT
+     , (
+        SELECT COUNT(*)
+          FROM INIT$_TB_EDIT_RULE
+         WHERE PROJECT_ID = :projectId
+           AND EXISTS (
+                SELECT 1
+                  FROM INIT$_TB_PROJECT P
+                 WHERE P.PROJECT_ID = :projectId
+                   AND P.USER_ID = :userId
+           )
+    ) AS EDIT_RULE_COUNT
+     , (
+        SELECT COUNT(*)
+          FROM INIT$_TB_EDIT_SESSION
+         WHERE PROJECT_ID = :projectId
+           AND EXISTS (
+                SELECT 1
+                  FROM INIT$_TB_PROJECT P
+                 WHERE P.PROJECT_ID = :projectId
+                   AND P.USER_ID = :userId
+           )
+    ) AS EDIT_SESSION_COUNT
+  FROM DUAL
+;
+
+-- [M01002_PROJECT_DELETE_SCOPE_LOCK]
+SELECT PROJECT_ID
+  FROM INIT$_TB_PROJECT
  WHERE PROJECT_ID = :projectId
-   AND EXISTS (
-        SELECT 1
-          FROM INIT$_TB_PROJECT P
-         WHERE P.PROJECT_ID = :projectId
-           AND P.USER_ID = :userId
-   )
+   AND USER_ID = :userId
+   FOR UPDATE
 ;
 
 -- [M01002_SCENARIO_DELETE_BY_PROJECT]

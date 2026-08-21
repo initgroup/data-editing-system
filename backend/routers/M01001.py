@@ -177,8 +177,17 @@ def save_project(req: ProjectSaveRequest, request: Request):
 def delete_project(req: ProjectDeleteRequest, request: Request):
     user_id = get_request_user_id(request)
     conn = None
+    cursor = None
     try:
         conn = get_target_db_connection(request)
+        cursor = conn.cursor()
+        cursor.execute(SqlLoader.get_sql("M01001_PROJECT_DELETE_SCOPE_LOCK"), {
+            "projectId": req.projectId,
+            "userId": user_id,
+        })
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Project not found.")
+
         child_result = execute_query(conn, "M01001_PROJECT_CHILD_COUNT", {
             "projectId": req.projectId,
             "userId": user_id,
@@ -187,34 +196,64 @@ def delete_project(req: ProjectDeleteRequest, request: Request):
             raise HTTPException(status_code=500, detail=child_result.get("message") or "Project dependency check failed.")
 
         child = child_result.get("data", [{}])[0] if child_result.get("data") else {}
-        scenario_count = int(child.get("SCENARIO_COUNT") or 0)
-        scenario_table_count = int(child.get("SCENARIO_TABLE_COUNT") or 0)
-        if scenario_count > 0 or scenario_table_count > 0:
+        dependency_labels = {
+            "SCENARIO_COUNT": "시나리오",
+            "SCENARIO_TABLE_COUNT": "시나리오 테이블 등록",
+            "DATA_WORK_JOB_COUNT": "데이터 작업",
+            "FLOW_WORK_COUNT": "FLOW",
+            "EDIT_RULE_COUNT": "편집 규칙",
+            "EDIT_SESSION_COUNT": "편집 실행",
+            "MANAGED_TABLE_PAIR_COUNT": "관리 물리 테이블 쌍",
+        }
+        dependencies = {
+            key: int(child.get(key) or 0)
+            for key in dependency_labels
+        }
+        active_dependencies = [
+            f"{dependency_labels[key]} {count}건"
+            for key, count in dependencies.items()
+            if count > 0
+        ]
+        if active_dependencies:
             raise HTTPException(
                 status_code=409,
                 detail=(
                     "프로젝트를 삭제할 수 없습니다. "
-                    f"먼저 연결된 시나리오와 시나리오 테이블 데이터를 삭제하세요. "
-                    f"(시나리오 {scenario_count}건, 시나리오 테이블 {scenario_table_count}건)"
+                    "먼저 연결된 업무 데이터와 관리 물리 테이블을 정리하세요. "
+                    f"({', '.join(active_dependencies)}) "
+                    "INITUP$/INITDN$까지 제거하려면 M02002의 '물리 테이블 삭제'를 사용해야 하며, "
+                    "'등록 해제'만 하면 실제 DB 테이블은 남습니다."
                 )
             )
 
-        result = execute_query(conn, "M01001_PROJECT_DELETE", {
+        cursor.execute(SqlLoader.get_sql("M01001_UPLOAD_META_DELETE_STALE_BY_PROJECT"), {
+            "projectId": req.projectId,
+        })
+        cursor.execute(SqlLoader.get_sql("M01001_PROJECT_DELETE"), {
             "projectId": req.projectId,
             "userId": user_id,
-        }, is_dml=True)
-        if result.get("status") != "success":
-            raise HTTPException(status_code=500, detail=result.get("message") or "Project delete failed.")
+        })
+        deleted_count = int(cursor.rowcount or 0)
+        if deleted_count <= 0:
+            raise HTTPException(status_code=404, detail="Project not found.")
+        conn.commit()
         return {
             "status": "success",
             "message": "Project deleted.",
-            "deletedCount": result.get("rowcount", 0)
+            "deletedCount": deleted_count,
+            "physicalTableAction": "NONE",
         }
     except HTTPException:
+        if conn:
+            conn.rollback()
         raise
     except Exception as e:
+        if conn:
+            conn.rollback()
         logger.error(f"M01001 project delete failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
+        if cursor:
+            cursor.close()
         if conn:
             conn.close()

@@ -54,6 +54,7 @@
     let quickHistoryPage = 1;
     let quickHistoryTotal = 0;
     let quickHistoryBusy = false;
+    let quickHistoryDetailRunId = null;
     let quickHistoryError = "";
 
     function initialState() {
@@ -186,6 +187,18 @@
         return `QE_${timePart}${randomPart}`;
     }
 
+    function makeWorkspaceNameStamp(date = new Date()) {
+        return [
+            date.getFullYear(),
+            String(date.getMonth() + 1).padStart(2, "0"),
+            String(date.getDate()).padStart(2, "0")
+        ].join("") + "-" + [
+            String(date.getHours()).padStart(2, "0"),
+            String(date.getMinutes()).padStart(2, "0"),
+            String(date.getSeconds()).padStart(2, "0")
+        ].join("");
+    }
+
     function normalizeCode(value, fallback) {
         const normalized = String(value || "")
             .normalize("NFKD")
@@ -200,7 +213,7 @@
     function generateWorkspaceDefaults(fileName) {
         const baseName = getBaseName(fileName);
         const stamp = makeStamp();
-        const projectName = `${baseName} 퀵 에디팅`;
+        const projectName = `퀵 에디팅 ${makeWorkspaceNameStamp()} · ${baseName}`;
         const scenarioName = `${baseName} 자동 규칙 발굴`;
         const projectCode = makeCompactProjectCode();
         const scenarioCode = `QRULE_${stamp}`;
@@ -852,7 +865,22 @@
                 state.flowId,
                 state.projectId,
                 state.scenarioId,
-                state.runRequestToken
+                state.runRequestToken,
+                {
+                    source: "QUICK_EDIT",
+                    projectCode: state.projectCode,
+                    projectName: state.projectName,
+                    scenarioCode: state.scenarioCode,
+                    scenarioName: state.scenarioName,
+                    scenarioTableId: state.scenarioTableId,
+                    ownerName: state.tableOwner,
+                    tableName: state.tableName,
+                    fileName: state.fileMeta?.name || "",
+                    fileSize: Number(state.fileMeta?.size || 0),
+                    estimatedRowCount: Number(state.rowCount || 0),
+                    flowName: state.flowName,
+                    jobCount: state.jobIds.length
+                }
             );
             state.flowRunId = Number(response.data?.flowRunId || 0);
             state.lastRunStatus = response.data?.runStatus || "STARTED";
@@ -1181,6 +1209,46 @@
         return new Map(rows.map((row) => [String(row.RULE_ID || ""), Number(row.VIOLATION_COUNT || 0)]));
     }
 
+    function getPrioritizedRules(kind, rules) {
+        const violationRules = getViolationSummary(kind).topRules || [];
+        return kind === "categorical"
+            ? R.prioritizeCategoricalRules(rules, violationRules, 12)
+            : R.prioritizeContinuousRules(rules, violationRules, 12);
+    }
+
+    function getDisplayedRules(kind) {
+        const rules = kind === "categorical"
+            ? (resultData.categorical?.rules || [])
+            : (resultData.continuous?.symbolicRuleSummary?.topRules || []);
+        return getPrioritizedRules(kind, rules);
+    }
+
+    function openDetailedAnalysis() {
+        const projectId = Number(state.projectId || 0);
+        const scenarioId = Number(state.scenarioId || 0);
+        const flowRunId = Number(state.flowRunId || 0);
+        const appWindow = window.opener;
+        if (!projectId || !scenarioId || !flowRunId) {
+            showToast("상세 분석으로 이동할 프로젝트·시나리오·실행 번호를 확인할 수 없습니다.", "error");
+            return;
+        }
+        if (!appWindow || appWindow.closed || !appWindow.PageManager) {
+            showToast("메인 화면을 찾을 수 없습니다. 메인 화면에서 퀵 에디팅을 다시 열어 주세요.", "error");
+            return;
+        }
+        try {
+            appWindow.sessionStorage.setItem("M04002:selectedProjectId", String(projectId));
+            appWindow.sessionStorage.setItem("M04002:selectedScenarioId", String(scenarioId));
+            appWindow.sessionStorage.setItem("M04002:selectedRunId", String(flowRunId));
+            const navigation = appWindow.PageManager.load("M04002", "규칙 발굴 분석", true);
+            navigation?.catch?.((error) => appWindow.console.error("[Quick Editing] M04002 navigation failed", error));
+            appWindow.focus();
+            window.close();
+        } catch (error) {
+            showToast(error.message || "상세 분석 화면으로 이동하지 못했습니다.", "error");
+        }
+    }
+
     function getRuleViolationCount(kind, rule) {
         if (!rule) return null;
         const value = getViolationCountMap(kind).get(String(rule.RULE_ID || ""));
@@ -1445,7 +1513,7 @@
             setText(categoryCharts.querySelector("[data-chart-caption]"), `상위 ${Math.max(conditionItems.length, resultItems.length)}개 항목`);
         }
         if (categoryRules) {
-            const rules = categorical?.rules || [];
+            const rules = getDisplayedRules("categorical");
             categoryRules.innerHTML = R.renderCategoricalRules(rules, {
                 columnComments: categoricalComments,
                 violationCounts: getViolationCountMap("categorical")
@@ -1482,7 +1550,7 @@
             setText(continuousCharts.querySelector("[data-chart-caption]"), `상위 ${Math.max(targetItems.length, methodItems.length)}개 항목`);
         }
         if (continuousRules) {
-            const rules = continuous.topRules || [];
+            const rules = getDisplayedRules("continuous");
             continuousRules.innerHTML = R.renderContinuousRules(rules, {
                 columnComments: continuousComments,
                 violationCounts: getViolationCountMap("continuous")
@@ -1685,7 +1753,7 @@
     }
 
     async function loadContinuousDetail(ruleIndex, force = false) {
-        const rules = resultData.continuous?.symbolicRuleSummary?.topRules || [];
+        const rules = getDisplayedRules("continuous");
         const index = Math.max(0, Math.min(rules.length - 1, Number(ruleIndex) || 0));
         const rule = rules[index];
         const artifact = state.resultArtifacts?.continuous;
@@ -2039,12 +2107,15 @@
         let rule;
         const comments = getResultColumnComments(kind);
         if (kind === "categorical") {
-            rule = resultData.categorical?.rules?.[index];
+            rule = getDisplayedRules("categorical")[index];
+            const resultText = rule?.RESULT_TEXT
+                || [rule?.RESULT_COLUMN, rule?.RESULT_VALUE].filter((value) => value !== null && value !== undefined && value !== "").join(" = ")
+                || "-";
             setText(title, `범주형 규칙 ${rule?.RULE_ID || index + 1}`);
             if (body && rule) body.innerHTML = `
                 <dl class="qe-rule-fields">
                     <div><dt>조건</dt><dd>${R.escapeHtml(R.annotateColumnText(rule.CONDITION_TEXT || rule.CONDITION_COLUMN || "-", comments))}</dd></div>
-                    <div><dt>결과</dt><dd>${R.escapeHtml(R.annotateColumnText(rule.RESULT_TEXT || rule.RESULT_COLUMN || "-", comments))}</dd></div>
+                    <div><dt>결과</dt><dd>${R.escapeHtml(R.annotateColumnText(resultText, comments))}</dd></div>
                     <div><dt>결과 컬럼 라벨</dt><dd>${R.escapeHtml(R.getColumnLabel(rule.RESULT_COLUMN || "-", comments))}</dd></div>
                     <div><dt>신뢰도</dt><dd>${R.escapeHtml(R.formatRatio(rule.RULE_CONFIDENCE))}</dd></div>
                     <div><dt>지지도</dt><dd>${R.escapeHtml(R.formatRatio(rule.RULE_SUPPORT))}</dd></div>
@@ -2053,7 +2124,7 @@
                 </dl>
                 ${renderRuleViolationAction(kind, index, rule)}`;
         } else {
-            rule = resultData.continuous?.symbolicRuleSummary?.topRules?.[index];
+            rule = getDisplayedRules("continuous")[index];
             setText(title, `연속형 규칙 ${rule?.RULE_ID || index + 1}`);
             const features = Array.isArray(rule?.FEATURE_LIST)
                 ? rule.FEATURE_LIST
@@ -2095,9 +2166,7 @@
     }
 
     function getRuleByKind(kind, index) {
-        return kind === "categorical"
-            ? resultData.categorical?.rules?.[index]
-            : resultData.continuous?.symbolicRuleSummary?.topRules?.[index];
+        return getDisplayedRules(kind)[index];
     }
 
     async function loadRuleViolations(kind, index, page = 1) {
@@ -2201,7 +2270,9 @@
         const moreButton = byId("qeRunHistoryMore");
         if (!target) return;
 
-        setText(count, quickHistoryBusy
+        setText(count, quickHistoryDetailRunId
+            ? `실행 #${quickHistoryDetailRunId} 상세를 불러오는 중입니다.`
+            : quickHistoryBusy
             ? "최근 실행을 불러오는 중입니다."
             : `최근 퀵 실행 ${quickHistoryTotal.toLocaleString("ko-KR")}건 중 ${quickHistoryRows.length.toLocaleString("ko-KR")}건`);
         setText(pageInfo, quickHistoryTotal
@@ -2244,7 +2315,14 @@
             const table = [row.OWNER_NAME, row.TABLE_NAME].filter(Boolean).join(".") || "대상 테이블";
             const completed = Number(row.SUCCESS_NODE_COUNT || 0);
             const total = Number(row.NODE_COUNT || row.JOB_COUNT || 4);
-            return `<button type="button" class="qe-run-history-item" data-history-run-id="${runId}"${quickHistoryBusy ? " disabled" : ""}>
+            const detailLoading = quickHistoryDetailRunId === runId;
+            const action = detailLoading
+                ? `<span class="qe-run-history-item__loading" role="status">
+                       <span>상세 조회 중</span>
+                       <span class="qe-run-history-loading-bar" aria-hidden="true"><i></i></span>
+                   </span>`
+                : `<span>8단계 결과 보기</span><span aria-hidden="true">→</span>`;
+            return `<button type="button" class="qe-run-history-item${detailLoading ? " is-loading" : ""}" data-history-run-id="${runId}" aria-busy="${detailLoading ? "true" : "false"}"${quickHistoryBusy ? " disabled" : ""}>
                 <span class="qe-run-history-item__main">
                     <small>실행 #${runId} · ${R.escapeHtml(R.formatDateTime(row.STARTED_AT || row.CREATED_AT))}</small>
                     <strong>${R.escapeHtml(project)} · ${R.escapeHtml(scenario)}</strong>
@@ -2256,7 +2334,7 @@
                     <span>${R.escapeHtml(R.formatDuration(row.STARTED_AT || row.CREATED_AT, row.FINISHED_AT))}</span>
                 </span>
                 <span class="qe-run-history-item__action">
-                    <span>8단계 결과 보기</span><span aria-hidden="true">→</span>
+                    ${action}
                 </span>
             </button>`;
         }).join("");
@@ -2309,6 +2387,7 @@
     async function restoreQuickHistory(flowRunId) {
         const runId = Number(flowRunId || 0);
         if (!runId || quickHistoryBusy || pipelineBusy) return;
+        quickHistoryDetailRunId = runId;
         quickHistoryBusy = true;
         renderQuickHistoryList();
         try {
@@ -2350,8 +2429,6 @@
             renderResultsEmpty();
             renderHistory();
             renderState(`실행 #${runId}의 저장된 8단계 결과를 복원했습니다.`);
-            byId("qeRunHistoryDialog")?.close();
-            window.scrollTo({ top: 0, behavior: "smooth" });
 
             if (R.normalizeStatus(state.lastRunStatus) === "SUCCESS") {
                 pipelineBusy = true;
@@ -2373,9 +2450,12 @@
                     updateActionState();
                 }
             }
+            byId("qeRunHistoryDialog")?.close();
+            window.scrollTo({ top: 0, behavior: "smooth" });
         } catch (error) {
             showToast(error.message, "error");
         } finally {
+            quickHistoryDetailRunId = null;
             quickHistoryBusy = false;
             renderQuickHistoryList();
         }
@@ -2546,6 +2626,7 @@
         });
         byId("retryButton", "qeRetryButton")?.addEventListener("click", handleRetry);
         byId("qeRunHistoryButton")?.addEventListener("click", openQuickHistoryDialog);
+        byId("qeOpenDetailedAnalysis")?.addEventListener("click", openDetailedAnalysis);
         byId("qeHistoryExitButton")?.addEventListener("click", () => resetPipelineState());
         byId("qeRunHistoryRefresh")?.addEventListener("click", async () => {
             try {

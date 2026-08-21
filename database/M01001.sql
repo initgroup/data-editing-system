@@ -91,6 +91,14 @@ DELETE FROM INIT$_TB_PROJECT
    AND USER_ID = :userId
 ;
 
+-- [M01001_PROJECT_DELETE_SCOPE_LOCK]
+SELECT PROJECT_ID
+  FROM INIT$_TB_PROJECT
+ WHERE PROJECT_ID = :projectId
+   AND USER_ID = :userId
+   FOR UPDATE
+;
+
 -- [M01001_PROJECT_CHILD_COUNT]
 SELECT (
         SELECT COUNT(*)
@@ -114,5 +122,92 @@ SELECT (
                    AND P.USER_ID = :userId
            )
     ) AS SCENARIO_TABLE_COUNT
+     , (
+        SELECT COUNT(*)
+          FROM INIT$_TB_DATA_WORK_JOB
+         WHERE PROJECT_ID = :projectId
+           AND EXISTS (
+                SELECT 1
+                  FROM INIT$_TB_PROJECT P
+                 WHERE P.PROJECT_ID = :projectId
+                   AND P.USER_ID = :userId
+           )
+    ) AS DATA_WORK_JOB_COUNT
+     , (
+        SELECT COUNT(*)
+          FROM INIT$_TB_FLOW_WORK
+         WHERE PROJECT_ID = :projectId
+           AND EXISTS (
+                SELECT 1
+                  FROM INIT$_TB_PROJECT P
+                 WHERE P.PROJECT_ID = :projectId
+                   AND P.USER_ID = :userId
+           )
+    ) AS FLOW_WORK_COUNT
+     , (
+        SELECT COUNT(*)
+          FROM INIT$_TB_EDIT_RULE
+         WHERE PROJECT_ID = :projectId
+           AND EXISTS (
+                SELECT 1
+                  FROM INIT$_TB_PROJECT P
+                 WHERE P.PROJECT_ID = :projectId
+                   AND P.USER_ID = :userId
+           )
+    ) AS EDIT_RULE_COUNT
+     , (
+        SELECT COUNT(*)
+          FROM INIT$_TB_EDIT_SESSION
+         WHERE PROJECT_ID = :projectId
+           AND EXISTS (
+                SELECT 1
+                  FROM INIT$_TB_PROJECT P
+                 WHERE P.PROJECT_ID = :projectId
+                   AND P.USER_ID = :userId
+           )
+    ) AS EDIT_SESSION_COUNT
+     , (
+        SELECT COUNT(*)
+          FROM INIT$_TB_UPLOAD_TABLE_META UM
+         WHERE UM.PROJECT_ID = :projectId
+           AND UM.TABLE_NAME LIKE 'INITUP$%'
+           AND EXISTS (
+                SELECT 1
+                  FROM INIT$_TB_PROJECT P
+                 WHERE P.PROJECT_ID = :projectId
+                   AND P.USER_ID = :userId
+           )
+           AND (
+                  EXISTS (
+                       SELECT 1
+                         FROM ALL_TABLES AT
+                        WHERE AT.OWNER = UM.OWNER_NAME
+                          AND AT.TABLE_NAME = UM.TABLE_NAME
+                  )
+               OR EXISTS (
+                       SELECT 1
+                         FROM ALL_TABLES AT
+                        WHERE AT.OWNER = UM.OWNER_NAME
+                          AND AT.TABLE_NAME = 'INITDN$' || SUBSTR(UM.TABLE_NAME, LENGTH('INITUP$') + 1)
+                  )
+               )
+    ) AS MANAGED_TABLE_PAIR_COUNT
   FROM DUAL
+;
+
+-- [M01001_UPLOAD_META_DELETE_STALE_BY_PROJECT]
+DELETE FROM INIT$_TB_UPLOAD_TABLE_META UM
+ WHERE UM.PROJECT_ID = :projectId
+   AND NOT EXISTS (
+        SELECT 1
+          FROM ALL_TABLES AT
+         WHERE AT.OWNER = UM.OWNER_NAME
+           AND AT.TABLE_NAME = UM.TABLE_NAME
+   )
+   AND NOT EXISTS (
+        SELECT 1
+          FROM ALL_TABLES AT
+         WHERE AT.OWNER = UM.OWNER_NAME
+           AND AT.TABLE_NAME = 'INITDN$' || SUBSTR(UM.TABLE_NAME, LENGTH('INITUP$') + 1)
+   )
 ;

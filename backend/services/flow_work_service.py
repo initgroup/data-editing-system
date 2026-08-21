@@ -975,6 +975,7 @@ def execute_flow_plan(
     flow_run_id: int,
     plan: List[Dict[str, Any]],
     runtime_defaults: Optional[Dict[str, Any]] = None,
+    run_context: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     prepare_flow_run_session(conn)
     executed = 0
@@ -985,7 +986,7 @@ def execute_flow_plan(
     plan_node_keys = {str(step.get("nodeKey") or "") for step in plan_steps}
     node_status: Dict[str, str] = {}
     node_outputs: Dict[str, Dict[str, Any]] = {}
-    run_summary_context: Dict[str, Any] = {}
+    run_summary_context: Dict[str, Any] = dict(run_context or {})
     editing_session_id = (runtime_defaults or {}).get("INIT$EditingSessionId")
     editing_target_table = (runtime_defaults or {}).get("INIT$TargetTable")
     if editing_target_table:

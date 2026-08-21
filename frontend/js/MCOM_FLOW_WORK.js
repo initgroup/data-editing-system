@@ -57,6 +57,7 @@
             flowRunHistorySnapshotPromise: null,
             flowRunHistorySnapshotRunId: "",
             flowRunHistorySnapshotSequence: 0,
+            flowRunSnapshotVersionsByRunId: new Map(),
             flowRunHistoryLoadPromise: null,
             flowNodeRunLoadPromisesByFlowRunId: new Map(),
             flowNodeRunLoadControllersByFlowRunId: new Map(),
@@ -251,6 +252,7 @@
                 this.flowRunHistorySnapshotPromise = null;
                 this.flowRunHistorySnapshotRunId = "";
                 this.flowRunHistorySnapshotSequence = 0;
+                this.flowRunSnapshotVersionsByRunId = new Map();
                 this.flowRunHistoryLoadPromise = null;
                 this.flowNodeRunLoadPromisesByFlowRunId = new Map();
                 this.flowNodeRunLoadControllersByFlowRunId = new Map();
@@ -415,6 +417,12 @@
 
             async loadWorkContext() {
                 const stored = this.getStoredContext();
+                try {
+                    await this.loadWorkContextBootstrap(stored);
+                    return;
+                } catch (error) {
+                    console.warn(`[${PAGE_CODE}] bootstrap failed; using compatible individual APIs.`, error);
+                }
                 await this.loadContextProjects(stored.projectId || "");
                 if (this.contextLoadFailed) return;
                 if (this.selectedProjectId) {
@@ -428,6 +436,58 @@
                     this.loadFlowAssets()
                 ]);
                 await this.loadFlowVersions(true, { refreshHistory: true, preferredFlowId: stored.flowId || "" });
+                this.setWorkContextCollapsed(Boolean(this.selectedProjectId && this.selectedScenarioId));
+            },
+
+            async loadWorkContextBootstrap(stored = {}) {
+                const params = new URLSearchParams({ includeHistory: "false" });
+                if (stored.projectId) params.set("preferredProjectId", String(stored.projectId));
+                if (stored.scenarioId) params.set("preferredScenarioId", String(stored.scenarioId));
+                if (stored.flowId) params.set("preferredFlowId", String(stored.flowId));
+                const [json] = await Promise.all([
+                    CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/bootstrap?${params.toString()}`, {
+                        method: "GET",
+                        showLoading: false
+                    }),
+                    this.loadFlowModelContracts()
+                ]);
+                const selection = json.selection || {};
+                this.contextLoadFailed = false;
+                this.contextProjects = Array.isArray(json.projects?.data)
+                    ? json.projects.data.filter((project) => project.USE_YN === "Y")
+                    : [];
+                this.renderContextProjects(selection.projectId || "");
+                this.contextScenarios = Array.isArray(json.scenarios?.data) ? json.scenarios.data : [];
+                this.renderContextScenarios(selection.scenarioId || "");
+
+                this.scenarioTables = Array.isArray(json.scenarioTables?.data) ? json.scenarioTables.data : [];
+                this.scenarioTableLoadError = "";
+                this.selectedScenarioTableKey = "";
+                this.renderScenarioTables();
+
+                this.flowNodeTypes = Array.isArray(json.nodeTypes?.data) ? json.nodeTypes.data : [];
+                this.renderNodeTypeOptions();
+                this.flowRegisteredJobs = Array.isArray(json.jobs?.data) ? json.jobs.data : [];
+                this.renderRegisteredJobs();
+                this.flowVariables = Array.isArray(json.defaultVariables?.data) ? json.defaultVariables.data : [];
+                this.renderFlowVariables();
+                this.bindFlowPalette();
+
+                this.flowList = Array.isArray(json.flows?.data) ? json.flows.data : [];
+                this.renderFlowVersions();
+                if (json.selectedFlow) {
+                    this.applyFlowData(json.selectedFlow, { preserveZoom: true });
+                    this.renderFlowVersions();
+                } else {
+                    this.newFlow(false);
+                }
+
+                this.flowRunHistoryRows = [];
+                this.flowRunSnapshotVersionsByRunId.clear();
+                this.flowNodeRunResultsByFlowRunId.clear();
+                this.expandedRunPlanFlowRunIds.clear();
+                this.renderFlowRunHistory([]);
+                this.saveStoredContext({ flowId: selection.flowId || "" });
                 this.setWorkContextCollapsed(Boolean(this.selectedProjectId && this.selectedScenarioId));
             },
 
@@ -665,7 +725,7 @@
             async loadFlowModelContracts() {
                 try {
                     const response = await fetch(PageManager.getAssetUrl("./config/flow-model-contracts.json"), {
-                        cache: "no-store",
+                        cache: "force-cache",
                         credentials: "include"
                     });
                     if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -6221,6 +6281,8 @@
                         projectId,
                         scenarioId
                     });
+                    const knownVersion = this.flowRunSnapshotVersionsByRunId.get(targetFlowRunId);
+                    if (knownVersion) params.set("ifVersion", knownVersion);
                     const json = await this.enqueueFlowRunRead(() => CommonUtils.request(
                         `${API_BASE_URL}/${PAGE_CODE}/run/${encodeURIComponent(targetFlowRunId)}/snapshot?${params.toString()}`,
                         { method: "GET", showLoading: false }
@@ -6231,6 +6293,11 @@
                         || scenarioId !== String(this.selectedScenarioId)
                         || requestSequence !== this.flowRunHistorySnapshotSequence
                     ) return false;
+
+                    if (json.version) {
+                        this.flowRunSnapshotVersionsByRunId.set(targetFlowRunId, String(json.version));
+                    }
+                    if (json.changed === false) return true;
 
                     const runRow = json.data?.run;
                     const nodeRuns = Array.isArray(json.data?.nodes) ? json.data.nodes : [];

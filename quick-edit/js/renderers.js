@@ -176,6 +176,78 @@
         return Number.isFinite(number) ? number : null;
     }
 
+    function getRuleKey(rule) {
+        return [rule?.RULE_ID, rule?.TARGET_COLUMN || rule?.RESULT_COLUMN]
+            .map((value) => String(value ?? "").trim().toUpperCase())
+            .join("|");
+    }
+
+    function compareText(left, right) {
+        return String(left ?? "").localeCompare(String(right ?? ""), "ko");
+    }
+
+    function prioritizeCategoricalRules(rules, violationRules, limit = 12) {
+        const baseRules = Array.isArray(rules) ? rules : [];
+        const priorityRules = Array.isArray(violationRules) ? violationRules : [];
+        const baseMap = new Map(baseRules.map((rule) => [getRuleKey(rule), rule]));
+        const merged = [];
+        const seen = new Set();
+        [...priorityRules, ...baseRules].forEach((rule) => {
+            const key = getRuleKey(rule);
+            if (!key || seen.has(key)) return;
+            seen.add(key);
+            const base = baseMap.get(key) || {};
+            merged.push({
+                ...base,
+                ...rule,
+                RESULT_VALUE: rule.RESULT_VALUE ?? rule.EXPECTED_VALUE ?? base.RESULT_VALUE,
+                RESULT_TEXT: rule.RESULT_TEXT ?? base.RESULT_TEXT
+            });
+        });
+        merged.sort((left, right) => (
+            asNumber(right.VIOLATION_COUNT) - asNumber(left.VIOLATION_COUNT)
+            || asNumber(right.CONDITION_COUNT) - asNumber(left.CONDITION_COUNT)
+            || asNumber(right.AVG_VIOLATION_SCORE) - asNumber(left.AVG_VIOLATION_SCORE)
+            || asNumber(right.RULE_CONFIDENCE) - asNumber(left.RULE_CONFIDENCE)
+            || compareText(left.RULE_ID, right.RULE_ID)
+        ));
+        return merged.slice(0, Math.max(1, asNumber(limit, 12)));
+    }
+
+    function prioritizeContinuousRules(rules, violationRules, limit = 12) {
+        const baseRules = Array.isArray(rules) ? rules : [];
+        const priorityRules = Array.isArray(violationRules) ? violationRules : [];
+        const baseMap = new Map(baseRules.map((rule) => [getRuleKey(rule), rule]));
+        const merged = [];
+        const seen = new Set();
+        [...priorityRules, ...baseRules].forEach((rule) => {
+            const key = getRuleKey(rule);
+            if (!key || seen.has(key)) return;
+            seen.add(key);
+            const base = baseMap.get(key) || {};
+            const featureColumns = rule.FEATURE_COLUMNS ?? base.FEATURE_COLUMNS ?? "";
+            merged.push({
+                ...base,
+                ...rule,
+                SCORE: rule.SCORE ?? rule.RULE_SCORE ?? base.SCORE,
+                COMPLEXITY: rule.COMPLEXITY ?? rule.RULE_COMPLEXITY ?? base.COMPLEXITY,
+                METHOD: rule.METHOD ?? rule.RULE_METHOD ?? base.METHOD,
+                FEATURE_COLUMNS: featureColumns,
+                FEATURE_LIST: rule.FEATURE_LIST ?? base.FEATURE_LIST
+                    ?? String(featureColumns).split(",").map((item) => item.trim()).filter(Boolean)
+            });
+        });
+        const isLinear = (rule) => String(rule.METHOD || "").toUpperCase().includes("LINEAR");
+        merged.sort((left, right) => (
+            asNumber(right.VIOLATION_COUNT) - asNumber(left.VIOLATION_COUNT)
+            || Number(isLinear(right)) - Number(isLinear(left))
+            || asNumber(right.MAX_ERROR_PCT) - asNumber(left.MAX_ERROR_PCT)
+            || asNumber(right.SCORE) - asNumber(left.SCORE)
+            || compareText(left.RULE_ID, right.RULE_ID)
+        ));
+        return merged.slice(0, Math.max(1, asNumber(limit, 12)));
+    }
+
     function renderCategoricalRules(rules, options = {}) {
         const safeRules = Array.isArray(rules) ? rules : [];
         if (!safeRules.length) return '<p class="qe-empty">발견된 범주형 규칙이 없습니다.</p>';
@@ -243,6 +315,8 @@
         formatRatio,
         getColumnLabel,
         annotateColumnText,
+        prioritizeCategoricalRules,
+        prioritizeContinuousRules,
         normalizeStatus,
         renderBars,
         renderCategoricalRules,

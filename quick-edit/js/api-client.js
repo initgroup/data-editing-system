@@ -244,7 +244,7 @@
             });
         }
 
-        runSavedFlow(flowId, projectId, scenarioId, requestToken) {
+        runSavedFlow(flowId, projectId, scenarioId, requestToken, quickEditSummary = null) {
             return this.request("/M04001/flow/run-saved", {
                 method: "POST",
                 body: {
@@ -252,6 +252,7 @@
                     projectId,
                     scenarioId,
                     requestToken,
+                    quickEditSummary,
                     batch: false
                 }
             });

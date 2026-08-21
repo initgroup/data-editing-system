@@ -226,13 +226,18 @@
             const preferredProjectId = pendingProjectId || storedContext.projectId || "";
             const preferredScenarioId = pendingScenarioId || (pendingProjectId ? "" : storedContext.scenarioId || "");
             await this.loadRuntimeParamPresetDefinitions();
-            await this.loadProjects(preferredProjectId);
-            await this.loadScenarios(preferredScenarioId);
-            this.persistWorkContext();
-            if (this.pendingRunId) {
-                await this.openPendingRunPage();
-            } else {
-                await this.loadRuns(1, { initialEmptyRetries: 2 });
+            try {
+                await this.loadBootstrap(preferredProjectId, preferredScenarioId);
+            } catch (error) {
+                console.warn(`[${PAGE_CODE}] bootstrap failed; using compatible individual APIs.`, error);
+                await this.loadProjects(preferredProjectId);
+                await this.loadScenarios(preferredScenarioId);
+                this.persistWorkContext();
+                if (this.pendingRunId) {
+                    await this.openPendingRunPage();
+                } else {
+                    await this.loadRuns(1, { initialEmptyRetries: 2 });
+                }
             }
         },
 
@@ -664,25 +669,107 @@
             }
         },
 
+        async loadBootstrap(preferredProjectId = "", preferredScenarioId = "") {
+            const pageSize = Number(getContainerEl("#pageSize-${PAGE_CODE}")?.value || 20);
+            const params = new URLSearchParams({
+                pageSize: String(pageSize),
+                status: getContainerEl("#status-${PAGE_CODE}")?.value || "ALL",
+                keyword: getContainerEl("#keyword-${PAGE_CODE}")?.value?.trim?.() || ""
+            });
+            if (preferredProjectId) params.set("preferredProjectId", String(preferredProjectId));
+            if (preferredScenarioId) params.set("preferredScenarioId", String(preferredScenarioId));
+            if (this.pendingRunId) params.set("preferredFlowRunId", String(this.pendingRunId));
+
+            const json = await CommonUtils.request(`${API_BASE_URL}/${API_PAGE_CODE}/bootstrap?${params.toString()}`, {
+                method: "GET",
+                showLoading: false
+            });
+            const selection = json.selection || {};
+            this.applyProjectsResponse(json.projects || {}, selection.projectId || "");
+            this.applyScenariosResponse(json.scenarios || {}, selection.scenarioId || "");
+            this.persistWorkContext();
+
+            this.runs = Array.isArray(json.runs?.data) ? json.runs.data : [];
+            this.runPage = Math.max(1, Number(json.runs?.page || selection.runPage || 1));
+            const responseTotal = Number(json.runs?.total || 0);
+            const rowTotal = Number(this.runs[0]?.TOTAL_COUNT || 0);
+            this.runTotal = Math.max(responseTotal, rowTotal, this.runs.length);
+            this.nodes = Array.isArray(json.nodes?.data) ? json.nodes.data : [];
+            this.nodeResultCache = new Map();
+            this.renderRuns();
+
+            const selectedRunId = selection.flowRunId;
+            this.selectedRun = this.runs.find((run) => String(run.FLOW_RUN_ID) === String(selectedRunId)) || null;
+            this.selectedNode = null;
+            this.currentModelDetail = null;
+            this.lastResultTableJson = null;
+            this.lastViolationSummary = null;
+            this.lastSymbolicRuleSummary = null;
+            this.updateDescriptiveStatisticsButton();
+            this.renderRunSummary();
+            this.clearSelectedNodeResults(this.nodes);
+            this.renderNodes();
+
+            if (!this.selectedRun) {
+                const nodeList = getContainerEl("#nodeList-${PAGE_CODE}");
+                const resultPanel = getContainerEl("#resultPanel-${PAGE_CODE}");
+                if (nodeList) nodeList.innerHTML = emptyState("noRunHistory", "No run history.");
+                if (resultPanel) resultPanel.innerHTML = emptyState("selectRunForResult", "Select a run history to view result details.");
+                this.pendingRunId = "";
+                if (!this.runs.length) await this.loadRuns(1, { initialEmptyRetries: 2 });
+                return;
+            }
+
+            const firstResultNode = this.nodes.find((node) => node.RESULT_KIND !== "NONE") || this.nodes[0];
+            this.pendingRunId = "";
+            if (firstResultNode) {
+                await this.selectNode(firstResultNode.FLOW_NODE_RUN_ID);
+            } else {
+                const resultPanel = getContainerEl("#resultPanel-${PAGE_CODE}");
+                if (resultPanel) resultPanel.innerHTML = emptyState("selectNodeForResult", "Select a node to view result details.");
+            }
+        },
+
+        applyProjectsResponse(json, preferredProjectId = "") {
+            const select = getContainerEl("#projectId-${PAGE_CODE}");
+            this.projects = Array.isArray(json.data) ? json.data : [];
+            if (!select) return;
+            select.innerHTML = `
+                <option value="">${escapeHtmlText(getLabel("selectProject", "-- Select project --"))}</option>
+                ${this.projects.map((project) => `
+                    <option class="${this.escapeHtml(CommonUtils.getOwnerScopeClass(project))}" value="${this.escapeHtml(project.PROJECT_ID ?? "")}">
+                        ${this.escapeHtml(CommonUtils.formatOwnerScopedName(project, project.PROJECT_NAME || project.PROJECT_CODE || `Project #${project.PROJECT_ID}`))}
+                    </option>
+                `).join("")}
+            `;
+            const exists = this.projects.some((project) => String(project.PROJECT_ID) === String(preferredProjectId));
+            select.value = exists ? String(preferredProjectId) : String(this.projects[0]?.PROJECT_ID || "");
+            CommonUtils.applyOwnerScopeToSelect(select, this.projects, select.value);
+        },
+
+        applyScenariosResponse(json, preferredScenarioId = "") {
+            const select = getContainerEl("#scenarioId-${PAGE_CODE}");
+            this.scenarios = Array.isArray(json.data) ? json.data : [];
+            if (!select) return;
+            select.innerHTML = `
+                <option value="">${escapeHtmlText(getLabel("all", "ALL"))}</option>
+                ${this.scenarios.map((scenario) => `
+                    <option class="${this.escapeHtml(CommonUtils.getOwnerScopeClass(scenario))}" value="${this.escapeHtml(scenario.SCENARIO_ID ?? "")}">
+                        ${this.escapeHtml(CommonUtils.formatOwnerScopedName(scenario, scenario.SCENARIO_NAME || scenario.SCENARIO_CODE || `Scenario #${scenario.SCENARIO_ID}`))}
+                    </option>
+                `).join("")}
+            `;
+            const exists = this.scenarios.some((scenario) => String(scenario.SCENARIO_ID) === String(preferredScenarioId));
+            select.value = exists ? String(preferredScenarioId) : "";
+            CommonUtils.applyOwnerScopeToSelect(select, this.scenarios, select.value, ["SCENARIO_ID", "scenarioId"]);
+        },
+
         async loadProjects(preferredProjectId = "") {
             const select = getContainerEl("#projectId-${PAGE_CODE}");
             if (select) select.innerHTML = `<option value="">${escapeHtmlText(getLabel("loadingProjects", "Loading projects..."))}</option>`;
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/M01002/projects?keyword=`, { method: "GET", showLoading: false });
-                this.projects = Array.isArray(json.data) ? json.data : [];
-                if (select) {
-                    select.innerHTML = `
-                        <option value="">${escapeHtmlText(getLabel("selectProject", "-- Select project --"))}</option>
-                        ${this.projects.map((project) => `
-                            <option class="${this.escapeHtml(CommonUtils.getOwnerScopeClass(project))}" value="${this.escapeHtml(project.PROJECT_ID ?? "")}">
-                                ${this.escapeHtml(CommonUtils.formatOwnerScopedName(project, project.PROJECT_NAME || project.PROJECT_CODE || `Project #${project.PROJECT_ID}`))}
-                            </option>
-                        `).join("")}
-                    `;
-                    const exists = this.projects.some((project) => String(project.PROJECT_ID) === String(preferredProjectId));
-                    select.value = exists ? String(preferredProjectId) : String(this.projects[0]?.PROJECT_ID || "");
-                    CommonUtils.applyOwnerScopeToSelect(select, this.projects, select.value);
-                }
+                this.applyProjectsResponse(json, preferredProjectId);
             } catch (error) {
                 if (select) select.innerHTML = `<option value="">Project load failed</option>`;
                 throw error;
@@ -698,20 +785,7 @@
             const params = new URLSearchParams({ projectId, keyword: "" });
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/M01002/scenarios?${params.toString()}`, { method: "GET", showLoading: false });
-                this.scenarios = Array.isArray(json.data) ? json.data : [];
-                if (select) {
-                    select.innerHTML = `
-                        <option value="">${escapeHtmlText(getLabel("all", "ALL"))}</option>
-                        ${this.scenarios.map((scenario) => `
-                            <option class="${this.escapeHtml(CommonUtils.getOwnerScopeClass(scenario))}" value="${this.escapeHtml(scenario.SCENARIO_ID ?? "")}">
-                                ${this.escapeHtml(CommonUtils.formatOwnerScopedName(scenario, scenario.SCENARIO_NAME || scenario.SCENARIO_CODE || `Scenario #${scenario.SCENARIO_ID}`))}
-                            </option>
-                        `).join("")}
-                    `;
-                    const exists = this.scenarios.some((scenario) => String(scenario.SCENARIO_ID) === String(preferredScenarioId));
-                    select.value = exists ? String(preferredScenarioId) : "";
-                    CommonUtils.applyOwnerScopeToSelect(select, this.scenarios, select.value, ["SCENARIO_ID", "scenarioId"]);
-                }
+                this.applyScenariosResponse(json, preferredScenarioId);
             } catch (error) {
                 if (select) select.innerHTML = `<option value="">Scenario load failed</option>`;
                 throw error;
@@ -1640,17 +1714,49 @@
                 targetOwner: node.TARGET_OWNER || "",
                 targetTable: node.TARGET_TABLE || "",
                 limit: "12",
-                includeSamples: "false"
+                includeSamples: "false",
+                flowRunId: String(this.selectedRun?.FLOW_RUN_ID || ""),
+                page: "1",
+                pageSize: String(this.normalizeRuleCardPageSize(this.ruleSummaryFilters?.pageSize || 20)),
+                resultColumnPage: "1",
+                resultColumnPageSize: "12"
             });
             try {
-                const json = await CommonUtils.request(`${API_BASE_URL}/${API_PAGE_CODE}/model-detail-summary?${params.toString()}`, { method: "GET", showLoading: false });
+                const combined = await CommonUtils.request(`${API_BASE_URL}/${API_PAGE_CODE}/model-result-summary?${params.toString()}`, {
+                    method: "GET",
+                    showLoading: false,
+                    timeoutMs: CommonUtils.getRuntimeSetting("APP_RULE_SUMMARY_TIMEOUT_MS", 60000, 12000, 300000),
+                    timeoutMessage: getText("Model result lookup took too long and was stopped.")
+                });
                 if (this.selectedNode !== node) return;
-                this.currentModelDetail = json;
-                this.currentExport = { filename: `${node.RESULT_OBJECT_NAME || "model-detail"}.csv`, columns: [], rows: [] };
-                this.renderModelAnalysis(json, "readable");
-                this.loadModelRuleSummary(1);
+                const detail = combined.detail;
+                if (!detail) throw new Error(combined.detailError || "Model detail summary load failed.");
+                this.currentModelDetail = detail;
+                this.currentModelDetail.ruleSummary = combined.rules || null;
+                this.currentModelDetail.ruleSummaryLoading = false;
+                this.currentModelDetail.ruleSummaryError = combined.rulesError || "";
+                if (combined.rules) {
+                    this.ruleSummaryFilters.page = Number(combined.rules.page || 1);
+                    this.ruleSummaryFilters.pageSize = Number(combined.rules.pageSize || this.ruleSummaryFilters.pageSize || 20);
+                    this.ruleSummaryFilters.resultColumnPage = Number(combined.rules.resultTopPage || 1);
+                    this.currentExport = this.buildRuleSummaryExport(node, combined.rules);
+                } else {
+                    this.currentExport = { filename: `${node.RESULT_OBJECT_NAME || "model-detail"}.csv`, columns: [], rows: [] };
+                }
+                this.renderModelAnalysis(this.currentModelDetail, "readable");
+                this.snapshotNodeResultCache();
             } catch (error) {
-                this.renderResultError(error.message || "Model detail summary load failed.");
+                console.warn(`[${PAGE_CODE}] combined model result failed; using compatible individual APIs.`, error);
+                try {
+                    const json = await CommonUtils.request(`${API_BASE_URL}/${API_PAGE_CODE}/model-detail-summary?${params.toString()}`, { method: "GET", showLoading: false });
+                    if (this.selectedNode !== node) return;
+                    this.currentModelDetail = json;
+                    this.currentExport = { filename: `${node.RESULT_OBJECT_NAME || "model-detail"}.csv`, columns: [], rows: [] };
+                    this.renderModelAnalysis(json, "readable");
+                    this.loadModelRuleSummary(1);
+                } catch (fallbackError) {
+                    this.renderResultError(fallbackError.message || "Model detail summary load failed.");
+                }
             }
         },
 
@@ -9023,7 +9129,7 @@
         async loadRuntimeParamPresetDefinitions() {
             this.runtimeParamPresetMap = new Map();
             try {
-                const response = await fetch(`${DETAIL_PRESET_URL}?v=${Date.now()}`, { cache: "no-store" });
+                const response = await fetch(PageManager.getAssetUrl(DETAIL_PRESET_URL), { cache: "force-cache" });
                 if (!response.ok) return;
                 const presets = await response.json();
                 (Array.isArray(presets) ? presets : []).forEach((preset) => {

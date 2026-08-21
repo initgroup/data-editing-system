@@ -20,6 +20,7 @@ from backend.database_helper import SqlLoader, execute_query
 from backend.target_database import get_target_db_connection
 from backend.services import flow_contract_service as flow_contracts
 from backend.services import descriptive_statistics_service as descriptive_statistics
+from backend.services import work_context_service
 
 
 logger = logging.getLogger(__name__)
@@ -1544,7 +1545,9 @@ def _fetch_symbolic_violation_summary(
         f"                 WHERE R.OWNER = :targetOwner AND R.TABLE_NAME = :targetTable {rule_run_filter_sql}{rule_filter_sql}{list_filter_sql}"
         "               ) Q "
         f"         WHERE {result_scope_sql} "
-        "         ORDER BY NVL(Q.VIOLATION_COUNT, 0) DESC, Q.MAX_ERROR_PCT DESC NULLS LAST, Q.RANK_NO NULLS LAST, Q.TARGET_COLUMN, Q.RULE_ID"
+        "         ORDER BY NVL(Q.VIOLATION_COUNT, 0) DESC, "
+        "                  CASE WHEN INSTR(UPPER(NVL(Q.RULE_METHOD, '')), 'LINEAR') > 0 THEN 0 ELSE 1 END, "
+        "                  Q.MAX_ERROR_PCT DESC NULLS LAST, Q.RANK_NO NULLS LAST, Q.TARGET_COLUMN, Q.RULE_ID"
         "       ) "
         " WHERE ROWNUM <= 12",
         list_params,
@@ -1989,7 +1992,13 @@ def _fetch_rule_violation_summary(
     top_rules = fetch_many(
         "SELECT * FROM ("
         "        SELECT Q.*, "
-        "               ROW_NUMBER() OVER (ORDER BY Q.RULE_CONFIDENCE DESC NULLS LAST, Q.RULE_LIFT DESC NULLS LAST, Q.RULE_SUPPORT DESC NULLS LAST, Q.RULE_ID) AS RN__, "
+        "               ROW_NUMBER() OVER ("
+        "                   ORDER BY NVL(Q.VIOLATION_COUNT, 0) DESC, "
+        "                            Q.CONDITION_COUNT DESC NULLS LAST, "
+        "                            Q.AVG_VIOLATION_SCORE DESC NULLS LAST, "
+        "                            Q.RULE_CONFIDENCE DESC NULLS LAST, "
+        "                            Q.RULE_LIFT DESC NULLS LAST, Q.RULE_ID"
+        "               ) AS RN__, "
         "               COUNT(*) OVER () AS TOTAL_COUNT "
         "          FROM ("
         '                SELECT S."OWNER" AS RULE_OWNER, '
@@ -2199,6 +2208,246 @@ def _normalize_select_sql(sql_text: str) -> str:
     return sql
 
 
+def fetch_flow_runs(
+    conn,
+    *,
+    user_id: int,
+    include_all_users: bool,
+    page: int,
+    page_size: int,
+    status: str,
+    keyword: str | None,
+    project_id: int,
+    scenario_id: int | None,
+    flow_menu_code: str,
+) -> dict[str, Any]:
+    offset, end_row = _page_window(page, page_size)
+    cursor = conn.cursor()
+    try:
+        cursor.execute(SqlLoader.get_sql("MCOMMON_ANLY_WORK_FLOW_RUN_LIST"), {
+            "userId": user_id,
+            "includeAllUsers": "Y" if include_all_users else "N",
+            "flowMenuCode": flow_menu_code,
+            "projectId": project_id,
+            "scenarioId": scenario_id,
+            "status": status,
+            "keyword": str(keyword).strip() if keyword else None,
+            "offset": offset,
+            "endRow": end_row,
+        })
+        columns = [desc[0] for desc in cursor.description]
+        rows = [_row_to_dict(columns, row) for row in cursor.fetchall()]
+        total = int(rows[0].get("TOTAL_COUNT") or 0) if rows else 0
+        for row in rows:
+            row.pop("RN__", None)
+        return {
+            "status": "success",
+            "data": rows,
+            "columns": columns,
+            "total": total,
+            "page": page,
+            "pageSize": page_size,
+        }
+    finally:
+        cursor.close()
+
+
+def fetch_flow_run_position(
+    conn,
+    *,
+    flow_run_id: int,
+    user_id: int,
+    include_all_users: bool,
+    page_size: int,
+    status: str,
+    keyword: str | None,
+    project_id: int,
+    scenario_id: int | None,
+    flow_menu_code: str,
+) -> dict[str, Any]:
+    cursor = conn.cursor()
+    try:
+        cursor.execute(SqlLoader.get_sql("MCOMMON_ANLY_WORK_FLOW_RUN_POSITION"), {
+            "flowRunId": flow_run_id,
+            "userId": user_id,
+            "includeAllUsers": "Y" if include_all_users else "N",
+            "flowMenuCode": flow_menu_code,
+            "projectId": project_id,
+            "scenarioId": scenario_id,
+            "status": status,
+            "keyword": str(keyword).strip() if keyword else None,
+        })
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Run is not included in the current filters.")
+        row_no = int(row[0] or 1)
+        return {
+            "status": "success",
+            "flowRunId": flow_run_id,
+            "rowNumber": row_no,
+            "page": max(1, ((row_no - 1) // page_size) + 1),
+            "pageSize": page_size,
+        }
+    finally:
+        cursor.close()
+
+
+def fetch_flow_run_nodes(
+    conn,
+    *,
+    flow_run_id: int,
+    user_id: int,
+    include_all_users: bool,
+) -> dict[str, Any]:
+    cursor = conn.cursor()
+    try:
+        cursor.execute(SqlLoader.get_sql("HOME_FLOW_RUN_NODES"), {
+            "flowRunId": flow_run_id,
+            "userId": user_id,
+            "includeAllUsers": "Y" if include_all_users else "N",
+        })
+        columns = [desc[0] for desc in cursor.description]
+        rows = [_normalize_node_result(_row_to_dict(columns, row)) for row in cursor.fetchall()]
+        return {"status": "success", "data": rows, "columns": columns, "total": len(rows)}
+    finally:
+        cursor.close()
+
+
+def get_analysis_bootstrap(
+    request: Request,
+    *,
+    preferred_project_id: int | None = None,
+    preferred_scenario_id: int | None = None,
+    preferred_flow_run_id: int | None = None,
+    page_size: int = 20,
+    status: str = "ALL",
+    keyword: str | None = None,
+    flow_menu_code: str = "M04001",
+):
+    """Load the M04002 initial context with one Target DB checkout.
+
+    Every section delegates to the same query helpers used by the individual
+    endpoints so a later UI event cannot observe a different query contract.
+    """
+    user_id = get_request_user_id(request)
+    include_all_users = get_request_role_code(request) == "ADMIN"
+    normalized_page_size = _normalize_page_size(page_size, 20, 100)
+    normalized_status = str(status or "ALL").strip().upper()
+    if normalized_status not in {"ALL", "SUCCESS", "FAILED", "STARTED", "RUNNING", "QUEUED", "SKIPPED", "ERROR"}:
+        normalized_status = "ALL"
+
+    conn = None
+    try:
+        conn = get_target_db_connection(request)
+        projects = work_context_service.list_projects(
+            conn,
+            user_id=user_id,
+            include_all_users=include_all_users,
+        )
+        project_rows = projects.get("data") or []
+        selected_project_id = next(
+            (
+                int(row.get("PROJECT_ID"))
+                for row in project_rows
+                if preferred_project_id is not None
+                and str(row.get("PROJECT_ID")) == str(preferred_project_id)
+            ),
+            int(project_rows[0].get("PROJECT_ID")) if project_rows else None,
+        )
+
+        scenarios = {"status": "success", "data": [], "columns": [], "total": 0}
+        selected_scenario_id = None
+        if selected_project_id is not None:
+            scenarios = work_context_service.list_scenarios(
+                conn,
+                project_id=selected_project_id,
+                user_id=user_id,
+                include_all_users=include_all_users,
+            )
+            selected_scenario_id = next(
+                (
+                    int(row.get("SCENARIO_ID"))
+                    for row in scenarios.get("data") or []
+                    if preferred_scenario_id is not None
+                    and str(row.get("SCENARIO_ID")) == str(preferred_scenario_id)
+                ),
+                None,
+            )
+
+        runs = {
+            "status": "success",
+            "data": [],
+            "columns": [],
+            "total": 0,
+            "page": 1,
+            "pageSize": normalized_page_size,
+        }
+        nodes = {"status": "success", "data": [], "columns": [], "total": 0}
+        selected_flow_run_id = None
+        run_page = 1
+        if selected_project_id is not None:
+            if preferred_flow_run_id is not None:
+                position = fetch_flow_run_position(
+                    conn,
+                    flow_run_id=preferred_flow_run_id,
+                    user_id=user_id,
+                    include_all_users=include_all_users,
+                    page_size=normalized_page_size,
+                    status=normalized_status,
+                    keyword=keyword,
+                    project_id=selected_project_id,
+                    scenario_id=selected_scenario_id,
+                    flow_menu_code=flow_menu_code,
+                )
+                run_page = int(position.get("page") or 1)
+            runs = fetch_flow_runs(
+                conn,
+                user_id=user_id,
+                include_all_users=include_all_users,
+                page=run_page,
+                page_size=normalized_page_size,
+                status=normalized_status,
+                keyword=keyword,
+                project_id=selected_project_id,
+                scenario_id=selected_scenario_id,
+                flow_menu_code=flow_menu_code,
+            )
+            run_rows = runs.get("data") or []
+            selected_flow_run_id = next(
+                (
+                    int(row.get("FLOW_RUN_ID"))
+                    for row in run_rows
+                    if preferred_flow_run_id is not None
+                    and str(row.get("FLOW_RUN_ID")) == str(preferred_flow_run_id)
+                ),
+                int(run_rows[0].get("FLOW_RUN_ID")) if run_rows else None,
+            )
+            if selected_flow_run_id is not None:
+                nodes = fetch_flow_run_nodes(
+                    conn,
+                    flow_run_id=selected_flow_run_id,
+                    user_id=user_id,
+                    include_all_users=include_all_users,
+                )
+
+        return {
+            "status": "success",
+            "projects": projects,
+            "scenarios": scenarios,
+            "runs": runs,
+            "nodes": nodes,
+            "selection": {
+                "projectId": selected_project_id,
+                "scenarioId": selected_scenario_id,
+                "flowRunId": selected_flow_run_id,
+                "runPage": run_page,
+            },
+        }
+    finally:
+        if conn:
+            conn.close()
+
+
 def list_flow_runs(
     request: Request,
     page: int = 1,
@@ -2215,7 +2464,6 @@ def list_flow_runs(
     include_all_users = get_request_role_code(request) == "ADMIN"
     page = _normalize_page(page)
     page_size = _normalize_page_size(pageSize, 20, 100)
-    offset, end_row = _page_window(page, page_size)
     normalized_status = str(status or "ALL").strip().upper()
     if normalized_status not in {"ALL", "SUCCESS", "FAILED", "STARTED", "RUNNING", "QUEUED", "SKIPPED", "ERROR"}:
         normalized_status = "ALL"
@@ -2223,24 +2471,18 @@ def list_flow_runs(
     cursor = None
     try:
         conn = get_target_db_connection(request)
-        cursor = conn.cursor()
-        cursor.execute(SqlLoader.get_sql("MCOMMON_ANLY_WORK_FLOW_RUN_LIST"), {
-            "userId": user_id,
-            "includeAllUsers": "Y" if include_all_users else "N",
-            "flowMenuCode": flow_menu_code,
-            "projectId": projectId,
-            "scenarioId": scenarioId,
-            "status": normalized_status,
-            "keyword": str(keyword).strip() if keyword else None,
-            "offset": offset,
-            "endRow": end_row,
-        })
-        columns = [desc[0] for desc in cursor.description]
-        rows = [_row_to_dict(columns, row) for row in cursor.fetchall()]
-        total = int(rows[0].get("TOTAL_COUNT") or 0) if rows else 0
-        for row in rows:
-            row.pop("RN__", None)
-        return {"status": "success", "data": rows, "columns": columns, "total": total, "page": page, "pageSize": page_size}
+        return fetch_flow_runs(
+            conn,
+            user_id=user_id,
+            include_all_users=include_all_users,
+            page=page,
+            page_size=page_size,
+            status=normalized_status,
+            keyword=keyword,
+            project_id=projectId,
+            scenario_id=scenarioId,
+            flow_menu_code=flow_menu_code,
+        )
     finally:
         if cursor:
             cursor.close()
@@ -2270,23 +2512,18 @@ def get_flow_run_position(
     cursor = None
     try:
         conn = get_target_db_connection(request)
-        cursor = conn.cursor()
-        cursor.execute(SqlLoader.get_sql("MCOMMON_ANLY_WORK_FLOW_RUN_POSITION"), {
-            "flowRunId": flow_run_id,
-            "userId": user_id,
-            "includeAllUsers": "Y" if include_all_users else "N",
-            "flowMenuCode": flow_menu_code,
-            "projectId": projectId,
-            "scenarioId": scenarioId,
-            "status": normalized_status,
-            "keyword": str(keyword).strip() if keyword else None,
-        })
-        row = cursor.fetchone()
-        if not row:
-            raise HTTPException(status_code=404, detail="Run is not included in the current filters.")
-        row_no = int(row[0] or 1)
-        page = max(1, ((row_no - 1) // page_size) + 1)
-        return {"status": "success", "flowRunId": flow_run_id, "rowNumber": row_no, "page": page, "pageSize": page_size}
+        return fetch_flow_run_position(
+            conn,
+            flow_run_id=flow_run_id,
+            user_id=user_id,
+            include_all_users=include_all_users,
+            page_size=page_size,
+            status=normalized_status,
+            keyword=keyword,
+            project_id=projectId,
+            scenario_id=scenarioId,
+            flow_menu_code=flow_menu_code,
+        )
     finally:
         if cursor:
             cursor.close()
@@ -2301,15 +2538,12 @@ def list_flow_run_nodes(flow_run_id: int, request: Request):
     cursor = None
     try:
         conn = get_target_db_connection(request)
-        cursor = conn.cursor()
-        cursor.execute(SqlLoader.get_sql("HOME_FLOW_RUN_NODES"), {
-            "flowRunId": flow_run_id,
-            "userId": user_id,
-            "includeAllUsers": "Y" if include_all_users else "N",
-        })
-        columns = [desc[0] for desc in cursor.description]
-        rows = [_normalize_node_result(_row_to_dict(columns, row)) for row in cursor.fetchall()]
-        return {"status": "success", "data": rows, "columns": columns, "total": len(rows)}
+        return fetch_flow_run_nodes(
+            conn,
+            flow_run_id=flow_run_id,
+            user_id=user_id,
+            include_all_users=include_all_users,
+        )
     finally:
         if cursor:
             cursor.close()
@@ -3236,16 +3470,19 @@ def get_model_detail_summary(
     targetTable: str | None = None,
     limit: int = 120,
     includeSamples: bool = False,
+    _connection=None,
 ):
     owner_name = _validate_identifier(owner, "owner")
     model_name = _validate_identifier(modelName, "model name")
     target_owner = _validate_identifier(targetOwner, "target owner") if targetOwner else ""
     target_table = _validate_identifier(targetTable, "target table") if targetTable else ""
     row_limit = max(1, min(int(limit or 120), 300))
-    conn = None
+    conn = _connection
+    owns_connection = conn is None
     cursor = None
     try:
-        conn = get_target_db_connection(request)
+        if conn is None:
+            conn = get_target_db_connection(request)
         model_metadata: dict[str, Any] = {}
         try:
             metadata_result = execute_query(conn, "MCOMMON_ANLY_WORK_MODEL_METADATA", {
@@ -3332,7 +3569,7 @@ def get_model_detail_summary(
     finally:
         if cursor:
             cursor.close()
-        if conn:
+        if conn and owns_connection:
             conn.close()
 
 
@@ -3354,6 +3591,7 @@ def get_model_rule_summary(
     runSourceType: str | None = None,
     runId: int | None = None,
     flowRunId: int | None = None,
+    _connection=None,
 ):
     owner_name = _validate_identifier(owner, "owner")
     model_name = _validate_identifier(modelName, "model name")
@@ -3378,10 +3616,12 @@ def get_model_rule_summary(
     if normalized_condition_column and normalized_condition_column != "__NULL__":
         normalized_condition_column = _validate_identifier(normalized_condition_column, "condition column")
     run_source_type, normalized_run_id = _normalize_run_context(runSourceType, runId, flowRunId)
-    conn = None
+    conn = _connection
+    owns_connection = conn is None
     cursor = None
     try:
-        conn = get_target_db_connection(request)
+        if conn is None:
+            conn = get_target_db_connection(request)
         cursor = conn.cursor() if target_owner and target_table else None
         column_comments = _fetch_column_comment_map(cursor, target_owner, target_table) if cursor else {}
         cluster_context = _fetch_relation_cluster_context(
@@ -3492,6 +3732,80 @@ def get_model_rule_summary(
     finally:
         if cursor:
             cursor.close()
+        if conn and owns_connection:
+            conn.close()
+
+
+def get_model_result_summary(
+    request: Request,
+    *,
+    owner: str,
+    model_name: str,
+    target_owner: str | None = None,
+    target_table: str | None = None,
+    limit: int = 120,
+    condition_count: int | None = None,
+    result_column: str | None = None,
+    condition_column: str | None = None,
+    result_has_value_yn: str | None = None,
+    confidence_scope: str | None = None,
+    page: int = 1,
+    page_size: int = 20,
+    result_column_page: int = 1,
+    result_column_page_size: int = 12,
+    run_source_type: str | None = None,
+    run_id: int | None = None,
+    flow_run_id: int | None = None,
+):
+    """Return the two existing model responses using one pooled connection."""
+    conn = None
+    try:
+        conn = get_target_db_connection(request)
+        detail = get_model_detail_summary(
+            request=request,
+            owner=owner,
+            modelName=model_name,
+            targetOwner=target_owner,
+            targetTable=target_table,
+            limit=limit,
+            includeSamples=False,
+            _connection=conn,
+        )
+        rules = None
+        rules_error = ""
+        try:
+            rules = get_model_rule_summary(
+                request=request,
+                owner=owner,
+                modelName=model_name,
+                targetOwner=target_owner,
+                targetTable=target_table,
+                conditionCount=condition_count,
+                resultColumn=result_column,
+                conditionColumn=condition_column,
+                resultHasValueYn=result_has_value_yn,
+                confidenceScope=confidence_scope,
+                page=page,
+                pageSize=page_size,
+                resultColumnPage=result_column_page,
+                resultColumnPageSize=result_column_page_size,
+                runSourceType=run_source_type,
+                runId=run_id,
+                flowRunId=flow_run_id,
+                _connection=conn,
+            )
+        except HTTPException as error:
+            rules_error = str(error.detail)
+        except Exception as error:
+            logger.warning("MCOMMON_ANLY_WORK combined rule summary failed: %s", error)
+            rules_error = str(error)
+        return {
+            "status": "success",
+            "detail": detail,
+            "rules": rules,
+            "rulesError": rules_error,
+        }
+    finally:
         if conn:
             conn.close()
 

@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from typing import Any, Dict, Optional
 from datetime import date, datetime
 from decimal import Decimal
+import hashlib
 import logging
 import re
 import threading
@@ -18,6 +19,7 @@ from backend.target_database import get_target_connection_id, get_target_db_conn
 from backend.services import data_work_service as data_work
 from backend.services import edit_work_service as edit_work
 from backend.services import flow_work_service as flow_work
+from backend.services import work_context_service
 from backend.services.background_jobs import BackgroundJobQueueFull, submit_background_job
 from backend.services.flow_work_service import FlowNodeRunRequest, FlowRunRequest, FlowWorkRequest
 from backend.paging import create_page_window, normalize_page_number, normalize_page_size
@@ -38,6 +40,41 @@ class SavedFlowRunRequest(BaseModel):
     scenarioId: int
     batch: Optional[bool] = False
     requestToken: Optional[str] = None
+    quickEditSummary: Optional[Dict[str, Any]] = None
+
+
+def normalize_quick_edit_summary(value: Any) -> Dict[str, Any]:
+    if not isinstance(value, dict) or str(value.get("source") or "").strip().upper() != "QUICK_EDIT":
+        return {}
+
+    def text_value(key: str, maximum: int) -> str:
+        return str(value.get(key) or "").strip()[:maximum]
+
+    def int_value(key: str) -> Optional[int]:
+        try:
+            normalized = int(value.get(key))
+            return normalized if normalized >= 0 else None
+        except (TypeError, ValueError):
+            return None
+
+    return {
+        "version": 1,
+        "source": "QUICK_EDIT",
+        "projectCode": text_value("projectCode", 100),
+        "projectName": text_value("projectName", 200),
+        "scenarioCode": text_value("scenarioCode", 100),
+        "scenarioName": text_value("scenarioName", 200),
+        "scenarioTableId": int_value("scenarioTableId"),
+        "ownerName": text_value("ownerName", 128).upper(),
+        "tableName": text_value("tableName", 128).upper(),
+        "editOwnerName": text_value("editOwnerName", 128).upper(),
+        "editTableName": text_value("editTableName", 128).upper(),
+        "fileName": text_value("fileName", 255),
+        "fileSize": int_value("fileSize"),
+        "estimatedRowCount": int_value("estimatedRowCount"),
+        "flowName": text_value("flowName", 200),
+        "jobCount": int_value("jobCount"),
+    }
 
 
 MODEL_DETAIL_VIEW_TYPES = [
@@ -306,6 +343,78 @@ def create_flow_work_router(
         if access.get("status") != "success" or not access_rows or int(access_rows[0].get("CNT") or 0) <= 0:
             raise HTTPException(status_code=404, detail="Project was not found.")
 
+    def query_scenario_tables(conn, project_id: int, scenario_id: int) -> Dict[str, Any]:
+        result = execute_query(conn, "FLOW_WORK_SCENARIO_TABLE_LIST", {
+            "projectId": project_id,
+            "scenarioId": scenario_id,
+        })
+        return data_work.require_success(result, "Scenario table query failed.")
+
+    def query_flow_jobs(
+        conn,
+        project_id: int,
+        scenario_id: int,
+        menu_code: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        result = execute_query(conn, "FLOW_WORK_DATA_JOB_ASSET_LIST", {
+            "projectId": project_id,
+            "scenarioId": scenario_id,
+            "menuCode": menu_code,
+        })
+        for row in result.get("data") or []:
+            row["PARAM_JSON"] = data_work.read_lob(row.get("PARAM_JSON"))
+            row["EXEC_PLSQL"] = data_work.read_lob(row.get("EXEC_PLSQL"))
+            row["EXEC_SPEC_JSON"] = data_work.read_lob(row.get("EXEC_SPEC_JSON"))
+        return data_work.require_success(result, "Flow job asset query failed.")
+
+    def query_node_types(
+        conn,
+        project_id: Optional[int] = None,
+        scenario_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        result = execute_query(conn, f"{SQL_PREFIX}_FLOW_NODE_TYPE_LIST", {
+            "projectId": project_id,
+            "scenarioId": scenario_id,
+        })
+        return data_work.require_success(result, "Flow node type query failed.")
+
+    def query_default_variables(conn) -> Dict[str, Any]:
+        result = execute_query(conn, f"{SQL_PREFIX}_FLOW_DEFAULT_VARIABLE_LIST")
+        return data_work.require_success(result, "Flow variable query failed.")
+
+    def query_flows(conn, request: Request, project_id: int, scenario_id: int) -> Dict[str, Any]:
+        require_project_access_for_request(conn, request, project_id)
+        return flow_work.list_flows(conn, MENU_CODE, project_id, scenario_id)
+
+    def query_flow(conn, request: Request, flow_id: int) -> Dict[str, Any]:
+        flow = flow_work.load_flow(conn, MENU_CODE, flow_id)
+        require_project_access_for_request(conn, request, int(flow.get("PROJECT_ID") or 0))
+        return {"status": "success", "data": flow}
+
+    def query_runs(
+        conn,
+        request: Request,
+        project_id: int,
+        scenario_id: int,
+        flow_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        require_project_access_for_request(conn, request, project_id)
+        return flow_work.list_runs(conn, MENU_CODE, project_id, scenario_id, flow_id)
+
+    def build_run_snapshot_version(run_row: Dict[str, Any]) -> str:
+        source = "|".join(
+            str(run_row.get(key) or "")
+            for key in (
+                "FLOW_RUN_ID",
+                "STATUS",
+                "MESSAGE",
+                "STARTED_AT",
+                "FINISHED_AT",
+                "NODE_UPDATED_AT",
+            )
+        )
+        return hashlib.sha256(source.encode("utf-8")).hexdigest()[:24]
+
     def normalize_run_request_token(value: Optional[str]) -> str:
         token = str(value or "").strip()
         if not token:
@@ -358,7 +467,9 @@ def create_flow_work_router(
 
     def build_idempotent_run_response(existing_run: Dict[str, Any], req: SavedFlowRunRequest) -> Dict[str, Any]:
         existing_run_type = str(existing_run.get("RUN_TYPE") or "MANUAL").upper()
-        requested_run_type = "BATCH" if req.batch else "MANUAL"
+        requested_run_type = "QUICK_EDIT" if normalize_quick_edit_summary(req.quickEditSummary) else ("BATCH" if req.batch else "MANUAL")
+        if requested_run_type == "QUICK_EDIT" and existing_run_type == "MANUAL":
+            requested_run_type = existing_run_type
         if existing_run_type != requested_run_type:
             raise HTTPException(
                 status_code=409,
@@ -428,16 +539,113 @@ def create_flow_work_router(
             )
         conn.commit()
 
+    @router.get("/bootstrap")
+    def get_bootstrap(
+        request: Request,
+        preferredProjectId: Optional[int] = None,
+        preferredScenarioId: Optional[int] = None,
+        preferredFlowId: Optional[int] = None,
+        includeHistory: bool = False,
+    ):
+        """Load the designer context through the same helpers as individual APIs."""
+        conn = None
+        try:
+            conn = get_target_db_connection(request)
+            user_id = get_request_user_id(request)
+            include_all_users = get_request_role_code(request) == "ADMIN"
+            projects = work_context_service.list_projects(
+                conn,
+                user_id=user_id,
+                include_all_users=include_all_users,
+            )
+            active_projects = [
+                row for row in projects.get("data") or []
+                if str(row.get("USE_YN") or "") == "Y"
+            ]
+            selected_project_id = next(
+                (
+                    int(row.get("PROJECT_ID"))
+                    for row in active_projects
+                    if preferredProjectId is not None
+                    and str(row.get("PROJECT_ID")) == str(preferredProjectId)
+                ),
+                None,
+            )
+
+            empty = {"status": "success", "data": [], "columns": [], "total": 0}
+            scenarios = dict(empty)
+            selected_scenario_id = None
+            if selected_project_id is not None:
+                scenarios = work_context_service.list_scenarios(
+                    conn,
+                    project_id=selected_project_id,
+                    user_id=user_id,
+                    include_all_users=include_all_users,
+                )
+                scenario_rows = scenarios.get("data") or []
+                selected_scenario_id = next(
+                    (
+                        int(row.get("SCENARIO_ID"))
+                        for row in scenario_rows
+                        if preferredScenarioId is not None
+                        and str(row.get("SCENARIO_ID")) == str(preferredScenarioId)
+                    ),
+                    int(scenario_rows[0].get("SCENARIO_ID")) if scenario_rows else None,
+                )
+
+            scenario_tables = dict(empty)
+            jobs = dict(empty)
+            flows = dict(empty)
+            selected_flow = None
+            history = None
+            node_types = query_node_types(conn, selected_project_id, selected_scenario_id)
+            default_variables = query_default_variables(conn)
+            if selected_project_id is not None and selected_scenario_id is not None:
+                scenario_tables = query_scenario_tables(conn, selected_project_id, selected_scenario_id)
+                jobs = query_flow_jobs(conn, selected_project_id, selected_scenario_id)
+                flows = query_flows(conn, request, selected_project_id, selected_scenario_id)
+                flow_rows = flows.get("data") or []
+                selected_flow_id = next(
+                    (
+                        int(row.get("FLOW_ID"))
+                        for row in flow_rows
+                        if preferredFlowId is not None
+                        and str(row.get("FLOW_ID")) == str(preferredFlowId)
+                    ),
+                    int(flow_rows[0].get("FLOW_ID")) if flow_rows else None,
+                )
+                if selected_flow_id is not None:
+                    selected_flow = query_flow(conn, request, selected_flow_id).get("data")
+                if includeHistory:
+                    history = query_runs(conn, request, selected_project_id, selected_scenario_id)
+
+            return {
+                "status": "success",
+                "projects": projects,
+                "scenarios": scenarios,
+                "scenarioTables": scenario_tables,
+                "nodeTypes": node_types,
+                "jobs": jobs,
+                "defaultVariables": default_variables,
+                "flows": flows,
+                "selectedFlow": selected_flow,
+                "history": history,
+                "selection": {
+                    "projectId": selected_project_id,
+                    "scenarioId": selected_scenario_id,
+                    "flowId": selected_flow.get("FLOW_ID") if selected_flow else None,
+                },
+            }
+        finally:
+            if conn:
+                conn.close()
+
     @router.get("/scenario-tables")
     def get_scenario_tables(request: Request, projectId: int, scenarioId: int):
         conn = None
         try:
             conn = get_target_db_connection(request)
-            result = execute_query(conn, "FLOW_WORK_SCENARIO_TABLE_LIST", {
-                "projectId": projectId,
-                "scenarioId": scenarioId
-            })
-            return data_work.require_success(result, "Scenario table query failed.")
+            return query_scenario_tables(conn, projectId, scenarioId)
         finally:
             if conn:
                 conn.close()
@@ -447,16 +655,7 @@ def create_flow_work_router(
         conn = None
         try:
             conn = get_target_db_connection(request)
-            result = execute_query(conn, "FLOW_WORK_DATA_JOB_ASSET_LIST", {
-                "projectId": projectId,
-                "scenarioId": scenarioId,
-                "menuCode": menuCode
-            })
-            for row in result.get("data") or []:
-                row["PARAM_JSON"] = data_work.read_lob(row.get("PARAM_JSON"))
-                row["EXEC_PLSQL"] = data_work.read_lob(row.get("EXEC_PLSQL"))
-                row["EXEC_SPEC_JSON"] = data_work.read_lob(row.get("EXEC_SPEC_JSON"))
-            return data_work.require_success(result, "Flow job asset query failed.")
+            return query_flow_jobs(conn, projectId, scenarioId, menuCode)
         finally:
             if conn:
                 conn.close()
@@ -466,11 +665,7 @@ def create_flow_work_router(
         conn = None
         try:
             conn = get_target_db_connection(request)
-            result = execute_query(conn, f"{SQL_PREFIX}_FLOW_NODE_TYPE_LIST", {
-                "projectId": projectId,
-                "scenarioId": scenarioId
-            })
-            return data_work.require_success(result, "Flow node type query failed.")
+            return query_node_types(conn, projectId, scenarioId)
         finally:
             if conn:
                 conn.close()
@@ -480,8 +675,7 @@ def create_flow_work_router(
         conn = None
         try:
             conn = get_target_db_connection(request)
-            result = execute_query(conn, f"{SQL_PREFIX}_FLOW_DEFAULT_VARIABLE_LIST")
-            return data_work.require_success(result, "Flow variable query failed.")
+            return query_default_variables(conn)
         finally:
             if conn:
                 conn.close()
@@ -513,8 +707,7 @@ def create_flow_work_router(
         conn = None
         try:
             conn = get_target_db_connection(request)
-            require_project_access_for_request(conn, request, projectId)
-            return flow_work.list_flows(conn, MENU_CODE, projectId, scenarioId)
+            return query_flows(conn, request, projectId, scenarioId)
         finally:
             if conn:
                 conn.close()
@@ -560,9 +753,7 @@ def create_flow_work_router(
         conn = None
         try:
             conn = get_target_db_connection(request)
-            flow = flow_work.load_flow(conn, MENU_CODE, flow_id)
-            require_project_access_for_request(conn, request, int(flow.get("PROJECT_ID") or 0))
-            return {"status": "success", "data": flow}
+            return query_flow(conn, request, flow_id)
         finally:
             if conn:
                 conn.close()
@@ -674,6 +865,7 @@ def create_flow_work_router(
         nodes: list[dict],
         edges: list[dict],
         request_token: str = "",
+        quick_edit_summary: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         validation = flow_work.validate_graph(nodes, edges)
         if validation["status"] != "success":
@@ -694,7 +886,9 @@ def create_flow_work_router(
             )
             validation["runtimeOverrides"] = runtime_overrides
 
-        run_type = "BATCH" if req.batch else "MANUAL"
+        if quick_edit_summary:
+            validation["quickEditSummary"] = quick_edit_summary
+        run_type = "QUICK_EDIT" if quick_edit_summary else ("BATCH" if req.batch else "MANUAL")
         run_status = "QUEUED" if req.batch else "STARTED"
         message = ROUTER_MESSAGES["run_queued"] if req.batch else "Flow execution started."
         payload_manual_run_id = flow_work.parse_manual_run_id(req.manualRunId)
@@ -706,6 +900,10 @@ def create_flow_work_router(
         flow_work.create_node_run_records(conn, run_id, flow_id, validation.get("plan", []))
         target_connection_id = get_target_connection_id(request)
         user_id = get_request_user_id(request)
+        persisted_run_context = {
+            "plan": validation.get("plan", []),
+            **({"quickEditSummary": quick_edit_summary} if quick_edit_summary else {}),
+        }
         conn.commit()
         try:
             submit_background_job(
@@ -717,13 +915,14 @@ def create_flow_work_router(
                 validation.get("plan", []),
                 runtime_overrides,
                 "Flow batch execution started." if req.batch else "Flow execution started.",
+                quick_edit_summary,
             )
         except BackgroundJobQueueFull as queue_error:
             mark_flow_submission_failed(
                 conn,
                 run_id,
                 validation.get("plan", []),
-                {"plan": validation.get("plan", [])},
+                persisted_run_context,
                 str(queue_error),
             )
             raise HTTPException(status_code=503, detail=str(queue_error))
@@ -732,7 +931,7 @@ def create_flow_work_router(
                 conn,
                 run_id,
                 validation.get("plan", []),
-                {"plan": validation.get("plan", [])},
+                persisted_run_context,
                 f"Background flow submission failed: {submit_error}",
             )
             logger.exception("%s background flow submission failed.", MENU_CODE)
@@ -857,6 +1056,15 @@ def create_flow_work_router(
                 runtimeOverrides={},
             )
             normalized_nodes, normalized_edges = flow_work.normalize_graph(saved_request.nodes, saved_request.edges)
+            quick_edit_summary = normalize_quick_edit_summary(req.quickEditSummary)
+            if quick_edit_summary:
+                quick_edit_summary.update({
+                    "projectId": int(saved_flow.get("PROJECT_ID") or req.projectId),
+                    "scenarioId": int(saved_flow.get("SCENARIO_ID") or req.scenarioId),
+                    "flowId": int(saved_flow.get("FLOW_ID") or req.flowId),
+                    "flowName": str(saved_flow.get("FLOW_NAME") or quick_edit_summary.get("flowName") or "")[:200],
+                    "nodeCount": len(normalized_nodes),
+                })
             response = queue_flow_run(
                 conn,
                 saved_request,
@@ -865,6 +1073,7 @@ def create_flow_work_router(
                 normalized_nodes,
                 normalized_edges,
                 request_token,
+                quick_edit_summary,
             )
             saved_lock.release()
             saved_lock = None
@@ -903,6 +1112,7 @@ def create_flow_work_router(
         plan: list[dict],
         runtime_overrides: dict | None = None,
         start_message: str = "Flow execution started.",
+        quick_edit_summary: dict | None = None,
     ):
         conn = None
         try:
@@ -921,6 +1131,7 @@ def create_flow_work_router(
                 flow_run_id,
                 plan or [],
                 runtime_defaults=runtime_defaults,
+                run_context={"quickEditSummary": quick_edit_summary} if quick_edit_summary else None,
             )
         except Exception as e:
             if conn:
@@ -933,6 +1144,8 @@ def create_flow_work_router(
                             "targetTable": runtime_overrides.get("INIT$TargetTable") or "",
                             "editSessionId": runtime_overrides.get("INIT$EditingSessionId"),
                         }
+                    if quick_edit_summary:
+                        failed_plan["quickEditSummary"] = quick_edit_summary
                     flow_work.update_run(
                         conn,
                         flow_run_id,
@@ -1126,8 +1339,7 @@ def create_flow_work_router(
         conn = None
         try:
             conn = get_target_db_connection(request)
-            require_project_access_for_request(conn, request, projectId)
-            return flow_work.list_runs(conn, MENU_CODE, projectId, scenarioId, flowId)
+            return query_runs(conn, request, projectId, scenarioId, flowId)
         finally:
             if conn:
                 conn.close()
@@ -1214,6 +1426,7 @@ def create_flow_work_router(
         request: Request,
         projectId: int,
         scenarioId: int,
+        ifVersion: Optional[str] = None,
     ):
         """Return one run and its node results with a single pooled connection."""
         conn = None
@@ -1223,9 +1436,19 @@ def create_flow_work_router(
             run_row = flow_work.get_run(conn, MENU_CODE, projectId, scenarioId, flow_run_id)
             if run_row is None:
                 raise HTTPException(status_code=404, detail="Flow run was not found in the selected project and scenario.")
+            snapshot_version = build_run_snapshot_version(run_row)
+            if str(ifVersion or "") == snapshot_version:
+                return {
+                    "status": "success",
+                    "changed": False,
+                    "version": snapshot_version,
+                    "data": None,
+                }
             node_rows = flow_work.list_node_runs(conn, flow_run_id).get("data") or []
             return {
                 "status": "success",
+                "changed": True,
+                "version": snapshot_version,
                 "data": {
                     "run": run_row,
                     "nodes": node_rows,
