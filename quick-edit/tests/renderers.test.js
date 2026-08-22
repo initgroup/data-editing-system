@@ -10,6 +10,16 @@ vm.runInThisContext(fs.readFileSync(rendererPath, "utf8"), { filename: rendererP
 
 const R = global.window.QuickEditRenderers;
 
+test("violation actual values follow the categorical and continuous data types", () => {
+    const categoricalColumns = R.getViolationNumericColumns("categorical");
+    const continuousColumns = R.getViolationNumericColumns("continuous");
+
+    assert.equal(categoricalColumns.has("ACTUAL_VALUE"), false);
+    assert.equal(continuousColumns.has("ACTUAL_VALUE"), true);
+    assert.equal(categoricalColumns.has("VIOLATION_SCORE"), true);
+    assert.equal(continuousColumns.has("ERROR_PCT"), true);
+});
+
 test("categorical all selection balances condition and result legend groups", () => {
     const ranked = [
         { RULE_ID: "A1", CONDITION_COUNT: 1, RESULT_COLUMN: "COL_A" },

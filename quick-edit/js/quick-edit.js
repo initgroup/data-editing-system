@@ -2324,6 +2324,20 @@
         return getDisplayedRules(kind)[index];
     }
 
+    function setRuleViolationPageBusy(target, busy) {
+        if (!target) return;
+        target.toggleAttribute("aria-busy", busy);
+        target.querySelectorAll("[data-violation-page]").forEach((pageButton) => {
+            if (busy) {
+                pageButton.dataset.wasDisabled = pageButton.disabled ? "true" : "false";
+                pageButton.disabled = true;
+            } else if (Object.prototype.hasOwnProperty.call(pageButton.dataset, "wasDisabled")) {
+                pageButton.disabled = pageButton.dataset.wasDisabled === "true";
+                delete pageButton.dataset.wasDisabled;
+            }
+        });
+    }
+
     async function loadRuleViolations(kind, index, page = 1) {
         const rule = getRuleByKind(kind, index);
         const artifact = kind === "categorical"
@@ -2334,10 +2348,15 @@
         const button = detailPanel?.querySelector(`[data-load-violations][data-rule-kind="${kind}"]`);
         if (!resultTarget || !rule) return;
         resultTarget.hidden = false;
-        resultTarget.innerHTML = "<p>위반 데이터를 조회하고 있습니다.</p>";
+        const hasRenderedGrid = Boolean(resultTarget.querySelector("[data-violation-grid]"));
+        if (!hasRenderedGrid) {
+            resultTarget.innerHTML = "<p>위반 데이터를 조회하고 있습니다.</p>";
+        }
+        setRuleViolationPageBusy(resultTarget, true);
         if (button) button.disabled = true;
         if (!artifact?.owner || !artifact?.objectName) {
             resultTarget.innerHTML = "<p>이 실행에서 저장된 위반 결과 테이블을 찾지 못했습니다.</p>";
+            setRuleViolationPageBusy(resultTarget, false);
             if (button) button.disabled = false;
             return;
         }
@@ -2355,8 +2374,14 @@
             });
             renderRuleViolationRows(resultTarget, response, kind, index, page);
         } catch (error) {
-            resultTarget.innerHTML = `<p>${R.escapeHtml(error.message || "위반 데이터를 조회하지 못했습니다.")}</p>`;
+            const message = error.message || "위반 데이터를 조회하지 못했습니다.";
+            if (hasRenderedGrid) {
+                showToast(message, "error");
+            } else {
+                resultTarget.innerHTML = `<p>${R.escapeHtml(message)}</p>`;
+            }
         } finally {
+            setRuleViolationPageBusy(resultTarget, false);
             if (button) button.disabled = false;
         }
     }
@@ -2383,7 +2408,7 @@
             VIOLATION_REASON: "위반 사유"
         };
         const comments = getResultColumnComments(kind);
-        const numericColumns = new Set(["PREDICTED_VALUE", "ACTUAL_VALUE", "ABS_ERROR", "ERROR_PCT", "TOLERANCE_PCT", "VIOLATION_SCORE", "RULE_CONFIDENCE", "RULE_LIFT"]);
+        const numericColumns = R.getViolationNumericColumns(kind);
         const renderValue = (row, column) => {
             const value = row[column];
             if (["RESULT_COLUMN", "TARGET_COLUMN"].includes(column)) return R.getColumnLabel(value, comments);
@@ -2391,25 +2416,33 @@
             if (numericColumns.has(column)) return formatDiagnosticNumber(value, 5);
             return value == null || value === "" ? "-" : String(value);
         };
-        target.innerHTML = `
-            <div class="qe-continuous-sample__title">
-                <strong>위반 데이터</strong><span>전체 ${R.escapeHtml(R.formatNumber(total, 0))}건 · ${page}/${totalPages} 페이지</span>
-            </div>
-            <div class="qe-detail-table-wrap">
-                <table class="qe-detail-table">
-                    <thead><tr><th>No</th>${columns.map((column) => `<th>${R.escapeHtml(labels[column] || column)}</th>`).join("")}</tr></thead>
-                    <tbody>${rows.map((row, rowIndex) => `<tr>
+        const summaryMarkup = `<strong>위반 데이터</strong><span>전체 ${R.escapeHtml(R.formatNumber(total, 0))}건 · ${page}/${totalPages} 페이지</span>`;
+        const gridMarkup = `
+            <table class="qe-detail-table">
+                <thead><tr><th>No</th>${columns.map((column) => `<th>${R.escapeHtml(labels[column] || column)}</th>`).join("")}</tr></thead>
+                <tbody>${rows.map((row, rowIndex) => `<tr>
                         <td class="is-number">${R.escapeHtml(R.formatNumber(((page - 1) * pageSize) + rowIndex + 1, 0))}</td>
                         ${columns.map((column) => `<td class="${numericColumns.has(column) ? "is-number" : ""}" title="${R.escapeHtml(renderValue(row, column))}">${R.escapeHtml(renderValue(row, column))}</td>`).join("")}
                     </tr>`).join("")}</tbody>
-                </table>
-            </div>
-            <div class="qe-dialog__actions">
+            </table>`;
+        const paginationMarkup = `
                 <button type="button" class="qe-secondary-button" data-violation-page="${Math.max(1, page - 1)}"
                         data-rule-kind="${R.escapeHtml(kind)}" data-rule-index="${index}" ${page <= 1 ? "disabled" : ""}>이전</button>
                 <button type="button" class="qe-secondary-button" data-violation-page="${Math.min(totalPages, page + 1)}"
-                        data-rule-kind="${R.escapeHtml(kind)}" data-rule-index="${index}" ${page >= totalPages ? "disabled" : ""}>다음</button>
-            </div>`;
+                        data-rule-kind="${R.escapeHtml(kind)}" data-rule-index="${index}" ${page >= totalPages ? "disabled" : ""}>다음</button>`;
+        const summaryTarget = target.querySelector("[data-violation-summary]");
+        const gridTarget = target.querySelector("[data-violation-grid]");
+        const paginationTarget = target.querySelector("[data-violation-pagination]");
+        if (summaryTarget && gridTarget && paginationTarget) {
+            summaryTarget.innerHTML = summaryMarkup;
+            gridTarget.innerHTML = gridMarkup;
+            paginationTarget.innerHTML = paginationMarkup;
+            return;
+        }
+        target.innerHTML = `
+            <div class="qe-continuous-sample__title" data-violation-summary>${summaryMarkup}</div>
+            <div class="qe-detail-table-wrap" data-violation-grid>${gridMarkup}</div>
+            <div class="qe-dialog__actions" data-violation-pagination>${paginationMarkup}</div>`;
     }
 
     function renderQuickHistoryList() {

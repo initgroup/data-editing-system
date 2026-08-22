@@ -46,6 +46,22 @@
         return `${formatNumber(percent, maximumFractionDigits)}%`;
     }
 
+    function getViolationNumericColumns(kind) {
+        const columns = [
+            "PREDICTED_VALUE",
+            "ABS_ERROR",
+            "ERROR_PCT",
+            "TOLERANCE_PCT",
+            "VIOLATION_SCORE",
+            "RULE_CONFIDENCE",
+            "RULE_LIFT"
+        ];
+        if (String(kind || "").trim().toLowerCase() === "continuous") {
+            columns.push("ACTUAL_VALUE");
+        }
+        return new Set(columns);
+    }
+
     function formatBytes(value) {
         let size = asNumber(value, 0);
         if (size <= 0) return "0 B";
@@ -433,6 +449,7 @@
         formatDuration,
         formatNumber,
         formatRatio,
+        getViolationNumericColumns,
         getColumnLabel,
         annotateColumnText,
         isSimpleLinearRule,

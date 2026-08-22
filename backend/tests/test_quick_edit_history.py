@@ -292,6 +292,18 @@ class QuickEditHistoryTests(unittest.TestCase):
         self.assertIn("MCOMMON_ANLY_WORK_ASSOC_RULE_BALANCED_VIOLATIONS", analysis_service)
         self.assertIn("MCOMMON_ANLY_WORK_SYMBOLIC_RULE_BALANCED_VIOLATIONS", analysis_service)
 
+    def test_violation_paging_updates_only_the_existing_grid_regions(self):
+        quick_js = (ROOT_DIR / "quick-edit" / "js" / "quick-edit.js").read_text(encoding="utf-8")
+        paging_section = quick_js.split("function renderRuleViolationRows", 1)[1].split(
+            "function renderQuickHistoryList", 1
+        )[0]
+
+        self.assertIn('target.querySelector("[data-violation-grid]")', paging_section)
+        self.assertIn("gridTarget.innerHTML = gridMarkup", paging_section)
+        self.assertIn("paginationTarget.innerHTML = paginationMarkup", paging_section)
+        self.assertIn("data-violation-summary", paging_section)
+        self.assertIn("data-violation-pagination", paging_section)
+
 
 if __name__ == "__main__":
     unittest.main()
