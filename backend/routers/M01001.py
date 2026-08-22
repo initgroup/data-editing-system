@@ -25,6 +25,7 @@ class ProjectSaveRequest(BaseModel):
     projectDesc: Optional[str] = None
     useYn: Optional[str] = "Y"
     sortOrder: Optional[Any] = 0
+    autoUniqueName: bool = False
     model_config = ConfigDict(extra='allow')
 
 
@@ -54,6 +55,46 @@ def _to_int(value, default=0):
     if isinstance(value, str) and value.strip() == "":
         return default
     return int(value)
+
+
+def _escape_like(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def _truncate_utf8(value: str, max_bytes: int) -> str:
+    result = value
+    while result and len(result.encode("utf-8")) > max_bytes:
+        result = result[:-1]
+    return result.rstrip()
+
+
+def _append_project_name_suffix(project_name: str, sequence: int, max_bytes: int = 200) -> str:
+    suffix = f" ({sequence})"
+    available_bytes = max_bytes - len(suffix.encode("utf-8"))
+    return f"{_truncate_utf8(project_name, available_bytes)}{suffix}"
+
+
+def _resolve_unique_project_name(cursor, user_id: Any, project_name: str) -> str:
+    project_name = _truncate_utf8(project_name, 200)
+    lookup_prefix = _truncate_utf8(project_name, 180)
+    cursor.execute(SqlLoader.get_sql("M01001_PROJECT_NAMES_FOR_UNIQUENESS"), {
+        "userId": user_id,
+        "projectName": project_name,
+        "projectNamePattern": f"{_escape_like(lookup_prefix)}%",
+    })
+    existing_names = {
+        str(row[0] or "").strip().casefold()
+        for row in cursor.fetchall()
+    }
+    if project_name.casefold() not in existing_names:
+        return project_name
+
+    sequence = 1
+    while True:
+        candidate = _append_project_name_suffix(project_name, sequence)
+        if candidate.casefold() not in existing_names:
+            return candidate
+        sequence += 1
 
 
 @router.get("/projects")
@@ -150,6 +191,8 @@ def save_project(req: ProjectSaveRequest, request: Request):
             cursor.execute(SqlLoader.get_sql("M01001_PROJECT_UPDATE"), params)
             project_id = params["projectId"]
         else:
+            if req.autoUniqueName:
+                params["projectName"] = _resolve_unique_project_name(cursor, user_id, project_name)
             insert_params = {key: value for key, value in params.items() if key != "projectId"}
             cursor.execute(SqlLoader.get_sql("M01001_PROJECT_INSERT"), insert_params)
             cursor.execute(SqlLoader.get_sql("M01001_PROJECT_ID_BY_CODE"), {

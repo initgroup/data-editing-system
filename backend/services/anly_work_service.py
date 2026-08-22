@@ -1841,14 +1841,39 @@ def _fetch_rule_violation_summary(
     rule_offset, rule_end_row = _page_window(rule_page, rule_page_size)
     rule_bind_params.update({"ruleOffset": rule_offset, "ruleEndRow": rule_end_row})
 
-    def fetch_one(sql: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
-        cursor.execute(sql, params or bind_params)
+    def execute_summary_query(label: str, sql: str, params: dict[str, Any] | None = None) -> None:
+        started_at = time.perf_counter()
+        try:
+            cursor.execute(sql, params or bind_params)
+        except Exception:
+            logger.warning(
+                "MCOMMON_ANLY_WORK violation summary query failed. stage=%s elapsed=%.3fs",
+                label,
+                time.perf_counter() - started_at,
+            )
+            raise
+        elapsed = time.perf_counter() - started_at
+        if elapsed >= 1.0:
+            logger.warning(
+                "MCOMMON_ANLY_WORK slow violation summary query. stage=%s elapsed=%.3fs",
+                label,
+                elapsed,
+            )
+        else:
+            logger.debug(
+                "MCOMMON_ANLY_WORK violation summary query. stage=%s elapsed=%.3fs",
+                label,
+                elapsed,
+            )
+
+    def fetch_one(label: str, sql: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        execute_summary_query(label, sql, params)
         columns = [desc[0] for desc in cursor.description]
         row = cursor.fetchone()
         return {column: _serialize_db_value(value) for column, value in zip(columns, row)} if row else {}
 
-    def fetch_many(sql: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
-        cursor.execute(sql, params or bind_params)
+    def fetch_many(label: str, sql: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+        execute_summary_query(label, sql, params)
         columns = [desc[0] for desc in cursor.description]
         return [
             {column: _serialize_db_value(value) for column, value in zip(columns, row)}
@@ -1856,6 +1881,7 @@ def _fetch_rule_violation_summary(
         ]
 
     overview = fetch_one(
+        "violation-overview",
         "SELECT COUNT(*) AS VIOLATION_COUNT, "
         "       COUNT(DISTINCT NVL(CASE_ID, CASE_ROWID)) AS VIOLATED_ROW_COUNT, "
         "       COUNT(DISTINCT RULE_ID) AS VIOLATED_RULE_COUNT, "
@@ -1873,15 +1899,40 @@ def _fetch_rule_violation_summary(
         "runSourceType": run_source_type or None,
         "runId": run_id,
     }
-    candidate_overview = fetch_one(
-        SqlLoader.get_sql("MCOMMON_ANLY_WORK_ASSOC_RULE_OVERVIEW"),
-        candidate_params,
-    ) if rule_model_name else {}
-    candidate_condition_dist = fetch_many(
-        SqlLoader.get_sql("MCOMMON_ANLY_WORK_ASSOC_RULE_CONDITION_DIST"),
-        candidate_params,
-    ) if rule_model_name else []
+    if rule_model_name and run_source_type and run_id is not None:
+        candidate_profile = fetch_many(
+            "candidate-profile-fast",
+            SqlLoader.get_sql("MCOMMON_ANLY_WORK_ASSOC_RULE_PROFILE_FAST"),
+            candidate_params,
+        )
+        candidate_overview = next(
+            (dict(row) for row in candidate_profile if int(row.get("IS_TOTAL") or 0) == 1),
+            {},
+        )
+        candidate_condition_dist = [
+            dict(row)
+            for row in candidate_profile
+            if int(row.get("IS_TOTAL") or 0) == 0
+        ]
+        candidate_overview.pop("IS_TOTAL", None)
+        for row in candidate_condition_dist:
+            row.pop("IS_TOTAL", None)
+    elif rule_model_name:
+        candidate_overview = fetch_one(
+            "candidate-overview",
+            SqlLoader.get_sql("MCOMMON_ANLY_WORK_ASSOC_RULE_OVERVIEW"),
+            candidate_params,
+        )
+        candidate_condition_dist = fetch_many(
+            "candidate-condition-distribution",
+            SqlLoader.get_sql("MCOMMON_ANLY_WORK_ASSOC_RULE_CONDITION_DIST"),
+            candidate_params,
+        )
+    else:
+        candidate_overview = {}
+        candidate_condition_dist = []
     balanced_top_rules = fetch_many(
+        "balanced-top-rules",
         SqlLoader.get_sql("MCOMMON_ANLY_WORK_ASSOC_RULE_BALANCED_VIOLATIONS"),
         {
             **candidate_params,
@@ -1928,43 +1979,63 @@ def _fetch_rule_violation_summary(
         candidate_filter_params["candidateRuleIdFilter"] = normalized_rule_filter
     candidate_filter_sql = " AND ".join(candidate_filter_clauses)
     candidate_display_sql = " AND ".join(candidate_display_clauses)
-    detection_overview = fetch_one(
-        "WITH BASE_CANDIDATES AS ("
-        "        SELECT S.* "
-        "          FROM \"INIT$_TB_RULEDISC_ASSOC_SUM\" S "
-        f"         WHERE {candidate_filter_sql}"
-        "     ), DISPLAY_CANDIDATES AS ("
-        "        SELECT C.* "
-        "          FROM BASE_CANDIDATES C "
-        f"         WHERE {candidate_display_sql}"
-        "     ), DETECTABLE_ALL AS ("
-        "        SELECT C.*, "
-        "               ROW_NUMBER() OVER ("
-        "                   ORDER BY CASE "
-        "                                WHEN C.\"RULE_CONFIDENCE\" IS NOT NULL "
-        "                                 AND ((C.\"RULE_CONFIDENCE\" <= 1 AND C.\"RULE_CONFIDENCE\" < 0.999999) "
-        "                                   OR (C.\"RULE_CONFIDENCE\" > 1 AND C.\"RULE_CONFIDENCE\" < 99.9999)) "
-        "                                THEN 0 ELSE 1 "
-        "                            END, "
-        "                            C.\"RULE_CONFIDENCE\" DESC NULLS LAST, C.\"RULE_LIFT\" DESC NULLS LAST, "
-        "                            C.\"SUPPORT_COUNT\" DESC NULLS LAST, C.\"RULE_ID\""
-        "               ) AS DETECTION_RN "
-        "          FROM BASE_CANDIDATES C "
-        "         WHERE NVL(C.\"RULE_CONFIDENCE\", 0) >= :detectMinConfidence "
-        "           AND NVL(C.\"RULE_LIFT\", 0) >= :detectMinLift"
-        "     ) "
-        "SELECT COUNT(*) AS CANDIDATE_RULE_COUNT, "
-        "       SUM(CASE WHEN NVL(C.\"RULE_CONFIDENCE\", 0) < :detectMinConfidence THEN 1 ELSE 0 END) AS CONFIDENCE_CUTOFF_COUNT, "
-        "       SUM(CASE WHEN NVL(C.\"RULE_LIFT\", 0) < :detectMinLift THEN 1 ELSE 0 END) AS LIFT_CUTOFF_COUNT, "
-        "       SUM(CASE WHEN D.DETECTION_RN <= :detectMaxRules THEN 1 ELSE 0 END) AS DETECTION_ELIGIBLE_RULE_COUNT, "
-        "       SUM(CASE WHEN D.DETECTION_RN > :detectMaxRules THEN 1 ELSE 0 END) AS MAX_RULES_CUTOFF_COUNT, "
-        "       MIN(D.DETECTION_RN) AS MIN_DETECTION_RN, "
-        "       MAX(D.DETECTION_RN) AS MAX_DETECTION_RN "
-        "  FROM DISPLAY_CANDIDATES C "
-        "  LEFT JOIN DETECTABLE_ALL D "
-        "    ON D.\"RULE_ID\" = C.\"RULE_ID\"",
-        candidate_filter_params,
-    ) if rule_model_name else {}
+    use_fast_detection_overview = bool(
+        rule_model_name
+        and run_source_type
+        and run_id is not None
+        and condition_count is None
+        and not normalized_rule_filter
+    )
+    if use_fast_detection_overview:
+        detection_overview = fetch_one(
+            "detection-overview-fast",
+            SqlLoader.get_sql("MCOMMON_ANLY_WORK_ASSOC_RULE_DETECTION_OVERVIEW_FAST"),
+            {
+                **candidate_filter_params,
+                "confidenceScope": normalized_confidence_scope,
+            },
+        )
+    elif rule_model_name:
+        detection_overview = fetch_one(
+            "detection-overview-filtered",
+            "WITH BASE_CANDIDATES AS ("
+            "        SELECT S.* "
+            "          FROM \"INIT$_TB_RULEDISC_ASSOC_SUM\" S "
+            f"         WHERE {candidate_filter_sql}"
+            "     ), DISPLAY_CANDIDATES AS ("
+            "        SELECT C.* "
+            "          FROM BASE_CANDIDATES C "
+            f"         WHERE {candidate_display_sql}"
+            "     ), DETECTABLE_ALL AS ("
+            "        SELECT C.*, "
+            "               ROW_NUMBER() OVER ("
+            "                   ORDER BY CASE "
+            "                                WHEN C.\"RULE_CONFIDENCE\" IS NOT NULL "
+            "                                 AND ((C.\"RULE_CONFIDENCE\" <= 1 AND C.\"RULE_CONFIDENCE\" < 0.999999) "
+            "                                   OR (C.\"RULE_CONFIDENCE\" > 1 AND C.\"RULE_CONFIDENCE\" < 99.9999)) "
+            "                                THEN 0 ELSE 1 "
+            "                            END, "
+            "                            C.\"RULE_CONFIDENCE\" DESC NULLS LAST, C.\"RULE_LIFT\" DESC NULLS LAST, "
+            "                            C.\"SUPPORT_COUNT\" DESC NULLS LAST, C.\"RULE_ID\""
+            "               ) AS DETECTION_RN "
+            "          FROM BASE_CANDIDATES C "
+            "         WHERE NVL(C.\"RULE_CONFIDENCE\", 0) >= :detectMinConfidence "
+            "           AND NVL(C.\"RULE_LIFT\", 0) >= :detectMinLift"
+            "     ) "
+            "SELECT COUNT(*) AS CANDIDATE_RULE_COUNT, "
+            "       SUM(CASE WHEN NVL(C.\"RULE_CONFIDENCE\", 0) < :detectMinConfidence THEN 1 ELSE 0 END) AS CONFIDENCE_CUTOFF_COUNT, "
+            "       SUM(CASE WHEN NVL(C.\"RULE_LIFT\", 0) < :detectMinLift THEN 1 ELSE 0 END) AS LIFT_CUTOFF_COUNT, "
+            "       SUM(CASE WHEN D.DETECTION_RN <= :detectMaxRules THEN 1 ELSE 0 END) AS DETECTION_ELIGIBLE_RULE_COUNT, "
+            "       SUM(CASE WHEN D.DETECTION_RN > :detectMaxRules THEN 1 ELSE 0 END) AS MAX_RULES_CUTOFF_COUNT, "
+            "       MIN(D.DETECTION_RN) AS MIN_DETECTION_RN, "
+            "       MAX(D.DETECTION_RN) AS MAX_DETECTION_RN "
+            "  FROM DISPLAY_CANDIDATES C "
+            "  LEFT JOIN DETECTABLE_ALL D "
+            "    ON D.\"RULE_ID\" = C.\"RULE_ID\"",
+            candidate_filter_params,
+        )
+    else:
+        detection_overview = {}
 
     candidate_rule_clauses = [
         'S."OWNER" = :candidateOwner',
@@ -2011,7 +2082,15 @@ def _fetch_rule_violation_summary(
         "MISS": "NVL(Q.VIOLATION_COUNT, 0) = 0 AND Q.DETECTION_SCANNED_YN = 'Y'",
         "MAX_RULES": "Q.DETECTION_SCANNED_YN = 'N'",
     }[normalized_result_scope]
+    has_violation_rows = int(overview.get("VIOLATION_COUNT") or 0) > 0
+    use_fast_hit_query = bool(
+        normalized_result_scope == "HIT"
+        and rule_model_name
+        and run_source_type
+        and run_id is not None
+    )
     top_rules = fetch_many(
+        "top-rules-ranked",
         "SELECT * FROM ("
         "        SELECT Q.*, "
         "               ROW_NUMBER() OVER ("
@@ -2087,12 +2166,31 @@ def _fetch_rule_violation_summary(
         "           AND RN__ <= :ruleEndRow "
         " ORDER BY RN__",
         {**rule_bind_params, **candidate_rule_params},
-    )
+    ) if not use_fast_hit_query else []
+    if use_fast_hit_query and has_violation_rows:
+        top_rules = fetch_many(
+            "top-rules-hit-fast",
+            SqlLoader.get_sql("MCOMMON_ANLY_WORK_ASSOC_RULE_HIT_LIST_FAST"),
+            {
+                "runSourceType": run_source_type,
+                "runId": run_id,
+                "owner": owner_name,
+                "targetOwner": target_owner,
+                "targetTable": target_table,
+                "modelName": rule_model_name,
+                "conditionCount": condition_count,
+                "confidenceScope": normalized_confidence_scope,
+                "ruleIdFilter": normalized_rule_filter or None,
+                "ruleOffset": rule_offset,
+                "ruleEndRow": rule_end_row,
+            },
+        )
     top_rule_total = int(top_rules[0].get("TOTAL_COUNT") or 0) if top_rules else 0
     for row in top_rules:
         row.pop("RN__", None)
         row.pop("TOTAL_COUNT", None)
     top_columns = fetch_many(
+        "top-violation-columns",
         "SELECT * FROM ("
         "        SELECT RESULT_COLUMN, "
         "               COUNT(*) AS VIOLATION_COUNT, "
@@ -2102,7 +2200,7 @@ def _fetch_rule_violation_summary(
         "         GROUP BY RESULT_COLUMN "
         "         ORDER BY VIOLATION_COUNT DESC, AVG_VIOLATION_SCORE DESC, RESULT_COLUMN"
         "       ) WHERE ROWNUM <= 12"
-    )
+    ) if has_violation_rows else []
     return {
         "targetOwner": target_owner,
         "targetTable": target_table,
@@ -2990,7 +3088,7 @@ def get_result_table(
                 run_source_type,
                 normalized_run_id,
             )
-            column_comments = _fetch_column_comment_map(cursor, target_owner, target_table)
+            column_comments = dict(predicted_type_summary.get("columnComments") or {})
             return {
                 "status": "success",
                 "owner": owner_name,
@@ -3235,7 +3333,26 @@ def get_result_table(
                 normalized_symbolic_violation_result_scope,
                 include_balanced_rule_summary,
             )
-        column_comments = _fetch_column_comment_map(cursor, target_owner, target_table)
+        summary_sections = (
+            cat_corr_summary,
+            relation_summary,
+            relation_network_summary,
+            predicted_type_summary,
+            violation_summary,
+            lasso_summary,
+            symbolic_rule_summary,
+            symbolic_violation_summary,
+        )
+        column_comments = next(
+            (
+                dict(summary.get("columnComments") or {})
+                for summary in summary_sections
+                if isinstance(summary, dict) and summary.get("columnComments") is not None
+            ),
+            None,
+        )
+        if column_comments is None:
+            column_comments = _fetch_column_comment_map(cursor, target_owner, target_table)
         return {
             "status": "success",
             "owner": owner_name,

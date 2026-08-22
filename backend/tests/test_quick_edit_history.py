@@ -21,11 +21,35 @@ def get_route_endpoint(path: str, method: str):
 
 
 class QuickEditHistoryTests(unittest.TestCase):
+    def test_quick_edit_elapsed_time_matches_m04001_timezone_and_waiting_rules(self):
+        renderers_js = (ROOT_DIR / "quick-edit" / "js" / "renderers.js").read_text(encoding="utf-8")
+        quick_js = (ROOT_DIR / "quick-edit" / "js" / "quick-edit.js").read_text(encoding="utf-8")
+        flow_js = (ROOT_DIR / "frontend" / "js" / "MCOM_FLOW_WORK.js").read_text(encoding="utf-8")
+
+        self.assertIn("return new Date(Date.UTC(", renderers_js)
+        self.assertIn('timeZone: "Asia/Seoul"', renderers_js)
+        self.assertIn('["PENDING", "QUEUED", "SUBMITTED"]', renderers_js)
+        self.assertIn("R.formatDuration(node.STARTED_AT, node.FINISHED_AT, status)", quick_js)
+        self.assertIn('if (!finishedAt && statusText === "QUEUED") return "Queued";', flow_js)
+        self.assertIn('const isRunning = !finishedAt && ["RUNNING", "STARTED"].includes(statusText);', flow_js)
+
+    def test_new_workspace_is_the_default_quick_edit_mode(self):
+        quick_html = (ROOT_DIR / "quick-edit" / "index.html").read_text(encoding="utf-8")
+        quick_js = (ROOT_DIR / "quick-edit" / "js" / "quick-edit.js").read_text(encoding="utf-8")
+
+        self.assertIn('id="projectModeNew" type="radio" name="projectMode" value="new" checked', quick_html)
+        self.assertIn('data-project-mode-panel="new">', quick_html)
+        self.assertIn('data-project-mode-panel="existing" hidden>', quick_html)
+        self.assertIn('workspaceMode: "new"', quick_js)
+        self.assertIn('state.workspaceMode = "new";', quick_js)
+
     def test_quick_edit_summary_is_compact_and_normalized(self):
         summary = normalize_quick_edit_summary({
             "source": "quick_edit",
             "projectCode": "QE_20260821",
             "projectName": "퀵 에디팅 20260821-143000",
+            "projectCreatedAt": "2026-08-21T05:30:00",
+            "scenarioCreatedAt": "2026-08-21T05:30:01",
             "ownerName": "init$edit01",
             "tableName": "initup$qedit",
             "fileSize": "2048",
@@ -38,6 +62,24 @@ class QuickEditHistoryTests(unittest.TestCase):
         self.assertEqual("INITUP$QEDIT", summary["tableName"])
         self.assertEqual(2048, summary["fileSize"])
         self.assertIsNone(summary["estimatedRowCount"])
+        self.assertEqual("2026-08-21T05:30:00", summary["projectCreatedAt"])
+        self.assertEqual("2026-08-21T05:30:01", summary["scenarioCreatedAt"])
+
+    def test_completed_workspace_summary_shows_menu_keys_and_kst_created_times(self):
+        quick_html = (ROOT_DIR / "quick-edit" / "index.html").read_text(encoding="utf-8")
+        quick_js = (ROOT_DIR / "quick-edit" / "js" / "quick-edit.js").read_text(encoding="utf-8")
+        renderers_js = (ROOT_DIR / "quick-edit" / "js" / "renderers.js").read_text(encoding="utf-8")
+
+        self.assertIn('id="qeWorkspaceSummary"', quick_html)
+        self.assertIn("프로젝트 설정 [M01001]", quick_html)
+        self.assertIn("시나리오 정의 [M01002]", quick_html)
+        self.assertIn("function renderWorkspaceSummary()", quick_js)
+        self.assertIn('state.completedSteps.includes(7)', quick_js)
+        self.assertIn("projectCreatedAt: state.projectCreatedAt", quick_js)
+        self.assertIn("scenarioCreatedAt: state.scenarioCreatedAt", quick_js)
+        self.assertIn("function formatFullDateTime(value)", renderers_js)
+        self.assertIn('timeZone: "Asia/Seoul"', renderers_js)
+        self.assertIn(" KST`;", renderers_js)
 
     def test_completed_run_keeps_quick_edit_summary(self):
         conn = Mock()
@@ -64,6 +106,8 @@ class QuickEditHistoryTests(unittest.TestCase):
         self.assertIn("R.RUN_TYPE = 'QUICK_EDIT'", sql)
         self.assertIn("'$.quickEditSummary' NULL ON ERROR", sql)
         self.assertIn("PROJECT_NAME VARCHAR2(200) PATH '$.projectName'", sql)
+        self.assertIn("PROJECT_CREATED_AT VARCHAR2(64) PATH '$.projectCreatedAt'", sql)
+        self.assertIn("SCENARIO_CREATED_AT VARCHAR2(64) PATH '$.scenarioCreatedAt'", sql)
         self.assertIn("PR.SUMMARY_YN = 'Y'", sql)
         self.assertIn("LEGACY_RUN_SCOPE", sql)
         self.assertIn("P.PROJECT_CODE LIKE 'QEDIT\\_%'", sql)
@@ -161,9 +205,11 @@ class QuickEditHistoryTests(unittest.TestCase):
                 "PROJECT_ID": 10,
                 "PROJECT_CODE": "P10",
                 "PROJECT_NAME": "Quick project",
+                "PROJECT_CREATED_AT": "2026-08-21T05:30:00",
                 "SCENARIO_ID": 20,
                 "SCENARIO_CODE": "S20",
                 "SCENARIO_NAME": "Quick scenario",
+                "SCENARIO_CREATED_AT": "2026-08-21T05:30:01",
                 "SCENARIO_TABLE_ID": 30,
                 "OWNER_NAME": "INIT$EDIT01",
                 "TABLE_NAME": "INITUP$QEDIT",
@@ -185,6 +231,8 @@ class QuickEditHistoryTests(unittest.TestCase):
         self.assertEqual("success", detail["restoreState"]["status"])
         self.assertTrue(detail["restoreState"]["historyView"])
         self.assertEqual([101, 102, 103, 104], detail["restoreState"]["jobIds"])
+        self.assertEqual("2026-08-21T05:30:00", detail["restoreState"]["projectCreatedAt"])
+        self.assertEqual("2026-08-21T05:30:01", detail["restoreState"]["scenarioCreatedAt"])
         self.assertEqual(8, len(detail["steps"]))
 
     def test_failed_detail_stops_at_saved_execution_step(self):

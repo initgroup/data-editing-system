@@ -1828,6 +1828,7 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_PREDICTED_TYPE" (
     v_run_source_type         VARCHAR2(30);
     v_run_id                  NUMBER;
     v_predicted_rowcount      NUMBER := 0;
+    v_total_rows              NUMBER;
     v_model_predicted_count   NUMBER := 0;
     v_final_rowcount          NUMBER := 0;
     v_model_version_id        NUMBER;
@@ -2024,6 +2025,7 @@ BEGIN
     ELSIF v_method = 'FINAL_BOTH' THEN
         v_final_type_expr :=
             'CASE
+                 WHEN UPPER(TRIM(S."COLUMN_NAME")) = ''FILE_ROW_NO'' THEN S."BASE_PREDICTED_TYPE"
                  WHEN TRIM(S."BASE_PREDICTED_TYPE") IS NULL THEN S."MODL_PREDICTED_TYPE"
                  WHEN TRIM(S."MODL_PREDICTED_TYPE") IS NULL THEN S."BASE_PREDICTED_TYPE"
                  WHEN "INIT$_FN_TYPE_CODE"(S."BASE_PREDICTED_TYPE") = "INIT$_FN_TYPE_CODE"(S."MODL_PREDICTED_TYPE")
@@ -2058,6 +2060,32 @@ BEGIN
     EXECUTE IMMEDIATE 'ALTER SESSION DISABLE PARALLEL DML';
     EXECUTE IMMEDIATE 'ALTER SESSION DISABLE PARALLEL QUERY';
 
+    -- Upload/reload validates and records the exact row count before a table
+    -- becomes READY. Reuse that value to avoid another full-table COUNT scan;
+    -- non-upload tables retain the exact-count fallback.
+    BEGIN
+        EXECUTE IMMEDIATE q'[
+            SELECT MAX("ROW_COUNT")
+              FROM "INIT$_TB_UPLOAD_TABLE_META"
+             WHERE "OWNER_NAME" = :ownerName
+               AND "TABLE_NAME" = :tableName
+               AND NVL("LOAD_STATUS", 'READY') = 'READY'
+        ]'
+        INTO v_total_rows
+        USING v_owner, v_table_name;
+    EXCEPTION
+        WHEN OTHERS THEN
+            v_total_rows := NULL;
+    END;
+
+    IF v_total_rows IS NULL THEN
+        EXECUTE IMMEDIATE
+            'SELECT /*+ NO_PARALLEL */ COUNT(*) FROM "'
+            || REPLACE(v_owner, '"', '""') || '"."'
+            || REPLACE(v_table_name, '"', '""') || '"'
+        INTO v_total_rows;
+    END IF;
+
     -- DBMS_XMLGEN receives the per-column profiling query as an SQL text
     -- literal. Keep that inner query compact and below 4000 bytes so it works
     -- with MAX_STRING_SIZE=STANDARD on both Oracle 21c and 26ai.
@@ -2080,8 +2108,8 @@ USING (
                 AND CM.TABLE_NAME = C.TABLE_NAME
                 AND CM.COLUMN_NAME = C.COLUMN_NAME
                CROSS JOIN (
-                   SELECT COUNT(*) AS TOTAL_ROWS
-                     FROM "~' || REPLACE(v_owner, '"', '""') || q'~"."~' || REPLACE(v_table_name, '"', '""') || q'~"
+                   SELECT ~' || TO_CHAR(v_total_rows, 'TM9', 'NLS_NUMERIC_CHARACTERS=.,') || q'~ AS TOTAL_ROWS
+                     FROM DUAL
                ) TT
          WHERE C.OWNER = ~' || sql_literal(v_owner) || q'~
            AND C.TABLE_NAME = ~' || sql_literal(v_table_name) || q'~

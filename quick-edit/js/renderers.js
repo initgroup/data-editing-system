@@ -74,12 +74,37 @@
         return `${formatNumber(size, index === 0 ? 0 : 1)} ${units[index]}`;
     }
 
+    function parseDateTime(value) {
+        if (!value) return null;
+        if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+        const text = String(value).trim();
+        const match = text.match(/^(\d{4})[-/](\d{2})[-/](\d{2})[ T](\d{2}):(\d{2}):(\d{2})/);
+        if (match) {
+            if (/[zZ]|[+-]\d{2}:?\d{2}$/.test(text)) {
+                const parsedWithZone = new Date(text);
+                return Number.isNaN(parsedWithZone.getTime()) ? null : parsedWithZone;
+            }
+            const [, year, month, day, hour, minute, second] = match;
+            return new Date(Date.UTC(
+                Number(year),
+                Number(month) - 1,
+                Number(day),
+                Number(hour),
+                Number(minute),
+                Number(second)
+            ));
+        }
+        const parsed = new Date(text);
+        return Number.isNaN(parsed.getTime()) ? null : parsed;
+    }
+
     function formatDateTime(value) {
         if (!value) return "-";
         const raw = String(value);
-        const parsed = new Date(raw);
-        if (Number.isNaN(parsed.getTime())) return raw.replace("T", " ");
+        const parsed = parseDateTime(value);
+        if (!parsed) return raw.replace("T", " ");
         return new Intl.DateTimeFormat("ko-KR", {
+            timeZone: "Asia/Seoul",
             month: "2-digit",
             day: "2-digit",
             hour: "2-digit",
@@ -89,12 +114,31 @@
         }).format(parsed);
     }
 
-    function formatDuration(startValue, endValue = null) {
+    function formatFullDateTime(value) {
+        if (!value) return "생성시간 확인 불가";
+        const parsed = parseDateTime(value);
+        if (!parsed) return String(value).replace("T", " ");
+        const parts = Object.fromEntries(new Intl.DateTimeFormat("ko-KR", {
+            timeZone: "Asia/Seoul",
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            hourCycle: "h23"
+        }).formatToParts(parsed).map((part) => [part.type, part.value]));
+        return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second} KST`;
+    }
+
+    function formatDuration(startValue, endValue = null, status = "") {
+        const normalizedStatus = normalizeStatus(status);
+        if (!endValue && ["PENDING", "QUEUED", "SUBMITTED"].includes(normalizedStatus)) return "-";
         if (!startValue) return "-";
-        const start = new Date(startValue).getTime();
-        const end = endValue ? new Date(endValue).getTime() : Date.now();
-        if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return "-";
-        const totalSeconds = Math.floor((end - start) / 1000);
+        const start = parseDateTime(startValue);
+        const end = endValue ? parseDateTime(endValue) : new Date();
+        if (!start || !end || end < start) return "-";
+        const totalSeconds = Math.floor((end.getTime() - start.getTime()) / 1000);
         const hours = Math.floor(totalSeconds / 3600);
         const minutes = Math.floor((totalSeconds % 3600) / 60);
         const seconds = totalSeconds % 60;
@@ -446,6 +490,7 @@
         escapeHtml,
         formatBytes,
         formatDateTime,
+        formatFullDateTime,
         formatDuration,
         formatNumber,
         formatRatio,
@@ -458,6 +503,7 @@
         selectBalancedRules,
         filterLegendItems,
         normalizeStatus,
+        parseDateTime,
         renderBars,
         renderCategoricalRules,
         renderContinuousRules,

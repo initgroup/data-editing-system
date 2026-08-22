@@ -63,9 +63,13 @@ def _limit_ml_concurrency(func):
                 detail="Another ML analysis is running. Please try again after it completes.",
             )
         _ml_execution_state.depth = 1
+        _ml_execution_state.matrix_cache = {}
+        _ml_execution_state.matrix_cache_bytes = 0
         try:
             return func(*args, **kwargs)
         finally:
+            _ml_execution_state.matrix_cache = {}
+            _ml_execution_state.matrix_cache_bytes = 0
             _ml_execution_state.depth = 0
             _ml_execution_semaphore.release()
 
@@ -113,6 +117,8 @@ def execute_web_api_job(
     payload = build_payload(job, runtime_values or {}, run_id)
     if method == "LASSO_FEATURE_SELECT":
         result = run_lasso_feature_select(conn, payload)
+        if str(result.get("skippedYn") or "N").upper() == "Y":
+            return str(result.get("message") or "LASSO feature selection was safely skipped.")
         if result.get("targetCount"):
             return (
                 f"LASSO auto feature selection completed. "
@@ -157,6 +163,7 @@ def execute_web_api_job(
         return (
             f"Integrated rule discovery completed. "
             f"{result.get('successCount', 0)}/{result.get('taskCount', 0)} task(s) succeeded."
+            f"{format_integrated_skipped_summary(result)}"
         )
     if method == "INTEGRATED_RULE_VIOLATION_DETECT":
         result = run_integrated_rule_violation_detect(conn, payload)
@@ -164,6 +171,7 @@ def execute_web_api_job(
         return (
             f"Integrated rule violation detection completed. "
             f"{result.get('successCount', 0)}/{result.get('taskCount', 0)} task(s) succeeded."
+            f"{format_integrated_skipped_summary(result)}"
         )
     raise HTTPException(status_code=400, detail=f"Unsupported WEB_API method: {method}")
 
@@ -199,6 +207,7 @@ DIMENSION_REDUCTION_MODES = {"NONE", "AUTO", "PCA"}
 ESTIMATION_MODES = {"AUTO", "OLS", "ROBUST_IRLS"}
 MONTE_CARLO_MODES = {"OFF", "AUTO", "BOOTSTRAP", "REPEATED_HOLDOUT"}
 BANFF_MODES = {"OFF", "AUTO", "RATIO"}
+DEFAULT_CASE_ID_COLUMN = "FILE_ROW_NO"
 
 
 def normalize_cluster_usage_mode(value: Any, default: str = "NONE") -> str:
@@ -581,11 +590,21 @@ def run_lasso_feature_select(conn, payload: Dict[str, Any]) -> Dict[str, Any]:
         get_value(payload, "P_CLUSTER_USAGE_MODE", "clusterUsageMode"),
         "NONE",
     )
+    case_id_column = require_identifier(
+        get_value(payload, "P_CASE_ID_COLUMN_NAME", "caseIdColumnName") or DEFAULT_CASE_ID_COLUMN,
+        "caseIdColumnName",
+    )
+    excluded_columns = {DEFAULT_CASE_ID_COLUMN, case_id_column}
 
     if is_auto_target(target_column_value):
         max_auto_targets = clamp(parse_int(get_value(payload, "P_MAX_AUTO_TARGETS", "maxAutoTargets"), 10), 1, 100)
         continue_on_error = parse_yes_no(get_value(payload, "P_CONTINUE_ON_ERROR", "continueOnError"), "Y") == "Y"
-        continuous_columns = load_predicted_continuous_columns(conn, owner, table)
+        continuous_columns = load_predicted_continuous_columns(
+            conn,
+            owner,
+            table,
+            exclude=excluded_columns,
+        )
         correlated_columns = load_auto_corr_target_columns(
             conn,
             owner,
@@ -599,19 +618,48 @@ def run_lasso_feature_select(conn, payload: Dict[str, Any]) -> Dict[str, Any]:
             correlated_columns,
         )[:max_auto_targets]
         if not target_columns:
-            raise HTTPException(status_code=400, detail="No FINAL_PREDICTED_TYPE continuous columns found for auto LASSO target selection.")
+            return build_lasso_skip_result(
+                "NO_ELIGIBLE_CONTINUOUS_TARGET",
+                (
+                    "No eligible continuous target columns were found after excluding the case ID. "
+                    "LASSO feature selection was safely skipped."
+                ),
+                cluster_usage_mode=cluster_usage_mode,
+            )
         return run_lasso_auto_targets(conn, payload, target_columns, continue_on_error, continuous_columns)
 
     target_column = require_identifier(target_column_value, "targetColumn")
+    if target_column in excluded_columns:
+        return build_lasso_skip_result(
+            "CASE_ID_TARGET_EXCLUDED",
+            f"Case ID column {target_column} is not eligible as a LASSO target. LASSO feature selection was safely skipped.",
+            target_column=target_column,
+            cluster_usage_mode=cluster_usage_mode,
+        )
 
     candidates = normalize_column_list(get_value(payload, "P_CANDIDATE_COLUMNS", "candidateColumns"))
+    candidates = [column for column in candidates if column not in excluded_columns]
     if not candidates:
-        candidates = load_predicted_continuous_columns(conn, owner, table, exclude={target_column})
+        candidates = load_predicted_continuous_columns(
+            conn,
+            owner,
+            table,
+            exclude={target_column, *excluded_columns},
+        )
     if not candidates:
         candidates = load_numeric_corr_candidates(conn, owner, table, target_column, run_source_type, run_id, max(50, max_features * 5))
-    candidates = [column for column in candidates if column != target_column]
+    candidates = [
+        column
+        for column in candidates
+        if column != target_column and column not in excluded_columns
+    ]
     if not candidates:
-        raise HTTPException(status_code=400, detail="No numeric candidate features were found for LASSO.")
+        return build_lasso_skip_result(
+            "NO_NUMERIC_CANDIDATE_FEATURES",
+            f"No eligible numeric candidate features were found for LASSO target {target_column}. LASSO feature selection was safely skipped.",
+            target_column=target_column,
+            cluster_usage_mode=cluster_usage_mode,
+        )
 
     cluster_nodes = load_relation_cluster_nodes(conn, owner, table, run_source_type, run_id) if cluster_usage_mode != "NONE" else {}
     candidates, cluster_usage = apply_cluster_candidate_strategy(
@@ -851,11 +899,28 @@ def run_symbolic_regression_rule(conn, payload: Dict[str, Any]) -> Dict[str, Any
         get_value(payload, "P_CLUSTER_USAGE_MODE", "clusterUsageMode"),
         "NONE",
     )
+    case_id_column = require_identifier(
+        get_value(payload, "P_CASE_ID_COLUMN_NAME", "caseIdColumnName") or DEFAULT_CASE_ID_COLUMN,
+        "caseIdColumnName",
+    )
+    excluded_columns = {DEFAULT_CASE_ID_COLUMN, case_id_column}
 
     if is_auto_target(target_column_value):
         max_auto_targets = clamp(parse_int(get_value(payload, "P_MAX_AUTO_TARGETS", "maxAutoTargets"), 10), 1, 100)
         continue_on_error = parse_yes_no(get_value(payload, "P_CONTINUE_ON_ERROR", "continueOnError"), "Y") == "Y"
-        target_columns = load_lasso_target_columns(conn, owner, table, run_source_type, run_id, min_r2_score, max_auto_targets)
+        target_columns = [
+            column
+            for column in load_lasso_target_columns(
+                conn,
+                owner,
+                table,
+                run_source_type,
+                run_id,
+                min_r2_score,
+                max_auto_targets,
+            )
+            if column not in excluded_columns
+        ]
         if not target_columns:
             return {
                 "status": "success",
@@ -875,6 +940,22 @@ def run_symbolic_regression_rule(conn, payload: Dict[str, Any]) -> Dict[str, Any
         return run_symbolic_auto_targets(conn, payload, target_columns, continue_on_error)
 
     target_column = require_identifier(target_column_value, "targetColumn")
+    if target_column in excluded_columns:
+        return {
+            "status": "success",
+            "skippedYn": "Y",
+            "skipReason": "CASE_ID_TARGET_EXCLUDED",
+            "message": (
+                f"Case ID column {target_column} is not eligible as a symbolic regression target. "
+                "Symbolic regression was safely skipped."
+            ),
+            "targetCount": 0,
+            "successCount": 0,
+            "failedCount": 0,
+            "featureCount": 0,
+            "ruleCount": 0,
+            "method": "NONE",
+        }
 
     features = normalize_column_list(get_value(payload, "P_FEATURE_COLUMNS", "featureColumns"))
     if not features:
@@ -1104,7 +1185,12 @@ def run_integrated_relation_cluster(conn, payload: Dict[str, Any]) -> Dict[str, 
     run_id = parse_int(get_value(payload, "P_RUN_ID", "runId"), 0)
     min_metric = clamp_float(parse_optional_float(get_value(payload, "P_MIN_METRIC", "minMetric")), 0.65, 0.0, 1.0)
     min_pvalue = clamp_float(parse_optional_float(get_value(payload, "P_MIN_PVALUE", "minPvalue")), 0.05, 0.0, 1.0)
-    sample_rows = parse_optional_positive_int(get_value(payload, "P_SAMPLE_ROWS", "sampleRows"), 100000)
+    requested_sample_rows = parse_optional_positive_int(
+        get_value(payload, "P_SAMPLE_ROWS", "sampleRows"),
+        100000,
+    )
+    sample_row_limit = _relation_sample_row_limit()
+    sample_rows = min(requested_sample_rows or sample_row_limit, sample_row_limit)
     max_distinct = clamp(parse_int(get_value(payload, "P_MAX_DISTINCT", "maxDistinct"), 100), 2, 100000)
     max_columns = clamp(parse_int(get_value(payload, "P_MAX_COLUMNS", "maxColumns"), 100), 2, 200)
     min_rows = clamp(parse_int(get_value(payload, "P_MIN_ROWS", "minRows"), 30), 4, 1000000)
@@ -1183,6 +1269,11 @@ def run_integrated_relation_cluster(conn, payload: Dict[str, Any]) -> Dict[str, 
             "INIT$_TB_COLREL_NETWORK_EDGE",
         ],
         "relationCriteria": relation_criteria,
+        "sampleRows": {
+            "requested": requested_sample_rows,
+            "effective": sample_rows,
+            "serverLimit": sample_row_limit,
+        },
         "network": network_result,
     }
 
@@ -1293,7 +1384,8 @@ def run_integrated_rule_discover(conn, payload: Dict[str, Any]) -> Dict[str, Any
             if isinstance(lasso_result.get("clusterUsage"), dict):
                 cluster_usage = dict(lasso_result["clusterUsage"])
             results.append({"task": "CONTINUOUS_LASSO", "resultTable": "INIT$_TB_COLREL_LASSO_FEATURE", **lasso_result})
-            result_tables.append("INIT$_TB_COLREL_LASSO_FEATURE")
+            if str(lasso_result.get("skippedYn") or "N").upper() != "Y":
+                result_tables.append("INIT$_TB_COLREL_LASSO_FEATURE")
             if str(lasso_result.get("status") or "").lower() == "partial_success":
                 failures.append({
                     "task": "CONTINUOUS_LASSO",
@@ -1329,12 +1421,13 @@ def run_integrated_rule_discover(conn, payload: Dict[str, Any]) -> Dict[str, Any
         detail = "; ".join(f"{item['task']}: {item['message']}" for item in failures) or "No integrated rule discovery task succeeded."
         raise HTTPException(status_code=400, detail=detail)
 
-    task_count, success_count, failed_count = calculate_integrated_task_counts(results, failures)
+    task_count, success_count, failed_count, skipped_count = calculate_integrated_task_counts(results, failures)
     return {
         "status": "partial_success" if failures else "success",
         "taskCount": task_count,
         "successCount": success_count,
         "failedCount": failed_count,
+        "skippedCount": skipped_count,
         "failedTasks": failures,
         "parts": sorted(parts),
         "resultTables": list(dict.fromkeys(result_tables)),
@@ -1396,12 +1489,13 @@ def run_integrated_rule_violation_detect(conn, payload: Dict[str, Any]) -> Dict[
         detail = "; ".join(f"{item['task']}: {item['message']}" for item in failures) or "No integrated violation detection task succeeded."
         raise HTTPException(status_code=400, detail=detail)
 
-    task_count, success_count, failed_count = calculate_integrated_task_counts(results, failures)
+    task_count, success_count, failed_count, skipped_count = calculate_integrated_task_counts(results, failures)
     return {
         "status": "partial_success" if failures else "success",
         "taskCount": task_count,
         "successCount": success_count,
         "failedCount": failed_count,
+        "skippedCount": skipped_count,
         "failedTasks": failures,
         "parts": sorted(parts),
         "resultTables": list(dict.fromkeys(result_tables)),
@@ -1443,7 +1537,7 @@ def summarize_partial_failures(result: Dict[str, Any], label: str) -> str:
 def calculate_integrated_task_counts(
     results: Sequence[Dict[str, Any]],
     failures: Sequence[Dict[str, Any]],
-) -> Tuple[int, int, int]:
+) -> Tuple[int, int, int, int]:
     result_tasks = {
         str(item.get("task") or "").strip()
         for item in results
@@ -1454,8 +1548,25 @@ def calculate_integrated_task_counts(
         for item in failures
         if isinstance(item, dict) and item.get("task")
     }
+    skipped_tasks = {
+        str(item.get("task") or "").strip()
+        for item in results
+        if isinstance(item, dict)
+        and item.get("task")
+        and str(item.get("skippedYn") or "N").upper() == "Y"
+    }
     task_count = len(result_tasks | failed_tasks)
-    return task_count, len(result_tasks - failed_tasks), len(failed_tasks)
+    return (
+        task_count,
+        len(result_tasks - failed_tasks - skipped_tasks),
+        len(failed_tasks),
+        len(skipped_tasks - failed_tasks),
+    )
+
+
+def format_integrated_skipped_summary(result: Dict[str, Any]) -> str:
+    skipped_count = int(result.get("skippedCount") or 0)
+    return f" {skipped_count} task(s) safely skipped." if skipped_count else ""
 
 
 def raise_for_partial_result(result: Dict[str, Any], label: str) -> None:
@@ -1494,6 +1605,15 @@ def run_integrated_apriori_assoc_model(
     )
     if max_rule_summary_columns == 50:
         max_rule_summary_columns = 9
+    requested_max_input_rows = parse_optional_positive_int(
+        get_value(payload, "P_MAX_INPUT_ROWS", "maxInputRows"),
+        100000,
+    )
+    max_input_row_limit = _association_input_row_limit()
+    effective_max_input_rows = min(
+        requested_max_input_rows or max_input_row_limit,
+        max_input_row_limit,
+    )
     cursor = conn.cursor()
     try:
         cursor.callproc(
@@ -1506,7 +1626,7 @@ def run_integrated_apriori_assoc_model(
                 clamp_float(parse_optional_float(get_value(payload, "P_MIN_CONFIDENCE", "minConfidence")), 0.7, 0.0, 1.0),
                 clamp(parse_int(get_value(payload, "P_MAX_RULE_LENGTH", "maxRuleLength"), 3), 1, 10),
                 parse_yes_no(get_value(payload, "P_DROP_EXISTING_YN", "dropExistingYn"), "Y"),
-                parse_optional_positive_int(get_value(payload, "P_MAX_INPUT_ROWS", "maxInputRows"), 100000) or 0,
+                effective_max_input_rows,
                 clean_optional_text(get_value(payload, "P_CATEGORICAL_COLUMNS", "P_CANDIDATE_COLUMNS", "candidateColumns")),
                 parse_int(get_value(payload, "P_MIN_RULE_SUPPORT_COUNT", "minRuleSupportCount"), 30),
                 clamp_float(parse_optional_float(get_value(payload, "P_MIN_RULE_LIFT", "minRuleLift")), 1.0, 0.0, 999999.0),
@@ -1535,6 +1655,11 @@ def run_integrated_apriori_assoc_model(
             "modelName": model_name,
             "resultTable": "INIT$_TB_RULEDISC_ASSOC_SUM",
             "summaryCount": summary_count,
+            "maxInputRows": {
+                "requested": requested_max_input_rows,
+                "effective": effective_max_input_rows,
+                "serverLimit": max_input_row_limit,
+            },
         }
     finally:
         cursor.close()
@@ -1781,9 +1906,19 @@ def run_lasso_auto_targets(
         detail = "; ".join(f"{item['targetColumn']}: {item['message']}" for item in failures) or "No auto target succeeded."
         raise HTTPException(status_code=400, detail=detail)
 
+    successful_results = [
+        item
+        for item in results
+        if str(item.get("skippedYn") or "N").upper() != "Y"
+    ]
+    skipped_results = [
+        item
+        for item in results
+        if str(item.get("skippedYn") or "N").upper() == "Y"
+    ]
     cluster_usages = [
         item.get("clusterUsage")
-        for item in results
+        for item in successful_results
         if isinstance(item.get("clusterUsage"), dict)
     ]
     applied_cluster_usages = [item for item in cluster_usages if str(item.get("appliedYn") or "N").upper() == "Y"]
@@ -1792,7 +1927,8 @@ def run_lasso_auto_targets(
     return {
         "status": "partial_success" if failures else "success",
         "targetCount": len(target_columns),
-        "successCount": len(results),
+        "successCount": len(successful_results),
+        "skippedCount": len(skipped_results),
         "failedCount": len(failures),
         "failedTargets": failures,
         "candidateCount": sum(int(item.get("candidateCount") or 0) for item in results),
@@ -1811,6 +1947,36 @@ def run_lasso_auto_targets(
             "targets": cluster_usages,
         },
         "targets": results,
+    }
+
+
+def build_lasso_skip_result(
+    reason: str,
+    message: str,
+    *,
+    target_column: Optional[str] = None,
+    cluster_usage_mode: str = "NONE",
+) -> Dict[str, Any]:
+    return {
+        "status": "success",
+        "skippedYn": "Y",
+        "skipReason": reason,
+        "message": message,
+        "targetColumn": target_column or "(auto)",
+        "targetCount": 0,
+        "successCount": 0,
+        "skippedCount": 1,
+        "failedCount": 0,
+        "candidateCount": 0,
+        "selectedCount": 0,
+        "method": "NONE",
+        "clusterUsage": {
+            "requestedMode": cluster_usage_mode,
+            "effectiveMode": "NONE",
+            "appliedYn": "N",
+            "fallbackYn": "N",
+            "reason": message,
+        },
     }
 
 
@@ -3689,6 +3855,18 @@ def _ml_fetch_batch_rows() -> int:
     return _positive_env_int("APP_ML_FETCH_BATCH_ROWS", 1000, 100)
 
 
+def _ml_matrix_cache_byte_limit() -> int:
+    return _positive_env_int("APP_ML_MATRIX_CACHE_MAX_BYTES", 64 * 1024 * 1024, 0)
+
+
+def _relation_sample_row_limit() -> int:
+    return _positive_env_int("APP_RELATION_SAMPLE_ROWS_MAX", 50000, 1000)
+
+
+def _association_input_row_limit() -> int:
+    return _positive_env_int("APP_ASSOC_INPUT_ROWS_MAX", 50000, 1000)
+
+
 def _ml_runtime_limit(payload: Dict[str, Any], key: str, hard_limit: int, minimum: int) -> int:
     """Return a request/job limit without allowing it to exceed the server cap."""
     try:
@@ -3728,59 +3906,89 @@ def fetch_numeric_matrix(
         row_limit,
     )
     columns = [target_column] + effective_features
-    select_list = ", ".join(quote_identifier(column) for column in columns)
-    null_filter = " AND ".join(f"{quote_identifier(column)} IS NOT NULL" for column in columns)
-    sql = (
-        f"SELECT {select_list}\n"
-        f"  FROM {quote_identifier(owner)}.{quote_identifier(table)}\n"
-        f" WHERE {null_filter}"
+    canonical_columns = sorted(columns)
+    cache_key = (
+        id(conn),
+        str(owner).upper(),
+        str(table).upper(),
+        tuple(str(column).upper() for column in canonical_columns),
+        effective_sample_rows,
     )
-    binds = {"sampleRows": effective_sample_rows}
-    sql += "\n   AND ROWNUM <= :sampleRows"
-
-    cursor = conn.cursor()
-    try:
-        batch_rows = min(_ml_fetch_batch_rows(), effective_sample_rows)
-        try:
-            cursor.arraysize = batch_rows
-            cursor.prefetchrows = batch_rows
-        except Exception:
-            pass
-        cursor.execute(sql, binds)
-        x_values = np.empty((effective_sample_rows, len(effective_features)), dtype=float)
-        y_values = np.empty(effective_sample_rows, dtype=float)
-        valid_row_count = 0
-        while valid_row_count < effective_sample_rows:
-            rows = cursor.fetchmany(min(batch_rows, effective_sample_rows - valid_row_count))
-            if not rows:
-                break
-            for row in rows:
-                values = [to_float(value) for value in row]
-                if any(value is None or not math.isfinite(value) for value in values):
-                    continue
-                y_values[valid_row_count] = values[0]
-                x_values[valid_row_count, :] = values[1:]
-                valid_row_count += 1
-                if valid_row_count >= effective_sample_rows:
-                    break
-        if not valid_row_count:
-            raise HTTPException(status_code=400, detail="No complete numeric rows were found.")
-        return (
-            x_values[:valid_row_count],
-            y_values[:valid_row_count],
-            effective_features,
-            {
-                "requestedSampleRows": int(sample_rows) if sample_rows else None,
-                "effectiveSampleRows": effective_sample_rows,
-                "loadedRows": valid_row_count,
-                "requestedFeatureCount": len(requested_features),
-                "effectiveFeatureCount": len(effective_features),
-                "maxInMemoryRows": row_limit,
-                "maxInputFeatures": feature_limit,
-            },
+    matrix_cache = getattr(_ml_execution_state, "matrix_cache", None)
+    cached_matrix = matrix_cache.get(cache_key) if isinstance(matrix_cache, dict) else None
+    cache_hit = cached_matrix is not None
+    if cached_matrix is not None:
+        numeric_matrix = cached_matrix
+        valid_row_count = int(numeric_matrix.shape[0])
+    else:
+        select_list = ", ".join(quote_identifier(column) for column in canonical_columns)
+        null_filter = " AND ".join(f"{quote_identifier(column)} IS NOT NULL" for column in canonical_columns)
+        sql = (
+            f"SELECT {select_list}\n"
+            f"  FROM {quote_identifier(owner)}.{quote_identifier(table)}\n"
+            f" WHERE {null_filter}"
         )
-    finally:
-        cursor.close()
+        binds = {"sampleRows": effective_sample_rows}
+        sql += "\n   AND ROWNUM <= :sampleRows"
+
+        cursor = conn.cursor()
+        try:
+            batch_rows = min(_ml_fetch_batch_rows(), effective_sample_rows)
+            try:
+                cursor.arraysize = batch_rows
+                cursor.prefetchrows = batch_rows
+            except Exception:
+                pass
+            cursor.execute(sql, binds)
+            numeric_matrix = np.empty((effective_sample_rows, len(canonical_columns)), dtype=float)
+            valid_row_count = 0
+            while valid_row_count < effective_sample_rows:
+                rows = cursor.fetchmany(min(batch_rows, effective_sample_rows - valid_row_count))
+                if not rows:
+                    break
+                for row in rows:
+                    values = [to_float(value) for value in row]
+                    if any(value is None or not math.isfinite(value) for value in values):
+                        continue
+                    numeric_matrix[valid_row_count, :] = values
+                    valid_row_count += 1
+                    if valid_row_count >= effective_sample_rows:
+                        break
+            if not valid_row_count:
+                raise HTTPException(status_code=400, detail="No complete numeric rows were found.")
+            numeric_matrix = numeric_matrix[:valid_row_count]
+        finally:
+            cursor.close()
+
+        cache_byte_limit = _ml_matrix_cache_byte_limit()
+        cached_bytes = int(getattr(_ml_execution_state, "matrix_cache_bytes", 0) or 0)
+        matrix_bytes = int(numeric_matrix.nbytes)
+        if (
+            isinstance(matrix_cache, dict)
+            and cache_byte_limit > 0
+            and cached_bytes + matrix_bytes <= cache_byte_limit
+        ):
+            matrix_cache[cache_key] = numeric_matrix
+            _ml_execution_state.matrix_cache_bytes = cached_bytes + matrix_bytes
+
+    column_indexes = {column: index for index, column in enumerate(canonical_columns)}
+    x_values = numeric_matrix[:, [column_indexes[column] for column in effective_features]].copy()
+    y_values = numeric_matrix[:, column_indexes[target_column]].copy()
+    return (
+        x_values,
+        y_values,
+        effective_features,
+        {
+            "requestedSampleRows": int(sample_rows) if sample_rows else None,
+            "effectiveSampleRows": effective_sample_rows,
+            "loadedRows": valid_row_count,
+            "requestedFeatureCount": len(requested_features),
+            "effectiveFeatureCount": len(effective_features),
+            "maxInMemoryRows": row_limit,
+            "maxInputFeatures": feature_limit,
+            "cacheHitYn": "Y" if cache_hit else "N",
+        },
+    )
 
 
 def clear_relation_network_rows(cursor, owner: str, table: str, run_source_type: str, run_id: int) -> None:

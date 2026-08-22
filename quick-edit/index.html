@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#102342">
     <meta name="color-scheme" content="light">
     <title>Quick Editing | IN-DEPS</title>
-    <link rel="stylesheet" href="./css/quick-edit.css?v=1.3.6">
+    <link rel="stylesheet" href="./css/quick-edit.css?v=1.3.7">
 </head>
 <body>
     <a class="qe-skip-link" href="#quickEditMain">본문 바로가기</a>
@@ -145,6 +145,40 @@
                 </details>
             </section>
 
+            <section id="qeWorkspaceSummary" class="qe-workspace-summary" aria-labelledby="qeWorkspaceSummaryTitle" aria-live="polite" hidden>
+                <div class="qe-workspace-summary__heading">
+                    <span class="qe-workspace-summary__icon" aria-hidden="true">✓</span>
+                    <div>
+                        <p class="qe-card__kicker">CREATED WORKSPACE</p>
+                        <h2 id="qeWorkspaceSummaryTitle">생성된 작업공간</h2>
+                        <p>아래 코드와 명칭으로 실제 메뉴에서 프로젝트와 시나리오를 찾을 수 있습니다.</p>
+                    </div>
+                    <span class="qe-workspace-summary__badge" data-workspace-summary-badge>자동 생성 완료</span>
+                </div>
+                <div class="qe-workspace-summary__items">
+                    <article class="qe-workspace-summary__item">
+                        <div class="qe-workspace-summary__item-head">
+                            <span>프로젝트 설정 [M01001]</span>
+                            <time data-workspace-project-created>생성시간 확인 불가</time>
+                        </div>
+                        <dl>
+                            <div><dt>프로젝트 코드</dt><dd data-workspace-project-code>-</dd></div>
+                            <div><dt>프로젝트 명칭</dt><dd data-workspace-project-name>-</dd></div>
+                        </dl>
+                    </article>
+                    <article class="qe-workspace-summary__item">
+                        <div class="qe-workspace-summary__item-head">
+                            <span>시나리오 정의 [M01002]</span>
+                            <time data-workspace-scenario-created>생성시간 확인 불가</time>
+                        </div>
+                        <dl>
+                            <div><dt>시나리오 코드</dt><dd data-workspace-scenario-code>-</dd></div>
+                            <div><dt>시나리오 명칭</dt><dd data-workspace-scenario-name>-</dd></div>
+                        </dl>
+                    </article>
+                </div>
+            </section>
+
             <div class="qe-workspace">
                 <section class="qe-card qe-setup-card" aria-labelledby="setupTitle">
                     <div class="qe-card__header">
@@ -182,14 +216,14 @@
                             <legend>작업 공간</legend>
                             <div class="qe-segmented" role="radiogroup" aria-label="프로젝트 사용 방식">
                                 <label>
-                                    <input id="projectModeNew" type="radio" name="projectMode" value="new">
+                                    <input id="projectModeNew" type="radio" name="projectMode" value="new" checked>
                                     <span>
                                         <strong>새로 만들기</strong>
                                         <small>파일명으로 자동 생성</small>
                                     </span>
                                 </label>
                                 <label>
-                                    <input id="projectModeExisting" type="radio" name="projectMode" value="existing" checked>
+                                    <input id="projectModeExisting" type="radio" name="projectMode" value="existing">
                                     <span>
                                         <strong>기존 작업 사용</strong>
                                         <small>프로젝트·시나리오 선택</small>
@@ -201,7 +235,7 @@
                                 준비된 프로젝트와 시나리오는 현재 자동 작업에 고정됩니다. 다른 작업공간을 사용하려면 새 작업을 시작해 주세요.
                             </p>
 
-                            <div class="qe-field-grid" data-project-mode-panel="new" hidden>
+                            <div class="qe-field-grid" data-project-mode-panel="new">
                                 <label class="qe-field" for="projectName">
                                     <span>프로젝트 이름 <em aria-hidden="true">*</em></span>
                                     <input id="projectName" name="projectName" type="text" maxlength="200"
@@ -216,7 +250,7 @@
                                 </label>
                             </div>
 
-                            <div class="qe-field-grid" data-project-mode-panel="existing">
+                            <div class="qe-field-grid" data-project-mode-panel="existing" hidden>
                                 <label class="qe-field" for="existingProject">
                                     <span>프로젝트 <em aria-hidden="true">*</em></span>
                                     <select id="existingProject" name="existingProject">
@@ -673,8 +707,8 @@
         <button type="button" data-toast-close aria-label="알림 닫기">×</button>
     </div>
 
-    <script src="./js/api-client.js?v=1.3.1" defer></script>
-    <script src="./js/renderers.js?v=1.3.4" defer></script>
-    <script src="./js/quick-edit.js?v=1.4.9" defer></script>
+    <script src="./js/api-client.js?v=1.3.2" defer></script>
+    <script src="./js/renderers.js?v=1.3.6" defer></script>
+    <script src="./js/quick-edit.js?v=1.4.11" defer></script>
 </body>
 </html>

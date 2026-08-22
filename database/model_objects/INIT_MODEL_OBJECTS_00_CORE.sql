@@ -34,7 +34,7 @@ SET SERVEROUTPUT ON;
 --   /
 
 DECLARE
-    v_version CONSTANT VARCHAR2(50) := '1.0.14';
+    v_version CONSTANT VARCHAR2(50) := '1.0.15';
 BEGIN
     DBMS_OUTPUT.PUT_LINE('=== INIT MODEL OBJECTS DEPLOY START ===');
     DBMS_OUTPUT.PUT_LINE('[INFO] Bundle version: ' || v_version);

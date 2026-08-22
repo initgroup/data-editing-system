@@ -105,17 +105,23 @@ def create_internal_success_message(method: str, result: Dict[str, Any]) -> str:
     if method == "INTEGRATED_RULE_DISCOVER":
         partial = str(result.get("status") or "").lower() == "partial_success"
         failure_summary = create_partial_failure_summary(result)
+        skipped_count = int(result.get("skippedCount") or 0)
+        skipped_summary = f" {skipped_count} task(s) safely skipped." if skipped_count else ""
         return (
             f"Integrated rule discovery {'partially completed' if partial else 'completed'}. "
             f"{result.get('successCount', 0)}/{result.get('taskCount', 0)} task(s) succeeded."
+            f"{skipped_summary}"
             f"{failure_summary}"
         )
     if method == "INTEGRATED_RULE_VIOLATION_DETECT":
         partial = str(result.get("status") or "").lower() == "partial_success"
         failure_summary = create_partial_failure_summary(result)
+        skipped_count = int(result.get("skippedCount") or 0)
+        skipped_summary = f" {skipped_count} task(s) safely skipped." if skipped_count else ""
         return (
             f"Integrated rule violation detection {'partially completed' if partial else 'completed'}. "
             f"{result.get('successCount', 0)}/{result.get('taskCount', 0)} task(s) succeeded."
+            f"{skipped_summary}"
             f"{failure_summary}"
         )
     return f"{method or 'API'} completed."

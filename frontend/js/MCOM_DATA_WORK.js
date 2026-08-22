@@ -36,6 +36,48 @@
                     ].join("-") + ` ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
                 },
 
+                formatKstDateTime(value) {
+                    if (value === null || value === undefined || value === "") return "-";
+
+                    let date = value instanceof Date ? value : null;
+                    if (!date) {
+                        const text = String(value).trim();
+                        const timezonePattern = /(?:Z|[+-]\d{2}:?\d{2})$/i;
+                        const dateTimePattern = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?$/;
+                        const parts = text.match(dateTimePattern);
+                        if (parts && !timezonePattern.test(text)) {
+                            const milliseconds = Number(String(parts[7] || "0").slice(0, 3).padEnd(3, "0"));
+                            date = new Date(Date.UTC(
+                                Number(parts[1]),
+                                Number(parts[2]) - 1,
+                                Number(parts[3]),
+                                Number(parts[4]),
+                                Number(parts[5]),
+                                Number(parts[6]),
+                                milliseconds
+                            ));
+                        } else {
+                            date = new Date(text);
+                        }
+                    }
+                    if (Number.isNaN(date.getTime())) return String(value);
+
+                    const parts = new Intl.DateTimeFormat("en-CA", {
+                        timeZone: "Asia/Seoul",
+                        year: "numeric",
+                        month: "2-digit",
+                        day: "2-digit",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        second: "2-digit",
+                        hourCycle: "h23"
+                    }).formatToParts(date).reduce((result, part) => {
+                        result[part.type] = part.value;
+                        return result;
+                    }, {});
+                    return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
+                },
+
                 confirmAdminPurge(options = {}) {
                     return new Promise((resolve) => {
                         const dialog = document.createElement("dialog");

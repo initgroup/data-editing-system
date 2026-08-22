@@ -101,7 +101,7 @@
             const codeLabel = code || this.t("noCode", "No code");
             const useLabel = this.tl("useValue", "Use {value}", { value: useYn });
             const createdAtLabel = this.tl("createdAtValue", "Created {value}", {
-                value: this.formatDateTime(project.CREATED_AT)
+                value: this.formatKstDateTime(project.CREATED_AT)
             });
 
             return `

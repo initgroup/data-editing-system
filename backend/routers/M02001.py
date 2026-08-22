@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict
 from typing import BinaryIO, Iterator, Optional
 import codecs
 import csv
+import hashlib
 import io
 import json
 import logging
@@ -18,6 +19,7 @@ import time
 import uuid
 from pathlib import Path
 
+import oracledb
 from backend.database_helper import SqlLoader, execute_query
 from backend.auth_context import get_request_role_code, get_request_user_id
 from backend.target_database import get_target_db_connection
@@ -26,8 +28,12 @@ from backend.paging import create_page_window, normalize_page_number, normalize_
 logger = logging.getLogger(__name__)
 router = APIRouter()
 UPLOAD_ROW_NO_COLUMN = "FILE_ROW_NO"
-UPLOAD_INSERT_BATCH_SIZE = 1000
-UPLOAD_INSERT_BATCH_CELL_LIMIT = 25_000
+UPLOAD_INSERT_BATCH_SIZE = max(100, int(os.getenv("UPLOAD_INSERT_BATCH_SIZE", "2000")))
+UPLOAD_INSERT_BATCH_CELL_LIMIT = max(10_000, int(os.getenv("UPLOAD_INSERT_BATCH_CELL_LIMIT", "120000")))
+UPLOAD_INSERT_BATCH_BYTE_LIMIT = max(1024 * 1024, int(os.getenv("UPLOAD_INSERT_BATCH_BYTE_LIMIT", str(16 * 1024 * 1024))))
+UPLOAD_COMMIT_ROW_INTERVAL = max(1000, int(os.getenv("UPLOAD_COMMIT_ROW_INTERVAL", "20000")))
+UPLOAD_DIRECT_PATH_ENABLED = str(os.getenv("UPLOAD_DIRECT_PATH_ENABLED", "Y")).strip().upper() not in {"N", "NO", "FALSE", "0"}
+UPLOAD_DB_CALL_TIMEOUT_MS = max(0, int(os.getenv("UPLOAD_DB_CALL_TIMEOUT_MS", "600000")))
 ORACLE_COMMENT_SAFE_BYTE_LIMIT = 3_900
 UPLOAD_ENCODING_SAMPLE_SIZE = 128 * 1024
 UPLOAD_PREVIEW_ROW_LIMIT = 50
@@ -36,6 +42,8 @@ UPLOAD_HTTP_CHUNK_LIMIT = 8 * 1024 * 1024
 UPLOAD_STAGING_MAX_AGE_SECONDS = 6 * 60 * 60
 UPLOAD_STAGING_DIRECTORY = Path(tempfile.gettempdir()) / "init-data-editing-uploads"
 AUTO_ENCODING_NAMES = {"", "auto", "detect", "auto-detect", "automatic"}
+UPLOAD_META_READY = "READY"
+UPLOAD_META_LOADING = "LOADING"
 
 
 class UploadTableRequest(BaseModel):
@@ -164,24 +172,46 @@ def upload_staged_file_to_table(
     tableComment: str = Form(""),
     tableNameRule: str = Form("INITUP$_{PROJECT_CODE}_FT_{TIME}"),
 ):
-    metadata, data_path = require_completed_staged_upload(request, uploadId)
-    with data_path.open("rb") as staged_file:
-        staged_upload = UploadFile(file=staged_file, filename=metadata.get("fileName") or "uploaded-file")
-        result = upload_file_to_table(
-            request,
-            staged_upload,
-            fileType,
-            delimiter,
-            fixedWidths,
-            hasHeader,
-            encoding,
-            projectId,
-            projectCode,
-            tableComment,
-            tableNameRule,
-        )
-    discard_staged_upload(uploadId)
-    return result
+    operation_request = build_staged_operation_request(
+        "UPLOAD",
+        projectId,
+        projectCode,
+        table_name_rule=tableNameRule,
+        file_type=fileType,
+        delimiter=delimiter,
+        fixed_widths=fixedWidths,
+        has_header=hasHeader,
+        encoding=encoding,
+        table_comment=tableComment,
+    )
+    metadata, data_path, cached_result, lock_path = begin_staged_finalization(
+        request,
+        uploadId,
+        operation_request,
+    )
+    if cached_result is not None:
+        return cached_result
+    try:
+        with data_path.open("rb") as staged_file:
+            staged_upload = UploadFile(file=staged_file, filename=metadata.get("fileName") or "uploaded-file")
+            result = upload_file_to_table(
+                request,
+                staged_upload,
+                fileType,
+                delimiter,
+                fixedWidths,
+                hasHeader,
+                encoding,
+                projectId,
+                projectCode,
+                tableComment,
+                tableNameRule,
+                uploadId,
+            )
+        finalize_staged_upload(uploadId, metadata, operation_request, result)
+        return result
+    finally:
+        release_staged_finalization_lock(lock_path)
 
 
 @router.post("/reload-staged")
@@ -198,24 +228,46 @@ def reload_staged_file_into_table(
     projectCode: str = Form(""),
     tableComment: str = Form(""),
 ):
-    metadata, data_path = require_completed_staged_upload(request, uploadId)
-    with data_path.open("rb") as staged_file:
-        staged_upload = UploadFile(file=staged_file, filename=metadata.get("fileName") or "uploaded-file")
-        result = reload_file_into_table(
-            request,
-            staged_upload,
-            targetTableName,
-            fileType,
-            delimiter,
-            fixedWidths,
-            hasHeader,
-            encoding,
-            projectId,
-            projectCode,
-            tableComment,
-        )
-    discard_staged_upload(uploadId)
-    return result
+    operation_request = build_staged_operation_request(
+        "RELOAD",
+        projectId,
+        projectCode,
+        target_table_name=targetTableName,
+        file_type=fileType,
+        delimiter=delimiter,
+        fixed_widths=fixedWidths,
+        has_header=hasHeader,
+        encoding=encoding,
+        table_comment=tableComment,
+    )
+    metadata, data_path, cached_result, lock_path = begin_staged_finalization(
+        request,
+        uploadId,
+        operation_request,
+    )
+    if cached_result is not None:
+        return cached_result
+    try:
+        with data_path.open("rb") as staged_file:
+            staged_upload = UploadFile(file=staged_file, filename=metadata.get("fileName") or "uploaded-file")
+            result = reload_file_into_table(
+                request,
+                staged_upload,
+                targetTableName,
+                fileType,
+                delimiter,
+                fixedWidths,
+                hasHeader,
+                encoding,
+                projectId,
+                projectCode,
+                tableComment,
+                uploadId,
+            )
+        finalize_staged_upload(uploadId, metadata, operation_request, result)
+        return result
+    finally:
+        release_staged_finalization_lock(lock_path)
 
 
 @router.post("/preview")
@@ -259,14 +311,17 @@ def upload_file_to_table(
     projectId: str = Form(""),
     projectCode: str = Form(""),
     tableComment: str = Form(""),
-    tableNameRule: str = Form("INITUP$_{PROJECT_CODE}_FT_{TIME}")
+    tableNameRule: str = Form("INITUP$_{PROJECT_CODE}_FT_{TIME}"),
+    uploadIdempotencyKey: str = Form(""),
 ):
+    if not str(projectId or "").strip() or not str(projectCode or "").strip():
+        raise HTTPException(status_code=400, detail="Project ID and project code are required for upload.")
     user_id = get_request_user_id(request)
     require_project_access(request, projectId, projectCode)
     stream = file.file
     filename = file.filename or ""
     resolved_encoding = resolve_upload_encoding(stream, fileType, encoding)
-    columns, row_width, _header_width = inspect_upload_stream(
+    columns, row_width, _header_width = inspect_upload_schema(
         stream,
         filename,
         fileType,
@@ -279,41 +334,63 @@ def upload_file_to_table(
         raise HTTPException(status_code=400, detail="No columns were detected.")
 
     table_name = create_upload_table_name(projectCode, tableNameRule, user_id=user_id)
+    staging_table_name = create_upload_staging_table_name()
     file_size = get_upload_stream_size(stream)
+    content_sha256 = compute_upload_stream_sha256(stream)
     column_specs = build_file_upload_column_specs(columns, hasHeader)
     safe_columns = [column_name for column_name, _ in column_specs]
     upload_columns = [UPLOAD_ROW_NO_COLUMN, *safe_columns]
 
     conn = None
     cursor = None
+    published = False
+    final_table_created = False
+    metadata_reserved = False
     try:
         conn = get_target_db_connection(request)
+        configure_upload_connection(conn)
         cursor = conn.cursor()
+        ensure_upload_table_metadata(cursor)
+        cleanup_stale_upload_work_tables(conn, cursor)
+        for reservation_attempt in range(10):
+            try:
+                cursor.execute(
+                    SqlLoader.get_sql("M02001_UPLOAD_TABLE_META_RESERVE"),
+                    {
+                        "tableName": table_name,
+                        "projectId": int(projectId),
+                        "fileExtension": Path(filename).suffix.lstrip(".").upper() or None,
+                        "fileName": filename or None,
+                        "fileSize": file_size,
+                        "uploadId": str(uploadIdempotencyKey or "").strip().lower() or None,
+                        "contentSha256": content_sha256,
+                    },
+                )
+                conn.commit()
+                metadata_reserved = True
+                break
+            except Exception as reservation_error:
+                conn.rollback()
+                if "ORA-00001" not in str(reservation_error) or reservation_attempt >= 9:
+                    raise
+                time.sleep(0.002)
+                table_name = create_upload_table_name(projectCode, tableNameRule, user_id=user_id)
         column_ddl = ", ".join([
             f'"{UPLOAD_ROW_NO_COLUMN}" NUMBER',
-            *[f'"{column}" VARCHAR2(4000)' for column in safe_columns]
+            *[f'"{column}" VARCHAR2(4000 BYTE)' for column in safe_columns]
         ])
-        cursor.execute(f'CREATE TABLE "{table_name}" ({column_ddl})')
-        cursor.execute(f'COMMENT ON COLUMN "{table_name}"."{UPLOAD_ROW_NO_COLUMN}" IS \'File row number\'')
+        cursor.execute(f'CREATE TABLE "{staging_table_name}" ({column_ddl}) NOLOGGING')
+        cursor.execute(f'COMMENT ON COLUMN "{staging_table_name}"."{UPLOAD_ROW_NO_COLUMN}" IS \'File row number\'')
         for safe_column, comment in column_specs:
             if comment:
                 safe_comment = escape_and_truncate_oracle_comment(comment)
                 cursor.execute(
-                    f'COMMENT ON COLUMN "{table_name}"."{safe_column}" IS \'{safe_comment}\''
+                    f'COMMENT ON COLUMN "{staging_table_name}"."{safe_column}" IS \'{safe_comment}\''
                 )
         if (tableComment or "").strip():
             safe_table_comment = escape_and_truncate_oracle_comment(tableComment.strip())
-            cursor.execute(f'COMMENT ON TABLE "{table_name}" IS \'{safe_table_comment}\'')
+            cursor.execute(f'COMMENT ON TABLE "{staging_table_name}" IS \'{safe_table_comment}\'')
 
-        inserted_count = 0
-        column_sql = ", ".join(f'"{column}"' for column in upload_columns)
-        bind_sql = ", ".join(f":{index + 1}" for index in range(len(upload_columns)))
-        insert_sql = f'INSERT INTO "{table_name}" ({column_sql}) VALUES ({bind_sql})'
-        insert_batch_size = max(
-            1,
-            min(UPLOAD_INSERT_BATCH_SIZE, UPLOAD_INSERT_BATCH_CELL_LIMIT // max(len(upload_columns), 1)),
-        )
-        batch_rows = []
         rows = iter_upload_data_rows(
             stream,
             filename,
@@ -325,32 +402,34 @@ def upload_file_to_table(
             row_width,
         )
         try:
-            for row_number, row in enumerate(rows, start=1):
-                batch_rows.append((row_number, *row))
-                if len(batch_rows) >= insert_batch_size:
-                    cursor.executemany(insert_sql, batch_rows)
-                    conn.commit()
-                    inserted_count += len(batch_rows)
-                    batch_rows.clear()
-            if batch_rows:
-                cursor.executemany(insert_sql, batch_rows)
-                conn.commit()
-                inserted_count += len(batch_rows)
+            load_result = load_upload_rows(
+                conn,
+                cursor,
+                staging_table_name,
+                upload_columns,
+                rows,
+            )
         finally:
             close_row_iterator(rows)
 
-        conn.commit()
+        inserted_count = int(load_result["rowCount"])
+        validated_count = count_upload_table_rows(cursor, staging_table_name)
+        if validated_count != inserted_count:
+            raise RuntimeError(
+                f"Upload row validation failed. Parsed {inserted_count} row(s), but Oracle stored {validated_count} row(s)."
+            )
+
         stats_gathered = False
         stats_message = ""
         try:
-            gather_upload_table_stats(cursor, table_name)
+            gather_upload_table_stats(cursor, staging_table_name)
             conn.commit()
             stats_gathered = True
             stats_message = "Table statistics gathered."
         except Exception as stats_error:
             stats_message = f"Table uploaded, but statistics gather failed: {stats_error}"
-            logger.warning("M02001 statistics gather failed for %s: %s", table_name, stats_error)
-        ensure_upload_table_metadata(cursor)
+            logger.warning("M02001 statistics gather failed for %s: %s", staging_table_name, stats_error)
+
         cursor.execute(
             SqlLoader.get_sql("M02001_UPLOAD_TABLE_META_MERGE"),
             {
@@ -359,9 +438,33 @@ def upload_file_to_table(
                 "fileExtension": Path(filename).suffix.lstrip(".").upper() or None,
                 "fileName": filename or None,
                 "fileSize": file_size,
+                "uploadId": str(uploadIdempotencyKey or "").strip().lower() or None,
+                "rowCount": inserted_count,
+                "contentSha256": content_sha256,
+                "loadStatus": UPLOAD_META_LOADING,
             },
         )
         conn.commit()
+        cursor.execute(f'ALTER TABLE "{staging_table_name}" LOGGING')
+        cursor.execute(f'ALTER TABLE "{staging_table_name}" RENAME TO "{table_name}"')
+        final_table_created = True
+        staging_table_name = ""
+        cursor.execute(
+            SqlLoader.get_sql("M02001_UPLOAD_TABLE_META_MERGE"),
+            {
+                "tableName": table_name,
+                "projectId": int(projectId),
+                "fileExtension": Path(filename).suffix.lstrip(".").upper() or None,
+                "fileName": filename or None,
+                "fileSize": file_size,
+                "uploadId": str(uploadIdempotencyKey or "").strip().lower() or None,
+                "rowCount": inserted_count,
+                "contentSha256": content_sha256,
+                "loadStatus": UPLOAD_META_READY,
+            },
+        )
+        conn.commit()
+        published = True
         return {
             "status": "success",
             "message": "File uploaded.",
@@ -369,15 +472,31 @@ def upload_file_to_table(
             "columns": upload_columns,
             "rowCount": inserted_count,
             "detectedEncoding": resolved_encoding,
+            "contentSha256": content_sha256,
+            "loadMode": load_result["loadMode"],
+            "insertBatchCount": load_result["batchCount"],
+            "commitCount": load_result["commitCount"],
             "statsGathered": stats_gathered,
             "statsMessage": stats_message
         }
+    except HTTPException:
+        if conn:
+            conn.rollback()
+        raise
     except Exception as e:
         if conn:
             conn.rollback()
         logger.error(f"M02001 upload failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
+        if cursor and not published:
+            cleanup_upload_work_table(
+                conn,
+                cursor,
+                staging_table_name or (table_name if final_table_created else ""),
+            )
+            if metadata_reserved:
+                cleanup_upload_table_metadata(conn, cursor, table_name)
         if cursor:
             cursor.close()
         if conn:
@@ -397,6 +516,7 @@ def reload_file_into_table(
     projectId: str = Form(""),
     projectCode: str = Form(""),
     tableComment: str = Form(""),
+    uploadIdempotencyKey: str = Form(""),
 ):
     if not str(projectId or "").strip() or not str(projectCode or "").strip():
         raise HTTPException(status_code=400, detail="Project ID and project code are required for reload.")
@@ -405,7 +525,7 @@ def reload_file_into_table(
     stream = file.file
     filename = file.filename or ""
     resolved_encoding = resolve_upload_encoding(stream, fileType, encoding)
-    columns, row_width, header_width = inspect_upload_stream(
+    columns, row_width, header_width = inspect_upload_schema(
         stream,
         filename,
         fileType,
@@ -418,16 +538,24 @@ def reload_file_into_table(
         raise HTTPException(status_code=400, detail="No columns were detected.")
 
     file_size = get_upload_stream_size(stream)
+    content_sha256 = compute_upload_stream_sha256(stream)
     column_specs = build_file_upload_column_specs(columns, hasHeader)
+    staging_table_name = create_upload_staging_table_name()
     conn = None
     cursor = None
     try:
         conn = get_target_db_connection(request)
+        configure_upload_connection(conn)
         cursor = conn.cursor()
         ensure_upload_table_metadata(cursor)
+        cleanup_stale_upload_work_tables(conn, cursor)
 
         base_prefix = create_upload_table_prefix(projectCode)
-        table_result = execute_query(conn, "M02001_UPLOAD_TABLE_TREE", {"tablePrefix": base_prefix})
+        table_result = execute_query(
+            conn,
+            "M02001_UPLOAD_TABLE_TREE",
+            {"tablePrefix": base_prefix, "projectId": int(projectId)},
+        )
         allowed_tables = {
             str(row.get("TABLE_NAME") or "").upper()
             for row in table_result.get("data", [])
@@ -446,27 +574,13 @@ def reload_file_into_table(
         source_width = header_width if str(hasHeader or "Y").upper() == "Y" else row_width
         target_column_names = validate_reload_column_layout(target_columns, source_width)
         data_column_names = target_column_names[1:]
-        if row_width > source_width:
-            raise HTTPException(
-                status_code=409,
-                detail=(
-                    f"파일의 데이터 행에 헤더({source_width}개)보다 많은 컬럼({row_width}개)이 있습니다. "
-                    "데이터는 변경되지 않았습니다."
-                ),
-            )
-
         quoted_table = f'"{table_name}"'
         quoted_columns = ", ".join(f'"{column_name}"' for column_name in target_column_names)
-        bind_sql = ", ".join(f":{index + 1}" for index in range(len(target_column_names)))
-        insert_sql = f"INSERT INTO {quoted_table} ({quoted_columns}) VALUES ({bind_sql})"
-        insert_batch_size = max(
-            1,
-            min(UPLOAD_INSERT_BATCH_SIZE, UPLOAD_INSERT_BATCH_CELL_LIMIT // max(len(target_column_names), 1)),
+        cursor.execute(
+            f'CREATE TABLE "{staging_table_name}" NOLOGGING AS '
+            f'SELECT /*+ NO_PARALLEL */ {quoted_columns} FROM {quoted_table} WHERE 1=0'
         )
 
-        cursor.execute(f"DELETE FROM {quoted_table}")
-        inserted_count = 0
-        batch_rows = []
         rows = iter_upload_data_rows(
             stream,
             filename,
@@ -478,17 +592,33 @@ def reload_file_into_table(
             row_width,
         )
         try:
-            for row_number, row in enumerate(rows, start=1):
-                batch_rows.append((row_number, *row))
-                if len(batch_rows) >= insert_batch_size:
-                    cursor.executemany(insert_sql, batch_rows)
-                    inserted_count += len(batch_rows)
-                    batch_rows.clear()
-            if batch_rows:
-                cursor.executemany(insert_sql, batch_rows)
-                inserted_count += len(batch_rows)
+            load_result = load_upload_rows(
+                conn,
+                cursor,
+                staging_table_name,
+                target_column_names,
+                rows,
+            )
         finally:
             close_row_iterator(rows)
+        inserted_count = int(load_result["rowCount"])
+        validated_count = count_upload_table_rows(cursor, staging_table_name)
+        if validated_count != inserted_count:
+            raise RuntimeError(
+                f"Reload row validation failed. Parsed {inserted_count} row(s), "
+                f"but Oracle stored {validated_count} row(s)."
+            )
+
+        cursor.execute(f"DELETE FROM {quoted_table}")
+        cursor.execute(
+            f'INSERT /*+ NO_PARALLEL */ INTO {quoted_table} ({quoted_columns}) '
+            f'SELECT /*+ NO_PARALLEL */ {quoted_columns} FROM "{staging_table_name}"'
+        )
+        copied_count = int(cursor.rowcount or 0)
+        if copied_count >= 0 and copied_count != inserted_count:
+            raise RuntimeError(
+                f"Reload copy validation failed. Expected {inserted_count} row(s), copied {copied_count} row(s)."
+            )
 
         cursor.execute(
             SqlLoader.get_sql("M02001_UPLOAD_TABLE_META_MERGE"),
@@ -498,6 +628,10 @@ def reload_file_into_table(
                 "fileExtension": Path(filename).suffix.lstrip(".").upper() or None,
                 "fileName": filename or None,
                 "fileSize": file_size,
+                "uploadId": str(uploadIdempotencyKey or "").strip().lower() or None,
+                "rowCount": inserted_count,
+                "contentSha256": content_sha256,
+                "loadStatus": UPLOAD_META_READY,
             },
         )
         conn.commit()
@@ -534,6 +668,10 @@ def reload_file_into_table(
             "columns": target_column_names,
             "rowCount": inserted_count,
             "detectedEncoding": resolved_encoding,
+            "contentSha256": content_sha256,
+            "loadMode": load_result["loadMode"],
+            "insertBatchCount": load_result["batchCount"],
+            "commitCount": load_result["commitCount"],
             "statsGathered": stats_gathered,
             "statsMessage": " ".join(metadata_messages),
         }
@@ -547,6 +685,8 @@ def reload_file_into_table(
         logger.error("M02001 reload failed for %s: %s", table_name, error)
         raise HTTPException(status_code=500, detail=str(error)) from error
     finally:
+        if cursor:
+            cleanup_upload_work_table(conn, cursor, staging_table_name)
         if cursor:
             cursor.close()
         if conn:
@@ -589,13 +729,23 @@ def get_upload_table_tree(
     projectCode: str = "",
     tablePrefix: str = "",
 ):
+    if not str(projectId or "").strip() or not str(projectCode or "").strip():
+        raise HTTPException(status_code=400, detail="Project ID and project code are required.")
     require_project_access(request, projectId, projectCode)
     base_prefix = create_upload_table_prefix(projectCode)
     table_prefix = normalize_upload_table_search_prefix(tablePrefix, base_prefix)
     conn = None
+    cursor = None
     try:
         conn = get_target_db_connection(request)
-        result = execute_query(conn, "M02001_UPLOAD_TABLE_TREE", {"tablePrefix": table_prefix})
+        cursor = conn.cursor()
+        ensure_upload_table_metadata(cursor)
+        conn.commit()
+        result = execute_query(
+            conn,
+            "M02001_UPLOAD_TABLE_TREE",
+            {"tablePrefix": table_prefix, "projectId": int(projectId)},
+        )
         if result.get("status") != "success":
             raise HTTPException(status_code=500, detail=result.get("detail") or result.get("message") or "Upload table tree query failed.")
         return {
@@ -606,6 +756,8 @@ def get_upload_table_tree(
             "tablePrefix": table_prefix
         }
     finally:
+        if cursor:
+            cursor.close()
         if conn:
             conn.close()
 
@@ -706,8 +858,8 @@ def write_staged_upload_metadata(upload_id: str, metadata: dict):
     os.replace(temporary_path, metadata_path)
 
 
-def require_staged_upload(request: Request, upload_id: str):
-    data_path, metadata_path = get_staging_paths(upload_id)
+def read_staged_upload_metadata(request: Request, upload_id: str):
+    _data_path, metadata_path = get_staging_paths(upload_id)
     try:
         with metadata_path.open("r", encoding="utf-8") as metadata_file:
             metadata = json.load(metadata_file)
@@ -718,6 +870,12 @@ def require_staged_upload(request: Request, upload_id: str):
         raise HTTPException(status_code=404, detail="Upload session was not found or has expired.")
     if str(metadata.get("userId") or "") != str(get_request_user_id(request)):
         raise HTTPException(status_code=404, detail="Upload session was not found or has expired.")
+    return metadata
+
+
+def require_staged_upload(request: Request, upload_id: str):
+    data_path, metadata_path = get_staging_paths(upload_id)
+    metadata = read_staged_upload_metadata(request, upload_id)
     if not data_path.is_file():
         raise HTTPException(status_code=404, detail="Upload session data was not found.")
     return metadata, data_path
@@ -737,11 +895,103 @@ def require_completed_staged_upload(request: Request, upload_id: str):
 
 def discard_staged_upload(upload_id: str):
     data_path, metadata_path = get_staging_paths(upload_id)
-    for path in (data_path, metadata_path, metadata_path.with_suffix(".json.tmp")):
+    for path in (
+        data_path,
+        metadata_path,
+        metadata_path.with_suffix(".json.tmp"),
+        metadata_path.with_suffix(".lock"),
+    ):
         try:
             path.unlink(missing_ok=True)
         except OSError:
             logger.warning("M02001 staged upload cleanup failed for %s", path.name)
+
+
+def build_staged_operation_request(
+    operation: str,
+    project_id: str,
+    project_code: str,
+    table_name_rule: str = "",
+    target_table_name: str = "",
+    file_type: str = "",
+    delimiter: str = "",
+    fixed_widths: str = "",
+    has_header: str = "",
+    encoding: str = "",
+    table_comment: str = "",
+):
+    return {
+        "operation": str(operation or "").strip().upper(),
+        "projectId": str(project_id or "").strip(),
+        "projectCode": str(project_code or "").strip().upper(),
+        "tableNameRule": str(table_name_rule or "").strip(),
+        "targetTableName": str(target_table_name or "").strip().upper(),
+        "fileType": str(file_type or "").strip().lower(),
+        "delimiter": str(delimiter or ""),
+        "fixedWidths": str(fixed_widths or "").strip(),
+        "hasHeader": str(has_header or "").strip().upper(),
+        "encoding": str(encoding or "").strip().lower(),
+        "tableComment": str(table_comment or ""),
+    }
+
+
+def begin_staged_finalization(request: Request, upload_id: str, operation_request: dict):
+    metadata = read_staged_upload_metadata(request, upload_id)
+    cached_result = metadata.get("finalResult")
+    if cached_result is not None:
+        if metadata.get("finalRequest") != operation_request:
+            raise HTTPException(
+                status_code=409,
+                detail="This upload session was already finalized for a different operation.",
+            )
+        return metadata, None, cached_result, None
+
+    _data_path, metadata_path = get_staging_paths(upload_id)
+    lock_path = metadata_path.with_suffix(".lock")
+    try:
+        descriptor = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        os.close(descriptor)
+    except FileExistsError as error:
+        raise HTTPException(status_code=409, detail="This upload session is already being finalized.") from error
+
+    try:
+        metadata = read_staged_upload_metadata(request, upload_id)
+        cached_result = metadata.get("finalResult")
+        if cached_result is not None:
+            if metadata.get("finalRequest") != operation_request:
+                raise HTTPException(
+                    status_code=409,
+                    detail="This upload session was already finalized for a different operation.",
+                )
+            release_staged_finalization_lock(lock_path)
+            return metadata, None, cached_result, None
+        metadata, data_path = require_completed_staged_upload(request, upload_id)
+        return metadata, data_path, None, lock_path
+    except Exception:
+        release_staged_finalization_lock(lock_path)
+        raise
+
+
+def finalize_staged_upload(upload_id: str, metadata: dict, operation_request: dict, result: dict):
+    metadata["finalRequest"] = operation_request
+    metadata["finalResult"] = result
+    metadata["finalizedAt"] = time.time()
+    metadata["updatedAt"] = metadata["finalizedAt"]
+    write_staged_upload_metadata(upload_id, metadata)
+    data_path, _metadata_path = get_staging_paths(upload_id)
+    try:
+        data_path.unlink(missing_ok=True)
+    except OSError:
+        logger.warning("M02001 finalized upload data cleanup failed for %s", data_path.name)
+
+
+def release_staged_finalization_lock(lock_path) -> None:
+    if not lock_path:
+        return
+    try:
+        lock_path.unlink(missing_ok=True)
+    except OSError:
+        logger.warning("M02001 staged upload lock cleanup failed for %s", lock_path.name)
 
 
 def ensure_upload_table_metadata(cursor) -> None:
@@ -752,10 +1002,18 @@ def ensure_upload_table_metadata(cursor) -> None:
         except Exception as error:
             if "ORA-00955" not in str(error):
                 raise
-    cursor.execute(SqlLoader.get_sql("M02001_UPLOAD_TABLE_META_PROJECT_EXISTS"))
-    if int((cursor.fetchone() or [0])[0] or 0) <= 0:
+    for column_key in (
+        "PROJECT",
+        "UPLOAD_ID",
+        "ROW_COUNT",
+        "CONTENT_SHA256",
+        "LOAD_STATUS",
+    ):
+        cursor.execute(SqlLoader.get_sql(f"M02001_UPLOAD_TABLE_META_{column_key}_EXISTS"))
+        if int((cursor.fetchone() or [0])[0] or 0) > 0:
+            continue
         try:
-            cursor.execute(SqlLoader.get_sql("M02001_UPLOAD_TABLE_META_PROJECT_ADD"))
+            cursor.execute(SqlLoader.get_sql(f"M02001_UPLOAD_TABLE_META_{column_key}_ADD"))
         except Exception as error:
             if "ORA-01430" not in str(error):
                 raise
@@ -770,6 +1028,202 @@ def get_upload_stream_size(stream: BinaryIO) -> int:
         return max(0, int(size))
     except Exception:
         return 0
+
+
+def configure_upload_connection(conn) -> None:
+    try:
+        conn.call_timeout = UPLOAD_DB_CALL_TIMEOUT_MS
+    except Exception:
+        logger.debug("M02001 upload call timeout could not be configured.", exc_info=True)
+
+
+def compute_upload_stream_sha256(stream: BinaryIO) -> str:
+    digest = hashlib.sha256()
+    stream.seek(0)
+    while True:
+        block = stream.read(1024 * 1024)
+        if not block:
+            break
+        digest.update(block)
+    stream.seek(0)
+    return digest.hexdigest()
+
+
+def create_upload_staging_table_name() -> str:
+    return f"INITSTG$_{uuid.uuid4().hex.upper()}"
+
+
+def get_upload_insert_batch_size(column_count: int) -> int:
+    return max(
+        1,
+        min(
+            UPLOAD_INSERT_BATCH_SIZE,
+            UPLOAD_INSERT_BATCH_CELL_LIMIT // max(int(column_count or 0), 1),
+        ),
+    )
+
+
+def prepare_upload_bind_row(row_number: int, row: list[str]):
+    estimated_bytes = 16
+    normalized = []
+    for column_index, value in enumerate(row, start=1):
+        text_value = stringify_cell(value)
+        byte_length = len(text_value.encode("utf-8"))
+        if byte_length > 4000:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"File data row {row_number}, column {column_index} exceeds "
+                    f"the Oracle VARCHAR2(4000 BYTE) limit ({byte_length} bytes)."
+                ),
+            )
+        estimated_bytes += byte_length + 8
+        normalized.append(text_value)
+    return (row_number, *normalized), estimated_bytes
+
+
+def iter_upload_insert_batches(rows: Iterator[list[str]], column_count: int):
+    max_rows = get_upload_insert_batch_size(column_count)
+    batch_rows = []
+    batch_bytes = 0
+    for row_number, row in enumerate(rows, start=1):
+        bind_row, row_bytes = prepare_upload_bind_row(row_number, row)
+        if batch_rows and (
+            len(batch_rows) >= max_rows
+            or batch_bytes + row_bytes > UPLOAD_INSERT_BATCH_BYTE_LIMIT
+        ):
+            yield batch_rows
+            batch_rows = []
+            batch_bytes = 0
+        batch_rows.append(bind_row)
+        batch_bytes += row_bytes
+    if batch_rows:
+        yield batch_rows
+
+
+def load_upload_rows(conn, cursor, table_name: str, upload_columns: list[str], rows: Iterator[list[str]]):
+    table_name = require_generated_upload_work_table(table_name)
+    column_sql = ", ".join(f'"{column}"' for column in upload_columns)
+    bind_sql = ", ".join(f":{index + 1}" for index in range(len(upload_columns)))
+    insert_sql = f'INSERT /*+ NO_PARALLEL */ INTO "{table_name}" ({column_sql}) VALUES ({bind_sql})'
+    use_direct_path = can_use_upload_direct_path(conn)
+    schema_name = get_current_schema_name(cursor) if use_direct_path else ""
+    inserted_count = 0
+    pending_commit_rows = 0
+    batch_count = 0
+    commit_count = 0
+    for batch_rows in iter_upload_insert_batches(rows, len(upload_columns)):
+        if use_direct_path:
+            conn.direct_path_load(
+                schema_name,
+                table_name,
+                upload_columns,
+                batch_rows,
+                batch_size=len(batch_rows),
+            )
+        else:
+            cursor.executemany(insert_sql, batch_rows)
+        batch_size = len(batch_rows)
+        inserted_count += batch_size
+        pending_commit_rows += batch_size
+        batch_count += 1
+        if pending_commit_rows >= UPLOAD_COMMIT_ROW_INTERVAL:
+            conn.commit()
+            commit_count += 1
+            pending_commit_rows = 0
+    if pending_commit_rows or not batch_count:
+        conn.commit()
+        commit_count += 1
+    return {
+        "rowCount": inserted_count,
+        "batchCount": batch_count,
+        "commitCount": commit_count,
+        "loadMode": "DIRECT_PATH" if use_direct_path else "ARRAY_DML",
+    }
+
+
+def can_use_upload_direct_path(conn) -> bool:
+    return bool(
+        UPLOAD_DIRECT_PATH_ENABLED
+        and oracledb.is_thin_mode()
+        and callable(getattr(conn, "direct_path_load", None))
+    )
+
+
+def get_current_schema_name(cursor) -> str:
+    cursor.execute(SqlLoader.get_sql("M02001_CURRENT_SCHEMA"))
+    schema_name = str((cursor.fetchone() or [""])[0] or "").strip().upper()
+    if not re.fullmatch(r"[A-Z][A-Z0-9_$#]{0,127}", schema_name):
+        raise RuntimeError("Oracle current schema could not be resolved for direct path load.")
+    return schema_name
+
+
+def count_upload_table_rows(cursor, table_name: str) -> int:
+    table_name = require_generated_upload_work_table(table_name)
+    cursor.execute(f'SELECT /*+ NO_PARALLEL */ COUNT(*) FROM "{table_name}"')
+    return int((cursor.fetchone() or [0])[0] or 0)
+
+
+def require_generated_upload_work_table(table_name: str) -> str:
+    name = str(table_name or "").strip().upper()
+    if not re.fullmatch(r"(?:INITSTG\$_[A-F0-9]{32}|INITUP\$_[A-Z0-9_$#_]*[0-9]{13})", name):
+        raise ValueError("Invalid generated upload work table name.")
+    return name
+
+
+def cleanup_upload_work_table(conn, cursor, table_name: str) -> None:
+    if not conn or not cursor or not table_name:
+        return
+    try:
+        safe_name = require_generated_upload_work_table(table_name)
+        cursor.execute(f'DROP TABLE "{safe_name}" PURGE')
+        conn.commit()
+    except Exception as cleanup_error:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        if "ORA-00942" not in str(cleanup_error):
+            logger.warning("M02001 upload work table cleanup failed for %s: %s", table_name, cleanup_error)
+
+
+def cleanup_stale_upload_work_tables(conn, cursor) -> None:
+    cursor.execute(
+        SqlLoader.get_sql("M02001_STALE_UPLOAD_STAGE_TABLES"),
+        {"maxAgeSeconds": UPLOAD_STAGING_MAX_AGE_SECONDS},
+    )
+    stale_stage_tables = [str(row[0] or "").strip().upper() for row in cursor.fetchall()]
+    cursor.execute(
+        SqlLoader.get_sql("M02001_STALE_LOADING_UPLOAD_TABLES"),
+        {"maxAgeSeconds": UPLOAD_STAGING_MAX_AGE_SECONDS},
+    )
+    stale_loading_tables = [str(row[0] or "").strip().upper() for row in cursor.fetchall()]
+    for table_name in [*stale_stage_tables, *stale_loading_tables]:
+        try:
+            safe_name = require_generated_upload_work_table(table_name)
+            cursor.execute(f'DROP TABLE "{safe_name}" PURGE')
+        except Exception as cleanup_error:
+            if "ORA-00942" not in str(cleanup_error):
+                logger.warning("M02001 stale Oracle upload stage cleanup failed for %s: %s", table_name, cleanup_error)
+    for table_name in stale_loading_tables:
+        cursor.execute(SqlLoader.get_sql("M02001_UPLOAD_TABLE_META_DELETE"), {"tableName": table_name})
+    if stale_stage_tables or stale_loading_tables:
+        conn.commit()
+
+
+def cleanup_upload_table_metadata(conn, cursor, table_name: str) -> None:
+    if not conn or not cursor or not table_name:
+        return
+    try:
+        safe_name = require_upload_table(table_name)
+        cursor.execute(SqlLoader.get_sql("M02001_UPLOAD_TABLE_META_DELETE"), {"tableName": safe_name})
+        conn.commit()
+    except Exception as cleanup_error:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        logger.warning("M02001 upload metadata cleanup failed for %s: %s", table_name, cleanup_error)
 
 
 def cleanup_stale_uploads():
@@ -892,6 +1346,37 @@ def read_upload_preview(
     return columns, normalized_rows, resolved_encoding
 
 
+def inspect_upload_schema(
+    stream: BinaryIO,
+    filename: str,
+    file_type: str,
+    delimiter: str,
+    fixed_widths: str,
+    has_header: str,
+    resolved_encoding: Optional[str],
+):
+    """Read only the first non-empty record and validate later records while loading."""
+    use_header = str(has_header or "Y").upper() == "Y"
+    raw_rows = iter_upload_raw_rows(
+        stream,
+        filename,
+        file_type,
+        delimiter,
+        fixed_widths,
+        resolved_encoding,
+    )
+    try:
+        first_row = next((row for row in raw_rows if is_non_empty_row(row)), None)
+    finally:
+        close_row_iterator(raw_rows)
+
+    if first_row is None:
+        return [], 0, 0
+    width = len(first_row)
+    columns = build_header_columns(first_row) if use_header else build_default_columns(width)
+    return columns, width, width if use_header else 0
+
+
 def inspect_upload_stream(
     stream: BinaryIO,
     filename: str,
@@ -947,6 +1432,7 @@ def iter_upload_data_rows(
 ) -> Iterator[list[str]]:
     use_header = str(has_header or "Y").upper() == "Y"
     header_skipped = False
+    source_row_number = 0
     raw_rows = iter_upload_raw_rows(
         stream,
         filename,
@@ -957,11 +1443,20 @@ def iter_upload_data_rows(
     )
     try:
         for raw_row in raw_rows:
+            source_row_number += 1
             if not is_non_empty_row(raw_row):
                 continue
             if use_header and not header_skipped:
                 header_skipped = True
                 continue
+            if len(raw_row) > width:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"File row {source_row_number} has {len(raw_row)} column(s), "
+                        f"which exceeds the expected {width} column(s)."
+                    ),
+                )
             yield normalize_upload_row(raw_row, width)
     finally:
         close_row_iterator(raw_rows)
@@ -1198,18 +1693,7 @@ def stringify_cell(value):
 
 def gather_upload_table_stats(cursor, table_name):
     cursor.execute(
-        """
-        BEGIN
-            DBMS_STATS.GATHER_TABLE_STATS(
-                ownname => USER,
-                tabname => :tableName,
-                estimate_percent => DBMS_STATS.AUTO_SAMPLE_SIZE,
-                method_opt => 'FOR ALL COLUMNS SIZE AUTO',
-                cascade => TRUE,
-                no_invalidate => FALSE
-            );
-        END;
-        """,
+        SqlLoader.get_sql("M02001_UPLOAD_TABLE_STATS_GATHER"),
         {"tableName": table_name},
     )
 

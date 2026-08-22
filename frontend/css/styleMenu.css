@@ -1736,6 +1736,13 @@ body.is-column-resizing .data-sql-grid-col-resizer::after {
     overflow: hidden;
 }
 
+@media (min-width: 1181px) {
+    #container-M01001 .env-workspace,
+    #container-M01002 .env-workspace {
+        grid-template-columns: minmax(420px, 38%) minmax(0, 1fr);
+    }
+}
+
 .env-object-panel,
 .env-panel {
     border: 1px solid #dcdcdc;
@@ -2770,6 +2777,13 @@ body.is-column-resizing .data-sql-grid-col-resizer::after {
     font-size: 12px;
     font-weight: 700;
     padding: 0 12px;
+}
+
+#container-M01001 .project-list-head,
+#container-M01001 .project-row,
+#container-M01002 .project-list-head,
+#container-M01002 .project-row {
+    grid-template-columns: minmax(0, 1.65fr) minmax(150px, 0.8fr);
 }
 
 .project-list-body {

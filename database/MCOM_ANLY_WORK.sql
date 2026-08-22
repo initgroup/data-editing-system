@@ -446,6 +446,7 @@ SELECT COLUMN_NAME
   FROM "INIT$_TB_COLTYPE_FINAL"
  WHERE OWNER = :targetOwner
    AND TABLE_NAME = :targetTable
+   AND COLUMN_NAME <> 'FILE_ROW_NO'
    AND TRIM(TYPE_GROUP_CODE) = 'CONTINUOUS'
  ORDER BY COLUMN_ID NULLS LAST
         , COLUMN_NAME;
@@ -455,6 +456,7 @@ SELECT COLUMN_NAME
   FROM "INIT$_TB_COLTYPE_FINAL"
  WHERE OWNER = :owner
    AND TABLE_NAME = :tableName
+   AND COLUMN_NAME <> 'FILE_ROW_NO'
    AND TRIM(TYPE_GROUP_CODE) = 'CONTINUOUS'
  ORDER BY COLUMN_ID NULLS LAST
         , COLUMN_NAME;
@@ -591,6 +593,203 @@ SELECT COUNT(*) AS TOTAL_RULES
    AND MODEL_NAME = :modelName
    AND (:runSourceType IS NULL OR RUN_SOURCE_TYPE = :runSourceType)
    AND (:runId IS NULL OR RUN_ID = :runId);
+
+-- [MCOMMON_ANLY_WORK_ASSOC_RULE_DETECTION_OVERVIEW_FAST]
+WITH DISPLAY_CANDIDATES AS
+     (
+      SELECT S.RULE_CONFIDENCE
+           , S.RULE_LIFT
+        FROM "INIT$_TB_RULEDISC_ASSOC_SUM" S
+       WHERE 1=1
+         AND S.RUN_SOURCE_TYPE = :runSourceType
+         AND S.RUN_ID = :runId
+         AND S.OWNER = :owner
+         AND S.TARGET_OWNER = :targetOwner
+         AND S.TARGET_TABLE = :targetTable
+         AND S.MODEL_NAME = :modelName
+         AND S.RESULT_HAS_VALUE_YN = 'Y'
+         AND S.RESULT_COLUMN IS NOT NULL
+         AND S.RESULT_VALUE IS NOT NULL
+         AND S.CONDITION_TEXT IS NOT NULL
+         AND (
+             :confidenceScope = 'ALL'
+             OR (
+                 S.RULE_CONFIDENCE IS NOT NULL
+                 AND (
+                     (S.RULE_CONFIDENCE <= 1 AND S.RULE_CONFIDENCE < 0.999999)
+                     OR (S.RULE_CONFIDENCE > 1 AND S.RULE_CONFIDENCE < 99.9999)
+                 )
+             )
+         )
+     )
+   , COUNTS AS
+     (
+      SELECT COUNT(*) AS CANDIDATE_RULE_COUNT
+           , NVL(SUM(CASE WHEN NVL(RULE_CONFIDENCE, 0) < :detectMinConfidence THEN 1 ELSE 0 END), 0) AS CONFIDENCE_CUTOFF_COUNT
+           , NVL(SUM(CASE WHEN NVL(RULE_LIFT, 0) < :detectMinLift THEN 1 ELSE 0 END), 0) AS LIFT_CUTOFF_COUNT
+           , NVL(SUM(CASE
+                         WHEN NVL(RULE_CONFIDENCE, 0) >= :detectMinConfidence
+                          AND NVL(RULE_LIFT, 0) >= :detectMinLift
+                         THEN 1 ELSE 0
+                     END), 0) AS DETECTABLE_RULE_COUNT
+        FROM DISPLAY_CANDIDATES
+     )
+SELECT CANDIDATE_RULE_COUNT
+     , CONFIDENCE_CUTOFF_COUNT
+     , LIFT_CUTOFF_COUNT
+     , LEAST(DETECTABLE_RULE_COUNT, :detectMaxRules) AS DETECTION_ELIGIBLE_RULE_COUNT
+     , GREATEST(DETECTABLE_RULE_COUNT - :detectMaxRules, 0) AS MAX_RULES_CUTOFF_COUNT
+     , CASE WHEN DETECTABLE_RULE_COUNT > 0 THEN 1 ELSE NULL END AS MIN_DETECTION_RN
+     , CASE
+           WHEN DETECTABLE_RULE_COUNT > 0 THEN LEAST(DETECTABLE_RULE_COUNT, :detectMaxRules)
+           ELSE NULL
+       END AS MAX_DETECTION_RN
+  FROM COUNTS;
+
+-- [MCOMMON_ANLY_WORK_ASSOC_RULE_PROFILE_FAST]
+SELECT GROUPING(CONDITION_COUNT) AS IS_TOTAL
+     , CONDITION_COUNT
+     , COUNT(*) AS TOTAL_RULES
+     , COUNT(*) AS RULE_COUNT
+     , SUM(CASE WHEN CONDITION_COUNT > 0 AND RESULT_COLUMN IS NOT NULL THEN 1 ELSE 0 END) AS MAPPED_RULES
+     , SUM(CASE WHEN RESULT_HAS_VALUE_YN = 'N' THEN 1 ELSE 0 END) AS MISSING_RESULT_RULES
+     , SUM(CASE
+               WHEN RULE_CONFIDENCE IS NOT NULL
+                AND (
+                    (RULE_CONFIDENCE <= 1 AND RULE_CONFIDENCE < 0.999999)
+                    OR (RULE_CONFIDENCE > 1 AND RULE_CONFIDENCE < 99.9999)
+                )
+               THEN 1 ELSE 0
+           END) AS NON_PERFECT_CONF_RULES
+     , MAX(MODEL_TYPE) AS MODEL_TYPE
+     , MAX(RULE_SOURCE) AS RULE_SOURCE
+     , AVG(RULE_SUPPORT) AS AVG_SUPPORT
+     , AVG(RULE_CONFIDENCE) AS AVG_CONFIDENCE
+     , AVG(RULE_LIFT) AS AVG_LIFT
+     , MAX(RULE_SUPPORT) AS MAX_SUPPORT
+     , MAX(RULE_CONFIDENCE) AS MAX_CONFIDENCE
+     , MAX(RULE_LIFT) AS MAX_LIFT
+  FROM "INIT$_TB_RULEDISC_ASSOC_SUM"
+ WHERE 1=1
+   AND RUN_SOURCE_TYPE = :runSourceType
+   AND RUN_ID = :runId
+   AND OWNER = :owner
+   AND TARGET_OWNER = :targetOwner
+   AND TARGET_TABLE = :targetTable
+   AND MODEL_NAME = :modelName
+ GROUP BY GROUPING SETS (
+          ()
+        , (CONDITION_COUNT)
+       )
+ ORDER BY IS_TOTAL DESC
+        , CONDITION_COUNT;
+
+-- [MCOMMON_ANLY_WORK_ASSOC_RULE_HIT_LIST_FAST]
+WITH VIOLATION_BASE AS
+     (
+      SELECT V.RULE_ID
+           , COUNT(*) AS VIOLATION_COUNT
+           , COUNT(DISTINCT NVL(V.CASE_ID, V.CASE_ROWID)) AS VIOLATED_ROW_COUNT
+           , AVG(V.VIOLATION_SCORE) AS AVG_VIOLATION_SCORE
+        FROM "INIT$_TB_RULEVIOL_ASSOC" V
+       WHERE 1=1
+         AND V.RUN_SOURCE_TYPE = :runSourceType
+         AND V.RUN_ID = :runId
+         AND V.TARGET_OWNER = :targetOwner
+         AND V.TARGET_TABLE = :targetTable
+         AND V.MODEL_NAME = :modelName
+         AND (:conditionCount IS NULL OR V.CONDITION_COUNT = :conditionCount)
+         AND (
+             :confidenceScope = 'ALL'
+             OR (
+                 V.RULE_CONFIDENCE IS NOT NULL
+                 AND (
+                     (V.RULE_CONFIDENCE <= 1 AND V.RULE_CONFIDENCE < 0.999999)
+                     OR (V.RULE_CONFIDENCE > 1 AND V.RULE_CONFIDENCE < 99.9999)
+                 )
+             )
+         )
+         AND (:ruleIdFilter IS NULL OR UPPER(V.RULE_ID) LIKE '%' || UPPER(:ruleIdFilter) || '%')
+       GROUP BY V.RULE_ID
+     )
+   , RANKED_RULES AS
+     (
+      SELECT S.OWNER AS RULE_OWNER
+           , S.MODEL_NAME
+           , S.RUN_SOURCE_TYPE
+           , S.RUN_ID
+           , S.RULE_ID
+           , S.CONDITION_COUNT
+           , DBMS_LOB.SUBSTR(S.CONDITION_TEXT, 4000, 1) AS CONDITION_TEXT
+           , S.RESULT_COLUMN
+           , DBMS_LOB.SUBSTR(TO_CLOB(S.RESULT_VALUE), 4000, 1) AS EXPECTED_VALUE
+           , V.VIOLATION_COUNT
+           , V.VIOLATED_ROW_COUNT
+           , V.AVG_VIOLATION_SCORE
+           , CAST(NULL AS NUMBER) AS DETECTION_RN
+           , 'Y' AS DETECTION_SCANNED_YN
+           , S.RULE_SUPPORT
+           , S.RULE_CONFIDENCE
+           , S.RULE_LIFT
+           , ROW_NUMBER() OVER (
+                 ORDER BY V.VIOLATION_COUNT DESC
+                        , S.CONDITION_COUNT DESC NULLS LAST
+                        , V.AVG_VIOLATION_SCORE DESC NULLS LAST
+                        , S.RULE_CONFIDENCE DESC NULLS LAST
+                        , S.RULE_LIFT DESC NULLS LAST
+                        , S.RULE_ID
+             ) AS RN__
+           , COUNT(*) OVER () AS TOTAL_COUNT
+        FROM "INIT$_TB_RULEDISC_ASSOC_SUM" S
+        JOIN VIOLATION_BASE V
+          ON V.RULE_ID = S.RULE_ID
+       WHERE 1=1
+         AND S.RUN_SOURCE_TYPE = :runSourceType
+         AND S.RUN_ID = :runId
+         AND S.OWNER = :owner
+         AND S.TARGET_OWNER = :targetOwner
+         AND S.TARGET_TABLE = :targetTable
+         AND S.MODEL_NAME = :modelName
+         AND S.RESULT_HAS_VALUE_YN = 'Y'
+         AND S.RESULT_COLUMN IS NOT NULL
+         AND S.RESULT_VALUE IS NOT NULL
+         AND S.CONDITION_TEXT IS NOT NULL
+         AND (:conditionCount IS NULL OR S.CONDITION_COUNT = :conditionCount)
+         AND (
+             :confidenceScope = 'ALL'
+             OR (
+                 S.RULE_CONFIDENCE IS NOT NULL
+                 AND (
+                     (S.RULE_CONFIDENCE <= 1 AND S.RULE_CONFIDENCE < 0.999999)
+                     OR (S.RULE_CONFIDENCE > 1 AND S.RULE_CONFIDENCE < 99.9999)
+                 )
+             )
+         )
+         AND (:ruleIdFilter IS NULL OR UPPER(S.RULE_ID) LIKE '%' || UPPER(:ruleIdFilter) || '%')
+     )
+SELECT RULE_OWNER
+     , MODEL_NAME
+     , RUN_SOURCE_TYPE
+     , RUN_ID
+     , RULE_ID
+     , CONDITION_COUNT
+     , CONDITION_TEXT
+     , RESULT_COLUMN
+     , EXPECTED_VALUE
+     , VIOLATION_COUNT
+     , VIOLATED_ROW_COUNT
+     , AVG_VIOLATION_SCORE
+     , DETECTION_RN
+     , DETECTION_SCANNED_YN
+     , RULE_SUPPORT
+     , RULE_CONFIDENCE
+     , RULE_LIFT
+     , RN__
+     , TOTAL_COUNT
+  FROM RANKED_RULES
+ WHERE RN__ > :ruleOffset
+   AND RN__ <= :ruleEndRow
+ ORDER BY RN__;
 
 -- [MCOMMON_ANLY_WORK_ASSOC_RULE_CONDITION_DIST]
 SELECT CONDITION_COUNT

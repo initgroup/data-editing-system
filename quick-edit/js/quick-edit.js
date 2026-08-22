@@ -78,15 +78,17 @@
             currentStep: 0,
             completedSteps: [],
             stepProgress: 0,
-            workspaceMode: "existing",
+            workspaceMode: "new",
             fileMeta: null,
             uploadId: null,
             projectId: null,
             projectCode: "",
             projectName: "",
+            projectCreatedAt: null,
             scenarioId: null,
             scenarioCode: "",
             scenarioName: "",
+            scenarioCreatedAt: null,
             tableOwner: "",
             tableName: "",
             rowCount: null,
@@ -540,6 +542,38 @@
         });
     }
 
+    function renderWorkspaceSummary() {
+        const summary = byId("qeWorkspaceSummary");
+        if (!summary) return;
+        const completed = ["success", "warning"].includes(state.status)
+            && state.completedSteps.includes(7)
+            && state.projectId
+            && state.scenarioId;
+        setHidden(summary, !completed);
+        if (!completed) return;
+
+        setText(summary.querySelector("[data-workspace-summary-badge]"), state.historyView
+            ? "과거 실행 작업공간"
+            : (state.workspaceMode === "new" ? "자동 생성 완료" : "기존 작업 사용"));
+        setText(summary.querySelector("[data-workspace-project-code]"), state.projectCode || `#${state.projectId}`);
+        setText(summary.querySelector("[data-workspace-project-name]"), state.projectName || "-");
+        setText(summary.querySelector("[data-workspace-scenario-code]"), state.scenarioCode || `#${state.scenarioId}`);
+        setText(summary.querySelector("[data-workspace-scenario-name]"), state.scenarioName || "-");
+
+        const projectCreated = summary.querySelector("[data-workspace-project-created]");
+        const scenarioCreated = summary.querySelector("[data-workspace-scenario-created]");
+        setText(projectCreated, state.projectCreatedAt
+            ? `생성 ${R.formatFullDateTime(state.projectCreatedAt)}`
+            : "생성시간 확인 불가");
+        setText(scenarioCreated, state.scenarioCreatedAt
+            ? `생성 ${R.formatFullDateTime(state.scenarioCreatedAt)}`
+            : "생성시간 확인 불가");
+        if (state.projectCreatedAt) projectCreated?.setAttribute("datetime", String(state.projectCreatedAt));
+        else projectCreated?.removeAttribute("datetime");
+        if (state.scenarioCreatedAt) scenarioCreated?.setAttribute("datetime", String(state.scenarioCreatedAt));
+        else scenarioCreated?.removeAttribute("datetime");
+    }
+
     function renderHistoryView() {
         const banner = byId("qeHistoryViewBanner");
         const enabled = Boolean(state.historyView && state.flowRunId);
@@ -575,6 +609,7 @@
         renderUploadProgress();
         renderArtifacts();
         renderHistoryView();
+        renderWorkspaceSummary();
         const step = STEPS[state.currentStep] || STEPS[0];
         setText(byId("currentStage", "qeCurrentStepTitle"), step.title);
         const description = state.error || message || state.lastRunMessage || step.description;
@@ -754,6 +789,7 @@
             state.projectId = projectId;
             state.projectCode = row.PROJECT_CODE || "";
             state.projectName = row.PROJECT_NAME || row.PROJECT_CODE || `프로젝트 ${projectId}`;
+            state.projectCreatedAt = row.CREATED_AT || null;
         } else {
             const fallback = makeCompactProjectCode();
             const projectCode = normalizeCode(valueOf("projectCode", "qeProjectCode") || state.projectCode, fallback);
@@ -768,6 +804,7 @@
             state.projectId = Number(row.PROJECT_ID || 0);
             state.projectCode = row.PROJECT_CODE || projectCode;
             state.projectName = row.PROJECT_NAME || projectName;
+            state.projectCreatedAt = row.CREATED_AT || null;
             if (!state.projectId) throw new Error("저장된 프로젝트 ID를 확인할 수 없습니다.");
         }
         persistState();
@@ -786,6 +823,7 @@
             state.scenarioId = scenarioId;
             state.scenarioCode = row.SCENARIO_CODE || "";
             state.scenarioName = row.SCENARIO_NAME || row.SCENARIO_CODE || `시나리오 ${scenarioId}`;
+            state.scenarioCreatedAt = row.CREATED_AT || null;
         } else {
             const fallback = `QRULE_${makeStamp()}`;
             const scenarioCode = normalizeCode(valueOf("scenarioCode", "qeScenarioCode") || state.scenarioCode, fallback);
@@ -804,6 +842,7 @@
             state.scenarioId = Number(row.SCENARIO_ID || 0);
             state.scenarioCode = row.SCENARIO_CODE || scenarioCode;
             state.scenarioName = row.SCENARIO_NAME || scenarioName;
+            state.scenarioCreatedAt = row.CREATED_AT || null;
             if (!state.scenarioId) throw new Error("저장된 시나리오 ID를 확인할 수 없습니다.");
         }
         persistState();
@@ -898,8 +937,10 @@
                     source: "QUICK_EDIT",
                     projectCode: state.projectCode,
                     projectName: state.projectName,
+                    projectCreatedAt: state.projectCreatedAt,
                     scenarioCode: state.scenarioCode,
                     scenarioName: state.scenarioName,
+                    scenarioCreatedAt: state.scenarioCreatedAt,
                     scenarioTableId: state.scenarioTableId,
                     ownerName: state.tableOwner,
                     tableName: state.tableName,
@@ -1031,19 +1072,19 @@
         setText(byId("qeRunStatus"), R.statusLabel(runStatus));
         setText(byId("qeRunMessage"), run.MESSAGE || state.lastRunMessage || "실행 준비 중");
         setText(byId("qeRunStartedAt"), R.formatDateTime(run.STARTED_AT || run.CREATED_AT));
-        setText(byId("qeRunElapsed"), R.formatDuration(run.STARTED_AT || run.CREATED_AT, run.FINISHED_AT));
+        setText(byId("qeRunElapsed"), R.formatDuration(run.STARTED_AT || run.CREATED_AT, run.FINISHED_AT, runStatus));
         if (runSummary) {
             runSummary.dataset.state = R.statusClass(runStatus).replace("is-", "");
             setText(runSummary.querySelector("[data-run-message]"), run.MESSAGE || state.lastRunMessage || "실행 준비 중");
             setText(runSummary.querySelector("[data-run-status]"), R.statusLabel(runStatus));
             setText(runSummary.querySelector("[data-run-id]"), `#${state.flowRunId || "-"}`);
             setText(runSummary.querySelector("[data-run-started]"), R.formatDateTime(run.STARTED_AT || run.CREATED_AT));
-            setText(runSummary.querySelector("[data-run-elapsed]"), R.formatDuration(run.STARTED_AT || run.CREATED_AT, run.FINISHED_AT));
+            setText(runSummary.querySelector("[data-run-elapsed]"), R.formatDuration(run.STARTED_AT || run.CREATED_AT, run.FINISHED_AT, runStatus));
         }
         if (!target) return;
         const rows = nodes.map((node, index) => {
             const status = R.normalizeStatus(node.STATUS);
-            const elapsed = R.formatDuration(node.STARTED_AT || node.CREATED_AT, node.FINISHED_AT);
+            const elapsed = R.formatDuration(node.STARTED_AT, node.FINISHED_AT, status);
             const message = node.MESSAGE || (status === "PENDING" ? "앞 단계 완료를 기다리고 있습니다." : "-");
             const messageMarkup = renderNodeMessage(message, status);
             const resultLabel = getNodeResultLabel(node);
@@ -2514,7 +2555,7 @@
                 <span class="qe-run-history-item__meta">
                     ${R.renderStatus(status)}
                     <span>모델 노드 ${completed}/${total || 4} 완료</span>
-                    <span>${R.escapeHtml(R.formatDuration(row.STARTED_AT || row.CREATED_AT, row.FINISHED_AT))}</span>
+                    <span>${R.escapeHtml(R.formatDuration(row.STARTED_AT || row.CREATED_AT, row.FINISHED_AT, row.STATUS))}</span>
                 </span>
                 <span class="qe-run-history-item__action">
                     ${action}
@@ -2659,9 +2700,9 @@
     function resetWorkspaceForm() {
         const newMode = byId("projectModeNew");
         const existingMode = byId("projectModeExisting");
-        if (newMode) newMode.checked = false;
-        if (existingMode) existingMode.checked = true;
-        state.workspaceMode = "existing";
+        if (newMode) newMode.checked = true;
+        if (existingMode) existingMode.checked = false;
+        state.workspaceMode = "new";
         ["projectName", "qeProjectName", "projectCode", "qeProjectCode", "scenarioName", "qeScenarioName", "scenarioCode", "qeScenarioCode"].forEach((id) => {
             const input = byId(id);
             if (input) input.value = "";

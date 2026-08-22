@@ -17,7 +17,6 @@
         init() {
             this.renderIdentity();
             this.renderWorkflowKpis();
-            this.renderRuleTrendChart();
             this.renderFlowRunStrip();
             this.renderFlowDetailPanel({ deferLoad: true });
             this.renderAlerts();
@@ -72,9 +71,26 @@
                 this.setRuleTrendLoading(false);
                 return;
             }
-            if (this.ruleTrendChart) this.ruleTrendChart.destroy();
             const trend = this.normalizeFlowTrend(this.dashboardData?.target?.flowTrend || []);
+            const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches === true;
 
+            if (this.ruleTrendChart) {
+                const successDataset = this.ruleTrendChart.data.datasets[0];
+                const failedDataset = this.ruleTrendChart.data.datasets[1];
+                this.ruleTrendChart.data.labels = trend.labels;
+                successDataset.label = this.t("chartSuccessLabel", "Integrated scenario success");
+                successDataset.data = trend.success;
+                failedDataset.label = this.t("chartFailedLabel", "Integrated scenario failed");
+                failedDataset.data = trend.failed;
+                failedDataset.hasData = trend.failed.some((value) => Number(value || 0) > 0);
+                this.ruleTrendChart.options.animation.duration = reduceMotion ? 0 : 450;
+                this.ruleTrendChart.options.animation.easing = "easeOutCubic";
+                this.setRuleTrendLoading(false);
+                this.ruleTrendChart.update();
+                return;
+            }
+
+            this.setRuleTrendLoading(false);
             this.ruleTrendChart = new Chart(canvas, {
                 type: "line",
                 data: {
@@ -86,8 +102,11 @@
                             borderColor: "#2563eb",
                             backgroundColor: "rgba(37, 99, 235, 0.14)",
                             fill: true,
-                            tension: 0.35,
+                            cubicInterpolationMode: "monotone",
+                            tension: 0.4,
                             borderWidth: 2.5,
+                            borderCapStyle: "round",
+                            borderJoinStyle: "round",
                             pointRadius: (context) => Number(context.raw || 0) > 0 ? 5 : 0,
                             pointHoverRadius: 8,
                             statusLabel: this.t("statusSuccess", "Success")
@@ -113,6 +132,8 @@
                     responsive: true,
                     maintainAspectRatio: false,
                     animation: {
+                        duration: reduceMotion ? 0 : 700,
+                        easing: "easeOutQuart",
                         onComplete: () => this.setRuleTrendLoading(false)
                     },
                     interaction: { mode: "index", intersect: false },
@@ -1126,17 +1147,29 @@
             const renderIdentity = options.renderIdentity !== false;
             const renderChart = options.renderChart !== false;
             const renderAlerts = options.renderAlerts !== false;
-            const renderLinks = options.renderLinks !== false;
+            const renderLinks = options.renderLinks === true;
             const showPopups = options.showPopups !== false;
+            const sectionQuery = options.sections
+                ? `?sections=${encodeURIComponent(options.sections)}`
+                : "";
             if (renderChart) this.setRuleTrendLoading(true);
             try {
-                const json = await CommonUtils.request(`${API_BASE_URL}/home/dashboard`, {
+                const json = await CommonUtils.request(`${API_BASE_URL}/home/dashboard${sectionQuery}`, {
                     method: "GET",
                     showLoading: false,
                     timeoutMs: 30000,
                     timeoutMessage: "Dashboard query timed out. Target DB may be busy with a batch job."
                 });
-                this.dashboardData = json || null;
+                const previous = this.dashboardData || {};
+                const incoming = json || {};
+                this.dashboardData = {
+                    ...previous,
+                    ...incoming,
+                    system: Object.prototype.hasOwnProperty.call(incoming, "system") ? incoming.system : previous.system,
+                    target: Object.prototype.hasOwnProperty.call(incoming, "target") ? incoming.target : previous.target,
+                    notices: Object.prototype.hasOwnProperty.call(incoming, "notices") ? incoming.notices : (previous.notices || []),
+                    popupNotices: Object.prototype.hasOwnProperty.call(incoming, "popupNotices") ? incoming.popupNotices : (previous.popupNotices || [])
+                };
                 if (renderIdentity) this.renderIdentity();
                 if (renderChart) {
                     this.renderWorkflowKpis();
@@ -1174,6 +1207,8 @@
             this.setRefreshButtonLoading("homeRefreshWorkflowButton", true);
             try {
                 await this.loadDashboard({
+                    sections: "workflow",
+                    renderIdentity: false,
                     renderAlerts: false,
                     renderLinks: false,
                     showPopups: false
@@ -1190,6 +1225,7 @@
             this.setRefreshButtonLoading("homeRefreshQualityButton", true);
             try {
                 await this.loadDashboard({
+                    sections: "notices",
                     renderIdentity: false,
                     renderChart: false,
                     renderLinks: false,
@@ -1227,7 +1263,7 @@
 
         bindEvents() {
             document.querySelectorAll("#container-home [data-home-page]").forEach((button) => {
-                button.addEventListener("click", () => this.openPage(button.dataset.homePage));
+                button.onclick = () => this.openPage(button.dataset.homePage);
             });
 
             const flowButton = document.getElementById("homeOpenFlowButton");

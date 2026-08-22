@@ -135,7 +135,8 @@
                     projectType: "EDITING",
                     projectDesc: "퀵 데이터 에디팅에서 자동 생성",
                     useYn: "Y",
-                    sortOrder: 0
+                    sortOrder: 0,
+                    autoUniqueName: true
                 }
             });
         }

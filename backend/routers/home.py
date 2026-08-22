@@ -4,8 +4,9 @@ import json
 import logging
 import os
 import re
+import threading
 import time
-from typing import Any, Dict
+from typing import Any
 from urllib.parse import quote
 
 from fastapi import APIRouter, HTTPException, Request, Response
@@ -35,6 +36,11 @@ TARGET_TABLES = [
     "INIT$_TB_COLREL_CAT_SUMMARY",
 ]
 
+DASHBOARD_SECTIONS = {"system", "workflow", "notices"}
+_SCHEMA_CACHE_LOCK = threading.Lock()
+_TARGET_SCHEMA_CACHE: dict[int, tuple[float, dict[str, bool]]] = {}
+_NOTICE_SCHEMA_CACHE: tuple[float, set[str]] | None = None
+
 MODEL_DETAIL_VIEW_TYPES = [
     ("VA", "Attribute/detail view"),
     ("VG", "Global/detail view"),
@@ -45,13 +51,7 @@ MODEL_DETAIL_VIEW_TYPES = [
 IDENTIFIER_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_$#]{0,127}$")
 
 
-def _scalar(cursor, sql: str, params: Dict[str, Any] | None = None, default: Any = 0) -> Any:
-    cursor.execute(sql, params or {})
-    row = cursor.fetchone()
-    return row[0] if row and row[0] is not None else default
-
-
-def _target_execute(cursor, sql_id: str, params: Dict[str, Any] | None = None):
+def _target_execute(cursor, sql_id: str, params: dict[str, Any] | None = None):
     started_at = time.monotonic()
     logger.info("[Home Target] SQL start %s", sql_id)
     cursor.execute(SqlLoader.get_sql(sql_id), params or {})
@@ -60,12 +60,6 @@ def _target_execute(cursor, sql_id: str, params: Dict[str, Any] | None = None):
     log_method = logger.warning if elapsed >= warn_seconds else logger.info
     log_method("[Home Target] SQL done %s elapsed=%.3fs", sql_id, elapsed)
     return cursor
-
-
-def _target_scalar(cursor, sql_id: str, params: Dict[str, Any] | None = None, default: Any = 0) -> Any:
-    _target_execute(cursor, sql_id, params)
-    row = cursor.fetchone()
-    return row[0] if row and row[0] is not None else default
 
 
 def _count_existing_tables(cursor, table_names: list[str]) -> dict[str, bool]:
@@ -82,10 +76,57 @@ def _count_existing_tables(cursor, table_names: list[str]) -> dict[str, bool]:
     return {name: name in existing for name in table_names}
 
 
-def _count_if(cursor, existing: dict[str, bool], table_name: str, sql_id: str, params: Dict[str, Any] | None = None) -> int:
-    if not existing.get(table_name):
-        return 0
-    return int(_target_scalar(cursor, sql_id, params, 0) or 0)
+def _schema_cache_seconds() -> float:
+    try:
+        return max(0.0, float(os.getenv("HOME_SCHEMA_CACHE_SECONDS", "60")))
+    except (TypeError, ValueError):
+        return 60.0
+
+
+def _get_target_table_status(cursor, connection_id: int) -> dict[str, bool]:
+    now = time.monotonic()
+    ttl = _schema_cache_seconds()
+    with _SCHEMA_CACHE_LOCK:
+        cached = _TARGET_SCHEMA_CACHE.get(int(connection_id))
+        if cached and cached[0] > now:
+            return dict(cached[1])
+
+    existing = _count_existing_tables(cursor, TARGET_TABLES)
+    if ttl > 0:
+        with _SCHEMA_CACHE_LOCK:
+            _TARGET_SCHEMA_CACHE[int(connection_id)] = (now + ttl, dict(existing))
+    return existing
+
+
+def _get_notice_table_status(cursor) -> set[str]:
+    global _NOTICE_SCHEMA_CACHE
+
+    now = time.monotonic()
+    ttl = _schema_cache_seconds()
+    with _SCHEMA_CACHE_LOCK:
+        if _NOTICE_SCHEMA_CACHE and _NOTICE_SCHEMA_CACHE[0] > now:
+            return set(_NOTICE_SCHEMA_CACHE[1])
+
+    cursor.execute(SqlLoader.get_sql("HOME_NOTICE_TABLES"))
+    existing = {str(row[0] or "").upper() for row in cursor.fetchall()}
+    if ttl > 0:
+        with _SCHEMA_CACHE_LOCK:
+            _NOTICE_SCHEMA_CACHE = (now + ttl, set(existing))
+    return existing
+
+
+def _normalize_dashboard_sections(value: str | None) -> set[str]:
+    if value is None or not str(value).strip() or str(value).strip().lower() == "all":
+        return set(DASHBOARD_SECTIONS)
+    sections = {
+        item.strip().lower()
+        for item in str(value).split(",")
+        if item.strip()
+    }
+    invalid = sections - DASHBOARD_SECTIONS
+    if invalid:
+        raise HTTPException(status_code=400, detail=f"Invalid dashboard section(s): {', '.join(sorted(invalid))}")
+    return sections
 
 
 def _plain_notice_text(value: str) -> str:
@@ -162,9 +203,14 @@ def _normalize_limit(value: int | None, default: int = 100, maximum: int = 500) 
     return max(1, min(limit, maximum))
 
 
-def _get_system_summary(user_id: int, connection_id: int | None, include_all_users: bool = False) -> dict[str, Any]:
+def _get_system_summary(
+    user_id: int,
+    connection_id: int | None,
+    include_all_users: bool = False,
+    cursor=None,
+) -> dict[str, Any]:
     conn = None
-    cursor = None
+    owns_cursor = cursor is None
     summary = {
         "connection": None,
         "connectionCount": 0,
@@ -172,15 +218,9 @@ def _get_system_summary(user_id: int, connection_id: int | None, include_all_use
         "activeUserCount": 0,
     }
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        summary["connectionCount"] = int(_scalar(
-            cursor,
-            SqlLoader.get_sql("HOME_CONNECTION_COUNT"),
-            {"userId": user_id, "includeAllUsers": "Y" if include_all_users else "N"},
-        ) or 0)
-        summary["userCount"] = int(_scalar(cursor, SqlLoader.get_sql("HOME_USER_COUNT")) or 0)
-        summary["activeUserCount"] = int(_scalar(cursor, SqlLoader.get_sql("HOME_ACTIVE_USER_COUNT")) or 0)
+        if owns_cursor:
+            conn = get_db_connection()
+            cursor = conn.cursor()
         if connection_id:
             cursor.execute(SqlLoader.get_sql("HOME_CONNECTION_DETAIL"), {
                 "userId": user_id,
@@ -205,22 +245,22 @@ def _get_system_summary(user_id: int, connection_id: int | None, include_all_use
         logger.warning("Home system dashboard summary failed: %s", error)
         summary["error"] = str(error)
     finally:
-        if cursor:
+        if owns_cursor and cursor:
             cursor.close()
         if conn:
             conn.close()
     return summary
 
 
-def _get_active_system_notices(limit: int = 5) -> list[dict[str, Any]]:
+def _get_active_system_notices(limit: int = 5, cursor=None) -> list[dict[str, Any]]:
     conn = None
-    cursor = None
+    owns_cursor = cursor is None
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(SqlLoader.get_sql("HOME_NOTICE_TABLE_EXISTS"))
-        row = cursor.fetchone()
-        if not row or int(row[0] or 0) == 0:
+        if owns_cursor:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+        existing_tables = _get_notice_table_status(cursor)
+        if "INIT$_TB_NOTICE" not in existing_tables:
             return []
 
         cursor.execute(SqlLoader.get_sql("HOME_ACTIVE_NOTICES"), {"limit": max(1, min(int(limit or 5), 20))})
@@ -259,22 +299,25 @@ def _get_active_system_notices(limit: int = 5) -> list[dict[str, Any]]:
                 "createdAt": row[9].isoformat(timespec="minutes") if isinstance(row[9], datetime) else row[9],
                 "attachments": [],
             })
-        cursor.execute(SqlLoader.get_sql("HOME_NOTICE_FILE_TABLE_EXISTS"))
-        file_table_row = cursor.fetchone()
-        if file_table_row and int(file_table_row[0] or 0) > 0:
+        notice_ids = [int(notice["noticeId"]) for notice in notices if notice.get("noticeId") is not None]
+        if "INIT$_TB_NOTICE_FILE" in existing_tables and notice_ids:
+            notice_binds = ",".join(f":noticeId{index}" for index, _ in enumerate(notice_ids))
+            sql = SqlLoader.get_sql("HOME_NOTICE_FILES_FOR_NOTICES").replace("/* --NOTICE_BINDS-- */", notice_binds)
+            cursor.execute(sql, {f"noticeId{index}": notice_id for index, notice_id in enumerate(notice_ids)})
+            columns = [desc[0] for desc in cursor.description]
+            attachments_by_notice: dict[int, list[dict[str, Any]]] = {}
+            for file_row in cursor.fetchall():
+                attachment = _row_to_dict(columns, file_row)
+                notice_id = int(attachment.get("NOTICE_ID"))
+                attachments_by_notice.setdefault(notice_id, []).append(attachment)
             for notice in notices:
-                cursor.execute(SqlLoader.get_sql("HOME_NOTICE_FILES_FOR_NOTICE"), {"noticeId": notice.get("noticeId")})
-                columns = [desc[0] for desc in cursor.description]
-                notice["attachments"] = [
-                    _row_to_dict(columns, file_row)
-                    for file_row in cursor.fetchall()
-                ]
+                notice["attachments"] = attachments_by_notice.get(int(notice["noticeId"]), [])
         return notices
     except Exception as error:
         logger.warning("Home active notice query failed: %s", error)
         return []
     finally:
-        if cursor:
+        if owns_cursor and cursor:
             cursor.close()
         if conn:
             conn.close()
@@ -285,21 +328,6 @@ def _get_target_summary(request: Request, user_id: int, connection_id: int | Non
         "connected": False,
         "schemaInstalled": False,
         "existingTables": {},
-        "counts": {
-            "projects": 0,
-            "scenarios": 0,
-            "scenarioTables": 0,
-            "dataJobs": 0,
-            "dataRuns": 0,
-            "flows": 0,
-            "flowRuns": 0,
-            "predictedColumns": 0,
-            "correlationPairs": 0,
-            "selectedCorrelations": 0,
-        },
-        "runStatus": [],
-        "trend": [],
-        "ruleTrend": [],
         "flowTrend": [],
         "recentFlowRuns": [],
     }
@@ -317,7 +345,7 @@ def _get_target_summary(request: Request, user_id: int, connection_id: int | Non
         if hasattr(conn, "call_timeout"):
             conn.call_timeout = int(os.getenv("HOME_TARGET_QUERY_TIMEOUT_MS", "30000"))
         cursor = conn.cursor()
-        existing = _count_existing_tables(cursor, TARGET_TABLES)
+        existing = _get_target_table_status(cursor, int(connection_id))
         summary["connected"] = True
         summary["existingTables"] = existing
         summary["schemaInstalled"] = all(existing.get(name) for name in [
@@ -327,55 +355,6 @@ def _get_target_summary(request: Request, user_id: int, connection_id: int | Non
             "INIT$_TB_DATA_WORK_JOB",
             "INIT$_TB_FLOW_WORK",
         ])
-
-        counts = summary["counts"]
-        counts["projects"] = _count_if(cursor, existing, "INIT$_TB_PROJECT",
-            "HOME_PROJECT_COUNT",
-            scope_params)
-        counts["scenarios"] = _count_if(cursor, existing, "INIT$_TB_SCENARIO",
-            "HOME_SCENARIO_COUNT", scope_params) if existing.get("INIT$_TB_PROJECT") else 0
-        counts["scenarioTables"] = _count_if(cursor, existing, "INIT$_TB_TABLES",
-            "HOME_SCENARIO_TABLE_COUNT", scope_params) if existing.get("INIT$_TB_PROJECT") else 0
-        counts["dataJobs"] = _count_if(cursor, existing, "INIT$_TB_DATA_WORK_JOB",
-            "HOME_DATA_JOB_COUNT", scope_params) if existing.get("INIT$_TB_PROJECT") else 0
-        counts["dataRuns"] = _count_if(cursor, existing, "INIT$_TB_DATA_WORK_RUN",
-            "HOME_DATA_RUN_COUNT", scope_params) if existing.get("INIT$_TB_DATA_WORK_JOB") and existing.get("INIT$_TB_PROJECT") else 0
-        counts["flows"] = _count_if(cursor, existing, "INIT$_TB_FLOW_WORK",
-            "HOME_FLOW_COUNT", scope_params) if existing.get("INIT$_TB_PROJECT") else 0
-        counts["flowRuns"] = _count_if(cursor, existing, "INIT$_TB_FLOW_WORK_RUN",
-            "HOME_FLOW_RUN_COUNT", scope_params) if existing.get("INIT$_TB_FLOW_WORK") and existing.get("INIT$_TB_PROJECT") else 0
-        counts["predictedColumns"] = _count_if(cursor, existing, "INIT$_TB_COLTYPE_RESULT",
-            "HOME_PREDICTED_COLUMN_COUNT")
-        counts["correlationPairs"] = _count_if(cursor, existing, "INIT$_TB_COLREL_CAT_PAIR",
-            "HOME_CORRELATION_PAIR_COUNT")
-        counts["selectedCorrelations"] = _count_if(cursor, existing, "INIT$_TB_COLREL_CAT_SUMMARY",
-            "HOME_SELECTED_CORRELATION_COUNT")
-
-        if existing.get("INIT$_TB_DATA_WORK_RUN") and existing.get("INIT$_TB_DATA_WORK_JOB") and existing.get("INIT$_TB_PROJECT"):
-            _target_execute(cursor, "HOME_RUN_STATUS", scope_params)
-            summary["runStatus"] = [{"status": row[0] or "UNKNOWN", "count": int(row[1] or 0)} for row in cursor.fetchall()]
-
-        if (
-            existing.get("INIT$_TB_DATA_WORK_RUN")
-            and existing.get("INIT$_TB_DATA_WORK_JOB")
-            and existing.get("INIT$_TB_FLOW_WORK_RUN")
-            and existing.get("INIT$_TB_FLOW_WORK")
-            and existing.get("INIT$_TB_PROJECT")
-        ):
-            _target_execute(cursor, "HOME_DATA_RUN_TREND", scope_params)
-            summary["trend"] = [{"label": row[0], "count": int(row[1] or 0)} for row in cursor.fetchall()]
-
-            _target_execute(cursor, "HOME_RULE_RUN_TREND", scope_params)
-            summary["ruleTrend"] = [
-                {
-                    "label": row[0],
-                    "menuCode": row[1],
-                    "menuLabel": row[2],
-                    "statusGroup": row[3] or "SUCCESS",
-                    "count": int(row[4] or 0),
-                }
-                for row in cursor.fetchall()
-            ]
 
         if (
             existing.get("INIT$_TB_FLOW_WORK_RUN")
@@ -421,7 +400,9 @@ async def read_home():
 
 
 @router.get("/dashboard")
-def dashboard(request: Request):
+def dashboard(request: Request, sections: str | None = None):
+    started_at = time.monotonic()
+    requested_sections = _normalize_dashboard_sections(sections)
     user_id = get_request_user_id(request)
     include_all_users = get_request_role_code(request) == "ADMIN"
     try:
@@ -429,74 +410,69 @@ def dashboard(request: Request):
     except Exception:
         connection_id = None
 
-    system = _get_system_summary(user_id, connection_id, include_all_users)
-    target = _get_target_summary(request, user_id, connection_id, include_all_users)
-    counts = target.get("counts", {})
-    connected = bool(target.get("connected"))
-    schema_installed = bool(target.get("schemaInstalled"))
-
-    data_runs = int(counts.get("dataRuns") or 0)
-    flow_runs = int(counts.get("flowRuns") or 0)
-    total_runs = data_runs + flow_runs
-    prepared = int(counts.get("scenarioTables") or 0)
-    review = int(counts.get("dataJobs") or 0)
-    pending = max(0, prepared + review - total_runs)
-    active_notices = _get_active_system_notices(50)
-
-    return {
+    payload: dict[str, Any] = {
         "status": "success",
         "generatedAt": datetime.now().isoformat(timespec="seconds"),
-        "system": system,
-        "target": target,
-        "kpis": [
-            {
-                "key": "targetReadiness",
-                "label": "Target Readiness",
-                "value": "Ready" if connected and schema_installed else ("Connected" if connected else "Required"),
-                "trend": "Schema installed" if schema_installed else ("Target connected, schema incomplete" if connected else "Select or fix Target DB"),
-                "tone": "is-good" if connected and schema_installed else "is-warn",
-                "icon": "fa-database",
-            },
-            {
-                "key": "projects",
-                "label": "Projects",
-                "value": counts.get("projects", 0),
-                "trend": f"{counts.get('scenarios', 0)} scenarios",
-                "tone": "is-info",
-                "icon": "fa-folder-tree",
-            },
-            {
-                "key": "flowStage",
-                "label": "Flows",
-                "value": counts.get("flows", 0),
-                "trend": f"{counts.get('flowRuns', 0)} flow runs",
-                "tone": "is-primary",
-                "icon": "fa-diagram-project",
-            },
-            {
-                "key": "dataWork",
-                "label": "Data Work",
-                "value": counts.get("dataJobs", 0),
-                "trend": f"{counts.get('dataRuns', 0)} job runs",
-                "tone": "is-neutral",
-                "icon": "fa-gears",
-            },
-        ],
-        "stages": [
-            {"code": "M02002", "name": "Target Table", "state": f"{counts.get('scenarioTables', 0)} tables", "value": counts.get("scenarioTables", 0), "icon": "fa-table"},
-            {"code": "M03003", "name": "Rule Discovery", "state": f"{counts.get('selectedCorrelations', 0)} selected", "value": counts.get("selectedCorrelations", 0), "icon": "fa-wand-magic-sparkles"},
-            {"code": "M04001", "name": "Integrated Flow", "state": f"{counts.get('flows', 0)} flows", "value": counts.get("flows", 0), "icon": "fa-diagram-project"},
-            {"code": "M07002", "name": "Final Apply", "state": f"{total_runs} runs", "value": total_runs, "icon": "fa-circle-check"},
-        ],
-        "quality": [
-            {"label": "Prepared", "value": prepared},
-            {"label": "Review", "value": review},
-            {"label": "Pending", "value": pending},
-        ],
-        "trend": target.get("trend", []),
-        "notices": active_notices,
-        "popupNotices": [notice for notice in active_notices if notice.get("popupYn") == "Y"],
+        "sections": sorted(requested_sections),
     }
+
+    if requested_sections & {"system", "notices"}:
+        system_started_at = time.monotonic()
+        conn = None
+        cursor = None
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            if "system" in requested_sections:
+                payload["system"] = _get_system_summary(
+                    user_id,
+                    connection_id,
+                    include_all_users,
+                    cursor=cursor,
+                )
+            if "notices" in requested_sections:
+                active_notices = _get_active_system_notices(20, cursor=cursor)
+                payload["notices"] = active_notices
+                payload["popupNotices"] = [
+                    notice for notice in active_notices if notice.get("popupYn") == "Y"
+                ]
+        except Exception as error:
+            logger.warning("Home system dashboard sections failed: %s", error)
+            if "system" in requested_sections:
+                payload["system"] = {"connection": None, "error": str(error)}
+            if "notices" in requested_sections:
+                payload["notices"] = []
+                payload["popupNotices"] = []
+        finally:
+            if cursor:
+                cursor.close()
+            if conn:
+                conn.close()
+        logger.info(
+            "[Home Dashboard] system sections=%s elapsed=%.3fs",
+            ",".join(sorted(requested_sections & {"system", "notices"})),
+            time.monotonic() - system_started_at,
+        )
+
+    if "workflow" in requested_sections:
+        target_started_at = time.monotonic()
+        payload["target"] = _get_target_summary(
+            request,
+            user_id,
+            connection_id,
+            include_all_users,
+        )
+        logger.info(
+            "[Home Dashboard] workflow elapsed=%.3fs",
+            time.monotonic() - target_started_at,
+        )
+
+    logger.info(
+        "[Home Dashboard] complete sections=%s elapsed=%.3fs",
+        ",".join(sorted(requested_sections)),
+        time.monotonic() - started_at,
+    )
+    return payload
 
 
 @router.get("/notice-files/{file_id}/download")
