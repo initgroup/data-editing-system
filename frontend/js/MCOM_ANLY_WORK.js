@@ -185,6 +185,7 @@
         relationNetworkEdgeGridCollapsed: false,
         relationNetworkEdgeFilter: { scope: "ALL", minWeightPercent: 0, aggregateClusters: false },
         relationNetworkPinnedNodeIds: new Set(),
+        expandedColumnLists: new Set(),
         lassoSummaryFilter: { direction: "ALL", targetColumn: "" },
         lassoPairFilter: { targetColumn: "", featureName: "" },
         predictedTypeFilter: "ALL",
@@ -266,6 +267,7 @@
             this.relationNetworkWheelZoomEnabled = true;
             this.relationNetworkEdgeGridCollapsed = false;
             this.relationNetworkPinnedNodeIds = new Set();
+            this.expandedColumnLists = new Set();
             this.lassoSummaryFilter = { direction: "ALL", targetColumn: "" };
             this.lassoPairFilter = { targetColumn: "", featureName: "" };
             this.predictedTypeFilter = "ALL";
@@ -1330,6 +1332,10 @@
             if (!panel) return;
             const activeName = String(this.selectedNode?.RESULT_OBJECT_NAME || "").toUpperCase();
             if (results.length > 1 && !panel.querySelector(".anly-work-result-switcher")) {
+                const hasColumnTypeResults = results.some((item) => [
+                    "INIT$_TB_COLTYPE_RESULT",
+                    "INIT$_TB_COLTYPE_FINAL"
+                ].includes(String(item?.objectName || "").trim().toUpperCase()));
                 const activeResult = this.getSelectedNodeResultObjects().find(
                     (item) => String(item?.objectName || "").trim().toUpperCase() === activeName
                 );
@@ -1356,6 +1362,13 @@
                                     <span>${this.escapeHtml(label)}</span>
                                 </button>`;
                             }).join("")}
+                            ${hasColumnTypeResults ? `
+                                <button type="button" class="anly-work-result-export" onclick="${PAGE_CODE}.exportPredictedTypeSummary()"
+                                        title="${this.escapeHtml(getText("Export all RULE / MODEL / FINAL column type results"))}">
+                                    <i class="fas fa-file-export"></i>
+                                    <span>Export</span>
+                                </button>
+                            ` : ""}
                         </div>
                     </nav>
                 `);
@@ -4178,8 +4191,8 @@
         renderCorrelationSummary(summary, json = {}) {
             if (!summary) return "";
             const columns = Array.isArray(summary.associatedColumns) ? summary.associatedColumns : [];
-            const visibleColumns = columns.slice(0, 80);
-            const hiddenCount = Math.max(0, columns.length - visibleColumns.length);
+            const expansionKey = this.getColumnListExpansionKey("CORRELATION", summary.correlationKind || "ALL");
+            const expanded = this.isColumnListExpanded(expansionKey);
             const isNumeric = String(summary.correlationKind || "").toUpperCase() === "NUMERIC";
             const topPairs = this.getRepresentativeColumnPairs(Array.isArray(summary.topPairs) ? summary.topPairs : []);
             const pairFilter = this.correlationSummaryFilter || {};
@@ -4210,10 +4223,9 @@
                         </header>
                         <div>
                             <strong>${this.escapeHtml(getText("Related columns"))}</strong>
-                            <div class="anly-work-corr-tags">
-                                ${visibleColumns.map((column) => this.renderColumnChip(column, summary)).join("")}
-                                ${hiddenCount ? `<em class="anly-work-column-chip">+${this.formatNumber(hiddenCount)} more</em>` : ""}
-                                ${!visibleColumns.length ? `<em class="anly-work-column-chip">${this.escapeHtml(getText("No related columns."))}</em>` : ""}
+                            <div class="anly-work-corr-tags ${expanded ? "is-expanded" : ""}">
+                                ${this.renderExpandableColumnChips(columns, summary, expansionKey, 80)}
+                                ${!columns.length ? `<em class="anly-work-column-chip">${this.escapeHtml(getText("No related columns."))}</em>` : ""}
                             </div>
                         </div>
                         <div>
@@ -4273,8 +4285,8 @@
             );
             const passCriteria = this.getActualRelationPassCriteria();
             const columns = this.getRelationDetailColumns(summary, selectedType, filteredPairs, selectedPassYn);
-            const visibleColumns = columns.slice(0, 80);
-            const hiddenCount = Math.max(0, columns.length - visibleColumns.length);
+            const expansionKey = this.getColumnListExpansionKey("RELATION", `${selectedType}:${selectedPassYn}`);
+            const expanded = this.isColumnListExpanded(expansionKey);
             return `
                 <section class="anly-work-corr-summary anly-work-relation-summary">
                     <header>
@@ -4349,10 +4361,9 @@
                         </header>
                         <div>
                             <strong>${this.escapeHtml(getText("Related columns"))}</strong>
-                            <div class="anly-work-corr-tags">
-                                ${visibleColumns.map((column) => this.renderColumnChip(column, summary)).join("")}
-                                ${hiddenCount ? `<em class="anly-work-column-chip">+${this.formatNumber(hiddenCount)} more</em>` : ""}
-                                ${!visibleColumns.length ? `<em class="anly-work-column-chip">${this.escapeHtml(getText("No related columns."))}</em>` : ""}
+                            <div class="anly-work-corr-tags ${expanded ? "is-expanded" : ""}">
+                                ${this.renderExpandableColumnChips(columns, summary, expansionKey, 80)}
+                                ${!columns.length ? `<em class="anly-work-column-chip">${this.escapeHtml(getText("No related columns."))}</em>` : ""}
                             </div>
                         </div>
                         <div>
@@ -4635,8 +4646,8 @@
                 ? topEdges
                 : topEdges.filter((edge) => this.getRelationClusterId(edge.CLUSTER_ID) === selectedClusterId);
             const detailColumns = this.getRelationNetworkDetailColumns(summary, selectedClusterId, visibleEdges, clusters);
-            const visibleColumns = detailColumns.slice(0, 80);
-            const hiddenCount = Math.max(0, detailColumns.length - visibleColumns.length);
+            const expansionKey = this.getColumnListExpansionKey("RELATION_NETWORK", selectedClusterId);
+            const expanded = this.isColumnListExpanded(expansionKey);
             return `
                 <section class="anly-work-corr-summary anly-work-network-summary">
                     <header>
@@ -4692,10 +4703,9 @@
                         </header>
                         <div>
                             <strong>${this.escapeHtml(getText("Related columns"))}</strong>
-                            <div class="anly-work-corr-tags">
-                                ${visibleColumns.map((column) => this.renderColumnChip(column, summary)).join("")}
-                                ${hiddenCount ? `<em class="anly-work-column-chip">+${this.formatNumber(hiddenCount)} more</em>` : ""}
-                                ${!visibleColumns.length ? `<em class="anly-work-column-chip">${this.escapeHtml(getText("No related columns."))}</em>` : ""}
+                            <div class="anly-work-corr-tags ${expanded ? "is-expanded" : ""}">
+                                ${this.renderExpandableColumnChips(detailColumns, summary, expansionKey, 80)}
+                                ${!detailColumns.length ? `<em class="anly-work-column-chip">${this.escapeHtml(getText("No related columns."))}</em>` : ""}
                             </div>
                         </div>
                         <div>
@@ -8656,14 +8666,84 @@
             `;
         },
 
+        getPredictedTypeExportGroupCode(value = "") {
+            const normalized = String(value || "").trim().toUpperCase();
+            if (["범주형", "CATEGORICAL", "CATEGORY", "CAT"].includes(normalized)) return "CATEGORICAL";
+            if (["연속형", "NUMERIC", "CONTINUOUS", "NUMBER"].includes(normalized)) return "CONTINUOUS";
+            return "OTHER";
+        },
+
+        exportPredictedTypeSummary() {
+            const summary = this.lastResultTableJson?.predictedTypeSummary;
+            if (!summary) {
+                alert(getText("No column type summary data to export."));
+                return;
+            }
+            const sourceMap = new Map((Array.isArray(summary.predictionSourceGroups) ? summary.predictionSourceGroups : [])
+                .map((source) => [String(source?.sourceCode || "").trim().toUpperCase(), source]));
+            if (!sourceMap.has("FINAL") && Array.isArray(summary.finalSummaryGroups)) {
+                sourceMap.set("FINAL", {
+                    sourceCode: "FINAL",
+                    sourceColumn: "FINAL_PREDICTED_TYPE",
+                    groups: summary.finalSummaryGroups
+                });
+            }
+            const rows = [];
+            ["RULE", "MODEL", "FINAL"].forEach((sourceCode) => {
+                const source = sourceMap.get(sourceCode);
+                (Array.isArray(source?.groups) ? source.groups : []).forEach((group) => {
+                    const groupCode = this.getPredictedTypeExportGroupCode(group?.typeGroup);
+                    (Array.isArray(group?.columns) ? group.columns : []).forEach((columnName) => {
+                        const columnId = String(columnName || "").trim();
+                        if (!columnId) return;
+                        rows.push({
+                            TARGET_OWNER: String(summary.targetOwner || ""),
+                            TARGET_TABLE: String(summary.targetTable || ""),
+                            SOURCE_TYPE: sourceCode,
+                            SOURCE_COLUMN: String(source?.sourceColumn || ""),
+                            TYPE_GROUP_CODE: groupCode,
+                            TYPE_GROUP_LABEL: this.getPredictedTypeGroupLabel(groupCode),
+                            COLUMN_ID: columnId,
+                            COLUMN_LABEL: this.getColumnComment(columnId, summary)
+                        });
+                    });
+                });
+            });
+            if (!rows.length) {
+                alert(getText("No column type summary data to export."));
+                return;
+            }
+            const filenameParts = [
+                PAGE_CODE,
+                summary.targetOwner,
+                summary.targetTable,
+                "COLUMN_TYPES_RULE_MODEL_FINAL"
+            ].filter(Boolean).map((part) => String(part).replace(/[^A-Za-z0-9_$-]+/g, "_"));
+            this.downloadCsv(
+                `${filenameParts.join("_")}.csv`,
+                [
+                    "TARGET_OWNER",
+                    "TARGET_TABLE",
+                    "SOURCE_TYPE",
+                    "SOURCE_COLUMN",
+                    "TYPE_GROUP_CODE",
+                    "TYPE_GROUP_LABEL",
+                    "COLUMN_ID",
+                    "COLUMN_LABEL"
+                ],
+                rows
+            );
+        },
+
         renderPredictedTypeUnifiedMode(sourceGroups = [], finalGroups = [], summary = null) {
             const safeGroups = this.getUnifiedPredictionSourceGroups(sourceGroups, finalGroups);
             if (!safeGroups.length) {
                 return `<div class="table-empty">${this.escapeHtml(getMessage("noPredictionColumns", "No RULE / MODEL / FINAL prediction column information is available."))}</div>`;
             }
+            const groupLayout = this.getPredictedTypeGroupLayout(safeGroups);
             return `
                 <div class="anly-work-type-source-grid">
-                    ${safeGroups.map((source) => this.renderPredictedTypeSourceGroup(source, summary)).join("")}
+                    ${safeGroups.map((source) => this.renderPredictedTypeSourceGroup(source, summary, false, groupLayout)).join("")}
                 </div>
             `;
         },
@@ -8756,6 +8836,7 @@
                     summary
                 );
             }
+            const groupLayout = this.getPredictedTypeGroupLayout(safeSourceGroups);
             return `
                 <section class="anly-work-type-version">
                     <header>
@@ -8763,14 +8844,15 @@
                         <span>${this.escapeHtml(getMessage("runBasedPredictionNote", "INIT$_TB_COLTYPE_RESULT prediction value at {method} execution", { method: methodLabel }))}</span>
                     </header>
                     <div class="anly-work-type-run-source-grid">
-                        ${safeSourceGroups.map((source) => this.renderPredictedTypeSourceGroup(source, summary, true)).join("")}
+                        ${safeSourceGroups.map((source) => this.renderPredictedTypeSourceGroup(source, summary, true, groupLayout)).join("")}
                     </div>
                 </section>
             `;
         },
 
-        renderPredictedTypeSourceGroup(source = {}, summary = null, compact = false) {
-            const groups = Array.isArray(source.groups) ? source.groups : [];
+        renderPredictedTypeSourceGroup(source = {}, summary = null, compact = false, groupLayout = null) {
+            const groups = this.normalizePredictedTypeGroups(source.groups);
+            const safeGroupLayout = groupLayout || this.getPredictedTypeGroupLayout([{ groups }]);
             const total = groups.reduce((sum, group) => sum + Number(group.columnCount || 0), 0);
             const sourceClass = `is-source-${String(source.sourceCode || "").toLowerCase().replace(/[^a-z0-9_-]/g, "")}`;
             return `
@@ -8781,14 +8863,15 @@
                         <small>${this.escapeHtml(getMessage("columnsCount", "{count} columns", { count: this.formatNumber(total) }))}</small>
                     </header>
                     <div class="anly-work-type-source-groups">
-                        ${groups.map((group) => this.renderPredictedTypeGroup(group, summary)).join("")}
+                        ${groups.map((group) => this.renderPredictedTypeGroup(group, summary, safeGroupLayout)).join("")}
                     </div>
                 </section>
             `;
         },
 
         renderPredictedTypeVersion(title, note, groups = [], summary = null) {
-            const safeGroups = Array.isArray(groups) ? groups : [];
+            const safeGroups = this.normalizePredictedTypeGroups(groups);
+            const groupLayout = this.getPredictedTypeGroupLayout([{ groups: safeGroups }]);
             return `
                 <section class="anly-work-type-version">
                     <header>
@@ -8796,25 +8879,74 @@
                         <span>${this.escapeHtml(note)}</span>
                     </header>
                     <div class="anly-work-type-group-grid">
-                        ${safeGroups.map((group) => this.renderPredictedTypeGroup(group, summary)).join("")}
+                        ${safeGroups.map((group) => this.renderPredictedTypeGroup(group, summary, groupLayout)).join("")}
                     </div>
                 </section>
             `;
         },
 
-        renderPredictedTypeGroup(group, summary = null) {
+        normalizePredictedTypeGroups(groups = []) {
+            const safeGroups = Array.isArray(groups) ? groups : [];
+            const groupMap = new Map(safeGroups.map((group) => [
+                this.getPredictedTypeExportGroupCode(group?.typeGroup),
+                group
+            ]));
+            return ["CATEGORICAL", "CONTINUOUS", "OTHER"].map((typeGroup) => {
+                const group = groupMap.get(typeGroup);
+                if (group) return group;
+                return {
+                    typeGroup,
+                    columnCount: 0,
+                    columns: []
+                };
+            });
+        },
+
+        getPredictedTypeGroupLayout(sourceGroups = []) {
+            const groupMaxCounts = {
+                CATEGORICAL: 0,
+                CONTINUOUS: 0,
+                OTHER: 0
+            };
+            (Array.isArray(sourceGroups) ? sourceGroups : []).forEach((source) => {
+                this.normalizePredictedTypeGroups(source?.groups).forEach((group) => {
+                    const groupCode = this.getPredictedTypeExportGroupCode(group?.typeGroup);
+                    const columnCount = Array.isArray(group?.columns)
+                        ? group.columns.length
+                        : Number(group?.columnCount || 0);
+                    groupMaxCounts[groupCode] = Math.max(groupMaxCounts[groupCode] || 0, columnCount);
+                });
+            });
+            return Object.fromEntries(Object.entries(groupMaxCounts).map(([groupCode, maxCount]) => {
+                const visibleLimit = groupCode === "OTHER" ? 10 : 20;
+                const visibleCount = Math.min(maxCount, visibleLimit);
+                return [groupCode, {
+                    visibleLimit,
+                    visibleRows: Math.max(1, visibleCount)
+                }];
+            }));
+        },
+
+        renderPredictedTypeGroup(group, summary = null, groupLayout = null) {
             const columns = Array.isArray(group.columns) ? group.columns : [];
-            const visibleColumns = columns.slice(0, 80);
-            const hiddenCount = Math.max(0, columns.length - visibleColumns.length);
+            const groupCode = this.getPredictedTypeExportGroupCode(group.typeGroup);
+            const layout = groupLayout?.[groupCode] || {
+                visibleLimit: groupCode === "OTHER" ? 10 : 20,
+                visibleRows: 1
+            };
+            const groupStyle = [
+                `--anly-type-visible-rows:${layout.visibleRows}`
+            ].join(";");
             return `
-                <article class="anly-work-type-group">
+                <article class="anly-work-type-group" style="${groupStyle}">
                     <header>
                         <strong>${this.escapeHtml(this.getPredictedTypeGroupLabel(group.typeGroup))}</strong>
                         <small>${this.escapeHtml(getMessage("columnsCount", "{count} columns", { count: this.formatNumber(group.columnCount) }))}</small>
                     </header>
-                    <div class="anly-work-corr-tags">
-                        ${visibleColumns.map((column) => this.renderColumnChip(column, summary || group)).join("")}
-                        ${hiddenCount ? `<em class="anly-work-column-chip">${this.escapeHtml(getMessage("moreColumns", "+{count} more", { count: this.formatNumber(hiddenCount) }))}</em>` : ""}
+                    <div class="anly-work-corr-tags anly-work-type-group-columns">
+                        ${columns.length
+                            ? columns.map((column) => this.renderColumnChip(column, summary || group)).join("")
+                            : `<span class="anly-work-type-group-empty">${this.escapeHtml(getMessage("noColumns", "No columns."))}</span>`}
                     </div>
                 </article>
             `;
@@ -9538,6 +9670,47 @@
                     ${comment ? `<small>${this.escapeHtml(comment)}</small>` : ""}
                 </em>
             `;
+        },
+
+        getColumnListExpansionKey(scope = "COLUMNS", detail = "") {
+            return [
+                String(scope || "COLUMNS").trim().toUpperCase(),
+                String(this.selectedNode?.FLOW_NODE_RUN_ID || ""),
+                String(this.selectedNode?.RESULT_OBJECT_NAME || "").trim().toUpperCase(),
+                String(detail || "").trim().toUpperCase()
+            ].join("|");
+        },
+
+        isColumnListExpanded(key = "") {
+            return Boolean(key && this.expandedColumnLists?.has(key));
+        },
+
+        renderExpandableColumnChips(columns = [], source = null, key = "", limit = 80) {
+            const safeColumns = Array.isArray(columns) ? columns : [];
+            const safeLimit = Math.max(1, Number(limit) || 80);
+            const expanded = this.isColumnListExpanded(key);
+            const visibleColumns = expanded ? safeColumns : safeColumns.slice(0, safeLimit);
+            const hiddenCount = Math.max(0, safeColumns.length - safeLimit);
+            return `
+                ${visibleColumns.map((column) => this.renderColumnChip(column, source)).join("")}
+                ${hiddenCount ? `
+                    <button type="button" class="anly-work-column-more-button" aria-expanded="${expanded ? "true" : "false"}"
+                            onclick="${PAGE_CODE}.toggleColumnListExpansion('${this.escapeJs(key)}')">
+                        ${expanded
+                            ? this.escapeHtml(getMessage("collapseColumns", "접기"))
+                            : this.escapeHtml(getMessage("moreColumns", "+{count} more", { count: this.formatNumber(hiddenCount) }))}
+                    </button>
+                ` : ""}
+            `;
+        },
+
+        toggleColumnListExpansion(key = "") {
+            const normalizedKey = String(key || "");
+            if (!normalizedKey) return;
+            if (!this.expandedColumnLists) this.expandedColumnLists = new Set();
+            if (this.expandedColumnLists.has(normalizedKey)) this.expandedColumnLists.delete(normalizedKey);
+            else this.expandedColumnLists.add(normalizedKey);
+            this.refreshTableResultSummary({ preserveScroll: true });
         },
 
         renderColumnAwareText(text, source = null) {

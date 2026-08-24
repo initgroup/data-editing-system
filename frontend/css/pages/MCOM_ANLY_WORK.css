@@ -1705,6 +1705,14 @@
     gap: 6px;
 }
 
+.anly-work-corr-tags.is-expanded {
+    align-content: flex-start;
+    max-height: 360px;
+    overflow: auto;
+    overscroll-behavior: contain;
+    padding: 6px;
+}
+
 .anly-work-corr-tags em {
     background: #ffffff;
     border: 1px solid #bfdbfe;
@@ -1717,6 +1725,23 @@
     font-style: normal;
     font-weight: 800;
     padding: 4px 7px;
+}
+
+.anly-work-column-more-button {
+    background: #eff6ff;
+    border: 1px solid #93c5fd;
+    color: #1d4ed8;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 850;
+    padding: 4px 9px;
+}
+
+.anly-work-column-more-button:hover,
+.anly-work-column-more-button:focus-visible {
+    background: #dbeafe;
+    border-color: #2563eb;
+    outline: none;
 }
 
 .anly-work-corr-pair-strip,
@@ -4059,6 +4084,8 @@
 
 .anly-work-column-chip b {
     flex: 0 1 auto;
+    font-family: Consolas, "Courier New", monospace;
+    min-width: 6ch;
 }
 
 .anly-work-column-ref b {
@@ -4236,6 +4263,8 @@
 .anly-work-type-source {
     background: rgba(255, 255, 255, 0.55);
     border: 1px solid #bfdbfe;
+    display: flex;
+    flex-direction: column;
     min-width: 0;
     overflow: hidden;
     padding: 10px;
@@ -4289,7 +4318,9 @@
 
 .anly-work-type-source-groups {
     display: grid;
+    flex: 1 1 auto;
     gap: 8px;
+    min-height: 0;
 }
 
 .anly-work-type-run-source-grid {
@@ -4336,6 +4367,13 @@
 .anly-work-type-group {
     background: #ffffff;
     border: 1px solid #bfdbfe;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    height: calc(
+        48px
+        + (var(--anly-type-visible-rows, 1) * 32px)
+    );
     min-width: 0;
     overflow: hidden;
     padding: 10px;
@@ -4359,6 +4397,41 @@
 .anly-work-type-group small {
     color: #64748b;
     font-size: 11px;
+}
+
+.anly-work-type-group-columns {
+    align-content: flex-start;
+    display: grid;
+    flex: 1 1 0;
+    grid-auto-rows: 26px;
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-right: 4px;
+}
+
+.anly-work-type-group-columns .anly-work-column-chip {
+    box-sizing: border-box;
+    max-width: none;
+    width: 100%;
+}
+
+.anly-work-type-group-columns .anly-work-column-chip b {
+    flex: 0 0 6ch;
+    font-family: Consolas, "Courier New", monospace;
+    max-width: 6ch;
+    width: 6ch;
+}
+
+.anly-work-type-group-columns .anly-work-column-chip small {
+    flex: 1 1 auto;
+}
+
+.anly-work-type-group-empty {
+    color: #94a3b8;
+    font-size: 11px;
+    padding: 4px 0;
 }
 
 .anly-work-type-detail {
@@ -6238,4 +6311,20 @@
     background: #e0f2fe;
     border-color: #0284c7;
     color: #075985;
+}
+
+.anly-work-result-switcher button.anly-work-result-export {
+    background: #ffffff;
+    border-color: #cbd5e1;
+    border-radius: 4px;
+    color: #0f2748;
+    margin-left: 8px;
+}
+
+.anly-work-result-switcher button.anly-work-result-export:hover,
+.anly-work-result-switcher button.anly-work-result-export:focus-visible {
+    background: #eff6ff;
+    border-color: #2563eb;
+    color: #1d4ed8;
+    outline: none;
 }

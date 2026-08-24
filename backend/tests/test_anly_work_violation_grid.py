@@ -31,6 +31,15 @@ class AnalysisViolationGridTests(unittest.TestCase):
         self.assertNotIn("max-width: 10ch;", style)
         self.assertNotIn("min-width: 10ch;", style)
 
+    def test_m04002_column_chips_reserve_six_column_id_characters(self):
+        style = ANALYSIS_STYLE.read_text(encoding="utf-8")
+        start = style.index(".anly-work-column-chip b {")
+        end = style.index("}", start)
+        column_id_rule = style[start:end]
+
+        self.assertIn('font-family: Consolas, "Courier New", monospace;', column_id_rule)
+        self.assertIn("min-width: 6ch;", column_id_rule)
+
     def test_rule_columns_start_immediately_after_frozen_keys(self):
         script = ANALYSIS_SCRIPT.read_text(encoding="utf-8")
         start = script.index("        orderViolationSqlColumns(columns")
@@ -40,6 +49,52 @@ class AnalysisViolationGridTests(unittest.TestCase):
         self.assertIn("const frozenKeys = keys.slice(0, freezeColumns);", order_block)
         self.assertIn("const remainingKeys = keys.slice(freezeColumns);", order_block)
         self.assertIn("return [...frozenKeys, ...rules, ...remainingKeys, ...rest];", order_block)
+
+    def test_column_type_more_badge_expands_and_collapses_full_list(self):
+        script = ANALYSIS_SCRIPT.read_text(encoding="utf-8")
+        style = ANALYSIS_STYLE.read_text(encoding="utf-8")
+
+        self.assertIn("expandedColumnLists: new Set()", script)
+        self.assertIn("renderExpandableColumnChips(columns", script)
+        self.assertIn("toggleColumnListExpansion(key", script)
+        self.assertIn('aria-expanded="${expanded ? "true" : "false"}"', script)
+        self.assertIn('getMessage("collapseColumns", "접기")', script)
+        self.assertIn(".anly-work-column-more-button", style)
+        self.assertIn(".anly-work-corr-tags.is-expanded", style)
+
+    def test_predicted_type_groups_keep_equal_height_and_scroll_internally(self):
+        script = ANALYSIS_SCRIPT.read_text(encoding="utf-8")
+        style = ANALYSIS_STYLE.read_text(encoding="utf-8")
+
+        self.assertIn("normalizePredictedTypeGroups(groups", script)
+        self.assertIn('["CATEGORICAL", "CONTINUOUS", "OTHER"]', script)
+        self.assertIn("getPredictedTypeGroupLayout(sourceGroups", script)
+        self.assertIn('const visibleLimit = groupCode === "OTHER" ? 10 : 20;', script)
+        self.assertIn("visibleRows: Math.max(1, visibleCount)", script)
+        self.assertIn("anly-work-type-group-columns", script)
+        self.assertIn("--anly-type-visible-rows", script)
+        self.assertIn("columns.map((column) => this.renderColumnChip", script)
+        self.assertIn(".anly-work-type-group-columns", style)
+        self.assertIn("grid-template-columns: minmax(0, 1fr);", style)
+        self.assertIn("overflow-y: auto;", style)
+        self.assertIn("var(--anly-type-visible-rows, 1) * 32px", style)
+        self.assertIn("flex: 0 0 6ch;", style)
+        self.assertIn("max-width: 6ch;", style)
+        self.assertIn("max-width: none;", style)
+        self.assertIn(".anly-work-type-group-columns .anly-work-column-chip small", style)
+        self.assertIn("flex: 1 1 auto;", style)
+
+    def test_column_type_export_includes_all_rule_model_final_groups(self):
+        script = ANALYSIS_SCRIPT.read_text(encoding="utf-8")
+        style = ANALYSIS_STYLE.read_text(encoding="utf-8")
+
+        self.assertIn("exportPredictedTypeSummary()", script)
+        self.assertIn('["RULE", "MODEL", "FINAL"].forEach', script)
+        self.assertIn('(Array.isArray(group?.columns) ? group.columns : []).forEach', script)
+        self.assertIn('"TYPE_GROUP_CODE"', script)
+        self.assertIn('"COLUMN_LABEL"', script)
+        self.assertIn("anly-work-result-export", script)
+        self.assertIn(".anly-work-result-switcher button.anly-work-result-export", style)
 
 
 if __name__ == "__main__":
