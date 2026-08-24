@@ -288,6 +288,50 @@
             ));
         }
 
+        getColumnTypeFinal(params) {
+            return this.request("/M03001/data/editable", {
+                method: "POST",
+                body: {
+                    owner: params.owner,
+                    tableName: "INIT$_TB_COLTYPE_FINAL",
+                    selectClause: [
+                        "OWNER",
+                        "TABLE_NAME",
+                        "COLUMN_NAME",
+                        "COLUMN_DESC",
+                        "COLUMN_ID",
+                        "DATA_TYPE",
+                        "BASE_PREDICTED_TYPE",
+                        "MODL_PREDICTED_TYPE",
+                        "FINAL_PREDICTED_TYPE",
+                        "FINAL_TYPE_CODE",
+                        "TYPE_GROUP_CODE",
+                        "LABEL_SOURCE",
+                        "CONFIRMED_YN",
+                        "FINAL_REASON",
+                        "FINAL_UPDATE_DT",
+                        "FINAL_UPDATE_USER"
+                    ].join(","),
+                    whereClause: params.whereClause,
+                    orderByClause: '"COLUMN_ID" ASC, "COLUMN_NAME" ASC',
+                    page: 1,
+                    limit: params.limit || 500
+                }
+            });
+        }
+
+        saveColumnTypeFinal(params) {
+            return this.request("/M03001/data/update", {
+                method: "POST",
+                body: {
+                    owner: params.owner,
+                    tableName: "INIT$_TB_COLTYPE_FINAL",
+                    whereClause: params.whereClause,
+                    changes: params.changes || []
+                }
+            });
+        }
+
         getCategoricalRules(params) {
             return this.request(this.buildPath("/M04002/model-rule-summary", {
                 owner: params.owner,

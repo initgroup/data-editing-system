@@ -430,14 +430,27 @@ def list_quick_edit_history(
         "offset": offset,
         "endRow": offset + page_size,
     }
-    list_only = flow_run_id is None
     result = execute_query(
         conn,
-        "FLOW_WORK_QUICK_EDIT_HISTORY_LIST" if list_only else "FLOW_WORK_QUICK_EDIT_HISTORY",
+        "FLOW_WORK_QUICK_EDIT_HISTORY_LIST",
         params,
     )
     response = data_work.require_success(result, "Quick Editing history query failed.")
     rows = response.get("data") or []
+    if flow_run_id is not None and rows:
+        row = rows[0]
+        needs_legacy_detail = (
+            normalize_status(row.get("RUN_TYPE"), "MANUAL") != "QUICK_EDIT"
+            or not str(row.get("OWNER_NAME") or "").strip()
+            or not str(row.get("TABLE_NAME") or "").strip()
+        )
+        if needs_legacy_detail:
+            legacy_result = execute_query(conn, "FLOW_WORK_QUICK_EDIT_HISTORY", params)
+            legacy_response = data_work.require_success(
+                legacy_result,
+                "Legacy Quick Editing history query failed.",
+            )
+            rows = legacy_response.get("data") or rows
     for row in rows:
         row["MESSAGE"] = data_work.read_lob(row.get("MESSAGE"))
     total = _quick_history_int(rows[0].get("TOTAL_COUNT")) if rows else 0
@@ -578,6 +591,14 @@ def list_node_runs(conn, flow_run_id: int) -> Dict[str, Any]:
         row["RUNTIME_PARAM_JSON"] = data_work.read_lob(row.get("RUNTIME_PARAM_JSON"))
         row["NODE_PAYLOAD_JSON"] = data_work.read_lob(row.get("NODE_PAYLOAD_JSON"))
         row["RUN_OUTPUT_JSON"] = data_work.read_lob(row.get("RUN_OUTPUT_JSON"))
+    return response
+
+
+def list_node_run_history(conn, flow_run_id: int) -> Dict[str, Any]:
+    result = execute_query(conn, "FLOW_WORK_NODE_RUN_HISTORY_LIST", {"flowRunId": flow_run_id})
+    response = data_work.require_success(result, "Flow node run history query failed.")
+    for row in response.get("data", []):
+        row["MESSAGE"] = data_work.read_lob(row.get("MESSAGE"))
     return response
 
 

@@ -21,6 +21,25 @@ def get_route_endpoint(path: str, method: str):
 
 
 class QuickEditHistoryTests(unittest.TestCase):
+    def test_statistics_summary_cards_match_kpi_populations_and_markers(self):
+        quick_html = (ROOT_DIR / "quick-edit" / "index.html").read_text(encoding="utf-8")
+        quick_js = (ROOT_DIR / "quick-edit" / "js" / "quick-edit.js").read_text(encoding="utf-8")
+        quick_css = (ROOT_DIR / "quick-edit" / "css" / "quick-edit.css").read_text(encoding="utf-8")
+        render_statistics = quick_js.split("function renderDescriptiveStatistics()", 1)[1].split(
+            "function getColumnTypeFinalRows()", 1
+        )[0]
+
+        self.assertIn("columns.forEach((column) =>", render_statistics)
+        self.assertNotIn("ranked.slice(0, 50)", render_statistics)
+        self.assertIn("const highPriorityColumnCount = ranked.filter(isHighPriority).length;", render_statistics)
+        self.assertIn("const violationColumnCount = ranked.filter", render_statistics)
+        self.assertIn("전체 ${R.escapeHtml(R.formatNumber(ranked.length, 0))}개 컬럼 표시", render_statistics)
+        self.assertIn('isPriority ? " is-priority" : ""', render_statistics)
+        self.assertIn('violationCount > 0 ? "is-violation" : "is-zero"', render_statistics)
+        self.assertIn('aria-label="통계 분석 컬럼 목록"', quick_html)
+        self.assertIn(".qe-statistics-priority-card.is-priority", quick_css)
+        self.assertIn("em.is-violation", quick_css)
+
     def test_quick_edit_elapsed_time_matches_m04001_timezone_and_waiting_rules(self):
         renderers_js = (ROOT_DIR / "quick-edit" / "js" / "renderers.js").read_text(encoding="utf-8")
         quick_js = (ROOT_DIR / "quick-edit" / "js" / "quick-edit.js").read_text(encoding="utf-8")
@@ -125,6 +144,9 @@ class QuickEditHistoryTests(unittest.TestCase):
         self.assertNotIn("DBMS_LOB.INSTR", sql)
         self.assertNotIn("ALL_TABLES", sql)
         self.assertNotIn("INIT$_TB_DATA_WORK_JOB", sql)
+        self.assertIn("R.MESSAGE", sql)
+        self.assertIn("PR.MESSAGE", sql)
+        self.assertLess(sql.index("R.MESSAGE"), sql.index("PR.MESSAGE"))
 
     def test_history_list_uses_fast_query_without_loading_detail(self):
         conn = Mock()
@@ -149,6 +171,86 @@ class QuickEditHistoryTests(unittest.TestCase):
         self.assertEqual(1, response["total"])
         self.assertEqual(1, execute_query.call_count)
         self.assertEqual("FLOW_WORK_QUICK_EDIT_HISTORY_LIST", execute_query.call_args.args[1])
+
+    def test_modern_history_detail_uses_fast_summary_query_without_legacy_fallback(self):
+        conn = Mock()
+        query_result = {
+            "status": "success",
+            "data": [{
+                "FLOW_RUN_ID": 1041,
+                "RUN_TYPE": "QUICK_EDIT",
+                "OWNER_NAME": "INIT$EDIT01",
+                "TABLE_NAME": "INITUP$QEDIT",
+                "TOTAL_COUNT": 1,
+            }],
+        }
+
+        with patch(
+            "backend.services.flow_work_service.execute_query",
+            return_value=query_result,
+        ) as execute_query:
+            response = flow_work_service.list_quick_edit_history(
+                conn,
+                "M04001",
+                7,
+                False,
+                1,
+                1,
+                flow_run_id=1041,
+            )
+
+        self.assertEqual(1, response["total"])
+        self.assertEqual(1, execute_query.call_count)
+        self.assertEqual("FLOW_WORK_QUICK_EDIT_HISTORY_LIST", execute_query.call_args.args[1])
+
+    def test_history_detail_endpoint_uses_compact_node_history(self):
+        endpoint = get_route_endpoint("/quick-edit/history/{flow_run_id}", "GET")
+        conn = Mock()
+        request = Mock()
+        run_row = {
+            "FLOW_RUN_ID": 1041,
+            "FLOW_ID": 88,
+            "PROJECT_ID": 10,
+            "SCENARIO_ID": 20,
+            "OWNER_NAME": "INIT$EDIT01",
+            "TABLE_NAME": "INITUP$QEDIT",
+            "STATUS": "SUCCESS",
+        }
+
+        with (
+            patch("backend.services.flow_work_router.get_target_db_connection", return_value=conn),
+            patch("backend.services.flow_work_router.get_request_user_id", return_value=7),
+            patch("backend.services.flow_work_router.get_request_role_code", return_value="USER"),
+            patch(
+                "backend.services.flow_work_router.flow_work.list_quick_edit_history",
+                return_value={"status": "success", "data": [run_row], "total": 1},
+            ),
+            patch(
+                "backend.services.flow_work_router.flow_work.list_node_run_history",
+                return_value={"status": "success", "data": []},
+            ) as list_history,
+            patch("backend.services.flow_work_router.flow_work.list_node_runs") as list_full_nodes,
+            patch("backend.services.flow_work_router.flow_work.get_run") as get_run,
+        ):
+            response = endpoint(1041, request)
+
+        self.assertEqual("success", response["status"])
+        list_history.assert_called_once_with(conn, 1041)
+        list_full_nodes.assert_not_called()
+        get_run.assert_not_called()
+
+    def test_history_restore_closes_dialog_before_loading_analysis_results(self):
+        quick_js = (ROOT_DIR / "quick-edit" / "js" / "quick-edit.js").read_text(encoding="utf-8")
+        restore_section = quick_js.split("async function restoreQuickHistory", 1)[1].split(
+            "\n    function showToast", 1
+        )[0]
+
+        self.assertLess(
+            restore_section.index('byId("qeRunHistoryDialog")?.close();'),
+            restore_section.index("await loadResults();"),
+        )
+        self.assertIn("quickHistoryDetailError = { runId", restore_section)
+        self.assertIn("불러오기 실패 · 다시 시도", quick_js)
 
     def test_empty_history_list_does_not_trigger_expensive_fallback(self):
         conn = Mock()

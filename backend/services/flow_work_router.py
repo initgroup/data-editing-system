@@ -1389,16 +1389,7 @@ def create_flow_work_router(
             if not rows:
                 raise HTTPException(status_code=404, detail="Quick Editing execution history was not found.")
             run_row = dict(rows[0])
-            stored_run = flow_work.get_run(
-                conn,
-                MENU_CODE,
-                int(run_row.get("PROJECT_ID") or 0),
-                int(run_row.get("SCENARIO_ID") or 0),
-                flow_run_id,
-            )
-            if stored_run:
-                run_row["PLAN_JSON"] = stored_run.get("PLAN_JSON")
-            node_rows = flow_work.list_node_runs(conn, flow_run_id).get("data") or []
+            node_rows = flow_work.list_node_run_history(conn, flow_run_id).get("data") or []
             return {
                 "status": "success",
                 "data": flow_work.build_quick_edit_history_detail(run_row, node_rows),

@@ -112,12 +112,13 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_TYPE_MODEL_TRAIN" (
     v_total_rows           NUMBER;
     v_train_rows           NUMBER;
     v_holdout_rows         NUMBER;
-    v_source_group_count   NUMBER;
-    v_holdout_group_count  NUMBER;
+    v_population_class_count NUMBER;
+    v_min_population_class_count NUMBER;
+    v_conflicting_signature_count NUMBER;
     v_running_count        NUMBER;
     v_train_class_count    NUMBER;
+    v_holdout_class_count  NUMBER;
     v_min_class_count      NUMBER;
-    v_unseen_class_count   NUMBER;
     v_score_row_count      NUMBER;
     v_prediction_count     NUMBER;
     v_model_attribute_count NUMBER;
@@ -125,11 +126,13 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_TYPE_MODEL_TRAIN" (
     v_model_target_count    NUMBER;
     v_model_target_name     VARCHAR2(128);
     v_model_target_value_count NUMBER;
+    v_raw_profile_query    VARCHAR2(32767);
     v_eligible_query       VARCHAR2(32767);
+    v_profile_query        VARCHAR2(32767);
     v_feature_projection   VARCHAR2(32767);
     v_data_query           VARCHAR2(32767);
     v_holdout_query        VARCHAR2(32767);
-    v_grouped_query        VARCHAR2(32767);
+    v_split_query          VARCHAR2(32767);
     v_model_data_query     VARCHAR2(32767);
     v_model_holdout_query  VARCHAR2(32767);
     v_score_expr           VARCHAR2(32767);
@@ -146,9 +149,41 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_TYPE_MODEL_TRAIN" (
     END;
 
     /*
+       The training signature must describe exactly the normalized predictor
+       values seen by OML.  Physical owner/table/column names and the target
+       label are intentionally excluded so an unchanged profile remains the
+       same learning case even when its source object is replaced or renamed.
+    */
+    FUNCTION feature_signature_expr(p_alias IN VARCHAR2) RETURN VARCHAR2 IS
+        v_prefix VARCHAR2(40) := p_alias || '.';
+    BEGIN
+        RETURN
+              'RAWTOHEX(STANDARD_HASH('
+            || 'NVL(CAST(' || v_prefix || '"DATA_TYPE" AS VARCHAR2(128)), ''UNKNOWN'')'
+            || ' || CHR(31) || TO_CHAR(NVL(' || v_prefix || '"TOTAL_ROWS", 0), ''TM9'', ''NLS_NUMERIC_CHARACTERS=.,'')'
+            || ' || CHR(31) || TO_CHAR(NVL(' || v_prefix || '"NON_NULL_ROWS", 0), ''TM9'', ''NLS_NUMERIC_CHARACTERS=.,'')'
+            || ' || CHR(31) || TO_CHAR(NVL(' || v_prefix || '"SAMPLE_ROWS", 0), ''TM9'', ''NLS_NUMERIC_CHARACTERS=.,'')'
+            || ' || CHR(31) || TO_CHAR(NVL(' || v_prefix || '"SAMPLE_NOT_NULL_ROWS", 0), ''TM9'', ''NLS_NUMERIC_CHARACTERS=.,'')'
+            || ' || CHR(31) || TO_CHAR(NVL(' || v_prefix || '"NUM_DISTINCT", 0), ''TM9'', ''NLS_NUMERIC_CHARACTERS=.,'')'
+            || ' || CHR(31) || TO_CHAR(NVL(' || v_prefix || '"SAMPLE_DISTINCT", 0), ''TM9'', ''NLS_NUMERIC_CHARACTERS=.,'')'
+            || ' || CHR(31) || TO_CHAR(NVL(' || v_prefix || '"DIST_VAL_RT", 0), ''TM9'', ''NLS_NUMERIC_CHARACTERS=.,'')'
+            || ' || CHR(31) || TO_CHAR(NVL(' || v_prefix || '"NULL_RATIO", 0), ''TM9'', ''NLS_NUMERIC_CHARACTERS=.,'')'
+            || ' || CHR(31) || NVL(CAST(' || v_prefix || '"LOG_DATA_TYPE" AS VARCHAR2(30)), ''UNKNOWN'')'
+            || ' || CHR(31) || TO_CHAR(NVL(' || v_prefix || '"ENTROPY", 0), ''TM9'', ''NLS_NUMERIC_CHARACTERS=.,'')'
+            || ' || CHR(31) || TO_CHAR(NVL(' || v_prefix || '"NORM_ENTROPY", 0), ''TM9'', ''NLS_NUMERIC_CHARACTERS=.,'')'
+            || ' || CHR(31) || TO_CHAR(NVL(' || v_prefix || '"NUMERIC_RATIO", 0), ''TM9'', ''NLS_NUMERIC_CHARACTERS=.,'')'
+            || ' || CHR(31) || TO_CHAR(NVL(' || v_prefix || '"INTEGER_RATIO", 0), ''TM9'', ''NLS_NUMERIC_CHARACTERS=.,'')'
+            || ' || CHR(31) || TO_CHAR(NVL(' || v_prefix || '"MIN_NUM_VALUE", 0), ''TM9'', ''NLS_NUMERIC_CHARACTERS=.,'')'
+            || ' || CHR(31) || TO_CHAR(NVL(' || v_prefix || '"MAX_NUM_VALUE", 0), ''TM9'', ''NLS_NUMERIC_CHARACTERS=.,'')'
+            || ' || CHR(31) || TO_CHAR(NVL(' || v_prefix || '"AVG_TEXT_LENGTH", 0), ''TM9'', ''NLS_NUMERIC_CHARACTERS=.,'')'
+            || ' || CHR(31) || TO_CHAR(NVL(' || v_prefix || '"MAX_TEXT_LENGTH", 0), ''TM9'', ''NLS_NUMERIC_CHARACTERS=.,'')'
+            || ', ''SHA256''))';
+    END;
+
+    /*
        CREATE_MODEL2 derives the model signature from the DATA_QUERY result
        metadata.  The source query contains outer joins, scalar subqueries and
-       grouped holdout CTEs, so nullable expressions can be exposed
+       profile-stratified holdout views, so nullable expressions can be exposed
        differently by Oracle releases even though an ordinary SELECT returns
        the expected values.  Present one stable, fully typed contract to model
        build, validation and scoring instead of allowing each step to infer a
@@ -325,100 +360,150 @@ BEGIN
         || '"NORM_ENTROPY", "NUMERIC_RATIO", "INTEGER_RATIO", "MIN_NUM_VALUE", "MAX_NUM_VALUE", '
         || '"AVG_TEXT_LENGTH", "MAX_TEXT_LENGTH", "TARGET_TYPE_CODE"';
 
-    -- First select one immutable profile snapshot per confirmed label, then cap
-    -- that deterministic eligible population. Train and holdout are split only
-    -- after the cap, so both memory use and evaluation size remain bounded.
-    v_eligible_query :=
-        'SELECT * FROM (
-             SELECT CAST(P."OWNER" || ''|'' || P."TABLE_NAME" || ''|'' || P."COLUMN_NAME" AS VARCHAR2(4000)) AS "CASE_ID"
-                  , P."OWNER" AS "SOURCE_OWNER"
-                  , P."TABLE_NAME" AS "SOURCE_TABLE"
-                  , P."DATA_TYPE"
-                  , P."TOTAL_ROWS"
-                  , P."NON_NULL_ROWS"
-                  , P."SAMPLE_ROWS"
-                  , P."SAMPLE_NOT_NULL_ROWS"
-                  , P."NUM_DISTINCT"
-                  , P."SAMPLE_DISTINCT"
-                  , P."DISTINCT_RATIO" AS "DIST_VAL_RT"
-                  , P."NULL_RATIO"
-                  , P."LOG_DATA_TYPE"
-                  , P."ENTROPY"
-                  , P."NORM_ENTROPY"
-                  , P."NUMERIC_RATIO"
-                  , P."INTEGER_RATIO"
-                  , P."MIN_NUM_VALUE"
-                  , P."MAX_NUM_VALUE"
-                  , P."AVG_TEXT_LENGTH"
-                  , P."MAX_TEXT_LENGTH"
-                  , L."TYPE_CODE" AS "TARGET_TYPE_CODE"
-               FROM "INIT$_TB_COLTYPE_LABEL" L
-               JOIN "INIT$_TB_COLTYPE_PROFILE" P
-                 ON P."PROFILE_ID" = NVL(
-                        L."SOURCE_PROFILE_ID",
-                        (
-                         SELECT MAX(P0."PROFILE_ID") KEEP (DENSE_RANK LAST ORDER BY P0."CREATED_AT", P0."PROFILE_ID")
-                           FROM "INIT$_TB_COLTYPE_PROFILE" P0
-                          WHERE P0."OWNER" = L."OWNER"
-                            AND P0."TABLE_NAME" = L."TABLE_NAME"
-                            AND P0."COLUMN_NAME" = L."COLUMN_NAME"
-                            AND P0."FEATURE_VERSION" = ''' || REPLACE(v_feature_version, '''', '''''') || '''
-                        )
-                    )
-                AND P."OWNER" = L."OWNER"
-                AND P."TABLE_NAME" = L."TABLE_NAME"
-                AND P."COLUMN_NAME" = L."COLUMN_NAME"
-                AND P."FEATURE_VERSION" = ''' || REPLACE(v_feature_version, '''', '''''') || '''
-              WHERE L."CONFIRMED_YN" = ''Y''
-                AND L."LABEL_SOURCE" IN (''USER_CONFIRMED'', ''IMPORTED_GOLD'')
-              ORDER BY ORA_HASH(P."OWNER" || ''|'' || P."TABLE_NAME" || ''|'' || P."COLUMN_NAME", 4294967295, ' || number_literal(v_random_seed) || ')
-                     , P."PROFILE_ID"
-         ) WHERE ROWNUM <= ' || number_literal(v_max_input_rows);
+    /*
+       A learning case is the immutable profile snapshot referenced by a
+       confirmed label.  Normalize the 18 V2 predictors exactly as the OML
+       input contract does, then deduplicate identical X vectors.  The source
+       object's physical owner/table/column names are used only to verify the
+       label-to-profile relationship and never enter X, CASE_ID, capping or
+       split allocation.
+    */
+    v_raw_profile_query :=
+          'SELECT CAST(NVL(P."DATA_TYPE", ''UNKNOWN'') AS VARCHAR2(128)) AS "DATA_TYPE"'
+        || '     , CAST(NVL(P."TOTAL_ROWS", 0) AS NUMBER) AS "TOTAL_ROWS"'
+        || '     , CAST(NVL(P."NON_NULL_ROWS", 0) AS NUMBER) AS "NON_NULL_ROWS"'
+        || '     , CAST(NVL(P."SAMPLE_ROWS", 0) AS NUMBER) AS "SAMPLE_ROWS"'
+        || '     , CAST(NVL(P."SAMPLE_NOT_NULL_ROWS", 0) AS NUMBER) AS "SAMPLE_NOT_NULL_ROWS"'
+        || '     , CAST(NVL(P."NUM_DISTINCT", 0) AS NUMBER) AS "NUM_DISTINCT"'
+        || '     , CAST(NVL(P."SAMPLE_DISTINCT", 0) AS NUMBER) AS "SAMPLE_DISTINCT"'
+        || '     , CAST(NVL(P."DISTINCT_RATIO", 0) AS NUMBER) AS "DIST_VAL_RT"'
+        || '     , CAST(NVL(P."NULL_RATIO", 0) AS NUMBER) AS "NULL_RATIO"'
+        || '     , CAST(NVL(P."LOG_DATA_TYPE", ''UNKNOWN'') AS VARCHAR2(30)) AS "LOG_DATA_TYPE"'
+        || '     , CAST(NVL(P."ENTROPY", 0) AS NUMBER) AS "ENTROPY"'
+        || '     , CAST(NVL(P."NORM_ENTROPY", 0) AS NUMBER) AS "NORM_ENTROPY"'
+        || '     , CAST(NVL(P."NUMERIC_RATIO", 0) AS NUMBER) AS "NUMERIC_RATIO"'
+        || '     , CAST(NVL(P."INTEGER_RATIO", 0) AS NUMBER) AS "INTEGER_RATIO"'
+        || '     , CAST(NVL(P."MIN_NUM_VALUE", 0) AS NUMBER) AS "MIN_NUM_VALUE"'
+        || '     , CAST(NVL(P."MAX_NUM_VALUE", 0) AS NUMBER) AS "MAX_NUM_VALUE"'
+        || '     , CAST(NVL(P."AVG_TEXT_LENGTH", 0) AS NUMBER) AS "AVG_TEXT_LENGTH"'
+        || '     , CAST(NVL(P."MAX_TEXT_LENGTH", 0) AS NUMBER) AS "MAX_TEXT_LENGTH"'
+        || '     , CAST(L."TYPE_CODE" AS VARCHAR2(40)) AS "TARGET_TYPE_CODE"'
+        || '  FROM "INIT$_TB_COLTYPE_LABEL" L'
+        || '  JOIN "INIT$_TB_COLTYPE_PROFILE" P'
+        || '    ON P."PROFILE_ID" = L."SOURCE_PROFILE_ID"'
+        || '   AND P."OWNER" = L."OWNER"'
+        || '   AND P."TABLE_NAME" = L."TABLE_NAME"'
+        || '   AND P."COLUMN_NAME" = L."COLUMN_NAME"'
+        || '   AND P."FEATURE_VERSION" = ''' || REPLACE(v_feature_version, '''', '''''') || ''''
+        || ' WHERE L."CONFIRMED_YN" = ''Y'''
+        || '   AND L."LABEL_SOURCE" IN (''USER_CONFIRMED'', ''IMPORTED_GOLD'')'
+        || '   AND L."TYPE_CODE" IS NOT NULL';
+
+    v_profile_query :=
+          'SELECT DISTINCT ' || feature_signature_expr('N') || ' AS "FEATURE_SIGNATURE"'
+        || '     , N.*'
+        || '  FROM (' || v_raw_profile_query || ') N';
 
     EXECUTE IMMEDIATE
-        'SELECT COUNT(*) FROM ('
-        || 'SELECT DISTINCT E."SOURCE_OWNER", E."SOURCE_TABLE" FROM (' || v_eligible_query || ') E)'
-        INTO v_source_group_count;
+          'SELECT COUNT(*)'
+        || '  FROM ('
+        || '        SELECT E."FEATURE_SIGNATURE"'
+        || '          FROM (' || v_profile_query || ') E'
+        || '         GROUP BY E."FEATURE_SIGNATURE"'
+        || '        HAVING COUNT(DISTINCT E."TARGET_TYPE_CODE") > 1'
+        || '       )'
+        INTO v_conflicting_signature_count;
+
+    IF v_conflicting_signature_count > 0 THEN
+        RAISE_APPLICATION_ERROR(
+            -20727,
+            'Identical normalized column profiles have conflicting confirmed type labels. Resolve '
+            || v_conflicting_signature_count || ' feature signature conflict(s) before training.'
+        );
+    END IF;
 
     /*
-       A hash-threshold split can put every small source-table population on one
-       side of the holdout.  Keep the no-leakage table grouping, but rank the
-       groups deterministically and reserve at least one group for validation.
+       Reserve three deterministic signatures per detailed class before the
+       global MAX_INPUT_ROWS cap.  This keeps at least two training cases and
+       one validation case for every class while the remaining capacity is a
+       feature-hash sample of the full confirmed-profile population.
     */
-    IF v_source_group_count >= 2 THEN
-        v_holdout_group_count := LEAST(
-            v_source_group_count - 1,
-            GREATEST(1, ROUND(v_source_group_count * v_holdout_percent / 100))
-        );
+    v_eligible_query :=
+          'SELECT C."FEATURE_SIGNATURE" AS "CASE_ID"'
+        || '     , C.*'
+        || '  FROM ('
+        || '        SELECT R.*'
+        || '          FROM ('
+        || '                SELECT D.*'
+        || '                     , ROW_NUMBER() OVER ('
+        || '                           PARTITION BY D."TARGET_TYPE_CODE"'
+        || '                               ORDER BY ORA_HASH(D."FEATURE_SIGNATURE", 4294967295, ' || number_literal(v_random_seed) || ')'
+        || '                                      , D."FEATURE_SIGNATURE"'
+        || '                       ) AS "CAP_CLASS_RN"'
+        || '                  FROM (' || v_profile_query || ') D'
+        || '               ) R'
+        || '         ORDER BY CASE WHEN R."CAP_CLASS_RN" <= 3 THEN 0 ELSE 1 END'
+        || '                , ORA_HASH(R."FEATURE_SIGNATURE", 4294967295, ' || number_literal(v_random_seed) || ')'
+        || '                , R."FEATURE_SIGNATURE"'
+        || '       ) C'
+        || ' WHERE ROWNUM <= ' || number_literal(v_max_input_rows);
 
-        /*
-           Keep the table-level split in one inline view.  The previous E/G
-           CTE was later embedded in the metric query's WITH E clause, which
-           produced ORA-32034 on Oracle 21c (WITH nested inside WITH).
-           DENSE_RANK assigns one stable rank to every source table without
-           the DISTINCT-and-join CTE and remains valid when wrapped by model
-           input, scoring and metric queries on both 21c and 26ai.
-        */
-        v_grouped_query :=
-              'SELECT E.*'
-            || '     , DENSE_RANK() OVER ('
-            || '           ORDER BY ORA_HASH(E."SOURCE_OWNER" || ''|'' || E."SOURCE_TABLE", 4294967295, ' || number_literal(v_random_seed) || ')'
-            || '                  , E."SOURCE_OWNER", E."SOURCE_TABLE") AS "GROUP_RN"'
-            || '  FROM (' || v_eligible_query || ') E';
+    EXECUTE IMMEDIATE
+          'SELECT COUNT(*)'
+        || '     , MIN(CLASS_ROWS)'
+        || '  FROM ('
+        || '        SELECT E."TARGET_TYPE_CODE"'
+        || '             , COUNT(*) AS CLASS_ROWS'
+        || '          FROM (' || v_eligible_query || ') E'
+        || '         GROUP BY E."TARGET_TYPE_CODE"'
+        || '       )'
+        INTO v_population_class_count
+           , v_min_population_class_count;
 
-        v_data_query :=
-              'SELECT ' || v_feature_projection
-            || '  FROM (' || v_grouped_query || ') S'
-            || ' WHERE S."GROUP_RN" > ' || number_literal(v_holdout_group_count);
-
-        v_holdout_query :=
-              'SELECT ' || v_feature_projection
-            || '  FROM (' || v_grouped_query || ') S'
-            || ' WHERE S."GROUP_RN" <= ' || number_literal(v_holdout_group_count);
-    ELSE
-        v_data_query := 'SELECT ' || v_feature_projection || ' FROM (' || v_eligible_query || ') E';
-        v_holdout_query := 'SELECT ' || v_feature_projection || ' FROM (' || v_eligible_query || ') E WHERE 1 = 0';
+    IF NVL(v_population_class_count, 0) < 2 THEN
+        RAISE_APPLICATION_ERROR(-20717, 'Training requires at least two confirmed detailed type classes.');
     END IF;
+    IF NVL(v_min_population_class_count, 0) < 3 THEN
+        RAISE_APPLICATION_ERROR(
+            -20718,
+            'Each detailed type class requires at least three unique confirmed column profiles '
+            || '(two training and one validation case).'
+        );
+    END IF;
+
+    /*
+       Rank feature signatures within each detailed type.  An exact per-class
+       quota preserves the class ratio, while hash ordering makes the split
+       deterministic and changes only the smallest necessary boundary when
+       new profiles are added.  No physical identifier participates.
+    */
+    v_split_query :=
+          'SELECT E.*'
+        || '     , ROW_NUMBER() OVER ('
+        || '           PARTITION BY E."TARGET_TYPE_CODE"'
+        || '               ORDER BY ORA_HASH(E."FEATURE_SIGNATURE", 4294967295, ' || number_literal(v_random_seed) || ')'
+        || '                      , E."FEATURE_SIGNATURE"'
+        || '       ) AS "SPLIT_CLASS_RN"'
+        || '     , COUNT(*) OVER ('
+        || '           PARTITION BY E."TARGET_TYPE_CODE"'
+        || '       ) AS "SPLIT_CLASS_ROWS"'
+        || '  FROM (' || v_eligible_query || ') E';
+
+    v_data_query :=
+          'SELECT ' || v_feature_projection
+        || '  FROM (' || v_split_query || ') S'
+        || ' WHERE S."SPLIT_CLASS_RN" > LEAST('
+        || '           S."SPLIT_CLASS_ROWS" - 2'
+        || '         , GREATEST(1, ROUND(S."SPLIT_CLASS_ROWS" * ' || number_literal(v_holdout_percent) || ' / 100))'
+        || '       )';
+
+    v_holdout_query :=
+          'SELECT ' || v_feature_projection
+        || '  FROM (' || v_split_query || ') S'
+        || ' WHERE S."SPLIT_CLASS_RN" <= LEAST('
+        || '           S."SPLIT_CLASS_ROWS" - 2'
+        || '         , GREATEST(1, ROUND(S."SPLIT_CLASS_ROWS" * ' || number_literal(v_holdout_percent) || ' / 100))'
+        || '       )';
 
     EXECUTE IMMEDIATE 'SELECT COUNT(*) FROM (' || v_data_query || ')' INTO v_train_rows;
     EXECUTE IMMEDIATE 'SELECT COUNT(*) FROM (' || v_holdout_query || ')' INTO v_holdout_rows;
@@ -427,11 +512,8 @@ BEGIN
     IF v_total_rows < v_min_rows THEN
         RAISE_APPLICATION_ERROR(-20714, 'Confirmed gold labels are insufficient: ' || v_total_rows || ' < ' || v_min_rows);
     END IF;
-    IF v_source_group_count < 2 THEN
-        RAISE_APPLICATION_ERROR(-20715, 'Grouped holdout requires confirmed labels from at least two source tables. Eligible tables: ' || v_source_group_count || '.');
-    END IF;
     IF v_train_rows = 0 OR v_holdout_rows = 0 THEN
-        RAISE_APPLICATION_ERROR(-20715, 'Grouped holdout split produced an empty train or holdout set after deterministic group allocation.');
+        RAISE_APPLICATION_ERROR(-20715, 'Profile-stratified split produced an empty train or holdout set.');
     END IF;
 
     EXECUTE IMMEDIATE
@@ -439,19 +521,21 @@ BEGIN
         || 'SELECT "TARGET_TYPE_CODE", COUNT(*) CLASS_ROWS FROM (' || v_data_query || ') GROUP BY "TARGET_TYPE_CODE")'
         INTO v_train_class_count, v_min_class_count;
     IF v_train_class_count < 2 THEN
-        RAISE_APPLICATION_ERROR(-20717, 'Training requires at least two confirmed type classes.');
+        RAISE_APPLICATION_ERROR(-20717, 'Training requires at least two confirmed detailed type classes.');
     END IF;
     IF NVL(v_min_class_count, 0) < 2 THEN
-        RAISE_APPLICATION_ERROR(-20718, 'Each training type class requires at least two confirmed columns.');
+        RAISE_APPLICATION_ERROR(-20718, 'Each training type class requires at least two unique confirmed column profiles.');
     END IF;
 
     EXECUTE IMMEDIATE
-        'SELECT COUNT(*) FROM ('
-        || 'SELECT DISTINCT "TARGET_TYPE_CODE" FROM (' || v_holdout_query || ') '
-        || 'MINUS SELECT DISTINCT "TARGET_TYPE_CODE" FROM (' || v_data_query || '))'
-        INTO v_unseen_class_count;
-    IF v_unseen_class_count > 0 THEN
-        RAISE_APPLICATION_ERROR(-20725, 'Holdout contains a type class that is absent from training. Add labels from more tables.');
+        'SELECT COUNT(DISTINCT "TARGET_TYPE_CODE") FROM (' || v_holdout_query || ')'
+        INTO v_holdout_class_count;
+    IF v_train_class_count <> v_population_class_count
+       OR v_holdout_class_count <> v_population_class_count THEN
+        RAISE_APPLICATION_ERROR(
+            -20725,
+            'Every detailed type class must be present in both training and validation after profile deduplication.'
+        );
     END IF;
 
     v_model_data_query := model_input_query(v_data_query);
@@ -521,13 +605,13 @@ BEGIN
 
     /*
        The default Decision Tree termination values (20 records to split and
-       10 records per child) are too restrictive for the first grouped
+       10 records per child) are too restrictive for the first profile-stratified
        training runs, where confirmed labels are intentionally distributed
        across many detailed type classes.  Oracle can then build a valid
        schema object whose signature contains only TARGET_TYPE_CODE.  Such a
        root-only model cannot score the column profile predictors.
 
-       Keep the grouped holdout and minimum-label safeguards above, but allow
+       Keep the profile-stratified holdout and minimum-label safeguards above, but allow
        the tree to retain real profile predictors from the initial sample.
        These settings are explicit instead of ODMS_DEEPTREE so the procedure
        remains compatible with Target DB releases that predate that shortcut.
@@ -1254,11 +1338,13 @@ CREATE OR REPLACE FUNCTION "INIT$_FN_PREDICT_BASE_TYPE" (
     p_is_integer       IN NUMBER,
     p_norm_entropy     IN NUMBER,
     p_min_num_value    IN NUMBER DEFAULT NULL,
-    p_max_num_value    IN NUMBER DEFAULT NULL
+    p_max_num_value    IN NUMBER DEFAULT NULL,
+    p_column_label     IN VARCHAR2 DEFAULT NULL
 ) RETURN VARCHAR2
 AUTHID CURRENT_USER
 IS
     v_column_name   VARCHAR2(128);
+    v_column_label  VARCHAR2(4000);
     v_log_data_type VARCHAR2(50);
     v_force_identifier_columns VARCHAR2(4000);
     v_identifier_dist_ratio NUMBER;
@@ -1280,6 +1366,7 @@ IS
     v_use_ordinal_max_distinct VARCHAR2(1);
 BEGIN
     v_column_name := UPPER(TRIM(p_column_name));
+    v_column_label := NULLIF(TRIM(p_column_label), '');
     v_log_data_type := UPPER(TRIM(p_log_data_type));
     v_use_force_identifier := "INIT$_FN_TARGET_SETTING_USE_YN"('DATA_PROFILING', 'FORCE_IDENTIFIER_COLUMNS', 'Y');
     v_use_identifier_dist_ratio := "INIT$_FN_TARGET_SETTING_USE_YN"('DATA_PROFILING', 'IDENTIFIER_DIST_RATIO', 'Y');
@@ -1314,6 +1401,16 @@ BEGIN
             RETURN '숫자형식별자';
         END IF;
         RETURN '문자형식별자';
+    END IF;
+
+    IF v_column_label IS NOT NULL
+       AND REGEXP_LIKE(v_column_label, '코드$') THEN
+        IF v_log_data_type = 'NUM' THEN
+            RETURN '숫자형범주형';
+        ELSIF v_log_data_type = 'CHR' THEN
+            RETURN '문자형범주형';
+        END IF;
+        RETURN '일반적범주형';
     END IF;
 
     IF v_use_identifier_dist_ratio = 'Y'
@@ -1387,11 +1484,13 @@ CREATE OR REPLACE FUNCTION "INIT$_FN_PREDICT_BASE_REASON" (
     p_is_integer       IN NUMBER,
     p_norm_entropy     IN NUMBER,
     p_min_num_value    IN NUMBER DEFAULT NULL,
-    p_max_num_value    IN NUMBER DEFAULT NULL
+    p_max_num_value    IN NUMBER DEFAULT NULL,
+    p_column_label     IN VARCHAR2 DEFAULT NULL
 ) RETURN VARCHAR2
 AUTHID CURRENT_USER
 IS
     v_column_name   VARCHAR2(128);
+    v_column_label  VARCHAR2(4000);
     v_log_data_type VARCHAR2(50);
     v_force_identifier_columns VARCHAR2(4000);
     v_identifier_dist_ratio NUMBER;
@@ -1413,6 +1512,7 @@ IS
     v_use_ordinal_max_distinct VARCHAR2(1);
 BEGIN
     v_column_name := UPPER(TRIM(p_column_name));
+    v_column_label := NULLIF(TRIM(p_column_label), '');
     v_log_data_type := UPPER(TRIM(p_log_data_type));
     v_use_force_identifier := "INIT$_FN_TARGET_SETTING_USE_YN"('DATA_PROFILING', 'FORCE_IDENTIFIER_COLUMNS', 'Y');
     v_use_identifier_dist_ratio := "INIT$_FN_TARGET_SETTING_USE_YN"('DATA_PROFILING', 'IDENTIFIER_DIST_RATIO', 'Y');
@@ -1444,6 +1544,11 @@ BEGIN
     IF v_use_force_identifier = 'Y'
        AND "INIT$_FN_TOKEN_LIST_CONTAINS"(v_force_identifier_columns, v_column_name) = 'Y' THEN
         RETURN '[설정기반 RULE] 강제 식별자 컬럼으로 판단';
+    END IF;
+
+    IF v_column_label IS NOT NULL
+       AND REGEXP_LIKE(v_column_label, '코드$') THEN
+        RETURN '[라벨기반 RULE] 컬럼 라벨이 코드로 끝나 범주형으로 판단';
     END IF;
 
     IF v_use_identifier_dist_ratio = 'Y'
@@ -2026,6 +2131,9 @@ BEGIN
         v_final_type_expr :=
             'CASE
                  WHEN UPPER(TRIM(S."COLUMN_NAME")) = ''FILE_ROW_NO'' THEN S."BASE_PREDICTED_TYPE"
+                 WHEN NULLIF(TRIM(S."COLUMN_DESC"), '''') IS NOT NULL
+                  AND REGEXP_LIKE(TRIM(S."COLUMN_DESC"), ''코드$'')
+                 THEN S."BASE_PREDICTED_TYPE"
                  WHEN TRIM(S."BASE_PREDICTED_TYPE") IS NULL THEN S."MODL_PREDICTED_TYPE"
                  WHEN TRIM(S."MODL_PREDICTED_TYPE") IS NULL THEN S."BASE_PREDICTED_TYPE"
                  WHEN "INIT$_FN_TYPE_CODE"(S."BASE_PREDICTED_TYPE") = "INIT$_FN_TYPE_CODE"(S."MODL_PREDICTED_TYPE")
@@ -2034,7 +2142,15 @@ BEGIN
                  THEN S."MODL_PREDICTED_TYPE"
                  ELSE S."BASE_PREDICTED_TYPE"
              END';
-        v_final_reason_expr := sql_literal('[자동결정] FINAL_BOTH: 규칙/모델 일치 또는 모델 확률 기준으로 최종값 반영');
+        v_final_reason_expr :=
+            'CASE
+                 WHEN UPPER(TRIM(S."COLUMN_NAME")) = ''FILE_ROW_NO''
+                 THEN ' || sql_literal('[자동결정] FINAL_BOTH: FILE_ROW_NO 식별자 규칙 우선') || '
+                 WHEN NULLIF(TRIM(S."COLUMN_DESC"), '''') IS NOT NULL
+                  AND REGEXP_LIKE(TRIM(S."COLUMN_DESC"), ''코드$'')
+                 THEN ' || sql_literal('[자동결정] FINAL_BOTH: 컬럼 라벨이 코드로 끝나 범주형 규칙 우선') || '
+                 ELSE ' || sql_literal('[자동결정] FINAL_BOTH: 규칙/모델 일치 또는 모델 확률 기준으로 최종값 반영') || '
+             END';
     END IF;
 
     IF v_method IN ('FINAL_RULE', 'FINAL_MODEL', 'FINAL_BOTH') THEN
@@ -2367,12 +2483,14 @@ SELECT A.R
                P.IS_INTEGER,
                P.NORM_ENTROPY,
                P.MIN_NUM_VALUE,
-               P.MAX_NUM_VALUE
+               P.MAX_NUM_VALUE,
+               P.COLUMN_DESC
            ) AS "BASE_PREDICTED_TYPE",
            "INIT$_FN_TYPE_CODE"(
                "INIT$_FN_PREDICT_BASE_TYPE"(
                    P.COLUMN_NAME, P.LOG_DATA_TYPE, P.NUM_DISTINCT, P.DIST_VAL_RT,
-                   P.IS_INTEGER, P.NORM_ENTROPY, P.MIN_NUM_VALUE, P.MAX_NUM_VALUE
+                   P.IS_INTEGER, P.NORM_ENTROPY, P.MIN_NUM_VALUE, P.MAX_NUM_VALUE,
+                   P.COLUMN_DESC
                )
            ) AS "BASE_TYPE_CODE",
            "INIT$_FN_PREDICT_BASE_REASON"(
@@ -2383,7 +2501,8 @@ SELECT A.R
                P.IS_INTEGER,
                P.NORM_ENTROPY,
                P.MIN_NUM_VALUE,
-               P.MAX_NUM_VALUE
+               P.MAX_NUM_VALUE,
+               P.COLUMN_DESC
            ) AS "BASE_REASON",
            CASE
                WHEN P.MODEL_PREDICTION_VALUE IS NULL THEN NULL

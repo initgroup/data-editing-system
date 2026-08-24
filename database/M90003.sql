@@ -45,6 +45,10 @@ SELECT R.MODEL_VERSION_ID
      , 0 AS CONFLICT_COUNT
      , 0 AS DUPLICATE_COUNT
      , 0 AS TOTAL_PROFILE_COUNT
+     , 0 AS IMPORTED_GOLD_COUNT
+     , 0 AS USER_CONFIRMED_COUNT
+     , 0 AS ADDITIONAL_USER_COUNT
+     , CAST(NULL AS TIMESTAMP) AS LAST_SUCCESSFUL_TRAINED_AT
   FROM "INIT$_TB_OML_ACTIVE_MODEL" A
   JOIN "INIT$_TB_OML_MODEL_REGISTRY" R
     ON R.MODEL_VERSION_ID = A.MODEL_VERSION_ID
@@ -53,9 +57,11 @@ SELECT R.MODEL_VERSION_ID
 ;
 
 -- [M90003_SUMMARY]
-WITH LATEST_PREDICTION AS
+WITH PROFILE_RUN_PREDICTION AS
      (
-      SELECT X.OWNER
+      SELECT X.RUN_SOURCE_TYPE
+           , X.RUN_ID
+           , X.OWNER
            , X.TABLE_NAME
            , X.COLUMN_NAME
            , COALESCE(X.BASE_TYPE_CODE, INIT$_FN_TYPE_CODE(X.BASE_PREDICTED_TYPE)) AS BASE_TYPE_CODE
@@ -64,8 +70,8 @@ WITH LATEST_PREDICTION AS
            (
             SELECT P.*
                  , ROW_NUMBER() OVER (
-                       PARTITION BY P.OWNER, P.TABLE_NAME, P.COLUMN_NAME
-                           ORDER BY P.CREATE_DT DESC, P.RUN_ID DESC
+                       PARTITION BY P.RUN_SOURCE_TYPE, P.RUN_ID, P.OWNER, P.TABLE_NAME, P.COLUMN_NAME
+                           ORDER BY P.CREATE_DT DESC
                                   , NVL(P.MODEL_VERSION_ID, -1) DESC
                                   , P.MODEL_NAME DESC
                    ) AS PREDICTION_RN
@@ -74,26 +80,43 @@ WITH LATEST_PREDICTION AS
        WHERE 1=1
          AND X.PREDICTION_RN = 1
      )
-   , LATEST_V2_PROFILE AS
+   , CONFIRMED_V2_PROFILE AS
      (
-      SELECT X.OWNER
-           , X.TABLE_NAME
-           , X.COLUMN_NAME
-        FROM
-           (
-            SELECT F.OWNER
-                 , F.TABLE_NAME
-                 , F.COLUMN_NAME
-                 , ROW_NUMBER() OVER (
-                       PARTITION BY F.OWNER, F.TABLE_NAME, F.COLUMN_NAME
-                           ORDER BY F.CREATED_AT DESC, F.PROFILE_ID DESC
-                   ) AS PROFILE_RN
-              FROM "INIT$_TB_COLTYPE_PROFILE" F
-             WHERE 1=1
-               AND F.FEATURE_VERSION = 'V2'
-           ) X
+      SELECT F.PROFILE_ID
+           , F.RUN_SOURCE_TYPE
+           , F.RUN_ID
+           , F.OWNER
+           , F.TABLE_NAME
+           , F.COLUMN_NAME
+           , F.DATA_TYPE
+           , F.TOTAL_ROWS
+           , F.NON_NULL_ROWS
+           , F.SAMPLE_ROWS
+           , F.SAMPLE_NOT_NULL_ROWS
+           , F.NUM_DISTINCT
+           , F.SAMPLE_DISTINCT
+           , F.DISTINCT_RATIO
+           , F.NULL_RATIO
+           , F.LOG_DATA_TYPE
+           , F.ENTROPY
+           , F.NORM_ENTROPY
+           , F.NUMERIC_RATIO
+           , F.INTEGER_RATIO
+           , F.MIN_NUM_VALUE
+           , F.MAX_NUM_VALUE
+           , F.AVG_TEXT_LENGTH
+           , F.MAX_TEXT_LENGTH
+        FROM "INIT$_TB_COLTYPE_PROFILE" F
        WHERE 1=1
-         AND X.PROFILE_RN = 1
+         AND F.FEATURE_VERSION = 'V2'
+     )
+   , LAST_SUCCESSFUL_TRAINING AS
+     (
+      SELECT MAX(T.FINISHED_AT) AS LAST_SUCCESSFUL_TRAINED_AT
+        FROM "INIT$_TB_OML_TRAIN_RUN" T
+       WHERE 1=1
+         AND T.MODEL_KEY = :modelKey
+         AND T.STATUS_CODE = 'SUCCESS'
      )
    , LABEL_COUNTS AS
      (
@@ -104,7 +127,7 @@ WITH LATEST_PREDICTION AS
                       AND F.OWNER IS NOT NULL
                      THEN 1
                  END
-             ) AS CONFIRMED_ELIGIBLE_COUNT
+             ) AS RAW_CONFIRMED_ELIGIBLE_COUNT
            , COUNT(
                  CASE
                      WHEN L.LABEL_SOURCE IN ('AUTO_RULE', 'AUTO_MODEL', 'AUTO_BOTH')
@@ -128,51 +151,146 @@ WITH LATEST_PREDICTION AS
                      THEN 1
                  END
              ) AS CONFLICT_COUNT
+           , COUNT(
+                 CASE
+                     WHEN L.CONFIRMED_YN = 'Y'
+                      AND L.LABEL_SOURCE = 'IMPORTED_GOLD'
+                      AND F.OWNER IS NOT NULL
+                     THEN 1
+                 END
+             ) AS IMPORTED_GOLD_COUNT
+           , COUNT(
+                 CASE
+                     WHEN L.CONFIRMED_YN = 'Y'
+                      AND L.LABEL_SOURCE = 'USER_CONFIRMED'
+                      AND F.OWNER IS NOT NULL
+                     THEN 1
+                 END
+             ) AS USER_CONFIRMED_COUNT
+           , COUNT(
+                 CASE
+                     WHEN L.CONFIRMED_YN = 'Y'
+                      AND L.LABEL_SOURCE = 'USER_CONFIRMED'
+                      AND F.OWNER IS NOT NULL
+                      AND (
+                             S.LAST_SUCCESSFUL_TRAINED_AT IS NULL
+                          OR L.UPDATED_AT > S.LAST_SUCCESSFUL_TRAINED_AT
+                      )
+                     THEN 1
+                 END
+             ) AS ADDITIONAL_USER_COUNT
+           , MAX(S.LAST_SUCCESSFUL_TRAINED_AT) AS LAST_SUCCESSFUL_TRAINED_AT
         FROM "INIT$_TB_COLTYPE_LABEL" L
-        LEFT JOIN LATEST_V2_PROFILE F
-          ON F.OWNER = L.OWNER
+       CROSS JOIN LAST_SUCCESSFUL_TRAINING S
+        LEFT JOIN CONFIRMED_V2_PROFILE F
+          ON F.PROFILE_ID = L.SOURCE_PROFILE_ID
+         AND F.OWNER = L.OWNER
          AND F.TABLE_NAME = L.TABLE_NAME
          AND F.COLUMN_NAME = L.COLUMN_NAME
-        LEFT JOIN LATEST_PREDICTION P
-          ON P.OWNER = L.OWNER
+        LEFT JOIN PROFILE_RUN_PREDICTION P
+          ON P.RUN_SOURCE_TYPE = F.RUN_SOURCE_TYPE
+         AND P.RUN_ID = F.RUN_ID
+         AND P.OWNER = L.OWNER
          AND P.TABLE_NAME = L.TABLE_NAME
          AND P.COLUMN_NAME = L.COLUMN_NAME
      )
+   , ELIGIBLE_PROFILE AS
+     (
+      SELECT CAST(NVL(F.DATA_TYPE, 'UNKNOWN') AS VARCHAR2(128)) AS DATA_TYPE
+           , CAST(NVL(F.TOTAL_ROWS, 0) AS NUMBER) AS TOTAL_ROWS
+           , CAST(NVL(F.NON_NULL_ROWS, 0) AS NUMBER) AS NON_NULL_ROWS
+           , CAST(NVL(F.SAMPLE_ROWS, 0) AS NUMBER) AS SAMPLE_ROWS
+           , CAST(NVL(F.SAMPLE_NOT_NULL_ROWS, 0) AS NUMBER) AS SAMPLE_NOT_NULL_ROWS
+           , CAST(NVL(F.NUM_DISTINCT, 0) AS NUMBER) AS NUM_DISTINCT
+           , CAST(NVL(F.SAMPLE_DISTINCT, 0) AS NUMBER) AS SAMPLE_DISTINCT
+           , CAST(NVL(F.DISTINCT_RATIO, 0) AS NUMBER) AS DIST_VAL_RT
+           , CAST(NVL(F.NULL_RATIO, 0) AS NUMBER) AS NULL_RATIO
+           , CAST(NVL(F.LOG_DATA_TYPE, 'UNKNOWN') AS VARCHAR2(30)) AS LOG_DATA_TYPE
+           , CAST(NVL(F.ENTROPY, 0) AS NUMBER) AS ENTROPY
+           , CAST(NVL(F.NORM_ENTROPY, 0) AS NUMBER) AS NORM_ENTROPY
+           , CAST(NVL(F.NUMERIC_RATIO, 0) AS NUMBER) AS NUMERIC_RATIO
+           , CAST(NVL(F.INTEGER_RATIO, 0) AS NUMBER) AS INTEGER_RATIO
+           , CAST(NVL(F.MIN_NUM_VALUE, 0) AS NUMBER) AS MIN_NUM_VALUE
+           , CAST(NVL(F.MAX_NUM_VALUE, 0) AS NUMBER) AS MAX_NUM_VALUE
+           , CAST(NVL(F.AVG_TEXT_LENGTH, 0) AS NUMBER) AS AVG_TEXT_LENGTH
+           , CAST(NVL(F.MAX_TEXT_LENGTH, 0) AS NUMBER) AS MAX_TEXT_LENGTH
+           , CAST(L.TYPE_CODE AS VARCHAR2(40)) AS TYPE_CODE
+        FROM "INIT$_TB_COLTYPE_LABEL" L
+        JOIN CONFIRMED_V2_PROFILE F
+          ON F.PROFILE_ID = L.SOURCE_PROFILE_ID
+         AND F.OWNER = L.OWNER
+         AND F.TABLE_NAME = L.TABLE_NAME
+         AND F.COLUMN_NAME = L.COLUMN_NAME
+       WHERE 1=1
+         AND L.CONFIRMED_YN = 'Y'
+         AND L.LABEL_SOURCE IN ('USER_CONFIRMED', 'IMPORTED_GOLD')
+         AND L.TYPE_CODE IS NOT NULL
+     )
+   , SIGNED_ELIGIBLE AS
+     (
+      SELECT RAWTOHEX(
+                 STANDARD_HASH(
+                     NVL(CAST(E.DATA_TYPE AS VARCHAR2(128)), 'UNKNOWN')
+                     || CHR(31) || TO_CHAR(NVL(E.TOTAL_ROWS, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                     || CHR(31) || TO_CHAR(NVL(E.NON_NULL_ROWS, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                     || CHR(31) || TO_CHAR(NVL(E.SAMPLE_ROWS, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                     || CHR(31) || TO_CHAR(NVL(E.SAMPLE_NOT_NULL_ROWS, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                     || CHR(31) || TO_CHAR(NVL(E.NUM_DISTINCT, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                     || CHR(31) || TO_CHAR(NVL(E.SAMPLE_DISTINCT, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                     || CHR(31) || TO_CHAR(NVL(E.DIST_VAL_RT, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                     || CHR(31) || TO_CHAR(NVL(E.NULL_RATIO, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                     || CHR(31) || NVL(CAST(E.LOG_DATA_TYPE AS VARCHAR2(30)), 'UNKNOWN')
+                     || CHR(31) || TO_CHAR(NVL(E.ENTROPY, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                     || CHR(31) || TO_CHAR(NVL(E.NORM_ENTROPY, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                     || CHR(31) || TO_CHAR(NVL(E.NUMERIC_RATIO, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                     || CHR(31) || TO_CHAR(NVL(E.INTEGER_RATIO, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                     || CHR(31) || TO_CHAR(NVL(E.MIN_NUM_VALUE, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                     || CHR(31) || TO_CHAR(NVL(E.MAX_NUM_VALUE, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                     || CHR(31) || TO_CHAR(NVL(E.AVG_TEXT_LENGTH, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                     || CHR(31) || TO_CHAR(NVL(E.MAX_TEXT_LENGTH, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                   , 'SHA256'
+                 )
+             ) AS FEATURE_SIGNATURE
+           , E.*
+        FROM ELIGIBLE_PROFILE E
+     )
+   , DEDUP_ELIGIBLE AS
+     (
+      SELECT DISTINCT E.FEATURE_SIGNATURE
+           , E.DATA_TYPE
+           , E.TOTAL_ROWS
+           , E.NON_NULL_ROWS
+           , E.SAMPLE_ROWS
+           , E.SAMPLE_NOT_NULL_ROWS
+           , E.NUM_DISTINCT
+           , E.SAMPLE_DISTINCT
+           , E.DIST_VAL_RT
+           , E.NULL_RATIO
+           , E.LOG_DATA_TYPE
+           , E.ENTROPY
+           , E.NORM_ENTROPY
+           , E.NUMERIC_RATIO
+           , E.INTEGER_RATIO
+           , E.MIN_NUM_VALUE
+           , E.MAX_NUM_VALUE
+           , E.AVG_TEXT_LENGTH
+           , E.MAX_TEXT_LENGTH
+           , E.TYPE_CODE
+        FROM SIGNED_ELIGIBLE E
+     )
+   , TRAINING_COUNTS AS
+     (
+      SELECT COUNT(*) AS CONFIRMED_ELIGIBLE_COUNT
+           , GREATEST(MAX(L.RAW_CONFIRMED_ELIGIBLE_COUNT) - COUNT(*), 0) AS DUPLICATE_COUNT
+        FROM DEDUP_ELIGIBLE E
+       CROSS JOIN LABEL_COUNTS L
+     )
    , PROFILE_COUNTS AS
      (
-      SELECT NVL(SUM(P.PROFILE_COUNT), 0) AS TOTAL_PROFILE_COUNT
-           , NVL(SUM(P.DUPLICATE_COUNT), 0) AS DUPLICATE_COUNT
-        FROM
-           (
-            SELECT F.OWNER
-                 , F.TABLE_NAME
-                 , F.COLUMN_NAME
-                 , SUM(F.HASH_COUNT) AS PROFILE_COUNT
-                 , SUM(
-                       CASE
-                           WHEN F.PROFILE_HASH IS NULL THEN 0
-                           ELSE GREATEST(F.HASH_COUNT - 1, 0)
-                       END
-                   ) AS DUPLICATE_COUNT
-              FROM
-                 (
-                  SELECT F0.OWNER
-                       , F0.TABLE_NAME
-                       , F0.COLUMN_NAME
-                       , F0.PROFILE_HASH
-                       , COUNT(*) AS HASH_COUNT
-                    FROM "INIT$_TB_COLTYPE_PROFILE" F0
-                   WHERE 1=1
-                     AND F0.FEATURE_VERSION = 'V2'
-                   GROUP BY F0.OWNER
-                          , F0.TABLE_NAME
-                          , F0.COLUMN_NAME
-                          , F0.PROFILE_HASH
-                 ) F
-             GROUP BY F.OWNER
-                    , F.TABLE_NAME
-                    , F.COLUMN_NAME
-           ) P
+      SELECT COUNT(*) AS TOTAL_PROFILE_COUNT
+        FROM "INIT$_TB_COLTYPE_PROFILE" F
+       WHERE 1=1
+         AND F.FEATURE_VERSION = 'V2'
      )
    , ACTIVE_MODEL AS
      (
@@ -204,16 +322,59 @@ SELECT A.MODEL_VERSION_ID
      , A.VALID_ROW_COUNT
      , A.TEST_ROW_COUNT
      , A.TRAINED_AT
-     , L.CONFIRMED_ELIGIBLE_COUNT
+     , T.CONFIRMED_ELIGIBLE_COUNT
      , L.EXCLUDED_AUTO_COUNT
      , L.EXCLUDED_LEGACY_COUNT
      , L.CONFLICT_COUNT
-     , P.DUPLICATE_COUNT
+     , T.DUPLICATE_COUNT
      , P.TOTAL_PROFILE_COUNT
+     , L.IMPORTED_GOLD_COUNT
+     , L.USER_CONFIRMED_COUNT
+     , L.ADDITIONAL_USER_COUNT
+     , L.LAST_SUCCESSFUL_TRAINED_AT
   FROM LABEL_COUNTS L
+ CROSS JOIN TRAINING_COUNTS T
  CROSS JOIN PROFILE_COUNTS P
   LEFT JOIN ACTIVE_MODEL A
     ON 1=1
+;
+
+-- [M90003_ADDITIONAL_LABEL_INFO]
+WITH LAST_SUCCESSFUL_TRAINING AS
+     (
+      SELECT MAX(T.FINISHED_AT) AS LAST_SUCCESSFUL_TRAINED_AT
+        FROM "INIT$_TB_OML_TRAIN_RUN" T
+       WHERE 1=1
+         AND T.MODEL_KEY = :modelKey
+         AND T.STATUS_CODE = 'SUCCESS'
+     )
+SELECT S.LAST_SUCCESSFUL_TRAINED_AT
+     , COUNT(
+           CASE
+               WHEN L.CONFIRMED_YN = 'Y'
+                AND L.LABEL_SOURCE = 'USER_CONFIRMED'
+                AND (
+                       S.LAST_SUCCESSFUL_TRAINED_AT IS NULL
+                    OR L.UPDATED_AT > S.LAST_SUCCESSFUL_TRAINED_AT
+                )
+                AND EXISTS
+                    (
+                     SELECT 1
+                       FROM "INIT$_TB_COLTYPE_PROFILE" F
+                      WHERE 1=1
+                        AND F.PROFILE_ID = L.SOURCE_PROFILE_ID
+                        AND F.OWNER = L.OWNER
+                        AND F.TABLE_NAME = L.TABLE_NAME
+                        AND F.COLUMN_NAME = L.COLUMN_NAME
+                        AND F.FEATURE_VERSION = 'V2'
+                    )
+               THEN 1
+           END
+       ) AS ADDITIONAL_USER_COUNT
+  FROM LAST_SUCCESSFUL_TRAINING S
+  LEFT JOIN "INIT$_TB_COLTYPE_LABEL" L
+    ON 1=1
+ GROUP BY S.LAST_SUCCESSFUL_TRAINED_AT
 ;
 
 -- [M90003_ACTIVE_MODEL_METRIC_LIST]
@@ -237,50 +398,198 @@ SELECT M.SPLIT_CODE
 ;
 
 -- [M90003_DATASET_GROUP_DISTRIBUTION]
-SELECT L.TYPE_GROUP_CODE
+WITH ELIGIBLE_PROFILE AS
+     (
+      SELECT CAST(NVL(F.DATA_TYPE, 'UNKNOWN') AS VARCHAR2(128)) AS DATA_TYPE
+           , CAST(NVL(F.TOTAL_ROWS, 0) AS NUMBER) AS TOTAL_ROWS
+           , CAST(NVL(F.NON_NULL_ROWS, 0) AS NUMBER) AS NON_NULL_ROWS
+           , CAST(NVL(F.SAMPLE_ROWS, 0) AS NUMBER) AS SAMPLE_ROWS
+           , CAST(NVL(F.SAMPLE_NOT_NULL_ROWS, 0) AS NUMBER) AS SAMPLE_NOT_NULL_ROWS
+           , CAST(NVL(F.NUM_DISTINCT, 0) AS NUMBER) AS NUM_DISTINCT
+           , CAST(NVL(F.SAMPLE_DISTINCT, 0) AS NUMBER) AS SAMPLE_DISTINCT
+           , CAST(NVL(F.DISTINCT_RATIO, 0) AS NUMBER) AS DIST_VAL_RT
+           , CAST(NVL(F.NULL_RATIO, 0) AS NUMBER) AS NULL_RATIO
+           , CAST(NVL(F.LOG_DATA_TYPE, 'UNKNOWN') AS VARCHAR2(30)) AS LOG_DATA_TYPE
+           , CAST(NVL(F.ENTROPY, 0) AS NUMBER) AS ENTROPY
+           , CAST(NVL(F.NORM_ENTROPY, 0) AS NUMBER) AS NORM_ENTROPY
+           , CAST(NVL(F.NUMERIC_RATIO, 0) AS NUMBER) AS NUMERIC_RATIO
+           , CAST(NVL(F.INTEGER_RATIO, 0) AS NUMBER) AS INTEGER_RATIO
+           , CAST(NVL(F.MIN_NUM_VALUE, 0) AS NUMBER) AS MIN_NUM_VALUE
+           , CAST(NVL(F.MAX_NUM_VALUE, 0) AS NUMBER) AS MAX_NUM_VALUE
+           , CAST(NVL(F.AVG_TEXT_LENGTH, 0) AS NUMBER) AS AVG_TEXT_LENGTH
+           , CAST(NVL(F.MAX_TEXT_LENGTH, 0) AS NUMBER) AS MAX_TEXT_LENGTH
+           , CAST(L.TYPE_CODE AS VARCHAR2(40)) AS TYPE_CODE
+        FROM "INIT$_TB_COLTYPE_LABEL" L
+        JOIN "INIT$_TB_COLTYPE_PROFILE" F
+          ON F.PROFILE_ID = L.SOURCE_PROFILE_ID
+         AND F.OWNER = L.OWNER
+         AND F.TABLE_NAME = L.TABLE_NAME
+         AND F.COLUMN_NAME = L.COLUMN_NAME
+         AND F.FEATURE_VERSION = 'V2'
+       WHERE 1=1
+         AND L.CONFIRMED_YN = 'Y'
+         AND L.LABEL_SOURCE IN ('USER_CONFIRMED', 'IMPORTED_GOLD')
+         AND L.TYPE_CODE IS NOT NULL
+     )
+   , SIGNED_ELIGIBLE AS
+     (
+      SELECT RAWTOHEX(
+                 STANDARD_HASH(
+                     NVL(CAST(E.DATA_TYPE AS VARCHAR2(128)), 'UNKNOWN')
+                     || CHR(31) || TO_CHAR(NVL(E.TOTAL_ROWS, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                     || CHR(31) || TO_CHAR(NVL(E.NON_NULL_ROWS, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                     || CHR(31) || TO_CHAR(NVL(E.SAMPLE_ROWS, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                     || CHR(31) || TO_CHAR(NVL(E.SAMPLE_NOT_NULL_ROWS, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                     || CHR(31) || TO_CHAR(NVL(E.NUM_DISTINCT, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                     || CHR(31) || TO_CHAR(NVL(E.SAMPLE_DISTINCT, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                     || CHR(31) || TO_CHAR(NVL(E.DIST_VAL_RT, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                     || CHR(31) || TO_CHAR(NVL(E.NULL_RATIO, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                     || CHR(31) || NVL(CAST(E.LOG_DATA_TYPE AS VARCHAR2(30)), 'UNKNOWN')
+                     || CHR(31) || TO_CHAR(NVL(E.ENTROPY, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                     || CHR(31) || TO_CHAR(NVL(E.NORM_ENTROPY, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                     || CHR(31) || TO_CHAR(NVL(E.NUMERIC_RATIO, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                     || CHR(31) || TO_CHAR(NVL(E.INTEGER_RATIO, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                     || CHR(31) || TO_CHAR(NVL(E.MIN_NUM_VALUE, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                     || CHR(31) || TO_CHAR(NVL(E.MAX_NUM_VALUE, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                     || CHR(31) || TO_CHAR(NVL(E.AVG_TEXT_LENGTH, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                     || CHR(31) || TO_CHAR(NVL(E.MAX_TEXT_LENGTH, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                   , 'SHA256'
+                 )
+             ) AS FEATURE_SIGNATURE
+           , E.*
+        FROM ELIGIBLE_PROFILE E
+     )
+   , DEDUP_ELIGIBLE AS
+     (
+      SELECT DISTINCT E.FEATURE_SIGNATURE
+           , E.DATA_TYPE
+           , E.TOTAL_ROWS
+           , E.NON_NULL_ROWS
+           , E.SAMPLE_ROWS
+           , E.SAMPLE_NOT_NULL_ROWS
+           , E.NUM_DISTINCT
+           , E.SAMPLE_DISTINCT
+           , E.DIST_VAL_RT
+           , E.NULL_RATIO
+           , E.LOG_DATA_TYPE
+           , E.ENTROPY
+           , E.NORM_ENTROPY
+           , E.NUMERIC_RATIO
+           , E.INTEGER_RATIO
+           , E.MIN_NUM_VALUE
+           , E.MAX_NUM_VALUE
+           , E.AVG_TEXT_LENGTH
+           , E.MAX_TEXT_LENGTH
+           , E.TYPE_CODE
+        FROM SIGNED_ELIGIBLE E
+     )
+SELECT INIT$_FN_TYPE_GROUP_CODE(E.TYPE_CODE) AS TYPE_GROUP_CODE
      , COUNT(*) AS LABEL_COUNT
      , ROUND(100 * COUNT(*) / NULLIF(SUM(COUNT(*)) OVER (), 0), 2) AS PERCENTAGE
-  FROM "INIT$_TB_COLTYPE_LABEL" L
- WHERE 1=1
-   AND L.CONFIRMED_YN = 'Y'
-   AND L.LABEL_SOURCE IN ('USER_CONFIRMED', 'IMPORTED_GOLD')
-   AND EXISTS
-       (
-        SELECT 1
-          FROM "INIT$_TB_COLTYPE_PROFILE" F
-         WHERE 1=1
-           AND F.OWNER = L.OWNER
-           AND F.TABLE_NAME = L.TABLE_NAME
-           AND F.COLUMN_NAME = L.COLUMN_NAME
-           AND F.FEATURE_VERSION = 'V2'
-       )
- GROUP BY L.TYPE_GROUP_CODE
- ORDER BY CASE L.TYPE_GROUP_CODE WHEN 'CATEGORICAL' THEN 1 WHEN 'CONTINUOUS' THEN 2 ELSE 3 END
+  FROM DEDUP_ELIGIBLE E
+ GROUP BY INIT$_FN_TYPE_GROUP_CODE(E.TYPE_CODE)
+ ORDER BY CASE INIT$_FN_TYPE_GROUP_CODE(E.TYPE_CODE)
+              WHEN 'CATEGORICAL' THEN 1
+              WHEN 'CONTINUOUS' THEN 2
+              ELSE 3
+          END
 ;
 
 -- [M90003_DATASET_DETAIL_DISTRIBUTION]
-SELECT L.TYPE_CODE
-     , L.TYPE_GROUP_CODE
+WITH ELIGIBLE_PROFILE AS
+     (
+      SELECT CAST(NVL(F.DATA_TYPE, 'UNKNOWN') AS VARCHAR2(128)) AS DATA_TYPE
+           , CAST(NVL(F.TOTAL_ROWS, 0) AS NUMBER) AS TOTAL_ROWS
+           , CAST(NVL(F.NON_NULL_ROWS, 0) AS NUMBER) AS NON_NULL_ROWS
+           , CAST(NVL(F.SAMPLE_ROWS, 0) AS NUMBER) AS SAMPLE_ROWS
+           , CAST(NVL(F.SAMPLE_NOT_NULL_ROWS, 0) AS NUMBER) AS SAMPLE_NOT_NULL_ROWS
+           , CAST(NVL(F.NUM_DISTINCT, 0) AS NUMBER) AS NUM_DISTINCT
+           , CAST(NVL(F.SAMPLE_DISTINCT, 0) AS NUMBER) AS SAMPLE_DISTINCT
+           , CAST(NVL(F.DISTINCT_RATIO, 0) AS NUMBER) AS DIST_VAL_RT
+           , CAST(NVL(F.NULL_RATIO, 0) AS NUMBER) AS NULL_RATIO
+           , CAST(NVL(F.LOG_DATA_TYPE, 'UNKNOWN') AS VARCHAR2(30)) AS LOG_DATA_TYPE
+           , CAST(NVL(F.ENTROPY, 0) AS NUMBER) AS ENTROPY
+           , CAST(NVL(F.NORM_ENTROPY, 0) AS NUMBER) AS NORM_ENTROPY
+           , CAST(NVL(F.NUMERIC_RATIO, 0) AS NUMBER) AS NUMERIC_RATIO
+           , CAST(NVL(F.INTEGER_RATIO, 0) AS NUMBER) AS INTEGER_RATIO
+           , CAST(NVL(F.MIN_NUM_VALUE, 0) AS NUMBER) AS MIN_NUM_VALUE
+           , CAST(NVL(F.MAX_NUM_VALUE, 0) AS NUMBER) AS MAX_NUM_VALUE
+           , CAST(NVL(F.AVG_TEXT_LENGTH, 0) AS NUMBER) AS AVG_TEXT_LENGTH
+           , CAST(NVL(F.MAX_TEXT_LENGTH, 0) AS NUMBER) AS MAX_TEXT_LENGTH
+           , CAST(L.TYPE_CODE AS VARCHAR2(40)) AS TYPE_CODE
+        FROM "INIT$_TB_COLTYPE_LABEL" L
+        JOIN "INIT$_TB_COLTYPE_PROFILE" F
+          ON F.PROFILE_ID = L.SOURCE_PROFILE_ID
+         AND F.OWNER = L.OWNER
+         AND F.TABLE_NAME = L.TABLE_NAME
+         AND F.COLUMN_NAME = L.COLUMN_NAME
+         AND F.FEATURE_VERSION = 'V2'
+       WHERE 1=1
+         AND L.CONFIRMED_YN = 'Y'
+         AND L.LABEL_SOURCE IN ('USER_CONFIRMED', 'IMPORTED_GOLD')
+         AND L.TYPE_CODE IS NOT NULL
+     )
+   , SIGNED_ELIGIBLE AS
+     (
+      SELECT RAWTOHEX(
+                 STANDARD_HASH(
+                     NVL(CAST(E.DATA_TYPE AS VARCHAR2(128)), 'UNKNOWN')
+                     || CHR(31) || TO_CHAR(NVL(E.TOTAL_ROWS, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                     || CHR(31) || TO_CHAR(NVL(E.NON_NULL_ROWS, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                     || CHR(31) || TO_CHAR(NVL(E.SAMPLE_ROWS, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                     || CHR(31) || TO_CHAR(NVL(E.SAMPLE_NOT_NULL_ROWS, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                     || CHR(31) || TO_CHAR(NVL(E.NUM_DISTINCT, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                     || CHR(31) || TO_CHAR(NVL(E.SAMPLE_DISTINCT, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                     || CHR(31) || TO_CHAR(NVL(E.DIST_VAL_RT, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                     || CHR(31) || TO_CHAR(NVL(E.NULL_RATIO, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                     || CHR(31) || NVL(CAST(E.LOG_DATA_TYPE AS VARCHAR2(30)), 'UNKNOWN')
+                     || CHR(31) || TO_CHAR(NVL(E.ENTROPY, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                     || CHR(31) || TO_CHAR(NVL(E.NORM_ENTROPY, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                     || CHR(31) || TO_CHAR(NVL(E.NUMERIC_RATIO, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                     || CHR(31) || TO_CHAR(NVL(E.INTEGER_RATIO, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                     || CHR(31) || TO_CHAR(NVL(E.MIN_NUM_VALUE, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                     || CHR(31) || TO_CHAR(NVL(E.MAX_NUM_VALUE, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                     || CHR(31) || TO_CHAR(NVL(E.AVG_TEXT_LENGTH, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                     || CHR(31) || TO_CHAR(NVL(E.MAX_TEXT_LENGTH, 0), 'TM9', 'NLS_NUMERIC_CHARACTERS=.,')
+                   , 'SHA256'
+                 )
+             ) AS FEATURE_SIGNATURE
+           , E.*
+        FROM ELIGIBLE_PROFILE E
+     )
+   , DEDUP_ELIGIBLE AS
+     (
+      SELECT DISTINCT E.FEATURE_SIGNATURE
+           , E.DATA_TYPE
+           , E.TOTAL_ROWS
+           , E.NON_NULL_ROWS
+           , E.SAMPLE_ROWS
+           , E.SAMPLE_NOT_NULL_ROWS
+           , E.NUM_DISTINCT
+           , E.SAMPLE_DISTINCT
+           , E.DIST_VAL_RT
+           , E.NULL_RATIO
+           , E.LOG_DATA_TYPE
+           , E.ENTROPY
+           , E.NORM_ENTROPY
+           , E.NUMERIC_RATIO
+           , E.INTEGER_RATIO
+           , E.MIN_NUM_VALUE
+           , E.MAX_NUM_VALUE
+           , E.AVG_TEXT_LENGTH
+           , E.MAX_TEXT_LENGTH
+           , E.TYPE_CODE
+        FROM SIGNED_ELIGIBLE E
+     )
+SELECT E.TYPE_CODE
+     , INIT$_FN_TYPE_GROUP_CODE(E.TYPE_CODE) AS TYPE_GROUP_CODE
      , COUNT(*) AS LABEL_COUNT
      , ROUND(100 * COUNT(*) / NULLIF(SUM(COUNT(*)) OVER (), 0), 2) AS PERCENTAGE
-  FROM "INIT$_TB_COLTYPE_LABEL" L
- WHERE 1=1
-   AND L.CONFIRMED_YN = 'Y'
-   AND L.LABEL_SOURCE IN ('USER_CONFIRMED', 'IMPORTED_GOLD')
-   AND EXISTS
-       (
-        SELECT 1
-          FROM "INIT$_TB_COLTYPE_PROFILE" F
-         WHERE 1=1
-           AND F.OWNER = L.OWNER
-           AND F.TABLE_NAME = L.TABLE_NAME
-           AND F.COLUMN_NAME = L.COLUMN_NAME
-           AND F.FEATURE_VERSION = 'V2'
-       )
- GROUP BY L.TYPE_CODE
-        , L.TYPE_GROUP_CODE
- ORDER BY L.TYPE_GROUP_CODE
-        , L.TYPE_CODE
+  FROM DEDUP_ELIGIBLE E
+ GROUP BY E.TYPE_CODE
+        , INIT$_FN_TYPE_GROUP_CODE(E.TYPE_CODE)
+ ORDER BY INIT$_FN_TYPE_GROUP_CODE(E.TYPE_CODE)
+        , E.TYPE_CODE
 ;
 
 -- [M90003_LABEL_LIST]
@@ -315,26 +624,18 @@ WITH PROFILE_COUNTS AS
               , F.TABLE_NAME
               , F.COLUMN_NAME
      )
-   , LATEST_PROFILE AS
+   , CONFIRMED_PROFILE AS
      (
-      SELECT X.*
-        FROM
-           (
-            SELECT F.*
-                 , ROW_NUMBER() OVER (
-                       PARTITION BY F.OWNER, F.TABLE_NAME, F.COLUMN_NAME
-                           ORDER BY F.CREATED_AT DESC, F.PROFILE_ID DESC
-                   ) AS PROFILE_RN
-              FROM "INIT$_TB_COLTYPE_PROFILE" F
-             WHERE 1=1
-               AND F.FEATURE_VERSION = 'V2'
-           ) X
+      SELECT F.*
+        FROM "INIT$_TB_COLTYPE_PROFILE" F
        WHERE 1=1
-         AND X.PROFILE_RN = 1
+         AND F.FEATURE_VERSION = 'V2'
      )
-   , LATEST_PREDICTION AS
+   , PROFILE_RUN_PREDICTION AS
      (
-      SELECT X.OWNER
+      SELECT X.RUN_SOURCE_TYPE
+           , X.RUN_ID
+           , X.OWNER
            , X.TABLE_NAME
            , X.COLUMN_NAME
            , COALESCE(X.BASE_TYPE_CODE, INIT$_FN_TYPE_CODE(X.BASE_PREDICTED_TYPE)) AS BASE_TYPE_CODE
@@ -343,8 +644,8 @@ WITH PROFILE_COUNTS AS
            (
             SELECT R.*
                  , ROW_NUMBER() OVER (
-                       PARTITION BY R.OWNER, R.TABLE_NAME, R.COLUMN_NAME
-                           ORDER BY R.CREATE_DT DESC, R.RUN_ID DESC
+                       PARTITION BY R.RUN_SOURCE_TYPE, R.RUN_ID, R.OWNER, R.TABLE_NAME, R.COLUMN_NAME
+                           ORDER BY R.CREATE_DT DESC
                                   , NVL(R.MODEL_VERSION_ID, -1) DESC
                                   , R.MODEL_NAME DESC
                    ) AS PREDICTION_RN
@@ -412,19 +713,26 @@ WITH PROFILE_COUNTS AS
                  ELSE 'N'
              END AS CONFLICT_YN
         FROM "INIT$_TB_COLTYPE_LABEL" L
-        LEFT JOIN LATEST_PROFILE P
-          ON P.OWNER = L.OWNER
+        LEFT JOIN CONFIRMED_PROFILE P
+          ON P.PROFILE_ID = L.SOURCE_PROFILE_ID
+         AND P.OWNER = L.OWNER
          AND P.TABLE_NAME = L.TABLE_NAME
          AND P.COLUMN_NAME = L.COLUMN_NAME
         LEFT JOIN PROFILE_COUNTS C
           ON C.OWNER = L.OWNER
          AND C.TABLE_NAME = L.TABLE_NAME
          AND C.COLUMN_NAME = L.COLUMN_NAME
-        LEFT JOIN LATEST_PREDICTION R
-          ON R.OWNER = L.OWNER
+        LEFT JOIN PROFILE_RUN_PREDICTION R
+          ON R.RUN_SOURCE_TYPE = P.RUN_SOURCE_TYPE
+         AND R.RUN_ID = P.RUN_ID
+         AND R.OWNER = L.OWNER
          AND R.TABLE_NAME = L.TABLE_NAME
          AND R.COLUMN_NAME = L.COLUMN_NAME
        WHERE 1=1
+         AND (
+                :labelSource = 'ALL'
+             OR L.LABEL_SOURCE = :labelSource
+         )
          AND (
                 :scope = 'ALL'
              OR :scope = 'ELIGIBLE'
@@ -674,7 +982,7 @@ INSERT INTO "INIT$_TB_OML_TRAIN_RUN" (
   , :algorithmCode
   , :featureVersion
   , :labelVersion
-  , 'USER_CONFIRMED,IMPORTED_GOLD'
+  , :trainSourceFilter
   , :minConfirmedLabels
   , :holdoutPercent
   , :maxTrainingRows
@@ -790,7 +1098,8 @@ BEGIN
        AND EXISTS (
                SELECT 1
                  FROM "INIT$_TB_COLTYPE_PROFILE" P
-                WHERE P."OWNER" = L."OWNER"
+                WHERE P."PROFILE_ID" = L."SOURCE_PROFILE_ID"
+                  AND P."OWNER" = L."OWNER"
                   AND P."TABLE_NAME" = L."TABLE_NAME"
                   AND P."COLUMN_NAME" = L."COLUMN_NAME"
                   AND P."FEATURE_VERSION" = 'V2'
@@ -802,7 +1111,8 @@ BEGIN
        AND EXISTS (
                SELECT 1
                  FROM "INIT$_TB_COLTYPE_PROFILE" P
-                WHERE P."OWNER" = L."OWNER"
+                WHERE P."PROFILE_ID" = L."SOURCE_PROFILE_ID"
+                  AND P."OWNER" = L."OWNER"
                   AND P."TABLE_NAME" = L."TABLE_NAME"
                   AND P."COLUMN_NAME" = L."COLUMN_NAME"
                   AND P."FEATURE_VERSION" = 'V2'

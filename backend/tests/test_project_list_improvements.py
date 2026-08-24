@@ -74,6 +74,22 @@ class ProjectListImprovementTests(unittest.TestCase):
         self.assertEqual(1, scenario_js.count("this.formatKstDateTime(project.CREATED_AT)"))
         self.assertEqual(1, scenario_js.count("this.formatKstDateTime(scenario.CREATED_AT)"))
 
+    def test_project_settings_list_matches_scenario_project_row_ui(self):
+        project_sql = SqlLoader.get_sql("M01001_PROJECT_LIST")
+        project_js = (ROOT_DIR / "frontend" / "js" / "M01001.js").read_text(encoding="utf-8")
+        scenario_js = (ROOT_DIR / "frontend" / "js" / "M01002.js").read_text(encoding="utf-8")
+
+        self.assertIn("AS SCENARIO_COUNT", project_sql)
+        for marker in (
+            'const scenarioCount = Number(project.SCENARIO_COUNT || 0);',
+            'class="project-row-title-text"',
+            'class="project-scenario-status"',
+            'env-registered-icon',
+            'registeredScenariosCount',
+        ):
+            self.assertIn(marker, project_js)
+            self.assertIn(marker, scenario_js)
+
 
 if __name__ == "__main__":
     unittest.main()

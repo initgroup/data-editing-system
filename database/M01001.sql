@@ -1,32 +1,37 @@
 -- [M01001_PROJECT_LIST]
-SELECT PROJECT_ID
-     , USER_ID
-     , USER_EMAIL
-     , CASE WHEN USER_ID = :userId THEN 'Y' ELSE 'N' END AS IS_OWNER_YN
-     , CASE WHEN USER_ID = :userId THEN 'MY' ELSE 'OTHER' END AS OWNER_SCOPE
-     , PROJECT_CODE
-     , PROJECT_NAME
-     , PROJECT_TYPE
-     , PROJECT_DESC
-     , USE_YN
-     , SORT_ORDER
-     , CREATED_AT
-     , UPDATED_AT
-  FROM INIT$_TB_PROJECT
- WHERE (:includeAllUsers = 'Y' OR USER_ID = :userId)
+SELECT P.PROJECT_ID
+     , P.USER_ID
+     , P.USER_EMAIL
+     , CASE WHEN P.USER_ID = :userId THEN 'Y' ELSE 'N' END AS IS_OWNER_YN
+     , CASE WHEN P.USER_ID = :userId THEN 'MY' ELSE 'OTHER' END AS OWNER_SCOPE
+     , P.PROJECT_CODE
+     , P.PROJECT_NAME
+     , P.PROJECT_TYPE
+     , P.PROJECT_DESC
+     , P.USE_YN
+     , P.SORT_ORDER
+     , P.CREATED_AT
+     , P.UPDATED_AT
+     , (
+        SELECT COUNT(*)
+          FROM INIT$_TB_SCENARIO S
+         WHERE S.PROJECT_ID = P.PROJECT_ID
+    ) AS SCENARIO_COUNT
+  FROM INIT$_TB_PROJECT P
+ WHERE (:includeAllUsers = 'Y' OR P.USER_ID = :userId)
    AND (
           :keyword IS NULL
        OR TRIM(:keyword) IS NULL
-       OR UPPER(PROJECT_NAME) LIKE '%' || UPPER(TRIM(:keyword)) || '%'
-       OR UPPER(PROJECT_CODE) LIKE '%' || UPPER(TRIM(:keyword)) || '%'
-       OR UPPER(NVL(PROJECT_TYPE, '')) LIKE '%' || UPPER(TRIM(:keyword)) || '%'
-       OR UPPER(NVL(PROJECT_DESC, '')) LIKE '%' || UPPER(TRIM(:keyword)) || '%'
+       OR UPPER(P.PROJECT_NAME) LIKE '%' || UPPER(TRIM(:keyword)) || '%'
+       OR UPPER(P.PROJECT_CODE) LIKE '%' || UPPER(TRIM(:keyword)) || '%'
+       OR UPPER(NVL(P.PROJECT_TYPE, '')) LIKE '%' || UPPER(TRIM(:keyword)) || '%'
+       OR UPPER(NVL(P.PROJECT_DESC, '')) LIKE '%' || UPPER(TRIM(:keyword)) || '%'
        )
- ORDER BY CASE WHEN USER_ID = :userId THEN 0 ELSE 1 END
-        , USER_EMAIL
-        , SORT_ORDER NULLS LAST
-        , PROJECT_NAME
-        , PROJECT_ID
+ ORDER BY CASE WHEN P.USER_ID = :userId THEN 0 ELSE 1 END
+        , P.USER_EMAIL
+        , P.SORT_ORDER NULLS LAST
+        , P.PROJECT_NAME
+        , P.PROJECT_ID
 ;
 
 -- [M01001_PROJECT_DETAIL]

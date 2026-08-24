@@ -2,6 +2,7 @@
     const PAGE_CODE = "M90003";
     const { getContainerEl } = PageManager.createHelper(PAGE_CODE);
     const getPageContainer = () => document.getElementById(`container-${PAGE_CODE}`);
+    const NAVIGATION_STORAGE_KEY = "init.m90003.navigation.v1";
     const TYPE_GROUPS = ["CATEGORICAL", "CONTINUOUS", "OTHER"];
     const CANONICAL_TYPES = [
         "NUM_IDENTIFIER",
@@ -75,6 +76,7 @@
             if (this.isInit) return;
             this.isInit = true;
             this.generation += 1;
+            const navigationIntent = this.consumeNavigationIntent();
             this.bindEvents();
             this.renderLoadingState();
             await this.loadModelFamilies();
@@ -89,6 +91,40 @@
             this.loadedTabs.add("train");
             this.renderOverview();
             this.renderCandidateComparison();
+            if (navigationIntent) await this.applyNavigationIntent(navigationIntent);
+        },
+
+        consumeNavigationIntent() {
+            try {
+                const raw = window.sessionStorage.getItem(NAVIGATION_STORAGE_KEY);
+                window.sessionStorage.removeItem(NAVIGATION_STORAGE_KEY);
+                if (!raw) return null;
+                const intent = JSON.parse(raw);
+                const requestedAt = Number(intent?.requestedAt || 0);
+                if (requestedAt && Date.now() - requestedAt > 5 * 60 * 1000) return null;
+                return intent;
+            } catch (error) {
+                console.warn("M90003 navigation intent could not be read.", error);
+                return null;
+            }
+        },
+
+        async applyNavigationIntent(intent = {}) {
+            if (!this.isInit || String(intent.tab || "") !== "dataset") return;
+            const source = String(intent.labelSource || "").toUpperCase();
+            const status = String(intent.status || "").toUpperCase();
+            const sourceSelect = getContainerEl("#datasetSource-M90003");
+            const statusSelect = getContainerEl("#datasetStatus-M90003");
+            if (sourceSelect && ["ALL", "IMPORTED_GOLD", "USER_CONFIRMED"].includes(source)) {
+                sourceSelect.value = source;
+            }
+            if (statusSelect && ["ALL", "ELIGIBLE", "EXCLUDED_AUTO", "EXCLUDED_LEGACY", "CONFLICT"].includes(status)) {
+                statusSelect.value = status;
+            }
+            this.datasetPage = 1;
+            this.selectedLabelIds.clear();
+            this.loadedTabs.delete("dataset");
+            await this.openTab("dataset");
         },
 
         destroy() {
@@ -154,7 +190,7 @@
                     this.toggleCurrentPageLabels(event.target.checked);
                 } else if (event.target.matches("[data-label-select]")) {
                     this.toggleLabelSelection(event.target.dataset.labelSelect, event.target.checked);
-                } else if (event.target.matches("#trainMinRows-M90003, #trainHoldout-M90003")) {
+                } else if (event.target.matches("#trainMinRows-M90003, #trainHoldout-M90003, #trainScope-M90003")) {
                     this.renderTrainingReadiness();
                 }
             };
@@ -358,7 +394,8 @@
                 const params = new URLSearchParams({
                     page: String(this.datasetPage),
                     pageSize: String(this.datasetPageSize),
-                    status: getContainerEl("#datasetStatus-M90003")?.value || "ELIGIBLE"
+                    status: getContainerEl("#datasetStatus-M90003")?.value || "ELIGIBLE",
+                    labelSource: getContainerEl("#datasetSource-M90003")?.value || "ALL"
                 });
                 const typeGroupCode = getContainerEl("#datasetGroup-M90003")?.value || "";
                 const keyword = (getContainerEl("#datasetKeyword-M90003")?.value || "").trim();
@@ -449,12 +486,19 @@
                 minConfirmedLabels: this.boundInteger(getContainerEl("#trainMinRows-M90003")?.value, 20, 100000, 30),
                 seed: this.boundInteger(getContainerEl("#trainSeed-M90003")?.value, 1, 2147483647, 42),
                 holdoutRatio: this.boundNumber(getContainerEl("#trainHoldout-M90003")?.value, 0.1, 0.4, 0.2),
+                trainingScope: getContainerEl("#trainScope-M90003")?.value || "FULL",
                 confirmedGoldOnly: true
             };
             const message = t(
-                "confirmStartTraining",
-                "Start {algorithm} training with at most {rows} confirmed gold labels?",
-                { algorithm: payload.algorithmCode, rows: this.formatInteger(payload.maxRows) }
+                payload.trainingScope === "ADDITIONAL" ? "confirmStartAdditionalTraining" : "confirmStartTraining",
+                payload.trainingScope === "ADDITIONAL"
+                    ? "Reflect newly confirmed labels in a candidate model? The full confirmed corpus is rebuilt to retain existing classes."
+                    : "Start {algorithm} training with at most {rows} confirmed gold labels?",
+                {
+                    algorithm: payload.algorithmCode,
+                    rows: this.formatInteger(payload.maxRows),
+                    additional: this.formatInteger(this.pick(this.summary?.counts || {}, "additionalUser", "ADDITIONAL_USER") || 0)
+                }
             );
             if (!(await this.confirm(message))) return;
             this.setButtonLoading(button, true, t("startingTraining", "Starting..."));
@@ -824,16 +868,26 @@
             }
             const typeRows = this.normalizeTypeDistribution().filter((row) => Number(row.count) > 0);
             const eligibleRows = typeRows.reduce((sum, row) => sum + Number(row.count || 0), 0);
-            const usableClasses = typeRows.filter((row) => Number(row.count) >= 2).length;
+            const usableClasses = typeRows.filter((row) => Number(row.count) >= 3).length;
             const minimumRows = this.boundInteger(getContainerEl("#trainMinRows-M90003")?.value, 20, 100000, 30);
-            const ready = eligibleRows >= minimumRows && usableClasses >= 2;
+            const ready = eligibleRows >= minimumRows
+                && typeRows.length >= 2
+                && usableClasses === typeRows.length;
+            const trainingScope = getContainerEl("#trainScope-M90003")?.value || "FULL";
+            const counts = this.pick(this.summary, "counts", "COUNTS") || {};
+            const additionalUserRows = Number(this.pick(counts, "additionalUser", "ADDITIONAL_USER") || 0);
+            const scopeReady = trainingScope !== "ADDITIONAL" || additionalUserRows > 0;
             const holdoutRatio = this.boundNumber(getContainerEl("#trainHoldout-M90003")?.value, 0.1, 0.4, 0.2);
             const smallestClassCount = typeRows.length ? Math.min(...typeRows.map((row) => Number(row.count || 0))) : 0;
-            const estimatedMinorityHoldout = Math.floor(smallestClassCount * holdoutRatio);
+            const estimatedMinorityHoldout = smallestClassCount >= 3
+                ? Math.min(smallestClassCount - 2, Math.max(1, Math.round(smallestClassCount * holdoutRatio)))
+                : 0;
             const limitedHoldout = ready && estimatedMinorityHoldout < 5;
-            note.className = `type-model-note ${ready && !limitedHoldout ? "is-info" : "is-warning"}`;
-            note.querySelector("span").textContent = !ready
-                ? t("trainingNotReady", "Training requires at least {minimum} confirmed rows and two detailed type classes with two or more rows each. Current: {rows} rows, {classes} usable classes.", { minimum: minimumRows, rows: this.formatInteger(eligibleRows), classes: usableClasses })
+            note.className = `type-model-note ${ready && scopeReady && !limitedHoldout ? "is-info" : "is-warning"}`;
+            note.querySelector("span").textContent = !scopeReady
+                ? t("additionalTrainingNotReady", "Additional training requires at least one user-confirmed label added since the latest successful training.")
+                : (!ready
+                ? t("trainingNotReady", "Training requires at least {minimum} confirmed rows and two or more detailed type classes, with at least three unique profiles per class. Current: {rows} rows, {classes} usable classes.", { minimum: minimumRows, rows: this.formatInteger(eligibleRows), classes: usableClasses })
                 : (limitedHoldout
                     ? t(
                         "trainingReadyHoldoutWarning",
@@ -843,8 +897,10 @@
                             holdout: this.formatInteger(estimatedMinorityHoldout)
                         }
                     )
-                    : t("trainingReady", "Training is ready with {rows} confirmed rows across {classes} usable classes.", { rows: this.formatInteger(eligibleRows), classes: usableClasses }));
-            button.disabled = !ready;
+                    : (trainingScope === "ADDITIONAL"
+                        ? t("additionalTrainingReady", "{additional} newly user-confirmed labels will be reflected by rebuilding the full {rows}-row confirmed corpus.", { additional: this.formatInteger(additionalUserRows), rows: this.formatInteger(eligibleRows) })
+                        : t("trainingReady", "Training is ready with {rows} confirmed rows across {classes} usable classes.", { rows: this.formatInteger(eligibleRows), classes: usableClasses }))));
+            button.disabled = !ready || !scopeReady;
         },
 
         renderLoadingState() {
@@ -921,6 +977,9 @@
             const counts = this.pick(this.summary, "counts", "COUNTS", "labelCounts", "LABEL_COUNTS") || this.summary || {};
             const items = [
                 ["eligible", t("eligibleConfirmed", "Eligible Confirmed"), this.pick(counts, "confirmedEligible", "CONFIRMED_ELIGIBLE", "eligibleConfirmed", "ELIGIBLE_CONFIRMED")],
+                ["initial", t("initialSampleSource", "Initial Samples"), this.pick(counts, "importedGold", "IMPORTED_GOLD")],
+                ["user", t("userConfirmedSource", "User Confirmed"), this.pick(counts, "userConfirmed", "USER_CONFIRMED")],
+                ["additional", t("additionalUserLabels", "New Since Training"), this.pick(counts, "additionalUser", "ADDITIONAL_USER")],
                 ["auto", t("excludedAutomatic", "Excluded Automatic"), this.pick(counts, "excludedAuto", "EXCLUDED_AUTO", "automaticExcluded", "AUTOMATIC_EXCLUDED")],
                 ["legacy", t("excludedLegacy", "Excluded Legacy"), this.pick(counts, "excludedLegacy", "EXCLUDED_LEGACY", "legacyExcluded", "LEGACY_EXCLUDED")],
                 ["conflict", t("conflicts", "Conflicts"), this.pick(counts, "conflicts", "CONFLICTS", "conflictCount", "CONFLICT_COUNT")],

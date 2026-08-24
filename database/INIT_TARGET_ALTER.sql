@@ -2593,6 +2593,64 @@ CREATE INDEX "IX_INIT$_TB_RULEVIOL_ASSOC_03"
 END;
 /
 
+-- Freeze legacy confirmed labels to one concrete V2 profile snapshot.  Prefer
+-- the profile from the recorded source run; when older rows have no usable run
+-- metadata, choose the latest matching V2 profile once during migration.  The
+-- trainer never performs this fallback at runtime, so later source-table
+-- changes cannot silently replace the learning case.
+DECLARE
+    v_backfilled_count NUMBER := 0;
+BEGIN
+    MERGE INTO "INIT$_TB_COLTYPE_LABEL" T
+    USING (
+        SELECT X.LABEL_ID
+             , X.PROFILE_ID
+             , X.RUN_SOURCE_TYPE
+             , X.RUN_ID
+          FROM
+             (
+              SELECT L.LABEL_ID
+                   , P.PROFILE_ID
+                   , P.RUN_SOURCE_TYPE
+                   , P.RUN_ID
+                   , ROW_NUMBER() OVER (
+                         PARTITION BY L.LABEL_ID
+                             ORDER BY CASE
+                                          WHEN P.RUN_SOURCE_TYPE = L.SOURCE_RUN_SOURCE_TYPE
+                                           AND P.RUN_ID = L.SOURCE_RUN_ID
+                                          THEN 0
+                                          ELSE 1
+                                      END
+                                    , P.CREATED_AT DESC
+                                    , P.PROFILE_ID DESC
+                     ) AS PROFILE_RN
+                FROM "INIT$_TB_COLTYPE_LABEL" L
+                JOIN "INIT$_TB_COLTYPE_PROFILE" P
+                  ON P.OWNER = L.OWNER
+                 AND P.TABLE_NAME = L.TABLE_NAME
+                 AND P.COLUMN_NAME = L.COLUMN_NAME
+                 AND P.FEATURE_VERSION = 'V2'
+               WHERE L.SOURCE_PROFILE_ID IS NULL
+                 AND L.CONFIRMED_YN = 'Y'
+                 AND L.LABEL_SOURCE IN ('USER_CONFIRMED', 'IMPORTED_GOLD')
+             ) X
+         WHERE X.PROFILE_RN = 1
+    ) S
+       ON (T.LABEL_ID = S.LABEL_ID)
+     WHEN MATCHED THEN UPDATE
+      SET T.SOURCE_PROFILE_ID = S.PROFILE_ID
+        , T.SOURCE_RUN_SOURCE_TYPE = S.RUN_SOURCE_TYPE
+        , T.SOURCE_RUN_ID = S.RUN_ID;
+
+    v_backfilled_count := SQL%ROWCOUNT;
+    COMMIT;
+    DBMS_OUTPUT.PUT_LINE(
+        '[OK] Backfilled ' || v_backfilled_count
+            || ' confirmed column-type label profile snapshot(s).'
+    );
+END;
+/
+
 -- Column-type model training is owned exclusively by M90003 and
 -- INIT$_SP_TYPE_MODEL_TRAIN. Remove the former per-job training procedure so
 -- it cannot be registered again as an M03001/FLOW work item.

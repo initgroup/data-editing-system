@@ -534,6 +534,9 @@
 }
 
 #container-M90003 .type-quality-item.is-eligible { border-color: #0f9f6e; }
+#container-M90003 .type-quality-item.is-initial { border-color: #2563eb; }
+#container-M90003 .type-quality-item.is-user { border-color: #0891b2; }
+#container-M90003 .type-quality-item.is-additional { border-color: #16a34a; }
 #container-M90003 .type-quality-item.is-auto { border-color: #7c3aed; }
 #container-M90003 .type-quality-item.is-legacy { border-color: #64748b; }
 #container-M90003 .type-quality-item.is-conflict { border-color: #dc2626; }
@@ -1086,7 +1089,7 @@
     border: 1px solid var(--model-border);
     display: grid;
     gap: 10px;
-    grid-template-columns: repeat(5, minmax(120px, 1fr)) minmax(150px, auto) auto;
+    grid-template-columns: repeat(6, minmax(120px, 1fr));
     padding: 14px;
 }
 

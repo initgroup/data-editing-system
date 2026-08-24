@@ -182,6 +182,14 @@
                     </select>
                 </label>
                 <label>
+                    <span data-label-key="learningDataSource">Learning Data Source</span>
+                    <select id="datasetSource-M90003" data-filter="dataset">
+                        <option value="ALL" data-label-key="allLearningSources">All Sources</option>
+                        <option value="IMPORTED_GOLD" data-label-key="initialSampleSource">Initial Samples</option>
+                        <option value="USER_CONFIRMED" data-label-key="userConfirmedSource">User Confirmed</option>
+                    </select>
+                </label>
+                <label>
                     <span data-label-key="finalTypeGroup">Final Type Group</span>
                     <select id="datasetGroup-M90003" data-filter="dataset">
                         <option value="" data-label-key="allGroups">All Groups</option>
@@ -269,6 +277,13 @@
             </div>
 
             <form id="trainForm-M90003" class="type-model-train-form">
+                <label class="type-model-training-scope">
+                    <span data-label-key="trainingScope">Training Scope</span>
+                    <select id="trainScope-M90003" required>
+                        <option value="FULL" data-label-key="trainingScopeFull">Rebuild with all confirmed data</option>
+                        <option value="ADDITIONAL" data-label-key="trainingScopeAdditional">Reflect newly confirmed data</option>
+                    </select>
+                </label>
                 <label>
                     <span data-label-key="algorithm">Algorithm</span>
                     <select id="trainAlgorithm-M90003" required>
@@ -311,6 +326,10 @@
             <div id="trainingReadiness-M90003" class="type-model-note is-warning">
                 <i class="fas fa-triangle-exclamation" aria-hidden="true"></i>
                 <span data-label-key="trainingSafetyNotice">Rows, seed, and holdout are bounded. Training runs in the Target DB and never replaces the champion automatically.</span>
+            </div>
+            <div class="type-model-note is-info">
+                <i class="fas fa-circle-info" aria-hidden="true"></i>
+                <span data-label-key="additionalTrainingPolicy">Additional training starts only when new user-confirmed labels exist, then rebuilds from all initial and user-confirmed data to prevent forgetting existing classes.</span>
             </div>
 
             <section class="type-model-card">

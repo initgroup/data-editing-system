@@ -2,6 +2,7 @@
     "use strict";
 
     const STORAGE_KEY = "init.quick-edit.pipeline.v1";
+    const MODEL_TRAINING_NAVIGATION_KEY = "init.m90003.navigation.v1";
     const STATE_VERSION = 1;
     const STEP_COUNT = 8;
     const STEPS = [
@@ -9,12 +10,28 @@
         { key: "project", title: "프로젝트", description: "작업 프로젝트를 준비합니다." },
         { key: "scenario", title: "시나리오", description: "규칙 발굴 시나리오를 준비합니다." },
         { key: "table", title: "대상 테이블", description: "INITUP$ 테이블을 만들고 시나리오에 등록합니다." },
-        { key: "models", title: "모델 4단계", description: "기본 4단계 모델과 실행 파라미터를 저장합니다." },
-        { key: "flow", title: "FLOW 자동 저장", description: "화면에 설계도를 표시하지 않고 내부 FLOW를 저장합니다." },
-        { key: "run", title: "자동 실행", description: "저장된 FLOW를 실행하고 상세 이력을 조회합니다." },
+        { key: "models", title: "모델 설정", description: "기본 4단계 모델과 실행 파라미터를 저장합니다." },
+        { key: "flow", title: "FLOW 설계", description: "화면에 설계도를 표시하지 않고 내부 FLOW를 저장합니다." },
+        { key: "run", title: "규칙 발굴 실행", description: "저장된 FLOW를 실행하고 상세 이력을 조회합니다." },
         { key: "results", title: "결과 분석", description: "발견된 범주형·연속형 규칙을 요약합니다." }
     ];
     const ALLOWED_EXTENSIONS = new Set(["csv", "tsv", "txt", "xlsx", "xlsm"]);
+    const COLUMN_TYPE_OPTIONS = [
+        ["숫자형식별자", "NUM_IDENTIFIER", "OTHER"],
+        ["문자형식별자", "CHAR_IDENTIFIER", "OTHER"],
+        ["숫자형범주형", "CAT_NUMERIC", "CATEGORICAL"],
+        ["순서형범주형", "CAT_ORDINAL", "CATEGORICAL"],
+        ["이산형연속형", "NUM_DISCRETE", "CONTINUOUS"],
+        ["문자형범주형", "CAT_CHAR", "CATEGORICAL"],
+        ["일반적범주형", "CAT_GENERAL", "CATEGORICAL"],
+        ["숫자형연속형", "NUM_CONTINUOUS", "CONTINUOUS"],
+        ["단순형텍스트", "FREE_TEXT", "OTHER"],
+        ["기타데이터형", "OTHER", "OTHER"],
+        ["미상데이터형", "UNKNOWN", "OTHER"]
+    ];
+    const COLUMN_TYPE_METADATA = new Map(COLUMN_TYPE_OPTIONS.map(([displayType, typeCode, groupCode]) => (
+        [displayType, { typeCode, groupCode }]
+    )));
 
     const R = window.QuickEditRenderers;
     const client = new window.QuickEditApiClient();
@@ -28,8 +45,11 @@
         continuous: null,
         categoricalViolation: null,
         continuousViolation: null,
-        descriptiveStatistics: null
+        descriptiveStatistics: null,
+        columnTypeFinal: null
     };
+    let columnTypeDirtyChanges = new Map();
+    let columnTypeSaveBusy = false;
     let ruleDistributionFilters = createRuleDistributionFilters();
     let categoricalDetail = { ruleId: "", ruleIndex: -1 };
     let continuousDetail = {
@@ -57,6 +77,7 @@
     let quickHistoryTotal = 0;
     let quickHistoryBusy = false;
     let quickHistoryDetailRunId = null;
+    let quickHistoryDetailError = { runId: null, message: "" };
     let quickHistoryError = "";
 
     function createRuleDistributionFilters() {
@@ -158,6 +179,31 @@
 
     function valueOf(...ids) {
         return String(byId(...ids)?.value || "").trim();
+    }
+
+    function sqlStringLiteral(value) {
+        return `'${String(value ?? "").replaceAll("'", "''")}'`;
+    }
+
+    function getColumnTypeWhereClause(owner = state.tableOwner, tableName = state.tableName) {
+        return `"OWNER" = ${sqlStringLiteral(String(owner || "").toUpperCase())} AND "TABLE_NAME" = ${sqlStringLiteral(String(tableName || "").toUpperCase())}`;
+    }
+
+    function resolveColumnTypeTarget(nodes, artifacts, preferredNode = null) {
+        const safeNodes = Array.isArray(nodes) ? nodes : [];
+        const node = preferredNode
+            || safeNodes.find((item) => String(item.REF_MENU_CODE || "").toUpperCase() === "M03001" && item.TARGET_OWNER && item.TARGET_TABLE)
+            || safeNodes.find((item) => item.TARGET_OWNER && item.TARGET_TABLE)
+            || null;
+        const artifact = artifacts?.categorical
+            || artifacts?.continuous
+            || artifacts?.categoricalViolation
+            || artifacts?.continuousViolation
+            || null;
+        return {
+            owner: String(node?.TARGET_OWNER || artifact?.targetOwner || state.tableOwner || "").trim().toUpperCase(),
+            tableName: String(node?.TARGET_TABLE || artifact?.targetTable || state.tableName || "").trim().toUpperCase()
+        };
     }
 
     function delay(milliseconds) {
@@ -1224,6 +1270,13 @@
             && node.TARGET_OWNER
             && node.TARGET_TABLE
         ));
+        const columnTypeTarget = resolveColumnTypeTarget(nodes, artifacts, statisticsNode);
+        if (columnTypeTarget.owner && columnTypeTarget.tableName) {
+            const targetChanged = state.tableOwner !== columnTypeTarget.owner || state.tableName !== columnTypeTarget.tableName;
+            state.tableOwner = columnTypeTarget.owner;
+            state.tableName = columnTypeTarget.tableName;
+            if (targetChanged) persistState();
+        }
         if (statisticsNode) {
             keys.push("descriptiveStatistics");
             requests.push(client.getDescriptiveStatistics(
@@ -1232,13 +1285,24 @@
             ));
         }
 
+        if (columnTypeTarget.owner && columnTypeTarget.tableName) {
+            keys.push("columnTypeFinal");
+            requests.push(client.getColumnTypeFinal({
+                owner: columnTypeTarget.owner,
+                whereClause: getColumnTypeWhereClause(columnTypeTarget.owner, columnTypeTarget.tableName),
+                limit: 1000
+            }));
+        }
+
         resultData = {
             categorical: null,
             continuous: null,
             categoricalViolation: null,
             continuousViolation: null,
-            descriptiveStatistics: null
+            descriptiveStatistics: null,
+            columnTypeFinal: null
         };
+        columnTypeDirtyChanges.clear();
         resetRuleDistributionFilters();
         const settled = await Promise.allSettled(requests);
         const errors = [];
@@ -1252,6 +1316,7 @@
         if (!artifacts.categoricalViolation) errors.push("범주형 위반 결과 테이블을 찾지 못했습니다.");
         if (!artifacts.continuousViolation) errors.push("연속형 위반 결과 테이블을 찾지 못했습니다.");
         if (!statisticsNode) errors.push("기초통계량을 계산할 대상 테이블 연결 정보를 찾지 못했습니다.");
+        if (!columnTypeTarget.owner || !columnTypeTarget.tableName) errors.push("컬럼 유형 FINAL 결과를 조회할 대상 테이블 정보가 없습니다.");
         state.resultWarning = errors.join(" ");
         persistState();
         renderResults();
@@ -1355,6 +1420,27 @@
         }
     }
 
+    async function openColumnTypeModelTraining() {
+        const appWindow = window.opener;
+        if (!appWindow || appWindow.closed || !appWindow.PageManager) {
+            showToast("메인 화면을 찾을 수 없습니다. 메인 화면에서 퀵 에디팅을 다시 열어 주세요.", "error");
+            return;
+        }
+        const navigationIntent = {
+            tab: "dataset",
+            labelSource: "USER_CONFIRMED",
+            status: "ELIGIBLE",
+            requestedAt: Date.now()
+        };
+        try {
+            appWindow.sessionStorage.setItem(MODEL_TRAINING_NAVIGATION_KEY, JSON.stringify(navigationIntent));
+            await appWindow.PageManager.load("M90003", "모델 학습 관리", true);
+            appWindow.focus();
+        } catch (error) {
+            showToast(error.message || "모델 학습 화면으로 이동하지 못했습니다.", "error");
+        }
+    }
+
     function getRuleViolationCount(kind, rule) {
         if (!rule) return null;
         const value = getViolationCountMap(kind).get(String(rule.RULE_ID || ""));
@@ -1409,30 +1495,59 @@
 
         const columns = Array.isArray(payload.columns) ? payload.columns : [];
         const insights = payload.insights && typeof payload.insights === "object" ? payload.insights : {};
-        const ranked = Array.isArray(insights.rankedColumns)
-            ? insights.rankedColumns
-            : columns.map((column) => column.insight || { columnName: column.columnName });
-        const summary = insights.summary || {};
+        const rankedCandidates = Array.isArray(insights.rankedColumns) ? insights.rankedColumns : [];
+        const statisticsColumnNames = new Set(columns.map((column) => String(column.columnName || "").toUpperCase()));
+        const includedColumnNames = new Set();
+        const ranked = rankedCandidates.filter((row) => {
+            const columnName = String(row.columnName || "").toUpperCase();
+            if (!statisticsColumnNames.has(columnName) || includedColumnNames.has(columnName)) return false;
+            includedColumnNames.add(columnName);
+            return true;
+        });
+        columns.forEach((column) => {
+            const columnName = String(column.columnName || "");
+            const normalizedName = columnName.toUpperCase();
+            if (includedColumnNames.has(normalizedName)) return;
+            ranked.push(column.insight || {
+                columnName,
+                columnComment: column.columnComment || "",
+                importanceScore: 0,
+                priorityLevel: "LOW",
+                priorityReasons: ["큰 변화 없음"],
+                violationCount: 0,
+                missingRate: 0
+            });
+            includedColumnNames.add(normalizedName);
+        });
+        const isHighPriority = (row) => {
+            const priorityLevel = String(row.priorityLevel || "").toUpperCase();
+            return priorityLevel ? priorityLevel === "HIGH" : Number(row.importanceScore || 0) >= 50;
+        };
+        const highPriorityColumnCount = ranked.filter(isHighPriority).length;
+        const violationColumnCount = ranked.filter((row) => Number(row.violationCount || 0) > 0).length;
         const distribution = payload.summary || {};
-        const totalViolations = finiteNumber(summary.totalViolationCount)
-            ?? ranked.reduce((sum, row) => sum + Number(row.violationCount || 0), 0);
+        const totalViolations = ranked.reduce((sum, row) => sum + Number(row.violationCount || 0), 0);
         kpis.innerHTML = R.renderKpis([
-            { label: "통계 분석 컬럼", value: R.formatNumber(columns.length, 0), tone: "primary" },
-            { label: "우선 확인 컬럼", value: R.formatNumber(summary.highPriorityColumnCount || 0, 0) },
-            { label: "위반 발생 컬럼", value: R.formatNumber(summary.violationColumnCount || 0, 0) },
+            { label: "통계 분석 컬럼", value: R.formatNumber(ranked.length, 0), tone: "primary" },
+            { label: "우선 확인 컬럼", value: R.formatNumber(highPriorityColumnCount, 0) },
+            { label: "위반 발생 컬럼", value: R.formatNumber(violationColumnCount, 0) },
             { label: "전체 규칙 위반", value: R.formatNumber(totalViolations, 0) },
             { label: "분산 감소", value: R.formatNumber(distribution.varianceDecreasedColumnCount || 0, 0), help: "수정 후 분산이 감소한 컬럼" },
             { label: "분산 증가", value: R.formatNumber(distribution.varianceIncreasedColumnCount || 0, 0), help: "수정 후 분산이 증가한 컬럼" }
         ]);
 
-        const topRows = ranked.slice(0, 50);
-        priority.innerHTML = topRows.length ? topRows.map((row, index) => {
+        const legend = `<div class="qe-statistics-card-legend" aria-label="컬럼 카드 표시 기준">
+            <strong>전체 ${R.escapeHtml(R.formatNumber(ranked.length, 0))}개 컬럼 표시</strong>
+            <span class="is-priority"><i aria-hidden="true"></i>테두리 강조 · 우선 확인 ${R.escapeHtml(R.formatNumber(highPriorityColumnCount, 0))}개</span>
+            <span class="is-violation"><b>위반</b>색상 배지 · 위반 발생 ${R.escapeHtml(R.formatNumber(violationColumnCount, 0))}개</span>
+        </div>`;
+        const cards = ranked.map((row, index) => {
             const reasons = Array.isArray(row.priorityReasons)
                 ? row.priorityReasons.join(" · ")
                 : String(row.priorityReasons || "분포 변화 확인");
-            const score = finiteNumber(row.importanceScore) || 0;
-            const level = score >= 70 ? "high" : score >= 30 ? "medium" : "low";
-            return `<button type="button" class="qe-statistics-priority-card is-${R.escapeHtml(level)}"
+            const isPriority = isHighPriority(row);
+            const violationCount = Number(row.violationCount || 0);
+            return `<button type="button" class="qe-statistics-priority-card${isPriority ? " is-priority" : ""}"
                     data-statistics-column="${R.escapeHtml(String(row.columnName || ""))}">
                 <span class="qe-statistics-rank">${index + 1}</span>
                 <span class="qe-statistics-priority-card__body">
@@ -1440,16 +1555,259 @@
                     <small>${R.escapeHtml(reasons)}</small>
                     <span>
                         <em>중요도 ${R.escapeHtml(R.formatNumber(row.importanceScore || 0, 1))}</em>
-                        <em>위반 ${R.escapeHtml(R.formatNumber(row.violationCount || 0, 0))}</em>
+                        <em class="${violationCount > 0 ? "is-violation" : "is-zero"}">위반 ${R.escapeHtml(R.formatNumber(violationCount, 0))}</em>
                         <em>결측 ${R.escapeHtml(formatPercent(row.missingRate || 0))}</em>
                     </span>
                 </span>
             </button>`;
-        }).join("") : '<div class="qe-empty">우선 확인할 컬럼 정보가 없습니다.</div>';
+        }).join("");
+        priority.innerHTML = ranked.length ? `${legend}${cards}` : '<div class="qe-empty">표시할 통계 분석 컬럼이 없습니다.</div>';
         notice.textContent = payload.notice || "";
         notice.hidden = !payload.notice;
         byId("qeStatisticsDetailButton").disabled = columns.length === 0;
         setHidden(section, false);
+    }
+
+    function getColumnTypeFinalRows() {
+        const payload = resultData.columnTypeFinal;
+        if (Array.isArray(payload?.data)) return payload.data;
+        if (Array.isArray(payload?.rows)) return payload.rows;
+        return [];
+    }
+
+    function columnTypeGroupLabel(groupCode) {
+        return {
+            CATEGORICAL: "범주형",
+            CONTINUOUS: "연속형",
+            OTHER: "기타"
+        }[String(groupCode || "OTHER").toUpperCase()] || "기타";
+    }
+
+    function columnTypeSourceLabel(source, confirmedYn) {
+        const normalized = String(source || "").toUpperCase();
+        if (normalized === "USER_CONFIRMED") {
+            return String(confirmedYn || "").toUpperCase() === "Y" ? "사용자 확정" : "사용자 검토";
+        }
+        if (normalized === "IMPORTED_GOLD") return "초기 샘플";
+        if (String(confirmedYn || "").toUpperCase() === "Y") return "확정";
+        return "자동 판정";
+    }
+
+    function renderColumnTypeFinal(options = {}) {
+        const section = byId("qeColumnTypeSummary");
+        const kpis = byId("qeColumnTypeKpis");
+        const groups = byId("qeColumnTypeGroups");
+        const editor = byId("qeColumnTypeEditor");
+        const editorToggle = byId("qeColumnTypeEditorToggle");
+        const editorPanel = byId("qeColumnTypeEditorPanel");
+        const table = byId("qeColumnTypeTable");
+        const notice = byId("qeColumnTypeNotice");
+        const saveButton = byId("qeColumnTypeSaveButton");
+        if (!section || !kpis || !groups || !editor || !editorToggle || !editorPanel || !table || !notice || !saveButton) return;
+
+        const rows = getColumnTypeFinalRows();
+        const payloadLoaded = Boolean(resultData.columnTypeFinal);
+        const keepEditorOpen = options.keepEditorOpen || !editorPanel.hidden;
+        if (!payloadLoaded || !rows.length) {
+            setHidden(section, false);
+            kpis.innerHTML = "";
+            groups.innerHTML = '<div class="qe-empty">표시할 컬럼 유형 FINAL 결과가 없습니다.</div>';
+            table.innerHTML = "";
+            editor.hidden = true;
+            editorPanel.hidden = true;
+            editorToggle.setAttribute("aria-expanded", "false");
+            notice.textContent = payloadLoaded
+                ? "M03001 컬럼유형분류 실행의 FINAL 결과가 생성되었는지 확인해 주세요."
+                : "컬럼 유형 FINAL 결과를 불러오지 못했습니다.";
+            notice.hidden = false;
+            saveButton.disabled = true;
+            byId("qeColumnTypeDirtyCount").textContent = "0";
+            return;
+        }
+
+        rows.forEach((row) => {
+            if (!("__ORIGINAL_FINAL_TYPE" in row)) {
+                row.__ORIGINAL_FINAL_TYPE = String(row.FINAL_PREDICTED_TYPE || "");
+                row.__ORIGINAL_GROUP_CODE = String(row.TYPE_GROUP_CODE || "OTHER");
+                row.__ORIGINAL_TYPE_CODE = String(row.FINAL_TYPE_CODE || "");
+                row.__ORIGINAL_CONFIRMED_YN = String(row.CONFIRMED_YN || "N");
+                row.__ORIGINAL_LABEL_SOURCE = String(row.LABEL_SOURCE || "");
+            }
+        });
+
+        const counts = rows.reduce((target, row) => {
+            const group = String(row.TYPE_GROUP_CODE || "OTHER").toUpperCase();
+            target[group] = (target[group] || 0) + 1;
+            if (String(row.CONFIRMED_YN || "").toUpperCase() === "Y") target.confirmed += 1;
+            return target;
+        }, { CATEGORICAL: 0, CONTINUOUS: 0, OTHER: 0, confirmed: 0 });
+        kpis.innerHTML = R.renderKpis([
+            { label: "전체 컬럼", value: R.formatNumber(rows.length, 0), tone: "primary" },
+            { label: "범주형", value: R.formatNumber(counts.CATEGORICAL, 0) },
+            { label: "연속형", value: R.formatNumber(counts.CONTINUOUS, 0), tone: "mint" },
+            { label: "기타", value: R.formatNumber(counts.OTHER, 0) },
+            { label: "사용자·샘플 확정", value: R.formatNumber(counts.confirmed, 0), help: "학습 가능한 확정 라벨" },
+            { label: "검토 필요", value: R.formatNumber(rows.length - counts.confirmed, 0), help: "자동 판정 상태" }
+        ]);
+
+        groups.innerHTML = ["CATEGORICAL", "CONTINUOUS", "OTHER"].map((groupCode) => {
+            const groupRows = rows.filter((row) => String(row.TYPE_GROUP_CODE || "OTHER").toUpperCase() === groupCode);
+            const tags = groupRows.length
+                ? groupRows.map((row) => {
+                    const columnName = String(row.COLUMN_NAME || "-");
+                    const columnLabel = String(row.COLUMN_DESC || "").trim();
+                    const displayLabel = columnLabel ? `${columnName} · ${columnLabel}` : columnName;
+                    return `<span class="qe-column-type-tag" title="${R.escapeHtml(displayLabel)}"><b>${R.escapeHtml(columnLabel || columnName)}</b>${columnLabel ? `<em>${R.escapeHtml(columnName)}</em>` : ""}</span>`;
+                }).join("")
+                : '<span class="qe-column-type-tag">해당 컬럼 없음</span>';
+            return `<article class="qe-column-type-group is-${groupCode.toLowerCase()}">
+                <header><strong>${columnTypeGroupLabel(groupCode)}</strong><span>${R.formatNumber(groupRows.length, 0)} columns</span></header>
+                <div class="qe-column-type-tags">${tags}</div>
+            </article>`;
+        }).join("");
+
+        const readOnly = Boolean(state.historyView);
+        table.innerHTML = rows.map((row, index) => {
+            const displayType = String(row.FINAL_PREDICTED_TYPE || "");
+            const groupCode = String(row.TYPE_GROUP_CODE || "OTHER").toUpperCase();
+            const rowId = String(row["INIT$ROWID"] || "");
+            const dirty = Array.from(columnTypeDirtyChanges.keys()).some((key) => key.startsWith(`${rowId}:`));
+            const sourceLabel = columnTypeSourceLabel(row.LABEL_SOURCE, row.CONFIRMED_YN);
+            const confirmed = String(row.CONFIRMED_YN || "").toUpperCase() === "Y";
+            const columnName = String(row.COLUMN_NAME || "-");
+            const columnLabel = String(row.COLUMN_DESC || "").trim();
+            const optionsHtml = `<option value="" disabled${displayType ? "" : " selected"}>유형 선택</option>` + COLUMN_TYPE_OPTIONS.map(([value]) => (
+                `<option value="${R.escapeHtml(value)}"${displayType === value ? " selected" : ""}>${R.escapeHtml(value)}</option>`
+            )).join("");
+            return `<div class="qe-column-type-row${dirty ? " is-dirty" : ""}" role="row">
+                <span class="qe-column-type-column" role="cell">
+                    <strong class="qe-column-type-column__label${columnLabel ? "" : " is-empty"}" title="${R.escapeHtml(columnLabel || "컬럼 라벨 없음")}">${R.escapeHtml(columnLabel || "컬럼 라벨 없음")}</strong>
+                    <small class="qe-column-type-column__id" title="${R.escapeHtml(columnName)}">${R.escapeHtml(columnName)}</small>
+                </span>
+                <select data-column-type-index="${index}" aria-label="${R.escapeHtml(columnLabel || columnName)} 최종 유형"${readOnly || !rowId ? " disabled" : ""}>${optionsHtml}</select>
+                <span class="qe-column-type-pill is-${groupCode.toLowerCase()}" role="cell">${R.escapeHtml(columnTypeGroupLabel(groupCode))}</span>
+                <label class="qe-column-type-source${confirmed ? " is-confirmed" : ""}" role="cell" title="${R.escapeHtml(sourceLabel)}">
+                    <input type="checkbox" data-column-confirm-index="${index}"${confirmed ? " checked" : ""}${readOnly || !rowId ? " disabled" : ""}>
+                    <span>${confirmed ? "학습 확정" : "검토 필요"}</span>
+                </label>
+            </div>`;
+        }).join("");
+        editor.hidden = false;
+        editorPanel.hidden = !keepEditorOpen;
+        editorToggle.setAttribute("aria-expanded", keepEditorOpen ? "true" : "false");
+        setText(byId("qeColumnTypeEditorSummary"), `${R.formatNumber(rows.length, 0)}개 컬럼`);
+        setText(byId("qeColumnTypeDirtyCount"), R.formatNumber(columnTypeDirtyChanges.size, 0));
+        saveButton.hidden = readOnly;
+        saveButton.disabled = readOnly || columnTypeSaveBusy || columnTypeDirtyChanges.size === 0;
+        notice.textContent = readOnly
+            ? "과거 실행 결과는 읽기 전용입니다. 현재 FINAL 유형 수정은 새 작업 결과에서 수행해 주세요."
+            : "유형 변경 저장 시 M03001과 동일한 INIT$_TB_COLTYPE_FINAL 저장 프로시저가 호출되고 USER_CONFIRMED 학습자료로 반영됩니다.";
+        notice.hidden = false;
+        setHidden(section, false);
+    }
+
+    function handleColumnTypeChange(event) {
+        const select = event.target.closest("select[data-column-type-index]");
+        if (!select || state.historyView || columnTypeSaveBusy) return;
+        const rows = getColumnTypeFinalRows();
+        const row = rows[Number(select.dataset.columnTypeIndex)];
+        const rowId = String(row?.["INIT$ROWID"] || "");
+        if (!row || !rowId) return;
+        const displayType = String(select.value || "");
+        const metadata = COLUMN_TYPE_METADATA.get(displayType) || { typeCode: "", groupCode: "OTHER" };
+        const changeKey = `${rowId}:FINAL_PREDICTED_TYPE`;
+        const confirmChangeKey = `${rowId}:CONFIRMED_YN`;
+        if (displayType === String(row.__ORIGINAL_FINAL_TYPE || "")) {
+            columnTypeDirtyChanges.delete(changeKey);
+            row.FINAL_TYPE_CODE = row.__ORIGINAL_TYPE_CODE;
+            row.TYPE_GROUP_CODE = row.__ORIGINAL_GROUP_CODE;
+            row.CONFIRMED_YN = row.__ORIGINAL_CONFIRMED_YN;
+            row.LABEL_SOURCE = row.__ORIGINAL_LABEL_SOURCE;
+        } else {
+            columnTypeDirtyChanges.set(changeKey, {
+                rowId,
+                columnName: "FINAL_PREDICTED_TYPE",
+                value: displayType
+            });
+            row.FINAL_TYPE_CODE = metadata.typeCode;
+            row.TYPE_GROUP_CODE = metadata.groupCode;
+            row.CONFIRMED_YN = "Y";
+            row.LABEL_SOURCE = "USER_CONFIRMED";
+            columnTypeDirtyChanges.delete(confirmChangeKey);
+        }
+        row.FINAL_PREDICTED_TYPE = displayType;
+        renderColumnTypeFinal({ keepEditorOpen: true });
+    }
+
+    function handleColumnTypeConfirmation(event) {
+        const checkbox = event.target.closest("input[data-column-confirm-index]");
+        if (!checkbox || state.historyView || columnTypeSaveBusy) return;
+        const rows = getColumnTypeFinalRows();
+        const row = rows[Number(checkbox.dataset.columnConfirmIndex)];
+        const rowId = String(row?.["INIT$ROWID"] || "");
+        if (!row || !rowId) return;
+        const confirmedYn = checkbox.checked ? "Y" : "N";
+        const changeKey = `${rowId}:CONFIRMED_YN`;
+        if (confirmedYn === String(row.__ORIGINAL_CONFIRMED_YN || "N")) {
+            columnTypeDirtyChanges.delete(changeKey);
+            if (!columnTypeDirtyChanges.has(`${rowId}:FINAL_PREDICTED_TYPE`)) {
+                row.LABEL_SOURCE = row.__ORIGINAL_LABEL_SOURCE;
+            }
+        } else {
+            columnTypeDirtyChanges.set(changeKey, {
+                rowId,
+                columnName: "CONFIRMED_YN",
+                value: confirmedYn
+            });
+            row.LABEL_SOURCE = "USER_CONFIRMED";
+        }
+        row.CONFIRMED_YN = confirmedYn;
+        renderColumnTypeFinal({ keepEditorOpen: true });
+    }
+
+    async function saveColumnTypeChanges() {
+        if (state.historyView || columnTypeSaveBusy || !columnTypeDirtyChanges.size) return;
+        const saveButton = byId("qeColumnTypeSaveButton");
+        let saved = false;
+        columnTypeSaveBusy = true;
+        if (saveButton) saveButton.disabled = true;
+        try {
+            const changes = Array.from(columnTypeDirtyChanges.values()).sort((left, right) => {
+                const priority = { FINAL_PREDICTED_TYPE: 1, CONFIRMED_YN: 2 };
+                return (priority[left.columnName] || 9) - (priority[right.columnName] || 9);
+            });
+            await client.saveColumnTypeFinal({
+                owner: state.tableOwner,
+                whereClause: getColumnTypeWhereClause(),
+                changes
+            });
+            saved = true;
+            columnTypeDirtyChanges.clear();
+            getColumnTypeFinalRows().forEach((row) => {
+                delete row.__ORIGINAL_FINAL_TYPE;
+                delete row.__ORIGINAL_GROUP_CODE;
+                delete row.__ORIGINAL_TYPE_CODE;
+                delete row.__ORIGINAL_CONFIRMED_YN;
+                delete row.__ORIGINAL_LABEL_SOURCE;
+            });
+            resultData.columnTypeFinal = await client.getColumnTypeFinal({
+                owner: state.tableOwner,
+                whereClause: getColumnTypeWhereClause(),
+                limit: 1000
+            });
+            renderColumnTypeFinal({ keepEditorOpen: true });
+            showToast("컬럼 유형을 저장했고 M90003 사용자 확정 학습자료에 반영했습니다.", "success");
+        } catch (error) {
+            showToast(
+                saved
+                    ? `저장은 완료했지만 최신 결과를 다시 불러오지 못했습니다. ${error.message || ""}`.trim()
+                    : (error.message || "컬럼 유형을 저장하지 못했습니다."),
+                saved ? "warning" : "error"
+            );
+        } finally {
+            columnTypeSaveBusy = false;
+            renderColumnTypeFinal({ keepEditorOpen: true });
+        }
     }
 
     function renderStatisticsDetail(columnName) {
@@ -1705,6 +2063,7 @@
         }
 
         renderDescriptiveStatistics();
+        renderColumnTypeFinal();
 
         const warningTarget = byId("resultsWarning", "qeResultsWarning");
         if (warningTarget) {
@@ -2540,11 +2899,14 @@
             const completed = Number(row.SUCCESS_NODE_COUNT || 0);
             const total = Number(row.NODE_COUNT || row.JOB_COUNT || 4);
             const detailLoading = quickHistoryDetailRunId === runId;
+            const detailFailed = Number(quickHistoryDetailError.runId || 0) === runId;
             const action = detailLoading
                 ? `<span class="qe-run-history-item__loading" role="status">
                        <span>상세 조회 중</span>
                        <span class="qe-run-history-loading-bar" aria-hidden="true"><i></i></span>
                    </span>`
+                : detailFailed
+                ? `<span class="qe-run-history-item__error" title="${R.escapeHtml(quickHistoryDetailError.message)}">불러오기 실패 · 다시 시도</span>`
                 : `<span>8단계 결과 보기</span><span aria-hidden="true">→</span>`;
             return `<button type="button" class="qe-run-history-item${detailLoading ? " is-loading" : ""}" data-history-run-id="${runId}" aria-busy="${detailLoading ? "true" : "false"}"${quickHistoryBusy ? " disabled" : ""}>
                 <span class="qe-run-history-item__main">
@@ -2572,6 +2934,7 @@
             quickHistoryRows = [];
             quickHistoryTotal = 0;
             quickHistoryError = "";
+            quickHistoryDetailError = { runId: null, message: "" };
         }
         quickHistoryBusy = true;
         renderQuickHistoryList();
@@ -2611,6 +2974,7 @@
     async function restoreQuickHistory(flowRunId) {
         const runId = Number(flowRunId || 0);
         if (!runId || quickHistoryBusy || pipelineBusy) return;
+        quickHistoryDetailError = { runId: null, message: "" };
         quickHistoryDetailRunId = runId;
         quickHistoryBusy = true;
         renderQuickHistoryList();
@@ -2629,8 +2993,10 @@
                 continuous: null,
                 categoricalViolation: null,
                 continuousViolation: null,
-                descriptiveStatistics: null
+                descriptiveStatistics: null,
+                columnTypeFinal: null
             };
+            columnTypeDirtyChanges.clear();
             continuousDetailRequestId += 1;
             continuousDetail = {
                 ruleId: "", ruleIndex: -1, rule: null, rows: [], evaluatedRows: [],
@@ -2653,6 +3019,8 @@
             renderResultsEmpty();
             renderHistory();
             renderState(`실행 #${runId}의 저장된 8단계 결과를 복원했습니다.`);
+            byId("qeRunHistoryDialog")?.close();
+            window.scrollTo({ top: 0, behavior: "smooth" });
 
             if (R.normalizeStatus(state.lastRunStatus) === "SUCCESS") {
                 pipelineBusy = true;
@@ -2674,9 +3042,8 @@
                     updateActionState();
                 }
             }
-            byId("qeRunHistoryDialog")?.close();
-            window.scrollTo({ top: 0, behavior: "smooth" });
         } catch (error) {
+            quickHistoryDetailError = { runId, message: error.message || "상세 결과를 불러오지 못했습니다." };
             showToast(error.message, "error");
         } finally {
             quickHistoryDetailRunId = null;
@@ -2729,8 +3096,10 @@
             continuous: null,
             categoricalViolation: null,
             continuousViolation: null,
-            descriptiveStatistics: null
+            descriptiveStatistics: null,
+            columnTypeFinal: null
         };
+        columnTypeDirtyChanges.clear();
         resetRuleDistributionFilters();
         continuousDetailRequestId += 1;
         continuousDetail = {
@@ -2757,6 +3126,7 @@
         setHidden(byId("qeCategoricalDetail"), true);
         setHidden(byId("qeContinuousDetail"), true);
         setHidden(byId("qeStatisticsSummary"), true);
+        setHidden(byId("qeColumnTypeSummary"), true);
         byId("qeStatisticsDialog")?.close();
         ["categoryKpis", "qeCategoricalKpis", "categoryRules", "qeCategoricalRules", "continuousKpis", "qeContinuousKpis", "continuousRules", "qeContinuousRules"].forEach((id) => {
             const target = byId(id);
@@ -2945,6 +3315,17 @@
             if (card) openInlineRuleDetail(card.dataset.ruleKind, Number(card.dataset.ruleIndex));
         });
         byId("qeStatisticsDetailButton")?.addEventListener("click", () => openStatisticsDialog());
+        byId("qeColumnTypeTable")?.addEventListener("change", handleColumnTypeChange);
+        byId("qeColumnTypeTable")?.addEventListener("change", handleColumnTypeConfirmation);
+        byId("qeColumnTypeEditorToggle")?.addEventListener("click", (event) => {
+            const panel = byId("qeColumnTypeEditorPanel");
+            if (!panel) return;
+            const expanded = event.currentTarget.getAttribute("aria-expanded") === "true";
+            panel.hidden = expanded;
+            event.currentTarget.setAttribute("aria-expanded", expanded ? "false" : "true");
+        });
+        byId("qeColumnTypeTrainingButton")?.addEventListener("click", openColumnTypeModelTraining);
+        byId("qeColumnTypeSaveButton")?.addEventListener("click", saveColumnTypeChanges);
         byId("qeStatisticsColumnSelect")?.addEventListener("change", (event) => {
             const payload = getStatisticsPayload();
             const column = (payload?.columns || [])[Number(event.target.value || 0)];
@@ -3019,8 +3400,10 @@
                     continuous: null,
                     categoricalViolation: null,
                     continuousViolation: null,
-                    descriptiveStatistics: null
+                    descriptiveStatistics: null,
+                    columnTypeFinal: null
                 };
+                columnTypeDirtyChanges.clear();
                 continuousDetailRequestId += 1;
                 continuousDetail = {
                     ruleId: "", ruleIndex: -1, rule: null, rows: [], evaluatedRows: [],

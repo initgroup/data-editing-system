@@ -41,6 +41,7 @@
     "untitledProject": "(이름 없음)",
     "noCode": "코드 없음",
     "useValue": "사용 {value}",
+    "registeredScenariosCount": "등록 시나리오: {count}",
     "selectedProjectDescription": "선택 프로젝트: {name}",
     "createProjectDescription": "새 프로젝트를 만듭니다.",
     "projectSavedDescription": "프로젝트가 저장되었습니다.",

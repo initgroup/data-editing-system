@@ -63,8 +63,10 @@ ALLOWED_LABEL_SCOPES = {
     "CONFLICT",
 }
 ALLOWED_TYPE_GROUP_CODES = {"ALL", "CATEGORICAL", "CONTINUOUS", "OTHER"}
+ALLOWED_LABEL_SOURCES = {"ALL", "IMPORTED_GOLD", "USER_CONFIRMED"}
 ALLOWED_MODEL_STATUSES = {"ALL", "CANDIDATE", "ACTIVE", "ARCHIVED", "FAILED"}
 ALLOWED_RUN_STATUSES = {"ALL", "REQUESTED", "RUNNING", "SUCCESS", "FAILED", "CANCELLED"}
+ALLOWED_TRAINING_SCOPES = {"FULL", "ADDITIONAL"}
 
 
 class TrainingStartRequest(BaseModel):
@@ -81,6 +83,7 @@ class TrainingStartRequest(BaseModel):
     seed: Optional[int] = 42
     randomSeed: Optional[int] = None
     confirmedGoldOnly: bool = True
+    trainingScope: str = "FULL"
     description: Optional[str] = ""
     model_config = ConfigDict(extra="allow")
 
@@ -454,7 +457,11 @@ def get_summary(request: Request, modelKey: str = Query(MODEL_KEY_COLUMN_TYPE)):
                 "conflicts": int(_value(summary_row, "CONFLICT_COUNT", default=0) or 0),
                 "duplicates": int(_value(summary_row, "DUPLICATE_COUNT", default=0) or 0),
                 "totalProfiles": int(_value(summary_row, "TOTAL_PROFILE_COUNT", default=0) or 0),
+                "importedGold": int(_value(summary_row, "IMPORTED_GOLD_COUNT", default=0) or 0),
+                "userConfirmed": int(_value(summary_row, "USER_CONFIRMED_COUNT", default=0) or 0),
+                "additionalUser": int(_value(summary_row, "ADDITIONAL_USER_COUNT", default=0) or 0),
             },
+            "lastSuccessfulTrainedAt": _value(summary_row, "LAST_SUCCESSFUL_TRAINED_AT"),
             "groupDistribution": group_rows,
             "typeDistribution": detail_rows,
         }
@@ -507,11 +514,13 @@ def get_labels(
     scope: str = Query("ALL"),
     status: Optional[str] = Query(None),
     typeGroupCode: str = Query("ALL"),
+    labelSource: str = Query("ALL"),
     keyword: str = Query(""),
 ):
     normalized_scope = _normalize_choice(status or scope, ALLOWED_LABEL_SCOPES, "status")
     group_text = str(typeGroupCode or "ALL").strip().upper() or "ALL"
     normalized_group = _normalize_choice(group_text, ALLOWED_TYPE_GROUP_CODES, "typeGroupCode")
+    normalized_source = _normalize_choice(labelSource, ALLOWED_LABEL_SOURCES, "labelSource")
     offset = (page - 1) * pageSize
     conn = None
     try:
@@ -521,6 +530,7 @@ def get_labels(
             "M90003_LABEL_LIST",
             {
                 "scope": normalized_scope,
+                "labelSource": normalized_source,
                 "typeGroupCode": normalized_group,
                 "keyword": _normalize_keyword(keyword),
                 "offsetRows": offset,
@@ -722,6 +732,7 @@ def start_training(req: TrainingStartRequest, request: Request):
     if feature_version not in set(adapter["featureVersions"]):
         raise HTTPException(status_code=400, detail="Unsupported featureVersion for this training adapter.")
     label_version = _normalize_version(req.labelVersion, "labelVersion")
+    training_scope = _normalize_choice(req.trainingScope, ALLOWED_TRAINING_SCOPES, "trainingScope")
     max_rows_value = req.maxRows if req.maxRows is not None else req.maxTrainingRows
     seed_value = req.seed if req.seed is not None else req.randomSeed
     max_training_rows = int(max_rows_value if max_rows_value is not None else 25000)
@@ -760,6 +771,27 @@ def start_training(req: TrainingStartRequest, request: Request):
         )
         if active_run_count > 0:
             raise HTTPException(status_code=409, detail="A training run for this model family is already active.")
+        additional_user_count = 0
+        additional_since = None
+        if training_scope == "ADDITIONAL":
+            additional_result = _query(
+                conn,
+                "M90003_ADDITIONAL_LABEL_INFO",
+                {"modelKey": model_key},
+            )
+            additional_row = (additional_result.get("data") or [{}])[0]
+            additional_user_count = int(
+                _value(additional_row, "ADDITIONAL_USER_COUNT", default=0) or 0
+            )
+            additional_since = _value(additional_row, "LAST_SUCCESSFUL_TRAINED_AT")
+            if additional_user_count <= 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail="No new user-confirmed labels are available since the latest successful training.",
+                )
+        train_source_filter = "IMPORTED_GOLD,USER_CONFIRMED"
+        if training_scope == "ADDITIONAL":
+            train_source_filter += "|MODE=ADDITIONAL"
         cursor = conn.cursor()
         train_run_id_var = cursor.var(int)
         cursor.execute(
@@ -769,6 +801,7 @@ def start_training(req: TrainingStartRequest, request: Request):
                 "algorithmCode": algorithm_code,
                 "featureVersion": feature_version,
                 "labelVersion": label_version,
+                "trainSourceFilter": train_source_filter,
                 "maxTrainingRows": max_training_rows,
                 "minConfirmedLabels": req.minConfirmedLabels,
                 "holdoutPercent": holdout_percent,
@@ -777,6 +810,13 @@ def start_training(req: TrainingStartRequest, request: Request):
                     {
                         "holdoutRatio": holdout_percent / 100,
                         "confirmedGoldOnly": True,
+                        "trainingScope": training_scope,
+                        "additionalUserCount": additional_user_count,
+                        "additionalSince": str(additional_since) if additional_since is not None else None,
+                        "corpusPolicy": "FULL_CONFIRMED_REBUILD",
+                        "casePolicy": "CONFIRMED_PROFILE_SNAPSHOT",
+                        "dedupPolicy": "NORMALIZED_X_SIGNATURE",
+                        "splitPolicy": "DETAILED_TYPE_STRATIFIED_DETERMINISTIC_HASH_V1",
                         "description": _normalize_reason(req.description),
                     },
                     ensure_ascii=False,
@@ -807,7 +847,15 @@ def start_training(req: TrainingStartRequest, request: Request):
             _mark_training_submission_failed(conn, train_run_id, str(error))
             raise
 
-        return {"status": "success", "data": {"trainRunId": train_run_id, "statusCode": "REQUESTED"}}
+        return {
+            "status": "success",
+            "data": {
+                "trainRunId": train_run_id,
+                "statusCode": "REQUESTED",
+                "trainingScope": training_scope,
+                "additionalUserCount": additional_user_count,
+            },
+        }
     except HTTPException:
         raise
     except Exception as error:

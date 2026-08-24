@@ -97,7 +97,10 @@
             const code = project.PROJECT_CODE || "";
             const type = project.PROJECT_TYPE || "";
             const useYn = project.USE_YN || "Y";
-            const title = displayName;
+            const scenarioCount = Number(project.SCENARIO_COUNT || 0);
+            const scenarioIcon = scenarioCount > 0
+                ? `<i class="fas fa-circle-check env-registered-icon" title="${this.escapeHtml(this.tl("registeredScenariosCount", "Registered scenarios: {count}", { count: scenarioCount }))}"></i>`
+                : "";
             const codeLabel = code || this.t("noCode", "No code");
             const useLabel = this.tl("useValue", "Use {value}", { value: useYn });
             const createdAtLabel = this.tl("createdAtValue", "Created {value}", {
@@ -107,7 +110,10 @@
             return `
                 <button type="button" class="project-row ${selectedClass} ${this.escapeAttr(ownerScopeClass)}" data-project-id="${this.escapeAttr(projectId)}" onclick="M01001.selectProject('${this.escapeAttr(projectId)}')">
                     <span class="project-row-main">
-                        <span class="project-row-title" title="${this.escapeHtml(title)}">${this.escapeHtml(title)}</span>
+                        <span class="project-row-title" title="${this.escapeHtml(displayName)}">
+                            <span class="project-row-title-text">${this.escapeHtml(displayName)}</span>
+                            <span class="project-scenario-status">${scenarioIcon}</span>
+                        </span>
                         <span class="project-row-sub" title="${this.escapeHtml(codeLabel)}">${this.escapeHtml(codeLabel)}</span>
                     </span>
                     <span class="project-row-meta">
