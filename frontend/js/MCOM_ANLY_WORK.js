@@ -9519,9 +9519,10 @@
             if (!column) return "";
             const comment = this.getColumnComment(column, source);
             if (!comment) return this.escapeHtml(column);
+            const displayColumn = column.length > 10 ? `${column.slice(0, 10)}...` : column;
             return `
                 <span class="anly-work-column-ref" title="${this.escapeHtml(`${column}: ${comment}`)}">
-                    <b>${this.escapeHtml(column)}</b>
+                    <b>${this.escapeHtml(displayColumn)}</b>
                     <small>${this.escapeHtml(comment)}</small>
                 </span>
             `;

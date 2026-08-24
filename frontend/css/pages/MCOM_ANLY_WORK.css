@@ -4057,9 +4057,12 @@
     overflow: hidden;
 }
 
-.anly-work-column-chip b,
-.anly-work-column-ref b {
+.anly-work-column-chip b {
     flex: 0 1 auto;
+}
+
+.anly-work-column-ref b {
+    flex: 0 0 auto;
 }
 
 .anly-work-column-chip small,
@@ -4067,6 +4070,10 @@
     color: #64748b;
     font-size: 10px;
     font-weight: 650;
+}
+
+.anly-work-column-ref small {
+    flex: 1 1 auto;
 }
 
 .anly-work-column-ref {

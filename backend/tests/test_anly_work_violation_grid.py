@@ -21,6 +21,16 @@ class AnalysisViolationGridTests(unittest.TestCase):
         self.assertIn("background: #fff7ed", style)
         self.assertIn("background: #ecfdf5", style)
 
+    def test_column_id_is_truncated_after_ten_characters_without_forced_width(self):
+        script = ANALYSIS_SCRIPT.read_text(encoding="utf-8")
+        style = ANALYSIS_STYLE.read_text(encoding="utf-8")
+
+        self.assertIn("column.length > 10 ? `${column.slice(0, 10)}...` : column", script)
+        self.assertIn("<b>${this.escapeHtml(displayColumn)}</b>", script)
+        self.assertIn(".anly-work-column-ref b {\n    flex: 0 0 auto;", style)
+        self.assertNotIn("max-width: 10ch;", style)
+        self.assertNotIn("min-width: 10ch;", style)
+
     def test_rule_columns_start_immediately_after_frozen_keys(self):
         script = ANALYSIS_SCRIPT.read_text(encoding="utf-8")
         start = script.index("        orderViolationSqlColumns(columns")

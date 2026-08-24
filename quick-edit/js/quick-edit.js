@@ -1247,13 +1247,38 @@
         };
     }
 
-    async function loadResults() {
+    function setResultsLoading(loading, message = "") {
         const panel = byId("resultsSection", "qeResultsPanel");
-        panel?.setAttribute("aria-busy", "true");
+        const overlay = byId("qeResultsLoadingOverlay");
+        if (!panel) return;
+        panel.classList.toggle("is-loading", Boolean(loading));
+        panel.setAttribute("aria-busy", loading ? "true" : "false");
+        if (loading) {
+            setHidden(panel, false);
+            setText(
+                byId("qeResultsLoadingMessage"),
+                message || "저장된 컬럼 유형과 규칙 분석 결과를 최신 정보로 교체하고 있습니다."
+            );
+        }
+        setHidden(overlay, !loading);
+    }
+
+    async function loadResults(options = {}) {
+        const showPanelLoading = options.showPanelLoading === true;
+        const panel = byId("resultsSection", "qeResultsPanel");
+        if (showPanelLoading) {
+            setResultsLoading(true, options.loadingMessage);
+        } else {
+            panel?.setAttribute("aria-busy", "true");
+        }
         try {
             await loadResultsData();
         } finally {
-            panel?.setAttribute("aria-busy", "false");
+            if (showPanelLoading) {
+                setResultsLoading(false);
+            } else {
+                panel?.setAttribute("aria-busy", "false");
+            }
         }
     }
 
@@ -3280,7 +3305,10 @@
                 pipelineBusy = true;
                 updateActionState();
                 try {
-                    await loadResults();
+                    await loadResults({
+                        showPanelLoading: true,
+                        loadingMessage: `실행 #${runId}의 컬럼 유형·기초통계·규칙 결과를 불러오고 있습니다.`
+                    });
                     if (R.normalizeStatus(state.lastRunStatus) === "SUCCESS") {
                         state.status = state.resultWarning ? "warning" : "success";
                         state.error = "";
@@ -3385,6 +3413,7 @@
     }
 
     function renderResultsEmpty() {
+        setResultsLoading(false);
         setHidden(byId("resultsSection", "qeResultsPanel"), true);
         setHidden(byId("qeCategoricalDetail"), true);
         setHidden(byId("qeContinuousDetail"), true);

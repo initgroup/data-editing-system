@@ -362,17 +362,24 @@ class QuickEditHistoryTests(unittest.TestCase):
         get_run.assert_not_called()
 
     def test_history_restore_closes_dialog_before_loading_analysis_results(self):
+        quick_html = (ROOT_DIR / "quick-edit" / "index.html").read_text(encoding="utf-8")
         quick_js = (ROOT_DIR / "quick-edit" / "js" / "quick-edit.js").read_text(encoding="utf-8")
+        quick_css = (ROOT_DIR / "quick-edit" / "css" / "quick-edit.css").read_text(encoding="utf-8")
         restore_section = quick_js.split("async function restoreQuickHistory", 1)[1].split(
             "\n    function showToast", 1
         )[0]
 
         self.assertLess(
             restore_section.index('byId("qeRunHistoryDialog")?.close();'),
-            restore_section.index("await loadResults();"),
+            restore_section.index("await loadResults({"),
         )
         self.assertIn("quickHistoryDetailError = { runId", restore_section)
         self.assertIn("불러오기 실패 · 다시 시도", quick_js)
+        self.assertIn('id="qeResultsLoadingOverlay"', quick_html)
+        self.assertIn("showPanelLoading: true", restore_section)
+        self.assertIn("function setResultsLoading", quick_js)
+        self.assertIn(".qe-results-loading[hidden]", quick_css)
+        self.assertIn("@keyframes qe-results-loading-spin", quick_css)
 
     def test_empty_history_list_does_not_trigger_expensive_fallback(self):
         conn = Mock()
