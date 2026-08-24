@@ -14,6 +14,7 @@ import re
 import time
 
 from backend.database_helper import execute_query, SqlLoader
+from backend.oracle_session import disable_parallel_execution
 from backend.services import data_work_service as data_work
 from backend.services import api_call_service
 from backend.services import flow_contract_service as flow_contracts
@@ -385,7 +386,13 @@ def execute_flow_dml(cursor, step: str, sql_id: str, params: Dict[str, Any]):
 def prepare_flow_run_session(conn):
     cursor = conn.cursor()
     try:
-        cursor.execute(SqlLoader.get_sql("FLOW_WORK_DISABLE_PARALLEL_DML"))
+        # This is an Oracle session-level PDML guard. It does not serialize
+        # independent background FLOW runs, which use their own connections.
+        disable_parallel_execution(
+            cursor,
+            include_query=False,
+            context="flow-work-run",
+        )
     finally:
         cursor.close()
 
@@ -740,12 +747,7 @@ def create_node_run_records(conn, flow_run_id: int, flow_id: int, plan: List[Dic
     cursor = conn.cursor()
     try:
         for index, step in enumerate(plan or [], start=1):
-            if replace_existing:
-                execute_flow_dml(cursor, f"FLOW_WORK_NODE_RUN_DELETE_BY_RUN_KEY[{step.get('nodeKey')}]", "FLOW_WORK_NODE_RUN_DELETE_BY_RUN_KEY", {
-                    "flowRunId": flow_run_id,
-                    "nodeKey": step.get("nodeKey")
-                })
-            execute_flow_dml(cursor, f"FLOW_WORK_NODE_RUN_INSERT[{index}]", "FLOW_WORK_NODE_RUN_INSERT", {
+            payload = {
                 "flowRunId": flow_run_id,
                 "flowId": flow_id,
                 "nodeKey": step.get("nodeKey"),
@@ -756,8 +758,18 @@ def create_node_run_records(conn, flow_run_id: int, flow_id: int, plan: List[Dic
                 "status": "PENDING",
                 "message": "Waiting for upstream dependencies.",
                 "runtimeParamJson": json.dumps(step.get("params") or {}, ensure_ascii=False),
-                "nodePayloadJson": json.dumps(step.get("nodePayload") or {}, ensure_ascii=False)
-            })
+                "nodePayloadJson": json.dumps(step.get("nodePayload") or {}, ensure_ascii=False),
+            }
+            if replace_existing:
+                execute_flow_dml(
+                    cursor,
+                    f"FLOW_WORK_NODE_RUN_RESET_BY_RUN_KEY[{step.get('nodeKey')}]",
+                    "FLOW_WORK_NODE_RUN_RESET_BY_RUN_KEY",
+                    payload,
+                )
+                if int(cursor.rowcount or 0) > 0:
+                    continue
+            execute_flow_dml(cursor, f"FLOW_WORK_NODE_RUN_INSERT[{index}]", "FLOW_WORK_NODE_RUN_INSERT", payload)
     finally:
         cursor.close()
 

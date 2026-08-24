@@ -6,8 +6,9 @@ from fastapi import HTTPException
 
 from backend.routers import M04001
 from backend.database_helper import SqlLoader
-from backend.services.flow_work_router import normalize_quick_edit_summary
+from backend.services.flow_work_router import build_failed_stage_rerun_plan, normalize_quick_edit_summary
 from backend.services import flow_work_service
+from backend.services.flow_work_service import FlowRunRequest
 
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -21,6 +22,122 @@ def get_route_endpoint(path: str, method: str):
 
 
 class QuickEditHistoryTests(unittest.TestCase):
+    def test_history_editing_exposes_workspace_reuse_rerun_actions(self):
+        quick_html = (ROOT_DIR / "quick-edit" / "index.html").read_text(encoding="utf-8")
+        quick_js = (ROOT_DIR / "quick-edit" / "js" / "quick-edit.js").read_text(encoding="utf-8")
+        api_client_js = (ROOT_DIR / "quick-edit" / "js" / "api-client.js").read_text(encoding="utf-8")
+
+        new_start = quick_html.index('id="runButton"')
+        full_rerun = quick_html.index('id="qeHistoryFullRerunButton"')
+        failed_rerun = quick_html.index('id="qeHistoryFailedRerunButton"')
+        self.assertLess(new_start, full_rerun)
+        self.assertLess(full_rerun, failed_rerun)
+        self.assertIn("전체 자동 재실행", quick_html[full_rerun:failed_rerun])
+        self.assertIn("실패단계부터 재실행", quick_html[failed_rerun:failed_rerun + 400])
+        self.assertIn("pipelineAction: PIPELINE_ACTION.HISTORY_FULL_RERUN", quick_js)
+        self.assertIn("client.rerunSavedFlowFromFailure(", quick_js)
+        self.assertIn("Number(state.projectId) !== savedWorkspace.projectId", quick_js)
+        failed_handler = quick_js.split("async function rerunHistoryFromFailedStage", 1)[1].split(
+            "\n    function bindEvents", 1
+        )[0]
+        self.assertNotIn("state.historyView = false", failed_handler)
+        full_handler = quick_js.split("async function rerunEntireHistoryFlow", 1)[1].split(
+            "\n    async function rerunHistoryFromFailedStage", 1
+        )[0]
+        self.assertNotIn("state.historyView = false", full_handler)
+        action_state = quick_js.split("function updateActionState()", 1)[1].split(
+            "\n    async function runPipeline", 1
+        )[0]
+        self.assertIn("setRunningState(startButton, PIPELINE_ACTION.FULL_AUTO);", action_state)
+        self.assertIn(
+            "setRunningState(historyFullRerunButton, PIPELINE_ACTION.HISTORY_FULL_RERUN);",
+            action_state,
+        )
+        self.assertIn(
+            "setRunningState(historyFailedRerunButton, PIPELINE_ACTION.HISTORY_FAILED_RERUN);",
+            action_state,
+        )
+        self.assertNotIn('startButton.classList.toggle("is-running", pipelineBusy)', action_state)
+        self.assertIn("activePipelineAction = PIPELINE_ACTION.HISTORY_FAILED_RERUN;", failed_handler)
+        self.assertIn('this.request("/M04001/flow/rerun-saved-failed-stage"', api_client_js)
+        get_route_endpoint("/flow/rerun-saved-failed-stage", "POST")
+
+        flow_router = (ROOT_DIR / "backend" / "services" / "flow_work_router.py").read_text(encoding="utf-8")
+        failed_route = flow_router.split("def rerun_saved_flow_from_failed_stage", 1)[1].split(
+            "\n    def run_flow_background", 1
+        )[0]
+        self.assertIn("saved_request = FlowRunRequest(", failed_route)
+        self.assertIn("saved_request.nodes", failed_route)
+        self.assertIn("saved_request.edges", failed_route)
+        self.assertNotIn("flow_work.normalize_graph(nodes, edges)", failed_route)
+
+        saved_request = FlowRunRequest(
+            flowId=88,
+            projectId=10,
+            scenarioId=20,
+            flowName="Saved Quick Editing flow",
+            nodes=[{"nodeKey": "N1", "nodeType": "JOB", "nodeName": "M03001"}],
+            edges=[],
+        )
+        normalized_nodes, _ = flow_work_service.normalize_graph(saved_request.nodes, saved_request.edges)
+        self.assertEqual("N1", normalized_nodes[0]["nodeKey"])
+
+    def test_failed_stage_rerun_starts_at_first_failed_node_and_keeps_downstream(self):
+        plan = [
+            {"nodeKey": "N1", "downstream": ["N2"]},
+            {"nodeKey": "N2", "downstream": ["N3"]},
+            {"nodeKey": "N3", "downstream": ["N4"]},
+            {"nodeKey": "N4", "downstream": []},
+        ]
+        selected, rerun_plan = build_failed_stage_rerun_plan(
+            plan,
+            [
+                {"NODE_KEY": "N1", "STATUS": "SUCCESS"},
+                {"NODE_KEY": "N2", "STATUS": "FAILED"},
+                {"NODE_KEY": "N3", "STATUS": "SKIPPED"},
+                {"NODE_KEY": "N4", "STATUS": "PENDING"},
+            ],
+        )
+
+        self.assertEqual("N2", selected["nodeKey"])
+        self.assertEqual(["N2", "N3", "N4"], [step["nodeKey"] for step in rerun_plan])
+
+    def test_node_run_reexecution_resets_rows_without_deleting_referenced_ids(self):
+        reset_sql = SqlLoader.get_sql("FLOW_WORK_NODE_RUN_RESET_BY_RUN_KEY")
+        service_source = (ROOT_DIR / "backend" / "services" / "flow_work_service.py").read_text(encoding="utf-8")
+        replace_section = service_source.split("def create_node_run_records", 1)[1].split(
+            "\n\ndef update_node_run_runtime_params", 1
+        )[0]
+
+        self.assertIn("UPDATE", reset_sql.upper())
+        self.assertNotIn("DELETE", reset_sql.upper())
+        self.assertNotIn("JOB_PARAM_JSON", reset_sql.upper())
+        self.assertIn("RUNTIME_PARAM_JSON", reset_sql.upper())
+        self.assertIn("NODE_PAYLOAD_JSON", reset_sql.upper())
+        self.assertIn("RUN_OUTPUT_JSON", reset_sql.upper())
+        self.assertIn('"FLOW_WORK_NODE_RUN_RESET_BY_RUN_KEY"', replace_section)
+        self.assertNotIn('"FLOW_WORK_NODE_RUN_DELETE_BY_RUN_KEY"', replace_section)
+
+        conn = Mock()
+        cursor = Mock()
+        cursor.rowcount = 1
+        conn.cursor.return_value = cursor
+        with patch("backend.services.flow_work_service.execute_flow_dml") as execute_dml:
+            flow_work_service.create_node_run_records(
+                conn,
+                1241,
+                88,
+                [
+                    {"nodeKey": "M03003-3", "nodeName": "M03003", "nodeType": "JOB", "level": 2},
+                    {"nodeKey": "M03004-4", "nodeName": "M03004", "nodeType": "JOB", "level": 3},
+                ],
+                replace_existing=True,
+            )
+
+        self.assertEqual(2, execute_dml.call_count)
+        self.assertTrue(all(call.args[2] == "FLOW_WORK_NODE_RUN_RESET_BY_RUN_KEY" for call in execute_dml.call_args_list))
+        cursor.close.assert_called_once()
+
     def test_statistics_summary_cards_match_kpi_populations_and_markers(self):
         quick_html = (ROOT_DIR / "quick-edit" / "index.html").read_text(encoding="utf-8")
         quick_js = (ROOT_DIR / "quick-edit" / "js" / "quick-edit.js").read_text(encoding="utf-8")
@@ -33,12 +150,17 @@ class QuickEditHistoryTests(unittest.TestCase):
         self.assertNotIn("ranked.slice(0, 50)", render_statistics)
         self.assertIn("const highPriorityColumnCount = ranked.filter(isHighPriority).length;", render_statistics)
         self.assertIn("const violationColumnCount = ranked.filter", render_statistics)
-        self.assertIn("전체 ${R.escapeHtml(R.formatNumber(ranked.length, 0))}개 컬럼 표시", render_statistics)
+        self.assertIn("전체 ${R.escapeHtml(R.formatNumber(ranked.length, 0))}개 컬럼", render_statistics)
         self.assertIn('isPriority ? " is-priority" : ""', render_statistics)
         self.assertIn('violationCount > 0 ? "is-violation" : "is-zero"', render_statistics)
+        self.assertIn("const lastViolationIndex = ranked.reduce", render_statistics)
+        self.assertIn("Math.ceil((lastViolationIndex + 1) / 3) * 3", render_statistics)
+        self.assertIn('class="qe-statistics-extra"', render_statistics)
+        self.assertIn("나머지 ${R.escapeHtml(R.formatNumber(remainingCards.length, 0))}개 컬럼 펼쳐보기", render_statistics)
         self.assertIn('aria-label="통계 분석 컬럼 목록"', quick_html)
         self.assertIn(".qe-statistics-priority-card.is-priority", quick_css)
         self.assertIn("em.is-violation", quick_css)
+        self.assertIn(".qe-statistics-extra__grid", quick_css)
 
     def test_quick_edit_elapsed_time_matches_m04001_timezone_and_waiting_rules(self):
         renderers_js = (ROOT_DIR / "quick-edit" / "js" / "renderers.js").read_text(encoding="utf-8")

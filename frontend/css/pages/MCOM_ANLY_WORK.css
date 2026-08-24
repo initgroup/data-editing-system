@@ -1558,12 +1558,20 @@
     font-weight: 750;
 }
 
-.anly-work-violation-sql-grid th.is-rule,
-.anly-work-violation-sql-grid td.is-rule {
+.anly-work-violation-sql-grid th.is-rule-condition,
+.anly-work-violation-sql-grid td.is-rule-condition {
     background: #fff7ed;
     border-right-color: #fdba74;
     color: #7c2d12;
     font-weight: 750;
+}
+
+.anly-work-violation-sql-grid th.is-rule-result,
+.anly-work-violation-sql-grid td.is-rule-result {
+    background: #ecfdf5;
+    border-right-color: #6ee7b7;
+    color: #065f46;
+    font-weight: 800;
 }
 
 .anly-work-violation-rule-grid article p {

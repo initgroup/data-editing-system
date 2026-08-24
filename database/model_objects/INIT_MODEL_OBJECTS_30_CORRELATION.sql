@@ -53,14 +53,20 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_CAT_CORR_ANALYZE" (
 
         BEGIN
             EXECUTE IMMEDIATE 'ALTER SESSION DISABLE PARALLEL DML';
+        EXCEPTION
+            WHEN OTHERS THEN
+                IF SQLCODE <> -12841 THEN
+                    RAISE;
+                END IF;
+        END;
+
+        BEGIN
             EXECUTE IMMEDIATE 'ALTER SESSION DISABLE PARALLEL QUERY';
         EXCEPTION
             WHEN OTHERS THEN
-                IF SQLCODE = -12841 THEN
-                    DBMS_OUTPUT.PUT_LINE('[WARN] Parallel session state was not changed because a transaction is already active.');
-                    RETURN;
+                IF SQLCODE <> -12841 THEN
+                    RAISE;
                 END IF;
-                RAISE;
         END;
     END;
 
@@ -485,14 +491,20 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_RELATION_MATRIX_ANALYZE" (
 
         BEGIN
             EXECUTE IMMEDIATE 'ALTER SESSION DISABLE PARALLEL DML';
+        EXCEPTION
+            WHEN OTHERS THEN
+                IF SQLCODE <> -12841 THEN
+                    RAISE;
+                END IF;
+        END;
+
+        BEGIN
             EXECUTE IMMEDIATE 'ALTER SESSION DISABLE PARALLEL QUERY';
         EXCEPTION
             WHEN OTHERS THEN
-                IF SQLCODE = -12841 THEN
-                    DBMS_OUTPUT.PUT_LINE('[WARN] Parallel session state was not changed because a transaction is already active.');
-                    RETURN;
+                IF SQLCODE <> -12841 THEN
+                    RAISE;
                 END IF;
-                RAISE;
         END;
     END;
 
@@ -1124,14 +1136,20 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_NUM_CORR_ANALYZE" (
 
         BEGIN
             EXECUTE IMMEDIATE 'ALTER SESSION DISABLE PARALLEL DML';
+        EXCEPTION
+            WHEN OTHERS THEN
+                IF SQLCODE <> -12841 THEN
+                    RAISE;
+                END IF;
+        END;
+
+        BEGIN
             EXECUTE IMMEDIATE 'ALTER SESSION DISABLE PARALLEL QUERY';
         EXCEPTION
             WHEN OTHERS THEN
-                IF SQLCODE = -12841 THEN
-                    DBMS_OUTPUT.PUT_LINE('[WARN] Parallel session state was not changed because a transaction is already active.');
-                    RETURN;
+                IF SQLCODE <> -12841 THEN
+                    RAISE;
                 END IF;
-                RAISE;
         END;
     END;
 

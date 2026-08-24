@@ -1,5 +1,7 @@
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
+
+from fastapi import HTTPException
 
 from backend.database_helper import SqlLoader
 from backend.services import ml_analysis_service
@@ -92,6 +94,26 @@ class MlAnalysisLassoCaseIdTests(unittest.TestCase):
         self.assertEqual(result["skippedYn"], "Y")
         self.assertEqual(result["skipReason"], "CASE_ID_TARGET_EXCLUDED")
 
+    def test_auto_lasso_safely_skips_targets_without_usable_numeric_rows(self):
+        with patch.object(
+            ml_analysis_service,
+            "run_lasso_feature_select",
+            side_effect=HTTPException(status_code=400, detail="No usable numeric target rows were found for COL001."),
+        ):
+            result = ml_analysis_service.run_lasso_auto_targets(
+                object(),
+                {"P_CLUSTER_USAGE_MODE": "PREFER_SAME_CLUSTER"},
+                ["COL001", "COL002"],
+                True,
+                ["COL001", "COL002", "COL003"],
+            )
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["skippedYn"], "Y")
+        self.assertEqual(result["skipReason"], "NO_USABLE_CONTINUOUS_DATA")
+        self.assertEqual(result["targetCount"], 2)
+        self.assertEqual(result["skippedCount"], 2)
+
     def test_integrated_discovery_stays_successful_when_continuous_work_is_skipped(self):
         categorical = {
             "task": "CATEGORICAL_APRIORI",
@@ -120,6 +142,9 @@ class MlAnalysisLassoCaseIdTests(unittest.TestCase):
             lambda *_args, **_kwargs: categorical,
         ), patch.object(
             ml_analysis_service,
+            "clear_integrated_analysis_scope",
+        ), patch.object(
+            ml_analysis_service,
             "run_lasso_feature_select",
             lambda *_args, **_kwargs: lasso_skip,
         ), patch.object(
@@ -128,11 +153,13 @@ class MlAnalysisLassoCaseIdTests(unittest.TestCase):
             lambda *_args, **_kwargs: symbolic_skip,
         ):
             result = ml_analysis_service.run_integrated_rule_discover(
-                object(),
+                Mock(),
                 {
                     "P_TARGET_OWNER": "OWNER1",
                     "P_TARGET_TABLE": "TABLE1",
                     "P_RULE_PARTS": "ALL",
+                    "P_RUN_SOURCE_TYPE": "FLOW_WORK",
+                    "P_RUN_ID": 77,
                 },
             )
 
@@ -144,6 +171,26 @@ class MlAnalysisLassoCaseIdTests(unittest.TestCase):
         self.assertEqual(result["failedTasks"], [])
         self.assertNotIn("INIT$_TB_COLREL_LASSO_FEATURE", result["resultTables"])
         self.assertNotIn("INIT$_TB_RULEDISC_SYMBOLIC", result["resultTables"])
+
+    def test_rerun_cleanup_deletes_dependent_results_before_rule_sources(self):
+        discovery_sql = SqlLoader.get_sql("ML_ANALYSIS_RULE_DISCOVERY_SCOPE_CLEAR")
+        violation_sql = SqlLoader.get_sql("ML_ANALYSIS_RULE_VIOLATION_SCOPE_CLEAR")
+
+        self.assertLess(
+            discovery_sql.index('"INIT$_TB_RULEVIOL_SYMBOLIC"'),
+            discovery_sql.index('"INIT$_TB_RULEDISC_SYMBOLIC"'),
+        )
+        self.assertLess(
+            discovery_sql.index('"INIT$_TB_RULEVIOL_ASSOC"'),
+            discovery_sql.index('"INIT$_TB_RULEDISC_ASSOC_SUM"'),
+        )
+        self.assertLess(
+            discovery_sql.index('"INIT$_TB_RULEDISC_SYMBOLIC"'),
+            discovery_sql.index('"INIT$_TB_COLREL_LASSO_FEATURE"'),
+        )
+        self.assertIn('"INIT$_TB_RULEVIOL_SYMBOLIC"', violation_sql)
+        self.assertIn('"INIT$_TB_RULEVIOL_ASSOC"', violation_sql)
+        self.assertEqual(2, violation_sql.count("DELETE /*+ NO_PARALLEL */"))
 
     def test_continuous_target_queries_hide_file_row_number(self):
         data_work_sql = SqlLoader.get_sql("MCOMMON_ANLY_WORK_CONTINUOUS_TARGET_COLUMNS")

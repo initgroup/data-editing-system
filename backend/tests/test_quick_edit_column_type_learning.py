@@ -24,12 +24,98 @@ class QuickEditColumnTypeLearningTests(unittest.TestCase):
         self.assertIn('columnName: "CONFIRMED_YN"', quick_edit)
         self.assertIn('id="qeColumnTypeSummary"', page)
         self.assertIn('id="qeColumnTypeSaveButton"', page)
+        self.assertIn('id="qeColumnTypeRerunButton"', page)
+        rerun_button = page.split('id="qeColumnTypeRerunButton"', 1)[1].split("</button>", 1)[0]
+        self.assertIn('class="qe-primary-button qe-column-type-rerun"', rerun_button)
+        self.assertIn("컬럼유형이후부터 재실행", rerun_button)
+        self.assertIn("qe-button-arrow", rerun_button)
         self.assertIn('id="qeColumnTypeTrainingButton"', page)
+        self.assertIn('id="qeColumnTypeFilter"', page)
         self.assertIn("const displayLabel = columnLabel ? `${columnName} · ${columnLabel}` : columnName;", quick_edit)
         editor_markup = page.split('id="qeColumnTypeEditor"', 1)[1].split('id="qeColumnTypeNotice"', 1)[0]
         self.assertLess(editor_markup.index('id="qeColumnTypeEditorToggle"'), editor_markup.index('id="qeColumnTypeSaveButton"'))
+        self.assertLess(editor_markup.index('id="qeColumnTypeRerunButton"'), editor_markup.index('id="qeColumnTypeTrainingButton"'))
         self.assertLess(editor_markup.index('id="qeColumnTypeSaveButton"'), editor_markup.index('id="qeColumnTypeEditorPanel"'))
         self.assertNotIn("<details", editor_markup)
+
+    def test_quick_edit_column_type_rerun_reuses_workspace_and_starts_at_m03002(self):
+        api_client = (ROOT_DIR / "quick-edit" / "js" / "api-client.js").read_text(encoding="utf-8")
+        quick_edit = (ROOT_DIR / "quick-edit" / "js" / "quick-edit.js").read_text(encoding="utf-8")
+        flow_router = (ROOT_DIR / "backend" / "services" / "flow_work_router.py").read_text(encoding="utf-8")
+        page = (ROOT_DIR / "quick-edit" / "index.html").read_text(encoding="utf-8")
+
+        self.assertIn('request("/M04001/flow/rerun-saved-column-types"', api_client)
+        rerun_client = api_client.split("rerunSavedFlowFromColumnTypes", 1)[1].split("\n        }", 1)[0]
+        for identifier in ("flowId", "projectId", "scenarioId", "flowRunId"):
+            self.assertIn(identifier, rerun_client)
+
+        rerun_ui = quick_edit.split("async function rerunWithChangedColumnTypes()", 1)[1].split(
+            "\n    function renderStatisticsDetail", 1
+        )[0]
+        self.assertIn("state.projectId", rerun_ui)
+        self.assertIn("state.scenarioId", rerun_ui)
+        self.assertIn("state.flowId", rerun_ui)
+        self.assertIn("state.flowRunId", rerun_ui)
+        self.assertIn("continuedRunId !== Number(state.flowRunId)", rerun_ui)
+        self.assertIn("state.completedSteps = state.completedSteps.filter((stepIndex) => stepIndex < 6)", rerun_ui)
+        self.assertIn('completeStep(6, "변경된 컬럼 유형 기준 규칙 발굴 실행이 완료되었습니다.")', rerun_ui)
+        self.assertIn('completeStep(7, "변경된 컬럼 유형 기준 결과 분석이 완료되었습니다.")', rerun_ui)
+        self.assertIn("state.currentStep = ruleDiscoveryCompleted ? 7 : 6", rerun_ui)
+
+        rerun_route = flow_router.split('@router.post("/flow/rerun-saved-column-types")', 1)[1].split(
+            "\n    def run_flow_background", 1
+        )[0]
+        self.assertIn('== "M03002"', rerun_route)
+        self.assertIn('{"M03002", "M03003", "M03004"}', rerun_route)
+        self.assertIn("flow_work.resume_run", rerun_route)
+        self.assertIn("req.flowRunId", rerun_route)
+        self.assertIn("replace_existing=True", rerun_route)
+        self.assertNotIn("flow_work.create_run", rerun_route)
+        self.assertIn("saved_request = FlowRunRequest(", rerun_route)
+        self.assertIn("saved_request.nodes", rerun_route)
+        self.assertIn("saved_request.edges", rerun_route)
+        self.assertNotIn("flow_work.normalize_graph(nodes, edges)", rerun_route)
+
+        column_editor = page.split('id="qeColumnTypeEditor"', 1)[1].split('id="qeColumnTypeNotice"', 1)[0]
+        self.assertIn("qe-column-type-editor__chevron-vertical", column_editor)
+        self.assertIn("핵심 편집 단계", column_editor)
+        self.assertNotIn(">⌄</span>", column_editor)
+        self.assertIn("border: 2px solid #91adf3;", (ROOT_DIR / "quick-edit" / "css" / "quick-edit.css").read_text(encoding="utf-8"))
+        self.assertIn(".qe-column-type-editor.is-expanded", (ROOT_DIR / "quick-edit" / "css" / "quick-edit.css").read_text(encoding="utf-8"))
+
+    def test_quick_edit_history_column_types_are_editable_and_filterable(self):
+        quick_edit = (ROOT_DIR / "quick-edit" / "js" / "quick-edit.js").read_text(encoding="utf-8")
+        page = (ROOT_DIR / "quick-edit" / "index.html").read_text(encoding="utf-8")
+        styles = (ROOT_DIR / "quick-edit" / "css" / "quick-edit.css").read_text(encoding="utf-8")
+
+        self.assertIn('id="qeColumnTypeFilter"', page)
+        self.assertIn("function matchesColumnTypeFilter", quick_edit)
+        self.assertIn("function renderColumnTypeFilter", quick_edit)
+        self.assertIn('kind === "GROUP"', quick_edit)
+        self.assertIn('kind === "TYPE"', quick_edit)
+        self.assertIn("filteredRows.length", quick_edit)
+        self.assertIn(".qe-column-type-filter", styles)
+
+        edit_guard = quick_edit.split("function canEditColumnTypeFinal()", 1)[1].split(
+            "\n    function matchesColumnTypeFilter", 1
+        )[0]
+        self.assertIn("hasSuccessfulColumnTypeStage()", edit_guard)
+        self.assertIn("state.projectId", edit_guard)
+        self.assertIn("state.scenarioId", edit_guard)
+        self.assertIn("state.flowRunId", edit_guard)
+        self.assertNotIn("historyView", edit_guard)
+
+        save_section = quick_edit.split("async function saveColumnTypeChanges()", 1)[1].split(
+            "\n    async function rerunWithChangedColumnTypes", 1
+        )[0]
+        rerun_section = quick_edit.split("async function rerunWithChangedColumnTypes()", 1)[1].split(
+            "\n    function renderStatisticsDetail", 1
+        )[0]
+        self.assertIn("canEditColumnTypeFinal()", save_section)
+        self.assertIn("canEditColumnTypeFinal()", rerun_section)
+        self.assertNotIn("columnTypeRerunReady", quick_edit)
+        self.assertNotIn("state.historyView ||", save_section)
+        self.assertNotIn("state.historyView\n", rerun_section)
 
     def test_quick_edit_column_labels_are_the_primary_editor_text(self):
         quick_edit = (ROOT_DIR / "quick-edit" / "js" / "quick-edit.js").read_text(encoding="utf-8")

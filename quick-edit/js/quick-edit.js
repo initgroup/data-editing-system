@@ -32,6 +32,13 @@
     const COLUMN_TYPE_METADATA = new Map(COLUMN_TYPE_OPTIONS.map(([displayType, typeCode, groupCode]) => (
         [displayType, { typeCode, groupCode }]
     )));
+    const PIPELINE_ACTION = Object.freeze({
+        FULL_AUTO: "FULL_AUTO",
+        RETRY: "RETRY",
+        HISTORY_FULL_RERUN: "HISTORY_FULL_RERUN",
+        HISTORY_FAILED_RERUN: "HISTORY_FAILED_RERUN",
+        COLUMN_TYPE_RERUN: "COLUMN_TYPE_RERUN"
+    });
 
     const R = window.QuickEditRenderers;
     const client = new window.QuickEditApiClient();
@@ -68,6 +75,7 @@
     let continuousDetailRequestId = 0;
     let chartResizeTimer = null;
     let pipelineBusy = false;
+    let activePipelineAction = "";
     let snapshotBusy = false;
     let pollGeneration = 0;
     let toastTimer = null;
@@ -124,6 +132,9 @@
             lastRunMessage: "",
             resultArtifacts: null,
             resultWarning: "",
+            columnTypeFilter: "ALL",
+            columnTypeRerunRequestToken: "",
+            failedStageRerunRequestToken: "",
             error: "",
             historyView: false,
             historyViewedAt: null,
@@ -629,7 +640,7 @@
 
         setText(
             banner?.querySelector("[data-history-view-label]"),
-            `실행 #${state.flowRunId} · ${state.projectName || state.projectCode || "프로젝트"} · 저장된 결과만 조회합니다.`
+            `실행 #${state.flowRunId} · ${state.projectName || state.projectCode || "프로젝트"} · 컬럼 유형은 편집·저장 후 같은 실행 ID로 재실행할 수 있습니다.`
         );
         const target = byId("qeHistoryStepResultList");
         if (!target) return;
@@ -686,13 +697,16 @@
         const historySection = byId("historySection", "qeHistorySection");
         setHidden(historySection, !state.flowRunId);
         const resultsSection = byId("resultsSection", "qeResultsPanel");
-        setHidden(resultsSection, !state.flowRunId || (!state.completedSteps.includes(7) && state.currentStep < 7));
+        const hasColumnTypeResult = getColumnTypeFinalRows().length > 0;
+        setHidden(resultsSection, !state.flowRunId || (!hasColumnTypeResult && !state.completedSteps.includes(7) && state.currentStep < 7));
         updateActionState();
     }
 
     function updateActionState() {
         const startButton = byId("runButton", "qeStartButton");
         const retryButton = byId("retryButton", "qeRetryButton");
+        const historyFullRerunButton = byId("qeHistoryFullRerunButton");
+        const historyFailedRerunButton = byId("qeHistoryFailedRerunButton");
         const resetButton = byId("resetButton", "qeResetButton");
         const historyButton = byId("qeRunHistoryButton");
         const form = byId("qeQuickForm");
@@ -701,21 +715,56 @@
         const projectLocked = Boolean(state.projectId);
         const scenarioLocked = Boolean(state.scenarioId);
         const hasInput = Boolean(selectedFile || state.uploadId || state.tableName);
+        const setRunningState = (button, action) => {
+            if (!button) return;
+            const running = pipelineBusy && activePipelineAction === action;
+            button.classList.toggle("is-running", running);
+            button.setAttribute("aria-busy", running ? "true" : "false");
+        };
         if (startButton) {
-            startButton.disabled = readOnlyHistory ? false : (pipelineBusy || !hasInput || !client.targetConnectionId);
+            startButton.disabled = pipelineBusy || (!readOnlyHistory && (!hasInput || !client.targetConnectionId));
             startButton.hidden = readOnlyHistory ? false : ["failed", "warning"].includes(state.status);
             setText(startButton.querySelector("span:first-child") || startButton, readOnlyHistory || state.status === "success" ? "새 작업 시작" : "전체 자동 실행");
-            startButton.classList.toggle("is-running", pipelineBusy);
+            setRunningState(startButton, PIPELINE_ACTION.FULL_AUTO);
         }
         if (retryButton) {
-            retryButton.hidden = readOnlyHistory || !["failed", "warning"].includes(state.status);
+            retryButton.hidden = readOnlyHistory || (
+                !["failed", "warning"].includes(state.status)
+                && activePipelineAction !== PIPELINE_ACTION.RETRY
+            );
             retryButton.disabled = pipelineBusy || !client.targetConnectionId;
+            setRunningState(retryButton, PIPELINE_ACTION.RETRY);
+        }
+        const hasSavedWorkspace = Boolean(state.projectId && state.scenarioId && state.flowId && state.flowRunId);
+        const terminalRunStatus = R.normalizeStatus(state.lastRunStatus || currentSnapshot?.run?.STATUS || "");
+        const hasFailedNode = (currentSnapshot?.nodes || []).some((node) =>
+            ["FAILED", "ERROR", "CANCELLED"].includes(R.normalizeStatus(node.STATUS || node.status))
+        );
+        if (historyFullRerunButton) {
+            historyFullRerunButton.hidden = !readOnlyHistory;
+            historyFullRerunButton.disabled = pipelineBusy
+                || !client.targetConnectionId
+                || !hasSavedWorkspace
+                || R.ACTIVE_STATUSES.has(terminalRunStatus);
+            setRunningState(historyFullRerunButton, PIPELINE_ACTION.HISTORY_FULL_RERUN);
+        }
+        if (historyFailedRerunButton) {
+            historyFailedRerunButton.hidden = !readOnlyHistory;
+            historyFailedRerunButton.disabled = pipelineBusy
+                || !client.targetConnectionId
+                || !hasSavedWorkspace
+                || R.ACTIVE_STATUSES.has(terminalRunStatus)
+                || (!hasFailedNode && !["FAILED", "ERROR", "CANCELLED"].includes(terminalRunStatus));
+            historyFailedRerunButton.title = historyFailedRerunButton.disabled && !pipelineBusy
+                ? "실패한 실행에서만 사용할 수 있습니다."
+                : "기존 실행 ID에서 최초 실패 단계와 후속 단계만 다시 실행합니다.";
+            setRunningState(historyFailedRerunButton, PIPELINE_ACTION.HISTORY_FAILED_RERUN);
         }
         if (resetButton) resetButton.disabled = pipelineBusy;
         if (historyButton) historyButton.disabled = pipelineBusy;
         if (form) form.setAttribute("aria-busy", pipelineBusy ? "true" : "false");
         document.querySelectorAll("#qeQuickForm input, #qeQuickForm select, #qeQuickForm button").forEach((element) => {
-            if ([startButton, retryButton, resetButton, byId("closeButton", "qeCloseButton")].includes(element)) return;
+            if ([startButton, retryButton, historyFullRerunButton, historyFailedRerunButton, resetButton, byId("closeButton", "qeCloseButton")].includes(element)) return;
             element.disabled = pipelineBusy || readOnlyHistory;
         });
         if (workspaceFieldset) {
@@ -767,6 +816,7 @@
         }
 
         pipelineBusy = true;
+        activePipelineAction = options.pipelineAction || PIPELINE_ACTION.FULL_AUTO;
         captureWorkspaceDraft();
         state.status = "running";
         state.error = "";
@@ -819,7 +869,9 @@
             showToast(state.error, "error");
         } finally {
             pipelineBusy = false;
+            activePipelineAction = "";
             updateActionState();
+            renderColumnTypeFinal();
         }
     }
 
@@ -979,23 +1031,7 @@
                 state.projectId,
                 state.scenarioId,
                 state.runRequestToken,
-                {
-                    source: "QUICK_EDIT",
-                    projectCode: state.projectCode,
-                    projectName: state.projectName,
-                    projectCreatedAt: state.projectCreatedAt,
-                    scenarioCode: state.scenarioCode,
-                    scenarioName: state.scenarioName,
-                    scenarioCreatedAt: state.scenarioCreatedAt,
-                    scenarioTableId: state.scenarioTableId,
-                    ownerName: state.tableOwner,
-                    tableName: state.tableName,
-                    fileName: state.fileMeta?.name || "",
-                    fileSize: Number(state.fileMeta?.size || 0),
-                    estimatedRowCount: Number(state.rowCount || 0),
-                    flowName: state.flowName,
-                    jobCount: state.jobIds.length
-                }
+                buildQuickEditSummary()
             );
             state.flowRunId = Number(response.data?.flowRunId || 0);
             state.lastRunStatus = response.data?.runStatus || "STARTED";
@@ -1004,6 +1040,26 @@
             renderState("FLOW 실행이 시작되었습니다. 상세 이력을 자동 조회합니다.");
         }
         await pollRunUntilTerminal(generation);
+    }
+
+    function buildQuickEditSummary() {
+        return {
+            source: "QUICK_EDIT",
+            projectCode: state.projectCode,
+            projectName: state.projectName,
+            projectCreatedAt: state.projectCreatedAt,
+            scenarioCode: state.scenarioCode,
+            scenarioName: state.scenarioName,
+            scenarioCreatedAt: state.scenarioCreatedAt,
+            scenarioTableId: state.scenarioTableId,
+            ownerName: state.tableOwner,
+            tableName: state.tableName,
+            fileName: state.fileMeta?.name || "",
+            fileSize: Number(state.fileMeta?.size || 0),
+            estimatedRowCount: Number(state.rowCount || 0),
+            flowName: state.flowName,
+            jobCount: state.jobIds.length
+        };
     }
 
     async function fetchSnapshot(options = {}) {
@@ -1537,7 +1593,7 @@
         ]);
 
         const legend = `<div class="qe-statistics-card-legend" aria-label="컬럼 카드 표시 기준">
-            <strong>전체 ${R.escapeHtml(R.formatNumber(ranked.length, 0))}개 컬럼 표시</strong>
+            <strong>전체 ${R.escapeHtml(R.formatNumber(ranked.length, 0))}개 컬럼</strong>
             <span class="is-priority"><i aria-hidden="true"></i>테두리 강조 · 우선 확인 ${R.escapeHtml(R.formatNumber(highPriorityColumnCount, 0))}개</span>
             <span class="is-violation"><b>위반</b>색상 배지 · 위반 발생 ${R.escapeHtml(R.formatNumber(violationColumnCount, 0))}개</span>
         </div>`;
@@ -1560,8 +1616,29 @@
                     </span>
                 </span>
             </button>`;
-        }).join("");
-        priority.innerHTML = ranked.length ? `${legend}${cards}` : '<div class="qe-empty">표시할 통계 분석 컬럼이 없습니다.</div>';
+        });
+        const lastViolationIndex = ranked.reduce((lastIndex, row, index) => (
+            Number(row.violationCount || 0) > 0 ? index : lastIndex
+        ), -1);
+        const initialCardCount = ranked.length
+            ? Math.min(ranked.length, Math.max(3, Math.ceil((lastViolationIndex + 1) / 3) * 3))
+            : 0;
+        const initialCards = cards.slice(0, initialCardCount).join("");
+        const remainingCards = cards.slice(initialCardCount);
+        const extraCards = remainingCards.length ? `<details class="qe-statistics-extra">
+            <summary>
+                <span class="qe-statistics-extra__closed">나머지 ${R.escapeHtml(R.formatNumber(remainingCards.length, 0))}개 컬럼 펼쳐보기</span>
+                <span class="qe-statistics-extra__open">상세 컬럼 닫기</span>
+                <small>위반 발생 컬럼 아래의 전체 통계 컬럼</small>
+                <span class="qe-statistics-extra__icon" aria-hidden="true">
+                    <svg viewBox="0 0 20 20" focusable="false"><path d="M5.5 10h9"></path><path class="is-vertical" d="M10 5.5v9"></path></svg>
+                </span>
+            </summary>
+            <div class="qe-statistics-extra__grid">${remainingCards.join("")}</div>
+        </details>` : "";
+        priority.innerHTML = ranked.length
+            ? `${legend}${initialCards}${extraCards}`
+            : '<div class="qe-empty">표시할 통계 분석 컬럼이 없습니다.</div>';
         notice.textContent = payload.notice || "";
         notice.hidden = !payload.notice;
         byId("qeStatisticsDetailButton").disabled = columns.length === 0;
@@ -1593,6 +1670,74 @@
         return "자동 판정";
     }
 
+    function hasSuccessfulColumnTypeStage() {
+        const nodes = Array.isArray(currentSnapshot?.nodes) ? currentSnapshot.nodes : [];
+        return nodes.some((node) => {
+            const menuCode = String(node.REF_MENU_CODE || "").trim().toUpperCase();
+            const nodeKey = String(node.NODE_KEY || node.nodeKey || "").trim().toUpperCase();
+            const nodeName = String(node.NODE_NAME || node.nodeName || "").trim().toUpperCase();
+            const isColumnTypeStage = menuCode === "M03001"
+                || nodeKey.startsWith("M03001")
+                || nodeName.startsWith("M03001");
+            return isColumnTypeStage && R.normalizeStatus(node.STATUS || node.status) === "SUCCESS";
+        });
+    }
+
+    function canEditColumnTypeFinal() {
+        const runStatus = R.normalizeStatus(state.lastRunStatus || currentSnapshot?.run?.STATUS || "");
+        return Boolean(
+            state.projectId
+            && state.scenarioId
+            && state.flowId
+            && state.flowRunId
+            && !R.ACTIVE_STATUSES.has(runStatus)
+            && hasSuccessfulColumnTypeStage()
+        );
+    }
+
+    function matchesColumnTypeFilter(row, filterValue = state.columnTypeFilter) {
+        const normalized = String(filterValue || "ALL");
+        if (normalized === "ALL") return true;
+        const [kind, value = ""] = normalized.split(":", 2);
+        if (kind === "GROUP") {
+            return String(row.TYPE_GROUP_CODE || "OTHER").toUpperCase() === value.toUpperCase();
+        }
+        if (kind === "TYPE") {
+            return String(row.FINAL_PREDICTED_TYPE || "") === value;
+        }
+        return true;
+    }
+
+    function renderColumnTypeFilter(rows, counts) {
+        const filter = byId("qeColumnTypeFilter");
+        if (!filter) return;
+        const detailedCounts = rows.reduce((target, row) => {
+            const displayType = String(row.FINAL_PREDICTED_TYPE || "").trim();
+            if (displayType) target.set(displayType, (target.get(displayType) || 0) + 1);
+            return target;
+        }, new Map());
+        const validValues = new Set(["ALL"]);
+        const groupOptions = [
+            ["CATEGORICAL", "범주형"],
+            ["CONTINUOUS", "연속형"],
+            ["OTHER", "기타"]
+        ].map(([groupCode, label]) => {
+            const value = `GROUP:${groupCode}`;
+            validValues.add(value);
+            return `<option value="${value}">${label} (${R.formatNumber(counts[groupCode] || 0, 0)})</option>`;
+        }).join("");
+        const detailOptions = COLUMN_TYPE_OPTIONS.map(([displayType]) => {
+            const value = `TYPE:${displayType}`;
+            validValues.add(value);
+            return `<option value="${R.escapeHtml(value)}">${R.escapeHtml(displayType)} (${R.formatNumber(detailedCounts.get(displayType) || 0, 0)})</option>`;
+        }).join("");
+        if (!validValues.has(String(state.columnTypeFilter || "ALL"))) state.columnTypeFilter = "ALL";
+        filter.innerHTML = `<option value="ALL">전체 유형 (${R.formatNumber(rows.length, 0)})</option>
+            <optgroup label="유형 그룹">${groupOptions}</optgroup>
+            <optgroup label="세부 유형">${detailOptions}</optgroup>`;
+        filter.value = state.columnTypeFilter || "ALL";
+    }
+
     function renderColumnTypeFinal(options = {}) {
         const section = byId("qeColumnTypeSummary");
         const kpis = byId("qeColumnTypeKpis");
@@ -1602,8 +1747,10 @@
         const editorPanel = byId("qeColumnTypeEditorPanel");
         const table = byId("qeColumnTypeTable");
         const notice = byId("qeColumnTypeNotice");
+        const filter = byId("qeColumnTypeFilter");
+        const rerunButton = byId("qeColumnTypeRerunButton");
         const saveButton = byId("qeColumnTypeSaveButton");
-        if (!section || !kpis || !groups || !editor || !editorToggle || !editorPanel || !table || !notice || !saveButton) return;
+        if (!section || !kpis || !groups || !editor || !editorToggle || !editorPanel || !table || !notice || !filter || !rerunButton || !saveButton) return;
 
         const rows = getColumnTypeFinalRows();
         const payloadLoaded = Boolean(resultData.columnTypeFinal);
@@ -1614,12 +1761,15 @@
             groups.innerHTML = '<div class="qe-empty">표시할 컬럼 유형 FINAL 결과가 없습니다.</div>';
             table.innerHTML = "";
             editor.hidden = true;
+            editor.classList.remove("is-expanded");
             editorPanel.hidden = true;
             editorToggle.setAttribute("aria-expanded", "false");
+            filter.disabled = true;
             notice.textContent = payloadLoaded
                 ? "M03001 컬럼유형분류 실행의 FINAL 결과가 생성되었는지 확인해 주세요."
                 : "컬럼 유형 FINAL 결과를 불러오지 못했습니다.";
             notice.hidden = false;
+            rerunButton.disabled = true;
             saveButton.disabled = true;
             byId("qeColumnTypeDirtyCount").textContent = "0";
             return;
@@ -1641,6 +1791,8 @@
             if (String(row.CONFIRMED_YN || "").toUpperCase() === "Y") target.confirmed += 1;
             return target;
         }, { CATEGORICAL: 0, CONTINUOUS: 0, OTHER: 0, confirmed: 0 });
+        renderColumnTypeFilter(rows, counts);
+        filter.disabled = false;
         kpis.innerHTML = R.renderKpis([
             { label: "전체 컬럼", value: R.formatNumber(rows.length, 0), tone: "primary" },
             { label: "범주형", value: R.formatNumber(counts.CATEGORICAL, 0) },
@@ -1666,8 +1818,11 @@
             </article>`;
         }).join("");
 
-        const readOnly = Boolean(state.historyView);
-        table.innerHTML = rows.map((row, index) => {
+        const readOnly = !canEditColumnTypeFinal() || pipelineBusy || columnTypeSaveBusy;
+        const filteredRows = rows
+            .map((row, index) => ({ row, index }))
+            .filter(({ row }) => matchesColumnTypeFilter(row));
+        table.innerHTML = filteredRows.map(({ row, index }) => {
             const displayType = String(row.FINAL_PREDICTED_TYPE || "");
             const groupCode = String(row.TYPE_GROUP_CODE || "OTHER").toUpperCase();
             const rowId = String(row["INIT$ROWID"] || "");
@@ -1691,24 +1846,43 @@
                     <span>${confirmed ? "학습 확정" : "검토 필요"}</span>
                 </label>
             </div>`;
-        }).join("");
+        }).join("") || '<div class="qe-column-type-filter-empty">선택한 유형에 해당하는 컬럼이 없습니다.</div>';
         editor.hidden = false;
+        editor.classList.toggle("is-expanded", keepEditorOpen);
         editorPanel.hidden = !keepEditorOpen;
         editorToggle.setAttribute("aria-expanded", keepEditorOpen ? "true" : "false");
-        setText(byId("qeColumnTypeEditorSummary"), `${R.formatNumber(rows.length, 0)}개 컬럼`);
+        setText(
+            byId("qeColumnTypeEditorSummary"),
+            state.columnTypeFilter === "ALL"
+                ? `${R.formatNumber(rows.length, 0)}개 컬럼`
+                : `${R.formatNumber(filteredRows.length, 0)} / ${R.formatNumber(rows.length, 0)}개`
+        );
         setText(byId("qeColumnTypeDirtyCount"), R.formatNumber(columnTypeDirtyChanges.size, 0));
-        saveButton.hidden = readOnly;
+        rerunButton.hidden = false;
+        rerunButton.disabled = readOnly
+            || pipelineBusy
+            || columnTypeSaveBusy
+            || columnTypeDirtyChanges.size > 0;
+        rerunButton.classList.toggle(
+            "is-running",
+            pipelineBusy && activePipelineAction === PIPELINE_ACTION.COLUMN_TYPE_RERUN
+        );
+        rerunButton.setAttribute(
+            "aria-busy",
+            pipelineBusy && activePipelineAction === PIPELINE_ACTION.COLUMN_TYPE_RERUN ? "true" : "false"
+        );
+        saveButton.hidden = false;
         saveButton.disabled = readOnly || columnTypeSaveBusy || columnTypeDirtyChanges.size === 0;
         notice.textContent = readOnly
-            ? "과거 실행 결과는 읽기 전용입니다. 현재 FINAL 유형 수정은 새 작업 결과에서 수행해 주세요."
-            : "유형 변경 저장 시 M03001과 동일한 INIT$_TB_COLTYPE_FINAL 저장 프로시저가 호출되고 USER_CONFIRMED 학습자료로 반영됩니다.";
+            ? "M03001 컬럼 유형 분석이 성공한 종료 실행에서만 FINAL 유형을 편집하고 재실행할 수 있습니다."
+            : `${state.historyView ? "선택한 과거 실행을 편집 중입니다. " : ""}저장 내용은 INIT$_TB_COLTYPE_FINAL과 USER_CONFIRMED 학습자료에 반영됩니다. 재실행은 기존 프로젝트·시나리오·실행 ID를 유지하고 M03002~M03004 결과만 갱신합니다.`;
         notice.hidden = false;
         setHidden(section, false);
     }
 
     function handleColumnTypeChange(event) {
         const select = event.target.closest("select[data-column-type-index]");
-        if (!select || state.historyView || columnTypeSaveBusy) return;
+        if (!select || !canEditColumnTypeFinal() || columnTypeSaveBusy) return;
         const rows = getColumnTypeFinalRows();
         const row = rows[Number(select.dataset.columnTypeIndex)];
         const rowId = String(row?.["INIT$ROWID"] || "");
@@ -1741,7 +1915,7 @@
 
     function handleColumnTypeConfirmation(event) {
         const checkbox = event.target.closest("input[data-column-confirm-index]");
-        if (!checkbox || state.historyView || columnTypeSaveBusy) return;
+        if (!checkbox || !canEditColumnTypeFinal() || columnTypeSaveBusy) return;
         const rows = getColumnTypeFinalRows();
         const row = rows[Number(checkbox.dataset.columnConfirmIndex)];
         const rowId = String(row?.["INIT$ROWID"] || "");
@@ -1766,7 +1940,7 @@
     }
 
     async function saveColumnTypeChanges() {
-        if (state.historyView || columnTypeSaveBusy || !columnTypeDirtyChanges.size) return;
+        if (!canEditColumnTypeFinal() || columnTypeSaveBusy || !columnTypeDirtyChanges.size) return;
         const saveButton = byId("qeColumnTypeSaveButton");
         let saved = false;
         columnTypeSaveBusy = true;
@@ -1782,6 +1956,8 @@
                 changes
             });
             saved = true;
+            state.columnTypeRerunRequestToken = "";
+            persistState();
             columnTypeDirtyChanges.clear();
             getColumnTypeFinalRows().forEach((row) => {
                 delete row.__ORIGINAL_FINAL_TYPE;
@@ -1796,7 +1972,7 @@
                 limit: 1000
             });
             renderColumnTypeFinal({ keepEditorOpen: true });
-            showToast("컬럼 유형을 저장했고 M90003 사용자 확정 학습자료에 반영했습니다.", "success");
+            showToast("컬럼 유형을 저장했습니다. 이제 기존 작업공간에서 변경 유형으로 재실행할 수 있습니다.", "success");
         } catch (error) {
             showToast(
                 saved
@@ -1807,6 +1983,84 @@
         } finally {
             columnTypeSaveBusy = false;
             renderColumnTypeFinal({ keepEditorOpen: true });
+        }
+    }
+
+    async function rerunWithChangedColumnTypes() {
+        if (
+            pipelineBusy
+            || columnTypeSaveBusy
+            || columnTypeDirtyChanges.size
+            || !canEditColumnTypeFinal()
+        ) return;
+        if (!state.projectId || !state.scenarioId || !state.flowId || !state.flowRunId) {
+            showToast("재실행할 기존 프로젝트·시나리오·FLOW 실행 정보를 확인할 수 없습니다.", "error");
+            return;
+        }
+
+        pipelineBusy = true;
+        activePipelineAction = PIPELINE_ACTION.COLUMN_TYPE_RERUN;
+        state.status = "running";
+        state.error = "";
+        state.resultWarning = "";
+        state.completedSteps = state.completedSteps.filter((stepIndex) => stepIndex < 6);
+        state.currentStep = 6;
+        state.stepProgress = 0.05;
+        if (!state.columnTypeRerunRequestToken) {
+            state.columnTypeRerunRequestToken = makeRunRequestToken();
+        }
+        const generation = ++pollGeneration;
+        persistState();
+        renderState("저장된 FINAL 유형을 적용해 기존 프로젝트·시나리오의 규칙 발굴 단계를 다시 실행합니다.");
+        renderColumnTypeFinal({ keepEditorOpen: false });
+
+        let ruleDiscoveryCompleted = false;
+        try {
+            const response = await client.rerunSavedFlowFromColumnTypes(
+                state.flowId,
+                state.projectId,
+                state.scenarioId,
+                state.flowRunId,
+                state.columnTypeRerunRequestToken,
+                buildQuickEditSummary()
+            );
+            const continuedRunId = Number(response.data?.flowRunId || 0);
+            if (!continuedRunId || continuedRunId !== Number(state.flowRunId)) {
+                throw new Error("기존 FLOW 실행 ID를 재사용하지 못해 재실행을 중단했습니다.");
+            }
+            state.lastRunStatus = response.data?.runStatus || "STARTED";
+            state.lastRunMessage = response.message || "변경 컬럼유형으로 규칙 발굴 재실행을 시작했습니다.";
+            currentSnapshot = null;
+            persistState();
+            renderHistory();
+
+            await pollRunUntilTerminal(generation);
+            ruleDiscoveryCompleted = true;
+            completeStep(6, "변경된 컬럼 유형 기준 규칙 발굴 실행이 완료되었습니다.");
+            setStep(7, "변경된 컬럼 유형으로 생성된 규칙 결과를 다시 불러오고 있습니다.", 0.5);
+            await loadResults();
+            completeStep(7, "변경된 컬럼 유형 기준 결과 분석이 완료되었습니다.");
+            state.status = state.resultWarning ? "warning" : "success";
+            state.currentStep = 7;
+            state.stepProgress = 1;
+            state.columnTypeRerunRequestToken = "";
+            persistState();
+            renderState(state.resultWarning || "변경된 FINAL 컬럼 유형으로 규칙 발굴 결과를 갱신했습니다.");
+            showToast(state.resultWarning || "변경 컬럼유형 재실행이 완료되었습니다.", state.resultWarning ? "warning" : "success");
+        } catch (error) {
+            state.status = "failed";
+            state.error = error?.message || "변경 컬럼유형 재실행 중 오류가 발생했습니다.";
+            state.columnTypeRerunRequestToken = "";
+            state.currentStep = ruleDiscoveryCompleted ? 7 : 6;
+            persistState();
+            renderState();
+            renderColumnTypeFinal({ keepEditorOpen: false });
+            showToast(state.error, "error");
+        } finally {
+            pipelineBusy = false;
+            activePipelineAction = "";
+            updateActionState();
+            renderColumnTypeFinal({ keepEditorOpen: false });
         }
     }
 
@@ -3022,17 +3276,23 @@
             byId("qeRunHistoryDialog")?.close();
             window.scrollTo({ top: 0, behavior: "smooth" });
 
-            if (R.normalizeStatus(state.lastRunStatus) === "SUCCESS") {
+            if (!R.ACTIVE_STATUSES.has(R.normalizeStatus(state.lastRunStatus))) {
                 pipelineBusy = true;
                 updateActionState();
                 try {
                     await loadResults();
-                    state.status = state.resultWarning ? "warning" : "success";
-                    state.error = "";
+                    if (R.normalizeStatus(state.lastRunStatus) === "SUCCESS") {
+                        state.status = state.resultWarning ? "warning" : "success";
+                        state.error = "";
+                    }
                     persistState();
-                    renderState(state.resultWarning || `실행 #${runId}의 저장된 분석 결과를 불러왔습니다.`);
+                    renderState(
+                        R.normalizeStatus(state.lastRunStatus) === "SUCCESS"
+                            ? (state.resultWarning || `실행 #${runId}의 저장된 분석 결과를 불러왔습니다.`)
+                            : `실행 #${runId}의 컬럼 유형 결과를 불러왔습니다. M03001 성공 시 편집·재실행할 수 있습니다.`
+                    );
                 } catch (error) {
-                    state.status = "warning";
+                    if (R.normalizeStatus(state.lastRunStatus) === "SUCCESS") state.status = "warning";
                     state.resultWarning = error.message;
                     persistState();
                     renderState("실행 단계는 복원했지만 일부 분석 결과를 불러오지 못했습니다.");
@@ -3040,6 +3300,7 @@
                 } finally {
                     pipelineBusy = false;
                     updateActionState();
+                    renderColumnTypeFinal();
                 }
             }
         } catch (error) {
@@ -3088,6 +3349,8 @@
         pollGeneration += 1;
         const wasRunning = pipelineBusy || state.status === "running";
         state = initialState();
+        pipelineBusy = false;
+        activePipelineAction = "";
         state.targetContextId = client.targetConnectionId;
         selectedFile = null;
         currentSnapshot = null;
@@ -3156,6 +3419,7 @@
         const failedRun = state.currentStep === 6 && ["FAILED", "ERROR", "CANCELLED"].includes(R.normalizeStatus(state.lastRunStatus));
         if (state.currentStep === 7 || state.status === "warning") {
             pipelineBusy = true;
+            activePipelineAction = PIPELINE_ACTION.RETRY;
             state.status = "running";
             updateActionState();
             try {
@@ -3172,11 +3436,138 @@
                 renderState();
             } finally {
                 pipelineBusy = false;
+                activePipelineAction = "";
                 updateActionState();
+                renderColumnTypeFinal();
             }
             return;
         }
-        await runPipeline({ forceNewRun: failedRun });
+        await runPipeline({ forceNewRun: failedRun, pipelineAction: PIPELINE_ACTION.RETRY });
+    }
+
+    function validateHistoryRerun() {
+        if (!state.historyView || !state.projectId || !state.scenarioId || !state.flowId || !state.flowRunId) {
+            throw new Error("재실행할 과거 프로젝트·시나리오·FLOW 정보를 확인할 수 없습니다.");
+        }
+        const runStatus = R.normalizeStatus(state.lastRunStatus || currentSnapshot?.run?.STATUS || "");
+        if (R.ACTIVE_STATUSES.has(runStatus)) {
+            throw new Error("현재 실행이 종료된 후 다시 시도해 주세요.");
+        }
+        return {
+            projectId: Number(state.projectId),
+            scenarioId: Number(state.scenarioId),
+            flowId: Number(state.flowId),
+            flowRunId: Number(state.flowRunId)
+        };
+    }
+
+    async function rerunEntireHistoryFlow() {
+        if (pipelineBusy) return;
+        let savedWorkspace;
+        try {
+            savedWorkspace = validateHistoryRerun();
+        } catch (error) {
+            showToast(error.message, "error");
+            return;
+        }
+        state.completedSteps = [0, 1, 2, 3, 4, 5];
+        state.currentStep = 6;
+        state.stepProgress = 0;
+        state.status = "idle";
+        persistState();
+        renderState("기존 프로젝트·시나리오에서 저장된 FLOW 전체를 다시 실행합니다.");
+        await runPipeline({
+            forceNewRun: true,
+            pipelineAction: PIPELINE_ACTION.HISTORY_FULL_RERUN
+        });
+        if (
+            Number(state.projectId) !== savedWorkspace.projectId
+            || Number(state.scenarioId) !== savedWorkspace.scenarioId
+            || Number(state.flowId) !== savedWorkspace.flowId
+        ) {
+            state.status = "failed";
+            state.error = "기존 프로젝트·시나리오·FLOW ID가 유지되지 않아 재실행 결과를 확인해야 합니다.";
+            persistState();
+            renderState();
+        }
+    }
+
+    async function rerunHistoryFromFailedStage() {
+        if (pipelineBusy) return;
+        let savedWorkspace;
+        try {
+            savedWorkspace = validateHistoryRerun();
+        } catch (error) {
+            showToast(error.message, "error");
+            return;
+        }
+
+        pipelineBusy = true;
+        activePipelineAction = PIPELINE_ACTION.HISTORY_FAILED_RERUN;
+        state.status = "running";
+        state.error = "";
+        state.resultWarning = "";
+        state.completedSteps = [0, 1, 2, 3, 4, 5];
+        state.currentStep = 6;
+        state.stepProgress = 0.05;
+        if (!state.failedStageRerunRequestToken) {
+            state.failedStageRerunRequestToken = makeRunRequestToken();
+        }
+        const generation = ++pollGeneration;
+        persistState();
+        renderState("기존 실행 ID에서 최초 실패 단계와 후속 단계를 다시 실행합니다.");
+
+        try {
+            const response = await client.rerunSavedFlowFromFailure(
+                savedWorkspace.flowId,
+                savedWorkspace.projectId,
+                savedWorkspace.scenarioId,
+                savedWorkspace.flowRunId,
+                state.failedStageRerunRequestToken,
+                buildQuickEditSummary()
+            );
+            const continuedRunId = Number(response.data?.flowRunId || 0);
+            if (continuedRunId !== savedWorkspace.flowRunId) {
+                throw new Error("기존 FLOW 실행 ID를 재사용하지 못해 실패 단계 재실행을 중단했습니다.");
+            }
+            if (
+                Number(state.projectId) !== savedWorkspace.projectId
+                || Number(state.scenarioId) !== savedWorkspace.scenarioId
+            ) {
+                throw new Error("기존 프로젝트·시나리오 ID를 재사용하지 못했습니다.");
+            }
+            state.lastRunStatus = response.data?.runStatus || "STARTED";
+            state.lastRunMessage = response.message || "실패 단계부터 재실행을 시작했습니다.";
+            currentSnapshot = null;
+            persistState();
+            renderHistory();
+
+            await pollRunUntilTerminal(generation);
+            completeStep(6, "실패 단계부터 규칙 발굴 재실행이 완료되었습니다.");
+            setStep(7, "재실행 결과를 다시 불러오고 있습니다.", 0.5);
+            await loadResults();
+            completeStep(7, "재실행 결과 분석이 완료되었습니다.");
+            state.status = state.resultWarning ? "warning" : "success";
+            state.currentStep = 7;
+            state.stepProgress = 1;
+            state.failedStageRerunRequestToken = "";
+            persistState();
+            renderState(state.resultWarning || "실패 단계부터 재실행이 완료되었습니다.");
+            showToast(state.resultWarning || "실패 단계부터 재실행이 완료되었습니다.", state.resultWarning ? "warning" : "success");
+        } catch (error) {
+            state.status = "failed";
+            state.error = error?.message || "실패 단계부터 재실행 중 오류가 발생했습니다.";
+            state.failedStageRerunRequestToken = "";
+            state.currentStep = 6;
+            persistState();
+            renderState();
+            showToast(state.error, "error");
+        } finally {
+            pipelineBusy = false;
+            activePipelineAction = "";
+            updateActionState();
+            renderColumnTypeFinal();
+        }
     }
 
     function bindEvents() {
@@ -3221,6 +3612,8 @@
             runPipeline();
         });
         byId("retryButton", "qeRetryButton")?.addEventListener("click", handleRetry);
+        byId("qeHistoryFullRerunButton")?.addEventListener("click", rerunEntireHistoryFlow);
+        byId("qeHistoryFailedRerunButton")?.addEventListener("click", rerunHistoryFromFailedStage);
         byId("qeRunHistoryButton")?.addEventListener("click", openQuickHistoryDialog);
         byId("qeOpenDetailedAnalysis")?.addEventListener("click", openDetailedAnalysis);
         byId("qeHistoryExitButton")?.addEventListener("click", () => resetPipelineState());
@@ -3317,13 +3710,20 @@
         byId("qeStatisticsDetailButton")?.addEventListener("click", () => openStatisticsDialog());
         byId("qeColumnTypeTable")?.addEventListener("change", handleColumnTypeChange);
         byId("qeColumnTypeTable")?.addEventListener("change", handleColumnTypeConfirmation);
+        byId("qeColumnTypeFilter")?.addEventListener("change", (event) => {
+            state.columnTypeFilter = String(event.target.value || "ALL");
+            persistState();
+            renderColumnTypeFinal({ keepEditorOpen: true });
+        });
         byId("qeColumnTypeEditorToggle")?.addEventListener("click", (event) => {
             const panel = byId("qeColumnTypeEditorPanel");
             if (!panel) return;
             const expanded = event.currentTarget.getAttribute("aria-expanded") === "true";
             panel.hidden = expanded;
             event.currentTarget.setAttribute("aria-expanded", expanded ? "false" : "true");
+            byId("qeColumnTypeEditor")?.classList.toggle("is-expanded", !expanded);
         });
+        byId("qeColumnTypeRerunButton")?.addEventListener("click", rerunWithChangedColumnTypes);
         byId("qeColumnTypeTrainingButton")?.addEventListener("click", openColumnTypeModelTraining);
         byId("qeColumnTypeSaveButton")?.addEventListener("click", saveColumnTypeChanges);
         byId("qeStatisticsColumnSelect")?.addEventListener("change", (event) => {
@@ -3429,14 +3829,16 @@
             if (state.historyView && state.flowRunId) {
                 try {
                     await fetchSnapshot({ silent: true });
-                    if (R.normalizeStatus(state.lastRunStatus) === "SUCCESS") {
+                    if (!R.ACTIVE_STATUSES.has(R.normalizeStatus(state.lastRunStatus))) {
                         await loadResults();
-                        state.status = state.resultWarning ? "warning" : "success";
+                        if (R.normalizeStatus(state.lastRunStatus) === "SUCCESS") {
+                            state.status = state.resultWarning ? "warning" : "success";
+                        }
                     }
                     persistState();
                     renderState(state.resultWarning || `실행 #${state.flowRunId}의 저장된 결과를 다시 불러왔습니다.`);
                 } catch (error) {
-                    state.status = "warning";
+                    if (R.normalizeStatus(state.lastRunStatus) === "SUCCESS") state.status = "warning";
                     state.resultWarning = error.message;
                     persistState();
                     renderState("과거 실행의 일부 결과를 불러오지 못했습니다.");
@@ -3463,6 +3865,7 @@
                 } finally {
                     pipelineBusy = false;
                     updateActionState();
+                    renderColumnTypeFinal();
                 }
             } else if (state.flowRunId && ["success", "warning"].includes(state.status)) {
                 try {

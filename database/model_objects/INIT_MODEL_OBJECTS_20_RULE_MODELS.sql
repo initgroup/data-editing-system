@@ -451,9 +451,29 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_APRIORI_ASSOC_MODEL" (
         END IF;
         RETURN '"' || REPLACE(p_column_name, '"', '""') || '"';
     END;
+
+    PROCEDURE disable_parallel_execution IS
+    BEGIN
+        BEGIN
+            EXECUTE IMMEDIATE 'ALTER SESSION DISABLE PARALLEL DML';
+        EXCEPTION
+            WHEN OTHERS THEN
+                IF SQLCODE <> -12841 THEN
+                    RAISE;
+                END IF;
+        END;
+
+        BEGIN
+            EXECUTE IMMEDIATE 'ALTER SESSION DISABLE PARALLEL QUERY';
+        EXCEPTION
+            WHEN OTHERS THEN
+                IF SQLCODE <> -12841 THEN
+                    RAISE;
+                END IF;
+        END;
+    END;
 BEGIN
-    EXECUTE IMMEDIATE 'ALTER SESSION DISABLE PARALLEL DML';
-    EXECUTE IMMEDIATE 'ALTER SESSION DISABLE PARALLEL QUERY';
+    disable_parallel_execution;
 
     v_model_name := UPPER(TRIM(p_model_name));
     v_case_id_col := UPPER(TRIM(p_case_id_column_name));
@@ -3065,8 +3085,20 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_DM_MODEL_VIEW_LIST" (
     p_result     OUT SYS_REFCURSOR
 ) AUTHID CURRENT_USER IS
     v_model_name VARCHAR2(128);
+
+    PROCEDURE disable_parallel_execution IS
+    BEGIN
+        BEGIN
+            EXECUTE IMMEDIATE 'ALTER SESSION DISABLE PARALLEL DML';
+        EXCEPTION
+            WHEN OTHERS THEN
+                IF SQLCODE <> -12841 THEN
+                    RAISE;
+                END IF;
+        END;
+    END;
 BEGIN
-    EXECUTE IMMEDIATE 'ALTER SESSION DISABLE PARALLEL DML';
+    disable_parallel_execution;
 
     v_model_name := UPPER(TRIM(p_model_name));
 
@@ -3113,8 +3145,20 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_DM_MODEL_VIEW_OPEN" (
     BEGIN
         RETURN '"' || REPLACE(p_name, '"', '""') || '"';
     END;
+
+    PROCEDURE disable_parallel_execution IS
+    BEGIN
+        BEGIN
+            EXECUTE IMMEDIATE 'ALTER SESSION DISABLE PARALLEL DML';
+        EXCEPTION
+            WHEN OTHERS THEN
+                IF SQLCODE <> -12841 THEN
+                    RAISE;
+                END IF;
+        END;
+    END;
 BEGIN
-    EXECUTE IMMEDIATE 'ALTER SESSION DISABLE PARALLEL DML';
+    disable_parallel_execution;
 
     v_model_name := UPPER(TRIM(p_model_name));
     v_view_type := UPPER(TRIM(p_view_type));

@@ -73,6 +73,19 @@ CREATE OR REPLACE PACKAGE BODY "INIT$_PKG_RULE_SUMMARY" AS
         RETURN v_value;
     END;
 
+    PROCEDURE disable_parallel_execution IS
+    BEGIN
+        BEGIN
+            EXECUTE IMMEDIATE 'ALTER SESSION DISABLE PARALLEL DML';
+        EXCEPTION
+            WHEN OTHERS THEN
+                IF SQLCODE <> -12841 THEN
+                    RAISE;
+                END IF;
+        END;
+
+    END;
+
     FUNCTION contains_column(p_cols IN t_column_list, p_col IN VARCHAR2) RETURN BOOLEAN IS
     BEGIN
         FOR i IN 1 .. p_cols.COUNT LOOP
@@ -500,7 +513,7 @@ SELECT ]' || sql_literal(v_run_source_type) || q'[,
             END LOOP;
         END collect_multi_condition_rules;
     BEGIN
-        EXECUTE IMMEDIATE 'ALTER SESSION DISABLE PARALLEL DML';
+        disable_parallel_execution;
 
         v_model_name := normalize_identifier(p_model_name, 'model_name');
         IF NOT is_null_token(p_case_id_column_name) THEN

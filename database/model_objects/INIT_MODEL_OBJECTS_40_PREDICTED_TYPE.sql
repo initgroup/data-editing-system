@@ -282,13 +282,33 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_TYPE_MODEL_TRAIN" (
             END;
         END LOOP;
     END;
+
+    PROCEDURE disable_parallel_execution IS
+    BEGIN
+        BEGIN
+            EXECUTE IMMEDIATE 'ALTER SESSION DISABLE PARALLEL DML';
+        EXCEPTION
+            WHEN OTHERS THEN
+                IF SQLCODE <> -12841 THEN
+                    RAISE;
+                END IF;
+        END;
+
+        BEGIN
+            EXECUTE IMMEDIATE 'ALTER SESSION DISABLE PARALLEL QUERY';
+        EXCEPTION
+            WHEN OTHERS THEN
+                IF SQLCODE <> -12841 THEN
+                    RAISE;
+                END IF;
+        END;
+    END;
 BEGIN
     IF p_train_run_id IS NULL THEN
         RAISE_APPLICATION_ERROR(-20710, 'train_run_id is required.');
     END IF;
 
-    EXECUTE IMMEDIATE 'ALTER SESSION DISABLE PARALLEL DML';
-    EXECUTE IMMEDIATE 'ALTER SESSION DISABLE PARALLEL QUERY';
+    disable_parallel_execution;
 
     LOCK TABLE "INIT$_TB_OML_TRAIN_RUN" IN EXCLUSIVE MODE NOWAIT;
 
@@ -1972,6 +1992,27 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_PREDICTED_TYPE" (
                    ELSE 999
                END';
     END;
+
+    PROCEDURE disable_parallel_execution IS
+    BEGIN
+        BEGIN
+            EXECUTE IMMEDIATE 'ALTER SESSION DISABLE PARALLEL DML';
+        EXCEPTION
+            WHEN OTHERS THEN
+                IF SQLCODE <> -12841 THEN
+                    RAISE;
+                END IF;
+        END;
+
+        BEGIN
+            EXECUTE IMMEDIATE 'ALTER SESSION DISABLE PARALLEL QUERY';
+        EXCEPTION
+            WHEN OTHERS THEN
+                IF SQLCODE <> -12841 THEN
+                    RAISE;
+                END IF;
+        END;
+    END;
 BEGIN
     v_owner := UPPER(TRIM(p_target_owner));
     v_table_name := UPPER(TRIM(p_target_table));
@@ -2173,8 +2214,7 @@ BEGIN
         ELSE 'LEGACY_UNKNOWN'
     END;
 
-    EXECUTE IMMEDIATE 'ALTER SESSION DISABLE PARALLEL DML';
-    EXECUTE IMMEDIATE 'ALTER SESSION DISABLE PARALLEL QUERY';
+    disable_parallel_execution;
 
     -- Upload/reload validates and records the exact row count before a table
     -- becomes READY. Reuse that value to avoid another full-table COUNT scan;

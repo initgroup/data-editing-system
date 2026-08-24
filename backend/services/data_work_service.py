@@ -12,6 +12,7 @@ import json
 import re
 
 from backend.database_helper import execute_query, SqlLoader
+from backend.oracle_session import disable_parallel_execution
 
 
 DANGEROUS_PLSQL_PATTERN = re.compile(
@@ -482,7 +483,11 @@ def delete_job(conn, menu_code: str, profile_job_id: int, project_id: int, scena
         # Free-tier/Autonomous DB can raise ORA-12839 when parent/child delete DML
         # touches parallel-enabled objects in one transaction. Keep this delete path
         # serial; revisit separately for production DB parallel DML policy.
-        cursor.execute("ALTER SESSION DISABLE PARALLEL DML")
+        disable_parallel_execution(
+            cursor,
+            include_query=False,
+            context=f"data-work-delete-job:{params['profileJobId']}",
+        )
         cursor.execute(SqlLoader.get_sql("DATA_WORK_RUN_DELETE_BY_JOB"), {
             "profileJobId": params["profileJobId"]
         })

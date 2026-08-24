@@ -43,6 +43,16 @@ class SavedFlowRunRequest(BaseModel):
     quickEditSummary: Optional[Dict[str, Any]] = None
 
 
+class SavedColumnTypeRerunRequest(BaseModel):
+    flowId: int
+    projectId: int
+    scenarioId: int
+    flowRunId: int
+    batch: Optional[bool] = False
+    requestToken: Optional[str] = None
+    quickEditSummary: Optional[Dict[str, Any]] = None
+
+
 def normalize_quick_edit_summary(value: Any) -> Dict[str, Any]:
     if not isinstance(value, dict) or str(value.get("source") or "").strip().upper() != "QUICK_EDIT":
         return {}
@@ -311,6 +321,39 @@ def build_node_downstream_plan(plan: list[dict], selected_node_key: str) -> list
     return [step for step in plan or [] if str(step.get("nodeKey") or "") in reachable]
 
 
+def build_failed_stage_rerun_plan(plan: list[dict], node_rows: list[dict]) -> tuple[dict, list[dict]]:
+    """Select the first failed node, or the first unfinished node when submission failed early."""
+    status_by_key = {
+        str(row.get("NODE_KEY") or row.get("nodeKey") or "").strip().upper(): str(
+            row.get("STATUS") or row.get("status") or ""
+        ).strip().upper()
+        for row in node_rows or []
+        if str(row.get("NODE_KEY") or row.get("nodeKey") or "").strip()
+    }
+    failed_statuses = {"FAILED", "ERROR", "CANCELLED"}
+    selected_step = next(
+        (
+            step for step in plan or []
+            if status_by_key.get(str(step.get("nodeKey") or "").strip().upper(), "") in failed_statuses
+        ),
+        None,
+    )
+    if not selected_step:
+        selected_step = next(
+            (
+                step for step in plan or []
+                if status_by_key.get(str(step.get("nodeKey") or "").strip().upper(), "") != "SUCCESS"
+            ),
+            None,
+        )
+    if not selected_step:
+        raise HTTPException(status_code=400, detail="The selected Quick Editing run has no failed stage to rerun.")
+    selected_plan = build_node_downstream_plan(plan, str(selected_step.get("nodeKey") or ""))
+    if not selected_plan:
+        raise HTTPException(status_code=400, detail="The failed-stage execution plan could not be built.")
+    return selected_step, selected_plan
+
+
 def create_flow_work_router(
     menu_code: str,
     sql_prefix: str,
@@ -494,7 +537,7 @@ def create_flow_work_router(
             },
         }
 
-    def get_save_lock(req: FlowWorkRequest | SavedFlowRunRequest) -> threading.Lock:
+    def get_save_lock(req: FlowWorkRequest | SavedFlowRunRequest | SavedColumnTypeRerunRequest) -> threading.Lock:
         flow_key = f"FLOW:{req.flowId}" if req.flowId else "NEW"
         key = "|".join([
             MENU_CODE,
@@ -1100,6 +1143,413 @@ def create_flow_work_router(
                     detail=f"Flow run hit a database row lock at {step}. Please wait a moment and run again.",
                 )
             logger.error("%s saved flow run failed: %s", MENU_CODE, error)
+            raise HTTPException(status_code=500, detail=str(error))
+        finally:
+            if conn:
+                conn.close()
+            if saved_lock:
+                saved_lock.release()
+
+    @router.post("/flow/rerun-saved-column-types")
+    def rerun_saved_flow_from_column_types(req: SavedColumnTypeRerunRequest, request: Request):
+        """Continue a completed Quick Editing run at M03002 using its saved FINAL column types."""
+        conn = None
+        saved_lock = None
+        request_token = normalize_run_request_token(req.requestToken)
+        try:
+            conn = get_target_db_connection(request)
+            require_project_access_for_request(conn, request, req.projectId)
+            saved_lock = get_save_lock(req)
+            if not saved_lock.acquire(timeout=save_lock_wait_seconds):
+                raise HTTPException(
+                    status_code=409,
+                    detail="This flow is still being saved or queued. Please wait a moment and try again.",
+                )
+
+            if request_token:
+                lock_flow_run_request_scope(conn, req.flowId, req.projectId, req.scenarioId)
+                existing_run = find_flow_run_by_request_token(conn, req.flowId, request_token)
+                if existing_run:
+                    response = build_idempotent_run_response(existing_run, req)
+                    conn.rollback()
+                    saved_lock.release()
+                    saved_lock = None
+                    return response
+
+            saved_flow = flow_work.load_flow(conn, MENU_CODE, req.flowId)
+            if (
+                int(saved_flow.get("PROJECT_ID") or 0) != int(req.projectId)
+                or int(saved_flow.get("SCENARIO_ID") or 0) != int(req.scenarioId)
+            ):
+                raise HTTPException(status_code=404, detail="Flow was not found in the selected project and scenario.")
+
+            graph = saved_flow.get("GRAPH") if isinstance(saved_flow.get("GRAPH"), dict) else {}
+            if isinstance(graph.get("nodes"), list) and isinstance(graph.get("edges"), list):
+                nodes = graph["nodes"]
+                edges = graph["edges"]
+            else:
+                nodes = saved_flow.get("NODES") or []
+                edges = saved_flow.get("EDGES") or []
+            saved_request = FlowRunRequest(
+                flowId=int(saved_flow.get("FLOW_ID") or req.flowId),
+                projectId=int(saved_flow.get("PROJECT_ID") or req.projectId),
+                scenarioId=int(saved_flow.get("SCENARIO_ID") or req.scenarioId),
+                flowGroup=saved_flow.get("FLOW_GROUP") or DEFAULT_FLOW_GROUP,
+                flowName=saved_flow.get("FLOW_NAME") or "Saved flow",
+                flowDesc=saved_flow.get("FLOW_DESC") or "",
+                flowType=saved_flow.get("FLOW_TYPE") or DEFAULT_FLOW_TYPE,
+                executionMode="DAG",
+                useYn=saved_flow.get("USE_YN") or "Y",
+                status=saved_flow.get("STATUS") or "DRAFT",
+                nodes=nodes,
+                edges=edges,
+                batch=False,
+                runtimeOverrides={},
+            )
+            normalized_nodes, normalized_edges = flow_work.normalize_graph(
+                saved_request.nodes,
+                saved_request.edges,
+            )
+            validation = flow_work.validate_graph(normalized_nodes, normalized_edges)
+            if validation["status"] != "success":
+                raise HTTPException(status_code=400, detail=validation["message"])
+
+            full_plan = validation.get("plan") or []
+            selected_step = next(
+                (
+                    step for step in full_plan
+                    if str(step.get("refMenuCode") or "").strip().upper() == "M03002"
+                ),
+                None,
+            )
+            if not selected_step:
+                raise HTTPException(status_code=400, detail="The saved Quick Editing flow does not contain the M03002 stage.")
+            selected_plan = build_node_downstream_plan(full_plan, str(selected_step.get("nodeKey") or ""))
+            selected_menu_codes = [
+                str(step.get("refMenuCode") or "").strip().upper()
+                for step in selected_plan
+            ]
+            if set(selected_menu_codes) != {"M03002", "M03003", "M03004"} or len(selected_menu_codes) != 3:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Column type rerun is allowed only for the saved M03002-M03004 Quick Editing stages.",
+                )
+
+            run_rows = flow_work.list_runs_by_flow(conn, req.flowId)
+            continued_run = next(
+                (row for row in run_rows if int(row.get("FLOW_RUN_ID") or 0) == int(req.flowRunId)),
+                None,
+            )
+            if not continued_run:
+                raise HTTPException(status_code=404, detail="The Quick Editing flow run was not found.")
+            continued_status = str(continued_run.get("STATUS") or "").strip().upper()
+            if continued_status in {"STARTED", "RUNNING", "QUEUED", "PENDING"}:
+                raise HTTPException(status_code=409, detail="The selected Quick Editing flow run is still active.")
+
+            flow_work.require_compatible_continue_run(
+                conn,
+                req.flowId,
+                req.flowRunId,
+                full_plan,
+                selected_plan,
+            )
+
+            previous_plan = flow_work.parse_json(continued_run.get("PLAN_JSON"), {})
+            quick_edit_summary = normalize_quick_edit_summary(req.quickEditSummary)
+            if not quick_edit_summary and isinstance(previous_plan, dict):
+                quick_edit_summary = normalize_quick_edit_summary(previous_plan.get("quickEditSummary"))
+            if not quick_edit_summary:
+                raise HTTPException(status_code=400, detail="Quick Editing execution context could not be restored.")
+            quick_edit_summary.update({
+                "projectId": int(saved_flow.get("PROJECT_ID") or req.projectId),
+                "scenarioId": int(saved_flow.get("SCENARIO_ID") or req.scenarioId),
+                "flowId": int(saved_flow.get("FLOW_ID") or req.flowId),
+                "flowName": str(saved_flow.get("FLOW_NAME") or quick_edit_summary.get("flowName") or "")[:200],
+                "nodeCount": len(full_plan),
+            })
+
+            if request_token:
+                for step in selected_plan:
+                    if isinstance(step, dict):
+                        step["runRequestToken"] = request_token
+            message = "Saved FINAL column types applied. Rule discovery rerun started from M03002."
+            run_plan = {
+                **validation,
+                "selectedNodeKey": selected_step.get("nodeKey"),
+                "downstream": True,
+                "continuedFromExistingRun": True,
+                "columnTypeRerun": True,
+                "plan": selected_plan,
+                "quickEditSummary": quick_edit_summary,
+            }
+            if request_token:
+                run_plan["runRequestToken"] = request_token
+
+            flow_work.resume_run(
+                conn,
+                req.flowId,
+                req.flowRunId,
+                "QUICK_EDIT",
+                "STARTED",
+                message,
+                run_plan,
+            )
+            flow_work.create_node_run_records(
+                conn,
+                req.flowRunId,
+                req.flowId,
+                selected_plan,
+                replace_existing=True,
+            )
+            target_connection_id = get_target_connection_id(request)
+            user_id = get_request_user_id(request)
+            conn.commit()
+            try:
+                submit_background_job(
+                    f"{MENU_CODE} column_type_rerun_id={req.flowRunId}",
+                    run_flow_background,
+                    req.flowRunId,
+                    target_connection_id,
+                    user_id,
+                    selected_plan,
+                    {},
+                    message,
+                    quick_edit_summary,
+                )
+            except BackgroundJobQueueFull as queue_error:
+                mark_flow_submission_failed(conn, req.flowRunId, selected_plan, run_plan, str(queue_error))
+                raise HTTPException(status_code=503, detail=str(queue_error))
+            except Exception as submit_error:
+                mark_flow_submission_failed(
+                    conn,
+                    req.flowRunId,
+                    selected_plan,
+                    run_plan,
+                    f"Background flow submission failed: {submit_error}",
+                )
+                logger.exception("%s column type rerun submission failed.", MENU_CODE)
+                raise HTTPException(status_code=500, detail="Background flow submission failed.")
+
+            saved_lock.release()
+            saved_lock = None
+            return {
+                "status": "success",
+                "message": message,
+                "data": {
+                    "flowId": int(req.flowId),
+                    "flowRunId": int(req.flowRunId),
+                    "runType": "QUICK_EDIT",
+                    "runStatus": "STARTED",
+                    "continuedFromExistingRun": True,
+                    "plan": selected_plan,
+                    "idempotentReplay": False,
+                },
+            }
+        except HTTPException:
+            if conn:
+                conn.rollback()
+            raise
+        except Exception as error:
+            if conn:
+                conn.rollback()
+            logger.error("%s saved column type rerun failed: %s", MENU_CODE, error)
+            raise HTTPException(status_code=500, detail=str(error))
+        finally:
+            if conn:
+                conn.close()
+            if saved_lock:
+                saved_lock.release()
+
+    @router.post("/flow/rerun-saved-failed-stage")
+    def rerun_saved_flow_from_failed_stage(req: SavedColumnTypeRerunRequest, request: Request):
+        """Resume a failed Quick Editing run at its first failed node and downstream nodes."""
+        conn = None
+        saved_lock = None
+        request_token = normalize_run_request_token(req.requestToken)
+        try:
+            conn = get_target_db_connection(request)
+            require_project_access_for_request(conn, request, req.projectId)
+            saved_lock = get_save_lock(req)
+            if not saved_lock.acquire(timeout=save_lock_wait_seconds):
+                raise HTTPException(
+                    status_code=409,
+                    detail="This flow is still being saved or queued. Please wait a moment and try again.",
+                )
+
+            if request_token:
+                lock_flow_run_request_scope(conn, req.flowId, req.projectId, req.scenarioId)
+                existing_run = find_flow_run_by_request_token(conn, req.flowId, request_token)
+                if existing_run:
+                    response = build_idempotent_run_response(existing_run, req)
+                    conn.rollback()
+                    saved_lock.release()
+                    saved_lock = None
+                    return response
+
+            saved_flow = flow_work.load_flow(conn, MENU_CODE, req.flowId)
+            if (
+                int(saved_flow.get("PROJECT_ID") or 0) != int(req.projectId)
+                or int(saved_flow.get("SCENARIO_ID") or 0) != int(req.scenarioId)
+            ):
+                raise HTTPException(status_code=404, detail="Flow was not found in the selected project and scenario.")
+
+            graph = saved_flow.get("GRAPH") if isinstance(saved_flow.get("GRAPH"), dict) else {}
+            if isinstance(graph.get("nodes"), list) and isinstance(graph.get("edges"), list):
+                nodes = graph["nodes"]
+                edges = graph["edges"]
+            else:
+                nodes = saved_flow.get("NODES") or []
+                edges = saved_flow.get("EDGES") or []
+            saved_request = FlowRunRequest(
+                flowId=int(saved_flow.get("FLOW_ID") or req.flowId),
+                projectId=int(saved_flow.get("PROJECT_ID") or req.projectId),
+                scenarioId=int(saved_flow.get("SCENARIO_ID") or req.scenarioId),
+                flowGroup=saved_flow.get("FLOW_GROUP") or DEFAULT_FLOW_GROUP,
+                flowName=saved_flow.get("FLOW_NAME") or "Saved flow",
+                flowDesc=saved_flow.get("FLOW_DESC") or "",
+                flowType=saved_flow.get("FLOW_TYPE") or DEFAULT_FLOW_TYPE,
+                executionMode="DAG",
+                useYn=saved_flow.get("USE_YN") or "Y",
+                status=saved_flow.get("STATUS") or "DRAFT",
+                nodes=nodes,
+                edges=edges,
+                batch=False,
+                runtimeOverrides={},
+            )
+            normalized_nodes, normalized_edges = flow_work.normalize_graph(
+                saved_request.nodes,
+                saved_request.edges,
+            )
+            validation = flow_work.validate_graph(normalized_nodes, normalized_edges)
+            if validation["status"] != "success":
+                raise HTTPException(status_code=400, detail=validation["message"])
+
+            run_rows = flow_work.list_runs_by_flow(conn, req.flowId)
+            continued_run = next(
+                (row for row in run_rows if int(row.get("FLOW_RUN_ID") or 0) == int(req.flowRunId)),
+                None,
+            )
+            if not continued_run:
+                raise HTTPException(status_code=404, detail="The Quick Editing flow run was not found.")
+            continued_status = str(continued_run.get("STATUS") or "").strip().upper()
+            if continued_status in {"STARTED", "RUNNING", "QUEUED", "PENDING"}:
+                raise HTTPException(status_code=409, detail="The selected Quick Editing flow run is still active.")
+            if continued_status not in {"FAILED", "ERROR", "CANCELLED"}:
+                raise HTTPException(status_code=400, detail="Only a failed Quick Editing run can resume from its failed stage.")
+
+            previous_plan = flow_work.parse_json(continued_run.get("PLAN_JSON"), {})
+            quick_edit_summary = normalize_quick_edit_summary(req.quickEditSummary)
+            if not quick_edit_summary and isinstance(previous_plan, dict):
+                quick_edit_summary = normalize_quick_edit_summary(previous_plan.get("quickEditSummary"))
+            if not quick_edit_summary:
+                raise HTTPException(status_code=400, detail="Quick Editing execution context could not be restored.")
+
+            full_plan = validation.get("plan") or []
+            node_rows = flow_work.list_node_runs(conn, req.flowRunId).get("data") or []
+            selected_step, selected_plan = build_failed_stage_rerun_plan(full_plan, node_rows)
+            flow_work.require_compatible_continue_run(
+                conn,
+                req.flowId,
+                req.flowRunId,
+                full_plan,
+                selected_plan,
+            )
+
+            quick_edit_summary.update({
+                "projectId": int(saved_flow.get("PROJECT_ID") or req.projectId),
+                "scenarioId": int(saved_flow.get("SCENARIO_ID") or req.scenarioId),
+                "flowId": int(saved_flow.get("FLOW_ID") or req.flowId),
+                "flowName": str(saved_flow.get("FLOW_NAME") or quick_edit_summary.get("flowName") or "")[:200],
+                "nodeCount": len(full_plan),
+            })
+            if request_token:
+                for step in selected_plan:
+                    if isinstance(step, dict):
+                        step["runRequestToken"] = request_token
+
+            selected_name = selected_step.get("nodeName") or selected_step.get("nodeKey")
+            message = f"Quick Editing failed-stage rerun started: {selected_name} and downstream nodes."
+            run_plan = {
+                **validation,
+                "selectedNodeKey": selected_step.get("nodeKey"),
+                "downstream": True,
+                "continuedFromExistingRun": True,
+                "failedStageRerun": True,
+                "plan": selected_plan,
+                "quickEditSummary": quick_edit_summary,
+            }
+            if request_token:
+                run_plan["runRequestToken"] = request_token
+
+            flow_work.resume_run(
+                conn,
+                req.flowId,
+                req.flowRunId,
+                "QUICK_EDIT",
+                "STARTED",
+                message,
+                run_plan,
+            )
+            flow_work.create_node_run_records(
+                conn,
+                req.flowRunId,
+                req.flowId,
+                selected_plan,
+                replace_existing=True,
+            )
+            target_connection_id = get_target_connection_id(request)
+            user_id = get_request_user_id(request)
+            conn.commit()
+            try:
+                submit_background_job(
+                    f"{MENU_CODE} failed_stage_rerun_id={req.flowRunId}",
+                    run_flow_background,
+                    req.flowRunId,
+                    target_connection_id,
+                    user_id,
+                    selected_plan,
+                    {},
+                    message,
+                    quick_edit_summary,
+                )
+            except BackgroundJobQueueFull as queue_error:
+                mark_flow_submission_failed(conn, req.flowRunId, selected_plan, run_plan, str(queue_error))
+                raise HTTPException(status_code=503, detail=str(queue_error))
+            except Exception as submit_error:
+                mark_flow_submission_failed(
+                    conn,
+                    req.flowRunId,
+                    selected_plan,
+                    run_plan,
+                    f"Background flow submission failed: {submit_error}",
+                )
+                logger.exception("%s failed-stage rerun submission failed.", MENU_CODE)
+                raise HTTPException(status_code=500, detail="Background flow submission failed.")
+
+            saved_lock.release()
+            saved_lock = None
+            return {
+                "status": "success",
+                "message": message,
+                "data": {
+                    "flowId": int(req.flowId),
+                    "flowRunId": int(req.flowRunId),
+                    "runType": "QUICK_EDIT",
+                    "runStatus": "STARTED",
+                    "continuedFromExistingRun": True,
+                    "selectedNodeKey": selected_step.get("nodeKey"),
+                    "plan": selected_plan,
+                    "idempotentReplay": False,
+                },
+            }
+        except HTTPException:
+            if conn:
+                conn.rollback()
+            raise
+        except Exception as error:
+            if conn:
+                conn.rollback()
+            logger.error("%s saved failed-stage rerun failed: %s", MENU_CODE, error)
             raise HTTPException(status_code=500, detail=str(error))
         finally:
             if conn:

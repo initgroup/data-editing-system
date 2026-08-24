@@ -296,6 +296,8 @@ def get_target_db_connection_by_id(
         try:
             if os.getenv("TARGET_DB_DISABLE_PARALLEL", "Y").strip().upper() == "Y":
                 with connection.cursor() as cursor:
+                    # Limit only Parallel DML on each Target DB session. Do not
+                    # globally serialize queries, DDL, or other pooled sessions.
                     disable_parallel_execution(
                         cursor,
                         include_query=False,

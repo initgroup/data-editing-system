@@ -20,6 +20,7 @@ import time
 
 from backend.database_helper import execute_query, SqlLoader
 from backend.database import get_db_connection
+from backend.oracle_session import disable_parallel_execution
 from backend.target_database import get_target_connection_id, get_target_db_connection
 from backend.auth_context import get_request_role_code, get_request_user_id
 from backend.paging import create_page_window, normalize_page_number, normalize_page_size
@@ -910,8 +911,11 @@ def prepare_table_mapping(
     edit_table = create_edit_table_name(managed_table)
     managed_ref = f"{quote_identifier(managed_owner)}.{quote_identifier(managed_table)}"
     source_ref = f"{quote_identifier(source_owner)}.{quote_identifier(source_table)}"
-    cursor.execute(SqlLoader.get_sql("M02002_DISABLE_PARALLEL_DML"))
-    cursor.execute(SqlLoader.get_sql("M02002_DISABLE_PARALLEL_QUERY"))
+    disable_parallel_execution(
+        cursor,
+        include_query=True,
+        context="M02002-managed-snapshot",
+    )
     source_select_list = []
     for column_name in source_columns:
         source_expression = f"T.{quote_metadata_identifier(column_name)}"

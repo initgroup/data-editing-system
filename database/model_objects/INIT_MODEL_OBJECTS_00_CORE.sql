@@ -54,6 +54,19 @@ END "INIT$_PKG_OML_SCRIPT";
 /
 
 CREATE OR REPLACE PACKAGE BODY "INIT$_PKG_OML_SCRIPT" AS
+    PROCEDURE disable_parallel_execution IS
+    BEGIN
+        BEGIN
+            EXECUTE IMMEDIATE 'ALTER SESSION DISABLE PARALLEL DML';
+        EXCEPTION
+            WHEN OTHERS THEN
+                IF SQLCODE <> -12841 THEN
+                    RAISE;
+                END IF;
+        END;
+
+    END;
+
     FUNCTION HAS_CREATE_API RETURN VARCHAR2 IS
         v_count NUMBER;
     BEGIN
@@ -135,7 +148,7 @@ CREATE OR REPLACE PACKAGE BODY "INIT$_PKG_OML_SCRIPT" AS
     ) IS
         v_errors VARCHAR2(3000);
     BEGIN
-        EXECUTE IMMEDIATE 'ALTER SESSION DISABLE PARALLEL DML';
+        disable_parallel_execution;
 
         IF p_script_name IS NULL OR NOT REGEXP_LIKE(p_script_name, '^[A-Z][A-Z0-9_$#]{0,127}$') THEN
             RAISE_APPLICATION_ERROR(-20070, 'Invalid OML4Py script name.');

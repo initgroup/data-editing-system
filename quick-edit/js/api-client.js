@@ -259,6 +259,34 @@
             });
         }
 
+        rerunSavedFlowFromColumnTypes(flowId, projectId, scenarioId, flowRunId, requestToken, quickEditSummary = null) {
+            return this.request("/M04001/flow/rerun-saved-column-types", {
+                method: "POST",
+                body: {
+                    flowId,
+                    projectId,
+                    scenarioId,
+                    flowRunId,
+                    requestToken,
+                    quickEditSummary
+                }
+            });
+        }
+
+        rerunSavedFlowFromFailure(flowId, projectId, scenarioId, flowRunId, requestToken, quickEditSummary = null) {
+            return this.request("/M04001/flow/rerun-saved-failed-stage", {
+                method: "POST",
+                body: {
+                    flowId,
+                    projectId,
+                    scenarioId,
+                    flowRunId,
+                    requestToken,
+                    quickEditSummary
+                }
+            });
+        }
+
         getRunSnapshot(flowRunId, projectId, scenarioId) {
             return this.request(this.buildPath(`/M04001/run/${encodeURIComponent(flowRunId)}/snapshot`, {
                 projectId,

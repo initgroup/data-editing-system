@@ -22,6 +22,7 @@ import oracledb
 from backend.database import get_db_connection, get_db_pool
 from backend.database_helper import execute_query, SqlLoader
 from backend.auth_context import get_request_user_id
+from backend.oracle_session import disable_parallel_execution
 from backend.security import decrypt_secret, encrypt_secret
 
 
@@ -1449,7 +1450,11 @@ def delete_connection(req: ConnectionIdRequest, request: Request):
             "userId": user_id,
         }
         cursor = conn.cursor()
-        cursor.execute("ALTER SESSION DISABLE PARALLEL DML")
+        disable_parallel_execution(
+            cursor,
+            include_query=False,
+            context=f"M99001-delete-connection:{req.connectionId}",
+        )
         drop_conn = True
         cursor.execute(SqlLoader.get_sql("M91001_CONNECTION_SETTINGS_DELETE"), params)
         settings_deleted = cursor.rowcount
@@ -1739,8 +1744,11 @@ def deploy_model_objects(req: ConnectionRequest, request: Request):
         target_conn = _connect_target(target_payload)
         database_info = _require_supported_target_database(target_conn)
         target_cursor = target_conn.cursor()
-        target_cursor.execute("ALTER SESSION DISABLE PARALLEL DML")
-        target_cursor.execute("ALTER SESSION DISABLE PARALLEL QUERY")
+        disable_parallel_execution(
+            target_cursor,
+            include_query=True,
+            context=f"M99001-model-object-deploy:{requested_group or 'ALL'}",
+        )
         target_cursor.callproc("DBMS_OUTPUT.ENABLE")
         logs = [
             f"[INFO] Target DB: {_database_version_message(database_info)}",

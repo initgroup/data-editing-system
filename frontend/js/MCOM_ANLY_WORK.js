@@ -3293,7 +3293,11 @@
         openViolationSqlPopup(kind = "all", value = "") {
             const sql = this.createViolationSql(kind, value);
             if (!sql) return;
-            const ruleColumns = this.getViolationRuleColumns(kind, value);
+            const ruleColumnRoles = this.getViolationRuleColumnRoles(kind, value);
+            const ruleColumns = [...new Set([
+                ...ruleColumnRoles.conditionColumns,
+                ...ruleColumnRoles.resultColumns
+            ])];
             const ruleDetail = this.getViolationRuleDetail(kind, value);
             const supportsRealtime = Boolean(this.isViolationNode(this.selectedNode) && kind === "rule" && String(value || "").trim());
             const defaultFreezeColumns = window.matchMedia("(max-width: 760px)").matches ? 0 : 2;
@@ -3314,6 +3318,8 @@
                 rows: [],
                 columnWidths: {},
                 ruleColumns,
+                ruleConditionColumns: ruleColumnRoles.conditionColumns,
+                ruleResultColumns: ruleColumnRoles.resultColumns,
                 ruleDetail,
                 title: getText("{label} violation row query", { label })
             };
@@ -3332,40 +3338,52 @@
             return (summary.topRules || []).find((item) => String(item.RULE_ID) === String(value)) || null;
         },
 
-        getViolationRuleColumns(kind = "all", value = "") {
-            const columns = new Set();
+        getViolationRuleColumnRoles(kind = "all", value = "") {
+            const conditionColumns = new Set();
+            const resultColumns = new Set();
             if (this.isSymbolicViolationNode(this.selectedNode)) {
                 const summary = this.lastSymbolicViolationSummary || {};
                 if (kind === "column" && value) {
-                    columns.add(String(value).trim().toUpperCase());
+                    resultColumns.add(String(value).trim().toUpperCase());
                 }
                 if (kind === "rule" && value) {
                     const rule = (summary.topRules || []).find((item) => String(item.RULE_ID) === String(value));
-                    this.parseFeatureList(rule?.FEATURE_COLUMNS || "").forEach((column) => columns.add(column.trim().toUpperCase()));
-                    if (rule?.TARGET_COLUMN) columns.add(String(rule.TARGET_COLUMN).trim().toUpperCase());
+                    this.parseFeatureList(rule?.FEATURE_COLUMNS || "").forEach((column) => conditionColumns.add(column.trim().toUpperCase()));
+                    if (rule?.TARGET_COLUMN) resultColumns.add(String(rule.TARGET_COLUMN).trim().toUpperCase());
                 }
                 if (kind === "all") {
                     (summary.topTargets || []).slice(0, 5).forEach((item) => {
-                        if (item.TARGET_COLUMN) columns.add(String(item.TARGET_COLUMN).trim().toUpperCase());
+                        if (item.TARGET_COLUMN) resultColumns.add(String(item.TARGET_COLUMN).trim().toUpperCase());
                     });
                 }
-                return [...columns].filter(Boolean);
+                return {
+                    conditionColumns: [...conditionColumns].filter(Boolean),
+                    resultColumns: [...resultColumns].filter(Boolean)
+                };
             }
             const summary = this.lastViolationSummary || {};
             if (kind === "column" && value) {
-                columns.add(String(value).trim().toUpperCase());
+                resultColumns.add(String(value).trim().toUpperCase());
             }
             if (kind === "rule" && value) {
                 const rule = (summary.topRules || []).find((item) => String(item.RULE_ID) === String(value));
-                this.extractColumnsFromRuleText(rule?.CONDITION_TEXT || "").forEach((column) => columns.add(column));
-                if (rule?.RESULT_COLUMN) columns.add(String(rule.RESULT_COLUMN).trim().toUpperCase());
+                this.extractColumnsFromRuleText(rule?.CONDITION_TEXT || "").forEach((column) => conditionColumns.add(column));
+                if (rule?.RESULT_COLUMN) resultColumns.add(String(rule.RESULT_COLUMN).trim().toUpperCase());
             }
             if (kind === "all") {
                 (summary.topColumns || []).slice(0, 5).forEach((item) => {
-                    if (item.RESULT_COLUMN) columns.add(String(item.RESULT_COLUMN).trim().toUpperCase());
+                    if (item.RESULT_COLUMN) resultColumns.add(String(item.RESULT_COLUMN).trim().toUpperCase());
                 });
             }
-            return [...columns].filter(Boolean);
+            return {
+                conditionColumns: [...conditionColumns].filter(Boolean),
+                resultColumns: [...resultColumns].filter(Boolean)
+            };
+        },
+
+        getViolationRuleColumns(kind = "all", value = "") {
+            const roles = this.getViolationRuleColumnRoles(kind, value);
+            return [...new Set([...roles.conditionColumns, ...roles.resultColumns])];
         },
 
         extractColumnsFromRuleText(text) {
@@ -3799,7 +3817,13 @@
                         </div>
                         <div id="${PAGE_ID_PREFIX}ViolationSqlMessage" class="table-empty">${state.rows?.length ? "" : this.escapeHtml(getText("Review the SQL, then query with Run or Ctrl+Enter."))}</div>
                         <div class="anly-work-sql-result">
-                            ${state.columns?.length ? this.renderViolationSqlGrid(state.columns, state.rows, state.ruleColumns || []) : ""}
+                            ${state.columns?.length ? this.renderViolationSqlGrid(
+                                state.columns,
+                                state.rows,
+                                state.ruleColumns || [],
+                                state.ruleConditionColumns || [],
+                                state.ruleResultColumns || []
+                            ) : ""}
                         </div>
                     </div>
                 </section>
@@ -3887,7 +3911,7 @@
             return getText("These are violation rows stored by the sampled detection result.");
         },
 
-        renderViolationSqlGrid(columns, rows, ruleColumns = []) {
+        renderViolationSqlGrid(columns, rows, ruleColumns = [], ruleConditionColumns = [], ruleResultColumns = []) {
             const safeColumns = this.orderViolationSqlColumns(columns || [], ruleColumns || []);
             const awareSummary = this.isSymbolicViolationNode(this.selectedNode)
                 ? (this.lastSymbolicViolationSummary || {})
@@ -3908,6 +3932,8 @@
                 "V_VIOLATION_SCORE"
             ]);
             const ruleColumnSet = new Set((ruleColumns || []).map((column) => String(column).toUpperCase()));
+            const conditionColumnSet = new Set((ruleConditionColumns || []).map((column) => String(column).toUpperCase()));
+            const resultColumnSet = new Set((ruleResultColumns || []).map((column) => String(column).toUpperCase()));
             if (!safeColumns.length) return `<div class="table-empty">${this.escapeHtml(getText("No query results."))}</div>`;
             const columnWidths = this.violationSql?.columnWidths || {};
             const freezeColumns = Math.max(0, Math.min(Number(this.violationSql?.freezeColumns ?? 2), safeColumns.length));
@@ -3928,7 +3954,7 @@
                         </colgroup>
                         <thead><tr>
                             ${columnMeta.map((meta) => `
-                            <th class="is-resizable ${meta.frozen ? "is-frozen-col" : ""} ${this.getViolationSqlColumnClass(meta.column, keyColumns, ruleColumnSet)}" data-col-index="${meta.index}" style="${meta.stickyStyle}">
+                            <th class="is-resizable ${meta.frozen ? "is-frozen-col" : ""} ${this.getViolationSqlColumnClass(meta.column, keyColumns, ruleColumnSet, conditionColumnSet, resultColumnSet)}" data-col-index="${meta.index}" style="${meta.stickyStyle}">
                                 <span class="table-th-content">${this.renderColumnAwareCell(meta.column, awareSummary)}</span>
                                 <span class="column-resizer" onmousedown="${PAGE_CODE}.startViolationSqlColumnResize(event, ${meta.index})"></span>
                             </th>
@@ -3938,7 +3964,7 @@
                                 <tr>
                                     ${columnMeta.map((meta) => {
                                     const value = row?.[meta.column] ?? "";
-                                    return `<td class="${meta.frozen ? "is-frozen-col" : ""} ${this.getViolationSqlColumnClass(meta.column, keyColumns, ruleColumnSet)}" data-col-index="${meta.index}" style="${meta.stickyStyle}" title="${this.escapeHtml(value)}">${this.renderColumnAwareCell(value, awareSummary)}</td>`;
+                                    return `<td class="${meta.frozen ? "is-frozen-col" : ""} ${this.getViolationSqlColumnClass(meta.column, keyColumns, ruleColumnSet, conditionColumnSet, resultColumnSet)}" data-col-index="${meta.index}" style="${meta.stickyStyle}" title="${this.escapeHtml(value)}">${this.renderColumnAwareCell(value, awareSummary)}</td>`;
                                 }).join("")}</tr>
                             `).join("")}
                         </tbody>
@@ -3984,13 +4010,18 @@
             const keys = pick(keyOrder);
             const rules = pick(ruleColumns || []);
             const rest = safeColumns.filter((column) => !used.has(column));
-            return [...keys, ...rules, ...rest];
+            const freezeColumns = Math.max(0, Number.parseInt(this.violationSql?.freezeColumns ?? 2, 10) || 0);
+            const frozenKeys = keys.slice(0, freezeColumns);
+            const remainingKeys = keys.slice(freezeColumns);
+            return [...frozenKeys, ...rules, ...remainingKeys, ...rest];
         },
 
-        getViolationSqlColumnClass(column, keyColumns, ruleColumnSet) {
+        getViolationSqlColumnClass(column, keyColumns, ruleColumnSet, conditionColumnSet, resultColumnSet) {
             const name = String(column || "").toUpperCase();
             if (keyColumns.has(name)) return "is-key";
-            if (ruleColumnSet.has(name)) return "is-rule";
+            if (resultColumnSet.has(name)) return "is-rule-result";
+            if (conditionColumnSet.has(name)) return "is-rule-condition";
+            if (ruleColumnSet.has(name)) return "is-rule-condition";
             return "";
         },
 
@@ -4013,7 +4044,13 @@
             const state = this.violationSql || {};
             if (!result) return;
             result.innerHTML = state.columns?.length
-                ? this.renderViolationSqlGrid(state.columns, state.rows || [], state.ruleColumns || [])
+                ? this.renderViolationSqlGrid(
+                    state.columns,
+                    state.rows || [],
+                    state.ruleColumns || [],
+                    state.ruleConditionColumns || [],
+                    state.ruleResultColumns || []
+                )
                 : "";
             this.applyViolationSqlGridDefaults();
         },

@@ -11,8 +11,13 @@ def _oracle_error_code(exc: BaseException) -> int | None:
     return getattr(error, "code", None)
 
 
-def disable_parallel_execution(cursor, *, include_query: bool = True, context: str = "") -> None:
-    """Keep Oracle Cloud/free-tier sessions on serial DML/queries when possible."""
+def disable_parallel_execution(
+    cursor,
+    *,
+    include_query: bool = False,
+    context: str = "",
+) -> None:
+    """Serialize only the selected Oracle statements; independent sessions remain concurrent."""
     statements = ["ALTER SESSION DISABLE PARALLEL DML"]
     if include_query:
         statements.append("ALTER SESSION DISABLE PARALLEL QUERY")
@@ -31,5 +36,5 @@ def disable_parallel_execution(cursor, *, include_query: bool = True, context: s
                     "Parallel session state was not changed because a transaction is already active. context=%s",
                     context or "-",
                 )
-                return
+                continue
             raise

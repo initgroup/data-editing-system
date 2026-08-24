@@ -1362,6 +1362,26 @@ def run_integrated_rule_discover(conn, payload: Dict[str, Any]) -> Dict[str, Any
         "reason": "Continuous rule discovery was not executed.",
     }
 
+    cursor = conn.cursor()
+    try:
+        disable_parallel_execution(
+            cursor,
+            include_query=True,
+            context="integrated-rule-discover",
+        )
+    finally:
+        cursor.close()
+
+    if run_id > 0:
+        clear_integrated_analysis_scope(
+            conn,
+            "ML_ANALYSIS_RULE_DISCOVERY_SCOPE_CLEAR",
+            owner,
+            table,
+            run_source_type,
+            run_id,
+        )
+
     if "CATEGORICAL" in parts:
         try:
             categorical_result = run_integrated_apriori_assoc_model(conn, payload, owner, table, run_source_type, run_id)
@@ -1461,6 +1481,16 @@ def run_integrated_rule_violation_detect(conn, payload: Dict[str, Any]) -> Dict[
     finally:
         cursor.close()
 
+    if run_id > 0:
+        clear_integrated_analysis_scope(
+            conn,
+            "ML_ANALYSIS_RULE_VIOLATION_SCOPE_CLEAR",
+            owner,
+            table,
+            run_source_type,
+            run_id,
+        )
+
     if "CATEGORICAL" in parts:
         set_integrated_task_savepoint(conn)
         try:
@@ -1515,6 +1545,29 @@ def rollback_integrated_task(conn) -> None:
     cursor = conn.cursor()
     try:
         cursor.execute(SqlLoader.get_sql("ML_ANALYSIS_INTEGRATED_TASK_ROLLBACK"))
+    finally:
+        cursor.close()
+
+
+def clear_integrated_analysis_scope(
+    conn,
+    sql_id: str,
+    owner: str,
+    table: str,
+    run_source_type: str,
+    run_id: int,
+) -> None:
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            SqlLoader.get_sql(sql_id),
+            {
+                "runSourceType": run_source_type,
+                "runId": run_id,
+                "owner": owner,
+                "tableName": table,
+            },
+        )
     finally:
         cursor.close()
 
@@ -1886,6 +1939,7 @@ def run_lasso_auto_targets(
 ) -> Dict[str, Any]:
     results = []
     failures = []
+    skipped_targets = []
     feature_pool = [str(column).upper() for column in (continuous_columns or [])]
     for target_column in target_columns:
         next_payload = dict(payload)
@@ -1898,11 +1952,34 @@ def run_lasso_auto_targets(
             result = run_lasso_feature_select(conn, next_payload)
             results.append({"targetColumn": target_column, **result})
         except Exception as exc:
-            failures.append({"targetColumn": target_column, "message": get_error_message(exc)})
+            failure = {"targetColumn": target_column, "message": get_error_message(exc)}
+            if is_insufficient_numeric_target_data(failure["message"]):
+                skipped_targets.append(failure)
+                continue
+            failures.append(failure)
             if not continue_on_error:
                 raise
 
     if not results:
+        if skipped_targets and not failures:
+            message = summarize_partial_failures(
+                {"failedTargets": skipped_targets},
+                "numeric target",
+            )
+            skipped = build_lasso_skip_result(
+                "NO_USABLE_CONTINUOUS_DATA",
+                f"Continuous targets without enough usable numeric data were safely skipped. {message}",
+                cluster_usage_mode=normalize_cluster_usage_mode(
+                    get_value(payload, "P_CLUSTER_USAGE_MODE", "clusterUsageMode"),
+                    "NONE",
+                ),
+            )
+            skipped.update({
+                "targetCount": len(target_columns),
+                "skippedCount": len(skipped_targets),
+                "skippedTargets": skipped_targets,
+            })
+            return skipped
         detail = "; ".join(f"{item['targetColumn']}: {item['message']}" for item in failures) or "No auto target succeeded."
         raise HTTPException(status_code=400, detail=detail)
 
@@ -1928,7 +2005,8 @@ def run_lasso_auto_targets(
         "status": "partial_success" if failures else "success",
         "targetCount": len(target_columns),
         "successCount": len(successful_results),
-        "skippedCount": len(skipped_results),
+        "skippedCount": len(skipped_results) + len(skipped_targets),
+        "skippedTargets": skipped_targets,
         "failedCount": len(failures),
         "failedTargets": failures,
         "candidateCount": sum(int(item.get("candidateCount") or 0) for item in results),
@@ -1948,6 +2026,19 @@ def run_lasso_auto_targets(
         },
         "targets": results,
     }
+
+
+def is_insufficient_numeric_target_data(message: Any) -> bool:
+    normalized = str(message or "").strip().lower()
+    return any(
+        marker in normalized
+        for marker in (
+            "no usable numeric target rows were found",
+            "no candidate features had at least",
+            "requires at least 10 complete numeric rows",
+            "no complete numeric rows were found",
+        )
+    )
 
 
 def build_lasso_skip_result(
@@ -3907,10 +3998,12 @@ def fetch_numeric_matrix(
     )
     columns = [target_column] + effective_features
     canonical_columns = sorted(columns)
+    target_column_key = str(target_column).upper()
     cache_key = (
         id(conn),
         str(owner).upper(),
         str(table).upper(),
+        target_column_key,
         tuple(str(column).upper() for column in canonical_columns),
         effective_sample_rows,
     )
@@ -3922,11 +4015,10 @@ def fetch_numeric_matrix(
         valid_row_count = int(numeric_matrix.shape[0])
     else:
         select_list = ", ".join(quote_identifier(column) for column in canonical_columns)
-        null_filter = " AND ".join(f"{quote_identifier(column)} IS NOT NULL" for column in canonical_columns)
         sql = (
             f"SELECT {select_list}\n"
             f"  FROM {quote_identifier(owner)}.{quote_identifier(table)}\n"
-            f" WHERE {null_filter}"
+            f" WHERE {quote_identifier(target_column)} IS NOT NULL"
         )
         binds = {"sampleRows": effective_sample_rows}
         sql += "\n   AND ROWNUM <= :sampleRows"
@@ -3940,7 +4032,8 @@ def fetch_numeric_matrix(
             except Exception:
                 pass
             cursor.execute(sql, binds)
-            numeric_matrix = np.empty((effective_sample_rows, len(canonical_columns)), dtype=float)
+            numeric_matrix = np.full((effective_sample_rows, len(canonical_columns)), np.nan, dtype=float)
+            target_index = canonical_columns.index(target_column)
             valid_row_count = 0
             while valid_row_count < effective_sample_rows:
                 rows = cursor.fetchmany(min(batch_rows, effective_sample_rows - valid_row_count))
@@ -3948,14 +4041,21 @@ def fetch_numeric_matrix(
                     break
                 for row in rows:
                     values = [to_float(value) for value in row]
-                    if any(value is None or not math.isfinite(value) for value in values):
+                    target_value = values[target_index]
+                    if target_value is None or not math.isfinite(target_value):
                         continue
-                    numeric_matrix[valid_row_count, :] = values
+                    numeric_matrix[valid_row_count, :] = [
+                        value if value is not None and math.isfinite(value) else np.nan
+                        for value in values
+                    ]
                     valid_row_count += 1
                     if valid_row_count >= effective_sample_rows:
                         break
             if not valid_row_count:
-                raise HTTPException(status_code=400, detail="No complete numeric rows were found.")
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"No usable numeric target rows were found for {target_column}.",
+                )
             numeric_matrix = numeric_matrix[:valid_row_count]
         finally:
             cursor.close()
@@ -3972,18 +4072,49 @@ def fetch_numeric_matrix(
             _ml_execution_state.matrix_cache_bytes = cached_bytes + matrix_bytes
 
     column_indexes = {column: index for index, column in enumerate(canonical_columns)}
-    x_values = numeric_matrix[:, [column_indexes[column] for column in effective_features]].copy()
     y_values = numeric_matrix[:, column_indexes[target_column]].copy()
+    minimum_feature_rows = min(10, max(2, int(math.ceil(valid_row_count * 0.2))))
+    retained_features: List[str] = []
+    feature_values = []
+    dropped_features: List[str] = []
+    imputed_cell_count = 0
+    for feature in effective_features:
+        values = numeric_matrix[:, column_indexes[feature]].copy()
+        finite_mask = np.isfinite(values)
+        if int(finite_mask.sum()) < minimum_feature_rows:
+            dropped_features.append(feature)
+            continue
+        median_value = float(np.median(values[finite_mask]))
+        missing_count = int((~finite_mask).sum())
+        if missing_count:
+            values[~finite_mask] = median_value
+            imputed_cell_count += missing_count
+        retained_features.append(feature)
+        feature_values.append(values)
+
+    if not retained_features:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"No candidate features had at least {minimum_feature_rows} usable numeric rows "
+                f"for target {target_column}."
+            ),
+        )
+    x_values = np.column_stack(feature_values)
     return (
         x_values,
         y_values,
-        effective_features,
+        retained_features,
         {
             "requestedSampleRows": int(sample_rows) if sample_rows else None,
             "effectiveSampleRows": effective_sample_rows,
             "loadedRows": valid_row_count,
             "requestedFeatureCount": len(requested_features),
-            "effectiveFeatureCount": len(effective_features),
+            "effectiveFeatureCount": len(retained_features),
+            "droppedFeatureCount": len(dropped_features),
+            "droppedFeatures": dropped_features,
+            "imputedCellCount": imputed_cell_count,
+            "missingValueStrategy": "MEDIAN_BY_FEATURE",
             "maxInMemoryRows": row_limit,
             "maxInputFeatures": feature_limit,
             "cacheHitYn": "Y" if cache_hit else "N",
