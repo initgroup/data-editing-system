@@ -22,6 +22,22 @@ def get_route_endpoint(path: str, method: str):
 
 
 class QuickEditHistoryTests(unittest.TestCase):
+    def test_primary_actions_are_above_stepper_and_sample_download_matches_m02001(self):
+        quick_html = (ROOT_DIR / "quick-edit" / "index.html").read_text(encoding="utf-8")
+        upload_html = (ROOT_DIR / "frontend" / "pages" / "M02001.html").read_text(encoding="utf-8")
+        sample_href = 'href="/samples/national_household_living_survey_sample.csv"'
+
+        intro_start = quick_html.index('<section class="qe-intro"')
+        stepper_start = quick_html.index('<nav class="qe-stepper-wrap"')
+        intro_markup = quick_html[intro_start:stepper_start]
+        self.assertIn('class="qe-intro__actions"', intro_markup)
+        self.assertIn('id="runButton"', intro_markup)
+        self.assertIn('form="qeQuickForm"', intro_markup)
+        self.assertLess(intro_markup.index('id="runButton"'), intro_markup.index('class="qe-intro__badge"'))
+        self.assertEqual(1, quick_html.count('id="runButton"'))
+        self.assertIn(sample_href, quick_html)
+        self.assertIn(sample_href, upload_html)
+
     def test_history_editing_exposes_workspace_reuse_rerun_actions(self):
         quick_html = (ROOT_DIR / "quick-edit" / "index.html").read_text(encoding="utf-8")
         quick_js = (ROOT_DIR / "quick-edit" / "js" / "quick-edit.js").read_text(encoding="utf-8")
@@ -150,6 +166,11 @@ class QuickEditHistoryTests(unittest.TestCase):
         self.assertNotIn("ranked.slice(0, 50)", render_statistics)
         self.assertIn("const highPriorityColumnCount = ranked.filter(isHighPriority).length;", render_statistics)
         self.assertIn("const violationColumnCount = ranked.filter", render_statistics)
+        self.assertIn("규칙×행 기준 총 ${R.formatNumber(totalViolations, 0)}건", render_statistics)
+        self.assertIn('label: "전체 규칙×행 위반"', render_statistics)
+        self.assertIn("50점 이상(HIGH)", render_statistics)
+        self.assertIn('id="qeStatisticsInterpretation"', quick_html)
+        self.assertIn('id="qeStatisticsMethodology"', quick_html)
         self.assertIn("전체 ${R.escapeHtml(R.formatNumber(ranked.length, 0))}개 컬럼", render_statistics)
         self.assertIn('isPriority ? " is-priority" : ""', render_statistics)
         self.assertIn('violationCount > 0 ? "is-violation" : "is-zero"', render_statistics)
@@ -161,6 +182,8 @@ class QuickEditHistoryTests(unittest.TestCase):
         self.assertIn(".qe-statistics-priority-card.is-priority", quick_css)
         self.assertIn("em.is-violation", quick_css)
         self.assertIn(".qe-statistics-extra__grid", quick_css)
+        self.assertIn(".qe-statistics-interpretation", quick_css)
+        self.assertIn(".qe-statistics-methodology__body", quick_css)
 
     def test_quick_edit_elapsed_time_matches_m04001_timezone_and_waiting_rules(self):
         renderers_js = (ROOT_DIR / "quick-edit" / "js" / "renderers.js").read_text(encoding="utf-8")
@@ -182,6 +205,20 @@ class QuickEditHistoryTests(unittest.TestCase):
         self.assertIn('data-project-mode-panel="new">', quick_html)
         self.assertIn('data-project-mode-panel="existing" hidden>', quick_html)
         self.assertIn('workspaceMode: "new"', quick_js)
+
+    def test_csv_upload_requires_and_announces_first_row_header(self):
+        quick_html = (ROOT_DIR / "quick-edit" / "index.html").read_text(encoding="utf-8")
+        quick_js = (ROOT_DIR / "quick-edit" / "js" / "quick-edit.js").read_text(encoding="utf-8")
+        quick_css = (ROOT_DIR / "quick-edit" / "css" / "quick-edit.css").read_text(encoding="utf-8")
+
+        self.assertIn('id="qeCsvHeaderRequirement"', quick_html)
+        self.assertIn("첫 행에 컬럼명(타이틀)이 포함된 파일만 사용할 수 있습니다.", quick_html)
+        self.assertIn('aria-describedby="fileDropHelp qeCsvHeaderRequirement fileMeta"', quick_html)
+        self.assertIn('const csvHeaderRequired = getExtension(meta?.name || "") === "csv";', quick_js)
+        self.assertIn('const hasHeader = extension === "csv"', quick_js)
+        self.assertIn('hasHeaderControl.disabled = csvHeaderRequired || pipelineBusy', quick_js)
+        self.assertIn('.qe-csv-header-requirement', quick_css)
+        self.assertIn('.qe-check-field[data-csv-header-required="true"]', quick_css)
         self.assertIn('state.workspaceMode = "new";', quick_js)
 
     def test_quick_edit_summary_is_compact_and_normalized(self):

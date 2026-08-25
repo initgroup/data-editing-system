@@ -382,24 +382,28 @@ def get_object_detail(req: ObjectDetailRequest, request: Request):
         if result.get("status") != "success":
             logger.warning(f"M90001_OBJECT_DETAIL failed, using dictionary fallback: {result}")
             detail_rows = fetch_dictionary_object_detail(conn, params)
-            enrich_argument_defaults(conn, detail_rows, params)
+            source_included, object_source = enrich_argument_defaults(conn, detail_rows, params)
             return {
                 "status": "success",
                 "data": detail_rows,
                 "metadata": metadata,
                 "columns": ["OBJECT_ID", "ITEM_NAME", "ITEM_VALUE", "ITEM_DESC", "ITEM_DEFAULT", "ITEM_ORDER", "DETAIL_SOURCE"],
                 "total": len(detail_rows),
-                "source": "dictionary_fallback"
+                "source": "dictionary_fallback",
+                "sourceIncluded": source_included,
+                "objectSource": object_source if source_included else None
             }
 
         detail_rows = result["data"]
-        enrich_argument_defaults(conn, detail_rows, params)
+        source_included, object_source = enrich_argument_defaults(conn, detail_rows, params)
         return {
             "status": "success",
             "data": detail_rows,
             "metadata": metadata,
             "columns": result.get("columns", []),
-            "total": result["total"]
+            "total": result["total"],
+            "sourceIncluded": source_included,
+            "objectSource": object_source if source_included else None
         }
     except Exception as e:
         logger.warning(f"M90001_OBJECT_DETAIL exception, using dictionary fallback: {str(e)}")
@@ -414,16 +418,21 @@ def get_object_detail(req: ObjectDetailRequest, request: Request):
                     "objectId": fallback_metadata.get("OBJECT_ID")
                 }
                 fallback_rows = fetch_dictionary_object_detail(conn, fallback_params)
-                enrich_argument_defaults(conn, fallback_rows, fallback_params)
+                source_included, object_source = enrich_argument_defaults(conn, fallback_rows, fallback_params)
             except Exception as fallback_error:
                 logger.warning(f"M90001 dictionary fallback failed: {str(fallback_error)}")
+                source_included, object_source = False, ""
+        else:
+            source_included, object_source = False, ""
         return {
             "status": "success",
             "data": fallback_rows,
             "metadata": fallback_metadata,
             "columns": ["OBJECT_ID", "ITEM_NAME", "ITEM_VALUE", "ITEM_DESC", "ITEM_DEFAULT", "ITEM_ORDER", "DETAIL_SOURCE"],
             "total": len(fallback_rows),
-            "source": "dictionary_fallback" if fallback_rows else "dictionary_fallback_empty"
+            "source": "dictionary_fallback" if fallback_rows else "dictionary_fallback_empty",
+            "sourceIncluded": source_included,
+            "objectSource": object_source if source_included else None
         }
     finally:
         if conn:
@@ -907,20 +916,30 @@ def fetch_rows(conn, sql: str, params: Dict[str, Any]) -> List[Dict[str, Any]]:
         if cursor:
             cursor.close()
 
-def enrich_argument_defaults(conn, rows: List[Dict[str, Any]], params: Dict[str, Any]) -> None:
+def enrich_argument_defaults(conn, rows: List[Dict[str, Any]], params: Dict[str, Any]) -> Tuple[bool, str]:
     object_type = (params.get("objectType") or "").upper()
     if object_type not in {"PROCEDURE", "FUNCTION", "PACKAGE_PROCEDURE", "PACKAGE_FUNCTION"}:
-        return
+        return False, ""
     if not rows:
-        return
+        return False, ""
 
-    defaults = {}
-    if all_arguments_has_default_value(conn):
-        defaults.update(fetch_argument_defaults(conn, params))
+    defaults = fetch_argument_defaults(conn, params)
+    source_included = False
+    object_source = ""
     if not defaults:
-        defaults.update(fetch_argument_defaults_from_source(conn, params))
+        try:
+            object_source = fetch_object_source(
+                conn,
+                str(params.get("owner") or "").upper(),
+                object_type,
+                str(params.get("objectName") or "").upper(),
+            )
+            source_included = True
+            defaults.update(parse_argument_defaults_from_source(object_source, object_type, params.get("objectName") or ""))
+        except Exception as e:
+            logger.info(f"Argument defaults could not be parsed from source: {str(e)}")
     if not defaults:
-        return
+        return source_included, object_source
 
     for row in rows:
         item_name = str(row.get("ITEM_NAME") or "").upper()
@@ -931,20 +950,7 @@ def enrich_argument_defaults(conn, rows: List[Dict[str, Any]], params: Dict[str,
             row["ITEM_DEFAULT"] = normalize_argument_default_value(default_value)
             if row.get("DETAIL_SOURCE") == "DICTIONARY":
                 row["DETAIL_SOURCE"] = "Dictionary default"
-
-def all_arguments_has_default_value(conn) -> bool:
-    sql = """
-        SELECT COUNT(*) AS CNT
-          FROM ALL_TAB_COLUMNS
-         WHERE TABLE_NAME = 'ALL_ARGUMENTS'
-           AND COLUMN_NAME = 'DEFAULT_VALUE'
-    """
-    try:
-        rows = fetch_rows(conn, sql, {})
-        return bool(rows and int(rows[0].get("CNT") or 0) > 0)
-    except Exception as e:
-        logger.info(f"ALL_ARGUMENTS.DEFAULT_VALUE is not available: {str(e)}")
-        return False
+    return source_included, object_source
 
 def fetch_argument_defaults(conn, params: Dict[str, Any]) -> Dict[str, str]:
     object_type = (params.get("objectType") or "").upper()
@@ -991,17 +997,6 @@ def fetch_argument_defaults(conn, params: Dict[str, Any]) -> Dict[str, str]:
         if value is not None:
             defaults[name] = str(value).strip()
     return defaults
-
-def fetch_argument_defaults_from_source(conn, params: Dict[str, Any]) -> Dict[str, str]:
-    object_type = (params.get("objectType") or "").upper()
-    owner = str(params.get("owner") or "").upper()
-    object_name = str(params.get("objectName") or "").upper()
-    try:
-        source = fetch_object_source(conn, owner, object_type, object_name)
-    except Exception as e:
-        logger.info(f"Argument defaults could not be parsed from source: {str(e)}")
-        return {}
-    return parse_argument_defaults_from_source(source, object_type, object_name)
 
 def parse_argument_defaults_from_source(source: str, object_type: str, object_name: str) -> Dict[str, str]:
     signature = extract_argument_signature(source, object_type, object_name)

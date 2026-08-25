@@ -28,6 +28,8 @@
         classificationDefaults: [],
         classificationSettings: [],
         selectedClassificationKey: "",
+        objectDetailRequestSeq: 0,
+        objectDetailLoadingKey: "",
         objectSourceRequestSeq: 0,
         rows: [],
         originalRows: [],
@@ -100,7 +102,10 @@
             this.classificationDefaults = [];
             this.classificationSettings = [];
             this.selectedClassificationKey = "";
+            this.objectDetailRequestSeq += 1;
+            this.objectDetailLoadingKey = "";
             this.objectSourceRequestSeq += 1;
+            this.setObjectDetailLoading(false);
             this.setDetailPresetButtonVisible(false);
             this.updateClassificationSettingsButton();
             this.closeClassificationSettings();
@@ -1106,6 +1111,11 @@
         },
 
         async selectObject(objectRow) {
+            const loadingKey = this.getNodeId(objectRow) || `${objectRow.OWNER}:${objectRow.OBJECT_TYPE}:${objectRow.OBJECT_NAME}`;
+            if (this.objectDetailLoadingKey === loadingKey) return;
+            const detailRequestSeq = this.objectDetailRequestSeq + 1;
+            this.objectDetailRequestSeq = detailRequestSeq;
+            this.objectDetailLoadingKey = loadingKey;
             this.selectedObject = objectRow;
             this.setDetailPresetButtonVisible(false);
             this.updateClassificationSettingsButton();
@@ -1116,6 +1126,7 @@
             const sourceRequestSeq = this.objectSourceRequestSeq + 1;
             this.objectSourceRequestSeq = sourceRequestSeq;
             this.renderObjectSource("Loading script...", "Loading source...");
+            this.setObjectDetailLoading(true, objectRow);
 
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/object-detail`, {
@@ -1127,6 +1138,7 @@
                         objectName: objectRow.OBJECT_NAME
                     }
                 });
+                if (detailRequestSeq !== this.objectDetailRequestSeq) return;
 
                 this.objectMeta = this.normalizeObjectMeta(json.metadata, objectRow);
                 this.renderObjectMeta();
@@ -1145,11 +1157,19 @@
                 this.selectedRowIndex = this.rows.length > 0 ? 0 : null;
                 this.renderRows();
                 this.updateDetailPresetButton();
-                this.loadObjectSource(objectRow, sourceRequestSeq);
+                if (json.sourceIncluded) {
+                    this.renderObjectSource(
+                        json.objectSource || "",
+                        json.objectSource ? "Dictionary source · detail response reused" : "No source text found."
+                    );
+                } else {
+                    this.loadObjectSource(objectRow, sourceRequestSeq);
+                }
 
                 const label = objectRow.OBJECT_TYPE === "TABLE" ? "columns" : "parameters";
                 this.updateDescription(`${objectRow.OWNER}.${objectRow.OBJECT_NAME} ${label}`);
             } catch (error) {
+                if (detailRequestSeq !== this.objectDetailRequestSeq) return;
                 console.error("[M90001] object detail load failed", error);
                 this.rows = [];
                 this.originalRows = [];
@@ -1162,6 +1182,31 @@
                 this.setDetailPresetButtonVisible(false);
                 this.renderObjectSource("", "Source was not loaded.");
                 this.updateDescription("Could not load object detail.");
+            } finally {
+                if (detailRequestSeq === this.objectDetailRequestSeq) {
+                    this.objectDetailLoadingKey = "";
+                    this.setObjectDetailLoading(false);
+                }
+            }
+        },
+
+        setObjectDetailLoading(loading, objectRow = null) {
+            const panel = getContainerEl(".env-panel");
+            const loadingBar = getContainerEl("#objectDetailLoading-M90001");
+            const label = loadingBar?.querySelector("[data-detail-loading-label]");
+            if (panel) {
+                panel.classList.toggle("is-detail-loading", Boolean(loading));
+                panel.setAttribute("aria-busy", loading ? "true" : "false");
+            }
+            if (!loadingBar) return;
+            loadingBar.hidden = !loading;
+            if (label && loading) {
+                const objectName = objectRow?.OBJECT_NAME || "선택한 객체";
+                label.textContent = getPageMessage(
+                    "loadingObjectDetail",
+                    `Loading ${objectName} details...`,
+                    { objectName }
+                );
             }
         },
 

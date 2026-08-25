@@ -57,7 +57,8 @@
       ".env-detail-toolbar .env-detail-hint": "Key와 Value는 읽기 전용 DB 객체 메타데이터입니다. 설명과 기본값만 수정하세요.",
       ".env-footer .env-detail-hint": "행은 선택한 DB 객체 기준으로 생성됩니다.",
       ".env-source-title strong": "스크립트",
-      "#objectSourceStatus-M90001": "객체를 선택하면 소스를 불러옵니다."
+      "#objectSourceStatus-M90001": "객체를 선택하면 소스를 불러옵니다.",
+      "[data-detail-loading-label]": "객체 상세 정보를 조회하고 있습니다."
     },
     "title": {
       ".env-registered-filter": "등록된 객체만 불러오기",
@@ -73,6 +74,7 @@
     }
   },
   "messages": {
+    "loadingObjectDetail": "{objectName} 상세 정보를 조회하고 있습니다.",
     "loadingClassificationSettings": "컬럼 유형 판정 기준을 불러오는 중입니다...",
     "classificationSettingsLoaded": "컬럼 유형 판정 기준 {count}건을 불러왔습니다.",
     "classificationSettingsLoadFailed": "컬럼 유형 판정 기준을 불러오지 못했습니다.",

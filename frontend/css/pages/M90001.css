@@ -59,7 +59,82 @@
 }
 
 #container-M90001 .env-panel {
+    position: relative;
     overflow-y: auto;
+}
+
+#container-M90001 .env-detail-loading {
+    position: sticky;
+    z-index: 8;
+    top: 0;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 7px 10px;
+    padding: 9px 12px 8px;
+    color: #1d4ed8;
+    border-bottom: 1px solid #bfd0f7;
+    background: rgba(239, 245, 255, 0.97);
+    box-shadow: 0 4px 12px rgba(30, 64, 175, 0.08);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+#container-M90001 .env-detail-loading[hidden] {
+    display: none !important;
+}
+
+#container-M90001 .env-detail-loading-spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid #b8caf2;
+    border-right-color: #2563eb;
+    border-radius: 50%;
+    animation: m90001-detail-spin 700ms linear infinite;
+}
+
+#container-M90001 .env-detail-loading-bar {
+    position: relative;
+    grid-column: 1 / -1;
+    overflow: hidden;
+    height: 3px;
+    border-radius: 999px;
+    background: #dbe7ff;
+}
+
+#container-M90001 .env-detail-loading-bar i {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 36%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #2563eb, #60a5fa);
+    animation: m90001-detail-progress 1.1s ease-in-out infinite;
+}
+
+#container-M90001 .env-panel.is-detail-loading .env-object-meta,
+#container-M90001 .env-panel.is-detail-loading .env-detail-source-bar,
+#container-M90001 .env-panel.is-detail-loading .env-detail-toolbar,
+#container-M90001 .env-panel.is-detail-loading .env-detail-grid {
+    opacity: 0.58;
+    pointer-events: none;
+}
+
+@keyframes m90001-detail-spin {
+    to { transform: rotate(360deg); }
+}
+
+@keyframes m90001-detail-progress {
+    0% { left: -38%; }
+    55% { left: 48%; }
+    100% { left: 102%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #container-M90001 .env-detail-loading-spinner,
+    #container-M90001 .env-detail-loading-bar i {
+        animation-duration: 2.4s;
+    }
 }
 
 #container-M90001 .env-source-panel {

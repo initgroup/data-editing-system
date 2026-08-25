@@ -403,6 +403,18 @@
         const dropZone = byId("fileDropZone", "qeDropZone");
         dropZone?.classList.toggle("has-file", Boolean(meta));
         if (dropZone) dropZone.dataset.state = meta ? "selected" : "empty";
+        const csvHeaderRequired = getExtension(meta?.name || "") === "csv";
+        const headerOption = byId("hasHeader", "qeHasHeader");
+        const headerField = headerOption?.closest(".qe-check-field");
+        const headerHelp = headerField?.querySelector("[data-header-option-help]");
+        if (csvHeaderRequired && headerOption?.type === "checkbox") headerOption.checked = true;
+        if (headerField) headerField.dataset.csvHeaderRequired = csvHeaderRequired ? "true" : "false";
+        setText(
+            headerHelp,
+            csvHeaderRequired
+                ? "CSV는 첫 행 컬럼명이 필수이므로 자동으로 고정됩니다."
+                : "CSV 선택 시 필수로 고정되며, 그 외 형식은 필요하면 변경할 수 있습니다."
+        );
     }
 
     function renderUploadProgress() {
@@ -423,7 +435,9 @@
         const fileName = selectedFile?.name || state.fileMeta?.name || "";
         const extension = getExtension(fileName);
         const hasHeaderElement = byId("hasHeader", "qeHasHeader");
-        const hasHeader = hasHeaderElement?.type === "checkbox"
+        const hasHeader = extension === "csv"
+            ? "Y"
+            : hasHeaderElement?.type === "checkbox"
             ? (hasHeaderElement.checked ? "Y" : "N")
             : (String(hasHeaderElement?.value || "Y").toUpperCase() === "N" ? "N" : "Y");
         const typeMap = { csv: "csv", tsv: "tsv", txt: "delimited", xlsx: "excel", xlsm: "excel" };
@@ -782,10 +796,16 @@
             if (control) control.disabled = pipelineBusy || readOnlyHistory || scenarioLocked;
         });
         const fileOptionsLocked = Boolean(state.tableName);
-        ["hasHeader", "qeHasHeader", "fileEncoding", "qeEncoding", "fileDelimiter", "qeDelimiter"].forEach((id) => {
+        ["fileEncoding", "qeEncoding", "fileDelimiter", "qeDelimiter"].forEach((id) => {
             const control = byId(id);
             if (control) control.disabled = pipelineBusy || readOnlyHistory || fileOptionsLocked;
         });
+        const hasHeaderControl = byId("hasHeader", "qeHasHeader");
+        const csvHeaderRequired = getExtension(selectedFile?.name || state.fileMeta?.name || "") === "csv";
+        if (hasHeaderControl) {
+            if (csvHeaderRequired && hasHeaderControl.type === "checkbox") hasHeaderControl.checked = true;
+            hasHeaderControl.disabled = csvHeaderRequired || pipelineBusy || readOnlyHistory || fileOptionsLocked;
+        }
         const fileOptions = byId("fileOptions");
         if (fileOptions) fileOptions.dataset.state = fileOptionsLocked ? "locked" : "editable";
         const workspaceLockNote = byId("workspaceLockNote");
@@ -1559,14 +1579,21 @@
     function renderDescriptiveStatistics() {
         const section = byId("qeStatisticsSummary");
         const kpis = byId("qeStatisticsKpis");
+        const interpretation = byId("qeStatisticsInterpretation");
+        const interpretationText = interpretation?.querySelector("[data-statistics-interpretation]");
+        const methodologyPanel = byId("qeStatisticsMethodology");
+        const methodologyBody = byId("qeStatisticsMethodologyBody");
         const priority = byId("qeStatisticsPriority");
         const notice = byId("qeStatisticsNotice");
         const payload = getStatisticsPayload();
-        if (!section || !kpis || !priority || !notice) return;
+        if (!section || !kpis || !interpretation || !interpretationText || !methodologyPanel || !methodologyBody || !priority || !notice) return;
 
         if (!payload || payload.available === false) {
             setHidden(section, false);
             kpis.innerHTML = "";
+            interpretation.hidden = true;
+            methodologyPanel.hidden = true;
+            methodologyBody.innerHTML = "";
             priority.innerHTML = '<div class="qe-empty">등록된 INITUP$ 원본 테이블에서 분석 가능한 컬럼 통계를 계산할 수 없습니다.</div>';
             notice.textContent = payload?.reason || payload?.notice || "대상 테이블 연결 정보를 확인해 주세요.";
             notice.hidden = false;
@@ -1608,11 +1635,42 @@
         const violationColumnCount = ranked.filter((row) => Number(row.violationCount || 0) > 0).length;
         const distribution = payload.summary || {};
         const totalViolations = ranked.reduce((sum, row) => sum + Number(row.violationCount || 0), 0);
+        const comparisonAvailable = Boolean(payload.after || insights.summary?.comparisonAvailable);
+        const scoreInputs = comparisonAvailable ? "위반·결측·분포 변화" : "위반·결측 상태";
+        interpretationText.textContent = `분석 컬럼 ${R.formatNumber(ranked.length, 0)}개 중 ${R.formatNumber(violationColumnCount, 0)}개 컬럼에서 규칙×행 기준 총 ${R.formatNumber(totalViolations, 0)}건의 위반이 발견됐고, ${scoreInputs} 등을 종합해 ${R.formatNumber(highPriorityColumnCount, 0)}개 컬럼이 우선 확인 대상으로 분류됐습니다.`;
+        interpretation.hidden = false;
+
+        const weights = insights.methodology && typeof insights.methodology === "object" ? insights.methodology : {};
+        const violationWeight = finiteNumber(weights.violationWeight) ?? 55;
+        const missingWeight = finiteNumber(weights.missingWeight) ?? 15;
+        const varianceWeight = finiteNumber(weights.varianceWeight) ?? 15;
+        const meanShiftWeight = finiteNumber(weights.meanShiftWeight) ?? 10;
+        const rangeShiftWeight = finiteNumber(weights.rangeShiftWeight) ?? 5;
+        methodologyBody.innerHTML = `<div class="qe-statistics-terms">
+            <div><strong>우선 확인 컬럼</strong><span>중요도 점수가 <b>50점 이상(HIGH)</b>인 컬럼입니다. 위반이 없어도 결측이나 분포 변화가 크면 포함될 수 있습니다.</span></div>
+            <div><strong>위반 발생 컬럼</strong><span>범주형 또는 연속형 규칙 위반 기록이 <b>1건 이상</b> 연결된 서로 다른 컬럼 수입니다.</span></div>
+            <div><strong>규칙×행 위반</strong><span>규칙 위반 결과 테이블의 기록 수입니다. 같은 원본 행이 여러 규칙을 위반하면 규칙별로 각각 계산하므로 <b>고유 원본 행 수와 다릅니다.</b></span></div>
+        </div>
+        <div class="qe-statistics-formula">
+            <strong>중요도 점수 = 최대 100점</strong>
+            <code>${R.escapeHtml(violationWeight)}×ln(1+V)/ln(1+Vmax) + ${R.escapeHtml(missingWeight)}×min(1, N/20%) + ${R.escapeHtml(varianceWeight)}×min(1, D) + ${R.escapeHtml(meanShiftWeight)}×min(1, M/2) + ${R.escapeHtml(rangeShiftWeight)}×min(1, R)</code>
+            <dl>
+                <div><dt>V / Vmax</dt><dd>현재 컬럼의 규칙×행 위반 건수 / 분석 컬럼 중 최대 위반 건수</dd></div>
+                <div><dt>N</dt><dd>원본·수정 중 더 높은 결측률</dd></div>
+                <div><dt>D</dt><dd>분산 변화율이며, 분산 비교가 불가능하면 고유값 비율 변화의 5배</dd></div>
+                <div><dt>M</dt><dd>평균 이동 거리 ÷ 원본 표준편차</dd></div>
+                <div><dt>R</dt><dd>최솟값·최댓값 이동을 전체 값 범위로 표준화한 비율</dd></div>
+            </dl>
+            <p>${comparisonAvailable
+                ? "원본과 수정 테이블을 비교할 수 있어 결측·분산·평균·범위 변화 항목을 함께 반영합니다."
+                : "수정 비교 테이블이 없어 변화 항목은 0점이며, 현재 원본의 규칙 위반과 결측률을 중심으로 계산합니다."}</p>
+        </div>`;
+        methodologyPanel.hidden = false;
         kpis.innerHTML = R.renderKpis([
-            { label: "통계 분석 컬럼", value: R.formatNumber(ranked.length, 0), tone: "primary" },
-            { label: "우선 확인 컬럼", value: R.formatNumber(highPriorityColumnCount, 0) },
-            { label: "위반 발생 컬럼", value: R.formatNumber(violationColumnCount, 0) },
-            { label: "전체 규칙 위반", value: R.formatNumber(totalViolations, 0) },
+            { label: "통계 분석 컬럼", value: R.formatNumber(ranked.length, 0), tone: "primary", help: "기초통계가 계산된 전체 컬럼" },
+            { label: "우선 확인 컬럼", value: R.formatNumber(highPriorityColumnCount, 0), help: "중요도 점수 50점 이상" },
+            { label: "위반 발생 컬럼", value: R.formatNumber(violationColumnCount, 0), help: "규칙 위반이 1건 이상인 컬럼" },
+            { label: "전체 규칙×행 위반", value: R.formatNumber(totalViolations, 0), help: "고유 행 수가 아닌 위반 기록 합계" },
             { label: "분산 감소", value: R.formatNumber(distribution.varianceDecreasedColumnCount || 0, 0), help: "수정 후 분산이 감소한 컬럼" },
             { label: "분산 증가", value: R.formatNumber(distribution.varianceIncreasedColumnCount || 0, 0), help: "수정 후 분산이 증가한 컬럼" }
         ]);

@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#102342">
     <meta name="color-scheme" content="light">
     <title>Quick Editing | IN-DEPS</title>
-    <link rel="stylesheet" href="./css/quick-edit.css?v=1.3.18">
+    <link rel="stylesheet" href="./css/quick-edit.css?v=1.3.21">
 </head>
 <body>
     <a class="qe-skip-link" href="#quickEditMain">본문 바로가기</a>
@@ -49,9 +49,26 @@
                         파일을 선택하면 프로젝트부터 모델, FLOW, 실행과 결과 분석까지 필요한 단계를 자동으로 준비합니다.
                     </p>
                 </div>
-                <div class="qe-intro__badge" aria-label="자동화 범위">
-                    <span aria-hidden="true">8</span>
-                    <span>자동 단계</span>
+                <div class="qe-intro__meta">
+                    <div class="qe-intro__actions" aria-label="자동 실행 작업">
+                        <button id="runButton" class="qe-primary-button" type="submit" form="qeQuickForm">
+                            <span>전체 자동 실행</span>
+                            <span class="qe-glyph qe-button-arrow" aria-hidden="true">›</span>
+                        </button>
+                        <button id="qeHistoryFullRerunButton" class="qe-secondary-button qe-history-rerun-button" type="button" hidden>
+                            전체 자동 재실행
+                        </button>
+                        <button id="qeHistoryFailedRerunButton" class="qe-secondary-button qe-history-rerun-button" type="button" hidden>
+                            실패단계부터 재실행
+                        </button>
+                        <button id="retryButton" class="qe-secondary-button" type="button" hidden>
+                            실패 단계부터 다시 시도
+                        </button>
+                    </div>
+                    <div class="qe-intro__badge" aria-label="자동화 범위">
+                        <span aria-hidden="true">8</span>
+                        <span>자동 단계</span>
+                    </div>
                 </div>
             </section>
 
@@ -194,7 +211,7 @@
                         <div id="fileDropZone" class="qe-dropzone" data-state="empty">
                             <input id="sourceFile" class="qe-visually-hidden" type="file"
                                    accept=".csv,.tsv,.txt,.xlsx,.xlsm"
-                                   aria-describedby="fileDropHelp fileMeta">
+                                   aria-describedby="fileDropHelp qeCsvHeaderRequirement fileMeta">
                             <label class="qe-dropzone__label" for="sourceFile">
                                 <span class="qe-dropzone__icon" aria-hidden="true">
                                     <span class="qe-glyph qe-glyph--upload">↑</span>
@@ -206,11 +223,28 @@
                                 <span class="qe-dropzone__action" aria-hidden="true">파일 찾기</span>
                             </label>
                             <p id="fileMeta" class="qe-file-meta" aria-live="polite">아직 선택한 파일이 없습니다.</p>
+                            <p id="qeCsvHeaderRequirement" class="qe-csv-header-requirement">
+                                <span aria-hidden="true">!</span>
+                                <span><strong>CSV 필수 조건</strong> 첫 행에 컬럼명(타이틀)이 포함된 파일만 사용할 수 있습니다. 퀵 에디팅은 첫 행을 자동으로 컬럼명으로 처리합니다.</span>
+                            </p>
                             <div class="qe-upload-progress" data-upload-progress hidden>
                                 <span data-upload-progress-label>파일 준비 중</span>
                                 <progress max="100" value="0" aria-label="파일 업로드 진행률"></progress>
                             </div>
                         </div>
+
+                        <a
+                            class="qe-sample-download"
+                            href="/samples/national_household_living_survey_sample.csv"
+                            download="국가통계_가구생활조사_샘플.csv"
+                            title="샘플 규칙 위반이 포함된 가상 가구생활조사 CSV 다운로드"
+                        >
+                            <span class="qe-sample-download__icon" aria-hidden="true">↓</span>
+                            <span>
+                                <strong>처음이신가요? 샘플파일 다운로드</strong>
+                                <small>M02001에서 제공하는 CSV로 바로 시작할 수 있습니다.</small>
+                            </span>
+                        </a>
 
                         <fieldset id="workspaceFieldset" class="qe-fieldset" data-workspace-fieldset>
                             <legend>작업 공간</legend>
@@ -279,7 +313,7 @@
                                     <input id="hasHeader" type="checkbox" checked>
                                     <span>
                                         <strong>첫 행을 컬럼명으로 사용</strong>
-                                        <small>해제하면 COL001 형식의 컬럼명이 자동 생성됩니다.</small>
+                                        <small data-header-option-help>CSV 선택 시 필수로 고정되며, 그 외 형식은 필요하면 변경할 수 있습니다.</small>
                                     </span>
                                 </label>
                                 <label class="qe-field" for="fileEncoding">
@@ -305,25 +339,10 @@
 
                         <p class="qe-form-message" data-form-message role="alert" hidden></p>
 
-                        <div class="qe-form__actions">
-                            <p>
-                                <span class="qe-glyph qe-glyph--info" aria-hidden="true">i</span>
-                                완료된 단계는 보존되어 오류가 나도 이어서 다시 시도할 수 있습니다.
-                            </p>
-                            <button id="runButton" class="qe-primary-button" type="submit">
-                                <span>전체 자동 실행</span>
-                                <span class="qe-glyph qe-button-arrow" aria-hidden="true">›</span>
-                            </button>
-                            <button id="qeHistoryFullRerunButton" class="qe-secondary-button qe-history-rerun-button" type="button" hidden>
-                                전체 자동 재실행
-                            </button>
-                            <button id="qeHistoryFailedRerunButton" class="qe-secondary-button qe-history-rerun-button" type="button" hidden>
-                                실패단계부터 재실행
-                            </button>
-                            <button id="retryButton" class="qe-secondary-button" type="button" hidden>
-                                실패 단계부터 다시 시도
-                            </button>
-                        </div>
+                        <p class="qe-form-guidance">
+                            <span class="qe-glyph qe-glyph--info" aria-hidden="true">i</span>
+                            완료된 단계는 보존되어 오류가 나도 이어서 다시 시도할 수 있습니다.
+                        </p>
                     </form>
                 </section>
 
@@ -491,7 +510,24 @@
                             전체 기초통계 상세
                         </button>
                     </div>
+                    <div id="qeStatisticsInterpretation" class="qe-statistics-interpretation" role="status" aria-live="polite" hidden>
+                        <span class="qe-statistics-interpretation__icon" aria-hidden="true">i</span>
+                        <p>
+                            <strong>분석 결과 해석</strong>
+                            <span data-statistics-interpretation></span>
+                        </p>
+                    </div>
                     <div id="qeStatisticsKpis" class="qe-kpi-grid" aria-label="기초통계량 핵심 지표"></div>
+                    <details id="qeStatisticsMethodology" class="qe-statistics-methodology" open hidden>
+                        <summary>
+                            <span>
+                                <strong>지표 용어와 중요도 산식</strong>
+                                <small>규칙×행 위반의 의미와 우선 확인 점수 계산 기준</small>
+                            </span>
+                            <span class="qe-statistics-methodology__toggle" aria-hidden="true">⌃</span>
+                        </summary>
+                        <div id="qeStatisticsMethodologyBody" class="qe-statistics-methodology__body"></div>
+                    </details>
                     <div id="qeStatisticsPriority" class="qe-statistics-priority" aria-label="통계 분석 컬럼 목록"></div>
                     <p id="qeStatisticsNotice" class="qe-statistics-notice" hidden></p>
                 </section>
@@ -773,6 +809,6 @@
 
     <script src="./js/api-client.js?v=1.3.4" defer></script>
     <script src="./js/renderers.js?v=1.3.6" defer></script>
-    <script src="./js/quick-edit.js?v=1.4.25" defer></script>
+    <script src="./js/quick-edit.js?v=1.4.27" defer></script>
 </body>
 </html>

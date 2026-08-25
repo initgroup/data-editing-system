@@ -618,7 +618,10 @@ SELECT M.OBJECT_ID
            , MAX(CASE WHEN ITEM_NAME = 'INIT$RESULT_OWNER' THEN ITEM_DEFAULT END) AS RESULT_OWNER
            , MAX(CASE WHEN ITEM_NAME = 'INIT$RESULT_TABLE_NAME' THEN ITEM_DEFAULT END) AS RESULT_TABLE_NAME
         FROM INIT$_TB_OBJECT_DETAIL
-       WHERE ITEM_NAME IN (
+       WHERE OWNER = :owner
+         AND OBJECT_TYPE = :objectType
+         AND OBJECT_NAME = :objectName
+         AND ITEM_NAME IN (
                 'INIT$RESULT_CREATE_YN'
               , 'INIT$RESULT_OWNER'
               , 'INIT$RESULT_TABLE_NAME'
@@ -743,10 +746,9 @@ WITH SAVED AS (
          , ITEM_ORDER
          , 'SAVED' AS DETAIL_SOURCE
       FROM INIT$_TB_OBJECT_DETAIL
-     WHERE (
-              (:objectId IS NOT NULL AND OBJECT_ID = :objectId)
-           OR (:objectId IS NULL AND OWNER = :owner AND OBJECT_TYPE = :objectType AND OBJECT_NAME = :objectName)
-           )
+     WHERE OWNER = :owner
+       AND OBJECT_TYPE = :objectType
+       AND OBJECT_NAME = :objectName
 ),
 DICTIONARY_ROWS AS (
     SELECT CAST(:objectId AS NUMBER) AS OBJECT_ID
@@ -843,10 +845,6 @@ SELECT COALESCE(S.OBJECT_ID, D.OBJECT_ID) AS OBJECT_ID
   FROM DICTIONARY_ROWS D
   LEFT JOIN SAVED S
     ON S.ITEM_NAME = D.ITEM_NAME
-   AND (
-           (:objectId IS NOT NULL AND S.OBJECT_ID = :objectId)
-        OR (:objectId IS NULL AND S.OWNER = :owner AND S.OBJECT_TYPE = :objectType AND S.OBJECT_NAME = :objectName)
-       )
  ORDER BY D.ITEM_ORDER
 ;
 
