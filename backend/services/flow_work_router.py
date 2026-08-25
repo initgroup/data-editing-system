@@ -83,6 +83,7 @@ def normalize_quick_edit_summary(value: Any) -> Dict[str, Any]:
         "editTableName": text_value("editTableName", 128).upper(),
         "fileName": text_value("fileName", 255),
         "fileSize": int_value("fileSize"),
+        "estimatedColumnCount": int_value("estimatedColumnCount"),
         "estimatedRowCount": int_value("estimatedRowCount"),
         "flowName": text_value("flowName", 200),
         "jobCount": int_value("jobCount"),

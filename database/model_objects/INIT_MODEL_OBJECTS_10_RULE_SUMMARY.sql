@@ -17,14 +17,81 @@ CREATE OR REPLACE PACKAGE "INIT$_PKG_RULE_SUMMARY" AS
         p_target_owner        IN VARCHAR2 DEFAULT NULL,
         p_target_table        IN VARCHAR2 DEFAULT NULL,
         p_run_source_type     IN VARCHAR2 DEFAULT 'DATA_WORK',
-        p_run_id              IN NUMBER   DEFAULT 0
+        p_run_id              IN NUMBER   DEFAULT 0,
+        p_max_condition_count IN NUMBER   DEFAULT 5,
+        p_max_rule_combinations IN NUMBER DEFAULT 1000
     );
+
+    FUNCTION GET_LAST_EFFECTIVE_MAX_COLUMNS RETURN NUMBER;
+    FUNCTION GET_LAST_EFFECTIVE_MAX_RULES_PER_PAIR RETURN NUMBER;
+    FUNCTION GET_LAST_CANDIDATE_COUNT RETURN NUMBER;
+    FUNCTION GET_LAST_REQUESTED_MAX_CONDITION_COUNT RETURN NUMBER;
+    FUNCTION GET_LAST_EFFECTIVE_MAX_CONDITION_COUNT RETURN NUMBER;
+    FUNCTION GET_LAST_MAX_RULE_COMBINATIONS RETURN NUMBER;
+    FUNCTION GET_LAST_ESTIMATED_COMBINATION_COUNT RETURN NUMBER;
+    FUNCTION GET_LAST_EVALUATED_COMBINATION_COUNT RETURN NUMBER;
+    FUNCTION GET_LAST_ADJUSTMENT_REASON RETURN VARCHAR2;
 END "INIT$_PKG_RULE_SUMMARY";
 /
 
 CREATE OR REPLACE PACKAGE BODY "INIT$_PKG_RULE_SUMMARY" AS
     TYPE t_column_list IS TABLE OF VARCHAR2(128);
     TYPE t_index_list IS TABLE OF PLS_INTEGER;
+
+    g_last_effective_max_columns NUMBER := 0;
+    g_last_effective_max_rules_per_pair NUMBER := 0;
+    g_last_candidate_count NUMBER := 0;
+    g_last_requested_max_condition_count NUMBER := 0;
+    g_last_effective_max_condition_count NUMBER := 0;
+    g_last_max_rule_combinations NUMBER := 0;
+    g_last_estimated_combination_count NUMBER := 0;
+    g_last_evaluated_combination_count NUMBER := 0;
+    g_last_adjustment_reason VARCHAR2(4000) := 'NONE';
+
+    FUNCTION GET_LAST_EFFECTIVE_MAX_COLUMNS RETURN NUMBER IS
+    BEGIN
+        RETURN g_last_effective_max_columns;
+    END;
+
+    FUNCTION GET_LAST_EFFECTIVE_MAX_RULES_PER_PAIR RETURN NUMBER IS
+    BEGIN
+        RETURN g_last_effective_max_rules_per_pair;
+    END;
+
+    FUNCTION GET_LAST_CANDIDATE_COUNT RETURN NUMBER IS
+    BEGIN
+        RETURN g_last_candidate_count;
+    END;
+
+    FUNCTION GET_LAST_REQUESTED_MAX_CONDITION_COUNT RETURN NUMBER IS
+    BEGIN
+        RETURN g_last_requested_max_condition_count;
+    END;
+
+    FUNCTION GET_LAST_EFFECTIVE_MAX_CONDITION_COUNT RETURN NUMBER IS
+    BEGIN
+        RETURN g_last_effective_max_condition_count;
+    END;
+
+    FUNCTION GET_LAST_MAX_RULE_COMBINATIONS RETURN NUMBER IS
+    BEGIN
+        RETURN g_last_max_rule_combinations;
+    END;
+
+    FUNCTION GET_LAST_ESTIMATED_COMBINATION_COUNT RETURN NUMBER IS
+    BEGIN
+        RETURN g_last_estimated_combination_count;
+    END;
+
+    FUNCTION GET_LAST_EVALUATED_COMBINATION_COUNT RETURN NUMBER IS
+    BEGIN
+        RETURN g_last_evaluated_combination_count;
+    END;
+
+    FUNCTION GET_LAST_ADJUSTMENT_REASON RETURN VARCHAR2 IS
+    BEGIN
+        RETURN g_last_adjustment_reason;
+    END;
 
     FUNCTION normalize_identifier(p_value IN VARCHAR2, p_label IN VARCHAR2) RETURN VARCHAR2 IS
         v_value VARCHAR2(128);
@@ -284,7 +351,9 @@ CREATE OR REPLACE PACKAGE BODY "INIT$_PKG_RULE_SUMMARY" AS
         p_target_owner        IN VARCHAR2 DEFAULT NULL,
         p_target_table        IN VARCHAR2 DEFAULT NULL,
         p_run_source_type     IN VARCHAR2 DEFAULT 'DATA_WORK',
-        p_run_id              IN NUMBER   DEFAULT 0
+        p_run_id              IN NUMBER   DEFAULT 0,
+        p_max_condition_count IN NUMBER   DEFAULT 5,
+        p_max_rule_combinations IN NUMBER DEFAULT 1000
     ) IS
         v_model_name VARCHAR2(128);
         v_case_id_col VARCHAR2(128);
@@ -306,11 +375,133 @@ CREATE OR REPLACE PACKAGE BODY "INIT$_PKG_RULE_SUMMARY" AS
         v_max_columns NUMBER;
         v_max_rules_per_pair NUMBER;
         v_max_input_rows NUMBER;
-        v_effective_max_condition_count NUMBER := 1;
+        v_requested_max_condition_count NUMBER := 5;
+        v_normalized_max_condition_count NUMBER := 5;
+        v_effective_max_condition_count NUMBER := 0;
+        v_max_possible_condition_count NUMBER := 0;
+        v_target_available_count NUMBER := 0;
+        v_max_rule_combinations NUMBER := 1000;
+        v_estimated_combination_count NUMBER := 0;
+        v_evaluated_combination_count NUMBER := 0;
+        v_budget_slot_count NUMBER := 1;
+        v_budget_per_slot NUMBER := 0;
+        v_budget_remainder NUMBER := 0;
+        v_current_slot_budget NUMBER := 0;
+        v_current_slot_evaluated NUMBER := 0;
+        v_adjustment_reason VARCHAR2(4000) := 'NONE';
         v_loaded_count NUMBER := 0;
         v_symmetric_pair_mode VARCHAR2(1) := 'N';
         v_run_source_type VARCHAR2(30);
         v_run_id NUMBER;
+
+        PROCEDURE append_adjustment_reason(p_reason IN VARCHAR2) IS
+        BEGIN
+            IF p_reason IS NULL OR TRIM(p_reason) IS NULL THEN
+                RETURN;
+            END IF;
+            IF v_adjustment_reason = 'NONE' THEN
+                v_adjustment_reason := SUBSTR(TRIM(p_reason), 1, 4000);
+            ELSIF INSTR(v_adjustment_reason, TRIM(p_reason)) = 0 THEN
+                v_adjustment_reason := SUBSTR(v_adjustment_reason || '; ' || TRIM(p_reason), 1, 4000);
+            END IF;
+        END append_adjustment_reason;
+
+        FUNCTION choose_count(
+            p_item_count IN PLS_INTEGER,
+            p_pick_count IN PLS_INTEGER
+        ) RETURN NUMBER IS
+            v_pick_count PLS_INTEGER;
+            v_result NUMBER := 1;
+        BEGIN
+            IF p_pick_count < 0 OR p_item_count < p_pick_count THEN
+                RETURN 0;
+            END IF;
+            IF p_pick_count = 0 OR p_item_count = p_pick_count THEN
+                RETURN 1;
+            END IF;
+
+            v_pick_count := LEAST(p_pick_count, p_item_count - p_pick_count);
+            FOR i IN 1 .. v_pick_count LOOP
+                v_result := v_result * (p_item_count - v_pick_count + i) / i;
+            END LOOP;
+            RETURN v_result;
+        END choose_count;
+
+        FUNCTION estimate_rule_combinations(p_condition_count IN PLS_INTEGER) RETURN NUMBER IS
+            v_total NUMBER := 0;
+            v_term NUMBER;
+            v_available_count PLS_INTEGER;
+        BEGIN
+            IF p_condition_count <= 0 THEN
+                RETURN 0;
+            END IF;
+
+            FOR condition_size IN 1 .. p_condition_count LOOP
+                IF v_symmetric_pair_mode = 'Y' THEN
+                    v_term := choose_count(
+                        v_candidates.COUNT,
+                        condition_size + 1
+                    );
+                    v_total := v_total + v_term;
+                ELSE
+                    FOR target_idx IN 1 .. v_targets.COUNT LOOP
+                        v_available_count := v_candidates.COUNT;
+                        IF contains_column(v_candidates, v_targets(target_idx)) THEN
+                            v_available_count := v_available_count - 1;
+                        END IF;
+                        v_term := choose_count(
+                            v_available_count,
+                            condition_size
+                        );
+                        v_total := v_total + v_term;
+                    END LOOP;
+                END IF;
+            END LOOP;
+
+            RETURN v_total;
+        END estimate_rule_combinations;
+
+        PROCEDURE begin_combination_budget_slot(
+            p_target_idx IN PLS_INTEGER,
+            p_condition_count IN PLS_INTEGER
+        ) IS
+            v_slot_index NUMBER;
+        BEGIN
+            IF v_symmetric_pair_mode = 'Y' THEN
+                v_slot_index := 0;
+                IF p_target_idx > 1 THEN
+                    FOR prior_target_idx IN 1 .. (p_target_idx - 1) LOOP
+                        v_slot_index := v_slot_index + LEAST(
+                            v_effective_max_condition_count,
+                            GREATEST(0, prior_target_idx - 1)
+                        );
+                    END LOOP;
+                END IF;
+                IF p_condition_count >= p_target_idx THEN
+                    v_current_slot_budget := 0;
+                    v_current_slot_evaluated := 0;
+                    RETURN;
+                END IF;
+                v_slot_index := v_slot_index + p_condition_count;
+            ELSE
+                v_slot_index := ((p_target_idx - 1) * v_effective_max_condition_count) + p_condition_count;
+            END IF;
+            v_current_slot_budget := v_budget_per_slot
+                + CASE WHEN v_slot_index <= v_budget_remainder THEN 1 ELSE 0 END;
+            v_current_slot_evaluated := 0;
+        END begin_combination_budget_slot;
+
+        FUNCTION current_budget_slot_available RETURN BOOLEAN IS
+        BEGIN
+            RETURN v_evaluated_combination_count < v_max_rule_combinations
+               AND v_current_slot_evaluated < v_current_slot_budget;
+        END current_budget_slot_available;
+
+        PROCEDURE mark_combination_evaluated IS
+        BEGIN
+            v_evaluated_combination_count := v_evaluated_combination_count + 1;
+            v_current_slot_evaluated := v_current_slot_evaluated + 1;
+        END mark_combination_evaluated;
 
         PROCEDURE load_multi_condition_rule(p_indexes IN t_index_list) IS
             v_condition_count PLS_INTEGER := p_indexes.COUNT;
@@ -329,6 +520,11 @@ CREATE OR REPLACE PACKAGE BODY "INIT$_PKG_RULE_SUMMARY" AS
             IF v_condition_count < 3 OR v_condition_count > 5 THEN
                 RETURN;
             END IF;
+            IF NOT current_budget_slot_available THEN
+                RETURN;
+            END IF;
+
+            mark_combination_evaluated;
 
             FOR i IN 1 .. v_condition_count LOOP
                 v_col := v_candidates(p_indexes(i));
@@ -489,6 +685,9 @@ SELECT ]' || sql_literal(v_run_source_type) || q'[,
         ) IS
             v_max_idx PLS_INTEGER;
         BEGIN
+            IF NOT current_budget_slot_available THEN
+                RETURN;
+            END IF;
             IF p_depth > p_needed THEN
                 load_multi_condition_rule(p_indexes);
                 RETURN;
@@ -499,6 +698,7 @@ SELECT ]' || sql_literal(v_run_source_type) || q'[,
                 RETURN;
             END IF;
             FOR idx IN p_start_idx .. v_max_idx LOOP
+                EXIT WHEN NOT current_budget_slot_available;
                 IF v_candidates(idx) = v_result_col THEN
                     CONTINUE;
                 END IF;
@@ -514,6 +714,16 @@ SELECT ]' || sql_literal(v_run_source_type) || q'[,
         END collect_multi_condition_rules;
     BEGIN
         disable_parallel_execution;
+
+        g_last_effective_max_columns := 0;
+        g_last_effective_max_rules_per_pair := 0;
+        g_last_candidate_count := 0;
+        g_last_requested_max_condition_count := 0;
+        g_last_effective_max_condition_count := 0;
+        g_last_max_rule_combinations := 0;
+        g_last_estimated_combination_count := 0;
+        g_last_evaluated_combination_count := 0;
+        g_last_adjustment_reason := 'NONE';
 
         v_model_name := normalize_identifier(p_model_name, 'model_name');
         IF NOT is_null_token(p_case_id_column_name) THEN
@@ -540,9 +750,25 @@ SELECT ]' || sql_literal(v_run_source_type) || q'[,
         v_min_support_count := GREATEST(1, NVL(p_min_support_count, 30));
         v_min_confidence := GREATEST(0, LEAST(1, NVL(p_min_confidence, 0.7)));
         v_min_lift := GREATEST(0, NVL(p_min_lift, 1));
-        v_max_columns := GREATEST(2, LEAST(80, NVL(p_max_columns, 25)));
-        v_max_rules_per_pair := GREATEST(1, LEAST(200, NVL(p_max_rules_per_pair, 25)));
+        v_max_columns := GREATEST(2, LEAST(80, TRUNC(NVL(p_max_columns, 25))));
+        v_max_rules_per_pair := GREATEST(1, LEAST(200, TRUNC(NVL(p_max_rules_per_pair, 25))));
         v_max_input_rows := CASE WHEN p_max_input_rows IS NULL OR p_max_input_rows <= 0 THEN NULL ELSE LEAST(p_max_input_rows, 1000000) END;
+        v_requested_max_condition_count := GREATEST(1, TRUNC(NVL(p_max_condition_count, 5)));
+        v_normalized_max_condition_count := LEAST(5, v_requested_max_condition_count);
+        v_max_rule_combinations := GREATEST(1, LEAST(100000, TRUNC(NVL(p_max_rule_combinations, 1000))));
+
+        IF NVL(p_max_columns, 25) <> v_max_columns THEN
+            append_adjustment_reason('Candidate column limit was constrained to the supported range 2..80.');
+        END IF;
+        IF NVL(p_max_rules_per_pair, 25) <> v_max_rules_per_pair THEN
+            append_adjustment_reason('Rules-per-combination limit was constrained to the supported range 1..200.');
+        END IF;
+        IF NVL(p_max_condition_count, 5) <> v_normalized_max_condition_count THEN
+            append_adjustment_reason('Condition count was constrained to the supported range 1..5.');
+        END IF;
+        IF NVL(p_max_rule_combinations, 1000) <> v_max_rule_combinations THEN
+            append_adjustment_reason('Combination budget was constrained to the supported range 1..100000.');
+        END IF;
 
         IF v_max_input_rows IS NOT NULL THEN
             v_base_query := 'SELECT * FROM (' || v_base_query || ') WHERE ROWNUM <= ' || TO_CHAR(v_max_input_rows);
@@ -580,25 +806,87 @@ SELECT ]' || sql_literal(v_run_source_type) || q'[,
         END IF;
 
         IF v_candidates.COUNT = 0 OR v_targets.COUNT = 0 THEN
+            g_last_effective_max_columns := v_max_columns;
+            g_last_effective_max_rules_per_pair := v_max_rules_per_pair;
+            g_last_candidate_count := v_candidates.COUNT;
+            g_last_requested_max_condition_count := v_requested_max_condition_count;
+            g_last_effective_max_condition_count := 0;
+            g_last_max_rule_combinations := v_max_rule_combinations;
+            g_last_estimated_combination_count := 0;
+            g_last_evaluated_combination_count := 0;
+            append_adjustment_reason('No usable candidate or target columns were found.');
+            g_last_adjustment_reason := v_adjustment_reason;
             DBMS_OUTPUT.PUT_LINE('[WARN] Conditional rule summary skipped. No usable candidate/target columns.');
             RETURN;
         END IF;
 
-        v_effective_max_condition_count :=
-            CASE
-                WHEN v_candidates.COUNT <= 6 THEN 5
-                WHEN v_candidates.COUNT <= 9 THEN 3
-                WHEN v_candidates.COUNT <= 15 THEN 2
-                ELSE 1
-            END;
+        FOR target_idx IN 1 .. v_targets.COUNT LOOP
+            v_target_available_count := v_candidates.COUNT;
+            IF contains_column(v_candidates, v_targets(target_idx)) THEN
+                v_target_available_count := v_target_available_count - 1;
+            END IF;
+            v_max_possible_condition_count := GREATEST(
+                v_max_possible_condition_count,
+                v_target_available_count
+            );
+        END LOOP;
+        v_max_possible_condition_count := LEAST(5, v_max_possible_condition_count);
+        v_effective_max_condition_count := LEAST(
+            v_normalized_max_condition_count,
+            v_max_possible_condition_count
+        );
 
-        IF v_effective_max_condition_count < 5 THEN
-            DBMS_OUTPUT.PUT_LINE('[WARN] Conditional rule max condition count adjusted to '
-                || v_effective_max_condition_count
-                || ' because candidate column count is '
-                || v_candidates.COUNT
-                || '. Limit candidate columns to 6 or fewer to calculate up to 5 conditions safely.');
+        IF v_effective_max_condition_count < v_normalized_max_condition_count THEN
+            append_adjustment_reason(
+                'Condition count was reduced because only '
+                || v_max_possible_condition_count
+                || ' distinct condition column(s) are available for a target.'
+            );
         END IF;
+
+        v_estimated_combination_count := estimate_rule_combinations(v_effective_max_condition_count);
+        IF v_symmetric_pair_mode = 'Y' THEN
+            v_budget_slot_count := 0;
+            FOR target_idx IN 1 .. v_targets.COUNT LOOP
+                v_budget_slot_count := v_budget_slot_count + LEAST(
+                    v_effective_max_condition_count,
+                    GREATEST(0, target_idx - 1)
+                );
+            END LOOP;
+            v_budget_slot_count := GREATEST(1, v_budget_slot_count);
+        ELSE
+            v_budget_slot_count := GREATEST(1, v_targets.COUNT * v_effective_max_condition_count);
+        END IF;
+        v_budget_per_slot := FLOOR(v_max_rule_combinations / v_budget_slot_count);
+        v_budget_remainder := MOD(v_max_rule_combinations, v_budget_slot_count);
+
+        IF v_estimated_combination_count > v_max_rule_combinations THEN
+            append_adjustment_reason(
+                'The combination space exceeds the evaluation budget of '
+                || v_max_rule_combinations
+                || '; the budget was distributed across target and condition-size groups without reducing the requested condition count.'
+            );
+        END IF;
+
+        g_last_effective_max_columns := v_max_columns;
+        g_last_effective_max_rules_per_pair := v_max_rules_per_pair;
+        g_last_candidate_count := v_candidates.COUNT;
+        g_last_requested_max_condition_count := v_requested_max_condition_count;
+        g_last_effective_max_condition_count := v_effective_max_condition_count;
+        g_last_max_rule_combinations := v_max_rule_combinations;
+        g_last_estimated_combination_count := v_estimated_combination_count;
+        g_last_adjustment_reason := v_adjustment_reason;
+
+        DBMS_OUTPUT.PUT_LINE('[INFO] Conditional rule limits: requestedColumns=' || NVL(TO_CHAR(p_max_columns), '(default)')
+            || ', effectiveColumnLimit=' || v_max_columns
+            || ', selectedCandidates=' || v_candidates.COUNT
+            || ', requestedRulesPerCombination=' || NVL(TO_CHAR(p_max_rules_per_pair), '(default)')
+            || ', effectiveRulesPerCombination=' || v_max_rules_per_pair
+            || ', requestedMaxConditions=' || v_requested_max_condition_count
+            || ', effectiveMaxConditions=' || v_effective_max_condition_count
+            || ', maxCombinations=' || v_max_rule_combinations
+            || ', estimatedCombinations=' || v_estimated_combination_count
+            || ', adjustmentReason=' || v_adjustment_reason);
 
         IF UPPER(TRIM(NVL(p_clear_existing_yn, 'Y'))) = 'Y' THEN
             DELETE /*+ NO_PARALLEL */ FROM "INIT$_TB_RULEDISC_ASSOC_SUM"
@@ -611,18 +899,24 @@ SELECT ]' || sql_literal(v_run_source_type) || q'[,
         END IF;
 
         FOR target_idx IN 1 .. v_targets.COUNT LOOP
+            EXIT WHEN v_evaluated_combination_count >= v_max_rule_combinations;
             v_result_col := v_targets(target_idx);
 
-            FOR cond_idx IN 1 .. v_candidates.COUNT LOOP
-                v_condition_col := v_candidates(cond_idx);
-                IF v_condition_col = v_result_col THEN
-                    CONTINUE;
-                END IF;
-                IF v_symmetric_pair_mode = 'Y' AND cond_idx >= target_idx THEN
-                    CONTINUE;
-                END IF;
+            begin_combination_budget_slot(target_idx, 1);
+            IF v_effective_max_condition_count >= 1 THEN
+                FOR cond_idx IN 1 .. v_candidates.COUNT LOOP
+                    EXIT WHEN NOT current_budget_slot_available;
+                    v_condition_col := v_candidates(cond_idx);
+                    IF v_condition_col = v_result_col THEN
+                        CONTINUE;
+                    END IF;
+                    IF v_symmetric_pair_mode = 'Y' AND cond_idx >= target_idx THEN
+                        CONTINUE;
+                    END IF;
 
-                v_sql := q'[
+                    mark_combination_evaluated;
+
+                    v_sql := q'[
 INSERT /*+ NO_PARALLEL */ INTO "INIT$_TB_RULEDISC_ASSOC_SUM" (
     "RUN_SOURCE_TYPE",
     "RUN_ID",
@@ -740,18 +1034,24 @@ SELECT ]' || sql_literal(v_run_source_type) || q'[,
   FROM RANKED
  WHERE RN__ <= ]' || TO_CHAR(v_max_rules_per_pair);
 
-                EXECUTE IMMEDIATE v_sql;
-                v_loaded_count := v_loaded_count + SQL%ROWCOUNT;
-            END LOOP;
+                    EXECUTE IMMEDIATE v_sql;
+                    v_loaded_count := v_loaded_count + SQL%ROWCOUNT;
+                END LOOP;
+            END IF;
 
-            IF v_effective_max_condition_count >= 2 AND v_candidates.COUNT >= 2 THEN
+            begin_combination_budget_slot(target_idx, 2);
+            IF current_budget_slot_available
+               AND v_effective_max_condition_count >= 2
+               AND v_candidates.COUNT >= 2 THEN
                 FOR cond1_idx IN 1 .. v_candidates.COUNT - 1 LOOP
+                    EXIT WHEN NOT current_budget_slot_available;
                     v_condition_col := v_candidates(cond1_idx);
                     IF v_condition_col = v_result_col THEN
                         CONTINUE;
                     END IF;
 
                     FOR cond2_idx IN cond1_idx + 1 .. v_candidates.COUNT LOOP
+                        EXIT WHEN NOT current_budget_slot_available;
                         v_condition_col2 := v_candidates(cond2_idx);
                         IF v_condition_col2 = v_result_col THEN
                             CONTINUE;
@@ -759,6 +1059,8 @@ SELECT ]' || sql_literal(v_run_source_type) || q'[,
                         IF v_symmetric_pair_mode = 'Y' AND cond2_idx >= target_idx THEN
                             CONTINUE;
                         END IF;
+
+                        mark_combination_evaluated;
 
                         v_sql := q'[
 INSERT /*+ NO_PARALLEL */ INTO "INIT$_TB_RULEDISC_ASSOC_SUM" (
@@ -891,8 +1193,11 @@ SELECT ]' || sql_literal(v_run_source_type) || q'[,
                 END LOOP;
             END IF;
 
-            IF v_effective_max_condition_count >= 3 AND v_candidates.COUNT >= 4 THEN
+            IF v_effective_max_condition_count >= 3
+               AND v_candidates.COUNT >= 4 THEN
                 FOR condition_size IN 3 .. LEAST(v_effective_max_condition_count, v_candidates.COUNT - 1) LOOP
+                    begin_combination_budget_slot(target_idx, condition_size);
+                    CONTINUE WHEN NOT current_budget_slot_available;
                     DECLARE
                         v_indexes t_index_list := t_index_list();
                     BEGIN
@@ -902,13 +1207,18 @@ SELECT ]' || sql_literal(v_run_source_type) || q'[,
             END IF;
         END LOOP;
 
+        g_last_evaluated_combination_count := v_evaluated_combination_count;
+        g_last_adjustment_reason := v_adjustment_reason;
+
         DBMS_OUTPUT.PUT_LINE('[OK] Conditional rule summary loaded: ' || v_loaded_count
             || ' rows (model=' || v_model_name
             || ', candidates=' || v_candidates.COUNT
             || ', targets=' || v_targets.COUNT
+            || ', evaluatedCombinations=' || v_evaluated_combination_count
             || ', source=' || v_rule_source || ')');
     EXCEPTION
         WHEN OTHERS THEN
+            g_last_evaluated_combination_count := v_evaluated_combination_count;
             ROLLBACK;
             RAISE;
     END LOAD_CONDITIONAL_RULES;

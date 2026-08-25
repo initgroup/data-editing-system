@@ -88,6 +88,9 @@ class M02001UploadOptimizationTests(unittest.TestCase):
         self.assertEqual(cursor.batch_sizes, [1967, 1967, 1066])
         self.assertEqual(result["commitCount"], 1)
         self.assertEqual(connection.commit_count, 1)
+        self.assertGreaterEqual(result["parseAndBindSeconds"], 0)
+        self.assertGreaterEqual(result["oracleLoadSeconds"], 0)
+        self.assertGreaterEqual(result["commitSeconds"], 0)
 
     def test_direct_path_mode_loads_only_the_disposable_stage(self):
         connection = FakeDirectPathConnection()
@@ -113,6 +116,8 @@ class M02001UploadOptimizationTests(unittest.TestCase):
         self.assertEqual(len(connection.loads), 1)
         self.assertEqual(connection.loads[0][0:2], ("OWNER1", table_name))
         self.assertEqual(cursor.batch_sizes, [])
+        self.assertGreaterEqual(result["parseAndBindSeconds"], 0)
+        self.assertGreaterEqual(result["oracleLoadSeconds"], 0)
 
     def test_staged_finalization_returns_cached_result_on_retry(self):
         request = object()

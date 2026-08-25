@@ -229,7 +229,18 @@
                     tableComment: payload.tableComment || "",
                     useYn: "Y",
                     sortOrder: payload.sortOrder || null,
-                    autoDesignYn: "Y"
+                    autoDesignYn: "N"
+                }
+            });
+        }
+
+        provisionDefaultDesign(payload) {
+            return this.request("/M02002/scenario-table/provision-default-design", {
+                method: "POST",
+                body: {
+                    projectId: payload.projectId,
+                    scenarioId: payload.scenarioId,
+                    scenarioTableId: payload.scenarioTableId
                 }
             });
         }

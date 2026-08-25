@@ -112,6 +112,7 @@ def create_internal_success_message(method: str, result: Dict[str, Any]) -> str:
             f"{result.get('successCount', 0)}/{result.get('taskCount', 0)} task(s) succeeded."
             f"{skipped_summary}"
             f"{failure_summary}"
+            f"{ml_analysis_service.format_rule_summary_limit_message(result)}"
         )
     if method == "INTEGRATED_RULE_VIOLATION_DETECT":
         partial = str(result.get("status") or "").lower() == "partial_success"

@@ -231,6 +231,7 @@ class QuickEditHistoryTests(unittest.TestCase):
             "ownerName": "init$edit01",
             "tableName": "initup$qedit",
             "fileSize": "2048",
+            "estimatedColumnCount": "56",
             "estimatedRowCount": -1,
         })
 
@@ -239,9 +240,44 @@ class QuickEditHistoryTests(unittest.TestCase):
         self.assertEqual("INIT$EDIT01", summary["ownerName"])
         self.assertEqual("INITUP$QEDIT", summary["tableName"])
         self.assertEqual(2048, summary["fileSize"])
+        self.assertEqual(56, summary["estimatedColumnCount"])
         self.assertIsNone(summary["estimatedRowCount"])
         self.assertEqual("2026-08-21T05:30:00", summary["projectCreatedAt"])
         self.assertEqual("2026-08-21T05:30:01", summary["scenarioCreatedAt"])
+
+    def test_target_table_progress_keeps_uploaded_column_and_row_counts(self):
+        quick_html = (ROOT_DIR / "quick-edit" / "index.html").read_text(encoding="utf-8")
+        quick_js = (ROOT_DIR / "quick-edit" / "js" / "quick-edit.js").read_text(encoding="utf-8")
+        quick_css = (ROOT_DIR / "quick-edit" / "css" / "quick-edit.css").read_text(encoding="utf-8")
+
+        self.assertIn('data-artifact-metrics', quick_html)
+        self.assertIn('data-result-dataset-summary', quick_html)
+        self.assertIn('data-result-dataset-metrics', quick_html)
+        self.assertIn('state.columnCount = upload.columnCount !== null', quick_js)
+        self.assertIn('metrics.push(`컬럼 ${R.formatNumber(columnCount, 0)}개`)', quick_js)
+        self.assertIn('metrics.push(`로우 ${R.formatNumber(rowCount, 0)}건`)', quick_js)
+        self.assertIn('function renderResultDatasetSummary()', quick_js)
+        self.assertIn('renderResultDatasetSummary();', quick_js)
+        self.assertIn('estimatedColumnCount: state.columnCount === null ? null', quick_js)
+        self.assertIn('.qe-artifact-metrics', quick_css)
+        self.assertIn('.qe-result-dataset-summary', quick_css)
+
+    def test_target_table_stage_is_separated_and_shows_timing_breakdown(self):
+        quick_html = (ROOT_DIR / "quick-edit" / "index.html").read_text(encoding="utf-8")
+        quick_js = (ROOT_DIR / "quick-edit" / "js" / "quick-edit.js").read_text(encoding="utf-8")
+        api_client_js = (ROOT_DIR / "quick-edit" / "js" / "api-client.js").read_text(encoding="utf-8")
+        quick_css = (ROOT_DIR / "quick-edit" / "css" / "quick-edit.css").read_text(encoding="utf-8")
+
+        self.assertIn('id="qeTargetTimingDetails"', quick_html)
+        self.assertIn('data-target-timing-bottleneck', quick_html)
+        self.assertIn('function renderTargetStageTimings()', quick_js)
+        self.assertIn('["Oracle 적재", Number(timings.oracleLoadSeconds)]', quick_js)
+        self.assertIn('["통계 수집", Number(timings.statisticsSeconds)]', quick_js)
+        self.assertIn('completeStep(3, `대상 테이블 등록 완료', quick_js)
+        self.assertIn('setStep(4, "기본 4단계 모델과 FLOW 자동 설계를 저장하고 있습니다."', quick_js)
+        self.assertIn('provisionDefaultDesign(payload)', api_client_js)
+        self.assertIn('autoDesignYn: "N"', api_client_js)
+        self.assertIn('.qe-target-timing', quick_css)
 
     def test_completed_workspace_summary_shows_menu_keys_and_kst_created_times(self):
         quick_html = (ROOT_DIR / "quick-edit" / "index.html").read_text(encoding="utf-8")
@@ -286,6 +322,7 @@ class QuickEditHistoryTests(unittest.TestCase):
         self.assertIn("PROJECT_NAME VARCHAR2(200) PATH '$.projectName'", sql)
         self.assertIn("PROJECT_CREATED_AT VARCHAR2(64) PATH '$.projectCreatedAt'", sql)
         self.assertIn("SCENARIO_CREATED_AT VARCHAR2(64) PATH '$.scenarioCreatedAt'", sql)
+        self.assertIn("ESTIMATED_COLUMN_COUNT NUMBER PATH '$.estimatedColumnCount'", sql)
         self.assertIn("PR.SUMMARY_YN = 'Y'", sql)
         self.assertIn("LEGACY_RUN_SCOPE", sql)
         self.assertIn("P.PROJECT_CODE LIKE 'QEDIT\\_%'", sql)
@@ -296,6 +333,7 @@ class QuickEditHistoryTests(unittest.TestCase):
 
         self.assertIn("R.RUN_TYPE = 'QUICK_EDIT'", sql)
         self.assertIn("'$.quickEditSummary' NULL ON ERROR", sql)
+        self.assertIn("ESTIMATED_COLUMN_COUNT NUMBER PATH '$.estimatedColumnCount'", sql)
         self.assertIn("PAGED_RUNS", sql)
         self.assertIn("P.PROJECT_CODE LIKE 'QE\\_%'", sql)
         self.assertIn("P.PROJECT_CODE LIKE 'QEDIT\\_%'", sql)
@@ -373,6 +411,8 @@ class QuickEditHistoryTests(unittest.TestCase):
             "SCENARIO_ID": 20,
             "OWNER_NAME": "INIT$EDIT01",
             "TABLE_NAME": "INITUP$QEDIT",
+            "ESTIMATED_COLUMN_COUNT": 56,
+            "ESTIMATED_ROW_COUNT": 300,
             "STATUS": "SUCCESS",
         }
 
@@ -394,6 +434,8 @@ class QuickEditHistoryTests(unittest.TestCase):
             response = endpoint(1041, request)
 
         self.assertEqual("success", response["status"])
+        self.assertEqual(56, response["data"]["restoreState"]["columnCount"])
+        self.assertEqual(300, response["data"]["restoreState"]["rowCount"])
         list_history.assert_called_once_with(conn, 1041)
         list_full_nodes.assert_not_called()
         get_run.assert_not_called()

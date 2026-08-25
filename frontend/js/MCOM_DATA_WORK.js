@@ -436,6 +436,9 @@
                 P_MIN_CONFIDENCE: "paramDescViolationMinConfidence",
                 P_MIN_LIFT: "paramDescViolationMinLift",
                 P_MAX_RULE_SUMMARY_COLUMNS: "paramDescMaxRuleSummaryColumns",
+                P_MAX_RULE_SUMMARY_PER_PAIR: "paramDescMaxRuleSummaryPerPair",
+                P_MAX_RULE_CONDITION_COUNT: "paramDescMaxRuleConditionCount",
+                P_MAX_RULE_COMBINATIONS: "paramDescMaxRuleCombinations",
                 P_MAX_RULES: "paramDescMaxRules",
                 P_SYMBOLIC_MAX_RULES: "paramDescSymbolicMaxRules",
                 P_MAX_VIOLATIONS_PER_RULE: "paramDescMaxViolationsPerRule",
@@ -1621,8 +1624,10 @@
                         { itemName: "P_CATEGORICAL_COLUMNS", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescCategoricalColumns", "Comma-separated categorical columns; (auto) uses profiled columns"), itemDefault: "(auto)" },
                         { itemName: "P_MIN_RULE_SUPPORT_COUNT", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMinRuleSupportCount", "Minimum association rule support row count"), itemDefault: "30" },
                         { itemName: "P_MIN_RULE_LIFT", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMinRuleLift", "Minimum lift for stored association-rule summaries"), itemDefault: "1" },
-                        { itemName: "P_MAX_RULE_SUMMARY_COLUMNS", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMaxRuleSummaryColumns", "Maximum columns included in association rule summary; 9 enables rules with up to three conditions"), itemDefault: "9" },
-                        { itemName: "P_MAX_RULE_SUMMARY_PER_PAIR", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMaxRuleSummaryPerPair", "Maximum summarized rules per column pair"), itemDefault: "50" },
+                        { itemName: "P_MAX_RULE_SUMMARY_COLUMNS", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMaxRuleSummaryColumns", "Maximum candidate columns considered for association-rule summaries"), itemDefault: "50" },
+                        { itemName: "P_MAX_RULE_SUMMARY_PER_PAIR", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMaxRuleSummaryPerPair", "Maximum summarized rules stored per target/condition-column combination (1-200)"), itemDefault: "50" },
+                        { itemName: "P_MAX_RULE_CONDITION_COUNT", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMaxRuleConditionCount", "Maximum X-condition count per categorical rule (1 to 5); the default is 5"), itemDefault: "5" },
+                        { itemName: "P_MAX_RULE_COMBINATIONS", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMaxRuleCombinations", "Maximum target and condition-column combinations evaluated"), itemDefault: "1000" },
                         { itemName: "P_TARGET_COLUMN", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescTargetColumn", "Dependent variable column"), itemDefault: "(auto)" },
                         { itemName: "P_MAX_FEATURES", itemValue: "NUMBER", itemDesc: this.getMessage("paramDescMaxFeatures", "Maximum selected feature count"), itemDefault: "10" },
                         { itemName: "P_CLUSTER_USAGE_MODE", itemValue: "VARCHAR2", itemDesc: this.getMessage("paramDescClusterUsageMode", "Cluster usage: NONE, PREFER_SAME_CLUSTER, or WITHIN_CLUSTER_ONLY; non-NONE requires the same run's relationship network"), itemDefault: "PREFER_SAME_CLUSTER" },
@@ -4241,9 +4246,6 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                 && this.getDataWorkPreviousResultTableFallback(this.currentJob)
             ) {
                 return this.getDataWorkPreviousResultTableFallback(this.currentJob);
-            }
-            if (name === "P_MAX_RULE_SUMMARY_COLUMNS" && value === "50") {
-                return "9";
             }
             return value;
         },

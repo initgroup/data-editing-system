@@ -515,6 +515,7 @@ def build_quick_edit_history_detail(run_row: Dict[str, Any], node_rows: List[Dic
     scenario_table_id = _quick_history_int(run_row.get("SCENARIO_TABLE_ID"))
     flow_id = _quick_history_int(run_row.get("FLOW_ID"))
     flow_run_id = _quick_history_int(run_row.get("FLOW_RUN_ID"))
+    column_count = _quick_history_int(run_row.get("ESTIMATED_COLUMN_COUNT"))
     row_count = _quick_history_int(run_row.get("ESTIMATED_ROW_COUNT"))
     message = str(run_row.get("MESSAGE") or "").strip()
     owner_name = str(run_row.get("OWNER_NAME") or "").strip()
@@ -564,6 +565,7 @@ def build_quick_edit_history_detail(run_row: Dict[str, Any], node_rows: List[Dic
             "scenarioCreatedAt": run_row.get("SCENARIO_CREATED_AT"),
             "tableOwner": owner_name,
             "tableName": table_name,
+            "columnCount": column_count,
             "rowCount": row_count,
             "scenarioTableId": scenario_table_id,
             "jobIds": job_ids,

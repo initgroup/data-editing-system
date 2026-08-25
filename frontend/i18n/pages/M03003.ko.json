@@ -26,6 +26,9 @@
     "exportJsonTitle": "현재 그리드 페이지를 JSON으로 내보냅니다."
   },
   "messages": {
-    "paramDescMaxRuleSummaryColumns": "범주형 규칙 요약에 사용할 최대 후보 컬럼 수입니다. 기본값 9는 계산량을 제한하면서 조건 2~3개 규칙을 생성할 수 있게 합니다."
+    "paramDescMaxRuleSummaryColumns": "범주형 규칙 요약에 고려할 후보 컬럼 수 상한(2~80)입니다. 규칙 하나의 X 조건 개수와는 다른 값입니다.",
+    "paramDescMaxRuleSummaryPerPair": "결과 컬럼과 조건 컬럼 조합별로 저장할 규칙 요약의 최대 개수(1~200)입니다.",
+    "paramDescMaxRuleConditionCount": "범주형 규칙 하나에 탐색할 X 조건 컬럼 수의 상한(1~5)입니다. 기본값은 5이며 실제 발견 규칙은 후보 수와 지지도·신뢰도·향상도 기준에 따라 더 적을 수 있습니다.",
+    "paramDescMaxRuleCombinations": "평가할 결과 컬럼과 조건 컬럼 조합의 최대 개수입니다. 초과 시 조건 수를 낮추지 않고 결과 컬럼·조건 수별로 예산을 나누어 탐색합니다."
   }
 }

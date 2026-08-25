@@ -69,12 +69,12 @@
         },
         {
           "key": "P_MAX_RULE_SUMMARY_COLUMNS",
-          "comment": "규칙 요약 최대 컬럼 수",
+          "comment": "규칙 요약 후보 컬럼 수 상한(2~80). 규칙당 X 조건 수가 아닙니다.",
           "defaultValue": "50"
         },
         {
           "key": "P_MAX_RULE_SUMMARY_PER_PAIR",
-          "comment": "컬럼 쌍별 최대 요약 개수",
+          "comment": "결과/조건 컬럼 조합별 저장할 규칙 요약 최대 개수(1~200)",
           "defaultValue": "50"
         },
         {
@@ -96,6 +96,16 @@
           "key": "P_RUN_ID",
           "comment": "같은 DATA_WORK/FLOW_WORK 실행 결과를 연결하는 Run ID",
           "defaultValue": ":INIT$RunId"
+        },
+        {
+          "key": "P_MAX_RULE_CONDITION_COUNT",
+          "comment": "범주형 규칙 하나에 탐색할 X 조건 컬럼 수의 상한(1~5). 기본값은 5이며, 실제 발견 규칙은 후보 수와 지지도·신뢰도·향상도 기준에 따라 더 적을 수 있습니다.",
+          "defaultValue": "5"
+        },
+        {
+          "key": "P_MAX_RULE_COMBINATIONS",
+          "comment": "평가할 결과 컬럼과 조건 컬럼 조합의 최대 개수. 조합 공간이 더 크면 조건 수를 낮추지 않고 결과 컬럼·조건 수별로 예산을 나누어 탐색합니다.",
+          "defaultValue": "1000"
         }
       ]
     },
@@ -755,13 +765,23 @@
         },
         {
           "key": "P_MAX_RULE_SUMMARY_COLUMNS",
-          "comment": "Apriori 규칙 요약 최대 컬럼 수",
+          "comment": "Apriori 규칙 요약 후보 컬럼 수 상한(2~80). 규칙당 X 조건 수가 아닙니다.",
           "defaultValue": "50"
         },
         {
           "key": "P_MAX_RULE_SUMMARY_PER_PAIR",
-          "comment": "Apriori 컬럼 쌍별 최대 요약 개수",
+          "comment": "Apriori 결과/조건 컬럼 조합별 저장할 규칙 요약 최대 개수(1~200)",
           "defaultValue": "50"
+        },
+        {
+          "key": "P_MAX_RULE_CONDITION_COUNT",
+          "comment": "범주형 규칙 하나에 탐색할 X 조건 컬럼 수의 상한(1~5). 기본값은 5이며, 실제 발견 규칙은 후보 수와 지지도·신뢰도·향상도 기준에 따라 더 적을 수 있습니다.",
+          "defaultValue": "5"
+        },
+        {
+          "key": "P_MAX_RULE_COMBINATIONS",
+          "comment": "평가할 결과 컬럼과 조건 컬럼 조합의 최대 개수. 조합 공간이 더 크면 조건 수를 낮추지 않고 결과 컬럼·조건 수별로 예산을 나누어 탐색합니다.",
+          "defaultValue": "1000"
         },
         {
           "key": "P_TARGET_COLUMN",

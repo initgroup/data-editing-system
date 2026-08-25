@@ -1739,6 +1739,20 @@ progress::-moz-progress-bar {
     white-space: nowrap;
 }
 
+.qe-artifact-metrics {
+    display: block;
+    margin-top: 3px;
+    color: var(--qe-muted);
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.35;
+    white-space: normal;
+}
+
+.qe-artifact-metrics[hidden] {
+    display: none;
+}
+
 .qe-artifact-list > div[data-state="success"] dd,
 .qe-artifact-list > div.is-complete dd {
     color: var(--qe-success);
@@ -1752,6 +1766,74 @@ progress::-moz-progress-bar {
 .qe-artifact-list > div[data-state="failed"] dd,
 .qe-artifact-list > div.is-failed dd {
     color: var(--qe-danger);
+}
+
+.qe-target-timing {
+    padding: 11px 14px 13px;
+    border-top: 1px solid var(--qe-line-soft);
+    background: #f8faff;
+}
+
+.qe-target-timing[hidden] {
+    display: none;
+}
+
+.qe-target-timing summary {
+    display: flex;
+    cursor: pointer;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    color: var(--qe-ink-soft);
+    font-size: 10px;
+    font-weight: 900;
+}
+
+.qe-target-timing summary strong {
+    color: var(--qe-brand);
+    font-family: var(--qe-mono);
+}
+
+.qe-target-timing > p {
+    margin: 9px 0 7px;
+    color: #8a570b;
+    font-size: 10px;
+    font-weight: 800;
+}
+
+.qe-target-timing dl {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 5px 12px;
+    margin: 0;
+}
+
+.qe-target-timing dl > div {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: 7px;
+}
+
+.qe-target-timing dt,
+.qe-target-timing dd {
+    margin: 0;
+    font-size: 9px;
+}
+
+.qe-target-timing dt {
+    overflow: hidden;
+    color: var(--qe-muted);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.qe-target-timing dd {
+    color: var(--qe-ink-soft);
+    font-family: var(--qe-mono);
+    font-weight: 800;
+    white-space: nowrap;
 }
 
 .qe-artifact-chip {
@@ -2245,6 +2327,34 @@ progress::-moz-progress-bar {
     display: flex;
     align-items: center;
     gap: 9px;
+}
+
+.qe-result-dataset-summary {
+    display: flex;
+    min-height: 40px;
+    flex-direction: column;
+    justify-content: center;
+    padding: 6px 12px;
+    border: 1px solid #cbd9f6;
+    border-radius: 11px;
+    background: var(--qe-brand-pale);
+    white-space: nowrap;
+}
+
+.qe-result-dataset-summary[hidden] {
+    display: none;
+}
+
+.qe-result-dataset-summary small {
+    color: var(--qe-muted);
+    font-size: 9px;
+    font-weight: 800;
+}
+
+.qe-result-dataset-summary strong {
+    color: var(--qe-brand-strong);
+    font-family: var(--qe-mono);
+    font-size: 11px;
 }
 
 .qe-detail-analysis-button {
@@ -5180,6 +5290,10 @@ button.qe-rule-card:hover,
         width: 100%;
         align-items: stretch;
         flex-direction: column;
+    }
+
+    .qe-result-dataset-summary {
+        align-items: center;
     }
 
     .qe-statistics-summary {

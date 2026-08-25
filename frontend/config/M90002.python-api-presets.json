@@ -612,163 +612,177 @@
             {
               "key": "INPUT.P_MAX_RULE_SUMMARY_COLUMNS",
               "value": "IN NUMBER",
-              "comment": "Maximum columns included in association rule summary; 9 enables rules with up to three conditions",
-              "defaultValue": "9",
+              "comment": "Maximum candidate columns considered for association-rule summaries (2-80). This is not the X-condition count per rule.",
+              "defaultValue": "50",
               "order": 14
             },
             {
               "key": "INPUT.P_MAX_RULE_SUMMARY_PER_PAIR",
               "value": "IN NUMBER",
-              "comment": "Maximum summarized rules per column pair",
+              "comment": "Maximum summarized rules stored per target/condition-column combination (1-200)",
               "defaultValue": "50",
               "order": 15
+            },
+            {
+              "key": "INPUT.P_MAX_RULE_CONDITION_COUNT",
+              "value": "IN NUMBER",
+              "comment": "Maximum X-condition columns searched per categorical rule (1-5). The default is 5; fewer may be found when candidate count or support/confidence/lift filters do not qualify a rule.",
+              "defaultValue": "5",
+              "order": 16
+            },
+            {
+              "key": "INPUT.P_MAX_RULE_COMBINATIONS",
+              "value": "IN NUMBER",
+              "comment": "Maximum target/condition-column combinations evaluated. Larger spaces are sampled by distributing this budget across targets and condition sizes without lowering the requested condition count.",
+              "defaultValue": "1000",
+              "order": 17
             },
             {
               "key": "INPUT.P_TARGET_COLUMN",
               "value": "IN VARCHAR2",
               "comment": "Continuous target column. (auto) runs all eligible continuous targets.",
               "defaultValue": "(auto)",
-              "order": 16
+              "order": 18
             },
             {
               "key": "INPUT.P_MAX_FEATURES",
               "value": "IN NUMBER",
               "comment": "Maximum LASSO/Symbolic feature count",
               "defaultValue": "10",
-              "order": 17
+              "order": 19
             },
             {
               "key": "INPUT.P_CLUSTER_USAGE_MODE",
               "value": "IN VARCHAR2",
               "comment": "Cluster usage: NONE disables clusters; PREFER_SAME_CLUSTER prefers same-cluster features but allows cross-cluster features; WITHIN_CLUSTER_ONLY restricts to the same cluster. Non-NONE requires the same run's RELATION_NETWORK result.",
               "defaultValue": "PREFER_SAME_CLUSTER",
-              "order": 18
+              "order": 20
             },
             {
               "key": "INPUT.P_SAMPLE_ROWS",
               "value": "IN NUMBER",
               "comment": "Maximum sampled rows",
               "defaultValue": "50000",
-              "order": 19
+              "order": 21
             },
             {
               "key": "INPUT.P_ALPHA",
               "value": "IN NUMBER",
               "comment": "LASSO alpha. (auto) lets the service select it.",
               "defaultValue": "(auto)",
-              "order": 20
+              "order": 22
             },
             {
               "key": "INPUT.P_MAX_ITERATIONS",
               "value": "IN NUMBER",
               "comment": "Maximum Symbolic/robust estimator iterations",
               "defaultValue": "10000",
-              "order": 21
+              "order": 23
             },
             {
               "key": "INPUT.P_MAX_SYMBOLIC_TERMS",
               "value": "IN NUMBER",
               "comment": "Maximum retained polynomial Symbolic Regression term count",
               "defaultValue": "8",
-              "order": 22
+              "order": 24
             },
             {
               "key": "INPUT.P_USE_PYSR",
               "value": "IN VARCHAR2",
               "comment": "Use PySR symbolic regression Y/N",
               "defaultValue": "N",
-              "order": 23
+              "order": 25
             },
             {
               "key": "INPUT.P_LINEAR_FIRST_YN",
               "value": "IN VARCHAR2",
               "comment": "Try a linear symbolic rule before nonlinear search",
               "defaultValue": "Y",
-              "order": 24
+              "order": 26
             },
             {
               "key": "INPUT.P_LINEAR_R2_THRESHOLD",
               "value": "IN NUMBER",
               "comment": "R2 threshold for accepting the linear symbolic rule",
               "defaultValue": "0.995",
-              "order": 25
+              "order": 27
             },
             {
               "key": "INPUT.P_MIN_R2_SCORE",
               "value": "IN NUMBER",
               "comment": "Minimum LASSO R2 score for symbolic regression",
               "defaultValue": "0.7",
-              "order": 26
+              "order": 28
             },
             {
               "key": "INPUT.P_DIMENSION_REDUCTION_MODE",
               "value": "IN VARCHAR2",
               "comment": "Source-feature screening mode: AUTO, PCA, or NONE. PCA retains representative original columns only.",
               "defaultValue": "AUTO",
-              "order": 27
+              "order": 29
             },
             {
               "key": "INPUT.P_ESTIMATION_MODE",
               "value": "IN VARCHAR2",
               "comment": "Linear estimator: AUTO, OLS, or ROBUST_IRLS. Robust mode uses deterministic Student-t-style IRLS.",
               "defaultValue": "AUTO",
-              "order": 28
+              "order": 30
             },
             {
               "key": "INPUT.P_MONTE_CARLO_MODE",
               "value": "IN VARCHAR2",
               "comment": "Fixed-seed stability validation: OFF, AUTO, BOOTSTRAP, or REPEATED_HOLDOUT. It does not randomize correction predictions.",
               "defaultValue": "AUTO",
-              "order": 29
+              "order": 31
             },
             {
               "key": "INPUT.P_MONTE_CARLO_ITERATIONS",
               "value": "IN NUMBER",
               "comment": "Stability-validation resample count, clamped to 5-50",
               "defaultValue": "20",
-              "order": 30
+              "order": 32
             },
             {
               "key": "INPUT.P_MONTE_CARLO_MAX_ROWS",
               "value": "IN NUMBER",
               "comment": "Maximum rows used only for stability validation, clamped to 100-10000",
               "defaultValue": "5000",
-              "order": 31
+              "order": 33
             },
             {
               "key": "INPUT.P_BANFF_MODE",
               "value": "IN VARCHAR2",
               "comment": "Single-ratio candidate mode: AUTO, RATIO, or OFF. This is Banff-inspired and is not a full Banff implementation.",
               "defaultValue": "AUTO",
-              "order": 32
+              "order": 34
             },
             {
               "key": "INPUT.P_MAX_AUTO_TARGETS",
               "value": "IN NUMBER",
               "comment": "Maximum auto continuous target count",
               "defaultValue": "10",
-              "order": 33
+              "order": 35
             },
             {
               "key": "INPUT.P_CONTINUE_ON_ERROR",
               "value": "IN VARCHAR2",
               "comment": "Continue remaining subtasks when one fails. Y can return partial completion, so review failed-task details.",
               "defaultValue": "Y",
-              "order": 34
+              "order": 36
             },
             {
               "key": "INPUT.P_RUN_SOURCE_TYPE",
               "value": "IN VARCHAR2",
               "comment": "DATA_WORK or FLOW_WORK",
               "defaultValue": ":INIT$RunSourceType",
-              "order": 35
+              "order": 37
             },
             {
               "key": "INPUT.P_RUN_ID",
               "value": "IN NUMBER",
               "comment": "Run ID linking profiling, relationship-network, and rule results from the same DATA_WORK or FLOW_WORK execution",
               "defaultValue": ":INIT$RunId",
-              "order": 36
+              "order": 38
             },
             {
               "key": "OUTPUT.status",

@@ -43,6 +43,13 @@ class TableRequest(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
+class ScenarioDefaultDesignRequest(BaseModel):
+    projectId: int
+    scenarioId: int
+    scenarioTableId: int
+    model_config = ConfigDict(extra="forbid")
+
+
 class SqlRequest(BaseModel):
     sql: str
     limit: Optional[int] = 100
@@ -145,6 +152,19 @@ def get_table_tree(
         raw_data = result.get("data", [])
         has_more = len(raw_data) > safe_limit
         data = raw_data[:safe_limit]
+        timings = {
+            "registrationSeconds": round(registration_seconds, 3),
+            "automationSeconds": round(float((automation.get("timings") or {}).get("totalSeconds") or 0), 3),
+            "responseQuerySeconds": round(response_query_seconds, 3),
+            "totalSeconds": round(time.perf_counter() - save_started_at, 3),
+        }
+        logger.info(
+            "M02002 scenario table save timing project=%s scenario=%s scenario_table=%s timings=%s",
+            project_id,
+            scenario_id,
+            scenario_table_id,
+            timings,
+        )
         return {
             "status": "success",
             "data": data,
@@ -340,6 +360,7 @@ def get_scenario_tables(request: Request, projectId: int, scenarioId: Optional[i
 
 @router.post("/scenario-table/save")
 def save_scenario_table(req: ScenarioTableRequest, request: Request):
+    save_started_at = time.perf_counter()
     project_id = require_int(req.projectId, "projectId")
     scenario_id = require_int(req.scenarioId, "scenarioId")
     owner_name = (req.ownerName or "").strip().upper()
@@ -461,6 +482,7 @@ def save_scenario_table(req: ScenarioTableRequest, request: Request):
         snapshot_created = bool(created_snapshot)
         created_snapshot = None
 
+        registration_seconds = time.perf_counter() - save_started_at
         automation = {
             "requested": str(req.autoDesignYn or "N").strip().upper() == "Y",
             "status": "skipped",
@@ -492,11 +514,13 @@ def save_scenario_table(req: ScenarioTableRequest, request: Request):
                     "message": get_exception_detail(automation_error),
                 }
 
+        response_query_started_at = time.perf_counter()
         result = execute_query(conn, "M02002_SCENARIO_TABLE_LIST", {
             "projectId": project_id,
             "scenarioId": scenario_id
         })
         data = result.get("data", [])
+        response_query_seconds = time.perf_counter() - response_query_started_at
         saved = next((row for row in data if row.get("SCENARIO_TABLE_ID") == scenario_table_id), None)
         if automation.get("status") == "success":
             message = "Scenario table and default four-stage flow design saved."
@@ -511,6 +535,7 @@ def save_scenario_table(req: ScenarioTableRequest, request: Request):
             "list": data,
             "snapshotCreated": snapshot_created,
             "automation": automation,
+            "timings": timings,
         }
     except HTTPException:
         if conn:
@@ -525,6 +550,64 @@ def save_scenario_table(req: ScenarioTableRequest, request: Request):
             drop_created_snapshot(cursor, *created_snapshot)
         logger.exception("M02002 scenario table save failed.")
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+@router.post("/scenario-table/provision-default-design")
+def provision_scenario_default_design(req: ScenarioDefaultDesignRequest, request: Request):
+    project_id = require_int(req.projectId, "projectId")
+    scenario_id = require_int(req.scenarioId, "scenarioId")
+    scenario_table_id = require_int(req.scenarioTableId, "scenarioTableId")
+    started_at = time.perf_counter()
+    conn = None
+    cursor = None
+    try:
+        conn = get_target_db_connection(request)
+        cursor = conn.cursor()
+        require_project_scenario_access(cursor, request, project_id, scenario_id)
+        cursor.close()
+        cursor = None
+        automation = scenario_default_design_service.provision_default_design(
+            conn,
+            project_id=project_id,
+            scenario_id=scenario_id,
+            scenario_table_id=scenario_table_id,
+        )
+        conn.commit()
+        logger.info(
+            "M02002 default design timing project=%s scenario=%s scenario_table=%s timings=%s",
+            project_id,
+            scenario_id,
+            scenario_table_id,
+            automation.get("timings") or {},
+        )
+        return {
+            "status": "success",
+            "message": "Default four-stage jobs and flow design saved.",
+            "automation": automation,
+            "timings": {
+                **(automation.get("timings") or {}),
+                "requestTotalSeconds": round(time.perf_counter() - started_at, 3),
+            },
+        }
+    except HTTPException:
+        if conn:
+            conn.rollback()
+        raise
+    except Exception as error:
+        if conn:
+            conn.rollback()
+        logger.exception(
+            "M02002 default design provisioning failed. project_id=%s scenario_id=%s scenario_table_id=%s",
+            project_id,
+            scenario_id,
+            scenario_table_id,
+        )
+        raise HTTPException(status_code=500, detail=get_exception_detail(error)) from error
     finally:
         if cursor:
             cursor.close()

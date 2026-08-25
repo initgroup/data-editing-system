@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#102342">
     <meta name="color-scheme" content="light">
     <title>Quick Editing | IN-DEPS</title>
-    <link rel="stylesheet" href="./css/quick-edit.css?v=1.3.21">
+    <link rel="stylesheet" href="./css/quick-edit.css?v=1.3.24">
 </head>
 <body>
     <a class="qe-skip-link" href="#quickEditMain">본문 바로가기</a>
@@ -388,11 +388,17 @@
                         </div>
                         <div data-artifact="table" data-state="waiting">
                             <dt>대상 테이블</dt>
-                            <dd data-artifact-value>대기</dd>
+                            <dd>
+                                <span data-artifact-value>대기</span>
+                                <small class="qe-artifact-metrics" data-artifact-metrics hidden></small>
+                            </dd>
                         </div>
                         <div data-artifact="models" data-state="waiting">
                             <dt>모델 작업</dt>
-                            <dd data-artifact-value>4단계 대기</dd>
+                            <dd>
+                                <span data-artifact-value>4단계 대기</span>
+                                <small class="qe-artifact-metrics" data-design-timing hidden></small>
+                            </dd>
                         </div>
                         <div data-artifact="flow" data-state="waiting">
                             <dt>FLOW 설계</dt>
@@ -403,6 +409,15 @@
                             <dd data-artifact-value>대기</dd>
                         </div>
                     </dl>
+
+                    <details id="qeTargetTimingDetails" class="qe-target-timing" open hidden>
+                        <summary>
+                            <span>4단계 대상 테이블 처리시간</span>
+                            <strong data-target-timing-total>-</strong>
+                        </summary>
+                        <p data-target-timing-bottleneck></p>
+                        <dl data-target-timing-list></dl>
+                    </details>
                 </aside>
             </div>
 
@@ -490,6 +505,10 @@
                         <p>오류가 많은 규칙을 우선 표시합니다. 카드를 누르면 상세 규칙을 확인할 수 있습니다.</p>
                     </div>
                     <div class="qe-result-header-actions">
+                        <div class="qe-result-dataset-summary" data-result-dataset-summary hidden>
+                            <small>분석 대상 데이터</small>
+                            <strong data-result-dataset-metrics>-</strong>
+                        </div>
                         <span class="qe-success-stamp">
                             <span class="qe-glyph qe-glyph--check" aria-hidden="true">✓</span>
                             분석 완료
@@ -807,8 +826,8 @@
         <button type="button" data-toast-close aria-label="알림 닫기">×</button>
     </div>
 
-    <script src="./js/api-client.js?v=1.3.4" defer></script>
+    <script src="./js/api-client.js?v=1.3.5" defer></script>
     <script src="./js/renderers.js?v=1.3.6" defer></script>
-    <script src="./js/quick-edit.js?v=1.4.27" defer></script>
+    <script src="./js/quick-edit.js?v=1.4.30" defer></script>
 </body>
 </html>

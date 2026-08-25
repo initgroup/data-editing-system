@@ -164,6 +164,7 @@ def execute_web_api_job(
             f"Integrated rule discovery completed. "
             f"{result.get('successCount', 0)}/{result.get('taskCount', 0)} task(s) succeeded."
             f"{format_integrated_skipped_summary(result)}"
+            f"{format_rule_summary_limit_message(result)}"
         )
     if method == "INTEGRATED_RULE_VIOLATION_DETECT":
         result = run_integrated_rule_violation_detect(conn, payload)
@@ -1629,6 +1630,97 @@ def raise_for_partial_result(result: Dict[str, Any], label: str) -> None:
     raise HTTPException(status_code=409, detail=f"{label} partially completed. {detail}")
 
 
+def read_rule_summary_runtime_limits(
+    cursor,
+    requested_columns: int,
+    requested_rules_per_combination: int,
+    requested_condition_count: int,
+    requested_combinations: int,
+) -> Dict[str, Any]:
+    effective_columns = clamp(requested_columns, 2, 80)
+    effective_rules_per_combination = clamp(requested_rules_per_combination, 1, 200)
+    effective_condition_count = clamp(requested_condition_count, 1, 5)
+    effective_combinations = clamp(requested_combinations, 1, 100000)
+    fallback_reasons = []
+    if effective_columns != requested_columns:
+        fallback_reasons.append("Candidate column limit was constrained to 2..80.")
+    if effective_rules_per_combination != requested_rules_per_combination:
+        fallback_reasons.append("Rules-per-combination limit was constrained to 1..200.")
+    if effective_condition_count != requested_condition_count:
+        fallback_reasons.append("Condition count was constrained to 1..5.")
+    if effective_combinations != requested_combinations:
+        fallback_reasons.append("Combination budget was constrained to 1..100000.")
+    runtime_values: Dict[str, Any] = {
+        "effectiveColumns": effective_columns,
+        "effectiveRulesPerCombination": effective_rules_per_combination,
+        "selectedCandidates": None,
+        "requestedConditionCount": requested_condition_count,
+        "effectiveConditionCount": effective_condition_count,
+        "effectiveCombinations": effective_combinations,
+        "estimatedCombinations": None,
+        "evaluatedCombinations": None,
+        "adjustmentReason": "; ".join(fallback_reasons) or "NONE",
+    }
+    callfunc = getattr(cursor, "callfunc", None)
+    if not callable(callfunc):
+        return runtime_values
+
+    getters = (
+        ("effectiveColumns", "INIT$_PKG_RULE_SUMMARY.GET_LAST_EFFECTIVE_MAX_COLUMNS", int),
+        ("effectiveRulesPerCombination", "INIT$_PKG_RULE_SUMMARY.GET_LAST_EFFECTIVE_MAX_RULES_PER_PAIR", int),
+        ("selectedCandidates", "INIT$_PKG_RULE_SUMMARY.GET_LAST_CANDIDATE_COUNT", int),
+        ("requestedConditionCount", "INIT$_PKG_RULE_SUMMARY.GET_LAST_REQUESTED_MAX_CONDITION_COUNT", int),
+        ("effectiveConditionCount", "INIT$_PKG_RULE_SUMMARY.GET_LAST_EFFECTIVE_MAX_CONDITION_COUNT", int),
+        ("effectiveCombinations", "INIT$_PKG_RULE_SUMMARY.GET_LAST_MAX_RULE_COMBINATIONS", int),
+        ("estimatedCombinations", "INIT$_PKG_RULE_SUMMARY.GET_LAST_ESTIMATED_COMBINATION_COUNT", int),
+        ("evaluatedCombinations", "INIT$_PKG_RULE_SUMMARY.GET_LAST_EVALUATED_COMBINATION_COUNT", int),
+        ("adjustmentReason", "INIT$_PKG_RULE_SUMMARY.GET_LAST_ADJUSTMENT_REASON", str),
+    )
+    try:
+        for key, function_name, return_type in getters:
+            value = callfunc(function_name, return_type)
+            if value is not None:
+                runtime_values[key] = int(value) if return_type is int else str(value)
+    except Exception:
+        # Rolling deployments may temporarily run against the previous package spec.
+        # The requested values remain visible even when session runtime getters are unavailable.
+        return runtime_values
+    return runtime_values
+
+
+def format_rule_summary_limit_message(result: Dict[str, Any]) -> str:
+    task_results = result.get("results") if isinstance(result.get("results"), list) else []
+    categorical = next(
+        (
+            item
+            for item in task_results
+            if isinstance(item, dict) and str(item.get("task") or "").upper() == "CATEGORICAL_APRIORI"
+        ),
+        result if str(result.get("task") or "").upper() == "CATEGORICAL_APRIORI" else None,
+    )
+    if not isinstance(categorical, dict):
+        return ""
+    limits = categorical.get("ruleSummaryLimits")
+    if not isinstance(limits, dict):
+        return ""
+
+    columns = limits.get("candidateColumns") if isinstance(limits.get("candidateColumns"), dict) else {}
+    rules_per_combination = (
+        limits.get("rulesPerCombination") if isinstance(limits.get("rulesPerCombination"), dict) else {}
+    )
+    conditions = limits.get("conditionCount") if isinstance(limits.get("conditionCount"), dict) else {}
+    combinations = limits.get("combinations") if isinstance(limits.get("combinations"), dict) else {}
+    reason = str(limits.get("adjustmentReason") or "NONE")
+    return (
+        " Rule summary limits: "
+        f"columns requested={columns.get('requested')}, effective={columns.get('effectiveLimit')}, selected={columns.get('selected')}; "
+        f"rules/combination requested={rules_per_combination.get('requested')}, effective={rules_per_combination.get('effective')}; "
+        f"conditions requested={conditions.get('requested')}, effective={conditions.get('effective')}; "
+        f"combinations budget={combinations.get('effectiveBudget')}, estimated={combinations.get('estimated')}, evaluated={combinations.get('evaluated')}. "
+        f"Adjustment: {reason}."
+    )
+
+
 def run_integrated_apriori_assoc_model(
     conn,
     payload: Dict[str, Any],
@@ -1654,10 +1746,20 @@ def run_integrated_apriori_assoc_model(
     )
     max_rule_summary_columns = parse_int(
         get_value(payload, "P_MAX_RULE_SUMMARY_COLUMNS", "maxRuleSummaryColumns"),
-        9,
+        50,
     )
-    if max_rule_summary_columns == 50:
-        max_rule_summary_columns = 9
+    max_rule_condition_count = parse_int(
+        get_value(payload, "P_MAX_RULE_CONDITION_COUNT", "maxRuleConditionCount"),
+        5,
+    )
+    max_rule_combinations = parse_int(
+        get_value(payload, "P_MAX_RULE_COMBINATIONS", "maxRuleCombinations"),
+        1000,
+    )
+    max_rule_summary_per_pair = parse_int(
+        get_value(payload, "P_MAX_RULE_SUMMARY_PER_PAIR", "maxRuleSummaryPerPair"),
+        50,
+    )
     requested_max_input_rows = parse_optional_positive_int(
         get_value(payload, "P_MAX_INPUT_ROWS", "maxInputRows"),
         100000,
@@ -1683,12 +1785,14 @@ def run_integrated_apriori_assoc_model(
                 clean_optional_text(get_value(payload, "P_CATEGORICAL_COLUMNS", "P_CANDIDATE_COLUMNS", "candidateColumns")),
                 parse_int(get_value(payload, "P_MIN_RULE_SUPPORT_COUNT", "minRuleSupportCount"), 30),
                 clamp_float(parse_optional_float(get_value(payload, "P_MIN_RULE_LIFT", "minRuleLift")), 1.0, 0.0, 999999.0),
-                clamp(max_rule_summary_columns, 1, 500),
-                clamp(parse_int(get_value(payload, "P_MAX_RULE_SUMMARY_PER_PAIR", "maxRuleSummaryPerPair"), 50), 1, 1000),
+                max_rule_summary_columns,
+                max_rule_summary_per_pair,
                 owner,
                 table,
                 run_source_type,
                 run_id,
+                max_rule_condition_count,
+                max_rule_combinations,
             ],
         )
         summary_count = count_result_rows(
@@ -1702,12 +1806,43 @@ def run_integrated_apriori_assoc_model(
                 "MODEL_NAME": model_name,
             },
         )
+        runtime_limits = read_rule_summary_runtime_limits(
+            cursor,
+            max_rule_summary_columns,
+            max_rule_summary_per_pair,
+            max_rule_condition_count,
+            max_rule_combinations,
+        )
         return {
             "task": "CATEGORICAL_APRIORI",
             "status": "success",
             "modelName": model_name,
             "resultTable": "INIT$_TB_RULEDISC_ASSOC_SUM",
             "summaryCount": summary_count,
+            "ruleSummaryLimits": {
+                "candidateColumns": {
+                    "requested": max_rule_summary_columns,
+                    "effectiveLimit": runtime_limits["effectiveColumns"],
+                    "selected": runtime_limits["selectedCandidates"],
+                },
+                "conditionCount": {
+                    "requested": max_rule_condition_count,
+                    "effective": runtime_limits["effectiveConditionCount"],
+                    "engineMaximum": 5,
+                },
+                "rulesPerCombination": {
+                    "requested": max_rule_summary_per_pair,
+                    "effective": runtime_limits["effectiveRulesPerCombination"],
+                },
+                "combinations": {
+                    "requestedBudget": max_rule_combinations,
+                    "effectiveBudget": runtime_limits["effectiveCombinations"],
+                    "estimated": runtime_limits["estimatedCombinations"],
+                    "evaluated": runtime_limits["evaluatedCombinations"],
+                },
+                "adjustedYn": "N" if runtime_limits["adjustmentReason"] == "NONE" else "Y",
+                "adjustmentReason": runtime_limits["adjustmentReason"],
+            },
             "maxInputRows": {
                 "requested": requested_max_input_rows,
                 "effective": effective_max_input_rows,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from typing import Any, Dict, List
 
 from fastapi import HTTPException
@@ -68,18 +69,22 @@ def provision_default_design(
     scenario_table_id: int,
 ) -> Dict[str, Any]:
     """Create or reuse the four default jobs and their editable sample flow."""
+    started_at = time.perf_counter()
+    lock_started_at = time.perf_counter()
     context = lock_scenario_table(
         conn,
         project_id=project_id,
         scenario_id=scenario_id,
         scenario_table_id=scenario_table_id,
     )
+    lock_seconds = time.perf_counter() - lock_started_at
     owner_name = context["ownerName"]
     table_name = context["tableName"]
 
     jobs: List[Dict[str, Any]] = []
     created_job_ids: List[int] = []
     reused_job_ids: List[int] = []
+    jobs_started_at = time.perf_counter()
     for stage in DEFAULT_STAGES:
         job, created = ensure_default_job(
             conn,
@@ -93,7 +98,9 @@ def provision_default_design(
         job_id = int(job.get("WORK_JOB_ID") or job.get("PROFILE_JOB_ID") or 0)
         jobs.append(job)
         (created_job_ids if created else reused_job_ids).append(job_id)
+    jobs_seconds = time.perf_counter() - jobs_started_at
 
+    flow_started_at = time.perf_counter()
     flow, flow_created = ensure_default_flow(
         conn,
         project_id=project_id,
@@ -103,6 +110,7 @@ def provision_default_design(
         table_name=table_name,
         jobs=jobs,
     )
+    flow_seconds = time.perf_counter() - flow_started_at
     return {
         "status": "success",
         "scenarioTableId": scenario_table_id,
@@ -114,6 +122,12 @@ def provision_default_design(
         "flowId": int(flow.get("FLOW_ID") or 0),
         "flowName": flow.get("FLOW_NAME") or "",
         "flowCreated": flow_created,
+        "timings": {
+            "lockSeconds": round(lock_seconds, 3),
+            "modelJobsSeconds": round(jobs_seconds, 3),
+            "flowDesignSeconds": round(flow_seconds, 3),
+            "totalSeconds": round(time.perf_counter() - started_at, 3),
+        },
     }
 
 

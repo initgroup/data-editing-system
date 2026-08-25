@@ -120,7 +120,10 @@
             scenarioCreatedAt: null,
             tableOwner: "",
             tableName: "",
+            columnCount: null,
             rowCount: null,
+            targetStageTimings: null,
+            designTimings: null,
             scenarioTableId: null,
             jobIds: [],
             flowId: null,
@@ -584,6 +587,19 @@
         }
     }
 
+    function getDatasetMetrics() {
+        const metrics = [];
+        const columnCount = Number(state.columnCount);
+        const rowCount = Number(state.rowCount);
+        if (state.columnCount !== null && Number.isFinite(columnCount) && columnCount >= 0) {
+            metrics.push(`컬럼 ${R.formatNumber(columnCount, 0)}개`);
+        }
+        if (state.rowCount !== null && Number.isFinite(rowCount) && rowCount >= 0) {
+            metrics.push(`로우 ${R.formatNumber(rowCount, 0)}건`);
+        }
+        return metrics;
+    }
+
     function renderArtifacts() {
         const target = byId("artifactList", "qeArtifactList");
         if (!target) return;
@@ -611,6 +627,81 @@
             const valueTarget = item.querySelector("[data-artifact-value]") || item.querySelector("dd");
             setText(valueTarget, value);
         });
+
+        const tableItem = target.querySelector('[data-artifact="table"]');
+        const tableMetrics = tableItem?.querySelector("[data-artifact-metrics]");
+        if (tableMetrics) {
+            const metrics = getDatasetMetrics();
+            setText(tableMetrics, metrics.join(" · "));
+            tableMetrics.hidden = !state.tableName || metrics.length === 0;
+        }
+
+        const designTiming = target.querySelector("[data-design-timing]");
+        const designSeconds = Number(state.designTimings?.totalSeconds);
+        if (designTiming) {
+            setText(designTiming, Number.isFinite(designSeconds) && designSeconds >= 0
+                ? `모델·FLOW 설계 ${formatMeasuredSeconds(designSeconds)}`
+                : "");
+            designTiming.hidden = !Number.isFinite(designSeconds) || designSeconds < 0;
+        }
+    }
+
+    function formatMeasuredSeconds(value) {
+        const seconds = Number(value);
+        if (!Number.isFinite(seconds) || seconds < 0) return "-";
+        if (seconds < 1) return `${seconds.toFixed(3)}초`;
+        return `${seconds.toFixed(1)}초`;
+    }
+
+    function renderTargetStageTimings() {
+        const details = byId("qeTargetTimingDetails");
+        const timings = state.targetStageTimings;
+        if (!details || !timings || typeof timings !== "object") {
+            setHidden(details, true);
+            return;
+        }
+        const groups = [
+            ["XLSX 스키마 확인", Number(timings.schemaInspectionSeconds)],
+            ["파일 체크섬", Number(timings.checksumSeconds)],
+            ["행 파싱·바인드", Number(timings.parseAndBindSeconds)],
+            ["Oracle 적재", Number(timings.oracleLoadSeconds)],
+            ["적재 커밋", Number(timings.commitSeconds)],
+            ["행수 검증", Number(timings.rowValidationSeconds)],
+            ["통계 수집", Number(timings.statisticsSeconds)],
+            ["DB 준비", Number(timings.dbSetupSeconds)],
+            ["테이블 게시", Number(timings.publishSeconds)],
+            ["HTTP·기타 대기", Number(timings.uploadRequestOverheadSeconds)],
+            ["테이블 조회", Number(timings.tableLookupSeconds)],
+            ["테이블 등록", Number(timings.tableRegistrationSeconds)]
+        ].filter(([, seconds]) => Number.isFinite(seconds) && seconds >= 0);
+        if (!groups.length) {
+            setHidden(details, true);
+            return;
+        }
+        const totalSeconds = Number(timings.totalSeconds);
+        const bottleneck = groups.reduce((slowest, current) => current[1] > slowest[1] ? current : slowest, groups[0]);
+        setText(details.querySelector("[data-target-timing-total]"), formatMeasuredSeconds(totalSeconds));
+        setText(
+            details.querySelector("[data-target-timing-bottleneck]"),
+            `가장 오래 걸린 구간: ${bottleneck[0]} ${formatMeasuredSeconds(bottleneck[1])}`
+        );
+        const list = details.querySelector("[data-target-timing-list]");
+        if (list) {
+            list.innerHTML = groups.map(([label, seconds]) => `
+                <div><dt>${R.escapeHtml(label)}</dt><dd>${R.escapeHtml(formatMeasuredSeconds(seconds))}</dd></div>
+            `).join("");
+        }
+        setHidden(details, false);
+    }
+
+    function renderResultDatasetSummary() {
+        const summary = document.querySelector("[data-result-dataset-summary]");
+        const metricsTarget = summary?.querySelector("[data-result-dataset-metrics]");
+        if (!summary || !metricsTarget) return;
+
+        const metrics = getDatasetMetrics();
+        setText(metricsTarget, metrics.join(" · "));
+        summary.hidden = metrics.length === 0;
     }
 
     function renderWorkspaceSummary() {
@@ -679,6 +770,8 @@
         renderFile();
         renderUploadProgress();
         renderArtifacts();
+        renderResultDatasetSummary();
+        renderTargetStageTimings();
         renderHistoryView();
         renderWorkspaceSummary();
         const step = STEPS[state.currentStep] || STEPS[0];
@@ -864,7 +957,6 @@
             completeStep(2, "시나리오가 준비되었습니다.");
 
             await ensureTargetAndDesign();
-            completeStep(3, "대상 테이블 등록이 완료되었습니다.");
             completeStep(4, "기본 4단계 모델 저장이 완료되었습니다.");
             completeStep(5, "샘플 노드 기반 FLOW가 내부에 자동 저장되었습니다.");
 
@@ -967,16 +1059,37 @@
     }
 
     async function ensureTargetAndDesign() {
+        const targetStageStartedAt = performance.now();
+        let uploadTimings = state.targetStageTimings || {};
         setStep(3, state.tableName ? "대상 테이블 등록 상태를 확인하고 있습니다." : "파일을 INITUP$ 대상 테이블로 적재하고 있습니다.", 0.15);
         const fileOptions = getFileOptions();
         if (!state.tableName) {
             if (!state.uploadId) throw new Error("완료된 파일 업로드 정보를 찾을 수 없습니다. 파일을 다시 선택해 주세요.");
+            const uploadRequestStartedAt = performance.now();
             const upload = await client.finalizeStagedUpload(state.uploadId, fileOptions, {
                 projectId: state.projectId,
                 projectCode: state.projectCode
             });
+            const uploadRequestSeconds = (performance.now() - uploadRequestStartedAt) / 1000;
             state.tableName = String(upload.tableName || "").toUpperCase();
+            const uploadedColumns = Array.isArray(upload.columns) ? upload.columns : [];
+            const responseColumnCount = Number(upload.columnCount);
+            state.columnCount = upload.columnCount !== null
+                && upload.columnCount !== undefined
+                && Number.isFinite(responseColumnCount)
+                && responseColumnCount >= 0
+                ? responseColumnCount
+                : uploadedColumns.filter((column) => String(column || "").toUpperCase() !== "FILE_ROW_NO").length;
             state.rowCount = Number(upload.rowCount || 0);
+            uploadTimings = {
+                ...(upload.timings || {}),
+                uploadRequestSeconds,
+                uploadRequestOverheadSeconds: Math.max(
+                    0,
+                    uploadRequestSeconds - (Number(upload.timings?.totalSeconds) || 0)
+                )
+            };
+            state.targetStageTimings = uploadTimings;
             state.uploadId = null;
             if (!state.tableName.startsWith("INITUP$")) {
                 throw new Error("업로드된 INITUP$ 테이블 정보를 확인할 수 없습니다.");
@@ -986,7 +1099,9 @@
 
         if (!state.tableOwner) {
             setStep(3, "생성된 대상 테이블의 소유자를 확인하고 있습니다.", 0.45);
+            const tableLookupStartedAt = performance.now();
             const tree = await client.getUploadTable(state.projectId, state.projectCode, state.tableName);
+            uploadTimings.tableLookupSeconds = (performance.now() - tableLookupStartedAt) / 1000;
             const rows = Array.isArray(tree.data) ? tree.data : [];
             const row = rows.find((item) => String(item.TABLE_NAME || "").toUpperCase() === state.tableName);
             if (!row?.OWNER) throw new Error("생성된 대상 테이블을 현재 프로젝트에서 찾을 수 없습니다.");
@@ -1000,20 +1115,43 @@
             && Array.isArray(state.jobIds)
             && state.jobIds.length === 4
         );
-        if (!designComplete) {
-            setStep(3, "대상 테이블 등록과 기본 4단계·FLOW 자동 설계를 저장하고 있습니다.", 0.7);
+        if (!state.scenarioTableId) {
+            setStep(3, "대상 테이블을 현재 시나리오에 등록하고 있습니다.", 0.75);
+            const registrationStartedAt = performance.now();
             const registration = await client.saveScenarioTable({
-                scenarioTableId: state.scenarioTableId,
+                scenarioTableId: null,
                 projectId: state.projectId,
                 scenarioId: state.scenarioId,
                 ownerName: state.tableOwner,
                 tableName: state.tableName,
                 tableComment: fileOptions.tableComment
             });
+            const registrationRequestSeconds = (performance.now() - registrationStartedAt) / 1000;
             const saved = registration.data || {};
-            state.scenarioTableId = Number(saved.SCENARIO_TABLE_ID || state.scenarioTableId || 0);
+            state.scenarioTableId = Number(saved.SCENARIO_TABLE_ID || 0);
+            if (!state.scenarioTableId) throw new Error("대상 테이블 등록 ID를 확인할 수 없습니다.");
+            uploadTimings.tableRegistrationSeconds = registrationRequestSeconds;
+            const measuredStageSeconds = [
+                uploadTimings.uploadRequestSeconds,
+                uploadTimings.tableLookupSeconds,
+                uploadTimings.tableRegistrationSeconds
+            ].reduce((sum, value) => sum + (Number(value) || 0), 0);
+            uploadTimings.totalSeconds = measuredStageSeconds > 0
+                ? measuredStageSeconds
+                : (performance.now() - targetStageStartedAt) / 1000;
+            state.targetStageTimings = uploadTimings;
             persistState();
-            const automation = registration.automation || {};
+        }
+        completeStep(3, `대상 테이블 등록 완료 · 컬럼 ${R.formatNumber(state.columnCount, 0)}개 · 로우 ${R.formatNumber(state.rowCount, 0)}건`);
+
+        if (!designComplete) {
+            setStep(4, "기본 4단계 모델과 FLOW 자동 설계를 저장하고 있습니다.", 0.25);
+            const design = await client.provisionDefaultDesign({
+                projectId: state.projectId,
+                scenarioId: state.scenarioId,
+                scenarioTableId: state.scenarioTableId
+            });
+            const automation = design.automation || {};
             if (automation.status !== "success") {
                 throw new Error(automation.message || "대상 테이블은 등록되었지만 기본 4단계 자동 설계에 실패했습니다.");
             }
@@ -1022,6 +1160,7 @@
                 : [];
             state.flowId = Number(automation.flowId || 0);
             state.flowName = automation.flowName || "자동 규칙 발굴 FLOW";
+            state.designTimings = automation.timings || design.timings || null;
             if (!state.scenarioTableId || state.jobIds.length !== 4 || !state.flowId) {
                 throw new Error("기본 4단계 모델 또는 FLOW 저장 결과가 완전하지 않습니다.");
             }
@@ -1076,6 +1215,7 @@
             tableName: state.tableName,
             fileName: state.fileMeta?.name || "",
             fileSize: Number(state.fileMeta?.size || 0),
+            estimatedColumnCount: state.columnCount === null ? null : Number(state.columnCount || 0),
             estimatedRowCount: Number(state.rowCount || 0),
             flowName: state.flowName,
             jobCount: state.jobIds.length

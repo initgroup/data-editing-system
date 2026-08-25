@@ -10,12 +10,14 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_APRIORI_ASSOC_MODEL" (
     p_candidate_columns   IN VARCHAR2 DEFAULT NULL,
     p_min_rule_support_count IN NUMBER DEFAULT 30,
     p_min_rule_lift       IN NUMBER   DEFAULT 1,
-    p_max_rule_summary_columns IN NUMBER DEFAULT 9,
+    p_max_rule_summary_columns IN NUMBER DEFAULT 50,
     p_max_rule_summary_per_pair IN NUMBER DEFAULT 50,
     p_target_owner        IN VARCHAR2 DEFAULT NULL,
     p_target_table        IN VARCHAR2 DEFAULT NULL,
     p_run_source_type     IN VARCHAR2 DEFAULT 'DATA_WORK',
-    p_run_id              IN NUMBER   DEFAULT 0
+    p_run_id              IN NUMBER   DEFAULT 0,
+    p_max_rule_condition_count IN NUMBER DEFAULT 5,
+    p_max_rule_combinations IN NUMBER DEFAULT 1000
 ) AUTHID CURRENT_USER IS
     TYPE t_column_list IS TABLE OF VARCHAR2(128);
 
@@ -588,7 +590,9 @@ BEGIN
             p_target_owner        => p_target_owner,
             p_target_table        => p_target_table,
             p_run_source_type     => v_run_source_type,
-            p_run_id              => v_run_id
+            p_run_id              => v_run_id,
+            p_max_condition_count => p_max_rule_condition_count,
+            p_max_rule_combinations => p_max_rule_combinations
         );
 
         SELECT COUNT(*)

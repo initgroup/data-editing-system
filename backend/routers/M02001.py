@@ -314,12 +314,14 @@ def upload_file_to_table(
     tableNameRule: str = Form("INITUP$_{PROJECT_CODE}_FT_{TIME}"),
     uploadIdempotencyKey: str = Form(""),
 ):
+    upload_started_at = time.perf_counter()
     if not str(projectId or "").strip() or not str(projectCode or "").strip():
         raise HTTPException(status_code=400, detail="Project ID and project code are required for upload.")
     user_id = get_request_user_id(request)
     require_project_access(request, projectId, projectCode)
     stream = file.file
     filename = file.filename or ""
+    schema_started_at = time.perf_counter()
     resolved_encoding = resolve_upload_encoding(stream, fileType, encoding)
     columns, row_width, _header_width = inspect_upload_schema(
         stream,
@@ -330,13 +332,16 @@ def upload_file_to_table(
         hasHeader,
         resolved_encoding,
     )
+    schema_inspection_seconds = time.perf_counter() - schema_started_at
     if not columns:
         raise HTTPException(status_code=400, detail="No columns were detected.")
 
     table_name = create_upload_table_name(projectCode, tableNameRule, user_id=user_id)
     staging_table_name = create_upload_staging_table_name()
     file_size = get_upload_stream_size(stream)
+    checksum_started_at = time.perf_counter()
     content_sha256 = compute_upload_stream_sha256(stream)
+    checksum_seconds = time.perf_counter() - checksum_started_at
     column_specs = build_file_upload_column_specs(columns, hasHeader)
     safe_columns = [column_name for column_name, _ in column_specs]
     upload_columns = [UPLOAD_ROW_NO_COLUMN, *safe_columns]
@@ -347,6 +352,7 @@ def upload_file_to_table(
     final_table_created = False
     metadata_reserved = False
     try:
+        db_setup_started_at = time.perf_counter()
         conn = get_target_db_connection(request)
         configure_upload_connection(conn)
         cursor = conn.cursor()
@@ -390,6 +396,7 @@ def upload_file_to_table(
         if (tableComment or "").strip():
             safe_table_comment = escape_and_truncate_oracle_comment(tableComment.strip())
             cursor.execute(f'COMMENT ON TABLE "{staging_table_name}" IS \'{safe_table_comment}\'')
+        db_setup_seconds = time.perf_counter() - db_setup_started_at
 
         rows = iter_upload_data_rows(
             stream,
@@ -413,7 +420,9 @@ def upload_file_to_table(
             close_row_iterator(rows)
 
         inserted_count = int(load_result["rowCount"])
+        validation_started_at = time.perf_counter()
         validated_count = count_upload_table_rows(cursor, staging_table_name)
+        row_validation_seconds = time.perf_counter() - validation_started_at
         if validated_count != inserted_count:
             raise RuntimeError(
                 f"Upload row validation failed. Parsed {inserted_count} row(s), but Oracle stored {validated_count} row(s)."
@@ -421,6 +430,7 @@ def upload_file_to_table(
 
         stats_gathered = False
         stats_message = ""
+        statistics_started_at = time.perf_counter()
         try:
             gather_upload_table_stats(cursor, staging_table_name)
             conn.commit()
@@ -429,7 +439,9 @@ def upload_file_to_table(
         except Exception as stats_error:
             stats_message = f"Table uploaded, but statistics gather failed: {stats_error}"
             logger.warning("M02001 statistics gather failed for %s: %s", staging_table_name, stats_error)
+        statistics_seconds = time.perf_counter() - statistics_started_at
 
+        publish_started_at = time.perf_counter()
         cursor.execute(
             SqlLoader.get_sql("M02001_UPLOAD_TABLE_META_MERGE"),
             {
@@ -465,11 +477,25 @@ def upload_file_to_table(
         )
         conn.commit()
         published = True
-        return {
+        publish_seconds = time.perf_counter() - publish_started_at
+        timings = {
+            "schemaInspectionSeconds": round(schema_inspection_seconds, 3),
+            "checksumSeconds": round(checksum_seconds, 3),
+            "dbSetupSeconds": round(db_setup_seconds, 3),
+            "parseAndBindSeconds": round(float(load_result.get("parseAndBindSeconds") or 0), 3),
+            "oracleLoadSeconds": round(float(load_result.get("oracleLoadSeconds") or 0), 3),
+            "commitSeconds": round(float(load_result.get("commitSeconds") or 0), 3),
+            "rowValidationSeconds": round(row_validation_seconds, 3),
+            "statisticsSeconds": round(statistics_seconds, 3),
+            "publishSeconds": round(publish_seconds, 3),
+            "totalSeconds": round(time.perf_counter() - upload_started_at, 3),
+        }
+        result = {
             "status": "success",
             "message": "File uploaded.",
             "tableName": table_name,
             "columns": upload_columns,
+            "columnCount": len(safe_columns),
             "rowCount": inserted_count,
             "detectedEncoding": resolved_encoding,
             "contentSha256": content_sha256,
@@ -477,8 +503,19 @@ def upload_file_to_table(
             "insertBatchCount": load_result["batchCount"],
             "commitCount": load_result["commitCount"],
             "statsGathered": stats_gathered,
-            "statsMessage": stats_message
+            "statsMessage": stats_message,
+            "timings": timings,
         }
+        logger.info(
+            "M02001 upload timing table=%s rows=%s columns=%s mode=%s batches=%s timings=%s",
+            table_name,
+            inserted_count,
+            len(safe_columns),
+            load_result["loadMode"],
+            load_result["batchCount"],
+            timings,
+        )
+        return result
     except HTTPException:
         if conn:
             conn.rollback()
@@ -1112,7 +1149,19 @@ def load_upload_rows(conn, cursor, table_name: str, upload_columns: list[str], r
     pending_commit_rows = 0
     batch_count = 0
     commit_count = 0
-    for batch_rows in iter_upload_insert_batches(rows, len(upload_columns)):
+    parse_and_bind_seconds = 0.0
+    oracle_load_seconds = 0.0
+    commit_seconds = 0.0
+    batch_iterator = iter(iter_upload_insert_batches(rows, len(upload_columns)))
+    while True:
+        parse_started_at = time.perf_counter()
+        try:
+            batch_rows = next(batch_iterator)
+        except StopIteration:
+            parse_and_bind_seconds += time.perf_counter() - parse_started_at
+            break
+        parse_and_bind_seconds += time.perf_counter() - parse_started_at
+        load_started_at = time.perf_counter()
         if use_direct_path:
             conn.direct_path_load(
                 schema_name,
@@ -1123,22 +1172,30 @@ def load_upload_rows(conn, cursor, table_name: str, upload_columns: list[str], r
             )
         else:
             cursor.executemany(insert_sql, batch_rows)
+        oracle_load_seconds += time.perf_counter() - load_started_at
         batch_size = len(batch_rows)
         inserted_count += batch_size
         pending_commit_rows += batch_size
         batch_count += 1
         if pending_commit_rows >= UPLOAD_COMMIT_ROW_INTERVAL:
+            commit_started_at = time.perf_counter()
             conn.commit()
+            commit_seconds += time.perf_counter() - commit_started_at
             commit_count += 1
             pending_commit_rows = 0
     if pending_commit_rows or not batch_count:
+        commit_started_at = time.perf_counter()
         conn.commit()
+        commit_seconds += time.perf_counter() - commit_started_at
         commit_count += 1
     return {
         "rowCount": inserted_count,
         "batchCount": batch_count,
         "commitCount": commit_count,
         "loadMode": "DIRECT_PATH" if use_direct_path else "ARRAY_DML",
+        "parseAndBindSeconds": parse_and_bind_seconds,
+        "oracleLoadSeconds": oracle_load_seconds,
+        "commitSeconds": commit_seconds,
     }
 
 

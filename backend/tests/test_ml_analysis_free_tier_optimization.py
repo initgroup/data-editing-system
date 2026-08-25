@@ -1,3 +1,4 @@
+import json
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -317,7 +318,122 @@ class MlAnalysisFreeTierOptimizationTests(unittest.TestCase):
             )
 
         self.assertEqual(connection.last_cursor.call_args[7], 50000)
+        self.assertEqual(connection.last_cursor.call_args[17], 5)
         self.assertEqual(result["maxInputRows"]["effective"], 50000)
+
+    def test_rule_summary_limits_do_not_rewrite_fifty_columns_to_nine(self):
+        connection = ProcedureConnection()
+        runtime_limits = {
+            "effectiveColumns": 50,
+            "effectiveRulesPerCombination": 50,
+            "selectedCandidates": 12,
+            "requestedConditionCount": 5,
+            "effectiveConditionCount": 5,
+            "effectiveCombinations": 2000,
+            "estimatedCombinations": 5000,
+            "evaluatedCombinations": 2000,
+            "adjustmentReason": "The budget was distributed across target and condition-size groups.",
+        }
+        with patch.object(ml_analysis_service, "_association_input_row_limit", return_value=50000), patch.object(
+            ml_analysis_service,
+            "count_result_rows",
+            return_value=3,
+        ), patch.object(
+            ml_analysis_service,
+            "read_rule_summary_runtime_limits",
+            return_value=runtime_limits,
+        ):
+            result = ml_analysis_service.run_integrated_apriori_assoc_model(
+                connection,
+                {
+                    "P_MAX_RULE_SUMMARY_COLUMNS": 50,
+                    "P_MAX_RULE_CONDITION_COUNT": 5,
+                    "P_MAX_RULE_COMBINATIONS": 2000,
+                },
+                "OWNER1",
+                "TABLE1",
+                "DATA_WORK",
+                1,
+            )
+
+        self.assertEqual(50, connection.last_cursor.call_args[11])
+        self.assertEqual(50, connection.last_cursor.call_args[12])
+        self.assertEqual(5, connection.last_cursor.call_args[17])
+        self.assertEqual(2000, connection.last_cursor.call_args[18])
+        self.assertEqual(50, result["ruleSummaryLimits"]["candidateColumns"]["requested"])
+        self.assertEqual(5, result["ruleSummaryLimits"]["conditionCount"]["effective"])
+        self.assertIn("distributed", result["ruleSummaryLimits"]["adjustmentReason"])
+
+    def test_rule_summary_limit_fallback_reports_supported_ranges(self):
+        limits = ml_analysis_service.read_rule_summary_runtime_limits(
+            ProcedureCursor(),
+            requested_columns=500,
+            requested_rules_per_combination=1000,
+            requested_condition_count=9,
+            requested_combinations=200000,
+        )
+
+        self.assertEqual(80, limits["effectiveColumns"])
+        self.assertEqual(200, limits["effectiveRulesPerCombination"])
+        self.assertEqual(5, limits["effectiveConditionCount"])
+        self.assertEqual(100000, limits["effectiveCombinations"])
+        self.assertIn("Candidate column limit", limits["adjustmentReason"])
+
+    def test_rule_summary_sql_uses_explicit_condition_and_combination_limits(self):
+        summary_sql = (
+            ROOT_DIR / "database" / "model_objects" / "INIT_MODEL_OBJECTS_10_RULE_SUMMARY.sql"
+        ).read_text(encoding="utf-8")
+        apriori_sql = (
+            ROOT_DIR / "database" / "model_objects" / "INIT_MODEL_OBJECTS_20_RULE_MODELS.sql"
+        ).read_text(encoding="utf-8")
+        service_source = (ROOT_DIR / "backend" / "services" / "ml_analysis_service.py").read_text(encoding="utf-8")
+        data_work_source = (ROOT_DIR / "frontend" / "js" / "MCOM_DATA_WORK.js").read_text(encoding="utf-8")
+
+        self.assertNotIn("WHEN v_candidates.COUNT <= 9 THEN 3", summary_sql)
+        self.assertNotIn("if max_rule_summary_columns == 50", service_source)
+        self.assertNotIn('name === "P_MAX_RULE_SUMMARY_COLUMNS" && value === "50"', data_work_source)
+        self.assertIn("p_max_condition_count IN NUMBER   DEFAULT 5", summary_sql)
+        self.assertIn("p_max_rule_combinations IN NUMBER DEFAULT 1000", summary_sql)
+        self.assertIn("begin_combination_budget_slot", summary_sql)
+        self.assertIn("current_budget_slot_available", summary_sql)
+        self.assertNotIn("WHILE v_effective_max_condition_count > 1", summary_sql)
+        self.assertIn("p_max_rule_condition_count IN NUMBER DEFAULT 5", apriori_sql)
+        self.assertIn("p_max_rule_summary_columns IN NUMBER DEFAULT 50", apriori_sql)
+
+    def test_internal_and_external_model_presets_expose_rule_summary_limits(self):
+        internal_presets = json.loads(
+            (ROOT_DIR / "frontend" / "config" / "M90001.object-detail-presets.json").read_text(encoding="utf-8")
+        )
+        external_presets = json.loads(
+            (ROOT_DIR / "frontend" / "config" / "M90002.python-api-presets.json").read_text(encoding="utf-8")
+        )
+        internal_keys = {
+            item["key"]
+            for obj in internal_presets["objects"]
+            if obj.get("objectName") in {"INIT$_SP_APRIORI_ASSOC_MODEL", "INTEGRATED_RULE_DISCOVER"}
+            for item in obj.get("items", [])
+        }
+        internal_condition_defaults = {
+            item.get("defaultValue")
+            for obj in internal_presets["objects"]
+            if obj.get("objectName") in {"INIT$_SP_APRIORI_ASSOC_MODEL", "INTEGRATED_RULE_DISCOVER"}
+            for item in obj.get("items", [])
+            if item.get("key") == "P_MAX_RULE_CONDITION_COUNT"
+        }
+        external_details = next(
+            obj["details"]
+            for group in external_presets["groups"]
+            for obj in group["resources"]
+            if obj.get("objectName") == "INTEGRATED_RULE_DISCOVER"
+        )
+        external_defaults = {item["key"]: item.get("defaultValue") for item in external_details}
+
+        self.assertIn("P_MAX_RULE_CONDITION_COUNT", internal_keys)
+        self.assertIn("P_MAX_RULE_COMBINATIONS", internal_keys)
+        self.assertEqual({"5"}, internal_condition_defaults)
+        self.assertEqual("50", external_defaults["INPUT.P_MAX_RULE_SUMMARY_COLUMNS"])
+        self.assertEqual("5", external_defaults["INPUT.P_MAX_RULE_CONDITION_COUNT"])
+        self.assertEqual("1000", external_defaults["INPUT.P_MAX_RULE_COMBINATIONS"])
 
 
 if __name__ == "__main__":
