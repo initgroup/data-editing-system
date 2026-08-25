@@ -96,6 +96,26 @@ class AnalysisViolationGridTests(unittest.TestCase):
         self.assertIn("anly-work-result-export", script)
         self.assertIn(".anly-work-result-switcher button.anly-work-result-export", style)
 
+    def test_symbolic_sample_grid_header_shows_column_comment_and_xy_role(self):
+        script = ANALYSIS_SCRIPT.read_text(encoding="utf-8")
+        style = ANALYSIS_STYLE.read_text(encoding="utf-8")
+
+        start = script.index("        renderSymbolicRuleRawDataTable()")
+        end = script.index("        selectSymbolicSampleRow", start)
+        render_block = script[start:end]
+
+        self.assertIn('const roleLabel = getText(isTarget ? "Y result value" : "X arguments");', render_block)
+        self.assertIn("this.getColumnComment(columnId, state.summary || {})", render_block)
+        self.assertIn("anly-work-symbolic-data-header-inner", render_block)
+        self.assertIn('isTarget ? "is-y-result" : "is-x-argument"', render_block)
+        role_line = '<em>${this.escapeHtml(roleLabel)}</em>'
+        column_line = '<b>${this.escapeHtml(columnId)}</b>'
+        comment_line = '<small>${comment ? this.escapeHtml(comment) : "-"}</small>'
+        self.assertLess(render_block.index(role_line), render_block.index(column_line))
+        self.assertLess(render_block.index(column_line), render_block.index(comment_line))
+        self.assertIn(".anly-work-symbolic-data-header-inner", style)
+        self.assertIn(".anly-work-symbolic-data-header.is-y-result", style)
+
 
 if __name__ == "__main__":
     unittest.main()

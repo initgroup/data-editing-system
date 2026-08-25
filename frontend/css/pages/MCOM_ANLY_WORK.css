@@ -4015,6 +4015,58 @@
     z-index: 40 !important;
 }
 
+.anly-work-symbolic-raw-table th.anly-work-symbolic-data-header {
+    min-width: 150px;
+    vertical-align: top;
+    white-space: normal;
+}
+
+.anly-work-symbolic-data-header-inner {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+}
+
+.anly-work-symbolic-data-header-inner > em {
+    border: 1px solid #bfdbfe;
+    border-radius: 999px;
+    color: #1d4ed8;
+    font-size: 9px;
+    font-style: normal;
+    font-weight: 850;
+    justify-self: start;
+    line-height: 1;
+    padding: 2px 5px;
+}
+
+.anly-work-symbolic-data-header-inner > b {
+    color: #0f172a;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 11px;
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.anly-work-symbolic-data-header.is-y-result .anly-work-symbolic-data-header-inner > em {
+    background: #ecfdf5;
+    border-color: #a7f3d0;
+    color: #047857;
+}
+
+.anly-work-symbolic-data-header-inner > small {
+    color: #64748b;
+    display: block;
+    font-size: 10px;
+    font-weight: 650;
+    line-height: 1.2;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .anly-work-symbolic-raw-table .grid-row-no.is-frozen-col {
     background-clip: padding-box;
     box-shadow: 1px 0 #cbd5e1;

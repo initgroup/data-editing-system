@@ -7806,6 +7806,8 @@
             const features = Array.isArray(state.rule?.FEATURE_LIST) ? state.rule.FEATURE_LIST : [];
             const targetColumn = String(state.rule?.TARGET_COLUMN || "Y").trim() || "Y";
             const columns = [...new Set(["SAMPLE_NO", ...features, targetColumn])];
+            const featureKeys = new Set(features.map((column) => String(column || "").trim().toUpperCase()).filter(Boolean));
+            const targetKey = targetColumn.toUpperCase();
             const evaluatedByRow = new Map(state.evaluatedRows.map((item) => [item.row, item]));
             if (summary) {
                 summary.textContent = state.hasMore
@@ -7821,11 +7823,30 @@
                 const numeric = Number(value);
                 return Number.isFinite(numeric) ? this.formatSymbolicDiagnosticNumber(numeric) : this.escapeHtml(value);
             };
+            const renderDataHeader = (column) => {
+                const columnId = String(column || "").trim();
+                const columnKey = columnId.toUpperCase();
+                const isTarget = columnKey === targetKey;
+                const isFeature = !isTarget && featureKeys.has(columnKey);
+                if (!isFeature && !isTarget) return `<th>${this.escapeHtml(columnId)}</th>`;
+                const roleLabel = getText(isTarget ? "Y result value" : "X arguments");
+                const comment = this.getColumnComment(columnId, state.summary || {});
+                const title = [roleLabel, columnId, comment].filter(Boolean).join(" · ");
+                return `
+                    <th class="anly-work-symbolic-data-header ${isTarget ? "is-y-result" : "is-x-argument"}" title="${this.escapeHtml(title)}">
+                        <span class="anly-work-symbolic-data-header-inner">
+                            <em>${this.escapeHtml(roleLabel)}</em>
+                            <b>${this.escapeHtml(columnId)}</b>
+                            <small>${comment ? this.escapeHtml(comment) : "-"}</small>
+                        </span>
+                    </th>
+                `;
+            };
             container.innerHTML = `
                 <table class="table-grid anly-work-symbolic-raw-table" data-standard-grid-freeze-columns="0">
                     <thead>
                         <tr>
-                            ${columns.map((column) => `<th>${this.escapeHtml(column)}</th>`).join("")}
+                            ${columns.map((column) => renderDataHeader(column)).join("")}
                             <th>${this.escapeHtml(getText("Predicted"))}</th>
                             <th>${this.escapeHtml(getText("Residual"))}</th>
                         </tr>
