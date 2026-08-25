@@ -11,12 +11,14 @@ from backend.auth_context import (
     get_session_ttl_seconds,
     get_request_user_id,
     revoke_current_session,
+    rotate_login_session_target,
     set_session_cookie,
 )
 from backend.database import get_db_connection
 from backend.database_helper import SqlLoader
 from backend.runtime_settings import load_server_resource_limits
 from backend.routers.M99001 import (
+    ConnectionIdRequest,
     LoginRequest,
     SessionCleanupRequest,
     SignupRequest,
@@ -257,10 +259,22 @@ def get_current_session(request: Request):
     user = authenticate_request(request)
     system_conn = None
     runtime_settings = {}
+    connection = None
     try:
         target_connection_id = user.get("targetConnectionId")
         if target_connection_id is not None:
             system_conn = get_db_connection()
+            connection_row = _get_connection_detail(
+                system_conn,
+                int(target_connection_id),
+                int(user.get("userId")),
+            )
+            connection = {
+                "connectionId": connection_row.get("CONNECTION_ID"),
+                "connectionName": connection_row.get("CONNECTION_NAME"),
+                "dbType": connection_row.get("DB_TYPE"),
+                "connectionScope": connection_row.get("CONNECTION_SCOPE") or "PRIVATE",
+            }
             runtime_settings = load_server_resource_limits(
                 system_conn,
                 int(user.get("userId")),
@@ -278,7 +292,63 @@ def get_current_session(request: Request):
                 "roleCode": user.get("roleCode") or "USER",
             },
             "targetConnectionId": target_connection_id,
+            "connection": connection,
         }
+    finally:
+        if system_conn:
+            system_conn.close()
+
+
+@router.post("/session/target")
+def switch_target_session(req: ConnectionIdRequest, request: Request, response: Response):
+    user = authenticate_request(request)
+    user_id = int(user.get("userId"))
+    connection_id = _to_optional_int(req.connectionId)
+    if connection_id is None:
+        raise HTTPException(status_code=400, detail="Target DB connection is required.")
+
+    system_conn = None
+    try:
+        system_conn = get_db_connection()
+        connection_row = _get_connection_detail(system_conn, connection_id, user_id)
+        if str(connection_row.get("USE_YN") or "N").upper() != "Y":
+            raise HTTPException(status_code=400, detail="Selected target DB connection is disabled.")
+
+        runtime_settings = load_server_resource_limits(
+            system_conn,
+            user_id,
+            connection_id,
+            force_refresh=True,
+        )
+        new_token = rotate_login_session_target(
+            system_conn,
+            request,
+            user_id,
+            connection_id,
+        )
+        set_session_cookie(response, new_token, request)
+        return {
+            "status": "success",
+            "message": "Target DB session changed.",
+            "sessionTtlSeconds": get_session_ttl_seconds(),
+            "runtimeSettings": runtime_settings,
+            "targetConnectionId": connection_id,
+            "connection": {
+                "connectionId": connection_row.get("CONNECTION_ID"),
+                "connectionName": connection_row.get("CONNECTION_NAME"),
+                "dbType": connection_row.get("DB_TYPE"),
+                "connectionScope": connection_row.get("CONNECTION_SCOPE") or "PRIVATE",
+            },
+        }
+    except HTTPException:
+        if system_conn:
+            system_conn.rollback()
+        raise
+    except Exception as error:
+        if system_conn:
+            system_conn.rollback()
+        logger.exception("Target DB session switch failed. user_id=%s connection_id=%s", user_id, connection_id)
+        raise HTTPException(status_code=500, detail=str(error))
     finally:
         if system_conn:
             system_conn.close()

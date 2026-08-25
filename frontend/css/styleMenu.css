@@ -2496,6 +2496,11 @@ body.is-column-resizing .data-sql-grid-col-resizer::after {
     margin-left: 12px;
 }
 
+.env-footer .env-cancel,
+.env-footer .env-danger {
+    white-space: nowrap;
+}
+
 .env-danger {
     margin-left: 12px;
     border-color: #fecaca;
@@ -2513,6 +2518,7 @@ body.is-column-resizing .data-sql-grid-col-resizer::after {
     background: #7f1d1d;
     color: #fff;
     font-weight: 700;
+    white-space: nowrap;
 }
 
 .env-purge:hover:not(:disabled) {

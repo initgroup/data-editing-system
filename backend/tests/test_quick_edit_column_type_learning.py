@@ -384,6 +384,45 @@ class QuickEditColumnTypeLearningTests(unittest.TestCase):
         self.assertIn("P.RUN_SOURCE_TYPE = L.SOURCE_RUN_SOURCE_TYPE", alter_sql)
         self.assertIn("T.SOURCE_PROFILE_ID = S.PROFILE_ID", alter_sql)
 
+    def test_model_lifecycle_enforces_one_active_version_and_recovers_rollback_history(self):
+        model_sql = (
+            ROOT_DIR / "database" / "model_objects" / "INIT_MODEL_OBJECTS_40_PREDICTED_TYPE.sql"
+        ).read_text(encoding="utf-8")
+        ddl_sql = (ROOT_DIR / "database" / "INIT_TARGET_DDL.sql").read_text(encoding="utf-8")
+        alter_sql = (ROOT_DIR / "database" / "INIT_TARGET_ALTER.sql").read_text(encoding="utf-8")
+        page_js = (ROOT_DIR / "frontend" / "js" / "M90003.js").read_text(encoding="utf-8")
+        version_list_sql = SqlLoader.get_sql("M90003_MODEL_VERSION_LIST")
+
+        unique_active_index = 'UK_INIT$_TB_OML_REG_ACTIVE_ONE'
+        unique_active_expression = 'CASE WHEN "STATUS_CODE" = \'ACTIVE\' THEN "MODEL_KEY" ELSE NULL END'
+        self.assertIn(unique_active_index, ddl_sql)
+        self.assertIn(unique_active_index, alter_sql)
+        self.assertIn(unique_active_index, model_sql)
+        self.assertIn(unique_active_expression, ddl_sql)
+        self.assertIn(unique_active_expression, alter_sql)
+        self.assertIn('Repair legacy duplicate ACTIVE', alter_sql)
+        self.assertIn('Reconciled the active model pointer', model_sql)
+        self.assertIn('A.MODEL_VERSION_ID = R.MODEL_VERSION_ID THEN \'ACTIVE\'', version_list_sql)
+        self.assertIn("WHEN R.STATUS_CODE = 'ACTIVE' THEN 'ARCHIVED'", version_list_sql)
+        self.assertGreaterEqual(
+            model_sql.count("Exactly one active model must remain"),
+            2,
+        )
+        rollback_proc = model_sql.split(
+            'CREATE OR REPLACE PROCEDURE "INIT$_SP_TYPE_MODEL_ROLLBACK"', 1
+        )[1].split('CREATE OR REPLACE PROCEDURE "INIT$_SP_TYPE_MODEL_DELETE"', 1)[0]
+        activate_proc = model_sql.split(
+            'CREATE OR REPLACE PROCEDURE "INIT$_SP_TYPE_MODEL_ACTIVATE"', 1
+        )[1].split('CREATE OR REPLACE PROCEDURE "INIT$_SP_TYPE_MODEL_ARCHIVE"', 1)[0]
+        self.assertIn('"MODEL_VERSION_ID" <> v_current_id', rollback_proc)
+        self.assertIn('"ACTIVATED_AT" DESC NULLS LAST', rollback_proc)
+        self.assertIn('ROLLBACK;', rollback_proc)
+        active_clear_clause = 'WHERE "MODEL_KEY" = v_model_key\n       AND "STATUS_CODE" = \'ACTIVE\';'
+        self.assertIn(active_clear_clause, activate_proc)
+        self.assertIn(active_clear_clause, rollback_proc)
+        self.assertIn('this.loading.has("model-lifecycle-action")', page_js)
+        self.assertIn('this.loading.delete("model-lifecycle-action")', page_js)
+
     def test_code_suffix_column_label_is_a_categorical_base_rule(self):
         model_sql = (
             ROOT_DIR / "database" / "model_objects" / "INIT_MODEL_OBJECTS_40_PREDICTED_TYPE.sql"

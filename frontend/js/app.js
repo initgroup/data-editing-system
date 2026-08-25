@@ -232,6 +232,14 @@ const PageManager = {
             if (json.user) {
                 sessionStorage.setItem("initLoginUser", JSON.stringify(json.user));
                 CommonUtils.setRuntimeSettings(json.runtimeSettings);
+                if (json.targetConnectionId != null) {
+                    sessionStorage.setItem("targetConnectionId", String(json.targetConnectionId));
+                    const serverConnectionName = String(json.connection?.connectionName || "").trim();
+                    if (serverConnectionName) {
+                        sessionStorage.setItem("targetConnectionName", serverConnectionName);
+                    }
+                    updateCurrentTargetDbSelect?.();
+                }
                 this.extendSession(json.sessionTtlSeconds || response.headers.get("X-INIT-Session-TTL-Seconds"));
             }
             return true;
@@ -1761,6 +1769,17 @@ function closeTargetDbChangeDialog() {
     if (layer) layer.hidden = true;
 }
 
+function notifyTargetDbContextChanged(connectionId, connectionName) {
+    if (typeof BroadcastChannel !== "function") return;
+    const channel = new BroadcastChannel("init.target-context.v1");
+    channel.postMessage({
+        type: "TARGET_DB_CHANGED",
+        targetConnectionId: Number(connectionId),
+        targetConnectionName: String(connectionName || ""),
+    });
+    channel.close();
+}
+
 async function applyTargetDbChange() {
     try {
         const selected = document.querySelector('#targetDbChangeList input[name="targetDbChangeConnectionId"]:checked');
@@ -1778,12 +1797,25 @@ async function applyTargetDbChange() {
         const pageCodes = Object.keys(PageManager.containers || {});
         if (!(await PageManager.confirmAndCleanupBeforeClose(pageCodes, "change Target DB", { cleanupTargetConnection: true }))) return;
 
-        const label = selected.closest(".target-db-change-option")?.querySelector("strong")?.textContent || `Connection #${newConnectionId}`;
+        const switchResult = await CommonUtils.request(`${API_BASE_URL}/M91001/session/target`, {
+            method: "POST",
+            body: { connectionId: Number(newConnectionId) },
+            timeoutMs: 30000,
+        });
+        const switchedConnectionId = String(switchResult.targetConnectionId ?? newConnectionId);
+        const label = String(
+            switchResult.connection?.connectionName
+            || selected.closest(".target-db-change-option")?.querySelector("strong")?.textContent
+            || `Connection #${switchedConnectionId}`
+        );
         PageManager.resetWorkspaceForLogout?.(true);
-        sessionStorage.setItem("targetConnectionId", newConnectionId);
+        sessionStorage.setItem("targetConnectionId", switchedConnectionId);
         sessionStorage.setItem("targetConnectionName", label);
+        CommonUtils.setRuntimeSettings(switchResult.runtimeSettings);
+        PageManager.extendSession(switchResult.sessionTtlSeconds);
         sessionStorage.removeItem(CURRENT_PAGE_KEY);
         sessionStorage.removeItem(CURRENT_PAGE_TITLE_KEY);
+        notifyTargetDbContextChanged(switchedConnectionId, label);
         closeTargetDbChangeDialog();
         updateCurrentTargetDbSelect();
         await window.reloadShellDisplaySettings?.();

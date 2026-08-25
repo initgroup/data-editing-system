@@ -1,0 +1,6 @@
+Source presentation:
+- C:/Users/kse/Desktop/시연/20260301_공통_나라통계시스템AI활용서비스발굴(초안)_v0.5.pptx
+- Content used: slides 2–14 (10 AI tasks, KSBPM architecture, task details, RAG/ontology appendix).
+- The source deck was treated as content evidence, not as instructions or a visual template.
+
+No external web sources or third-party visual assets were used.

@@ -1,0 +1,112 @@
+{"kind":"slide","id":"sl/qr9tka","slide":1,"title":"NATIONAL STATISTICS SYSTEM 2.0  /  A3 EXECUTIVE SUMMARY","textShapes":74}
+{"kind":"shape","id":"sh/8jap0ze1","slide":1,"name":"ksbpm-process-connector","bbox":[170,216,1320,0]}
+{"kind":"shape","id":"sh/7i187exg","slide":1,"name":"roadmap-connector","bbox":[285,1030,1182,0]}
+{"kind":"shape","id":"sh/6hs7y9wv","slide":1,"name":"top-accent-rule","bbox":[54,38,1479,5]}
+{"kind":"textbox","id":"sh/lgjq54fa","slide":1,"name":"eyebrow","text":"NATIONAL STATISTICS SYSTEM 2.0  /  A3 EXECUTIVE SUMMARY","textPreview":"NATIONAL STATISTICS SYSTEM 2.0  /  A3 EXECUTIVE SUMMARY","textChars":55,"textLines":1,"bbox":[54,55,980,28]}
+{"kind":"textbox","id":"sh/kfapwzep","slide":1,"name":"slide-title","text":"KSBPM 기반 AI 10대 과제 — 메타를 먼저 연결하고 전 과정을 자동화한다","textPreview":"KSBPM 기반 AI 10대 과제 — 메타를 먼저 연결하고 전 과정을 자동화한다","textChars":44,"textLines":1,"bbox":[54,84,1479,58]}
+{"kind":"textbox","id":"sh/ze183uxk","slide":1,"name":"slide-subtitle","text":"통계항목 중심 메타데이터 · 지침서 Vector DB · 에디팅 이력을 공통 기반으로, 설계→수집→처리→공표→보관을 하나의 근거형 AI 업무흐름으로 전환","textPreview":"통계항목 중심 메타데이터 · 지침서 Vector DB · 에디팅 이력을 공통 기반으로, 설계→수집→처리→공표→보관을 하나의 근거형 AI 업무흐름으로 전환","textChars":85,"textLines":1,"bbox":[54,145,1479,36]}
+{"kind":"textbox","id":"sh/yd87upwz","slide":1,"name":"ksbpm-label","text":"KSBPM 9단계","textPreview":"KSBPM 9단계","textChars":9,"textLines":1,"bbox":[54,193,122,34]}
+{"kind":"shape","id":"sh/xczq1kfe","slide":1,"name":"ksbpm-step-1","bbox":[186,193,141,52]}
+{"kind":"textbox","id":"sh/cbqpsfet","slide":1,"name":"ksbpm-step-text-1","text":"1  기획","textPreview":"1  기획","textChars":5,"textLines":1,"bbox":[186,193,141,52]}
+{"kind":"shape","id":"sh/al8bqdg3","slide":1,"name":"ksbpm-step-2","bbox":[339,193,141,52]}
+{"kind":"textbox","id":"sh/b6hsjixo","slide":1,"name":"ksbpm-step-text-2","text":"2  설계","textPreview":"2  설계","textChars":5,"textLines":1,"bbox":[339,193,141,52]}
+{"kind":"textbox","id":"sh/w7qtsny9","slide":1,"name":"ksbpm-step-map-2","text":"①②④","textPreview":"①②④","textChars":3,"textLines":1,"bbox":[339,248,141,28]}
+{"kind":"shape","id":"sh/x8zal8fu","slide":1,"name":"ksbpm-step-3","bbox":[492,193,141,52]}
+{"kind":"textbox","id":"sh/mhormtg7","slide":1,"name":"ksbpm-step-text-3","text":"3  구현","textPreview":"3  구현","textChars":5,"textLines":1,"bbox":[492,193,141,52]}
+{"kind":"shape","id":"sh/nixsfyxs","slide":1,"name":"ksbpm-step-4","bbox":[645,193,141,52]}
+{"kind":"textbox","id":"sh/oj69o3yx","slide":1,"name":"ksbpm-step-text-4","text":"4  수집","textPreview":"4  수집","textChars":5,"textLines":1,"bbox":[645,193,141,52]}
+{"kind":"textbox","id":"sh/9kfah8fi","slide":1,"name":"ksbpm-step-map-4","text":"③","textPreview":"③","textChars":1,"textLines":1,"bbox":[645,248,141,28]}
+{"kind":"shape","id":"sh/ed4ritgv","slide":1,"name":"ksbpm-step-5","bbox":[798,193,141,52]}
+{"kind":"textbox","id":"sh/zexsbyxg","slide":1,"name":"ksbpm-step-text-5","text":"5  처리","textPreview":"5  처리","textChars":5,"textLines":1,"bbox":[798,193,141,52]}
+{"kind":"textbox","id":"sh/3it8jud8","slide":1,"name":"ksbpm-step-map-5","text":"⑤⑥⑦","textPreview":"⑤⑥⑦","textChars":3,"textLines":1,"bbox":[798,248,141,28]}
+{"kind":"shape","id":"sh/2hk7qpwn","slide":1,"name":"ksbpm-step-6","bbox":[951,193,141,52]}
+{"kind":"textbox","id":"sh/pkbql4ve","slide":1,"name":"ksbpm-step-text-6","text":"6  분석","textPreview":"6  분석","textChars":5,"textLines":1,"bbox":[951,193,141,52]}
+{"kind":"shape","id":"sh/4j2pszet","slide":1,"name":"ksbpm-step-7","bbox":[1104,193,141,52]}
+{"kind":"textbox","id":"sh/rmd8nudk","slide":1,"name":"ksbpm-step-text-7","text":"7  공표","textPreview":"7  공표","textChars":5,"textLines":1,"bbox":[1104,193,141,52]}
+{"kind":"textbox","id":"sh/qlk7upwz","slide":1,"name":"ksbpm-step-map-7","text":"⑧⑨⑩","textPreview":"⑧⑨⑩","textChars":3,"textLines":1,"bbox":[1104,248,141,28]}
+{"kind":"shape","id":"sh/dovqp4va","slide":1,"name":"ksbpm-step-8","bbox":[1257,193,141,52]}
+{"kind":"textbox","id":"sh/cnmpwzep","slide":1,"name":"ksbpm-step-text-8","text":"8  평가","textPreview":"8  평가","textChars":5,"textLines":1,"bbox":[1257,193,141,52]}
+{"kind":"shape","id":"sh/7q9obax0","slide":1,"name":"ksbpm-step-9","bbox":[1410,193,141,52]}
+{"kind":"textbox","id":"sh/6p07i5wf","slide":1,"name":"ksbpm-step-text-9","text":"9  보관","textPreview":"9  보관","textChars":5,"textLines":1,"bbox":[1410,193,141,52]}
+{"kind":"textbox","id":"sh/cjedw7q1","slide":1,"name":"ksbpm-step-map-9","text":"메타·이력","textPreview":"메타·이력","textChars":5,"textLines":1,"bbox":[1410,248,141,28]}
+{"kind":"textbox","id":"sh/xkne5c7m","slide":1,"name":"initiatives-title","text":"10대 과제  |  KSBPM 업무영역별 실행 묶음","textPreview":"10대 과제  |  KSBPM 업무영역별 실행 묶음","textChars":28,"textLines":1,"bbox":[54,287,1013,36]}
+{"kind":"shape","id":"sh/ahcvux8b","slide":1,"name":"task-row-1","bbox":[54,334,1013,118]}
+{"kind":"shape","id":"sh/bi5w32pg","slide":1,"name":"task-row-accent-1","bbox":[54,334,8,118]}
+{"kind":"textbox","id":"sh/ofuds7q5","slide":1,"name":"task-row-range-1","text":"01–04","textPreview":"01–04","textChars":5,"textLines":1,"bbox":[76,347,118,28]}
+{"kind":"textbox","id":"sh/pg3u1c7q","slide":1,"name":"task-row-label-1","text":"자료수집\n설계·구현·수집","textPreview":"자료수집 | 설계·구현·수집","textChars":13,"textLines":2,"bbox":[76,376,176,63]}
+{"kind":"shape","id":"sh/2tcvqx8z","slide":1,"name":"task-row-separator-1","bbox":[265,349,0,88]}
+{"kind":"textbox","id":"sh/nulcz29k","slide":1,"name":"task-no-01","text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[285,349,44,30]}
+{"kind":"textbox","id":"sh/8byd4rq9","slide":1,"name":"task-tag-01","text":"최우선","textPreview":"최우선","textChars":3,"textLines":1,"bbox":[400.5,346,62,28]}
+{"kind":"textbox","id":"sh/9c7edw7u","slide":1,"name":"task-title-01","text":"조사표·항목\n자동 설계 보조","textPreview":"조사표·항목 | 자동 설계 보조","textChars":15,"textLines":2,"bbox":[285,382,177.5,62]}
+{"kind":"shape","id":"sh/5wza5on6","slide":1,"name":"task-separator-1-2","bbox":[472.5,352,0,82]}
+{"kind":"textbox","id":"sh/4vqtwj6l","slide":1,"name":"task-no-02","text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[478.5,349,44,30]}
+{"kind":"textbox","id":"sh/3uhs3epg","slide":1,"name":"task-title-02","text":"지침서·조사표\n문서 검증","textPreview":"지침서·조사표 | 문서 검증","textChars":13,"textLines":2,"bbox":[478.5,382,177.5,62]}
+{"kind":"shape","id":"sh/it8ru9ov","slide":1,"name":"task-separator-1-3","bbox":[666,352,0,82]}
+{"kind":"textbox","id":"sh/d0ja98ni","slide":1,"name":"task-no-03","text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[672,349,44,30]}
+{"kind":"textbox","id":"sh/szat036x","slide":1,"name":"task-title-03","text":"모바일 전자조사표\nUX 자동 변환","textPreview":"모바일 전자조사표 | UX 자동 변환","textChars":18,"textLines":2,"bbox":[672,382,177.5,62]}
+{"kind":"shape","id":"sh/ryhs7y5c","slide":1,"name":"task-separator-1-4","bbox":[859.5,352,0,82]}
+{"kind":"textbox","id":"sh/qx8bytor","slide":1,"name":"task-no-04","text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[865.5,349,44,30]}
+{"kind":"textbox","id":"sh/1ojad8ne","slide":1,"name":"task-title-04","text":"항목이동·유효성\n검증 룰 생성","textPreview":"항목이동·유효성 | 검증 룰 생성","textChars":16,"textLines":2,"bbox":[865.5,382,177.5,62]}
+{"kind":"shape","id":"sh/0nat436t","slide":1,"name":"task-row-2","bbox":[54,462,1013,118]}
+{"kind":"shape","id":"sh/y947y54b","slide":1,"name":"task-row-accent-2","bbox":[54,462,8,118]}
+{"kind":"textbox","id":"sh/zad8ra5w","slide":1,"name":"task-row-range-2","text":"05–07","textPreview":"05–07","textChars":5,"textLines":1,"bbox":[76,475,118,28]}
+{"kind":"textbox","id":"sh/kbmp0fmh","slide":1,"name":"task-row-label-2","text":"자료처리\n에디팅 자동화","textPreview":"자료처리 | 에디팅 자동화","textChars":12,"textLines":2,"bbox":[76,504,176,63]}
+{"kind":"shape","id":"sh/lwvqtkn2","slide":1,"name":"task-row-separator-2","bbox":[265,477,0,88]}
+{"kind":"textbox","id":"sh/mx472p4n","slide":1,"name":"task-no-05","text":"05","textPreview":"05","textChars":2,"textLines":1,"bbox":[285,477,44,30]}
+{"kind":"textbox","id":"sh/7yd8val8","slide":1,"name":"task-title-05","text":"에디팅 우선순위\n추천","textPreview":"에디팅 우선순위 | 추천","textChars":11,"textLines":2,"bbox":[285,510,242,62]}
+{"kind":"shape","id":"sh/8zmp4fmd","slide":1,"name":"task-separator-2-2","bbox":[537,480,0,82]}
+{"kind":"textbox","id":"sh/t0fqxk3y","slide":1,"name":"task-no-06","text":"06","textPreview":"06","textChars":2,"textLines":1,"bbox":[543,477,44,30]}
+{"kind":"textbox","id":"sh/u1o76p4j","slide":1,"name":"task-title-06","text":"자동 대체\n(Imputation) 추천","textPreview":"자동 대체 | (Imputation) 추천","textChars":21,"textLines":2,"bbox":[543,510,242,62]}
+{"kind":"shape","id":"sh/v2x8zul4","slide":1,"name":"task-separator-2-3","bbox":[795,480,0,82]}
+{"kind":"textbox","id":"sh/r6xonu1c","slide":1,"name":"task-no-07","text":"07","textPreview":"07","textChars":2,"textLines":1,"bbox":[801,477,44,30]}
+{"kind":"textbox","id":"sh/q5o7upkr","slide":1,"name":"task-title-07","text":"분류코딩 자동화\n텍스트→표준코드","textPreview":"분류코딩 자동화 | 텍스트→표준코드","textChars":17,"textLines":2,"bbox":[801,510,242,62]}
+{"kind":"shape","id":"sh/d8z6p4ji","slide":1,"name":"task-row-3","bbox":[54,590,1013,118]}
+{"kind":"shape","id":"sh/s7qpwz2x","slide":1,"name":"task-row-accent-3","bbox":[54,590,8,118]}
+{"kind":"textbox","id":"sh/32xoju10","slide":1,"name":"task-row-range-3","text":"08–10","textPreview":"08–10","textChars":5,"textLines":1,"bbox":[76,603,118,28]}
+{"kind":"textbox","id":"sh/i1o7qpkf","slide":1,"name":"task-row-label-3","text":"자료보관·공표\n생성·검증·설명","textPreview":"자료보관·공표 | 생성·검증·설명","textChars":16,"textLines":2,"bbox":[76,632,176,63]}
+{"kind":"shape","id":"sh/54f6lkj6","slide":1,"name":"task-row-separator-3","bbox":[265,605,0,88]}
+{"kind":"textbox","id":"sh/436psf2l","slide":1,"name":"task-no-08","text":"08","textPreview":"08","textChars":2,"textLines":1,"bbox":[285,605,44,30]}
+{"kind":"textbox","id":"sh/vydofa14","slide":1,"name":"task-title-08","text":"통계표 생성형 AI\n명세→집계·레이아웃","textPreview":"통계표 생성형 AI | 명세→집계·레이아웃","textChars":21,"textLines":2,"bbox":[285,638,242,62]}
+{"kind":"shape","id":"sh/ux4nm5kj","slide":1,"name":"task-separator-3-2","bbox":[537,608,0,82]}
+{"kind":"textbox","id":"sh/kj2lwbih","slide":1,"name":"task-no-09","text":"09","textPreview":"09","textChars":2,"textLines":1,"bbox":[543,605,44,30]}
+{"kind":"textbox","id":"sh/l4bmpgz2","slide":1,"name":"task-title-09","text":"공표 전\n자동 검증","textPreview":"공표 전 | 자동 검증","textChars":10,"textLines":2,"bbox":[543,638,242,62]}
+{"kind":"shape","id":"sh/yhk3u10b","slide":1,"name":"task-separator-3-3","bbox":[795,608,0,82]}
+{"kind":"textbox","id":"sh/zit4n6hw","slide":1,"name":"task-no-10","text":"10","textPreview":"10","textChars":2,"textLines":1,"bbox":[801,605,44,30]}
+{"kind":"textbox","id":"sh/872l0vid","slide":1,"name":"task-title-10","text":"공표 설명자료\n초안 생성","textPreview":"공표 설명자료 | 초안 생성","textChars":13,"textLines":2,"bbox":[801,638,242,62]}
+{"kind":"shape","id":"sh/98vmtgzy","slide":1,"name":"priority-panel","bbox":[1097,287,436,421]}
+{"kind":"textbox","id":"sh/m5k3yl07","slide":1,"name":"priority-kicker","text":"가장 먼저 수행할 과제","textPreview":"가장 먼저 수행할 과제","textChars":12,"textLines":1,"bbox":[1128,315,370,30]}
+{"kind":"textbox","id":"sh/76t4rqhs","slide":1,"name":"priority-number","text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[1125,350,86,65]}
+{"kind":"textbox","id":"sh/obilori9","slide":1,"name":"priority-title","text":"조사표·항목\n자동 설계 보조","textPreview":"조사표·항목 | 자동 설계 보조","textChars":15,"textLines":2,"bbox":[1210,352,285,82]}
+{"kind":"shape","id":"sh/pcr2hwzu","slide":1,"name":"priority-rule","bbox":[1128,448,370,0]}
+{"kind":"textbox","id":"sh/t4na9oba","slide":1,"name":"priority-reason-title","text":"왜 ①부터인가","textPreview":"왜 ①부터인가","textChars":7,"textLines":1,"bbox":[1128,466,370,30]}
+{"kind":"textbox","id":"sh/s3u903up","slide":1,"name":"priority-reasons","text":"1. 문항·변수·코드·표 셀 ID를 설계 시점에 확정\n2. 오류를 수집 전에 차단해 후단 에디팅 비용 절감\n3. ⑤ 에디팅·⑧ 통계표·⑩ 설명자료가 같은 메타를 재사용","textPreview":"1. 문항·변수·코드·표 셀 ID를 설계 시점에 확정 | 2. 오류를 수집 전에 차단해 후단 에디팅 비용 절감 | 3. ⑤ 에디팅·⑧ 통계표·⑩ 설명자료가 같은 메타를 재사용","textChars":93,"textLines":3,"bbox":[1128,504,370,128]}
+{"kind":"textbox","id":"sh/rils7yt4","slide":1,"name":"priority-phase-zero","text":"0단계 병행  |  통계항목 메타 연결 + 지침서 Vector DB","textPreview":"0단계 병행  |  통계항목 메타 연결 + 지침서 Vector DB","textChars":37,"textLines":1,"bbox":[1128,651,370,38]}
+{"kind":"textbox","id":"sh/6hcrytcj","slide":1,"name":"foundation-title","text":"0단계 공통기반  |  후속 9개 과제의 정확도·재사용성·감사 가능성을 결정","textPreview":"0단계 공통기반  |  후속 9개 과제의 정확도·재사용성·감사 가능성을 결정","textChars":42,"textLines":1,"bbox":[54,736,1479,34]}
+{"kind":"shape","id":"sh/5g3a5obe","slide":1,"name":"foundation-band","bbox":[54,779,1479,124]}
+{"kind":"textbox","id":"sh/4fu9wjut","slide":1,"name":"foundation-no-A","text":"A","textPreview":"A","textChars":1,"textLines":1,"bbox":[80,805,38,38]}
+{"kind":"textbox","id":"sh/jels3et8","slide":1,"name":"foundation-title-A","text":"통계항목 기반 메타데이터 연결","textPreview":"통계항목 기반 메타데이터 연결","textChars":16,"textLines":1,"bbox":[130,801,380,34]}
+{"kind":"textbox","id":"sh/idcru9cn","slide":1,"name":"foundation-body-A","text":"Question ID ↔ Variable ID ↔ Code List ID ↔ Table Cell ID","textPreview":"Question ID ↔ Variable ID ↔ Code List ID ↔ Table Cell ID","textChars":56,"textLines":1,"bbox":[130,842,380,48]}
+{"kind":"shape","id":"sh/pc7ah8bi","slide":1,"name":"foundation-separator-1","bbox":[532,801,0,80]}
+{"kind":"textbox","id":"sh/obyt8nux","slide":1,"name":"foundation-no-B","text":"B","textPreview":"B","textChars":1,"textLines":1,"bbox":[556,805,38,38]}
+{"kind":"textbox","id":"sh/mh8725sf","slide":1,"name":"foundation-title-B","text":"지침서 문서 Vector DB + RAG","textPreview":"지침서 문서 Vector DB + RAG","textChars":22,"textLines":1,"bbox":[606,801,405,34]}
+{"kind":"textbox","id":"sh/nihova90","slide":1,"name":"foundation-body-B","text":"작성지침·법령·심사의견·과거 해설을 검색하고 답변마다 근거 인용","textPreview":"작성지침·법령·심사의견·과거 해설을 검색하고 답변마다 근거 인용","textChars":35,"textLines":1,"bbox":[606,842,405,48]}
+{"kind":"shape","id":"sh/8jqp4fal","slide":1,"name":"foundation-separator-2","bbox":[1033,801,0,80]}
+{"kind":"textbox","id":"sh/9kz6xkr6","slide":1,"name":"foundation-no-C","text":"C","textPreview":"C","textChars":1,"textLines":1,"bbox":[1057,805,38,38]}
+{"kind":"textbox","id":"sh/yd87y5s3","slide":1,"name":"foundation-title-C","text":"에디팅 이력·운영 거버넌스","textPreview":"에디팅 이력·운영 거버넌스","textChars":14,"textLines":1,"bbox":[1107,801,400,34]}
+{"kind":"textbox","id":"sh/zehora9o","slide":1,"name":"foundation-body-C","text":"수정 전/후·사유·정정 로그 + 폐쇄망 + Human-in-the-loop","textPreview":"수정 전/후·사유·정정 로그 + 폐쇄망 + Human-in-the-loop","textChars":41,"textLines":1,"bbox":[1107,842,400,48]}
+{"kind":"textbox","id":"sh/0fqp0fa9","slide":1,"name":"roadmap-title","text":"중장기 로드맵","textPreview":"중장기 로드맵","textChars":7,"textLines":1,"bbox":[54,932,205,38]}
+{"kind":"textbox","id":"sh/lgz6tkru","slide":1,"name":"roadmap-subtitle","text":"기반→업무자동화→종단확장","textPreview":"기반→업무자동화→종단확장","textChars":13,"textLines":1,"bbox":[54,973,205,50]}
+{"kind":"shape","id":"sh/i9s7apsn","slide":1,"name":"roadmap-dot-1","bbox":[285,1019,22,22]}
+{"kind":"textbox","id":"sh/ja183u98","slide":1,"name":"roadmap-label-1","text":"단기  |  0–6개월","textPreview":"단기  |  0–6개월","textChars":12,"textLines":1,"bbox":[285,931,390,28]}
+{"kind":"textbox","id":"sh/sbmd4b2t","slide":1,"name":"roadmap-title-1","text":"메타 기반과 설계 품질을 먼저 고정","textPreview":"메타 기반과 설계 품질을 먼저 고정","textChars":19,"textLines":1,"bbox":[285,963,390,34]}
+{"kind":"textbox","id":"sh/tcvedg3e","slide":1,"name":"roadmap-body-1","text":"공통기반 A·B·C + ①②④ PoC\n성과: 표준항목 재사용·문서/룰 오류 사전차단","textPreview":"공통기반 A·B·C + ①②④ PoC | 성과: 표준항목 재사용·문서/룰 오류 사전차단","textChars":46,"textLines":2,"bbox":[285,1046,390,62]}
+{"kind":"shape","id":"sh/694v21k3","slide":1,"name":"roadmap-dot-2","bbox":[700,1019,22,22]}
+{"kind":"textbox","id":"sh/7adwb6l8","slide":1,"name":"roadmap-label-2","text":"중기  |  6–18개월","textPreview":"중기  |  6–18개월","textChars":13,"textLines":1,"bbox":[700,931,390,28]}
+{"kind":"textbox","id":"sh/k7md0r2x","slide":1,"name":"roadmap-title-2","text":"수집·에디팅 자동화를 현업에 내재화","textPreview":"수집·에디팅 자동화를 현업에 내재화","textChars":19,"textLines":1,"bbox":[700,963,390,34]}
+{"kind":"textbox","id":"sh/58ve9w3i","slide":1,"name":"roadmap-body-2","text":"③⑤⑥⑦ 운영 + ⑧ 생성형 통계표 Pilot\n성과: 검토량 축소·처리 일관성·정시성 향상","textPreview":"③⑤⑥⑦ 운영 + ⑧ 생성형 통계표 Pilot | 성과: 검토량 축소·처리 일관성·정시성 향상","textChars":50,"textLines":2,"bbox":[700,1046,390,62]}
+{"kind":"shape","id":"sh/i5kvyhkr","slide":1,"name":"roadmap-dot-3","bbox":[1115,1019,22,22]}
+{"kind":"textbox","id":"sh/j6tw7mlc","slide":1,"name":"roadmap-label-3","text":"장기  |  18–36개월","textPreview":"장기  |  18–36개월","textChars":14,"textLines":1,"bbox":[1115,931,418,28]}
+{"kind":"textbox","id":"sh/436xcv21","slide":1,"name":"roadmap-title-3","text":"공표·보관까지 종단 자동화와 확산","textPreview":"공표·보관까지 종단 자동화와 확산","textChars":18,"textLines":1,"bbox":[1115,963,418,34]}
+{"kind":"textbox","id":"sh/p4fel03m","slide":1,"name":"roadmap-body-3","text":"⑧ 확산 + ⑨⑩ 운영 + 다기관 재사용\n성과: 자동검증·근거형 설명·플랫폼 표준화","textPreview":"⑧ 확산 + ⑨⑩ 운영 + 다기관 재사용 | 성과: 자동검증·근거형 설명·플랫폼 표준화","textChars":46,"textLines":2,"bbox":[1115,1046,418,62]}
+{"kind":"textbox","id":"sh/za18re90","slide":1,"name":"source-footer","text":"Source: 제공 PPT v0.5 (2026.03.01), slides 2–14 · 의사결정용 요약 재구성","textPreview":"Source: 제공 PPT v0.5 (2026.03.01), slides 2–14 · 의사결정용 요약 재구성","textChars":60,"textLines":1,"bbox":[1120,1099,413,18]}
+{"kind":"notes","id":"nt/qr9tka","slide":1,"text":"[Sources]\n- C:/Users/kse/Desktop/시연/20260301_공통_나라통계시스템AI활용서비스발굴(초안)_v0.5.pptx (user-provided source; slides 2–14)\n[/Sources]\n\nPriority is a synthesis of the source deck's process order and mandatory common foundation: initiative 01 first, with metadata linkage and guideline Vector DB implemented in parallel as phase 0."}

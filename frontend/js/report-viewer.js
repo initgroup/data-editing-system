@@ -1,6 +1,8 @@
 (function() {
     const API_BASE = "/api/M06001";
     const query = new URLSearchParams(window.location.search);
+    const TARGET_CONTEXT_CHANNEL_NAME = "init.target-context.v1";
+    let targetContextChannel = null;
     const state = {
         isBatch: String(query.get("mode") || "").trim().toLowerCase() === "batch",
         reportCode: String(query.get("reportCode") || "").trim(),
@@ -246,6 +248,12 @@
             button.addEventListener("click", () => downloadReport(button.dataset.format, button));
         });
         window.addEventListener("pagehide", abortPendingRequests, { once: true });
+        if (typeof BroadcastChannel === "function") {
+            targetContextChannel = new BroadcastChannel(TARGET_CONTEXT_CHANNEL_NAME);
+            targetContextChannel.addEventListener("message", (event) => {
+                if (event?.data?.type === "TARGET_DB_CHANGED") closeViewer();
+            });
+        }
     }
 
     function closeViewer() {
@@ -258,6 +266,8 @@
         state.downloadController?.abort();
         if (state.loadTimeoutId) window.clearTimeout(state.loadTimeoutId);
         state.loadTimeoutId = null;
+        targetContextChannel?.close();
+        targetContextChannel = null;
     }
 
     function getTargetConnectionId() {

@@ -2,6 +2,7 @@
     "use strict";
 
     const STORAGE_KEY = "init.quick-edit.pipeline.v1";
+    const TARGET_CONTEXT_CHANNEL_NAME = "init.target-context.v1";
     const MODEL_TRAINING_NAVIGATION_KEY = "init.m90003.navigation.v1";
     const STATE_VERSION = 1;
     const STEP_COUNT = 8;
@@ -4009,7 +4010,27 @@
         });
     }
 
+    let targetContextChannel = null;
+
+    function bindTargetContextChannel() {
+        if (targetContextChannel || typeof BroadcastChannel !== "function") return;
+        targetContextChannel = new BroadcastChannel(TARGET_CONTEXT_CHANNEL_NAME);
+        targetContextChannel.addEventListener("message", (event) => {
+            const message = event?.data || {};
+            if (message.type !== "TARGET_DB_CHANGED") return;
+            const changedConnectionId = Number(message.targetConnectionId || 0);
+            if (!changedConnectionId || changedConnectionId === Number(client.targetConnectionId || 0)) return;
+            sessionStorage.removeItem(STORAGE_KEY);
+            window.location.reload();
+        });
+        window.addEventListener("beforeunload", () => {
+            targetContextChannel?.close();
+            targetContextChannel = null;
+        }, { once: true });
+    }
+
     async function init() {
+        bindTargetContextChannel();
         bindEvents();
         applyRestoredFormState();
         renderWorkspaceMode();

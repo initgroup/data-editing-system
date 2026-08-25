@@ -851,6 +851,132 @@ EXCEPTION
 END;
 /
 
+DECLARE
+    v_index_count NUMBER;
+BEGIN
+    -- INIT$_TB_OML_ACTIVE_MODEL is the authoritative deployment pointer.
+    -- Repair legacy registry drift before lifecycle procedures are replaced.
+    UPDATE "INIT$_TB_OML_ACTIVE_MODEL" A
+       SET "MODEL_VERSION_ID" = (
+               SELECT MAX(R."MODEL_VERSION_ID") KEEP (
+                          DENSE_RANK FIRST
+                          ORDER BY R."ACTIVATED_AT" DESC NULLS LAST
+                                 , R."VERSION_NO" DESC
+                                 , R."MODEL_VERSION_ID" DESC
+                      )
+                 FROM "INIT$_TB_OML_MODEL_REGISTRY" R
+                WHERE R."MODEL_KEY" = A."MODEL_KEY"
+                  AND R."STATUS_CODE" = 'ACTIVE'
+           )
+     WHERE NOT EXISTS (
+               SELECT 1
+                 FROM "INIT$_TB_OML_MODEL_REGISTRY" C
+                WHERE C."MODEL_KEY" = A."MODEL_KEY"
+                  AND C."MODEL_VERSION_ID" = A."MODEL_VERSION_ID"
+           )
+       AND EXISTS (
+               SELECT 1
+                 FROM "INIT$_TB_OML_MODEL_REGISTRY" R
+                WHERE R."MODEL_KEY" = A."MODEL_KEY"
+                  AND R."STATUS_CODE" = 'ACTIVE'
+           );
+
+    UPDATE "INIT$_TB_OML_ACTIVE_MODEL" A
+       SET "PREVIOUS_MODEL_VERSION_ID" = NULL
+     WHERE A."PREVIOUS_MODEL_VERSION_ID" = A."MODEL_VERSION_ID"
+        OR NOT EXISTS (
+               SELECT 1
+                 FROM "INIT$_TB_OML_MODEL_REGISTRY" P
+                WHERE P."MODEL_KEY" = A."MODEL_KEY"
+                  AND P."MODEL_VERSION_ID" = A."PREVIOUS_MODEL_VERSION_ID"
+           );
+
+    MERGE INTO "INIT$_TB_OML_ACTIVE_MODEL" A
+    USING (
+          SELECT X."MODEL_KEY"
+               , X."MODEL_VERSION_ID"
+            FROM
+               (
+                SELECT R."MODEL_KEY"
+                     , R."MODEL_VERSION_ID"
+                     , ROW_NUMBER() OVER (
+                           PARTITION BY R."MODEL_KEY"
+                           ORDER BY R."ACTIVATED_AT" DESC NULLS LAST
+                                  , R."VERSION_NO" DESC
+                                  , R."MODEL_VERSION_ID" DESC
+                       ) AS RN
+                  FROM "INIT$_TB_OML_MODEL_REGISTRY" R
+                 WHERE R."STATUS_CODE" = 'ACTIVE'
+               ) X
+           WHERE X.RN = 1
+          ) S
+       ON (A."MODEL_KEY" = S."MODEL_KEY")
+     WHEN NOT MATCHED THEN
+        INSERT (
+            "MODEL_KEY"
+          , "MODEL_VERSION_ID"
+          , "PREVIOUS_MODEL_VERSION_ID"
+          , "UPDATED_BY"
+          , "UPDATED_AT"
+        ) VALUES (
+            S."MODEL_KEY"
+          , S."MODEL_VERSION_ID"
+          , NULL
+          , SYS_CONTEXT('USERENV', 'SESSION_USER')
+          , SYSTIMESTAMP
+        );
+
+    UPDATE "INIT$_TB_OML_MODEL_REGISTRY" R
+       SET "STATUS_CODE" = 'ARCHIVED'
+         , "ARCHIVED_BY" = COALESCE(R."ARCHIVED_BY", SYS_CONTEXT('USERENV', 'SESSION_USER'))
+         , "ARCHIVED_AT" = COALESCE(R."ARCHIVED_AT", SYSTIMESTAMP)
+     WHERE R."STATUS_CODE" = 'ACTIVE'
+       AND EXISTS (
+               SELECT 1
+                 FROM "INIT$_TB_OML_ACTIVE_MODEL" A
+                WHERE A."MODEL_KEY" = R."MODEL_KEY"
+                  AND A."MODEL_VERSION_ID" <> R."MODEL_VERSION_ID"
+           );
+
+    UPDATE "INIT$_TB_OML_MODEL_REGISTRY" R
+       SET "STATUS_CODE" = 'ACTIVE'
+         , "ARCHIVED_BY" = NULL
+         , "ARCHIVED_AT" = NULL
+     WHERE EXISTS (
+               SELECT 1
+                 FROM "INIT$_TB_OML_ACTIVE_MODEL" A
+                WHERE A."MODEL_KEY" = R."MODEL_KEY"
+                  AND A."MODEL_VERSION_ID" = R."MODEL_VERSION_ID"
+           )
+       AND R."STATUS_CODE" IN ('CANDIDATE', 'ARCHIVED');
+
+    COMMIT;
+
+    SELECT COUNT(*)
+      INTO v_index_count
+      FROM USER_INDEXES
+     WHERE INDEX_NAME = 'UK_INIT$_TB_OML_REG_ACTIVE_ONE';
+
+    IF v_index_count = 0 THEN
+        BEGIN
+            EXECUTE IMMEDIATE q'~
+                CREATE UNIQUE INDEX "UK_INIT$_TB_OML_REG_ACTIVE_ONE"
+                    ON "INIT$_TB_OML_MODEL_REGISTRY" (
+                        CASE WHEN "STATUS_CODE" = 'ACTIVE' THEN "MODEL_KEY" ELSE NULL END
+                    )
+            ~';
+        EXCEPTION
+            WHEN OTHERS THEN
+                IF SQLCODE <> -1408 THEN
+                    RAISE;
+                END IF;
+        END;
+    END IF;
+
+    DBMS_OUTPUT.PUT_LINE('[OK] Reconciled the active model pointer and installed the single-active guard.');
+END;
+/
+
 CREATE OR REPLACE PROCEDURE "INIT$_SP_TYPE_MODEL_ACTIVATE" (
     p_model_version_id IN NUMBER,
     p_user_id          IN VARCHAR2
@@ -861,6 +987,7 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_TYPE_MODEL_ACTIVATE" (
     v_previous_id      NUMBER;
     v_previous_count   NUMBER;
     v_model_count      NUMBER;
+    v_active_count     NUMBER;
     v_user_id          VARCHAR2(128) := SUBSTR(COALESCE(NULLIF(TRIM(p_user_id), ''), SYS_CONTEXT('USERENV', 'SESSION_USER')), 1, 128);
 BEGIN
     SELECT "MODEL_KEY"
@@ -908,17 +1035,20 @@ BEGIN
          WHERE "MODEL_VERSION_ID" = v_previous_id
            AND "MODEL_KEY" = v_model_key;
         IF v_previous_count <> 1 THEN
-            RAISE_APPLICATION_ERROR(-20720, 'Active model pointer does not match the model registry.');
+            -- Recover from a legacy/stale pointer. The activation below will
+            -- establish a new valid active pointer atomically.
+            v_previous_id := NULL;
         END IF;
     END IF;
 
+    -- The function-based unique index is immediate. Clear the logical key
+    -- completely before assigning the target row as the sole ACTIVE model.
     UPDATE "INIT$_TB_OML_MODEL_REGISTRY"
        SET "STATUS_CODE" = 'ARCHIVED'
          , "ARCHIVED_BY" = v_user_id
          , "ARCHIVED_AT" = SYSTIMESTAMP
      WHERE "MODEL_KEY" = v_model_key
-       AND "STATUS_CODE" = 'ACTIVE'
-       AND "MODEL_VERSION_ID" <> p_model_version_id;
+       AND "STATUS_CODE" = 'ACTIVE';
 
     UPDATE "INIT$_TB_OML_MODEL_REGISTRY"
        SET "STATUS_CODE" = 'ACTIVE'
@@ -927,6 +1057,15 @@ BEGIN
          , "ARCHIVED_BY" = NULL
          , "ARCHIVED_AT" = NULL
      WHERE "MODEL_VERSION_ID" = p_model_version_id;
+
+    SELECT COUNT(*)
+      INTO v_active_count
+      FROM "INIT$_TB_OML_MODEL_REGISTRY"
+     WHERE "MODEL_KEY" = v_model_key
+       AND "STATUS_CODE" = 'ACTIVE';
+    IF v_active_count <> 1 THEN
+        RAISE_APPLICATION_ERROR(-20720, 'Exactly one active model must remain after activation.');
+    END IF;
 
     MERGE INTO "INIT$_TB_OML_ACTIVE_MODEL" T
     USING (SELECT v_model_key "MODEL_KEY" FROM DUAL) S
@@ -943,6 +1082,10 @@ BEGIN
         "MODEL_KEY", "MODEL_VERSION_ID", "PREVIOUS_MODEL_VERSION_ID", "ACTION_CODE", "ACTION_BY", "ACTION_AT"
     ) VALUES (v_model_key, p_model_version_id, v_previous_id, 'ACTIVATE', v_user_id, SYSTIMESTAMP);
     COMMIT;
+EXCEPTION
+    WHEN OTHERS THEN
+        ROLLBACK;
+        RAISE;
 END;
 /
 
@@ -1004,6 +1147,8 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_TYPE_MODEL_ROLLBACK" (
     v_previous_model_name VARCHAR2(128);
     v_model_count NUMBER;
     v_current_count NUMBER;
+    v_previous_count NUMBER;
+    v_active_count NUMBER;
     v_user_id     VARCHAR2(128) := SUBSTR(COALESCE(NULLIF(TRIM(p_user_id), ''), SYS_CONTEXT('USERENV', 'SESSION_USER')), 1, 128);
 BEGIN
     FOR R IN (
@@ -1021,9 +1166,23 @@ BEGIN
       FROM "INIT$_TB_OML_ACTIVE_MODEL"
      WHERE "MODEL_KEY" = v_model_key
      FOR UPDATE;
+
+    IF v_previous_id IS NOT NULL THEN
+        SELECT COUNT(*)
+          INTO v_previous_count
+          FROM "INIT$_TB_OML_MODEL_REGISTRY"
+         WHERE "MODEL_KEY" = v_model_key
+           AND "MODEL_VERSION_ID" = v_previous_id
+           AND "MODEL_VERSION_ID" <> v_current_id
+           AND "STATUS_CODE" IN ('CANDIDATE', 'ARCHIVED', 'ACTIVE');
+        IF v_previous_count <> 1 THEN
+            v_previous_id := NULL;
+        END IF;
+    END IF;
+
     IF v_previous_id IS NULL THEN
-        -- The first explicit activation has no pointer history.  A prior
-        -- candidate/archived version is still a valid rollback target.
+        -- Recover missing/invalid legacy history by choosing the most recently
+        -- activated deployable version other than the current pointer.
         BEGIN
             SELECT "MODEL_VERSION_ID"
               INTO v_previous_id
@@ -1031,9 +1190,11 @@ BEGIN
                     SELECT "MODEL_VERSION_ID"
                       FROM "INIT$_TB_OML_MODEL_REGISTRY"
                      WHERE "MODEL_KEY" = v_model_key
-                       AND "MODEL_VERSION_ID" < v_current_id
+                       AND "MODEL_VERSION_ID" <> v_current_id
                        AND "STATUS_CODE" IN ('CANDIDATE', 'ARCHIVED', 'ACTIVE')
-                     ORDER BY "VERSION_NO" DESC, "MODEL_VERSION_ID" DESC
+                     ORDER BY "ACTIVATED_AT" DESC NULLS LAST
+                            , "VERSION_NO" DESC
+                            , "MODEL_VERSION_ID" DESC
                    )
              WHERE ROWNUM = 1;
         EXCEPTION
@@ -1068,15 +1229,26 @@ BEGIN
         RAISE_APPLICATION_ERROR(-20724, 'Previous physical model does not exist: ' || v_previous_model_name);
     END IF;
 
+    -- Use the same two-phase transition as activation so the immediate unique
+    -- index never observes both the current and rollback target as ACTIVE.
     UPDATE "INIT$_TB_OML_MODEL_REGISTRY"
        SET "STATUS_CODE" = 'ARCHIVED', "ARCHIVED_BY" = v_user_id, "ARCHIVED_AT" = SYSTIMESTAMP
      WHERE "MODEL_KEY" = v_model_key
-       AND "STATUS_CODE" = 'ACTIVE'
-       AND "MODEL_VERSION_ID" <> v_previous_id;
+       AND "STATUS_CODE" = 'ACTIVE';
     UPDATE "INIT$_TB_OML_MODEL_REGISTRY"
        SET "STATUS_CODE" = 'ACTIVE', "ACTIVATED_BY" = v_user_id, "ACTIVATED_AT" = SYSTIMESTAMP,
            "ARCHIVED_BY" = NULL, "ARCHIVED_AT" = NULL
      WHERE "MODEL_VERSION_ID" = v_previous_id;
+
+    SELECT COUNT(*)
+      INTO v_active_count
+      FROM "INIT$_TB_OML_MODEL_REGISTRY"
+     WHERE "MODEL_KEY" = v_model_key
+       AND "STATUS_CODE" = 'ACTIVE';
+    IF v_active_count <> 1 THEN
+        RAISE_APPLICATION_ERROR(-20723, 'Exactly one active model must remain after rollback.');
+    END IF;
+
     UPDATE "INIT$_TB_OML_ACTIVE_MODEL"
        SET "MODEL_VERSION_ID" = v_previous_id
          , "PREVIOUS_MODEL_VERSION_ID" = v_current_id
@@ -1087,6 +1259,10 @@ BEGIN
         "MODEL_KEY", "MODEL_VERSION_ID", "PREVIOUS_MODEL_VERSION_ID", "ACTION_CODE", "ACTION_BY", "ACTION_AT"
     ) VALUES (v_model_key, v_previous_id, v_current_id, 'ROLLBACK', v_user_id, SYSTIMESTAMP);
     COMMIT;
+EXCEPTION
+    WHEN OTHERS THEN
+        ROLLBACK;
+        RAISE;
 END;
 /
 

@@ -240,6 +240,42 @@ def create_login_session(conn, user_id: int, target_connection_id: Optional[int]
             cursor.close()
 
 
+def rotate_login_session_target(
+    conn,
+    request: Request,
+    user_id: int,
+    target_connection_id: int,
+) -> str:
+    """Atomically replace the current session with one bound to another Target DB."""
+    current_token = _get_session_token(request)
+    if not current_token:
+        raise HTTPException(status_code=401, detail="Login session is required.")
+
+    current_token_hash = _hash_session_token(current_token)
+    cursor = None
+    try:
+        new_token = create_login_session(conn, user_id, target_connection_id)
+        cursor = conn.cursor()
+        cursor.execute(SqlLoader.get_sql("AUTH_SESSION_REVOKE_FOR_TARGET_SWITCH"), {
+            "sessionTokenHash": current_token_hash,
+            "userId": int(user_id),
+        })
+        if int(cursor.rowcount or 0) != 1:
+            raise HTTPException(status_code=401, detail="Login session is no longer valid.")
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        if cursor:
+            cursor.close()
+
+    _release_session_touch_reservation(current_token_hash)
+    _invalidate_verified_session(current_token_hash)
+    request.state.session_cookie_token_override = new_token
+    return new_token
+
+
 def set_session_cookie(response: Response, token: str, request: Optional[Request] = None) -> None:
     for cookie_name in LEGACY_SESSION_COOKIE_NAMES:
         if cookie_name != SESSION_COOKIE_NAME:
@@ -261,7 +297,7 @@ def set_session_cookie(response: Response, token: str, request: Optional[Request
 
 
 def refresh_session_cookie(request: Request, response: Response) -> None:
-    token = _get_session_token(request)
+    token = getattr(request.state, "session_cookie_token_override", None) or _get_session_token(request)
     if token:
         set_session_cookie(response, token, request)
 

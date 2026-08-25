@@ -56,9 +56,21 @@ def get_target_connection_id(request: Request) -> int:
     if not raw_value:
         raise HTTPException(status_code=400, detail="Target DB connection is required. Please login again.")
     try:
-        return int(raw_value)
+        connection_id = int(raw_value)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid target DB connection ID.")
+
+    if not getattr(request.state, "internal_api_authorized", False):
+        auth_user = getattr(request.state, "auth_user", None) or {}
+        session_connection_id = auth_user.get("targetConnectionId")
+        if session_connection_id is None:
+            raise HTTPException(status_code=409, detail="Target DB session is not selected. Please login again.")
+        if int(session_connection_id) != connection_id:
+            raise HTTPException(
+                status_code=409,
+                detail="Target DB context changed. Reload the page and try again.",
+            )
+    return connection_id
 
 
 def _target_pool_key(connection_id: int, user_id: int) -> tuple[int, int]:

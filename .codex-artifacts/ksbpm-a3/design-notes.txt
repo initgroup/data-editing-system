@@ -1,0 +1,18 @@
+Communication job:
+By the end, national statistics decision-makers should understand what to start first and how the ten AI tasks sequence across KSBPM, because a statistical-item metadata backbone and guideline Vector DB make downstream editing and publication automation reliable.
+
+Composition reference:
+- Codex Grid slide 16: dense multi-topic scan pattern.
+- Codex Grid slide 18: three-milestone timeline.
+- Codex Grid slide 24: Gantt-like roadmap and dependency bands.
+
+Selected composition:
+- A3 landscape, one slide.
+- Top: KSBPM 9-step process spine.
+- Middle-left: all ten initiatives grouped by data collection, processing/editing, and publication/preservation.
+- Middle-right: priority recommendation.
+- Bottom: shared foundation and 0–36 month roadmap.
+
+Priority recommendation:
+- First task: 01 Survey form and statistical-item design assistance.
+- Mandatory phase 0 in parallel: statistical-item metadata linkage, guideline document Vector DB, and correction/edit logs with governance.

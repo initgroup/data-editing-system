@@ -2038,6 +2038,112 @@ CREATE INDEX "IX_INIT$_TB_OML_MODEL_REGISTRY_01"
     ON "INIT$_TB_OML_MODEL_REGISTRY" ("MODEL_KEY", "STATUS_CODE", "VERSION_NO")
 ]');
 
+    IF table_exists('INIT$_TB_OML_MODEL_REGISTRY')
+       AND table_exists('INIT$_TB_OML_ACTIVE_MODEL') THEN
+        -- The active pointer is authoritative. Repair legacy duplicate ACTIVE
+        -- registry rows before adding the database-level single-active guard.
+        UPDATE "INIT$_TB_OML_ACTIVE_MODEL" A
+           SET "MODEL_VERSION_ID" = (
+                   SELECT MAX(R."MODEL_VERSION_ID") KEEP (
+                              DENSE_RANK FIRST
+                              ORDER BY R."ACTIVATED_AT" DESC NULLS LAST
+                                     , R."VERSION_NO" DESC
+                                     , R."MODEL_VERSION_ID" DESC
+                          )
+                     FROM "INIT$_TB_OML_MODEL_REGISTRY" R
+                    WHERE R."MODEL_KEY" = A."MODEL_KEY"
+                      AND R."STATUS_CODE" = 'ACTIVE'
+               )
+         WHERE NOT EXISTS (
+                   SELECT 1
+                     FROM "INIT$_TB_OML_MODEL_REGISTRY" C
+                    WHERE C."MODEL_KEY" = A."MODEL_KEY"
+                      AND C."MODEL_VERSION_ID" = A."MODEL_VERSION_ID"
+               )
+           AND EXISTS (
+                   SELECT 1
+                     FROM "INIT$_TB_OML_MODEL_REGISTRY" R
+                    WHERE R."MODEL_KEY" = A."MODEL_KEY"
+                      AND R."STATUS_CODE" = 'ACTIVE'
+               );
+
+        UPDATE "INIT$_TB_OML_ACTIVE_MODEL" A
+           SET "PREVIOUS_MODEL_VERSION_ID" = NULL
+         WHERE A."PREVIOUS_MODEL_VERSION_ID" = A."MODEL_VERSION_ID"
+            OR NOT EXISTS (
+                   SELECT 1
+                     FROM "INIT$_TB_OML_MODEL_REGISTRY" P
+                    WHERE P."MODEL_KEY" = A."MODEL_KEY"
+                      AND P."MODEL_VERSION_ID" = A."PREVIOUS_MODEL_VERSION_ID"
+               );
+
+        MERGE INTO "INIT$_TB_OML_ACTIVE_MODEL" A
+        USING (
+              SELECT X."MODEL_KEY"
+                   , X."MODEL_VERSION_ID"
+                FROM
+                   (
+                    SELECT R."MODEL_KEY"
+                         , R."MODEL_VERSION_ID"
+                         , ROW_NUMBER() OVER (
+                               PARTITION BY R."MODEL_KEY"
+                               ORDER BY R."ACTIVATED_AT" DESC NULLS LAST
+                                      , R."VERSION_NO" DESC
+                                      , R."MODEL_VERSION_ID" DESC
+                           ) AS RN
+                      FROM "INIT$_TB_OML_MODEL_REGISTRY" R
+                     WHERE R."STATUS_CODE" = 'ACTIVE'
+                   ) X
+               WHERE X.RN = 1
+              ) S
+           ON (A."MODEL_KEY" = S."MODEL_KEY")
+         WHEN NOT MATCHED THEN
+            INSERT (
+                "MODEL_KEY"
+              , "MODEL_VERSION_ID"
+              , "PREVIOUS_MODEL_VERSION_ID"
+              , "UPDATED_BY"
+              , "UPDATED_AT"
+            ) VALUES (
+                S."MODEL_KEY"
+              , S."MODEL_VERSION_ID"
+              , NULL
+              , SYS_CONTEXT('USERENV', 'SESSION_USER')
+              , SYSTIMESTAMP
+            );
+
+        UPDATE "INIT$_TB_OML_MODEL_REGISTRY" R
+           SET "STATUS_CODE" = 'ARCHIVED'
+             , "ARCHIVED_BY" = COALESCE(R."ARCHIVED_BY", SYS_CONTEXT('USERENV', 'SESSION_USER'))
+             , "ARCHIVED_AT" = COALESCE(R."ARCHIVED_AT", SYSTIMESTAMP)
+         WHERE R."STATUS_CODE" = 'ACTIVE'
+           AND EXISTS (
+                   SELECT 1
+                     FROM "INIT$_TB_OML_ACTIVE_MODEL" A
+                    WHERE A."MODEL_KEY" = R."MODEL_KEY"
+                      AND A."MODEL_VERSION_ID" <> R."MODEL_VERSION_ID"
+               );
+
+        UPDATE "INIT$_TB_OML_MODEL_REGISTRY" R
+           SET "STATUS_CODE" = 'ACTIVE'
+             , "ARCHIVED_BY" = NULL
+             , "ARCHIVED_AT" = NULL
+         WHERE EXISTS (
+                   SELECT 1
+                     FROM "INIT$_TB_OML_ACTIVE_MODEL" A
+                    WHERE A."MODEL_KEY" = R."MODEL_KEY"
+                      AND A."MODEL_VERSION_ID" = R."MODEL_VERSION_ID"
+               )
+           AND R."STATUS_CODE" IN ('CANDIDATE', 'ARCHIVED');
+    END IF;
+
+    create_index_if_missing('UK_INIT$_TB_OML_REG_ACTIVE_ONE', 'INIT$_TB_OML_MODEL_REGISTRY', q'[
+CREATE UNIQUE INDEX "UK_INIT$_TB_OML_REG_ACTIVE_ONE"
+    ON "INIT$_TB_OML_MODEL_REGISTRY" (
+        CASE WHEN "STATUS_CODE" = 'ACTIVE' THEN "MODEL_KEY" ELSE NULL END
+    )
+]');
+
     create_index_if_missing('IX_INIT$_TB_OML_TRAIN_RUN_01', 'INIT$_TB_OML_TRAIN_RUN', q'[
 CREATE INDEX "IX_INIT$_TB_OML_TRAIN_RUN_01"
     ON "INIT$_TB_OML_TRAIN_RUN" ("MODEL_KEY", "STATUS_CODE", "REQUESTED_AT")

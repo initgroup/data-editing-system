@@ -255,7 +255,7 @@
             if (action === "dataset-prev") return this.changePage("dataset", -1);
             if (action === "dataset-next") return this.changePage("dataset", 1);
             if (action === "refresh-models") return this.loadModels();
-            if (action === "rollback-current") return this.rollbackCurrentModel();
+            if (action === "rollback-current") return this.rollbackCurrentModel(button);
             if (action === "refresh-runs") return this.loadRuns();
             if (action === "runs-prev") return this.changePage("runs", -1);
             if (action === "runs-next") return this.changePage("runs", 1);
@@ -264,8 +264,8 @@
             if (action === "show-training-feature") return this.showTrainingFeature(button?.dataset.featureIndex);
             if (action === "close-training-feature") return this.closeTrainingFeature();
             const modelId = button?.dataset.modelId || "";
-            if (action === "activate-model") return this.activateModel(modelId, false);
-            if (action === "rollback-model") return this.rollbackCurrentModel();
+            if (action === "activate-model") return this.activateModel(modelId, button);
+            if (action === "rollback-model") return this.rollbackCurrentModel(button);
             if (action === "archive-model") return this.archiveModel(modelId);
             if (action === "delete-model") return this.deleteModel(modelId);
         },
@@ -687,13 +687,15 @@
             }
         },
 
-        async activateModel(modelId) {
-            if (!modelId) return;
+        async activateModel(modelId, button = null) {
+            if (!modelId || this.loading.has("model-lifecycle-action")) return;
+            this.loading.add("model-lifecycle-action");
             const model = this.models.find((item) => String(this.pick(item, "id", "modelId", "MODEL_ID", "modelVersionId", "MODEL_VERSION_ID")) === String(modelId));
             const version = this.pick(model, "modelVersion", "MODEL_VERSION", "version") || modelId;
             const message = t("confirmActivateModel", "Activate candidate version {version} as the new champion?", { version });
-            if (!(await this.confirm(message))) return;
             try {
+                if (!(await this.confirm(message))) return;
+                this.setButtonLoading(button, true);
                 await this.request(`/models/${encodeURIComponent(modelId)}/activate`, {
                     method: "POST",
                     body: { reason: "M90003 explicit activation" }
@@ -702,14 +704,20 @@
                 await Promise.allSettled([this.loadSummary(), this.loadModels()]);
             } catch (error) {
                 this.showMessage("error", error.message || t("modelActivationFailed", "Model activation failed."));
+            } finally {
+                this.setButtonLoading(button, false);
+                this.loading.delete("model-lifecycle-action");
             }
         },
 
-        async rollbackCurrentModel() {
+        async rollbackCurrentModel(button = null) {
+            if (this.loading.has("model-lifecycle-action")) return;
+            this.loading.add("model-lifecycle-action");
             const active = this.models.find((row) => ["CHAMPION", "ACTIVE"].includes(String(this.pick(row, "status", "STATUS", "statusCode", "STATUS_CODE")).toUpperCase()));
             const version = this.pick(active, "modelVersion", "MODEL_VERSION", "version") || "-";
-            if (!(await this.confirm(t("confirmRollbackCurrentModel", "Roll back the current champion version {version} to the most recent previous model?", { version })))) return;
             try {
+                if (!(await this.confirm(t("confirmRollbackCurrentModel", "Roll back the current champion version {version} to the most recent previous model?", { version })))) return;
+                this.setButtonLoading(button, true);
                 await this.request("/models/rollback", {
                     method: "POST",
                     body: { modelKey: this.selectedModelKey, reason: "M90003 explicit rollback" }
@@ -718,6 +726,9 @@
                 await Promise.allSettled([this.loadSummary(), this.loadModels()]);
             } catch (error) {
                 this.showMessage("error", error.message || t("modelRollbackFailed", "Model rollback failed."));
+            } finally {
+                this.setButtonLoading(button, false);
+                this.loading.delete("model-lifecycle-action");
             }
         },
 

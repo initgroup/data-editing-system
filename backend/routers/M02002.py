@@ -152,19 +152,6 @@ def get_table_tree(
         raw_data = result.get("data", [])
         has_more = len(raw_data) > safe_limit
         data = raw_data[:safe_limit]
-        timings = {
-            "registrationSeconds": round(registration_seconds, 3),
-            "automationSeconds": round(float((automation.get("timings") or {}).get("totalSeconds") or 0), 3),
-            "responseQuerySeconds": round(response_query_seconds, 3),
-            "totalSeconds": round(time.perf_counter() - save_started_at, 3),
-        }
-        logger.info(
-            "M02002 scenario table save timing project=%s scenario=%s scenario_table=%s timings=%s",
-            project_id,
-            scenario_id,
-            scenario_table_id,
-            timings,
-        )
         return {
             "status": "success",
             "data": data,
@@ -528,6 +515,19 @@ def save_scenario_table(req: ScenarioTableRequest, request: Request):
             message = "Scenario table saved, but default flow design could not be created."
         else:
             message = "DB table snapshot imported and saved." if snapshot_created else "Scenario table saved."
+        timings = {
+            "registrationSeconds": round(registration_seconds, 3),
+            "automationSeconds": round(float((automation.get("timings") or {}).get("totalSeconds") or 0), 3),
+            "responseQuerySeconds": round(response_query_seconds, 3),
+            "totalSeconds": round(time.perf_counter() - save_started_at, 3),
+        }
+        logger.info(
+            "M02002 scenario table save timing project=%s scenario=%s scenario_table=%s timings=%s",
+            project_id,
+            scenario_id,
+            scenario_table_id,
+            timings,
+        )
         return {
             "status": "success",
             "message": message,

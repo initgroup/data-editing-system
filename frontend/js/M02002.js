@@ -4,6 +4,7 @@
     const { getContainerEl } = PageManager.createHelper(PAGE_CODE);
     const COMMON = MCOMMON.createPageHelper(PAGE_CODE);
     const TREE_PAGE_SIZE = 200;
+    const CONTEXT_CHANGE_DEBOUNCE_MS = 180;
 
     const M02002 = {
 
@@ -13,8 +14,14 @@
         contextScenarios: [],
         selectedProjectId: "",
         selectedScenarioId: "",
+        contextChangeRequestVersion: 0,
+        contextProjectRequestVersion: 0,
+        contextScenarioRequestVersion: 0,
+        contextProjectAbortController: null,
+        contextScenarioAbortController: null,
         scenarioTables: [],
         scenarioTableRequestVersion: 0,
+        scenarioTableAbortController: null,
         selectedScenarioTableKey: "",
         tables: [],
         displayedTables: [],
@@ -23,6 +30,7 @@
         tableTreeHasMore: false,
         tableTreeNextOffset: 0,
         tableTreeRequestVersion: 0,
+        tableTreeAbortController: null,
         selectedTable: null,
         analysisTable: null,
         focusedTableKey: "",
@@ -63,7 +71,8 @@
             await this.loadWorkContext();
             this.switchTab("columns");
             this.isInit = true;
-            Promise.all([this.loadScenarioTables(), this.loadTableTree()])
+            this.loadTableTree()
+                .then(() => this.loadScenarioTables())
                 .catch((error) => console.error("[M02002] deferred initial data load failed", error));
         },
 
@@ -72,8 +81,9 @@
             this.contextScenarios = [];
             this.selectedProjectId = "";
             this.selectedScenarioId = "";
+            this.contextChangeRequestVersion += 1;
+            this.cancelContextRequests({ includeProjectList: true });
             this.scenarioTables = [];
-            this.scenarioTableRequestVersion = 0;
             this.selectedScenarioTableKey = "";
             this.tables = [];
             this.displayedTables = [];
@@ -81,7 +91,6 @@
             this.tableTreeLoading = false;
             this.tableTreeHasMore = false;
             this.tableTreeNextOffset = 0;
-            this.tableTreeRequestVersion = 0;
             this.selectedTable = null;
             this.analysisTable = null;
             this.focusedTableKey = "";
@@ -131,7 +140,8 @@
 
         async loadWorkContext() {
             const stored = this.getStoredContext();
-            await this.loadContextProjects(stored.projectId || "");
+            const projectsLoaded = await this.loadContextProjects(stored.projectId || "");
+            if (!projectsLoaded) return;
             if (this.contextLoadFailed) return;
             if (this.selectedProjectId) {
                 await this.loadContextScenarios(stored.scenarioId || "");
@@ -142,31 +152,51 @@
         },
 
         async refreshWorkContext() {
+            const contextVersion = ++this.contextChangeRequestVersion;
             const currentProjectId = this.selectedProjectId;
             const currentScenarioId = this.selectedScenarioId;
-            await this.loadContextProjects(currentProjectId);
+            this.cancelContextRequests({ includeProjectList: true });
+            const projectsLoaded = await this.loadContextProjects(currentProjectId);
+            if (!projectsLoaded || contextVersion !== this.contextChangeRequestVersion) return;
             if (this.contextLoadFailed) return;
             if (this.selectedProjectId) {
-                await this.loadContextScenarios(currentScenarioId);
+                const scenariosLoaded = await this.loadContextScenarios(currentScenarioId, {
+                    projectId: this.selectedProjectId,
+                    contextVersion
+                });
+                if (!scenariosLoaded || contextVersion !== this.contextChangeRequestVersion) return;
             }
             if (this.contextLoadFailed) return;
+            await this.loadTableTree();
+            if (contextVersion !== this.contextChangeRequestVersion) return;
             await this.loadScenarioTables();
         },
 
         async loadContextProjects(preferredProjectId = "") {
             const select = getContainerEl("#contextProject-M02002");
-            if (!select) return;
+            if (!select) return false;
 
+            const requestVersion = ++this.contextProjectRequestVersion;
+            this.contextProjectAbortController?.abort();
+            const controller = new AbortController();
+            this.contextProjectAbortController = controller;
             select.innerHTML = `<option value="">${this.escapeHtml(this.t("loadingProjects", "Loading projects..."))}</option>`;
             try {
                 this.contextLoadFailed = false;
                 const params = new URLSearchParams({ keyword: "" });
-                const json = await CommonUtils.request(`${API_BASE_URL}/M01002/projects?${params.toString()}`, { method: "GET", showLoading: false });
+                const json = await CommonUtils.request(`${API_BASE_URL}/M01002/projects?${params.toString()}`, {
+                    method: "GET",
+                    showLoading: false,
+                    signal: controller.signal
+                });
+                if (requestVersion !== this.contextProjectRequestVersion) return false;
                 this.contextProjects = Array.isArray(json.data)
                     ? json.data.filter((project) => project.USE_YN === "Y")
                     : [];
                 this.renderContextProjects(preferredProjectId);
+                return true;
             } catch (error) {
+                if (error?.name === "AbortError" || requestVersion !== this.contextProjectRequestVersion) return false;
                 const message = error.message || this.t("projectLoadFailed", "Project load failed.");
                 this.contextLoadFailed = true;
                 this.contextProjects = [];
@@ -174,6 +204,11 @@
                 console.error("[M02002] project context load failed", error);
                 select.innerHTML = `<option value="">${this.escapeHtml(this.t("projectLoadFailed", "Project load failed"))}</option>`;
                 console.error("[M02002] work context load failed", message);
+                return false;
+            } finally {
+                if (this.contextProjectAbortController === controller) {
+                    this.contextProjectAbortController = null;
+                }
             }
         },
 
@@ -197,20 +232,38 @@
         },
 
         async handleContextProjectChange(projectId) {
+            const contextVersion = ++this.contextChangeRequestVersion;
+            this.cancelContextRequests({ includeProjectList: true });
             this.selectedProjectId = projectId || "";
             CommonUtils.applyOwnerScopeToSelect(getContainerEl("#contextProject-M02002"), this.contextProjects, this.selectedProjectId);
             this.selectedScenarioId = "";
             this.resetTableAnalysis();
             this.saveStoredContext();
-            await this.loadContextScenarios("");
-            await Promise.all([this.loadScenarioTables(), this.loadTableTree()]);
+            await new Promise((resolve) => window.setTimeout(resolve, CONTEXT_CHANGE_DEBOUNCE_MS));
+            if (contextVersion !== this.contextChangeRequestVersion) return;
+            const selectedProjectId = this.selectedProjectId;
+            const scenariosLoaded = await this.loadContextScenarios("", {
+                projectId: selectedProjectId,
+                contextVersion
+            });
+            if (!scenariosLoaded || contextVersion !== this.contextChangeRequestVersion) return;
+            await this.loadTableTree();
+            if (contextVersion !== this.contextChangeRequestVersion) return;
+            await this.loadScenarioTables();
         },
 
-        async loadContextScenarios(preferredScenarioId = "") {
-            if (!this.selectedProjectId) {
+        async loadContextScenarios(preferredScenarioId = "", options = {}) {
+            const projectId = String(options.projectId ?? this.selectedProjectId ?? "");
+            const contextVersion = options.contextVersion;
+            const requestVersion = ++this.contextScenarioRequestVersion;
+            this.contextScenarioAbortController?.abort();
+            const controller = new AbortController();
+            this.contextScenarioAbortController = controller;
+            if (!projectId) {
                 this.contextScenarios = [];
                 this.renderContextScenarios("");
-                return;
+                this.contextScenarioAbortController = null;
+                return true;
             }
 
             const select = getContainerEl("#contextScenario-M02002");
@@ -219,13 +272,24 @@
             try {
                 this.contextLoadFailed = false;
                 const params = new URLSearchParams({
-                    projectId: this.selectedProjectId,
+                    projectId,
                     keyword: ""
                 });
-                const json = await CommonUtils.request(`${API_BASE_URL}/M01002/scenarios?${params.toString()}`, { method: "GET", showLoading: false });
+                const json = await CommonUtils.request(`${API_BASE_URL}/M01002/scenarios?${params.toString()}`, {
+                    method: "GET",
+                    showLoading: false,
+                    signal: controller.signal
+                });
+                if (
+                    requestVersion !== this.contextScenarioRequestVersion
+                    || projectId !== String(this.selectedProjectId || "")
+                    || (contextVersion !== undefined && contextVersion !== this.contextChangeRequestVersion)
+                ) return false;
                 this.contextScenarios = Array.isArray(json.data) ? json.data : [];
                 this.renderContextScenarios(preferredScenarioId);
+                return true;
             } catch (error) {
+                if (error?.name === "AbortError" || requestVersion !== this.contextScenarioRequestVersion) return false;
                 const message = error.message || this.t("scenarioLoadFailed", "Scenario load failed.");
                 this.contextLoadFailed = true;
                 this.contextScenarios = [];
@@ -233,6 +297,11 @@
                 console.error("[M02002] scenario context load failed", error);
                 if (select) select.innerHTML = `<option value="">${this.escapeHtml(this.t("scenarioLoadFailed", "Scenario load failed"))}</option>`;
                 console.error("[M02002] work context load failed", message);
+                return false;
+            } finally {
+                if (this.contextScenarioAbortController === controller) {
+                    this.contextScenarioAbortController = null;
+                }
             }
         },
 
@@ -257,11 +326,35 @@
         },
 
         async handleContextScenarioChange(scenarioId) {
+            const contextVersion = ++this.contextChangeRequestVersion;
+            this.cancelContextRequests();
             this.selectedScenarioId = scenarioId || "";
             CommonUtils.applyOwnerScopeToSelect(getContainerEl("#contextScenario-M02002"), this.contextScenarios, this.selectedScenarioId, ["SCENARIO_ID", "scenarioId"]);
             this.resetTableAnalysis();
             this.saveStoredContext();
-            await Promise.all([this.loadScenarioTables(), this.loadTableTree()]);
+            await new Promise((resolve) => window.setTimeout(resolve, CONTEXT_CHANGE_DEBOUNCE_MS));
+            if (contextVersion !== this.contextChangeRequestVersion) return;
+            await this.loadTableTree();
+            if (contextVersion !== this.contextChangeRequestVersion) return;
+            await this.loadScenarioTables();
+        },
+
+        cancelContextRequests(options = {}) {
+            if (options.includeProjectList) {
+                this.contextProjectRequestVersion += 1;
+                this.contextProjectAbortController?.abort();
+                this.contextProjectAbortController = null;
+            }
+            this.contextScenarioRequestVersion += 1;
+            this.contextScenarioAbortController?.abort();
+            this.contextScenarioAbortController = null;
+            this.scenarioTableRequestVersion += 1;
+            this.scenarioTableAbortController?.abort();
+            this.scenarioTableAbortController = null;
+            this.tableTreeRequestVersion += 1;
+            this.tableTreeAbortController?.abort();
+            this.tableTreeAbortController = null;
+            this.tableTreeLoading = false;
         },
 
         ensureWorkContextSelected() {
@@ -276,26 +369,43 @@
 
         async loadScenarioTables() {
             const requestVersion = ++this.scenarioTableRequestVersion;
+            const projectId = String(this.selectedProjectId || "");
+            const scenarioId = String(this.selectedScenarioId || "");
+            this.scenarioTableAbortController?.abort();
+            const controller = new AbortController();
+            this.scenarioTableAbortController = controller;
             this.selectedScenarioTableKey = "";
             this.scenarioTables = [];
-            if (!this.selectedProjectId) {
+            if (!projectId) {
                 this.updateActionButtons();
+                this.scenarioTableAbortController = null;
                 return;
             }
 
             try {
                 const params = new URLSearchParams({
-                    projectId: this.selectedProjectId
+                    projectId
                 });
-                if (this.selectedScenarioId) params.set("scenarioId", this.selectedScenarioId);
-                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/scenario-tables?${params.toString()}`, { method: "GET", showLoading: false });
-                if (requestVersion !== this.scenarioTableRequestVersion) return;
+                if (scenarioId) params.set("scenarioId", scenarioId);
+                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/scenario-tables?${params.toString()}`, {
+                    method: "GET",
+                    showLoading: false,
+                    signal: controller.signal
+                });
+                if (
+                    requestVersion !== this.scenarioTableRequestVersion
+                    || projectId !== String(this.selectedProjectId || "")
+                    || scenarioId !== String(this.selectedScenarioId || "")
+                ) return;
                 this.scenarioTables = Array.isArray(json.data) ? json.data : [];
             } catch (error) {
-                if (requestVersion !== this.scenarioTableRequestVersion) return;
+                if (error?.name === "AbortError" || requestVersion !== this.scenarioTableRequestVersion) return;
                 this.scenarioTables = [];
                 console.error("[M02002] scenario table load failed", error);
             } finally {
+                if (this.scenarioTableAbortController === controller) {
+                    this.scenarioTableAbortController = null;
+                }
                 if (requestVersion !== this.scenarioTableRequestVersion) return;
                 this.updateActionButtons();
                 if (this.selectedTable) this.updateSelectedMeta();
@@ -1035,10 +1145,15 @@
             if (!container) return;
             if (this.tableTreeLoading && !reset) return;
 
+            const projectId = String(this.selectedProjectId || "");
+            const scenarioId = String(this.selectedScenarioId || "");
             const keyword = this.tableSearchMode ? (getContainerEl("#tableSearch-M02002")?.value || "").trim() : "";
             const registeredOnly = this.isRegisteredOnly();
             const offset = reset ? 0 : this.tableTreeNextOffset;
             const requestVersion = ++this.tableTreeRequestVersion;
+            if (reset) this.tableTreeAbortController?.abort();
+            const controller = new AbortController();
+            this.tableTreeAbortController = controller;
             this.tableTreeLoading = true;
             if (reset) {
                 container.innerHTML = `<div class="table-empty">${this.escapeHtml(this.t("loadingTables", "Loading tables..."))}</div>`;
@@ -1054,12 +1169,20 @@
                     limit: String(TREE_PAGE_SIZE),
                     registeredOnly: registeredOnly ? "Y" : "N"
                 });
-                if (this.selectedProjectId) {
-                    params.set("projectId", this.selectedProjectId);
-                    if (this.selectedScenarioId) params.set("scenarioId", this.selectedScenarioId);
+                if (projectId) {
+                    params.set("projectId", projectId);
+                    if (scenarioId) params.set("scenarioId", scenarioId);
                 }
-                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/table-tree?${params.toString()}`, { method: "GET", showLoading: false });
-                if (requestVersion !== this.tableTreeRequestVersion) return;
+                const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/table-tree?${params.toString()}`, {
+                    method: "GET",
+                    showLoading: false,
+                    signal: controller.signal
+                });
+                if (
+                    requestVersion !== this.tableTreeRequestVersion
+                    || projectId !== String(this.selectedProjectId || "")
+                    || scenarioId !== String(this.selectedScenarioId || "")
+                ) return;
                 if (json.status && json.status !== "success") {
                     throw new Error(json.message || json.detail || this.t("tableListLoadFailed", "Table list load failed."));
                 }
@@ -1077,9 +1200,12 @@
                 this.renderTableTree();
                 this.updateActionButtons();
             } catch (error) {
-                if (requestVersion !== this.tableTreeRequestVersion) return;
+                if (error?.name === "AbortError" || requestVersion !== this.tableTreeRequestVersion) return;
                 container.innerHTML = `<div class="table-error">${this.escapeHtml(error.message)}</div>`;
             } finally {
+                if (this.tableTreeAbortController === controller) {
+                    this.tableTreeAbortController = null;
+                }
                 if (requestVersion === this.tableTreeRequestVersion) this.tableTreeLoading = false;
             }
         },

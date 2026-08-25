@@ -829,7 +829,7 @@ SELECT X.MODEL_VERSION_ID AS MODEL_ID
      , X.ALGORITHM_CODE
      , X.FEATURE_VERSION
      , X.LABEL_VERSION
-     , X.STATUS_CODE AS STATUS
+     , X.EFFECTIVE_STATUS_CODE AS STATUS
      , X.TRAIN_RUN_ID
      , X.TRAIN_ROW_COUNT AS TRAINED_ROWS
      , X.VALID_ROW_COUNT AS VALIDATION_ROWS
@@ -846,14 +846,32 @@ SELECT X.MODEL_VERSION_ID AS MODEL_ID
   FROM
      (
       SELECT R.*
+           , CASE
+                 WHEN A.MODEL_VERSION_ID = R.MODEL_VERSION_ID THEN 'ACTIVE'
+                 WHEN R.STATUS_CODE = 'ACTIVE' THEN 'ARCHIVED'
+                 ELSE R.STATUS_CODE
+             END AS EFFECTIVE_STATUS_CODE
            , ROW_NUMBER() OVER (
-                 ORDER BY CASE R.STATUS_CODE WHEN 'ACTIVE' THEN 0 WHEN 'CANDIDATE' THEN 1 ELSE 2 END
+                 ORDER BY CASE
+                              WHEN A.MODEL_VERSION_ID = R.MODEL_VERSION_ID THEN 0
+                              WHEN R.STATUS_CODE = 'CANDIDATE' THEN 1
+                              ELSE 2
+                          END
                         , R.VERSION_NO DESC
              ) AS RN
         FROM "INIT$_TB_OML_MODEL_REGISTRY" R
+        LEFT JOIN "INIT$_TB_OML_ACTIVE_MODEL" A
+          ON A.MODEL_KEY = R.MODEL_KEY
        WHERE 1=1
          AND R.MODEL_KEY = :modelKey
-         AND (:statusCode = 'ALL' OR R.STATUS_CODE = :statusCode)
+         AND (
+                 :statusCode = 'ALL'
+              OR CASE
+                     WHEN A.MODEL_VERSION_ID = R.MODEL_VERSION_ID THEN 'ACTIVE'
+                     WHEN R.STATUS_CODE = 'ACTIVE' THEN 'ARCHIVED'
+                     ELSE R.STATUS_CODE
+                 END = :statusCode
+             )
      ) X
  WHERE 1=1
    AND X.RN <= :limitRows
