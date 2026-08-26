@@ -1,0 +1,1543 @@
+{
+  "schema": "openai.presentation.layout/v4",
+  "unit": "px",
+  "slide": {
+    "aid": "sl/2n00fb",
+    "id": "2n00fb",
+    "slide": 13,
+    "layoutId": "6035ac3d-36d1-4403-bd4d-1fe1d7ae304f",
+    "layoutName": "Title Slide",
+    "layoutType": "title",
+    "masterLayoutId": "7c015f2d-6b71-49e2-82db-f12cd9a0e0b9",
+    "masterLayoutName": "Master",
+    "backgroundColor": "#FFFFFF",
+    "frame": {
+      "left": 0,
+      "top": 0,
+      "width": 794,
+      "height": 1123
+    }
+  },
+  "theme": {
+    "colorSchemeName": "ChatGPT",
+    "colors": {
+      "accent1": "#156082",
+      "accent2": "#E97132",
+      "accent3": "#196B24",
+      "accent4": "#0F9ED5",
+      "accent5": "#A02B93",
+      "accent6": "#4EA72E",
+      "bg1": "#FFFFFF",
+      "bg2": "#000000",
+      "tx1": "#1F1F1F",
+      "tx2": "#FFFFFF",
+      "dk1": "#000000",
+      "lt1": "#FFFFFF",
+      "dk2": "#0E2841",
+      "lt2": "#E8E8E8",
+      "hlink": "#467886",
+      "folHlink": "#96607D"
+    },
+    "typefaces": [
+      "Consolas",
+      "Malgun Gothic"
+    ]
+  },
+  "inheritedLayers": [
+    {
+      "scope": "layout",
+      "id": "6035ac3d-36d1-4403-bd4d-1fe1d7ae304f",
+      "name": "Title Slide",
+      "type": "title",
+      "parentLayoutId": "7c015f2d-6b71-49e2-82db-f12cd9a0e0b9",
+      "elements": []
+    },
+    {
+      "scope": "master",
+      "id": "7c015f2d-6b71-49e2-82db-f12cd9a0e0b9",
+      "name": "Master",
+      "type": "master",
+      "elements": []
+    }
+  ],
+  "elements": [
+    {
+      "order": 1,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ut4jmpoz",
+      "id": "1",
+      "name": "page-13-rail",
+      "bbox": [
+        0,
+        0,
+        10,
+        1123
+      ],
+      "geometry": "rect",
+      "fillColor": "#158D91",
+      "lineColor": "#158D91",
+      "lineWidth": 0
+    },
+    {
+      "order": 2,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/hwv2x4nq",
+      "id": "2",
+      "name": "page-13-chapter",
+      "bbox": [
+        62,
+        45,
+        460,
+        24
+      ],
+      "geometry": "rect",
+      "text": "03 · EXECUTION RESOURCE ROUTING",
+      "textPreview": "03 · EXECUTION RESOURCE ROUTING",
+      "resolvedFontSize": 13,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 13,
+        "typeface": "Malgun Gothic",
+        "color": "#158D91",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "03 · EXECUTION RESOURCE ROUTING"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "03 · EXECUTION RESOURCE ROUTING",
+          "lineSpacingPercent": 112000,
+          "resolvedTextStyle": {
+            "fontSize": 13,
+            "typeface": "Malgun Gothic",
+            "color": "#158D91",
+            "bold": true,
+            "alignment": "left",
+            "lineSpacing": 1.12
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "03 · EXECUTION RESOURCE ROUTING",
+              "fontSize": 13,
+              "typeface": "Malgun Gothic",
+              "color": "#158D91",
+              "bold": true,
+              "alignment": "left",
+              "lineSpacing": 1.12
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 3,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/wvm1oz65",
+      "id": "3",
+      "name": "page-13-title",
+      "bbox": [
+        62,
+        82,
+        670,
+        84
+      ],
+      "geometry": "rect",
+      "text": "실행 리소스는 세 경로로 라우팅됩니다",
+      "textPreview": "실행 리소스는 세 경로로 라우팅됩니다",
+      "resolvedFontSize": 38,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 38,
+        "typeface": "Malgun Gothic",
+        "color": "#14233C",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "실행 리소스는 세 경로로 라우팅됩니다"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "실행 리소스는 세 경로로 라우팅됩니다",
+          "lineSpacingPercent": 96000,
+          "resolvedTextStyle": {
+            "fontSize": 38,
+            "typeface": "Malgun Gothic",
+            "color": "#14233C",
+            "bold": true,
+            "alignment": "left",
+            "lineSpacing": 0.96
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "실행 리소스는 세 경로로 라우팅됩니다",
+              "fontSize": 38,
+              "typeface": "Malgun Gothic",
+              "color": "#14233C",
+              "bold": true,
+              "alignment": "left",
+              "lineSpacing": 0.96
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 4,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/jydkzu5w",
+      "id": "4",
+      "name": "page-13-subtitle",
+      "bbox": [
+        62,
+        170,
+        670,
+        50
+      ],
+      "geometry": "rect",
+      "text": "Job에 저장된 실행 유형과 결과 계약을 기준으로 Target DB, OML Python, 내부·외부 API 경로 중 하나를 선택합니다.",
+      "textPreview": "Job에 저장된 실행 유형과 결과 계약을 기준으로 Target DB, OML Python, 내부·외부 API 경로 중 하나를 선택합니다.",
+      "resolvedFontSize": 17,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 17,
+        "typeface": "Malgun Gothic",
+        "color": "#3F4F65",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Job에 저장된 실행 유형과 결과 계약을 기준으로 Target DB, OML Python, 내부·외부 API"
+          },
+          {
+            "index": 2,
+            "text": "경로 중 하나를 선택합니다."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Job에 저장된 실행 유형과 결과 계약을 기준으로 Target DB, OML Python, 내부·외부 API 경로 중 하나를 선택합니다.",
+          "lineSpacingPercent": 122000,
+          "resolvedTextStyle": {
+            "fontSize": 17,
+            "typeface": "Malgun Gothic",
+            "color": "#3F4F65",
+            "alignment": "left",
+            "lineSpacing": 1.22
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Job에 저장된 실행 유형과 결과 계약을 기준으로 Target DB, OML Python, 내부·외부 API 경로 중 하나를 선택합니다.",
+              "fontSize": 17,
+              "typeface": "Malgun Gothic",
+              "color": "#3F4F65",
+              "alignment": "left",
+              "lineSpacing": 1.22
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 5,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ix4jqpob",
+      "id": "5",
+      "name": "page-13-top-rule",
+      "bbox": [
+        62,
+        226,
+        670,
+        2
+      ],
+      "geometry": "rect",
+      "fillColor": "#D7E0EA",
+      "lineColor": "#D7E0EA",
+      "lineWidth": 0
+    },
+    {
+      "order": 6,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/50f214n2",
+      "id": "6",
+      "name": "page-13-footer-rule",
+      "bbox": [
+        62,
+        1067,
+        670,
+        1
+      ],
+      "geometry": "rect",
+      "fillColor": "#D7E0EA",
+      "lineColor": "#D7E0EA",
+      "lineWidth": 0
+    },
+    {
+      "order": 7,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/4z61sz6h",
+      "id": "7",
+      "name": "page-13-footer-name",
+      "bbox": [
+        62,
+        1080,
+        300,
+        18
+      ],
+      "geometry": "rect",
+      "text": "IN-DEPS 시스템 소개서",
+      "textPreview": "IN-DEPS 시스템 소개서",
+      "resolvedFontSize": 10,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 10,
+        "typeface": "Malgun Gothic",
+        "color": "#6D7A8D",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "IN-DEPS 시스템 소개서"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "IN-DEPS 시스템 소개서",
+          "lineSpacingPercent": 112000,
+          "resolvedTextStyle": {
+            "fontSize": 10,
+            "typeface": "Malgun Gothic",
+            "color": "#6D7A8D",
+            "alignment": "left",
+            "lineSpacing": 1.12
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "IN-DEPS 시스템 소개서",
+              "fontSize": 10,
+              "typeface": "Malgun Gothic",
+              "color": "#6D7A8D",
+              "alignment": "left",
+              "lineSpacing": 1.12
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 8,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/rmxk3e5s",
+      "id": "8",
+      "name": "page-13-footer-number",
+      "bbox": [
+        682,
+        1078,
+        50,
+        20
+      ],
+      "geometry": "rect",
+      "text": "13",
+      "textPreview": "13",
+      "resolvedFontSize": 11,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 11,
+        "typeface": "Malgun Gothic",
+        "color": "#158D91",
+        "bold": true,
+        "alignment": "right",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "13"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "13",
+          "lineSpacingPercent": 112000,
+          "resolvedTextStyle": {
+            "fontSize": 11,
+            "typeface": "Malgun Gothic",
+            "color": "#158D91",
+            "bold": true,
+            "alignment": "right",
+            "lineSpacing": 1.12
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "13",
+              "fontSize": 11,
+              "typeface": "Malgun Gothic",
+              "color": "#158D91",
+              "bold": true,
+              "alignment": "right",
+              "lineSpacing": 1.12
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 9,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/61oju9o7",
+      "id": "9",
+      "name": "p13-db-fill",
+      "bbox": [
+        62,
+        268,
+        670,
+        180
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#EAF2FB",
+      "lineColor": "#EAF2FB",
+      "lineWidth": 0
+    },
+    {
+      "order": 10,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/83uhwbe1",
+      "id": "10",
+      "name": "p13-db-accent",
+      "bbox": [
+        62,
+        268,
+        8,
+        180
+      ],
+      "geometry": "rect",
+      "fillColor": "#2F6FB5",
+      "lineColor": "#2F6FB5",
+      "lineWidth": 0
+    },
+    {
+      "order": 11,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/943ipgf6",
+      "id": "11",
+      "name": "p13-db-kicker",
+      "bbox": [
+        90,
+        286,
+        210,
+        20
+      ],
+      "geometry": "rect",
+      "text": "DB_OBJECT · M90001",
+      "textPreview": "DB_OBJECT · M90001",
+      "resolvedFontSize": 12,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 12,
+        "typeface": "Consolas",
+        "color": "#2F6FB5",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "DB_OBJECT · M90001"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "DB_OBJECT · M90001",
+          "lineSpacingPercent": 112000,
+          "resolvedTextStyle": {
+            "fontSize": 12,
+            "typeface": "Consolas",
+            "color": "#2F6FB5",
+            "bold": true,
+            "alignment": "left",
+            "lineSpacing": 1.12
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "DB_OBJECT · M90001",
+              "fontSize": 12,
+              "typeface": "Consolas",
+              "color": "#2F6FB5",
+              "bold": true,
+              "alignment": "left",
+              "lineSpacing": 1.12
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 12,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/m1czu1wv",
+      "id": "12",
+      "name": "p13-db-title",
+      "bbox": [
+        90,
+        312,
+        245,
+        34
+      ],
+      "geometry": "rect",
+      "text": "Target DB 실행 객체",
+      "textPreview": "Target DB 실행 객체",
+      "resolvedFontSize": 23,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 23,
+        "typeface": "Malgun Gothic",
+        "color": "#14233C",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Target DB 실행 객체"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Target DB 실행 객체",
+          "lineSpacingPercent": 112000,
+          "resolvedTextStyle": {
+            "fontSize": 23,
+            "typeface": "Malgun Gothic",
+            "color": "#14233C",
+            "bold": true,
+            "alignment": "left",
+            "lineSpacing": 1.12
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Target DB 실행 객체",
+              "fontSize": 23,
+              "typeface": "Malgun Gothic",
+              "color": "#14233C",
+              "bold": true,
+              "alignment": "left",
+              "lineSpacing": 1.12
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 13,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/72l0n6xg",
+      "id": "13",
+      "name": "p13-db-body",
+      "bbox": [
+        352,
+        290,
+        348,
+        140
+      ],
+      "geometry": "rect",
+      "text": "등록된 프로시저·패키지·Oracle ML 모델을 서버 세션의 검증된 Target DB 연결에서 실행합니다. 객체명·파라미터·결과 계약이 실제 DB 정의와 일치해야 합니다.",
+      "textPreview": "등록된 프로시저·패키지·Oracle ML 모델을 서버 세션의 검증된 Target DB 연결에서 실행합니다. 객체명·파라미터·결과 계약이 실제 DB 정의와 일치해야 합니다.",
+      "resolvedFontSize": 16,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 16,
+        "typeface": "Malgun Gothic",
+        "color": "#3F4F65",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 4,
+        "lines": [
+          {
+            "index": 1,
+            "text": "등록된 프로시저·패키지·Oracle ML 모델을 서버"
+          },
+          {
+            "index": 2,
+            "text": "세션의 검증된 Target DB 연결에서 실행합니다."
+          },
+          {
+            "index": 3,
+            "text": "객체명·파라미터·결과 계약이 실제 DB 정의와"
+          },
+          {
+            "index": 4,
+            "text": "일치해야 합니다."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "등록된 프로시저·패키지·Oracle ML 모델을 서버 세션의 검증된 Target DB 연결에서 실행합니다. 객체명·파라미터·결과 계약이 실제 DB 정의와 일치해야 합니다.",
+          "lineSpacingPercent": 120000,
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "typeface": "Malgun Gothic",
+            "color": "#3F4F65",
+            "alignment": "left",
+            "lineSpacing": 1.2
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "등록된 프로시저·패키지·Oracle ML 모델을 서버 세션의 검증된 Target DB 연결에서 실행합니다. 객체명·파라미터·결과 계약이 실제 DB 정의와 일치해야 합니다.",
+              "fontSize": 16,
+              "typeface": "Malgun Gothic",
+              "color": "#3F4F65",
+              "alignment": "left",
+              "lineSpacing": 1.2
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 14,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/w7eh0vex",
+      "id": "14",
+      "name": "p13-oml-fill",
+      "bbox": [
+        62,
+        472,
+        670,
+        180
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#F1EFF8",
+      "lineColor": "#F1EFF8",
+      "lineWidth": 0
+    },
+    {
+      "order": 15,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/h8nitgfi",
+      "id": "15",
+      "name": "p13-oml-accent",
+      "bbox": [
+        62,
+        472,
+        8,
+        180
+      ],
+      "geometry": "rect",
+      "fillColor": "#6E62A8",
+      "lineColor": "#6E62A8",
+      "lineWidth": 0
+    },
+    {
+      "order": 16,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/u5wzylwr",
+      "id": "16",
+      "name": "p13-oml-kicker",
+      "bbox": [
+        90,
+        490,
+        210,
+        20
+      ],
+      "geometry": "rect",
+      "text": "OML_PYTHON · OML4PY",
+      "textPreview": "OML_PYTHON · OML4PY",
+      "resolvedFontSize": 12,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 12,
+        "typeface": "Consolas",
+        "color": "#6E62A8",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "OML_PYTHON · OML4PY"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "OML_PYTHON · OML4PY",
+          "lineSpacingPercent": 112000,
+          "resolvedTextStyle": {
+            "fontSize": 12,
+            "typeface": "Consolas",
+            "color": "#6E62A8",
+            "bold": true,
+            "alignment": "left",
+            "lineSpacing": 1.12
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "OML_PYTHON · OML4PY",
+              "fontSize": 12,
+              "typeface": "Consolas",
+              "color": "#6E62A8",
+              "bold": true,
+              "alignment": "left",
+              "lineSpacing": 1.12
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 17,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/v650rqxc",
+      "id": "17",
+      "name": "p13-oml-title",
+      "bbox": [
+        90,
+        516,
+        245,
+        34
+      ],
+      "geometry": "rect",
+      "text": "OML Python SQL API",
+      "textPreview": "OML Python SQL API",
+      "resolvedFontSize": 23,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 23,
+        "typeface": "Malgun Gothic",
+        "color": "#14233C",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "OML Python SQL API"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "OML Python SQL API",
+          "lineSpacingPercent": 112000,
+          "resolvedTextStyle": {
+            "fontSize": 23,
+            "typeface": "Malgun Gothic",
+            "color": "#14233C",
+            "bold": true,
+            "alignment": "left",
+            "lineSpacing": 1.12
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "OML Python SQL API",
+              "fontSize": 23,
+              "typeface": "Malgun Gothic",
+              "color": "#14233C",
+              "bold": true,
+              "alignment": "left",
+              "lineSpacing": 1.12
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 18,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/4ve14vet",
+      "id": "18",
+      "name": "p13-oml-body",
+      "bbox": [
+        352,
+        494,
+        348,
+        140
+      ],
+      "geometry": "rect",
+      "text": "OML4Py Script Repository와 pyqEval·pyqTableEval·pyqRowEval·pyqGroupEval·pyqIndexEval 계약을 사용하고 결과를 표준 출력 형식으로 정규화합니다.",
+      "textPreview": "OML4Py Script Repository와 pyqEval·pyqTableEval·pyqRowEval·pyqGroupEval·pyqIndexEval 계약을 사용하고 결과를 표준 출력 형식으로 정규화합니다.",
+      "resolvedFontSize": 16,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 16,
+        "typeface": "Malgun Gothic",
+        "color": "#3F4F65",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 4,
+        "lines": [
+          {
+            "index": 1,
+            "text": "OML4Py Script Repository와"
+          },
+          {
+            "index": 2,
+            "text": "pyqEval·pyqTableEval·pyqRowEval·pyqGroupEval"
+          },
+          {
+            "index": 3,
+            "text": "·pyqIndexEval 계약을 사용하고 결과를 표준"
+          },
+          {
+            "index": 4,
+            "text": "출력 형식으로 정규화합니다."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "OML4Py Script Repository와 pyqEval·pyqTableEval·pyqRowEval·pyqGroupEval·pyqIndexEval 계약을 사용하고 결과를 표준 출력 형식으로 정규화합니다.",
+          "lineSpacingPercent": 120000,
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "typeface": "Malgun Gothic",
+            "color": "#3F4F65",
+            "alignment": "left",
+            "lineSpacing": 1.2
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "OML4Py Script Repository와 pyqEval·pyqTableEval·pyqRowEval·pyqGroupEval·pyqIndexEval 계약을 사용하고 결과를 표준 출력 형식으로 정규화합니다.",
+              "fontSize": 16,
+              "typeface": "Malgun Gothic",
+              "color": "#3F4F65",
+              "alignment": "left",
+              "lineSpacing": 1.2
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 19,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/5w7ix0fe",
+      "id": "19",
+      "name": "p13-api-fill",
+      "bbox": [
+        62,
+        676,
+        670,
+        180
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#E9F5F4",
+      "lineColor": "#E9F5F4",
+      "lineWidth": 0
+    },
+    {
+      "order": 20,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ds3ih07i",
+      "id": "20",
+      "name": "p13-api-accent",
+      "bbox": [
+        62,
+        676,
+        8,
+        180
+      ],
+      "geometry": "rect",
+      "fillColor": "#158D91",
+      "lineColor": "#158D91",
+      "lineWidth": 0
+    },
+    {
+      "order": 21,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/sruh8v6d",
+      "id": "21",
+      "name": "p13-api-kicker",
+      "bbox": [
+        90,
+        694,
+        210,
+        20
+      ],
+      "geometry": "rect",
+      "text": "WEB_API · M90002",
+      "textPreview": "WEB_API · M90002",
+      "resolvedFontSize": 12,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 12,
+        "typeface": "Consolas",
+        "color": "#158D91",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "WEB_API · M90002"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "WEB_API · M90002",
+          "lineSpacingPercent": 112000,
+          "resolvedTextStyle": {
+            "fontSize": 12,
+            "typeface": "Consolas",
+            "color": "#158D91",
+            "bold": true,
+            "alignment": "left",
+            "lineSpacing": 1.12
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "WEB_API · M90002",
+              "fontSize": 12,
+              "typeface": "Consolas",
+              "color": "#158D91",
+              "bold": true,
+              "alignment": "left",
+              "lineSpacing": 1.12
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 22,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/rq10fqps",
+      "id": "22",
+      "name": "p13-api-title",
+      "bbox": [
+        90,
+        720,
+        245,
+        34
+      ],
+      "geometry": "rect",
+      "text": "내부 Python·외부 JSON API",
+      "textPreview": "내부 Python·외부 JSON API",
+      "resolvedFontSize": 23,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 23,
+        "typeface": "Malgun Gothic",
+        "color": "#14233C",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "내부 Python·외부"
+          },
+          {
+            "index": 2,
+            "text": "JSON API"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "내부 Python·외부 JSON API",
+          "lineSpacingPercent": 112000,
+          "resolvedTextStyle": {
+            "fontSize": 23,
+            "typeface": "Malgun Gothic",
+            "color": "#14233C",
+            "bold": true,
+            "alignment": "left",
+            "lineSpacing": 1.12
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "내부 Python·외부 JSON API",
+              "fontSize": 23,
+              "typeface": "Malgun Gothic",
+              "color": "#14233C",
+              "bold": true,
+              "alignment": "left",
+              "lineSpacing": 1.12
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 23,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/qpsz6lo7",
+      "id": "23",
+      "name": "p13-api-body",
+      "bbox": [
+        352,
+        698,
+        348,
+        140
+      ],
+      "geometry": "rect",
+      "text": "기본 2~4단계는 INTERNAL_API가 같은 WAS 함수를 직접 호출합니다. 사용자가 EXTERNAL_API를 등록한 경우에만 원격 HTTP JSON endpoint를 호출합니다.",
+      "textPreview": "기본 2~4단계는 INTERNAL_API가 같은 WAS 함수를 직접 호출합니다. 사용자가 EXTERNAL_API를 등록한 경우에만 원격 HTTP JSON endpoint를 호출합니다.",
+      "resolvedFontSize": 16,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 16,
+        "typeface": "Malgun Gothic",
+        "color": "#3F4F65",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 4,
+        "lines": [
+          {
+            "index": 1,
+            "text": "기본 2~4단계는 INTERNAL_API가 같은 WAS"
+          },
+          {
+            "index": 2,
+            "text": "함수를 직접 호출합니다. 사용자가"
+          },
+          {
+            "index": 3,
+            "text": "EXTERNAL_API를 등록한 경우에만 원격 HTTP"
+          },
+          {
+            "index": 4,
+            "text": "JSON endpoint를 호출합니다."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "기본 2~4단계는 INTERNAL_API가 같은 WAS 함수를 직접 호출합니다. 사용자가 EXTERNAL_API를 등록한 경우에만 원격 HTTP JSON endpoint를 호출합니다.",
+          "lineSpacingPercent": 120000,
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "typeface": "Malgun Gothic",
+            "color": "#3F4F65",
+            "alignment": "left",
+            "lineSpacing": 1.2
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "기본 2~4단계는 INTERNAL_API가 같은 WAS 함수를 직접 호출합니다. 사용자가 EXTERNAL_API를 등록한 경우에만 원격 HTTP JSON endpoint를 호출합니다.",
+              "fontSize": 16,
+              "typeface": "Malgun Gothic",
+              "color": "#3F4F65",
+              "alignment": "left",
+              "lineSpacing": 1.2
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 24,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/1g3il0nu",
+      "id": "24",
+      "name": "p13-check-label-bar",
+      "bbox": [
+        62,
+        900,
+        5,
+        20
+      ],
+      "geometry": "rect",
+      "fillColor": "#B97316",
+      "lineColor": "#B97316",
+      "lineWidth": 0
+    },
+    {
+      "order": 25,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/0fuhcv69",
+      "id": "25",
+      "name": "p13-check-label",
+      "bbox": [
+        78,
+        896,
+        654,
+        28
+      ],
+      "geometry": "rect",
+      "text": "공통 검증 항목",
+      "textPreview": "공통 검증 항목",
+      "resolvedFontSize": 15,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 15,
+        "typeface": "Malgun Gothic",
+        "color": "#B97316",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "공통 검증 항목"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "공통 검증 항목",
+          "lineSpacingPercent": 112000,
+          "resolvedTextStyle": {
+            "fontSize": 15,
+            "typeface": "Malgun Gothic",
+            "color": "#B97316",
+            "bold": true,
+            "alignment": "left",
+            "lineSpacing": 1.12
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "공통 검증 항목",
+              "fontSize": 15,
+              "typeface": "Malgun Gothic",
+              "color": "#B97316",
+              "bold": true,
+              "alignment": "left",
+              "lineSpacing": 1.12
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 26,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/fel0jq5o",
+      "id": "26",
+      "name": "p13-check",
+      "bbox": [
+        70,
+        940,
+        654,
+        132
+      ],
+      "geometry": "rect",
+      "text": "Target·Result·Run 바인드와 출력 계약\n권한·ACL·시간·응답 크기·유효 JSON\n대용량 처리 범위, 병렬 자원과 커밋 단위",
+      "textPreview": "Target·Result·Run 바인드와 출력 계약 | 권한·ACL·시간·응답 크기·유효 JSON | 대용량 처리 범위, 병렬 자원과 커밋 단위",
+      "resolvedFontSize": 17,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 17,
+        "typeface": "Malgun Gothic",
+        "color": "#3F4F65",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 3,
+        "lines": [
+          {
+            "index": 1,
+            "text": "• Target·Result·Run 바인드와 출력 계약"
+          },
+          {
+            "index": 2,
+            "text": "• 권한·ACL·시간·응답 크기·유효 JSON"
+          },
+          {
+            "index": 3,
+            "text": "• 대용량 처리 범위, 병렬 자원과 커밋 단위"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Target·Result·Run 바인드와 출력 계약",
+          "bulletCharacter": "•",
+          "marginLeft": 21,
+          "indent": -13,
+          "lineSpacingPercent": 116000,
+          "spaceAfter": 8,
+          "resolvedTextStyle": {
+            "anchor": 1,
+            "fontSize": 17,
+            "typeface": "Malgun Gothic",
+            "color": "#3F4F65",
+            "alignment": "left",
+            "verticalAlignment": "top",
+            "lineSpacing": 1.16,
+            "autoFit": "none",
+            "insets": {
+              "top": 0,
+              "right": 0,
+              "bottom": 0,
+              "left": 0
+            }
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Target·Result·Run 바인드와 출력 계약",
+              "anchor": 1,
+              "fontSize": 17,
+              "typeface": "Malgun Gothic",
+              "color": "#3F4F65",
+              "alignment": "left",
+              "verticalAlignment": "top",
+              "lineSpacing": 1.16,
+              "autoFit": "none",
+              "insets": {
+                "top": 0,
+                "right": 0,
+                "bottom": 0,
+                "left": 0
+              }
+            }
+          ]
+        },
+        {
+          "index": 2,
+          "text": "권한·ACL·시간·응답 크기·유효 JSON",
+          "bulletCharacter": "•",
+          "marginLeft": 21,
+          "indent": -13,
+          "lineSpacingPercent": 116000,
+          "spaceAfter": 8,
+          "resolvedTextStyle": {
+            "anchor": 1,
+            "fontSize": 17,
+            "typeface": "Malgun Gothic",
+            "color": "#3F4F65",
+            "alignment": "left",
+            "verticalAlignment": "top",
+            "lineSpacing": 1.16,
+            "autoFit": "none",
+            "insets": {
+              "top": 0,
+              "right": 0,
+              "bottom": 0,
+              "left": 0
+            }
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "권한·ACL·시간·응답 크기·유효 JSON",
+              "anchor": 1,
+              "fontSize": 17,
+              "typeface": "Malgun Gothic",
+              "color": "#3F4F65",
+              "alignment": "left",
+              "verticalAlignment": "top",
+              "lineSpacing": 1.16,
+              "autoFit": "none",
+              "insets": {
+                "top": 0,
+                "right": 0,
+                "bottom": 0,
+                "left": 0
+              }
+            }
+          ]
+        },
+        {
+          "index": 3,
+          "text": "대용량 처리 범위, 병렬 자원과 커밋 단위",
+          "bulletCharacter": "•",
+          "marginLeft": 21,
+          "indent": -13,
+          "lineSpacingPercent": 116000,
+          "spaceAfter": 8,
+          "resolvedTextStyle": {
+            "anchor": 1,
+            "fontSize": 17,
+            "typeface": "Malgun Gothic",
+            "color": "#3F4F65",
+            "alignment": "left",
+            "verticalAlignment": "top",
+            "lineSpacing": 1.16,
+            "autoFit": "none",
+            "insets": {
+              "top": 0,
+              "right": 0,
+              "bottom": 0,
+              "left": 0
+            }
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "대용량 처리 범위, 병렬 자원과 커밋 단위",
+              "anchor": 1,
+              "fontSize": 17,
+              "typeface": "Malgun Gothic",
+              "color": "#3F4F65",
+              "alignment": "left",
+              "verticalAlignment": "top",
+              "lineSpacing": 1.16,
+              "autoFit": "none",
+              "insets": {
+                "top": 0,
+                "right": 0,
+                "bottom": 0,
+                "left": 0
+              }
+            }
+          ]
+        }
+      ],
+      "lineWidth": 0
+    }
+  ],
+  "composeRuns": []
+}

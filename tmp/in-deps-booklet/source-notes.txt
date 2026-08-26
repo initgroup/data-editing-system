@@ -1,0 +1,21 @@
+Communication job
+By the end, platform users, operators, and reviewers should understand how IN-DEPS connects data selection, four-stage rule discovery, Flow execution, human review, editing, and controlled operational application because every change remains grounded in a traceable Run and explicit execution contract.
+
+Primary source
+- D:\work\data-editing-system\frontend\help\in-deps-system-guide.html
+
+Supporting project sources
+- D:\work\data-editing-system\frontend\config\menu.config.js
+- D:\work\data-editing-system\frontend\help\help-content.json
+- D:\work\data-editing-system\frontend\assets\indeps_banner_bilingual.png
+- D:\work\data-editing-system\frontend\assets\init-logo.png
+
+Negative reference only
+- C:\Users\kse\Desktop\인뎁스(IN-DEPS)_시스템_소개서 (1).pdf
+  This file is not a visual template. It demonstrates problems to avoid: browser-print page breaks, fragmented explanations, large unused areas, and black rendering artifacts.
+
+Editorial decisions
+- A4 portrait, 24 pages so the page count is suitable for booklet imposition.
+- One complete explanatory unit per page; no web-section continuation across arbitrary page breaks.
+- Native PowerPoint text and shapes for editable content; local PNG logos only.
+- Flat solid colors and PowerPoint PDF export to avoid browser-print rendering artifacts.

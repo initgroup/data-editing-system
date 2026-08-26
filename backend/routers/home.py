@@ -1,3 +1,4 @@
+import base64
 from datetime import date, datetime
 from decimal import Decimal
 import json
@@ -10,13 +11,11 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
-from fastapi import APIRouter, HTTPException, Query, Request, Response
+from fastapi import APIRouter, HTTPException, Request, Response
 
 from backend.auth_context import get_request_role_code, get_request_user_id
 from backend.database import get_db_connection
 from backend.database_helper import SqlLoader, execute_query
-from backend.services.report_fonts import REPORT_FONT_FAMILY, embedded_korean_font_css
-from backend.services.structured_report_renderers import render_report_pdf
 from backend.target_database import get_target_connection_id, get_target_db_connection
 
 
@@ -26,7 +25,12 @@ router = APIRouter()
 
 _ROOT_DIR = Path(__file__).resolve().parents[2]
 _SYSTEM_GUIDE_PATH = _ROOT_DIR / "frontend" / "help" / "in-deps-system-guide.html"
-_SYSTEM_GUIDE_FILE_NAME = "인뎁스(IN-DEPS)_시스템_소개서"
+_SYSTEM_GUIDE_PDF_PATH = _ROOT_DIR / "frontend" / "help" / "IN-DEPS_Product_Introduction_KR_v1.0.pdf"
+_SYSTEM_GUIDE_PDF_FILE_NAME = "IN-DEPS_Product_Introduction_KR_v1.0.pdf"
+_SYSTEM_GUIDE_IMAGE_PATHS = {
+    "../assets/indeps_compact_bilingual.png": _ROOT_DIR / "frontend" / "assets" / "indeps_compact_bilingual.png",
+    "../assets/init-logo.png": _ROOT_DIR / "frontend" / "assets" / "init-logo.png",
+}
 
 
 TARGET_TABLES = [
@@ -157,39 +161,26 @@ def _safe_file_name(value: Any) -> str:
     return (text or "attachment")[:500]
 
 
-def _system_guide_download_headers(extension: str) -> dict[str, str]:
-    file_name = f"{_SYSTEM_GUIDE_FILE_NAME}.{extension}"
-    ascii_name = f"IN-DEPS_System_Introduction.{extension}"
+def _system_guide_download_headers() -> dict[str, str]:
     return {
         "Cache-Control": "private, no-store",
         "Pragma": "no-cache",
         "X-Content-Type-Options": "nosniff",
         "Content-Disposition": (
-            f'attachment; filename="{ascii_name}"; '
-            f"filename*=UTF-8''{quote(file_name, safe='')}"
+            f'attachment; filename="{_SYSTEM_GUIDE_PDF_FILE_NAME}"; '
+            f"filename*=UTF-8''{quote(_SYSTEM_GUIDE_PDF_FILE_NAME, safe='')}"
         ),
     }
 
 
-def _system_guide_pdf_html(html_content: bytes) -> bytes:
-    font_css = embedded_korean_font_css()
-    if not font_css:
-        raise HTTPException(status_code=503, detail="PDF renderer font is not installed.")
-
+def _system_guide_embedded_html(html_content: bytes) -> bytes:
     document = html_content.decode("utf-8")
-    if "</head>" not in document:
-        raise HTTPException(status_code=500, detail="System guide document is invalid.")
-
-    pdf_font_style = (
-        "<style data-pdf-font>\n"
-        f"{font_css}\n"
-        ":root { --font-sans: \""
-        f"{REPORT_FONT_FAMILY}"
-        "\", \"Malgun Gothic\", sans-serif; }\n"
-        f"body {{ font-family: \"{REPORT_FONT_FAMILY}\", \"Malgun Gothic\", sans-serif; }}\n"
-        "</style>\n"
-    )
-    return document.replace("</head>", f"{pdf_font_style}</head>", 1).encode("utf-8")
+    for source, image_path in _SYSTEM_GUIDE_IMAGE_PATHS.items():
+        if not image_path.is_file():
+            raise HTTPException(status_code=500, detail="System guide image was not found.")
+        encoded_image = base64.b64encode(image_path.read_bytes()).decode("ascii")
+        document = document.replace(source, f"data:image/png;base64,{encoded_image}")
+    return document.encode("utf-8")
 
 
 def _serialize_db_value(value: Any) -> Any:
@@ -443,33 +434,47 @@ async def read_home():
 
 
 @router.get("/system-guide/download")
-def download_system_guide(
-    request: Request,
-    format: str = Query(..., pattern="^(html|pdf)$"),
-):
+def download_system_guide(request: Request):
+    get_request_user_id(request)
+    if not _SYSTEM_GUIDE_PDF_PATH.is_file():
+        raise HTTPException(status_code=404, detail="System guide PDF was not found.")
+
+    try:
+        return Response(
+            content=_SYSTEM_GUIDE_PDF_PATH.read_bytes(),
+            media_type="application/pdf",
+            headers=_system_guide_download_headers(),
+        )
+    except HTTPException:
+        raise
+    except Exception as error:
+        logger.exception("System guide PDF could not be downloaded.")
+        raise HTTPException(status_code=500, detail="System guide PDF could not be downloaded.") from error
+
+
+@router.get("/system-guide/preview")
+def preview_system_guide(request: Request):
     get_request_user_id(request)
     if not _SYSTEM_GUIDE_PATH.is_file():
         raise HTTPException(status_code=404, detail="System guide document was not found.")
 
     try:
-        html_content = _SYSTEM_GUIDE_PATH.read_bytes()
-        if format == "html":
-            content = html_content
-            media_type = "text/html; charset=utf-8"
-        else:
-            content = render_report_pdf(_system_guide_pdf_html(html_content), batch=True)
-            media_type = "application/pdf"
-
+        content = _system_guide_embedded_html(_SYSTEM_GUIDE_PATH.read_bytes())
         return Response(
             content=content,
-            media_type=media_type,
-            headers=_system_guide_download_headers(format),
+            media_type="text/html; charset=utf-8",
+            headers={
+                "Cache-Control": "private, no-store",
+                "Pragma": "no-cache",
+                "X-Content-Type-Options": "nosniff",
+                "Content-Disposition": "inline",
+            },
         )
     except HTTPException:
         raise
     except Exception as error:
-        logger.exception("System guide file could not be generated. format=%s", format)
-        raise HTTPException(status_code=500, detail="System guide file could not be generated.") from error
+        logger.exception("System guide preview could not be generated.")
+        raise HTTPException(status_code=500, detail="System guide preview could not be generated.") from error
 
 
 @router.get("/dashboard")

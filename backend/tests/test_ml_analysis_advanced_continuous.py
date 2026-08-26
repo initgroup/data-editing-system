@@ -121,6 +121,143 @@ class MlAnalysisAdvancedContinuousTests(unittest.TestCase):
         self.assertIn("donorImputation=N", message)
         self.assertIn("minimumChangeOptimization=N", message)
 
+    def test_small_sample_prefers_dominant_coefficient_free_sum_with_one_violation(self):
+        x_values = np.asarray(
+            [
+                [20, 80],
+                [30, 50],
+                [40, 20],
+                [50, 80],
+                [10, 50],
+                [70, 20],
+                [80, 80],
+                [90, 50],
+                [100, 20],
+                [110, 50],
+                [0, 20],
+            ],
+            dtype=float,
+        )
+        y_values = np.asarray(
+            [100, 80, 60, 130, 110, 90, 160, 140, 120, 160, 20],
+            dtype=float,
+        )
+
+        expression, score, complexity, method, message = fit_symbolic_expression(
+            x_values,
+            y_values,
+            ["DOMESTIC_TRAINING_COST", "OVERSEAS_TRAINING_COST"],
+            1000,
+            False,
+            True,
+            0.995,
+            8,
+            monte_carlo_mode="OFF",
+            banff_mode="OFF",
+        )
+
+        self.assertEqual(method, "SIMPLE_ARITHMETIC")
+        self.assertEqual(
+            expression,
+            "DOMESTIC_TRAINING_COST + OVERSEAS_TRAINING_COST",
+        )
+        self.assertEqual(complexity, 2)
+        self.assertAlmostEqual(score, 0.8630478087649402)
+        self.assertIn("matchRows=10/11", message)
+        self.assertIn("selection=SIMPLE_ARITHMETIC", message)
+
+    def test_simple_arithmetic_search_uses_features_after_first_six(self):
+        rng = np.random.default_rng(81)
+        row_count = 40
+        unrelated = rng.normal(size=(row_count, 6))
+        domestic = rng.integers(10, 100, size=row_count).astype(float)
+        overseas = rng.integers(10, 100, size=row_count).astype(float)
+        x_values = np.column_stack([unrelated, domestic, overseas])
+        y_values = domestic + overseas
+        y_values[:4] += 250.0
+
+        expression, _, _, method, message = fit_symbolic_expression(
+            x_values,
+            y_values,
+            [
+                "NOISE_1",
+                "NOISE_2",
+                "NOISE_3",
+                "NOISE_4",
+                "NOISE_5",
+                "NOISE_6",
+                "DOMESTIC",
+                "OVERSEAS",
+            ],
+            1000,
+            False,
+            True,
+            0.995,
+            8,
+            monte_carlo_mode="OFF",
+            banff_mode="OFF",
+        )
+
+        self.assertEqual(method, "SIMPLE_ARITHMETIC")
+        self.assertEqual(expression, "DOMESTIC + OVERSEAS")
+        self.assertIn("matchRows=36/40", message)
+
+    def test_simple_arithmetic_supports_subtraction_multiplication_and_safe_division(self):
+        left = np.arange(11, 41, dtype=float)
+        right = (np.arange(30, dtype=float) % 7.0) + 2.0
+        cases = [
+            (left - right, "LEFT - RIGHT"),
+            (left * right, "LEFT*RIGHT"),
+            (left / right, "LEFT/NULLIF(RIGHT, 0)"),
+        ]
+
+        for target, expected_expression in cases:
+            with self.subTest(expression=expected_expression):
+                expression, _, _, method, _ = fit_symbolic_expression(
+                    np.column_stack([left, right]),
+                    target,
+                    ["LEFT", "RIGHT"],
+                    1000,
+                    False,
+                    True,
+                    0.995,
+                    8,
+                    monte_carlo_mode="OFF",
+                    banff_mode="OFF",
+                    simple_arithmetic_max_terms=2,
+                )
+
+                self.assertEqual(method, "SIMPLE_ARITHMETIC")
+                self.assertEqual(expression, expected_expression)
+
+    def test_simple_arithmetic_excludes_median_imputed_cells_from_match_support(self):
+        domestic = np.arange(10, 21, dtype=float)
+        overseas = np.arange(30, 41, dtype=float)
+        y_values = domestic + overseas
+        x_values = np.column_stack([domestic, overseas])
+        valid_masks = np.ones_like(x_values, dtype=bool)
+        x_values[0, 0] = 999.0
+        valid_masks[0, 0] = False
+
+        expression, _, _, method, message = fit_symbolic_expression(
+            x_values,
+            y_values,
+            ["DOMESTIC", "OVERSEAS"],
+            1000,
+            False,
+            True,
+            0.995,
+            8,
+            monte_carlo_mode="OFF",
+            banff_mode="OFF",
+            feature_valid_masks=valid_masks,
+        )
+
+        self.assertEqual(method, "SIMPLE_ARITHMETIC")
+        self.assertEqual(expression, "DOMESTIC + OVERSEAS")
+        self.assertIn("matchRows=10/10", message)
+        self.assertIn("coverage=0.909091", message)
+
     def test_monte_carlo_is_fixed_seed_and_diagnostic_only(self):
         rng = np.random.default_rng(23)
         source = rng.normal(size=400)

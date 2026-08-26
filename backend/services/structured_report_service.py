@@ -480,6 +480,10 @@ _ALLOWED_PARAMETER_KEYS = {
     "monteCarloIterations",
     "monteCarloMaxRows",
     "banffMode",
+    "simpleArithmeticFirstYn",
+    "simpleArithmeticMinMatchRate",
+    "simpleArithmeticMaxTerms",
+    "simpleArithmeticTolerancePct",
     "editingSessionId",
 }
 _ALLOWED_P_PARAMETER_KEYS = {
@@ -554,6 +558,10 @@ _ALLOWED_P_PARAMETER_KEYS = {
     "P_RUN_ID",
     "P_RUN_SOURCE_TYPE",
     "P_SAMPLE_ROWS",
+    "P_SIMPLE_ARITHMETIC_FIRST_YN",
+    "P_SIMPLE_ARITHMETIC_MAX_TERMS",
+    "P_SIMPLE_ARITHMETIC_MIN_MATCH_RATE",
+    "P_SIMPLE_ARITHMETIC_TOLERANCE_PCT",
     "P_SYMBOLIC_MAX_RULES",
     "P_SYMBOLIC_RESULT_OWNER",
     "P_SYMBOLIC_RESULT_TABLE",

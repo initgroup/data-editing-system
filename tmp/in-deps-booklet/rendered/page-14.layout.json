@@ -1,0 +1,1731 @@
+{
+  "schema": "openai.presentation.layout/v4",
+  "unit": "px",
+  "slide": {
+    "aid": "sl/zy5dxq",
+    "id": "zy5dxq",
+    "slide": 14,
+    "layoutId": "6035ac3d-36d1-4403-bd4d-1fe1d7ae304f",
+    "layoutName": "Title Slide",
+    "layoutType": "title",
+    "masterLayoutId": "7c015f2d-6b71-49e2-82db-f12cd9a0e0b9",
+    "masterLayoutName": "Master",
+    "backgroundColor": "#FFFFFF",
+    "frame": {
+      "left": 0,
+      "top": 0,
+      "width": 794,
+      "height": 1123
+    }
+  },
+  "theme": {
+    "colorSchemeName": "ChatGPT",
+    "colors": {
+      "accent1": "#156082",
+      "accent2": "#E97132",
+      "accent3": "#196B24",
+      "accent4": "#0F9ED5",
+      "accent5": "#A02B93",
+      "accent6": "#4EA72E",
+      "bg1": "#FFFFFF",
+      "bg2": "#000000",
+      "tx1": "#1F1F1F",
+      "tx2": "#FFFFFF",
+      "dk1": "#000000",
+      "lt1": "#FFFFFF",
+      "dk2": "#0E2841",
+      "lt2": "#E8E8E8",
+      "hlink": "#467886",
+      "folHlink": "#96607D"
+    },
+    "typefaces": [
+      "Consolas",
+      "Malgun Gothic"
+    ]
+  },
+  "inheritedLayers": [
+    {
+      "scope": "layout",
+      "id": "6035ac3d-36d1-4403-bd4d-1fe1d7ae304f",
+      "name": "Title Slide",
+      "type": "title",
+      "parentLayoutId": "7c015f2d-6b71-49e2-82db-f12cd9a0e0b9",
+      "elements": []
+    },
+    {
+      "scope": "master",
+      "id": "7c015f2d-6b71-49e2-82db-f12cd9a0e0b9",
+      "name": "Master",
+      "type": "master",
+      "elements": []
+    }
+  ],
+  "elements": [
+    {
+      "order": 1,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/z2x8nats",
+      "id": "1",
+      "name": "page-14-rail",
+      "bbox": [
+        0,
+        0,
+        10,
+        1123
+      ],
+      "geometry": "rect",
+      "fillColor": "#B97316",
+      "lineColor": "#B97316",
+      "lineWidth": 0
+    },
+    {
+      "order": 2,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/0nq9wfax",
+      "id": "2",
+      "name": "page-14-chapter",
+      "bbox": [
+        62,
+        45,
+        460,
+        24
+      ],
+      "geometry": "rect",
+      "text": "03 · RUN & NODE STATUS",
+      "textPreview": "03 · RUN & NODE STATUS",
+      "resolvedFontSize": 13,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 13,
+        "typeface": "Malgun Gothic",
+        "color": "#B97316",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "03 · RUN & NODE STATUS"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "03 · RUN & NODE STATUS",
+          "lineSpacingPercent": 112000,
+          "resolvedTextStyle": {
+            "fontSize": 13,
+            "typeface": "Malgun Gothic",
+            "color": "#B97316",
+            "bold": true,
+            "alignment": "left",
+            "lineSpacing": 1.12
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "03 · RUN & NODE STATUS",
+              "fontSize": 13,
+              "typeface": "Malgun Gothic",
+              "color": "#B97316",
+              "bold": true,
+              "alignment": "left",
+              "lineSpacing": 1.12
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 3,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/1ozqpkbi",
+      "id": "3",
+      "name": "page-14-title",
+      "bbox": [
+        62,
+        82,
+        670,
+        84
+      ],
+      "geometry": "rect",
+      "text": "SUCCESS와 좋은 결과는 같은 말이 아닙니다",
+      "textPreview": "SUCCESS와 좋은 결과는 같은 말이 아닙니다",
+      "resolvedFontSize": 38,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 38,
+        "typeface": "Malgun Gothic",
+        "color": "#14233C",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "SUCCESS와 좋은 결과는 같은 말이"
+          },
+          {
+            "index": 2,
+            "text": "아닙니다"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "SUCCESS와 좋은 결과는 같은 말이 아닙니다",
+          "lineSpacingPercent": 96000,
+          "resolvedTextStyle": {
+            "fontSize": 38,
+            "typeface": "Malgun Gothic",
+            "color": "#14233C",
+            "bold": true,
+            "alignment": "left",
+            "lineSpacing": 0.96
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "SUCCESS와 좋은 결과는 같은 말이 아닙니다",
+              "fontSize": 38,
+              "typeface": "Malgun Gothic",
+              "color": "#14233C",
+              "bold": true,
+              "alignment": "left",
+              "lineSpacing": 0.96
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 4,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/mp8ryps3",
+      "id": "4",
+      "name": "page-14-subtitle",
+      "bbox": [
+        62,
+        170,
+        670,
+        50
+      ],
+      "geometry": "rect",
+      "text": "실행 상태는 프로세스가 어떻게 종료되었는지를 나타냅니다. 규칙 품질과 업무 승인 여부는 결과 지표·표본·메시지를 별도로 확인해야 합니다.",
+      "textPreview": "실행 상태는 프로세스가 어떻게 종료되었는지를 나타냅니다. 규칙 품질과 업무 승인 여부는 결과 지표·표본·메시지를 별도로 확인해야 합니다.",
+      "resolvedFontSize": 17,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 17,
+        "typeface": "Malgun Gothic",
+        "color": "#3F4F65",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "실행 상태는 프로세스가 어떻게 종료되었는지를 나타냅니다. 규칙 품질과 업무 승인"
+          },
+          {
+            "index": 2,
+            "text": "여부는 결과 지표·표본·메시지를 별도로 확인해야 합니다."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "실행 상태는 프로세스가 어떻게 종료되었는지를 나타냅니다. 규칙 품질과 업무 승인 여부는 결과 지표·표본·메시지를 별도로 확인해야 합니다.",
+          "lineSpacingPercent": 122000,
+          "resolvedTextStyle": {
+            "fontSize": 17,
+            "typeface": "Malgun Gothic",
+            "color": "#3F4F65",
+            "alignment": "left",
+            "lineSpacing": 1.22
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "실행 상태는 프로세스가 어떻게 종료되었는지를 나타냅니다. 규칙 품질과 업무 승인 여부는 결과 지표·표본·메시지를 별도로 확인해야 합니다.",
+              "fontSize": 17,
+              "typeface": "Malgun Gothic",
+              "color": "#3F4F65",
+              "alignment": "left",
+              "lineSpacing": 1.22
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 5,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/nqh8ruto",
+      "id": "5",
+      "name": "page-14-top-rule",
+      "bbox": [
+        62,
+        226,
+        670,
+        2
+      ],
+      "geometry": "rect",
+      "fillColor": "#D7E0EA",
+      "lineColor": "#D7E0EA",
+      "lineWidth": 0
+    },
+    {
+      "order": 6,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/orq90fa9",
+      "id": "6",
+      "name": "page-14-footer-rule",
+      "bbox": [
+        62,
+        1067,
+        670,
+        1
+      ],
+      "geometry": "rect",
+      "fillColor": "#D7E0EA",
+      "lineColor": "#D7E0EA",
+      "lineWidth": 0
+    },
+    {
+      "order": 7,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/9szqtkbu",
+      "id": "7",
+      "name": "page-14-footer-name",
+      "bbox": [
+        62,
+        1080,
+        300,
+        18
+      ],
+      "geometry": "rect",
+      "text": "IN-DEPS 시스템 소개서",
+      "textPreview": "IN-DEPS 시스템 소개서",
+      "resolvedFontSize": 10,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 10,
+        "typeface": "Malgun Gothic",
+        "color": "#6D7A8D",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "IN-DEPS 시스템 소개서"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "IN-DEPS 시스템 소개서",
+          "lineSpacingPercent": 112000,
+          "resolvedTextStyle": {
+            "fontSize": 10,
+            "typeface": "Malgun Gothic",
+            "color": "#6D7A8D",
+            "alignment": "left",
+            "lineSpacing": 1.12
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "IN-DEPS 시스템 소개서",
+              "fontSize": 10,
+              "typeface": "Malgun Gothic",
+              "color": "#6D7A8D",
+              "alignment": "left",
+              "lineSpacing": 1.12
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 8,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/2t47mlcz",
+      "id": "8",
+      "name": "page-14-footer-number",
+      "bbox": [
+        682,
+        1078,
+        50,
+        20
+      ],
+      "geometry": "rect",
+      "text": "14",
+      "textPreview": "14",
+      "resolvedFontSize": 11,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 11,
+        "typeface": "Malgun Gothic",
+        "color": "#B97316",
+        "bold": true,
+        "alignment": "right",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "14"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "14",
+          "lineSpacingPercent": 112000,
+          "resolvedTextStyle": {
+            "fontSize": 11,
+            "typeface": "Malgun Gothic",
+            "color": "#B97316",
+            "bold": true,
+            "alignment": "right",
+            "lineSpacing": 1.12
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "14",
+              "fontSize": 11,
+              "typeface": "Malgun Gothic",
+              "color": "#B97316",
+              "bold": true,
+              "alignment": "right",
+              "lineSpacing": 1.12
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 9,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/3ud8fqtk",
+      "id": "9",
+      "name": "p14-row-0",
+      "bbox": [
+        62,
+        270,
+        670,
+        160
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#ECF5EF",
+      "lineColor": "#ECF5EF",
+      "lineWidth": 0
+    },
+    {
+      "order": 10,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/7qhc3e58",
+      "id": "10",
+      "name": "p14-status-0",
+      "bbox": [
+        86,
+        292,
+        160,
+        34
+      ],
+      "geometry": "rect",
+      "text": "SUCCESS",
+      "textPreview": "SUCCESS",
+      "resolvedFontSize": 22,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 22,
+        "typeface": "Consolas",
+        "color": "#3E8D65",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "SUCCESS"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "SUCCESS",
+          "lineSpacingPercent": 112000,
+          "resolvedTextStyle": {
+            "fontSize": 22,
+            "typeface": "Consolas",
+            "color": "#3E8D65",
+            "bold": true,
+            "alignment": "left",
+            "lineSpacing": 1.12
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "SUCCESS",
+              "fontSize": 22,
+              "typeface": "Consolas",
+              "color": "#3E8D65",
+              "bold": true,
+              "alignment": "left",
+              "lineSpacing": 1.12
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 11,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/6p8bu94n",
+      "id": "11",
+      "name": "p14-meaning-title-0",
+      "bbox": [
+        277,
+        290,
+        110,
+        22
+      ],
+      "geometry": "rect",
+      "text": "실행 의미",
+      "textPreview": "실행 의미",
+      "resolvedFontSize": 13,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 13,
+        "typeface": "Malgun Gothic",
+        "color": "#3E8D65",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "실행 의미"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "실행 의미",
+          "lineSpacingPercent": 112000,
+          "resolvedTextStyle": {
+            "fontSize": 13,
+            "typeface": "Malgun Gothic",
+            "color": "#3E8D65",
+            "bold": true,
+            "alignment": "left",
+            "lineSpacing": 1.12
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "실행 의미",
+              "fontSize": 13,
+              "typeface": "Malgun Gothic",
+              "color": "#3E8D65",
+              "bold": true,
+              "alignment": "left",
+              "lineSpacing": 1.12
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 12,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/tsju5ony",
+      "id": "12",
+      "name": "p14-meaning-0",
+      "bbox": [
+        277,
+        319,
+        425,
+        42
+      ],
+      "geometry": "rect",
+      "text": "노드 실행과 결과 계약 저장 완료",
+      "textPreview": "노드 실행과 결과 계약 저장 완료",
+      "resolvedFontSize": 17,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 17,
+        "typeface": "Malgun Gothic",
+        "color": "#14233C",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "노드 실행과 결과 계약 저장 완료"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "노드 실행과 결과 계약 저장 완료",
+          "lineSpacingPercent": 112000,
+          "resolvedTextStyle": {
+            "fontSize": 17,
+            "typeface": "Malgun Gothic",
+            "color": "#14233C",
+            "bold": true,
+            "alignment": "left",
+            "lineSpacing": 1.12
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "노드 실행과 결과 계약 저장 완료",
+              "fontSize": 17,
+              "typeface": "Malgun Gothic",
+              "color": "#14233C",
+              "bold": true,
+              "alignment": "left",
+              "lineSpacing": 1.12
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 13,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/8ratwjmt",
+      "id": "13",
+      "name": "p14-reading-title-0",
+      "bbox": [
+        277,
+        369,
+        110,
+        20
+      ],
+      "geometry": "rect",
+      "text": "운영 해석",
+      "textPreview": "운영 해석",
+      "resolvedFontSize": 13,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 13,
+        "typeface": "Malgun Gothic",
+        "color": "#3E8D65",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "운영 해석"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "운영 해석",
+          "lineSpacingPercent": 112000,
+          "resolvedTextStyle": {
+            "fontSize": 13,
+            "typeface": "Malgun Gothic",
+            "color": "#3E8D65",
+            "bold": true,
+            "alignment": "left",
+            "lineSpacing": 1.12
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "운영 해석",
+              "fontSize": 13,
+              "typeface": "Malgun Gothic",
+              "color": "#3E8D65",
+              "bold": true,
+              "alignment": "left",
+              "lineSpacing": 1.12
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 14,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/jmhczu5w",
+      "id": "14",
+      "name": "p14-reading-0",
+      "bbox": [
+        377,
+        366,
+        325,
+        48
+      ],
+      "geometry": "rect",
+      "text": "업무 승인이나 규칙 품질을 뜻하지 않습니다. 실제 지표와 표본을 확인합니다.",
+      "textPreview": "업무 승인이나 규칙 품질을 뜻하지 않습니다. 실제 지표와 표본을 확인합니다.",
+      "resolvedFontSize": 15,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 15,
+        "typeface": "Malgun Gothic",
+        "color": "#3F4F65",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "업무 승인이나 규칙 품질을 뜻하지 않습니다."
+          },
+          {
+            "index": 2,
+            "text": "실제 지표와 표본을 확인합니다."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "업무 승인이나 규칙 품질을 뜻하지 않습니다. 실제 지표와 표본을 확인합니다.",
+          "lineSpacingPercent": 116000,
+          "resolvedTextStyle": {
+            "fontSize": 15,
+            "typeface": "Malgun Gothic",
+            "color": "#3F4F65",
+            "alignment": "left",
+            "lineSpacing": 1.16
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "업무 승인이나 규칙 품질을 뜻하지 않습니다. 실제 지표와 표본을 확인합니다.",
+              "fontSize": 15,
+              "typeface": "Malgun Gothic",
+              "color": "#3F4F65",
+              "alignment": "left",
+              "lineSpacing": 1.16
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 15,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/yl8bq94b",
+      "id": "15",
+      "name": "p14-row-1",
+      "bbox": [
+        62,
+        460,
+        670,
+        160
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#F9ECEE",
+      "lineColor": "#F9ECEE",
+      "lineWidth": 0
+    },
+    {
+      "order": 16,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/lozu14n2",
+      "id": "16",
+      "name": "p14-status-1",
+      "bbox": [
+        86,
+        482,
+        160,
+        34
+      ],
+      "geometry": "rect",
+      "text": "FAILED",
+      "textPreview": "FAILED",
+      "resolvedFontSize": 22,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 22,
+        "typeface": "Consolas",
+        "color": "#B54D58",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "FAILED"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "FAILED",
+          "lineSpacingPercent": 112000,
+          "resolvedTextStyle": {
+            "fontSize": 22,
+            "typeface": "Consolas",
+            "color": "#B54D58",
+            "bold": true,
+            "alignment": "left",
+            "lineSpacing": 1.12
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "FAILED",
+              "fontSize": 22,
+              "typeface": "Consolas",
+              "color": "#B54D58",
+              "bold": true,
+              "alignment": "left",
+              "lineSpacing": 1.12
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 17,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/knqtszmh",
+      "id": "17",
+      "name": "p14-meaning-title-1",
+      "bbox": [
+        277,
+        480,
+        110,
+        22
+      ],
+      "geometry": "rect",
+      "text": "실행 의미",
+      "textPreview": "실행 의미",
+      "resolvedFontSize": 13,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 13,
+        "typeface": "Malgun Gothic",
+        "color": "#B54D58",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "실행 의미"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "실행 의미",
+          "lineSpacingPercent": 112000,
+          "resolvedTextStyle": {
+            "fontSize": 13,
+            "typeface": "Malgun Gothic",
+            "color": "#B54D58",
+            "bold": true,
+            "alignment": "left",
+            "lineSpacing": 1.12
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "실행 의미",
+              "fontSize": 13,
+              "typeface": "Malgun Gothic",
+              "color": "#B54D58",
+              "bold": true,
+              "alignment": "left",
+              "lineSpacing": 1.12
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 18,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/byxcvu50",
+      "id": "18",
+      "name": "p14-meaning-1",
+      "bbox": [
+        277,
+        509,
+        425,
+        42
+      ],
+      "geometry": "rect",
+      "text": "실행 오류 또는 검토가 필요한 부분 완료",
+      "textPreview": "실행 오류 또는 검토가 필요한 부분 완료",
+      "resolvedFontSize": 17,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 17,
+        "typeface": "Malgun Gothic",
+        "color": "#14233C",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "실행 오류 또는 검토가 필요한 부분 완료"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "실행 오류 또는 검토가 필요한 부분 완료",
+          "lineSpacingPercent": 112000,
+          "resolvedTextStyle": {
+            "fontSize": 17,
+            "typeface": "Malgun Gothic",
+            "color": "#14233C",
+            "bold": true,
+            "alignment": "left",
+            "lineSpacing": 1.12
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "실행 오류 또는 검토가 필요한 부분 완료",
+              "fontSize": 17,
+              "typeface": "Malgun Gothic",
+              "color": "#14233C",
+              "bold": true,
+              "alignment": "left",
+              "lineSpacing": 1.12
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 19,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/axobmp4f",
+      "id": "19",
+      "name": "p14-reading-title-1",
+      "bbox": [
+        277,
+        559,
+        110,
+        20
+      ],
+      "geometry": "rect",
+      "text": "운영 해석",
+      "textPreview": "운영 해석",
+      "resolvedFontSize": 13,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 13,
+        "typeface": "Malgun Gothic",
+        "color": "#B54D58",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "운영 해석"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "운영 해석",
+          "lineSpacingPercent": 112000,
+          "resolvedTextStyle": {
+            "fontSize": 13,
+            "typeface": "Malgun Gothic",
+            "color": "#B54D58",
+            "bold": true,
+            "alignment": "left",
+            "lineSpacing": 1.12
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "운영 해석",
+              "fontSize": 13,
+              "typeface": "Malgun Gothic",
+              "color": "#B54D58",
+              "bold": true,
+              "alignment": "left",
+              "lineSpacing": 1.12
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 20,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/etovyp87",
+      "id": "20",
+      "name": "p14-reading-1",
+      "bbox": [
+        377,
+        556,
+        325,
+        48
+      ],
+      "geometry": "rect",
+      "text": "메시지에서 성공한 하위 작업과 실패한 작업을 유형별로 나누어 확인합니다.",
+      "textPreview": "메시지에서 성공한 하위 작업과 실패한 작업을 유형별로 나누어 확인합니다.",
+      "resolvedFontSize": 15,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 15,
+        "typeface": "Malgun Gothic",
+        "color": "#3F4F65",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "메시지에서 성공한 하위 작업과 실패한 작업을"
+          },
+          {
+            "index": 2,
+            "text": "유형별로 나누어 확인합니다."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "메시지에서 성공한 하위 작업과 실패한 작업을 유형별로 나누어 확인합니다.",
+          "lineSpacingPercent": 116000,
+          "resolvedTextStyle": {
+            "fontSize": 15,
+            "typeface": "Malgun Gothic",
+            "color": "#3F4F65",
+            "alignment": "left",
+            "lineSpacing": 1.16
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "메시지에서 성공한 하위 작업과 실패한 작업을 유형별로 나누어 확인합니다.",
+              "fontSize": 15,
+              "typeface": "Malgun Gothic",
+              "color": "#3F4F65",
+              "alignment": "left",
+              "lineSpacing": 1.16
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 21,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/fuxc7ups",
+      "id": "21",
+      "name": "p14-row-2",
+      "bbox": [
+        62,
+        650,
+        670,
+        160
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#F2F6FA",
+      "lineColor": "#F2F6FA",
+      "lineWidth": 0
+    },
+    {
+      "order": 22,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/0v6d0zqd",
+      "id": "22",
+      "name": "p14-status-2",
+      "bbox": [
+        86,
+        672,
+        160,
+        34
+      ],
+      "geometry": "rect",
+      "text": "SKIPPED",
+      "textPreview": "SKIPPED",
+      "resolvedFontSize": 22,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 22,
+        "typeface": "Consolas",
+        "color": "#6D7A8D",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "SKIPPED"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "SKIPPED",
+          "lineSpacingPercent": 112000,
+          "resolvedTextStyle": {
+            "fontSize": 22,
+            "typeface": "Consolas",
+            "color": "#6D7A8D",
+            "bold": true,
+            "alignment": "left",
+            "lineSpacing": 1.12
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "SKIPPED",
+              "fontSize": 22,
+              "typeface": "Consolas",
+              "color": "#6D7A8D",
+              "bold": true,
+              "alignment": "left",
+              "lineSpacing": 1.12
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 23,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/1wfu947y",
+      "id": "23",
+      "name": "p14-meaning-title-2",
+      "bbox": [
+        277,
+        670,
+        110,
+        22
+      ],
+      "geometry": "rect",
+      "text": "실행 의미",
+      "textPreview": "실행 의미",
+      "resolvedFontSize": 13,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 13,
+        "typeface": "Malgun Gothic",
+        "color": "#6D7A8D",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "실행 의미"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "실행 의미",
+          "lineSpacingPercent": 112000,
+          "resolvedTextStyle": {
+            "fontSize": 13,
+            "typeface": "Malgun Gothic",
+            "color": "#6D7A8D",
+            "bold": true,
+            "alignment": "left",
+            "lineSpacing": 1.12
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "실행 의미",
+              "fontSize": 13,
+              "typeface": "Malgun Gothic",
+              "color": "#6D7A8D",
+              "bold": true,
+              "alignment": "left",
+              "lineSpacing": 1.12
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 24,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/2xov2p8j",
+      "id": "24",
+      "name": "p14-meaning-2",
+      "bbox": [
+        277,
+        699,
+        425,
+        42
+      ],
+      "geometry": "rect",
+      "text": "의존 조건 미충족 또는 실행 대상 제외",
+      "textPreview": "의존 조건 미충족 또는 실행 대상 제외",
+      "resolvedFontSize": 17,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 17,
+        "typeface": "Malgun Gothic",
+        "color": "#14233C",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "의존 조건 미충족 또는 실행 대상 제외"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "의존 조건 미충족 또는 실행 대상 제외",
+          "lineSpacingPercent": 112000,
+          "resolvedTextStyle": {
+            "fontSize": 17,
+            "typeface": "Malgun Gothic",
+            "color": "#14233C",
+            "bold": true,
+            "alignment": "left",
+            "lineSpacing": 1.12
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "의존 조건 미충족 또는 실행 대상 제외",
+              "fontSize": 17,
+              "typeface": "Malgun Gothic",
+              "color": "#14233C",
+              "bold": true,
+              "alignment": "left",
+              "lineSpacing": 1.12
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 25,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/nyxcbup4",
+      "id": "25",
+      "name": "p14-reading-title-2",
+      "bbox": [
+        277,
+        749,
+        110,
+        20
+      ],
+      "geometry": "rect",
+      "text": "운영 해석",
+      "textPreview": "운영 해석",
+      "resolvedFontSize": 13,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 13,
+        "typeface": "Malgun Gothic",
+        "color": "#6D7A8D",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "운영 해석"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "운영 해석",
+          "lineSpacingPercent": 112000,
+          "resolvedTextStyle": {
+            "fontSize": 13,
+            "typeface": "Malgun Gothic",
+            "color": "#6D7A8D",
+            "bold": true,
+            "alignment": "left",
+            "lineSpacing": 1.12
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "운영 해석",
+              "fontSize": 13,
+              "typeface": "Malgun Gothic",
+              "color": "#6D7A8D",
+              "bold": true,
+              "alignment": "left",
+              "lineSpacing": 1.12
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 26,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/oj6d4zq9",
+      "id": "26",
+      "name": "p14-reading-2",
+      "bbox": [
+        377,
+        746,
+        325,
+        48
+      ],
+      "geometry": "rect",
+      "text": "필수 선행 노드 상태와 ON_COMPLETE 등 엣지 조건을 확인합니다.",
+      "textPreview": "필수 선행 노드 상태와 ON_COMPLETE 등 엣지 조건을 확인합니다.",
+      "resolvedFontSize": 15,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 15,
+        "typeface": "Malgun Gothic",
+        "color": "#3F4F65",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "필수 선행 노드 상태와 ON_COMPLETE 등 엣지"
+          },
+          {
+            "index": 2,
+            "text": "조건을 확인합니다."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "필수 선행 노드 상태와 ON_COMPLETE 등 엣지 조건을 확인합니다.",
+          "lineSpacingPercent": 116000,
+          "resolvedTextStyle": {
+            "fontSize": 15,
+            "typeface": "Malgun Gothic",
+            "color": "#3F4F65",
+            "alignment": "left",
+            "lineSpacing": 1.16
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "필수 선행 노드 상태와 ON_COMPLETE 등 엣지 조건을 확인합니다.",
+              "fontSize": 15,
+              "typeface": "Malgun Gothic",
+              "color": "#3F4F65",
+              "alignment": "left",
+              "lineSpacing": 1.16
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 27,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/9kzud47u",
+      "id": "27",
+      "name": "p14-callout-fill",
+      "bbox": [
+        62,
+        864,
+        670,
+        94
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#FAF2E6",
+      "lineColor": "#B97316",
+      "lineWidth": 1
+    },
+    {
+      "order": 28,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/al8v698f",
+      "id": "28",
+      "name": "p14-callout-accent",
+      "bbox": [
+        62,
+        864,
+        6,
+        94
+      ],
+      "geometry": "rect",
+      "fillColor": "#B97316",
+      "lineColor": "#B97316",
+      "lineWidth": 0
+    },
+    {
+      "order": 29,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/bmhwfep0",
+      "id": "29",
+      "name": "p14-callout-text",
+      "bbox": [
+        84,
+        882,
+        628,
+        62
+      ],
+      "geometry": "rect",
+      "text": "위반 0건은 오류가 아닐 수 있습니다. 반대로 SUCCESS라도 규칙 표본과 설명력이 충분한지는 별도로 검토합니다.",
+      "textPreview": "위반 0건은 오류가 아닐 수 있습니다. 반대로 SUCCESS라도 규칙 표본과 설명력이 충분한지는 별도로 검토합니다.",
+      "resolvedFontSize": 17,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 17,
+        "typeface": "Malgun Gothic",
+        "color": "#14233C",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "위반 0건은 오류가 아닐 수 있습니다. 반대로 SUCCESS라도 규칙 표본과 설명력이"
+          },
+          {
+            "index": 2,
+            "text": "충분한지는 별도로 검토합니다."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "위반 0건은 오류가 아닐 수 있습니다. 반대로 SUCCESS라도 규칙 표본과 설명력이 충분한지는 별도로 검토합니다.",
+          "lineSpacingPercent": 118000,
+          "resolvedTextStyle": {
+            "fontSize": 17,
+            "typeface": "Malgun Gothic",
+            "color": "#14233C",
+            "bold": true,
+            "alignment": "left",
+            "lineSpacing": 1.18
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "위반 0건은 오류가 아닐 수 있습니다. 반대로 SUCCESS라도 규칙 표본과 설명력이 충분한지는 별도로 검토합니다.",
+              "fontSize": 17,
+              "typeface": "Malgun Gothic",
+              "color": "#14233C",
+              "bold": true,
+              "alignment": "left",
+              "lineSpacing": 1.18
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    }
+  ],
+  "composeRuns": []
+}

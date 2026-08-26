@@ -102,33 +102,11 @@
             border-bottom: 1px solid var(--ink-200);
             background: linear-gradient(145deg, var(--white) 58%, var(--blue-50));
         }
-        .brand-mark {
-            width: 42px;
-            height: 42px;
-            position: relative;
-            flex: 0 0 42px;
-        }
-        .brand-mark::before,
-        .brand-mark::after {
-            content: "";
-            position: absolute;
-            border-radius: 5px;
-            background: linear-gradient(135deg, var(--blue-500), var(--blue-700));
-        }
-        .brand-mark::before { inset: 4px 4px 17px 4px; }
-        .brand-mark::after { inset: 17px 17px 4px 4px; }
-        .brand-copy b {
+        .brand-logo {
             display: block;
-            color: var(--blue-700);
-            font-size: 1.04rem;
-            letter-spacing: -0.02em;
-        }
-        .brand-copy span {
-            display: block;
-            color: var(--ink-600);
-            font-size: 0.73rem;
-            font-weight: 700;
-            letter-spacing: 0.08em;
+            height: auto;
+            max-width: 100%;
+            width: 240px;
         }
         .nav-wrap {
             flex: 1;
@@ -254,6 +232,36 @@
             pointer-events: none;
         }
         .hero > * { position: relative; z-index: 1; }
+        .hero h1 {
+            font-size: clamp(1.8rem, 3vw, 2.6rem);
+            max-width: none;
+            white-space: nowrap;
+        }
+        .hero-brand-lockup {
+            align-items: center;
+            display: flex;
+            gap: 22px;
+            margin: 0 0 28px;
+            width: min(690px, 100%);
+        }
+        .hero-product-logo {
+            display: block;
+            height: auto;
+            min-width: 0;
+            width: min(430px, 70%);
+        }
+        .hero-company-logo {
+            display: block;
+            height: auto;
+            min-width: 0;
+            width: min(150px, 24%);
+        }
+        .hero-brand-divider {
+            align-self: stretch;
+            background: var(--ink-200);
+            flex: 0 0 1px;
+            min-height: 44px;
+        }
         .hero-tags { display: flex; flex-wrap: wrap; gap: 9px; margin: 27px 0 34px; }
         .tag {
             display: inline-flex;
@@ -751,6 +759,7 @@
             }
             .main { height: auto; overflow: visible; }
             .content { width: min(100% - 34px, 720px); padding-top: 24px; }
+            .hero h1 { white-space: normal; }
             .top-actions { display: none; }
             .grid-2, .grid-3, .checklist, .contract-grid, .menu-grid { grid-template-columns: 1fr; }
             .arch-band { grid-template-columns: 1fr; }
@@ -763,6 +772,9 @@
         @media (max-width: 560px) {
             .metric-grid, .grid-4, .journey, .run-flow, .edit-rail, .arch-content.cols-2, .arch-content.cols-3, .arch-content.cols-4 { grid-template-columns: 1fr; }
             .hero { min-height: auto; padding-top: 68px; }
+            .hero-brand-lockup { gap: 14px; margin-bottom: 22px; }
+            .hero-product-logo { width: 72%; }
+            .hero-company-logo { width: 22%; }
             .architecture, .tab-panel { padding: 18px; }
             .stage-summary { grid-template-columns: 1fr; }
             .tab-button { width: 50%; }
@@ -778,6 +790,9 @@
             section { padding: 12mm 0 10mm; break-before: page; border: 0; }
             section:first-of-type { break-before: auto; }
             .hero { min-height: 240mm; align-content: center; }
+            .hero-brand-lockup { margin-bottom: 8mm; width: 150mm; }
+            .hero-product-logo { width: 105mm; }
+            .hero-company-logo { width: 34mm; }
             .card, .metric-card, .architecture, .tabs, .menu-card, .check-card, .status-table, .notice { break-inside: avoid; box-shadow: none; }
             .tab-list { display: none; }
             .tab-panel { display: block !important; padding: 18px 0; border-bottom: 1px solid var(--ink-200); }
@@ -792,11 +807,7 @@
 
     <aside class="sidebar" aria-label="문서 목차">
         <div class="brand">
-            <span class="brand-mark" aria-hidden="true"></span>
-            <div class="brand-copy">
-                <b>IN-DEPS 시스템 가이드</b>
-                <span>INIT DATA EDITING PLATFORM</span>
-            </div>
+            <img class="brand-logo" src="../assets/indeps_compact_bilingual.png" alt="인뎁스 IN-DEPS 제품 로고">
         </div>
         <div class="nav-wrap custom-scrollbar">
             <p class="nav-label">DOCUMENT CONTENTS</p>
@@ -815,7 +826,7 @@
         <div class="sidebar-footer">
             <strong>Standalone Manual</strong>
             CSS·JavaScript 포함 단일 HTML<br>
-            Guide baseline v1.1.373
+            Guide baseline v1.1.374
         </div>
     </aside>
 
@@ -827,10 +838,15 @@
     <main class="main custom-scrollbar" id="main-content">
         <div class="content">
             <div class="top-actions">
-                <button type="button" class="print-button" onclick="window.print()">A4 인쇄 / PDF 저장</button>
+                <!-- <button type="button" class="print-button" onclick="window.print()">A4 인쇄 / PDF 저장</button> -->
             </div>
 
             <section id="section-overview" class="hero">
+                <div class="hero-brand-lockup" aria-label="인뎁스 제품 및 인아이티 회사 로고">
+                    <img class="hero-product-logo" src="../assets/indeps_compact_bilingual.png" alt="인뎁스 IN-DEPS 제품 로고">
+                    <span class="hero-brand-divider" aria-hidden="true"></span>
+                    <img class="hero-company-logo" src="../assets/init-logo.png" alt="INIT 인아이티 회사 로고">
+                </div>
                 <p class="eyebrow">IN-DEPS(INIT DATA EDITING PLATFORM SYSTEM) MANUAL</p>
                 <h1>인아이티 데이터 에디팅 플랫폼 시스템</h1>
                 <p class="lead">
@@ -1245,7 +1261,7 @@
                 </div>
                 <footer class="doc-footer">
                     <span>인아이티 데이터 에디팅 플랫폼 시스템 · IN-DEPS 인뎁스 가이드</span>
-                    <span>Standalone HTML · Baseline v1.1.373</span>
+                    <span>Standalone HTML · Baseline v1.1.374</span>
                 </footer>
             </section>
         </div>

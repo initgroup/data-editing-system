@@ -1,0 +1,1341 @@
+{
+  "schema": "openai.presentation.layout/v4",
+  "unit": "px",
+  "slide": {
+    "aid": "sl/cq8rme",
+    "id": "cq8rme",
+    "slide": 22,
+    "layoutId": "6035ac3d-36d1-4403-bd4d-1fe1d7ae304f",
+    "layoutName": "Title Slide",
+    "layoutType": "title",
+    "masterLayoutId": "7c015f2d-6b71-49e2-82db-f12cd9a0e0b9",
+    "masterLayoutName": "Master",
+    "backgroundColor": "#FFFFFF",
+    "frame": {
+      "left": 0,
+      "top": 0,
+      "width": 794,
+      "height": 1123
+    }
+  },
+  "theme": {
+    "colorSchemeName": "ChatGPT",
+    "colors": {
+      "accent1": "#156082",
+      "accent2": "#E97132",
+      "accent3": "#196B24",
+      "accent4": "#0F9ED5",
+      "accent5": "#A02B93",
+      "accent6": "#4EA72E",
+      "bg1": "#FFFFFF",
+      "bg2": "#000000",
+      "tx1": "#1F1F1F",
+      "tx2": "#FFFFFF",
+      "dk1": "#000000",
+      "lt1": "#FFFFFF",
+      "dk2": "#0E2841",
+      "lt2": "#E8E8E8",
+      "hlink": "#467886",
+      "folHlink": "#96607D"
+    },
+    "typefaces": [
+      "Malgun Gothic"
+    ]
+  },
+  "inheritedLayers": [
+    {
+      "scope": "layout",
+      "id": "6035ac3d-36d1-4403-bd4d-1fe1d7ae304f",
+      "name": "Title Slide",
+      "type": "title",
+      "parentLayoutId": "7c015f2d-6b71-49e2-82db-f12cd9a0e0b9",
+      "elements": []
+    },
+    {
+      "scope": "master",
+      "id": "7c015f2d-6b71-49e2-82db-f12cd9a0e0b9",
+      "name": "Master",
+      "type": "master",
+      "elements": []
+    }
+  ],
+  "elements": [
+    {
+      "order": 1,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/i1cv2p0v",
+      "id": "1",
+      "name": "page-22-rail",
+      "bbox": [
+        0,
+        0,
+        10,
+        1123
+      ],
+      "geometry": "rect",
+      "fillColor": "#B54D58",
+      "lineColor": "#B54D58",
+      "lineWidth": 0
+    },
+    {
+      "order": 2,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/543exkzm",
+      "id": "2",
+      "name": "page-22-chapter",
+      "bbox": [
+        62,
+        45,
+        460,
+        24
+      ],
+      "geometry": "rect",
+      "text": "06 · SECURITY BOUNDARIES",
+      "textPreview": "06 · SECURITY BOUNDARIES",
+      "resolvedFontSize": 13,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 13,
+        "typeface": "Malgun Gothic",
+        "color": "#B54D58",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "06 · SECURITY BOUNDARIES"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "06 · SECURITY BOUNDARIES",
+          "lineSpacingPercent": 112000,
+          "resolvedTextStyle": {
+            "fontSize": 13,
+            "typeface": "Malgun Gothic",
+            "color": "#B54D58",
+            "bold": true,
+            "alignment": "left",
+            "lineSpacing": 1.12
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "06 · SECURITY BOUNDARIES",
+              "fontSize": 13,
+              "typeface": "Malgun Gothic",
+              "color": "#B54D58",
+              "bold": true,
+              "alignment": "left",
+              "lineSpacing": 1.12
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 3,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/43ud4fi1",
+      "id": "3",
+      "name": "page-22-title",
+      "bbox": [
+        62,
+        82,
+        670,
+        84
+      ],
+      "geometry": "rect",
+      "text": "인증·권한·비밀 값은 서버 경계에서 판단합니다",
+      "textPreview": "인증·권한·비밀 값은 서버 경계에서 판단합니다",
+      "resolvedFontSize": 38,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 38,
+        "typeface": "Malgun Gothic",
+        "color": "#14233C",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "인증·권한·비밀 값은 서버 경계에서"
+          },
+          {
+            "index": 2,
+            "text": "판단합니다"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "인증·권한·비밀 값은 서버 경계에서 판단합니다",
+          "lineSpacingPercent": 96000,
+          "resolvedTextStyle": {
+            "fontSize": 38,
+            "typeface": "Malgun Gothic",
+            "color": "#14233C",
+            "bold": true,
+            "alignment": "left",
+            "lineSpacing": 0.96
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "인증·권한·비밀 값은 서버 경계에서 판단합니다",
+              "fontSize": 38,
+              "typeface": "Malgun Gothic",
+              "color": "#14233C",
+              "bold": true,
+              "alignment": "left",
+              "lineSpacing": 0.96
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 4,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/vylwrah4",
+      "id": "4",
+      "name": "page-22-subtitle",
+      "bbox": [
+        62,
+        170,
+        670,
+        50
+      ],
+      "geometry": "rect",
+      "text": "브라우저 저장 값이나 메뉴 숨김을 보안 근거로 사용하지 않고, 서버 세션과 시스템 DB 조회를 기준으로 사용자와 관리자 권한을 확인합니다.",
+      "textPreview": "브라우저 저장 값이나 메뉴 숨김을 보안 근거로 사용하지 않고, 서버 세션과 시스템 DB 조회를 기준으로 사용자와 관리자 권한을 확인합니다.",
+      "resolvedFontSize": 17,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 17,
+        "typeface": "Malgun Gothic",
+        "color": "#3F4F65",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "브라우저 저장 값이나 메뉴 숨김을 보안 근거로 사용하지 않고, 서버 세션과 시스템 DB"
+          },
+          {
+            "index": 2,
+            "text": "조회를 기준으로 사용자와 관리자 권한을 확인합니다."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "브라우저 저장 값이나 메뉴 숨김을 보안 근거로 사용하지 않고, 서버 세션과 시스템 DB 조회를 기준으로 사용자와 관리자 권한을 확인합니다.",
+          "lineSpacingPercent": 122000,
+          "resolvedTextStyle": {
+            "fontSize": 17,
+            "typeface": "Malgun Gothic",
+            "color": "#3F4F65",
+            "alignment": "left",
+            "lineSpacing": 1.22
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "브라우저 저장 값이나 메뉴 숨김을 보안 근거로 사용하지 않고, 서버 세션과 시스템 DB 조회를 기준으로 사용자와 관리자 권한을 확인합니다.",
+              "fontSize": 17,
+              "typeface": "Malgun Gothic",
+              "color": "#3F4F65",
+              "alignment": "left",
+              "lineSpacing": 1.22
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 5,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/uxcvy50z",
+      "id": "5",
+      "name": "page-22-top-rule",
+      "bbox": [
+        62,
+        226,
+        670,
+        2
+      ],
+      "geometry": "rect",
+      "fillColor": "#D7E0EA",
+      "lineColor": "#D7E0EA",
+      "lineWidth": 0
+    },
+    {
+      "order": 6,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/h03etkza",
+      "id": "6",
+      "name": "page-22-footer-rule",
+      "bbox": [
+        62,
+        1067,
+        670,
+        1
+      ],
+      "geometry": "rect",
+      "fillColor": "#D7E0EA",
+      "lineColor": "#D7E0EA",
+      "lineWidth": 0
+    },
+    {
+      "order": 7,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/gzud0fip",
+      "id": "7",
+      "name": "page-22-footer-name",
+      "bbox": [
+        62,
+        1080,
+        300,
+        18
+      ],
+      "geometry": "rect",
+      "text": "IN-DEPS 시스템 소개서",
+      "textPreview": "IN-DEPS 시스템 소개서",
+      "resolvedFontSize": 10,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 10,
+        "typeface": "Malgun Gothic",
+        "color": "#6D7A8D",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "IN-DEPS 시스템 소개서"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "IN-DEPS 시스템 소개서",
+          "lineSpacingPercent": 112000,
+          "resolvedTextStyle": {
+            "fontSize": 10,
+            "typeface": "Malgun Gothic",
+            "color": "#6D7A8D",
+            "alignment": "left",
+            "lineSpacing": 1.12
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "IN-DEPS 시스템 소개서",
+              "fontSize": 10,
+              "typeface": "Malgun Gothic",
+              "color": "#6D7A8D",
+              "alignment": "left",
+              "lineSpacing": 1.12
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 8,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/7a1wnah8",
+      "id": "8",
+      "name": "page-22-footer-number",
+      "bbox": [
+        682,
+        1078,
+        50,
+        20
+      ],
+      "geometry": "rect",
+      "text": "22",
+      "textPreview": "22",
+      "resolvedFontSize": 11,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 11,
+        "typeface": "Malgun Gothic",
+        "color": "#B54D58",
+        "bold": true,
+        "alignment": "right",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "22"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "22",
+          "lineSpacingPercent": 112000,
+          "resolvedTextStyle": {
+            "fontSize": 11,
+            "typeface": "Malgun Gothic",
+            "color": "#B54D58",
+            "bold": true,
+            "alignment": "right",
+            "lineSpacing": 1.12
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "22",
+              "fontSize": 11,
+              "typeface": "Malgun Gothic",
+              "color": "#B54D58",
+              "bold": true,
+              "alignment": "right",
+              "lineSpacing": 1.12
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 9,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/69svu50n",
+      "id": "9",
+      "name": "p22-auth-fill",
+      "bbox": [
+        62,
+        268,
+        670,
+        164
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#EAF2FB",
+      "lineColor": "#EAF2FB",
+      "lineWidth": 0
+    },
+    {
+      "order": 10,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/k3et8by1",
+      "id": "10",
+      "name": "p22-auth-accent",
+      "bbox": [
+        62,
+        268,
+        8,
+        164
+      ],
+      "geometry": "rect",
+      "fillColor": "#2F6FB5",
+      "lineColor": "#2F6FB5",
+      "lineWidth": 0
+    },
+    {
+      "order": 11,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/l4nahgfm",
+      "id": "11",
+      "name": "p22-auth-title",
+      "bbox": [
+        90,
+        290,
+        245,
+        34
+      ],
+      "geometry": "rect",
+      "text": "인증·인가 기준",
+      "textPreview": "인증·인가 기준",
+      "resolvedFontSize": 22,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 22,
+        "typeface": "Malgun Gothic",
+        "color": "#14233C",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "인증·인가 기준"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "인증·인가 기준",
+          "lineSpacingPercent": 112000,
+          "resolvedTextStyle": {
+            "fontSize": 22,
+            "typeface": "Malgun Gothic",
+            "color": "#14233C",
+            "bold": true,
+            "alignment": "left",
+            "lineSpacing": 1.12
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "인증·인가 기준",
+              "fontSize": 22,
+              "typeface": "Malgun Gothic",
+              "color": "#14233C",
+              "bold": true,
+              "alignment": "left",
+              "lineSpacing": 1.12
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 12,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/y1wb6lgb",
+      "id": "12",
+      "name": "p22-auth-body",
+      "bbox": [
+        352,
+        290,
+        348,
+        124
+      ],
+      "geometry": "rect",
+      "text": "서버 세션 쿠키와 시스템 DB 조회가 사용자 ID와 역할의 기준입니다. GET/POST 파라미터, 임의 헤더, sessionStorage·localStorage는 권한 근거가 아닙니다.",
+      "textPreview": "서버 세션 쿠키와 시스템 DB 조회가 사용자 ID와 역할의 기준입니다. GET/POST 파라미터, 임의 헤더, sessionStorage·localStorage는 권한 근거가 아닙니다.",
+      "resolvedFontSize": 16,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 16,
+        "typeface": "Malgun Gothic",
+        "color": "#3F4F65",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 4,
+        "lines": [
+          {
+            "index": 1,
+            "text": "서버 세션 쿠키와 시스템 DB 조회가 사용자"
+          },
+          {
+            "index": 2,
+            "text": "ID와 역할의 기준입니다. GET/POST 파라미터,"
+          },
+          {
+            "index": 3,
+            "text": "임의 헤더, sessionStorage·localStorage는 권한"
+          },
+          {
+            "index": 4,
+            "text": "근거가 아닙니다."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "서버 세션 쿠키와 시스템 DB 조회가 사용자 ID와 역할의 기준입니다. GET/POST 파라미터, 임의 헤더, sessionStorage·localStorage는 권한 근거가 아닙니다.",
+          "lineSpacingPercent": 120000,
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "typeface": "Malgun Gothic",
+            "color": "#3F4F65",
+            "alignment": "left",
+            "lineSpacing": 1.2
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "서버 세션 쿠키와 시스템 DB 조회가 사용자 ID와 역할의 기준입니다. GET/POST 파라미터, 임의 헤더, sessionStorage·localStorage는 권한 근거가 아닙니다.",
+              "fontSize": 16,
+              "typeface": "Malgun Gothic",
+              "color": "#3F4F65",
+              "alignment": "left",
+              "lineSpacing": 1.2
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 13,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/z25sfqxg",
+      "id": "13",
+      "name": "p22-admin-fill",
+      "bbox": [
+        62,
+        450,
+        670,
+        148
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#F1EFF8",
+      "lineColor": "#F1EFF8",
+      "lineWidth": 0
+    },
+    {
+      "order": 14,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/czet4by5",
+      "id": "14",
+      "name": "p22-admin-accent",
+      "bbox": [
+        62,
+        450,
+        8,
+        148
+      ],
+      "geometry": "rect",
+      "fillColor": "#6E62A8",
+      "lineColor": "#6E62A8",
+      "lineWidth": 0
+    },
+    {
+      "order": 15,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/x0nadgfq",
+      "id": "15",
+      "name": "p22-admin-title",
+      "bbox": [
+        90,
+        472,
+        245,
+        34
+      ],
+      "geometry": "rect",
+      "text": "관리자 기능",
+      "textPreview": "관리자 기능",
+      "resolvedFontSize": 22,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 22,
+        "typeface": "Malgun Gothic",
+        "color": "#14233C",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "관리자 기능"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "관리자 기능",
+          "lineSpacingPercent": 112000,
+          "resolvedTextStyle": {
+            "fontSize": 22,
+            "typeface": "Malgun Gothic",
+            "color": "#14233C",
+            "bold": true,
+            "alignment": "left",
+            "lineSpacing": 1.12
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "관리자 기능",
+              "fontSize": 22,
+              "typeface": "Malgun Gothic",
+              "color": "#14233C",
+              "bold": true,
+              "alignment": "left",
+              "lineSpacing": 1.12
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 16,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/axwb21gz",
+      "id": "16",
+      "name": "p22-admin-body",
+      "bbox": [
+        352,
+        472,
+        348,
+        108
+      ],
+      "geometry": "rect",
+      "text": "관리자 메뉴 숨김은 보조 UI일 뿐입니다. 관리자 API는 서버의 관리자 역할 검사 또는 전역 관리자 정책을 통과해야 합니다.",
+      "textPreview": "관리자 메뉴 숨김은 보조 UI일 뿐입니다. 관리자 API는 서버의 관리자 역할 검사 또는 전역 관리자 정책을 통과해야 합니다.",
+      "resolvedFontSize": 16,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 16,
+        "typeface": "Malgun Gothic",
+        "color": "#3F4F65",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 3,
+        "lines": [
+          {
+            "index": 1,
+            "text": "관리자 메뉴 숨김은 보조 UI일 뿐입니다. 관리자"
+          },
+          {
+            "index": 2,
+            "text": "API는 서버의 관리자 역할 검사 또는 전역"
+          },
+          {
+            "index": 3,
+            "text": "관리자 정책을 통과해야 합니다."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "관리자 메뉴 숨김은 보조 UI일 뿐입니다. 관리자 API는 서버의 관리자 역할 검사 또는 전역 관리자 정책을 통과해야 합니다.",
+          "lineSpacingPercent": 120000,
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "typeface": "Malgun Gothic",
+            "color": "#3F4F65",
+            "alignment": "left",
+            "lineSpacing": 1.2
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "관리자 메뉴 숨김은 보조 UI일 뿐입니다. 관리자 API는 서버의 관리자 역할 검사 또는 전역 관리자 정책을 통과해야 합니다.",
+              "fontSize": 16,
+              "typeface": "Malgun Gothic",
+              "color": "#3F4F65",
+              "alignment": "left",
+              "lineSpacing": 1.2
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 17,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/by5sb6xk",
+      "id": "17",
+      "name": "p22-secret-fill",
+      "bbox": [
+        62,
+        616,
+        670,
+        164
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#F9ECEE",
+      "lineColor": "#F9ECEE",
+      "lineWidth": 0
+    },
+    {
+      "order": 18,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/wvytgfy9",
+      "id": "18",
+      "name": "p22-secret-accent",
+      "bbox": [
+        62,
+        616,
+        8,
+        164
+      ],
+      "geometry": "rect",
+      "fillColor": "#B54D58",
+      "lineColor": "#B54D58",
+      "lineWidth": 0
+    },
+    {
+      "order": 19,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/hwrup0fu",
+      "id": "19",
+      "name": "p22-secret-title",
+      "bbox": [
+        90,
+        638,
+        245,
+        34
+      ],
+      "geometry": "rect",
+      "text": "비밀번호·키·지갑",
+      "textPreview": "비밀번호·키·지갑",
+      "resolvedFontSize": 22,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 22,
+        "typeface": "Malgun Gothic",
+        "color": "#14233C",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "비밀번호·키·지갑"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "비밀번호·키·지갑",
+          "lineSpacingPercent": 112000,
+          "resolvedTextStyle": {
+            "fontSize": 22,
+            "typeface": "Malgun Gothic",
+            "color": "#14233C",
+            "bold": true,
+            "alignment": "left",
+            "lineSpacing": 1.12
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "비밀번호·키·지갑",
+              "fontSize": 22,
+              "typeface": "Malgun Gothic",
+              "color": "#14233C",
+              "bold": true,
+              "alignment": "left",
+              "lineSpacing": 1.12
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 20,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/5cna907y",
+      "id": "20",
+      "name": "p22-secret-body",
+      "bbox": [
+        352,
+        638,
+        348,
+        124
+      ],
+      "geometry": "rect",
+      "text": "DB·지갑 비밀번호, 외부 API Key, 관리자 인증 값은 암호화·세션·권한 경계에서 처리하며 도움말·브라우저 응답·JS에 남기지 않습니다.",
+      "textPreview": "DB·지갑 비밀번호, 외부 API Key, 관리자 인증 값은 암호화·세션·권한 경계에서 처리하며 도움말·브라우저 응답·JS에 남기지 않습니다.",
+      "resolvedFontSize": 16,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 16,
+        "typeface": "Malgun Gothic",
+        "color": "#3F4F65",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 3,
+        "lines": [
+          {
+            "index": 1,
+            "text": "DB·지갑 비밀번호, 외부 API Key, 관리자 인증"
+          },
+          {
+            "index": 2,
+            "text": "값은 암호화·세션·권한 경계에서 처리하며"
+          },
+          {
+            "index": 3,
+            "text": "도움말·브라우저 응답·JS에 남기지 않습니다."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "DB·지갑 비밀번호, 외부 API Key, 관리자 인증 값은 암호화·세션·권한 경계에서 처리하며 도움말·브라우저 응답·JS에 남기지 않습니다.",
+          "lineSpacingPercent": 120000,
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "typeface": "Malgun Gothic",
+            "color": "#3F4F65",
+            "alignment": "left",
+            "lineSpacing": 1.2
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "DB·지갑 비밀번호, 외부 API Key, 관리자 인증 값은 암호화·세션·권한 경계에서 처리하며 도움말·브라우저 응답·JS에 남기지 않습니다.",
+              "fontSize": 16,
+              "typeface": "Malgun Gothic",
+              "color": "#3F4F65",
+              "alignment": "left",
+              "lineSpacing": 1.2
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 21,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/4bet0vqd",
+      "id": "21",
+      "name": "p22-external-fill",
+      "bbox": [
+        62,
+        798,
+        670,
+        164
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#FAF2E6",
+      "lineColor": "#FAF2E6",
+      "lineWidth": 0
+    },
+    {
+      "order": 22,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/3als7qps",
+      "id": "22",
+      "name": "p22-external-accent",
+      "bbox": [
+        62,
+        798,
+        8,
+        164
+      ],
+      "geometry": "rect",
+      "fillColor": "#B97316",
+      "lineColor": "#B97316",
+      "lineWidth": 0
+    },
+    {
+      "order": 23,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ipcby58n",
+      "id": "23",
+      "name": "p22-external-title",
+      "bbox": [
+        90,
+        820,
+        245,
+        34
+      ],
+      "geometry": "rect",
+      "text": "EXTERNAL_API 인증 값",
+      "textPreview": "EXTERNAL_API 인증 값",
+      "resolvedFontSize": 22,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 22,
+        "typeface": "Malgun Gothic",
+        "color": "#14233C",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "EXTERNAL_API 인증 값"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "EXTERNAL_API 인증 값",
+          "lineSpacingPercent": 112000,
+          "resolvedTextStyle": {
+            "fontSize": 22,
+            "typeface": "Malgun Gothic",
+            "color": "#14233C",
+            "bold": true,
+            "alignment": "left",
+            "lineSpacing": 1.12
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "EXTERNAL_API 인증 값",
+              "fontSize": 22,
+              "typeface": "Malgun Gothic",
+              "color": "#14233C",
+              "bold": true,
+              "alignment": "left",
+              "lineSpacing": 1.12
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 24,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ho3a5072",
+      "id": "24",
+      "name": "p22-external-body",
+      "bbox": [
+        352,
+        820,
+        348,
+        124
+      ],
+      "geometry": "rect",
+      "text": "런타임 바인드 화면에서 입력되어 브라우저 메모리와 실행 요청에 포함됩니다. 현재 경로는 서버 비밀 저장소의 값을 자동으로 조회하지 않습니다.",
+      "textPreview": "런타임 바인드 화면에서 입력되어 브라우저 메모리와 실행 요청에 포함됩니다. 현재 경로는 서버 비밀 저장소의 값을 자동으로 조회하지 않습니다.",
+      "resolvedFontSize": 16,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 16,
+        "typeface": "Malgun Gothic",
+        "color": "#3F4F65",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 4,
+        "lines": [
+          {
+            "index": 1,
+            "text": "런타임 바인드 화면에서 입력되어 브라우저"
+          },
+          {
+            "index": 2,
+            "text": "메모리와 실행 요청에 포함됩니다. 현재 경로는"
+          },
+          {
+            "index": 3,
+            "text": "서버 비밀 저장소의 값을 자동으로 조회하지"
+          },
+          {
+            "index": 4,
+            "text": "않습니다."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "런타임 바인드 화면에서 입력되어 브라우저 메모리와 실행 요청에 포함됩니다. 현재 경로는 서버 비밀 저장소의 값을 자동으로 조회하지 않습니다.",
+          "lineSpacingPercent": 120000,
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "typeface": "Malgun Gothic",
+            "color": "#3F4F65",
+            "alignment": "left",
+            "lineSpacing": 1.2
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "런타임 바인드 화면에서 입력되어 브라우저 메모리와 실행 요청에 포함됩니다. 현재 경로는 서버 비밀 저장소의 값을 자동으로 조회하지 않습니다.",
+              "fontSize": 16,
+              "typeface": "Malgun Gothic",
+              "color": "#3F4F65",
+              "alignment": "left",
+              "lineSpacing": 1.2
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 25,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/gnutwvqh",
+      "id": "25",
+      "name": "p22-callout-fill",
+      "bbox": [
+        62,
+        974,
+        670,
+        72
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#ECF5EF",
+      "lineColor": "#3E8D65",
+      "lineWidth": 1
+    },
+    {
+      "order": 26,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/vmls3qpw",
+      "id": "26",
+      "name": "p22-callout-accent",
+      "bbox": [
+        62,
+        974,
+        6,
+        72
+      ],
+      "geometry": "rect",
+      "fillColor": "#3E8D65",
+      "lineColor": "#3E8D65",
+      "lineWidth": 0
+    },
+    {
+      "order": 27,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ulcbul8b",
+      "id": "27",
+      "name": "p22-callout-text",
+      "bbox": [
+        84,
+        992,
+        628,
+        40
+      ],
+      "geometry": "rect",
+      "text": "공개 도움말과 소개서는 논리적인 흐름만 설명하며 실제 DB 접속 정보, 내부 비밀 값과 인증 자격 증명을 포함하지 않습니다.",
+      "textPreview": "공개 도움말과 소개서는 논리적인 흐름만 설명하며 실제 DB 접속 정보, 내부 비밀 값과 인증 자격 증명을 포함하지 않습니다.",
+      "resolvedFontSize": 17,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 17,
+        "typeface": "Malgun Gothic",
+        "color": "#14233C",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "공개 도움말과 소개서는 논리적인 흐름만 설명하며 실제 DB 접속 정보, 내부 비밀"
+          },
+          {
+            "index": 2,
+            "text": "값과 인증 자격 증명을 포함하지 않습니다."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "공개 도움말과 소개서는 논리적인 흐름만 설명하며 실제 DB 접속 정보, 내부 비밀 값과 인증 자격 증명을 포함하지 않습니다.",
+          "lineSpacingPercent": 118000,
+          "resolvedTextStyle": {
+            "fontSize": 17,
+            "typeface": "Malgun Gothic",
+            "color": "#14233C",
+            "bold": true,
+            "alignment": "left",
+            "lineSpacing": 1.18
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "공개 도움말과 소개서는 논리적인 흐름만 설명하며 실제 DB 접속 정보, 내부 비밀 값과 인증 자격 증명을 포함하지 않습니다.",
+              "fontSize": 17,
+              "typeface": "Malgun Gothic",
+              "color": "#14233C",
+              "bold": true,
+              "alignment": "left",
+              "lineSpacing": 1.18
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    }
+  ],
+  "composeRuns": []
+}

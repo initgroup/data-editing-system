@@ -1,0 +1,874 @@
+{
+  "schema": "openai.presentation.layout/v4",
+  "unit": "px",
+  "slide": {
+    "aid": "sl/ze3py7",
+    "id": "ze3py7",
+    "slide": 24,
+    "layoutId": "6035ac3d-36d1-4403-bd4d-1fe1d7ae304f",
+    "layoutName": "Title Slide",
+    "layoutType": "title",
+    "masterLayoutId": "7c015f2d-6b71-49e2-82db-f12cd9a0e0b9",
+    "masterLayoutName": "Master",
+    "backgroundColor": "#15255A",
+    "frame": {
+      "left": 0,
+      "top": 0,
+      "width": 794,
+      "height": 1123
+    }
+  },
+  "theme": {
+    "colorSchemeName": "ChatGPT",
+    "colors": {
+      "accent1": "#156082",
+      "accent2": "#E97132",
+      "accent3": "#196B24",
+      "accent4": "#0F9ED5",
+      "accent5": "#A02B93",
+      "accent6": "#4EA72E",
+      "bg1": "#FFFFFF",
+      "bg2": "#000000",
+      "tx1": "#1F1F1F",
+      "tx2": "#FFFFFF",
+      "dk1": "#000000",
+      "lt1": "#FFFFFF",
+      "dk2": "#0E2841",
+      "lt2": "#E8E8E8",
+      "hlink": "#467886",
+      "folHlink": "#96607D"
+    },
+    "typefaces": [
+      "Malgun Gothic"
+    ]
+  },
+  "inheritedLayers": [
+    {
+      "scope": "layout",
+      "id": "6035ac3d-36d1-4403-bd4d-1fe1d7ae304f",
+      "name": "Title Slide",
+      "type": "title",
+      "parentLayoutId": "7c015f2d-6b71-49e2-82db-f12cd9a0e0b9",
+      "elements": []
+    },
+    {
+      "scope": "master",
+      "id": "7c015f2d-6b71-49e2-82db-f12cd9a0e0b9",
+      "name": "Master",
+      "type": "master",
+      "elements": []
+    }
+  ],
+  "elements": [
+    {
+      "order": 1,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/gr6x0329",
+      "id": "1",
+      "name": "back-left",
+      "bbox": [
+        0,
+        0,
+        18,
+        1123
+      ],
+      "geometry": "rect",
+      "fillColor": "#158D91",
+      "lineColor": "#158D91",
+      "lineWidth": 0
+    },
+    {
+      "order": 2,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/vqxwrylo",
+      "id": "2",
+      "name": "back-logo-panel",
+      "bbox": [
+        62,
+        68,
+        500,
+        158
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#FFFFFF",
+      "lineColor": "#FFFFFF",
+      "lineWidth": 0
+    },
+    {
+      "order": 3,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/vyxon2dk",
+      "id": "3",
+      "bbox": [
+        82,
+        82,
+        460,
+        130
+      ],
+      "alt": "인뎁스 IN-DEPS 제품 로고",
+      "contentType": "image/png",
+      "imageFit": "contain",
+      "asset": {
+        "assetId": "43e4021f-be71-48fc-a7e3-6797460da7c9",
+        "contentType": "image/png",
+        "byteLength": 72495
+      }
+    },
+    {
+      "order": 4,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/tofepo3y",
+      "id": "4",
+      "name": "back-kicker",
+      "bbox": [
+        62,
+        300,
+        520,
+        28
+      ],
+      "geometry": "rect",
+      "text": "THE IN-DEPS OPERATING MODEL",
+      "textPreview": "THE IN-DEPS OPERATING MODEL",
+      "resolvedFontSize": 14,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 14,
+        "typeface": "Malgun Gothic",
+        "color": "#7AC7D0",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "THE IN-DEPS OPERATING MODEL"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "THE IN-DEPS OPERATING MODEL",
+          "lineSpacingPercent": 112000,
+          "resolvedTextStyle": {
+            "fontSize": 14,
+            "typeface": "Malgun Gothic",
+            "color": "#7AC7D0",
+            "bold": true,
+            "alignment": "left",
+            "lineSpacing": 1.12
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "THE IN-DEPS OPERATING MODEL",
+              "fontSize": 14,
+              "typeface": "Malgun Gothic",
+              "color": "#7AC7D0",
+              "bold": true,
+              "alignment": "left",
+              "lineSpacing": 1.12
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 5,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/836dwj2d",
+      "id": "5",
+      "name": "back-title",
+      "bbox": [
+        62,
+        362,
+        620,
+        205
+      ],
+      "geometry": "rect",
+      "text": "근거를 만들고\n사람이 결정하며\n변경을 추적합니다",
+      "textPreview": "근거를 만들고 | 사람이 결정하며 | 변경을 추적합니다",
+      "resolvedFontSize": 48,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 48,
+        "typeface": "Malgun Gothic",
+        "color": "#FFFFFF",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 3,
+        "lines": [
+          {
+            "index": 1,
+            "text": "근거를 만들고"
+          },
+          {
+            "index": 2,
+            "text": "사람이 결정하며"
+          },
+          {
+            "index": 3,
+            "text": "변경을 추적합니다"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "근거를 만들고",
+          "lineSpacingPercent": 105000,
+          "resolvedTextStyle": {
+            "fontSize": 48,
+            "typeface": "Malgun Gothic",
+            "color": "#FFFFFF",
+            "bold": true,
+            "alignment": "left",
+            "lineSpacing": 1.05
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "근거를 만들고",
+              "fontSize": 48,
+              "typeface": "Malgun Gothic",
+              "color": "#FFFFFF",
+              "bold": true,
+              "alignment": "left",
+              "lineSpacing": 1.05
+            }
+          ],
+          "marginLeft": 0
+        },
+        {
+          "index": 2,
+          "text": "사람이 결정하며",
+          "lineSpacingPercent": 105000,
+          "resolvedTextStyle": {
+            "fontSize": 48,
+            "typeface": "Malgun Gothic",
+            "color": "#FFFFFF",
+            "bold": true,
+            "alignment": "left",
+            "lineSpacing": 1.05
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "사람이 결정하며",
+              "fontSize": 48,
+              "typeface": "Malgun Gothic",
+              "color": "#FFFFFF",
+              "bold": true,
+              "alignment": "left",
+              "lineSpacing": 1.05
+            }
+          ],
+          "marginLeft": 0
+        },
+        {
+          "index": 3,
+          "text": "변경을 추적합니다",
+          "lineSpacingPercent": 105000,
+          "resolvedTextStyle": {
+            "fontSize": 48,
+            "typeface": "Malgun Gothic",
+            "color": "#FFFFFF",
+            "bold": true,
+            "alignment": "left",
+            "lineSpacing": 1.05
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "변경을 추적합니다",
+              "fontSize": 48,
+              "typeface": "Malgun Gothic",
+              "color": "#FFFFFF",
+              "bold": true,
+              "alignment": "left",
+              "lineSpacing": 1.05
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 6,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/72dwnyls",
+      "id": "6",
+      "name": "back-body",
+      "bbox": [
+        62,
+        620,
+        600,
+        145
+      ],
+      "geometry": "rect",
+      "text": "데이터 선정부터 규칙 발굴, Flow 실행, 결과 해석, 편집과 운영 반영까지 — IN-DEPS는 분석과 변경 사이의 책임을 분리하면서 하나의 Run과 감사 이력으로 업무를 연결합니다.",
+      "textPreview": "데이터 선정부터 규칙 발굴, Flow 실행, 결과 해석, 편집과 운영 반영까지 — IN-DEPS는 분석과 변경 사이의 책임을 분리하면서 하나의 Run과 감사 이력으로 업무를 연결합니다.",
+      "resolvedFontSize": 21,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 21,
+        "typeface": "Malgun Gothic",
+        "color": "#D9E3F1",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 3,
+        "lines": [
+          {
+            "index": 1,
+            "text": "데이터 선정부터 규칙 발굴, Flow 실행, 결과 해석, 편집과 운영"
+          },
+          {
+            "index": 2,
+            "text": "반영까지 — IN-DEPS는 분석과 변경 사이의 책임을 분리하면서"
+          },
+          {
+            "index": 3,
+            "text": "하나의 Run과 감사 이력으로 업무를 연결합니다."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "데이터 선정부터 규칙 발굴, Flow 실행, 결과 해석, 편집과 운영 반영까지 — IN-DEPS는 분석과 변경 사이의 책임을 분리하면서 하나의 Run과 감사 이력으로 업무를 연결합니다.",
+          "lineSpacingPercent": 134000,
+          "resolvedTextStyle": {
+            "fontSize": 21,
+            "typeface": "Malgun Gothic",
+            "color": "#D9E3F1",
+            "alignment": "left",
+            "lineSpacing": 1.34
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "데이터 선정부터 규칙 발굴, Flow 실행, 결과 해석, 편집과 운영 반영까지 — IN-DEPS는 분석과 변경 사이의 책임을 분리하면서 하나의 Run과 감사 이력으로 업무를 연결합니다.",
+              "fontSize": 21,
+              "typeface": "Malgun Gothic",
+              "color": "#D9E3F1",
+              "alignment": "left",
+              "lineSpacing": 1.34
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 7,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/614vutk7",
+      "id": "7",
+      "name": "back-dot-0",
+      "bbox": [
+        62,
+        828,
+        14,
+        14
+      ],
+      "geometry": "ellipse",
+      "fillColor": "#5E92CE",
+      "lineColor": "#5E92CE",
+      "lineWidth": 0
+    },
+    {
+      "order": 8,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/l0velo3m",
+      "id": "8",
+      "name": "back-value-0",
+      "bbox": [
+        92,
+        823,
+        300,
+        28
+      ],
+      "geometry": "rect",
+      "text": "설명 가능한 근거",
+      "textPreview": "설명 가능한 근거",
+      "resolvedFontSize": 18,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 18,
+        "typeface": "Malgun Gothic",
+        "color": "#FFFFFF",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "설명 가능한 근거"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "설명 가능한 근거",
+          "lineSpacingPercent": 112000,
+          "resolvedTextStyle": {
+            "fontSize": 18,
+            "typeface": "Malgun Gothic",
+            "color": "#FFFFFF",
+            "bold": true,
+            "alignment": "left",
+            "lineSpacing": 1.12
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "설명 가능한 근거",
+              "fontSize": 18,
+              "typeface": "Malgun Gothic",
+              "color": "#FFFFFF",
+              "bold": true,
+              "alignment": "left",
+              "lineSpacing": 1.12
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 9,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/kzmdsj21",
+      "id": "9",
+      "name": "back-dot-1",
+      "bbox": [
+        62,
+        882,
+        14,
+        14
+      ],
+      "geometry": "ellipse",
+      "fillColor": "#4DB8B0",
+      "lineColor": "#4DB8B0",
+      "lineWidth": 0
+    },
+    {
+      "order": 10,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/y507yp87",
+      "id": "10",
+      "name": "back-value-1",
+      "bbox": [
+        92,
+        877,
+        300,
+        28
+      ],
+      "geometry": "rect",
+      "text": "검토 가능한 결정",
+      "textPreview": "검토 가능한 결정",
+      "resolvedFontSize": 18,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 18,
+        "typeface": "Malgun Gothic",
+        "color": "#FFFFFF",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "검토 가능한 결정"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "검토 가능한 결정",
+          "lineSpacingPercent": 112000,
+          "resolvedTextStyle": {
+            "fontSize": 18,
+            "typeface": "Malgun Gothic",
+            "color": "#FFFFFF",
+            "bold": true,
+            "alignment": "left",
+            "lineSpacing": 1.12
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "검토 가능한 결정",
+              "fontSize": 18,
+              "typeface": "Malgun Gothic",
+              "color": "#FFFFFF",
+              "bold": true,
+              "alignment": "left",
+              "lineSpacing": 1.12
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 11,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/z69oru9c",
+      "id": "11",
+      "name": "back-dot-2",
+      "bbox": [
+        62,
+        936,
+        14,
+        14
+      ],
+      "geometry": "ellipse",
+      "fillColor": "#79B391",
+      "lineColor": "#79B391",
+      "lineWidth": 0
+    },
+    {
+      "order": 12,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/072p0zqx",
+      "id": "12",
+      "name": "back-value-2",
+      "bbox": [
+        92,
+        931,
+        300,
+        28
+      ],
+      "geometry": "rect",
+      "text": "통제 가능한 변경",
+      "textPreview": "통제 가능한 변경",
+      "resolvedFontSize": 18,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 18,
+        "typeface": "Malgun Gothic",
+        "color": "#FFFFFF",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "통제 가능한 변경"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "통제 가능한 변경",
+          "lineSpacingPercent": 112000,
+          "resolvedTextStyle": {
+            "fontSize": 18,
+            "typeface": "Malgun Gothic",
+            "color": "#FFFFFF",
+            "bold": true,
+            "alignment": "left",
+            "lineSpacing": 1.12
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "통제 가능한 변경",
+              "fontSize": 18,
+              "typeface": "Malgun Gothic",
+              "color": "#FFFFFF",
+              "bold": true,
+              "alignment": "left",
+              "lineSpacing": 1.12
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 13,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/l8b6t4ri",
+      "id": "13",
+      "name": "back-dot-3",
+      "bbox": [
+        62,
+        990,
+        14,
+        14
+      ],
+      "geometry": "ellipse",
+      "fillColor": "#B7A8E2",
+      "lineColor": "#B7A8E2",
+      "lineWidth": 0
+    },
+    {
+      "order": 14,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/qh0nu58v",
+      "id": "14",
+      "name": "back-value-3",
+      "bbox": [
+        92,
+        985,
+        300,
+        28
+      ],
+      "geometry": "rect",
+      "text": "재현 가능한 이력",
+      "textPreview": "재현 가능한 이력",
+      "resolvedFontSize": 18,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 18,
+        "typeface": "Malgun Gothic",
+        "color": "#FFFFFF",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "재현 가능한 이력"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "재현 가능한 이력",
+          "lineSpacingPercent": 112000,
+          "resolvedTextStyle": {
+            "fontSize": 18,
+            "typeface": "Malgun Gothic",
+            "color": "#FFFFFF",
+            "bold": true,
+            "alignment": "left",
+            "lineSpacing": 1.12
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "재현 가능한 이력",
+              "fontSize": 18,
+              "typeface": "Malgun Gothic",
+              "color": "#FFFFFF",
+              "bold": true,
+              "alignment": "left",
+              "lineSpacing": 1.12
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 15,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/bi9ona9g",
+      "id": "15",
+      "name": "back-init-panel",
+      "bbox": [
+        548,
+        998,
+        184,
+        64
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#FFFFFF",
+      "lineColor": "#FFFFFF",
+      "lineWidth": 0
+    },
+    {
+      "order": 16,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/3eh07yhw",
+      "id": "16",
+      "bbox": [
+        562,
+        1006,
+        156,
+        48
+      ],
+      "alt": "INIT 인아이티 회사 로고",
+      "contentType": "image/png",
+      "imageFit": "contain",
+      "asset": {
+        "assetId": "7d5961aa-915e-4bc1-bcbb-2af9be19138e",
+        "contentType": "image/png",
+        "byteLength": 48535
+      }
+    },
+    {
+      "order": 17,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/d4r6pkrm",
+      "id": "17",
+      "name": "back-format",
+      "bbox": [
+        62,
+        1025,
+        230,
+        20
+      ],
+      "geometry": "rect",
+      "text": "A4 PRINT EDITION · 2026",
+      "textPreview": "A4 PRINT EDITION · 2026",
+      "resolvedFontSize": 10,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 10,
+        "typeface": "Malgun Gothic",
+        "color": "#98A9C0",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "A4 PRINT EDITION · 2026"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "A4 PRINT EDITION · 2026",
+          "lineSpacingPercent": 112000,
+          "resolvedTextStyle": {
+            "fontSize": 10,
+            "typeface": "Malgun Gothic",
+            "color": "#98A9C0",
+            "bold": true,
+            "alignment": "left",
+            "lineSpacing": 1.12
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "A4 PRINT EDITION · 2026",
+              "fontSize": 10,
+              "typeface": "Malgun Gothic",
+              "color": "#98A9C0",
+              "bold": true,
+              "alignment": "left",
+              "lineSpacing": 1.12
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    }
+  ],
+  "composeRuns": []
+}

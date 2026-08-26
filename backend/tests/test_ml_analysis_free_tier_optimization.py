@@ -435,6 +435,50 @@ class MlAnalysisFreeTierOptimizationTests(unittest.TestCase):
         self.assertEqual("5", external_defaults["INPUT.P_MAX_RULE_CONDITION_COUNT"])
         self.assertEqual("1000", external_defaults["INPUT.P_MAX_RULE_COMBINATIONS"])
 
+    def test_symbolic_presets_enable_simple_arithmetic_priority(self):
+        internal_presets = json.loads(
+            (ROOT_DIR / "frontend" / "config" / "M90001.object-detail-presets.json").read_text(encoding="utf-8")
+        )
+        external_presets = json.loads(
+            (ROOT_DIR / "frontend" / "config" / "M90002.python-api-presets.json").read_text(encoding="utf-8")
+        )
+        expected_internal = {
+            "P_SIMPLE_ARITHMETIC_FIRST_YN": "Y",
+            "P_SIMPLE_ARITHMETIC_MIN_MATCH_RATE": "0.90",
+            "P_SIMPLE_ARITHMETIC_MAX_TERMS": "3",
+            "P_SIMPLE_ARITHMETIC_TOLERANCE_PCT": "0",
+        }
+        for object_name in {"SYMBOLIC_REGRESSION_RULE", "INTEGRATED_RULE_DISCOVER"}:
+            details = next(
+                obj["items"]
+                for obj in internal_presets["objects"]
+                if obj.get("objectName") == object_name
+            )
+            defaults = {item["key"]: item.get("defaultValue") for item in details}
+            self.assertEqual(
+                {key: defaults.get(key) for key in expected_internal},
+                expected_internal,
+            )
+
+        resources = {
+            resource["objectName"]: resource
+            for group in external_presets["groups"]
+            for resource in group["resources"]
+        }
+        expected_external = {
+            f"INPUT.{key}": value
+            for key, value in expected_internal.items()
+        }
+        for object_name in {"SYMBOLIC_REGRESSION_RULE", "INTEGRATED_RULE_DISCOVER"}:
+            defaults = {
+                item["key"]: item.get("defaultValue")
+                for item in resources[object_name]["details"]
+            }
+            self.assertEqual(
+                {key: defaults.get(key) for key in expected_external},
+                expected_external,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

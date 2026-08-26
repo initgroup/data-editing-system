@@ -442,46 +442,74 @@
               "order": 17
             },
             {
+              "key": "INPUT.P_SIMPLE_ARITHMETIC_FIRST_YN",
+              "value": "IN VARCHAR2",
+              "comment": "Try coefficient-free arithmetic rules before fitted regression Y/N",
+              "defaultValue": "Y",
+              "order": 18
+            },
+            {
+              "key": "INPUT.P_SIMPLE_ARITHMETIC_MIN_MATCH_RATE",
+              "value": "IN NUMBER",
+              "comment": "Minimum dominant-row match rate for coefficient-free arithmetic rules",
+              "defaultValue": "0.90",
+              "order": 19
+            },
+            {
+              "key": "INPUT.P_SIMPLE_ARITHMETIC_MAX_TERMS",
+              "value": "IN NUMBER",
+              "comment": "Maximum source term count for coefficient-free arithmetic candidates, clamped to 2-4",
+              "defaultValue": "3",
+              "order": 20
+            },
+            {
+              "key": "INPUT.P_SIMPLE_ARITHMETIC_TOLERANCE_PCT",
+              "value": "IN NUMBER",
+              "comment": "Relative match tolerance for arithmetic discovery; 0.01 means 1 percent",
+              "defaultValue": "0",
+              "order": 21
+            },
+            {
               "key": "INPUT.P_MAX_AUTO_TARGETS",
               "value": "IN NUMBER",
               "comment": "Maximum auto target columns when P_TARGET_COLUMN is (auto)",
               "defaultValue": "10",
-              "order": 18
+              "order": 22
             },
             {
               "key": "INPUT.P_CONTINUE_ON_ERROR",
               "value": "IN VARCHAR2",
               "comment": "Continue remaining auto targets when one target fails",
               "defaultValue": "Y",
-              "order": 19
+              "order": 23
             },
             {
               "key": "INPUT.P_RUN_SOURCE_TYPE",
               "value": "IN VARCHAR2",
               "comment": "DATA_WORK or FLOW_WORK",
               "defaultValue": ":INIT$RunSourceType",
-              "order": 20
+              "order": 24
             },
             {
               "key": "INPUT.P_RUN_ID",
               "value": "IN NUMBER",
               "comment": "Run ID linking results from the same DATA_WORK or FLOW_WORK execution",
               "defaultValue": ":INIT$RunId",
-              "order": 21
+              "order": 25
             },
             {
               "key": "OUTPUT.status",
               "value": "$.status",
               "comment": "API success status",
               "defaultValue": "",
-              "order": 22
+              "order": 26
             },
             {
               "key": "OUTPUT.resultTable",
               "value": "$.resultTable -> INIT$_TB_RULEDISC_SYMBOLIC",
               "comment": "Result table managed by the internal Python service",
               "defaultValue": "INIT$_TB_RULEDISC_SYMBOLIC",
-              "order": 23
+              "order": 27
             }
           ]
         },
@@ -757,46 +785,74 @@
               "order": 34
             },
             {
+              "key": "INPUT.P_SIMPLE_ARITHMETIC_FIRST_YN",
+              "value": "IN VARCHAR2",
+              "comment": "Try coefficient-free arithmetic rules before fitted regression Y/N",
+              "defaultValue": "Y",
+              "order": 35
+            },
+            {
+              "key": "INPUT.P_SIMPLE_ARITHMETIC_MIN_MATCH_RATE",
+              "value": "IN NUMBER",
+              "comment": "Minimum dominant-row match rate for coefficient-free arithmetic rules",
+              "defaultValue": "0.90",
+              "order": 36
+            },
+            {
+              "key": "INPUT.P_SIMPLE_ARITHMETIC_MAX_TERMS",
+              "value": "IN NUMBER",
+              "comment": "Maximum source term count for coefficient-free arithmetic candidates, clamped to 2-4",
+              "defaultValue": "3",
+              "order": 37
+            },
+            {
+              "key": "INPUT.P_SIMPLE_ARITHMETIC_TOLERANCE_PCT",
+              "value": "IN NUMBER",
+              "comment": "Relative match tolerance for arithmetic discovery; 0.01 means 1 percent",
+              "defaultValue": "0",
+              "order": 38
+            },
+            {
               "key": "INPUT.P_MAX_AUTO_TARGETS",
               "value": "IN NUMBER",
               "comment": "Maximum auto continuous target count",
               "defaultValue": "10",
-              "order": 35
+              "order": 39
             },
             {
               "key": "INPUT.P_CONTINUE_ON_ERROR",
               "value": "IN VARCHAR2",
               "comment": "Continue remaining subtasks when one fails. Y can return partial completion, so review failed-task details.",
               "defaultValue": "Y",
-              "order": 36
+              "order": 40
             },
             {
               "key": "INPUT.P_RUN_SOURCE_TYPE",
               "value": "IN VARCHAR2",
               "comment": "DATA_WORK or FLOW_WORK",
               "defaultValue": ":INIT$RunSourceType",
-              "order": 37
+              "order": 41
             },
             {
               "key": "INPUT.P_RUN_ID",
               "value": "IN NUMBER",
               "comment": "Run ID linking profiling, relationship-network, and rule results from the same DATA_WORK or FLOW_WORK execution",
               "defaultValue": ":INIT$RunId",
-              "order": 38
+              "order": 42
             },
             {
               "key": "OUTPUT.status",
               "value": "$.status",
               "comment": "API success status",
               "defaultValue": "",
-              "order": 37
+              "order": 43
             },
             {
               "key": "OUTPUT.resultTables",
               "value": "$.resultTables",
               "comment": "Service-managed result tables",
               "defaultValue": "INIT$_TB_RULEDISC_ASSOC_SUM,INIT$_TB_COLREL_LASSO_FEATURE,INIT$_TB_RULEDISC_SYMBOLIC",
-              "order": 38
+              "order": 44
             }
           ]
         },

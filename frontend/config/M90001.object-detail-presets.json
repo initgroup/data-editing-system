@@ -622,6 +622,27 @@
           "defaultValue": "N"
         },
         {
+          "key": "P_SIMPLE_ARITHMETIC_FIRST_YN",
+          "comment": "회귀식보다 계수 없는 단순 사칙연산 규칙을 먼저 탐색할지 여부(Y/N)",
+          "defaultValue": "Y"
+        },
+        {
+          "key": "P_SIMPLE_ARITHMETIC_MIN_MATCH_RATE",
+          "comment": "단순 사칙연산 규칙을 채택할 최소 일치 행 비율",
+          "defaultValue": "0.90"
+        },
+        {
+          "key": "P_SIMPLE_ARITHMETIC_MAX_TERMS",
+          "comment": "단순 사칙연산 후보에 사용할 최대 원본 항 수(2~4)",
+          "defaultValue": "3"
+        },
+        {
+          "key": "P_SIMPLE_ARITHMETIC_TOLERANCE_PCT",
+          "comment": "단순 사칙연산 규칙 발견의 상대 허용오차. 0.01은 1%",
+          "defaultValue": "0"
+        },
+
+        {
           "key": "P_LINEAR_FIRST_YN",
           "comment": "단순 선형 회귀식을 먼저 확인할지 여부. Y이면 충분히 잘 맞는 선형식은 바로 규칙으로 사용",
           "defaultValue": "Y"
@@ -823,6 +844,27 @@
           "comment": "PySR 사용 여부(Y/N). N이면 polynomial LASSO fallback 사용",
           "defaultValue": "N"
         },
+        {
+          "key": "P_SIMPLE_ARITHMETIC_FIRST_YN",
+          "comment": "회귀식보다 계수 없는 단순 사칙연산 규칙을 먼저 탐색할지 여부(Y/N)",
+          "defaultValue": "Y"
+        },
+        {
+          "key": "P_SIMPLE_ARITHMETIC_MIN_MATCH_RATE",
+          "comment": "단순 사칙연산 규칙을 채택할 최소 일치 행 비율",
+          "defaultValue": "0.90"
+        },
+        {
+          "key": "P_SIMPLE_ARITHMETIC_MAX_TERMS",
+          "comment": "단순 사칙연산 후보에 사용할 최대 원본 항 수(2~4)",
+          "defaultValue": "3"
+        },
+        {
+          "key": "P_SIMPLE_ARITHMETIC_TOLERANCE_PCT",
+          "comment": "단순 사칙연산 규칙 발견의 상대 허용오차. 0.01은 1%",
+          "defaultValue": "0"
+        },
+
         {
           "key": "P_LINEAR_FIRST_YN",
           "comment": "단순 선형 회귀식을 먼저 확인할지 여부",

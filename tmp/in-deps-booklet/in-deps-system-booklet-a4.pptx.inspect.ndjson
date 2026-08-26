@@ -1,0 +1,833 @@
+{"kind":"deck","id":"pr/hcoyid","name":"Deck"}
+{"kind":"layout","layoutId":"7c015f2d-6b71-49e2-82db-f12cd9a0e0b9","name":"Master","type":"master"}
+{"kind":"layout","layoutId":"6035ac3d-36d1-4403-bd4d-1fe1d7ae304f","name":"Title Slide","type":"title"}
+{"kind":"slide","id":"sl/k24obd","slide":1,"title":"SYSTEM INTRODUCTION · PRINT EDITION","textShapes":5}
+{"kind":"shape","id":"sh/0bud0zmd","slide":1,"name":"cover-top","bbox":[0,0,794,34]}
+{"kind":"shape","id":"sh/za1c7u5s","slide":1,"name":"cover-right","bbox":[670,0,124,1123]}
+{"kind":"shape","id":"sh/y9svyp47","slide":1,"name":"cover-right-accent","bbox":[768,0,26,1123]}
+{"kind":"textbox","id":"sh/8fud4zm9","slide":1,"name":"cover-kicker","text":"SYSTEM INTRODUCTION · PRINT EDITION","textPreview":"SYSTEM INTRODUCTION · PRINT EDITION","textChars":35,"textLines":1,"bbox":[62,333,470,28]}
+{"kind":"textbox","id":"sh/nelcbu54","slide":1,"name":"cover-title","text":"인아이티 데이터\n에디팅 플랫폼 시스템","textPreview":"인아이티 데이터 | 에디팅 플랫폼 시스템","textChars":20,"textLines":2,"bbox":[62,392,600,150]}
+{"kind":"textbox","id":"sh/mdcv2p4j","slide":1,"name":"cover-subtitle","text":"데이터 선정부터 규칙 발굴, 검토·수정, 운영 반영까지\n하나의 추적 가능한 흐름으로 연결하는 IN-DEPS 시스템 소개서","textPreview":"데이터 선정부터 규칙 발굴, 검토·수정, 운영 반영까지 | 하나의 추적 가능한 흐름으로 연결하는 IN-DEPS 시스템 소개서","textChars":67,"textLines":2,"bbox":[62,587,575,90]}
+{"kind":"shape","id":"sh/pkju1knq","slide":1,"name":"cover-statement-line","bbox":[62,742,120,5]}
+{"kind":"textbox","id":"sh/4jqd8fm5","slide":1,"name":"cover-statement","text":"근거를 만들고, 사람이 결정하며,\n모든 변경을 Run과 감사 이력으로 추적합니다.","textPreview":"근거를 만들고, 사람이 결정하며, | 모든 변경을 Run과 감사 이력으로 추적합니다.","textChars":45,"textLines":2,"bbox":[62,770,540,82]}
+{"kind":"textbox","id":"sh/fax0nidg","slide":1,"name":"cover-edition","text":"A4 PORTRAIT · EDITABLE POWERPOINT + PRINT PDF","textPreview":"A4 PORTRAIT · EDITABLE POWERPOINT + PRINT PDF","textChars":45,"textLines":1,"bbox":[330,1002,330,22]}
+{"kind":"image","id":"im/8n2xs76x","slide":1,"name":"","alt":"인뎁스 IN-DEPS 제품 로고","bbox":[62,78,560,175]}
+{"kind":"image","id":"im/psna5gby","slide":1,"name":"","alt":"INIT 인아이티 회사 로고","bbox":[62,984,196,56]}
+{"kind":"notes","id":"nt/k24obd","slide":1,"text":"[Sources]\n- D:/work/data-editing-system/frontend/help/in-deps-system-guide.html (content source, accessed 2026-08-26)"}
+{"kind":"slide","id":"sl/q2tr66","slide":2,"title":"INTRODUCTION","textShapes":17}
+{"kind":"shape","id":"sh/1ofedcby","slide":2,"name":"page-2-rail","bbox":[0,0,10,1123]}
+{"kind":"textbox","id":"sh/elofixs7","slide":2,"name":"page-2-chapter","text":"INTRODUCTION","textPreview":"INTRODUCTION","textChars":12,"textLines":1,"bbox":[62,45,460,24]}
+{"kind":"textbox","id":"sh/fmxwb2ts","slide":2,"name":"page-2-title","text":"하나의 흐름으로 데이터 품질을 관리합니다","textPreview":"하나의 흐름으로 데이터 품질을 관리합니다","textChars":22,"textLines":1,"bbox":[62,82,670,84]}
+{"kind":"textbox","id":"sh/orqxo7a9","slide":2,"name":"page-2-subtitle","text":"IN-DEPS는 분석 모델만 제공하는 도구가 아니라, 데이터 품질 판단의 근거와 사람이 승인한 변경 과정을 함께 관리하는 데이터 에디팅 플랫폼입니다.","textPreview":"IN-DEPS는 분석 모델만 제공하는 도구가 아니라, 데이터 품질 판단의 근거와 사람이 승인한 변경 과정을 함께 관리하는 데이터 에디팅 플랫폼입니다.","textChars":83,"textLines":1,"bbox":[62,170,670,50]}
+{"kind":"shape","id":"sh/pszehcbu","slide":2,"name":"page-2-top-rule","bbox":[62,226,670,2]}
+{"kind":"shape","id":"sh/2pofmxsj","slide":2,"name":"page-2-footer-rule","bbox":[62,1067,670,1]}
+{"kind":"textbox","id":"sh/3qhwf2to","slide":2,"name":"page-2-footer-name","text":"IN-DEPS 시스템 소개서","textPreview":"IN-DEPS 시스템 소개서","textChars":15,"textLines":1,"bbox":[62,1080,300,18]}
+{"kind":"textbox","id":"sh/cfqxsral","slide":2,"name":"page-2-footer-number","text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[682,1078,50,20]}
+{"kind":"textbox","id":"sh/dgzelwb6","slide":2,"name":"p2-big-statement","text":"발견 → 검토 → 수정 → 검증 → 반영","textPreview":"발견 → 검토 → 수정 → 검증 → 반영","textChars":22,"textLines":1,"bbox":[62,276,670,54]}
+{"kind":"textbox","id":"sh/xo3m9kna","slide":2,"name":"p2-big-caption","text":"각 단계는 독립된 책임을 가지며, 모든 실행은 프로젝트·시나리오·Target DB·Flow Run 컨텍스트 안에서 연결됩니다.","textPreview":"각 단계는 독립된 책임을 가지며, 모든 실행은 프로젝트·시나리오·Target DB·Flow Run 컨텍스트 안에서 연결됩니다.","textChars":70,"textLines":1,"bbox":[98,344,598,60]}
+{"kind":"shape","id":"sh/wnu50f6p","slide":2,"name":"p2-trace-fill","bbox":[62,440,670,132]}
+{"kind":"shape","id":"sh/vml47a54","slide":2,"name":"p2-trace-accent","bbox":[62,440,8,132]}
+{"kind":"textbox","id":"sh/alcny5oj","slide":2,"name":"p2-trace-kicker","text":"TRACEABILITY","textPreview":"TRACEABILITY","textChars":12,"textLines":1,"bbox":[90,458,210,20]}
+{"kind":"textbox","id":"sh/5cn6d4n6","slide":2,"name":"p2-trace-title","text":"근거가 남는 분석","textPreview":"근거가 남는 분석","textChars":9,"textLines":1,"bbox":[90,484,245,34]}
+{"kind":"textbox","id":"sh/kbe54z61","slide":2,"name":"p2-trace-body","text":"컬럼 프로파일, 관계 지표, 규칙 품질, 위반 상세와 실제 Run 파라미터를 함께 보존합니다.","textPreview":"컬럼 프로파일, 관계 지표, 규칙 품질, 위반 상세와 실제 Run 파라미터를 함께 보존합니다.","textChars":52,"textLines":1,"bbox":[352,462,348,92]}
+{"kind":"shape","id":"sh/jq54bu5g","slide":2,"name":"p2-human-fill","bbox":[62,590,670,132]}
+{"kind":"shape","id":"sh/ipwn2pov","slide":2,"name":"p2-human-accent","bbox":[62,590,8,132]}
+{"kind":"textbox","id":"sh/lgjm1072","slide":2,"name":"p2-human-kicker","text":"HUMAN REVIEW","textPreview":"HUMAN REVIEW","textChars":12,"textLines":1,"bbox":[90,608,210,20]}
+{"kind":"textbox","id":"sh/0va5sv6h","slide":2,"name":"p2-human-title","text":"사람이 내리는 결정","textPreview":"사람이 내리는 결정","textChars":10,"textLines":1,"bbox":[90,634,245,34]}
+{"kind":"textbox","id":"sh/cze58ved","slide":2,"name":"p2-human-body","text":"모델과 Rule 결과는 후보를 만들고, 최종 규칙 선정과 데이터 수정·운영 반영은 검토와 권한을 통과합니다.","textPreview":"모델과 Rule 결과는 후보를 만들고, 최종 규칙 선정과 데이터 수정·운영 반영은 검토와 권한을 통과합니다.","textChars":60,"textLines":1,"bbox":[352,612,348,92]}
+{"kind":"shape","id":"sh/d0nmh0fy","slide":2,"name":"p2-control-fill","bbox":[62,740,670,132]}
+{"kind":"shape","id":"sh/qxwn65w7","slide":2,"name":"p2-control-accent","bbox":[62,740,8,132]}
+{"kind":"textbox","id":"sh/ry54fqxs","slide":2,"name":"p2-control-kicker","text":"CONTROLLED CHANGE","textPreview":"CONTROLLED CHANGE","textChars":17,"textLines":1,"bbox":[90,758,210,20]}
+{"kind":"textbox","id":"sh/03y5cfep","slide":2,"name":"p2-control-title","text":"통제되는 운영 반영","textPreview":"통제되는 운영 반영","textChars":10,"textLines":1,"bbox":[90,784,245,34]}
+{"kind":"textbox","id":"sh/1476lkfu","slide":2,"name":"p2-control-body","text":"원본 기준본, 편집본, 효과 검증과 버전 DML을 분리해 자동 탐지가 원본 변경으로 직결되지 않도록 설계합니다.","textPreview":"원본 기준본, 편집본, 효과 검증과 버전 DML을 분리해 자동 탐지가 원본 변경으로 직결되지 않도록 설계합니다.","textChars":62,"textLines":1,"bbox":[352,762,348,92]}
+{"kind":"shape","id":"sh/e1wna5wj","slide":2,"name":"p2-callout-fill","bbox":[62,906,670,92]}
+{"kind":"shape","id":"sh/z25ojax4","slide":2,"name":"p2-callout-accent","bbox":[62,906,6,92]}
+{"kind":"textbox","id":"sh/ory5gfel","slide":2,"name":"p2-callout-text","text":"핵심 원칙 · 좋은 결과는 실행 성공 여부가 아니라, 설명 가능한 근거와 검토 가능한 변경 과정으로 판단합니다.","textPreview":"핵심 원칙 · 좋은 결과는 실행 성공 여부가 아니라, 설명 가능한 근거와 검토 가능한 변경 과정으로 판단합니다.","textChars":62,"textLines":1,"bbox":[84,924,628,60]}
+{"kind":"notes","id":"nt/q2tr66","slide":2,"text":"[Sources]\n- D:/work/data-editing-system/frontend/help/in-deps-system-guide.html (content source, accessed 2026-08-26)"}
+{"kind":"slide","id":"sl/gztajd","slide":3,"title":"GUIDE MAP","textShapes":29}
+{"kind":"shape","id":"sh/i9g3itwv","slide":3,"name":"page-3-rail","bbox":[0,0,10,1123]}
+{"kind":"textbox","id":"sh/5wrmdovm","slide":3,"name":"page-3-chapter","text":"GUIDE MAP","textPreview":"GUIDE MAP","textChars":9,"textLines":1,"bbox":[62,45,460,24]}
+{"kind":"textbox","id":"sh/kvilk3e1","slide":3,"name":"page-3-title","text":"이 소개서는 업무 흐름을 따라 읽도록 구성했습니다","textPreview":"이 소개서는 업무 흐름을 따라 읽도록 구성했습니다","textChars":27,"textLines":1,"bbox":[62,82,670,84]}
+{"kind":"textbox","id":"sh/7y94fydc","slide":3,"name":"page-3-subtitle","text":"웹 페이지의 섹션 순서를 그대로 인쇄하지 않고, 하나의 질문에 한 페이지가 답하도록 내용을 다시 묶었습니다.","textPreview":"웹 페이지의 섹션 순서를 그대로 인쇄하지 않고, 하나의 질문에 한 페이지가 답하도록 내용을 다시 묶었습니다.","textChars":60,"textLines":1,"bbox":[62,170,670,50]}
+{"kind":"shape","id":"sh/6x0nmtwr","slide":3,"name":"page-3-top-rule","bbox":[62,226,670,2]}
+{"kind":"shape","id":"sh/t0rmh8vi","slide":3,"name":"page-3-footer-rule","bbox":[62,1067,670,1]}
+{"kind":"textbox","id":"sh/szi5o3ex","slide":3,"name":"page-3-footer-name","text":"IN-DEPS 시스템 소개서","textPreview":"IN-DEPS 시스템 소개서","textChars":15,"textLines":1,"bbox":[62,1080,300,18]}
+{"kind":"textbox","id":"sh/n2p43ed8","slide":3,"name":"page-3-footer-number","text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[682,1078,50,20]}
+{"kind":"shape","id":"sh/m1w3a9wn","slide":3,"name":"p3-num-01-circle","bbox":[62,286,44,44]}
+{"kind":"textbox","id":"sh/gfid0fax","slide":3,"name":"p3-num-01-number","text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[62,288,44,40]}
+{"kind":"textbox","id":"sh/10ru9kri","slide":3,"name":"p3-title-01","text":"업무 흐름과 시스템 구조","textPreview":"업무 흐름과 시스템 구조","textChars":13,"textLines":1,"bbox":[130,275,340,34]}
+{"kind":"textbox","id":"sh/ed0vy5sr","slide":3,"name":"p3-desc-01","text":"전체 프로세스, 아키텍처, 운영 원칙","textPreview":"전체 프로세스, 아키텍처, 운영 원칙","textChars":20,"textLines":1,"bbox":[130,316,420,34]}
+{"kind":"textbox","id":"sh/fe9c7a9c","slide":3,"name":"p3-pages-01","text":"04–06","textPreview":"04–06","textChars":5,"textLines":1,"bbox":[632,288,100,28]}
+{"kind":"shape","id":"sh/o3id4zqt","slide":3,"name":"p3-line-0","bbox":[130,360,602,1]}
+{"kind":"shape","id":"sh/p4budkre","slide":3,"name":"p3-num-02-circle","bbox":[62,402,44,44]}
+{"kind":"textbox","id":"sh/210v2psn","slide":3,"name":"p3-num-02-number","text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[62,404,44,40]}
+{"kind":"textbox","id":"sh/n29cbu98","slide":3,"name":"p3-title-02","text":"에디팅 규칙 발굴 4단계","textPreview":"에디팅 규칙 발굴 4단계","textChars":13,"textLines":1,"bbox":[130,391,340,34]}
+{"kind":"textbox","id":"sh/47ytsvap","slide":3,"name":"p3-desc-02","text":"컬럼 유형, 관계, 규칙, 위반, SAME_RUN","textPreview":"컬럼 유형, 관계, 규칙, 위반, SAME_RUN","textChars":27,"textLines":1,"bbox":[130,432,420,34]}
+{"kind":"textbox","id":"sh/587u10ra","slide":3,"name":"p3-pages-02","text":"07–11","textPreview":"07–11","textChars":5,"textLines":1,"bbox":[632,404,100,28]}
+{"kind":"shape","id":"sh/l4zapwjy","slide":3,"name":"p3-line-1","bbox":[130,476,602,1]}
+{"kind":"shape","id":"sh/k3q9wr2d","slide":3,"name":"p3-num-03-circle","bbox":[62,518,44,44]}
+{"kind":"textbox","id":"sh/j2hsnm1s","slide":3,"name":"p3-num-03-number","text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[62,520,44,40]}
+{"kind":"textbox","id":"sh/y18ruhk7","slide":3,"name":"p3-title-03","text":"Flow 실행과 결과 해석","textPreview":"Flow 실행과 결과 해석","textChars":14,"textLines":1,"bbox":[130,507,340,34]}
+{"kind":"textbox","id":"sh/t8zatwju","slide":3,"name":"p3-desc-03","text":"DAG 검증, 실행 경로, 상태 해석","textPreview":"DAG 검증, 실행 경로, 상태 해석","textChars":20,"textLines":1,"bbox":[130,548,420,34]}
+{"kind":"textbox","id":"sh/87qt0r2p","slide":3,"name":"p3-pages-03","text":"12–14","textPreview":"12–14","textChars":5,"textLines":1,"bbox":[632,520,100,28]}
+{"kind":"shape","id":"sh/76hsrm14","slide":3,"name":"p3-line-2","bbox":[130,592,602,1]}
+{"kind":"shape","id":"sh/658by1kj","slide":3,"name":"p3-num-04-circle","bbox":[62,634,44,44]}
+{"kind":"textbox","id":"sh/hwjaxgj6","slide":3,"name":"p3-num-04-number","text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[62,636,44,40]}
+{"kind":"textbox","id":"sh/gvat4b2l","slide":3,"name":"p3-title-04","text":"결정·수정·운영 반영","textPreview":"결정·수정·운영 반영","textChars":11,"textLines":1,"bbox":[130,623,340,34]}
+{"kind":"textbox","id":"sh/e5kz29wr","slide":3,"name":"p3-desc-04","text":"규칙 결정, 편집본, 효과 검증, DML","textPreview":"규칙 결정, 편집본, 효과 검증, DML","textChars":22,"textLines":1,"bbox":[130,664,420,34]}
+{"kind":"textbox","id":"sh/f6tgbedc","slide":3,"name":"p3-pages-04","text":"15–16","textPreview":"15–16","textChars":5,"textLines":1,"bbox":[632,636,100,28]}
+{"kind":"shape","id":"sh/072h4jex","slide":3,"name":"p3-line-3","bbox":[130,708,602,1]}
+{"kind":"shape","id":"sh/1sbydovi","slide":3,"name":"p3-num-05-circle","bbox":[62,750,44,44]}
+{"kind":"textbox","id":"sh/2tkz6tw3","slide":3,"name":"p3-num-05-number","text":"05","textPreview":"05","textChars":2,"textLines":1,"bbox":[62,752,44,40]}
+{"kind":"textbox","id":"sh/nutgfedo","slide":3,"name":"p3-title-05","text":"전체 업무 메뉴","textPreview":"전체 업무 메뉴","textChars":8,"textLines":1,"bbox":[130,739,340,34]}
+{"kind":"textbox","id":"sh/ov2h8jet","slide":3,"name":"p3-desc-05","text":"24개 활성 업무 화면과 역할","textPreview":"24개 활성 업무 화면과 역할","textChars":16,"textLines":1,"bbox":[130,780,420,34]}
+{"kind":"textbox","id":"sh/pwvyhove","slide":3,"name":"p3-pages-05","text":"17–20","textPreview":"17–20","textChars":5,"textLines":1,"bbox":[632,752,100,28]}
+{"kind":"shape","id":"sh/ax4zatwz","slide":3,"name":"p3-line-4","bbox":[130,824,602,1]}
+{"kind":"shape","id":"sh/bydgjydk","slide":3,"name":"p3-num-06-circle","bbox":[62,866,44,44]}
+{"kind":"textbox","id":"sh/je9g3y5o","slide":3,"name":"p3-num-06-number","text":"06","textPreview":"06","textChars":2,"textLines":1,"bbox":[62,868,44,40]}
+{"kind":"textbox","id":"sh/yd0futo3","slide":3,"name":"p3-title-06","text":"운영·보안·용어","textPreview":"운영·보안·용어","textChars":8,"textLines":1,"bbox":[130,855,340,34]}
+{"kind":"textbox","id":"sh/lgry58nu","slide":3,"name":"p3-desc-06","text":"실행 체크, 보안 경계, 핵심 용어","textPreview":"실행 체크, 보안 경계, 핵심 용어","textChars":19,"textLines":1,"bbox":[130,896,420,34]}
+{"kind":"textbox","id":"sh/kfihw369","slide":3,"name":"p3-pages-06","text":"21–24","textPreview":"21–24","textChars":5,"textLines":1,"bbox":[632,868,100,28]}
+{"kind":"notes","id":"nt/gztajd","slide":3,"text":"[Sources]\n- D:/work/data-editing-system/frontend/help/in-deps-system-guide.html (content source, accessed 2026-08-26)"}
+{"kind":"slide","id":"sl/2pawc6","slide":4,"title":"01 · END-TO-END JOURNEY","textShapes":29}
+{"kind":"shape","id":"sh/3a1s3yx4","slide":4,"name":"page-4-rail","bbox":[0,0,10,1123]}
+{"kind":"textbox","id":"sh/4batwjyp","slide":4,"name":"page-4-chapter","text":"01 · END-TO-END JOURNEY","textPreview":"01 · END-TO-END JOURNEY","textChars":23,"textLines":1,"bbox":[62,45,460,24]}
+{"kind":"textbox","id":"sh/pcja5ofu","slide":4,"name":"page-4-title","text":"여섯 단계가 하나의 추적 가능한 업무를 만듭니다","textPreview":"여섯 단계가 하나의 추적 가능한 업무를 만듭니다","textChars":26,"textLines":1,"bbox":[62,82,670,84]}
+{"kind":"textbox","id":"sh/qdsbytgf","slide":4,"name":"page-4-subtitle","text":"메뉴는 개별 기능의 모음이 아니라, 업무 범위를 정의하고 분석 근거를 만든 뒤 안전한 변경과 보고로 이어지는 연속 프로세스입니다.","textPreview":"메뉴는 개별 기능의 모음이 아니라, 업무 범위를 정의하고 분석 근거를 만든 뒤 안전한 변경과 보고로 이어지는 연속 프로세스입니다.","textChars":72,"textLines":1,"bbox":[62,170,670,50]}
+{"kind":"shape","id":"sh/by1s7yx0","slide":4,"name":"page-4-top-rule","bbox":[62,226,670,2]}
+{"kind":"shape","id":"sh/czat03yl","slide":4,"name":"page-4-footer-rule","bbox":[62,1067,670,1]}
+{"kind":"textbox","id":"sh/d03a98f6","slide":4,"name":"page-4-footer-name","text":"IN-DEPS 시스템 소개서","textPreview":"IN-DEPS 시스템 소개서","textChars":15,"textLines":1,"bbox":[62,1080,300,18]}
+{"kind":"textbox","id":"sh/6h8rm9gb","slide":4,"name":"page-4-footer-number","text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[682,1078,50,20]}
+{"kind":"shape","id":"sh/72hsvexw","slide":4,"name":"journey-node-1","bbox":[62,260,670,103]}
+{"kind":"shape","id":"sh/jils7i54","slide":4,"name":"journey-num-1-circle","bbox":[80,286,42,42]}
+{"kind":"textbox","id":"sh/ihcbed4j","slide":4,"name":"journey-num-1-number","text":"1","textPreview":"1","textChars":1,"textLines":1,"bbox":[80,288,42,38]}
+{"kind":"textbox","id":"sh/5k3a9sna","slide":4,"name":"journey-title-1","text":"업무 범위 정의","textPreview":"업무 범위 정의","textChars":8,"textLines":1,"bbox":[140,279,220,32]}
+{"kind":"textbox","id":"sh/kjutgnmp","slide":4,"name":"journey-kicker-1","text":"M01001 · M01002","textPreview":"M01001 · M01002","textChars":15,"textLines":1,"bbox":[140,317,220,20]}
+{"kind":"textbox","id":"sh/vu1s3y58","slide":4,"name":"journey-body-1","text":"프로젝트와 시나리오로 모든 실행의 상위 업무 맥락을 정합니다.","textPreview":"프로젝트와 시나리오로 모든 실행의 상위 업무 맥락을 정합니다.","textChars":34,"textLines":1,"bbox":[372,278,338,69]}
+{"kind":"shape","id":"sh/atsbat4n","slide":4,"name":"journey-node-2","bbox":[62,378,670,103]}
+{"kind":"shape","id":"sh/xw3a58ny","slide":4,"name":"journey-num-2-circle","bbox":[80,404,42,42]}
+{"kind":"textbox","id":"sh/wvatc3mt","slide":4,"name":"journey-num-2-number","text":"2","textPreview":"2","textChars":1,"textLines":1,"bbox":[80,406,42,38]}
+{"kind":"textbox","id":"sh/nq1szy5w","slide":4,"name":"journey-title-2","text":"대상 데이터 준비","textPreview":"대상 데이터 준비","textChars":9,"textLines":1,"bbox":[140,397,220,32]}
+{"kind":"textbox","id":"sh/mpsb6t4b","slide":4,"name":"journey-kicker-2","text":"M02001 · M02002","textPreview":"M02001 · M02002","textChars":15,"textLines":1,"bbox":[140,435,220,20]}
+{"kind":"textbox","id":"sh/ql8bit8j","slide":4,"name":"journey-body-2","text":"파일을 적재하거나 Target DB 테이블을 관리 대상으로 연결합니다.","textPreview":"파일을 적재하거나 Target DB 테이블을 관리 대상으로 연결합니다.","textChars":39,"textLines":1,"bbox":[372,396,338,69]}
+{"kind":"shape","id":"sh/bmhcbypo","slide":4,"name":"journey-node-3","bbox":[62,496,670,103]}
+{"kind":"shape","id":"sh/cnqtkjq9","slide":4,"name":"journey-num-3-circle","bbox":[80,522,42,42]}
+{"kind":"textbox","id":"sh/dozudo7u","slide":4,"name":"journey-num-3-number","text":"3","textPreview":"3","textChars":1,"textLines":1,"bbox":[80,524,42,38]}
+{"kind":"textbox","id":"sh/ypsbmtof","slide":4,"name":"journey-title-3","text":"4단계 모델 작업","textPreview":"4단계 모델 작업","textChars":9,"textLines":1,"bbox":[140,515,220,32]}
+{"kind":"textbox","id":"sh/zq1cfyp0","slide":4,"name":"journey-kicker-3","text":"M03001–M03004","textPreview":"M03001–M03004","textChars":13,"textLines":1,"bbox":[140,553,220,20]}
+{"kind":"textbox","id":"sh/0rato36l","slide":4,"name":"journey-body-3","text":"컬럼 유형, 관계, 규칙, 위반 탐지 Job을 저장하고 개별 검증합니다.","textPreview":"컬럼 유형, 관계, 규칙, 위반 탐지 Job을 저장하고 개별 검증합니다.","textChars":40,"textLines":1,"bbox":[372,514,338,69]}
+{"kind":"shape","id":"sh/lsjuh876","slide":4,"name":"journey-node-4","bbox":[62,614,670,103]}
+{"kind":"shape","id":"sh/mtsvqdob","slide":4,"name":"journey-num-4-circle","bbox":[80,640,42,42]}
+{"kind":"textbox","id":"sh/nu1cjipw","slide":4,"name":"journey-num-4-number","text":"4","textPreview":"4","textChars":1,"textLines":1,"bbox":[80,642,42,38]}
+{"kind":"textbox","id":"sh/xo3epcre","slide":4,"name":"journey-title-4","text":"통합 Flow 실행","textPreview":"통합 Flow 실행","textChars":10,"textLines":1,"bbox":[140,633,220,32]}
+{"kind":"textbox","id":"sh/wnuxg7qt","slide":4,"name":"journey-kicker-4","text":"M04001 · M04002","textPreview":"M04001 · M04002","textChars":15,"textLines":1,"bbox":[140,671,220,20]}
+{"kind":"textbox","id":"sh/vmlwn298","slide":4,"name":"journey-body-4","text":"Job을 DAG로 연결하고 같은 Flow Run에서 실행·분석합니다.","textPreview":"Job을 DAG로 연결하고 같은 Flow Run에서 실행·분석합니다.","textChars":38,"textLines":1,"bbox":[372,632,338,69]}
+{"kind":"shape","id":"sh/alcfexsn","slide":4,"name":"journey-node-5","bbox":[62,732,670,103]}
+{"kind":"shape","id":"sh/5cnetcra","slide":4,"name":"journey-num-5-circle","bbox":[80,758,42,42]}
+{"kind":"textbox","id":"sh/kbexk7qp","slide":4,"name":"journey-num-5-number","text":"5","textPreview":"5","textChars":1,"textLines":1,"bbox":[80,760,42,38]}
+{"kind":"textbox","id":"sh/ja5wrm94","slide":4,"name":"journey-title-5","text":"결정·수정·반영","textPreview":"결정·수정·반영","textChars":8,"textLines":1,"bbox":[140,751,220,32]}
+{"kind":"textbox","id":"sh/i9wfih8j","slide":4,"name":"journey-kicker-5","text":"M05001–M05003","textPreview":"M05001–M05003","textChars":13,"textLines":1,"bbox":[140,789,220,20]}
+{"kind":"textbox","id":"sh/tg7yxwrm","slide":4,"name":"journey-body-5","text":"규칙 확정, 오류 수정, 효과 검증과 운영 DML을 서로 분리합니다.","textPreview":"규칙 확정, 오류 수정, 효과 검증과 운영 DML을 서로 분리합니다.","textChars":38,"textLines":1,"bbox":[372,750,338,69]}
+{"kind":"shape","id":"sh/sfexorq1","slide":4,"name":"journey-node-6","bbox":[62,850,670,103]}
+{"kind":"shape","id":"sh/obihgva9","slide":4,"name":"journey-num-6-circle","bbox":[80,876,42,42]}
+{"kind":"textbox","id":"sh/pcrip0bu","slide":4,"name":"journey-num-6-number","text":"6","textPreview":"6","textChars":1,"textLines":1,"bbox":[80,878,42,38]}
+{"kind":"textbox","id":"sh/290zels3","slide":4,"name":"journey-title-6","text":"결과 보고·운영","textPreview":"결과 보고·운영","textChars":8,"textLines":1,"bbox":[140,869,220,32]}
+{"kind":"textbox","id":"sh/3a90nqto","slide":4,"name":"journey-kicker-6","text":"M06001– · M90001–","textPreview":"M06001– · M90001–","textChars":17,"textLines":1,"bbox":[140,907,220,20]}
+{"kind":"textbox","id":"sh/g7yhcbax","slide":4,"name":"journey-body-6","text":"보고서와 모델·사용자·시스템 리소스를 운영합니다.","textPreview":"보고서와 모델·사용자·시스템 리소스를 운영합니다.","textChars":27,"textLines":1,"bbox":[372,868,338,69]}
+{"kind":"shape","id":"sh/18rilgbi","slide":4,"bbox":[397,363,0,15]}
+{"kind":"shape","id":"sh/e5gzalsr","slide":4,"bbox":[397,481,0,15]}
+{"kind":"shape","id":"sh/f6p0j6tc","slide":4,"bbox":[397,599,0,15]}
+{"kind":"shape","id":"sh/0321ofah","slide":4,"bbox":[397,717,0,15]}
+{"kind":"shape","id":"sh/l4bixkbm","slide":4,"bbox":[397,835,0,15]}
+{"kind":"notes","id":"nt/2pawc6","slide":4,"text":"[Sources]\n- D:/work/data-editing-system/frontend/help/in-deps-system-guide.html (content source, accessed 2026-08-26)\n- D:/work/data-editing-system/frontend/config/menu.config.js (menu structure, accessed 2026-08-26)"}
+{"kind":"slide","id":"sl/785iad","slide":5,"title":"01 · SYSTEM ARCHITECTURE","textShapes":20}
+{"kind":"shape","id":"sh/2po7y58b","slide":5,"name":"page-5-rail","bbox":[0,0,10,1123]}
+{"kind":"textbox","id":"sh/pcf69k7m","slide":5,"name":"page-5-chapter","text":"01 · SYSTEM ARCHITECTURE","textPreview":"01 · SYSTEM ARCHITECTURE","textChars":24,"textLines":1,"bbox":[62,45,460,24]}
+{"kind":"textbox","id":"sh/4b6p0fqh","slide":5,"name":"page-5-title","text":"업무 컨텍스트와 실행 계약이 시스템을 잇습니다","textPreview":"업무 컨텍스트와 실행 계약이 시스템을 잇습니다","textChars":25,"textLines":1,"bbox":[62,82,670,84]}
+{"kind":"textbox","id":"sh/rehobups","slide":5,"name":"page-5-subtitle","text":"사용자 채널에서 결과 아티팩트까지 모든 단계가 세션·권한·Target DB와 Flow Run을 공통 기준으로 사용합니다.","textPreview":"사용자 채널에서 결과 아티팩트까지 모든 단계가 세션·권한·Target DB와 Flow Run을 공통 기준으로 사용합니다.","textChars":67,"textLines":1,"bbox":[62,170,670,50]}
+{"kind":"shape","id":"sh/qdo72p87","slide":5,"name":"page-5-top-rule","bbox":[62,226,670,2]}
+{"kind":"shape","id":"sh/dgz6d47y","slide":5,"name":"page-5-footer-rule","bbox":[62,1067,670,1]}
+{"kind":"textbox","id":"sh/cfqp4z6d","slide":5,"name":"page-5-footer-name","text":"IN-DEPS 시스템 소개서","textPreview":"IN-DEPS 시스템 소개서","textChars":15,"textLines":1,"bbox":[62,1080,300,18]}
+{"kind":"textbox","id":"sh/zih8fup4","slide":5,"name":"page-5-footer-number","text":"05","textPreview":"05","textChars":2,"textLines":1,"bbox":[682,1078,50,20]}
+{"kind":"shape","id":"sh/eh8769oj","slide":5,"name":"p5-layer-0","bbox":[134,264,598,112]}
+{"kind":"textbox","id":"sh/gn6dozel","slide":5,"name":"p5-label-0","text":"사용자 채널","textPreview":"사용자 채널","textChars":6,"textLines":1,"bbox":[62,282,56,56]}
+{"kind":"textbox","id":"sh/hozeh4fq","slide":5,"name":"p5-title-0","text":"웹 작업공간","textPreview":"웹 작업공간","textChars":6,"textLines":1,"bbox":[158,280,544,30]}
+{"kind":"textbox","id":"sh/u1ovmpwf","slide":5,"name":"p5-body-0","text":"메뉴, 데이터 작업, Flow 캔버스, 분석과 보고서를 하나의 로그인 세션에서 조작","textPreview":"메뉴, 데이터 작업, Flow 캔버스, 분석과 보고서를 하나의 로그인 세션에서 조작","textChars":46,"textLines":1,"bbox":[158,317,550,46]}
+{"kind":"shape","id":"sh/v2xwfux0","slide":5,"name":"p5-layer-1","bbox":[134,402,598,112]}
+{"kind":"textbox","id":"sh/4rqdsjeh","slide":5,"name":"p5-label-1","text":"보안 경계","textPreview":"보안 경계","textChars":5,"textLines":1,"bbox":[62,420,56,56]}
+{"kind":"textbox","id":"sh/pszelov2","slide":5,"name":"p5-title-1","text":"세션·API 게이트웨이","textPreview":"세션·API 게이트웨이","textChars":12,"textLines":1,"bbox":[158,418,544,30]}
+{"kind":"textbox","id":"sh/ip8vq9wb","slide":5,"name":"p5-body-1","text":"서버 세션, 사용자 역할과 시스템 DB 권한을 확인한 뒤 업무 API 연결","textPreview":"서버 세션, 사용자 역할과 시스템 DB 권한을 확인한 뒤 업무 API 연결","textChars":41,"textLines":1,"bbox":[158,455,550,46]}
+{"kind":"shape","id":"sh/3qhwjedw","slide":5,"name":"p5-layer-2","bbox":[134,540,598,112]}
+{"kind":"textbox","id":"sh/cvqdwjet","slide":5,"name":"p5-label-2","text":"업무 기준","textPreview":"업무 기준","textChars":5,"textLines":1,"bbox":[62,558,56,56]}
+{"kind":"textbox","id":"sh/dwjepovy","slide":5,"name":"p5-title-2","text":"프로젝트·시나리오·Target DB","textPreview":"프로젝트·시나리오·Target DB","textChars":19,"textLines":1,"bbox":[158,556,544,30]}
+{"kind":"textbox","id":"sh/lcfe9on2","slide":5,"name":"p5-body-2","text":"대상 데이터, 실행 Job과 결과가 같은 업무 범위 안에서 움직이도록 컨텍스트 고정","textPreview":"대상 데이터, 실행 Job과 결과가 같은 업무 범위 안에서 움직이도록 컨텍스트 고정","textChars":46,"textLines":1,"bbox":[158,593,550,46]}
+{"kind":"shape","id":"sh/0b6dgj6x","slide":5,"name":"p5-layer-3","bbox":[134,678,598,112]}
+{"kind":"textbox","id":"sh/zadw7e5c","slide":5,"name":"p5-label-3","text":"실행 제어","textPreview":"실행 제어","textChars":5,"textLines":1,"bbox":[62,696,56,56]}
+{"kind":"textbox","id":"sh/y94ve9or","slide":5,"name":"p5-title-3","text":"Flow·Job·실행 리소스","textPreview":"Flow·Job·실행 리소스","textChars":15,"textLines":1,"bbox":[158,694,544,30]}
+{"kind":"textbox","id":"sh/9gfedone","slide":5,"name":"p5-body-3","text":"DAG 검증 후 DB_OBJECT, OML_PYTHON, INTERNAL/EXTERNAL API 중 한 경로 선택","textPreview":"DAG 검증 후 DB_OBJECT, OML_PYTHON, INTERNAL/EXTERNAL API 중 한 경로 선택","textChars":63,"textLines":1,"bbox":[158,731,550,46]}
+{"kind":"shape","id":"sh/8f6dkj6t","slide":5,"name":"p5-layer-4","bbox":[134,816,598,112]}
+{"kind":"textbox","id":"sh/nexwby58","slide":5,"name":"p5-label-4","text":"결과·운영","textPreview":"결과·운영","textChars":5,"textLines":1,"bbox":[62,834,56,56]}
+{"kind":"textbox","id":"sh/mdoviton","slide":5,"name":"p5-title-4","text":"Run 아티팩트·분석·편집·보고","textPreview":"Run 아티팩트·분석·편집·보고","textChars":17,"textLines":1,"bbox":[158,832,544,30]}
+{"kind":"textbox","id":"sh/pkvu14na","slide":5,"name":"p5-body-4","text":"Node 결과와 실제 파라미터를 보존하고 규칙 결정, 수정, 반영, 보고로 연결","textPreview":"Node 결과와 실제 파라미터를 보존하고 규칙 결정, 수정, 반영, 보고로 연결","textChars":44,"textLines":1,"bbox":[158,869,550,46]}
+{"kind":"shape","id":"sh/4jmd8z6p","slide":5,"bbox":[433,376,0,26]}
+{"kind":"shape","id":"sh/up0bi547","slide":5,"bbox":[433,514,0,26]}
+{"kind":"shape","id":"sh/fq9sbals","slide":5,"bbox":[433,652,0,26]}
+{"kind":"shape","id":"sh/gr2tkfmd","slide":5,"bbox":[433,790,0,26]}
+{"kind":"notes","id":"nt/785iad","slide":5,"text":"[Sources]\n- D:/work/data-editing-system/frontend/help/in-deps-system-guide.html (content source, accessed 2026-08-26)"}
+{"kind":"slide","id":"sl/kh4qyf","slide":6,"title":"01 · OPERATING PRINCIPLES","textShapes":16}
+{"kind":"shape","id":"sh/v2dwj6lg","slide":6,"name":"page-6-rail","bbox":[0,0,10,1123]}
+{"kind":"textbox","id":"sh/g36dcbm1","slide":6,"name":"page-6-chapter","text":"01 · OPERATING PRINCIPLES","textPreview":"01 · OPERATING PRINCIPLES","textChars":25,"textLines":1,"bbox":[62,45,460,24]}
+{"kind":"textbox","id":"sh/h4felg3m","slide":6,"name":"page-6-title","text":"탐지와 수정은 의도적으로 분리됩니다","textPreview":"탐지와 수정은 의도적으로 분리됩니다","textChars":19,"textLines":1,"bbox":[62,82,670,84]}
+{"kind":"textbox","id":"sh/6x4v614z","slide":6,"name":"page-6-subtitle","text":"자동 분석은 검토 가능한 근거를 만들고, 사람이 승인한 결과만 별도 편집본과 통제된 운영 반영 단계로 이동합니다.","textPreview":"자동 분석은 검토 가능한 근거를 만들고, 사람이 승인한 결과만 별도 편집본과 통제된 운영 반영 단계로 이동합니다.","textChars":63,"textLines":1,"bbox":[62,170,670,50]}
+{"kind":"shape","id":"sh/7ydwf6lk","slide":6,"name":"page-6-top-rule","bbox":[62,226,670,2]}
+{"kind":"shape","id":"sh/8zmd8rmp","slide":6,"name":"page-6-footer-rule","bbox":[62,1067,670,1]}
+{"kind":"textbox","id":"sh/t0vehw3a","slide":6,"name":"page-6-footer-name","text":"IN-DEPS 시스템 소개서","textPreview":"IN-DEPS 시스템 소개서","textChars":15,"textLines":1,"bbox":[62,1080,300,18]}
+{"kind":"textbox","id":"sh/y9kv2h4n","slide":6,"name":"page-6-footer-number","text":"06","textPreview":"06","textChars":2,"textLines":1,"bbox":[682,1078,50,20]}
+{"kind":"textbox","id":"sh/jatwbml8","slide":6,"name":"p6-center","text":"자동화는 후보를 만들고\n운영 변경은 통제를 통과합니다","textPreview":"자동화는 후보를 만들고 | 운영 변경은 통제를 통과합니다","textChars":29,"textLines":2,"bbox":[117,286,560,110]}
+{"kind":"shape","id":"sh/batszydo","slide":6,"name":"p6-card-0","bbox":[62,446,670,154]}
+{"kind":"shape","id":"sh/a90r6dcj","slide":6,"name":"p6-num-0-circle","bbox":[86,493,48,48]}
+{"kind":"textbox","id":"sh/xcba18vu","slide":6,"name":"p6-num-0-number","text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[86,495,48,44]}
+{"kind":"textbox","id":"sh/cb2983u9","slide":6,"name":"p6-title-0","text":"Run 기반 추적","textPreview":"Run 기반 추적","textChars":9,"textLines":1,"bbox":[160,474,230,35]}
+{"kind":"textbox","id":"sh/zyts3id0","slide":6,"name":"p6-body-0","text":"실제 파라미터, 노드 상태, 결과 아티팩트를 Flow Run과 Node Run 단위로 연결합니다.","textPreview":"실제 파라미터, 노드 상태, 결과 아티팩트를 Flow Run과 Node Run 단위로 연결합니다.","textChars":54,"textLines":1,"bbox":[160,522,540,58]}
+{"kind":"shape","id":"sh/yxkradcf","slide":6,"name":"p6-card-1","bbox":[62,630,670,154]}
+{"kind":"shape","id":"sh/l0ba5sv6","slide":6,"name":"p6-num-1-circle","bbox":[86,677,48,48]}
+{"kind":"textbox","id":"sh/kz29cnul","slide":6,"name":"p6-num-1-number","text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[86,679,48,44]}
+{"kind":"textbox","id":"sh/f298redg","slide":6,"name":"p6-title-1","text":"탐지와 수정 분리","textPreview":"탐지와 수정 분리","textChars":9,"textLines":1,"bbox":[160,658,230,35]}
+{"kind":"textbox","id":"sh/ehgrytcb","slide":6,"name":"p6-body-1","text":"규칙 위반 탐지는 검토 자료를 만들 뿐 원본 데이터를 자동으로 수정하지 않습니다.","textPreview":"규칙 위반 탐지는 검토 자료를 만들 뿐 원본 데이터를 자동으로 수정하지 않습니다.","textChars":45,"textLines":1,"bbox":[160,706,540,58]}
+{"kind":"shape","id":"sh/ixov61wj","slide":6,"name":"p6-card-2","bbox":[62,814,670,154]}
+{"kind":"shape","id":"sh/jyxczmx4","slide":6,"name":"p6-num-2-circle","bbox":[86,861,48,48]}
+{"kind":"textbox","id":"sh/4z6d8rep","slide":6,"name":"p6-num-2-number","text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[86,863,48,44]}
+{"kind":"textbox","id":"sh/50fu1wfa","slide":6,"name":"p6-title-2","text":"운영 반영 통제","textPreview":"운영 반영 통제","textChars":8,"textLines":1,"bbox":[160,842,230,35]}
+{"kind":"textbox","id":"sh/utov2hwn","slide":6,"name":"p6-body-2","text":"수정본 효과 검증, DML 검증, 실행 전 확인과 감사 이력을 순서대로 통과합니다.","textPreview":"수정본 효과 검증, DML 검증, 실행 전 확인과 감사 이력을 순서대로 통과합니다.","textChars":46,"textLines":1,"bbox":[160,890,540,58]}
+{"kind":"shape","id":"sh/vuxcvmx8","slide":6,"name":"p6-callout-fill","bbox":[62,974,670,72]}
+{"kind":"shape","id":"sh/wv6d4ret","slide":6,"name":"p6-callout-accent","bbox":[62,974,6,72]}
+{"kind":"textbox","id":"sh/hwfuxwfe","slide":6,"name":"p6-callout-text","text":"SUCCESS는 실행이 끝났다는 뜻입니다. 규칙의 품질과 데이터 변경의 적절성은 별도의 지표와 사람의 검토로 판단합니다.","textPreview":"SUCCESS는 실행이 끝났다는 뜻입니다. 규칙의 품질과 데이터 변경의 적절성은 별도의 지표와 사람의 검토로 판단합니다.","textChars":67,"textLines":1,"bbox":[84,992,628,40]}
+{"kind":"notes","id":"nt/kh4qyf","slide":6,"text":"[Sources]\n- D:/work/data-editing-system/frontend/help/in-deps-system-guide.html (content source, accessed 2026-08-26)"}
+{"kind":"slide","id":"sl/1itdkw","slide":7,"title":"02 · FOUR-STAGE DISCOVERY · STEP 1","textShapes":23}
+{"kind":"shape","id":"sh/29k3qxg3","slide":7,"name":"page-7-rail","bbox":[0,0,10,1123]}
+{"kind":"textbox","id":"sh/pwbmlcze","slide":7,"name":"page-7-chapter","text":"02 · FOUR-STAGE DISCOVERY · STEP 1","textPreview":"02 · FOUR-STAGE DISCOVERY · STEP 1","textChars":34,"textLines":1,"bbox":[62,45,460,24]}
+{"kind":"textbox","id":"sh/ov2ls7yt","slide":7,"name":"page-7-title","text":"컬럼 유형은 프로파일·Rule·Model을 함께 봅니다","textPreview":"컬럼 유형은 프로파일·Rule·Model을 함께 봅니다","textChars":30,"textLines":1,"bbox":[62,82,670,84]}
+{"kind":"textbox","id":"sh/byt4nmhk","slide":7,"name":"page-7-subtitle","text":"데이터 타입만으로 연속형을 단정하지 않고, 분포와 컬럼명 의미를 포함한 Rule 결과와 활성 모델 판단을 호환성 가드에서 결합합니다.","textPreview":"데이터 타입만으로 연속형을 단정하지 않고, 분포와 컬럼명 의미를 포함한 Rule 결과와 활성 모델 판단을 호환성 가드에서 결합합니다.","textChars":74,"textLines":1,"bbox":[62,170,670,50]}
+{"kind":"shape","id":"sh/axk3uhgz","slide":7,"name":"page-7-top-rule","bbox":[62,226,670,2]}
+{"kind":"shape","id":"sh/x0bmpczq","slide":7,"name":"page-7-footer-rule","bbox":[62,1067,670,1]}
+{"kind":"textbox","id":"sh/cz25w7y5","slide":7,"name":"page-7-footer-name","text":"IN-DEPS 시스템 소개서","textPreview":"IN-DEPS 시스템 소개서","textChars":15,"textLines":1,"bbox":[62,1080,300,18]}
+{"kind":"textbox","id":"sh/r294bihg","slide":7,"name":"page-7-footer-number","text":"07","textPreview":"07","textChars":2,"textLines":1,"bbox":[682,1078,50,20]}
+{"kind":"shape","id":"sh/q1g3idgv","slide":7,"name":"step1-node-1","bbox":[62,264,670,132]}
+{"kind":"shape","id":"sh/ovaxkfu5","slide":7,"name":"step1-num-1-circle","bbox":[80,290,42,42]}
+{"kind":"textbox","id":"sh/pgjetkbq","slide":7,"name":"step1-num-1-number","text":"1","textPreview":"1","textChars":1,"textLines":1,"bbox":[80,292,42,38]}
+{"kind":"textbox","id":"sh/2tsfipcz","slide":7,"name":"step1-title-1","text":"컬럼 프로파일","textPreview":"컬럼 프로파일","textChars":7,"textLines":1,"bbox":[140,283,220,32]}
+{"kind":"textbox","id":"sh/3u1wratk","slide":7,"name":"step1-kicker-1","text":"INPUT","textPreview":"INPUT","textChars":5,"textLines":1,"bbox":[140,321,220,20]}
+{"kind":"textbox","id":"sh/cjuxozuh","slide":7,"name":"step1-body-1","text":"NULL·DISTINCT·비율, 최소·최대, 길이, 소수·정수 비율, 엔트로피·분포와 컬럼명 힌트를 수집합니다.","textPreview":"NULL·DISTINCT·비율, 최소·최대, 길이, 소수·정수 비율, 엔트로피·분포와 컬럼명 힌트를 수집합니다.","textChars":62,"textLines":1,"bbox":[372,282,338,98]}
+{"kind":"shape","id":"sh/dk3ex4b2","slide":7,"name":"step1-node-2","bbox":[62,418,670,132]}
+{"kind":"shape","id":"sh/qhsfmpcb","slide":7,"name":"step1-num-2-circle","bbox":[80,444,42,42]}
+{"kind":"textbox","id":"sh/bilwvutw","slide":7,"name":"step1-num-2-number","text":"2","textPreview":"2","textChars":1,"textLines":1,"bbox":[80,446,42,38]}
+{"kind":"textbox","id":"sh/snqdcvux","slide":7,"name":"step1-title-2","text":"Rule·Model 판정","textPreview":"Rule·Model 판정","textChars":13,"textLines":1,"bbox":[140,437,220,32]}
+{"kind":"textbox","id":"sh/tozel0bi","slide":7,"name":"step1-kicker-2","text":"PARALLEL EVIDENCE","textPreview":"PARALLEL EVIDENCE","textChars":17,"textLines":1,"bbox":[140,475,220,20]}
+{"kind":"textbox","id":"sh/9krupw3m","slide":7,"name":"step1-body-2","text":"V3 Rule 함수가 세부 유형과 근거를 만들고, 활성 OML 모델은 기존 계약과 파라미터를 유지한 채 독립적으로 판단합니다.","textPreview":"V3 Rule 함수가 세부 유형과 근거를 만들고, 활성 OML 모델은 기존 계약과 파라미터를 유지한 채 독립적으로 판단합니다.","textChars":70,"textLines":1,"bbox":[372,436,338,98]}
+{"kind":"shape","id":"sh/8jitgrm1","slide":7,"name":"step1-node-3","bbox":[62,572,670,132]}
+{"kind":"shape","id":"sh/7i9cnmlg","slide":7,"name":"step1-num-3-circle","bbox":[80,598,42,42]}
+{"kind":"textbox","id":"sh/mh0beh4v","slide":7,"name":"step1-num-3-number","text":"3","textPreview":"3","textChars":1,"textLines":1,"bbox":[80,600,42,38]}
+{"kind":"textbox","id":"sh/hobutw3i","slide":7,"name":"step1-title-3","text":"최종 호환성 가드","textPreview":"최종 호환성 가드","textChars":9,"textLines":1,"bbox":[140,591,220,32]}
+{"kind":"textbox","id":"sh/wn2dkbmx","slide":7,"name":"step1-kicker-3","text":"FINAL SELECTION","textPreview":"FINAL SELECTION","textChars":15,"textLines":1,"bbox":[140,629,220,20]}
+{"kind":"textbox","id":"sh/vmtcr6lc","slide":7,"name":"step1-body-3","text":"일치·누락·신뢰도·그룹 호환성을 평가하고 연속형→범주형 오분류를 차단하며 식별자·자유 텍스트를 보호합니다.","textPreview":"일치·누락·신뢰도·그룹 호환성을 평가하고 연속형→범주형 오분류를 차단하며 식별자·자유 텍스트를 보호합니다.","textChars":59,"textLines":1,"bbox":[372,590,338,98]}
+{"kind":"shape","id":"sh/ul0bi14r","slide":7,"name":"step1-node-4","bbox":[62,726,670,132]}
+{"kind":"shape","id":"sh/5cbuxg3e","slide":7,"name":"step1-num-4-circle","bbox":[80,752,42,42]}
+{"kind":"textbox","id":"sh/4b2dobm9","slide":7,"name":"step1-num-4-number","text":"4","textPreview":"4","textChars":1,"textLines":1,"bbox":[80,754,42,38]}
+{"kind":"textbox","id":"sh/2lcz29gf","slide":7,"name":"step1-title-4","text":"Run·최종 유형","textPreview":"Run·최종 유형","textChars":9,"textLines":1,"bbox":[140,745,220,32]}
+{"kind":"textbox","id":"sh/3ml0vex0","slide":7,"name":"step1-kicker-4","text":"OUTPUT","textPreview":"OUTPUT","textChars":6,"textLines":1,"bbox":[140,783,220,20]}
+{"kind":"textbox","id":"sh/onu14jy5","slide":7,"name":"step1-body-4","text":"RULE·MODEL·FINAL 유형과 근거를 저장하고 사용자 확정값을 보존한 최신 최종 유형을 M03002에 제공합니다.","textPreview":"RULE·MODEL·FINAL 유형과 근거를 저장하고 사용자 확정값을 보존한 최신 최종 유형을 M03002에 제공합니다.","textChars":67,"textLines":1,"bbox":[372,744,338,98]}
+{"kind":"shape","id":"sh/p83ixofq","slide":7,"bbox":[397,396,0,22]}
+{"kind":"shape","id":"sh/q9cj6tgb","slide":7,"bbox":[397,550,0,22]}
+{"kind":"shape","id":"sh/ba50zyxw","slide":7,"bbox":[397,704,0,22]}
+{"kind":"shape","id":"sh/cbe183yh","slide":7,"name":"p7-functions-fill","bbox":[62,900,670,72]}
+{"kind":"shape","id":"sh/dcni1of2","slide":7,"name":"p7-functions-accent","bbox":[62,900,6,72]}
+{"kind":"textbox","id":"sh/ydwjatgn","slide":7,"name":"p7-functions-text","text":"Rule 근거 · INIT$_FN_PREDICT_BASE_TYPE_V3 / INIT$_FN_PREDICT_BASE_REASON_V3","textPreview":"Rule 근거 · INIT$_FN_PREDICT_BASE_TYPE_V3 / INIT$_FN_PREDICT_BASE_REASON_V3","textChars":73,"textLines":1,"bbox":[84,918,628,40]}
+{"kind":"textbox","id":"sh/ze503yxs","slide":7,"name":"p7-note","text":"모델 판단 로직 자체는 변경하지 않습니다. 개선은 Rule의 설명력과 최종 선택의 호환성 검증에 집중합니다.","textPreview":"모델 판단 로직 자체는 변경하지 않습니다. 개선은 Rule의 설명력과 최종 선택의 호환성 검증에 집중합니다.","textChars":60,"textLines":1,"bbox":[80,995,634,64]}
+{"kind":"notes","id":"nt/1itdkw","slide":7,"text":"[Sources]\n- D:/work/data-editing-system/frontend/help/in-deps-system-guide.html (content source, accessed 2026-08-26)"}
+{"kind":"slide","id":"sl/9gozsn","slide":8,"title":"02 · FOUR-STAGE DISCOVERY · STEP 2","textShapes":17}
+{"kind":"shape","id":"sh/udc3il4j","slide":8,"name":"page-8-rail","bbox":[0,0,10,1123]}
+{"kind":"textbox","id":"sh/1gn2t0na","slide":8,"name":"page-8-chapter","text":"02 · FOUR-STAGE DISCOVERY · STEP 2","textPreview":"02 · FOUR-STAGE DISCOVERY · STEP 2","textChars":34,"textLines":1,"bbox":[62,45,460,24]}
+{"kind":"textbox","id":"sh/gfelkvmp","slide":8,"name":"page-8-title","text":"관계 지표는 컬럼 유형 조합에 따라 달라집니다","textPreview":"관계 지표는 컬럼 유형 조합에 따라 달라집니다","textChars":25,"textLines":1,"bbox":[62,82,670,84]}
+{"kind":"textbox","id":"sh/3i54va5g","slide":8,"name":"page-8-subtitle","text":"1단계의 최신 확정 유형을 기준으로 적합한 지표를 계산하고, 통과 관계를 네트워크·군집으로 확장합니다.","textPreview":"1단계의 최신 확정 유형을 기준으로 적합한 지표를 계산하고, 통과 관계를 네트워크·군집으로 확장합니다.","textChars":57,"textLines":1,"bbox":[62,170,670,50]}
+{"kind":"shape","id":"sh/2hw3m54v","slide":8,"name":"page-8-top-rule","bbox":[62,226,670,2]}
+{"kind":"shape","id":"sh/pknmx0n6","slide":8,"name":"page-8-footer-rule","bbox":[62,1067,670,1]}
+{"kind":"textbox","id":"sh/ojelovm1","slide":8,"name":"page-8-footer-name","text":"IN-DEPS 시스템 소개서","textPreview":"IN-DEPS 시스템 소개서","textChars":15,"textLines":1,"bbox":[62,1080,300,18]}
+{"kind":"textbox","id":"sh/jm1kj65w","slide":8,"name":"page-8-footer-number","text":"08","textPreview":"08","textChars":2,"textLines":1,"bbox":[682,1078,50,20]}
+{"kind":"shape","id":"sh/ils3a1or","slide":8,"name":"p8-metric-0","bbox":[62,270,670,122]}
+{"kind":"textbox","id":"sh/kni1kz2d","slide":8,"name":"p8-pair-0","text":"범주형 × 범주형","textPreview":"범주형 × 범주형","textChars":9,"textLines":1,"bbox":[84,290,190,24]}
+{"kind":"textbox","id":"sh/loritk3y","slide":8,"name":"p8-metric-name-0","text":"Cramér's V","textPreview":"Cramér's V","textChars":10,"textLines":1,"bbox":[84,326,230,34]}
+{"kind":"textbox","id":"sh/ylgjipk7","slide":8,"name":"p8-desc-0","text":"범주 간 결합 강도와 p-value","textPreview":"범주 간 결합 강도와 p-value","textChars":19,"textLines":1,"bbox":[362,305,340,56]}
+{"kind":"shape","id":"sh/zm90ruls","slide":8,"name":"p8-metric-1","bbox":[62,418,670,122]}
+{"kind":"textbox","id":"sh/8bi1oz29","slide":8,"name":"p8-pair-1","text":"연속형 × 연속형","textPreview":"연속형 × 연속형","textChars":9,"textLines":1,"bbox":[84,438,190,24]}
+{"kind":"textbox","id":"sh/9crix43u","slide":8,"name":"p8-metric-name-1","text":"Pearson / Spearman","textPreview":"Pearson / Spearman","textChars":18,"textLines":1,"bbox":[84,474,230,34]}
+{"kind":"textbox","id":"sh/mp0jmpk3","slide":8,"name":"p8-desc-1","text":"선형 또는 순위 관계와 p-value","textPreview":"선형 또는 순위 관계와 p-value","textChars":20,"textLines":1,"bbox":[362,453,340,56]}
+{"kind":"shape","id":"sh/7q90vulo","slide":8,"name":"p8-metric-2","bbox":[62,566,670,122]}
+{"kind":"textbox","id":"sh/ofyhcf25","slide":8,"name":"p8-pair-2","text":"범주형 × 연속형","textPreview":"범주형 × 연속형","textChars":9,"textLines":1,"bbox":[84,586,190,24]}
+{"kind":"textbox","id":"sh/pg7il03q","slide":8,"name":"p8-metric-name-2","text":"Eta Squared","textPreview":"Eta Squared","textChars":11,"textLines":1,"bbox":[84,622,230,34]}
+{"kind":"textbox","id":"sh/pczy9wve","slide":8,"name":"p8-desc-2","text":"집단이 연속값 변동을 설명하는 정도","textPreview":"집단이 연속값 변동을 설명하는 정도","textChars":19,"textLines":1,"bbox":[362,601,340,56]}
+{"kind":"shape","id":"sh/4bqhgret","slide":8,"name":"p8-network-label-bar","bbox":[62,736,5,20]}
+{"kind":"textbox","id":"sh/3ahg7md8","slide":8,"name":"p8-network-label","text":"통과 관계를 네트워크와 군집으로 재구성","textPreview":"통과 관계를 네트워크와 군집으로 재구성","textChars":21,"textLines":1,"bbox":[78,732,654,28]}
+{"kind":"textbox","id":"sh/29ofe1wn","slide":8,"name":"p8-network-bullets","text":"실제 Run 임계값으로 PASS 여부를 저장하고 강한 관계를 weighted edge로 선택합니다.\n결정적 community, degree, centrality를 계산해 3단계 규칙 발굴의 선택적 보조 입력으로 사용합니다.\nLATEST_MASTER 유형과 Target 테이블·유의수준·강도·샘플·edge 제한을 함께 기록합니다.","textPreview":"실제 Run 임계값으로 PASS 여부를 저장하고 강한 관계를 weighted edge로 선택합니다. | 결정적 community, degree, centrality를 계산해 3단계 규칙 발굴의 선택적 보조 입력으로 사용합니다. | LATEST_M...","textChars":183,"textLines":3,"bbox":[70,778,654,166]}
+{"kind":"shape","id":"sh/dgzydgvq","slide":8,"name":"p8-warning-fill","bbox":[62,936,670,96]}
+{"kind":"shape","id":"sh/cfqhkbu5","slide":8,"name":"p8-warning-accent","bbox":[62,936,6,96]}
+{"kind":"textbox","id":"sh/rehgb6dk","slide":8,"name":"p8-warning-text","text":"해석 주의 · 관계 통과는 인과관계나 최종 업무 규칙을 뜻하지 않습니다. 기준 미달 관계도 다변량 수식 후보에 필요할 수 있습니다.","textPreview":"해석 주의 · 관계 통과는 인과관계나 최종 업무 규칙을 뜻하지 않습니다. 기준 미달 관계도 다변량 수식 후보에 필요할 수 있습니다.","textChars":73,"textLines":1,"bbox":[84,954,628,64]}
+{"kind":"notes","id":"nt/9gozsn","slide":8,"text":"[Sources]\n- D:/work/data-editing-system/frontend/help/in-deps-system-guide.html (content source, accessed 2026-08-26)"}
+{"kind":"slide","id":"sl/namp9t","slide":9,"title":"02 · FOUR-STAGE DISCOVERY · STEP 3","textShapes":16}
+{"kind":"shape","id":"sh/p4vids7y","slide":9,"name":"page-9-rail","bbox":[0,0,10,1123]}
+{"kind":"textbox","id":"sh/214z2x8n","slide":9,"name":"page-9-chapter","text":"02 · FOUR-STAGE DISCOVERY · STEP 3","textPreview":"02 · FOUR-STAGE DISCOVERY · STEP 3","textChars":34,"textLines":1,"bbox":[62,45,460,24]}
+{"kind":"textbox","id":"sh/32d0b2ps","slide":9,"name":"page-9-title","text":"범주형과 연속형 규칙을 독립적으로 발굴합니다","textPreview":"범주형과 연속형 규칙을 독립적으로 발굴합니다","textChars":24,"textLines":1,"bbox":[62,82,670,84]}
+{"kind":"textbox","id":"sh/gfmh0nqh","slide":9,"name":"page-9-subtitle","text":"통합 실행은 두 분석 경로를 함께 호출하지만, 결과는 자동 확정이 아니라 사람이 검토할 규칙 후보입니다.","textPreview":"통합 실행은 두 분석 경로를 함께 호출하지만, 결과는 자동 확정이 아니라 사람이 검토할 규칙 후보입니다.","textChars":58,"textLines":1,"bbox":[62,170,670,50]}
+{"kind":"shape","id":"sh/hgvi9s72","slide":9,"name":"page-9-top-rule","bbox":[62,226,670,2]}
+{"kind":"shape","id":"sh/udkzyd8b","slide":9,"name":"page-9-footer-rule","bbox":[62,1067,670,1]}
+{"kind":"textbox","id":"sh/vet07ipw","slide":9,"name":"page-9-footer-name","text":"IN-DEPS 시스템 소개서","textPreview":"IN-DEPS 시스템 소개서","textChars":15,"textLines":1,"bbox":[62,1080,300,18]}
+{"kind":"textbox","id":"sh/8b2hwnq5","slide":9,"name":"page-9-footer-number","text":"09","textPreview":"09","textChars":2,"textLines":1,"bbox":[682,1078,50,20]}
+{"kind":"shape","id":"sh/tcbi587q","slide":9,"name":"p9-left","bbox":[62,272,323,480]}
+{"kind":"textbox","id":"sh/xgf65kny","slide":9,"name":"p9-left-kicker","text":"CATEGORICAL","textPreview":"CATEGORICAL","textChars":11,"textLines":1,"bbox":[86,298,275,20]}
+{"kind":"textbox","id":"sh/wf6pwfmd","slide":9,"name":"p9-left-title","text":"Apriori 연관 규칙","textPreview":"Apriori 연관 규칙","textChars":13,"textLines":1,"bbox":[86,335,275,38]}
+{"kind":"textbox","id":"sh/vedo3a5s","slide":9,"name":"p9-left-desc","text":"조건–결과 형태의 사람이 읽을 수 있는 IF/THEN 후보를 만듭니다.","textPreview":"조건–결과 형태의 사람이 읽을 수 있는 IF/THEN 후보를 만듭니다.","textChars":39,"textLines":1,"bbox":[86,388,275,70]}
+{"kind":"textbox","id":"sh/ad47u54n","slide":9,"name":"p9-left-bullets","text":"최소 support·confidence 적용\n규칙 길이와 조합 예산 제한\nOracle ML 모델과 요약 동시 생성\nlift와 표본 건수 함께 저장","textPreview":"최소 support·confidence 적용 | 규칙 길이와 조합 예산 제한 | Oracle ML 모델과 요약 동시 생성 | lift와 표본 건수 함께 저장","textChars":81,"textLines":4,"bbox":[86,486,275,210]}
+{"kind":"shape","id":"sh/9cv610n2","slide":9,"name":"p9-right","bbox":[409,272,323,480]}
+{"kind":"textbox","id":"sh/8rmpsvmh","slide":9,"name":"p9-right-kicker","text":"CONTINUOUS","textPreview":"CONTINUOUS","textChars":10,"textLines":1,"bbox":[433,298,275,20]}
+{"kind":"textbox","id":"sh/nqdoza5w","slide":9,"name":"p9-right-title","text":"LASSO + Symbolic","textPreview":"LASSO + Symbolic","textChars":16,"textLines":1,"bbox":[433,335,275,38]}
+{"kind":"textbox","id":"sh/mp4nq54b","slide":9,"name":"p9-right-desc","text":"중요변수를 압축하고 설명 가능한 f(x)=y 수식 후보를 비교합니다.","textPreview":"중요변수를 압축하고 설명 가능한 f(x)=y 수식 후보를 비교합니다.","textChars":38,"textLines":1,"bbox":[433,388,275,70]}
+{"kind":"textbox","id":"sh/lov6x0nq","slide":9,"name":"p9-right-bullets","text":"결측 중앙값 보정과 표준화\n교차검증 또는 계수로 변수 선택\n선형·강건·비율·다항·PySR 비교\nOracle-safe 수식과 R² 저장","textPreview":"결측 중앙값 보정과 표준화 | 교차검증 또는 계수로 변수 선택 | 선형·강건·비율·다항·PySR 비교 | Oracle-safe 수식과 R² 저장","textChars":74,"textLines":4,"bbox":[433,486,275,210]}
+{"kind":"shape","id":"sh/0nm5ovm5","slide":9,"name":"p9-partial-label-bar","bbox":[62,796,5,20]}
+{"kind":"textbox","id":"sh/c76pkvu1","slide":9,"name":"p9-partial-label","text":"부분 완료도 검토 가능한 결과로 남깁니다","textPreview":"부분 완료도 검토 가능한 결과로 남깁니다","textChars":22,"textLines":1,"bbox":[78,792,654,28]}
+{"kind":"textbox","id":"sh/dsz6d0vm","slide":9,"name":"p9-partial","text":"범주형·연속형 하위 작업의 성공과 실패를 독립적으로 확인합니다.\n일부만 완료되면 성공 결과와 실패 메시지를 함께 반환합니다.\nFlow Node는 FAILED로 기록될 수 있으므로 메시지와 생성된 결과를 함께 읽습니다.","textPreview":"범주형·연속형 하위 작업의 성공과 실패를 독립적으로 확인합니다. | 일부만 완료되면 성공 결과와 실패 메시지를 함께 반환합니다. | Flow Node는 FAILED로 기록될 수 있으므로 메시지와 생성된 결과를 함께 읽습니다.","textChars":121,"textLines":3,"bbox":[70,838,654,150]}
+{"kind":"shape","id":"sh/q5o7ilcb","slide":9,"name":"p9-callout-fill","bbox":[62,974,670,78]}
+{"kind":"shape","id":"sh/r6xobqdg","slide":9,"name":"p9-callout-accent","bbox":[62,974,6,78]}
+{"kind":"textbox","id":"sh/436pgve5","slide":9,"name":"p9-callout-text","text":"중요변수 결과와 최종 수식 채택 결과는 서로 다른 판단 단계입니다.","textPreview":"중요변수 결과와 최종 수식 채택 결과는 서로 다른 판단 단계입니다.","textChars":37,"textLines":1,"bbox":[84,992,628,46]}
+{"kind":"notes","id":"nt/namp9t","slide":9,"text":"[Sources]\n- D:/work/data-editing-system/frontend/help/in-deps-system-guide.html (content source, accessed 2026-08-26)"}
+{"kind":"slide","id":"sl/hi5q2d","slide":10,"title":"02 · FOUR-STAGE DISCOVERY · STEP 4","textShapes":15}
+{"kind":"shape","id":"sh/321kr290","slide":10,"name":"page-10-rail","bbox":[0,0,10,1123]}
+{"kind":"textbox","id":"sh/43al07ql","slide":10,"name":"page-10-chapter","text":"02 · FOUR-STAGE DISCOVERY · STEP 4","textPreview":"02 · FOUR-STAGE DISCOVERY · STEP 4","textChars":34,"textLines":1,"bbox":[62,45,460,24]}
+{"kind":"textbox","id":"sh/54j2tcr6","slide":10,"name":"page-10-title","text":"위반 탐지는 같은 Run의 규칙만 적용합니다","textPreview":"위반 탐지는 같은 Run의 규칙만 적용합니다","textChars":24,"textLines":1,"bbox":[62,82,670,84]}
+{"kind":"textbox","id":"sh/q5s32h8r","slide":10,"name":"page-10-subtitle","text":"범주형 연관 규칙과 연속형 Symbolic 수식을 SAME_RUN 계약으로 받아 위반 후보와 상세 행을 저장합니다.","textPreview":"범주형 연관 규칙과 연속형 Symbolic 수식을 SAME_RUN 계약으로 받아 위반 후보와 상세 행을 저장합니다.","textChars":64,"textLines":1,"bbox":[62,170,670,50]}
+{"kind":"shape","id":"sh/rq1kvm9c","slide":10,"name":"page-10-top-rule","bbox":[62,226,670,2]}
+{"kind":"shape","id":"sh/sral4rqx","slide":10,"name":"page-10-footer-rule","bbox":[62,1067,670,1]}
+{"kind":"textbox","id":"sh/dsj2xcr2","slide":10,"name":"page-10-footer-name","text":"IN-DEPS 시스템 소개서","textPreview":"IN-DEPS 시스템 소개서","textChars":15,"textLines":1,"bbox":[62,1080,300,18]}
+{"kind":"textbox","id":"sh/etc36h8n","slide":10,"name":"page-10-footer-number","text":"10","textPreview":"10","textChars":2,"textLines":1,"bbox":[682,1078,50,20]}
+{"kind":"shape","id":"sh/ful4zm98","slide":10,"name":"p10-input-fill","bbox":[62,266,670,84]}
+{"kind":"shape","id":"sh/vmd4vqls","slide":10,"name":"p10-input-accent","bbox":[62,266,6,84]}
+{"kind":"textbox","id":"sh/ul432lkn","slide":10,"name":"p10-input-text","text":"필수 입력 · 같은 Flow Run에서 성공한 연관 모델·범주형 규칙 요약·Symbolic 규칙","textPreview":"필수 입력 · 같은 Flow Run에서 성공한 연관 모델·범주형 규칙 요약·Symbolic 규칙","textChars":53,"textLines":1,"bbox":[84,284,628,52]}
+{"kind":"shape","id":"sh/hofmx03y","slide":10,"name":"p10-cat","bbox":[62,382,322,400]}
+{"kind":"textbox","id":"sh/gnm54v2d","slide":10,"name":"p10-cat-title","text":"범주형 위반","textPreview":"범주형 위반","textChars":6,"textLines":1,"bbox":[86,409,274,35]}
+{"kind":"textbox","id":"sh/7id4rqlw","slide":10,"name":"p10-cat-desc","text":"규칙 조건이 일치하지만 결과가 NULL이거나 예상값과 다른 행을 찾습니다.","textPreview":"규칙 조건이 일치하지만 결과가 NULL이거나 예상값과 다른 행을 찾습니다.","textChars":41,"textLines":1,"bbox":[86,461,274,84]}
+{"kind":"textbox","id":"sh/6h43ylkb","slide":10,"name":"p10-cat-bullets","text":"confidence·lift를 보조 점수로 사용\n규칙별 저장·스캔 제한 적용\n위반 후보와 근거를 함께 보존","textPreview":"confidence·lift를 보조 점수로 사용 | 규칙별 저장·스캔 제한 적용 | 위반 후보와 근거를 함께 보존","textChars":59,"textLines":3,"bbox":[86,573,274,160]}
+{"kind":"shape","id":"sh/tkvmtg32","slide":10,"name":"p10-num","bbox":[410,382,322,400]}
+{"kind":"textbox","id":"sh/8jml0b2h","slide":10,"name":"p10-num-title","text":"연속형 위반","textPreview":"연속형 위반","textChars":6,"textLines":1,"bbox":[434,409,274,35]}
+{"kind":"textbox","id":"sh/rex43al0","slide":10,"name":"p10-num-desc","text":"허용된 수식으로 예측값을 계산하고 실제값과의 상대·절대 오차를 평가합니다.","textPreview":"허용된 수식으로 예측값을 계산하고 실제값과의 상대·절대 오차를 평가합니다.","textChars":41,"textLines":1,"bbox":[434,461,274,84]}
+{"kind":"textbox","id":"sh/qdona5kf","slide":10,"name":"p10-num-bullets","text":"허용 feature와 수식만 안전하게 평가\n상대·절대 오차 임계값 적용\n실제·예측·오차를 상세 저장","textPreview":"허용 feature와 수식만 안전하게 평가 | 상대·절대 오차 임계값 적용 | 실제·예측·오차를 상세 저장","textChars":55,"textLines":3,"bbox":[434,573,274,160]}
+{"kind":"shape","id":"sh/mlcfid8z","slide":10,"name":"p10-result-fill","bbox":[62,816,670,132]}
+{"kind":"shape","id":"sh/nmlgri9k","slide":10,"name":"p10-result-accent","bbox":[62,816,8,132]}
+{"kind":"textbox","id":"sh/8nuhk3q5","slide":10,"name":"p10-result-title","text":"결과를 이렇게 읽습니다","textPreview":"결과를 이렇게 읽습니다","textChars":12,"textLines":1,"bbox":[90,838,245,34]}
+{"kind":"textbox","id":"sh/9o3yt8rq","slide":10,"name":"p10-result-body","text":"SUCCESS이면서 0건이면 정상 결과일 수 있습니다. FAILED이면 범주형·연속형의 성공 여부를 부분 완료 메시지로 나누어 확인합니다.","textPreview":"SUCCESS이면서 0건이면 정상 결과일 수 있습니다. FAILED이면 범주형·연속형의 성공 여부를 부분 완료 메시지로 나누어 확인합니다.","textChars":77,"textLines":1,"bbox":[352,838,348,92]}
+{"kind":"shape","id":"sh/apczmd8b","slide":10,"name":"p10-warning-fill","bbox":[62,966,670,84]}
+{"kind":"shape","id":"sh/vqlgvi9w","slide":10,"name":"p10-warning-accent","bbox":[62,966,6,84]}
+{"kind":"textbox","id":"sh/wruhonq1","slide":10,"name":"p10-warning-text","text":"위반 탐지는 원본을 수정하지 않습니다. 실제 오류 수정은 M05002의 별도 편집 테이블에서 수행합니다.","textPreview":"위반 탐지는 원본을 수정하지 않습니다. 실제 오류 수정은 M05002의 별도 편집 테이블에서 수행합니다.","textChars":58,"textLines":1,"bbox":[84,984,628,52]}
+{"kind":"notes","id":"nt/hi5q2d","slide":10,"text":"[Sources]\n- D:/work/data-editing-system/frontend/help/in-deps-system-guide.html (content source, accessed 2026-08-26)"}
+{"kind":"slide","id":"sl/jfnaws","slide":11,"title":"02 · FOUR-STAGE DISCOVERY · RUN CONTRACT","textShapes":25}
+{"kind":"shape","id":"sh/ve1ojep8","slide":11,"name":"page-11-rail","bbox":[0,0,10,1123]}
+{"kind":"textbox","id":"sh/gfapcjqt","slide":11,"name":"page-11-chapter","text":"02 · FOUR-STAGE DISCOVERY · RUN CONTRACT","textPreview":"02 · FOUR-STAGE DISCOVERY · RUN CONTRACT","textChars":40,"textLines":1,"bbox":[62,45,460,24]}
+{"kind":"textbox","id":"sh/hgj6lo7y","slide":11,"name":"page-11-title","text":"4단계는 같은 Run 안에서 계약으로 이어집니다","textPreview":"4단계는 같은 Run 안에서 계약으로 이어집니다","textChars":26,"textLines":1,"bbox":[62,82,670,84]}
+{"kind":"textbox","id":"sh/6p8n698b","slide":11,"name":"page-11-subtitle","text":"각 단계는 결과 테이블만 넘기는 것이 아니라, 어떤 기준과 Run을 참조할지 명시한 아티팩트 계약으로 연결됩니다.","textPreview":"각 단계는 결과 테이블만 넘기는 것이 아니라, 어떤 기준과 Run을 참조할지 명시한 아티팩트 계약으로 연결됩니다.","textChars":63,"textLines":1,"bbox":[62,170,670,50]}
+{"kind":"shape","id":"sh/7qhofepw","slide":11,"name":"page-11-top-rule","bbox":[62,226,670,2]}
+{"kind":"shape","id":"sh/8bq58jqh","slide":11,"name":"page-11-footer-rule","bbox":[62,1067,670,1]}
+{"kind":"textbox","id":"sh/tcz6ho72","slide":11,"name":"page-11-footer-name","text":"IN-DEPS 시스템 소개서","textPreview":"IN-DEPS 시스템 소개서","textChars":15,"textLines":1,"bbox":[62,1080,300,18]}
+{"kind":"textbox","id":"sh/ylon2p8f","slide":11,"name":"page-11-footer-number","text":"11","textPreview":"11","textChars":2,"textLines":1,"bbox":[682,1078,50,20]}
+{"kind":"shape","id":"sh/jmhobup0","slide":11,"name":"p11-node-0","bbox":[90,278,614,124]}
+{"kind":"shape","id":"sh/3u9oz2t4","slide":11,"name":"p11-num-0-circle","bbox":[112,315,48,48]}
+{"kind":"textbox","id":"sh/it0n6xsj","slide":11,"name":"p11-num-0-number","text":"1","textPreview":"1","textChars":1,"textLines":1,"bbox":[112,317,48,44]}
+{"kind":"textbox","id":"sh/5wr61cba","slide":11,"name":"p11-title-0","text":"컬럼 유형","textPreview":"컬럼 유형","textChars":5,"textLines":1,"bbox":[182,302,180,32]}
+{"kind":"textbox","id":"sh/4vi587ap","slide":11,"name":"p11-body-0","text":"RULE · MODEL · FINAL 유형과 사용자 확정 기준","textPreview":"RULE · MODEL · FINAL 유형과 사용자 확정 기준","textChars":34,"textLines":1,"bbox":[182,345,496,38]}
+{"kind":"textbox","id":"sh/ry9o3mtg","slide":11,"name":"p11-latest","text":"LATEST_MASTER","textPreview":"LATEST_MASTER","textChars":13,"textLines":1,"bbox":[549,296,130,20]}
+{"kind":"shape","id":"sh/qx0nahsv","slide":11,"name":"p11-node-1","bbox":[90,440,614,124]}
+{"kind":"shape","id":"sh/d0b65wb6","slide":11,"name":"p11-num-1-circle","bbox":[112,477,48,48]}
+{"kind":"textbox","id":"sh/sz25cral","slide":11,"name":"p11-num-1-number","text":"2","textPreview":"2","textChars":1,"textLines":1,"bbox":[112,479,48,44]}
+{"kind":"textbox","id":"sh/72p4ritw","slide":11,"name":"p11-title-1","text":"관계·군집","textPreview":"관계·군집","textChars":5,"textLines":1,"bbox":[182,464,180,32]}
+{"kind":"textbox","id":"sh/61gnydcb","slide":11,"name":"p11-body-1","text":"유형별 지표, PASS 관계, 네트워크와 community","textPreview":"유형별 지표, PASS 관계, 네트워크와 community","textChars":32,"textLines":1,"bbox":[182,507,496,38]}
+{"kind":"textbox","id":"sh/ah4r6lcz","slide":11,"name":"p11-same-1","text":"SAME_RUN","textPreview":"SAME_RUN","textChars":8,"textLines":1,"bbox":[584,458,95,20]}
+{"kind":"shape","id":"sh/bid8zqdk","slide":11,"name":"p11-node-2","bbox":[90,602,614,124]}
+{"kind":"shape","id":"sh/wj698vu5","slide":11,"name":"p11-num-2-circle","bbox":[112,639,48,48]}
+{"kind":"textbox","id":"sh/xkfq10vq","slide":11,"name":"p11-num-2-number","text":"3","textPreview":"3","textChars":1,"textLines":1,"bbox":[112,641,48,44]}
+{"kind":"textbox","id":"sh/mt472lc3","slide":11,"name":"p11-title-2","text":"규칙 발굴","textPreview":"규칙 발굴","textChars":5,"textLines":1,"bbox":[182,626,180,32]}
+{"kind":"textbox","id":"sh/nud8vqdo","slide":11,"name":"p11-body-2","text":"Apriori 규칙, LASSO 중요변수, Symbolic 수식","textPreview":"Apriori 규칙, LASSO 중요변수, Symbolic 수식","textChars":35,"textLines":1,"bbox":[182,669,496,38]}
+{"kind":"textbox","id":"sh/ofm94vut","slide":11,"name":"p11-same-2","text":"SAME_RUN","textPreview":"SAME_RUN","textChars":8,"textLines":1,"bbox":[584,620,95,20]}
+{"kind":"shape","id":"sh/9gvqx0ve","slide":11,"name":"p11-node-3","bbox":[90,764,614,124]}
+{"kind":"shape","id":"sh/epk7y1wr","slide":11,"name":"p11-num-3-circle","bbox":[112,801,48,48]}
+{"kind":"textbox","id":"sh/fqt8r6dc","slide":11,"name":"p11-num-3-number","text":"4","textPreview":"4","textChars":1,"textLines":1,"bbox":[112,803,48,44]}
+{"kind":"textbox","id":"sh/h4jud4fu","slide":11,"name":"p11-title-3","text":"위반 탐지","textPreview":"위반 탐지","textChars":5,"textLines":1,"bbox":[182,788,180,32]}
+{"kind":"textbox","id":"sh/gjat4je9","slide":11,"name":"p11-body-3","text":"범주형·연속형 위반 후보와 상세 행","textPreview":"범주형·연속형 위반 후보와 상세 행","textChars":19,"textLines":1,"bbox":[182,831,496,38]}
+{"kind":"textbox","id":"sh/vi1sbexo","slide":11,"name":"p11-same-3","text":"SAME_RUN","textPreview":"SAME_RUN","textChars":8,"textLines":1,"bbox":[584,782,95,20]}
+{"kind":"shape","id":"sh/uh8b29wj","slide":11,"bbox":[397,402,0,38]}
+{"kind":"textbox","id":"sh/tgza94fy","slide":11,"name":"p11-link-label-0","text":"최신 확정 유형","textPreview":"최신 확정 유형","textChars":8,"textLines":1,"bbox":[494,402,185,20]}
+{"kind":"shape","id":"sh/8fqt0zed","slide":11,"bbox":[397,564,0,38]}
+{"kind":"textbox","id":"sh/7ehs7uxs","slide":11,"name":"p11-link-label-1","text":"같은 Run의 선행 아티팩트","textPreview":"같은 Run의 선행 아티팩트","textChars":15,"textLines":1,"bbox":[494,564,185,20]}
+{"kind":"shape","id":"sh/6d8bypw7","slide":11,"bbox":[397,726,0,38]}
+{"kind":"textbox","id":"sh/lcza5kfm","slide":11,"name":"p11-link-label-2","text":"같은 Run의 선행 아티팩트","textPreview":"같은 Run의 선행 아티팩트","textChars":15,"textLines":1,"bbox":[494,726,185,20]}
+{"kind":"shape","id":"sh/kbqtwze1","slide":11,"name":"p11-callout-fill","bbox":[62,946,670,94]}
+{"kind":"shape","id":"sh/kfi1c3ed","slide":11,"name":"p11-callout-accent","bbox":[62,946,6,94]}
+{"kind":"textbox","id":"sh/lgr258fy","slide":11,"name":"p11-callout-text","text":"Flow 분석에서는 단계별 결과뿐 아니라 실제 Run 파라미터와 선행 아티팩트가 같은 실행 맥락인지 함께 확인합니다.","textPreview":"Flow 분석에서는 단계별 결과뿐 아니라 실제 Run 파라미터와 선행 아티팩트가 같은 실행 맥락인지 함께 확인합니다.","textChars":65,"textLines":1,"bbox":[84,964,628,62]}
+{"kind":"notes","id":"nt/jfnaws","slide":11,"text":"[Sources]\n- D:/work/data-editing-system/frontend/help/in-deps-system-guide.html (content source, accessed 2026-08-26)"}
+{"kind":"slide","id":"sl/tatdww","slide":12,"title":"03 · FLOW ORCHESTRATION","textShapes":26}
+{"kind":"shape","id":"sh/psnqds3m","slide":12,"name":"page-12-rail","bbox":[0,0,10,1123]}
+{"kind":"textbox","id":"sh/2pw72d4b","slide":12,"name":"page-12-chapter","text":"03 · FLOW ORCHESTRATION","textPreview":"03 · FLOW ORCHESTRATION","textChars":23,"textLines":1,"bbox":[62,45,460,24]}
+{"kind":"textbox","id":"sh/3q58bilw","slide":12,"name":"page-12-title","text":"저장된 Job을 검증 가능한 DAG로 실행합니다","textPreview":"저장된 Job을 검증 가능한 DAG로 실행합니다","textChars":26,"textLines":1,"bbox":[62,82,670,84]}
+{"kind":"textbox","id":"sh/cvyp8nmd","slide":12,"name":"page-12-subtitle","text":"M04001의 Flow는 그림이 아니라 저장·검증·실행 가능한 실행 계획이며, 각 노드 상태와 출력을 같은 Flow Run에 기록합니다.","textPreview":"M04001의 Flow는 그림이 아니라 저장·검증·실행 가능한 실행 계획이며, 각 노드 상태와 출력을 같은 Flow Run에 기록합니다.","textChars":76,"textLines":1,"bbox":[62,170,670,50]}
+{"kind":"shape","id":"sh/dw7qhs3y","slide":12,"name":"page-12-top-rule","bbox":[62,226,670,2]}
+{"kind":"shape","id":"sh/qtw76x47","slide":12,"name":"page-12-footer-rule","bbox":[62,1067,670,1]}
+{"kind":"textbox","id":"sh/ru58fils","slide":12,"name":"page-12-footer-name","text":"IN-DEPS 시스템 소개서","textPreview":"IN-DEPS 시스템 소개서","textChars":15,"textLines":1,"bbox":[62,1080,300,18]}
+{"kind":"textbox","id":"sh/szupw3m9","slide":12,"name":"page-12-footer-number","text":"12","textPreview":"12","textChars":2,"textLines":1,"bbox":[682,1078,50,20]}
+{"kind":"shape","id":"sh/t036583e","slide":12,"name":"dag-node-1","bbox":[62,260,670,112]}
+{"kind":"shape","id":"sh/d8ve1wze","slide":12,"name":"dag-num-1-circle","bbox":[80,286,42,42]}
+{"kind":"textbox","id":"sh/s72xsrit","slide":12,"name":"dag-num-1-number","text":"1","textPreview":"1","textChars":1,"textLines":1,"bbox":[80,288,42,38]}
+{"kind":"textbox","id":"sh/r6twzmh8","slide":12,"name":"dag-title-1","text":"Job 배치·연결","textPreview":"Job 배치·연결","textChars":9,"textLines":1,"bbox":[140,279,220,32]}
+{"kind":"textbox","id":"sh/q5kfqh0n","slide":12,"name":"dag-kicker-1","text":"01 · DESIGN","textPreview":"01 · DESIGN","textChars":11,"textLines":1,"bbox":[140,317,220,20]}
+{"kind":"textbox","id":"sh/1cvy5wza","slide":12,"name":"dag-body-1","text":"저장한 4단계 Job과 확장 리소스를 노드·엣지로 구성합니다.","textPreview":"저장한 4단계 Job과 확장 리소스를 노드·엣지로 구성합니다.","textChars":34,"textLines":1,"bbox":[372,278,338,78]}
+{"kind":"shape","id":"sh/0bmxwryp","slide":12,"name":"dag-node-2","bbox":[62,391,670,112]}
+{"kind":"shape","id":"sh/fadw3mhk","slide":12,"name":"dag-num-2-circle","bbox":[80,417,42,42]}
+{"kind":"textbox","id":"sh/e94fu1gz","slide":12,"name":"dag-num-2-number","text":"2","textPreview":"2","textChars":1,"textLines":1,"bbox":[80,419,42,38]}
+{"kind":"textbox","id":"sh/p0fy9gzm","slide":12,"name":"dag-title-2","text":"구조·계약 검증","textPreview":"구조·계약 검증","textChars":8,"textLines":1,"bbox":[140,410,220,32]}
+{"kind":"textbox","id":"sh/ofmx0by1","slide":12,"name":"dag-kicker-2","text":"02 · VALIDATE","textPreview":"02 · VALIDATE","textChars":13,"textLines":1,"bbox":[140,448,220,20]}
+{"kind":"textbox","id":"sh/8ve9sja9","slide":12,"name":"dag-body-2","text":"순환, 역방향 단계, 포트·아티팩트와 SAME_RUN 입력을 확인합니다.","textPreview":"순환, 역방향 단계, 포트·아티팩트와 SAME_RUN 입력을 확인합니다.","textChars":40,"textLines":1,"bbox":[372,409,338,78]}
+{"kind":"shape","id":"sh/9wnql4bu","slide":12,"name":"dag-node-3","bbox":[62,522,670,112]}
+{"kind":"shape","id":"sh/mtw7q9sj","slide":12,"name":"dag-num-3-circle","bbox":[80,548,42,42]}
+{"kind":"textbox","id":"sh/7u58jeto","slide":12,"name":"dag-num-3-number","text":"3","textPreview":"3","textChars":1,"textLines":1,"bbox":[80,550,42,38]}
+{"kind":"textbox","id":"sh/wjy9wjal","slide":12,"name":"dag-title-3","text":"런타임 값 확정","textPreview":"런타임 값 확정","textChars":8,"textLines":1,"bbox":[140,541,220,32]}
+{"kind":"textbox","id":"sh/hk7qpob6","slide":12,"name":"dag-kicker-3","text":"03 · BIND","textPreview":"03 · BIND","textChars":9,"textLines":1,"bbox":[140,579,220,20]}
+{"kind":"textbox","id":"sh/uxgru9sf","slide":12,"name":"dag-body-3","text":"Target, Result, 선행 출력, Run ID와 실제 파라미터를 결합합니다.","textPreview":"Target, Result, 선행 출력, Run ID와 실제 파라미터를 결합합니다.","textChars":46,"textLines":1,"bbox":[372,540,338,78]}
+{"kind":"shape","id":"sh/vip8net0","slide":12,"name":"dag-node-4","bbox":[62,653,670,112]}
+{"kind":"shape","id":"sh/cnupkza1","slide":12,"name":"dag-num-4-circle","bbox":[80,679,42,42]}
+{"kind":"textbox","id":"sh/xo3qdkbm","slide":12,"name":"dag-num-4-number","text":"4","textPreview":"4","textChars":1,"textLines":1,"bbox":[80,681,42,38]}
+{"kind":"textbox","id":"sh/fitsj2d4","slide":12,"name":"dag-title-4","text":"실행 경로 선택","textPreview":"실행 경로 선택","textChars":8,"textLines":1,"bbox":[140,672,220,32]}
+{"kind":"textbox","id":"sh/ehkbqxcj","slide":12,"name":"dag-kicker-4","text":"04 · EXECUTE","textPreview":"04 · EXECUTE","textChars":12,"textLines":1,"bbox":[140,710,220,20]}
+{"kind":"textbox","id":"sh/1kbulsva","slide":12,"name":"dag-body-4","text":"저장된 EXEC_SOURCE_TYPE에 맞는 실행 어댑터를 한 개 선택합니다.","textPreview":"저장된 EXEC_SOURCE_TYPE에 맞는 실행 어댑터를 한 개 선택합니다.","textChars":43,"textLines":1,"bbox":[372,671,338,78]}
+{"kind":"shape","id":"sh/0j2ts7up","slide":12,"name":"dag-node-5","bbox":[62,784,670,112]}
+{"kind":"shape","id":"sh/re9sfid8","slide":12,"name":"dag-num-5-circle","bbox":[80,810,42,42]}
+{"kind":"textbox","id":"sh/qd0bmdcn","slide":12,"name":"dag-num-5-number","text":"5","textPreview":"5","textChars":1,"textLines":1,"bbox":[80,812,42,38]}
+{"kind":"textbox","id":"sh/dgbahsve","slide":12,"name":"dag-title-5","text":"결과 정규화","textPreview":"결과 정규화","textChars":6,"textLines":1,"bbox":[140,803,220,32]}
+{"kind":"textbox","id":"sh/sfitonut","slide":12,"name":"dag-kicker-5","text":"05 · MATERIALIZE","textPreview":"05 · MATERIALIZE","textChars":16,"textLines":1,"bbox":[140,841,220,20]}
+{"kind":"textbox","id":"sh/jq9sbidw","slide":12,"name":"dag-body-5","text":"출력 계약과 메시지를 Run·Node 결과 아티팩트로 저장합니다.","textPreview":"출력 계약과 메시지를 Run·Node 결과 아티팩트로 저장합니다.","textChars":36,"textLines":1,"bbox":[372,802,338,78]}
+{"kind":"shape","id":"sh/ip0bidcr","slide":12,"bbox":[397,372,0,19]}
+{"kind":"shape","id":"sh/yxkfm18b","slide":12,"bbox":[397,503,0,19]}
+{"kind":"shape","id":"sh/jytwf69w","slide":12,"bbox":[397,634,0,19]}
+{"kind":"shape","id":"sh/kz2xobq1","slide":12,"bbox":[397,765,0,19]}
+{"kind":"shape","id":"sh/lkbehgrm","slide":12,"name":"p12-callout-fill","bbox":[62,936,670,92]}
+{"kind":"shape","id":"sh/at0fi18z","slide":12,"name":"p12-callout-accent","bbox":[62,936,6,92]}
+{"kind":"textbox","id":"sh/bu9wb69k","slide":12,"name":"p12-callout-text","text":"Validate를 통과하지 못한 연결은 실행하지 않습니다. 필수 선행 노드는 SUCCESS가 되어야 후행 노드가 진행됩니다.","textPreview":"Validate를 통과하지 못한 연결은 실행하지 않습니다. 필수 선행 노드는 SUCCESS가 되어야 후행 노드가 진행됩니다.","textChars":69,"textLines":1,"bbox":[84,954,628,60]}
+{"kind":"notes","id":"nt/tatdww","slide":12,"text":"[Sources]\n- D:/work/data-editing-system/frontend/help/in-deps-system-guide.html (content source, accessed 2026-08-26)"}
+{"kind":"slide","id":"sl/2n00fb","slide":13,"title":"03 · EXECUTION RESOURCE ROUTING","textShapes":16}
+{"kind":"shape","id":"sh/ut4jmpoz","slide":13,"name":"page-13-rail","bbox":[0,0,10,1123]}
+{"kind":"textbox","id":"sh/hwv2x4nq","slide":13,"name":"page-13-chapter","text":"03 · EXECUTION RESOURCE ROUTING","textPreview":"03 · EXECUTION RESOURCE ROUTING","textChars":31,"textLines":1,"bbox":[62,45,460,24]}
+{"kind":"textbox","id":"sh/wvm1oz65","slide":13,"name":"page-13-title","text":"실행 리소스는 세 경로로 라우팅됩니다","textPreview":"실행 리소스는 세 경로로 라우팅됩니다","textChars":20,"textLines":1,"bbox":[62,82,670,84]}
+{"kind":"textbox","id":"sh/jydkzu5w","slide":13,"name":"page-13-subtitle","text":"Job에 저장된 실행 유형과 결과 계약을 기준으로 Target DB, OML Python, 내부·외부 API 경로 중 하나를 선택합니다.","textPreview":"Job에 저장된 실행 유형과 결과 계약을 기준으로 Target DB, OML Python, 내부·외부 API 경로 중 하나를 선택합니다.","textChars":76,"textLines":1,"bbox":[62,170,670,50]}
+{"kind":"shape","id":"sh/ix4jqpob","slide":13,"name":"page-13-top-rule","bbox":[62,226,670,2]}
+{"kind":"shape","id":"sh/50f214n2","slide":13,"name":"page-13-footer-rule","bbox":[62,1067,670,1]}
+{"kind":"textbox","id":"sh/4z61sz6h","slide":13,"name":"page-13-footer-name","text":"IN-DEPS 시스템 소개서","textPreview":"IN-DEPS 시스템 소개서","textChars":15,"textLines":1,"bbox":[62,1080,300,18]}
+{"kind":"textbox","id":"sh/rmxk3e5s","slide":13,"name":"page-13-footer-number","text":"13","textPreview":"13","textChars":2,"textLines":1,"bbox":[682,1078,50,20]}
+{"kind":"shape","id":"sh/61oju9o7","slide":13,"name":"p13-db-fill","bbox":[62,268,670,180]}
+{"kind":"shape","id":"sh/83uhwbe1","slide":13,"name":"p13-db-accent","bbox":[62,268,8,180]}
+{"kind":"textbox","id":"sh/943ipgf6","slide":13,"name":"p13-db-kicker","text":"DB_OBJECT · M90001","textPreview":"DB_OBJECT · M90001","textChars":18,"textLines":1,"bbox":[90,286,210,20]}
+{"kind":"textbox","id":"sh/m1czu1wv","slide":13,"name":"p13-db-title","text":"Target DB 실행 객체","textPreview":"Target DB 실행 객체","textChars":15,"textLines":1,"bbox":[90,312,245,34]}
+{"kind":"textbox","id":"sh/72l0n6xg","slide":13,"name":"p13-db-body","text":"등록된 프로시저·패키지·Oracle ML 모델을 서버 세션의 검증된 Target DB 연결에서 실행합니다. 객체명·파라미터·결과 계약이 실제 DB 정의와 일치해야 합니다.","textPreview":"등록된 프로시저·패키지·Oracle ML 모델을 서버 세션의 검증된 Target DB 연결에서 실행합니다. 객체명·파라미터·결과 계약이 실제 DB 정의와 일치해야 합니다.","textChars":95,"textLines":1,"bbox":[352,290,348,140]}
+{"kind":"shape","id":"sh/w7eh0vex","slide":13,"name":"p13-oml-fill","bbox":[62,472,670,180]}
+{"kind":"shape","id":"sh/h8nitgfi","slide":13,"name":"p13-oml-accent","bbox":[62,472,8,180]}
+{"kind":"textbox","id":"sh/u5wzylwr","slide":13,"name":"p13-oml-kicker","text":"OML_PYTHON · OML4PY","textPreview":"OML_PYTHON · OML4PY","textChars":19,"textLines":1,"bbox":[90,490,210,20]}
+{"kind":"textbox","id":"sh/v650rqxc","slide":13,"name":"p13-oml-title","text":"OML Python SQL API","textPreview":"OML Python SQL API","textChars":18,"textLines":1,"bbox":[90,516,245,34]}
+{"kind":"textbox","id":"sh/4ve14vet","slide":13,"name":"p13-oml-body","text":"OML4Py Script Repository와 pyqEval·pyqTableEval·pyqRowEval·pyqGroupEval·pyqIndexEval 계약을 사용하고 결과를 표준 출력 형식으로 정규화합니다.","textPreview":"OML4Py Script Repository와 pyqEval·pyqTableEval·pyqRowEval·pyqGroupEval·pyqIndexEval 계약을 사용하고 결과를 표준 출력 형식으로 정규화합니다.","textChars":115,"textLines":1,"bbox":[352,494,348,140]}
+{"kind":"shape","id":"sh/5w7ix0fe","slide":13,"name":"p13-api-fill","bbox":[62,676,670,180]}
+{"kind":"shape","id":"sh/ds3ih07i","slide":13,"name":"p13-api-accent","bbox":[62,676,8,180]}
+{"kind":"textbox","id":"sh/sruh8v6d","slide":13,"name":"p13-api-kicker","text":"WEB_API · M90002","textPreview":"WEB_API · M90002","textChars":16,"textLines":1,"bbox":[90,694,210,20]}
+{"kind":"textbox","id":"sh/rq10fqps","slide":13,"name":"p13-api-title","text":"내부 Python·외부 JSON API","textPreview":"내부 Python·외부 JSON API","textChars":21,"textLines":1,"bbox":[90,720,245,34]}
+{"kind":"textbox","id":"sh/qpsz6lo7","slide":13,"name":"p13-api-body","text":"기본 2~4단계는 INTERNAL_API가 같은 WAS 함수를 직접 호출합니다. 사용자가 EXTERNAL_API를 등록한 경우에만 원격 HTTP JSON endpoint를 호출합니다.","textPreview":"기본 2~4단계는 INTERNAL_API가 같은 WAS 함수를 직접 호출합니다. 사용자가 EXTERNAL_API를 등록한 경우에만 원격 HTTP JSON endpoint를 호출합니다.","textChars":102,"textLines":1,"bbox":[352,698,348,140]}
+{"kind":"shape","id":"sh/1g3il0nu","slide":13,"name":"p13-check-label-bar","bbox":[62,900,5,20]}
+{"kind":"textbox","id":"sh/0fuhcv69","slide":13,"name":"p13-check-label","text":"공통 검증 항목","textPreview":"공통 검증 항목","textChars":8,"textLines":1,"bbox":[78,896,654,28]}
+{"kind":"textbox","id":"sh/fel0jq5o","slide":13,"name":"p13-check","text":"Target·Result·Run 바인드와 출력 계약\n권한·ACL·시간·응답 크기·유효 JSON\n대용량 처리 범위, 병렬 자원과 커밋 단위","textPreview":"Target·Result·Run 바인드와 출력 계약 | 권한·ACL·시간·응답 크기·유효 JSON | 대용량 처리 범위, 병렬 자원과 커밋 단위","textChars":76,"textLines":3,"bbox":[70,940,654,132]}
+{"kind":"notes","id":"nt/2n00fb","slide":13,"text":"[Sources]\n- D:/work/data-editing-system/frontend/help/in-deps-system-guide.html (content source, accessed 2026-08-26)"}
+{"kind":"slide","id":"sl/zy5dxq","slide":14,"title":"03 · RUN & NODE STATUS","textShapes":21}
+{"kind":"shape","id":"sh/z2x8nats","slide":14,"name":"page-14-rail","bbox":[0,0,10,1123]}
+{"kind":"textbox","id":"sh/0nq9wfax","slide":14,"name":"page-14-chapter","text":"03 · RUN & NODE STATUS","textPreview":"03 · RUN & NODE STATUS","textChars":22,"textLines":1,"bbox":[62,45,460,24]}
+{"kind":"textbox","id":"sh/1ozqpkbi","slide":14,"name":"page-14-title","text":"SUCCESS와 좋은 결과는 같은 말이 아닙니다","textPreview":"SUCCESS와 좋은 결과는 같은 말이 아닙니다","textChars":26,"textLines":1,"bbox":[62,82,670,84]}
+{"kind":"textbox","id":"sh/mp8ryps3","slide":14,"name":"page-14-subtitle","text":"실행 상태는 프로세스가 어떻게 종료되었는지를 나타냅니다. 규칙 품질과 업무 승인 여부는 결과 지표·표본·메시지를 별도로 확인해야 합니다.","textPreview":"실행 상태는 프로세스가 어떻게 종료되었는지를 나타냅니다. 규칙 품질과 업무 승인 여부는 결과 지표·표본·메시지를 별도로 확인해야 합니다.","textChars":76,"textLines":1,"bbox":[62,170,670,50]}
+{"kind":"shape","id":"sh/nqh8ruto","slide":14,"name":"page-14-top-rule","bbox":[62,226,670,2]}
+{"kind":"shape","id":"sh/orq90fa9","slide":14,"name":"page-14-footer-rule","bbox":[62,1067,670,1]}
+{"kind":"textbox","id":"sh/9szqtkbu","slide":14,"name":"page-14-footer-name","text":"IN-DEPS 시스템 소개서","textPreview":"IN-DEPS 시스템 소개서","textChars":15,"textLines":1,"bbox":[62,1080,300,18]}
+{"kind":"textbox","id":"sh/2t47mlcz","slide":14,"name":"page-14-footer-number","text":"14","textPreview":"14","textChars":2,"textLines":1,"bbox":[682,1078,50,20]}
+{"kind":"shape","id":"sh/3ud8fqtk","slide":14,"name":"p14-row-0","bbox":[62,270,670,160]}
+{"kind":"textbox","id":"sh/7qhc3e58","slide":14,"name":"p14-status-0","text":"SUCCESS","textPreview":"SUCCESS","textChars":7,"textLines":1,"bbox":[86,292,160,34]}
+{"kind":"textbox","id":"sh/6p8bu94n","slide":14,"name":"p14-meaning-title-0","text":"실행 의미","textPreview":"실행 의미","textChars":5,"textLines":1,"bbox":[277,290,110,22]}
+{"kind":"textbox","id":"sh/tsju5ony","slide":14,"name":"p14-meaning-0","text":"노드 실행과 결과 계약 저장 완료","textPreview":"노드 실행과 결과 계약 저장 완료","textChars":18,"textLines":1,"bbox":[277,319,425,42]}
+{"kind":"textbox","id":"sh/8ratwjmt","slide":14,"name":"p14-reading-title-0","text":"운영 해석","textPreview":"운영 해석","textChars":5,"textLines":1,"bbox":[277,369,110,20]}
+{"kind":"textbox","id":"sh/jmhczu5w","slide":14,"name":"p14-reading-0","text":"업무 승인이나 규칙 품질을 뜻하지 않습니다. 실제 지표와 표본을 확인합니다.","textPreview":"업무 승인이나 규칙 품질을 뜻하지 않습니다. 실제 지표와 표본을 확인합니다.","textChars":42,"textLines":1,"bbox":[377,366,325,48]}
+{"kind":"shape","id":"sh/yl8bq94b","slide":14,"name":"p14-row-1","bbox":[62,460,670,160]}
+{"kind":"textbox","id":"sh/lozu14n2","slide":14,"name":"p14-status-1","text":"FAILED","textPreview":"FAILED","textChars":6,"textLines":1,"bbox":[86,482,160,34]}
+{"kind":"textbox","id":"sh/knqtszmh","slide":14,"name":"p14-meaning-title-1","text":"실행 의미","textPreview":"실행 의미","textChars":5,"textLines":1,"bbox":[277,480,110,22]}
+{"kind":"textbox","id":"sh/byxcvu50","slide":14,"name":"p14-meaning-1","text":"실행 오류 또는 검토가 필요한 부분 완료","textPreview":"실행 오류 또는 검토가 필요한 부분 완료","textChars":22,"textLines":1,"bbox":[277,509,425,42]}
+{"kind":"textbox","id":"sh/axobmp4f","slide":14,"name":"p14-reading-title-1","text":"운영 해석","textPreview":"운영 해석","textChars":5,"textLines":1,"bbox":[277,559,110,20]}
+{"kind":"textbox","id":"sh/etovyp87","slide":14,"name":"p14-reading-1","text":"메시지에서 성공한 하위 작업과 실패한 작업을 유형별로 나누어 확인합니다.","textPreview":"메시지에서 성공한 하위 작업과 실패한 작업을 유형별로 나누어 확인합니다.","textChars":40,"textLines":1,"bbox":[377,556,325,48]}
+{"kind":"shape","id":"sh/fuxc7ups","slide":14,"name":"p14-row-2","bbox":[62,650,670,160]}
+{"kind":"textbox","id":"sh/0v6d0zqd","slide":14,"name":"p14-status-2","text":"SKIPPED","textPreview":"SKIPPED","textChars":7,"textLines":1,"bbox":[86,672,160,34]}
+{"kind":"textbox","id":"sh/1wfu947y","slide":14,"name":"p14-meaning-title-2","text":"실행 의미","textPreview":"실행 의미","textChars":5,"textLines":1,"bbox":[277,670,110,22]}
+{"kind":"textbox","id":"sh/2xov2p8j","slide":14,"name":"p14-meaning-2","text":"의존 조건 미충족 또는 실행 대상 제외","textPreview":"의존 조건 미충족 또는 실행 대상 제외","textChars":21,"textLines":1,"bbox":[277,699,425,42]}
+{"kind":"textbox","id":"sh/nyxcbup4","slide":14,"name":"p14-reading-title-2","text":"운영 해석","textPreview":"운영 해석","textChars":5,"textLines":1,"bbox":[277,749,110,20]}
+{"kind":"textbox","id":"sh/oj6d4zq9","slide":14,"name":"p14-reading-2","text":"필수 선행 노드 상태와 ON_COMPLETE 등 엣지 조건을 확인합니다.","textPreview":"필수 선행 노드 상태와 ON_COMPLETE 등 엣지 조건을 확인합니다.","textChars":40,"textLines":1,"bbox":[377,746,325,48]}
+{"kind":"shape","id":"sh/9kzud47u","slide":14,"name":"p14-callout-fill","bbox":[62,864,670,94]}
+{"kind":"shape","id":"sh/al8v698f","slide":14,"name":"p14-callout-accent","bbox":[62,864,6,94]}
+{"kind":"textbox","id":"sh/bmhwfep0","slide":14,"name":"p14-callout-text","text":"위반 0건은 오류가 아닐 수 있습니다. 반대로 SUCCESS라도 규칙 표본과 설명력이 충분한지는 별도로 검토합니다.","textPreview":"위반 0건은 오류가 아닐 수 있습니다. 반대로 SUCCESS라도 규칙 표본과 설명력이 충분한지는 별도로 검토합니다.","textChars":64,"textLines":1,"bbox":[84,882,628,62]}
+{"kind":"notes","id":"nt/zy5dxq","slide":14,"text":"[Sources]\n- D:/work/data-editing-system/frontend/help/in-deps-system-guide.html (content source, accessed 2026-08-26)"}
+{"kind":"slide","id":"sl/ktqrus","slide":15,"title":"04 · REVIEW TO CHANGE","textShapes":26}
+{"kind":"shape","id":"sh/21gf6tkr","slide":15,"name":"page-15-rail","bbox":[0,0,10,1123]}
+{"kind":"textbox","id":"sh/p4ry1832","slide":15,"name":"page-15-chapter","text":"04 · REVIEW TO CHANGE","textPreview":"04 · REVIEW TO CHANGE","textChars":21,"textLines":1,"bbox":[62,45,460,24]}
+{"kind":"textbox","id":"sh/43ih832x","slide":15,"name":"page-15-title","text":"분석 결과는 다섯 책임 단계를 거쳐 변경됩니다","textPreview":"분석 결과는 다섯 책임 단계를 거쳐 변경됩니다","textChars":25,"textLines":1,"bbox":[62,82,670,84]}
+{"kind":"textbox","id":"sh/fypgvyl0","slide":15,"name":"page-15-subtitle","text":"발굴 결과를 곧바로 원본에 적용하지 않고, 해석·결정·편집·효과 검증·보고를 서로 다른 작업 화면과 책임으로 분리합니다.","textPreview":"발굴 결과를 곧바로 원본에 적용하지 않고, 해석·결정·편집·효과 검증·보고를 서로 다른 작업 화면과 책임으로 분리합니다.","textChars":67,"textLines":1,"bbox":[62,170,670,50]}
+{"kind":"shape","id":"sh/uxgf2tkf","slide":15,"name":"page-15-top-rule","bbox":[62,226,670,2]}
+{"kind":"shape","id":"sh/h07yxo36","slide":15,"name":"page-15-footer-rule","bbox":[62,1067,670,1]}
+{"kind":"textbox","id":"sh/gzyx4j2l","slide":15,"name":"page-15-footer-name","text":"IN-DEPS 시스템 소개서","textPreview":"IN-DEPS 시스템 소개서","textChars":15,"textLines":1,"bbox":[62,1080,300,18]}
+{"kind":"textbox","id":"sh/7a5grel4","slide":15,"name":"page-15-footer-number","text":"15","textPreview":"15","textChars":2,"textLines":1,"bbox":[682,1078,50,20]}
+{"kind":"shape","id":"sh/69wfy9kj","slide":15,"name":"change-node-1","bbox":[62,260,670,112]}
+{"kind":"shape","id":"sh/c3214fmp","slide":15,"name":"change-num-1-circle","bbox":[80,286,42,42]}
+{"kind":"textbox","id":"sh/x4b2xkna","slide":15,"name":"change-num-1-number","text":"1","textPreview":"1","textChars":1,"textLines":1,"bbox":[80,288,42,38]}
+{"kind":"textbox","id":"sh/a10j254j","slide":15,"name":"change-title-1","text":"결과 분석","textPreview":"결과 분석","textChars":5,"textLines":1,"bbox":[140,279,220,32]}
+{"kind":"textbox","id":"sh/b2tkva54","slide":15,"name":"change-kicker-1","text":"M04002","textPreview":"M04002","textChars":6,"textLines":1,"bbox":[140,317,220,20]}
+{"kind":"textbox","id":"sh/ozi10vmt","slide":15,"name":"change-body-1","text":"유형, 관계·군집, 규칙, 위반과 실제 Run 파라미터를 함께 해석합니다.","textPreview":"유형, 관계·군집, 규칙, 위반과 실제 Run 파라미터를 함께 해석합니다.","textChars":41,"textLines":1,"bbox":[372,278,338,78]}
+{"kind":"shape","id":"sh/p0r2t0ny","slide":15,"name":"change-node-2","bbox":[62,392,670,112]}
+{"kind":"shape","id":"sh/2x0jy54n","slide":15,"name":"change-num-2-circle","bbox":[80,418,42,42]}
+{"kind":"textbox","id":"sh/3y9kra58","slide":15,"name":"change-num-2-number","text":"2","textPreview":"2","textChars":1,"textLines":1,"bbox":[80,420,42,38]}
+{"kind":"textbox","id":"sh/8vmlczmx","slide":15,"name":"change-title-2","text":"규칙 결정","textPreview":"규칙 결정","textChars":5,"textLines":1,"bbox":[140,411,220,32]}
+{"kind":"textbox","id":"sh/9wv254ni","slide":15,"name":"change-kicker-2","text":"M05001","textPreview":"M05001","textChars":6,"textLines":1,"bbox":[140,449,220,20]}
+{"kind":"textbox","id":"sh/hg7a90ba","slide":15,"name":"change-body-2","text":"발굴 후보를 선정·제외하고 사용자 규칙을 검증해 규칙 마스터를 관리합니다.","textPreview":"발굴 후보를 선정·제외하고 사용자 규칙을 검증해 규칙 마스터를 관리합니다.","textChars":41,"textLines":1,"bbox":[372,410,338,78]}
+{"kind":"shape","id":"sh/wfyt0vap","slide":15,"name":"change-node-3","bbox":[62,524,670,112]}
+{"kind":"shape","id":"sh/veps7qt4","slide":15,"name":"change-num-3-circle","bbox":[80,550,42,42]}
+{"kind":"textbox","id":"sh/udgbylsz","slide":15,"name":"change-num-3-number","text":"3","textPreview":"3","textChars":1,"textLines":1,"bbox":[80,552,42,38]}
+{"kind":"textbox","id":"sh/9c7a50be","slide":15,"name":"change-title-3","text":"오류 수정","textPreview":"오류 수정","textChars":5,"textLines":1,"bbox":[140,543,220,32]}
+{"kind":"textbox","id":"sh/8bytwvat","slide":15,"name":"change-kicker-3","text":"M05002","textPreview":"M05002","textChars":6,"textLines":1,"bbox":[140,581,220,20]}
+{"kind":"textbox","id":"sh/7a5s3qt8","slide":15,"name":"change-body-3","text":"원본 기준 작업본을 검사하고 INITDN$ 편집본에서 셀 값을 수정합니다.","textPreview":"원본 기준 작업본을 검사하고 INITDN$ 편집본에서 셀 값을 수정합니다.","textChars":41,"textLines":1,"bbox":[372,542,338,78]}
+{"kind":"shape","id":"sh/m9wbulsn","slide":15,"name":"change-node-4","bbox":[62,656,670,112]}
+{"kind":"shape","id":"sh/l8na1gb2","slide":15,"name":"change-num-4-circle","bbox":[80,682,42,42]}
+{"kind":"textbox","id":"sh/07etsbah","slide":15,"name":"change-num-4-number","text":"4","textPreview":"4","textChars":1,"textLines":1,"bbox":[80,684,42,38]}
+{"kind":"textbox","id":"sh/qdc72h8f","slide":15,"name":"change-title-4","text":"효과·DML","textPreview":"효과·DML","textChars":6,"textLines":1,"bbox":[140,675,220,32]}
+{"kind":"textbox","id":"sh/bel8bm90","slide":15,"name":"change-kicker-4","text":"M05003","textPreview":"M05003","textChars":6,"textLines":1,"bbox":[140,713,220,20]}
+{"kind":"textbox","id":"sh/cfu94rql","slide":15,"name":"change-body-4","text":"수정 전후 효과를 비교하고 버전 관리된 운영 반영 DML을 검증·실행합니다.","textPreview":"수정 전후 효과를 비교하고 버전 관리된 운영 반영 DML을 검증·실행합니다.","textChars":42,"textLines":1,"bbox":[372,674,338,78]}
+{"kind":"shape","id":"sh/dg3qdwr6","slide":15,"name":"change-node-5","bbox":[62,788,670,112]}
+{"kind":"shape","id":"sh/2ps7yh8j","slide":15,"name":"change-num-5-circle","bbox":[80,814,42,42]}
+{"kind":"textbox","id":"sh/3q187294","slide":15,"name":"change-num-5-number","text":"5","textPreview":"5","textChars":1,"textLines":1,"bbox":[80,816,42,38]}
+{"kind":"textbox","id":"sh/obap07q9","slide":15,"name":"change-title-5","text":"결과 보고","textPreview":"결과 보고","textChars":5,"textLines":1,"bbox":[140,807,220,32]}
+{"kind":"textbox","id":"sh/pc3q9cru","slide":15,"name":"change-kicker-5","text":"M06001 · M06002","textPreview":"M06001 · M06002","textChars":15,"textLines":1,"bbox":[140,845,220,20]}
+{"kind":"textbox","id":"sh/els7ux87","slide":15,"name":"change-body-5","text":"고정형·통합 또는 맞춤형 보고서로 분석과 에디팅 이력을 공유합니다.","textPreview":"고정형·통합 또는 맞춤형 보고서로 분석과 에디팅 이력을 공유합니다.","textChars":37,"textLines":1,"bbox":[372,806,338,78]}
+{"kind":"shape","id":"sh/fm18329s","slide":15,"bbox":[397,372,0,20]}
+{"kind":"shape","id":"sh/7el4zyto","slide":15,"bbox":[397,504,0,20]}
+{"kind":"shape","id":"sh/6dcn6tc3","slide":15,"bbox":[397,636,0,20]}
+{"kind":"shape","id":"sh/t03m18be","slide":15,"bbox":[397,768,0,20]}
+{"kind":"shape","id":"sh/szu583u9","slide":15,"name":"p15-callout-fill","bbox":[62,942,670,96]}
+{"kind":"shape","id":"sh/ja14vydc","slide":15,"name":"p15-callout-accent","bbox":[62,942,6,96]}
+{"kind":"textbox","id":"sh/i9s32tcr","slide":15,"name":"p15-callout-text","text":"각 단계가 분리되어 있기 때문에 규칙 후보의 품질 문제와 실제 데이터 변경 위험을 서로 다른 지점에서 통제할 수 있습니다.","textPreview":"각 단계가 분리되어 있기 때문에 규칙 후보의 품질 문제와 실제 데이터 변경 위험을 서로 다른 지점에서 통제할 수 있습니다.","textChars":68,"textLines":1,"bbox":[84,960,628,64]}
+{"kind":"notes","id":"nt/ktqrus","slide":15,"text":"[Sources]\n- D:/work/data-editing-system/frontend/help/in-deps-system-guide.html (content source, accessed 2026-08-26)"}
+{"kind":"slide","id":"sl/1hehgb","slide":16,"title":"04 · EDITING & OPERATIONAL APPLY","textShapes":17}
+{"kind":"shape","id":"sh/10fip8bu","slide":16,"name":"page-16-rail","bbox":[0,0,10,1123]}
+{"kind":"textbox","id":"sh/ex4judc3","slide":16,"name":"page-16-chapter","text":"04 · EDITING & OPERATIONAL APPLY","textPreview":"04 · EDITING & OPERATIONAL APPLY","textChars":32,"textLines":1,"bbox":[62,45,460,24]}
+{"kind":"textbox","id":"sh/zyd0nido","slide":16,"name":"page-16-title","text":"원본·편집본·운영 반영을 세 층으로 분리합니다","textPreview":"원본·편집본·운영 반영을 세 층으로 분리합니다","textChars":25,"textLines":1,"bbox":[62,82,670,84]}
+{"kind":"textbox","id":"sh/cvmhs3ux","slide":16,"name":"page-16-subtitle","text":"탐지 결과가 원본을 직접 바꾸지 않도록 검사 기준, 사용자 편집, 운영 반영을 서로 다른 데이터와 승인 단계로 관리합니다.","textPreview":"탐지 결과가 원본을 직접 바꾸지 않도록 검사 기준, 사용자 편집, 운영 반영을 서로 다른 데이터와 승인 단계로 관리합니다.","textChars":68,"textLines":1,"bbox":[62,170,670,50]}
+{"kind":"shape","id":"sh/dwvil8vi","slide":16,"name":"page-16-top-rule","bbox":[62,226,670,2]}
+{"kind":"shape","id":"sh/qt4zqtc7","slide":16,"name":"page-16-footer-rule","bbox":[62,1067,670,1]}
+{"kind":"textbox","id":"sh/rud0jydc","slide":16,"name":"page-16-footer-name","text":"IN-DEPS 시스템 소개서","textPreview":"IN-DEPS 시스템 소개서","textChars":15,"textLines":1,"bbox":[62,1080,300,18]}
+{"kind":"textbox","id":"sh/472ho3u1","slide":16,"name":"page-16-footer-number","text":"16","textPreview":"16","textChars":2,"textLines":1,"bbox":[682,1078,50,20]}
+{"kind":"shape","id":"sh/p8vihovm","slide":16,"name":"p16-node-0","bbox":[110,286,574,174]}
+{"kind":"textbox","id":"sh/1kvm54ra","slide":16,"name":"p16-label-0","text":"기준 작업본","textPreview":"기준 작업본","textChars":6,"textLines":1,"bbox":[138,310,180,24]}
+{"kind":"textbox","id":"sh/0jm5czqp","slide":16,"name":"p16-code-0","text":"INITUP$","textPreview":"INITUP$","textChars":7,"textLines":1,"bbox":[138,347,250,38]}
+{"kind":"textbox","id":"sh/fid43u94","slide":16,"name":"p16-desc-0","text":"규칙을 적용해 현재 위반 여부를 검사하는 원본 기준 스냅샷","textPreview":"규칙을 적용해 현재 위반 여부를 검사하는 원본 기준 스냅샷","textChars":32,"textLines":1,"bbox":[392,328,270,92]}
+{"kind":"shape","id":"sh/ex4nap8j","slide":16,"name":"p16-node-1","bbox":[110,504,574,174]}
+{"kind":"textbox","id":"sh/dwvm1kry","slide":16,"name":"p16-label-1","text":"사용자 편집본","textPreview":"사용자 편집본","textChars":7,"textLines":1,"bbox":[138,528,180,24]}
+{"kind":"textbox","id":"sh/svm58fqd","slide":16,"name":"p16-code-1","text":"INITDN$","textPreview":"INITDN$","textChars":7,"textLines":1,"bbox":[138,565,250,38]}
+{"kind":"textbox","id":"sh/rut4za9s","slide":16,"name":"p16-desc-1","text":"검토자가 오류 값을 수정하고 변경 사유와 세션을 기록하는 편집 테이블","textPreview":"검토자가 오류 값을 수정하고 변경 사유와 세션을 기록하는 편집 테이블","textChars":38,"textLines":1,"bbox":[392,546,270,92]}
+{"kind":"shape","id":"sh/qtkn6p8n","slide":16,"name":"p16-node-2","bbox":[110,722,574,174]}
+{"kind":"textbox","id":"sh/5sbmxkr2","slide":16,"name":"p16-label-2","text":"운영 반영","textPreview":"운영 반영","textChars":5,"textLines":1,"bbox":[138,746,180,24]}
+{"kind":"textbox","id":"sh/4r2l4fqh","slide":16,"name":"p16-code-2","text":"VERSIONED DML","textPreview":"VERSIONED DML","textChars":13,"textLines":1,"bbox":[138,783,250,38]}
+{"kind":"textbox","id":"sh/wb65kfid","slide":16,"name":"p16-desc-2","text":"효과 검증을 통과한 변경만 버전 DML로 생성·검증·승인 후 실행","textPreview":"효과 검증을 통과한 변경만 버전 DML로 생성·검증·승인 후 실행","textChars":36,"textLines":1,"bbox":[392,764,270,92]}
+{"kind":"shape","id":"sh/hcfmdkzy","slide":16,"bbox":[397,460,0,44]}
+{"kind":"textbox","id":"sh/u9oni507","slide":16,"name":"p16-gate-0","text":"사람의 검토·수정","textPreview":"사람의 검토·수정","textChars":9,"textLines":1,"bbox":[282,454,230,24]}
+{"kind":"shape","id":"sh/vax4bahs","slide":16,"bbox":[397,678,0,44]}
+{"kind":"textbox","id":"sh/87m5gvi1","slide":16,"name":"p16-gate-1","text":"효과 검증·권한·실행 확인","textPreview":"효과 검증·권한·실행 확인","textChars":14,"textLines":1,"bbox":[282,672,230,24]}
+{"kind":"shape","id":"sh/98fm90zm","slide":16,"name":"p16-audit-fill","bbox":[62,946,670,92]}
+{"kind":"shape","id":"sh/m54ne50b","slide":16,"name":"p16-audit-accent","bbox":[62,946,6,92]}
+{"kind":"textbox","id":"sh/76d47ahg","slide":16,"name":"p16-audit-text","text":"감사 이력 · 편집 세션, 수정 전후 값, 규칙 근거, DML 버전과 실행 결과를 다시 추적할 수 있어야 합니다.","textPreview":"감사 이력 · 편집 세션, 수정 전후 값, 규칙 근거, DML 버전과 실행 결과를 다시 추적할 수 있어야 합니다.","textChars":63,"textLines":1,"bbox":[84,964,628,60]}
+{"kind":"notes","id":"nt/1hehgb","slide":16,"text":"[Sources]\n- D:/work/data-editing-system/frontend/help/in-deps-system-guide.html (content source, accessed 2026-08-26)"}
+{"kind":"slide","id":"sl/ma5zpu","slide":17,"title":"05 · MENU MAP","textShapes":26}
+{"kind":"shape","id":"sh/sfq9sz6d","slide":17,"name":"page-17-rail","bbox":[0,0,10,1123]}
+{"kind":"textbox","id":"sh/rehszu5s","slide":17,"name":"page-17-chapter","text":"05 · MENU MAP","textPreview":"05 · MENU MAP","textChars":13,"textLines":1,"bbox":[62,45,460,24]}
+{"kind":"textbox","id":"sh/qd8rqpo7","slide":17,"name":"page-17-title","text":"24개 업무 메뉴는 네 책임 영역으로 구성됩니다","textPreview":"24개 업무 메뉴는 네 책임 영역으로 구성됩니다","textChars":26,"textLines":1,"bbox":[62,82,670,84]}
+{"kind":"textbox","id":"sh/14ja54nu","slide":17,"name":"page-17-subtitle","text":"메인 홈을 제외한 활성 업무 화면을 업무 단계에 따라 묶었습니다. 관리자 메뉴 노출과 API 실행 권한은 서버 역할 검사를 기준으로 합니다.","textPreview":"메인 홈을 제외한 활성 업무 화면을 업무 단계에 따라 묶었습니다. 관리자 메뉴 노출과 API 실행 권한은 서버 역할 검사를 기준으로 합니다.","textChars":78,"textLines":1,"bbox":[62,170,670,50]}
+{"kind":"shape","id":"sh/03atwz69","slide":17,"name":"page-17-top-rule","bbox":[62,226,670,2]}
+{"kind":"shape","id":"sh/f2hs3e5o","slide":17,"name":"page-17-footer-rule","bbox":[62,1067,670,1]}
+{"kind":"textbox","id":"sh/e18ru9o3","slide":17,"name":"page-17-footer-name","text":"IN-DEPS 시스템 소개서","textPreview":"IN-DEPS 시스템 소개서","textChars":15,"textLines":1,"bbox":[62,1080,300,18]}
+{"kind":"textbox","id":"sh/p8ja9onq","slide":17,"name":"page-17-footer-number","text":"17","textPreview":"17","textChars":2,"textLines":1,"bbox":[682,1078,50,20]}
+{"kind":"shape","id":"sh/o7at0j6l","slide":17,"name":"p17-group-0","bbox":[62,276,670,150]}
+{"kind":"shape","id":"sh/ql0369c3","slide":17,"name":"p17-num-0-circle","bbox":[86,326,48,48]}
+{"kind":"textbox","id":"sh/rm94zedo","slide":17,"name":"p17-num-0-number","text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[86,328,48,44]}
+{"kind":"textbox","id":"sh/cnil8ju9","slide":17,"name":"p17-title-0","text":"업무 설계·대상 준비","textPreview":"업무 설계·대상 준비","textChars":11,"textLines":1,"bbox":[160,301,320,36]}
+{"kind":"textbox","id":"sh/dobm1ovu","slide":17,"name":"p17-desc-0","text":"프로젝트·시나리오·파일·Target 테이블","textPreview":"프로젝트·시나리오·파일·Target 테이블","textChars":23,"textLines":1,"bbox":[160,351,390,54]}
+{"kind":"textbox","id":"sh/epk3atcf","slide":17,"name":"p17-count-0","text":"4","textPreview":"4","textChars":1,"textLines":1,"bbox":[640,310,70,54]}
+{"kind":"textbox","id":"sh/zat43edk","slide":17,"name":"p17-count-label-0","text":"개 메뉴","textPreview":"개 메뉴","textChars":4,"textLines":1,"bbox":[636,370,74,24]}
+{"kind":"shape","id":"sh/0b2lcju5","slide":17,"name":"p17-group-1","bbox":[62,459,670,150]}
+{"kind":"shape","id":"sh/1cbm5ovq","slide":17,"name":"p17-num-1-circle","bbox":[86,509,48,48]}
+{"kind":"textbox","id":"sh/utg3ypwv","slide":17,"name":"p17-num-1-number","text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[86,511,48,44]}
+{"kind":"textbox","id":"sh/fupkrudg","slide":17,"name":"p17-title-1","text":"모델 설정·통합 실행","textPreview":"모델 설정·통합 실행","textChars":11,"textLines":1,"bbox":[160,484,320,36]}
+{"kind":"textbox","id":"sh/jy50zqt8","slide":17,"name":"p17-desc-1","text":"4단계 Job, Flow 설계와 Run 분석","textPreview":"4단계 Job, Flow 설계와 Run 분석","textChars":24,"textLines":1,"bbox":[160,534,390,54]}
+{"kind":"textbox","id":"sh/yxwz6lsn","slide":17,"name":"p17-count-1","text":"6","textPreview":"6","textChars":1,"textLines":1,"bbox":[640,493,70,54]}
+{"kind":"textbox","id":"sh/l0ni10be","slide":17,"name":"p17-count-label-1","text":"개 메뉴","textPreview":"개 메뉴","textChars":4,"textLines":1,"bbox":[636,553,74,24]}
+{"kind":"shape","id":"sh/kze18vat","slide":17,"name":"p17-group-2","bbox":[62,642,670,150]}
+{"kind":"shape","id":"sh/bul0vqtc","slide":17,"name":"p17-num-2-circle","bbox":[86,692,48,48]}
+{"kind":"textbox","id":"sh/atcz2lcr","slide":17,"name":"p17-num-2-number","text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[86,694,48,44]}
+{"kind":"textbox","id":"sh/xw3ixgb2","slide":17,"name":"p17-title-2","text":"규칙 결정·수정·보고","textPreview":"규칙 결정·수정·보고","textChars":11,"textLines":1,"bbox":[160,667,320,36]}
+{"kind":"textbox","id":"sh/wvuh4bux","slide":17,"name":"p17-desc-2","text":"규칙 마스터, 편집, 운영 반영, 보고서","textPreview":"규칙 마스터, 편집, 운영 반영, 보고서","textChars":22,"textLines":1,"bbox":[160,717,390,54]}
+{"kind":"textbox","id":"sh/vqp07atg","slide":17,"name":"p17-count-2","text":"5","textPreview":"5","textChars":1,"textLines":1,"bbox":[640,676,70,54]}
+{"kind":"textbox","id":"sh/upgjy5sv","slide":17,"name":"p17-count-label-2","text":"개 메뉴","textPreview":"개 메뉴","textChars":4,"textLines":1,"bbox":[636,736,74,24]}
+{"kind":"shape","id":"sh/cvqxs7ad","slide":17,"name":"p17-group-3","bbox":[62,825,670,150]}
+{"kind":"shape","id":"sh/dwzy1cry","slide":17,"name":"p17-num-3-circle","bbox":[86,875,48,48]}
+{"kind":"textbox","id":"sh/q98fqxs7","slide":17,"name":"p17-num-3-number","text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[86,877,48,44]}
+{"kind":"textbox","id":"sh/rahwz29s","slide":17,"name":"p17-title-3","text":"리소스·개인·관리자 운영","textPreview":"리소스·개인·관리자 운영","textChars":13,"textLines":1,"bbox":[160,850,320,36]}
+{"kind":"textbox","id":"sh/0zaxw7qp","slide":17,"name":"p17-desc-3","text":"모델/API, 개인 설정, DB·시스템·공지","textPreview":"모델/API, 개인 설정, DB·시스템·공지","textChars":24,"textLines":1,"bbox":[160,900,390,54]}
+{"kind":"textbox","id":"sh/10jy5cru","slide":17,"name":"p17-count-3","text":"9","textPreview":"9","textChars":1,"textLines":1,"bbox":[640,859,70,54]}
+{"kind":"textbox","id":"sh/ex8fuhsj","slide":17,"name":"p17-count-label-3","text":"개 메뉴","textPreview":"개 메뉴","textChars":4,"textLines":1,"bbox":[636,919,74,24]}
+{"kind":"shape","id":"sh/zy1g3m94","slide":17,"name":"p17-auth-fill","bbox":[62,982,670,72]}
+{"kind":"shape","id":"sh/o3ax0rql","slide":17,"name":"p17-auth-accent","bbox":[62,982,6,72]}
+{"kind":"textbox","id":"sh/94jy9wr6","slide":17,"name":"p17-auth-text","text":"보안 경계 · 화면에서 메뉴를 숨기는 것은 편의 기능입니다. 실제 관리자 기능은 서버의 관리자 역할 검사를 통과해야 합니다.","textPreview":"보안 경계 · 화면에서 메뉴를 숨기는 것은 편의 기능입니다. 실제 관리자 기능은 서버의 관리자 역할 검사를 통과해야 합니다.","textChars":69,"textLines":1,"bbox":[84,1000,628,40]}
+{"kind":"notes","id":"nt/ma5zpu","slide":17,"text":"[Sources]\n- D:/work/data-editing-system/frontend/help/in-deps-system-guide.html (content source, accessed 2026-08-26)\n- D:/work/data-editing-system/frontend/config/menu.config.js (active menu structure, accessed 2026-08-26)"}
+{"kind":"slide","id":"sl/kaw2y9","slide":18,"title":"05 · MENU MAP · 1/3","textShapes":29}
+{"kind":"shape","id":"sh/7alkzmxw","slide":18,"name":"page-18-rail","bbox":[0,0,10,1123]}
+{"kind":"textbox","id":"sh/sbul8re1","slide":18,"name":"page-18-chapter","text":"05 · MENU MAP · 1/3","textPreview":"05 · MENU MAP · 1/3","textChars":19,"textLines":1,"bbox":[62,45,460,24]}
+{"kind":"textbox","id":"sh/tc321wfm","slide":18,"name":"page-18-title","text":"업무 범위와 4단계 모델 작업을 준비합니다","textPreview":"업무 범위와 4단계 모델 작업을 준비합니다","textChars":23,"textLines":1,"bbox":[62,82,670,84]}
+{"kind":"textbox","id":"sh/edw3a1w7","slide":18,"name":"page-18-subtitle","text":"프로젝트·시나리오·대상 데이터 준비에서 규칙 발굴 4단계 Job 설정까지의 메뉴입니다.","textPreview":"프로젝트·시나리오·대상 데이터 준비에서 규칙 발굴 4단계 Job 설정까지의 메뉴입니다.","textChars":48,"textLines":1,"bbox":[62,170,670,50]}
+{"kind":"shape","id":"sh/fe5k3mxs","slide":18,"name":"page-18-top-rule","bbox":[62,226,670,2]}
+{"kind":"shape","id":"sh/gfelcred","slide":18,"name":"page-18-footer-rule","bbox":[62,1067,670,1]}
+{"kind":"textbox","id":"sh/10n25wfy","slide":18,"name":"page-18-footer-name","text":"IN-DEPS 시스템 소개서","textPreview":"IN-DEPS 시스템 소개서","textChars":15,"textLines":1,"bbox":[62,1080,300,18]}
+{"kind":"textbox","id":"sh/21w3e1wj","slide":18,"name":"page-18-footer-number","text":"18","textPreview":"18","textChars":2,"textLines":1,"bbox":[682,1078,50,20]}
+{"kind":"shape","id":"sh/325k76xo","slide":18,"name":"p18-menu-0-row","bbox":[62,264,670,78]}
+{"kind":"textbox","id":"sh/vqps7294","slide":18,"name":"p18-menu-0-code","text":"M01001","textPreview":"M01001","textChars":6,"textLines":1,"bbox":[80,282,96,22]}
+{"kind":"textbox","id":"sh/upgbyxsj","slide":18,"name":"p18-menu-0-title","text":"프로젝트 설정","textPreview":"프로젝트 설정","textChars":7,"textLines":1,"bbox":[184,279,180,28]}
+{"kind":"textbox","id":"sh/hs7u9cra","slide":18,"name":"p18-menu-0-desc","text":"데이터 에디팅 업무의 최상위 범위를 등록·조회·수정합니다.","textPreview":"데이터 에디팅 업무의 최상위 범위를 등록·조회·수정합니다.","textChars":32,"textLines":1,"bbox":[374,277,340,54]}
+{"kind":"shape","id":"sh/gryt07qp","slide":18,"name":"p18-menu-1-row","bbox":[62,352,670,78]}
+{"kind":"textbox","id":"sh/7mps329s","slide":18,"name":"p18-menu-1-code","text":"M01002","textPreview":"M01002","textChars":6,"textLines":1,"bbox":[80,370,96,22]}
+{"kind":"textbox","id":"sh/6lwbuxs7","slide":18,"name":"p18-menu-1-title","text":"시나리오 정의","textPreview":"시나리오 정의","textChars":7,"textLines":1,"bbox":[184,367,180,28]}
+{"kind":"textbox","id":"sh/to7a5sry","slide":18,"name":"p18-menu-1-desc","text":"프로젝트 안의 실행 목적·설명·기준을 관리합니다.","textPreview":"프로젝트 안의 실행 목적·설명·기준을 관리합니다.","textChars":27,"textLines":1,"bbox":[374,365,340,54]}
+{"kind":"shape","id":"sh/8nytwnad","slide":18,"name":"p18-menu-2-row","bbox":[62,440,670,78]}
+{"kind":"textbox","id":"sh/ri9cfm9c","slide":18,"name":"p18-menu-2-code","text":"M02001","textPreview":"M02001","textChars":6,"textLines":1,"bbox":[80,458,96,22]}
+{"kind":"textbox","id":"sh/qh0b6h8r","slide":18,"name":"p18-menu-2-title","text":"파일 업로드 관리","textPreview":"파일 업로드 관리","textChars":9,"textLines":1,"bbox":[184,455,180,28]}
+{"kind":"textbox","id":"sh/2d4vylsz","slide":18,"name":"p18-menu-2-desc","text":"CSV·Excel을 Target DB 작업 테이블로 적재하고 구조를 확인합니다.","textPreview":"CSV·Excel을 Target DB 작업 테이블로 적재하고 구조를 확인합니다.","textChars":44,"textLines":1,"bbox":[374,453,340,54]}
+{"kind":"shape","id":"sh/nedw7qtk","slide":18,"name":"p18-menu-3-row","bbox":[62,528,670,78]}
+{"kind":"textbox","id":"sh/ofmx0va5","slide":18,"name":"p18-menu-3-code","text":"M02002","textPreview":"M02002","textChars":6,"textLines":1,"bbox":[80,546,96,22]}
+{"kind":"textbox","id":"sh/pgve90ba","slide":18,"name":"p18-menu-3-title","text":"대상 테이블 선정","textPreview":"대상 테이블 선정","textChars":9,"textLines":1,"bbox":[184,543,180,28]}
+{"kind":"textbox","id":"sh/ah4f25sv","slide":18,"name":"p18-menu-3-desc","text":"Target DB 테이블을 관리 대상으로 등록하고 기본 Job·Flow를 준비합니다.","textPreview":"Target DB 테이블을 관리 대상으로 등록하고 기본 Job·Flow를 준비합니다.","textChars":47,"textLines":1,"bbox":[374,541,340,54]}
+{"kind":"shape","id":"sh/bidwbatg","slide":18,"name":"p18-menu-4-row","bbox":[62,616,670,78]}
+{"kind":"textbox","id":"sh/cjmx4va1","slide":18,"name":"p18-menu-4-code","text":"M03001","textPreview":"M03001","textChars":6,"textLines":1,"bbox":[80,634,96,22]}
+{"kind":"textbox","id":"sh/xkfed0bm","slide":18,"name":"p18-menu-4-title","text":"컬럼 유형 분석","textPreview":"컬럼 유형 분석","textChars":8,"textLines":1,"bbox":[184,631,180,28]}
+{"kind":"textbox","id":"sh/qlkvq1cr","slide":18,"name":"p18-menu-4-desc","text":"RULE·MODEL·FINAL과 사용자 확정 최종 유형을 구분합니다.","textPreview":"RULE·MODEL·FINAL과 사용자 확정 최종 유형을 구분합니다.","textChars":38,"textLines":1,"bbox":[374,629,340,54]}
+{"kind":"shape","id":"sh/rmtwz6tc","slide":18,"name":"p18-menu-5-row","bbox":[62,704,670,78]}
+{"kind":"textbox","id":"sh/t0zy54vu","slide":18,"name":"p18-menu-5-code","text":"M03002","textPreview":"M03002","textChars":6,"textLines":1,"bbox":[80,722,96,22]}
+{"kind":"textbox","id":"sh/8fqhczu9","slide":18,"name":"p18-menu-5-title","text":"컬럼 상관 분석","textPreview":"컬럼 상관 분석","textChars":8,"textLines":1,"bbox":[184,719,180,28]}
+{"kind":"textbox","id":"sh/7ehg3udo","slide":18,"name":"p18-menu-5-desc","text":"유형별 지표, 관계 매트릭스, 네트워크와 군집을 생성합니다.","textPreview":"유형별 지표, 관계 매트릭스, 네트워크와 군집을 생성합니다.","textChars":33,"textLines":1,"bbox":[374,717,340,54]}
+{"kind":"shape","id":"sh/6d8za9c3","slide":18,"name":"p18-menu-6-row","bbox":[62,792,670,78]}
+{"kind":"textbox","id":"sh/h4ji9ovq","slide":18,"name":"p18-menu-6-code","text":"M03003","textPreview":"M03003","textChars":6,"textLines":1,"bbox":[80,810,96,22]}
+{"kind":"textbox","id":"sh/g3ahgju5","slide":18,"name":"p18-menu-6-title","text":"자동 규칙 발굴","textPreview":"자동 규칙 발굴","textChars":8,"textLines":1,"bbox":[184,807,180,28]}
+{"kind":"textbox","id":"sh/v2h07ed0","slide":18,"name":"p18-menu-6-desc","text":"Apriori와 LASSO·Symbolic 규칙 후보를 발굴합니다.","textPreview":"Apriori와 LASSO·Symbolic 규칙 후보를 발굴합니다.","textChars":37,"textLines":1,"bbox":[374,805,340,54]}
+{"kind":"shape","id":"sh/u18ze9cf","slide":18,"name":"p18-menu-7-row","bbox":[62,880,670,78]}
+{"kind":"textbox","id":"sh/x8fyxkvm","slide":18,"name":"p18-menu-7-code","text":"M03004","textPreview":"M03004","textChars":6,"textLines":1,"bbox":[80,898,96,22]}
+{"kind":"textbox","id":"sh/w76h4fu1","slide":18,"name":"p18-menu-7-title","text":"규칙 위반 탐지","textPreview":"규칙 위반 탐지","textChars":8,"textLines":1,"bbox":[184,895,180,28]}
+{"kind":"textbox","id":"sh/03e1cnep","slide":18,"name":"p18-menu-7-desc","text":"범주형·연속형 규칙의 위반 후보와 상세 행을 찾습니다.","textPreview":"범주형·연속형 규칙의 위반 후보와 상세 행을 찾습니다.","textChars":30,"textLines":1,"bbox":[374,893,340,54]}
+{"kind":"notes","id":"nt/kaw2y9","slide":18,"text":"[Sources]\n- D:/work/data-editing-system/frontend/help/in-deps-system-guide.html (content source, accessed 2026-08-26)\n- D:/work/data-editing-system/frontend/config/menu.config.js (menu codes and labels, accessed 2026-08-26)"}
+{"kind":"slide","id":"sl/g24mzs","slide":19,"title":"05 · MENU MAP · 2/3","textShapes":27}
+{"kind":"shape","id":"sh/9476p8ba","slide":19,"name":"page-19-rail","bbox":[0,0,10,1123]}
+{"kind":"textbox","id":"sh/m1w7etcj","slide":19,"name":"page-19-chapter","text":"05 · MENU MAP · 2/3","textPreview":"05 · MENU MAP · 2/3","textChars":19,"textLines":1,"bbox":[62,45,460,24]}
+{"kind":"textbox","id":"sh/725onyt4","slide":19,"name":"page-19-title","text":"실행 결과를 결정·수정·보고로 연결합니다","textPreview":"실행 결과를 결정·수정·보고로 연결합니다","textChars":22,"textLines":1,"bbox":[62,82,670,84]}
+{"kind":"textbox","id":"sh/kzepcjut","slide":19,"name":"page-19-subtitle","text":"Flow 실행과 결과 분석, 규칙 결정, 편집, 운영 반영과 보고서 메뉴입니다.","textPreview":"Flow 실행과 결과 분석, 규칙 결정, 편집, 운영 반영과 보고서 메뉴입니다.","textChars":44,"textLines":1,"bbox":[62,170,670,50]}
+{"kind":"shape","id":"sh/l0n6lobe","slide":19,"name":"page-19-top-rule","bbox":[62,226,670,2]}
+{"kind":"shape","id":"sh/yxwna9cn","slide":19,"name":"page-19-footer-rule","bbox":[62,1067,670,1]}
+{"kind":"textbox","id":"sh/zy5ojet8","slide":19,"name":"page-19-footer-name","text":"IN-DEPS 시스템 소개서","textPreview":"IN-DEPS 시스템 소개서","textChars":15,"textLines":1,"bbox":[62,1080,300,18]}
+{"kind":"textbox","id":"sh/4viponax","slide":19,"name":"page-19-footer-number","text":"19","textPreview":"19","textChars":2,"textLines":1,"bbox":[682,1078,50,20]}
+{"kind":"shape","id":"sh/5wr6xsbi","slide":19,"name":"p19-menu-0-row","bbox":[62,270,670,78]}
+{"kind":"textbox","id":"sh/147uxc7q","slide":19,"name":"p19-menu-0-code","text":"M04001","textPreview":"M04001","textChars":6,"textLines":1,"bbox":[80,288,96,22]}
+{"kind":"textbox","id":"sh/03yt47q5","slide":19,"name":"p19-menu-0-title","text":"규칙 발굴 실행","textPreview":"규칙 발굴 실행","textChars":8,"textLines":1,"bbox":[184,285,180,28]}
+{"kind":"textbox","id":"sh/z2psv2pk","slide":19,"name":"p19-menu-0-desc","text":"Job을 DAG로 연결해 통합 Flow를 설계·검증·실행합니다.","textPreview":"Job을 DAG로 연결해 통합 Flow를 설계·검증·실행합니다.","textChars":35,"textLines":1,"bbox":[374,283,340,54]}
+{"kind":"shape","id":"sh/e1wb2x8z","slide":19,"name":"p19-menu-1-row","bbox":[62,369,670,78]}
+{"kind":"textbox","id":"sh/d0natsre","slide":19,"name":"p19-menu-1-code","text":"M04002","textPreview":"M04002","textChars":6,"textLines":1,"bbox":[80,387,96,22]}
+{"kind":"textbox","id":"sh/czet0nq9","slide":19,"name":"p19-menu-1-title","text":"규칙 발굴 분석","textPreview":"규칙 발굴 분석","textChars":8,"textLines":1,"bbox":[184,384,180,28]}
+{"kind":"textbox","id":"sh/ry5sri9o","slide":19,"name":"p19-menu-1-desc","text":"Flow Run의 4단계 결과와 실제 실행 맥락을 해석합니다.","textPreview":"Flow Run의 4단계 결과와 실제 실행 맥락을 해석합니다.","textChars":34,"textLines":1,"bbox":[374,382,340,54]}
+{"kind":"shape","id":"sh/qxwbyx83","slide":19,"name":"p19-menu-2-row","bbox":[62,468,670,78]}
+{"kind":"textbox","id":"sh/xwru5w7y","slide":19,"name":"p19-menu-2-code","text":"M05001","textPreview":"M05001","textChars":6,"textLines":1,"bbox":[80,486,96,22]}
+{"kind":"textbox","id":"sh/wvitcrqd","slide":19,"name":"p19-menu-2-title","text":"에디팅 규칙 관리","textPreview":"에디팅 규칙 관리","textChars":9,"textLines":1,"bbox":[184,483,180,28]}
+{"kind":"textbox","id":"sh/wzqd8vyp","slide":19,"name":"p19-menu-2-desc","text":"발굴 후보를 선정·제외하고 최종·사용자 규칙을 관리합니다.","textPreview":"발굴 후보를 선정·제외하고 최종·사용자 규칙을 관리합니다.","textChars":32,"textLines":1,"bbox":[374,481,340,54]}
+{"kind":"shape","id":"sh/h0ze10fu","slide":19,"name":"p19-menu-3-row","bbox":[62,567,670,78]}
+{"kind":"textbox","id":"sh/ud8v6lgj","slide":19,"name":"p19-menu-3-code","text":"M05002","textPreview":"M05002","textChars":6,"textLines":1,"bbox":[80,585,96,22]}
+{"kind":"textbox","id":"sh/vehwzqx4","slide":19,"name":"p19-menu-3-title","text":"에디팅 오류 수정","textPreview":"에디팅 오류 수정","textChars":9,"textLines":1,"bbox":[184,582,180,28]}
+{"kind":"textbox","id":"sh/8b6d4vyd","slide":19,"name":"p19-menu-3-desc","text":"활성 규칙으로 기준본을 검사하고 편집본의 오류 값을 수정합니다.","textPreview":"활성 규칙으로 기준본을 검사하고 편집본의 오류 값을 수정합니다.","textChars":35,"textLines":1,"bbox":[374,580,340,54]}
+{"kind":"shape","id":"sh/9cfexgfy","slide":19,"name":"p19-menu-4-row","bbox":[62,666,670,78]}
+{"kind":"textbox","id":"sh/m9ov2lg7","slide":19,"name":"p19-menu-4-code","text":"M05003","textPreview":"M05003","textChars":6,"textLines":1,"bbox":[80,684,96,22]}
+{"kind":"textbox","id":"sh/7axwvqxs","slide":19,"name":"p19-menu-4-title","text":"에디팅 운영 반영","textPreview":"에디팅 운영 반영","textChars":9,"textLines":1,"bbox":[184,681,180,28]}
+{"kind":"textbox","id":"sh/k76d0byh","slide":19,"name":"p19-menu-4-desc","text":"수정 효과, 버전 DML, 실행과 감사 이력을 관리합니다.","textPreview":"수정 효과, 버전 DML, 실행과 감사 이력을 관리합니다.","textChars":32,"textLines":1,"bbox":[374,679,340,54]}
+{"kind":"shape","id":"sh/l8futgf2","slide":19,"name":"p19-menu-5-row","bbox":[62,765,670,78]}
+{"kind":"textbox","id":"sh/n2dwj61o","slide":19,"name":"p19-menu-5-code","text":"M06001","textPreview":"M06001","textChars":6,"textLines":1,"bbox":[80,783,96,22]}
+{"kind":"textbox","id":"sh/2h4fa103","slide":19,"name":"p19-menu-5-title","text":"기본형 보고서","textPreview":"기본형 보고서","textChars":7,"textLines":1,"bbox":[184,780,180,28]}
+{"kind":"textbox","id":"sh/p4velgju","slide":19,"name":"p19-menu-5-desc","text":"설계·분석·에디팅 결과를 고정형·통합 보고서로 제공합니다.","textPreview":"설계·분석·에디팅 결과를 고정형·통합 보고서로 제공합니다.","textChars":32,"textLines":1,"bbox":[374,778,340,54]}
+{"kind":"shape","id":"sh/o3mxcbi9","slide":19,"name":"p19-menu-6-row","bbox":[62,864,670,78]}
+{"kind":"textbox","id":"sh/b6xwnq1k","slide":19,"name":"p19-menu-6-code","text":"M06002","textPreview":"M06002","textChars":6,"textLines":1,"bbox":[80,882,96,22]}
+{"kind":"textbox","id":"sh/a54fel0f","slide":19,"name":"p19-menu-6-title","text":"맞춤형 보고서","textPreview":"맞춤형 보고서","textChars":7,"textLines":1,"bbox":[184,879,180,28]}
+{"kind":"textbox","id":"sh/x8fepgzq","slide":19,"name":"p19-menu-6-desc","text":"보고 블록을 용지와 순서에 맞춰 재사용 가능한 템플릿으로 만듭니다.","textPreview":"보고 블록을 용지와 순서에 맞춰 재사용 가능한 템플릿으로 만듭니다.","textChars":37,"textLines":1,"bbox":[374,877,340,54]}
+{"kind":"shape","id":"sh/c76xgbi5","slide":19,"name":"p19-callout-fill","bbox":[62,956,670,78]}
+{"kind":"shape","id":"sh/zaxwrqhw","slide":19,"name":"p19-callout-accent","bbox":[62,956,6,78]}
+{"kind":"textbox","id":"sh/y9ofil0b","slide":19,"name":"p19-callout-text","text":"업무 승인·데이터 수정·운영 실행·결과 공유는 서로 다른 메뉴와 이력으로 분리됩니다.","textPreview":"업무 승인·데이터 수정·운영 실행·결과 공유는 서로 다른 메뉴와 이력으로 분리됩니다.","textChars":47,"textLines":1,"bbox":[84,974,628,46]}
+{"kind":"notes","id":"nt/g24mzs","slide":19,"text":"[Sources]\n- D:/work/data-editing-system/frontend/help/in-deps-system-guide.html (content source, accessed 2026-08-26)\n- D:/work/data-editing-system/frontend/config/menu.config.js (menu codes and labels, accessed 2026-08-26)"}
+{"kind":"slide","id":"sl/e0wkhd","slide":20,"title":"05 · MENU MAP · 3/3","textShapes":32}
+{"kind":"shape","id":"sh/7atcvix8","slide":20,"name":"page-20-rail","bbox":[0,0,10,1123]}
+{"kind":"textbox","id":"sh/sb2d4net","slide":20,"name":"page-20-chapter","text":"05 · MENU MAP · 3/3","textPreview":"05 · MENU MAP · 3/3","textChars":19,"textLines":1,"bbox":[62,45,460,24]}
+{"kind":"textbox","id":"sh/tcbuxsfy","slide":20,"name":"page-20-title","text":"리소스·개인 환경·관리자 기능을 운영합니다","textPreview":"리소스·개인 환경·관리자 기능을 운영합니다","textChars":23,"textLines":1,"bbox":[62,82,670,84]}
+{"kind":"textbox","id":"sh/i50vydwb","slide":20,"name":"page-20-subtitle","text":"실행 리소스와 모델 학습, 개인 설정, Target DB·시스템·공지 관리 메뉴입니다.","textPreview":"실행 리소스와 모델 학습, 개인 설정, Target DB·시스템·공지 관리 메뉴입니다.","textChars":48,"textLines":1,"bbox":[62,170,670,50]}
+{"kind":"shape","id":"sh/j6tcrixw","slide":20,"name":"page-20-top-rule","bbox":[62,226,670,2]}
+{"kind":"shape","id":"sh/k72d03eh","slide":20,"name":"page-20-footer-rule","bbox":[62,1067,670,1]}
+{"kind":"textbox","id":"sh/58but8f2","slide":20,"name":"page-20-footer-name","text":"IN-DEPS 시스템 소개서","textPreview":"IN-DEPS 시스템 소개서","textChars":15,"textLines":1,"bbox":[62,1080,300,18]}
+{"kind":"textbox","id":"sh/214vaxwv","slide":20,"name":"page-20-footer-number","text":"20","textPreview":"20","textChars":2,"textLines":1,"bbox":[682,1078,50,20]}
+{"kind":"shape","id":"sh/32dc32xg","slide":20,"name":"p20-menu-0-row","bbox":[62,260,670,78]}
+{"kind":"textbox","id":"sh/vydcralg","slide":20,"name":"p20-menu-0-code","text":"M90001","textPreview":"M90001","textChars":6,"textLines":1,"bbox":[80,278,96,22]}
+{"kind":"textbox","id":"sh/ux4vy5kv","slide":20,"name":"p20-menu-0-title","text":"내부 모델 등록","textPreview":"내부 모델 등록","textChars":8,"textLines":1,"bbox":[184,275,180,28]}
+{"kind":"textbox","id":"sh/h0vutk36","slide":20,"name":"p20-menu-0-desc","text":"Target DB 프로시저·패키지·모델 객체를 실행 리소스로 등록합니다.","textPreview":"Target DB 프로시저·패키지·모델 객체를 실행 리소스로 등록합니다.","textChars":40,"textLines":1,"bbox":[374,273,340,54]}
+{"kind":"shape","id":"sh/wzmd0f2l","slide":20,"name":"p20-menu-1-row","bbox":[62,339,670,78]}
+{"kind":"textbox","id":"sh/j2xcvalc","slide":20,"name":"p20-menu-1-code","text":"M90002","textPreview":"M90002","textChars":6,"textLines":1,"bbox":[80,357,96,22]}
+{"kind":"textbox","id":"sh/i1ov25kr","slide":20,"name":"p20-menu-1-title","text":"외부 모델 등록","textPreview":"외부 모델 등록","textChars":8,"textLines":1,"bbox":[184,354,180,28]}
+{"kind":"textbox","id":"sh/5ofexk3i","slide":20,"name":"p20-menu-1-desc","text":"내부 Python·외부 JSON API·OML 리소스 계약을 관리합니다.","textPreview":"내부 Python·외부 JSON API·OML 리소스 계약을 관리합니다.","textChars":40,"textLines":1,"bbox":[374,352,340,54]}
+{"kind":"shape","id":"sh/436d4f2x","slide":20,"name":"p20-menu-2-row","bbox":[62,418,670,78]}
+{"kind":"textbox","id":"sh/rqxwzul8","slide":20,"name":"p20-menu-2-code","text":"M90003","textPreview":"M90003","textChars":6,"textLines":1,"bbox":[80,436,96,22]}
+{"kind":"textbox","id":"sh/6pov6pk3","slide":20,"name":"p20-menu-2-title","text":"모델 학습 관리","textPreview":"모델 학습 관리","textChars":8,"textLines":1,"bbox":[184,433,180,28]}
+{"kind":"textbox","id":"sh/2lsfyt4b","slide":20,"name":"p20-menu-2-desc","text":"공통 OML 모델의 학습·검증·활성화·롤백 이력을 관리합니다.","textPreview":"공통 OML 모델의 학습·검증·활성화·롤백 이력을 관리합니다.","textChars":34,"textLines":1,"bbox":[374,431,340,54]}
+{"kind":"shape","id":"sh/3m1g7y5g","slide":20,"name":"p20-menu-3-row","bbox":[62,497,670,78]}
+{"kind":"textbox","id":"sh/onax03m1","slide":20,"name":"p20-menu-3-code","text":"M91001","textPreview":"M91001","textChars":6,"textLines":1,"bbox":[80,515,96,22]}
+{"kind":"textbox","id":"sh/pojy98nm","slide":20,"name":"p20-menu-3-title","text":"나의 회원정보","textPreview":"나의 회원정보","textChars":7,"textLines":1,"bbox":[184,512,180,28]}
+{"kind":"textbox","id":"sh/ex8fu94z","slide":20,"name":"p20-menu-3-desc","text":"계정 정보와 개인 API Key 상태를 관리합니다.","textPreview":"계정 정보와 개인 API Key 상태를 관리합니다.","textChars":28,"textLines":1,"bbox":[374,510,340,54]}
+{"kind":"shape","id":"sh/fihg3e5k","slide":20,"name":"p20-menu-4-row","bbox":[62,576,670,78]}
+{"kind":"textbox","id":"sh/gjqxwjm5","slide":20,"name":"p20-menu-4-code","text":"M91002","textPreview":"M91002","textChars":6,"textLines":1,"bbox":[80,594,96,22]}
+{"kind":"textbox","id":"sh/1kjy5onq","slide":20,"name":"p20-menu-4-title","text":"내 시스템 설정","textPreview":"내 시스템 설정","textChars":8,"textLines":1,"bbox":[184,591,180,28]}
+{"kind":"textbox","id":"sh/ytcz6d43","slide":20,"name":"p20-menu-4-desc","text":"언어·표시·계정과 사용자별 설정을 관리합니다.","textPreview":"언어·표시·계정과 사용자별 설정을 관리합니다.","textChars":25,"textLines":1,"bbox":[374,589,340,54]}
+{"kind":"shape","id":"sh/zelgzi5o","slide":20,"name":"p20-menu-5-row","bbox":[62,655,670,78]}
+{"kind":"textbox","id":"sh/tk7alwb2","slide":20,"name":"p20-menu-5-code","text":"M99001","textPreview":"M99001","textChars":6,"textLines":1,"bbox":[80,673,96,22]}
+{"kind":"textbox","id":"sh/8jy9sbax","slide":20,"name":"p20-menu-5-title","text":"DB 접속 정보 설정","textPreview":"DB 접속 정보 설정","textChars":11,"textLines":1,"bbox":[184,670,180,28]}
+{"kind":"textbox","id":"sh/7ypsj6tc","slide":20,"name":"p20-menu-5-desc","text":"관리자가 Target DB 연결을 등록·테스트·초기화합니다.","textPreview":"관리자가 Target DB 연결을 등록·테스트·초기화합니다.","textChars":33,"textLines":1,"bbox":[374,668,340,54]}
+{"kind":"shape","id":"sh/6xgrq1sr","slide":20,"name":"p20-menu-6-row","bbox":[62,734,670,78]}
+{"kind":"textbox","id":"sh/lwnahwb6","slide":20,"name":"p20-menu-6-code","text":"M99002","textPreview":"M99002","textChars":6,"textLines":1,"bbox":[80,752,96,22]}
+{"kind":"textbox","id":"sh/kve9oral","slide":20,"name":"p20-menu-6-title","text":"데이터베이스관리","textPreview":"데이터베이스관리","textChars":8,"textLines":1,"bbox":[184,749,180,28]}
+{"kind":"textbox","id":"sh/ju5sfmt0","slide":20,"name":"p20-menu-6-desc","text":"Target DB 객체·데이터·컬럼·소스·SQL을 탐색합니다.","textPreview":"Target DB 객체·데이터·컬럼·소스·SQL을 탐색합니다.","textChars":34,"textLines":1,"bbox":[374,747,340,54]}
+{"kind":"shape","id":"sh/ytwrmhsf","slide":20,"name":"p20-menu-7-row","bbox":[62,813,670,78]}
+{"kind":"textbox","id":"sh/5srat0ba","slide":20,"name":"p20-menu-7-code","text":"M99003","textPreview":"M99003","textChars":6,"textLines":1,"bbox":[80,831,96,22]}
+{"kind":"textbox","id":"sh/4ritkvap","slide":20,"name":"p20-menu-7-title","text":"System Management","textPreview":"System Management","textChars":17,"textLines":1,"bbox":[184,828,180,28]}
+{"kind":"textbox","id":"sh/cjm94r69","slide":20,"name":"p20-menu-7-desc","text":"초기화·테이블 점검·사용자 승인 등 시스템을 운영합니다.","textPreview":"초기화·테이블 점검·사용자 승인 등 시스템을 운영합니다.","textChars":31,"textLines":1,"bbox":[374,826,340,54]}
+{"kind":"shape","id":"sh/dkvaxw7u","slide":20,"name":"p20-menu-8-row","bbox":[62,892,670,78]}
+{"kind":"textbox","id":"sh/qh4r2ho3","slide":20,"name":"p20-menu-8-code","text":"M99004","textPreview":"M99004","textChars":6,"textLines":1,"bbox":[80,910,96,22]}
+{"kind":"textbox","id":"sh/bid8vmpo","slide":20,"name":"p20-menu-8-title","text":"공지사항 관리","textPreview":"공지사항 관리","textChars":7,"textLines":1,"bbox":[184,907,180,28]}
+{"kind":"textbox","id":"sh/0n698b6l","slide":20,"name":"p20-menu-8-desc","text":"공지와 첨부 파일을 등록·수정·삭제합니다.","textPreview":"공지와 첨부 파일을 등록·수정·삭제합니다.","textChars":23,"textLines":1,"bbox":[374,905,340,54]}
+{"kind":"notes","id":"nt/e0wkhd","slide":20,"text":"[Sources]\n- D:/work/data-editing-system/frontend/help/in-deps-system-guide.html (content source, accessed 2026-08-26)\n- D:/work/data-editing-system/frontend/config/menu.config.js (menu codes and labels, accessed 2026-08-26)"}
+{"kind":"slide","id":"sl/ukwvai","slide":21,"title":"06 · SAFE OPERATION","textShapes":15}
+{"kind":"shape","id":"sh/3ex0nalg","slide":21,"name":"page-21-rail","bbox":[0,0,10,1123]}
+{"kind":"textbox","id":"sh/4f6hwfm1","slide":21,"name":"page-21-chapter","text":"06 · SAFE OPERATION","textPreview":"06 · SAFE OPERATION","textChars":19,"textLines":1,"bbox":[62,45,460,24]}
+{"kind":"textbox","id":"sh/pgfip036","slide":21,"name":"page-21-title","text":"실행 전후에 세 가지 기준을 확인합니다","textPreview":"실행 전후에 세 가지 기준을 확인합니다","textChars":21,"textLines":1,"bbox":[62,82,670,84]}
+{"kind":"textbox","id":"sh/qhojy54r","slide":21,"name":"page-21-subtitle","text":"실행 컨텍스트, 상태와 품질, 수정·반영 안전성을 분리해 점검하면 잘못된 대상 실행과 성급한 운영 변경을 줄일 수 있습니다.","textPreview":"실행 컨텍스트, 상태와 품질, 수정·반영 안전성을 분리해 점검하면 잘못된 대상 실행과 성급한 운영 변경을 줄일 수 있습니다.","textChars":69,"textLines":1,"bbox":[62,170,670,50]}
+{"kind":"shape","id":"sh/rih0ralc","slide":21,"name":"page-21-top-rule","bbox":[62,226,670,2]}
+{"kind":"shape","id":"sh/cjq10f2x","slide":21,"name":"page-21-footer-rule","bbox":[62,1067,670,1]}
+{"kind":"textbox","id":"sh/dkzitk3i","slide":21,"name":"page-21-footer-name","text":"IN-DEPS 시스템 소개서","textPreview":"IN-DEPS 시스템 소개서","textChars":15,"textLines":1,"bbox":[62,1080,300,18]}
+{"kind":"textbox","id":"sh/6l4zml4n","slide":21,"name":"page-21-footer-number","text":"21","textPreview":"21","textChars":2,"textLines":1,"bbox":[682,1078,50,20]}
+{"kind":"shape","id":"sh/7md0fql8","slide":21,"name":"p21-card-0","bbox":[62,274,670,205]}
+{"kind":"shape","id":"sh/3yp43q58","slide":21,"name":"p21-num-0-circle","bbox":[86,302,48,48]}
+{"kind":"textbox","id":"sh/2xg3a5on","slide":21,"name":"p21-num-0-number","text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[86,304,48,44]}
+{"kind":"textbox","id":"sh/pkrm50ne","slide":21,"name":"p21-title-0","text":"실행 전 컨텍스트","textPreview":"실행 전 컨텍스트","textChars":9,"textLines":1,"bbox":[160,305,330,34]}
+{"kind":"textbox","id":"sh/4zilcv6t","slide":21,"name":"p21-bullets-0","text":"현재 사용자, 역할과 Target DB 확인\n프로젝트·시나리오·대상 테이블 범위 확인\nFlow Validate의 단계·포트·SAME_RUN 확인","textPreview":"현재 사용자, 역할과 Target DB 확인 | 프로젝트·시나리오·대상 테이블 범위 확인 | Flow Validate의 단계·포트·SAME_RUN 확인","textChars":80,"textLines":3,"bbox":[160,362,536,96]}
+{"kind":"shape","id":"sh/vup4zq5c","slide":21,"name":"p21-card-1","bbox":[62,510,670,205]}
+{"kind":"shape","id":"sh/utg36lor","slide":21,"name":"p21-num-1-circle","bbox":[86,538,48,48]}
+{"kind":"textbox","id":"sh/hw7m10n2","slide":21,"name":"p21-num-1-number","text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[86,540,48,44]}
+{"kind":"textbox","id":"sh/gvyl8v6h","slide":21,"name":"p21-title-1","text":"상태와 품질 분리","textPreview":"상태와 품질 분리","textChars":9,"textLines":1,"bbox":[160,541,330,34]}
+{"kind":"textbox","id":"sh/7q5kv650","slide":21,"name":"p21-bullets-1","text":"SUCCESS와 업무 승인을 구분\nFAILED의 부분 완료 메시지를 유형별 확인\n위반 0건이 정상 결과일 가능성 확인","textPreview":"SUCCESS와 업무 승인을 구분 | FAILED의 부분 완료 메시지를 유형별 확인 | 위반 0건이 정상 결과일 가능성 확인","textChars":65,"textLines":3,"bbox":[160,598,536,96]}
+{"kind":"shape","id":"sh/6pw32lof","slide":21,"name":"p21-card-2","bbox":[62,746,670,205]}
+{"kind":"shape","id":"sh/a1wne18n","slide":21,"name":"p21-num-2-circle","bbox":[86,774,48,48]}
+{"kind":"textbox","id":"sh/bm54769s","slide":21,"name":"p21-num-2-number","text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[86,776,48,44]}
+{"kind":"textbox","id":"sh/wne5gbqd","slide":21,"name":"p21-title-2","text":"수정·반영 안전성","textPreview":"수정·반영 안전성","textChars":9,"textLines":1,"bbox":[160,777,330,34]}
+{"kind":"textbox","id":"sh/xonm9gry","slide":21,"name":"p21-bullets-2","text":"탐지 결과가 원본을 자동 수정하지 않음\n수정본 효과 검증 후 버전 DML 검증\n운영 반영 전 권한·실행 확인·감사 이력 점검","textPreview":"탐지 결과가 원본을 자동 수정하지 않음 | 수정본 효과 검증 후 버전 DML 검증 | 운영 반영 전 권한·실행 확인·감사 이력 점검","textChars":69,"textLines":3,"bbox":[160,834,536,96]}
+{"kind":"shape","id":"sh/ypwnil8j","slide":21,"name":"p21-callout-fill","bbox":[62,970,670,76]}
+{"kind":"shape","id":"sh/jq54bq94","slide":21,"name":"p21-callout-accent","bbox":[62,970,6,76]}
+{"kind":"textbox","id":"sh/kry5kvqp","slide":21,"name":"p21-callout-text","text":"운영 체크는 오류 대응 절차가 아니라 실행 전에 범위와 책임을 확정하는 기본 업무 절차입니다.","textPreview":"운영 체크는 오류 대응 절차가 아니라 실행 전에 범위와 책임을 확정하는 기본 업무 절차입니다.","textChars":52,"textLines":1,"bbox":[84,988,628,44]}
+{"kind":"notes","id":"nt/ukwvai","slide":21,"text":"[Sources]\n- D:/work/data-editing-system/frontend/help/in-deps-system-guide.html (content source, accessed 2026-08-26)"}
+{"kind":"slide","id":"sl/cq8rme","slide":22,"title":"06 · SECURITY BOUNDARIES","textShapes":14}
+{"kind":"shape","id":"sh/i1cv2p0v","slide":22,"name":"page-22-rail","bbox":[0,0,10,1123]}
+{"kind":"textbox","id":"sh/543exkzm","slide":22,"name":"page-22-chapter","text":"06 · SECURITY BOUNDARIES","textPreview":"06 · SECURITY BOUNDARIES","textChars":24,"textLines":1,"bbox":[62,45,460,24]}
+{"kind":"textbox","id":"sh/43ud4fi1","slide":22,"name":"page-22-title","text":"인증·권한·비밀 값은 서버 경계에서 판단합니다","textPreview":"인증·권한·비밀 값은 서버 경계에서 판단합니다","textChars":25,"textLines":1,"bbox":[62,82,670,84]}
+{"kind":"textbox","id":"sh/vylwrah4","slide":22,"name":"page-22-subtitle","text":"브라우저 저장 값이나 메뉴 숨김을 보안 근거로 사용하지 않고, 서버 세션과 시스템 DB 조회를 기준으로 사용자와 관리자 권한을 확인합니다.","textPreview":"브라우저 저장 값이나 메뉴 숨김을 보안 근거로 사용하지 않고, 서버 세션과 시스템 DB 조회를 기준으로 사용자와 관리자 권한을 확인합니다.","textChars":77,"textLines":1,"bbox":[62,170,670,50]}
+{"kind":"shape","id":"sh/uxcvy50z","slide":22,"name":"page-22-top-rule","bbox":[62,226,670,2]}
+{"kind":"shape","id":"sh/h03etkza","slide":22,"name":"page-22-footer-rule","bbox":[62,1067,670,1]}
+{"kind":"textbox","id":"sh/gzud0fip","slide":22,"name":"page-22-footer-name","text":"IN-DEPS 시스템 소개서","textPreview":"IN-DEPS 시스템 소개서","textChars":15,"textLines":1,"bbox":[62,1080,300,18]}
+{"kind":"textbox","id":"sh/7a1wnah8","slide":22,"name":"page-22-footer-number","text":"22","textPreview":"22","textChars":2,"textLines":1,"bbox":[682,1078,50,20]}
+{"kind":"shape","id":"sh/69svu50n","slide":22,"name":"p22-auth-fill","bbox":[62,268,670,164]}
+{"kind":"shape","id":"sh/k3et8by1","slide":22,"name":"p22-auth-accent","bbox":[62,268,8,164]}
+{"kind":"textbox","id":"sh/l4nahgfm","slide":22,"name":"p22-auth-title","text":"인증·인가 기준","textPreview":"인증·인가 기준","textChars":8,"textLines":1,"bbox":[90,290,245,34]}
+{"kind":"textbox","id":"sh/y1wb6lgb","slide":22,"name":"p22-auth-body","text":"서버 세션 쿠키와 시스템 DB 조회가 사용자 ID와 역할의 기준입니다. GET/POST 파라미터, 임의 헤더, sessionStorage·localStorage는 권한 근거가 아닙니다.","textPreview":"서버 세션 쿠키와 시스템 DB 조회가 사용자 ID와 역할의 기준입니다. GET/POST 파라미터, 임의 헤더, sessionStorage·localStorage는 권한 근거가 아닙니다.","textChars":103,"textLines":1,"bbox":[352,290,348,124]}
+{"kind":"shape","id":"sh/z25sfqxg","slide":22,"name":"p22-admin-fill","bbox":[62,450,670,148]}
+{"kind":"shape","id":"sh/czet4by5","slide":22,"name":"p22-admin-accent","bbox":[62,450,8,148]}
+{"kind":"textbox","id":"sh/x0nadgfq","slide":22,"name":"p22-admin-title","text":"관리자 기능","textPreview":"관리자 기능","textChars":6,"textLines":1,"bbox":[90,472,245,34]}
+{"kind":"textbox","id":"sh/axwb21gz","slide":22,"name":"p22-admin-body","text":"관리자 메뉴 숨김은 보조 UI일 뿐입니다. 관리자 API는 서버의 관리자 역할 검사 또는 전역 관리자 정책을 통과해야 합니다.","textPreview":"관리자 메뉴 숨김은 보조 UI일 뿐입니다. 관리자 API는 서버의 관리자 역할 검사 또는 전역 관리자 정책을 통과해야 합니다.","textChars":70,"textLines":1,"bbox":[352,472,348,108]}
+{"kind":"shape","id":"sh/by5sb6xk","slide":22,"name":"p22-secret-fill","bbox":[62,616,670,164]}
+{"kind":"shape","id":"sh/wvytgfy9","slide":22,"name":"p22-secret-accent","bbox":[62,616,8,164]}
+{"kind":"textbox","id":"sh/hwrup0fu","slide":22,"name":"p22-secret-title","text":"비밀번호·키·지갑","textPreview":"비밀번호·키·지갑","textChars":9,"textLines":1,"bbox":[90,638,245,34]}
+{"kind":"textbox","id":"sh/5cna907y","slide":22,"name":"p22-secret-body","text":"DB·지갑 비밀번호, 외부 API Key, 관리자 인증 값은 암호화·세션·권한 경계에서 처리하며 도움말·브라우저 응답·JS에 남기지 않습니다.","textPreview":"DB·지갑 비밀번호, 외부 API Key, 관리자 인증 값은 암호화·세션·권한 경계에서 처리하며 도움말·브라우저 응답·JS에 남기지 않습니다.","textChars":79,"textLines":1,"bbox":[352,638,348,124]}
+{"kind":"shape","id":"sh/4bet0vqd","slide":22,"name":"p22-external-fill","bbox":[62,798,670,164]}
+{"kind":"shape","id":"sh/3als7qps","slide":22,"name":"p22-external-accent","bbox":[62,798,8,164]}
+{"kind":"textbox","id":"sh/ipcby58n","slide":22,"name":"p22-external-title","text":"EXTERNAL_API 인증 값","textPreview":"EXTERNAL_API 인증 값","textChars":17,"textLines":1,"bbox":[90,820,245,34]}
+{"kind":"textbox","id":"sh/ho3a5072","slide":22,"name":"p22-external-body","text":"런타임 바인드 화면에서 입력되어 브라우저 메모리와 실행 요청에 포함됩니다. 현재 경로는 서버 비밀 저장소의 값을 자동으로 조회하지 않습니다.","textPreview":"런타임 바인드 화면에서 입력되어 브라우저 메모리와 실행 요청에 포함됩니다. 현재 경로는 서버 비밀 저장소의 값을 자동으로 조회하지 않습니다.","textChars":78,"textLines":1,"bbox":[352,820,348,124]}
+{"kind":"shape","id":"sh/gnutwvqh","slide":22,"name":"p22-callout-fill","bbox":[62,974,670,72]}
+{"kind":"shape","id":"sh/vmls3qpw","slide":22,"name":"p22-callout-accent","bbox":[62,974,6,72]}
+{"kind":"textbox","id":"sh/ulcbul8b","slide":22,"name":"p22-callout-text","text":"공개 도움말과 소개서는 논리적인 흐름만 설명하며 실제 DB 접속 정보, 내부 비밀 값과 인증 자격 증명을 포함하지 않습니다.","textPreview":"공개 도움말과 소개서는 논리적인 흐름만 설명하며 실제 DB 접속 정보, 내부 비밀 값과 인증 자격 증명을 포함하지 않습니다.","textChars":69,"textLines":1,"bbox":[84,992,628,40]}
+{"kind":"notes","id":"nt/cq8rme","slide":22,"text":"[Sources]\n- D:/work/data-editing-system/frontend/help/in-deps-system-guide.html (content source, accessed 2026-08-26)"}
+{"kind":"slide","id":"sl/qtr5w1","slide":23,"title":"06 · GLOSSARY","textShapes":23}
+{"kind":"shape","id":"sh/epg3e1wb","slide":23,"name":"page-23-rail","bbox":[0,0,10,1123]}
+{"kind":"textbox","id":"sh/1s729wf2","slide":23,"name":"page-23-chapter","text":"06 · GLOSSARY","textPreview":"06 · GLOSSARY","textChars":13,"textLines":1,"bbox":[62,45,460,24]}
+{"kind":"textbox","id":"sh/grylgreh","slide":23,"name":"page-23-title","text":"핵심 용어는 실행 맥락과 변경 책임을 설명합니다","textPreview":"핵심 용어는 실행 맥락과 변경 책임을 설명합니다","textChars":26,"textLines":1,"bbox":[62,82,670,84]}
+{"kind":"textbox","id":"sh/rmpk3mx0","slide":23,"name":"page-23-subtitle","text":"화면과 결과를 읽을 때 반복해서 등장하는 여섯 용어를 하나의 기준으로 정리했습니다.","textPreview":"화면과 결과를 읽을 때 반복해서 등장하는 여섯 용어를 하나의 기준으로 정리했습니다.","textChars":46,"textLines":1,"bbox":[62,170,670,50]}
+{"kind":"shape","id":"sh/6lw3ahwf","slide":23,"name":"page-23-top-rule","bbox":[62,226,670,2]}
+{"kind":"shape","id":"sh/to725wfq","slide":23,"name":"page-23-footer-rule","bbox":[62,1067,670,1]}
+{"kind":"textbox","id":"sh/snylcrel","slide":23,"name":"page-23-footer-name","text":"IN-DEPS 시스템 소개서","textPreview":"IN-DEPS 시스템 소개서","textChars":15,"textLines":1,"bbox":[62,1080,300,18]}
+{"kind":"textbox","id":"sh/bi94f6x4","slide":23,"name":"page-23-footer-number","text":"23","textPreview":"23","textChars":2,"textLines":1,"bbox":[682,1078,50,20]}
+{"kind":"shape","id":"sh/qh03mlwj","slide":23,"name":"p23-term-0","bbox":[62,266,670,98]}
+{"kind":"textbox","id":"sh/4zahofep","slide":23,"name":"p23-code-0","text":"JOB","textPreview":"JOB","textChars":3,"textLines":1,"bbox":[82,284,180,24]}
+{"kind":"textbox","id":"sh/p0jihkva","slide":23,"name":"p23-title-0","text":"데이터 작업","textPreview":"데이터 작업","textChars":6,"textLines":1,"bbox":[82,319,220,28]}
+{"kind":"textbox","id":"sh/2xszm5wj","slide":23,"name":"p23-desc-0","text":"실행 객체와 파라미터, 대상·결과 계약을 저장한 재사용 실행 단위","textPreview":"실행 객체와 파라미터, 대상·결과 계약을 저장한 재사용 실행 단위","textChars":36,"textLines":1,"bbox":[330,286,378,60]}
+{"kind":"shape","id":"sh/3y1gfad4","slide":23,"name":"p23-term-1","bbox":[62,386,670,98]}
+{"kind":"textbox","id":"sh/gvahkved","slide":23,"name":"p23-code-1","text":"FLOW RUN","textPreview":"FLOW RUN","textChars":8,"textLines":1,"bbox":[82,404,180,24]}
+{"kind":"textbox","id":"sh/hwjyd0vy","slide":23,"name":"p23-title-1","text":"통합 실행 맥락","textPreview":"통합 실행 맥락","textChars":8,"textLines":1,"bbox":[82,439,220,28]}
+{"kind":"textbox","id":"sh/ut8zilwn","slide":23,"name":"p23-desc-1","text":"하나의 DAG 실행에서 실제 파라미터와 모든 Node Run을 묶는 추적 기준","textPreview":"하나의 DAG 실행에서 실제 파라미터와 모든 Node Run을 묶는 추적 기준","textChars":43,"textLines":1,"bbox":[330,406,378,60]}
+{"kind":"shape","id":"sh/fuhgbqd8","slide":23,"name":"p23-term-2","bbox":[62,506,670,98]}
+{"kind":"textbox","id":"sh/s7qhgveh","slide":23,"name":"p23-code-2","text":"ARTIFACT","textPreview":"ARTIFACT","textChars":8,"textLines":1,"bbox":[82,524,180,24]}
+{"kind":"textbox","id":"sh/tszy90v2","slide":23,"name":"p23-title-2","text":"단계 결과 계약","textPreview":"단계 결과 계약","textChars":8,"textLines":1,"bbox":[82,559,220,28]}
+{"kind":"textbox","id":"sh/9c76xs3e","slide":23,"name":"p23-desc-2","text":"후행 노드와 분석·보고가 참조할 테이블, 모델, JSON과 실행 메시지","textPreview":"후행 노드와 분석·보고가 참조할 테이블, 모델, JSON과 실행 메시지","textChars":39,"textLines":1,"bbox":[330,526,378,60]}
+{"kind":"shape","id":"sh/oby5on2t","slide":23,"name":"p23-term-3","bbox":[62,626,670,98]}
+{"kind":"textbox","id":"sh/napovilo","slide":23,"name":"p23-code-3","text":"LATEST_MASTER","textPreview":"LATEST_MASTER","textChars":13,"textLines":1,"bbox":[82,644,180,24]}
+{"kind":"textbox","id":"sh/mpgnmdk3","slide":23,"name":"p23-title-3","text":"최신 확정 기준","textPreview":"최신 확정 기준","textChars":8,"textLines":1,"bbox":[82,679,220,28]}
+{"kind":"textbox","id":"sh/1o76t83i","slide":23,"name":"p23-desc-3","text":"사용자 확정값을 보존한 최신 컬럼 유형 등 단계가 참조하는 마스터","textPreview":"사용자 확정값을 보존한 최신 컬럼 유형 등 단계가 참조하는 마스터","textChars":36,"textLines":1,"bbox":[330,646,378,60]}
+{"kind":"shape","id":"sh/0ny5k32x","slide":23,"name":"p23-term-4","bbox":[62,746,670,98]}
+{"kind":"textbox","id":"sh/zm5orilc","slide":23,"name":"p23-code-4","text":"SAME_RUN","textPreview":"SAME_RUN","textChars":8,"textLines":1,"bbox":[82,764,180,24]}
+{"kind":"textbox","id":"sh/elwnidkr","slide":23,"name":"p23-title-4","text":"동일 Run 의존","textPreview":"동일 Run 의존","textChars":9,"textLines":1,"bbox":[82,799,220,28]}
+{"kind":"textbox","id":"sh/lkr65cjm","slide":23,"name":"p23-desc-4","text":"현재 Flow Run에서 성공한 선행 노드 아티팩트만 필수 입력으로 사용하는 계약","textPreview":"현재 Flow Run에서 성공한 선행 노드 아티팩트만 필수 입력으로 사용하는 계약","textChars":45,"textLines":1,"bbox":[330,766,378,60]}
+{"kind":"shape","id":"sh/kjipw721","slide":23,"name":"p23-term-5","bbox":[62,866,670,98]}
+{"kind":"textbox","id":"sh/2pc3q90j","slide":23,"name":"p23-code-5","text":"INITUP$ / INITDN$","textPreview":"INITUP$ / INITDN$","textChars":17,"textLines":1,"bbox":[82,884,180,24]}
+{"kind":"textbox","id":"sh/3qlkje14","slide":23,"name":"p23-title-5","text":"원본 기준본 / 편집본","textPreview":"원본 기준본 / 편집본","textChars":12,"textLines":1,"bbox":[82,919,220,28]}
+{"kind":"textbox","id":"sh/4rulsjip","slide":23,"name":"p23-desc-5","text":"검사 기준 작업본과 사용자 수정이 이루어지는 편집 테이블을 분리하는 패턴","textPreview":"검사 기준 작업본과 사용자 수정이 이루어지는 편집 테이블을 분리하는 패턴","textChars":40,"textLines":1,"bbox":[330,886,378,60]}
+{"kind":"notes","id":"nt/qtr5w1","slide":23,"text":"[Sources]\n- D:/work/data-editing-system/frontend/help/in-deps-system-guide.html (content source, accessed 2026-08-26)"}
+{"kind":"slide","id":"sl/ze3py7","slide":24,"title":"THE IN-DEPS OPERATING MODEL","textShapes":8}
+{"kind":"shape","id":"sh/gr6x0329","slide":24,"name":"back-left","bbox":[0,0,18,1123]}
+{"kind":"shape","id":"sh/vqxwrylo","slide":24,"name":"back-logo-panel","bbox":[62,68,500,158]}
+{"kind":"textbox","id":"sh/tofepo3y","slide":24,"name":"back-kicker","text":"THE IN-DEPS OPERATING MODEL","textPreview":"THE IN-DEPS OPERATING MODEL","textChars":27,"textLines":1,"bbox":[62,300,520,28]}
+{"kind":"textbox","id":"sh/836dwj2d","slide":24,"name":"back-title","text":"근거를 만들고\n사람이 결정하며\n변경을 추적합니다","textPreview":"근거를 만들고 | 사람이 결정하며 | 변경을 추적합니다","textChars":26,"textLines":3,"bbox":[62,362,620,205]}
+{"kind":"textbox","id":"sh/72dwnyls","slide":24,"name":"back-body","text":"데이터 선정부터 규칙 발굴, Flow 실행, 결과 해석, 편집과 운영 반영까지 — IN-DEPS는 분석과 변경 사이의 책임을 분리하면서 하나의 Run과 감사 이력으로 업무를 연결합니다.","textPreview":"데이터 선정부터 규칙 발굴, Flow 실행, 결과 해석, 편집과 운영 반영까지 — IN-DEPS는 분석과 변경 사이의 책임을 분리하면서 하나의 Run과 감사 이력으로 업무를 연결합니다.","textChars":103,"textLines":1,"bbox":[62,620,600,145]}
+{"kind":"shape","id":"sh/614vutk7","slide":24,"name":"back-dot-0","bbox":[62,828,14,14]}
+{"kind":"textbox","id":"sh/l0velo3m","slide":24,"name":"back-value-0","text":"설명 가능한 근거","textPreview":"설명 가능한 근거","textChars":9,"textLines":1,"bbox":[92,823,300,28]}
+{"kind":"shape","id":"sh/kzmdsj21","slide":24,"name":"back-dot-1","bbox":[62,882,14,14]}
+{"kind":"textbox","id":"sh/y507yp87","slide":24,"name":"back-value-1","text":"검토 가능한 결정","textPreview":"검토 가능한 결정","textChars":9,"textLines":1,"bbox":[92,877,300,28]}
+{"kind":"shape","id":"sh/z69oru9c","slide":24,"name":"back-dot-2","bbox":[62,936,14,14]}
+{"kind":"textbox","id":"sh/072p0zqx","slide":24,"name":"back-value-2","text":"통제 가능한 변경","textPreview":"통제 가능한 변경","textChars":9,"textLines":1,"bbox":[92,931,300,28]}
+{"kind":"shape","id":"sh/l8b6t4ri","slide":24,"name":"back-dot-3","bbox":[62,990,14,14]}
+{"kind":"textbox","id":"sh/qh0nu58v","slide":24,"name":"back-value-3","text":"재현 가능한 이력","textPreview":"재현 가능한 이력","textChars":9,"textLines":1,"bbox":[92,985,300,28]}
+{"kind":"shape","id":"sh/bi9ona9g","slide":24,"name":"back-init-panel","bbox":[548,998,184,64]}
+{"kind":"textbox","id":"sh/d4r6pkrm","slide":24,"name":"back-format","text":"A4 PRINT EDITION · 2026","textPreview":"A4 PRINT EDITION · 2026","textChars":23,"textLines":1,"bbox":[62,1025,230,20]}
+{"kind":"image","id":"im/vyxon2dk","slide":24,"name":"","alt":"인뎁스 IN-DEPS 제품 로고","bbox":[82,82,460,130]}
+{"kind":"image","id":"im/3eh07yhw","slide":24,"name":"","alt":"INIT 인아이티 회사 로고","bbox":[562,1006,156,48]}
+{"kind":"notes","id":"nt/ze3py7","slide":24,"text":"[Sources]\n- D:/work/data-editing-system/frontend/help/in-deps-system-guide.html (content source, accessed 2026-08-26)"}

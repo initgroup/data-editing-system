@@ -9,7 +9,7 @@ still execute feature selection and symbolic rule discovery.
 from fastapi import HTTPException
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 from functools import wraps
-from itertools import combinations
+from itertools import combinations, product
 import hashlib
 import json
 import math
@@ -209,6 +209,8 @@ ESTIMATION_MODES = {"AUTO", "OLS", "ROBUST_IRLS"}
 MONTE_CARLO_MODES = {"OFF", "AUTO", "BOOTSTRAP", "REPEATED_HOLDOUT"}
 BANFF_MODES = {"OFF", "AUTO", "RATIO"}
 DEFAULT_CASE_ID_COLUMN = "FILE_ROW_NO"
+SIMPLE_ARITHMETIC_MIN_COVERAGE = 0.90
+SIMPLE_ARITHMETIC_MIN_ROWS = 10
 
 
 def normalize_cluster_usage_mode(value: Any, default: str = "NONE") -> str:
@@ -845,6 +847,50 @@ def run_symbolic_regression_rule(conn, payload: Dict[str, Any]) -> Dict[str, Any
     )
     min_r2_score = clamp_float(parse_optional_float(get_value(payload, "P_MIN_R2_SCORE", "minR2Score")), 0.7, 0.0, 1.0)
     use_pysr = parse_yes_no(get_value(payload, "P_USE_PYSR", "usePysr"), "N") == "Y"
+    simple_arithmetic_first = parse_yes_no(
+        get_value(
+            payload,
+            "P_SIMPLE_ARITHMETIC_FIRST_YN",
+            "simpleArithmeticFirstYn",
+        ),
+        "Y",
+    ) == "Y"
+    simple_arithmetic_min_match_rate = clamp_float(
+        parse_optional_float(
+            get_value(
+                payload,
+                "P_SIMPLE_ARITHMETIC_MIN_MATCH_RATE",
+                "simpleArithmeticMinMatchRate",
+            )
+        ),
+        0.90,
+        0.0,
+        1.0,
+    )
+    simple_arithmetic_max_terms = clamp(
+        parse_int(
+            get_value(
+                payload,
+                "P_SIMPLE_ARITHMETIC_MAX_TERMS",
+                "simpleArithmeticMaxTerms",
+            ),
+            3,
+        ),
+        2,
+        4,
+    )
+    simple_arithmetic_tolerance_pct = clamp_float(
+        parse_optional_float(
+            get_value(
+                payload,
+                "P_SIMPLE_ARITHMETIC_TOLERANCE_PCT",
+                "simpleArithmeticTolerancePct",
+            )
+        ),
+        0.0,
+        0.0,
+        1.0,
+    )
     linear_first = parse_yes_no(get_value(payload, "P_LINEAR_FIRST_YN", "linearFirstYn"), "Y") == "Y"
     linear_r2_threshold = clamp_float(
         parse_optional_float(get_value(payload, "P_LINEAR_R2_THRESHOLD", "linearR2Threshold")),
@@ -965,7 +1011,7 @@ def run_symbolic_regression_rule(conn, payload: Dict[str, Any]) -> Dict[str, Any
         raise HTTPException(status_code=400, detail=f"No LASSO selected features were found for symbolic regression. Required SELECTED_YN=Y and R2_SCORE >= {min_r2_score}.")
     features = features[:max_features]
 
-    x_values, y_values, used_features, matrix_limits = fetch_numeric_matrix(
+    x_values, y_values, used_features, matrix_limits, feature_valid_masks = fetch_numeric_matrix(
         conn,
         owner,
         table,
@@ -984,16 +1030,20 @@ def run_symbolic_regression_rule(conn, payload: Dict[str, Any]) -> Dict[str, Any
             _ml_input_feature_limit(),
             1,
         ),
+        include_feature_valid_masks=True,
     )
     if len(y_values) < 10:
         raise HTTPException(status_code=400, detail="Symbolic regression requires at least 10 complete numeric rows.")
 
+    pre_screen_features = list(used_features)
     x_values, used_features, pca_diagnostics = apply_pca_representative_screening(
         x_values,
         used_features,
         dimension_reduction_mode,
         max_representatives=max_features,
     )
+    selected_feature_indexes = [pre_screen_features.index(feature) for feature in used_features]
+    feature_valid_masks = feature_valid_masks[:, selected_feature_indexes]
 
     cluster_nodes = load_relation_cluster_nodes(conn, owner, table, run_source_type, run_id) if cluster_usage_mode != "NONE" else {}
 
@@ -1011,6 +1061,11 @@ def run_symbolic_regression_rule(conn, payload: Dict[str, Any]) -> Dict[str, Any
         monte_carlo_iterations=monte_carlo_iterations,
         monte_carlo_max_rows=monte_carlo_max_rows,
         banff_mode=banff_mode,
+        simple_arithmetic_first=simple_arithmetic_first,
+        simple_arithmetic_min_match_rate=simple_arithmetic_min_match_rate,
+        simple_arithmetic_max_terms=simple_arithmetic_max_terms,
+        simple_arithmetic_tolerance_pct=simple_arithmetic_tolerance_pct,
+        feature_valid_masks=feature_valid_masks,
     )
     if (
         str(pca_diagnostics.get("appliedYn") or "N").upper() == "Y"
@@ -1026,6 +1081,10 @@ def run_symbolic_regression_rule(conn, payload: Dict[str, Any]) -> Dict[str, Any
         f"inputFeatures={matrix_limits['effectiveFeatureCount']}/{matrix_limits['requestedFeatureCount']}, "
         f"selectedExpressionFeatures={len(rule_features)}, "
         f"maxSymbolicTerms={max_symbolic_terms}, "
+        f"simpleArithmeticFirst={'Y' if simple_arithmetic_first else 'N'}, "
+        f"simpleArithmeticMinMatchRate={simple_arithmetic_min_match_rate:.6g}, "
+        f"simpleArithmeticMaxTerms={simple_arithmetic_max_terms}, "
+        f"simpleArithmeticTolerancePct={simple_arithmetic_tolerance_pct:.6g}, "
         f"clusterMode={cluster_usage.get('effectiveMode')}, "
         f"targetCluster={cluster_usage.get('targetClusterId')}, "
         f"sameClusterFeatures={cluster_usage.get('sameClusterFeatureCount')}, "
@@ -1120,6 +1179,10 @@ def run_symbolic_regression_rule(conn, payload: Dict[str, Any]) -> Dict[str, Any
         "estimationMode": estimation_mode,
         "monteCarloMode": monte_carlo_mode,
         "banffMode": banff_mode,
+        "simpleArithmeticFirstYn": "Y" if simple_arithmetic_first else "N",
+        "simpleArithmeticMinMatchRate": simple_arithmetic_min_match_rate,
+        "simpleArithmeticMaxTerms": simple_arithmetic_max_terms,
+        "simpleArithmeticTolerancePct": simple_arithmetic_tolerance_pct,
         "memoryLimits": matrix_limits,
     }
 
@@ -1348,6 +1411,50 @@ def run_integrated_rule_discover(conn, payload: Dict[str, Any]) -> Dict[str, Any
         "banffMode": normalize_banff_mode(
             get_value(payload, "P_BANFF_MODE", "banffMode"),
             "AUTO",
+        ),
+        "simpleArithmeticFirstYn": parse_yes_no(
+            get_value(
+                payload,
+                "P_SIMPLE_ARITHMETIC_FIRST_YN",
+                "simpleArithmeticFirstYn",
+            ),
+            "Y",
+        ),
+        "simpleArithmeticMinMatchRate": clamp_float(
+            parse_optional_float(
+                get_value(
+                    payload,
+                    "P_SIMPLE_ARITHMETIC_MIN_MATCH_RATE",
+                    "simpleArithmeticMinMatchRate",
+                )
+            ),
+            0.90,
+            0.0,
+            1.0,
+        ),
+        "simpleArithmeticMaxTerms": clamp(
+            parse_int(
+                get_value(
+                    payload,
+                    "P_SIMPLE_ARITHMETIC_MAX_TERMS",
+                    "simpleArithmeticMaxTerms",
+                ),
+                3,
+            ),
+            2,
+            4,
+        ),
+        "simpleArithmeticTolerancePct": clamp_float(
+            parse_optional_float(
+                get_value(
+                    payload,
+                    "P_SIMPLE_ARITHMETIC_TOLERANCE_PCT",
+                    "simpleArithmeticTolerancePct",
+                )
+            ),
+            0.0,
+            0.0,
+            1.0,
         ),
     }
 
@@ -2288,6 +2395,11 @@ def fit_symbolic_expression(
     monte_carlo_iterations: int = 20,
     monte_carlo_max_rows: int = 5000,
     banff_mode: str = "AUTO",
+    simple_arithmetic_first: bool = True,
+    simple_arithmetic_min_match_rate: float = 0.90,
+    simple_arithmetic_max_terms: int = 3,
+    simple_arithmetic_tolerance_pct: float = 0.0,
+    feature_valid_masks=None,
 ) -> Tuple[str, float, int, str, str]:
     normalized_estimation_mode = normalize_estimation_mode(estimation_mode)
     normalized_monte_carlo_mode = normalize_monte_carlo_mode(monte_carlo_mode)
@@ -2302,6 +2414,11 @@ def fit_symbolic_expression(
         linear_r2_threshold,
         max_symbolic_terms,
         normalized_estimation_mode,
+        simple_arithmetic_first,
+        simple_arithmetic_min_match_rate,
+        simple_arithmetic_max_terms,
+        simple_arithmetic_tolerance_pct,
+        feature_valid_masks,
     )
     selected_candidate = select_banff_inspired_ratio_candidate(
         base_candidate,
@@ -2340,10 +2457,41 @@ def _fit_symbolic_expression_base(
     linear_r2_threshold: float = 0.995,
     max_symbolic_terms: int = 8,
     estimation_mode: str = "AUTO",
+    simple_arithmetic_first: bool = True,
+    simple_arithmetic_min_match_rate: float = 0.90,
+    simple_arithmetic_max_terms: int = 3,
+    simple_arithmetic_tolerance_pct: float = 0.0,
+    feature_valid_masks=None,
 ) -> Tuple[str, float, int, str, str]:
     require_sklearn()
     normalized_estimation_mode = normalize_estimation_mode(estimation_mode)
     holdout_indexes = build_symbolic_holdout_indexes(len(y_values))
+    if simple_arithmetic_first:
+        simple_candidate = fit_simple_arithmetic_candidate(
+            x_values,
+            y_values,
+            feature_names,
+            feature_valid_masks=feature_valid_masks,
+            min_match_rate=clamp_float(
+                parse_optional_float(simple_arithmetic_min_match_rate),
+                0.90,
+                0.0,
+                1.0,
+            ),
+            max_terms=clamp(parse_int(simple_arithmetic_max_terms, 3), 2, 4),
+            tolerance_pct=clamp_float(
+                parse_optional_float(simple_arithmetic_tolerance_pct),
+                0.0,
+                0.0,
+                1.0,
+            ),
+        )
+        if simple_candidate is not None:
+            simple_candidate["message"] = (
+                f"{simple_candidate['message']} selection=SIMPLE_ARITHMETIC; "
+                "reason=QUALIFIED_DOMINANT_ROW_MATCH_AND_PARSIMONY."
+            )
+            return symbolic_candidate_tuple(simple_candidate)
     linear_candidate = None
     if linear_first:
         sparse_linear_candidate = fit_sparse_linear_candidate(
@@ -3117,6 +3265,18 @@ def select_banff_inspired_ratio_candidate(
         "donorImputation=N; missingValueImputation=N; "
         "multivariateErrorLocalization=N; minimumChangeOptimization=N."
     )
+    if str(method or "").upper() == "SIMPLE_ARITHMETIC":
+        return (
+            expression,
+            score,
+            complexity,
+            method,
+            (
+                f"{message} banffMode={mode}; banffRatioEvaluated=N; "
+                "banffRatioReason=SIMPLE_ARITHMETIC_PRIORITY; "
+                f"{limitation}"
+            ),
+        )
     if mode == "OFF":
         return (
             expression,
@@ -3256,6 +3416,13 @@ def run_monte_carlo_stability_diagnostic(
             f"monteCarloReason=DISABLED; {fixed_note}"
         )
 
+    if str(method or "").upper() == "SIMPLE_ARITHMETIC":
+        return (
+            f"monteCarloMode={requested_mode}; monteCarloExecuted=N; "
+            "monteCarloReason=DETERMINISTIC_FIXED_FORMULA_NO_FITTING; "
+            f"{fixed_note}"
+        )
+
     model_family = get_monte_carlo_model_family(method)
     if model_family is None:
         return (
@@ -3387,6 +3554,204 @@ def run_monte_carlo_stability_diagnostic(
         f"monteCarloRmseMean={rmse_mean:.6g}; monteCarloRmseStd={rmse_std:.6g}; "
         f"monteCarloMaeMean={mae_mean:.6g}; monteCarloMaeStd={mae_std:.6g}; "
         f"monteCarloStable={'Y' if stable else 'N'}; {fixed_note}"
+    )
+
+
+def fit_simple_arithmetic_candidate(
+    x_values,
+    y_values,
+    feature_names: Sequence[str],
+    feature_valid_masks=None,
+    min_match_rate: float = 0.90,
+    max_terms: int = 3,
+    tolerance_pct: float = 0.0,
+) -> Optional[Dict[str, Any]]:
+    """Find a coefficient-free arithmetic rule supported by dominant rows."""
+    require_sklearn()
+    matrix = np.asarray(x_values, dtype=float)
+    target = np.asarray(y_values, dtype=float).reshape(-1)
+    names = [str(name).upper() for name in feature_names]
+    if (
+        matrix.ndim != 2
+        or matrix.shape[0] != len(target)
+        or matrix.shape[1] != len(names)
+        or len(target) < SIMPLE_ARITHMETIC_MIN_ROWS
+        or len(names) < 2
+    ):
+        return None
+
+    valid_matrix = np.isfinite(matrix)
+    if feature_valid_masks is not None:
+        supplied_masks = np.asarray(feature_valid_masks, dtype=bool)
+        if supplied_masks.shape == matrix.shape:
+            valid_matrix &= supplied_masks
+    finite_target = np.isfinite(target)
+    minimum_match_rate = clamp_float(
+        parse_optional_float(min_match_rate),
+        0.90,
+        0.0,
+        1.0,
+    )
+    maximum_terms = min(clamp(parse_int(max_terms, 3), 2, 4), len(names))
+    relative_tolerance = clamp_float(
+        parse_optional_float(tolerance_pct),
+        0.0,
+        0.0,
+        1.0,
+    )
+    finite_target_values = np.abs(target[finite_target])
+    target_scale = float(np.max(finite_target_values)) if finite_target_values.size else 0.0
+    absolute_tolerance = max(1.0e-9, target_scale * 1.0e-12)
+    minimum_valid_rows = max(
+        SIMPLE_ARITHMETIC_MIN_ROWS,
+        int(math.ceil(len(target) * SIMPLE_ARITHMETIC_MIN_COVERAGE)),
+    )
+    accepted: List[Dict[str, Any]] = []
+
+    def evaluate_candidate(
+        expression: str,
+        prediction,
+        feature_indexes: Sequence[int],
+        operation_family: str,
+        complexity: int,
+        extra_valid_mask=None,
+    ) -> None:
+        predicted = np.asarray(prediction, dtype=float).reshape(-1)
+        valid_mask = finite_target.copy()
+        for feature_index in feature_indexes:
+            valid_mask &= valid_matrix[:, feature_index]
+        if extra_valid_mask is not None:
+            valid_mask &= np.asarray(extra_valid_mask, dtype=bool)
+        valid_mask &= np.isfinite(predicted)
+        valid_count = int(np.sum(valid_mask))
+        if valid_count < minimum_valid_rows:
+            return
+
+        actual = target[valid_mask]
+        expected = predicted[valid_mask]
+        absolute_error = np.abs(actual - expected)
+        allowed_error = np.maximum(
+            absolute_tolerance,
+            np.abs(expected) * relative_tolerance,
+        )
+        match_count = int(np.sum(absolute_error <= allowed_error))
+        match_rate = match_count / valid_count
+        coverage = valid_count / len(target)
+        if (
+            coverage + 1.0e-12 < SIMPLE_ARITHMETIC_MIN_COVERAGE
+            or match_rate + 1.0e-12 < minimum_match_rate
+        ):
+            return
+
+        metrics = calculate_regression_metrics(actual, expected)
+        candidate = {
+            "expression": expression,
+            "fitScore": float(metrics["r2"]),
+            "score": float(metrics["r2"]),
+            "complexity": int(complexity),
+            "method": "SIMPLE_ARITHMETIC",
+            "message": (
+                "A coefficient-free arithmetic rule was evaluated directly on original-scale values. "
+                f"operationFamily={operation_family}; "
+                f"matchRows={match_count}/{valid_count}; "
+                f"matchRate={match_rate:.6g}; coverage={coverage:.6g}; "
+                f"rmse={float(metrics['rmse']):.6g}; mae={float(metrics['mae']):.6g}; "
+                f"relativeTolerance={relative_tolerance:.6g}; "
+                f"absoluteTolerance={absolute_tolerance:.6g}; "
+                f"minimumMatchRate={minimum_match_rate:.6g}; "
+                f"minimumCoverage={SIMPLE_ARITHMETIC_MIN_COVERAGE:.6g};"
+            ),
+            "validation": None,
+            "featureNames": [names[index] for index in feature_indexes],
+            "matchCount": match_count,
+            "validCount": valid_count,
+            "matchRate": match_rate,
+            "coverage": coverage,
+            "rmse": float(metrics["rmse"]),
+            "operationFamily": operation_family,
+        }
+        accepted.append(candidate)
+
+    for term_count in range(2, maximum_terms + 1):
+        for indexes in combinations(range(len(names)), term_count):
+            subset = matrix[:, list(indexes)]
+            for signs in product((-1.0, 1.0), repeat=term_count):
+                coefficients = np.asarray(signs, dtype=float)
+                prediction = subset @ coefficients
+                expression = format_linear_expression(
+                    0.0,
+                    sorted(
+                        [
+                            (float(coefficient), names[index])
+                            for coefficient, index in zip(coefficients, indexes)
+                        ],
+                        key=lambda item: item[1],
+                    ),
+                )
+                evaluate_candidate(
+                    expression,
+                    prediction,
+                    indexes,
+                    "ADDITIVE",
+                    term_count,
+                )
+
+            if term_count != 2:
+                continue
+            left_index, right_index = indexes
+            left = matrix[:, left_index]
+            right = matrix[:, right_index]
+            with np.errstate(over="ignore", divide="ignore", invalid="ignore"):
+                evaluate_candidate(
+                    f"{names[left_index]}*{names[right_index]}",
+                    left * right,
+                    indexes,
+                    "MULTIPLICATIVE",
+                    2,
+                )
+                for numerator_index, denominator_index in (
+                    (left_index, right_index),
+                    (right_index, left_index),
+                ):
+                    numerator = matrix[:, numerator_index]
+                    denominator = matrix[:, denominator_index]
+                    denominator_scale = max(
+                        float(np.nanstd(denominator)),
+                        1.0,
+                    )
+                    nonzero_mask = np.abs(denominator) > denominator_scale * 1.0e-12
+                    prediction = np.full(len(target), np.nan, dtype=float)
+                    prediction[nonzero_mask] = (
+                        numerator[nonzero_mask] / denominator[nonzero_mask]
+                    )
+                    evaluate_candidate(
+                        f"{names[numerator_index]}/NULLIF({names[denominator_index]}, 0)",
+                        prediction,
+                        (numerator_index, denominator_index),
+                        "DIVISION",
+                        2,
+                        nonzero_mask,
+                    )
+
+    if not accepted:
+        return None
+
+    operation_rank = {
+        "ADDITIVE": 0,
+        "MULTIPLICATIVE": 1,
+        "DIVISION": 2,
+    }
+    return min(
+        accepted,
+        key=lambda candidate: (
+            int(candidate["complexity"]),
+            -float(candidate["matchRate"]),
+            -float(candidate["coverage"]),
+            -float(candidate["fitScore"]),
+            float(candidate["rmse"]),
+            operation_rank.get(str(candidate["operationFamily"]), 9),
+            str(candidate["expression"]),
+        ),
     )
 
 
@@ -4111,6 +4476,7 @@ def fetch_numeric_matrix(
     sample_rows: Optional[int],
     max_in_memory_rows: Optional[int] = None,
     max_input_features: Optional[int] = None,
+    include_feature_valid_masks: bool = False,
 ):
     hard_row_limit = _ml_in_memory_row_limit()
     hard_feature_limit = _ml_input_feature_limit()
@@ -4211,6 +4577,7 @@ def fetch_numeric_matrix(
     minimum_feature_rows = min(10, max(2, int(math.ceil(valid_row_count * 0.2))))
     retained_features: List[str] = []
     feature_values = []
+    feature_valid_masks = []
     dropped_features: List[str] = []
     imputed_cell_count = 0
     for feature in effective_features:
@@ -4226,6 +4593,7 @@ def fetch_numeric_matrix(
             imputed_cell_count += missing_count
         retained_features.append(feature)
         feature_values.append(values)
+        feature_valid_masks.append(finite_mask)
 
     if not retained_features:
         raise HTTPException(
@@ -4236,7 +4604,7 @@ def fetch_numeric_matrix(
             ),
         )
     x_values = np.column_stack(feature_values)
-    return (
+    result = (
         x_values,
         y_values,
         retained_features,
@@ -4255,6 +4623,9 @@ def fetch_numeric_matrix(
             "cacheHitYn": "Y" if cache_hit else "N",
         },
     )
+    if include_feature_valid_masks:
+        return (*result, np.column_stack(feature_valid_masks))
+    return result
 
 
 def clear_relation_network_rows(cursor, owner: str, table: str, run_source_type: str, run_id: int) -> None:
