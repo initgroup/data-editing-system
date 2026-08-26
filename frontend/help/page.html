@@ -7,7 +7,19 @@
     <meta name="ai-context-kind" content="menu-help">
     <meta name="ai-context-priority" content="highest">
     <script src="../js/cache-version-utils.js"></script>
-    <script src="./help-utils.js"></script>
+    <script>
+        function getHelpPageAssetUrl(relativePath, cachePath) {
+            const version = window.AssetCacheVersionUtils.getAssetVersion(cachePath);
+            if (!version) return relativePath;
+            const separator = relativePath.includes("?") ? "&" : "?";
+            return `${relativePath}${separator}v=${encodeURIComponent(version)}`;
+        }
+
+        document.write(`<script src="${getHelpPageAssetUrl("./help-utils.js", "help/help-utils.js")}"><\/script>`);
+        document.write(`<link rel="stylesheet" href="${getHelpPageAssetUrl("./home-system-help.css", "help/home-system-help.css")}">`);
+        document.write(`<script src="${getHelpPageAssetUrl("../config/menu.config.js", "config/menu.config.js")}"><\/script>`);
+        document.write(`<script src="${getHelpPageAssetUrl("./home-system-help.js", "help/home-system-help.js")}"><\/script>`);
+    </script>
     <style>
         :root {
             color-scheme: light;
@@ -171,6 +183,83 @@
             white-space: nowrap;
         }
 
+        .help-guide-actions {
+            align-items: center;
+            background: rgba(15, 23, 42, 0.78);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            border-radius: 12px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 7px;
+            padding: 6px;
+            position: absolute;
+            right: 22px;
+            top: 20px;
+            z-index: 1200;
+        }
+
+        .help-guide-label {
+            align-items: center;
+            color: #dbeafe;
+            display: inline-flex;
+            font-size: 12px;
+            font-weight: 800;
+            gap: 7px;
+            padding: 0 5px 0 3px;
+            white-space: nowrap;
+        }
+
+        .help-guide-label svg {
+            height: 18px;
+            width: 18px;
+        }
+
+        .help-guide-download {
+            align-items: center;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.28);
+            border-radius: 8px;
+            color: #f8fafc;
+            display: inline-flex;
+            font-size: 12px;
+            font-weight: 800;
+            gap: 6px;
+            min-height: 32px;
+            padding: 6px 9px;
+            text-decoration: none;
+            transition: background-color 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+            white-space: nowrap;
+        }
+
+        .help-guide-download[data-format="pdf"] {
+            background: #2563eb;
+            border-color: #60a5fa;
+        }
+
+        .help-guide-download:hover {
+            background: #1d4ed8;
+            border-color: #93c5fd;
+            transform: translateY(-1px);
+        }
+
+        .help-guide-download:focus-visible {
+            outline: 3px solid #67e8f9;
+            outline-offset: 2px;
+        }
+
+        .help-guide-download svg {
+            flex: 0 0 auto;
+            height: 15px;
+            width: 15px;
+        }
+
+        @media (max-width: 980px) {
+            .help-guide-actions {
+                margin: 12px 18px 0;
+                position: static;
+            }
+        }
+
         @media (max-width: 760px) {
             header,
             main {
@@ -181,6 +270,17 @@
             .grid {
                 grid-template-columns: 1fr;
             }
+
+            .help-guide-actions {
+                margin-left: 18px;
+                margin-right: 18px;
+            }
+        }
+
+        @media print {
+            .help-guide-actions {
+                display: none;
+            }
         }
     </style>
 </head>
@@ -190,6 +290,28 @@
         <p id="helpSummary">Loading help content.</p>
         <div class="meta" id="helpMeta"></div>
     </header>
+
+    <div class="help-guide-actions" id="inDepsGuideActions" role="group">
+        <span class="help-guide-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M6 3.5h8l4 4V20.5H6z"></path>
+                <path d="M14 3.5v4h4M12 10.5v6M9.5 14l2.5 2.5 2.5-2.5"></path>
+            </svg>
+            <span id="inDepsGuideLabel">System introduction downloads</span>
+        </span>
+        <a class="help-guide-download" id="inDepsGuideDownloadHtml" data-format="html" href="/api/home/system-guide/download?format=html">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M5 20h14"></path>
+            </svg>
+            <span id="inDepsGuideDownloadHtmlLabel">Download (HTML)</span>
+        </a>
+        <a class="help-guide-download" id="inDepsGuideDownloadPdf" data-format="pdf" href="/api/home/system-guide/download?format=pdf">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M5 20h14"></path>
+            </svg>
+            <span id="inDepsGuideDownloadPdfLabel">Download (PDF)</span>
+        </a>
+    </div>
 
     <main id="helpMain" data-ai-section="menu-help"></main>
 
@@ -203,6 +325,12 @@
                 loadFailed: "Unable to load help content",
                 noList: "No description is registered.",
                 noDefinition: "No layout information is registered.",
+                guideDocument: {
+                    label: "System introduction downloads",
+                    groupLabel: "System introduction downloads",
+                    downloadHtml: "Download (HTML)",
+                    downloadPdf: "Download (PDF)"
+                },
                 sectionTitles: {
                     summary: "Menu Summary",
                     purpose: "Screen Purpose",
@@ -267,6 +395,12 @@
                 loadFailed: "도움말을 불러오지 못했습니다",
                 noList: "등록된 설명이 없습니다.",
                 noDefinition: "등록된 구성 정보가 없습니다.",
+                guideDocument: {
+                    label: "시스템 소개서 파일 다운로드",
+                    groupLabel: "시스템 소개서 파일 다운로드",
+                    downloadHtml: "내려받기(HTML)",
+                    downloadPdf: "내려받기(PDF)"
+                },
                 sectionTitles: {
                     summary: "메뉴 요약",
                     purpose: "화면 목적",
@@ -352,8 +486,29 @@
             return normalizeHelpLanguage(languageCode) === "ko" ? "./help-content.json" : "./help-content.en.json";
         }
 
+        function setupInDepsGuideActions() {
+            const actions = document.getElementById("inDepsGuideActions");
+            const label = document.getElementById("inDepsGuideLabel");
+            const htmlDownload = document.getElementById("inDepsGuideDownloadHtml");
+            const pdfDownload = document.getElementById("inDepsGuideDownloadPdf");
+            const htmlDownloadLabel = document.getElementById("inDepsGuideDownloadHtmlLabel");
+            const pdfDownloadLabel = document.getElementById("inDepsGuideDownloadPdfLabel");
+            const labels = currentHelpText.guideDocument || HELP_UI.en.guideDocument;
+            if (!actions || !label || !htmlDownload || !pdfDownload || !htmlDownloadLabel || !pdfDownloadLabel) return;
+
+            actions.setAttribute("aria-label", labels.groupLabel || labels.label);
+            label.textContent = labels.label;
+            htmlDownloadLabel.textContent = labels.downloadHtml;
+            pdfDownloadLabel.textContent = labels.downloadPdf;
+            htmlDownload.title = labels.downloadHtml;
+            pdfDownload.title = labels.downloadPdf;
+            htmlDownload.href = "/api/home/system-guide/download?format=html";
+            pdfDownload.href = "/api/home/system-guide/download?format=pdf";
+        }
+
         async function fetchHelpContent(path) {
-            const url = window.AssetCacheVersionUtils.getAssetUrl(path);
+            const cachePath = `help/${String(path || "").replace(/^\.\//, "")}`;
+            const url = getHelpPageAssetUrl(path, cachePath);
             const response = await fetch(url, { cache: "no-store" });
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             return response.json();
@@ -416,6 +571,13 @@
                 { label: labels.helpUtility, path: "help/help-utils.js" },
                 { label: labels.helpContent, path: `help/${currentHelpContentPath.replace("./", "")}` }
             ];
+
+            if (normalizedPageCode === "home") {
+                assets.push(
+                    { label: "HOME help styles", path: "help/home-system-help.css" },
+                    { label: "HOME help interactions", path: "help/home-system-help.js" }
+                );
+            }
 
             if (implementation.frontendHtml) {
                 assets.push({ label: labels.currentMenuHtml, path: implementation.frontendHtml });
@@ -494,8 +656,22 @@
             return defaults[key] || [];
         }
 
-        function renderHelp(page) {
+        function renderHelp(page, content) {
             const implementation = window.HelpContentUtils.buildImplementation(page.pageCode);
+            const normalizedPageCode = window.HelpContentUtils.normalizePageCode(page.pageCode).toLowerCase();
+            if (normalizedPageCode === "home" && page.systemGuide && window.HomeSystemHelp?.render) {
+                window.HomeSystemHelp.render({
+                    page,
+                    content,
+                    language: currentHelpLanguage,
+                    ui: currentHelpText,
+                    implementation,
+                    renderCacheVersions
+                });
+                return;
+            }
+
+            window.HomeSystemHelp?.reset?.();
             const sections = currentHelpText.sectionTitles;
             const optionalTitles = currentHelpText.optionalTitles;
             const sqlPurposes = getImplementationItems(page, implementation, "sqlPurposes");
@@ -590,13 +766,14 @@
             currentHelpText = HELP_UI[currentHelpLanguage] || HELP_UI.en;
             currentHelpContentPath = getHelpContentPath(currentHelpLanguage);
             document.documentElement.lang = currentHelpLanguage;
+            setupInDepsGuideActions();
             document.getElementById("helpTitle").textContent = currentHelpText.loadingTitle;
             document.getElementById("helpSummary").textContent = currentHelpText.loadingSummary;
             const requestedPage = window.HelpContentUtils.normalizePageCode(params.get("page") || "home");
             const content = await fetchHelpContent(currentHelpContentPath);
             const pageSource = content.pages[requestedPage] || content.pages[requestedPage.toUpperCase?.()] || content.pages.home;
             const page = window.HelpContentUtils.prepareHelpPage(pageSource, currentHelpLanguage);
-            renderHelp(page);
+            renderHelp(page, content);
         }
 
         initHelp().catch((error) => {

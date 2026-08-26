@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>INIT-Data Editing Platform System</title>
     <script>
-        window.APP_CACHE_VERSION = "1.1.372";
+        window.APP_CACHE_VERSION = "1.1.373";
         window.APP_ASSET_VERSION_OVERRIDES = {
             // 전체 캐시 갱신: APP_CACHE_VERSION만 올립니다.
             // 부분 캐시 갱신: "js/M90001.js": "1.0.1" 처럼 파일별 버전을 지정합니다.
@@ -30,8 +30,10 @@
             "i18n/pages/M03003.ko.json": "1.0.2",
             "i18n/pages/MCOM_FLOW_WORK.ko.json": "1.0.1",
             "js/MCOM_FLOW_WORK.js": "1.1.21",
-            "js/MCOM_ANLY_WORK.js": "1.1.6",
-            "css/pages/MCOM_ANLY_WORK.css": "1.0.2",
+            "js/MCOM_ANLY_WORK.js": "1.1.7",
+            "css/pages/MCOM_ANLY_WORK.css": "1.0.3",
+            "i18n/pages/MCOM_ANLY_WORK.ko.json": "1.0.1",
+            "i18n/pages/MCOM_ANLY_WORK.en.json": "1.0.1",
             "pages/MCOM_EDIT_WORK.html": "1.0.2",
             "js/MCOM_EDIT_WORK.js": "1.0.4",
             "css/pages/MCOM_EDIT_WORK.css": "1.0.1",
@@ -57,7 +59,9 @@
             "css/pages/MCOM_FLOW_WORK.css": "1.0.5",
             "css/style.css": "1.1.12",
             "js/common.js": "1.0.1",
-            "css/styleMenu.css": "1.1.88"
+            "css/styleMenu.css": "1.1.88",
+            "help/page.html": "1.1.374",
+            "help/in-deps-system-guide.html": "1.0.1"
         };
         window.APP_PAGE_CSS_FILES = [
             "./css/pages/M01002.css",
@@ -626,11 +630,19 @@
         }
 
         function openHomeHelpPopup() {
-            const width = 980;
-            const height = 760;
-            const left = Math.max(0, Math.round((window.screen.width - width) / 2));
-            const top = Math.max(0, Math.round((window.screen.height - height) / 2));
-            const pageCode = encodeURIComponent(getCurrentHelpPageCode());
+            const currentPageCode = getCurrentHelpPageCode();
+            const isHomeHelp = String(currentPageCode || "").toLowerCase() === "home";
+            const availableWidth = Math.max(1, Number(window.screen.availWidth || window.screen.width || 1280));
+            const availableHeight = Math.max(1, Number(window.screen.availHeight || window.screen.height || 800));
+            const widthMargin = Math.min(48, Math.round(availableWidth * 0.08));
+            const heightMargin = Math.min(48, Math.round(availableHeight * 0.08));
+            const width = Math.max(1, Math.min(isHomeHelp ? 1360 : 980, availableWidth - widthMargin));
+            const height = Math.max(1, Math.min(isHomeHelp ? 900 : 760, availableHeight - heightMargin));
+            const screenLeft = Number.isFinite(window.screen.availLeft) ? window.screen.availLeft : 0;
+            const screenTop = Number.isFinite(window.screen.availTop) ? window.screen.availTop : 0;
+            const left = Math.round(screenLeft + (availableWidth - width) / 2);
+            const top = Math.round(screenTop + (availableHeight - height) / 2);
+            const pageCode = encodeURIComponent(currentPageCode);
             const languageCode = encodeURIComponent(window.I18nManager?.getCurrentLanguage?.() || "en");
             window.AssetCacheVersionUtils?.publishConfig?.();
             const version = encodeURIComponent(window.AssetCacheVersionUtils?.getAssetVersion?.("help/page.html") || window.APP_CACHE_VERSION || "");
@@ -1581,7 +1593,7 @@
                     sourceType: "menu-help",
                     priority: 1,
                     mimeType: "text/markdown",
-                    text: window.HelpContentUtils.buildHelpMarkdown(page, implementation, { languageCode }),
+                    text: window.HelpContentUtils.buildHelpMarkdown(page, implementation, { languageCode, content }),
                     metadata: {
                         pageCode: page.pageCode,
                         languageCode,

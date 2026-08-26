@@ -110,6 +110,7 @@
     "The current sample shows directional bias: mean residual is {bias}, or {ratio} of MAE.": "The current sample shows directional bias: mean residual is {bias}, or {ratio} of MAE.",
     "Observed maximum relative error {error} exceeds the allowed relative error {tolerance}.": "Observed maximum relative error {error} exceeds the allowed relative error {tolerance}.",
     "{count} rows exceed the allowed relative error for this rule.": "{count} rows exceed the allowed relative error for this rule.",
-    "No immediate warning was found in the available diagnostics. Confirm the formula with independent validation data before operational use.": "No immediate warning was found in the available diagnostics. Confirm the formula with independent validation data before operational use."
+    "No immediate warning was found in the available diagnostics. Confirm the formula with independent validation data before operational use.": "No immediate warning was found in the available diagnostics. Confirm the formula with independent validation data before operational use.",
+    "f(X) predicted value (Y)": "f(X) predicted value (Y)"
   }
 }

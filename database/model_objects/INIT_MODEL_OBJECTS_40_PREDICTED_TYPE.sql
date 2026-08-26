@@ -1807,6 +1807,266 @@ BEGIN
 END;
 /
 
+CREATE OR REPLACE FUNCTION "INIT$_FN_PREDICT_BASE_TYPE_V3" (
+    p_column_name          IN VARCHAR2
+  , p_column_label         IN VARCHAR2
+  , p_log_data_type        IN VARCHAR2
+  , p_total_rows           IN NUMBER
+  , p_non_null_rows        IN NUMBER
+  , p_num_distinct         IN NUMBER
+  , p_sample_not_null_rows IN NUMBER
+  , p_integer_ratio        IN NUMBER
+  , p_norm_entropy         IN NUMBER
+  , p_top1_ratio           IN NUMBER
+  , p_min_num_value        IN NUMBER DEFAULT NULL
+  , p_max_num_value        IN NUMBER DEFAULT NULL
+) RETURN VARCHAR2
+AUTHID CURRENT_USER
+IS
+    v_column_name              VARCHAR2(128);
+    v_semantic_text            VARCHAR2(4000);
+    v_log_data_type            VARCHAR2(30);
+    v_force_identifier_columns VARCHAR2(4000);
+    v_total_rows               NUMBER;
+    v_non_null_rows            NUMBER;
+    v_num_distinct             NUMBER;
+    v_integer_ratio            NUMBER;
+    v_fraction_ratio           NUMBER;
+    v_distinct_total_ratio     NUMBER;
+    v_distinct_non_null_ratio  NUMBER;
+    v_range_size               NUMBER;
+    v_range_density            NUMBER;
+    v_identifier_dist_ratio    NUMBER;
+    v_low_cardinality_count    NUMBER;
+    v_ordinal_max_distinct     NUMBER;
+    v_high_entropy             NUMBER;
+    v_text_dist_ratio          NUMBER;
+    v_dense_range_ratio        NUMBER;
+    v_discrete_min_distinct    NUMBER;
+    v_fraction_cont_ratio      NUMBER;
+    v_category_dist_ratio      NUMBER;
+    v_dominant_value_ratio     NUMBER;
+    v_min_profile_rows         NUMBER;
+    v_is_sample_reliable       BOOLEAN;
+    v_is_low_cardinality       BOOLEAN;
+    v_is_category_hint         BOOLEAN;
+    v_is_identifier_hint       BOOLEAN;
+    v_is_continuous_hint       BOOLEAN;
+    v_is_discrete_hint         BOOLEAN;
+    v_is_ordinal_hint          BOOLEAN;
+BEGIN
+    v_column_name := UPPER(TRIM(NVL(p_column_name, '')));
+    v_semantic_text := UPPER(TRIM(NVL(p_column_name, '') || ' ' || NVL(p_column_label, '')));
+    v_log_data_type := UPPER(TRIM(NVL(p_log_data_type, 'ETC')));
+    v_total_rows := GREATEST(NVL(p_total_rows, 0), 0);
+    v_non_null_rows := GREATEST(NVL(p_non_null_rows, 0), 0);
+    v_num_distinct := GREATEST(NVL(p_num_distinct, 0), 0);
+    v_integer_ratio := CASE
+        WHEN p_integer_ratio IS NULL THEN NULL
+        ELSE LEAST(1, GREATEST(0, p_integer_ratio))
+    END;
+    v_fraction_ratio := CASE
+        WHEN v_integer_ratio IS NULL THEN NULL
+        ELSE 1 - v_integer_ratio
+    END;
+    v_distinct_total_ratio := CASE
+        WHEN v_total_rows > 0 THEN LEAST(1, v_num_distinct / v_total_rows)
+        ELSE 0
+    END;
+    v_distinct_non_null_ratio := CASE
+        WHEN v_non_null_rows > 0 THEN LEAST(1, v_num_distinct / v_non_null_rows)
+        ELSE 0
+    END;
+
+    v_identifier_dist_ratio := "INIT$_FN_TARGET_SETTING_NUMBER"('DATA_PROFILING', 'IDENTIFIER_DIST_RATIO', 0.9);
+    v_low_cardinality_count := "INIT$_FN_TARGET_SETTING_NUMBER"('DATA_PROFILING', 'LOW_CARDINALITY_COUNT', 15);
+    v_ordinal_max_distinct := "INIT$_FN_TARGET_SETTING_NUMBER"('DATA_PROFILING', 'ORDINAL_MAX_DISTINCT', 30);
+    v_high_entropy := "INIT$_FN_TARGET_SETTING_NUMBER"('DATA_PROFILING', 'HIGH_ENTROPY', 0.7);
+    v_text_dist_ratio := "INIT$_FN_TARGET_SETTING_NUMBER"('DATA_PROFILING', 'TEXT_DIST_RATIO', 0.5);
+    v_dense_range_ratio := "INIT$_FN_TARGET_SETTING_NUMBER"('DATA_PROFILING', 'DENSE_NUMERIC_RANGE_RATIO', 0.8);
+    v_discrete_min_distinct := "INIT$_FN_TARGET_SETTING_NUMBER"('DATA_PROFILING', 'DISCRETE_NUMERIC_MIN_DISTINCT', 16);
+    v_fraction_cont_ratio := "INIT$_FN_TARGET_SETTING_NUMBER"('DATA_PROFILING', 'FRACTION_CONTINUOUS_RATIO', 0.02);
+    v_category_dist_ratio := "INIT$_FN_TARGET_SETTING_NUMBER"('DATA_PROFILING', 'CATEGORICAL_DIST_RATIO', 0.05);
+    v_dominant_value_ratio := "INIT$_FN_TARGET_SETTING_NUMBER"('DATA_PROFILING', 'DOMINANT_VALUE_RATIO', 0.6);
+    v_min_profile_rows := "INIT$_FN_TARGET_SETTING_NUMBER"('DATA_PROFILING', 'MIN_PROFILE_ROWS', 30);
+    v_force_identifier_columns := "INIT$_FN_TARGET_SETTING_VALUE"('DATA_PROFILING', 'FORCE_IDENTIFIER_COLUMNS', 'FILE_ROW_NO');
+
+    v_is_sample_reliable := NVL(p_sample_not_null_rows, 0) >= v_min_profile_rows;
+    v_is_category_hint :=
+           REGEXP_LIKE(v_semantic_text, '(^|[- _])(CD|CODE|TYPE|KIND|STATUS|FLAG|YN|GRADE|LEVEL)([- _]|$)')
+        OR REGEXP_LIKE(v_semantic_text, '(코드|구분|유형|상태|여부|등급|성별|분류)$');
+    v_is_identifier_hint :=
+           REGEXP_LIKE(v_semantic_text, '(^|[- _])(ID|KEY|UUID|ROW_NO|SEQ_NO)([- _]|$)')
+        OR REGEXP_LIKE(v_semantic_text, '(식별자|고유번호|일련번호)$');
+    v_is_continuous_hint :=
+           REGEXP_LIKE(v_semantic_text, '(^|[- _])(AMT|AMOUNT|PRICE|COST|RATE|RATIO|AVG|MEAN|WEIGHT|HEIGHT|TEMP)([- _]|$)')
+        OR REGEXP_LIKE(v_semantic_text, '(금액|가격|비용|비율|평균|온도|무게|높이)$');
+    v_is_discrete_hint :=
+           REGEXP_LIKE(v_semantic_text, '(^|[- _])(CNT|COUNT|QTY|QUANTITY|AGE|YEAR)([- _]|$)')
+        OR REGEXP_LIKE(v_semantic_text, '(횟수|개수|건수|수량|인원수|가구원수|층수|나이|연도)$');
+    v_is_ordinal_hint :=
+           REGEXP_LIKE(v_semantic_text, '(^|[- _])(RANK|ORDER|STEP|STAGE)([- _]|$)')
+        OR REGEXP_LIKE(v_semantic_text, '(순위|단계|차수|학년)$');
+    v_is_low_cardinality :=
+        v_non_null_rows >= v_min_profile_rows
+        AND (
+               v_num_distinct BETWEEN 1 AND v_low_cardinality_count
+            OR (
+                   v_num_distinct <= v_ordinal_max_distinct
+               AND v_distinct_total_ratio <= v_category_dist_ratio
+               AND (
+                      NVL(p_norm_entropy, 0) < v_high_entropy
+                   OR NVL(p_top1_ratio, 0) >= v_dominant_value_ratio
+               )
+            )
+        );
+    v_range_size := CASE
+        WHEN p_min_num_value IS NOT NULL
+         AND p_max_num_value IS NOT NULL
+         AND NVL(v_integer_ratio, 0) >= 0.98
+        THEN FLOOR(p_max_num_value) - CEIL(p_min_num_value) + 1
+        ELSE NULL
+    END;
+    v_range_density := CASE
+        WHEN NVL(v_range_size, 0) > 0 THEN LEAST(1, v_num_distinct / v_range_size)
+        ELSE 0
+    END;
+
+    IF v_non_null_rows = 0 THEN
+        RETURN '기타데이터형';
+    END IF;
+
+    IF "INIT$_FN_TOKEN_LIST_CONTAINS"(v_force_identifier_columns, v_column_name) = 'Y' THEN
+        IF v_log_data_type = 'NUM' THEN
+            RETURN '숫자형식별자';
+        END IF;
+        RETURN '문자형식별자';
+    END IF;
+
+    IF v_is_category_hint THEN
+        IF v_log_data_type = 'NUM' THEN
+            RETURN '숫자형범주형';
+        ELSIF v_log_data_type = 'CHR' THEN
+            RETURN '문자형범주형';
+        END IF;
+        RETURN '일반적범주형';
+    END IF;
+
+    IF v_is_identifier_hint
+       AND v_non_null_rows >= v_min_profile_rows
+       AND v_distinct_non_null_ratio >= v_identifier_dist_ratio THEN
+        IF v_log_data_type = 'NUM' THEN
+            RETURN '숫자형식별자';
+        END IF;
+        RETURN '문자형식별자';
+    END IF;
+
+    IF v_log_data_type = 'NUM' THEN
+        IF v_is_sample_reliable
+           AND v_fraction_ratio IS NOT NULL
+           AND v_fraction_ratio >= v_fraction_cont_ratio THEN
+            RETURN '숫자형연속형';
+        END IF;
+
+        IF v_is_continuous_hint THEN
+            RETURN '숫자형연속형';
+        END IF;
+
+        IF v_is_ordinal_hint
+           AND v_num_distinct <= v_ordinal_max_distinct THEN
+            RETURN '순서형범주형';
+        END IF;
+
+        IF v_is_discrete_hint
+           AND NVL(v_integer_ratio, 0) >= 0.98 THEN
+            RETURN '이산형연속형';
+        END IF;
+
+        IF NVL(v_integer_ratio, 0) >= 0.98
+           AND v_num_distinct >= v_discrete_min_distinct
+           AND v_range_density >= v_dense_range_ratio THEN
+            RETURN '이산형연속형';
+        END IF;
+
+        IF v_is_low_cardinality THEN
+            RETURN '숫자형범주형';
+        END IF;
+
+        IF NVL(v_integer_ratio, 0) >= 0.98
+           AND v_num_distinct <= v_ordinal_max_distinct
+           AND v_distinct_total_ratio <= v_category_dist_ratio
+           AND NVL(p_norm_entropy, 0) < v_high_entropy THEN
+            RETURN '순서형범주형';
+        END IF;
+
+        RETURN '숫자형연속형';
+    END IF;
+
+    IF v_log_data_type = 'CHR' THEN
+        IF v_is_low_cardinality THEN
+            RETURN '문자형범주형';
+        END IF;
+
+        IF v_distinct_non_null_ratio > v_text_dist_ratio
+           AND NVL(p_norm_entropy, 0) >= v_high_entropy THEN
+            RETURN '단순형텍스트';
+        END IF;
+
+        RETURN '일반적범주형';
+    END IF;
+
+    RETURN '기타데이터형';
+END;
+/
+
+CREATE OR REPLACE FUNCTION "INIT$_FN_PREDICT_BASE_REASON_V3" (
+    p_column_name          IN VARCHAR2
+  , p_column_label         IN VARCHAR2
+  , p_log_data_type        IN VARCHAR2
+  , p_total_rows           IN NUMBER
+  , p_non_null_rows        IN NUMBER
+  , p_num_distinct         IN NUMBER
+  , p_sample_not_null_rows IN NUMBER
+  , p_integer_ratio        IN NUMBER
+  , p_norm_entropy         IN NUMBER
+  , p_top1_ratio           IN NUMBER
+  , p_min_num_value        IN NUMBER DEFAULT NULL
+  , p_max_num_value        IN NUMBER DEFAULT NULL
+) RETURN VARCHAR2
+AUTHID CURRENT_USER
+IS
+    v_type_value VARCHAR2(100);
+BEGIN
+    v_type_value := "INIT$_FN_PREDICT_BASE_TYPE_V3"(
+        p_column_name
+      , p_column_label
+      , p_log_data_type
+      , p_total_rows
+      , p_non_null_rows
+      , p_num_distinct
+      , p_sample_not_null_rows
+      , p_integer_ratio
+      , p_norm_entropy
+      , p_top1_ratio
+      , p_min_num_value
+      , p_max_num_value
+    );
+
+    RETURN CASE v_type_value
+        WHEN '숫자형식별자' THEN '[RULE V3] 컬럼 의미와 고유값 비율에 따라 숫자형 식별자로 판단'
+        WHEN '문자형식별자' THEN '[RULE V3] 컬럼 의미와 고유값 비율에 따라 문자형 식별자로 판단'
+        WHEN '숫자형연속형' THEN '[RULE V3] 소수값 비율, 컬럼 의미 또는 수치 분포에 따라 연속형으로 판단'
+        WHEN '이산형연속형' THEN '[RULE V3] 정수 비율, 수량 의미와 값 범위 밀도에 따라 이산형 수치로 판단'
+        WHEN '순서형범주형' THEN '[RULE V3] 순서 의미, 고유값 개수와 분포에 따라 순서형 범주로 판단'
+        WHEN '숫자형범주형' THEN '[RULE V3] 코드 의미 또는 낮은 cardinality에 따라 숫자형 범주로 판단'
+        WHEN '문자형범주형' THEN '[RULE V3] 코드 의미 또는 낮은 cardinality에 따라 문자형 범주로 판단'
+        WHEN '일반적범주형' THEN '[RULE V3] 컬럼 의미와 문자값 분포에 따라 일반 범주로 판단'
+        WHEN '단순형텍스트' THEN '[RULE V3] 고유값 비율과 엔트로피가 높아 자유 텍스트로 판단'
+        ELSE '[RULE V3] 유효한 데이터가 없거나 지원하지 않는 데이터 타입으로 판단'
+    END;
+END;
+/
+
 CREATE OR REPLACE PROCEDURE "INIT$_SP_COLUMN_TYPE_CONFIRM" (
     p_owner            IN VARCHAR2,
     p_table_name       IN VARCHAR2,
@@ -2123,7 +2383,7 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_PREDICTED_TYPE" (
     v_insert_base_reason_expr VARCHAR2(1000);
     v_insert_model_expr       VARCHAR2(1000);
     v_final_type_expr         CLOB := 'CAST(NULL AS VARCHAR2(4000))';
-    v_final_reason_expr       VARCHAR2(1000) := 'CAST(NULL AS VARCHAR2(1000))';
+    v_final_reason_expr       CLOB := 'CAST(NULL AS VARCHAR2(1000))';
     v_final_dt_expr           VARCHAR2(1000) := 'CAST(NULL AS DATE)';
     v_final_user_expr         VARCHAR2(1000) := 'CAST(NULL AS VARCHAR2(128))';
     v_run_source_type         VARCHAR2(30);
@@ -2135,6 +2395,7 @@ CREATE OR REPLACE PROCEDURE "INIT$_SP_PREDICTED_TYPE" (
     v_model_version_id        NUMBER;
     v_model_version           NUMBER;
     v_model_auto_confidence   NUMBER;
+    v_model_cross_confidence  NUMBER;
     v_integer_tolerance       NUMBER;
     v_auto_label_source       VARCHAR2(30) := 'LEGACY_UNKNOWN';
 
@@ -2198,6 +2459,7 @@ BEGIN
     v_run_source_type := normalize_run_source_type(p_run_source_type);
     v_run_id := NVL(p_run_id, 0);
     v_model_auto_confidence := LEAST(1, GREATEST(0, "INIT$_FN_TARGET_SETTING_NUMBER"('DATA_PROFILING', 'MODEL_AUTO_CONFIDENCE', 0.85)));
+    v_model_cross_confidence := LEAST(1, GREATEST(v_model_auto_confidence, "INIT$_FN_TARGET_SETTING_NUMBER"('DATA_PROFILING', 'MODEL_CROSS_GROUP_CONFIDENCE', 0.90)));
     v_integer_tolerance := LEAST(0.1, GREATEST(0, "INIT$_FN_TARGET_SETTING_NUMBER"('DATA_PROFILING', 'INTEGER_TOLERANCE', 0.000000001)));
 
     IF NOT REGEXP_LIKE(v_owner, '^[A-Z][A-Z0-9_$#]{0,127}$') THEN
@@ -2355,18 +2617,89 @@ BEGIN
                  WHEN TRIM(S."MODL_PREDICTED_TYPE") IS NULL THEN S."BASE_PREDICTED_TYPE"
                  WHEN "INIT$_FN_TYPE_CODE"(S."BASE_PREDICTED_TYPE") = "INIT$_FN_TYPE_CODE"(S."MODL_PREDICTED_TYPE")
                  THEN S."BASE_PREDICTED_TYPE"
-                 WHEN NVL(S."MODEL_CONFIDENCE", 0) >= ' || TO_CHAR(v_model_auto_confidence, 'TM9', 'NLS_NUMERIC_CHARACTERS=.,') || '
+
+                 WHEN "INIT$_FN_TYPE_CODE"(S."BASE_PREDICTED_TYPE") = ''NUM_CONTINUOUS''
+                  AND "INIT$_FN_TYPE_GROUP_CODE"(S."MODL_PREDICTED_TYPE") = ''CATEGORICAL''
+                 THEN S."BASE_PREDICTED_TYPE"
+
+                 WHEN "INIT$_FN_TYPE_CODE"(S."BASE_PREDICTED_TYPE") IN (''NUM_IDENTIFIER'', ''CHAR_IDENTIFIER'')
+                 THEN S."BASE_PREDICTED_TYPE"
+
+                 WHEN "INIT$_FN_TYPE_CODE"(S."BASE_PREDICTED_TYPE") = ''FREE_TEXT''
+                  AND "INIT$_FN_TYPE_GROUP_CODE"(S."MODL_PREDICTED_TYPE") = ''CATEGORICAL''
+                 THEN S."BASE_PREDICTED_TYPE"
+
+                 WHEN "INIT$_FN_TYPE_CODE"(S."BASE_PREDICTED_TYPE") = ''NUM_DISCRETE''
+                  AND "INIT$_FN_TYPE_GROUP_CODE"(S."MODL_PREDICTED_TYPE") = ''CATEGORICAL''
+                  AND NVL(S."NUM_DISTINCT", 0) BETWEEN 1 AND 30
+                  AND NVL(S."NUM_DISTINCT", 0) / NULLIF(NVL(S."TOTAL_ROWS", 0), 0) <= 0.05
+                  AND NVL(S."MODEL_CONFIDENCE", 0) >= ' || TO_CHAR(v_model_cross_confidence, 'TM9', 'NLS_NUMERIC_CHARACTERS=.,') || '
                  THEN S."MODL_PREDICTED_TYPE"
+
+                 WHEN "INIT$_FN_TYPE_GROUP_CODE"(S."BASE_PREDICTED_TYPE") = ''CATEGORICAL''
+                  AND "INIT$_FN_TYPE_CODE"(S."MODL_PREDICTED_TYPE") = ''NUM_CONTINUOUS''
+                  AND NVL(S."INTEGER_RATIO", 1) < 0.98
+                  AND NVL(S."MODEL_CONFIDENCE", 0) >= ' || TO_CHAR(v_model_cross_confidence, 'TM9', 'NLS_NUMERIC_CHARACTERS=.,') || '
+                 THEN S."MODL_PREDICTED_TYPE"
+
+                 WHEN "INIT$_FN_TYPE_CODE"(S."BASE_PREDICTED_TYPE") IN (''OTHER'', ''UNKNOWN'')
+                  AND "INIT$_FN_TYPE_CODE"(S."MODL_PREDICTED_TYPE") NOT IN (''OTHER'', ''UNKNOWN'')
+                  AND NVL(S."MODEL_CONFIDENCE", 0) >= ' || TO_CHAR(v_model_cross_confidence, 'TM9', 'NLS_NUMERIC_CHARACTERS=.,') || '
+                 THEN S."MODL_PREDICTED_TYPE"
+
+                 WHEN "INIT$_FN_TYPE_CODE"(S."BASE_PREDICTED_TYPE") NOT IN (''OTHER'', ''UNKNOWN'')
+                  AND "INIT$_FN_TYPE_CODE"(S."MODL_PREDICTED_TYPE") IN (''OTHER'', ''UNKNOWN'')
+                 THEN S."BASE_PREDICTED_TYPE"
+
+                 WHEN NVL(S."MODEL_CONFIDENCE", 0) >= ' || TO_CHAR(v_model_auto_confidence, 'TM9', 'NLS_NUMERIC_CHARACTERS=.,') || '
+                  AND "INIT$_FN_TYPE_GROUP_CODE"(S."BASE_PREDICTED_TYPE") = "INIT$_FN_TYPE_GROUP_CODE"(S."MODL_PREDICTED_TYPE")
+                 THEN S."MODL_PREDICTED_TYPE"
+
                  ELSE S."BASE_PREDICTED_TYPE"
              END';
         v_final_reason_expr :=
             'CASE
                  WHEN UPPER(TRIM(S."COLUMN_NAME")) = ''FILE_ROW_NO''
-                 THEN ' || sql_literal('[자동결정] FINAL_BOTH: FILE_ROW_NO 식별자 규칙 우선') || '
+                 THEN ' || sql_literal('[자동결정] FINAL_RULE_IDENTIFIER_GUARD: FILE_ROW_NO 식별자 규칙 우선') || '
                  WHEN NULLIF(TRIM(S."COLUMN_DESC"), '''') IS NOT NULL
                   AND REGEXP_LIKE(TRIM(S."COLUMN_DESC"), ''코드$'')
-                 THEN ' || sql_literal('[자동결정] FINAL_BOTH: 컬럼 라벨이 코드로 끝나 범주형 규칙 우선') || '
-                 ELSE ' || sql_literal('[자동결정] FINAL_BOTH: 규칙/모델 일치 또는 모델 확률 기준으로 최종값 반영') || '
+                 THEN ' || sql_literal('[자동결정] FINAL_RULE_CATEGORY_HINT: 컬럼 라벨의 코드 의미 규칙 우선') || '
+                 WHEN TRIM(S."BASE_PREDICTED_TYPE") IS NULL
+                 THEN ' || sql_literal('[자동결정] FINAL_MODEL_RULE_MISSING: RULE 결과가 없어 MODEL 반영') || '
+                 WHEN TRIM(S."MODL_PREDICTED_TYPE") IS NULL
+                 THEN ' || sql_literal('[자동결정] FINAL_RULE_MODEL_MISSING: MODEL 결과가 없어 RULE 반영') || '
+                 WHEN "INIT$_FN_TYPE_CODE"(S."BASE_PREDICTED_TYPE") = "INIT$_FN_TYPE_CODE"(S."MODL_PREDICTED_TYPE")
+                 THEN ' || sql_literal('[자동결정] FINAL_RULE_EXACT_MATCH: RULE/MODEL 세부 유형 일치') || '
+                 WHEN "INIT$_FN_TYPE_CODE"(S."BASE_PREDICTED_TYPE") = ''NUM_CONTINUOUS''
+                  AND "INIT$_FN_TYPE_GROUP_CODE"(S."MODL_PREDICTED_TYPE") = ''CATEGORICAL''
+                 THEN ' || sql_literal('[자동결정] FINAL_RULE_CONTINUOUS_GUARD: 연속형의 범주형 전환 차단') || '
+                 WHEN "INIT$_FN_TYPE_CODE"(S."BASE_PREDICTED_TYPE") IN (''NUM_IDENTIFIER'', ''CHAR_IDENTIFIER'')
+                 THEN ' || sql_literal('[자동결정] FINAL_RULE_IDENTIFIER_GUARD: 식별자 유형 보호') || '
+                 WHEN "INIT$_FN_TYPE_CODE"(S."BASE_PREDICTED_TYPE") = ''FREE_TEXT''
+                  AND "INIT$_FN_TYPE_GROUP_CODE"(S."MODL_PREDICTED_TYPE") = ''CATEGORICAL''
+                 THEN ' || sql_literal('[자동결정] FINAL_RULE_FREE_TEXT_GUARD: 자유 텍스트의 범주형 전환 차단') || '
+                 WHEN "INIT$_FN_TYPE_CODE"(S."BASE_PREDICTED_TYPE") = ''NUM_DISCRETE''
+                  AND "INIT$_FN_TYPE_GROUP_CODE"(S."MODL_PREDICTED_TYPE") = ''CATEGORICAL''
+                  AND NVL(S."NUM_DISTINCT", 0) BETWEEN 1 AND 30
+                  AND NVL(S."NUM_DISTINCT", 0) / NULLIF(NVL(S."TOTAL_ROWS", 0), 0) <= 0.05
+                  AND NVL(S."MODEL_CONFIDENCE", 0) >= ' || TO_CHAR(v_model_cross_confidence, 'TM9', 'NLS_NUMERIC_CHARACTERS=.,') || '
+                 THEN ' || sql_literal('[자동결정] FINAL_MODEL_DISCRETE_TO_CATEGORY: 낮은 cardinality와 높은 모델 신뢰도로 범주형 전환') || '
+                 WHEN "INIT$_FN_TYPE_GROUP_CODE"(S."BASE_PREDICTED_TYPE") = ''CATEGORICAL''
+                  AND "INIT$_FN_TYPE_CODE"(S."MODL_PREDICTED_TYPE") = ''NUM_CONTINUOUS''
+                  AND NVL(S."INTEGER_RATIO", 1) < 0.98
+                  AND NVL(S."MODEL_CONFIDENCE", 0) >= ' || TO_CHAR(v_model_cross_confidence, 'TM9', 'NLS_NUMERIC_CHARACTERS=.,') || '
+                 THEN ' || sql_literal('[자동결정] FINAL_MODEL_FRACTION_TO_CONTINUOUS: 소수값 근거와 높은 모델 신뢰도로 연속형 전환') || '
+                 WHEN "INIT$_FN_TYPE_CODE"(S."BASE_PREDICTED_TYPE") IN (''OTHER'', ''UNKNOWN'')
+                  AND "INIT$_FN_TYPE_CODE"(S."MODL_PREDICTED_TYPE") NOT IN (''OTHER'', ''UNKNOWN'')
+                  AND NVL(S."MODEL_CONFIDENCE", 0) >= ' || TO_CHAR(v_model_cross_confidence, 'TM9', 'NLS_NUMERIC_CHARACTERS=.,') || '
+                 THEN ' || sql_literal('[자동결정] FINAL_MODEL_RULE_UNKNOWN: RULE 미상 유형을 높은 신뢰도의 MODEL로 보완') || '
+                 WHEN "INIT$_FN_TYPE_CODE"(S."BASE_PREDICTED_TYPE") NOT IN (''OTHER'', ''UNKNOWN'')
+                  AND "INIT$_FN_TYPE_CODE"(S."MODL_PREDICTED_TYPE") IN (''OTHER'', ''UNKNOWN'')
+                 THEN ' || sql_literal('[자동결정] FINAL_RULE_MODEL_UNKNOWN: MODEL 미상 유형이 정상 RULE을 덮지 않도록 보호') || '
+                 WHEN "INIT$_FN_TYPE_GROUP_CODE"(S."BASE_PREDICTED_TYPE") = "INIT$_FN_TYPE_GROUP_CODE"(S."MODL_PREDICTED_TYPE")
+                  AND NVL(S."MODEL_CONFIDENCE", 0) >= ' || TO_CHAR(v_model_auto_confidence, 'TM9', 'NLS_NUMERIC_CHARACTERS=.,') || '
+                 THEN ' || sql_literal('[자동결정] FINAL_MODEL_SAME_GROUP_HIGH_CONFIDENCE: 같은 그룹 내 높은 신뢰도의 MODEL 세부 유형 반영') || '
+                 ELSE ' || sql_literal('[자동결정] FINAL_RULE_COMPATIBILITY_FALLBACK: 허용되지 않은 그룹 전환 또는 모델 신뢰도 부족') || '
              END';
     END IF;
 
@@ -2484,6 +2817,7 @@ USING (
                ) AS LOG_DATA_TYPE,
                X.ENTROPY,
                X.NORM_ENTROPY,
+               X.TOP1_RATIO,
                ROUND(X.NUMERIC_CONVERTIBLE_COUNT / NULLIF(X.SAMPLE_NOT_NULL_COUNT, 0), 6) AS NUMERIC_RATIO,
                ROUND(X.INTEGER_CONVERTIBLE_COUNT / NULLIF(X.NUMERIC_CONVERTIBLE_COUNT, 0), 6) AS INTEGER_RATIO,
                X.MIN_NUM_VALUE,
@@ -2589,6 +2923,10 @@ E AS (
                WHEN NVL(T.N, 0) = 0 OR T.D <= 1 THEN 0
                ELSE -NVL(SUM((F.N / T.N) * LN(F.N / T.N)), 0) / LN(T.D)
            END NE
+         , CASE
+               WHEN NVL(T.N, 0) = 0 THEN 0
+               ELSE NVL(MAX(F.N), 0) / T.N
+           END T1
       FROM T
       LEFT JOIN F
         ON 1 = 1
@@ -2602,6 +2940,7 @@ SELECT A.R
      , T.D
      , ROUND(NVL(E.E, 0), 6) E
      , ROUND(NVL(E.NE, 0), 6) NE
+     , ROUND(NVL(E.T1, 0), 6) T1
      , A.MN
      , A.MX
      , ROUND(A.AL, 6) AL
@@ -2618,6 +2957,7 @@ SELECT A.R
                        DIST_CNT                   NUMBER PATH 'D',
                        ENTROPY                    NUMBER PATH 'E',
                        NORM_ENTROPY               NUMBER PATH 'NE',
+                       TOP1_RATIO                 NUMBER PATH 'T1',
                        MIN_NUM_VALUE              NUMBER PATH 'MN',
                        MAX_NUM_VALUE              NUMBER PATH 'MX',
                        AVG_TEXT_LENGTH            NUMBER PATH 'AL',
@@ -2691,34 +3031,41 @@ SELECT A.R
            P.MAX_NUM_VALUE AS "MAX_NUM_VALUE",
            P.AVG_TEXT_LENGTH AS "AVG_TEXT_LENGTH",
            P.MAX_TEXT_LENGTH AS "MAX_TEXT_LENGTH",
-           "INIT$_FN_PREDICT_BASE_TYPE"(
+           "INIT$_FN_PREDICT_BASE_TYPE_V3"(
                P.COLUMN_NAME,
+               P.COLUMN_DESC,
                P.LOG_DATA_TYPE,
+               P.TOTAL_ROWS,
+               P.NON_NULL_ROWS,
                P.NUM_DISTINCT,
-               P.DIST_VAL_RT,
-               P.IS_INTEGER,
+               P.SAMPLE_NOT_NULL_COUNT,
+               P.INTEGER_RATIO,
                P.NORM_ENTROPY,
+               P.TOP1_RATIO,
                P.MIN_NUM_VALUE,
-               P.MAX_NUM_VALUE,
-               P.COLUMN_DESC
+               P.MAX_NUM_VALUE
            ) AS "BASE_PREDICTED_TYPE",
            "INIT$_FN_TYPE_CODE"(
-               "INIT$_FN_PREDICT_BASE_TYPE"(
-                   P.COLUMN_NAME, P.LOG_DATA_TYPE, P.NUM_DISTINCT, P.DIST_VAL_RT,
-                   P.IS_INTEGER, P.NORM_ENTROPY, P.MIN_NUM_VALUE, P.MAX_NUM_VALUE,
-                   P.COLUMN_DESC
+               "INIT$_FN_PREDICT_BASE_TYPE_V3"(
+                   P.COLUMN_NAME, P.COLUMN_DESC, P.LOG_DATA_TYPE, P.TOTAL_ROWS,
+                   P.NON_NULL_ROWS, P.NUM_DISTINCT, P.SAMPLE_NOT_NULL_COUNT,
+                   P.INTEGER_RATIO, P.NORM_ENTROPY, P.TOP1_RATIO,
+                   P.MIN_NUM_VALUE, P.MAX_NUM_VALUE
                )
            ) AS "BASE_TYPE_CODE",
-           "INIT$_FN_PREDICT_BASE_REASON"(
+           "INIT$_FN_PREDICT_BASE_REASON_V3"(
                P.COLUMN_NAME,
+               P.COLUMN_DESC,
                P.LOG_DATA_TYPE,
+               P.TOTAL_ROWS,
+               P.NON_NULL_ROWS,
                P.NUM_DISTINCT,
-               P.DIST_VAL_RT,
-               P.IS_INTEGER,
+               P.SAMPLE_NOT_NULL_COUNT,
+               P.INTEGER_RATIO,
                P.NORM_ENTROPY,
+               P.TOP1_RATIO,
                P.MIN_NUM_VALUE,
-               P.MAX_NUM_VALUE,
-               P.COLUMN_DESC
+               P.MAX_NUM_VALUE
            ) AS "BASE_REASON",
            CASE
                WHEN P.MODEL_PREDICTION_VALUE IS NULL THEN NULL

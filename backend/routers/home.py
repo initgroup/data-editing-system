@@ -6,19 +6,27 @@ import os
 import re
 import threading
 import time
+from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, HTTPException, Query, Request, Response
 
 from backend.auth_context import get_request_role_code, get_request_user_id
 from backend.database import get_db_connection
 from backend.database_helper import SqlLoader, execute_query
+from backend.services.report_fonts import REPORT_FONT_FAMILY, embedded_korean_font_css
+from backend.services.structured_report_renderers import render_report_pdf
 from backend.target_database import get_target_connection_id, get_target_db_connection
 
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+_ROOT_DIR = Path(__file__).resolve().parents[2]
+_SYSTEM_GUIDE_PATH = _ROOT_DIR / "frontend" / "help" / "in-deps-system-guide.html"
+_SYSTEM_GUIDE_FILE_NAME = "인뎁스(IN-DEPS)_시스템_소개서"
 
 
 TARGET_TABLES = [
@@ -147,6 +155,41 @@ def _safe_file_name(value: Any) -> str:
     text = str(value or "").replace("\\", "/").split("/")[-1].strip()
     text = text.replace("\r", "").replace("\n", "")
     return (text or "attachment")[:500]
+
+
+def _system_guide_download_headers(extension: str) -> dict[str, str]:
+    file_name = f"{_SYSTEM_GUIDE_FILE_NAME}.{extension}"
+    ascii_name = f"IN-DEPS_System_Introduction.{extension}"
+    return {
+        "Cache-Control": "private, no-store",
+        "Pragma": "no-cache",
+        "X-Content-Type-Options": "nosniff",
+        "Content-Disposition": (
+            f'attachment; filename="{ascii_name}"; '
+            f"filename*=UTF-8''{quote(file_name, safe='')}"
+        ),
+    }
+
+
+def _system_guide_pdf_html(html_content: bytes) -> bytes:
+    font_css = embedded_korean_font_css()
+    if not font_css:
+        raise HTTPException(status_code=503, detail="PDF renderer font is not installed.")
+
+    document = html_content.decode("utf-8")
+    if "</head>" not in document:
+        raise HTTPException(status_code=500, detail="System guide document is invalid.")
+
+    pdf_font_style = (
+        "<style data-pdf-font>\n"
+        f"{font_css}\n"
+        ":root { --font-sans: \""
+        f"{REPORT_FONT_FAMILY}"
+        "\", \"Malgun Gothic\", sans-serif; }\n"
+        f"body {{ font-family: \"{REPORT_FONT_FAMILY}\", \"Malgun Gothic\", sans-serif; }}\n"
+        "</style>\n"
+    )
+    return document.replace("</head>", f"{pdf_font_style}</head>", 1).encode("utf-8")
 
 
 def _serialize_db_value(value: Any) -> Any:
@@ -397,6 +440,36 @@ def _get_target_summary(request: Request, user_id: int, connection_id: int | Non
 @router.get("/")
 async def read_home():
     return {"message": "Home API is available."}
+
+
+@router.get("/system-guide/download")
+def download_system_guide(
+    request: Request,
+    format: str = Query(..., pattern="^(html|pdf)$"),
+):
+    get_request_user_id(request)
+    if not _SYSTEM_GUIDE_PATH.is_file():
+        raise HTTPException(status_code=404, detail="System guide document was not found.")
+
+    try:
+        html_content = _SYSTEM_GUIDE_PATH.read_bytes()
+        if format == "html":
+            content = html_content
+            media_type = "text/html; charset=utf-8"
+        else:
+            content = render_report_pdf(_system_guide_pdf_html(html_content), batch=True)
+            media_type = "application/pdf"
+
+        return Response(
+            content=content,
+            media_type=media_type,
+            headers=_system_guide_download_headers(format),
+        )
+    except HTTPException:
+        raise
+    except Exception as error:
+        logger.exception("System guide file could not be generated. format=%s", format)
+        raise HTTPException(status_code=500, detail="System guide file could not be generated.") from error
 
 
 @router.get("/dashboard")

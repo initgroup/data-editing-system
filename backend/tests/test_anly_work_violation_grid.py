@@ -40,15 +40,24 @@ class AnalysisViolationGridTests(unittest.TestCase):
         self.assertIn('font-family: Consolas, "Courier New", monospace;', column_id_rule)
         self.assertIn("min-width: 6ch;", column_id_rule)
 
-    def test_rule_columns_start_immediately_after_frozen_keys(self):
+    def test_formula_prediction_follows_the_actual_rule_result_column(self):
         script = ANALYSIS_SCRIPT.read_text(encoding="utf-8")
+        style = ANALYSIS_STYLE.read_text(encoding="utf-8")
         start = script.index("        orderViolationSqlColumns(columns")
         end = script.index("        getViolationSqlColumnClass", start)
         order_block = script[start:end]
 
         self.assertIn("const frozenKeys = keys.slice(0, freezeColumns);", order_block)
         self.assertIn("const remainingKeys = keys.slice(freezeColumns);", order_block)
-        self.assertIn("return [...frozenKeys, ...rules, ...remainingKeys, ...rest];", order_block)
+        self.assertIn('const predictedColumns = pick(["V_PREDICTED_VALUE"]);', order_block)
+        self.assertIn(
+            "return [...frozenKeys, ...ruleConditions, ...ruleResults, ...predictedColumns, ...remainingKeys, ...rest];",
+            order_block,
+        )
+        self.assertIn('getText("f(X) predicted value (Y)")', script)
+        self.assertIn('return "is-formula-prediction"', script)
+        self.assertIn(".anly-work-violation-sql-grid th.is-formula-prediction", style)
+        self.assertIn("background: #eef2ff", style)
 
     def test_column_type_more_badge_expands_and_collapses_full_list(self):
         script = ANALYSIS_SCRIPT.read_text(encoding="utf-8")

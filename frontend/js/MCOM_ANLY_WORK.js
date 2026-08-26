@@ -3925,7 +3925,11 @@
         },
 
         renderViolationSqlGrid(columns, rows, ruleColumns = [], ruleConditionColumns = [], ruleResultColumns = []) {
-            const safeColumns = this.orderViolationSqlColumns(columns || [], ruleColumns || []);
+            const safeColumns = this.orderViolationSqlColumns(
+                columns || [],
+                ruleColumns || [],
+                ruleResultColumns || []
+            );
             const awareSummary = this.isSymbolicViolationNode(this.selectedNode)
                 ? (this.lastSymbolicViolationSummary || {})
                 : (this.lastViolationSummary || {});
@@ -3968,7 +3972,7 @@
                         <thead><tr>
                             ${columnMeta.map((meta) => `
                             <th class="is-resizable ${meta.frozen ? "is-frozen-col" : ""} ${this.getViolationSqlColumnClass(meta.column, keyColumns, ruleColumnSet, conditionColumnSet, resultColumnSet)}" data-col-index="${meta.index}" style="${meta.stickyStyle}">
-                                <span class="table-th-content">${this.renderColumnAwareCell(meta.column, awareSummary)}</span>
+                                <span class="table-th-content">${this.renderViolationSqlColumnHeader(meta.column, awareSummary)}</span>
                                 <span class="column-resizer" onmousedown="${PAGE_CODE}.startViolationSqlColumnResize(event, ${meta.index})"></span>
                             </th>
                         `).join("")}</tr></thead>
@@ -3986,6 +3990,14 @@
             `;
         },
 
+        renderViolationSqlColumnHeader(column, awareSummary = null) {
+            const name = String(column || "").toUpperCase();
+            if (name === "V_PREDICTED_VALUE") {
+                return this.escapeHtml(getText("f(X) predicted value (Y)"));
+            }
+            return this.renderColumnAwareCell(column, awareSummary);
+        },
+
         getViolationSqlColumnWidth(column, columnWidths = this.violationSql?.columnWidths || {}) {
             const key = String(column || "");
             const saved = Number(columnWidths[key]);
@@ -3993,13 +4005,14 @@
             const name = key.toUpperCase();
             if (name === "V_RULE_ID") return 260;
             if (name === "V_RESULT_COLUMN" || name === "V_TARGET_COLUMN") return 150;
-            if (["V_EXPECTED_VALUE", "V_PREDICTED_VALUE", "V_ACTUAL_VALUE", "V_LOWER_BOUND", "V_UPPER_BOUND", "V_ABS_ERROR", "V_ERROR_PCT"].includes(name)) return 136;
+            if (name === "V_PREDICTED_VALUE") return 160;
+            if (["V_EXPECTED_VALUE", "V_ACTUAL_VALUE", "V_LOWER_BOUND", "V_UPPER_BOUND", "V_ABS_ERROR", "V_ERROR_PCT"].includes(name)) return 136;
             if (name === "V_VIOLATION_SCORE") return 160;
             if (name === "V_VIOLATION_ID" || name === "V_CASE_ID") return 118;
             return 132;
         },
 
-        orderViolationSqlColumns(columns, ruleColumns = []) {
+        orderViolationSqlColumns(columns, ruleColumns = [], ruleResultColumns = []) {
             const safeColumns = (columns || []).filter((column) => column !== "RN__");
             const keyOrder = [
                 "V_VIOLATION_ID",
@@ -4008,7 +4021,6 @@
                 "V_RESULT_COLUMN",
                 "V_TARGET_COLUMN",
                 "V_EXPECTED_VALUE",
-                "V_PREDICTED_VALUE",
                 "V_ACTUAL_VALUE",
                 "V_LOWER_BOUND",
                 "V_UPPER_BOUND",
@@ -4022,15 +4034,20 @@
                 .filter((column) => column && !used.has(column) && used.add(column));
             const keys = pick(keyOrder);
             const rules = pick(ruleColumns || []);
+            const resultNames = new Set((ruleResultColumns || []).map((column) => String(column).toUpperCase()));
+            const ruleConditions = rules.filter((column) => !resultNames.has(String(column).toUpperCase()));
+            const ruleResults = rules.filter((column) => resultNames.has(String(column).toUpperCase()));
+            const predictedColumns = pick(["V_PREDICTED_VALUE"]);
             const rest = safeColumns.filter((column) => !used.has(column));
             const freezeColumns = Math.max(0, Number.parseInt(this.violationSql?.freezeColumns ?? 2, 10) || 0);
             const frozenKeys = keys.slice(0, freezeColumns);
             const remainingKeys = keys.slice(freezeColumns);
-            return [...frozenKeys, ...rules, ...remainingKeys, ...rest];
+            return [...frozenKeys, ...ruleConditions, ...ruleResults, ...predictedColumns, ...remainingKeys, ...rest];
         },
 
         getViolationSqlColumnClass(column, keyColumns, ruleColumnSet, conditionColumnSet, resultColumnSet) {
             const name = String(column || "").toUpperCase();
+            if (name === "V_PREDICTED_VALUE") return "is-formula-prediction";
             if (keyColumns.has(name)) return "is-key";
             if (resultColumnSet.has(name)) return "is-rule-result";
             if (conditionColumnSet.has(name)) return "is-rule-condition";
@@ -4073,7 +4090,11 @@
             event.stopPropagation();
             const table = event.currentTarget?.closest?.("table");
             const col = table?.querySelectorAll("col")?.[columnIndex + 1];
-            const columns = this.orderViolationSqlColumns(this.violationSql?.columns || [], this.violationSql?.ruleColumns || []);
+            const columns = this.orderViolationSqlColumns(
+                this.violationSql?.columns || [],
+                this.violationSql?.ruleColumns || [],
+                this.violationSql?.ruleResultColumns || []
+            );
             const column = columns[columnIndex];
             if (!table || !col || !column) return;
             const startWidth = Number.parseInt(col.style.width, 10) || col.getBoundingClientRect().width || 120;

@@ -1,0 +1,1354 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="인아이티 데이터 에디팅 플랫폼 시스템 소개 및 운영 매뉴얼">
+    <title>인아이티 데이터 에디팅 플랫폼 시스템 | IN-DEPS 가이드</title>
+    <style>
+        :root {
+            --ink-950: #111827;
+            --ink-900: #182233;
+            --ink-800: #253247;
+            --ink-700: #40506a;
+            --ink-600: #5b6b82;
+            --ink-500: #77859a;
+            --ink-300: #c9d2de;
+            --ink-200: #dfe5ec;
+            --ink-100: #edf1f5;
+            --ink-50: #f7f9fb;
+            --blue-700: #1d5fc5;
+            --blue-600: #2878e8;
+            --blue-500: #3d8dff;
+            --blue-100: #dcecff;
+            --blue-50: #eff6ff;
+            --teal-700: #0f7e7a;
+            --teal-100: #d8f1ef;
+            --teal-50: #effaf9;
+            --amber-700: #a66400;
+            --amber-100: #fae8b8;
+            --amber-50: #fff8e7;
+            --violet-700: #6848c7;
+            --violet-100: #e6defd;
+            --violet-50: #f5f2ff;
+            --rose-700: #bf3d64;
+            --rose-100: #f8d8e2;
+            --rose-50: #fff2f6;
+            --green-700: #1c7a54;
+            --green-100: #d9efe5;
+            --green-50: #f0faf5;
+            --white: #ffffff;
+            --sidebar-width: 292px;
+            --radius-sm: 8px;
+            --radius-md: 13px;
+            --radius-lg: 20px;
+            --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
+            --shadow-md: 0 14px 32px rgba(15, 23, 42, 0.08);
+            --font-sans: "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR", Arial, sans-serif;
+            --font-mono: Consolas, "Cascadia Code", "Courier New", monospace;
+        }
+
+        * { box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
+        body {
+            margin: 0;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            background: var(--ink-50);
+            color: var(--ink-900);
+            font-family: var(--font-sans);
+            line-height: 1.65;
+            word-break: keep-all;
+        }
+
+        button, input { font: inherit; }
+        button { cursor: pointer; }
+        a { color: inherit; text-decoration: none; }
+        code, .mono { font-family: var(--font-mono); }
+        strong { color: var(--ink-950); }
+
+        .skip-link {
+            position: fixed;
+            z-index: 1000;
+            left: 12px;
+            top: -60px;
+            padding: 10px 14px;
+            border-radius: 8px;
+            background: var(--ink-950);
+            color: var(--white);
+            transition: top 0.2s ease;
+        }
+        .skip-link:focus { top: 12px; }
+
+        .sidebar {
+            position: relative;
+            z-index: 30;
+            width: var(--sidebar-width);
+            flex: 0 0 var(--sidebar-width);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background: var(--white);
+            border-right: 1px solid var(--ink-200);
+            box-shadow: 4px 0 18px rgba(15, 23, 42, 0.04);
+        }
+        .brand {
+            min-height: 88px;
+            padding: 18px 22px;
+            display: flex;
+            align-items: center;
+            gap: 13px;
+            border-bottom: 1px solid var(--ink-200);
+            background: linear-gradient(145deg, var(--white) 58%, var(--blue-50));
+        }
+        .brand-mark {
+            width: 42px;
+            height: 42px;
+            position: relative;
+            flex: 0 0 42px;
+        }
+        .brand-mark::before,
+        .brand-mark::after {
+            content: "";
+            position: absolute;
+            border-radius: 5px;
+            background: linear-gradient(135deg, var(--blue-500), var(--blue-700));
+        }
+        .brand-mark::before { inset: 4px 4px 17px 4px; }
+        .brand-mark::after { inset: 17px 17px 4px 4px; }
+        .brand-copy b {
+            display: block;
+            color: var(--blue-700);
+            font-size: 1.04rem;
+            letter-spacing: -0.02em;
+        }
+        .brand-copy span {
+            display: block;
+            color: var(--ink-600);
+            font-size: 0.73rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+        }
+        .nav-wrap {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px 14px;
+        }
+        .nav-label {
+            margin: 0 10px 10px;
+            color: var(--ink-500);
+            font-size: 0.72rem;
+            font-weight: 800;
+            letter-spacing: 0.12em;
+        }
+        .nav-list { display: grid; gap: 4px; }
+        .nav-link {
+            display: grid;
+            grid-template-columns: 28px 1fr;
+            align-items: center;
+            min-height: 43px;
+            padding: 8px 10px;
+            border-right: 4px solid transparent;
+            border-radius: 8px;
+            color: var(--ink-600);
+            font-size: 0.88rem;
+            font-weight: 700;
+            transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+        }
+        .nav-link:hover { background: var(--ink-50); color: var(--ink-900); }
+        .nav-link.active {
+            background: var(--blue-50);
+            color: var(--blue-700);
+            border-right-color: var(--blue-600);
+        }
+        .nav-number { color: var(--blue-500); font-family: var(--font-mono); font-size: 0.74rem; }
+        .sidebar-footer {
+            padding: 14px 20px 18px;
+            border-top: 1px solid var(--ink-200);
+            background: var(--ink-50);
+            color: var(--ink-500);
+            font-size: 0.72rem;
+        }
+        .sidebar-footer strong { display: block; margin-bottom: 3px; color: var(--ink-700); }
+
+        .mobile-header { display: none; }
+        .main {
+            flex: 1;
+            height: 100vh;
+            overflow-y: auto;
+            scroll-behavior: smooth;
+            background:
+                radial-gradient(circle at 94% 0%, rgba(61, 141, 255, 0.07), transparent 24rem),
+                var(--white);
+        }
+        .content {
+            width: min(1180px, calc(100% - 72px));
+            margin: 0 auto;
+            padding: 58px 0 100px;
+        }
+        section {
+            position: relative;
+            scroll-margin-top: 34px;
+            padding: 26px 0 70px;
+            border-bottom: 1px solid var(--ink-200);
+        }
+        section:last-child { border-bottom: 0; }
+        .eyebrow {
+            margin: 0 0 9px;
+            color: var(--blue-600);
+            font-size: 0.76rem;
+            font-weight: 900;
+            letter-spacing: 0.13em;
+            text-transform: uppercase;
+        }
+        h1, h2, h3, h4, p { margin-top: 0; }
+        h1 {
+            max-width: 900px;
+            margin-bottom: 18px;
+            color: var(--ink-950);
+            font-size: clamp(2.15rem, 4vw, 3.55rem);
+            line-height: 1.19;
+            letter-spacing: -0.045em;
+        }
+        h2 {
+            margin-bottom: 14px;
+            color: var(--ink-950);
+            font-size: clamp(1.7rem, 2.8vw, 2.35rem);
+            line-height: 1.3;
+            letter-spacing: -0.035em;
+        }
+        h3 {
+            margin-bottom: 9px;
+            color: var(--ink-900);
+            font-size: 1.18rem;
+            line-height: 1.4;
+            letter-spacing: -0.02em;
+        }
+        h4 { margin-bottom: 7px; color: var(--ink-900); font-size: 0.97rem; }
+        .lead {
+            max-width: 930px;
+            color: var(--ink-600);
+            font-size: 1.09rem;
+        }
+        .section-head { margin-bottom: 30px; }
+        .section-head .lead { margin-bottom: 0; }
+
+        .hero {
+            min-height: 630px;
+            padding-top: 20px;
+            display: grid;
+            align-content: center;
+        }
+        .hero::after {
+            content: "IN-DEPS";
+            position: absolute;
+            z-index: 0;
+            right: 0;
+            top: 42px;
+            color: rgba(40, 120, 232, 0.045);
+            font-family: var(--font-mono);
+            font-size: clamp(5rem, 12vw, 10rem);
+            font-weight: 900;
+            letter-spacing: -0.08em;
+            pointer-events: none;
+        }
+        .hero > * { position: relative; z-index: 1; }
+        .hero-tags { display: flex; flex-wrap: wrap; gap: 9px; margin: 27px 0 34px; }
+        .tag {
+            display: inline-flex;
+            align-items: center;
+            min-height: 32px;
+            padding: 5px 12px;
+            border: 1px solid var(--blue-100);
+            border-radius: 999px;
+            background: var(--blue-50);
+            color: var(--blue-700);
+            font-size: 0.77rem;
+            font-weight: 800;
+        }
+        .metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 13px; }
+        .metric-card {
+            min-height: 122px;
+            padding: 20px;
+            border: 1px solid var(--ink-200);
+            border-radius: var(--radius-md);
+            background: rgba(255, 255, 255, 0.94);
+            box-shadow: var(--shadow-sm);
+        }
+        .metric-card:first-child { background: var(--blue-50); border-color: var(--blue-100); }
+        .metric-value { display: block; color: var(--blue-600); font-size: 2rem; font-weight: 900; line-height: 1; }
+        .metric-label { display: block; margin-top: 12px; color: var(--ink-600); font-size: 0.83rem; font-weight: 700; }
+
+        .notice {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 14px;
+            align-items: start;
+            margin: 20px 0;
+            padding: 17px 19px;
+            border: 1px solid var(--blue-100);
+            border-left: 4px solid var(--blue-500);
+            border-radius: var(--radius-sm);
+            background: var(--blue-50);
+            color: var(--ink-700);
+            font-size: 0.9rem;
+        }
+        .notice.warn { border-color: var(--amber-100); border-left-color: var(--amber-700); background: var(--amber-50); }
+        .notice.safe { border-color: var(--green-100); border-left-color: var(--green-700); background: var(--green-50); }
+        .notice-badge {
+            min-width: 30px;
+            padding: 2px 7px;
+            border-radius: 999px;
+            background: var(--white);
+            color: var(--blue-700);
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            font-weight: 900;
+            text-align: center;
+        }
+
+        .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+        .grid-4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 15px; }
+        .card {
+            position: relative;
+            padding: 22px;
+            border: 1px solid var(--ink-200);
+            border-radius: var(--radius-md);
+            background: var(--white);
+            box-shadow: var(--shadow-sm);
+        }
+        .card::before {
+            content: "";
+            position: absolute;
+            left: 0;
+            top: 20px;
+            bottom: 20px;
+            width: 4px;
+            border-radius: 0 4px 4px 0;
+            background: var(--blue-500);
+        }
+        .card.teal::before { background: var(--teal-700); }
+        .card.amber::before { background: var(--amber-700); }
+        .card.violet::before { background: var(--violet-700); }
+        .card.rose::before { background: var(--rose-700); }
+        .card.green::before { background: var(--green-700); }
+        .card p:last-child, .card ul:last-child { margin-bottom: 0; }
+        .card-kicker {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--blue-600);
+            font-family: var(--font-mono);
+            font-size: 0.72rem;
+            font-weight: 900;
+            letter-spacing: 0.05em;
+        }
+        .card p { color: var(--ink-600); font-size: 0.9rem; }
+        .clean-list { margin: 12px 0 0; padding-left: 19px; color: var(--ink-700); font-size: 0.88rem; }
+        .clean-list li + li { margin-top: 7px; }
+
+        .journey {
+            position: relative;
+            display: grid;
+            grid-template-columns: repeat(6, minmax(0, 1fr));
+            gap: 12px;
+            margin-top: 32px;
+        }
+        .journey::before {
+            content: "";
+            position: absolute;
+            left: 7%;
+            right: 7%;
+            top: 31px;
+            height: 2px;
+            background: var(--ink-200);
+        }
+        .journey-step { position: relative; z-index: 1; text-align: center; }
+        .journey-number {
+            width: 62px;
+            height: 62px;
+            margin: 0 auto 15px;
+            display: grid;
+            place-items: center;
+            border: 6px solid var(--white);
+            border-radius: 50%;
+            background: var(--blue-500);
+            color: var(--white);
+            font-family: var(--font-mono);
+            font-size: 1rem;
+            font-weight: 900;
+            box-shadow: 0 0 0 1px var(--blue-100);
+        }
+        .journey-step h3 { font-size: 0.96rem; }
+        .journey-step p { color: var(--ink-600); font-size: 0.78rem; }
+        .journey-code { color: var(--blue-600); font-family: var(--font-mono); font-size: 0.67rem; font-weight: 800; }
+
+        .architecture {
+            padding: 28px;
+            overflow: hidden;
+            border: 1px solid var(--ink-200);
+            border-radius: var(--radius-lg);
+            background: linear-gradient(180deg, var(--ink-50), var(--white));
+        }
+        .architecture-flow { display: grid; gap: 16px; }
+        .arch-band {
+            display: grid;
+            grid-template-columns: 155px 1fr;
+            gap: 18px;
+            align-items: stretch;
+        }
+        .arch-label {
+            padding: 15px;
+            display: flex;
+            align-items: center;
+            border-right: 1px solid var(--ink-300);
+            color: var(--ink-600);
+            font-size: 0.74rem;
+            font-weight: 900;
+            letter-spacing: 0.04em;
+        }
+        .arch-content { display: grid; gap: 10px; }
+        .arch-content.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .arch-content.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .arch-content.cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+        .arch-node {
+            min-height: 100px;
+            padding: 16px;
+            border: 1px solid var(--blue-100);
+            border-radius: 11px;
+            background: var(--blue-50);
+        }
+        .arch-node.teal { border-color: var(--teal-100); background: var(--teal-50); }
+        .arch-node.amber { border-color: var(--amber-100); background: var(--amber-50); }
+        .arch-node.violet { border-color: var(--violet-100); background: var(--violet-50); }
+        .arch-node.rose { border-color: var(--rose-100); background: var(--rose-50); }
+        .arch-node.green { border-color: var(--green-100); background: var(--green-50); }
+        .arch-node b { display: block; margin-bottom: 5px; color: var(--ink-900); font-size: 0.9rem; }
+        .arch-node span { display: block; color: var(--ink-600); font-size: 0.76rem; }
+        .flow-arrow {
+            height: 22px;
+            position: relative;
+        }
+        .flow-arrow::before {
+            content: "";
+            position: absolute;
+            left: calc(155px + 50%);
+            top: 0;
+            width: 2px;
+            height: 15px;
+            background: var(--ink-300);
+        }
+        .flow-arrow::after {
+            content: "";
+            position: absolute;
+            left: calc(155px + 50% - 4px);
+            bottom: 0;
+            width: 0;
+            height: 0;
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+            border-top: 7px solid var(--ink-300);
+        }
+
+        .tabs {
+            overflow: hidden;
+            border: 1px solid var(--ink-200);
+            border-radius: var(--radius-md);
+            background: var(--white);
+            box-shadow: var(--shadow-sm);
+        }
+        .tab-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0;
+            border-bottom: 1px solid var(--ink-200);
+            background: var(--ink-50);
+        }
+        .tab-button {
+            min-height: 50px;
+            padding: 12px 18px;
+            border: 0;
+            border-bottom: 3px solid transparent;
+            background: transparent;
+            color: var(--ink-600);
+            font-size: 0.84rem;
+            font-weight: 800;
+        }
+        .tab-button:hover { background: var(--white); color: var(--ink-900); }
+        .tab-button.active { border-bottom-color: var(--blue-600); background: var(--white); color: var(--blue-700); }
+        .tab-panel { display: none; padding: 28px; }
+        .tab-panel.active { display: block; animation: fade-in 0.25s ease-out; }
+        @keyframes fade-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+        .stage-summary {
+            display: grid;
+            grid-template-columns: 96px 1fr;
+            gap: 22px;
+            align-items: start;
+            margin-bottom: 25px;
+        }
+        .stage-symbol {
+            width: 86px;
+            height: 86px;
+            display: grid;
+            place-items: center;
+            border: 2px solid var(--blue-500);
+            background: var(--blue-50);
+            color: var(--blue-700);
+            font-family: var(--font-mono);
+            font-size: 1.45rem;
+            font-weight: 900;
+        }
+        .stage-symbol.triangle { clip-path: polygon(50% 0, 100% 100%, 0 100%); padding-top: 22px; border: 0; background: var(--teal-100); color: var(--teal-700); }
+        .stage-symbol.circle { border-radius: 50%; border-color: var(--amber-700); background: var(--amber-50); color: var(--amber-700); }
+        .stage-symbol.diamond { transform: rotate(45deg); border-color: var(--rose-700); background: var(--rose-50); color: var(--rose-700); }
+        .stage-symbol.diamond span { transform: rotate(-45deg); }
+        .stage-summary p { color: var(--ink-600); }
+        .contract-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+        .contract {
+            padding: 18px;
+            border: 1px solid var(--ink-200);
+            border-radius: 10px;
+            background: var(--ink-50);
+        }
+        .contract h4 { color: var(--blue-700); }
+        .contract ul { margin: 8px 0 0; padding-left: 18px; color: var(--ink-700); font-size: 0.85rem; }
+        .contract li + li { margin-top: 5px; }
+        .artifact-line {
+            margin-top: 17px;
+            padding: 12px 15px;
+            border-radius: 8px;
+            background: var(--ink-900);
+            color: #dbeafe;
+            font-family: var(--font-mono);
+            font-size: 0.78rem;
+            overflow-wrap: anywhere;
+        }
+
+        .run-flow {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 26px;
+            align-items: stretch;
+            margin: 25px 0;
+        }
+        .run-step {
+            position: relative;
+            min-height: 150px;
+            padding: 18px;
+            border: 1px solid var(--ink-200);
+            border-radius: 12px;
+            background: var(--white);
+        }
+        .run-step:not(:last-child)::after {
+            content: "→";
+            position: absolute;
+            right: -23px;
+            top: 50%;
+            color: var(--blue-500);
+            font-size: 1.3rem;
+            font-weight: 900;
+            transform: translateY(-50%);
+        }
+        .run-step b { display: block; margin-bottom: 8px; color: var(--ink-900); font-size: 0.9rem; }
+        .run-step p { margin-bottom: 0; color: var(--ink-600); font-size: 0.78rem; }
+        .status-table {
+            width: 100%;
+            border-collapse: collapse;
+            border: 1px solid var(--ink-200);
+            border-radius: 10px;
+            overflow: hidden;
+            font-size: 0.86rem;
+        }
+        .status-table th, .status-table td { padding: 13px 15px; border-bottom: 1px solid var(--ink-200); text-align: left; vertical-align: top; }
+        .status-table th { background: var(--ink-50); color: var(--ink-700); }
+        .status-table tr:last-child td { border-bottom: 0; }
+        .status {
+            display: inline-flex;
+            min-width: 76px;
+            justify-content: center;
+            padding: 3px 8px;
+            border-radius: 999px;
+            font-family: var(--font-mono);
+            font-size: 0.72rem;
+            font-weight: 900;
+        }
+        .status.success { background: var(--green-100); color: var(--green-700); }
+        .status.failed { background: var(--rose-100); color: var(--rose-700); }
+        .status.skipped { background: var(--ink-100); color: var(--ink-700); }
+
+        .edit-rail {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 12px;
+            margin: 28px 0;
+        }
+        .edit-node {
+            min-height: 154px;
+            padding: 18px;
+            border-top: 5px solid var(--green-700);
+            border-radius: 10px;
+            background: var(--green-50);
+        }
+        .edit-node:nth-child(1), .edit-node:nth-child(2) { border-top-color: var(--amber-700); background: var(--amber-50); }
+        .edit-node:nth-child(5) { border-top-color: var(--blue-600); background: var(--blue-50); }
+        .edit-node .mono { color: var(--ink-600); font-size: 0.7rem; font-weight: 800; }
+        .edit-node p { margin-bottom: 0; color: var(--ink-600); font-size: 0.78rem; }
+
+        .menu-tools {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .menu-filter {
+            min-height: 38px;
+            padding: 7px 13px;
+            border: 1px solid var(--ink-200);
+            border-radius: 999px;
+            background: var(--white);
+            color: var(--ink-600);
+            font-size: 0.78rem;
+            font-weight: 800;
+        }
+        .menu-filter.active { border-color: var(--blue-500); background: var(--blue-50); color: var(--blue-700); }
+        .menu-search {
+            min-width: 240px;
+            min-height: 40px;
+            margin-left: auto;
+            padding: 8px 13px;
+            border: 1px solid var(--ink-200);
+            border-radius: 9px;
+            background: var(--white);
+            color: var(--ink-900);
+        }
+        .menu-search:focus { outline: 3px solid var(--blue-100); border-color: var(--blue-500); }
+        .menu-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+        .menu-card {
+            min-height: 175px;
+            padding: 20px;
+            border: 1px solid var(--ink-200);
+            border-radius: 11px;
+            background: var(--white);
+        }
+        .menu-card.hidden { display: none; }
+        .menu-meta { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+        .menu-code { color: var(--blue-600); font-family: var(--font-mono); font-size: 0.75rem; font-weight: 900; }
+        .menu-group { color: var(--ink-500); font-size: 0.7rem; font-weight: 800; }
+        .admin-badge { padding: 2px 8px; border: 1px solid var(--rose-100); border-radius: 999px; background: var(--rose-50); color: var(--rose-700); font-size: 0.67rem; font-weight: 900; }
+        .menu-card h3 { margin-bottom: 10px; }
+        .menu-card p { margin-bottom: 0; color: var(--ink-600); font-size: 0.84rem; }
+        .menu-empty { display: none; padding: 28px; border: 1px dashed var(--ink-300); border-radius: 10px; color: var(--ink-600); text-align: center; }
+        .menu-empty.visible { display: block; }
+
+        .checklist {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 16px;
+        }
+        .check-card {
+            padding: 21px;
+            border: 1px solid var(--ink-200);
+            border-radius: var(--radius-md);
+            background: var(--white);
+        }
+        .check-card h3 { display: flex; align-items: center; gap: 9px; }
+        .check-icon {
+            width: 27px;
+            height: 27px;
+            display: inline-grid;
+            place-items: center;
+            border-radius: 50%;
+            background: var(--blue-100);
+            color: var(--blue-700);
+            font-family: var(--font-mono);
+            font-size: 0.72rem;
+            font-weight: 900;
+        }
+        .check-card ul { margin: 13px 0 0; padding-left: 18px; color: var(--ink-700); font-size: 0.84rem; }
+        .check-card li + li { margin-top: 7px; }
+
+        .doc-footer {
+            padding: 34px 0 10px;
+            display: flex;
+            justify-content: space-between;
+            gap: 20px;
+            color: var(--ink-500);
+            font-size: 0.75rem;
+        }
+
+        .top-actions {
+            position: sticky;
+            z-index: 20;
+            top: 16px;
+            height: 0;
+            display: flex;
+            justify-content: flex-end;
+            pointer-events: none;
+        }
+        .print-button {
+            min-height: 38px;
+            padding: 7px 13px;
+            border: 1px solid var(--ink-200);
+            border-radius: 9px;
+            background: rgba(255, 255, 255, 0.92);
+            color: var(--ink-700);
+            font-size: 0.77rem;
+            font-weight: 800;
+            box-shadow: var(--shadow-sm);
+            backdrop-filter: blur(8px);
+            pointer-events: auto;
+        }
+        .print-button:hover { border-color: var(--blue-500); color: var(--blue-700); }
+
+        .custom-scrollbar { scrollbar-width: thin; scrollbar-color: var(--ink-300) transparent; }
+        .custom-scrollbar::-webkit-scrollbar { width: 7px; height: 7px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: var(--ink-300); border-radius: 5px; }
+
+        @media (max-width: 1050px) {
+            .metric-grid, .grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .journey { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 26px; }
+            .journey::before { display: none; }
+            .run-flow, .edit-rail { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .run-step:not(:last-child)::after { display: none; }
+            .arch-content.cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+
+        @media (max-width: 800px) {
+            body { height: auto; min-height: 100vh; overflow: auto; display: block; }
+            .sidebar {
+                position: fixed;
+                left: 0;
+                top: 0;
+                transform: translateX(-101%);
+                transition: transform 0.22s ease;
+            }
+            body.nav-open .sidebar { transform: translateX(0); }
+            .mobile-header {
+                position: sticky;
+                z-index: 25;
+                top: 0;
+                min-height: 58px;
+                padding: 10px 16px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                border-bottom: 1px solid var(--ink-200);
+                background: rgba(255, 255, 255, 0.96);
+                backdrop-filter: blur(10px);
+            }
+            .mobile-header b { color: var(--blue-700); }
+            .nav-toggle {
+                min-width: 42px;
+                min-height: 38px;
+                border: 1px solid var(--ink-200);
+                border-radius: 8px;
+                background: var(--white);
+                color: var(--ink-900);
+            }
+            .main { height: auto; overflow: visible; }
+            .content { width: min(100% - 34px, 720px); padding-top: 24px; }
+            .top-actions { display: none; }
+            .grid-2, .grid-3, .checklist, .contract-grid, .menu-grid { grid-template-columns: 1fr; }
+            .arch-band { grid-template-columns: 1fr; }
+            .arch-label { border-right: 0; border-bottom: 1px solid var(--ink-300); padding: 8px 2px; }
+            .flow-arrow::before { left: 50%; }
+            .flow-arrow::after { left: calc(50% - 4px); }
+            .menu-search { width: 100%; margin-left: 0; }
+        }
+
+        @media (max-width: 560px) {
+            .metric-grid, .grid-4, .journey, .run-flow, .edit-rail, .arch-content.cols-2, .arch-content.cols-3, .arch-content.cols-4 { grid-template-columns: 1fr; }
+            .hero { min-height: auto; padding-top: 68px; }
+            .architecture, .tab-panel { padding: 18px; }
+            .stage-summary { grid-template-columns: 1fr; }
+            .tab-button { width: 50%; }
+            .doc-footer { display: block; }
+        }
+
+        @page { size: A4 portrait; margin: 16mm 14mm; }
+        @media print {
+            body { height: auto; overflow: visible; display: block; background: var(--white); color: #111; }
+            .sidebar, .mobile-header, .top-actions, .menu-tools { display: none !important; }
+            .main { height: auto; overflow: visible; background: var(--white); }
+            .content { width: 100%; max-width: none; padding: 0; }
+            section { padding: 12mm 0 10mm; break-before: page; border: 0; }
+            section:first-of-type { break-before: auto; }
+            .hero { min-height: 240mm; align-content: center; }
+            .card, .metric-card, .architecture, .tabs, .menu-card, .check-card, .status-table, .notice { break-inside: avoid; box-shadow: none; }
+            .tab-list { display: none; }
+            .tab-panel { display: block !important; padding: 18px 0; border-bottom: 1px solid var(--ink-200); }
+            .menu-card.hidden { display: block; }
+            .menu-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .doc-footer { break-before: avoid; }
+        }
+    </style>
+</head>
+<body>
+    <a class="skip-link" href="#section-overview">본문으로 이동</a>
+
+    <aside class="sidebar" aria-label="문서 목차">
+        <div class="brand">
+            <span class="brand-mark" aria-hidden="true"></span>
+            <div class="brand-copy">
+                <b>IN-DEPS 시스템 가이드</b>
+                <span>INIT DATA EDITING PLATFORM</span>
+            </div>
+        </div>
+        <div class="nav-wrap custom-scrollbar">
+            <p class="nav-label">DOCUMENT CONTENTS</p>
+            <nav class="nav-list" id="sidebar-nav">
+                <a class="nav-link active" href="#section-overview" data-target="section-overview"><span class="nav-number">01</span><span>플랫폼 소개</span></a>
+                <a class="nav-link" href="#section-journey" data-target="section-journey"><span class="nav-number">02</span><span>전체 업무 흐름</span></a>
+                <a class="nav-link" href="#section-architecture" data-target="section-architecture"><span class="nav-number">03</span><span>시스템 구성도</span></a>
+                <a class="nav-link" href="#section-pipeline" data-target="section-pipeline"><span class="nav-number">04</span><span>규칙 발굴 4단계</span></a>
+                <a class="nav-link" href="#section-execution" data-target="section-execution"><span class="nav-number">05</span><span>Flow 실행과 리소스</span></a>
+                <a class="nav-link" href="#section-editing" data-target="section-editing"><span class="nav-number">06</span><span>분석·수정·운영 반영</span></a>
+                <a class="nav-link" href="#section-menus" data-target="section-menus"><span class="nav-number">07</span><span>전체 업무 메뉴</span></a>
+                <a class="nav-link" href="#section-operations" data-target="section-operations"><span class="nav-number">08</span><span>운영·보안 가이드</span></a>
+                <a class="nav-link" href="#section-sources" data-target="section-sources"><span class="nav-number">09</span><span>핵심 용어</span></a>
+            </nav>
+        </div>
+        <div class="sidebar-footer">
+            <strong>Standalone Manual</strong>
+            CSS·JavaScript 포함 단일 HTML<br>
+            Guide baseline v1.1.373
+        </div>
+    </aside>
+
+    <header class="mobile-header">
+        <b>IN-DEPS 시스템 가이드</b>
+        <button class="nav-toggle" type="button" aria-label="목차 열기" aria-expanded="false">☰</button>
+    </header>
+
+    <main class="main custom-scrollbar" id="main-content">
+        <div class="content">
+            <div class="top-actions">
+                <button type="button" class="print-button" onclick="window.print()">A4 인쇄 / PDF 저장</button>
+            </div>
+
+            <section id="section-overview" class="hero">
+                <p class="eyebrow">IN-DEPS(INIT DATA EDITING PLATFORM SYSTEM) MANUAL</p>
+                <h1>인아이티 데이터 에디팅 플랫폼 시스템</h1>
+                <p class="lead">
+                    프로젝트와 시나리오를 기준으로 대상 데이터를 준비하고, 컬럼 유형·관계·규칙·위반을 단계적으로 분석한 뒤,
+                    사람이 검토한 결과만 수정본과 운영 반영으로 이어지게 하는 <strong>추적 가능한 데이터 품질·에디팅 플랫폼</strong>입니다.
+                </p>
+                <div class="hero-tags" aria-label="플랫폼 핵심 특성">
+                    <span class="tag">Target DB 중심 실행</span>
+                    <span class="tag">4단계 규칙 발굴</span>
+                    <span class="tag">DAG 기반 Flow</span>
+                    <span class="tag">Rule + OML 결합</span>
+                    <span class="tag">수정본 분리·효과 검증</span>
+                </div>
+                <div class="metric-grid">
+                    <article class="metric-card"><span class="metric-value">24</span><span class="metric-label">메인 홈을 제외한 활성 업무 메뉴</span></article>
+                    <article class="metric-card"><span class="metric-value">4</span><span class="metric-label">컬럼 유형부터 위반 탐지까지 기본 단계</span></article>
+                    <article class="metric-card"><span class="metric-value">3</span><span class="metric-label">DB_OBJECT · OML_PYTHON · WEB_API 실행 경로</span></article>
+                    <article class="metric-card"><span class="metric-value">1</span><span class="metric-label">프로젝트·시나리오·Target DB·Flow Run 실행 맥락</span></article>
+                </div>
+                <div class="notice" role="note">
+                    <span class="notice-badge">범위</span>
+                    <div>이 문서는 요청에 따라 <strong>메인 홈 화면의 사용법과 대시보드 설명을 제외</strong>하고, 플랫폼의 업무·분석·실행·운영 구조를 인뎁스 매뉴얼 형태로 설명합니다.</div>
+                </div>
+            </section>
+
+            <section id="section-journey">
+                <div class="section-head">
+                    <p class="eyebrow">END-TO-END JOURNEY</p>
+                    <h2>데이터 선정부터 운영 반영까지</h2>
+                    <p class="lead">플랫폼의 메뉴는 개별 화면 모음이 아니라, 업무 범위를 정의하고 분석 근거를 만들며 수정 효과와 운영 반영을 추적하는 하나의 연속된 프로세스를 구성합니다.</p>
+                </div>
+                <div class="journey" aria-label="전체 업무 6단계">
+                    <article class="journey-step"><div class="journey-number">01</div><h3>업무 범위 정의</h3><p>프로젝트와 시나리오로 모든 실행의 상위 맥락을 정합니다.</p><span class="journey-code">M01001 · M01002</span></article>
+                    <article class="journey-step"><div class="journey-number">02</div><h3>대상 데이터 준비</h3><p>파일을 적재하거나 Target DB 테이블을 관리 대상으로 연결합니다.</p><span class="journey-code">M02001 · M02002</span></article>
+                    <article class="journey-step"><div class="journey-number">03</div><h3>4단계 모델 작업</h3><p>컬럼 유형, 관계, 규칙, 위반 탐지 Job을 저장하고 검증합니다.</p><span class="journey-code">M03001~M03004</span></article>
+                    <article class="journey-step"><div class="journey-number">04</div><h3>통합 Flow 실행</h3><p>Job을 DAG로 연결하고 하나의 Run에서 실행·분석합니다.</p><span class="journey-code">M04001 · M04002</span></article>
+                    <article class="journey-step"><div class="journey-number">05</div><h3>결정·수정·반영</h3><p>규칙 확정, 오류 수정, 효과 검증과 운영 DML을 분리합니다.</p><span class="journey-code">M05001~M05003</span></article>
+                    <article class="journey-step"><div class="journey-number">06</div><h3>결과 보고·운영</h3><p>기본·맞춤 보고서와 모델·사용자·시스템 리소스를 관리합니다.</p><span class="journey-code">M06001~ · M90001~</span></article>
+                </div>
+                <div class="grid-3" style="margin-top:34px">
+                    <article class="card"><span class="card-kicker">TRACEABILITY</span><h3>Run 기반 추적</h3><p>실제 파라미터, 노드 상태, 결과 아티팩트를 Flow Run과 Node Run 단위로 연결합니다.</p></article>
+                    <article class="card teal"><span class="card-kicker">SEPARATION</span><h3>탐지와 수정 분리</h3><p>규칙 위반 탐지는 검토 자료를 만들 뿐 원본 데이터를 자동 수정하지 않습니다.</p></article>
+                    <article class="card green"><span class="card-kicker">CONTROL</span><h3>운영 반영 통제</h3><p>수정본 효과 검증, DML 검증, 실행 전 확인과 감사 이력을 순서대로 통과합니다.</p></article>
+                </div>
+            </section>
+
+            <section id="section-architecture">
+                <div class="section-head">
+                    <p class="eyebrow">SYSTEM ARCHITECTURE</p>
+                    <h2>업무 컨텍스트에서 결과 아티팩트까지</h2>
+                    <p class="lead">브라우저 화면은 요청과 결과를 표현하고, 실제 권한·Target DB 선택·분석 실행·결과 저장은 서버와 데이터베이스의 검증된 경계 안에서 처리됩니다.</p>
+                </div>
+                <div class="architecture" aria-label="시스템 구성 흐름">
+                    <div class="architecture-flow">
+                        <div class="arch-band">
+                            <div class="arch-label">사용자·보안 컨텍스트</div>
+                            <div class="arch-content cols-3">
+                                <div class="arch-node"><b>웹 작업공간</b><span>메뉴, 데이터 작업, Flow 캔버스, 분석과 보고서를 조작합니다.</span></div>
+                                <div class="arch-node"><b>세션·API 게이트웨이</b><span>로그인 세션과 서버 측 역할을 확인해 업무 API를 연결합니다.</span></div>
+                                <div class="arch-node teal"><b>프로젝트·시나리오·Target DB</b><span>업무 범위와 관리형 대상 테이블을 하나의 실행 맥락으로 묶습니다.</span></div>
+                            </div>
+                        </div>
+                        <div class="flow-arrow" aria-hidden="true"></div>
+                        <div class="arch-band">
+                            <div class="arch-label">Flow 오케스트레이션</div>
+                            <div class="arch-content cols-2">
+                                <div class="arch-node violet"><b>M04001 Flow 설계·검증·실행</b><span>저장된 Job을 DAG로 연결하고 순환, 단계, 포트, 아티팩트 계약을 검증합니다.</span></div>
+                                <div class="arch-node violet"><b>Job·런타임 바인드·결과 계약</b><span>Target, Result, 선행 결과, Run ID와 실제 실행 파라미터를 확정합니다.</span></div>
+                            </div>
+                        </div>
+                        <div class="flow-arrow" aria-hidden="true"></div>
+                        <div class="arch-band">
+                            <div class="arch-label">실행 리소스 라우팅</div>
+                            <div class="arch-content cols-3">
+                                <div class="arch-node"><b>DB_OBJECT</b><span>Target DB 프로시저·패키지·Oracle ML 모델을 바인드 실행합니다.</span></div>
+                                <div class="arch-node amber"><b>OML_PYTHON</b><span>OML4Py SQL API와 등록 스크립트 저장소를 사용합니다.</span></div>
+                                <div class="arch-node rose"><b>WEB_API</b><span>기본 INTERNAL_API 또는 사용자 확장 EXTERNAL_API 계약을 실행합니다.</span></div>
+                            </div>
+                        </div>
+                        <div class="flow-arrow" aria-hidden="true"></div>
+                        <div class="arch-band">
+                            <div class="arch-label">규칙 발굴 기본 4단계</div>
+                            <div class="arch-content cols-4">
+                                <div class="arch-node"><b>1 · 컬럼 유형</b><span>RULE과 활성 OML 분류를 결합합니다.</span></div>
+                                <div class="arch-node teal"><b>2 · 관계·군집</b><span>유형별 통계 지표와 네트워크를 만듭니다.</span></div>
+                                <div class="arch-node amber"><b>3 · 규칙 발굴</b><span>Apriori와 LASSO·Symbolic 규칙을 생성합니다.</span></div>
+                                <div class="arch-node rose"><b>4 · 위반 탐지</b><span>범주형·연속형 규칙의 위반 후보를 저장합니다.</span></div>
+                            </div>
+                        </div>
+                        <div class="flow-arrow" aria-hidden="true"></div>
+                        <div class="arch-band">
+                            <div class="arch-label">결과·운영</div>
+                            <div class="arch-content cols-3">
+                                <div class="arch-node violet"><b>Run·Node 아티팩트</b><span>상태, 실제 파라미터, 출력 계약과 메시지를 저장합니다.</span></div>
+                                <div class="arch-node teal"><b>분석·규칙 결정</b><span>실행 성공과 결과 품질을 분리해 업무적으로 해석합니다.</span></div>
+                                <div class="arch-node green"><b>수정·반영·보고</b><span>수정본 검증, 운영 DML, 감사 기록과 보고서를 연결합니다.</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="notice warn">
+                    <span class="notice-badge">중요</span>
+                    <div>기본 자동 설계는 <strong>M03001 → M03002 → M03003 → M03004</strong> 순서입니다. 2단계는 최신 확정 유형(<code>LATEST_MASTER</code>)을 참조하고, 3~4단계의 필수 선행 아티팩트는 같은 Flow Run(<code>SAME_RUN</code>)으로 연결됩니다.</div>
+                </div>
+            </section>
+
+            <section id="section-pipeline">
+                <div class="section-head">
+                    <p class="eyebrow">RULE DISCOVERY PIPELINE</p>
+                    <h2>에디팅 규칙 발굴 기본 4단계</h2>
+                    <p class="lead">각 단계는 저장 가능한 데이터 작업 Job이며, 개별 검증 또는 M04001 통합 Flow 실행이 가능합니다. 아래 탭은 현재 도움말과 구현 객체를 기준으로 입력, 처리, 출력과 해석 포인트를 정리합니다.</p>
+                </div>
+                <div class="tabs" data-tabs>
+                    <div class="tab-list" role="tablist" aria-label="규칙 발굴 단계">
+                        <button class="tab-button active" type="button" role="tab" aria-selected="true" data-tab="stage-1">1. 컬럼 유형</button>
+                        <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="stage-2">2. 관계·군집</button>
+                        <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="stage-3">3. 규칙 발굴</button>
+                        <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="stage-4">4. 위반 탐지</button>
+                    </div>
+
+                    <article class="tab-panel active" id="stage-1" role="tabpanel">
+                        <div class="stage-summary">
+                            <div class="stage-symbol">1</div>
+                            <div><span class="card-kicker">M03001 · DB_OBJECT</span><h3>컬럼 유형 분석</h3><p>컬럼 프로파일과 규칙 엔진, 활성 컬럼 유형 OML 모델을 결합해 세부 유형과 범주형·연속형·기타 그룹을 판정합니다. 활성 모델이 없거나 사용할 수 없으면 AUTO가 규칙 결과로 안전하게 폴백하며 사용자 확정값은 보존됩니다.</p></div>
+                        </div>
+                        <div class="contract-grid">
+                            <div class="contract"><h4>프로파일·규칙 입력</h4><ul><li>데이터 타입, NULL, DISTINCT 개수와 전체 행 대비 비율</li><li>최소·최대, 길이, 소수·정수 비율, 수치 변환 비율</li><li>엔트로피·값 분포와 컬럼명 의미 힌트</li><li>예측 방식, 샘플, 신뢰도와 Target DB 활성 모델</li></ul></div>
+                            <div class="contract"><h4>현재 규칙 판정</h4><ul><li><code>INIT$_FN_PREDICT_BASE_TYPE_V3</code>가 식별자·연속·이산·순서·범주·텍스트 유형을 판정</li><li><code>INIT$_FN_PREDICT_BASE_REASON_V3</code>가 판정 근거를 설명</li><li>숫자 데이터 타입만으로 연속형을 단정하지 않음</li></ul></div>
+                            <div class="contract"><h4>Rule + Model 최종 선택</h4><ul><li>규칙·모델 일치, 한쪽 결과 누락, 신뢰도와 그룹 호환성을 평가</li><li>연속형→범주형 오분류 차단, 식별자·자유 텍스트 보호</li><li>모델 판단 로직 자체는 변경하지 않고 최종 호환성 가드에서 조정</li></ul></div>
+                            <div class="contract"><h4>출력·후속 단계</h4><ul><li>이번 Run의 RULE·MODEL·FINAL 유형과 판정 사유</li><li>사용자 확정값을 보존한 최신 최종 유형</li><li>M03002 관계 분석의 유형 기준</li></ul></div>
+                        </div>
+                        <div class="artifact-line">INIT$_SP_PREDICTED_TYPE → PREDICTED_TYPE_RUN · PREDICTED_TYPE_FINAL</div>
+                    </article>
+
+                    <article class="tab-panel" id="stage-2" role="tabpanel">
+                        <div class="stage-summary">
+                            <div class="stage-symbol triangle">2</div>
+                            <div><span class="card-kicker">M03002 · INTERNAL_API / DB PROCEDURE</span><h3>컬럼 상관·관계 분석</h3><p>1단계 최종 유형을 기준으로 컬럼 쌍에 적합한 지표를 계산하고, 통과 관계를 네트워크로 구성해 컬럼 군집과 중심성을 산출합니다.</p></div>
+                        </div>
+                        <div class="contract-grid">
+                            <div class="contract"><h4>유형별 지표</h4><ul><li>범주형×범주형: Cramér's V와 p-value</li><li>연속형×연속형: Pearson, 선택 시 Spearman과 p-value</li><li>범주형×연속형: Eta Squared</li></ul></div>
+                            <div class="contract"><h4>네트워크·군집</h4><ul><li>실제 Run 임계값으로 PASS 여부 저장</li><li>강한 관계를 weighted edge로 선택</li><li>결정적 community, degree, centrality 계산</li></ul></div>
+                            <div class="contract"><h4>입력</h4><ul><li>1단계 최신 확정 유형(<code>LATEST_MASTER</code>)</li><li>Target 테이블, 유의수준, 관계 강도, 샘플과 edge 제한</li></ul></div>
+                            <div class="contract"><h4>해석</h4><ul><li>상관 통과는 인과관계나 최종 업무 규칙을 의미하지 않음</li><li>기준 미달 관계도 다변량 수식 후보에 필요할 수 있음</li><li>군집은 3단계 규칙 발굴의 선택적 보조 입력</li></ul></div>
+                        </div>
+                        <div class="artifact-line">INIT$_SP_CAT_CORR_ANALYZE · INIT$_SP_NUM_CORR_ANALYZE · INIT$_SP_RELATION_MATRIX_ANALYZE → RELATION_PAIR · RELATION_NETWORK</div>
+                    </article>
+
+                    <article class="tab-panel" id="stage-3" role="tabpanel">
+                        <div class="stage-summary">
+                            <div class="stage-symbol circle">3</div>
+                            <div><span class="card-kicker">M03003 · INTERNAL_API + ORACLE ML</span><h3>자동 규칙 발굴</h3><p>범주형 데이터는 조건–결과 연관 규칙을, 연속형 데이터는 중요변수 선택과 <code>f(x)=y</code> 수식 규칙을 생성합니다. 결과는 자동 확정이 아니라 사람이 검토할 후보입니다.</p></div>
+                        </div>
+                        <div class="contract-grid">
+                            <div class="contract"><h4>범주형 Apriori</h4><ul><li>최소 support·confidence와 규칙 길이·조합 예산 적용</li><li>Oracle ML 연관 모델과 사람이 읽는 IF/THEN 요약 생성</li><li>lift와 표본 건수를 함께 저장</li></ul></div>
+                            <div class="contract"><h4>연속형 LASSO</h4><ul><li>결측 중앙값 보정과 표준화</li><li>교차검증 또는 계수 선택으로 중요변수 압축</li><li>중요변수 결과와 최종 수식 채택 결과를 구분</li></ul></div>
+                            <div class="contract"><h4>Symbolic 규칙</h4><ul><li>선형·강건·비율·다항 LASSO와 선택적 PySR 후보 비교</li><li>안정성·설명력을 평가하고 Oracle-safe 수식으로 정규화</li><li>수식과 R²를 규칙 후보로 저장</li></ul></div>
+                            <div class="contract"><h4>부분 완료</h4><ul><li>범주형·연속형 하위 작업을 독립적으로 검토</li><li>일부만 완료되면 성공 결과와 실패 메시지를 함께 반환</li><li>Flow Node는 FAILED와 검토 메시지로 기록될 수 있음</li></ul></div>
+                        </div>
+                        <div class="artifact-line">INIT$_SP_APRIORI_ASSOC_MODEL · run_integrated_rule_discover → ASSOCIATION_MODEL · ASSOC_RULE_SUMMARY · LASSO_FEATURE · SYMBOLIC_RULE</div>
+                    </article>
+
+                    <article class="tab-panel" id="stage-4" role="tabpanel">
+                        <div class="stage-summary">
+                            <div class="stage-symbol diamond"><span>4</span></div>
+                            <div><span class="card-kicker">M03004 · INTERNAL_API + DB PROCEDURE</span><h3>규칙 위반 탐지</h3><p>같은 Run의 범주형·연속형 규칙을 대상 데이터에 적용해 위반 후보와 상세 행을 저장합니다. 탐지 결과는 검토 자료이며 원본 데이터는 자동 수정되지 않습니다.</p></div>
+                        </div>
+                        <div class="contract-grid">
+                            <div class="contract"><h4>범주형 위반</h4><ul><li>규칙 조건 일치 + 결과 NULL 또는 불일치 행 탐지</li><li>confidence·lift를 위반 점수의 보조 지표로 사용</li><li>규칙별 저장·스캔 제한 적용</li></ul></div>
+                            <div class="contract"><h4>연속형 위반</h4><ul><li>허용된 수식과 feature만 안전하게 평가</li><li>실제값과 예측값의 상대·절대 오차 임계값 적용</li><li>실제·예측·오차를 상세 결과에 저장</li></ul></div>
+                            <div class="contract"><h4>SAME_RUN 입력</h4><ul><li>같은 Run의 연관 모델·범주형 규칙 요약</li><li>같은 Run의 Symbolic 규칙</li><li>규칙 부분, 허용 오차와 결과 제한</li></ul></div>
+                            <div class="contract"><h4>결과 해석</h4><ul><li>SUCCESS이면서 0건은 정상 결과일 수 있음</li><li>FAILED이면 부분 완료 메시지로 유형별 성공 여부 확인</li><li>실제 오류 수정은 M05002의 별도 작업 테이블에서 수행</li></ul></div>
+                        </div>
+                        <div class="artifact-line">INIT$_SP_RULE_VIOLATION_DETECT · INIT$_SP_SYMBOLIC_RULE_VIOLATION_DETECT → CAT_RULE_VIOLATION · SYMBOLIC_RULE_VIOLATION</div>
+                    </article>
+                </div>
+            </section>
+
+            <section id="section-execution">
+                <div class="section-head">
+                    <p class="eyebrow">FLOW ORCHESTRATION & RESOURCE ROUTING</p>
+                    <h2>저장된 Job을 검증 가능한 DAG로 실행</h2>
+                    <p class="lead">M04001의 Flow는 단순한 그림이 아니라 저장·검증·실행 가능한 DAG입니다. 실행기는 검증된 위상 순서로 노드를 처리하고 각 상태와 출력을 동일한 Flow Run에 기록합니다.</p>
+                </div>
+
+                <div class="run-flow" aria-label="Flow 실행 절차">
+                    <article class="run-step"><span class="card-kicker">01 · DESIGN</span><b>Job 배치·연결</b><p>M03001~M03004에서 저장한 Job과 확장 리소스를 노드·엣지로 구성합니다.</p></article>
+                    <article class="run-step"><span class="card-kicker">02 · VALIDATE</span><b>구조·계약 검증</b><p>순환, 역방향 단계, 포트·아티팩트와 SAME_RUN 입력을 확인합니다.</p></article>
+                    <article class="run-step"><span class="card-kicker">03 · BIND</span><b>런타임 값 확정</b><p>Target, Result, 선행 출력, Run ID와 실제 파라미터를 결합합니다.</p></article>
+                    <article class="run-step"><span class="card-kicker">04 · EXECUTE</span><b>실행 경로 선택</b><p>저장된 <code>EXEC_SOURCE_TYPE</code>에 맞는 어댑터를 한 개 선택합니다.</p></article>
+                    <article class="run-step"><span class="card-kicker">05 · MATERIALIZE</span><b>결과 정규화</b><p>출력 계약과 메시지를 Run·Node 결과 아티팩트로 저장합니다.</p></article>
+                </div>
+
+                <div class="tabs" data-tabs>
+                    <div class="tab-list" role="tablist" aria-label="실행 리소스 유형">
+                        <button class="tab-button active" type="button" role="tab" aria-selected="true" data-tab="resource-db">DB_OBJECT</button>
+                        <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="resource-oml">OML_PYTHON</button>
+                        <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="resource-api">WEB_API</button>
+                    </div>
+                    <article class="tab-panel active" id="resource-db" role="tabpanel">
+                        <div class="grid-2">
+                            <div><span class="card-kicker">M90001 · TARGET DB</span><h3>내부 모델·실행 객체</h3><p>등록된 프로시저, 패키지와 Oracle ML 모델을 서버 세션의 Target DB 연결에서 실행합니다. 객체명, 파라미터와 결과 계약이 실제 DB 정의와 일치해야 합니다.</p></div>
+                            <div class="contract"><h4>주요 확인</h4><ul><li>검증된 Target DB 연결과 등록 객체 ID</li><li>대상 테이블·Run 바인드와 결과 테이블</li><li>대용량 처리 시 병렬 자원, 범위와 커밋 단위</li></ul></div>
+                        </div>
+                    </article>
+                    <article class="tab-panel" id="resource-oml" role="tabpanel">
+                        <div class="grid-2">
+                            <div><span class="card-kicker">OML4PY · SQL API</span><h3>OML Python 실행 경로</h3><p>등록 리소스의 실행 방법에 따라 OML4Py Script Repository와 SQL API를 사용하고, 데이터프레임·행·테이블 결과를 표준 결과 계약에 맞춥니다.</p></div>
+                            <div class="contract"><h4>지원 실행 계약</h4><ul><li><code>pyqEval</code>, <code>pyqTableEval</code>, <code>pyqRowEval</code></li><li><code>pyqGroupEval</code>, <code>pyqIndexEval</code></li><li>Target DB 권한, OML4Py 설치와 ACL 상태 확인</li></ul></div>
+                        </div>
+                    </article>
+                    <article class="tab-panel" id="resource-api" role="tabpanel">
+                        <div class="grid-2">
+                            <div><span class="card-kicker">M90002 · API OBJECT REGISTRY</span><h3>내부 Python API와 외부 JSON API</h3><p>기본 자동 설계의 2~4단계는 WEB_API Job이지만 <strong>INTERNAL_API 어댑터가 같은 WAS의 Python 함수를 직접 호출</strong>하므로 외부 인터넷 요청이 아닙니다. 사용자가 EXTERNAL_API를 등록한 경우에만 원격 HTTP JSON 엔드포인트를 호출합니다.</p></div>
+                            <div class="contract"><h4>검증 항목</h4><ul><li>method, endpoint, 입출력·저장 계약</li><li>외부 응답의 시간·크기 제한과 유효 JSON 여부</li><li>EXTERNAL_API 인증 값은 런타임 입력이며 자동 비밀 조회가 아님</li></ul></div>
+                        </div>
+                    </article>
+                </div>
+
+                <h3 style="margin-top:30px">Run과 Node 상태 해석</h3>
+                <table class="status-table">
+                    <thead><tr><th>상태</th><th>실행 의미</th><th>운영 해석</th></tr></thead>
+                    <tbody>
+                        <tr><td><span class="status success">SUCCESS</span></td><td>노드 실행과 결과 계약 저장이 완료되었습니다.</td><td>업무 승인이나 규칙 품질을 뜻하지 않으므로 실제 지표와 표본을 확인합니다.</td></tr>
+                        <tr><td><span class="status failed">FAILED</span></td><td>실행 오류 또는 검토가 필요한 부분 완료가 기록되었습니다.</td><td>메시지에서 범주형·연속형 등 성공한 하위 작업과 실패한 작업을 나누어 확인합니다.</td></tr>
+                        <tr><td><span class="status skipped">SKIPPED</span></td><td>의존 조건을 충족하지 못했거나 실행 대상에서 제외되었습니다.</td><td>실선 선행 노드는 SUCCESS가 필요하고, 점선 ON_COMPLETE는 선행 종료 후 진행할 수 있습니다.</td></tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <section id="section-editing">
+                <div class="section-head">
+                    <p class="eyebrow">ANALYZE · DECIDE · EDIT · APPLY · REPORT</p>
+                    <h2>분석 결과를 안전한 데이터 변경으로 연결</h2>
+                    <p class="lead">발굴된 규칙과 위반 후보는 곧바로 원본에 적용되지 않습니다. 결과 해석, 규칙 결정, 수정본 편집, 효과 검증, 운영 DML과 보고를 서로 다른 책임 단계로 분리합니다.</p>
+                </div>
+                <div class="edit-rail">
+                    <article class="edit-node"><span class="mono">M04002</span><h3>결과 분석</h3><p>유형, 관계·군집, 규칙, 위반 결과와 실제 Run 파라미터를 함께 해석합니다.</p></article>
+                    <article class="edit-node"><span class="mono">M05001</span><h3>규칙 결정</h3><p>발굴 후보를 선정·제외하고 사용자 규칙을 검증해 규칙 마스터를 관리합니다.</p></article>
+                    <article class="edit-node"><span class="mono">M05002</span><h3>오류 수정</h3><p>INITUP$ 원본 기준 작업본을 검사하고 INITDN$ 편집본에서 셀 값을 수정합니다.</p></article>
+                    <article class="edit-node"><span class="mono">M05003</span><h3>효과·DML</h3><p>수정 전후 효과를 비교하고 버전 관리된 운영 반영 DML을 검증·실행합니다.</p></article>
+                    <article class="edit-node"><span class="mono">M06001·02</span><h3>결과 보고</h3><p>고정형·통합 또는 맞춤 템플릿 보고서로 분석과 에디팅 이력을 공유합니다.</p></article>
+                </div>
+                <div class="grid-2">
+                    <article class="card green">
+                        <span class="card-kicker">DATA SAFETY</span>
+                        <h3>원본과 수정본 분리</h3>
+                        <ul class="clean-list"><li>위반 탐지는 검토 후보 생성 단계입니다.</li><li>수정은 별도의 INITDN$ 편집 테이블에서 수행합니다.</li><li>효과 검증이 끝난 편집 세션만 운영 DML 단계로 이동합니다.</li></ul>
+                    </article>
+                    <article class="card violet">
+                        <span class="card-kicker">AUDITABILITY</span>
+                        <h3>버전과 감사 이력</h3>
+                        <ul class="clean-list"><li>Baseline Run과 Reanalysis Run을 구분합니다.</li><li>실행 완료 DML은 덮어쓰지 않고 새 버전으로 관리합니다.</li><li>규칙 결정, 수정, 검증과 반영 이벤트를 감사 기록으로 남깁니다.</li></ul>
+                    </article>
+                </div>
+            </section>
+
+            <section id="section-menus">
+                <div class="section-head">
+                    <p class="eyebrow">LIVE BUSINESS MENU MAP</p>
+                    <h2>전체 업무 메뉴 구성</h2>
+                    <p class="lead">현재 <code>MENU_CONFIG</code>에 활성화된 메뉴 중 메인 홈을 제외한 24개 화면입니다. 관리자 전용 항목은 별도 배지로 표시하며, 실제 노출과 API 실행 권한은 서버 역할 검사 결과에 따라 달라집니다.</p>
+                </div>
+                <div class="menu-tools" aria-label="메뉴 필터">
+                    <button class="menu-filter active" type="button" data-menu-filter="all">전체 24</button>
+                    <button class="menu-filter" type="button" data-menu-filter="setup">업무 준비</button>
+                    <button class="menu-filter" type="button" data-menu-filter="analysis">분석·Flow</button>
+                    <button class="menu-filter" type="button" data-menu-filter="editing">수정·보고</button>
+                    <button class="menu-filter" type="button" data-menu-filter="resource">리소스·환경</button>
+                    <button class="menu-filter" type="button" data-menu-filter="admin">관리자</button>
+                    <input class="menu-search" id="menu-search" type="search" placeholder="메뉴 코드 또는 이름 검색" aria-label="메뉴 검색">
+                </div>
+                <div class="menu-grid" id="menu-grid">
+                    <article class="menu-card" data-category="setup">
+                        <div class="menu-meta"><span><span class="menu-code">M01001</span> · <span class="menu-group">프로젝트 관리</span></span></div>
+                        <h3>프로젝트 설정</h3><p>데이터 에디팅 업무의 최상위 단위인 프로젝트를 등록·조회·수정·삭제합니다.</p>
+                    </article>
+                    <article class="menu-card" data-category="setup">
+                        <div class="menu-meta"><span><span class="menu-code">M01002</span> · <span class="menu-group">프로젝트 관리</span></span></div>
+                        <h3>시나리오 정의</h3><p>프로젝트 안에서 수행할 데이터 에디팅 시나리오와 실행 기준을 관리합니다.</p>
+                    </article>
+                    <article class="menu-card" data-category="setup">
+                        <div class="menu-meta"><span><span class="menu-code">M02001</span> · <span class="menu-group">에디팅 대상 선정</span></span></div>
+                        <h3>파일 업로드 관리</h3><p>로컬 파일을 Target DB 작업 테이블로 업로드하고 미리보기·컬럼·데이터를 확인합니다.</p>
+                    </article>
+                    <article class="menu-card" data-category="setup">
+                        <div class="menu-meta"><span><span class="menu-code">M02002</span> · <span class="menu-group">에디팅 대상 선정</span></span></div>
+                        <h3>대상 테이블 선정</h3><p>Target DB 테이블을 시나리오 관리 대상으로 등록하고 기본 4단계 Job과 샘플 Flow를 준비합니다.</p>
+                    </article>
+                    <article class="menu-card" data-category="analysis">
+                        <div class="menu-meta"><span><span class="menu-code">M03001</span> · <span class="menu-group">에디팅 모델 설정</span></span></div>
+                        <h3>컬럼 유형 분석</h3><p>컬럼을 범주형·연속형·기타로 판정하고 Run 유형과 사용자 확정 최종 유형을 구분합니다.</p>
+                    </article>
+                    <article class="menu-card" data-category="analysis">
+                        <div class="menu-meta"><span><span class="menu-code">M03002</span> · <span class="menu-group">에디팅 모델 설정</span></span></div>
+                        <h3>컬럼 상관 분석</h3><p>유형별 관계 지표, 통합 매트릭스와 관계 네트워크·군집 결과를 생성합니다.</p>
+                    </article>
+                    <article class="menu-card" data-category="analysis">
+                        <div class="menu-meta"><span><span class="menu-code">M03003</span> · <span class="menu-group">에디팅 모델 설정</span></span></div>
+                        <h3>자동 규칙 발굴</h3><p>범주형 Apriori와 연속형 LASSO 중요변수·Symbolic 수식 규칙을 발굴합니다.</p>
+                    </article>
+                    <article class="menu-card" data-category="analysis">
+                        <div class="menu-meta"><span><span class="menu-code">M03004</span> · <span class="menu-group">에디팅 모델 설정</span></span></div>
+                        <h3>규칙 위반 탐지</h3><p>범주형 연관 규칙과 연속형 Symbolic 수식의 위반 후보·상세 행을 탐지합니다.</p>
+                    </article>
+                    <article class="menu-card" data-category="analysis">
+                        <div class="menu-meta"><span><span class="menu-code">M04001</span> · <span class="menu-group">에디팅 규칙 발굴</span></span></div>
+                        <h3>규칙 발굴 실행</h3><p>데이터 작업을 노드와 엣지로 연결해 재사용 가능한 통합 DAG를 설계·검증·실행합니다.</p>
+                    </article>
+                    <article class="menu-card" data-category="analysis">
+                        <div class="menu-meta"><span><span class="menu-code">M04002</span> · <span class="menu-group">에디팅 규칙 발굴</span></span></div>
+                        <h3>규칙 발굴 분석</h3><p>Flow Run의 4단계 결과를 조회하고 관계·군집·규칙·위반 결과를 업무적으로 해석합니다.</p>
+                    </article>
+                    <article class="menu-card" data-category="editing">
+                        <div class="menu-meta"><span><span class="menu-code">M05001</span> · <span class="menu-group">에디팅 실행 관리</span></span></div>
+                        <h3>에디팅 규칙 관리</h3><p>발굴 후보를 선정·제외하고 최종 규칙과 사용자 규칙을 규칙 마스터에서 관리합니다.</p>
+                    </article>
+                    <article class="menu-card" data-category="editing">
+                        <div class="menu-meta"><span><span class="menu-code">M05002</span> · <span class="menu-group">에디팅 실행 관리</span></span></div>
+                        <h3>에디팅 오류 수정</h3><p>활성 규칙으로 INITUP$ 작업본을 검사하고 INITDN$ 편집본에서 오류 값을 수정합니다.</p>
+                    </article>
+                    <article class="menu-card" data-category="editing">
+                        <div class="menu-meta"><span><span class="menu-code">M05003</span> · <span class="menu-group">에디팅 실행 관리</span></span></div>
+                        <h3>에디팅 운영 반영</h3><p>수정 효과, 운영 반영 DML과 전체 감사 이력을 분리된 탭에서 관리합니다.</p>
+                    </article>
+                    <article class="menu-card" data-category="editing">
+                        <div class="menu-meta"><span><span class="menu-code">M06001</span> · <span class="menu-group">에디팅 보고서</span></span></div>
+                        <h3>기본형 보고서</h3><p>설계·실행·분석·에디팅 결과를 고정형·통합 보고서로 제공합니다.</p>
+                    </article>
+                    <article class="menu-card" data-category="editing">
+                        <div class="menu-meta"><span><span class="menu-code">M06002</span> · <span class="menu-group">에디팅 보고서</span></span></div>
+                        <h3>맞춤형 보고서</h3><p>보고서 블록을 원하는 용지와 순서로 배치해 재사용 가능한 맞춤 템플릿을 만듭니다.</p>
+                    </article>
+                    <article class="menu-card" data-category="resource">
+                        <div class="menu-meta"><span><span class="menu-code">M90001</span> · <span class="menu-group">모델 리소스</span></span></div>
+                        <h3>내부 모델 등록</h3><p>Target DB 프로시저·패키지·모델 객체를 데이터 작업 실행 리소스로 등록합니다.</p>
+                    </article>
+                    <article class="menu-card" data-category="resource">
+                        <div class="menu-meta"><span><span class="menu-code">M90002</span> · <span class="menu-group">모델 리소스</span></span></div>
+                        <h3>외부 모델 등록</h3><p>내장 Python API, 외부 JSON API와 OML 리소스의 호출·파라미터·결과 계약을 관리합니다.</p>
+                    </article>
+                    <article class="menu-card" data-category="resource">
+                        <div class="menu-meta"><span><span class="menu-code">M90003</span> · <span class="menu-group">모델 리소스</span></span><span class="admin-badge">관리자</span></div>
+                        <h3>모델 학습 관리</h3><p>공통 OML 모델의 학습 데이터, 후보 모델, 검증, 활성화와 롤백 이력을 관리합니다.</p>
+                    </article>
+                    <article class="menu-card" data-category="resource">
+                        <div class="menu-meta"><span><span class="menu-code">M91001</span> · <span class="menu-group">내 환경 설정</span></span></div>
+                        <h3>나의 회원정보</h3><p>현재 로그인 사용자의 계정 정보와 개인 API Key 상태를 관리합니다.</p>
+                    </article>
+                    <article class="menu-card" data-category="resource">
+                        <div class="menu-meta"><span><span class="menu-code">M91002</span> · <span class="menu-group">내 환경 설정</span></span></div>
+                        <h3>내 시스템 설정</h3><p>사용자별 언어·표시·계정과 개인 설정을 카테고리별로 관리합니다.</p>
+                    </article>
+                    <article class="menu-card" data-category="admin">
+                        <div class="menu-meta"><span><span class="menu-code">M99001</span> · <span class="menu-group">관리자 설정</span></span><span class="admin-badge">관리자</span></div>
+                        <h3>DB 접속 정보 설정</h3><p>관리자가 Target DB 접속 정보를 등록·테스트하고 초기 구성 작업을 수행합니다.</p>
+                    </article>
+                    <article class="menu-card" data-category="admin">
+                        <div class="menu-meta"><span><span class="menu-code">M99002</span> · <span class="menu-group">관리자 설정</span></span><span class="admin-badge">관리자</span></div>
+                        <h3>데이터베이스관리</h3><p>Target DB 객체와 테이블 데이터, 컬럼, 소스와 SQL을 탐색·진단합니다.</p>
+                    </article>
+                    <article class="menu-card" data-category="admin">
+                        <div class="menu-meta"><span><span class="menu-code">M99003</span> · <span class="menu-group">관리자 설정</span></span><span class="admin-badge">관리자</span></div>
+                        <h3>System Management</h3><p>시스템 초기화·테이블 점검·사용자 승인과 비밀번호 초기화 등 관리자 운영을 수행합니다.</p>
+                    </article>
+                    <article class="menu-card" data-category="admin">
+                        <div class="menu-meta"><span><span class="menu-code">M99004</span> · <span class="menu-group">관리자 설정</span></span><span class="admin-badge">관리자</span></div>
+                        <h3>공지사항 관리</h3><p>사용자에게 안내할 공지사항과 첨부 파일을 등록·수정·삭제합니다.</p>
+                    </article>
+                </div>
+                <div class="menu-empty" id="menu-empty">조건에 맞는 메뉴가 없습니다.</div>
+            </section>
+
+            <section id="section-operations">
+                <div class="section-head">
+                    <p class="eyebrow">SAFE OPERATION & SECURITY</p>
+                    <h2>실행 전후에 반드시 확인할 기준</h2>
+                    <p class="lead">데이터 에디팅은 Target DB의 실행 컨텍스트와 결과 이력을 다루므로, 선택 범위·실제 Run 파라미터·권한·반영 단계를 구분해 점검합니다.</p>
+                </div>
+                <div class="checklist">
+                    <article class="check-card"><h3><span class="check-icon">01</span>실행 전 컨텍스트</h3><ul><li>현재 사용자, 역할과 Target DB를 확인합니다.</li><li>프로젝트·시나리오·대상 테이블이 같은 범위인지 확인합니다.</li><li>Flow Validate에서 단계·포트·SAME_RUN 계약을 확인합니다.</li></ul></article>
+                    <article class="check-card"><h3><span class="check-icon">02</span>상태와 품질 분리</h3><ul><li>SUCCESS는 실행 종료이며 업무 승인이 아닙니다.</li><li>FAILED의 부분 완료 메시지를 유형별로 확인합니다.</li><li>위반 0건은 오류가 아닌 정상 결과일 수 있습니다.</li></ul></article>
+                    <article class="check-card"><h3><span class="check-icon">03</span>수정·반영 안전성</h3><ul><li>탐지 결과가 원본을 자동 수정하지 않습니다.</li><li>수정본 효과 검증 후 버전 DML을 검증합니다.</li><li>운영 반영 전 권한·실행 확인·감사 이력을 점검합니다.</li></ul></article>
+                </div>
+                <div class="notice safe">
+                    <span class="notice-badge">보안</span>
+                    <div><strong>인증·인가 기준은 서버 세션과 시스템 DB 조회입니다.</strong> 브라우저 저장소, GET/POST 파라미터 또는 임의 사용자 헤더는 사용자 ID나 관리자 권한의 근거가 아닙니다. 관리자 메뉴 숨김은 보조 UI일 뿐 보안 경계가 아닙니다.</div>
+                </div>
+                <div class="grid-2">
+                    <article class="card rose"><span class="card-kicker">SECRET BOUNDARY</span><h3>비밀번호·키·지갑</h3><p>DB 비밀번호, 지갑 비밀번호, 외부 API Key와 관리자 인증 값은 서버 암호화·세션·권한 경계에서 처리하며 도움말이나 브라우저 응답에 남기지 않습니다.</p></article>
+                    <article class="card amber"><span class="card-kicker">EXTERNAL API</span><h3>런타임 인증 값</h3><p>EXTERNAL_API 인증 값은 런타임 바인드 화면에서 입력되어 브라우저 메모리와 실행 요청에 포함됩니다. 현재 경로는 서버 비밀 저장소 값을 자동 조회하지 않습니다.</p></article>
+                </div>
+                <div class="notice warn">
+                    <span class="notice-badge">DB</span>
+                    <div>Oracle Cloud Target DB의 대용량 분석은 병렬 DML뿐 아니라 조회부 병렬 실행과 <code>enq: PS - contention</code> 가능성을 함께 점검합니다. 의도하지 않은 병렬 처리라면 대상 DB 특성에 맞춰 병렬 DML·QUERY 차단과 블록 단위 처리를 좁게 적용합니다.</div>
+                </div>
+            </section>
+
+            <section id="section-sources">
+                <div class="section-head">
+                    <p class="eyebrow">SYSTEM GLOSSARY</p>
+                    <h2>핵심 용어</h2>
+                    <p class="lead">플랫폼의 데이터 작업, 통합 실행과 단계 간 결과 계약을 이해하는 데 필요한 주요 용어입니다.</p>
+                </div>
+                <div class="grid-3">
+                    <article class="card"><span class="card-kicker">JOB</span><h3>데이터 작업</h3><p>실행 객체와 파라미터, 대상·결과 계약을 저장한 재사용 가능한 실행 단위입니다.</p></article>
+                    <article class="card violet"><span class="card-kicker">FLOW RUN</span><h3>통합 실행 맥락</h3><p>하나의 DAG 실행에서 실제 파라미터와 모든 Node Run을 묶는 추적 기준입니다.</p></article>
+                    <article class="card teal"><span class="card-kicker">ARTIFACT</span><h3>단계 결과 계약</h3><p>후행 노드와 분석·보고 화면이 참조할 테이블, 모델, JSON과 실행 메시지입니다.</p></article>
+                    <article class="card amber"><span class="card-kicker">LATEST_MASTER</span><h3>최신 확정 기준</h3><p>사용자 확정값을 보존한 최신 컬럼 유형 등 단계가 참조하는 마스터 기준입니다.</p></article>
+                    <article class="card rose"><span class="card-kicker">SAME_RUN</span><h3>동일 Run 의존</h3><p>현재 Flow Run에서 성공한 선행 노드의 아티팩트만 필수 입력으로 사용하는 계약입니다.</p></article>
+                    <article class="card green"><span class="card-kicker">INITUP$ / INITDN$</span><h3>원본 기준본 / 편집본</h3><p>검사 기준 작업본과 수정이 이루어지는 편집 테이블을 분리하는 운영 패턴입니다.</p></article>
+                </div>
+                <footer class="doc-footer">
+                    <span>인아이티 데이터 에디팅 플랫폼 시스템 · IN-DEPS 인뎁스 가이드</span>
+                    <span>Standalone HTML · Baseline v1.1.373</span>
+                </footer>
+            </section>
+        </div>
+    </main>
+
+    <script>
+        (function () {
+            "use strict";
+
+            const main = document.getElementById("main-content");
+            const navLinks = Array.from(document.querySelectorAll(".nav-link"));
+            const sections = Array.from(document.querySelectorAll("main section[id]"));
+            const navToggle = document.querySelector(".nav-toggle");
+
+            function setActiveNav(targetId) {
+                navLinks.forEach(function (link) {
+                    link.classList.toggle("active", link.dataset.target === targetId);
+                });
+            }
+
+            navLinks.forEach(function (link) {
+                link.addEventListener("click", function (event) {
+                    event.preventDefault();
+                    const target = document.getElementById(link.dataset.target);
+                    if (!target) return;
+                    target.scrollIntoView({ behavior: "smooth", block: "start" });
+                    setActiveNav(target.id);
+                    document.body.classList.remove("nav-open");
+                    if (navToggle) navToggle.setAttribute("aria-expanded", "false");
+                });
+            });
+
+            if (main) {
+                let ticking = false;
+                main.addEventListener("scroll", function () {
+                    if (ticking) return;
+                    ticking = true;
+                    window.requestAnimationFrame(function () {
+                        let active = sections[0] ? sections[0].id : "";
+                        sections.forEach(function (section) {
+                            if (section.offsetTop - main.scrollTop <= 180) active = section.id;
+                        });
+                        setActiveNav(active);
+                        ticking = false;
+                    });
+                }, { passive: true });
+            }
+
+            if (navToggle) {
+                navToggle.addEventListener("click", function () {
+                    const open = document.body.classList.toggle("nav-open");
+                    navToggle.setAttribute("aria-expanded", String(open));
+                });
+            }
+
+            document.querySelectorAll("[data-tabs]").forEach(function (tabs) {
+                const buttons = Array.from(tabs.querySelectorAll(".tab-button"));
+                const panels = Array.from(tabs.querySelectorAll(".tab-panel"));
+                buttons.forEach(function (button) {
+                    button.addEventListener("click", function () {
+                        const targetId = button.dataset.tab;
+                        buttons.forEach(function (item) {
+                            const active = item === button;
+                            item.classList.toggle("active", active);
+                            item.setAttribute("aria-selected", String(active));
+                        });
+                        panels.forEach(function (panel) {
+                            panel.classList.toggle("active", panel.id === targetId);
+                        });
+                    });
+                });
+            });
+
+            const menuGrid = document.getElementById("menu-grid");
+            const menuEmpty = document.getElementById("menu-empty");
+            const menuSearch = document.getElementById("menu-search");
+            const menuCards = menuGrid ? Array.from(menuGrid.querySelectorAll(".menu-card")) : [];
+            const filterButtons = Array.from(document.querySelectorAll("[data-menu-filter]"));
+            let activeFilter = "all";
+
+            function renderMenuCards() {
+                const keyword = String(menuSearch ? menuSearch.value : "").trim().toLowerCase();
+                let visibleCount = 0;
+                menuCards.forEach(function (card) {
+                    const filterMatch = activeFilter === "all" || card.dataset.category === activeFilter;
+                    const searchText = String(card.textContent || "").toLowerCase();
+                    const visible = filterMatch && (!keyword || searchText.includes(keyword));
+                    card.classList.toggle("hidden", !visible);
+                    if (visible) visibleCount += 1;
+                });
+                if (menuEmpty) menuEmpty.classList.toggle("visible", visibleCount === 0);
+            }
+
+            filterButtons.forEach(function (button) {
+                button.addEventListener("click", function () {
+                    activeFilter = button.dataset.menuFilter;
+                    filterButtons.forEach(function (item) { item.classList.toggle("active", item === button); });
+                    renderMenuCards();
+                });
+            });
+            if (menuSearch) menuSearch.addEventListener("input", renderMenuCards);
+            renderMenuCards();
+        }());
+    </script>
+</body>
+</html>

@@ -1574,6 +1574,14 @@
     font-weight: 800;
 }
 
+.anly-work-violation-sql-grid th.is-formula-prediction,
+.anly-work-violation-sql-grid td.is-formula-prediction {
+    background: #eef2ff;
+    border-right-color: #a5b4fc;
+    color: #3730a3;
+    font-weight: 800;
+}
+
 .anly-work-violation-rule-grid article p {
     color: #334155;
     font-size: 12px;

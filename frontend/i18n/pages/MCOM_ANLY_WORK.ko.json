@@ -361,6 +361,7 @@
     "No numeric actual/predicted sample pairs are available.": "숫자로 비교할 실제값/예측값 표본 쌍이 없습니다.",
     "Actual value": "실제값",
     "Predicted value": "예측값",
+    "f(X) predicted value (Y)": "f(X) 예측값(Y)",
     "Sample observations": "표본 관측값",
     "Points close to the y=x line have smaller prediction errors. Large vertical gaps indicate rows that need review.": "점이 y=x 선에 가까울수록 예측 오차가 작습니다. 세로 간격이 큰 행은 확인이 필요합니다.",
     "No numeric residual sample pairs are available.": "숫자로 비교할 잔차 표본 쌍이 없습니다.",

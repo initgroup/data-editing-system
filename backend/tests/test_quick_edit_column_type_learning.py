@@ -451,6 +451,22 @@ class QuickEditColumnTypeLearningTests(unittest.TestCase):
         self.assertIn(code_rule, final_both)
         self.assertLess(final_both.index(code_rule), final_both.index(model_confidence))
 
+    def test_final_both_reason_expression_uses_a_clob_buffer(self):
+        model_sql = (
+            ROOT_DIR / "database" / "model_objects" / "INIT_MODEL_OBJECTS_40_PREDICTED_TYPE.sql"
+        ).read_text(encoding="utf-8")
+        predicted_type_procedure = model_sql.split(
+            'CREATE OR REPLACE PROCEDURE "INIT$_SP_PREDICTED_TYPE"', 1
+        )[1]
+        final_both = predicted_type_procedure.split("ELSIF v_method = 'FINAL_BOTH' THEN", 1)[1].split(
+            "    END IF;", 1
+        )[0]
+        final_reason_expression = final_both.split("v_final_reason_expr :=", 1)[1]
+
+        self.assertIn("v_final_reason_expr       CLOB", predicted_type_procedure)
+        self.assertNotIn("v_final_reason_expr       VARCHAR2(1000)", predicted_type_procedure)
+        self.assertGreater(len(final_reason_expression.encode("utf-8")), 1000)
+
 
 if __name__ == "__main__":
     unittest.main()

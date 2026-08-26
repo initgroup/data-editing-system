@@ -1,5 +1,5 @@
 {
-  "version": "2026.07.25",
+  "version": "2026.08.26",
   "language": "en",
   "systemName": "INIT Data Editing System",
   "pages": {
@@ -59,7 +59,285 @@
       ],
       "aiGuidance": [
         "Use the current session, Target DB, dashboard values, and notices when answering HOME questions."
-      ]
+      ],
+      "systemGuide": {
+        "hero": {
+          "eyebrow": "INIT DATA EDITING · SYSTEM GUIDE",
+          "tags": ["Main home", "Complete menu guide", "Interactive architecture"],
+          "metricAriaLabel": "System help summary",
+          "metrics": {
+            "menus": "Configured menus",
+            "stages": "Core discovery stages",
+            "executionPaths": "Execution resource paths",
+            "runContext": "Connected run context"
+          }
+        },
+        "labels": {
+          "openDetail": "View detailed flow",
+          "expandDiagram": "Expand architecture",
+          "collapseDiagram": "Exit expanded view",
+          "hoverPreview": "Hover an object or move focus with the keyboard",
+          "close": "Close",
+          "detailContent": "Detailed description of the selected architecture object",
+          "artifact": "Main artifacts",
+          "callFlow": "Call flow",
+          "algorithm": "Internal algorithm",
+          "inputs": "Inputs and prerequisites",
+          "outputs": "Outputs and next step",
+          "checks": "Validation and interpretation",
+          "detailFooter": "The saved Job and actual parameters of the selected Run are the final source of truth.",
+          "technicalInfo": "Technical links and cache versions"
+        },
+        "navigation": {
+          "ariaLabel": "Main help contents",
+          "home": "Main home",
+          "journey": "Work journey",
+          "architecture": "Architecture",
+          "menus": "All menus",
+          "operations": "Operating guide"
+        },
+        "homeOverview": {
+          "eyebrow": "MAIN HOME",
+          "title": "What can I check on Main Home?",
+          "description": "Main Home brings together the current session and Target DB, recent integrated runs, notices, and shortcuts needed to start the next task.",
+          "cards": [
+            { "title": "User, role, and Target DB", "description": "Confirm the signed-in user, role, and selected Target DB.", "points": ["Verify the intended Target DB before work", "Server-side roles protect administrator functions"], "tone": "blue" },
+            { "title": "Recent integrated scenarios", "description": "Review seven-day Flow counts, success or failure, and node results for a selected Run.", "points": ["Select a date and Run to inspect node states", "Continue into integrated result analysis"], "tone": "teal" },
+            { "title": "Notices and operations", "description": "Read notices and attachments available for the current publication period.", "points": ["Review pinned and regular notices", "Download available attachments"], "tone": "amber" },
+            { "title": "Shortcuts and header tools", "description": "Open the four analysis menus, integrated Flow, Quick Edit, or Current Menu Help.", "points": ["Refresh or close workspace tabs", "Open contextual help from the question-mark button"], "tone": "violet" }
+          ]
+        },
+        "journey": {
+          "eyebrow": "END-TO-END JOURNEY",
+          "title": "From data selection to production application",
+          "description": "The menus form one traceable process: establish scope, prepare target data, discover rules in four stages, review and correct data, validate changes, apply them, and report the outcome.",
+          "steps": [
+            { "title": "Define work scope", "description": "Create the parent project and execution scenario.", "menuCodes": ["M01001", "M01002"] },
+            { "title": "Prepare target data", "description": "Upload a file or connect a managed Target DB table to the scenario.", "menuCodes": ["M02001", "M02002"] },
+            { "title": "Configure four stages", "description": "Save and test column type, relation, rule, and violation jobs.", "menuCodes": ["M03001~M03004"] },
+            { "title": "Run the integrated Flow", "description": "Connect jobs as a DAG, validate contracts, execute one Run, and analyze it.", "menuCodes": ["M04001", "M04002"] },
+            { "title": "Decide, correct, and apply", "description": "Finalize rules, edit violations, validate effects, then confirm and execute server-revalidated DML.", "menuCodes": ["M05001~M05003"] },
+            { "title": "Report and operate", "description": "Generate reports and manage model, user, and system resources.", "menuCodes": ["M06001~", "M90001~"] }
+          ]
+        },
+        "architecture": {
+          "eyebrow": "INTERACTIVE SYSTEM MAP",
+          "title": "System architecture and the four-stage editing-rule flow",
+          "description": "Hover or focus an object to activate its connections. Click any object to open a scrollable layer explaining inputs, algorithms, internal and external model calls, outputs, and checks.",
+          "hint": "The default design is M03001 → M03002 → M03003 → M03004. Stage 2 reads the latest finalized types (LATEST_MASTER), while required upstream artifacts for stages 3–4 stay within the same Flow Run (SAME_RUN). The detail layer remains independently scrollable in expanded view and at high browser zoom.",
+          "legendAriaLabel": "Four-stage artifact-shape legend",
+          "legend": [
+            { "shape": "square", "label": "Stage 1 · column type" },
+            { "shape": "triangle", "label": "Stage 2 · relation/cluster" },
+            { "shape": "circle", "label": "Stage 3 · rules" },
+            { "shape": "diamond", "label": "Stage 4 · violations" }
+          ],
+          "bandLabels": {
+            "context": "User and work context",
+            "orchestration": "Flow orchestration",
+            "execution": "Execution resource routing",
+            "stages": "Four-stage editing-rule discovery",
+            "outcomes": "Analysis, correction, application, and reporting"
+          },
+          "labels": {
+            "secureContext": "session context",
+            "validatedContext": "role and Target DB check",
+            "executionPlan": "validated execution plan",
+            "selectExecutionPath": "Choose one route from the saved Job execution type",
+            "normalizedArtifact": "Normalize output to same-Run artifacts",
+            "defaultStage1": "Default design · direct stage 1",
+            "optionalResource": "Optional Job resource",
+            "defaultStages2To4": "Default design · stages 2–4",
+            "latestMaster": "LATEST_MASTER",
+            "sameRun": "SAME_RUN",
+            "resultContract": "record node and Run results",
+            "traceableResult": "traceable result"
+          },
+          "previewTitle": "Explore the architecture",
+          "previewDescription": "Select an object to preview its role, then click it for the detailed processing flow.",
+          "nodes": {
+            "workspace": {
+              "kicker": "User channel", "title": "Web workspace", "summary": "Operate menus, canvases, results, and reports inside one signed-in session.", "shape": "rounded", "symbol": "UI", "tone": "blue",
+              "detail": {
+                "overview": "Users confirm the current context on Main Home, then move through project, scenario, data, and Flow screens. Browser state renders the UI but is not an authorization source.",
+                "callFlow": ["Start a server login session and apply the configured language.", "Select a Target DB, project, scenario, and menu.", "The common request utility calls the server API.", "Update lists, canvases, Run states, and results from the response."],
+                "inputs": ["Server-issued login session", "Selected screen and user input"], "outputs": ["Validation, save, and execution requests", "Visual Run and analysis results"],
+                "checks": ["Local browser storage and arbitrary headers are not trusted for authorization.", "EXTERNAL_API credentials are entered in the runtime-bind dialog and are included in browser memory and the execution request."]
+              }
+            },
+            "session-api": {
+              "kicker": "Security boundary", "title": "Session and API gateway", "summary": "Validate the server session, role, and system-DB scope before routing business APIs.", "shape": "rounded", "symbol": "API", "tone": "blue",
+              "detail": {
+                "overview": "Business requests pass through authenticated FastAPI routes. Administrator operations add a server-side role check, and the Target DB connection is resolved from server context.",
+                "callFlow": ["Restore login context from the session cookie.", "Look up the user, role, and access scope in the system DB.", "Resolve the current Target DB connection on the server.", "Dispatch to the menu router and shared service."],
+                "inputs": ["Session cookie", "Menu request and validated parameters"], "outputs": ["Role-scoped API response", "Service call using the Target DB connection"],
+                "checks": ["New APIs require login by default.", "Menu hiding is a UI aid; the server role check is the security boundary."]
+              }
+            },
+            "target-context": {
+              "kicker": "Business scope", "title": "Project, scenario, and Target DB", "summary": "Bind project scope, execution scenario, and managed target table into one work context.", "shape": "rounded", "symbol": "DB", "tone": "teal", "artifact": "PROJECT · SCENARIO · TARGET_TABLE",
+              "detail": {
+                "overview": "Every analysis and edit result belongs to a project, scenario, and Target DB. M02002 can provision or reuse the four default Jobs and sample Flow for a managed target table.",
+                "callFlow": ["Select a project and scenario.", "Upload a file or browse a Target DB table.", "Save the scenario target table.", "Optionally provision the four default Jobs and Flow."],
+                "inputs": ["Project access scope", "Scenario", "Selected Target DB and table"], "outputs": ["Common target for M03001–M03004", "Execution context for M04001"],
+                "checks": ["Verify the intended Target DB before execution.", "Keep the source baseline and editable copy separate."]
+              }
+            },
+            "orchestrator": {
+              "kicker": "M04001 · execution control", "title": "Flow design, validation, and execution", "summary": "Connect saved Jobs as a DAG and validate artifacts, order, cycles, and SAME_RUN dependencies.", "shape": "rounded", "symbol": "DAG", "tone": "violet", "artifact": "FLOW → NODE → EDGE → FLOW_RUN",
+              "detail": {
+                "overview": "A Flow is an executable DAG. The current executor processes the validated topological order and records every node state and output under one Flow Run.",
+                "callFlow": ["Place Jobs saved in M03001–M03004 on the canvas.", "Define prerequisite and completion edges.", "Validate cycles, reverse stages, ports, artifacts, and required SAME_RUN inputs.", "Start Run now or Queue batch.", "Record SUCCESS, FAILED, or SKIPPED for each node; partial subtask completion is persisted as FAILED with a review message."],
+                "inputs": ["Saved Flow, nodes, and edges", "Job definitions and actual runtime parameters", "Upstream artifacts"], "outputs": ["Topologically ordered plan", "Flow and Node Run history", "Output contracts for downstream nodes"],
+                "checks": ["A successful Validate proves structure and contracts, not data-processing success.", "Solid edges require upstream SUCCESS; ON_COMPLETE edges require a terminal state.", "The current default executor is ordered, not parallel."]
+              }
+            },
+            "job-contract": {
+              "kicker": "Common execution contract", "title": "Saved Job, runtime binds, and result contract", "summary": "Resolve target, result, upstream input, and Run IDs, then route to DB, OML Python, or API execution.", "shape": "rounded", "symbol": "JOB", "tone": "violet", "artifact": "TARGET / PREVIOUS / RESULT / RUN BINDS",
+              "detail": {
+                "overview": "Each node references a saved data Job. The server merges Job defaults with Flow edges and system values before selecting the execution adapter.",
+                "callFlow": ["Load the Job and execution resource specification.", "Merge saved values, reserved runtime values, and upstream output.", "Validate identifiers, required values, and SAME_RUN contracts.", "Dispatch WEB_API to the API executor, and DB_OBJECT or OML_PYTHON to the saved-script execution path.", "Normalize output into artifacts and the Node Run message."],
+                "inputs": ["Saved Job parameters", "Target and result information", "Flow Run ID and upstream output"], "outputs": ["Adapter-specific binds or JSON payload", "Normalized result artifacts"],
+                "checks": ["Actual saved parameters for the selected Run override preset examples.", "Identifiers and dynamic fragments are allow-listed before execution."]
+              }
+            },
+            "internal-model": {
+              "kicker": "M90001 · DB_OBJECT", "title": "Internal model and Target DB object", "summary": "Run registered procedures, packages, and Oracle ML models through the server Target DB connection.", "shape": "rounded", "symbol": "IN", "tone": "blue", "artifact": "PL/SQL / ORACLE ML → TABLE or MODEL",
+              "detail": {
+                "overview": "Internal models are Target DB objects registered in M90001. Stage 1 uses this route in the default design, and categorical Apriori processing also uses Oracle ML in the Target DB.",
+                "callFlow": ["Read registered object and parameter metadata.", "Prepare the session Target DB connection and runtime binds.", "Execute the saved PL/SQL block with binds.", "Associate table or model output with the same Run.", "Record DB output and execution state."],
+                "inputs": ["Validated Target DB connection", "Registered object and parameters", "Target and Run binds"], "outputs": ["Column, relation, rule, or violation tables", "Oracle ML model and execution message"],
+                "checks": ["Object names and parameters must match the Target DB definition.", "Review parallel resources, scope limits, and commit units for large analysis jobs."]
+              }
+            },
+            "oml-python": {
+              "kicker": "OML_PYTHON · SQL API", "title": "OML Python route", "summary": "Invoke OML4Py SQL APIs and Script Repository resources according to the registered execution method.", "shape": "rounded", "symbol": "OML", "tone": "amber", "artifact": "pyqEval / pyqTableEval / pyqRowEval / pyqGroupEval / pyqIndexEval",
+              "detail": {
+                "overview": "OML Python is an optional Target DB OML4Py resource path. The registered method and parameter contract determine the SQL API and normalized result shape.",
+                "callFlow": ["Load the OML Python resource and execution method.", "Bind target data and runtime parameters.", "Execute the registered script through the selected OML4Py SQL API.", "Map the response to a table or model artifact."],
+                "inputs": ["OML4Py Script Repository resource", "Target data and parameters"], "outputs": ["Table-apply output", "Model or analysis result"],
+                "checks": ["The execution method and return shape must match the resource contract.", "Check Target DB privileges, OML4Py installation, and ACL configuration."]
+              }
+            },
+            "api-resource": {
+              "kicker": "M90002 · WEB_API", "title": "Internal Python API and external JSON API", "summary": "Default stages 2–4 call same-server functions directly; only user extensions call remote HTTP APIs.", "shape": "rounded", "symbol": "OUT", "tone": "rose", "artifact": "INTERNAL_API or EXTERNAL_API → OUTPUT CONTRACT",
+              "detail": {
+                "overview": "M90002 is an API Object Registry. The default stage 2–4 Jobs are saved as WEB_API but use the INTERNAL_API adapter to call Python analysis functions directly with no internet request. A remote HTTP call happens only for a separately registered EXTERNAL_API.",
+                "callFlow": ["Read API type, method, endpoint, and I/O contract.", "Build the payload from Target, Run, and upstream artifacts.", "Call INTERNAL_API as a direct server function without HTTP loopback.", "For EXTERNAL_API, send a GET query or JSON body to an absolute http(s) endpoint.", "Validate timeout, response size, and JSON, then apply the output contract."],
+                "inputs": ["Registered API spec and actual Run parameters", "Latest finalized types for stage 2 (LATEST_MASTER) and SAME_RUN upstream artifacts for stages 3–4", "Credentials entered in the runtime-bind dialog for EXTERNAL_API"], "outputs": ["Relation network, LASSO, Symbolic rule, and violation results", "Mapped table, model, or JSON output from a user API"],
+                "checks": ["Do not describe the default INTERNAL_API as an internet model call.", "External responses must be valid JSON within configured limits.", "EXTERNAL_API credentials are included in browser memory and the execution request; this path does not resolve them automatically from a server-side secret store."]
+              }
+            },
+            "stage-1": {
+              "kicker": "M03001 · STEP 1", "title": "Column type analysis", "summary": "Combine column profiles, deterministic rules, and the active OML classifier to assign categorical, continuous, or other types.", "shape": "square", "symbol": "1", "tone": "blue", "artifact": "PREDICTED_TYPE_RUN · PREDICTED_TYPE_FINAL",
+              "detail": {
+                "overview": "Stage 1 profiles every column, combines rule and active-model predictions, safely falls back to rules when the model is unavailable, and preserves explicitly confirmed labels.",
+                "callFlow": ["Resolve target table and execution parameters.", "Profile type, nullness, distinctness, length, numeric ratio, entropy, and distribution.", "Combine base rules with active OML predictions.", "Persist per-Run and final column types separately."],
+                "algorithm": ["Use deterministic sampling for stable large-table profiles.", "Combine rule results with model confidence.", "Keep rule output when the model returns no usable prediction."],
+                "inputs": ["Scenario target table", "Prediction, sample, and confidence parameters", "Active column-type model for the Target DB"], "outputs": ["Per-Run predicted types", "Final types preserving confirmed labels", "Type input for stage 2"],
+                "checks": ["A numeric data type alone does not prove continuous business meaning.", "Distinguish Run types from current final types.", "Actual Run thresholds override presets."]
+              }
+            },
+            "stage-2": {
+              "kicker": "M03002 · STEP 2", "title": "Column relation analysis", "summary": "Compute type-aware relation metrics and build an integrated matrix, network, and column clusters.", "shape": "triangle", "symbol": "2", "tone": "teal", "artifact": "RELATION_PAIR · CAT/NUM_CORR_PAIR · RELATION_NETWORK",
+              "detail": {
+                "overview": "Stage 2 applies the appropriate metric to categorical-categorical, numeric-numeric, and categorical-numeric pairs, then clusters the strongest network edges.",
+                "callFlow": ["Read final column types and target data.", "Compute the type-specific metric and, where supported, its significance probability.", "Apply actual thresholds and store PASS status.", "Select strong edges and create deterministic weighted communities."],
+                "algorithm": ["Categorical × categorical: Cramér's V and p-value", "Continuous × continuous: Pearson and optional Spearman", "Categorical × continuous: Eta Squared", "Weighted community, degree, and centrality from passing edges"],
+                "inputs": ["Stage 1 final types", "Target table", "Significance, strength, sample, and edge limits"], "outputs": ["Integrated relation matrix", "Categorical and numeric pairs", "Optional relation-network input for stage 3"],
+                "checks": ["Passing correlation is not causation or a final business rule.", "Below-threshold variables may still matter in multivariate formulas.", "Clusters are optional guidance for discovery."]
+              }
+            },
+            "stage-3": {
+              "kicker": "M03003 · STEP 3", "title": "Automatic rule discovery", "summary": "Create reviewable candidates with categorical Apriori and continuous LASSO plus symbolic regression.", "shape": "circle", "symbol": "3", "tone": "amber", "artifact": "ASSOCIATION_MODEL · ASSOC_RULE_SUMMARY · LASSO_FEATURE · SYMBOLIC_RULE",
+              "detail": {
+                "overview": "Categorical processing builds IF/THEN association candidates; continuous processing selects features and derives f(x)=y formulas. If only some subtasks complete, successful output and failure details can be returned while the Flow Node is persisted as FAILED with a review message.",
+                "callFlow": ["Choose categorical and/or continuous parts.", "Build an Apriori model and readable categorical-rule summaries.", "Use LASSO to select continuous features.", "Search symbolic or polynomial formulas and evaluate stability.", "Persist candidates with quality metrics."],
+                "algorithm": ["Apriori applies support, confidence, length, and combination budgets.", "LASSO uses median imputation, scaling, and sparse coefficient selection.", "Symbolic search compares linear, robust, ratio, polynomial-LASSO, and optional PySR candidates.", "Non-NONE cluster mode consumes the same Run's RELATION_NETWORK."],
+                "inputs": ["Stage 1 types", "Stage 2 pairs and optional network", "Part, threshold, candidate, budget, and time limits"], "outputs": ["Association model and readable rules", "Continuous features and symbolic formulas", "Same-Run input for stage 4"],
+                "checks": ["Discovered rules are candidates, not approvals.", "LASSO features and accepted formulas are different results.", "Interpret quality metrics and business meaning together."]
+              }
+            },
+            "stage-4": {
+              "kicker": "M03004 · STEP 4", "title": "Rule violation detection", "summary": "Apply same-Run categorical and continuous rules to produce violation candidates and row details.", "shape": "diamond", "symbol": "4", "tone": "rose", "artifact": "CAT_RULE_VIOLATION · SYMBOLIC_RULE_VIOLATION",
+              "detail": {
+                "overview": "Categorical detection finds rows whose condition holds but outcome differs; continuous detection finds rows whose actual value exceeds formula error tolerances. This stage detects and records—it does not edit source data.",
+                "callFlow": ["Verify selected parts and same-Run rule artifacts.", "Validate categorical conditions or safe symbolic expressions.", "Compare actual rows with expected or predicted values.", "Persist violations within per-rule limits.", "Record subtask and overall node states."],
+                "algorithm": ["Categorical: condition match plus null or mismatched result.", "Continuous: allowed formula and feature evaluation with relative and absolute error thresholds.", "Per-part savepoints can preserve one successful part if the other fails."],
+                "inputs": ["Same-Run association model and rule summary", "Same-Run symbolic rules", "Tolerance, rule, scan, and storage limits"], "outputs": ["Categorical violation details", "Continuous actual, predicted, and error details", "Input for M04002 and M05001"],
+                "checks": ["SUCCESS with zero violations can be a valid outcome.", "When a Node is FAILED, use its partial-completion message to separate successful and failed parts.", "Corrections occur later in M05002."]
+              }
+            },
+            "run-artifacts": {
+              "kicker": "Execution trace", "title": "Run and node-result artifacts", "summary": "Bind stage results, actual parameters, states, and messages into a traceable Flow Run.", "shape": "rounded", "symbol": "RUN", "tone": "violet", "artifact": "FLOW_RUN · NODE_RUN · RESULT CONTRACT",
+              "detail": {
+                "overview": "Every node input, output, and state belongs to a Flow Run. SAME_RUN validation checks whether an upstream node in that Run declares the required artifact contract, while analysis reads both stored history and actual results.",
+                "callFlow": ["Issue Flow Run and Node Run IDs.", "Record start, finish, failure, and skip states.", "Attach actual runtime parameters and result targets.", "Expose messages and artifacts to analysis."],
+                "inputs": ["Node result and standard output contract", "Actual Run parameters"], "outputs": ["Execution history", "Basis for Result SQL and model details", "Analysis and report context"],
+                "checks": ["Distinguish stored SUCCESS, FAILED, and SKIPPED states, and review partial-completion messages on FAILED nodes.", "Single-node runs still need required upstream SAME_RUN inputs."]
+              }
+            },
+            "analysis": {
+              "kicker": "M04002 · interpretation", "title": "Integrated discovery analysis", "summary": "Visualize the four-stage Run as column types, relation clusters, rules, and violations.", "shape": "rounded", "symbol": "QA", "tone": "teal",
+              "detail": {
+                "overview": "M04002 presents each model result using a type-aware table, chart, network, or rule view and separates execution status from result quality.",
+                "callFlow": ["Find the Flow Run by project, scenario, and state.", "Load node states and artifacts.", "Render the appropriate result view.", "Export selected data or continue to rule decisions."],
+                "inputs": ["Flow and Node Runs", "Model, relation, rule, violation, and sample results"], "outputs": ["Integrated interpretation", "Evidence for M05001", "Report-ready output"],
+                "checks": ["Execution success is not business approval.", "Review samples with totals and actual thresholds."]
+              }
+            },
+            "editing": {
+              "kicker": "M05001–M05003 · execution management", "title": "Rule decision, correction, and production application", "summary": "Finalize candidates, correct an editable copy, validate effects, then confirm and execute versioned production DML.", "shape": "rounded", "symbol": "EDIT", "tone": "green",
+              "detail": {
+                "overview": "Discovery results never apply directly to source data. Rule decisions, editable-copy changes, effect validation, and DML generation, validation, saving, and execution remain separate and auditable.",
+                "callFlow": ["Select or exclude candidates and validate user rules in M05001.", "Prepare the editable work table and correct violation cells in M05002.", "Validate before-and-after effects and optionally rerun the Flow in M05003.", "Server-revalidate saved DML, then confirm and execute it for an editing session whose effects have been validated.", "Record all major events in audit history."],
+                "inputs": ["Stage 4 violations", "Approved rule master", "Baseline and editable work tables"], "outputs": ["Change history", "Effect validation", "Versioned DML and audit history"],
+                "checks": ["Rule decisions, editable-copy effect validation, and production DML execution are separate steps.", "Completed DML is versioned rather than overwritten."]
+              }
+            },
+            "reports": {
+              "kicker": "M06001–M06002 · sharing", "title": "Basic and custom reports", "summary": "Package projects, Runs, rules, and editing history into fixed or user-designed reports.", "shape": "rounded", "symbol": "RPT", "tone": "amber",
+              "detail": {
+                "overview": "Basic Reports provide a fixed catalog and integrated report; Custom Reports arrange reusable blocks in a saved user template.",
+                "callFlow": ["Select project, scenario, and baseline Run.", "Check available analysis and editing results.", "Preview an individual, integrated, or custom report.", "Generate M06001 reports as HTML, Excel (XLSX), or PDF, and M06002 custom reports as HTML or PDF."],
+                "inputs": ["Flow and Node results", "Decision, correction, validation, and application history", "Report template"], "outputs": ["Review and audit reports", "Reusable custom templates"],
+                "checks": ["Show the baseline project, scenario, and Run.", "Do not include projects outside the user's access scope."]
+              }
+            }
+          }
+        },
+        "menuMap": {
+          "eyebrow": "LIVE MENU MAP",
+          "title": "Complete menu structure and main functions",
+          "description": "This map lists every enabled menu in the configured left-menu order and marks administrator-only entries. Actual visibility varies by UI role filtering and server API authorization; compatibility routes M07001–M07003 are not menus and are excluded.",
+          "adminLabel": "ADMIN",
+          "countLabel": "menus",
+          "groups": {
+            "home": { "title": "Main Home", "description": "Session, Target DB, recent integrated runs, notices, and shortcuts" },
+            "project": { "title": "Project Management", "description": "Define the top-level work scope and execution scenarios" },
+            "data-prep": { "title": "Editing Target Selection", "description": "Upload files, browse the Target DB, and prepare scenario target tables" },
+            "rule-discovery": { "title": "Editing Model Setup", "description": "Save, test, and run each of the four default stages" },
+            "edit-flow": { "title": "Editing Rule Discovery", "description": "Execute four-stage Jobs as a DAG and analyze the Run" },
+            "edit-master": { "title": "Editing Execution Management", "description": "Decide rules, correct errors, validate effects, and apply changes" },
+            "editing-report": { "title": "Editing Reports", "description": "Generate fixed, integrated, and custom reports" },
+            "model-resource": { "title": "Model Resources", "description": "Manage DB objects, API resources, and shared trained models" },
+            "system-setting": { "title": "My Environment Settings", "description": "Manage account, language, display, filters, and personal settings" },
+            "admin-setting": { "title": "Admin Settings", "description": "Manage DB connections, objects, system users, and notices" }
+          }
+        },
+        "operating": {
+          "eyebrow": "SAFE OPERATION",
+          "title": "Checks before and after execution",
+          "description": "Data editing operates in a specific Target DB context and creates auditable results. Keep scope, actual Run parameters, roles, and production-application steps distinct.",
+          "cards": [
+            { "kicker": "BEFORE RUN", "title": "Execution context", "points": ["Confirm the current user, role, and Target DB.", "Verify that project, scenario, and target table belong together.", "Use Flow Validate to check stages, ports, and SAME_RUN contracts."] },
+            { "kicker": "READ RESULT", "title": "Separate state from quality", "points": ["SUCCESS means execution completed, not that a rule is approved.", "For FAILED nodes with a partial-completion message, review successful and failed subtasks separately.", "Zero violations can be a valid successful result."] },
+            { "kicker": "APPLY CHANGE", "title": "Correction and application safety", "points": ["Detection does not automatically edit source data.", "Validate the editable copy before versioned DML.", "Check execution confirmation, roles, and audit history for production operations."] }
+          ],
+          "privacyTitle": "Security and privacy boundary",
+          "privacyNote": "Help explains logical models, artifacts, and call flows only. DB passwords, wallets, and administrator authentication values remain behind server encryption, session, and authorization boundaries. EXTERNAL_API credentials are entered in the runtime-bind dialog and are included in browser memory and the execution request; this path does not resolve them automatically from a server-side secret store."
+        }
+      }
     },
     "M01001": {
       "pageCode": "M01001",
@@ -141,10 +419,10 @@
       "label": "Target Table",
       "group": "Editing Target Selection",
       "status": "enabled",
-      "summary": "Browses Target DB tables and selects the target tables used by projects and scenarios.",
+      "summary": "Explores Target DB tables, registers a managed scenario target, and can provision the four default Jobs and sample Flow.",
       "purpose": [
-        "Inspect Target DB table metadata and sample data.",
-        "Register or remove scenario target-table mappings."
+        "Inspect columns, sample data, and SQL before connecting the analysis and rule-discovery target to a scenario.",
+        "Prepare a managed work snapshot for a regular table and optionally auto-design M03001–M03004 Jobs plus the M04001 default Flow."
       ],
       "layout": [
         { "name": "Table Tree", "description": "Browses schemas and tables." },
@@ -155,7 +433,7 @@
         "Select a project and scenario, inspect a table, then save it as a scenario target table."
       ],
       "controls": [
-        "Table Tree, Columns, Data, Save Scenario Table, and Delete Mapping."
+        "Table Tree, Columns, Data, Save Scenario Table with optional four-stage Flow provisioning, and Delete Mapping."
       ],
       "aiGuidance": [
         "Deleting here removes the scenario mapping; do not describe it as dropping the Target DB table."

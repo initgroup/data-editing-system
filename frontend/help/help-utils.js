@@ -311,6 +311,98 @@
         return (items || []).filter(Boolean).map((item) => `- ${item}`).join("\n");
     }
 
+    function getSystemGuideMenuGroups(guide, content) {
+        const config = Array.isArray(window.MENU_CONFIG) ? window.MENU_CONFIG : [];
+        const pages = content?.pages || {};
+        const localizedGroups = guide?.menuMap?.groups || {};
+        return config
+            .filter((item) => item?.enabled !== false)
+            .map((item) => {
+                if (item.type === "page" && item.page) {
+                    const page = pages[item.page] || pages[String(item.page).toUpperCase()] || {};
+                    return {
+                        title: localizedGroups.home?.title || page.group || item.label,
+                        description: localizedGroups.home?.description || "",
+                        pages: [{ config: item, page }]
+                    };
+                }
+                if (item.type !== "folder") return null;
+                const groupText = localizedGroups[item.key] || {};
+                return {
+                    title: groupText.title || item.label || item.key,
+                    description: groupText.description || "",
+                    pages: (item.children || [])
+                        .filter((child) => child?.enabled !== false && child?.page)
+                        .map((child) => ({
+                            config: child,
+                            page: pages[child.page] || pages[String(child.page).toUpperCase()] || {}
+                        }))
+                };
+            })
+            .filter(Boolean);
+    }
+
+    function buildSystemGuideMarkdown(page, content) {
+        const guide = page?.systemGuide;
+        if (!guide) return [];
+        const lines = [];
+        const overview = guide.homeOverview || {};
+        if (overview.title) {
+            lines.push("", `## ${overview.title}`, overview.description || "");
+            (overview.cards || []).forEach((card) => {
+                lines.push(`### ${card.title}`, card.description || "", toList(card.points));
+            });
+        }
+
+        const journey = guide.journey || {};
+        if (journey.title) {
+            lines.push("", `## ${journey.title}`, journey.description || "");
+            (journey.steps || []).forEach((step, index) => {
+                lines.push(`${index + 1}. ${step.title} (${(step.menuCodes || []).join(", ")}): ${step.description || ""}`);
+            });
+        }
+
+        const architecture = guide.architecture || {};
+        if (architecture.title) {
+            lines.push("", `## ${architecture.title}`, architecture.description || "", architecture.hint || "");
+            Object.values(architecture.nodes || {}).forEach((node) => {
+                lines.push("", `### ${node.title}`, node.detail?.overview || node.summary || "");
+                if (node.artifact) lines.push(`- ${guide.labels?.artifact || "Artifacts"}: ${node.artifact}`);
+                if (node.detail?.callFlow?.length) {
+                    lines.push(`- ${guide.labels?.callFlow || "Call flow"}:`);
+                    node.detail.callFlow.forEach((item, index) => lines.push(`  ${index + 1}. ${item}`));
+                }
+                if (node.detail?.algorithm?.length) lines.push(`- ${guide.labels?.algorithm || "Algorithm"}:\n${toList(node.detail.algorithm)}`);
+                if (node.detail?.inputs?.length) lines.push(`- ${guide.labels?.inputs || "Inputs"}:\n${toList(node.detail.inputs)}`);
+                if (node.detail?.outputs?.length) lines.push(`- ${guide.labels?.outputs || "Outputs"}:\n${toList(node.detail.outputs)}`);
+                if (node.detail?.checks?.length) lines.push(`- ${guide.labels?.checks || "Checks"}:\n${toList(node.detail.checks)}`);
+            });
+        }
+
+        const menuMap = guide.menuMap || {};
+        if (menuMap.title) {
+            lines.push("", `## ${menuMap.title}`, menuMap.description || "");
+            getSystemGuideMenuGroups(guide, content).forEach((group) => {
+                lines.push("", `### ${group.title}`, group.description || "");
+                group.pages.forEach(({ config, page: menuPage }) => {
+                    const pageCode = menuPage.pageCode || config.page || "";
+                    const title = menuPage.title || menuPage.label || config.title || config.label || pageCode;
+                    const roleText = (config.roles || []).includes("ADMIN") ? ` [${menuMap.adminLabel || "ADMIN"}]` : "";
+                    const functions = (menuPage.purpose || []).filter(Boolean).slice(0, 2).join(" ");
+                    lines.push(`- ${pageCode} ${title}${roleText}: ${menuPage.summary || ""}${functions ? ` ${functions}` : ""}`);
+                });
+            });
+        }
+
+        const operating = guide.operating || {};
+        if (operating.title) {
+            lines.push("", `## ${operating.title}`, operating.description || "");
+            (operating.cards || []).forEach((card) => lines.push(`### ${card.title}`, toList(card.points)));
+            if (operating.privacyNote) lines.push(`- ${operating.privacyTitle || "Privacy"}: ${operating.privacyNote}`);
+        }
+        return lines;
+    }
+
     function buildHelpMarkdown(page, implementation, options = {}) {
         const languageCode = normalizeLanguageCode(options.languageCode || options.language || "en");
         const text = getMarkdownText(languageCode);
@@ -332,6 +424,7 @@
         const sqlPurposes = getImplementationItems(preparedPage, implementation, "sqlPurposes", languageCode);
         const logicalDataDomains = getImplementationItems(preparedPage, implementation, "logicalDataDomains", languageCode);
         const privacyNote = preparedPage.privacyNote || (languageCode === "en" ? text.defaults.privacyNote : implementation.privacyNote);
+        const systemGuideSections = buildSystemGuideMarkdown(preparedPage, options.content);
 
         return [
             `# ${preparedPage.title || preparedPage.label || preparedPage.pageCode}`,
@@ -354,6 +447,7 @@
             "",
             `## ${text.sections.controls}`,
             toList(preparedPage.controls),
+            ...systemGuideSections,
             "",
             `## ${text.sections.implementation}`,
             `- ${text.implementation.frontendHtml}: ${implementation.frontendHtml}`,
