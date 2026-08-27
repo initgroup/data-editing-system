@@ -26,7 +26,7 @@
                     if (value === null || value === undefined || value === "") return "-";
 
                     const date = value instanceof Date ? value : new Date(value);
-                    if (Number.isNaN(date.getTime())) return String(value);
+                    if (!date || Number.isNaN(date.getTime())) return String(value);
 
                     const pad = (number) => String(number).padStart(2, "0");
                     return [
@@ -38,28 +38,7 @@
 
                 formatKstDateTime(value) {
                     if (value === null || value === undefined || value === "") return "-";
-
-                    let date = value instanceof Date ? value : null;
-                    if (!date) {
-                        const text = String(value).trim();
-                        const timezonePattern = /(?:Z|[+-]\d{2}:?\d{2})$/i;
-                        const dateTimePattern = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?$/;
-                        const parts = text.match(dateTimePattern);
-                        if (parts && !timezonePattern.test(text)) {
-                            const milliseconds = Number(String(parts[7] || "0").slice(0, 3).padEnd(3, "0"));
-                            date = new Date(Date.UTC(
-                                Number(parts[1]),
-                                Number(parts[2]) - 1,
-                                Number(parts[3]),
-                                Number(parts[4]),
-                                Number(parts[5]),
-                                Number(parts[6]),
-                                milliseconds
-                            ));
-                        } else {
-                            date = new Date(text);
-                        }
-                    }
+                    const date = CommonUtils.parseDatabaseDateTime(value);
                     if (Number.isNaN(date.getTime())) return String(value);
 
                     const parts = new Intl.DateTimeFormat("en-CA", {
@@ -3618,29 +3597,7 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
         },
 
         parseDateTime(value) {
-            if (!value) return null;
-            if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
-
-            const text = String(value).trim();
-            const match = text.match(/^(\d{4})[-/](\d{2})[-/](\d{2})[ T](\d{2}):(\d{2}):(\d{2})/);
-            if (match) {
-                const [, year, month, day, hour, minute, second] = match;
-                if (/[zZ]|[+-]\d{2}:?\d{2}$/.test(text)) {
-                    const parsedWithZone = new Date(text);
-                    return Number.isNaN(parsedWithZone.getTime()) ? null : parsedWithZone;
-                }
-                return new Date(Date.UTC(
-                    Number(year),
-                    Number(month) - 1,
-                    Number(day),
-                    Number(hour),
-                    Number(minute),
-                    Number(second)
-                ));
-            }
-
-            const parsed = new Date(text);
-            return Number.isNaN(parsed.getTime()) ? null : parsed;
+            return CommonUtils.parseDatabaseDateTime(value);
         },
 
         ensureJobReady(requireObject) {

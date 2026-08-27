@@ -163,7 +163,7 @@ app.add_middleware(
         "X-Bootstrap-Token",
         "X-INIT-API-Key",
     ],
-    expose_headers=["X-INIT-Session-TTL-Seconds"],
+    expose_headers=["X-INIT-Session-TTL-Seconds", "X-INIT-DB-Mode"],
 )
 
 
@@ -236,6 +236,9 @@ async def enforce_api_authentication(request, call_next):
                 detail = getattr(exc, "detail", "Login session is required.")
                 return JSONResponse(status_code=status_code, content={"detail": detail})
     response = await call_next(request)
+    response.headers["X-INIT-DB-Mode"] = (
+        "cloud" if os.getenv("DB_MODE", "local").strip().lower() == "cloud" else "local"
+    )
     if browser_session_authenticated:
         refresh_session_cookie(request, response)
         response.headers["X-INIT-Session-TTL-Seconds"] = str(get_session_ttl_seconds())

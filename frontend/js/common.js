@@ -389,6 +389,47 @@ const CommonUtils = {
         sessionStorage.setItem("initRuntimeSettings", JSON.stringify(settings));
     },
 
+    setDatabaseMode(value) {
+        const mode = String(value || "").trim().toLowerCase();
+        if (!mode) return;
+        sessionStorage.setItem("initDbMode", mode === "cloud" ? "cloud" : "local");
+    },
+
+    getDatabaseMode() {
+        return sessionStorage.getItem("initDbMode") === "cloud" ? "cloud" : "local";
+    },
+
+    parseDatabaseDateTime(value) {
+        if (value === null || value === undefined || value === "") return null;
+        if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+
+        const text = String(value).trim();
+        const timezonePattern = /(?:Z|[+-]\d{2}:?\d{2})$/i;
+        if (timezonePattern.test(text)) {
+            const parsedWithZone = new Date(text.replace(" ", "T"));
+            return Number.isNaN(parsedWithZone.getTime()) ? null : parsedWithZone;
+        }
+
+        const match = text.match(/^(\d{4})[-/](\d{2})[-/](\d{2})[ T](\d{2}):(\d{2}):(\d{2})(?:[.,](\d{1,9}))?/);
+        if (match) {
+            const [, year, month, day, hour, minute, second, fraction] = match;
+            const milliseconds = Number(String(fraction || "0").slice(0, 3).padEnd(3, "0"));
+            const sourceOffsetMs = this.getDatabaseMode() === "local" ? 9 * 60 * 60 * 1000 : 0;
+            return new Date(Date.UTC(
+                Number(year),
+                Number(month) - 1,
+                Number(day),
+                Number(hour),
+                Number(minute),
+                Number(second),
+                milliseconds
+            ) - sourceOffsetMs);
+        }
+
+        const parsed = new Date(text);
+        return Number.isNaN(parsed.getTime()) ? null : parsed;
+    },
+
     getRuntimeSetting(settingKey, fallbackValue, minimum = null, maximum = null) {
         let settings = {};
         try {
@@ -624,6 +665,7 @@ const CommonUtils = {
                 credentials: 'include',
                 signal: controller?.signal || externalSignal
             });
+            this.setDatabaseMode(response.headers.get("X-INIT-DB-Mode"));
             
             if (!response.ok) {
                 const errorJson = await response.json().catch(() => ({}));

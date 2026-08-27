@@ -1548,28 +1548,7 @@
         },
 
         parseDateTime(value) {
-            if (!value) return null;
-            if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
-            const text = String(value).trim();
-            const match = text.match(/^(\d{4})[-/](\d{2})[-/](\d{2})[ T](\d{2}):(\d{2}):(\d{2})(?:[.,](\d+))?/);
-            if (match) {
-                const [, year, month, day, hour, minute, second, fraction] = match;
-                if (/[zZ]|[+-]\d{2}:?\d{2}$/.test(text)) {
-                    const parsedWithZone = new Date(text);
-                    return Number.isNaN(parsedWithZone.getTime()) ? null : parsedWithZone;
-                }
-                return new Date(Date.UTC(
-                    Number(year),
-                    Number(month) - 1,
-                    Number(day),
-                    Number(hour),
-                    Number(minute),
-                    Number(second),
-                    Number(String(fraction || "0").padEnd(3, "0").slice(0, 3))
-                ));
-            }
-            const parsed = new Date(text);
-            return Number.isNaN(parsed.getTime()) ? null : parsed;
+            return CommonUtils.parseDatabaseDateTime(value);
         },
 
         formatElapsedTime(startedAt, finishedAt, status = "") {

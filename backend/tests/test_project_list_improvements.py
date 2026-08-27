@@ -74,6 +74,27 @@ class ProjectListImprovementTests(unittest.TestCase):
         self.assertEqual(1, scenario_js.count("this.formatKstDateTime(project.CREATED_AT)"))
         self.assertEqual(1, scenario_js.count("this.formatKstDateTime(scenario.CREATED_AT)"))
 
+    def test_kst_parser_uses_database_mode_for_naive_timestamps(self):
+        main_py = (ROOT_DIR / "main.py").read_text(encoding="utf-8")
+        common_js = (ROOT_DIR / "frontend" / "js" / "common.js").read_text(encoding="utf-8")
+
+        self.assertIn('response.headers["X-INIT-DB-Mode"]', main_py)
+        self.assertIn('"X-INIT-DB-Mode"', main_py)
+        self.assertIn('response.headers.get("X-INIT-DB-Mode")', common_js)
+        self.assertIn('this.getDatabaseMode() === "local" ? 9 * 60 * 60 * 1000 : 0', common_js)
+
+        for relative_path in (
+            "frontend/js/M02001.js",
+            "frontend/js/M02002.js",
+            "frontend/js/home.js",
+            "frontend/js/M99001.js",
+            "frontend/js/M99002.js",
+            "frontend/js/MCOM_DATA_WORK.js",
+            "frontend/js/MCOM_FLOW_WORK.js",
+        ):
+            source = (ROOT_DIR / relative_path).read_text(encoding="utf-8")
+            self.assertIn("CommonUtils.parseDatabaseDateTime(value)", source)
+
     def test_project_settings_list_matches_scenario_project_row_ui(self):
         project_sql = SqlLoader.get_sql("M01001_PROJECT_LIST")
         project_js = (ROOT_DIR / "frontend" / "js" / "M01001.js").read_text(encoding="utf-8")
